@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T19:29:04.268Z",
+  "task_name": "auto114",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「图腾之眼」的2D解谜冒险游戏。玩家在一个由古老图腾构成的迷宫中，通过旋转和组合图腾上的眼睛图案来解锁通路，每关有不同规则（比如眼睛颜色配对、方向连锁）。用TypeScript和React来实现。文件结构大概这样：src/下有GameEngine.ts（主循环、迷宮状态管理、碰撞检测和关卡切换逻辑）、Totem.ts（管理每个图腾的眼睛图案生成、旋转动画、颜色和方向状态）、MazeGenerator.ts（负责随机生成迷宫地图、放置图腾和定义出口触发条件）、UILayer.tsx（React组件，展示当前关卡编号、收集到的图腾碎片数量、一个旋转提示动画和重置按钮）。根目录放package.json（依赖包括react、react-dom、typescript和vite），tsconfig.json（启用strict、jsx: react-jsx），vite.config.ts（用react插件），以及一个index.html作为入口。这样我npm install && npm run dev就能直接跑起来。需求方面：1. 迷宫是网格地图，每格可能为空、墙或图腾（玩家交互对象），玩家用方向键移动。2. 眼睛图案有4种颜色（红/蓝/绿/黄）和4个方向（上/下/左/右），初始随机生成，玩家点击图腾可旋转（每次90度）。3. 关卡规则：第一关要求所有图腾的眼睛颜色一致且方向朝内（指向迷宫中心），第二关增加颜色配对（相邻图腾颜色需互补），第三关加入方向连锁（一个图腾旋转会带动相邻图腾）。4. 界面：深色岩石纹理背景，图腾用发光线条绘制，玩家角色是一个发光的眼睛图标。左上角显示关卡和碎片数（碎片每关收集3个可解锁下关），右下角有一个半透明毛玻璃提示面板（点击显示当前关规则动画）。5. 交互反馈：图腾旋转时有柔和的粒子拖尾和音效（使用Web Audio简短的咔嗒声），完成配对时图腾发光并播放胜利轻音。6. 性能：帧率保持60fps，动画用requestAnimationFrame，粒子系统限制150个。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:b25eda81f55dd817543c042739e46cdb_6a25c5f3706f3f03611236be.6a25c670706f3f0361123714.6a25c67067830b0fe99aa1ed:Trae CN.T(2026/6/8 03:28:48)",
+    "user_id": "2402906841289811",
+    "trace_id": "b25eda81f55dd817543c042739e46cdb",
+    "session_id": "6a25c5f3706f3f03611236be",
+    "task_id": "6a25c670706f3f0361123714",
+    "message_id": "6a25c67067830b0fe99aa1ed",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 03:28:48",
+    "format": "full"
+  },
+  "trace": "null"
+}
