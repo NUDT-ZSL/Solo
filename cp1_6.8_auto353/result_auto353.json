@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T04:29:29.118Z",
+  "task_name": "auto353",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「影子戏法」的交互式皮影戏创作与表演工具。用户可以在虚拟灯箱上拖拽、旋转和缩放皮影角色，通过实时生成的物理阴影和动态剪影，编排一出短剧并录制为视频。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口）、src/App.tsx（主组件管理舞台状态和界面布局）、src/ShadowStage.tsx（Canvas舞台，负责绘制剪影角色、光源效果和物理阴影计算）、src/ControlPanel.tsx（控制面板，包含角色库、动作时间轴、录制按钮和参数调节）、src/utils/shadowPhysics.ts（模拟阴影形变和衰减的物理引擎）、还有src/utils/animationRecorder.ts（录制舞台内容为WebM视频并导出）。别忘了一起带上package.json（包含React、TypeScript、Vite的依赖和dev脚本）、vite.config.ts、tsconfig.json和index.html，这样我npm install && npm run dev就能直接跑。需求如下：1. 用户从右侧角色列表拖出皮影角色（预设剪影如猴子、鹤、书生等）放入舞台，角色带有透明度阴影和细碎关节动画；2. 每个角色支持拖拽移动、双指旋转/缩放，操作时显示半透明手柄和旋转指示线，松手后角色按物理惯性滑动一小段并停稳；3. 点击舞台空白处设置“光源”位置，所有角色实时生成随光源方向变化的动态阴影，阴影边缘柔和衰减且形变符合光源角度；4. 界面左侧有一个毛玻璃时间轴面板，用户可记录角色关键帧（位置、旋转、缩放），点击播放后按时间轴自动插值动画，配合光源位置变化形成完整皮影剧；5. 整体视觉走古风皮影美学：米黄到浅褐渐变舞台背景，角色用深褐色半透明剪影，边缘有微光晕，阴影呈透明到深灰渐变，按钮和面板是圆形毛玻璃加仿古铜色边框，悬停时有轻微发光和振动反馈；6. 性能上要求舞台帧率稳定在60fps，角色数量不超过10个时无卡顿，阴影计算使用Web Worker避免阻塞主线程。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:488100907e02cb00dc8e1b552cfd22bc_6a2644c0ac19fd96be194bdb.6a264513ac19fd96be194beb.6a264513bb25b09e6c01dab5:Trae CN.T(2026/6/8 12:29:07)",
+    "user_id": "2402906841289811",
+    "trace_id": "488100907e02cb00dc8e1b552cfd22bc",
+    "session_id": "6a2644c0ac19fd96be194bdb",
+    "task_id": "6a264513ac19fd96be194beb",
+    "message_id": "6a264513bb25b09e6c01dab5",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 12:29:07",
+    "format": "full"
+  },
+  "trace": "null"
+}

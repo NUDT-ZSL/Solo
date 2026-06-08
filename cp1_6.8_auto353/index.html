@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>影子戏法 - 交互式皮影戏创作与表演工具</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        overflow: hidden;
+        background: #1a1208;
+        font-family: 'Microsoft YaHei', 'SimSun', serif;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+      }
+      #root {
+        width: 100vw;
+        height: 100vh;
+      }
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 8px rgba(184, 115, 51, 0.4); }
+        50% { box-shadow: 0 0 18px rgba(184, 115, 51, 0.8); }
+      }
+      @keyframes subtleVibrate {
+        0%, 100% { transform: translate(0, 0); }
+        25% { transform: translate(0.5px, -0.5px); }
+        50% { transform: translate(-0.5px, 0.5px); }
+        75% { transform: translate(0.5px, 0.5px); }
+      }
+      .btn-antique:hover {
+        animation: pulseGlow 1.5s ease-in-out infinite, subtleVibrate 0.15s ease-in-out;
+      }
+      .btn-antique {
+        transition: all 0.2s ease;
+      }
+      .btn-antique:active {
+        transform: scale(0.95);
+      }
+      ::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(139, 90, 43, 0.1);
+        border-radius: 2px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(184, 115, 51, 0.5);
+        border-radius: 2px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(184, 115, 51, 0.8);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
