@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>霓虹贪吃虫 | Neon Snake</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0D0519;
+      font-family: 'Courier New', monospace;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .game-wrapper {
+      position: relative;
+      padding: 24px;
+      border-radius: 16px;
+      background: rgba(26, 10, 46, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 0 40px rgba(255, 107, 107, 0.15),
+                  0 0 80px rgba(78, 205, 196, 0.1);
+    }
+
+    .game-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+    }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+    }
+
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .score-panel {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      text-align: right;
+      pointer-events: none;
+    }
+
+    .score {
+      font-size: 24px;
+      color: #FFD93D;
+      text-shadow: 0 0 8px rgba(255, 217, 61, 0.8);
+      font-weight: bold;
+    }
+
+    .length {
+      font-size: 18px;
+      color: #A8E6CF;
+      text-shadow: 0 0 6px rgba(168, 230, 207, 0.6);
+      margin-top: 4px;
+    }
+
+    .gameover-panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(13, 5, 25, 0.6);
+      pointer-events: auto;
+    }
+
+    .gameover-panel.active {
+      display: flex;
+    }
+
+    .gameover-title {
+      font-size: 48px;
+      color: #FF3366;
+      text-shadow: 0 0 12px #FF3366,
+                   0 0 24px rgba(255, 51, 102, 0.6);
+      font-weight: bold;
+      letter-spacing: 4px;
+      margin-bottom: 24px;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.08);
+        opacity: 0.85;
+      }
+    }
+
+    .high-score {
+      font-size: 22px;
+      color: #FFD93D;
+      text-shadow: 0 0 8px rgba(255, 217, 61, 0.7);
+      margin-bottom: 8px;
+    }
+
+    .final-score {
+      font-size: 18px;
+      color: #A8E6CF;
+      margin-bottom: 32px;
+    }
+
+    .restart-btn {
+      font-family: 'Courier New', monospace;
+      font-size: 20px;
+      font-weight: bold;
+      color: #fff;
+      background: #FF6B6B;
+      border: none;
+      padding: 14px 40px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 16px rgba(255, 107, 107, 0.6);
+      letter-spacing: 2px;
+    }
+
+    .restart-btn:hover {
+      background: #FF8E8E;
+      box-shadow: 0 0 24px rgba(255, 142, 142, 0.8);
+      transform: translateY(-2px);
+    }
+
+    .restart-btn:active {
+      transform: scale(0.9);
+    }
+
+    .tips {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .tip-line {
+      font-size: 14px;
+      color: #B0C4DE;
+      line-height: 1.8;
+      letter-spacing: 1px;
+    }
+
+    .logo-animation {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0D0519;
+      z-index: 100;
+      transition: opacity 0.8s ease;
+    }
+
+    .logo-animation.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .logo-text {
+      font-size: 56px;
+      font-weight: bold;
+      letter-spacing: 6px;
+      background: linear-gradient(90deg, #FF6B6B, #FFE66D, #4ECDC4, #FF6B6B);
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: logoFlow 2s linear infinite, logoFadeIn 1s ease;
+    }
+
+    @keyframes logoFlow {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 300% 50%; }
+    }
+
+    @keyframes logoFadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-wrapper">
+    <div class="game-container">
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+      
+      <div class="ui-overlay">
+        <div class="score-panel">
+          <div class="score" id="scoreDisplay">SCORE: 0</div>
+          <div class="length" id="lengthDisplay">LENGTH: 3</div>
+        </div>
+
+        <div class="gameover-panel" id="gameoverPanel">
+          <div class="gameover-title">GAME OVER</div>
+          <div class="high-score" id="highScoreDisplay">HIGH SCORE: 0</div>
+          <div class="final-score" id="finalScoreDisplay">YOUR SCORE: 0</div>
+          <button class="restart-btn" id="restartBtn">再来一次</button>
+        </div>
+      </div>
+
+      <div class="logo-animation" id="logoAnimation">
+        <div class="logo-text">NEON SNAKE</div>
+      </div>
+    </div>
+
+    <div class="tips">
+      <div class="tip-line">方向键移动</div>
+      <div class="tip-line">Shift 闪烁冲刺</div>
+      <div class="tip-line">收集能量变长</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
