@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T05:19:55.439Z",
+  "task_name": "auto382",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「匿名画廊」的全栈web应用，用户无需登录就能上传一张图片，并添加一段文字描述（可选），系统会为每张图片生成一个唯一短链接，访问该链接可以查看图片和描述，并允许查看者匿名留下一条评论（最多50字）。所有公开上传的图片会展示在「画廊广场」页面上，以瀑布流布局呈现，每张图片卡片包含缩略图、描述片段和评论数，悬停时有轻微放大和阴影加深效果。点击卡片进入详情页，图片有淡入动画，评论以气泡样式从底部依次弹出，带有打字机效果。整体视觉走极简毛玻璃风格：浅灰到白色渐变背景，卡片和面板是半透明磨砂玻璃质感，主色调为柔和的蓝紫色渐变，按钮是圆角胶囊形状，带微光悬停效果，响应式适配手机和桌面。性能方面要求图片懒加载，滚动流畅，帧率稳定。用TypeScript和React实现前端，后端用FastAPI（Python），Vite构建。文件结构大概这样：server/main.py（FastAPI入口，处理图片上传、短链接生成和评论保存）、server/gallery_router.py（画廊广场和详情页的查询路由）、client/src/main.tsx（React入口挂载应用）、client/src/App.tsx（主组件管理路由和布局）、client/src/Pages/GalleryPage.tsx（画廊广场瀑布流页面）、client/src/Pages/DetailPage.tsx（图片详情和评论页面）。对了，顺便把package.json、tsconfig.json、vite.config.ts都带上，这样npm install && npm run dev就能直接跑了。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:8c53db2b2c459a7f2374e1bdcca69b07_6a264fc8623f1b442d7cd7e3.6a2650eb623f1b442d7cd8c0.6a2650ea1b7651ec9fd20ff2:Trae CN.T(2026/6/8 13:19:39)",
+    "user_id": "2402906841289811",
+    "trace_id": "8c53db2b2c459a7f2374e1bdcca69b07",
+    "session_id": "6a264fc8623f1b442d7cd7e3",
+    "task_id": "6a2650eb623f1b442d7cd8c0",
+    "message_id": "6a2650ea1b7651ec9fd20ff2",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 13:19:39",
+    "format": "full"
+  },
+  "trace": "null"
+}
