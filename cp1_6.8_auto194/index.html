@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>光音织梦 — 3D交互式音乐可视化</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --glass-bg: rgba(10, 5, 30, 0.55);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        --accent-purple: #9b30ff;
+        --accent-green: #00e5a0;
+        --accent-gold: #ffd700;
+        --accent-blue: #6a5acd;
+        --text-primary: rgba(255, 255, 255, 0.92);
+        --text-secondary: rgba(255, 255, 255, 0.55);
+        --font-display: 'Orbitron', sans-serif;
+        --font-body: 'Noto Sans SC', sans-serif;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        font-family: var(--font-body);
+        color: var(--text-primary);
+      }
+
+      #canvas-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+      }
+
+      #canvas-container canvas {
+        display: block;
+      }
+
+      .overlay {
+        position: fixed;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .overlay > * {
+        pointer-events: auto;
+      }
+
+      .glass {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px) saturate(1.4);
+        -webkit-backdrop-filter: blur(20px) saturate(1.4);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        box-shadow: var(--glass-shadow);
+      }
+
+      .title-bar {
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 28px;
+        animation: fadeSlideDown 1s ease-out both;
+      }
+
+      .title-bar h1 {
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 3px;
+        background: linear-gradient(135deg, var(--accent-purple), var(--accent-green), var(--accent-gold));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .title-bar .divider {
+        width: 1px;
+        height: 20px;
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      .audio-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn-glass {
+        font-family: var(--font-body);
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 7px 16px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        white-space: nowrap;
+      }
+
+      .btn-glass:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 12px rgba(155, 48, 255, 0.2);
+      }
+
+      .btn-glass.active {
+        background: rgba(155, 48, 255, 0.2);
+        border-color: var(--accent-purple);
+        box-shadow: 0 0 16px rgba(155, 48, 255, 0.3);
+      }
+
+      .btn-glass svg {
+        width: 14px;
+        height: 14px;
+        vertical-align: -2px;
+        margin-right: 6px;
+      }
+
+      .control-panel {
+        bottom: 28px;
+        right: 28px;
+        padding: 20px 24px;
+        min-width: 240px;
+        animation: fadeSlideUp 1s 0.3s ease-out both;
+      }
+
+      .control-panel h3 {
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 2px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+        text-transform: uppercase;
+      }
+
+      .slider-group {
+        margin-bottom: 14px;
+      }
+
+      .slider-group:last-of-type {
+        margin-bottom: 18px;
+      }
+
+      .slider-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+
+      .slider-label .value {
+        font-family: var(--font-display);
+        font-size: 11px;
+        color: var(--accent-green);
+      }
+
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.08);
+        outline: none;
+        cursor: pointer;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent-green);
+        box-shadow: 0 0 10px rgba(0, 229, 160, 0.5);
+        transition: transform 0.15s ease;
+      }
+
+      input[type="range"]::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent-green);
+        box-shadow: 0 0 10px rgba(0, 229, 160, 0.5);
+        border: none;
+        cursor: pointer;
+      }
+
+      .btn-reset {
+        width: 100%;
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 8px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+      }
+
+      .btn-reset:hover {
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      .info-card {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.92);
+        z-index: 100;
+        padding: 28px;
+        min-width: 360px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.4s ease, transform 0.4s ease;
+      }
+
+      .info-card.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      .info-card h2 {
+        font-family: var(--font-display);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        margin-bottom: 14px;
+        color: var(--accent-green);
+      }
+
+      .info-card canvas {
+        width: 100%;
+        height: 120px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+      }
+
+      .emotion-tags {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+
+      .emotion-tag {
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-primary);
+        font-weight: 400;
+      }
+
+      .btn-close-card {
+        font-family: var(--font-body);
+        font-size: 12px;
+        color: var(--text-secondary);
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 6px 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .btn-close-card:hover {
+        color: var(--text-primary);
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      #file-input {
+        display: none;
+      }
+
+      .status-indicator {
+        position: fixed;
+        bottom: 28px;
+        left: 28px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        animation: fadeSlideUp 1s 0.5s ease-out both;
+      }
+
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent-green);
+        box-shadow: 0 0 8px rgba(0, 229, 160, 0.5);
+      }
+
+      .status-dot.idle {
+        background: var(--text-secondary);
+        box-shadow: none;
+      }
+
+      @keyframes fadeSlideDown {
+        from {
+          opacity: 0;
+          transform: translateX(-50%) translateY(-16px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+      }
+
+      @keyframes fadeSlideUp {
+        from {
+          opacity: 0;
+          transform: translateY(16px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+
+    <div class="overlay title-bar glass" id="title-bar">
+      <h1>光音织梦</h1>
+      <div class="divider"></div>
+      <div class="audio-controls">
+        <button class="btn-glass" id="btn-preset1" data-preset="clair-de-lune">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          月光曲
+        </button>
+        <button class="btn-glass" id="btn-preset2" data-preset="canon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          卡农
+        </button>
+        <button class="btn-glass" id="btn-upload">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          上传音频
+        </button>
+        <button class="btn-glass" id="btn-stop" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          停止
+        </button>
+      </div>
+      <input type="file" id="file-input" accept="audio/*" />
+    </div>
+
+    <div class="overlay control-panel glass" id="control-panel">
+      <h3>参数控制</h3>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>粒子速度</span>
+          <span class="value" id="speed-value">1.0x</span>
+        </div>
+        <input type="range" id="slider-speed" min="0.1" max="3" step="0.1" value="1" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>光晕强度</span>
+          <span class="value" id="halo-value">1.0x</span>
+        </div>
+        <input type="range" id="slider-halo" min="0" max="2" step="0.1" value="1" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>灵敏度</span>
+          <span class="value" id="sensitivity-value">1.0x</span>
+        </div>
+        <input type="range" id="slider-sensitivity" min="0.2" max="3" step="0.1" value="1" />
+      </div>
+      <button class="btn-reset" id="btn-reset-camera">重置视角</button>
+    </div>
+
+    <div class="info-card glass" id="info-card">
+      <h2>频谱分析</h2>
+      <canvas id="spectrum-canvas" width="600" height="200"></canvas>
+      <div class="emotion-tags" id="emotion-tags"></div>
+      <button class="btn-close-card" id="btn-close-card">关闭</button>
+    </div>
+
+    <div class="status-indicator" id="status-indicator">
+      <div class="status-dot idle" id="status-dot"></div>
+      <span id="status-text">等待音频输入...</span>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
