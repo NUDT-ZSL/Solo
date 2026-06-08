@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>沙尘暴粒子工作室</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>沙尘暴粒子工作室</h1>
+      <p class="subtitle">Sandstorm Particle Studio</p>
+    </header>
+
+    <main class="main-content">
+      <div class="canvas-wrapper">
+        <canvas id="sandCanvas" width="800" height="600"></canvas>
+
+        <button id="windBtn" class="wind-btn">
+          <span class="wind-icon">🌪️</span>
+          <span>起风</span>
+        </button>
+
+        <div class="control-toggle" id="controlToggle">⚙️</div>
+
+        <aside class="control-panel" id="controlPanel">
+          <div class="panel-header">
+            <h3>控制面板</h3>
+            <button class="panel-close" id="panelClose">✕</button>
+          </div>
+
+          <div class="control-group">
+            <label>
+              <span class="label-text">粒子数量</span>
+              <span class="label-value" id="particleCountValue">1500</span>
+            </label>
+            <input type="range" id="particleCount" min="500" max="4000" value="1500" step="100" />
+          </div>
+
+          <div class="control-group">
+            <label>
+              <span class="label-text">粒子速度 (px/s)</span>
+              <span class="label-value" id="particleSpeedValue">80</span>
+            </label>
+            <input type="range" id="particleSpeed" min="20" max="200" value="80" step="5" />
+          </div>
+
+          <div class="control-group">
+            <label>
+              <span class="label-text">粒子大小 (px)</span>
+              <span class="label-value" id="particleSizeValue">4</span>
+            </label>
+            <input type="range" id="particleSize" min="1" max="12" value="4" step="1" />
+          </div>
+
+          <div class="control-group">
+            <label>
+              <span class="label-text">笔刷大小 (px)</span>
+              <span class="label-value" id="brushSizeValue">30</span>
+            </label>
+            <input type="range" id="brushSize" min="10" max="80" value="30" step="1" />
+          </div>
+
+          <div class="control-group">
+            <label>
+              <span class="label-text">笔刷透明度</span>
+              <span class="label-value" id="brushOpacityValue">0.6</span>
+            </label>
+            <input type="range" id="brushOpacity" min="0.1" max="1.0" value="0.6" step="0.05" />
+          </div>
+
+          <button class="reset-btn" id="resetBtn">重置所有参数</button>
+        </aside>
+      </div>
+
+      <footer class="status-bar">
+        <div class="status-left">
+          粒子总数: <span id="particleTotal">0</span>
+        </div>
+        <div class="status-right">
+          笔刷直径: <span id="brushDiameter">30</span> px
+          <button class="export-btn" id="exportBtn">导出截屏</button>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
