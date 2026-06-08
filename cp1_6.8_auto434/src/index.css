@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Nunito', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(135deg, #FFF8F0 0%, #F5E6D3 100%);
+  min-height: 100vh;
+}
+
+@layer components {
+  .badge-btn {
+    @apply inline-flex items-center justify-center rounded-full font-body font-semibold
+      transition-all duration-200 cursor-pointer select-none;
+  }
+
+  .badge-btn-primary {
+    @apply badge-btn bg-warm-yellow text-warm-brown
+      hover:animate-pulse-glow active:animate-bounce-in;
+    box-shadow: 0 2px 8px rgba(245, 166, 35, 0.3);
+  }
+
+  .badge-btn-secondary {
+    @apply badge-btn bg-warm-orange text-white
+      hover:animate-pulse-glow active:animate-bounce-in;
+    box-shadow: 0 2px 8px rgba(232, 131, 74, 0.3);
+  }
+
+  .glass-card {
+    @apply rounded-2xl backdrop-blur-md bg-white/60 border-2 transition-all duration-200;
+    border-color: #C9A96E;
+    box-shadow: 0 4px 16px rgba(93, 64, 55, 0.08);
+  }
+
+  .glass-card:hover {
+    @apply -translate-y-1;
+    box-shadow: 0 8px 24px rgba(93, 64, 55, 0.15);
+  }
+
+  .genre-pill {
+    @apply px-3 py-1 rounded-full text-sm font-semibold cursor-pointer
+      transition-all duration-200 select-none;
+  }
+
+  .genre-pill-active {
+    @apply genre-pill bg-warm-yellow text-warm-brown;
+    box-shadow: 0 0 8px rgba(245, 166, 35, 0.3);
+  }
+
+  .genre-pill-inactive {
+    @apply genre-pill bg-white/50 text-warm-brown/60 hover:bg-warm-yellow/30;
+  }
+}
