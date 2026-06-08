@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「记忆琥珀」的全栈web应用，用户可以创建数字时间胶囊——写下文字或上传图片，设定在未来某个时间才可打开，系统自动生成一段随机波形的环境音（如雨声、风声）作为背景，并展示倒计时。浏览时支持按类别（回忆、许愿、计划等）和状态（未开启、已开启）筛选，点击胶囊有柔和的光芒扩散和开启动画。整体视觉走琥珀复古风：暖黄到深棕渐变背景，主色调是琥珀色和乳白色，卡片采用半透明磨砂圆角面板带金色细边框，按钮是琥珀色圆形带微光悬停效果，创建时有信封折叠展开动画，开启时有光晕粒子上升效果，响应式适配手机和桌面。交互反馈要流畅，帧率稳定在60fps。用TypeScript和React实现前端，后端用FastAPI（Python），Vite构建。项目包含6个文件：server/main.py（FastAPI入口，初始化并挂载路由）、server/api_routes.py（处理胶囊的创建、查询、定时解锁逻辑）、server/audio_gen.py（用随机波形生成环境音）、client/src/main.tsx（React入口）、client/src/App.tsx（主布局和路由）、client/src/components/CapsuleCard.tsx（胶囊卡片组件，含倒计时和开启交互）。配置方面，根目录有package.json（包含react、vite、fastapi、uvicorn等依赖和启动脚本），client目录有vite.config.ts和tsconfig.json，server目录有requirements.txt。运行方式：先npm install，然后在一个终端跑uvicorn server.main:app --reload，另一个终端跑npm run dev，最后打开浏览器访问localhost:5173。"
+}
