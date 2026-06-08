@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「情绪回声」的全栈web应用，用户能记录每日情绪并选择颜色和emoji，系统会基于情绪值生成一段简短的诗句或文案，并以时间轴形式展示历史记录，支持按情绪类别筛选。整体视觉走莫兰迪色系柔和风：背景是浅灰到米白渐变，卡片是圆角毛玻璃面板带微阴影，按钮是哑光莫兰迪色（如薰衣草紫、鼠尾草绿）圆形胶囊，悬停时轻微上浮并带微光，情绪选择用渐变色彩环，点击时有光晕扩散动画，时间轴滑动有平滑过渡，筛选时卡片重新排列带弹性效果。响应式适配手机和桌面，交互反馈流畅，帧率稳定在60fps。用TypeScript和React实现前端，后端用Python的FastAPI，Vite构建。项目包含6个文件：server/main.py（FastAPI入口，初始化并挂载路由）、server/emotion_engine.py（根据情绪值生成诗句的逻辑）、src/main.tsx（应用入口）、src/App.tsx（主布局，包含情绪输入和时间轴）、src/components/EmotionPicker.tsx（情绪选择器组件，带色环和emoji）、src/components/Timeline.tsx（时间轴组件，按日期和情绪展示历史）。另外附带package.json（包含依赖：react、react-dom、typescript、@vitejs/plugin-react、vite、axios、fastapi、uvicorn，以及启动脚本：\"dev\"为\"vite\"）和vite.config.ts（配置React插件），还有tsconfig.json，这样直接npm install && npm run dev就能跑。"
+}
