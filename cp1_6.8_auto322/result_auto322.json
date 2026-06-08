@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T03:17:31.632Z",
+  "task_name": "auto322",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「呼吸光韵」的交互式呼吸训练可视化工具。用户可以选择不同的呼吸模式（比如4-7-8、方形呼吸、自由模式），应用会以柔和的光晕动画和波动曲线引导用户吸气、屏息、呼气，每次呼吸循环完成后显示心率估算和放松指数。整体界面走暗色静谧风：深灰到黑渐变背景，主区域是圆形光晕画布，光晕随呼吸节奏膨胀收缩并渐变颜色（吸气从蓝到绿，屏息从绿到紫，呼气从紫到红），底部是模式选择器（胶囊式按钮）、进度指示器和设置面板（包含呼吸时长滑块、提示音开关、毛玻璃强度调节）。按钮悬停有光晕扩散效果，模式切换时有缓动过渡动画，响应式适配桌面和移动端，帧率保持60fps。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（React入口挂载）、src/App.tsx（主组件，管理呼吸模式、状态和布局）、src/BreathingCanvas.tsx（Canvas渲染引擎，负责光晕和波动曲线的绘制）、src/ControlPanel.tsx（控制面板组件，包含模式选择器、滑块和设置）、src/utils/breathingUtils.ts（呼吸算法和心率模拟逻辑）。对了，顺便把package.json（包含react、react-dom、typescript、vite依赖，脚本：dev和build）、tsconfig.json、vite.config.ts和入口HTML也带上，这样我npm install && npm run dev就能直接跑。需求方面：1. 按选择模式驱动光晕膨胀收缩和颜色渐变动画；2. 实时显示呼吸阶段提示文字（吸气/屏息/呼气）；3. 每次循环结束后更新放松指数；4. 设置面板调整呼吸周期时长和提示音开关；5. 界面暗色静谧风，毛玻璃控制面板，交互响应流畅；6. 响应式适配桌面和移动端，60fps保证。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:d5d94b1f74d720680b3951388f5854a4_6a2633e6d463d36ec9c57bfe.6a26343cd463d36ec9c57c41.6a26343ba5a75a4f3269d82c:Trae CN.T(2026/6/8 11:17:16)",
+    "user_id": "2402906841289811",
+    "trace_id": "d5d94b1f74d720680b3951388f5854a4",
+    "session_id": "6a2633e6d463d36ec9c57bfe",
+    "task_id": "6a26343cd463d36ec9c57c41",
+    "message_id": "6a26343ba5a75a4f3269d82c",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 11:17:16",
+    "format": "full"
+  },
+  "trace": "null"
+}
