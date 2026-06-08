@@ -1,0 +1,498 @@
+{
+  "words": [
+    {
+      "word": "思维",
+      "pos": "noun",
+      "definition": "人脑对客观事物间接的、概括的反映，是认识的高级形式",
+      "examples": ["创造性思维是解决复杂问题的关键", "他的思维方式很独特"],
+      "associations": [
+        {"word": "灵感", "strength": 0.85},
+        {"word": "逻辑", "strength": 0.9},
+        {"word": "想象", "strength": 0.8},
+        {"word": "记忆", "strength": 0.7},
+        {"word": "智慧", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "灵感",
+      "pos": "noun",
+      "definition": "在文学、艺术、科学等创造活动中突然涌现的创造性思路",
+      "examples": ["诗人的灵感来源于大自然", "她等待灵感的降临"],
+      "associations": [
+        {"word": "思维", "strength": 0.85},
+        {"word": "创造", "strength": 0.9},
+        {"word": "想象", "strength": 0.88},
+        {"word": "火花", "strength": 0.7},
+        {"word": "直觉", "strength": 0.82}
+      ]
+    },
+    {
+      "word": "逻辑",
+      "pos": "noun",
+      "definition": "思维的规律和规则，研究推理有效性的学科",
+      "examples": ["这篇文章的逻辑非常严密", "逻辑推理是科学研究的基础"],
+      "associations": [
+        {"word": "思维", "strength": 0.9},
+        {"word": "推理", "strength": 0.92},
+        {"word": "理性", "strength": 0.85},
+        {"word": "判断", "strength": 0.78},
+        {"word": "秩序", "strength": 0.65}
+      ]
+    },
+    {
+      "word": "想象",
+      "pos": "verb",
+      "definition": "在头脑中对已有表象进行加工、改造而形成新形象的心理过程",
+      "examples": ["孩子总是想象着飞向太空", "想象力比知识更重要"],
+      "associations": [
+        {"word": "思维", "strength": 0.8},
+        {"word": "灵感", "strength": 0.88},
+        {"word": "创造", "strength": 0.85},
+        {"word": "梦境", "strength": 0.72},
+        {"word": "自由", "strength": 0.68}
+      ]
+    },
+    {
+      "word": "创造",
+      "pos": "verb",
+      "definition": "想出新方法、建立新理论、做出新的成绩或东西",
+      "examples": ["人类不断创造新的文明", "创造力是推动社会进步的动力"],
+      "associations": [
+        {"word": "灵感", "strength": 0.9},
+        {"word": "想象", "strength": 0.85},
+        {"word": "探索", "strength": 0.78},
+        {"word": "艺术", "strength": 0.82},
+        {"word": "变革", "strength": 0.7}
+      ]
+    },
+    {
+      "word": "记忆",
+      "pos": "noun",
+      "definition": "人脑对经验过的事物的识记、保持、再现或再认",
+      "examples": ["童年的记忆仍然清晰", "记忆是学习的基础"],
+      "associations": [
+        {"word": "思维", "strength": 0.7},
+        {"word": "时间", "strength": 0.75},
+        {"word": "情感", "strength": 0.8},
+        {"word": "遗忘", "strength": 0.88},
+        {"word": "经验", "strength": 0.82}
+      ]
+    },
+    {
+      "word": "智慧",
+      "pos": "noun",
+      "definition": "辨析判断、发明创造的能力，是知识、经验与思考的综合",
+      "examples": ["古人的智慧令人叹服", "智慧源于深刻的思考"],
+      "associations": [
+        {"word": "思维", "strength": 0.75},
+        {"word": "知识", "strength": 0.88},
+        {"word": "理性", "strength": 0.8},
+        {"word": "洞察", "strength": 0.82},
+        {"word": "哲学", "strength": 0.72}
+      ]
+    },
+    {
+      "word": "知识",
+      "pos": "noun",
+      "definition": "人类在实践中获得的认识和经验的总和",
+      "examples": ["知识就是力量", "追求知识是人类的天性"],
+      "associations": [
+        {"word": "智慧", "strength": 0.88},
+        {"word": "学习", "strength": 0.9},
+        {"word": "真理", "strength": 0.78},
+        {"word": "探索", "strength": 0.75},
+        {"word": "经验", "strength": 0.8}
+      ]
+    },
+    {
+      "word": "学习",
+      "pos": "verb",
+      "definition": "通过阅读、听讲、研究、实践等获得知识或技能的过程",
+      "examples": ["活到老学到老", "学习使人进步"],
+      "associations": [
+        {"word": "知识", "strength": 0.9},
+        {"word": "成长", "strength": 0.82},
+        {"word": "思考", "strength": 0.78},
+        {"word": "记忆", "strength": 0.72},
+        {"word": "坚持", "strength": 0.68}
+      ]
+    },
+    {
+      "word": "探索",
+      "pos": "verb",
+      "definition": "对未知事物进行寻究、试图发现",
+      "examples": ["人类对宇宙的探索永无止境", "探索未知是科学的精神"],
+      "associations": [
+        {"word": "创造", "strength": 0.78},
+        {"word": "知识", "strength": 0.75},
+        {"word": "冒险", "strength": 0.7},
+        {"word": "发现", "strength": 0.88},
+        {"word": "好奇心", "strength": 0.85}
+      ]
+    },
+    {
+      "word": "发现",
+      "pos": "verb",
+      "definition": "经过探索研究看到或找到前人没有看到的事物或规律",
+      "examples": ["哥伦布发现了新大陆", "科学发现改变了世界"],
+      "associations": [
+        {"word": "探索", "strength": 0.88},
+        {"word": "惊喜", "strength": 0.72},
+        {"word": "真理", "strength": 0.78},
+        {"word": "洞察", "strength": 0.8},
+        {"word": "好奇心", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "好奇心",
+      "pos": "noun",
+      "definition": "对自己不了解的事物觉得新奇而感兴趣的心理",
+      "examples": ["好奇心驱使他不断提问", "保持好奇心是创新的源泉"],
+      "associations": [
+        {"word": "探索", "strength": 0.85},
+        {"word": "发现", "strength": 0.75},
+        {"word": "学习", "strength": 0.78},
+        {"word": "童心", "strength": 0.7},
+        {"word": "想象", "strength": 0.72}
+      ]
+    },
+    {
+      "word": "推理",
+      "pos": "verb",
+      "definition": "由一个或几个已知判断推出另一个新判断的思维形式",
+      "examples": ["根据线索进行逻辑推理", "推理能力是智力的重要表现"],
+      "associations": [
+        {"word": "逻辑", "strength": 0.92},
+        {"word": "思维", "strength": 0.78},
+        {"word": "判断", "strength": 0.85},
+        {"word": "分析", "strength": 0.82},
+        {"word": "理性", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "理性",
+      "pos": "adj",
+      "definition": "属于判断、推理等活动的，从理智上控制行为的能力",
+      "examples": ["保持理性的判断", "理性思考是成熟的标志"],
+      "associations": [
+        {"word": "逻辑", "strength": 0.85},
+        {"word": "智慧", "strength": 0.8},
+        {"word": "冷静", "strength": 0.78},
+        {"word": "情感", "strength": 0.6},
+        {"word": "判断", "strength": 0.82}
+      ]
+    },
+    {
+      "word": "情感",
+      "pos": "noun",
+      "definition": "人对客观事物是否满足自己的需要而产生的态度体验",
+      "examples": ["音乐能够触动人的情感", "情感是文学创作的灵魂"],
+      "associations": [
+        {"word": "记忆", "strength": 0.8},
+        {"word": "共鸣", "strength": 0.88},
+        {"word": "温暖", "strength": 0.72},
+        {"word": "理性", "strength": 0.6},
+        {"word": "心弦", "strength": 0.78}
+      ]
+    },
+    {
+      "word": "共鸣",
+      "pos": "noun",
+      "definition": "由别人的某种情绪引起相同的情绪，比喻思想上的一致",
+      "examples": ["这首诗引起了读者的共鸣", "人与人之间需要共鸣"],
+      "associations": [
+        {"word": "情感", "strength": 0.88},
+        {"word": "理解", "strength": 0.82},
+        {"word": "艺术", "strength": 0.75},
+        {"word": "心弦", "strength": 0.8},
+        {"word": "沟通", "strength": 0.7}
+      ]
+    },
+    {
+      "word": "温暖",
+      "pos": "adj",
+      "definition": "暖和，使人感到暖意，也比喻关怀和同情",
+      "examples": ["阳光带来温暖", "她的话语让人感到温暖"],
+      "associations": [
+        {"word": "情感", "strength": 0.72},
+        {"word": "阳光", "strength": 0.85},
+        {"word": "春天", "strength": 0.8},
+        {"word": "希望", "strength": 0.78},
+        {"word": "关怀", "strength": 0.82}
+      ]
+    },
+    {
+      "word": "希望",
+      "pos": "noun",
+      "definition": "心里想着实现某种事情，对未来美好的期望",
+      "examples": ["希望是黑暗中的灯塔", "永远不要放弃希望"],
+      "associations": [
+        {"word": "温暖", "strength": 0.78},
+        {"word": "梦想", "strength": 0.85},
+        {"word": "坚持", "strength": 0.72},
+        {"word": "光明", "strength": 0.82},
+        {"word": "勇气", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "梦想",
+      "pos": "noun",
+      "definition": "对未来事物的美好想象和希望，也指美好的愿望",
+      "examples": ["追逐梦想的脚步永不停歇", "每个人心中都有一个梦想"],
+      "associations": [
+        {"word": "希望", "strength": 0.85},
+        {"word": "想象", "strength": 0.78},
+        {"word": "自由", "strength": 0.72},
+        {"word": "坚持", "strength": 0.8},
+        {"word": "飞翔", "strength": 0.68}
+      ]
+    },
+    {
+      "word": "自由",
+      "pos": "noun",
+      "definition": "不受约束，不受限制，在法律规定的范围内随自己意志活动的权利",
+      "examples": ["自由是人类的永恒追求", "思想的自由最为珍贵"],
+      "associations": [
+        {"word": "想象", "strength": 0.68},
+        {"word": "梦想", "strength": 0.72},
+        {"word": "飞翔", "strength": 0.82},
+        {"word": "风", "strength": 0.7},
+        {"word": "天空", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "飞翔",
+      "pos": "verb",
+      "definition": "在空中飞旋，比喻自由地发展",
+      "examples": ["鸟儿在天空飞翔", "让思想自由飞翔"],
+      "associations": [
+        {"word": "自由", "strength": 0.82},
+        {"word": "梦想", "strength": 0.68},
+        {"word": "天空", "strength": 0.9},
+        {"word": "鸟", "strength": 0.78},
+        {"word": "云", "strength": 0.72}
+      ]
+    },
+    {
+      "word": "天空",
+      "pos": "noun",
+      "definition": "地面以上的空间，日月星辰罗列的广大空间",
+      "examples": ["仰望无边的天空", "天空是梦想的画布"],
+      "associations": [
+        {"word": "飞翔", "strength": 0.9},
+        {"word": "自由", "strength": 0.75},
+        {"word": "云", "strength": 0.88},
+        {"word": "星辰", "strength": 0.82},
+        {"word": "辽阔", "strength": 0.78}
+      ]
+    },
+    {
+      "word": "星辰",
+      "pos": "noun",
+      "definition": "星星的总称，泛指日月星",
+      "examples": ["仰望星辰，感受宇宙的浩瀚", "星辰大海是终极的征途"],
+      "associations": [
+        {"word": "天空", "strength": 0.82},
+        {"word": "宇宙", "strength": 0.9},
+        {"word": "光芒", "strength": 0.78},
+        {"word": "夜晚", "strength": 0.85},
+        {"word": "神秘", "strength": 0.72}
+      ]
+    },
+    {
+      "word": "宇宙",
+      "pos": "noun",
+      "definition": "一切物质及其存在形式的总体，万物的总称",
+      "examples": ["宇宙的奥秘令人着迷", "人类对宇宙的认识还很有限"],
+      "associations": [
+        {"word": "星辰", "strength": 0.9},
+        {"word": "神秘", "strength": 0.82},
+        {"word": "探索", "strength": 0.85},
+        {"word": "无限", "strength": 0.88},
+        {"word": "时空", "strength": 0.78}
+      ]
+    },
+    {
+      "word": "神秘",
+      "pos": "adj",
+      "definition": "使人摸不透的，高深莫测的",
+      "examples": ["深海中隐藏着神秘的生物", "宇宙的起源至今仍很神秘"],
+      "associations": [
+        {"word": "宇宙", "strength": 0.82},
+        {"word": "星辰", "strength": 0.72},
+        {"word": "未知", "strength": 0.88},
+        {"word": "好奇", "strength": 0.75},
+        {"word": "夜晚", "strength": 0.68}
+      ]
+    },
+    {
+      "word": "艺术",
+      "pos": "noun",
+      "definition": "用形象来反映现实但比现实有典型性的社会意识形态",
+      "examples": ["艺术源于生活又高于生活", "她全身心投入艺术创作"],
+      "associations": [
+        {"word": "创造", "strength": 0.82},
+        {"word": "共鸣", "strength": 0.75},
+        {"word": "灵感", "strength": 0.78},
+        {"word": "美", "strength": 0.9},
+        {"word": "表达", "strength": 0.82}
+      ]
+    },
+    {
+      "word": "自然",
+      "pos": "noun",
+      "definition": "自然界，指一切存在物的总和，也指事物发展的规律",
+      "examples": ["回归自然是心灵的栖息", "自然之美令人敬畏"],
+      "associations": [
+        {"word": "春天", "strength": 0.78},
+        {"word": "生命", "strength": 0.85},
+        {"word": "和谐", "strength": 0.82},
+        {"word": "山川", "strength": 0.72},
+        {"word": "宁静", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "春天",
+      "pos": "noun",
+      "definition": "一年四季之首，万物复苏的季节",
+      "examples": ["春天来了，百花盛开", "春天象征着重生与希望"],
+      "associations": [
+        {"word": "温暖", "strength": 0.8},
+        {"word": "自然", "strength": 0.78},
+        {"word": "生命", "strength": 0.82},
+        {"word": "花", "strength": 0.85},
+        {"word": "希望", "strength": 0.72}
+      ]
+    },
+    {
+      "word": "生命",
+      "pos": "noun",
+      "definition": "生物体所具有的活动能力，也指有生命的东西",
+      "examples": ["生命是最宝贵的财富", "尊重每一个生命"],
+      "associations": [
+        {"word": "自然", "strength": 0.85},
+        {"word": "春天", "strength": 0.82},
+        {"word": "成长", "strength": 0.88},
+        {"word": "坚韧", "strength": 0.72},
+        {"word": "奇迹", "strength": 0.78}
+      ]
+    },
+    {
+      "word": "成长",
+      "pos": "verb",
+      "definition": "向成熟的阶段发展、生长",
+      "examples": ["成长是一个不断学习的过程", "每一次挫折都是成长的机会"],
+      "associations": [
+        {"word": "生命", "strength": 0.88},
+        {"word": "学习", "strength": 0.82},
+        {"word": "坚持", "strength": 0.78},
+        {"word": "变化", "strength": 0.72},
+        {"word": "时间", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "坚持",
+      "pos": "verb",
+      "definition": "坚决保持、进行下去，不放弃",
+      "examples": ["坚持就是胜利", "坚持梦想才能实现梦想"],
+      "associations": [
+        {"word": "希望", "strength": 0.72},
+        {"word": "梦想", "strength": 0.8},
+        {"word": "成长", "strength": 0.78},
+        {"word": "坚韧", "strength": 0.88},
+        {"word": "勇气", "strength": 0.82}
+      ]
+    },
+    {
+      "word": "勇气",
+      "pos": "noun",
+      "definition": "敢作敢为毫不畏惧的气魄",
+      "examples": ["面对困难需要勇气", "改变自己需要很大的勇气"],
+      "associations": [
+        {"word": "坚持", "strength": 0.82},
+        {"word": "希望", "strength": 0.75},
+        {"word": "冒险", "strength": 0.78},
+        {"word": "突破", "strength": 0.85},
+        {"word": "信念", "strength": 0.8}
+      ]
+    },
+    {
+      "word": "直觉",
+      "pos": "noun",
+      "definition": "未经充分逻辑推理的直观感觉",
+      "examples": ["女性的直觉往往很准确", "有时候要相信自己的直觉"],
+      "associations": [
+        {"word": "灵感", "strength": 0.82},
+        {"word": "判断", "strength": 0.72},
+        {"word": "本能", "strength": 0.85},
+        {"word": "理性", "strength": 0.55},
+        {"word": "洞察", "strength": 0.78}
+      ]
+    },
+    {
+      "word": "洞察",
+      "pos": "verb",
+      "definition": "观察得非常深入、透彻，看穿事物的本质",
+      "examples": ["他有着敏锐的洞察力", "洞察人心是一门艺术"],
+      "associations": [
+        {"word": "智慧", "strength": 0.82},
+        {"word": "发现", "strength": 0.8},
+        {"word": "直觉", "strength": 0.78},
+        {"word": "观察", "strength": 0.85},
+        {"word": "深刻", "strength": 0.75}
+      ]
+    },
+    {
+      "word": "遗忘",
+      "pos": "verb",
+      "definition": "忘记，对记忆的内容不能回忆或回忆错误",
+      "examples": ["时间会让人遗忘伤痛", "有些事情不应被遗忘"],
+      "associations": [
+        {"word": "记忆", "strength": 0.88},
+        {"word": "时间", "strength": 0.82},
+        {"word": "释然", "strength": 0.72},
+        {"word": "珍惜", "strength": 0.68},
+        {"word": "痕迹", "strength": 0.65}
+      ]
+    },
+    {
+      "word": "时间",
+      "pos": "noun",
+      "definition": "物质运动中的一种存在方式，由过去、现在、将来构成的连绵不断的系统",
+      "examples": ["时间是最公平的", "时间见证了一切"],
+      "associations": [
+        {"word": "记忆", "strength": 0.75},
+        {"word": "遗忘", "strength": 0.82},
+        {"word": "成长", "strength": 0.75},
+        {"word": "永恒", "strength": 0.78},
+        {"word": "变化", "strength": 0.72}
+      ]
+    },
+    {
+      "word": "经验",
+      "pos": "noun",
+      "definition": "由实践得来的知识或技能",
+      "examples": ["经验是最好的老师", "从经验中汲取教训"],
+      "associations": [
+        {"word": "知识", "strength": 0.8},
+        {"word": "记忆", "strength": 0.82},
+        {"word": "实践", "strength": 0.88},
+        {"word": "智慧", "strength": 0.72},
+        {"word": "成长", "strength": 0.7}
+      ]
+    },
+    {
+      "word": "光芒",
+      "pos": "noun",
+      "definition": "向四面放射的强烈光线，比喻希望的象征",
+      "examples": ["黑暗中看到一线光芒", "知识的光芒照亮前路"],
+      "associations": [
+        {"word": "星辰", "strength": 0.78},
+        {"word": "光明", "strength": 0.9},
+        {"word": "阳光", "strength": 0.82},
+        {"word": "希望", "strength": 0.72},
+        {"word": "灯塔", "strength": 0.7}
+      ]
+    }
+  ]
+}
