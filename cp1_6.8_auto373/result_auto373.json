@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T05:01:52.746Z",
+  "task_name": "auto373",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「数据潮汐」的3D交互可视化项目，模拟在深蓝色数字海洋中，由实时数据流驱动的动态粒子波浪。用户可以通过鼠标交互控制波浪形态，并查看不同数据维度的视觉映射。使用TypeScript和Three.js来实现，Vite构建。项目包含6个文件：src/main.ts（入口，初始化场景、相机和渲染器）、src/App.ts（主组件管理场景状态和UI布局）、src/OceanSystem.ts（负责粒子波浪的生成、更新和渲染，包含波浪算法和粒子属性管理）、src/DataController.ts（模拟数据流输入，提供随机数据或接受用户上传的JSON数据，将数据映射到波浪参数如高度、颜色和速度）、src/InteractionHandler.ts（处理鼠标拖拽旋转视角、滚轮缩放、点击波浪触发局部浪涌动画）、src/ui/ControlPanel.tsx（毛玻璃控制面板，包含数据源选择器、波浪振幅滑块、颜色主题切换（海洋、火焰、极光）、粒子密度调节（1000-5000）和“重置视角”按钮，切换时有平滑过渡动画）。另外根目录放index.html（入口页面，背景深蓝到黑渐变，标题居中显示）、package.json（包含依赖：three、react、react-dom、@types/react、@types/three、vite、typescript，以及启动脚本：dev/build/preview）、tsconfig.json（严格模式，配置路径别名）和vite.config.ts（配置React插件）。需求包括：1. 粒子波浪由数千个发光粒子组成，粒子大小和颜色随波浪高度变化，底部有半透明光晕；2. 默认场景缓慢自动旋转，数据更新时波浪形态变化，并带有粒子流动轨迹（拖尾效果）；3. 交互反馈：鼠标拖拽旋转视角流畅，滚轮缩放有惯性，点击波浪任意位置触发一次局部浪涌动画（点击点周围粒子向上喷涌并扩散，持续2秒后恢复）；4. 控制面板响应式适配（桌面右下角、移动端底部全宽），毛玻璃效果（背景模糊，边框发光）；5. 性能要求：帧率稳定60fps，粒子数动态调节时平滑过渡；6. 数据源支持模拟随机数据和用户上传CSV/JSON文件两种模式，上传后自动映射到波浪参数。运行方式：npm install && npm run dev，直接开箱即用。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:76b39e089f2f51b14136ddb391e35b9c_6a264bcdaf88bb5c2580c682.6a264ca6af88bb5c2580c739.6a264ca60b02abbbf6f7c01c:Trae CN.T(2026/6/8 13:01:26)",
+    "user_id": "2402906841289811",
+    "trace_id": "76b39e089f2f51b14136ddb391e35b9c",
+    "session_id": "6a264bcdaf88bb5c2580c682",
+    "task_id": "6a264ca6af88bb5c2580c739",
+    "message_id": "6a264ca60b02abbbf6f7c01c",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 13:01:26",
+    "format": "full"
+  },
+  "trace": "null"
+}
