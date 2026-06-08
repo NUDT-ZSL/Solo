@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>流光幻境 — Luminous Realm</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0a0a1a;
+        font-family: 'Noto Sans SC', sans-serif;
+      }
+      #app {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+      canvas {
+        display: block;
+      }
+      .loading-screen {
+        position: fixed;
+        inset: 0;
+        background: #0a0a1a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.8s ease;
+      }
+      .loading-screen.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loading-text {
+        font-family: 'Orbitron', monospace;
+        color: #00e5ff;
+        font-size: 1.2rem;
+        letter-spacing: 0.3em;
+        animation: loadPulse 1.5s ease-in-out infinite;
+      }
+      @keyframes loadPulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="loading-screen" id="loading">
+        <span class="loading-text">INITIALIZING</span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
