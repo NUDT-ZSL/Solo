@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「时光藏品」的全栈web应用，用户可以为每一年创建一份数字时间胶囊，记录当年的重要事件、心情和照片，并设定一个解锁年份（例如5年后），到达解锁时间后胶囊自动打开，用户和受邀好友可以查看里面的内容。首页以时间线形式展示用户所有胶囊（未解锁的显示为密封信封样式，解锁后展示内容预览），点击胶囊进入详情页，可以看到完整记录（文字、图片、一个动态年份倒计时进度条，以及已邀请好友列表）。用户可以邀请其他用户通过邮件链接加入，也可以公开分享（生成一个公开链接，但内容仍受解锁时间限制）。整体视觉走复古怀旧风：米白到浅棕渐变背景，信封卡片是泛黄纸张质感，带轻微纸纹纹理和柔和阴影，未解锁时显示一把小锁图标，解锁时锁裂开并散落光点，内容以手写体文字和褪色照片风格展示，年份倒计时进度条用渐变线条模拟墨水流动。控制面板是半透明毛玻璃圆角面板（浅色），带有微缓动悬停效果，响应式适配桌面和移动端，交互反馈流畅，帧率保持60fps。用TypeScript和React做前端，Node.js做后端。前端用Vite构建，后端用Express。文件结构大概这样：client/src/main.tsx（入口挂载React）、client/src/App.tsx（主路由和状态管理）、client/src/pages/TimeLine.tsx（首页时间线组件）、client/src/pages/CapsuleDetail.tsx（胶囊详情页组件，含倒计时和好友列表）、client/src/components/CapsuleCard.tsx（胶囊卡片组件，含锁动画）、client/src/utils/api.ts（后端API调用封装）、server/src/index.ts（Express服务入口，含API路由和静态文件服务）。对了，顺便把client/package.json（包含vite、react、react-router-dom等依赖，dev脚本用vite）、server/package.json（包含express、cors、multer等，start脚本用ts-node或编译后运行）、client/vite.config.ts（配置代理到后端端口）、client/tsconfig.json（标准react-ts配置）、server/tsconfig.json（node目标）都带上，这样我npm install && npm run dev就能跑起来了。"
+}
