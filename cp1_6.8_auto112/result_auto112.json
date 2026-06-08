@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T19:17:33.647Z",
+  "task_name": "auto112",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「风语信件」的交互式信件排版与动画工具。用户可以选择信纸纹理（3种预设：羊皮纸、复古横格纸、空白雪白纸）、字体风格（手写体、打字机体、优雅花体），输入信件内容后，页面会以打字机逐字打印动画展示信件，并有随机飘落的羽毛或干花粒子背景。用户可以点击「封缄」按钮，将信件折叠（CSS 3D翻转动画）并盖上蜡封印章。用TypeScript和React来实现，交互逻辑封装在独立TS模块中。文件大概有：src/下有 LetterEngine.ts（核心引擎，管理信纸纹理加载、字体切换、文本分段和逐字动画调度）、SealAnimation.ts（管理蜡封印章生成随机位置、3D翻转折叠动画）、ParticleEffect.ts（管理羽毛/干花粒子的生成、随机飘落轨迹、缓动和淡出）、MainUI.tsx（React组件，包含编辑器面板、预览区、控制按钮组和一个重置按钮）。根目录放 package.json（依赖包括 react、react-dom、typescript、vite、@vitejs/plugin-react），以及 tsconfig.json（严格模式）、vite.config.js（配置React插件和开发服务器端口）、index.html（入口，包含一个id为root的div）。运行方式：npm install && npm run dev。界面布局：左侧是深色半透明毛玻璃编辑器面板（带信纸预览缩略图和字体选择下拉框），右侧是浅色半透明毛玻璃信件预览区（显示带打字机动画的信件内容，背景粒子飘落）。整体风格为古典优雅：暖黄调和复古棕色系，微妙的纸张纹理背景，所有交互带缓动动画（0.3s ease）。响应式适配桌面和平板。需求：1. 提供三种信纸纹理和三种字体，切换即时生效；2. 打字机逐字打印动画，速度可调（滑块控制）；3. 点击封缄触发3D翻转折叠动画并随机生成一枚蜡封印章（位置随机，半透明毛玻璃效果）；4. 背景持续飘落羽毛和干花粒子（约30个），粒子带旋转和缓动淡出；5. 性能方面保持60fps，粒子数量动态调整；6. 所有交互反馈流畅（按钮点击有按下和释放动画，悬停有轻微放大）；7. 控制面板包含重置按钮和速度滑块。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:9e9c4166fc0d2c534195ceeee495a27a_6a25c26a04f01ca28e49c22d.6a25c3ba04f01ca28e49c35c.6a25c3ba190ad03e1b9ded6f:Trae CN.T(2026/6/8 03:17:14)",
+    "user_id": "2402906841289811",
+    "trace_id": "9e9c4166fc0d2c534195ceeee495a27a",
+    "session_id": "6a25c26a04f01ca28e49c22d",
+    "task_id": "6a25c3ba04f01ca28e49c35c",
+    "message_id": "6a25c3ba190ad03e1b9ded6f",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 03:17:14",
+    "format": "full"
+  },
+  "trace": "null"
+}
