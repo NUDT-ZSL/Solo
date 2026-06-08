@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T17:44:51.077Z",
+  "task_name": "auto59",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「幻音涟漪」的交互式音乐可视化项目，用户播放音频文件时，画布上实时生成随音乐频率和振幅变化的彩色波形与粒子动画。用 TypeScript 和 React 来做，配 Web Audio API 分析音频，Canvas 绘制视觉。文件结构大概这样：src/下有 AudioEngine.ts（处理音频文件加载、解码和实时频率分析）、WaveRenderer.ts（负责绘制主波形，带缓动和颜色渐变）、ParticleSystem.ts（管理粒子生成、运动和消散，粒子大小和颜色随音乐动态变化）、ControlPanel.tsx（React 组件，包含文件上传按钮、播放/暂停按钮和音量滑块）、App.tsx（主组件，整合所有模块、管理全局状态和动画循环）。另外，根目录放一个 package.json（依赖包括 react、react-dom、typescript、vite、@vitejs/plugin-react），vite.config.js 配置好 React 插件，tsconfig.json 带上，再提供一个 index.html 作为入口。这样我 npm install && npm run dev 就能跑起来。主要需求：1. 支持用户上传 .mp3 或 .wav 文件，自动解析并开始播放，同时启动实时可视化；2. 主波形图用多层半透明渐变线条绘制，根据频率改变颜色（低频偏红橙、中频偏绿、高频偏蓝紫），波形带缓动跟随，平滑不卡顿；3. 粒子系统在波形上下两侧生成大量细小颗粒，粒子大小和颜色随当前音量动态变化，音量高时粒子变大变亮并向四周扩散，音量低时粒子缩小暗淡并向中心汇聚；4. 控制面板位于画布下方，采用毛玻璃半透明风格（深色背景配霓虹蓝紫辅色），按钮有缓动悬停效果，文件上传按钮带拖拽区域样式；5. 整体界面暗色基底（深灰到黑渐变），背景有缓慢漂移的星光粒子，画布占主体，响应式适配桌面和移动端，帧率保持 60fps；6. 交互反馈流畅，点击播放/暂停时伴有按钮微动效和波形动画平滑过渡，文件上传时有加载提示。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:03af23e4d7751d7602665325d79ea052_6a25ad8390dfb02f15fc3fbf.6a25ae0390dfb02f15fc402a.6a25ae023a4f887057813ad3:Trae CN.T(2026/6/8 01:44:35)",
+    "user_id": "2402906841289811",
+    "trace_id": "03af23e4d7751d7602665325d79ea052",
+    "session_id": "6a25ad8390dfb02f15fc3fbf",
+    "task_id": "6a25ae0390dfb02f15fc402a",
+    "message_id": "6a25ae023a4f887057813ad3",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 01:44:35",
+    "format": "full"
+  },
+  "trace": "null"
+}
