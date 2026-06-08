@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T07:03:22.606Z",
+  "task_name": "auto438",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫『流光织网』的交互式Web应用，它在浏览器中模拟一张由发光丝线编织的动态网格，用户可通过鼠标拖拽和点击来扭曲、切割和重组网格，形成不断变化的流动图案。用TypeScript和Canvas API实现，Vite构建。文件结构大概是：src/main.ts（入口）、src/grid.ts（网格逻辑与渲染）、src/interaction.ts（鼠标交互处理）、src/control.ts（控制面板UI）、src/utils.ts（工具函数和常量），再加上index.html、package.json、tsconfig.json和vite.config.js，这样npm install && npm run dev就能直接跑起来。需求方面：1. 网格由数百条半透明发光线条组成，线条颜色从左到右从暖橙渐变到冷蓝，每条线带微光拖尾，移动时有流动感；2. 鼠标拖拽可扭曲网格形成波浪或漩涡形态，拖拽时有弹性跟随动画并伴有粒子飞溅效果；3. 点击网格会触发“切割”效果——线条在点击处断开并向外扩散光晕，之后慢慢重新连接；4. 界面右下角有一个毛玻璃控制面板，包含“网格密度”滑块（5-20）、“扭曲强度”滑块（0.1-1.0）、“颜色主题”选择器（预设4种：极光、熔岩、深海、霓虹）和“重置”按钮，所有控件都有平滑悬停和点击反馈；5. 整个页面采用深空蓝到紫黑渐变背景，控制面板半透明带微光边框，按钮悬停时发光，无多余UI干扰；6. 交互反馈要流畅，帧率稳定在60fps，拖动和点击动画不卡顿；7. 使用TypeScript，配置完整，包括tsconfig.json中的strict模式。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:ec7aaad08c537998d852085572b66af9_6a2668596ffce764dbac8ad6.6a26692a6ffce764dbac8b98.6a26692a9cfa191fcbc4204c:Trae CN.T(2026/6/8 15:03:06)",
+    "user_id": "2402906841289811",
+    "trace_id": "ec7aaad08c537998d852085572b66af9",
+    "session_id": "6a2668596ffce764dbac8ad6",
+    "task_id": "6a26692a6ffce764dbac8b98",
+    "message_id": "6a26692a9cfa191fcbc4204c",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 15:03:06",
+    "format": "full"
+  },
+  "trace": "null"
+}
