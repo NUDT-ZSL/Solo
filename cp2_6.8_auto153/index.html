@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>流体力学3D模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: radial-gradient(ellipse at center, #0A0A2E 0%, #1A0A3E 100%);
+      color: #ffffff;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #page-title {
+      position: absolute;
+      top: 24px;
+      right: 32px;
+      font-size: 20px;
+      font-weight: 600;
+      color: #ffffff;
+      text-shadow: 0 0 10px #00B4D8;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+      z-index: 100;
+    }
+
+    #page-title:hover {
+      text-shadow: 0 0 20px #00B4D8, 0 0 30px #00B4D8;
+    }
+
+    #control-panel {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      width: 300px;
+      padding: 16px;
+      background: rgba(13, 13, 43, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #4A4A6E;
+      border-radius: 12px;
+      z-index: 100;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    #control-panel.collapsed {
+      transform: translateX(-340px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .panel-section {
+      margin-bottom: 18px;
+    }
+
+    .panel-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .panel-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #B8B8D8;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .panel-value {
+      color: #00B4D8;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: #2A2A4E;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #00B4D8;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 0 rgba(0, 180, 216, 0);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 8px #00B4D8, 0 0 16px rgba(0, 180, 216, 0.5);
+      transform: scale(1.1);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #00B4D8;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      box-shadow: 0 0 8px #00B4D8, 0 0 16px rgba(0, 180, 216, 0.5);
+    }
+
+    .mode-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      height: 36px;
+      border: none;
+      background: #3A3A5C;
+      color: #B8B8D8;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .mode-btn:hover {
+      background: #4A4A6E;
+      color: #ffffff;
+    }
+
+    .mode-btn:active {
+      transform: scale(0.95);
+      transition: transform 0.1s ease;
+    }
+
+    .mode-btn.active {
+      background: #00B4D8;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(0, 180, 216, 0.6), 0 0 24px rgba(0, 180, 216, 0.3);
+    }
+
+    #mode-title {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 72px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.85);
+      letter-spacing: 8px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      text-shadow: 0 0 30px rgba(0, 180, 216, 0.5);
+      z-index: 50;
+      user-select: none;
+    }
+
+    #mode-title.visible {
+      opacity: 1;
+    }
+
+    #fps-counter {
+      position: absolute;
+      bottom: 16px;
+      right: 24px;
+      font-size: 12px;
+      color: #4A4A6E;
+      font-variant-numeric: tabular-nums;
+      z-index: 100;
+      user-select: none;
+    }
+
+    @media (max-width: 768px) {
+      #page-title {
+        top: 16px;
+        right: 16px;
+        font-size: 16px;
+      }
+
+      #control-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 200px;
+        border-radius: 16px 16px 0 0;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #control-panel.collapsed {
+        transform: translateY(220px);
+        opacity: 0;
+      }
+
+      .panel-grid {
+        display: flex;
+        gap: 16px;
+        flex: 1;
+      }
+
+      .panel-section {
+        flex: 1;
+        margin-bottom: 0;
+        min-width: 0;
+      }
+
+      .mode-buttons {
+        margin-top: 12px;
+      }
+
+      #mode-title {
+        font-size: 36px;
+        letter-spacing: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="page-title">流体力学3D模拟器</div>
+    <div id="fps-counter">-- FPS</div>
+    <div id="mode-title"></div>
+    <div id="control-panel"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
