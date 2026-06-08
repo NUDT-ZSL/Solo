@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T01:44:03.201Z",
+  "task_name": "auto307",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「字影流沙」的交互式文字动画生成器，用户输入一段文字，应用会实时生成流动的沙粒效果，让文字像被风吹散的沙堡一样逐渐消散又重组。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口挂载React应用）、src/App.tsx（主组件，管理文字输入和沙画状态）、src/SandCanvas.tsx（Canvas渲染引擎，负责粒子系统的更新和绘制）、src/ControlPanel.tsx（控制面板，包含文字输入框、动画速度滑块、消散强度滑块和重置按钮）、src/utils/particleSystem.ts（粒子系统逻辑，包括粒子初始化、更新和消散重组算法）。对了，顺便把package.json（包含react、react-dom、typescript、@vitejs/plugin-react等依赖，启动脚本dev和build）、tsconfig.json（启用jsx、strict模式）、vite.config.ts（配置React插件）以及一个入口index.html（挂载#root）也带上，这样我npm install && npm run dev就能直接运行。需求方面：1. 用户输入任意文本，点击“生成”后，文字轮廓会先以沙粒形态浮现，然后沙粒缓慢飘散，几秒后又重组回原文字，循环往复；2. 控制面板包含文字输入框、动画速度滑块（控制飘散/重组速度）、消散强度滑块（控制飘散范围和粒子间距）、一个重置按钮（回到初始静态文字状态）；3. 界面布局：上方是Canvas画布区域（占大部分空间，自适应宽高），下方是控制面板（居中，半透明毛玻璃圆角面板，带细发光边框）；4. 整体视觉走沙漠落日风：背景是暖黄到橙红渐变，沙粒是细小的金色到琥珀色发光点，消散时有轻微拖尾光效，重组时粒子会沿原文字路径汇聚并闪烁；5. 动画过渡平滑，帧率保持在60fps，粒子数量根据画布大小动态调节以保证性能；6. 响应式适配桌面和移动端，控制面板在小屏上折叠成底部浮动条；7. 交互反馈流畅：滑块拖动时文字实时更新动画参数，按钮点击有按压和松开的缓动效果。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:776ed5b1f1385f29c6736380db00fe2d_6a261dbca15b9da7e04f5ba0.6a261e53a15b9da7e04f5c02.6a261e5384411c499861be17:Trae CN.T(2026/6/8 09:43:47)",
+    "user_id": "2402906841289811",
+    "trace_id": "776ed5b1f1385f29c6736380db00fe2d",
+    "session_id": "6a261dbca15b9da7e04f5ba0",
+    "task_id": "6a261e53a15b9da7e04f5c02",
+    "message_id": "6a261e5384411c499861be17",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 09:43:47",
+    "format": "full"
+  },
+  "trace": "null"
+}
