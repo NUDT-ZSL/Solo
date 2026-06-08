@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Abstract Sculpture Generator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0B1A;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      color: #E2E8F0;
+      user-select: none;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #nebula-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(90, 60, 180, 0.08) 70%, rgba(30, 20, 80, 0.15) 100%);
+      animation: nebulaPulse 8s ease-in-out infinite;
+    }
+    @keyframes nebulaPulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+    #template-buttons {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 10;
+    }
+    .template-btn {
+      padding: 10px 18px;
+      background: rgba(26, 27, 46, 0.7);
+      border: 1px solid #2D3748;
+      border-radius: 8px;
+      color: #E2E8F0;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: all 0.2s ease;
+      filter: brightness(0.8);
+      text-align: left;
+      min-width: 140px;
+    }
+    .template-btn:hover {
+      filter: brightness(1.0);
+      border-color: #667EEA;
+      transform: translateX(4px);
+    }
+    .template-btn.active {
+      filter: brightness(1.0);
+      border-color: #D53F8C;
+      background: rgba(213, 63, 140, 0.15);
+    }
+    .template-btn small {
+      display: block;
+      font-size: 10px;
+      color: #A0AEC0;
+      margin-top: 2px;
+      font-weight: 400;
+    }
+    #control-panel {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      width: 280px;
+      background: rgba(26, 27, 46, 0.7);
+      border: 1px solid #2D3748;
+      border-radius: 12px;
+      padding: 18px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 10;
+      display: none;
+    }
+    #control-panel.visible {
+      display: block;
+      animation: panelFadeIn 0.3s ease;
+    }
+    @keyframes panelFadeIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2D3748;
+      color: #F6E05E;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .panel-close {
+      background: none;
+      border: none;
+      color: #A0AEC0;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s;
+      filter: brightness(0.8);
+    }
+    .panel-close:hover {
+      filter: brightness(1.0);
+      color: #FC8181;
+    }
+    .control-group {
+      margin-bottom: 12px;
+    }
+    .control-label {
+      font-size: 11px;
+      color: #A0AEC0;
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .control-label span:last-child {
+      color: #667EEA;
+      font-family: monospace;
+    }
+    .slider-container {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .slider-container label {
+      font-size: 10px;
+      color: #718096;
+      min-width: 14px;
+    }
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: #2D3748;
+      border-radius: 2px;
+      outline: none;
+      filter: brightness(0.8);
+      transition: filter 0.2s;
+    }
+    input[type="range"]:hover {
+      filter: brightness(1.0);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      background: #667EEA;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #9F7AEA;
+      transform: scale(1.2);
+    }
+    input[type="color"] {
+      width: 100%;
+      height: 32px;
+      border: 1px solid #2D3748;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+      padding: 2px;
+      filter: brightness(0.8);
+      transition: filter 0.2s;
+    }
+    input[type="color"]:hover {
+      filter: brightness(1.0);
+    }
+    #light-controller {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 140px;
+      height: 140px;
+      background: rgba(26, 27, 46, 0.7);
+      border: 1px solid #2D3748;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 10;
+      cursor: grab;
+      overflow: hidden;
+    }
+    #light-controller:active {
+      cursor: grabbing;
+    }
+    #light-controller canvas {
+      width: 100%;
+      height: 100%;
+    }
+    .light-label {
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: #A0AEC0;
+      pointer-events: none;
+    }
+    #transition-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0A0B1A;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 100;
+      transition: opacity 0.5s ease;
+    }
+    #transition-overlay.active {
+      opacity: 1;
+    }
+    #info-hint {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      font-size: 11px;
+      color: #4A5568;
+      z-index: 10;
+      line-height: 1.6;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+    .row .control-group {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="nebula-overlay"></div>
+    <div id="transition-overlay"></div>
+
+    <div id="template-buttons">
+      <button class="template-btn active" data-template="starRing">
+        星环组合
+        <small>Star Ring Complex</small>
+      </button>
+      <button class="template-btn" data-template="floatingCube">
+        浮空方阵
+        <small>Floating Cube Matrix</small>
+      </button>
+      <button class="template-btn" data-template="spiralTower">
+        螺旋塔
+        <small>Spiral Tower</small>
+      </button>
+      <button class="template-btn" data-template="chaosCluster">
+        混沌簇
+        <small>Chaos Cluster</small>
+      </button>
+    </div>
+
+    <div id="control-panel">
+      <div class="panel-title">
+        <span>几何体参数</span>
+        <button class="panel-close" id="panel-close">×</button>
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>位置偏移 X/Y/Z</span></div>
+        <div class="slider-container">
+          <label>X</label>
+          <input type="range" id="pos-x" min="-5" max="5" step="0.1" value="0" />
+        </div>
+        <div style="height:4px"></div>
+        <div class="slider-container">
+          <label>Y</label>
+          <input type="range" id="pos-y" min="-5" max="5" step="0.1" value="0" />
+        </div>
+        <div style="height:4px"></div>
+        <div class="slider-container">
+          <label>Z</label>
+          <input type="range" id="pos-z" min="-5" max="5" step="0.1" value="0" />
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>旋转角度 X/Y/Z</span></div>
+        <div class="slider-container">
+          <label>X</label>
+          <input type="range" id="rot-x" min="0" max="360" step="1" value="0" />
+        </div>
+        <div style="height:4px"></div>
+        <div class="slider-container">
+          <label>Y</label>
+          <input type="range" id="rot-y" min="0" max="360" step="1" value="0" />
+        </div>
+        <div style="height:4px"></div>
+        <div class="slider-container">
+          <label>Z</label>
+          <input type="range" id="rot-z" min="0" max="360" step="1" value="0" />
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>缩放比例</span><span id="scale-val">1.00</span></div>
+        <input type="range" id="scale" min="0.5" max="2" step="0.05" value="1" />
+      </div>
+      <div class="row">
+        <div class="control-group">
+          <div class="control-label"><span>颜色</span></div>
+          <input type="color" id="color-picker" value="#ffffff" />
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>透明度</span><span id="opacity-val">1.00</span></div>
+          <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1" />
+        </div>
+      </div>
+    </div>
+
+    <div id="light-controller">
+      <div class="light-label">拖拽移动光源</div>
+    </div>
+
+    <div id="info-hint">
+      鼠标左键：选择几何体 · 右键拖动：旋转视角<br/>
+      滚轮：缩放 · 右下角：控制光源位置
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
