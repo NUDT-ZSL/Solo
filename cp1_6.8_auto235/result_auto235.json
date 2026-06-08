@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T23:21:26.960Z",
+  "task_name": "auto235",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「灵感星图」的平台，用户可以随手记录零碎灵感（文字、标签、优先级），系统会根据标签和优先级自动生成一张动态的星图：每个灵感变成一颗发光星点，星点大小代表优先级，颜色按标签分组（比如技术-蓝、设计-紫、生活-绿、其他-橙），所有星点会在一个3D空间里缓慢旋转，鼠标悬停显示灵感内容，点击可查看详情。首页用瀑布流卡片展示所有灵感（毛玻璃质感，带标签色条和优先级星标），卡片有微上浮和阴影动效，支持搜索过滤（标签/关键词）。\n用TypeScript和React做前端，Node.js+Express做后端，前后端分离。文件结构大概这样：\n- server/src/index.ts：Express入口，提供REST API（获取灵感列表、详情、新增等）\n- server/src/data.ts：mock灵感数据（直接写死，不需要数据库）\n- client/src/main.tsx：React入口\n- client/src/pages/Home.tsx：首页瀑布流列表\n- client/src/pages/Detail.tsx：灵感详情页（含星图交互）\n- client/src/components/StarMap.tsx：用Three.js渲染星图的核心组件\n根目录放package.json（包含前后端依赖和启动脚本：用concurrently同时跑前端和后端）、tsconfig.json（前后端各自一份）、vite.config.ts（前端构建配置）。另外再写一个入口HTML（client/index.html）。\n具体需求：\n1. 用户能添加灵感（标题、内容、标签、优先级），提交后列表和星图同步更新。\n2. 首页瀑布流卡片带毛玻璃背景、圆角、微上浮动效（鼠标悬停时上浮+阴影加深），卡片左上角显示标签色条和优先级星标（星标数量对应优先级1-5）。\n3. 搜索框支持按标签和关键词实时过滤，搜索结果卡片有淡入动画。\n4. 点击卡片进入详情页，详情页上方展示灵感完整信息，下方是用Three.js渲染的星图：所有灵感节点在3D空间随机分布，随时间缓慢公转，每个节点大小=优先级*10（最小20px），颜色按标签预设，鼠标悬停显示标题浮窗，点击节点高亮并展示该灵感摘要。\n5. 星图支持鼠标拖拽旋转视角和滚轮缩放，帧率保持60fps。\n6. 整体视觉风格：深蓝灰渐变背景，毛玻璃卡片和面板，柔和的圆角，细微发光边缘，背景有缓慢飘浮的细小星点（用Canvas或CSS实现），页面切换有缓动淡入动画。\n7. 响应式适配：桌面和平板（卡片列数自适应 3->2->1）。\n运行方式：npm install && npm run dev，前端和后端都会启动。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:3e50b3e762d01cfb264d3ba4cdab24ec_6a25fc66e60af91fee1a06c5.6a25fcd3e60af91fee1a072a.6a25fcd2d0434c6ed6fa6d5b:Trae CN.T(2026/6/8 07:20:51)",
+    "user_id": "2402906841289811",
+    "trace_id": "3e50b3e762d01cfb264d3ba4cdab24ec",
+    "session_id": "6a25fc66e60af91fee1a06c5",
+    "task_id": "6a25fcd3e60af91fee1a072a",
+    "message_id": "6a25fcd2d0434c6ed6fa6d5b",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 07:20:51",
+    "format": "full"
+  },
+  "trace": "null"
+}
