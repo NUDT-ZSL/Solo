@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T06:34:43.565Z",
+  "task_name": "auto423",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「幻音领域」的2D音乐谜题游戏。玩家控制一个发光小球，在由音符方块组成的动态迷宫中移动，通过踩踏方块改变音符的高低，奏出正确的旋律解锁出口。整体视觉走赛博霓虹风格：深紫到纯黑渐变背景，音符方块是半透明发光晶体（颜色对应音阶：Do红橙、Re金、Mi黄绿、Fa青、Sol蓝、La紫、Si玫红），玩家小球是暖白色发光体带彩色粒子拖尾，踩踏方块时方块会高亮并播放对应音符音色，同时产生光晕扩散和粒子升腾动画。界面左上角显示当前旋律进度（一串音符图标，已奏亮的发光，未奏的暗淡），右上角有毛玻璃小地图显示整体的迷宫布局和音符方块位置，底部有操作提示（WASD移动，空格跳跃）。交互反馈要流畅：移动时小球拖尾粒子飞舞，踩踏音符时有彩色光晕脉冲，完成一段旋律时屏幕边缘闪烁并播放连接音效。帧率保持60fps，响应式适配桌面和手机。用TypeScript和React来实现，Vite构建。项目文件大概6个：src/main.tsx（入口）、src/App.tsx（主布局，整合场景和UI）、src/components/Maze.tsx（迷宫地图生成与逻辑，包括音符方块的放置和踩踏检测）、src/components/PlayerBall.tsx（小球移动、跳跃、粒子拖尾渲染）、src/components/MelodyPanel.tsx（上半部分的旋律进度和音符音色播放，使用Web Audio API）、以及public/index.html（入口HTML，记得在title里写上「幻音领域」）和package.json（依赖包括react、react-dom、typescript、@types/react、@types/react-dom、vite、@vitejs/plugin-react，脚本里配好dev和build命令）以及tsconfig.json（严格模式，jsx用react-jsx）。最好直接npm install && npm run dev就能跑。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:3803b5b46698016fb476bc643dbf0283_6a26617e925de175122971b8.6a266273925de175122972ac.6a266272344efe027b363b1e:Trae CN.T(2026/6/8 14:34:27)",
+    "user_id": "2402906841289811",
+    "trace_id": "3803b5b46698016fb476bc643dbf0283",
+    "session_id": "6a26617e925de175122971b8",
+    "task_id": "6a266273925de175122972ac",
+    "message_id": "6a266272344efe027b363b1e",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 14:34:27",
+    "format": "full"
+  },
+  "trace": "null"
+}
