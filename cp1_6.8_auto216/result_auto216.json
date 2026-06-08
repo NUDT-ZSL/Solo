@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T22:36:23.414Z",
+  "task_name": "auto216",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「回声博物馆」的在线声音记忆收藏平台。用户可以录制一段短音频（最长30秒），并配上标题、一段文字回忆和一张氛围图片，系统会根据音频的频谱特征和文字情感自动生成一个动态的「回声徽章」——徽章主体是一个圆形渐变圆盘（颜色随音频低中高频变化：低频棕红、中频翠绿、高频银蓝），周围环绕一圈发光粒子（粒子数量代表录音次数），徽章会随播放缓缓旋转。在首页，所有用户的回声以交错瀑布流排列，每个回声卡片是毛玻璃质感的缩略展示（包含标题、情绪标签和播放按钮），点击卡片进入详情页，可以看到大徽章动态旋转、播放/暂停控制条（带波形可视化——用Canvas绘制）、文字回忆和氛围图片，并支持点赞和评论（评论以时间线排列，每条评论触发光晕扩散动画）。上传流程是多步向导（录制→填写→生成），生成徽章时有粒子凝聚动画。整体界面采用怀旧博物馆风：深灰绿底色配古铜色点缀，毛玻璃卡片带柔和阴影和圆角，背景有缓慢飘浮的细小尘埃粒子（像老唱片店），页面切换有缓动淡入动画，响应式适配桌面和移动端，交互反馈流畅，帧率保持60fps。\n用TypeScript和React实现，Vite作为构建工具。文件结构大概这样：\n- src/main.tsx：应用入口，挂载React根组件\n- src/App.tsx：路由和全局状态管理，包含首页和详情页路由\n- src/components/RecordWizard.tsx：录音上传向导组件（录制、填写、生成三个步骤，带状态管理）\n- src/components/EchoCard.tsx：首页瀑布流中的单张回声卡片组件（毛玻璃缩略样式，点击跳转详情页）\n- src/components/EchoDetail.tsx：详情页组件，包含大徽章动画、波形可视化控制条和评论时间线\n- src/utils/audioAnalysis.ts：音频频谱分析工具函数，提取频率特征和强度变化\n对了，顺便把package.json（依赖至少包括react、react-dom、react-router-dom、vite、@vitejs/plugin-react、typescript、@types/react、@types/react-dom，启动脚本用dev）、vite.config.js、tsconfig.json（严格模式）和入口index.html都带上，这样我npm install && npm run dev就能直接跑。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:da9be77b0f7e50e7bd95d2cf83b9e28d_6a25f0f9138b77c6a3d06252.6a25f254138b77c6a3d06381.6a25f25442ca4764570ea845:Trae CN.T(2026/6/8 06:36:04)",
+    "user_id": "2402906841289811",
+    "trace_id": "da9be77b0f7e50e7bd95d2cf83b9e28d",
+    "session_id": "6a25f0f9138b77c6a3d06252",
+    "task_id": "6a25f254138b77c6a3d06381",
+    "message_id": "6a25f25442ca4764570ea845",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 06:36:04",
+    "format": "full"
+  },
+  "trace": "null"
+}
