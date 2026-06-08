@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T17:19:17.578Z",
+  "task_name": "auto48",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「时序光影」的交互式日程时间线工具，用户可以按天添加待办事项（标题、描述、优先级），系统自动生成一条带有缓动动画的纵向时间轴，每个事项以彩色光点节点呈现（高优先级红色、中橙、低绿），节点有呼吸光晕，鼠标悬停放大显示预览，点击展开半透明毛玻璃卡片展示完整详情，支持按周/月视图切换，节点间有平滑连线动画。整体采用深色背景（深灰到黑渐变）配霓虹蓝紫辅色，卡片带模糊玻璃质感，背景有缓慢漂移的粒子动画，交互响应流畅，帧率保持在60fps。用TypeScript和React来实现，配合Canvas绘制时间轴和粒子。文件结构大概这样：src/下有TimelineEngine.ts（核心模块，管理时间轴数据、节点布局、缓动动画和视图切换）、ParticleSystem.ts（管理背景粒子系统的生成、漂移动画和性能优化）、EventCard.tsx（React组件，渲染毛玻璃卡片和展开动画）、App.tsx（主组件，组合时间轴、粒子背景和导航栏）。对了，顺便把package.json也带上，依赖写上react、typescript、vite，启动脚本用dev，再配一个tsconfig.json和vite.config.js，这样npm install && npm run dev就能直接跑了。根目录放一个index.html作为入口。需求：1. 支持按天添加待办事项，含标题、描述、优先级（高/中/低）；2. 纵向时间轴，每个事项以彩色光点节点呈现，节点有呼吸光晕和悬停放大动画；3. 点击节点展开半透明毛玻璃卡片显示完整详情，卡片带缩放模糊过渡；4. 支持按周/月视图切换，节点间有平滑缓動连线；5. 背景有缓慢漂移的粒子动画，深色背景配合霓虹蓝紫辅色；6. 响应式适配移动端，帧率保持在60fps。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:b964a00aebca96ccaf8093addeb9fab2_6a25a692b5c8af7396fbff14.6a25a804b5c8af7396fc0049.6a25a803240c95381d562ab2:Trae CN.T(2026/6/8 01:19:00)",
+    "user_id": "2402906841289811",
+    "trace_id": "b964a00aebca96ccaf8093addeb9fab2",
+    "session_id": "6a25a692b5c8af7396fbff14",
+    "task_id": "6a25a804b5c8af7396fc0049",
+    "message_id": "6a25a803240c95381d562ab2",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 01:19:00",
+    "format": "full"
+  },
+  "trace": "null"
+}
