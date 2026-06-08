@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "Web前端",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「光标秘境」的交互式光标追踪与动态粒子生成页面，用户移动鼠标或手指时，光标周围会持续产生彩色粒子，形成流动的轨迹，同时页面背景会根据光标位置和移动速度渐变变换颜色。点击页面任意位置会触发一次粒子爆散，并短暂显示一个毛玻璃信息卡片（内容随机展示一句名言或灵感语录）。整体界面采用深色极简风格：深灰到炭黑渐变背景，粒子的颜色根据光标移动速度从冷色（蓝紫）过渡到暖色（橙红），粒子大小和寿命随速度变化，轨迹有缓动淡出效果。页面响应式适配桌面和移动端（触摸事件兼容），交互反馈流畅，帧率保持60fps。用TypeScript和React来实现，Vite作为构建工具。文件结构大概这样：src/main.tsx（React入口）、src/components/ParticleCanvas.tsx（核心粒子画布组件，负责粒子生成和动画循环）、src/components/InfoCard.tsx（毛玻璃信息卡片组件，控制显示和动画）、src/hooks/useMouseTrail.ts（自定义hooks，封装光标位置追踪和速度计算）、src/styles/global.css（全局样式和渐变背景动画）。另外根目录需要package.json（包含react、react-dom、typescript、vite等依赖和dev脚本）、tsconfig.json、vite.config.js和入口index.html。这样我下载后直接npm install && npm run dev就能跑起来。"
+}
