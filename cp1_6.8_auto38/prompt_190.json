@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "3D/交互可视化",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「云海蜃楼」的3D交互可视化项目，模拟在云端浮现的海市蜃楼景象。用户可以通过鼠标拖拽旋转视角、滚轮缩放，观察由半透明发光建筑群组成的幻景在云层中缓缓浮现、扭曲和消散，云海本身带有动态流动和粒子的光晕，整体色调为梦幻的粉紫和金色渐变。点击任意一座幻景建筑会触发一次「蜃爆」——该建筑急速膨胀并碎裂成无数发光碎片向四周飞散，同时弹出一张半透明毛玻璃信息卡片显示该建筑的名称、幻光强度和稳定度。右侧有一个半透明毛玻璃控制面板，包含三个滑块调节「云海流速」、「建筑透明度」和「粒子密度」，以及一个「重置幻景」按钮。整体风格为奇幻空灵风：粉紫到橙红渐变天空，云海用半透明粒子系统和低多边形云团模拟，幻景建筑为发光半透明几何体组合并带有缓慢旋转和升降动画，粒子系统模拟光尘飘散，所有动画流畅，帧率保持在60fps。用TypeScript和Three.js来实现，配合Vite构建。文件结构大概这样：src/下有SceneManager.ts（Three.js场景、相机、灯光和主循环）、CloudSystem.ts（云海粒子系统和流动动画）、MirageBuilder.ts（幻景建筑生成和管理、点击交互和破碎特效）、UIControls.tsx（React组件，包含控制面板和毛玻璃信息卡片）。另外，根目录下需要package.json（dependencies: react, three, @react-three/fiber @react-three/drei vite @vitejs/plugin-react typescript），tsconfig.json（严格模式，jsx react-jsx），vite.config.js（配置react插件），以及入口index.html（挂载#root）。运行方式就是npm install && npm run dev。"
+}
