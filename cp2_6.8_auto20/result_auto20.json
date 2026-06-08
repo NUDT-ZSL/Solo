@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T05:07:09.217Z",
+  "task_name": "auto20",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "开发一个多人实时协作的便签墙应用，让团队成员能在共享的虚拟白板上粘贴、移动和编辑便签，适合远程会议或头脑风暴场景。使用TypeScript、React前端和Express后端实现，前后端通过WebSocket通信。文件结构如下：\n - package.json（根目录，含依赖：express、uuid、ws、react、react-dom、typescript、@types/react、@types/react-dom、@types/express、@types/ws、vite、@vitejs/plugin-react、ts-node，启动脚本：concurrently \"npm run server\" \"npm run client\"，client启动：cd client && vite，server启动：ts-node server.ts）\n - client/package.json（含依赖：react、react-dom、typescript、@types/react、@types/react-dom、vite、@vitejs/plugin-react、socket.io-client，启动脚本：npm run dev）\n - client/vite.config.js（Vite构建配置，指向client/index.html）\n - client/tsconfig.json（严格模式，ES模块，JSX react-jsx）\n - client/index.html（入口页面，加载React应用）\n - client/src/main.tsx（React应用入口，渲染App组件）\n - client/src/App.tsx（主组件，包含便签墙组件和WebSocket连接初始化）\n - client/src/StickyNote.tsx（单个便签组件，支持文本编辑、拖拽移动、颜色选择、删除操作）\n - server/server.ts（Express+WebSocket服务器，管理便签数据广播，监听2555端口）\n\n具体需求：\n1. 支持创建彩色便签：用户在便签墙空白区域双击弹出创建对话框，输入文本并选择颜色（预设6种柔和色：米黄、浅粉、淡绿、天蓝、薰衣草紫、薄荷绿），点击确定后便签出现在双击位置。\n2. 便签可拖拽移动：按住便签标题栏（顶部窄条区域）拖拽任意位置，松开后位置实时广播给其他在线用户，拖拽过程有平滑跟随效果（无贴滞感）。\n3. 便签内容实时编辑：双击便签文本区进入编辑状态，编辑完成后回车或点击空白区域保存，内容变更通过WebSocket广播同步，其他用户能看到实时打字内容（每300ms同步一次，减少网络开销）。\n4. 支持删除和清除所有：每个便签右上角有关闭按钮（x），点击后从墙上移除并广播删除事件；底部工具栏提供“清空墙面”按钮，点击后二次确认弹窗，确认后清除所有便签。\n5. 在线用户计数：页面顶部显示当前在线人数（通过WebSocket连接数统计），当新用户加入或离开时，所有客户端自动更新人数显示。\n\n界面方面：布局为全屏便签墙（白色背景），顶部有简洁工具栏（左侧显示应用名“便签墙”，右侧显示在线人数图标+数字）。便签默认带有轻微阴影（box-shadow）和圆角（8px），拖拽时阴影加深（box-shadow: 0 8px 16px rgba(0,0,0,0.2)）并放大至1.05倍，释放后恢复原状。颜色主题走柔和莫兰迪色系，便签颜色与文本颜色搭配协调（深色背景配白色文字，浅色背景配深色文字）。底部工具栏左对齐，按钮采用圆形图标+文字标签样式，悬浮时背景色变深过渡0.2s。响应式适配：在移动端（宽度<768px）便签尺寸缩小至160x160，工具条文字隐藏仅留图标，仍支持触控拖拽。\n\n性能要求：所有WebSocket消息延迟不超过200ms（本地局域网环境），50个并发便签同时拖拽时页面帧率保持30FPS以上，便签数量上限为200个（达到时提示用户无法创建新便签）。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:7120b288b8b6148ec171d5ebba2945ba_6a264c66fdd163d05ca1b171.6a264dd9fdd163d05ca1b259.6a264dd8878a6fdd07b06ea1:Trae CN.T(2026/6/8 13:06:33)",
+    "user_id": "218182458805051",
+    "trace_id": "7120b288b8b6148ec171d5ebba2945ba",
+    "session_id": "6a264c66fdd163d05ca1b171",
+    "task_id": "6a264dd9fdd163d05ca1b259",
+    "message_id": "6a264dd8878a6fdd07b06ea1",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 13:06:33",
+    "format": "full"
+  },
+  "trace": "null"
+}
