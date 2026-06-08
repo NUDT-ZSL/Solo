@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T04:47:08.439Z",
+  "task_name": "auto367",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「鳞光秘境」的2D潜行收集游戏，玩家在深海发光珊瑚丛中操纵一条小光鱼，通过移动和躲闪避开巡逻的捕食者（如电鳗、鲨鱼），同时收集散落的荧光孢子来点亮黑暗区域并解锁道路。用TypeScript和React来实现，使用Vite构建。文件结构大概这样：src/main.tsx（入口挂载React应用）、src/App.tsx（主组件管理游戏状态和UI布局）、src/GameCanvas.tsx（Canvas渲染引擎负责绘制深海场景、珊瑚、鱼群和光照效果）、src/PlayerController.tsx（管理光鱼的移动、碰撞检测和技能触发）、src/EnemyAI.tsx（捕食者的巡逻和追击AI）、src/CollectibleSystem.tsx（管理孢子生成、收集反馈和场景解锁）。需求方面：1. 主玩法：玩家用键盘方向键控制光鱼游动，按空格键释放一次闪光（冷却2秒）可短暂眩晕周围捕食者，收集50个孢子解锁下一区域，共有3个区域（珊瑚浅滩、海底峡谷、沉船遗迹），切换时有淡入淡出动画。2. 界面：整体采用深蓝到墨黑渐变背景，珊瑚呈半透明荧光色（粉、绿、紫），光鱼自身带有柔和光晕和尾部粒子拖尾，捕食者身体有生物发光条纹。左上角显示孢子收集进度条（弧形设计）和当前区域名称，右下角为技能冷却图标（圆形倒计时环），切换区域时有毛玻璃过渡遮罩。3. 交互反馈：光鱼游动时尾部粒子密度随速度变化，收集孢子时产生彩色光爆和音效（用Web Audio生成简单的合成音），被捕食者追击时屏幕边缘出现红色警告波。捕食者视野范围以半透明扇形显示，玩家进入视野后捕食者加速追击并发出低沉嗡嗡声。4. 性能：帧率稳定60fps，捕食者AI每帧更新位置和状态，粒子数控制在500以内。5. 配置：对了，顺手把package.json带上，里面要有vite、typescript、react依赖和启动脚本（\"dev\": \"vite\"），还有tsconfig.json和vite.config.js都写好，这样我直接npm install && npm run dev就能跑起来。入口HTML是index.html，挂载id为root的div。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:5b938aaeb8bac876d3b6f34c045fe233_6a264827cfded18ea68ba469.6a26493ccfded18ea68ba55d.6a26493cc2211303309ebf63:Trae CN.T(2026/6/8 12:46:52)",
+    "user_id": "2402906841289811",
+    "trace_id": "5b938aaeb8bac876d3b6f34c045fe233",
+    "session_id": "6a264827cfded18ea68ba469",
+    "task_id": "6a26493ccfded18ea68ba55d",
+    "message_id": "6a26493cc2211303309ebf63",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 12:46:52",
+    "format": "full"
+  },
+  "trace": "null"
+}
