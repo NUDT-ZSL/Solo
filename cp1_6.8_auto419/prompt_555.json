@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "游戏开发",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「熔炉纪元」的2D资源管理模拟游戏：玩家建造和升级熔炉，用不同类型的矿石和燃料来炼制合金，每种合金有不同属性和用途，可以解锁新科技和建筑。整体视觉走蒸汽朋克+火炉风格：深棕到暗红渐变背景，熔炉是金属质感带发光火焰纹理，矿石是半透明彩色晶体（铜、铁、水晶等），燃料是闪烁的发光煤块，炼制时有火焰翻滚和火花飞溅粒子，合金成品有光泽流动动画，界面元素使用圆角毛玻璃面板和铜色细边框。界面左上角显示资源数量（金币、矿、燃料），右上角显示科技树和炼制配方，底部是毛玻璃建造面板（拖动熔炉到场景中，建造时有齿轮旋转和蒸汽喷发动画），炼制过程中进度条带粒子流动效果，完成时有金色光晕和碎片爆散。交互反馈要流畅，帧率稳定在60fps。 用TypeScript和React实现，Vite构建。项目包含5个文件： src/main.tsx（入口，挂载App），src/App.tsx（主布局，游戏状态管理和面板切换），src/components/Forge.tsx（核心游戏区域，canvas绘制熔炉动画和粒子），src/components/ResourcePanel.tsx（资源显示和控制按钮），src/components/ConsolePanel.tsx（科技树和配方列表）。 对了，顺便把package.json带上，配置好依赖（react, react-dom, vite, typescript, @types/react, @types/react-dom），scripts加上dev、build、preview，还有tsconfig.json和vite.config.ts也写上，这样我直接npm install && npm run dev就能跑起来。"
+}
