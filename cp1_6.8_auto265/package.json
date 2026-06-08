@@ -1,0 +1,17 @@
+{
+  "name": "phantom-corridor",
+  "version": "1.0.0",
+  "description": "幻境回廊 - 2D动作解谜游戏",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.12"
+  }
+}
