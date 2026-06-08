@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T19:00:10.814Z",
+  "task_name": "auto100",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「浪花记忆」的匿名故事漂流瓶平台。用户可以在一个渐变海洋背景的页面上，写一段真实或虚构的短故事（限制200字内），选择一个漂流瓶样式（有5种预设造型，比如经典软木瓶、琉璃瓶、海螺瓶、贝壳瓶、木筏瓶），提交后故事被封装成一只发光漂流瓶，漂浮在首页的「记忆海域」上——海域由大量慢速漂浮、随机旋转的半透明瓶子组成，每个瓶子的造型和颜色与用户选择一致，瓶身带有微弱的呼吸光晕和上下浮动动画。鼠标悬停时瓶子放大，瓶身浮现故事的标题（如果用户有填），点击瓶子会触发一次瓶子碎裂的粒子特效（水花和发光碎片），并弹出一张半透明毛玻璃卡片展示完整故事、提交时间、阅读次数和一个「打捞」按钮——点击后自己的故事会化作一道金色光流飞向该瓶子并融合，瓶子的光晕会变亮。右侧有一个半透明毛玻璃控制面板，包含「发布故事」按钮（点击弹出毛玻璃输入框和样式选择器）、「热度排行」按钮（切换到排行榜页面，按阅读次数降序列出故事标题和摘要），以及一个「随机打捞」按钮（直接跳转到一个随机瓶子的详情卡片）。整体风格为海洋梦境风：背景从浅蓝到深紫渐变，瓶子用荧光蓝、粉、紫、青半透明毛玻璃质感，带有缓动漂浮动效。响应式适配桌面和手机，交互响应流畅，帧率保持60fps。用TypeScript和React做前端（带路由），后端用FastAPI提供服务。文件结构大概这样：src/下有 BottleEngine.ts（核心逻辑，管理瓶子生成、漂浮动画、点击事件和粒子特效，用Three.js实现3D效果）、StoryStorage.ts（处理故事数据的创建、查询、热度排序，与后端API通信）、OceanBackground.ts（用Shader渲染动态海洋背景，包含波浪、光晕和渐变）、UILayer.tsx（React主组件，整合控制面板、故事输入框、排行榜和详情卡片，使用React Router切换页面）。根目录放 package.json（依赖包括 react、react-dom、react-router-dom、three、@types/three，并配置启动脚本）、tsconfig.json（es2015模块，严格模式）、vite.config.js、以及后端 FastAPI 的 main.py（提供 /api/stories 和 /api/stories/:id/read POST/GET 接口）。运行方式：npm install && npm run dev 启动前端，python main.py 启动后端。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:1066756a11d4e91a18518804dfd19de6_6a25bef4e47387b086f66704.6a25bfaae47387b086f667aa.6a25bfaaa226e467355b4310:Trae CN.T(2026/6/8 02:59:54)",
+    "user_id": "2402906841289811",
+    "trace_id": "1066756a11d4e91a18518804dfd19de6",
+    "session_id": "6a25bef4e47387b086f66704",
+    "task_id": "6a25bfaae47387b086f667aa",
+    "message_id": "6a25bfaaa226e467355b4310",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 02:59:54",
+    "format": "full"
+  },
+  "trace": "null"
+}
