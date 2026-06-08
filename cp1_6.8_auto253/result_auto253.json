@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T23:56:12.980Z",
+  "task_name": "auto253",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做个叫「潮汐回廊」的2D动作策略游戏。玩家在一个由动态水流构成的迷宫中控制一个光球，通过点击屏幕让光球在水中移动，需要躲避不断生成的水流陷阱（旋涡、暗流），并收集能量碎片解锁通往下一层的门。迷宫布局和水流方向会随关卡变化，难度递增。整体视觉风格是深海荧光风：纯黑到深蓝渐变背景，水流用半透明流动线条表示（颜色蓝紫到青绿渐变），光球带有拖尾粒子，收集碎片时爆发彩色粒子扩散，躲避陷阱时有脉冲光效。界面左上角显示关卡编号和收集进度，右下角半透明毛玻璃控制面板含重置和暂停按钮。用TypeScript和Phaser3来实现。文件结构：src/main.ts（Phaser游戏配置和入口）、src/scenes/MenuScene.ts（主菜单，深海背景和开始按钮）、src/scenes/GameScene.ts（核心玩法，迷宫生成、水流动画、玩家移动和碰撞）、src/scenes/GameOverScene.ts（通关/失败界面，显示得分和重玩按钮）、src/config.ts（关卡配置、水流参数、颜色常量）。顺便带上package.json（依赖phaser和typescript，启动脚本用npm run dev）、tsconfig.json、vite.config.ts，这样我npm install && npm run dev就能跑。需求：1. 迷宫由动态水墙和路径组成，每关墙体和陷阱布局不同；2. 光球可点击移动，移动时有拖尾粒子，碰到陷阱会损失生命；3. 收集3个能量碎片即可解锁出口，收集时有粒子爆散反馈；4. 水流陷阱会周期性改变方向和速度，增加策略性；5. 关卡切换有缓动淡入动画；6. 界面整体响应式，适配桌面和移动端，帧率保持60fps。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:396dbc49b3aa1af625677b2efe8f2e42_6a26043a78d020590a125703.6a26050d78d020590a1257ba.6a26050d6b713762919f60fa:Trae CN.T(2026/6/8 07:55:57)",
+    "user_id": "2402906841289811",
+    "trace_id": "396dbc49b3aa1af625677b2efe8f2e42",
+    "session_id": "6a26043a78d020590a125703",
+    "task_id": "6a26050d78d020590a1257ba",
+    "message_id": "6a26050d6b713762919f60fa",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 07:55:57",
+    "format": "full"
+  },
+  "trace": "null"
+}
