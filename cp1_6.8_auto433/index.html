@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>岩脉韵律</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0604; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    #control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 260px;
+      padding: 20px;
+      background: rgba(30, 20, 14, 0.55);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 160, 60, 0.15);
+      border-radius: 14px;
+      color: #d4b896;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      z-index: 100;
+      user-select: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    #control-panel h3 {
+      margin: 0 0 14px 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #f0c878;
+      text-align: center;
+    }
+
+    .ctrl-group {
+      margin-bottom: 14px;
+    }
+
+    .ctrl-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+      font-size: 12px;
+      color: #b89a78;
+    }
+
+    .ctrl-group label span {
+      color: #f0c878;
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 160, 60, 0.2);
+      outline: none;
+      transition: background 0.2s;
+    }
+
+    input[type="range"]:hover {
+      background: rgba(255, 160, 60, 0.35);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #f0a030;
+      cursor: pointer;
+      border: 2px solid rgba(255, 200, 120, 0.6);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+      box-shadow: 0 0 8px rgba(240, 160, 48, 0.5);
+    }
+
+    select {
+      width: 100%;
+      padding: 6px 10px;
+      background: rgba(40, 28, 18, 0.7);
+      color: #f0c878;
+      border: 1px solid rgba(255, 160, 60, 0.25);
+      border-radius: 6px;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    select:hover {
+      border-color: rgba(255, 160, 60, 0.5);
+      background: rgba(50, 35, 22, 0.8);
+    }
+
+    select option {
+      background: #1e140e;
+      color: #d4b896;
+    }
+
+    #btn-reset {
+      width: 100%;
+      padding: 8px 0;
+      margin-top: 4px;
+      background: rgba(240, 160, 48, 0.15);
+      color: #f0c878;
+      border: 1px solid rgba(255, 160, 60, 0.25);
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, border-color 0.2s;
+    }
+
+    #btn-reset:hover {
+      background: rgba(240, 160, 48, 0.3);
+      border-color: rgba(255, 160, 60, 0.5);
+    }
+
+    #btn-reset:active {
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+  <div id="control-panel">
+    <h3>韵律控制</h3>
+    <div class="ctrl-group">
+      <label>粒子数量 <span id="val-count">2000</span></label>
+      <input type="range" id="slider-count" min="500" max="5000" step="100" value="2000" />
+    </div>
+    <div class="ctrl-group">
+      <label>流动速度 <span id="val-speed">1.0</span></label>
+      <input type="range" id="slider-speed" min="0.5" max="2.5" step="0.1" value="1.0" />
+    </div>
+    <div class="ctrl-group">
+      <label>颜色主题</label>
+      <select id="select-theme">
+        <option value="lava" selected>熔岩</option>
+        <option value="crystal">水晶</option>
+        <option value="emerald">翡翠</option>
+        <option value="amber">琥珀</option>
+      </select>
+    </div>
+    <button id="btn-reset">重置视角</button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
