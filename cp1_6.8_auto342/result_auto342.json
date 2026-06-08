@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T03:49:06.503Z",
+  "task_name": "auto342",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「匿名共绘」的全栈web应用，让用户可以在一个共享数字画布上匿名协作创作。每个用户打开页面后，会看到一个无限滚动的白色画布，可以用鼠标自由绘制彩色线条（按住左键拖动画笔），每次绘制都会实时同步到其他在线用户的画布上。画布左上角有一个「调色盘」和「画笔大小」滑块，右侧边栏显示当前在线人数和最近几位匿名用户的绘制动态（例如「匿名用户1画了一条蓝色曲线」）。用户还可以点击「重置」按钮清空自己当前区域的内容（不影响其他区域），或者点击「保存快照」下载当前画布为PNG图片。整体界面走极简毛玻璃风格：半透明操作面板、柔和的圆角按钮、画布背景是浅灰网格。按钮悬停有轻微的缩放和发光反馈。性能上要保证多人同时绘制时帧率不低于30fps，并且网络延迟尽量低。用TypeScript和React做前端，后端用FastAPI（Python）处理WebSocket同步。文件结构大概这样：frontend/下面有 src/main.tsx（入口）、src/App.tsx（主组件管理画布和布局）、src/Canvas.tsx（Canvas绘制引擎）、src/Toolbar.tsx（调色盘和画笔控制面板）、src/utils/websocket.ts（WebSocket连接管理），以及 package.json 和 vite.config.ts 配好构建；backend/下面有 main.py（FastAPI应用，包含WebSocket路由）和 requirements.txt。对了，把 package.json 也写上，依赖包括 react、react-dom、typescript、vite、@vitejs/plugin-react 这些，脚本配好 dev 和 build，这样 npm install && npm run dev 就能直接跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:10aee6efb1078596b94f6739885bcd98_6a263aaa75b53973e62bc965.6a263ba075b53973e62bca45.6a263ba0f828e77aeee17f11:Trae CN.T(2026/6/8 11:48:48)",
+    "user_id": "2402906841289811",
+    "trace_id": "10aee6efb1078596b94f6739885bcd98",
+    "session_id": "6a263aaa75b53973e62bc965",
+    "task_id": "6a263ba075b53973e62bca45",
+    "message_id": "6a263ba0f828e77aeee17f11",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 11:48:48",
+    "format": "full"
+  },
+  "trace": "null"
+}
