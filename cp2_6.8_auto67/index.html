@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>地铁线路图编辑器与客流热力图</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background-color: #0F0F1F;
+      color: #D0D0E0;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      padding: 16px;
+      gap: 16px;
+    }
+
+    .canvas-container {
+      flex: 0 0 65%;
+      background-color: #1E1E3A;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .canvas-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .canvas-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #D0D0E0;
+    }
+
+    .canvas-tools {
+      display: flex;
+      gap: 8px;
+    }
+
+    .tool-btn {
+      background-color: #2A2A4A;
+      border: 1px solid #3A3A5A;
+      color: #D0D0E0;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+
+    .tool-btn:hover {
+      background-color: #3A3A5A;
+      border-color: #FF9800;
+    }
+
+    .tool-btn:active {
+      transform: scale(0.95);
+    }
+
+    .tool-btn.active {
+      background-color: #FF9800;
+      color: #0F0F1F;
+      border-color: #FF9800;
+    }
+
+    #metroCanvas {
+      flex: 1;
+      background-color: #1A1A2E;
+      border-radius: 8px;
+      cursor: crosshair;
+      display: block;
+    }
+
+    .panel {
+      flex: 0 0 calc(35% - 16px);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background-color: #1E1E3A;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .card h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: #D0D0E0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2A2A4A;
+    }
+
+    .lines-list {
+      max-height: 300px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .line-item {
+      background-color: #252545;
+      border-radius: 8px;
+      padding: 10px 12px;
+      transition: all 0.2s ease;
+    }
+
+    .line-item:hover {
+      background-color: #2A2A4A;
+    }
+
+    .line-item-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .line-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .line-color:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 6px rgba(255, 152, 0, 0.4);
+    }
+
+    .line-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: text;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .line-name:hover {
+      background-color: #3A3A5A;
+    }
+
+    .line-name-input {
+      background-color: #0F0F1F;
+      border: 1px solid #FF9800;
+      color: #D0D0E0;
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      width: 100px;
+      outline: none;
+    }
+
+    .line-delete-btn {
+      background: none;
+      border: none;
+      color: #6B7280;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .line-delete-btn:hover {
+      color: #E53935;
+      background-color: rgba(229, 57, 53, 0.1);
+    }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .slider-label {
+      font-size: 11px;
+      color: #888;
+      width: 40px;
+      flex-shrink: 0;
+    }
+
+    .slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: #3A3A5A;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FF9800;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(255, 152, 0, 0.4);
+      transition: all 0.2s ease;
+    }
+
+    .slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 10px rgba(255, 152, 0, 0.6);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FF9800;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 6px rgba(255, 152, 0, 0.4);
+    }
+
+    .slider-value {
+      font-size: 12px;
+      color: #FF9800;
+      width: 32px;
+      text-align: right;
+      font-weight: 600;
+    }
+
+    .line-stats {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      font-size: 11px;
+      color: #888;
+    }
+
+    .add-line-btn {
+      margin-top: 12px;
+      width: 100%;
+      background-color: #2A2A4A;
+      border: 1px dashed #4A4A6A;
+      color: #888;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+
+    .add-line-btn:hover {
+      background-color: #3A3A5A;
+      border-color: #FF9800;
+      color: #FF9800;
+    }
+
+    .add-line-btn:active {
+      transform: scale(0.98);
+    }
+
+    .timeline-container {
+      margin-top: 8px;
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .current-time {
+      color: #FF9800;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .timeline {
+      position: relative;
+      width: 100%;
+      height: 40px;
+      background: linear-gradient(90deg, #2A2A4A 0%, #3A3A5A 50%, #2A2A4A 100%);
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+
+    .timeline-ticks {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 4px;
+      pointer-events: none;
+    }
+
+    .timeline-tick {
+      width: 1px;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.1);
+      position: relative;
+    }
+
+    .timeline-tick:first-child,
+    .timeline-tick:last-child {
+      width: 0;
+    }
+
+    .timeline-labels {
+      position: absolute;
+      top: 42px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: #6B7280;
+    }
+
+    .timeline-handle {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background-color: rgba(255, 152, 0, 0.6);
+      cursor: grab;
+      box-shadow: 0 0 8px rgba(255, 152, 0, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    .timeline-handle:hover {
+      background-color: rgba(255, 152, 0, 0.9);
+      transform: translate(-50%, -50%) scale(1.2);
+      box-shadow: 0 0 12px rgba(255, 152, 0, 0.7);
+    }
+
+    .timeline-handle.dragging {
+      cursor: grabbing;
+      background-color: #FF9800;
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+
+    .peak-indicator {
+      position: absolute;
+      top: 4px;
+      height: 32px;
+      background-color: rgba(255, 87, 34, 0.15);
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    .time-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .time-btn {
+      flex: 1;
+      background-color: #2A2A4A;
+      border: 1px solid #3A3A5A;
+      color: #D0D0E0;
+      padding: 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .time-btn:hover {
+      background-color: #3A3A5A;
+      border-color: #FF9800;
+    }
+
+    .time-btn:active {
+      transform: scale(0.95);
+    }
+
+    .time-btn.playing {
+      background-color: #FF9800;
+      color: #0F0F1F;
+      border-color: #FF9800;
+    }
+
+    .info-tip {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #6B7280;
+      line-height: 1.6;
+    }
+
+    .color-picker-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .color-picker {
+      background-color: #1E1E3A;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .color-picker-title {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: #D0D0E0;
+    }
+
+    .color-options {
+      display: flex;
+      gap: 10px;
+    }
+
+    .color-option {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+    }
+
+    .color-option:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+    }
+
+    .color-option.selected {
+      border-color: #FF9800;
+    }
+
+    .context-menu {
+      position: fixed;
+      background-color: #1E1E3A;
+      border: 1px solid #3A3A5A;
+      border-radius: 8px;
+      padding: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      min-width: 120px;
+    }
+
+    .context-menu-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #D0D0E0;
+      transition: all 0.15s ease;
+    }
+
+    .context-menu-item:hover {
+      background-color: #3A3A5A;
+      color: #FF9800;
+    }
+
+    .context-menu-item.danger:hover {
+      background-color: rgba(229, 57, 53, 0.2);
+      color: #E53935;
+    }
+
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+      }
+
+      .canvas-container,
+      .panel {
+        flex: 0 0 auto;
+        width: 100%;
+      }
+
+      .canvas-container {
+        min-height: 500px;
+      }
+
+      .lines-list {
+        max-height: 200px;
+      }
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1A1A2E;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #3A3A5A;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4A4A6A;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="canvas-container">
+      <div class="canvas-header">
+        <h2>🚇 地铁线路图编辑器</h2>
+        <div class="canvas-tools">
+          <button id="toolSelect" class="tool-btn active">选择</button>
+          <button id="toolAddStation" class="tool-btn">添加站点</button>
+          <button id="toolConnect" class="tool-btn">连接站点</button>
+        </div>
+      </div>
+      <canvas id="metroCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="card">
+        <h3>📋 线路管理</h3>
+        <div id="linesList" class="lines-list"></div>
+        <button id="addLineBtn" class="add-line-btn">+ 新建线路</button>
+      </div>
+
+      <div class="card">
+        <h3>⏰ 时间模拟</h3>
+        <div class="timeline-container">
+          <div class="timeline-header">
+            <span>当前时间</span>
+            <span id="currentTime" class="current-time">08:00</span>
+          </div>
+          <div id="timeline" class="timeline">
+            <div id="peakMorning" class="peak-indicator" style="left: 29.17%; width: 8.33%;"></div>
+            <div id="peakEvening" class="peak-indicator" style="left: 70.83%; width: 8.33%;"></div>
+            <div class="timeline-ticks" id="timelineTicks"></div>
+            <div id="timelineHandle" class="timeline-handle" style="left: 33.33%;"></div>
+            <div class="timeline-labels" id="timelineLabels"></div>
+          </div>
+          <div class="time-controls">
+            <button id="btnRewind" class="time-btn">⏪ 快退</button>
+            <button id="btnPlay" class="time-btn">▶ 播放</button>
+            <button id="btnForward" class="time-btn">⏩ 快进</button>
+          </div>
+          <div class="info-tip">
+            💡 提示：早高峰 7:00-9:00，晚高峰 17:00-19:00<br>
+            高峰时段客流系数 1.0，其他时段 0.3
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="contextMenu" class="context-menu" style="display: none;"></div>
+  <div id="colorPickerOverlay" class="color-picker-overlay" style="display: none;"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
