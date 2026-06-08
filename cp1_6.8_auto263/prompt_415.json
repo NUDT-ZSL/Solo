@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「味觉共振」的全栈web应用，用户可以创建自己的风味档案，记录品尝不同食物时的口感、气味和心情，系统会基于用户的记录生成一个动态的“风味网络图”——每个食物是一个节点，连接线表示风味相似度，节点大小和颜色代表喜好程度和情感倾向。首页展示最近公开的风味档案卡片（带食物图片缩略图、简短描述、风味标签和心情emoji），卡片为毛玻璃质感，鼠标悬停时卡片微上浮并显示更多阴影，点击进入详情页可查看完整风味分析，包括风味雷达图、相似食物推荐和评论。用户还可以点赞、收藏和关注他人。整体视觉采用暖色极简风：米白到浅棕渐变背景，卡片带柔和阴影，按钮和交互元素有微缓动动画，响应式适配桌面和移动端，交互反馈流畅，帧率保持60fps。用TypeScript和React做前端，Node.js+Express做后端。文件结构大概这样：前端有src/main.tsx（入口）、src/App.tsx（主组件管理路由）、src/pages/Home.tsx（首页卡片瀑布流）、src/pages/Detail.tsx（风味详情页）、src/pages/Create.tsx（创建风味记录表单）、src/components/FlavorRadar.tsx（雷达图组件），后端有server.js（Express启动和路由）、routes/food.js（食物相关API）、utils/analysis.js（风味相似度分析逻辑）。对了，package.json里要带上依赖和启动脚本，比如前端用vite构建，后端用nodemon热重载，根目录一个package.json同时管理前后端，配好代理，运行命令写成\"npm run dev\"就行。tsconfig.json也要有，前后端分开配置。入口HTML放public/index.html。整体代码结构清晰，直接npm install && npm run dev就能跑起来。"
+}
