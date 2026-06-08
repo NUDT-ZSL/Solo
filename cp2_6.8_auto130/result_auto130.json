@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T08:41:15.642Z",
+  "task_name": "auto130",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我需要一个能够在浏览器中创建和分享微型音乐播放与节奏可视化工具的应用，主要解决音乐爱好者在学习音频信号处理和波形可视化时缺乏一种结合音乐播放、实时波形渲染和交互式节奏标记的轻量级演示工具的问题。\n\n它应当具备以下能力：\n1) 用户通过文件上传按钮加载本地的MP3或WAV文件，浏览器自动解析并开始播放，同时主界面中央显示实时音频波形（使用Canvas绘制，背景深灰#1A202C，波形线条为青色#4FD1C5，宽度2px，音量峰值处波形变亮为#81E6D9）。下方的播放控制条包括播放/暂停、进度条（可拖拽跳转）、音量滑块和当前时间/总时长显示。\n2) 用户可在波形显示区域双击添加节奏标记点，标记点以垂直虚线（颜色浅紫#B794F4，线宽1px）绘制在波形上方，如果两个标记点之间的间隔小于0.3秒则自动合并（提示并显示箭头）。右侧有一个侧边栏以列表形式列出所有标记点的时间位置（格式MM:SS.ms）和自定义标签（初始为空，点击可编辑），列表支持拖拽排序，删除标记点直接点击删除按钮。标记总数量上限50个。\n3) 提供三种预设可视化主题：默认（深色背景+青色波形）、霓虹（纯黑背景+渐变色波形，从品红#D53F8C渐变到亮黄#ECC94B）、极简（白色背景+灰色波形#A0AEC0，重视排版清晰度）。用户可通过右上角下拉菜单一键切换，切换时波形区域有0.5秒的平滑渐变过渡动画。\n4) 当播放进度到达某个标记点时，波形下方弹出一个浮动的通知卡片（圆角8px，白色背景带阴影），显示标记标签和精确时间，停留2秒后自动淡出。如果连续快速经过多个标记点，通知卡片合并显示前三个标记点的信息。\n\n界面方面要求：整个应用采用左右分栏布局，左侧宽度70%为主波形区域，右侧宽度30%为标记列表面板。主区域背景深色卡片样式（#2D3748），圆角12px带浅阴影；右侧面板背景浅色（#F7FAFC），圆角8px，内边距16px。所有按钮（播放/暂停、上传、删除标记）采用圆角6px，悬停时背景色加深10%并增加阴影，点击时缩放0.97。上传按钮使用图标+文字，图标为32x32像素的上传箭头svg。响应式方面，在宽度小于768px时，左右分栏改为上下布局，标记面板移动到波形下方，且控制条的高度增加30%以便触控。\n\n性能上需要音频播放和波形绘制保持60FPS，标记点拖拽排序响应延迟不超过50ms。文件上传后音频解码时间不超过1秒（本地文件）。\n\n实现采用TypeScript、React（前端用React框架，无后端，完全浏览器端运行）和Vite，按以下文件组织代码：\n - package.json（含依赖：react、react-dom、typescript、@types/react、@types/react-dom、vite、@vitejs/plugin-react、howler，启动脚本：npm run dev）\n - vite.config.js（使用@vitejs/plugin-react插件，配置resolve.alias将@映射到src目录）\n - tsconfig.json（严格模式，target ES2020，module ESNext，包含jsx: react-jsx，包含DOM和ESNext类型）\n - index.html（入口HTML，包含id为root的div，引入React挂载点，设置meta viewport为响应式适配）\n - src/main.tsx（React入口，创建根组件App，使用StrictMode包裹）\n - src/App.tsx（主应用组件，管理全局状态包含audioFile、isPlaying、currentTime、duration、volume、markers、theme，组合子组件AudioPlayer、Waveform、MarkerPanel、ThemeSelector，使用useState和useCallback管理状态和事件处理）\n - src/components/AudioPlayer.tsx（音频控制组件，使用Howler播放音频，提供文件上传按钮、播放/暂停按钮、进度条拖拽、音量滑块、时间显示。调用App传入的回调更新currentTime和duration，同时监听ended事件）\n - src/components/Waveform.tsx（波形渲染组件，接收audioData和markers数组，使用ref获取Canvas元素，在requestAnimationFrame循环中从Howler获取当前音频频谱数据（通过audioContext.createAnalyser），绘制实时波形，并叠加标记点垂直线。支持双击添加标记点回调）\n - src/components/MarkerPanel.tsx（右侧标记列表面板，接收markers数组和删除/编辑/排序回调函数，使用拖拽排序实现列表重排，每个标记项显示时间和可编辑标签，点击删除按钮触发回调）\n - src/utils/audioAnalyzer.ts（工具模块，封装AudioContext和AnalyserNode的创建与销毁，提供getSpectrum方法返回当前频域数据数组（128个浮点数），以及decodeAudioData方法将ArrayBuffer解码为AudioBuffer供Waveform使用）\n\n运行方式：npm install && npm run dev。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:e73bbc495308deef2adfa2c4b5d96d0d_6a267f3af1a59c270c100fd9.6a26801cf1a59c270c101073.6a26801bc29b22a24b46c49f:Trae CN.T(2026/6/8 16:41:00)",
+    "user_id": "218182458805051",
+    "trace_id": "e73bbc495308deef2adfa2c4b5d96d0d",
+    "session_id": "6a267f3af1a59c270c100fd9",
+    "task_id": "6a26801cf1a59c270c101073",
+    "message_id": "6a26801bc29b22a24b46c49f",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 16:41:00",
+    "format": "full"
+  },
+  "trace": "null"
+}
