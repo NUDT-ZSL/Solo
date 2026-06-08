@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T09:42:25.044Z",
+  "task_name": "auto158",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "开发一个微型交互式数据驱动的可视化场景切换仪表盘，让用户能通过点击卡片切换不同主题的数据展示场景（如城市交通流、海洋生态、太空探索），每个场景包含动态动画和交互元素。使用TypeScript、React、D3.js和Vite实现。文件结构如下：\n - package.json（依赖：react、react-dom、typescript、@types/react、@types/react-dom、vite、@vitejs/plugin-react、d3、@types/d3，启动脚本：npm run dev）\n - index.html（入口页面，加载字体和基础样式）\n - vite.config.js（Vite构建配置）\n - tsconfig.json（严格模式，包含DOM类型）\n - src/main.tsx（React入口，渲染根组件）\n - src/App.tsx（主应用组件，管理场景状态和切换逻辑）\n - src/components/SceneCard.tsx（卡片组件，显示场景预览和切换按钮）\n - src/scenes/CityTraffic.tsx（城市交通流场景组件，绘制动态车流线图和粒子）\n - src/scenes/OceanEco.tsx（海洋生态场景组件，绘制鱼群游动和珊瑚生长动画）\n - src/scenes/SpaceExploration.tsx（太空探索场景组件，绘制星云旋转和飞船航行轨迹）\n\n具体需求：\n1. 仪表盘顶部显示标题和三个场景卡片，卡片尺寸120x160px，圆角12px，背景渐变色（交通流#FF6B6B到#EE5A24，生态#00D2D3到#0ABDE3，太空#6C5CE7到#A29BFE），悬停时阴影加深至box-shadow 0 8px 20px rgba(0,0,0,0.3)并上移4px，点击后卡片边框显示2px金黄色#FECA57脉冲发光动画，持续2秒。\n2. 点击卡片后，中央画布（750x500px，背景深灰#2D3436到#636E72渐变）平滑切换对应场景动画，切换动画使用React Transition Group的CSSTransition实现，旧场景以透明度从1到0、x轴从0到-50px淡出，新场景以透明度从0到1、x轴从50px到0淡入，持续400ms ease-out。\n3. 城市交通流场景：生成30条随机路径的车辆流线，每条线由5-8个控制点生成贝塞尔曲线，线条颜色从#FF7675到#FDCB6E渐变，宽度2-4px，车辆用半径4px的圆形沿路径移动，速度随机(1-3单位/秒)，并显示实时交通密度数值（位于画布右下角，白色#DFE6E9字体，14px，半透明背景#2D3436 alpha 0.7，圆角6px）。\n4. 海洋生态场景：生成60条游动的鱼（每个由三角形绘制，颜色从#00B894到#00CEC9渐变），使用Boids算法（分离、对齐、聚拢系数可调，默认分离1.5、对齐0.8、聚拢1.0）模拟鱼群运动，鱼群整体每10秒变换一次移动方向并散开再聚拢，同时底部绘制海草（绿色#00A86B，曲线随机摆动，线宽2px）。\n5. 太空探索场景：生成200个星星粒子（半径random(1,3)px，颜色#FFFFFF，透明度0.3-1.0缓慢闪烁），一颗飞船（由菱形绘制，边长12px，颜色#E17055）沿螺旋路径移动，螺旋轨迹以画布中心为原点，半径先增大后减小（从50到200px），同时轨迹上留下渐隐的发光尾迹（由30个圆点组成，透明度从0.8到0递减，大小从4px到1px），画布左上角显示飞船坐标（格式：X: ±123, Y: ±456）。\n6. 每个场景运行时FPS稳定在55-60之间，通过requestAnimationFrame实现动画循环，并使用D3的时间缩放函数（d3.scaleTime）控制动画进度，避免画面抖动。\n\n界面方面：仪表盘整体采用深色主题，背景#1E272E，卡片区域水平居中，卡片之间有16px间距，中央画布居中对齐并带2px #485460实线边框圆角8px，画布底部有10px间距显示当前场景名称（白色#DFE6E9，18px，font-weight 600）。所有文本使用系统字体栈，响应式：当屏幕宽度小于800px时，卡片垂直排列，画布宽高自适应为100% 60vh。\n\n性能要求：所有场景动画帧率不低于55FPS，使用D3的动画调度而非React setState频繁重渲染，每个场景的粒子或对象数量控制在有效范围内（不超过200个动态元素），页面加载时间不超过2秒。运行方式：npm install && npm run dev。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:2e6c5a6a1a8cff4f1b09ffbdde5ba082_6a268e32152a2e0ed61a32b7.6a268e71152a2e0ed61a32c7.6a268e71bd049d7f3e906bcb:Trae CN.T(2026/6/8 17:42:09)",
+    "user_id": "218182458805051",
+    "trace_id": "2e6c5a6a1a8cff4f1b09ffbdde5ba082",
+    "session_id": "6a268e32152a2e0ed61a32b7",
+    "task_id": "6a268e71152a2e0ed61a32c7",
+    "message_id": "6a268e71bd049d7f3e906bcb",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 17:42:09",
+    "format": "full"
+  },
+  "trace": "null"
+}
