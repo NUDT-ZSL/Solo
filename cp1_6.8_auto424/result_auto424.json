@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T06:35:16.595Z",
+  "task_name": "auto424",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「星尘织梦」的3D交互可视化项目，模拟在深邃的宇宙中，成千上万的发光粒子随着用户的鼠标移动和点击而流动、汇聚、爆散，形成不断变化的动态星云。用户可以用鼠标拖拽控制粒子流动的方向和速度，点击时粒子会像被震散后重新汇聚，并形成新的星云形状。整体视觉走极光星云风格：深空蓝到墨黑渐变背景，粒子是细小发光点（颜色从中心暖白到边缘冷蓝渐变），粒子之间有半透明细线连接，形成动态星图。鼠标交互时粒子流动轨迹带有微光拖尾和光晕，点击爆散时有星尘扩散和光晕闪光，之后粒子慢慢重新连接。界面右下角有一个毛玻璃控制面板，包含「粒子数量」滑块（500-5000）、「星风强度」滑块（0.1-2.0）、「连接距离」滑块（50-200）和「重置星图」按钮，所有控件都有平滑悬停和点击反馈。交互反馈要流畅，帧率保持在60fps。用TypeScript和Three.js来实现，Vite构建。项目文件结构：src/main.ts（入口，初始化场景和渲染循环）、src/App.ts（主应用类，管理状态和交互）、src/components/ParticleSystem.ts（粒子系统核心，控制粒子的创建、流动和爆散）、src/components/ControlPanel.ts（生成毛玻璃控制面板并绑定事件）、src/utils/shaders.ts（定义粒子和连接线的自定义着色器）。对了，顺便把 package.json、tsconfig.json、vite.config.ts 和 index.html 也带上，这样 npm install && npm run dev 就能直接跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:8873d573b901051ee65370ff50195aa8_6a266182925de175122971ba.6a266293925de175122972d4.6a26629373a07d3d7861bac8:Trae CN.T(2026/6/8 14:34:59)",
+    "user_id": "2402906841289811",
+    "trace_id": "8873d573b901051ee65370ff50195aa8",
+    "session_id": "6a266182925de175122971ba",
+    "task_id": "6a266293925de175122972d4",
+    "message_id": "6a26629373a07d3d7861bac8",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 14:34:59",
+    "format": "full"
+  },
+  "trace": "null"
+}
