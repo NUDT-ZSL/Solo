@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T07:36:18.297Z",
+  "task_name": "auto95",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "开发一个微型在线协作故事接龙与分支叙事编辑器应用，让多个用户在一个房间里共同创作一个分支叙事故事，每个参与者可以添加新的叙事节点、选择分支走向，并看到其他成员正在编辑的节点实时高亮，最终形成一棵完整的叙事树。使用TypeScript、React前端和WebSocket后端实现。文件结构如下：\n - package.json（依赖：react、react-dom、typescript、@types/react、@types/react-dom、vite、@vitejs/plugin-react、express、ws、@types/express、@types/ws，启动脚本：npm run dev）\n - index.html（入口页面，包含UI容器）\n - vite.config.js（Vite构建配置，代理WebSocket端口）\n - tsconfig.json（严格模式，包含DOM和ESNext类型）\n - server.ts（WebSocket服务端，管理房间、同步节点操作）\n - src/App.tsx（前端主组件，渲染叙事树和编辑面板）\n - src/TreeCanvas.tsx（叙事树可视化和交互逻辑）\n\n具体需求：\n1. 用户可创建或加入一个故事房间（房间码6位数字），房间内最多6人，每个用户分配一个颜色标识（从预设8色中随机分配），用户离开后30分钟房间自动销毁。\n2. 叙事树以根节点（故事开头）开始，每个节点是一个可编辑的文本卡片（背景白色，圆角8px，最大宽度200px），用户点击某个节点可在其下方添加子节点（最多3个子节点），表示分支选择；节点之间用灰色贝塞尔曲线连接，子节点按添加顺序从左到右排列。\n3. 当某用户正在编辑一个节点（点击节点后弹出文本输入框），该节点边框变为用户颜色并脉动（透明度从1到0.5循环，周期1.5秒），同时其他用户看到该节点右上角显示小圆点指示器（颜色同用户）。\n4. 支持节点内容实时同步：每1秒自动保存一次编辑内容，通过WebSocket广播给房间内其他人，已保存的节点内容不可再编辑（只读，显示半透明覆盖层#00000010），仅可添加子节点。\n5. 提供导出功能：将整个叙事树以JSON格式（包含节点id、内容、父节点id、子节点列表）下载为文本文件，文件名包含房间码和时间戳。\n\n界面方面：页面整体采用深色主题（背景#1A1A2E，卡片背景#16213E，文字#E2E8F0），叙事树画布居中占据主体（最小宽800px），左侧显示房间成员列表和在线状态（绿色圆点离线灰）。节点编辑框弹出时背景变暗（半透明蒙层#00000060），编辑框居中显示（宽400px，高200px），带有淡入动画（0.3s ease）。使用过渡动画（CSS transition）实现节点添加和连接线绘制，每个新节点出现时从父节点位置飞入（0.4s cubic-bezier）。响应式适配：当屏幕宽度小于768px时，画布自适应缩小，节点卡片宽度变为160px。\n\n性能要求：WebSocket消息延迟小于100ms，叙事树节点数上限200个时，帧率保持30fps以上。\n\n运行方式：npm install && npm run dev（同时启动前端和WebSocket服务器，前端通过Vite代理WebSocket到服务器端口）。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:516f5f89db9e558599a8ee35631df593_6a267088408090ba7673c76b.6a2670e2408090ba7673c7bc.6a2670e2d82f9139790348bc:Trae CN.T(2026/6/8 15:36:02)",
+    "user_id": "218182458805051",
+    "trace_id": "516f5f89db9e558599a8ee35631df593",
+    "session_id": "6a267088408090ba7673c76b",
+    "task_id": "6a2670e2408090ba7673c7bc",
+    "message_id": "6a2670e2d82f9139790348bc",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 15:36:02",
+    "format": "full"
+  },
+  "trace": "null"
+}
