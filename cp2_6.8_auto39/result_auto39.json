@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T05:49:59.676Z",
+  "task_name": "auto39",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "开发一个基于时间胶囊的匿名心情漂流瓶应用，让用户撰写一段1-3个月后才会被随机其他用户拆阅的心情留言，营造一种慢节奏的跨时空匿名社交体验。使用TypeScript、React前端和Express后端实现，前后端通过RESTful API通信。文件结构如下：\n - package.json（根目录，含依赖：express、uuid、cors、react、react-dom、typescript、@types/react、@types/react-dom、@types/express、@types/cors、vite、@vitejs/plugin-react、ts-node，启动脚本：concurrently \"npm run server\" \"npm run dev\"）\n - index.html（入口页面）\n - vite.config.js（Vite构建配置）\n - tsconfig.json（严格模式，ES模块，包含DOM类型）\n - server/index.ts（Express服务端，处理漂流瓶的投递、存储和随机提取接口，数据存内存）\n - src/App.tsx（主应用组件，路由切换投递与拆阅视图）\n - src/BottleSend.tsx（投递页面，编辑器与定时设置）\n - src/BottleOpen.tsx（拆阅页面，随机获取并展示胶囊，含延迟动画）\n\n具体需求：\n1. 投递功能：用户在一个富文本编辑器中书写心情文字（支持纯文本和简单Markdown语法如加粗、换行），并选择一个释放日期（1个月、2个月、3个月后），提交后生成一个带有唯一ID的胶囊对象存储在后端，胶囊内容加密存储（使用Base64简单编码），返回成功提示。\n2. 拆阅功能：每次点击“拆开一个”按钮，后端从所有当前日期已到释放日的胶囊中随机选取一个返回（若暂无则提示“海面空空”），前端展示时先显示3秒钟的密封信封动画（信封封面随机颜色渐变），然后翻页显示内容，胶囊只可被拆阅一次，拆阅后自动失效。\n3. 匿名互动：拆阅后用户可选择向原投递者发送一条简短回复（不超过100字），回复以匿名方式存储并与原胶囊关联，原投递者在投递记录页面的状态变为“有新回复”，点击可查看匿名回复内容。\n4. 投递记录：用户在当前会话中的投递历史以列表展示，每项显示投递日期、释放倒计时（动态更新）和当前状态（未拆阅/已拆阅/有回复），已拆阅的胶囊显示占位符“已漂向远方”，不可再次查看内容。\n5. 数据持久化：后端在内存中维护一个胶囊和回复列表，页面刷新或会话结束数据不会丢失（重启后重置），投递记录用sessionStorage保存以恢复会话状态。\n\n界面方面：整体采用柔和航海风格，主色为深蓝色（#1A2A44）搭配浅沙色（#F5E6CC），投递编辑区使用卡片式白底圆角设计（阴影深度8px），释放日期选择用3个按钮（1月/2月/3月，选中态为波浪动画）。拆阅页面中心放置一个漂浮的信封图标（CSS动画上下浮动，周期3秒），点击后信封先旋转180度并放大（过渡0.8秒），然后破碎消散（fadeOut 1秒）露出文字。历史记录列表每项左侧显示一个圆形状态指示灯（绿色=未拆阅，灰色=已拆阅，金色=有新回复），倒计时文本用等宽字体实时更新。整个页面在移动端（小于768px）自动调整为单列布局，按钮和输入框尺寸放大至48px触摸友好。\n\n性能要求：投递和拆阅接口响应时间小于300ms，前端动画帧率稳定在60fps，拆阅时信封动画不出现卡顿或跳帧。运行方式：npm install && npm run dev。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:49711ae5963e09e23d5f4b2b5c23bad2_6a26578acb3fbb0eecba3e55.6a2657f8cb3fbb0eecba3ea9.6a2657f7d944731068445d9b:Trae CN.T(2026/6/8 13:49:44)",
+    "user_id": "218182458805051",
+    "trace_id": "49711ae5963e09e23d5f4b2b5c23bad2",
+    "session_id": "6a26578acb3fbb0eecba3e55",
+    "task_id": "6a2657f8cb3fbb0eecba3ea9",
+    "message_id": "6a2657f7d944731068445d9b",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 13:49:44",
+    "format": "full"
+  },
+  "trace": "null"
+}
