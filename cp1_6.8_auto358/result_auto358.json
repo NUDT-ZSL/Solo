@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T04:32:00.708Z",
+  "task_name": "auto358",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「谜境电台」的全栈web应用，用户可以匿名提交一段15秒以内的语音谜题（比如：念一段歌词、描述一个梦境、或者模仿一种声音），然后系统随机把这段语音播给另一个匿名用户，接收者需要猜出谜题的内容（文字输入或语音回答），猜对后两人会建立一次「心灵共振」连接（持续24小时）。\n使用TypeScript和React来实现，后端用FastAPI（Python）。文件结构大概这样：\n- server/main.py（FastAPI 入口，处理语音上传、匹配、连接管理）\n- server/voice_router.py（语音路由，处理音频存储和随机抽取）\n- client/src/main.tsx（React入口，挂载App）\n- client/src/App.tsx（主组件管理页面路由和全局状态）\n- client/src/MysteryPlayer.tsx（谜题播放器组件，显示播放界面、录音按钮、答案输入框）\n- client/src/ConnectionList.tsx（连接列表组件，展示历史记录和剩余时间）\n- package.json（依赖：react、react-router-dom、axios、vite等，运行脚本：dev、build）\n- tsconfig.json（TypeScript配置）\n- vite.config.js（Vite配置）\n- client/index.html（入口HTML）\n\n需求：\n1. 用户无需注册，打开页面即可录音（浏览器麦克风权限），录音后自动上传并生成匿名谜题ID，首页随机展示一个来自他人的录音谜题（带“谜题类型”标签和发布时间），用户播放后可以“猜谜”或“跳过”；\n2. 猜谜页面包含一个文字输入框和可选的语音回答按钮，提交后系统比对答案（支持关键词模糊匹配），如果匹配则双方建立连接；\n3. 连接列表显示自己发布和猜过的所有谜题记录，以及当前活跃的“心灵共振”剩余时间，连接过期后自动从列表中淡出；\n4. 界面整体走复古收音机风格：深棕色木质纹理背景，金属旋钮和指针元素，按钮是圆角矩形加浮雕效果，播放/录音时有模拟指针摆动的动画，切换页面时有渐变过渡；\n5. 性能上要保证音频播放和录音无卡顿，交互响应流畅，列表滚动平滑；\n6. 配色以暖棕、暗金、米白为主，所有交互元素（按钮、卡片）在悬停时有微弱的发光和上浮阴影效果。\n\n直接 npm install && npm run dev 就可以在本地开发服务器上跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:ee694021c69b107c4e343237273538eb_6a2644ccac19fd96be194be5.6a2645b0ac19fd96be194c82.6a2645b0344bbf24715fee05:Trae CN.T(2026/6/8 12:31:44)",
+    "user_id": "2402906841289811",
+    "trace_id": "ee694021c69b107c4e343237273538eb",
+    "session_id": "6a2644ccac19fd96be194be5",
+    "task_id": "6a2645b0ac19fd96be194c82",
+    "message_id": "6a2645b0344bbf24715fee05",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 12:31:44",
+    "format": "full"
+  },
+  "trace": "null"
+}
