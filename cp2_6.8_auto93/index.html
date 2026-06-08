@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>森林冠层竞争与共生关系可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(180deg, #0B1A2E 0%, #162A1E 100%);
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #ui-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background: rgba(20, 20, 30, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #555577;
+      border-radius: 12px;
+      padding: 20px;
+      color: #E8E8F0;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      z-index: 100;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    #ui-panel.hidden {
+      transform: translateX(360px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #panel-toggle {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      background: rgba(20, 20, 30, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #555577;
+      border-radius: 10px;
+      color: #D4AF37;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 101;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    #panel-toggle:hover {
+      background: rgba(40, 40, 60, 0.9);
+      transform: scale(1.05);
+    }
+
+    #ui-panel:not(.hidden) ~ #panel-toggle {
+      right: 360px;
+    }
+
+    .panel-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #D4AF37;
+      text-align: center;
+      letter-spacing: 1px;
+    }
+
+    .control-group {
+      margin-bottom: 18px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #B8B8C8;
+    }
+
+    .control-value {
+      font-weight: 600;
+      color: #D4AF37;
+      min-width: 40px;
+      text-align: right;
+      transition: transform 0.15s ease;
+    }
+
+    .control-value.pop {
+      transform: scale(1.2);
+    }
+
+    .slider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #F4D03F 0%, #D4AF37 100%);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(212, 175, 55, 0.5);
+      transition: transform 0.15s ease;
+    }
+
+    .slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #F4D03F 0%, #D4AF37 100%);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 8px rgba(212, 175, 55, 0.5);
+    }
+
+    .select-wrapper {
+      position: relative;
+    }
+
+    .control-select {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid #555577;
+      border-radius: 8px;
+      color: #E8E8F0;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .control-select:hover {
+      border-color: #D4AF37;
+    }
+
+    .control-select:focus {
+      border-color: #D4AF37;
+    }
+
+    .select-wrapper::after {
+      content: '▼';
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #D4AF37;
+      font-size: 10px;
+      pointer-events: none;
+    }
+
+    .btn {
+      position: relative;
+      width: 100%;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
+      border: 1px solid #D4AF37;
+      border-radius: 8px;
+      color: #D4AF37;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      overflow: hidden;
+      transition: all 0.2s ease;
+      letter-spacing: 0.5px;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.35) 0%, rgba(212, 175, 55, 0.2) 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn.playing {
+      background: linear-gradient(135deg, rgba(76, 175, 80, 0.2) 0%, rgba(76, 175, 80, 0.1) 100%);
+      border-color: #4CAF50;
+      color: #4CAF50;
+    }
+
+    .btn.playing:hover {
+      background: linear-gradient(135deg, rgba(76, 175, 80, 0.35) 0%, rgba(76, 175, 80, 0.2) 100%);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.4);
+      transform: scale(0);
+      animation: ripple-anim 0.3s ease-out;
+      pointer-events: none;
+    }
+
+    @keyframes ripple-anim {
+      to {
+        transform: scale(4);
+        opacity: 0;
+      }
+    }
+
+    .stats-info {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(85, 85, 119, 0.5);
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #A0A0B0;
+      margin-bottom: 6px;
+    }
+
+    .stats-value {
+      color: #E8E8F0;
+      font-weight: 500;
+    }
+
+    @media (max-width: 1366px) {
+      #ui-panel {
+        width: 280px;
+        padding: 16px;
+      }
+
+      #ui-panel:not(.hidden) ~ #panel-toggle {
+        right: 320px;
+      }
+
+      .panel-title {
+        font-size: 16px;
+        margin-bottom: 16px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      #ui-panel {
+        top: 70px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+      }
+
+      #ui-panel:not(.hidden) ~ #panel-toggle {
+        right: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="ui-panel" class="hidden">
+      <h2 class="panel-title">🌲 森林参数控制</h2>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>☀️ 光照强度</span>
+          <span class="control-value" id="light-value">1.25</span>
+        </div>
+        <input type="range" class="slider" id="light-slider" min="0.5" max="2.0" step="0.05" value="1.25" />
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>💧 土壤湿度</span>
+          <span class="control-value" id="moisture-value">50</span>
+        </div>
+        <input type="range" class="slider" id="moisture-slider" min="0" max="100" step="1" value="50" />
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>🍄 菌根网络强度</span>
+          <span class="control-value" id="mycorrhiza-value">0.50</span>
+        </div>
+        <input type="range" class="slider" id="mycorrhiza-slider" min="0" max="1" step="0.01" value="0.50" />
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>🌳 树种组合</span>
+        </div>
+        <div class="select-wrapper">
+          <select class="control-select" id="forest-type">
+            <option value="conifer">针叶林（松树为主）</option>
+            <option value="broadleaf">阔叶林（橡树、枫树为主）</option>
+            <option value="mixed" selected>混交林</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn playing" id="toggle-animation">
+        ⏸ 暂停动画
+      </button>
+
+      <div class="stats-info">
+        <div class="stats-row">
+          <span>树木总数</span>
+          <span class="stats-value" id="tree-count">-</span>
+        </div>
+        <div class="stats-row">
+          <span>活跃粒子</span>
+          <span class="stats-value" id="particle-count">-</span>
+        </div>
+        <div class="stats-row">
+          <span>FPS</span>
+          <span class="stats-value" id="fps-counter">-</span>
+        </div>
+      </div>
+    </div>
+    <button id="panel-toggle" title="显示/隐藏控制面板">⚙</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
