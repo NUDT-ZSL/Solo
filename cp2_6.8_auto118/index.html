@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>像素风天气模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0B0C10;
+      font-family: 'Courier New', monospace;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #mainCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .control-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(45, 55, 72, 0.85);
+      border-radius: 8px;
+      padding: 16px 20px;
+      min-width: 220px;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .control-panel h3 {
+      color: #E2E8F0;
+      font-size: 14px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #4A5568;
+      padding-bottom: 8px;
+    }
+
+    .slider-group {
+      margin-bottom: 14px;
+    }
+
+    .slider-group label {
+      display: flex;
+      justify-content: space-between;
+      color: #A0AEC0;
+      font-size: 12px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .slider-group label span {
+      color: #68D391;
+      font-weight: bold;
+    }
+
+    .slider-group input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    #densitySlider {
+      background: linear-gradient(to right, #48BB78, #F56565);
+    }
+
+    #windSlider {
+      background: linear-gradient(to right, #4299E1, #F6AD55);
+    }
+
+    .slider-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s ease;
+    }
+
+    .slider-group input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .slider-group input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .fullscreen-btn {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.2s ease;
+      font-family: 'Courier New', monospace;
+    }
+
+    .fullscreen-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .fullscreen-btn:active {
+      transform: translateY(0);
+    }
+
+    .weather-buttons {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 16px;
+      z-index: 100;
+    }
+
+    .weather-btn {
+      width: 64px;
+      height: 64px;
+      border: 2px solid #4A5568;
+      border-radius: 50%;
+      background: rgba(45, 55, 72, 0.8);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 0;
+    }
+
+    .weather-btn:hover {
+      border-color: #718096;
+      background: rgba(74, 85, 104, 0.9);
+    }
+
+    .weather-btn.active {
+      background: #F6AD55;
+      border-color: #F6E05E;
+      transform: scale(1.1);
+      box-shadow: 0 0 20px rgba(246, 173, 85, 0.5);
+    }
+
+    .weather-btn canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="mainCanvas"></canvas>
+  </div>
+
+  <div class="control-panel">
+    <h3>控制面板</h3>
+    <div class="slider-group">
+      <label>粒子密度 <span id="densityValue">100</span></label>
+      <input type="range" id="densitySlider" min="10" max="200" step="10" value="100" />
+    </div>
+    <div class="slider-group">
+      <label>风速 <span id="windValue">5</span></label>
+      <input type="range" id="windSlider" min="0" max="10" step="1" value="5" />
+    </div>
+    <button class="fullscreen-btn" id="fullscreenBtn">全屏模式</button>
+  </div>
+
+  <div class="weather-buttons" id="weatherButtons">
+    <button class="weather-btn active" data-weather="sunny" title="晴天"></button>
+    <button class="weather-btn" data-weather="cloudy" title="多云"></button>
+    <button class="weather-btn" data-weather="rainy" title="雨天"></button>
+    <button class="weather-btn" data-weather="snowy" title="雪天"></button>
+    <button class="weather-btn" data-weather="stormy" title="雷暴"></button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
