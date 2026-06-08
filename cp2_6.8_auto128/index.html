@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 魔方解算路径可视化器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body {
+      background: linear-gradient(180deg, #0B0E17 0%, #1A1F36 100%);
+      color: #E2E8F0;
+    }
+    #app { width: 100vw; height: 100vh; position: relative; }
+    #canvas-container { width: 100%; height: 100%; }
+
+    .status-panel {
+      position: absolute;
+      left: 20px;
+      bottom: 90px;
+      padding: 16px 20px;
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      min-width: 180px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .status-panel .status-title { font-size: 12px; opacity: 0.6; margin-bottom: 4px; letter-spacing: 0.5px; }
+    .status-panel .status-text { font-size: 18px; font-weight: 600; color: #63B3ED; }
+    .status-panel .status-steps { margin-top: 6px; font-size: 13px; opacity: 0.85; }
+    .status-panel .status-formula { margin-top: 8px; font-family: 'Courier New', monospace; font-size: 14px; color: #FFD700; }
+
+    .controls {
+      position: absolute;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .layer-slider-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+    }
+    .layer-slider-label { font-size: 10px; opacity: 0.7; letter-spacing: 0.5px; }
+    .layer-slider-labels { display: flex; justify-content: space-between; width: 60px; font-size: 10px; opacity: 0.7; }
+    input[type="range"].layer-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 60px;
+      height: 4px;
+      transform: rotate(180deg);
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"].layer-slider::-webkit-slider-runnable-track {
+      height: 4px;
+      background: linear-gradient(90deg, #2D3748, #4A5568);
+      border-radius: 2px;
+    }
+    input[type="range"].layer-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      margin-top: -6px;
+      background: #63B3ED;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(99, 179, 237, 0.5);
+      transition: transform 0.2s;
+    }
+    input[type="range"].layer-slider::-webkit-slider-thumb:active { transform: scale(0.9); }
+    input[type="range"].layer-slider::-moz-range-track { height: 4px; background: linear-gradient(90deg, #2D3748, #4A5568); border-radius: 2px; }
+    input[type="range"].layer-slider::-moz-range-thumb { width: 16px; height: 16px; background: #63B3ED; border-radius: 50%; border: none; box-shadow: 0 0 8px rgba(99, 179, 237, 0.5); }
+
+    .dir-buttons { display: flex; gap: 8px; flex-direction: column; }
+
+    .ctrl-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: #2D3748;
+      color: #E2E8F0;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+      user-select: none;
+    }
+    .ctrl-btn:hover:not(:disabled) { transform: scale(1.1); box-shadow: 0 0 16px #FFFFFF33; }
+    .ctrl-btn:active:not(:disabled) { transform: scale(0.9); }
+    .ctrl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .ctrl-btn.primary { background: #3182CE; }
+    .ctrl-btn.accent { background: #38A169; }
+    .ctrl-btn.danger { background: #E53E3E; }
+
+    .progress-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      min-width: 200px;
+    }
+    .progress-label { font-size: 11px; opacity: 0.7; }
+    .progress-bar-wrap { width: 100%; height: 6px; background: #2D3748; border-radius: 3px; position: relative; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #63B3ED, #3182CE); border-radius: 3px; transition: width 0.15s; }
+    input[type="range"].progress-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: transparent;
+      position: absolute;
+      top: 0;
+      left: 0;
+      cursor: pointer;
+    }
+    input[type="range"].progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; background: #63B3ED; border-radius: 50%; margin-top: -4px; box-shadow: 0 0 8px rgba(99,179,237,0.6); }
+    input[type="range"].progress-slider::-moz-range-thumb { width: 14px; height: 14px; background: #63B3ED; border-radius: 50%; border: none; }
+
+    .divider { width: 1px; height: 36px; background: rgba(255,255,255,0.1); }
+
+    .step-buttons { display: flex; gap: 8px; align-items: center; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <div class="status-panel">
+      <div class="status-title">当前状态</div>
+      <div class="status-text" id="status-text">就绪</div>
+      <div class="status-steps" id="status-steps">步数: 0 / 0</div>
+      <div class="status-formula" id="status-formula"></div>
+    </div>
+
+    <div class="controls">
+      <div class="layer-slider-container">
+        <div class="layer-slider-label">选择层</div>
+        <input type="range" class="layer-slider" id="layer-slider" min="0" max="5" step="1" value="0" />
+        <div class="layer-slider-labels"><span>U</span><span>D</span><span>F</span><span>B</span><span>L</span><span>R</span></div>
+      </div>
+
+      <div class="dir-buttons">
+        <button class="ctrl-btn" id="btn-cw" title="顺时针">↻</button>
+        <button class="ctrl-btn" id="btn-ccw" title="逆时针">↺</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="step-buttons">
+        <button class="ctrl-btn" id="btn-prev" title="上一步">⏮</button>
+        <button class="ctrl-btn primary" id="btn-shuffle" title="打乱">🔀</button>
+        <button class="ctrl-btn accent" id="btn-solve" title="解算" disabled>▶</button>
+        <button class="ctrl-btn" id="btn-next" title="下一步">⏭</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="progress-container">
+        <div class="progress-label"><span id="progress-label">0 / 0</span> 步</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+          <input type="range" class="progress-slider" id="progress-slider" min="0" max="0" value="0" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
