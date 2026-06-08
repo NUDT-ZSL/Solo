@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "Web前端",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「墨迹年鉴」的交互式时间线可视化工具，用户可以导入自己的年度日记/博客/社交媒体数据（例如一个包含日期和文本的JSON），然后应用会以水墨风格的动态时间线来展示这些数据——每条记录作为一滴墨迹落在时间轴上，墨迹大小由文本长度决定，颜色由情感分析（简单基于关键词）从冷色（悲伤）渐变到暖色（快乐），用户悬停到墨迹上会触发涟漪扩散动画并显示文字摘要。整体视觉走东方水墨风格：米黄到浅灰渐变背景，带有宣纸纹理，时间轴是一根半透明毛笔线，墨迹边缘有晕染效果，标题用楷体字，按钮是圆形毛笔印章样式。左侧有毛玻璃筛选面板（按月份/情感过滤），右侧有水墨风格的图表展示每月数据量。交互反馈流畅，帧率稳定60fps。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口挂载React应用）、src/App.tsx（主组件管理数据状态和布局）、src/Timeline.tsx（时间轴组件，渲染墨迹和动画）、src/InkDrop.tsx（单个墨迹组件的涟漪动画和悬停效果）、src/FilterPanel.tsx（毛玻璃筛选面板）、src/utils/dataProcessor.ts（解析JSON并进行简单情感分析）。另外需要配套的构建配置：vite.config.ts设置React和TypeScript插件，tsconfig.json严格模式开启，package.json包含react、typescript、vite等依赖，启动脚本是dev和build，src/index.html作为入口HTML引入main.tsx。这样我直接npm install && npm run dev就能跑起来。"
+}
