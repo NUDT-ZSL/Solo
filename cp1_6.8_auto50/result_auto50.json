@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T17:30:08.690Z",
+  "task_name": "auto50",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「风吟诗签」的交互式诗歌生成器，用户可以从一个古风风格的界面中选择意象词（如月、山、花）和情感主题（如离别、思念），系统根据规则库自动组合生成一首五言或七言绝句，并配合水墨风格的动态背景和飘落的桃花粒子动画。用TypeScript和React来实现，UI采用毛玻璃质感和浅青灰主色调，按钮和卡片带有缓动悬停效果，生成的诗句以竖排毛笔字动画逐字显现，点击诗句任意字会触发墨迹扩散特效并展示该字释义的浮窗。右侧有一个控制面板，包含意象筛选标签、情感下拉菜单和一个「生成」按钮，左侧实时显示当前诗句，底部有收藏和分享按钮。响应式适配平板和手机。交互响应流畅，帧率保持60fps。文件结构大概这样：src/下有PoemEngine.ts（核心模块，管理意象词库、情感规则库和诗句生成逻辑）、ParticleAnimator.ts（控制桃花粒子和背景水墨动画，使用Canvas渲染）、UIPanel.tsx（React组件，包含控制面板、诗句展示区和底部操作栏）、PoemCard.tsx（React组件，展示单句诗句的毛玻璃卡片和墨迹特效）。另外，根目录放一个package.json，带上依赖和启动脚本（scripts部分包含dev和build命令）；入口HTML放在public/index.html；tsconfig.json配置严格模式；vite.config.js用Vite作为构建工具。这样我直接npm install && npm run dev就能跑起来了。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:78e87ce89531271a0956fb2a3372c0c6_6a25aa3fa67d8ac61bfd50c9.6a25aa90a67d8ac61bfd511c.6a25aa901e81a5208775f8d2:Trae CN.T(2026/6/8 01:29:52)",
+    "user_id": "2402906841289811",
+    "trace_id": "78e87ce89531271a0956fb2a3372c0c6",
+    "session_id": "6a25aa3fa67d8ac61bfd50c9",
+    "task_id": "6a25aa90a67d8ac61bfd511c",
+    "message_id": "6a25aa901e81a5208775f8d2",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 01:29:52",
+    "format": "full"
+  },
+  "trace": "null"
+}
