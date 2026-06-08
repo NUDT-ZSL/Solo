@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T16:31:50.213Z",
+  "task_name": "auto20",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「符语织机」的交互式符文学符号生成器。用户可以通过在画布上点击放置符文节点，然后选择不同的连线规则（如直线、曲线、网状）和颜色主题（如暗夜星辉、熔岩赤焰、深海幽蓝），系统会自动生成一张独特的符文图谱，并伴有粒子特效和缓动动画。用TypeScript和React来实现，配合Canvas绘制。文件结构大概这样：src/下有RuneEngine.ts（负责画布渲染、符文节点管理、连线算法和帧率控制，保持60fps）、SymbolGenerator.ts（根据用户选择的规则和颜色生成符文图案，包括节点位置、连线路径和颜色渐变）、ParticleEffect.ts（管理粒子系统，添加光晕、飘散和缓动动画）、ControlPanel.tsx（React组件，包含节点放置工具、连线规则选择下拉框、颜色主题切换按钮和重置画布按钮）、App.tsx（主组件，整合画布和面板）、utils.ts（提供公共工具函数如随机数、颜色插值）。界面方面：整体采用深色背景（接近黑灰色），符文节点为发光白色或根据主题颜色发光，粒子为半透明彩色小点，缓慢飘散。页面布局是左侧为画布区域（占大部分空间），右侧或底部为半透明毛玻璃面板放置控件，控件带微光效和悬浮动画。交互反馈：点击画布新增节点时，节点有脉动弹出动画；选择连线规则或颜色主题时，图谱会平滑过渡（缓动切换），粒子立即响应变化；鼠标悬停节点时节点放大并显示坐标工具提示。响应式适配：在手机端合理调整面板位置和控件大小。性能方面：确保画布渲染流畅，不卡顿，帧率不低于60fps。顺便把配置文件也带上：package.json里加上react、react-dom、typescript、vite和@vitejs/plugin-react依赖，脚本配好dev和build；vite.config.js配置react插件；tsconfig.json严格模式开启；入口HTML在根目录下。这样我npm install && npm run dev就能直接跑起来了。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:68f7b38c8f9c9b67d09b4d326aedc4a6_6a259c581b4c5ed63bdef1e8.6a259ce61b4c5ed63bdef26c.6a259ce5012e951e4b245987:Trae CN.T(2026/6/8 00:31:34)",
+    "user_id": "2402906841289811",
+    "trace_id": "68f7b38c8f9c9b67d09b4d326aedc4a6",
+    "session_id": "6a259c581b4c5ed63bdef1e8",
+    "task_id": "6a259ce61b4c5ed63bdef26c",
+    "message_id": "6a259ce5012e951e4b245987",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 00:31:34",
+    "format": "full"
+  },
+  "trace": "null"
+}
