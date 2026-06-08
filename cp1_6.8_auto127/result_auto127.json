@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T19:48:13.940Z",
+  "task_name": "auto127",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「星轨残影」的3D交互可视化项目，模拟流星划过夜空后留下发光轨迹并缓缓消散的梦幻场景。用户可以通过鼠标拖拽旋转视角、滚轮缩放，观察流星在三维空间中随机生成并飞行，拖尾轨迹由大量发光粒子构成，轨迹会随时间逐渐衰减消失。点击任意流星会触发一次小型爆炸特效（粒子向外扩散并闪烁），同时弹出一个半透明毛玻璃信息面板显示该流星的速度、颜色和消失倒计时。整体视觉风格为深邃星空：纯黑背景搭配渐变星云贴图，流星拖尾用粒子系统生成，粒子大小和颜色随生命周期变化（从亮白渐变到透明），背景有远景恒星闪烁动画。交互反馈流畅，帧率保持60fps。界面布局：右下角有一个半透明毛玻璃控制面板，包含三个滑块（流星生成频率、拖尾粒子寿命、视角自动旋转速度）和一个「重置星轨」按钮。响应式适配桌面和平板。使用TypeScript和React配合Three.js实现。文件结构大概这样：src/下有main.tsx（入口，初始化场景、相机、渲染器、动画循环和集成React UI）、MeteorEngine.ts（核心引擎，管理流星的生成、运动轨迹、拖尾粒子更新和点击检测）、ExplosionEffect.ts（管理流星点击爆炸特效的粒子生成、扩散动画和销毁逻辑）、StarBackground.ts（管理背景星云贴图、恒星闪烁动画和星空的旋转）、ControlPanel.tsx（React组件，实现右下角的毛玻璃控制面板，包含滑块和按钮，状态通过Zustand共享）。根目录放package.json（依赖包括react、react-dom、three、@react-three/fiber、@react-three/drei、zustand、vite、typescript、@types/react、@types/react-dom、@types/three），还有tsconfig.json（设置严格模式、路径别名@指向src）、vite.config.ts（配置react插件和路径别名）和index.html（入口HTML，挂载#root）。README里写一下运行方式：npm install && npm run dev。项目结构清晰，核心逻辑在TS模块里，React只负责UI层。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:8f3d972400fe31c61c2bca10b1fc3bc2_6a25c984f5ccad4b65b9c6dd.6a25caebf5ccad4b65b9c7f8.6a25caeb64b7890246482cae:Trae CN.T(2026/6/8 03:47:55)",
+    "user_id": "2402906841289811",
+    "trace_id": "8f3d972400fe31c61c2bca10b1fc3bc2",
+    "session_id": "6a25c984f5ccad4b65b9c6dd",
+    "task_id": "6a25caebf5ccad4b65b9c7f8",
+    "message_id": "6a25caeb64b7890246482cae",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 03:47:55",
+    "format": "full"
+  },
+  "trace": "null"
+}
