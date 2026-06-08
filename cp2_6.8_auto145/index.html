@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEON BREAKOUT</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #0a0515;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+    }
+    #game-wrapper {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      box-shadow: 0 0 60px rgba(0, 212, 255, 0.15);
+    }
+    #game-canvas {
+      display: block;
+      width: 800px;
+      height: 600px;
+      background: linear-gradient(180deg, #1A0A2E 0%, #0F0C29 100%);
+      cursor: none;
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 30px;
+    }
+    .screen.active {
+      display: flex;
+    }
+    #menu-screen {
+      background: rgba(0, 0, 0, 0.7);
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+    }
+    #gameover-screen {
+      background: rgba(0, 0, 0, 0.7);
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+    }
+    .title {
+      font-size: 32px;
+      font-weight: bold;
+      color: #00D4FF;
+      text-shadow: 0 0 6px #00D4FF, 0 0 12px #00D4FF, 0 0 20px rgba(0, 212, 255, 0.5);
+      letter-spacing: 4px;
+    }
+    .neon-btn {
+      padding: 14px 40px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #00D4FF, #9F7AEA);
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+      letter-spacing: 2px;
+    }
+    .neon-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.7), 0 0 50px rgba(159, 122, 234, 0.4);
+    }
+    .score-panel {
+      background: rgba(0, 0, 0, 0.85);
+      border-radius: 16px;
+      padding: 30px 50px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      width: 300px;
+      box-shadow: 0 0 30px rgba(159, 122, 234, 0.2);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+    }
+    .score-label {
+      font-size: 18px;
+      color: #9F7AEA;
+      letter-spacing: 3px;
+    }
+    .score-value {
+      font-size: 40px;
+      font-weight: bold;
+      color: #00D4FF;
+      text-shadow: 0 0 10px #00D4FF, 0 0 20px rgba(0, 212, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="game-wrapper">
+    <canvas id="game-canvas" width="800" height="600"></canvas>
+    <div id="ui-overlay">
+      <div id="menu-screen" class="screen active">
+        <h1 class="title">NEON BREAKOUT</h1>
+        <button id="start-btn" class="neon-btn">点击开始</button>
+      </div>
+      <div id="gameover-screen" class="screen">
+        <div class="score-panel">
+          <span class="score-label">SCORE</span>
+          <span id="final-score" class="score-value">0</span>
+          <button id="restart-btn" class="neon-btn">重新开始</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
