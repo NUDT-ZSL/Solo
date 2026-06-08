@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T16:30:48.146Z",
+  "task_name": "auto18",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「鼓韵图腾」的2D节奏敲击游戏。玩家面对一个由多个图腾石柱组成的祭坛，每根柱子对应一个鼓点，背景音乐播放时，石柱会按节奏发光提示，玩家需要在正确时机敲击（点击）发光的柱子，连击成功会累积能量并释放特效，失败则中断连击。游戏有多个关卡，每关音乐和柱子排列不同，难度递增。用TypeScript和React来实现，游戏逻辑封装在独立的TS模块中，React只负责UI渲染和状态管理。文件结构大概这样：src/下有GameEngine.ts（主循环、关卡切换、计时和连击判定）、DrumManager.ts（管理图腾柱的敲击状态、动画和音效触发）、BeatAnalyzer.ts（解析音乐节拍并生成提示序列）、UILayer.tsx（React组件，包含计分板、连击计数器、进度条和设置面板）。另外还要package.json（包含react、typescript、vite依赖和启动脚本dev/build），tsconfig.json（strict模式，配置正确），vite.config.ts，以及一个入口index.html。这样我npm install && npm run dev就能直接跑起来。需求方面：1. 玩家点击柱子时，柱子要有下降和反弹的弹性动画，并伴有光晕爆发，视觉反馈要即时；2. 连击成功时，屏幕边缘出现彩色粒子爆散，连击数越高粒子越密集；3. 每关背景音乐和柱子灯光序列同步，柱子发光提示要提前一拍，给玩家预判时间；4. 计分板显示当前得分和最高分，连击计数器显示当前连击数并带缩放动画；5. 设置面板可调节音乐音量、特效音量和延迟校准（±100ms），用滑块控制，滑块带缓动动画；6. 游戏整体风格为原始部落风：深褐色木质纹理背景，柱子为深色石柱带金色纹路发光，粒子颜色随机从橙红到金色渐变；7. 性能要求：帧率保持60fps，点击响应延迟低于50ms。界面布局：中间为柱子区域（3x3或环形排列），上方计分板和连击数，右下角为半透明毛玻璃设置面板。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:e0637e43bf6da994852be642c9bc3b63_6a259c541b4c5ed63bdef1e4.6a259ca81b4c5ed63bdef227.6a259ca8c06426b84e071f24:Trae CN.T(2026/6/8 00:30:32)",
+    "user_id": "2402906841289811",
+    "trace_id": "e0637e43bf6da994852be642c9bc3b63",
+    "session_id": "6a259c541b4c5ed63bdef1e4",
+    "task_id": "6a259ca81b4c5ed63bdef227",
+    "message_id": "6a259ca8c06426b84e071f24",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 00:30:32",
+    "format": "full"
+  },
+  "trace": "null"
+}
