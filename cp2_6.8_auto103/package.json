@@ -1,0 +1,14 @@
+{
+  "name": "pixel-arcade-racer",
+  "version": "1.0.0",
+  "description": "A mini interactive 2D pixel-style retro arcade racing cockpit simulator",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
