@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T04:31:29.740Z",
+  "task_name": "auto357",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「极光回响」的3D交互可视化项目，模拟一片沉浸式的极光穹顶下，漂浮着由声音驱动的发光粒子群。用户可以通过麦克风说话或播放音频，粒子群会根据声音的频率和振幅实时改变颜色、大小和运动轨迹，同时穹顶上的极光带也会随节奏脉动。整体视觉走梦幻极地风格：深蓝到墨黑渐变背景，极光带呈半透明波浪状，颜色从翠绿渐变到浅紫，粒子是细小发光球体，带有光晕和拖尾，场景自动缓慢旋转。用户可以通过鼠标拖拽旋转视角，滚轮拉近拉远，点击任意粒子群会触发一次局部涟漪扩散效果。界面左下方有一个毛玻璃控制面板，包含麦克风开关、颜色主题选择器（极光、火焰、海洋）和粒子密度滑块，切换时有平滑动画。性能要求：帧率稳定60fps，交互响应流畅。用TypeScript和Three.js来实现，使用Vite构建。文件结构大概这样：src/main.ts（入口初始化场景和渲染器）、src/App.ts（主组件管理场景状态和交互逻辑）、src/AuroraDome.ts（极光穹顶粒子系统，生成和更新极光波浪动画）、src/ParticleSwarm.ts（声音驱动粒子群，处理音频分析并驱动粒子行为）、src/ControlPanel.tsx（毛玻璃控制面板组件）。对了，顺便把package.json、tsconfig.json、vite.config.ts和入口HTML文件也带上，这样我直接npm install && npm run dev就能跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:d607ed95836a937fea09453333006008_6a2644c9ac19fd96be194be3.6a264591ac19fd96be194c63.6a2645910cc6b268c0b627b6:Trae CN.T(2026/6/8 12:31:13)",
+    "user_id": "2402906841289811",
+    "trace_id": "d607ed95836a937fea09453333006008",
+    "session_id": "6a2644c9ac19fd96be194be3",
+    "task_id": "6a264591ac19fd96be194c63",
+    "message_id": "6a2645910cc6b268c0b627b6",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 12:31:13",
+    "format": "full"
+  },
+  "trace": "null"
+}
