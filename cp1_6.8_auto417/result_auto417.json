@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T06:31:33.168Z",
+  "task_name": "auto417",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「梦境速写」的全栈web应用，用户可以创建和分享自己的梦境记录，每条记录包含一个标题、一段文字描述、一个情绪标签（如恐惧、喜悦、困惑等）以及一个自动生成的抽象艺术缩略图（根据情绪关键词用canvas绘制简单色块和线条）。浏览时支持按情绪标签和创建时间筛选，以瀑布流布局展示卡片，点击卡片进入详情页可看到完整描述和全屏展示抽象艺术动画（色块缓慢流动或闪烁）。整体视觉走梦境迷离风格：深蓝到紫红渐变背景，卡片是毛玻璃圆角面板带微弱的发光边框，情绪标签用不同颜色的小圆点显示，标题用衬线字体半透明，创建和编辑页面有柔和的光晕和渐入动画，瀑布流筛选时有平滑过渡和错落布局。响应式适配手机和桌面。交互反馈要流畅，帧率稳定在60fps。用TypeScript和React实现前端，后端用Python的FastAPI，Vite构建。项目包含6个文件：server/main.py（FastAPI入口，挂载路由和静态文件）、server/routes/dreams.py（梦境数据的增删查接口，用内存列表存储）、src/main.tsx（前端入口，渲染React根组件）、src/App.tsx（主组件，布局管理、状态存储和路由切换）、src/components/DreamCard.tsx（单个梦境卡片的展示组件，包含缩略图、标题、情绪标签和点击进入详情）、src/components/DreamCanvas.tsx（核心canvas组件，根据情绪关键词生成抽象艺术动画，绘制动态色块和线条）。运行的话，前端vite.config.ts配置好了后端代理，后端直接python server/main.py启动，前端npm install && npm run dev就行。package.json里要包含react、react-dom、typescript、vite、@vitejs/plugin-react这些依赖和dev脚本。另外配置tsconfig.json和vite.config.ts，方便直接启动。入口HTML放到index.html。需求大概：1. 首页瀑布流展示所有梦境卡片，每张卡片显示情绪标签色点、标题和缩略图；2. 支持按情绪标签（多选）和创建时间（升序/降序）筛选，筛选时卡片重新排列带弹性动画；3. 点击卡片进入详情页，全屏显示抽象艺术动画（canvas动态色块和线条缓慢运动，颜色根据情绪变化），下方展示完整标题和描述；4. 创建梦境页面：表单包含标题、描述和情绪标签选择器（点击颜色圆选择），提交后自动生成缩略图并跳转到详情；5. 删除功能：详情页右下角有删除按钮，点击后卡片从列表消失并带淡出动画；6. 底层用内存列表存储，刷新后数据丢失但可接受，接口简单RESTful；7. 界面毛玻璃风格统一，卡片阴影柔和，按钮是圆形胶囊带微光悬停，所有交互有平滑过渡和反馈。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:91faad5b70658f123f81597b50999185_6a266171925de175122971ac.6a2661b4925de175122971bc.6a2661b445d7d238a6d85e11:Trae CN.T(2026/6/8 14:31:16)",
+    "user_id": "2402906841289811",
+    "trace_id": "91faad5b70658f123f81597b50999185",
+    "session_id": "6a266171925de175122971ac",
+    "task_id": "6a2661b4925de175122971bc",
+    "message_id": "6a2661b445d7d238a6d85e11",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 14:31:16",
+    "format": "full"
+  },
+  "trace": "null"
+}
