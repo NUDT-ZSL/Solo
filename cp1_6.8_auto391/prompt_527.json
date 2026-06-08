@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「情绪色谱日记」的全栈web应用，用户每天可以写一条带情绪的日记，系统会根据情绪关键词（如快乐、悲伤、平静）自动生成一个抽象艺术色块作为背景，色块颜色和形状会随情绪强度变化，用户还能回顾历史日记并按情绪类型筛选，看到每一天的色块列表和心情曲线。界面走柔和极简风格：浅灰到白色渐变背景，日记卡片是毛玻璃圆角面板，情绪色块是渐变色带轻微动效，导航栏是半透明磨砂质感，按钮是圆角胶囊带微光悬停效果，筛选时有平滑过渡动画，响应式适配手机和桌面。交互响应流畅，帧率稳定在60fps。后端用FastAPI（Python）处理用户认证和日记CRUD，前端用TypeScript和React实现，Vite构建。项目文件结构大概这样：server/main.py（FastAPI入口，初始化路由和中间件）、server/diary_router.py（处理日记增删改查和情绪分析逻辑）、client/src/main.tsx（React入口挂载应用）、client/src/App.tsx（主组件管理路由和布局）、client/src/DiaryPage.tsx（日记创建和编辑页面）、client/src/HistoryPage.tsx（历史日记展示和筛选页面）。另外把package.json带上，里面写好依赖（react、react-dom、vite、@vitejs/plugin-react、axios等）和启动脚本（dev用vite，build用vite build），再配个vite.config.js和tsconfig.json，入口HTML放在index.html，这样我拿到后直接npm install && npm run dev就能跑起来。"
+}
