@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T16:17:44.798Z",
+  "task_name": "auto13",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「极光幻境」的3D交互可视化项目，模拟北极夜空中动态极光与雪原地形的交互场景。用户可以通过鼠标拖拽旋转视角、滚轮缩放，观察极光在夜空中流动、扭曲和脉动，同时雪原上散布着一些发光的冰晶，冰晶会随极光强度变化而闪烁。点击任意冰晶会触发一次「光爆」——该冰晶急速膨胀并放射出彩色光柱，周围雪尘扬起，同时弹出半透明毛玻璃信息卡片显示该冰晶的坐标和能量值。整体风格为冷色调极地风：深蓝到紫黑渐变背景，极光用半透明条带状粒子模拟流动，雪原用低多边形起伏表面并带淡蓝色光泽，冰晶为发光多面体，粒子系统模拟飘雪和光尘。界面右下角有一个半透明毛玻璃控制面板，包含三个滑块调节「极光流速」、「冰晶亮度」和「粒子密度」，调节时场景实时平滑变化，滑块带弹性动画。所有交互响应流畅，帧率保持60fps，响应式适配移动端和桌面端。使用TypeScript和Three.js来实现。文件结构大概这样：src/下有AuroraEngine.ts（创建场景、相机和轨道控制，驱动渲染循环）、AuroraGenerator.ts（生成极光粒子并处理流动和扭曲动画）、TerrainManager.ts（生成低多边雪原地形，管理冰晶位置和点击交互）、ParticleSystem.ts（管理飘雪和光尘粒子系统的生命周期）、ControlPanel.tsx（React组件，包含三个滑块和毛玻璃面板，控制场景参数）。另外给我一个index.html作为入口，一个package.json（依赖包含three、react、vite，启动脚本写dev/build），一个vite.config.ts，一个tsconfig.json，这样我npm install && npm run dev就能直接跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:c3c07071dc8695690d6c09f8048290da_6a2598efee5700a64a74212f.6a259998ee5700a64a7421bb.6a259998ea4ba98c9cbb315a:Trae CN.T(2026/6/8 00:17:28)",
+    "user_id": "2402906841289811",
+    "trace_id": "c3c07071dc8695690d6c09f8048290da",
+    "session_id": "6a2598efee5700a64a74212f",
+    "task_id": "6a259998ee5700a64a7421bb",
+    "message_id": "6a259998ea4ba98c9cbb315a",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 00:17:28",
+    "format": "full"
+  },
+  "trace": "null"
+}
