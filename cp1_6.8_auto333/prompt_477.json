@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想做一个叫「情绪回声」的全栈web应用，用户可以在上面记录每日情绪片段（一段文字、一个表情符号、一个颜色标签），然后这些情绪碎片会以声波波形的形式展示在个人时间线上，用户也可以查看其他用户匿名分享的情绪波形，并给予「共鸣」（一个点赞+可选的同感标签）。核心功能：1) 用户打开页面即可记录情绪，选择颜色（从预设色板中选）和表情，写一段话，保存后生成一个情绪声音（用Web Audio合成一个短音效）；2) 首页显示一个全局情绪波形图，每个碎片是一个半透明的发光波形脉冲，按时间排列，点击波形播放对应的情绪声音和文字；3) 个人主页展示自己的情绪时间线，波形按时间轴排列，带日期标题，点击可编辑或删除；4) 每个碎片可以查看共鸣列表，用户可给予共鸣并选择标签（如“同感”、“想听更多”等）。整体视觉走极光风格：深空蓝到紫色渐变背景，波形是半透明发光曲线带光晕，卡片是毛玻璃圆角卡片（白色半透明质感），悬停时波形微微脉动，按钮有柔和光晕扩散动画，响应式适配桌面和移动端，交互反馈流畅，帧率保持60fps。用TypeScript和React做前端，后端用FastAPI（Python）。文件结构大概这样：backend/main.py（FastAPI应用入口，包含路由和API逻辑）、backend/emotion_handler.py（处理情绪碎片的生成和音频合成逻辑）、src/main.tsx（入口挂载React应用）、src/App.tsx（主组件管理路由和全局状态）、src/pages/Home.tsx（首页全局情绪波形图组件）、src/pages/Profile.tsx（个人主页时间线组件）、src/components/EmotionCard.tsx（单个情绪碎片卡片组件，包含波形显示和交互）。对了，顺便把package.json带上，前端依赖用react、react-dom、vite、typescript等，启动脚本用dev和build，后端依赖用fastapi、uvicorn、numpy、soundfile等，启动脚本用uvicorn main:app --reload。还有tsconfig.json和vite.config.js也写上，这样直接npm install && npm run dev就能跑前端，后端pip install -r requirements.txt && uvicorn main:app --reload就能跑后端。"
+}
