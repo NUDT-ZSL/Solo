@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T03:33:12.916Z",
+  "task_name": "auto332",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「回声驿站」的全栈web应用，用户可以在上面录制一段30秒以内的语音留言，然后系统随机把这段语音漂流给另一个匿名用户，收到的人可以听并用文字或简短语音回应，回应后两个用户会建立一次短暂的“回声连接”（连接持续24小时后自动消失）。\n核心功能：1) 用户无需注册，打开页面即可录音（浏览器麦克风权限），录音结束后自动上传并生成一个匿名语音ID；2) 首页显示一条从“漂流海”中随机拾取到的语音（带模糊标题和发布时间），用户播放后可以选择“回应”或“放生”，回应必须包含文字和可选语音；3) 每个用户会在本地存一个连接列表，显示自己发过和回应的语音记录，以及当前活跃的回声连接剩余时间；4) 后台有一个简单的匹配逻辑，随机将新语音分配给活跃用户。\n界面设计：整体海洋漂流风格，浅蓝到深蓝渐变背景，底部有柔和波浪动画，语音卡片是半透明毛玻璃圆角卡片，播放时卡片中心出现声波可视化动画（用Canvas绘制实时音频频谱），播放按钮是圆形发光按钮，悬停时扩散光晕，回应时卡片从底部滑入，发语音时有水滴落入水面的涟漪动画。响应式适配桌面和移动端，交互反馈流畅。\n用TypeScript和React做前端，后端用FastAPI（Python）。文件结构大概这样：前端：frontend/src/main.tsx（入口挂载React应用）、frontend/src/App.tsx（主组件，路由管理）、frontend/src/pages/Home.tsx（首页，显示漂流语音和交互）、frontend/src/components/VoiceRecorder.tsx（录音组件，管理麦克风权限和录音）、frontend/src/hooks/useAudioVisualizer.ts（自定义Hook，用于声波可视化动画）、后端：backend/main.py（FastAPI应用入口，包含路由和匹配逻辑）。\n对了，顺便把前端package.json（包含依赖如react、typescript、vite、react-router-dom，以及dev启动脚本）和vite.config.js带上，后端也要一个requirements.txt（fastapi、uvicorn、python-multipart），然后给个简单的入口HTML作为SPA壳子。直接npm install && pip install -r requirements.txt安装，然后npm run dev和uvicorn backend.main:app分别启动前后端。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:2588eb4f4d335d3d8a5d7f16f13a6d45_6a263742974d7ee274a633fe.6a2637e9974d7ee274a6348b.6a2637e827f8009a2d77a7a2:Trae CN.T(2026/6/8 11:32:57)",
+    "user_id": "2402906841289811",
+    "trace_id": "2588eb4f4d335d3d8a5d7f16f13a6d45",
+    "session_id": "6a263742974d7ee274a633fe",
+    "task_id": "6a2637e9974d7ee274a6348b",
+    "message_id": "6a2637e827f8009a2d77a7a2",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 11:32:57",
+    "format": "full"
+  },
+  "trace": "null"
+}
