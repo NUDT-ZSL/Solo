@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D植物生长与修剪模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #8fbc8f 0%, #2e5a2e 50%, #1a3d1a 100%);
+    }
+
+    #app-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: 0 5%;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #control-panel {
+      position: absolute;
+      left: 5%;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 240px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 12px;
+      padding: 20px;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      z-index: 10;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #fff;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .control-group {
+      margin-bottom: 8px;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: #f5f5dc;
+    }
+
+    .control-group .value-display {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .control-group input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    .control-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #90ee90;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease;
+    }
+
+    .control-group input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .control-group input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #90ee90;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    #hint {
+      position: absolute;
+      top: 20px;
+      left: 5%;
+      color: #fffacd;
+      font-size: 14px;
+      text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+      z-index: 10;
+      line-height: 1.6;
+      pointer-events: none;
+      opacity: 0.85;
+    }
+
+    #stats {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.5);
+      color: #f5f5dc;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 10;
+      display: none;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    #stats.visible {
+      display: block;
+      animation: fadeIn 0.4s ease-in-out;
+    }
+
+    #stats span {
+      margin: 0 12px;
+    }
+
+    #stats .stat-label {
+      color: #90ee90;
+      font-weight: 500;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <div id="canvas-container"></div>
+    <div id="hint">
+      拖拽切割植物<br/>
+      单击查看统计信息<br/>
+      双击触发开花动画
+    </div>
+    <div id="control-panel">
+      <div class="panel-title">控制面板</div>
+      <div class="control-group">
+        <label>
+          生长速度
+          <span class="value-display" id="speed-value">1.0x</span>
+        </label>
+        <input type="range" id="speed-slider" min="0.1" max="3.0" step="0.1" value="1.0" />
+      </div>
+      <div class="control-group">
+        <label>
+          修剪半径
+          <span class="value-display" id="radius-value">1.0</span>
+        </label>
+        <input type="range" id="radius-slider" min="0.5" max="3.0" step="0.1" value="1.0" />
+      </div>
+    </div>
+    <div id="stats">
+      <span><span class="stat-label">枝干数：</span><span id="stat-branches">0</span></span>
+      <span><span class="stat-label">叶片数：</span><span id="stat-leaves">0</span></span>
+      <span><span class="stat-label">生长层数：</span><span id="stat-layers">0</span></span>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
