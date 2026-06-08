@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T06:23:00.227Z",
+  "task_name": "auto59",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我需要一个能够在浏览器中运行的微型团队故事接龙编辑器，主要解决线上创意写作小组缺乏轻量级协作工具来共同续写一个故事，并实时追踪每个成员的贡献和故事分支演变的问题。\n\n它应当具备以下能力：\n1) 创建一个故事房间，用户通过输入房间名和昵称加入（无需注册），每个房间独立存储故事内容和成员列表，支持最多6人同时在线协作，通过WebSocket实现实时同步——任何人的编辑更新（添加新段落、修改已有段落、删除段落）都会在200ms内广播到同房间其他用户的界面上。\n2) 故事以树形结构组织：初始有一个故事开头段落，成员可选择在任意现有段落下方续写（作为子节点），形成分支。每个段落最多1000字，段落之间用时间线和缩进关系表示顺序和层级，左侧显示缩进式树形目录，右侧展示当前选中段落的完整内容。\n3) 每个段落旁显示作者昵称和贡献时间（格式：HH:mm:ss），鼠标悬停时显示该段落的编辑历史（每次修改记录时间戳和作者）。成员头像用首字母圆形标签显示（随机6色：红#FF6B6B、蓝#4ECDC4、黄#FFE66D、紫#A855F7、绿#22C55E、粉#FF8BAC），在线成员头像带绿色发光边框。\n4) 提供故事导出功能，以Markdown格式输出整个故事树（按时间顺序深度优先遍历，不同层级用不同数量的#标题标注），点击导出按钮后浏览器自动下载。\n\n界面方面要求：整体采用左树右文的双列布局，左侧树形目录宽280px，背景色#F8FAFC，每级缩进24px，当前选中节点高亮为#EDF2F7底色；右侧主内容区剩余宽度，背景纯白#FFFFFF，文本区域使用衬线字体Georgia，字号16px，行高1.8，段落之间16px间距。页面顶部40px高的导航栏（#2D3748深蓝灰背景），左侧显示房间名（白色18px粗体），右侧显示当前在线成员头像组（间距8px），以及一个蜗牛壳主题图标（绿色渐变，尺寸28x28）。段落下方的“添加续写”输入框固定在段落底部，带浅灰色圆角边框（border-radius:8px），聚焦时边框变为#4ECDC4青色，并出现淡入动画（0.3秒ease-out）。左侧树形节点展开/收起伴随高度过渡动画（0.25秒ease-in-out）。整体响应式：屏幕宽度小于768px时左侧栏收起为可切换的侧滑抽屉，主内容区占满宽度。性能上需要：在同时6人在线和100个段落的情况下，页面帧率不低于50fps，WebSocket消息的端到端延迟不超过300ms。\n\n实现采用TypeScript、React前端和Express后端，通过WebSocket（使用socket.io库）实现实时通信，数据存储在服务器内存中（重启后丢失但运行期间保持）。按以下文件组织代码：\n - package.json（根目录，含依赖：express、socket.io、uuid、cors、react、react-dom、socket.io-client、typescript、@types/react、@types/react-dom、@types/express、@types/cors、@types/socket.io、@types/uuid、vite、@vitejs/plugin-react，启动脚本：\"dev\": \"concurrently \\\"ts-node src/server.ts\\\" \\\"vite\\\"\"）\n - index.html（入口页面，加载React应用，页面标题为“故事蜗牛 - 团队接龙编辑器”）\n - vite.config.js（Vite构建配置，集成React插件，devServer代理/api和/socket.io到http://localhost:3001）\n - tsconfig.json（严格模式，包含DOM和ES2020类型，模块解析为bundler）\n - src/client/App.tsx（React主组件，包含房间加入界面和接龙编辑器主界面，管理WebSocket连接和故事状态，渲染左侧树形目录和右侧内容区）\n - src/client/TreeView.tsx（递归渲染故事树节点，每个节点显示段落摘要（截断40字+...）、作者头像标签和子节点展开按钮，点击节点触发右侧内容更新）\n - src/server.ts（Express + Socket.io服务器，管理多房间、故事数据的增删改查广播，初始化内存存储，监听3001端口）\n\n运行方式：npm install && npm run dev。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:c06847610f357840898e23b84390f201_6a265ec17244027d2cadc014.6a265fb47244027d2cadc0dc.6a265fb3cc3afeb1da266a7b:Trae CN.T(2026/6/8 14:22:44)",
+    "user_id": "218182458805051",
+    "trace_id": "c06847610f357840898e23b84390f201",
+    "session_id": "6a265ec17244027d2cadc014",
+    "task_id": "6a265fb47244027d2cadc0dc",
+    "message_id": "6a265fb3cc3afeb1da266a7b",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 14:22:44",
+    "format": "full"
+  },
+  "trace": "null"
+}
