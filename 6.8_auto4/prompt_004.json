@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "游戏开发",
+    "修改范围": "模块内多文件",
+    "提示词内容": "想开发一个2D平台跳跃小游戏，主角在一个随机生成的空中岛屿群上跳跃探险，收集星星并避开敌人。用TypeScript和Phaser 3来写，打包用Vite。文件结构：index.html入口，main.ts启动游戏，scene目录下放MenuScene.ts（菜单场景，背景动态飘浮云朵，点击开始按钮淡入主场景）、GameScene.ts（主游戏场景，生成岛屿、主角、敌人和星星，实现碰撞检测和重力，岛屿布局随机但确保可到达，敌人来回移动，收集星星时弹出粒子特效），以及一个objects目录，放Player.ts（主角类，处理左右移动、跳跃和动画）、Island.ts（岛屿类，绘制不同尺寸的绿色平台）。界面方面：整体配色用糖果色系（粉蓝、亮绿、暖黄），背景有动态云朵和渐变天空，主角跳跃时带弹性动画，收集星星时有闪光和得分文字弹出，敌人设计成简单锯齿状。性能上保证60帧流畅，用对象池管理敌人和星星。交互反馈要即时：主角受伤时闪红并短暂无敌，掉出屏幕重新来。移动端支持点击跳跃和左右按钮，响应式适配屏幕。运行配置带上：package.json（依赖phaser、typescript、vite，脚本dev和build），vite.config.js（配置resolve和base），tsconfig.json（strict模式）。结构大概5个文件：index.html、main.ts、MenuScene.ts、GameScene.ts、Player.ts、Island.ts。直接npm install && npm run dev就能跑。"
+}
