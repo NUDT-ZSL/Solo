@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T18:32:50.517Z",
+  "task_name": "auto88",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「暗影齿轮·蒸汽纪元」的2D平台解谜游戏，玩家操控一个发条傀儡在维多利亚风格的蒸汽工厂中穿梭，利用齿轮传动、蒸汽喷射和光影机关来收集能量核心并解锁通往下一层的门。用TypeScript和React来实现，游戏核心逻辑封装在独立TS模块中，React负责UI和状态管理。文件结构大概这样：src/下有GameEngine.ts（主循环、碰撞检测、关卡状态和胜负判定）、ClockworkPlayer.ts（管理发条傀儡的移动、跳跃、齿轮攀爬和能量槽）、SteamMechanism.ts（管理齿轮旋转、蒸汽喷射方向和光影遮挡的交互逻辑）、UILayer.tsx（React组件，显示能量槽、关卡进度条、捡到的核心数量和提示文字）。根目录放package.json（依赖包括react、typescript、vite），还有tsconfig.json、vite.config.js和一个index.html入口。运行直接npm install && npm run dev。需求方面：1. 玩家通过WASD控制傀儡移动，空格跳跃，靠近齿轮按E键攀爬并随齿轮旋转移动；蒸汽喷射方向随机变化，玩家需躲避高压蒸汽（碰到扣能量）或利用蒸汽跳上高台；光影机关通过切换光源方向让平台显现或消失。2. 界面风格：整体采用铜绿深棕和暗金色调，背景是满是齿轮管道的蒸汽工厂，玩家傀儡带有铜锈和发光符文特效，齿轮转动有残影轨迹，蒸汽粒子半透明且带有光晕；UI半透明毛玻璃质感，能量槽用蒸汽压力表风格显示。3. 交互反馈：每次攀爬齿轮、跳跃和触发机关都有屏幕震动和音效反馈（用Web Audio生成），碰撞蒸汽时能量槽闪烁并播放泄漏声；收集核心时核心发光并发出叮当声，同时屏幕右上角显示收集数增加动画。4. 响应式适配桌面和触屏，触屏用户通过屏幕虚拟摇杆和按钮操作，按钮半透明悬浮。5. 性能要求：帧率保持60fps，粒子数量和机关动画使用requestAnimationFrame优化，避免导致卡顿。6. 关卡设计：至少两个关卡，每关末尾有蒸汽守卫boss战（AI驱动，利用齿轮和蒸汽喷射攻击），击败后获得钥匙开门。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:3c5ae85905a9b53120f4c3e66f0cdf7f_6a25b838d86c277c521e31be.6a25b93fd86c277c521e32d8.6a25b93fe8d1ab1f111bc2e0:Trae CN.T(2026/6/8 02:32:31)",
+    "user_id": "2402906841289811",
+    "trace_id": "3c5ae85905a9b53120f4c3e66f0cdf7f",
+    "session_id": "6a25b838d86c277c521e31be",
+    "task_id": "6a25b93fd86c277c521e32d8",
+    "message_id": "6a25b93fe8d1ab1f111bc2e0",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 02:32:31",
+    "format": "full"
+  },
+  "trace": "null"
+}
