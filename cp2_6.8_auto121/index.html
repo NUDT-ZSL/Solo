@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>深海水母群生态模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0B1D;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #E2E8F0;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    canvas {
+      display: block;
+    }
+    #control-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 20px;
+      background: rgba(10, 11, 29, 0.75);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      min-width: 260px;
+      z-index: 10;
+      opacity: 0;
+      transform: translateX(-20px);
+      animation: slideIn 0.6s ease-out 0.3s forwards;
+    }
+    #control-panel h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #E2E8F0;
+      letter-spacing: 0.5px;
+    }
+    .control-group {
+      margin-bottom: 16px;
+      opacity: 0;
+      animation: fadeIn 0.5s ease-out forwards;
+    }
+    .control-group:nth-child(2) { animation-delay: 0.5s; }
+    .control-group:nth-child(3) { animation-delay: 0.7s; }
+    .control-group:nth-child(4) { animation-delay: 0.9s; }
+    .control-group label {
+      display: block;
+      font-size: 12px;
+      color: #A0AEC0;
+      margin-bottom: 6px;
+      letter-spacing: 0.3px;
+    }
+    .control-group input[type="range"] {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #63B3ED, #B794F4);
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(99, 179, 237, 0.5);
+      transition: transform 0.2s ease;
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .control-group select {
+      width: 100%;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: #E2E8F0;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+    .control-group select:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(99, 179, 237, 0.5);
+    }
+    .control-group select option {
+      background: #1A1B3D;
+      color: #E2E8F0;
+    }
+    .value-display {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 12px;
+      color: #63B3ED;
+      font-weight: 500;
+    }
+    #info-card {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 18px 22px;
+      background: rgba(10, 11, 29, 0.65);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      min-width: 220px;
+      z-index: 10;
+      opacity: 0;
+      transform: scale(0.8);
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    #info-card.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+    #info-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #info-card .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
+    }
+    #info-card .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    #info-card .info-row:last-child {
+      border-bottom: none;
+    }
+    #info-card .info-label {
+      color: #A0AEC0;
+    }
+    #info-card .info-value {
+      color: #E2E8F0;
+      font-weight: 500;
+    }
+    @keyframes slideIn {
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="control-panel">
+    <h3>🐚 控制台</h3>
+    <div class="control-group">
+      <label>游动速度 <span class="value-display" id="speed-value">1.0x</span></label>
+      <input type="range" id="speed-slider" min="0.5" max="2" step="0.1" value="1" />
+    </div>
+    <div class="control-group">
+      <label>呼吸振幅 <span class="value-display" id="breath-value">1.0x</span></label>
+      <input type="range" id="breath-slider" min="0.5" max="1.5" step="0.1" value="1" />
+    </div>
+    <div class="control-group">
+      <label>背景粒子密度</label>
+      <select id="density-select">
+        <option value="sparse">稀疏</option>
+        <option value="medium" selected>中等</option>
+        <option value="dense">密集</option>
+      </select>
+    </div>
+  </div>
+  <div id="info-card">
+    <h4>
+      <span class="color-dot" id="card-color"></span>
+      <span id="card-name">水母</span>
+    </h4>
+    <div class="info-row">
+      <span class="info-label">游动速度</span>
+      <span class="info-value" id="card-speed">0.0 单位/秒</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">伞盖直径</span>
+      <span class="info-value" id="card-diameter">0.0 单位</span>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
