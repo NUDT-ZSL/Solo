@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T18:15:18.460Z",
+  "task_name": "auto75",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「熔岩脉动」的3D交互可视化项目，模拟地底深处熔岩在岩层裂隙中流动、冷却和爆发的动态过程。用户可以通过鼠标拖拽旋转视角、滚轮缩放，观察熔岩流从地底裂缝中涌出，沿着地面缓慢扩散并冷却形成黑色岩石，同时伴有飞溅的熔岩粒子。点击任意熔岩流交汇点会触发一次「熔岩喷发」——该处熔岩柱冲天而起，散射出大量炽热粒子，周围地面龟裂并发出红光，同时弹出一张半透明毛玻璃信息卡片显示该点的温度、流速和压力值。右侧有一个半透明毛玻璃控制面板，包含三个滑块调节「熔岩流速」、「粒子密度」和「冷却速度」，以及一个「重置场景」按钮。整体风格为地心炽热风：黑红到橙黄渐变背景，熔岩流用半透明发光粒子流和动态流动纹理，岩层用粗糙的深灰色多面体，裂缝用发光的橙红色线条。响应式适配桌面和移动端，帧率保持在60fps。用TypeScript和Three.js来实现。文件结构大概这样：src/下有 main.ts（入口，初始化场景、相机、渲染器和动画循环）、LavaSystem.ts（核心引擎，管理熔岩流的生成、流动、冷却和喷发逻辑）、ParticleEmitter.ts（管理熔岩粒子和火花粒子的生成、运动和消散）、RockLayer.ts（管理岩层、裂缝和龟裂地形的生成与动画）、UIPanel.tsx（React组件，实现控制面板和弹窗卡片）。另外根目录放 package.json（依赖包括 three、react、typescript、vite 等，启动脚本用 dev 和 build），tsconfig.json（模块解析用 ESNext，jsx 用 react-jsx），vite.config.js（处理 React 和 TypeScript），以及一个 index.html 作为入口。总之，希望能直接 npm install && npm run dev 就能跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:3951b717a6aa8b3e5f34f586f00f63b4_6a25b4b554df006ef44e0e34.6a25b52654df006ef44e0e98.6a25b5269aee7e5d3ca3f0d0:Trae CN.T(2026/6/8 02:15:02)",
+    "user_id": "2402906841289811",
+    "trace_id": "3951b717a6aa8b3e5f34f586f00f63b4",
+    "session_id": "6a25b4b554df006ef44e0e34",
+    "task_id": "6a25b52654df006ef44e0e98",
+    "message_id": "6a25b5269aee7e5d3ca3f0d0",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 02:15:02",
+    "format": "full"
+  },
+  "trace": "null"
+}
