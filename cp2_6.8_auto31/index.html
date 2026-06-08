@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>太空弹球对战</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0a0a2e 0%, #1a1a3e 100%);
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #fff;
+      touch-action: none;
+      user-select: none;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .game-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hud {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: 8px;
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+    }
+
+    .hud-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hud-label {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+    }
+
+    .hud-value {
+      color: #00ffcc;
+      font-weight: bold;
+      font-size: 16px;
+      text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+    }
+
+    .hud-value.score {
+      color: #ff0066;
+      text-shadow: 0 0 10px rgba(255, 0, 102, 0.5);
+    }
+
+    .hud-value.lives {
+      color: #ffcc00;
+      text-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+    }
+
+    canvas {
+      display: block;
+      border: 2px solid rgba(0, 255, 204, 0.4);
+      border-radius: 8px;
+      box-shadow: 
+        0 0 30px rgba(0, 255, 204, 0.2),
+        inset 0 0 30px rgba(10, 10, 46, 0.5);
+      background: linear-gradient(180deg, #0a0a2e 0%, #1a1a3e 100%);
+    }
+
+    .controls-hint {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 0, 102, 0.2);
+      border-radius: 8px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      flex-wrap: wrap;
+    }
+
+    .key {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+      margin: 0 2px;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 10, 46, 0.9);
+      backdrop-filter: blur(8px);
+      border-radius: 8px;
+      z-index: 10;
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .overlay-title {
+      font-size: 36px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #ff0066, #00ffcc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: none;
+    }
+
+    .overlay-subtitle {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 30px;
+    }
+
+    .final-score {
+      font-size: 24px;
+      color: #00ffcc;
+      margin-bottom: 8px;
+      text-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+    }
+
+    .high-score-display {
+      font-size: 14px;
+      color: #ff0066;
+      margin-bottom: 30px;
+      text-shadow: 0 0 10px rgba(255, 0, 102, 0.5);
+    }
+
+    .btn {
+      padding: 14px 36px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      background: linear-gradient(135deg, #ff0066, #00ffcc);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      min-width: 48px;
+      min-height: 48px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 20px rgba(255, 0, 102, 0.3);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(0, 255, 204, 0.4);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(0, 255, 204, 0.4);
+      box-shadow: none;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+    }
+
+    .powerup-legend {
+      display: flex;
+      gap: 16px;
+      margin-top: 16px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .powerup-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .powerup-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .powerup-dot.red { background: #ff3366; box-shadow: 0 0 8px #ff3366; }
+    .powerup-dot.blue { background: #3399ff; box-shadow: 0 0 8px #3399ff; }
+    .powerup-dot.green { background: #33ff99; box-shadow: 0 0 8px #33ff99; }
+
+    @media (max-width: 640px) {
+      .hud {
+        font-size: 12px;
+        padding: 6px 12px;
+      }
+
+      .hud-value {
+        font-size: 14px;
+      }
+
+      .overlay-title {
+        font-size: 24px;
+      }
+
+      .overlay-subtitle {
+        font-size: 14px;
+      }
+
+      .controls-hint {
+        font-size: 11px;
+        gap: 12px;
+      }
+
+      .btn {
+        padding: 12px 28px;
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="game-container" id="gameContainer">
+      <div class="hud" id="hud">
+        <div class="hud-item">
+          <span class="hud-label">分数</span>
+          <span class="hud-value score" id="score">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label">生命</span>
+          <span class="hud-value lives" id="lives">3</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label">最高分</span>
+          <span class="hud-value" id="highScore">0</span>
+        </div>
+      </div>
+      <canvas id="gameCanvas"></canvas>
+      <div class="controls-hint">
+        <span><span class="key">←</span><span class="key">→</span> 移动挡板</span>
+        <span><span class="key">空格</span> 发射/暂停</span>
+        <span><span class="key">R</span> 重新开始</span>
+      </div>
+      <div class="overlay" id="startOverlay">
+        <h1 class="overlay-title">太空弹球对战</h1>
+        <p class="overlay-subtitle">击碎所有砖块，收集道具，挑战最高分！</p>
+        <div class="powerup-legend">
+          <div class="powerup-item"><span class="powerup-dot red"></span>加速球</div>
+          <div class="powerup-item"><span class="powerup-dot blue"></span>加宽挡板</div>
+          <div class="powerup-item"><span class="powerup-dot green"></span>多球分裂</div>
+        </div>
+        <div style="margin-top: 24px;">
+          <button class="btn" id="startBtn">开始游戏</button>
+        </div>
+      </div>
+      <div class="overlay hidden" id="pauseOverlay">
+        <h1 class="overlay-title">游戏暂停</h1>
+        <p class="overlay-subtitle">按空格键继续</p>
+        <div class="btn-group">
+          <button class="btn" id="resumeBtn">继续游戏</button>
+          <button class="btn btn-secondary" id="restartBtnPause">重新开始</button>
+        </div>
+      </div>
+      <div class="overlay hidden" id="gameOverOverlay">
+        <h1 class="overlay-title">游戏结束</h1>
+        <div class="final-score" id="finalScore">分数: 0</div>
+        <div class="high-score-display" id="highScoreDisplay">最高分: 0</div>
+        <button class="btn" id="restartBtn">重新开始</button>
+      </div>
+      <div class="overlay hidden" id="winOverlay">
+        <h1 class="overlay-title">恭喜通关！</h1>
+        <div class="final-score" id="winScore">分数: 0</div>
+        <div class="high-score-display" id="winHighScore">最高分: 0</div>
+        <button class="btn" id="winRestartBtn">再来一局</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
