@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "游戏开发",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「极光之线」的2D摆线物理解谜游戏，玩家控制一个能量球在由极光构成的多层环形轨道上滚动，轨道上分布着能量节点和反转开关，玩家需要调整轨道倾斜度和速率，让能量球按顺序激活所有节点才能通关，每关轨道层数和节点数量递增，反转开关可以改变球的方向。整体视觉风格是极光幻光风：纯黑到深蓝渐变背景，轨道用半透明发光线条（颜色从蓝紫到青绿渐变），能量球是带有拖尾粒子的发光球体，节点是脉动光环，激活时爆发彩色粒子扩散，反转开关触发时屏幕闪烁极光效果（彩色光晕扫过），死亡时球体爆散成光点并缓慢消散。界面布局：顶部居中显示关卡编号和已激活节点数，底部有重置和暂停按钮（暂停时弹出毛玻璃菜单含继续和重玩选项），页面切换有缓动淡入动画，响应式适配桌面和移动端，交互反馈流畅，帧率保持60fps。用TypeScript和React来实现，使用Vite构建。文件结构大概这样：src/main.tsx（入口，挂载React应用）、src/App.tsx（主组件管理游戏状态和关卡）、src/game/OrbitSystem.ts（轨道层生成与物理逻辑，包含节点和开关交互）、src/game/BallController.ts（能量球运动、碰撞和粒子拖尾）、src/components/GameCanvas.tsx（Canvas渲染主循环，处理鼠标/触摸输入）、src/components/HUD.tsx（UI覆盖层显示关卡、节点计数、按钮）。对了，顺便把package.json（依赖react、react-dom、typescript、vite、@types/react、@types/react-dom，dev脚本用vite，build也用vite）、tsconfig.json（strict模式，jsx react-jsx）、vite.config.ts（react插件）、index.html（挂载点）都带上，这样npm install && npm run dev就能直接跑起来。"
+}
