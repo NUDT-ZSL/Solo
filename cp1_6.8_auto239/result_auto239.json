@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T23:25:00.852Z",
+  "task_name": "auto239",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「光痕迷域」的2D益智游戏，玩家在由动态光轨构成的迷宫内操控一个发光小球，通过点击屏幕移动小球，长按可让小球留下短暂的荧光足迹，足迹可以作为临时桥梁帮助小球穿越裂隙或到达高处。迷宫布局和机关（如旋转棱镜、脉冲光球）每关不同，难度递增。整体视觉风格是几何光幻风：纯黑背景，光轨用渐变发光线条表示（颜色随关卡变化：蓝紫、翠绿、暖橙），玩家小球带有拖尾粒子效果，跳跃时有波纹扩散反馈，荧光足迹由像素化粒子组成并随时间淡出，关卡切换有缓动淡入动画。界面布局简洁，左上角显示关卡编号和步数，右下角有一个半透明毛玻璃控制面板，包含一个重置关卡按钮和两个滑块（足迹持续时间、移动速度），帧率保持60fps，交互反馈流畅。用TypeScript和Phaser3来实现，Vite作为构建工具。文件结构大概这样：src/main.ts（Phaser游戏入口）、src/scenes/MazeScene.ts（迷宫场景逻辑与渲染）、src/objects/Player.ts（小球与足迹逻辑）、src/utils/levelData.ts（关卡配置与数据）、index.html（入口HTML），根目录加上package.json（含依赖和脚本：phaser、typescript、vite，启动命令用npm run dev）和tsconfig.json，再写个vite.config.js，这样我npm install && npm run dev就能直接跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:ce0b8aa30f513b73523492407eb07215_6a25fc6ee60af91fee1a06cd.6a25fdbbe60af91fee1a07e8.6a25fdbbfc8d6400dc1d19a7:Trae CN.T(2026/6/8 07:24:43)",
+    "user_id": "2402906841289811",
+    "trace_id": "ce0b8aa30f513b73523492407eb07215",
+    "session_id": "6a25fc6ee60af91fee1a06cd",
+    "task_id": "6a25fdbbe60af91fee1a07e8",
+    "message_id": "6a25fdbbfc8d6400dc1d19a7",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 07:24:43",
+    "format": "full"
+  },
+  "trace": "null"
+}
