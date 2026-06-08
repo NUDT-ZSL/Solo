@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "3D/交互可视化",
+    "修改范围": "模块内多文件",
+    "提示词内容": "想做一个叫「星语织梦」的3D交互可视化项目，模拟用户通过语音或文字输入，实时生成动态的星空粒子图案：每个词语对应一个星座，句子连接成星轨，情感分析（正面/负面）影响粒子颜色（暖色/冷色），语速或打字节奏控制粒子扩散速度。用户可以通过鼠标拖拽旋转视角、滚轮缩放，点击星座会触发粒子爆散成对应词语的字母形状并缓慢重组。整体视觉风格是深邃星空风：纯黑到靛蓝渐变背景，星座用半透明发光线条连接（颜色由情感决定），粒子是带有光晕的细小光点，运动有缓动阻尼，星轨随时间缓慢旋转。界面右下角有一个半透明毛玻璃控制面板，包含一个文本输入框、一个语音输入按钮、两个滑块（粒子密度、扩散速度）和一个重置画布按钮，页面切换有缓动淡入动画，响应式适配桌面和平板，交互反馈流畅，帧率保持60fps。\n用TypeScript和Three.js来实现，Vite作为构建工具。文件结构大概这样：src/main.ts（入口，初始化Three场景和渲染循环）、src/App.tsx（React主组件，管理UI状态和Three场景挂载）、src/components/StarSystem.ts（核心星座粒子系统，处理文本解析、粒子生成和动画）、src/components/ControlPanel.tsx（控制面板UI，包含输入框、滑块和按钮）、src/components/AudioAnalyzer.ts（语音输入处理，提取语速和情感）、index.html（入口HTML）、vite.config.ts（Vite配置）、package.json（依赖包括three、react、react-dom、@react-three/fiber、@react-three/drei，以及启动脚本）、tsconfig.json（TypeScript配置）。麻烦把这些配置文件也带上，这样我npm install && npm run dev就能直接跑起来。"
+}
