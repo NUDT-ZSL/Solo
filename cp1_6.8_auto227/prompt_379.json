@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "游戏开发",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「量子棋局」的2D回合制策略游戏，玩家在一个由量子态格子组成的棋盘上，通过点击格子翻转其状态（叠加态/坍缩态），当相邻三个同态格子形成直线时触发消除并得分，同时格子会持续闪烁变色代表量子涨落，玩家需要在60秒内尽可能多得分。整体视觉风格是量子科幻风：深黑到暗紫渐变背景，格子用半透明发光方块表示（叠加态为渐变蓝紫光，坍缩态为纯白稳定光），格子边缘有微弱脉冲光晕，消除时播放粒子爆散和棋盘波纹扩散动画，闪烁变色有缓动渐变过渡。界面布局：左上角显示倒计时和当前得分，右下角有一个半透明毛玻璃控制面板，包含一个重置按钮和两个滑块（棋盘大小、涨落速度），页面切换有缓动淡入动画，帧率保持60fps，交互反馈流畅。用TypeScript和Phaser3来实现，配置要完整。文件结构大概这样：\n- src/main.ts：Phaser游戏入口，配置canvas和场景\n- src/scenes/GameScene.ts：主游戏场景，处理棋盘逻辑、格子点击、消除检测和动画\n- src/scenes/UIControlPanel.ts：UI控制面板场景，叠加在GameScene上方，管理滑块和按钮\n- src/utils/boardGenerator.ts：生成随机棋盘状态（初始格子态和涨落参数）\n- src/utils/constants.ts：存放所有常量（棋盘大小、颜色方案、动画时长等）\n- index.html：入口HTML，引入打包后的js\n- package.json：包含依赖（phaser、vite、typescript）和启动脚本（vite）\n- tsconfig.json：TypeScript配置\n- vite.config.js：Vite构建配置\n这样你拿到后直接npm install && npm run dev就能玩。"
+}
