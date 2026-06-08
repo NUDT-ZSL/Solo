@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "3D/交互可视化",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「光影织梦」的3D交互可视化项目，模拟在深邃的虚拟空间中，无数发光的丝线交错编织成一幅动态光影织锦，用户可以通过鼠标拖拽和点击来影响织锦的纹理和色彩。整体视觉走极简霓虹风格：纯黑到深蓝渐变背景，发光丝线是半透明的渐变细线（颜色从暖金到冷蓝渐变），交织节点处有闪烁的微小光点，拖拽时丝线产生弹性变形并伴有粒子流动画，点击节点会爆散成星尘并重新编织。界面右下角有一个毛玻璃控制面板，包含「丝线密度」滑块（50-200）、「色彩主题」选择器（预设4种：金蓝、红紫、绿粉、冷白）、「动画速度」滑块（0.5-2.0）和「重置编织」按钮。交互反馈要流畅，帧率稳定在60fps。用TypeScript和Three.js来写，Vite构建。项目包含5个文件：src/main.tsx（入口，渲染主组件）、src/App.tsx（顶层组件，布局和状态管理）、src/core/WeaverScene.ts（核心场景类，管理Three.js场景、相机、渲染器，处理交互事件）、src/core/ThreadSystem.ts（丝线系统类，管理粒子/丝线的生成、更新和变形逻辑）、src/components/ControlPanel.tsx（毛玻璃控制面板，所有滑块和选择器），另外根目录需要package.json（依赖：three、@types/three、react、react-dom、@types/react、@types/react-dom、typescript、vite、@vitejs/plugin-react），tsconfig.json（strict模式，jsx设为react-jsx），以及vite.config.js（配置React插件）。入口文件是index.html，直接引用src/main.tsx。运行方式：npm install && npm run dev。"
+}
