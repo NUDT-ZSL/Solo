@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T05:53:03.332Z",
+  "task_name": "auto43",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个基于3D交互式风场可视化与粒子路径追踪的小项目，想法是让用户加载一个自定义的风速场网格数据（预设几个示例场，如漩涡、湍流、层流），粒子的运动遵循流线路径，粒子颜色随速度大小渐变，用户可以交互式调整发射源位置和粒子生命长度，适合用于气象数据展示或游戏特效原型。希望它能做到：第一，默认显示一个20x20x10的三维速度场网格，每个格点存储一个矢量（x,y,z方向分量），预设三种风场模式（顺时针漩涡、随机湍流、水平层流），用户通过下拉菜单切换时，场景中所有粒子路径实时重置并重新计算，切换动画持续0.5秒（从旧场淡出、新场淡入）；第二，从鼠标悬停位置（通过射线碰撞检测）自动发射粒子流（每秒30个粒子），粒子沿当前格点插值得到的速度方向运动，轨迹用半透明尾迹线绘制（每条尾迹保留最近20个点，线宽随生命值从2像素渐变到0），粒子颜色从蓝色（低速，0-0.5单位/秒）渐变到红色（高速，1.5-3.0单位/秒），中间经过青色和黄色；第三，右侧控制面板提供三个滑块：粒子生命长度（2-10秒，步长0.5）、发射速率（10-100粒子/秒，步长5）和速度倍率（0.5x-2.0x），所有滑块值变化即时生效，粒子系统响应延迟不超过100ms；第四，支持立体网格辅助线显示（半透明蓝色线框，可切换显示/隐藏），场景自适应窗口大小，在1920x1080和1440x900分辨率下界面布局自动调整，控制面板保持300px宽并始终固定在右侧。性能上要求：粒子数量峰值不超过2000个，在60FPS目标下帧率不得低于45FPS，粒子尾迹使用BufferGeometry批量更新。实现用TypeScript、Three.js和Vite，把代码拆成以下文件：\n - package.json（依赖：three、@types/three、typescript、vite，脚本：npm run dev）\n - index.html（入口，加载Canvas全屏）\n - vite.config.js（指向index.html，开启ES模块）\n - tsconfig.json（严格模式，包含DOM类型）\n - src/main.ts（场景初始化、OrbitControls、动画循环、粒子系统主控，负责组合所有模块）\n - src/windField.ts（生成和管理三种预设风场网格数据，提供getVelocity(point: Vector3)方法进行三线性插值，数据流向：被main.ts调用获取速度矢量）\n - src/particleSystem.ts（管理粒子发射、生命周期、尾迹更新和几何体批量渲染，数据流向：接收风场插值速度更新粒子位置，输出BufferGeometry给Three.js渲染）\n - src/ui.ts（创建和绑定HTML控制面板中的下拉菜单和滑块事件，数据流向：接收用户输入后通过回调通知main.ts更新参数）\n - src/styles.css（控制面板样式，深色半透明背景，滑块自定义样式）\n跑 npm install && npm run dev 就能直接看到效果。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:f9ad37cdb0c585e4fe740d6800a475cf_6a265792cb3fbb0eecba3e5d.6a26589bcb3fbb0eecba3f34.6a26589b9ea59d70b8f7e3d4:Trae CN.T(2026/6/8 13:52:27)",
+    "user_id": "218182458805051",
+    "trace_id": "f9ad37cdb0c585e4fe740d6800a475cf",
+    "session_id": "6a265792cb3fbb0eecba3e5d",
+    "task_id": "6a26589bcb3fbb0eecba3f34",
+    "message_id": "6a26589b9ea59d70b8f7e3d4",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 13:52:27",
+    "format": "full"
+  },
+  "trace": "null"
+}
