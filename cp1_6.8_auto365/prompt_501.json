@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想做一个叫「回声胶囊」的全栈web应用，用户可以匿名发布一段15秒以内的语音留言，系统会随机把这段语音播给另一个在线用户，接收者可以录制一段语音回复，对话持续三轮后自动生成一个加密的「回声胶囊」链接，只有双方同意才能打开收听整段对话。用TypeScript + React做前端，后端用FastAPI（Python），Vite构建。文件结构大概这样:\n- server/main.py: FastAPI入口，初始化路由和WebSocket\n- server/voice_router.py: 处理语音上传、匹配、对话管理和胶囊生成\n- client/src/main.tsx: React入口\n- client/src/App.tsx: 主组件，管理页面路由和WebSocket连接\n- client/src/VoiceRecorder.tsx: 录音组件，支持15秒倒计时和波形预览\n- client/src/ChatRoom.tsx: 对话房间，展示语音气泡和状态\n- client/vite.config.ts: 构建配置\n- client/tsconfig.json: TypeScript配置\n- client/package.json: 依赖和启动脚本\n\n需求:\n1. 核心功能: 用户进入页面后随机匹配一个在线用户(基于WebSocket维护在线列表)，匹配成功后双方轮流发送15秒语音(一共三轮)，结束后系统自动生成一个加密胶囊链接，只有双方都点击同意后才能收听完整对话。\n2. 界面方面: 首页是深蓝到墨黑渐变背景，一个大的圆形匹配按钮悬停中央，周围漂浮着半透明发光胶囊粒子，点击按钮触发粒子汇聚动画。匹配成功时中央显示对方匿名头像(随机生成渐变色圆形)和“连接成功”的脉冲光效。录音界面是圆形录音按钮，录音时按钮有脉动光环，顶部有15秒倒计时进度条。对话气泡使用毛玻璃卡片，自己的气泡偏右蓝色，对方气泡偏左紫色。胶囊生成时屏幕中央展示一个旋转的发光胶囊3D模型(用CSS 3D或Three.js轻量模型)，下方显示“解开需双方同意”的提示和勾选按钮。\n3. 性能要求: 所有动画和过渡保持60fps，录音和语音播放无卡顿，WebSocket连接稳定。\n4. 运行方式: 直接npm install && npm run dev就能跑前端，后端用uvicorn main:app启动。别忘了把package.json、vite.config.ts、tsconfig.json都配齐全。"
+}
