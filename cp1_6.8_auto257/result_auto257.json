@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T00:08:11.419Z",
+  "task_name": "auto257",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「灵感涂鸦板」的在线协作涂鸦平台，用户可以创建白板房间，邀请其他人一起实时涂鸦，支持画笔、形状、文字工具，可以撤销/重做，并且所有操作会同步到其他用户。用TypeScript和React做前端，Node.js+Express做后端，WebSocket实现实时同步。文件结构大概这样：前端有 src/main.tsx（入口）、src/App.tsx（主组件管理路由和房间）、src/components/Canvas.tsx（白板画布核心，处理画笔事件和绘制）、src/components/Toolbar.tsx（工具选择和颜色、粗细控制面板）、src/components/Chat.tsx（侧边聊天栏，支持emoji回复）。后端有 server/index.ts（Express服务器，提供房间管理和WebSocket处理）和 server/roomManager.ts（管理房间状态、同步广播）。还要一个 package.json（包含前端和后端的依赖脚本，比如 \"dev\" 同时启动前后端）、vite.config.ts（Vite配置）、tsconfig.json、入口 HTML（index.html）。运行的话 npm install && npm run dev 就能同时启动前后端。需求方面：1. 用户可以创建或加入房间（房间号随机生成，可复制分享），支持最多10人同时协作。2. 白板支持画笔（可调粗细和颜色）、矩形、圆形、直线、文字输入（点击位置弹出输入框），所有工具都有实时预览。3. 每个操作可撤销和重做（最多50步），撤销/重做对其他用户同步。4. 界面采用极简毛玻璃风格：半透明毛玻璃工具栏（固定左侧垂直排列），画布背景浅灰格子纸纹理，工具图标用发光线条风格（选中时高亮），颜色选择器是弧形渐变环，按钮和滑块有微缓动动画，响应式适配桌面和平板（平板端工具栏折叠为底部横条）。5. 右侧有隐藏式聊天栏（可拖拽宽度），支持文字消息和emoji反应（点击消息旁的+号弹出emoji选择器），新消息有淡入动画。6. 性能方面：画笔绘制流畅，帧率保持60fps，WebSocket消息压缩传输，避免卡顿。整体难度中等偏上，因为需要处理实时同步和冲突。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:61c0f6e58581f850f6d1f87ba0a923ec_6a2607a7372c3559485fc667.6a2607db372c3559485fc677.6a2607db92b0d07688525fb9:Trae CN.T(2026/6/8 08:07:55)",
+    "user_id": "2402906841289811",
+    "trace_id": "61c0f6e58581f850f6d1f87ba0a923ec",
+    "session_id": "6a2607a7372c3559485fc667",
+    "task_id": "6a2607db372c3559485fc677",
+    "message_id": "6a2607db92b0d07688525fb9",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 08:07:55",
+    "format": "full"
+  },
+  "trace": "null"
+}
