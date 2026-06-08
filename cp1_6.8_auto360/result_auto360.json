@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T04:33:04.341Z",
+  "task_name": "auto360",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「四季之森」的2D回合制塔防游戏，玩家在森林地图上种植不同季节属性的魔法植物，抵御入侵的暗影生物。每个回合，玩家从手牌中选择一种植物种子种在预设的格子中，植物会释放对应季节的魔法攻击敌人：春日藤蔓缠绕减速，夏日火花灼烧范围伤害，秋日落叶护盾吸收伤害，冬日冰晶冻结路径。敌人会沿着固定路径前进，路径上有交互点（比如被冰晶冻结的水塘会变成冰面，让后续敌人滑行变向）。整体视觉走手绘童话风：浅绿到金黄渐变的森林背景，植物有圆润的卡通造型，攻击特效是半透明发光粒子，敌人是暗影剪影形态，界面是圆角卡片和毛玻璃面板，防御塔格栅格有浮雕纹理。鼠标悬停植物时有微光扩散动画，攻击时有粒子爆裂反馈，敌人被消灭时有消散动画。性能要求帧率稳定60fps，交互响应流畅。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口挂载React应用）、src/App.tsx（主组件管理游戏状态、布局和回合逻辑）、src/GameBoard.tsx（Canvas渲染棋盘、植物、敌人、攻击特效和动画循环）、src/CardHand.tsx（卡片手牌组件，展示当前回合可选植物种子，支持拖拽放置）、src/utils/gameLogic.ts（纯函数模块，处理回合判定、伤害计算、路径规划等游戏规则）、src/utils/plants.ts（植物和敌人的数据配置，含属性、技能、动画参数）。顺便把package.json带上，包含react、react-dom、typescript、vite和@types/react等依赖，启动脚本写dev和build，再加个vite.config.ts和tsconfig.json，入口HTML放在根目录，这样我npm install && npm run dev就能直接跑起来了。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:47a0ad80c6a1c621c5111b7d61fd2254_6a2644d1ac19fd96be194be9.6a2645efac19fd96be194ccc.6a2645ef4a91ed71d619105f:Trae CN.T(2026/6/8 12:32:47)",
+    "user_id": "2402906841289811",
+    "trace_id": "47a0ad80c6a1c621c5111b7d61fd2254",
+    "session_id": "6a2644d1ac19fd96be194be9",
+    "task_id": "6a2645efac19fd96be194ccc",
+    "message_id": "6a2645ef4a91ed71d619105f",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 12:32:47",
+    "format": "full"
+  },
+  "trace": "null"
+}
