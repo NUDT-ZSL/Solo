@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「时光驿站」的在线时间胶囊分享平台。用户可以创建时间胶囊，设置未来的开启日期，写下文字、上传图片或录音。到达日期后，胶囊会自动解锁，用户才能查看内容，也可以选择公开分享（其他用户可以看到解锁后的胶囊）。系统会生成一张动态的「时间线墙」，展示所有公开胶囊的解锁时刻（以发光球体表示，从远处飞入并悬停），点击球体展开毛玻璃卡片显示摘要和预览。整体风格是温暖怀旧风：米白色和淡黄色底色，毛玻璃卡片，柔和阴影和圆角，背景有缓慢飘浮的细小光点（像旧照片上的灰尘），页面切换有缓动横向滑动动画，响应式适配桌面和平板，交互反馈流畅，帧率保持在60fps。用TypeScript和React做前端，后端用FastAPI，前后端分离。文件结构大概这样：src/下有TimeCapsuleEngine.ts（核心逻辑，管理胶囊的创建、加密、定时解锁状态判断）、TimelineVisualizer.ts（生成时间线墙，每个胶囊作为发光球体，带飞入和悬停动画）、CapsuleEditor.tsx（创建和编辑胶囊的表单组件，支持文字、图片、录音上传，附带日期选择器）、UILayer.tsx（主界面布局，包含顶部导航栏、时间线墙视图、胶囊详情弹窗、以及搜索/筛选面板）。根目录下有package.json（带上依赖：react、react-dom、typescript、vite、@vitejs/plugin-react、axios、recharts、crypto-js，以及dev脚本用vite，build脚本用vite build），tsconfig.json（moduleResolution: bundler，strict模式），vite.config.js（配置react插件和端口），以及一个入口index.html直接挂载React根组件。运行方式：运行npm install，然后npm run dev，就能在浏览器里打开。"
+}
