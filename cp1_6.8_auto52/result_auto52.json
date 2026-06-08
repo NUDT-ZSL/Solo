@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T17:31:10.410Z",
+  "task_name": "auto52",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个叫「谜语回廊」的匿名谜语交换平台。用户可以写一个谜面和谜底（谜底只存储在服务端），然后将谜语封装成一张发光的谜语卡，随机嵌入一面不断旋转的动态谜语墙中。卡片颜色随机（暖黄、青绿、淡蓝），带有呼吸光晕和缓动漂浮动画，鼠标悬浮会微微放大并显示谜面前几个字，点击卡片则触发微粒爆散特效，并弹出一张半透明毛玻璃卡片展示完整谜面、一个输入框和一个「提交答案」按钮。答对时卡片裂开成彩色粒子并播放清脆提示音，答错则卡片晃动并变红一秒。首页展示谜语墙，底部导航栏可切换到「已破解」页面，以网格列表显示所有已答对的谜语（带半透明卡片样式和破解时间）。整体风格为暗色基底配霓虹渐变点缀，毛玻璃卡片、粒子动画和缓动效果贯穿始终，交互响应要流畅，帧率保持60fps。用TypeScript和React实现前端，后端用Python的Flask。文件结构大概是：backend/app.py（Flask主应用，处理谜语的增删改查和答案校验）、backend/mystery_service.py（谜语存储和匹配逻辑）、src/components/MysteryWall.tsx（谜语墙与交互组件）、src/components/ResultList.tsx（已破解列表组件）、src/App.tsx（路由和布局），根目录放一个package.json（依赖包括react、express、cors等，启动脚本为'dev'）和一个vite.config.ts构建配置，另外带上tsconfig.json，对了还有入口HTML（index.html），这样直接npm install && npm run dev就能跑起来。需求：1. 用户可提交谜面+谜底，谜底加密存储，每次验证需提交答案；2. 谜语墙动态渲染，卡片随机分布且缓慢旋转漂浮；3. 点击卡片弹出验证卡片，提交答案后反馈动画（正确裂开，错误晃动变红）；4. 已破解页面显示用户答对的谜语列表，带平滑入场动画；5. 响应式适配手机和电脑，深色主题，霓虹渐变配色，毛玻璃和粒子动画提升沉浸感；6. 性能优化：仅渲染可视区域的卡片，帧率保持60fps。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:e225d73c6f901e2c49882448887abfec_6a25aa42a67d8ac61bfd50cd.6a25aacea67d8ac61bfd515b.6a25aaceb71efb7148cb7cef:Trae CN.T(2026/6/8 01:30:54)",
+    "user_id": "2402906841289811",
+    "trace_id": "e225d73c6f901e2c49882448887abfec",
+    "session_id": "6a25aa42a67d8ac61bfd50cd",
+    "task_id": "6a25aacea67d8ac61bfd515b",
+    "message_id": "6a25aaceb71efb7148cb7cef",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 01:30:54",
+    "format": "full"
+  },
+  "trace": "null"
+}
