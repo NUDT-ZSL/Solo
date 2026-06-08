@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T21:47:39.716Z",
+  "task_name": "auto190",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「声纹回廊」的在线声音记录与可视化平台，用户可以录制一段环境音（最长20秒），系统会提取音频特征（如频谱能量、节奏峰值），并生成一个动态的3D声音雕塑——声音频谱映射为旋转的柱状结构，颜色随频率变化（低频红橙、中频青绿、高频紫蓝），用户可以用鼠标拖拽旋转视角、滚轮缩放，点击任意柱子会触发其扩散成粒子动画，并弹出毛玻璃卡片显示该频段的能量值和情感标签。录制的声音可以保存到个人收藏，并支持用关键词搜索其他用户分享的声音雕塑，搜索时结果以瀑布流卡片展示，点击卡片进入详情页。首页提供一个随机探索按钮，每次随机展示一个热门声音雕塑。整体风格要自然科技感——深灰蓝渐变背景，毛玻璃卡片和工具栏，柔和圆角和微光边缘，卡片悬停时有缓动上浮动画，页面切换有淡入缓动，响应式适配桌面和平板，交互反馈流畅，帧率保持在60fps。用TypeScript和React来做，后端用Flask提供API和文件服务。文件结构大概这样：\n- package.json：包含前后端依赖，启动脚本用 \"dev\" 同时启动前端vite和后端flask\n- vite.config.ts：前端构建配置，代理后端API端口\n- tsconfig.json：TypeScript配置\n- index.html：入口html\n- src/ 下：\n  - main.tsx：React入口\n  - AudioRecorder.tsx：录音组件，控制录音、上传并预览波形\n  - SculptureViewer.tsx：3D场景组件，展示声音雕塑\n  - SculptureEngine.ts：核心引擎，处理音频特征到3D几何的映射、粒子动画和交互逻辑\n- backend/ 下：\n  - app.py：Flask应用，提供录音上传、查询接口\n运行方式：npm install && npm run dev，前端访问localhost:5173，后端在localhost:5000。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:2884365d8172928723e21289dd287c83_6a25e5f9b9f90415c33f2fef.6a25e6ebb9f90415c33f30c0.6a25e6eb45015c681455f9de:Trae CN.T(2026/6/8 05:47:23)",
+    "user_id": "2402906841289811",
+    "trace_id": "2884365d8172928723e21289dd287c83",
+    "session_id": "6a25e5f9b9f90415c33f2fef",
+    "task_id": "6a25e6ebb9f90415c33f30c0",
+    "message_id": "6a25e6eb45015c681455f9de",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 05:47:23",
+    "format": "full"
+  },
+  "trace": "null"
+}
