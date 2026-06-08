@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T16:33:23.865Z",
+  "task_name": "auto23",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「霓虹律动」的交互式音乐可视化墙，用户在浏览器上播放音频（可以通过麦克风或上传文件），页面会实时生成动态的霓虹色彩波浪和粒子特效，音符和节拍会驱动波浪的起伏和粒子的爆发。界面采用深色背景搭配高饱和霓虹配色（粉、蓝、紫渐变），波浪用半透明发光曲线模拟，粒子为光点随音乐节奏闪烁和扩散，有一个居中的波形显示区，底部有音频控制栏。整体风格是赛博朋克霓虹风，动画要流畅，帧率保持60fps。用TypeScript和React来实现，配合Canvas绘制。文件结构大概这样：src/下有AudioEngine.ts（处理音频输入、分析波形和节拍数据）、WaveRenderer.ts（Canvas渲染循环，绘制霓虹曲线和粒子，控制帧率）、ParticleSystem.ts（管理粒子生成、运动和生命周期）、UIComponents.tsx（React组件，包含控制栏（播放/暂停、音量滑块、音源选择）、状态显示面板（当前节奏、音量柱））。另外，根目录要有package.json（包含依赖和启动脚本，比如react、typescript、vite等，scripts里写dev和build），一个index.html作为入口，一个vite.config.ts（配置React插件），一个tsconfig.json（严格模式，配置完整）。这样我就能直接npm install && npm run dev跑起来了。需求概括：1. 用户可选择麦克风输入或上传音频文件，实时分析音频波形和节拍；2. 主画布使用Canvas渲染动态霓虹波浪和粒子系统，波浪按频率变化起伏，粒子随节拍爆发扩散；3. 底部控制栏包含播放/暂停、音量滑块、音源切换（麦克风/文件上传）按钮，上传文件时支持MP3/WAV；4. 界面布局：全屏画布，控制栏悬浮在底部（半透明毛玻璃样式），响应式适配不同屏幕尺寸；5. 动画性能优化：保持60fps，节拍检测延迟低于50ms，粒子数量在500-2000个动态调节以保证流畅；6. 颜色主题：深色背景（#0a0a1a），霓虹色波浪（HSL色相动态变化，范围280-340度），粒子颜色从粉到蓝渐变，整体视觉有发光和拖尾效果；7. 交互反馈：点击画布任意位置可触发一次粒子爆炸特效，响应时间小于100ms。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:c4ef2ca3a7500fe1976a0661f04530fa_6a259c5e1b4c5ed63bdef1ee.6a259d431b4c5ed63bdef2ee.6a259d43e8bcf47095a39ce9:Trae CN.T(2026/6/8 00:33:07)",
+    "user_id": "2402906841289811",
+    "trace_id": "c4ef2ca3a7500fe1976a0661f04530fa",
+    "session_id": "6a259c5e1b4c5ed63bdef1ee",
+    "task_id": "6a259d431b4c5ed63bdef2ee",
+    "message_id": "6a259d43e8bcf47095a39ce9",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 00:33:07",
+    "format": "full"
+  },
+  "trace": "null"
+}
