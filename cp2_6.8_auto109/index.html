@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nebula Particle Gallery</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000000;
+      font-family: monospace;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #control-panel {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      background: rgba(30, 30, 30, 0.85);
+      border-radius: 16px;
+      padding: 20px;
+      color: #ffffff;
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      user-select: none;
+    }
+    #fps {
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      font-size: 14px;
+      color: #ffffff;
+      font-family: monospace;
+    }
+    .preset-buttons {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .preset-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+    .preset-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 16px rgba(255, 255, 255, 0.5);
+    }
+    .preset-btn:active {
+      transform: scale(0.9);
+    }
+    .preset-btn.active {
+      box-shadow: 0 0 0 2px #ffffff, 0 0 16px rgba(255, 255, 255, 0.4);
+    }
+    .preset-btn.spiral {
+      background: #FF6B9C;
+    }
+    .preset-btn.ring {
+      background: #FFD54F;
+    }
+    .preset-btn.chaos {
+      background: #00E676;
+    }
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .slider-label {
+      font-size: 12px;
+      color: #aaaaaa;
+      font-family: monospace;
+    }
+    #speed-slider {
+      width: 160px;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: #333333;
+      border-radius: 3px;
+      outline: none;
+    }
+    #speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #FF6B9C;
+      cursor: pointer;
+      border: 2px solid #ffffff;
+      transition: background 0.2s ease;
+    }
+    #speed-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #FF6B9C;
+      cursor: pointer;
+      border: 2px solid #ffffff;
+      transition: background 0.2s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="control-panel">
+      <span id="fps">FPS: --</span>
+      <div class="preset-buttons">
+        <button class="preset-btn spiral active" data-type="spiral" title="螺旋星云"></button>
+        <button class="preset-btn ring" data-type="ring" title="环状星云"></button>
+        <button class="preset-btn chaos" data-type="chaos" title="混沌星云"></button>
+      </div>
+      <div class="slider-container">
+        <span class="slider-label">扩散速度</span>
+        <input type="range" id="speed-slider" min="0.5" max="3.0" step="0.1" value="1.0" />
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
