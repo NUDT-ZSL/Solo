@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T06:02:57.282Z",
+  "task_name": "auto401",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「声景漫游」的全栈web应用，用户可以创建自己的“声音风景”，通过上传一段录音（最长30秒）或即兴录制，系统会自动根据音频特征（如节奏、频率）生成一幅动态的抽象插画作为配图，并支持按心情标签（宁静、欢快、忧郁等）和创建时间筛选浏览。浏览时采用瀑布流布局，每个卡片展示缩略图、标签和播放按钮，点击卡片进入详情页，可播放音频并看到全屏插画动画（粒子随音频节奏波动），还能给声音风景点赞和评论（匿名）。用TypeScript和React实现前端，后端用FastAPI（Python），Vite构建。项目包含6个文件：server/main.py（FastAPI入口，初始化并挂载路由）、server/soundscape_router.py（处理声音风景的CRUD和随机浏览）、server/audio_processor.py（模拟根据音频特征生成抽象画参数）、client/src/main.tsx（React应用入口）、client/src/App.tsx（主组件，路由和状态管理）、client/src/components/SoundscapeCard.tsx（卡片组件，显示缩略图、标签和播放按钮）。运行方式：直接 npm install && npm run dev 即可，前后端启动脚本都在package.json里配好，入口HTML通过Vite自动生成。具体需求：1. 用户注册登录（简单邮箱+密码），未登录可浏览但无法创建或点赞。2. 创建声音风景页：录音/上传按钮、心情标签选择（预设6种）、提交后自动生成抽象插画（用随机几何形状和渐变色块模拟）。3. 首页瀑布流展示所有公开声音风景，卡片悬停有轻微放大和阴影加深效果，点击播放按钮播放音频并触发粒子波动动画（用canvas绘制）。4. 详情页：全屏展示插画动画，音频波形可视化同步播放，底部评论区（匿名评论，50字以内），评论以气泡样式从底部依次弹出。5. 界面走柔和极简风格：浅灰到白色渐变背景，卡片是毛玻璃圆角面板带阴影，按钮是圆角胶囊带微光悬停效果，主色调为蓝紫色渐变，响应式适配手机和桌面。6. 交互反馈流畅，帧率稳定在60fps，音频播放与动画同步无延迟。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:12d687e2e947d8a1bd4fdd14730d99ab_6a265abf568e6b1a78367d83.6a265b01568e6b1a78367d93.6a265b013012ac10f91549dc:Trae CN.T(2026/6/8 14:02:41)",
+    "user_id": "2402906841289811",
+    "trace_id": "12d687e2e947d8a1bd4fdd14730d99ab",
+    "session_id": "6a265abf568e6b1a78367d83",
+    "task_id": "6a265b01568e6b1a78367d93",
+    "message_id": "6a265b013012ac10f91549dc",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 14:02:41",
+    "format": "full"
+  },
+  "trace": "null"
+}
