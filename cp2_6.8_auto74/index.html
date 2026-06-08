@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>关卡原型构建器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    body { background: #1F2937; color: #F3F4F6; user-select: none; }
+    #app { display: flex; flex-direction: column; width: 100vw; height: 100vh; }
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: #374151;
+      height: 48px;
+      border-bottom: 1px solid #4B5563;
+      transition: background 0.2s ease;
+    }
+    #topbar.hidden { display: none; }
+    .topbar-left { display: flex; gap: 8px; align-items: center; }
+    .topbar-title { font-size: 14px; font-weight: 600; color: #F3F4F6; margin-right: 16px; }
+    .mode-btn {
+      padding: 6px 16px;
+      background: #4B5563;
+      border: none;
+      color: #F3F4F6;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .mode-btn:hover { background: #6B7280; transform: scale(1.03); }
+    .mode-btn.active { background: #3B82F6; }
+    .mode-btn.active:hover { background: #2563EB; }
+    #main { display: flex; flex: 1; overflow: hidden; }
+    #sidebar {
+      width: 60px;
+      background: #374151;
+      border-right: 1px solid #4B5563;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0;
+      gap: 8px;
+      transition: opacity 0.2s ease;
+    }
+    #sidebar.hidden { display: none; }
+    .tool-btn {
+      width: 44px;
+      height: 44px;
+      background: #4B5563;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      color: #F3F4F6;
+    }
+    .tool-btn:hover { background: #6B7280; transform: scale(1.05); }
+    .tool-btn.active { background: #3B82F6; }
+    .tool-btn svg { width: 22px; height: 22px; }
+    #canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+    canvas { display: block; background: #1F2937; }
+    #properties {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 220px;
+      background: #374151;
+      border: 1px solid #4B5563;
+      border-radius: 8px;
+      padding: 12px;
+      display: none;
+      z-index: 10;
+      transition: opacity 0.2s ease;
+    }
+    #properties.visible { display: block; }
+    #properties h3 { font-size: 13px; margin-bottom: 10px; color: #F3F4F6; }
+    .prop-row { margin-bottom: 8px; }
+    .prop-row label { font-size: 12px; color: #9CA3AF; display: block; margin-bottom: 4px; }
+    .prop-row select {
+      width: 100%;
+      padding: 6px 8px;
+      background: #1F2937;
+      border: 1px solid #4B5563;
+      border-radius: 4px;
+      color: #F3F4F6;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .prop-row select:focus { outline: none; border-color: #3B82F6; }
+    .delete-btn {
+      width: 100%;
+      padding: 6px;
+      background: #EF4444;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-top: 8px;
+      transition: background 0.2s ease;
+    }
+    .delete-btn:hover { background: #DC2626; }
+    #hint {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      font-size: 11px;
+      color: #9CA3AF;
+      background: rgba(55, 65, 81, 0.9);
+      padding: 8px 12px;
+      border-radius: 6px;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    #hint.hidden { display: none; }
+    #flash-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 5;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+    #flash-overlay.red { background: rgba(239, 68, 68, 0.4); opacity: 1; }
+    #flash-overlay.blue { background: rgba(59, 130, 246, 0.4); opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="topbar">
+      <div class="topbar-left">
+        <span class="topbar-title">🎨 关卡构建器</span>
+        <button class="mode-btn active" id="btn-edit">编辑</button>
+        <button class="mode-btn" id="btn-play">运行</button>
+      </div>
+      <div style="font-size:11px;color:#9CA3AF;">Ctrl+Z 撤销 · Ctrl+Shift+Z 重做</div>
+    </div>
+    <div id="main">
+      <div id="sidebar">
+        <button class="tool-btn active" id="tool-rect" title="矩形工具">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+        </button>
+        <button class="tool-btn" id="tool-circle" title="圆形工具">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="8" ry="7"/></svg>
+        </button>
+        <button class="tool-btn" id="tool-triangle" title="三角形工具">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,4 20,19 4,19"/></svg>
+        </button>
+      </div>
+      <div id="canvas-wrap">
+        <canvas id="canvas"></canvas>
+        <div id="properties">
+          <h3 id="prop-title">属性</h3>
+          <div class="prop-row">
+            <label>物理属性</label>
+            <select id="prop-type">
+              <option value="static">静态</option>
+              <option value="dynamic">动态</option>
+              <option value="portal-a">传送门-入口</option>
+              <option value="portal-b">传送门-出口</option>
+              <option value="trap">陷阱</option>
+            </select>
+          </div>
+          <button class="delete-btn" id="btn-delete">删除图形</button>
+        </div>
+        <div id="hint">点击左侧工具开始绘制 · 点击图形选中 · 拖拽锚点缩放</div>
+        <div id="flash-overlay"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
