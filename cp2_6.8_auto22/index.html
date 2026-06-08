@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D室内家具布局模拟器</title>
+  <link rel="stylesheet" href="./src/roomLayout.css" />
+</head>
+<body>
+  <div id="app" class="app-container">
+    <aside class="sidebar left-sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">家具库</h2>
+      </div>
+      <div class="furniture-list" id="furnitureList">
+        <div class="furniture-item" data-type="table">
+          <div class="furniture-icon">🪑</div>
+          <span class="furniture-label">桌子</span>
+        </div>
+        <div class="furniture-item" data-type="chair">
+          <div class="furniture-icon">💺</div>
+          <span class="furniture-label">椅子</span>
+        </div>
+        <div class="furniture-item" data-type="sofa">
+          <div class="furniture-icon">🛋️</div>
+          <span class="furniture-label">沙发</span>
+        </div>
+        <div class="furniture-item" data-type="bed">
+          <div class="furniture-icon">🛏️</div>
+          <span class="furniture-label">床</span>
+        </div>
+        <div class="furniture-item" data-type="bookshelf">
+          <div class="furniture-icon">📚</div>
+          <span class="furniture-label">书柜</span>
+        </div>
+        <div class="furniture-item" data-type="lamp">
+          <div class="furniture-icon">💡</div>
+          <span class="furniture-label">灯具</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="scene-container">
+      <canvas id="sceneCanvas"></canvas>
+      <div class="angle-indicator" id="angleIndicator" style="display: none;">
+        <span id="angleValue">0°</span>
+      </div>
+      <div class="delete-confirm" id="deleteConfirm" style="display: none;">
+        <div class="confirm-box">
+          <p>确定要删除这个家具吗？</p>
+          <div class="confirm-buttons">
+            <button class="btn btn-confirm" id="confirmDelete">确定</button>
+            <button class="btn btn-cancel" id="cancelDelete">取消</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="sidebar right-sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">环境设置</h2>
+      </div>
+      
+      <div class="panel-section">
+        <div class="section-header" data-section="walls">
+          <span class="section-title">墙壁颜色</span>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-content" id="wallsSection">
+          <div class="color-presets">
+            <div class="color-swatch active" style="background-color: #F5F5F5;" data-color="#F5F5F5" title="米白"></div>
+            <div class="color-swatch" style="background-color: #E8DED0;" data-color="#E8DED0" title="暖白"></div>
+            <div class="color-swatch" style="background-color: #D4C5B5;" data-color="#D4C5B5" title="浅米"></div>
+            <div class="color-swatch" style="background-color: #8FA6A0;" data-color="#8FA6A0" title="莫兰迪绿"></div>
+            <div class="color-swatch" style="background-color: #7B8FA6;" data-color="#7B8FA6" title="莫兰迪蓝"></div>
+            <div class="color-swatch" style="background-color: #A69889;" data-color="#A69889" title="灰棕"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-header" data-section="floor">
+          <span class="section-title">地板材质</span>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-content" id="floorSection">
+          <div class="material-options">
+            <div class="material-option active" data-material="tile">
+              <div class="material-preview tile-preview"></div>
+              <span class="material-label">瓷砖</span>
+            </div>
+            <div class="material-option" data-material="wood">
+              <div class="material-preview wood-preview"></div>
+              <span class="material-label">木质</span>
+            </div>
+            <div class="material-option" data-material="carpet">
+              <div class="material-preview carpet-preview"></div>
+              <span class="material-label">地毯</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-header" data-section="lighting">
+          <span class="section-title">灯光亮度</span>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-content" id="lightingSection">
+          <div class="slider-container">
+            <span class="slider-label">亮度</span>
+            <input type="range" id="lightIntensity" min="0.5" max="2.0" step="0.1" value="1.0" />
+            <span class="slider-value" id="lightValue">1.0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section" id="furnitureInfoSection" style="display: none;">
+        <div class="section-header">
+          <span class="section-title">选中家具</span>
+        </div>
+        <div class="section-content">
+          <div class="furniture-info">
+            <div class="info-row">
+              <span class="info-label">名称</span>
+              <span class="info-value" id="furnitureName">-</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">X 坐标</span>
+              <span class="info-value" id="furniturePosX">-</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Z 坐标</span>
+              <span class="info-value" id="furniturePosZ">-</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">旋转角度</span>
+              <span class="info-value" id="furnitureRotation">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
