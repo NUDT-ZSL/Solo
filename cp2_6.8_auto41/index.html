@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 熔岩灯流体模拟</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3a 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .bubble-label {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      pointer-events: none;
+      transform: translate(-50%, -100%);
+      transition: opacity 0.2s ease;
+      z-index: 100;
+    }
+
+    .bubble-label .label-title {
+      font-weight: bold;
+      margin-bottom: 4px;
+      color: #ffa94d;
+    }
+
+    .bubble-label .label-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .bubble-label .label-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
