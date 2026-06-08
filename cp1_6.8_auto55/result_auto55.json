@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T17:32:47.126Z",
+  "task_name": "auto55",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「极光幻境」的3D交互可视化项目，模拟在极地夜空中舞动的彩色极光，用户可以通过鼠标拖拽旋转视角、滚轮缩放，观察极光光带在星空中缓慢流动、扭曲和闪烁，背景有闪烁的星星粒子，整体色调为深蓝到紫黑渐变，极光以青绿、粉紫和金色渐变呈现半透明发光质感。点击任意光带区域会触发一次「极光爆裂」——该处极光急速膨胀并放射出彩色射线，周围粒子被排开，同时弹出一张半透明毛玻璃信息卡片显示当前极光的强度、色温和波动频率。右侧有一个半透明毛玻璃控制面板，包含三个滑块调节「极光流速」、「粒子密度」和「光带扭曲度」，以及一个「重置画面」按钮。整体风格为梦幻自然风：深蓝到紫黑渐变天空，极光用半透明粒子系统和动态曲面网格模拟，光带带呼吸脉动和缓动漂浮动画，颜色在青绿、粉紫之间循环渐变，背景有闪烁的星星粒子，交互响应流畅，帧率保持在60fps。用TypeScript和React来实现，配合Three.js渲染3D场景。文件结构大概这样：src/下有AuroraEngine.ts（核心引擎，管理Three.js场景、极光网格和粒子系统）、AuroraPhysics.ts（处理极光流动、扭曲和闪烁物理计算）、UIOverlay.tsx（React组件，包含控制面板、信息卡片和按钮）、InteractionManager.ts（处理鼠标交互、点击触发爆裂动画和信息展示）。另外，根目录放一个package.json，带上依赖（three、react、typescript、vite等）和启动脚本，一个index.html作为入口，一个vite.config.js配置构建，以及一个tsconfig.json。这样我下载后直接npm install && npm run dev就能跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:dc357b20760d4f7bf7981901715f6a1d_6a25aa48a67d8ac61bfd50d3.6a25ab2da67d8ac61bfd51c4.6a25ab2de3811b68376736f8:Trae CN.T(2026/6/8 01:32:29)",
+    "user_id": "2402906841289811",
+    "trace_id": "dc357b20760d4f7bf7981901715f6a1d",
+    "session_id": "6a25aa48a67d8ac61bfd50d3",
+    "task_id": "6a25ab2da67d8ac61bfd51c4",
+    "message_id": "6a25ab2de3811b68376736f8",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 01:32:29",
+    "format": "full"
+  },
+  "trace": "null"
+}
