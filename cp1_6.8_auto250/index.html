@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>风鸣羽舞</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #e8e4e0 0%, #f5f0eb 50%, #ede8e3 100%);
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .fade-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #f0ece8;
+      pointer-events: none;
+      z-index: 9999;
+      animation: fadeOut 1.2s ease-out forwards;
+    }
+
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 16px;
+      padding: 20px 24px;
+      z-index: 100;
+      min-width: 220px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+
+    .control-panel .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(80, 70, 60, 0.8);
+      margin-bottom: 16px;
+      letter-spacing: 2px;
+    }
+
+    .control-panel .control-group {
+      margin-bottom: 14px;
+    }
+
+    .control-panel .control-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: rgba(80, 70, 60, 0.7);
+      margin-bottom: 6px;
+    }
+
+    .control-panel .control-group label span.value {
+      font-variant-numeric: tabular-nums;
+      color: rgba(80, 70, 60, 0.9);
+      font-weight: 500;
+    }
+
+    .control-panel input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, rgba(160, 180, 200, 0.3), rgba(180, 160, 200, 0.3));
+      outline: none;
+      cursor: pointer;
+    }
+
+    .control-panel input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid rgba(160, 160, 180, 0.5);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .control-panel input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .control-panel .reset-btn {
+      width: 100%;
+      padding: 8px 0;
+      border: 1px solid rgba(160, 160, 180, 0.3);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.3);
+      color: rgba(80, 70, 60, 0.7);
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      letter-spacing: 1px;
+    }
+
+    .control-panel .reset-btn:hover {
+      background: rgba(255, 255, 255, 0.5);
+      border-color: rgba(160, 160, 180, 0.5);
+      color: rgba(80, 70, 60, 0.9);
+    }
+
+    .hint {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 13px;
+      color: rgba(80, 70, 60, 0.45);
+      letter-spacing: 3px;
+      pointer-events: none;
+      z-index: 100;
+      animation: hintFade 4s ease-out forwards;
+    }
+
+    @keyframes hintFade {
+      0% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+      15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      70% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @media (max-width: 768px) {
+      .control-panel {
+        bottom: 16px;
+        right: 16px;
+        padding: 16px 18px;
+        min-width: 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="fade-overlay"></div>
+    <div class="hint">点击画布生成气流 · 点击羽毛触发爆散</div>
+    <div class="control-panel">
+      <div class="panel-title">风鸣羽舞</div>
+      <div class="control-group">
+        <label>气流强度 <span class="value" id="windStrengthValue">0.5</span></label>
+        <input type="range" id="windStrength" min="0.1" max="2.0" step="0.05" value="0.5" />
+      </div>
+      <div class="control-group">
+        <label>羽毛数量 <span class="value" id="featherCountValue">20</span></label>
+        <input type="range" id="featherCount" min="5" max="60" step="1" value="20" />
+      </div>
+      <button class="reset-btn" id="resetBtn">重 置</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
