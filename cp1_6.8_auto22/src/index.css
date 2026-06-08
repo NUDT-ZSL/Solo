@@ -1,0 +1,132 @@
+@import url('https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Noto Sans SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(142, 45, 226, 0.4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(142, 45, 226, 0.6);
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .neon-border {
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    position: relative;
+  }
+
+  .neon-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, #4a00e0, #8e2de2, #e040fb);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .paper-texture {
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 28px,
+        rgba(139, 119, 101, 0.08) 28px,
+        rgba(139, 119, 101, 0.08) 29px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 28px,
+        rgba(139, 119, 101, 0.05) 28px,
+        rgba(139, 119, 101, 0.05) 29px
+      );
+  }
+
+  .note-glow-positive {
+    box-shadow: 0 0 12px rgba(255, 107, 53, 0.3), 0 0 24px rgba(247, 201, 72, 0.15);
+  }
+
+  .note-glow-neutral {
+    box-shadow: 0 0 12px rgba(78, 205, 196, 0.3), 0 0 24px rgba(85, 98, 112, 0.15);
+  }
+
+  .note-glow-negative {
+    box-shadow: 0 0 12px rgba(44, 62, 80, 0.3), 0 0 24px rgba(142, 68, 173, 0.15);
+  }
+
+  .neon-button {
+    background: linear-gradient(135deg, #4a00e0, #8e2de2);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(74, 0, 224, 0.3);
+  }
+
+  .neon-button:hover {
+    box-shadow: 0 4px 16px rgba(74, 0, 224, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .neon-button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(74, 0, 224, 0.3);
+  }
+}
+
+@layer utilities {
+  .text-gradient-neon {
+    background: linear-gradient(135deg, #4a00e0, #8e2de2, #e040fb);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
