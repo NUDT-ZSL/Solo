@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T06:50:24.320Z",
+  "task_name": "auto432",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「磁力书签」的全栈web应用，用户可以把自己感兴趣的网页链接保存为书签，并给每个书签添加标签、评分和一条简短笔记，系统会根据标签和评分自动生成一个「书签活力图」——一个由动态粒子构成的小型3D图标，颜色和运动状态关联标签类别和评分高低。浏览时支持按标签和评分范围筛选，以网格布局展示卡片，点击卡片展开详情能看到完整的链接、笔记和活力图动画，活力图会随着评分变化而改变粒子颜色和旋转速度。整体视觉走赛博未来风格：深空蓝到紫黑渐变背景，主色调是电光蓝和霓虹紫，卡片是圆角毛玻璃面板带发光边框，评分用半透明星级图标渐变填充，点击星级时星星有脉冲光晕和弹性动画，书签卡片悬停时轻微上浮并带光晕扩散，筛选和排序时有平滑淡入淡出错落过渡，活力图在卡片中持续旋转并缓慢变色，响应式适配手机和桌面。交互反馈要流畅，帧率稳定在60fps。用TypeScript和React实现前端，后端用Python的FastAPI，Vite构建。项目包含6个文件：src/api.ts（封装后端API请求，如获取、添加、更新、删除书签，带上标签筛选和评分排序参数）、src/components/BookmarkCard.tsx（展示单个书签卡片，包含链接标题、标签、评分交互、简短笔记和嵌入的活力图组件，点击展开详情时活力图放大并播放旋转动画）、src/components/BookmarkGrid.tsx（管理书签卡片网格布局，支持筛选和排序功能，监听搜索和评分过滤，卡片重新排列时有弹性Transition）、src/components/VitalityGraph.tsx（使用Three.js渲染3D粒子系统，接收标签和评分作为参数，粒子颜色和旋转速度随参数动态变化，实现持续的动画循环）、src/pages/HomePage.tsx（页面主入口，包含标题、搜索栏、筛选面板和网格组件，布局为左右分栏，左侧筛选面板毛玻璃设计，右侧网格自适应）、src/App.tsx（React应用根组件，配置路由和全局状态管理，使用Context存储书签列表和筛选条件）。另外还需要一个package.json（包含react、react-dom、vite、typescript、@types/react、@types/react-dom、three、@types/three、tailwindcss等依赖，以及dev脚本用'vite'、build脚本用'vite build'、preview脚本用'vite preview'）、一个vite.config.ts（配置React插件和别名）、一个tsconfig.json（配置严格模式和路径映射）、一个index.html（入口HTML，包含<div id='root'>和script标签加载src/main.tsx）。运行方式：npm install && npm run dev。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:7fec7c1a5da3bc7f1bae79ed7b3f1824_6a2664cfc7a983a38819173d.6a26661ec7a983a388191842.6a26661ded076c85d14cf37f:Trae CN.T(2026/6/8 14:50:06)",
+    "user_id": "2402906841289811",
+    "trace_id": "7fec7c1a5da3bc7f1bae79ed7b3f1824",
+    "session_id": "6a2664cfc7a983a38819173d",
+    "task_id": "6a26661ec7a983a388191842",
+    "message_id": "6a26661ded076c85d14cf37f",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 14:50:06",
+    "format": "full"
+  },
+  "trace": "null"
+}
