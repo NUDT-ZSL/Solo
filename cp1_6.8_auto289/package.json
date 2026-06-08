@@ -1,0 +1,17 @@
+{
+  "name": "shadow-echo",
+  "version": "1.0.0",
+  "description": "暗影回响 - 2D潜行解谜游戏",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.12"
+  }
+}
