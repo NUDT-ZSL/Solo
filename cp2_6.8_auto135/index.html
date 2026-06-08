@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>赛博光剑锻造工坊 | Cyber Lightsaber Forge</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0a0a0f;
+      color: #00D4FF;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #forge-ui {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(900px, 92vw);
+      max-height: 90vh;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      z-index: 100;
+      transition: opacity 0.5s ease;
+      overflow-y: auto;
+    }
+
+    #forge-ui.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .ui-title {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #00D4FF;
+      text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+      margin-bottom: 8px;
+    }
+
+    .ui-subtitle {
+      text-align: center;
+      font-size: 13px;
+      letter-spacing: 2px;
+      color: rgba(0, 212, 255, 0.6);
+      margin-bottom: 16px;
+    }
+
+    .ui-main {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .ui-left {
+      flex: 1;
+      min-width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .ui-right {
+      flex: 1;
+      min-width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(0, 212, 255, 0.7);
+      margin-bottom: 12px;
+    }
+
+    .color-picker {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      justify-items: center;
+    }
+
+    .color-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .color-btn.selected {
+      border-color: transparent;
+      box-shadow: 0 0 4px 4px currentColor, 0 0 20px currentColor;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 4px 4px currentColor, 0 0 20px currentColor; }
+      50% { transform: scale(1.08); box-shadow: 0 0 6px 6px currentColor, 0 0 30px currentColor; }
+    }
+
+    .color-wheel {
+      width: 100%;
+      height: 12px;
+      border-radius: 6px;
+      background: linear-gradient(to right,
+        #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000
+      );
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .color-wheel::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 3px solid white;
+      cursor: pointer;
+      background: var(--thumb-color, #00D4FF);
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: rgba(0, 212, 255, 0.9);
+    }
+
+    .slider-value {
+      color: #00D4FF;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #2D3748;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--blade-color, #00D4FF), #ffffff);
+      border: none;
+      box-shadow: 0 0 8px var(--blade-color, #00D4FF);
+      transition: transform 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--blade-color, #00D4FF), #ffffff);
+      border: none;
+      box-shadow: 0 0 8px var(--blade-color, #00D4FF);
+    }
+
+    .forge-btn {
+      align-self: center;
+      padding: 16px 56px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: white;
+      background: linear-gradient(135deg, var(--blade-color, #00D4FF), #0088ff);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 20px var(--blade-color, #00D4FF);
+    }
+
+    .forge-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 40px var(--blade-color, #00D4FF);
+    }
+
+    .forge-btn:active {
+      transform: scale(0.95);
+      transition: transform 0.1s ease;
+    }
+
+    #back-btn {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(0, 212, 255, 0.15);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      color: rgba(0, 212, 255, 0.6);
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s ease;
+      z-index: 50;
+    }
+
+    #back-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #back-btn:hover {
+      opacity: 1;
+      transform: scale(1.2);
+      background: rgba(0, 212, 255, 0.35);
+      color: #00D4FF;
+      box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+    }
+
+    @media (max-width: 768px) {
+      .ui-main {
+        flex-direction: column;
+      }
+
+      #forge-ui {
+        padding: 20px;
+        gap: 20px;
+      }
+
+      .ui-title {
+        font-size: 22px;
+      }
+
+      .color-picker {
+        grid-template-columns: repeat(6, 1fr);
+      }
+
+      .color-btn {
+        width: 40px;
+        height: 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="forge-ui">
+    <div>
+      <div class="ui-title">⚔ CYBER FORGE ⚔</div>
+      <div class="ui-subtitle">打造你的专属霓虹光剑</div>
+    </div>
+
+    <div class="ui-main">
+      <div class="ui-left">
+        <div>
+          <div class="section-label">预设霓虹色</div>
+          <div class="color-picker" id="color-picker"></div>
+        </div>
+        <div>
+          <div class="section-label">自定义色环</div>
+          <input type="range" id="color-wheel" class="color-wheel" min="0" max="360" value="180">
+        </div>
+      </div>
+
+      <div class="ui-right">
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>剑刃长度</span>
+            <span class="slider-value" id="length-value">1.0x</span>
+          </div>
+          <input type="range" id="length-slider" min="0.5" max="2.0" step="0.05" value="1.0">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>发光强度</span>
+            <span class="slider-value" id="glow-value">1.0x</span>
+          </div>
+          <input type="range" id="glow-slider" min="0.5" max="2.0" step="0.05" value="1.0">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>剑柄粗糙度</span>
+            <span class="slider-value" id="roughness-value">0.4</span>
+          </div>
+          <input type="range" id="roughness-slider" min="0.1" max="1.0" step="0.05" value="0.4">
+        </div>
+      </div>
+    </div>
+
+    <button class="forge-btn" id="forge-btn">出鞘 ⚔</button>
+  </div>
+
+  <button id="back-btn" title="返回锻造">←</button>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
