@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T18:47:06.992Z",
+  "task_name": "auto95",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「时光胶囊」的匿名未来信件投递应用，用户可以写信并设定一个未来的日期（1年到10年后），信件会被加密存储，到期后通过邮件通知用户回来查看。用TypeScript和React做前端，后端用FastAPI，前后端分离。文件结构大概这样：src/下有 TimeCapsuleEngine.ts（核心逻辑，处理信件创建、加密、定时触发和信件解密）、LetterEditor.tsx（React组件，一个类似信纸风格的编辑器，带情绪选择（快乐、忧伤、平静等）和未来日期选择器）、LetterList.tsx（用户历史信件列表，每封信以封蜡印章样式展示，未读的印章完整，已读的破碎，点击后弹出半透明毛玻璃卡片显示信件预览）、NotificationScheduler.ts（定时任务模块，管理信件到期后的邮件通知逻辑和状态更新）。根目录放 package.json（依赖包括 react、react-dom、typescript、vite、fastapi、uvicorn、apscheduler、python-jose 等），还有前端入口HTML和后端入口main.py，以及一个vite.config.ts和tsconfig.json。这样我直接 npm install && npm run dev 就能跑前端，后端用 uvicorn main:app --reload 启动。需求方面：1）用户可以匿名写信，选择未来日期和情绪标签，提交后信件会加密存储；2）首页展示一个漂浮的胶囊图标和输入框，引导用户开始写信，背景用复古羊皮纸纹理，配色为暖褐色系（深褐、金色、米白），胶囊图标带有缓动上下浮动动画和发光效果；3）用户可以通过邮件或账户令牌（匿名生成）查看自己的历史信件列表，每封信以封蜡印章样式的卡片展示，鼠标悬停时印章微微放大并显示信件标题，点击后弹出一张半透明毛玻璃卡片展示信件内容、情绪标签和剩余天数；4）信件到期时，系统通过邮件通知用户，用户登录后信件会自动触发一封信封拆开的动画（封蜡破碎，信纸展开），然后显示完整内容；5）整体界面响应式适配桌面和手机，信件编辑器和阅读器都带有淡入淡出和缓动动画，交互反馈流畅，帧率保持60fps；6）整个应用性能良好，后端定时任务使用轻量级apscheduler，前端组件懒加载，减少首屏加载时间。创建一个中等难度的全栈项目，模块内多文件实现，每人文件职责如上所述。不要使用数据库，信件数据用JSON文件临时存储（实际产品需用数据库，但此处模拟即可）。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:bde9e1a0e644127e56e49b0144db8761_6a25bb79ad02070d0fb18b38.6a25bc99ad02070d0fb18c2f.6a25bc999c696cbb3de24023:Trae CN.T(2026/6/8 02:46:49)",
+    "user_id": "2402906841289811",
+    "trace_id": "bde9e1a0e644127e56e49b0144db8761",
+    "session_id": "6a25bb79ad02070d0fb18b38",
+    "task_id": "6a25bc99ad02070d0fb18c2f",
+    "message_id": "6a25bc999c696cbb3de24023",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 02:46:49",
+    "format": "full"
+  },
+  "trace": "null"
+}
