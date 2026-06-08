@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "Web前端",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「像素星图」的交互式Web应用，它能在页面上生成一幅动态的像素风格星图——用户通过鼠标拖拽和点击来旋转视角、放大缩小，还能点击星星查看详细信息（比如距离、亮度等），星图上的星星会缓慢闪烁并带有光晕，背景是深空渐变。整体视觉走复古像素赛博风格：深蓝到紫黑渐变背景，星星是8x8像素的彩色方块（颜色从暖黄到冷蓝渐变），运行时星星有缓慢的呼吸闪烁动画，还带一像素宽的光晕，鼠标拖拽时有平滑的惯性滚动和缩放，点击星星有亮光扩散和像素音效（用Web Audio API生成简短音效）。界面右上角有一个毛玻璃控制面板，包含「星图密度」滑块（100-1000颗星星）、「闪烁速度」滑块（0.5-2.0）和「重置视角」按钮，所有控件都有悬停高亮和点击反馈，响应式适配桌面和手机，帧率保持60fps。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口）、src/App.tsx（主布局，包含canvas和面板）、src/components/StarMap.tsx（核心：canvas绘制星星并处理拖拽/缩放交互）、src/components/ControlPanel.tsx（控制面板组件，处理滑块和按钮逻辑）、src/utils/starGenerator.ts（生成星星数据——位置、亮度、颜色等）、vite.config.ts（Vite配置，启用React插件）、tsconfig.json（TypeScript配置）、index.html（入口HTML，加载React应用）、package.json（依赖包括react、react-dom、@vitejs/plugin-react，启动脚本用\"npm run dev\"）。这样我npm install && npm run dev就能直接跑起来。"
+}
