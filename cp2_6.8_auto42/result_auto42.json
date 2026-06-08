@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T05:52:12.115Z",
+  "task_name": "auto42",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "场景：在线教育平台需要一套能自动生成和批改选择题的系统，教师可快速创建题库并查看学生的答题统计，但当前缺乏一个轻量级、可交互的网页解决方案。\n\n构建一个基于文本的智能题库管理与在线测验应用，教师可以创建含图片、公式的题目，学生登录后随机抽题作答并实时获得批改反馈，所有数据持久化存储。使用 TypeScript、React 前端和 Express 后端，前后端通过 RESTful API 通信，数据库采用内存存储（重启后重置但运行期间保持）。文件结构按职责模块化，并注明各文件间的调用关系和数据流向：\n - package.json（含依赖：express、uuid、cors、react、react-dom、typescript、@types/react、@types/react-dom、@types/express、@types/cors、vite、@vitejs/plugin-react、tsx，启动脚本：concurrently \"npm run serve\" \"npm run dev\"）\n - vite.config.js（构建配置，开发代理 /api -> http://localhost:3001）\n - tsconfig.json（严格模式，ESModule，包含 DOM 类型，jsx 设为 react-jsx）\n - index.html（入口页面）\n - server/src/index.ts（Express 服务端，启动端口 3001，处理 /api/questions、/api/answers 等 CRUD 路由，与 react 端无直接关系，提供 RESTful 接口）\n - src/main.tsx（React 入口，渲染 App 组件）\n - src/App.tsx（主应用组件，管理路由：教师端 /teacher 和学生端 /student，调用 QuestionService 和 StudentService 获取数据）\n - src/services/questionService.ts（封装向 /api/questions 的 fetch 请求，包括创建、查询、删除题目）\n - src/services/studentService.ts（封装学生答题相关请求，包括获取随机题目、提交答案、查看历史）\n - src/components/TeacherPanel.tsx（教师面板，展示题目列表和创建表单，调用 questionService）\n - src/components/StudentQuiz.tsx（学生答题界面，随机抽题、选项点击、提交后显示对错和解析）\n\n功能需求：\n1) 教师端支持添加单选题：每道题包含题目描述（支持 Markdown 语法，如图片用 ![](url)）、四个选项（A/B/C/D）和正确答案、答案解析。添加时表单实时预览渲染效果。\n2) 教师端题目列表以卡片形式展示，每张卡片显示题目前 20 字、选项缩略和正确选项标记，支持删除和修改（点击修改弹出浮层编辑，原地替换保存）。\n3) 学生端输入姓名后进入答题：每次从题库随机抽取 5 道题（不重复），每题限时 30 秒，倒计时显示在题目右上角（颜色从绿渐变到红）。超时自动跳入下一题并标记为未作答。\n4) 学生提交答案后立即显示每道题的正确/错误状态（绿色对勾/红色叉叉图标），并展示正确答案和解析，底部显示总分（正确数/5）和用时。\n5) 教师端可查看全体学生答题历史：表格形式展示学生姓名、答题时间、得分、用时，点击某行展开详细答题记录（每题所选答案和对错）。\n6) 界面要求：整体采用深蓝（#1a2332）和亮橙（#f97316）配色主题，首页登录面板居中带模糊背景渐变，教师/学生切换按钮在顶部导航栏。题目卡片悬停时轻微上浮（transform: translateY(-4px)）带 0.2s 过渡，选项按钮点击时涟漪扩散动画。题目预览区使用浅色背景（#2d3b4e）圆角容器，Markdown 渲染的图片最大宽度 300px 防撑爆。响应式适配：大屏（>=1024px）卡片两列，平板（768-1023px）单列，手机（<768px）全宽加适当内边距。所有交互反馈（加载、成功、错误）使用带有图标的 Toast 提示（1.5s 自动消失）。\n\n性能约束：学生随机抽取 5 道题接口响应时间不超过 200ms，批量提交答案（5题）响应时间不超过 500ms；前端界面操作（点击选项、切换题目）延迟不超过 100ms。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:c32bd2e82e5ed760cbe38933ac6cfc25_6a265790cb3fbb0eecba3e5b.6a265868cb3fbb0eecba3f0c.6a26586776bbccc346dd875b:Trae CN.T(2026/6/8 13:51:36)",
+    "user_id": "218182458805051",
+    "trace_id": "c32bd2e82e5ed760cbe38933ac6cfc25",
+    "session_id": "6a265790cb3fbb0eecba3e5b",
+    "task_id": "6a265868cb3fbb0eecba3f0c",
+    "message_id": "6a26586776bbccc346dd875b",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 13:51:36",
+    "format": "full"
+  },
+  "trace": "null"
+}
