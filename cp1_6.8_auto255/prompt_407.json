@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "Web前端",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「词链工坊」的交互式词语接龙游戏。玩家可以单人练习或双人对战，系统随机给出起始词，玩家需在输入框中输入以该词最后一个字开头的词语，输入正确时显示绿色高亮并播放轻快音效，错误则红色抖动并提示，每个词有20秒倒计时，超时则游戏结束。游戏结束后展示接龙历史、总词数和平均用时，支持分享结果。界面采用暖色卡通风：浅橙到米白渐变背景，卡片是毛玻璃圆角方块，每个词语卡片带有微上浮阴影和缓动动画，倒计时用环形进度条展示，输入框有焦点脉冲光效，响应式适配桌面和移动端，帧率保持60fps。\n用TypeScript和React实现，Vite作为构建工具。文件结构大概这样：\n- src/main.tsx：入口，挂载React应用\n- src/App.tsx：主组件，管理游戏状态和路由\n- src/components/GameBoard.tsx：游戏主界面，包含输入框、倒计时和当前词展示\n- src/components/WordCard.tsx：历史词语卡片组件，展示单次接龙结果\n- src/components/ResultScreen.tsx：游戏结束后的结果界面，显示统计数据和分享按钮\n- vite.config.ts：Vite配置\n- tsconfig.json：TypeScript配置\n- index.html：入口HTML\n- package.json：依赖和脚本，运行 npm install && npm run dev 即可启动"
+}
