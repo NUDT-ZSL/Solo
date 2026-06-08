@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>武器-技能搭配模拟沙盒</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #1E1E2E;
+      color: #FFFFFF;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      user-select: none;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .left-panel, .right-panel {
+      background-color: rgba(30, 30, 46, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 12px;
+      overflow-y: auto;
+      transition: transform 0.3s ease-out;
+    }
+
+    .left-panel {
+      width: 220px;
+      flex-shrink: 0;
+      border-right: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .right-panel {
+      width: 260px;
+      flex-shrink: 0;
+      border-left: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .center-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #1E1E2E;
+      min-width: 0;
+    }
+
+    .canvas-wrapper {
+      flex: 1;
+      position: relative;
+      padding: 2px;
+      min-height: 0;
+      background-color: #1E1E2E;
+    }
+
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background-color: #1E1E2E;
+      cursor: crosshair;
+    }
+
+    .bottom-panel {
+      height: 220px;
+      flex-shrink: 0;
+      background-color: rgba(43, 43, 74, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #F59E0B;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .section-title {
+      font-size: 12px;
+      color: #A78BFA;
+      margin: 12px 0 8px 0;
+      border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+      padding-bottom: 4px;
+    }
+
+    .weapon-grid, .skill-palette {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .weapon-item, .skill-item {
+      width: 100%;
+      aspect-ratio: 1;
+      background-color: #2B2B4A;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .weapon-item:hover, .skill-item:hover {
+      border-color: #8B5CF6;
+      transform: scale(1.03);
+    }
+
+    .weapon-item.selected {
+      border-color: #F59E0B;
+      box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.6);
+    }
+
+    .skill-item.slot-selected {
+      border-color: #F59E0B;
+      box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.5);
+    }
+
+    .skill-item.skill-flash {
+      animation: skillFlash 0.1s ease-out;
+    }
+
+    @keyframes skillFlash {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.25); filter: brightness(2); }
+      100% { transform: scale(1); }
+    }
+
+    .icon-canvas {
+      width: 40px;
+      height: 40px;
+    }
+
+    .item-name {
+      font-size: 10px;
+      margin-top: 4px;
+      color: #FFFFFF;
+    }
+
+    .item-tooltip {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      z-index: 100;
+      color: #FFFFFF;
+    }
+
+    .weapon-item:hover .item-tooltip,
+    .skill-item:hover .item-tooltip {
+      opacity: 1;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-label {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .stat-value {
+      color: #FFFFFF;
+      font-weight: bold;
+    }
+
+    .dps-display {
+      font-size: 36px;
+      font-weight: bold;
+      color: #F59E0B;
+      text-align: center;
+      padding: 10px;
+      background-color: rgba(245, 158, 11, 0.1);
+      border-radius: 6px;
+      margin-bottom: 10px;
+      text-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+    }
+
+    .dps-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: center;
+      margin-top: -6px;
+      margin-bottom: 10px;
+    }
+
+    .power-score {
+      font-size: 20px;
+      font-weight: bold;
+      color: #8B5CF6;
+      text-align: center;
+      padding: 8px;
+      background-color: rgba(139, 92, 246, 0.1);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .skill-slots {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .skill-slot {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      background-color: rgba(43, 43, 74, 0.8);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .skill-slot.empty {
+      opacity: 0.5;
+    }
+
+    .cooldown-ring {
+      width: 30px;
+      height: 30px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .skill-slot-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .skill-slot-name {
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .skill-slot-cd {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .skill-key-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      width: 16px;
+      height: 16px;
+      background-color: #8B5CF6;
+      color: #FFFFFF;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      background-color: rgba(30, 30, 46, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .stat-card-value {
+      font-size: 22px;
+      font-weight: bold;
+      color: #F59E0B;
+    }
+
+    .stat-card-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 4px;
+    }
+
+    .bottom-content {
+      display: flex;
+      gap: 16px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .skill-usage-section {
+      flex: 1;
+      background-color: rgba(30, 30, 46, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .skill-usage-bars {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      gap: 8px;
+      padding: 8px 4px 4px 4px;
+      min-height: 80px;
+    }
+
+    .usage-bar-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      height: 100%;
+      justify-content: flex-end;
+    }
+
+    .usage-bar {
+      width: 100%;
+      max-width: 40px;
+      background-color: currentColor;
+      border-radius: 3px 3px 0 0;
+      min-height: 4px;
+      transition: height 0.3s ease-out;
+    }
+
+    .usage-bar-label {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .usage-bar-count {
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .reset-btn {
+      background-color: #8B5CF6;
+      color: #FFFFFF;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: bold;
+      transition: all 0.15s ease;
+      align-self: center;
+    }
+
+    .reset-btn:hover {
+      background-color: #A78BFA;
+    }
+
+    .reset-btn:active {
+      background-color: #6D28D9;
+    }
+
+    .mobile-toggle {
+      display: none;
+      position: fixed;
+      top: 10px;
+      width: 40px;
+      height: 40px;
+      background-color: #8B5CF6;
+      border: none;
+      border-radius: 6px;
+      color: #FFFFFF;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .toggle-left { left: 10px; }
+    .toggle-right { right: 10px; }
+
+    @media (max-width: 768px) {
+      .left-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 220px;
+        z-index: 150;
+        transform: translateX(-100%);
+        box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
+      }
+
+      .left-panel.open {
+        transform: translateX(0);
+      }
+
+      .right-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        width: 240px;
+        z-index: 150;
+        transform: translateX(100%);
+        box-shadow: -2px 0 20px rgba(0, 0, 0, 0.5);
+      }
+
+      .right-panel.open {
+        transform: translateX(0);
+      }
+
+      .mobile-toggle {
+        display: flex;
+      }
+
+      .bottom-panel {
+        height: auto;
+        max-height: 40vh;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <button class="mobile-toggle toggle-left" id="toggleLeftBtn" aria-label="武器栏">☰</button>
+    <button class="mobile-toggle toggle-right" id="toggleRightBtn" aria-label="属性面板">⚙</button>
+
+    <div class="main-container">
+      <aside class="left-panel" id="leftPanel">
+        <div class="panel-title">武器库</div>
+        <div class="weapon-grid" id="weaponGrid"></div>
+
+        <div class="section-title">技能库 (点选配置到槽位)</div>
+        <div class="skill-palette" id="skillPalette"></div>
+      </aside>
+
+      <main class="center-panel">
+        <div class="canvas-wrapper">
+          <canvas id="gameCanvas"></canvas>
+        </div>
+      </main>
+
+      <aside class="right-panel" id="rightPanel">
+        <div class="panel-title">战斗状态</div>
+
+        <div class="dps-display" id="dpsDisplay">0</div>
+        <div class="dps-label">DPS (5秒平均)</div>
+
+        <div class="power-score">
+          战斗力: <span id="powerScore">0</span>
+        </div>
+
+        <div class="section-title">当前武器</div>
+        <div id="weaponInfo"></div>
+
+        <div class="section-title">技能槽</div>
+        <div class="skill-slots" id="skillSlots"></div>
+      </aside>
+    </div>
+
+    <footer class="bottom-panel">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="panel-title" style="margin-bottom: 0;">战斗统计</div>
+        <button class="reset-btn" id="resetBtn">重置战斗</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-value" id="totalDamage">0</div>
+          <div class="stat-card-label">总输出伤害</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value" id="killCount">0</div>
+          <div class="stat-card-label">击杀靶子</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value" id="peakDps">0</div>
+          <div class="stat-card-label">最高DPS</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value" id="battleTime">0s</div>
+          <div class="stat-card-label">战斗时长</div>
+        </div>
+      </div>
+
+      <div class="bottom-content">
+        <div class="skill-usage-section">
+          <div style="font-size: 12px; color: #A78BFA; margin-bottom: 4px;">技能使用次数</div>
+          <div class="skill-usage-bars" id="skillUsageBars"></div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
