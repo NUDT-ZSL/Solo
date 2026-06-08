@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T00:08:41.594Z",
+  "task_name": "auto258",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个小众的交互式网站——「心跳实验室」，一个通过点击卡片改变心率节奏、触发不同视觉反馈的互动实验。用户进入页面后，会看到一个由几十张半透明卡片组成的网格阵列，每张卡片代表一个“心跳节拍”，点击某个卡片会改变整体节奏（变快或变慢），同时页面背景颜色会从冷色向暖色渐变，卡片之间会出现脉冲波扩散动画，节奏越快，波越密集。整体视觉风格是极简生物风：纯白到浅灰背景，卡片是毛玻璃圆角方块，带微弱发光边框，节奏变化时有缓动过渡动画，响应式适配桌面和移动端，交互反馈流畅，帧率保持60fps。\n用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口，挂载React应用）、src/App.tsx（主组件，管理全局节奏状态和布局）、src/components/CardGrid.tsx（渲染卡片网格，处理点击事件和脉冲动画）、src/components/HeartBeatController.tsx（控制节奏速度的界面，含滑块和显示当前bpm）、src/utils/beatEngine.ts（管理心跳逻辑，包括节奏计算和事件分发）、vite.config.ts（Vite配置）。\n对了，记得把package.json带上，包含依赖（react、react-dom、typescript、vite、@vitejs/plugin-react）和启动脚本（dev、build），再加个index.html作为入口，tsconfig.json也配好，这样我npm install && npm run dev就能直接跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:0964f0318faedd62174a32712f91aca5_6a2607a8372c3559485fc669.6a2607fa372c3559485fc6b5.6a2607f996d1bd6516acfb4a:Trae CN.T(2026/6/8 08:08:26)",
+    "user_id": "2402906841289811",
+    "trace_id": "0964f0318faedd62174a32712f91aca5",
+    "session_id": "6a2607a8372c3559485fc669",
+    "task_id": "6a2607fa372c3559485fc6b5",
+    "message_id": "6a2607f996d1bd6516acfb4a",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 08:08:26",
+    "format": "full"
+  },
+  "trace": "null"
+}
