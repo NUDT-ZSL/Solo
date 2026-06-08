@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T22:00:40.132Z",
+  "task_name": "auto195",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「光影诗笺」的交互式诗歌光影生成器。用户可以从预设的古风诗词库中选择一首诗，或粘贴自己的短诗（最多12行），系统会根据每行的情感关键词（如悲、喜、思、寂）自动匹配对应的颜色和动态光影效果，并以瀑布流形式逐行展示——文字从底部向上浮动并淡入，鼠标悬停时该行会放大并显示一个毛玻璃信息卡片，卡片内包含情感浓度、意象标签和推荐配乐。整体界面采用水墨淡彩风：米白仿宣纸底色，深灰毛玻璃工具栏，文字用毛笔字体（提供Google Fonts的Ma Shan Zheng），背景有缓慢飘浮的细小墨点粒子（像研磨时的飞溅），页面切换有缓动淡入动画，响应式适配桌面和平板，帧率保持60fps。用TypeScript和React来实现。文件结构大概这样：src/下有InkEngine.ts（核心引擎，管理墨点粒子生成、缓动动画和鼠标交互）、PoetryMatcher.ts（情感关键词匹配，将每行映射到颜色和光影效果）、LightEffect.ts（生成光影效果，如渐变背景和发光文字）、App.tsx（React主组件，组合所有模块，管理全局状态和UI布局）、main.tsx（入口文件，挂载React应用）。对了，顺便把package.json（含依赖如react、react-dom、typescript和vite，以及启动脚本dev/build）、tsconfig.json、vite.config.js和入口HTML（index.html）都带上，这样我直接npm install && npm run dev就能跑。需求方面：1. 从预设古风诗词库选择或粘贴自定义短诗（最多12行），系统自动识别每行并分配情感和光影效果；2. 文字以瀑布流形式从底部向上浮动淡入，鼠标悬停时该行放大并显示毛玻璃卡片（含情感浓度、意象标签和推荐配乐）；3. 背景有缓慢飘浮的细小墨点粒子，鼠标移动时产生微弱的跟随效果，所有动画缓动流畅，帧率保持60fps；4. 界面采用水墨淡彩风：米白仿宣纸底色，深灰毛玻璃工具栏，文字用毛笔字体（Ma Shan Zheng），页面切换有缓动淡入动画；5. 响应式适配桌面和平板，交互反馈流畅；6. 提供一个重置按钮，清空当前显示并回到选择界面。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:a406e74dd80e6a8c69ceb78849c4b9e6_6a25e961d6e02d28c3262ad2.6a25e9f8d6e02d28c3262b43.6a25e9f8c67a226b8f1d64cc:Trae CN.T(2026/6/8 06:00:24)",
+    "user_id": "2402906841289811",
+    "trace_id": "a406e74dd80e6a8c69ceb78849c4b9e6",
+    "session_id": "6a25e961d6e02d28c3262ad2",
+    "task_id": "6a25e9f8d6e02d28c3262b43",
+    "message_id": "6a25e9f8c67a226b8f1d64cc",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 06:00:24",
+    "format": "full"
+  },
+  "trace": "null"
+}
