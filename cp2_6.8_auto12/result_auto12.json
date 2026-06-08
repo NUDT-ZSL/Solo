@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T04:50:36.739Z",
+  "task_name": "auto12",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "场景：在一个在线教育平台上，老师想要布置阅读任务并观察学生实时阅读进度的场景，学生需要能够分段阅读并记录阅读时长和理解程度。\n\n构建一个互动式文档阅读追踪应用，包含网页端阅读器和服务器端进度存储。使用TypeScript、React前端和Express后端实现，前后端通过RESTful API通信。文件结构按职责模块化，并注明各文件间的调用关系和数据流向：\n - package.json（根目录，含依赖：express、uuid、react、react-dom、typescript、@types/react、@types/express、vite、@vitejs/plugin-react、ts-node，启动脚本：npm run dev）\n - vite.config.js（前端构建配置，代理/api到后端端口3001）\n - tsconfig.json（严格模式，支持JSX和ES模块）\n - index.html（前端入口页面，挂载React应用）\n - src/frontend/App.tsx（主组件，调用后端API获取文档列表和进度数据，渲染排版阅读器和进度面板）\n - src/frontend/DocumentReader.tsx（阅读器组件，从父组件接收文档内容分页，记录用户翻页时间，并调用后端API上传进度；数据流向：App→DocumentReader→后端API）\n - src/frontend/ProgressTracker.tsx（进度跟踪组件，从父组件接收当前用户统计，显示各段落阅读状态和用时）\n - src/backend/server.ts（Express服务器，提供GET /api/documents返回文档列表和内容，POST /api/progress接收阅读进度数据，GET /api/progress/:userId返回用户进度）\n\n功能需求：\n1) 文档分页阅读：文档内容按段落分页，每次只显示一个段落，用户点击“下一段”或“上一段”按钮翻页，翻页时需记录当前阅读进度（段落索引、阅读时长）。\n2) 实时进度追踪：用户阅读完一个段落后，阅读时长自动记录并上传到后端；后端累计每个段落的阅读总时长和阅读次数，并支持按用户ID查询历史进度。\n3) 多用户并发：支持模拟多个用户（通过下拉选择切换用户ID），每个用户的阅读进度独立存储和显示，切换用户时阅读器恢复到该用户最新进度。\n4) 阅读统计面板：在阅读器右侧显示统计面板，展示当前用户的总阅读段数、总阅读时长、平均每段用时，以及每个段落的浏览状态（未读/已读）。\n\n界面要求：整体采用左右两栏布局，左侧占70%宽度为阅读器区域，右侧占30%为统计面板。阅读器区域上边缘放置进度条（显示当前段落位置/总段落数），中部为书籍风格的文本段落（背景米白、字体深灰、行高1.8），底部居中显示“上一段”和“下一段”按钮，按钮为圆角矩形，主色为#2d6a4f（墨绿），悬停时变为#40916c。统计面板顶部为下拉菜单切换用户，其下以卡片形式列出各项统计数据，每个卡片带有轻微的阴影和圆角，切换用户时有淡入动画（0.3秒过渡）。整体配色采用自然书籍风格（米白、森林绿、暖灰），字体使用系统衬线字体，营造温暖沉浸的阅读体验。页面需响应式适配：屏幕宽度小于768px时，两栏变为上下堆叠，阅读器在上，统计面板在下。\n\n性能约束：后端API响应时间不超过200ms（本地环境下），翻页操作（包括进度上传）的端到端延迟不超过500ms，确保阅读流畅无卡顿。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:64e3bd54e2ce973401d485b490c8ed10_6a2648bc7e0237db4fbccd5f.6a2649f87e0237db4fbcce5c.6a2649f8d2cf05530ddde17e:Trae CN.T(2026/6/8 12:50:00)",
+    "user_id": "218182458805051",
+    "trace_id": "64e3bd54e2ce973401d485b490c8ed10",
+    "session_id": "6a2648bc7e0237db4fbccd5f",
+    "task_id": "6a2649f87e0237db4fbcce5c",
+    "message_id": "6a2649f8d2cf05530ddde17e",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 12:50:00",
+    "format": "full"
+  },
+  "trace": "null"
+}
