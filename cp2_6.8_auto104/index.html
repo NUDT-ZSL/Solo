@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>动态分形树生成器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      overflow: hidden;
+      background: #1A202C;
+      color: #E2E8F0;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1A202C;
+    }
+
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+
+    #pruned-counter {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #FFFFFF;
+      font-size: 14px;
+      padding: 8px 16px;
+      background: rgba(45, 55, 72, 0.8);
+      border-radius: 8px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #pruned-counter.visible {
+      opacity: 1;
+    }
+
+    #export-toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(72, 187, 120, 0.9);
+      color: #FFFFFF;
+      font-size: 16px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 200;
+    }
+
+    #export-toast.visible {
+      opacity: 1;
+    }
+
+    #hamburger-btn {
+      display: none;
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 44px;
+      height: 44px;
+      background: #2D3748;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 150;
+      padding: 0;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #hamburger-btn span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: #E2E8F0;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    #hamburger-btn span::before,
+    #hamburger-btn span::after {
+      content: '';
+      position: absolute;
+      width: 22px;
+      height: 2px;
+      background: #E2E8F0;
+      left: 0;
+      transition: all 0.3s ease;
+    }
+
+    #hamburger-btn span::before {
+      top: -7px;
+    }
+
+    #hamburger-btn span::after {
+      top: 7px;
+    }
+
+    #controls-panel {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 280px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      background: #2D3748;
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 100;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      transition: transform 0.3s ease;
+    }
+
+    #controls-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #controls-panel::-webkit-scrollbar-track {
+      background: #1A202C;
+      border-radius: 3px;
+    }
+
+    #controls-panel::-webkit-scrollbar-thumb {
+      background: #4A5568;
+      border-radius: 3px;
+    }
+
+    #controls-panel h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #FFFFFF;
+    }
+
+    .control-section {
+      margin-bottom: 20px;
+    }
+
+    .control-section-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #A0AEC0;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .slider-container {
+      margin-bottom: 14px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .slider-label span:first-child {
+      font-size: 14px;
+      color: #E2E8F0;
+    }
+
+    .slider-label span:last-child {
+      font-size: 12px;
+      color: #63B3ED;
+      font-family: 'Courier New', monospace;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #4A5568;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #63B3ED;
+      cursor: pointer;
+      border: 2px solid #2D3748;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      background: #90CDF4;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #63B3ED;
+      cursor: pointer;
+      border: 2px solid #2D3748;
+    }
+
+    .presets-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .preset-btn {
+      width: 100%;
+      padding: 10px 12px;
+      background: #4A5568;
+      border: none;
+      border-radius: 8px;
+      color: #E2E8F0;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+    }
+
+    .preset-btn:hover {
+      background: #63B3ED;
+      color: #1A202C;
+      transform: translateX(2px);
+    }
+
+    .preset-btn:active {
+      transform: translateX(2px) scale(0.98);
+    }
+
+    .toggle-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .toggle-label {
+      font-size: 14px;
+      color: #E2E8F0;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: #4A5568;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .toggle-switch.active {
+      background: #48BB78;
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      transition: transform 0.2s ease;
+    }
+
+    .toggle-switch.active::after {
+      transform: translateX(20px);
+    }
+
+    .action-btn {
+      width: 100%;
+      padding: 10px 12px;
+      background: #4A5568;
+      border: none;
+      border-radius: 8px;
+      color: #E2E8F0;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 8px;
+    }
+
+    .action-btn:hover {
+      background: #63B3ED;
+      color: #1A202C;
+    }
+
+    .action-btn:active {
+      transform: scale(0.98);
+    }
+
+    .action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #4A5568 !important;
+      color: #E2E8F0 !important;
+      transform: none;
+    }
+
+    .export-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    @media (max-width: 768px) {
+      #hamburger-btn {
+        display: flex;
+      }
+
+      #controls-panel {
+        top: 70px;
+        right: 16px;
+        transform: translateX(calc(100% + 32px));
+      }
+
+      #controls-panel.mobile-open {
+        transform: translateX(0);
+      }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      #controls-panel {
+        width: 260px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="fractal-canvas"></canvas>
+  </div>
+
+  <button id="hamburger-btn" aria-label="菜单">
+    <span></span>
+  </button>
+
+  <div id="controls-panel">
+    <h2>🌳 分形树控制台</h2>
+
+    <div class="control-section">
+      <div class="control-section-title">生长参数</div>
+      
+      <div class="slider-container">
+        <div class="slider-label">
+          <span>递归深度</span>
+          <span id="depth-value">6</span>
+        </div>
+        <input type="range" id="depth-slider" min="1" max="8" step="1" value="6">
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-label">
+          <span>分支角度</span>
+          <span id="angle-value">30°</span>
+        </div>
+        <input type="range" id="angle-slider" min="10" max="80" step="1" value="30">
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-label">
+          <span>长度比</span>
+          <span id="ratio-value">0.70</span>
+        </div>
+        <input type="range" id="ratio-slider" min="0.3" max="1.0" step="0.01" value="0.7">
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-label">
+          <span>主干长度</span>
+          <span id="length-value">50px</span>
+        </div>
+        <input type="range" id="length-slider" min="30" max="100" step="1" value="50">
+      </div>
+    </div>
+
+    <div class="control-section">
+      <div class="control-section-title">风格预设</div>
+      <div class="presets-grid">
+        <button class="preset-btn" data-preset="oak">🌲 自然橡树</button>
+        <button class="preset-btn" data-preset="maple">🍁 对称枫树</button>
+        <button class="preset-btn" data-preset="willow">🌿 扭曲柳树</button>
+      </div>
+    </div>
+
+    <div class="control-section">
+      <div class="control-section-title">裁剪模式</div>
+      <div class="toggle-container">
+        <span class="toggle-label">启用裁剪</span>
+        <div id="prune-toggle" class="toggle-switch"></div>
+      </div>
+      <button id="undo-prune-btn" class="action-btn" disabled>↩ 撤销裁剪</button>
+    </div>
+
+    <div class="control-section">
+      <div class="control-section-title">导出</div>
+      <div class="export-buttons">
+        <button id="export-svg-btn" class="action-btn">导出 SVG</button>
+        <button id="export-png-btn" class="action-btn">导出 PNG</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pruned-counter">已裁剪 0 段</div>
+  <div id="export-toast">导出成功</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
