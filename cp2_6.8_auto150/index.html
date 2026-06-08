@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>霓虹音符跳跃跑酷</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      background: linear-gradient(135deg, #180B26 0%, #0F0A1A 100%);
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .game-container {
+      position: relative;
+      width: 800px;
+      max-width: 100%;
+      aspect-ratio: 800 / 600;
+      border: 1px solid rgba(0, 255, 185, 0.3);
+      border-radius: 8px;
+      box-shadow: 
+        0 0 40px rgba(167, 139, 250, 0.3),
+        inset 0 0 60px rgba(15, 10, 26, 0.8);
+      overflow: hidden;
+    }
+
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #180B26;
+    }
+
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      padding: 20px;
+    }
+
+    .game-ui {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+    }
+
+    .score-display {
+      color: #FFFFFF;
+      font-size: 28px;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 4px #A78BFA, 0 0 8px rgba(167, 139, 250, 0.5);
+    }
+
+    .speed-display {
+      color: #CBD5E0;
+      font-size: 18px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .note-display {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #FFFFFF;
+      font-size: 20px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .start-screen, .game-over-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(24, 11, 38, 0.9);
+      pointer-events: auto;
+      gap: 30px;
+    }
+
+    .game-over-text {
+      color: rgba(255, 0, 0, 0.8);
+      font-size: 64px;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 12px #FF0000, 0 0 24px rgba(255, 0, 0, 0.5);
+    }
+
+    .title-text {
+      color: #00FFB9;
+      font-size: 36px;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 8px #00FFB9, 0 0 16px rgba(0, 255, 185, 0.5);
+      text-align: center;
+    }
+
+    .instruction-text {
+      color: #CBD5E0;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      max-width: 400px;
+      line-height: 1.8;
+    }
+
+    .neon-btn {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: 3px solid #00FFB9;
+      background: transparent;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+      pointer-events: auto;
+      box-shadow: 0 0 8px rgba(0, 255, 185, 0.5);
+    }
+
+    .neon-btn:hover {
+      box-shadow: 0 0 8px #00FFB9, 0 0 16px #00FFB9, 0 0 24px rgba(0, 255, 185, 0.5);
+      background: rgba(0, 255, 185, 0.1);
+    }
+
+    .neon-btn svg {
+      width: 100%;
+      height: 100%;
+      fill: #FFFFFF;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .score-display {
+        font-size: 22px;
+      }
+
+      .speed-display {
+        font-size: 14px;
+      }
+
+      .note-display {
+        font-size: 16px;
+        bottom: 10px;
+      }
+
+      .title-text {
+        font-size: 24px;
+      }
+
+      .game-over-text {
+        font-size: 40px;
+      }
+
+      .instruction-text {
+        font-size: 12px;
+        padding: 0 20px;
+      }
+
+      .neon-btn {
+        width: 50px;
+        height: 50px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div class="ui-overlay">
+      <div class="game-ui">
+        <div class="score-display" id="scoreDisplay">分数: 0</div>
+        <div class="speed-display" id="speedDisplay">速度: x1.00</div>
+      </div>
+      <div class="note-display" id="noteDisplay"></div>
+    </div>
+
+    <div class="start-screen" id="startScreen">
+      <div class="title-text">霓虹音符跳跃</div>
+      <div class="instruction-text">
+        按 空格键 或 点击屏幕 跳跃<br />
+        按 E 键释放能量音波<br />
+        踩中平台获得分数，躲避静音陷阱！
+      </div>
+      <button class="neon-btn" id="startBtn" aria-label="开始游戏">
+        <svg viewBox="0 0 24 24">
+          <polygon points="8,5 19,12 8,19" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="game-over-screen hidden" id="gameOverScreen">
+      <div class="game-over-text">GAME OVER</div>
+      <div class="title-text" id="finalScore">最终分数: 0</div>
+      <button class="neon-btn" id="restartBtn" aria-label="重新开始">
+        <svg viewBox="0 0 24 24">
+          <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
