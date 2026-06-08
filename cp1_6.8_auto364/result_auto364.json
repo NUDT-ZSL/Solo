@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T04:45:33.875Z",
+  "task_name": "auto364",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "想开发一个叫「灵枢秘卷」的2D回合制拼图解谜游戏。玩家扮演一位古籍修复师，需要通过旋转和拼合破碎的符文碎片，还原上古卷轴上的封印图案，每关图案源自甲骨文或八卦符号。每块碎片带有微弱光效和能量流动粒子，旋转时碎片边缘有半透明光晕，正确拼接后碎片之间会发出一道脉冲连线并锁定，同时有金色粒子爆散。界面中央是拼图区域（支持拖拽和点击旋转），左下角有能量条（每次旋转消耗能量，随时间恢复），右侧显示当前关卡和提示按钮（提示会高亮下一块正确碎片的位置）。整体视觉走古风卷轴风格：米黄到浅褐渐变背景、宣纸纹理、毛玻璃控制面板、按钮是圆形印章样式，切换关卡时有卷轴展开动画。鼠标悬停碎片有微光和轻微放大效果，旋转时有柔和音效（用Web Audio生成），拼合完成时触发全屏金色光晕扩散和符文文字飘散。性能要求帧率稳定60fps，交互响应流畅。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口挂载React应用）、src/App.tsx（主组件管理关卡状态和布局）、src/PuzzleBoard.tsx（Canvas拼图区域，负责碎片渲染、拖拽旋转和拼接检测）、src/ControlPanel.tsx（控制面板，包含能量条、关卡选择、提示按钮）、src/utils/puzzleLogic.ts（拼图验证算法、碎片数据生成、关卡配置）。顺便把package.json带上，里面要有react、react-dom、three.js等依赖和dev脚本，再加个入口HTML和tsconfig.json，还有vite.config.js，这样我直接npm install && npm run dev就能跑。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:2aa9e1d63bf9af0c614b04be4a7b7ac7_6a264822cfded18ea68ba463.6a2648ddcfded18ea68ba4ee.6a2648dd531d7fd70af9226a:Trae CN.T(2026/6/8 12:45:17)",
+    "user_id": "2402906841289811",
+    "trace_id": "2aa9e1d63bf9af0c614b04be4a7b7ac7",
+    "session_id": "6a264822cfded18ea68ba463",
+    "task_id": "6a2648ddcfded18ea68ba4ee",
+    "message_id": "6a2648dd531d7fd70af9226a",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 12:45:17",
+    "format": "full"
+  },
+  "trace": "null"
+}
