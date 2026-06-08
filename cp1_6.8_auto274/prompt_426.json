@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "Web前端",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想做个叫「霓虹字迹」的交互式文字涂鸦板，用户可以在画布上用手指或鼠标书写，书写的内容会自动转化为流动的霓虹光轨，每条光轨会缓慢波动并散发光晕，多条光轨可以叠加成一副完整的霓虹画。整体界面走暗色赛博朋克风：纯黑到深紫渐变背景，书写时笔触有缓动拖尾效果，光轨颜色从冷蓝到暖紫渐变，每条光轨末端带有粒子扩散，画布上有一个毛玻璃控制面板，包含颜色选择器、笔刷粗细滑块（2~20px）、清空按钮和导出图片按钮，导出时包含所有光轨的最终效果。响应式适配桌面和移动端，帧率保持60fps。用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口挂载React）、src/App.tsx（主组件管理状态和布局）、src/components/Canvas.tsx（画布核心，处理触摸/鼠标事件，绘制光轨）、src/components/Controls.tsx（控制面板，颜色、粗细、清空、导出）、src/utils/drawUtils.ts（绘制辅助函数，如光轨缓动、粒子扩散算法）。另外加上基础配置：package.json（依赖react、react-dom、@types/react、@types/react-dom、typescript、vite、@vitejs/plugin-react）并配置scripts（dev、build、preview），vite.config.js（配置react插件和base路径），tsconfig.json（strict模式、jsx设为react-jsx、target es2020），还有一个index.html作为入口（挂载div#root和引入React）。这样npm install && npm run dev就能直接跑了。需求方面：1. 书写时笔触实时显示，离开后转为光轨并缓慢波动 2. 每条光轨独立控制颜色和粗细 3. 支持多笔绘制，每笔之间颜色和粗细可不同 4. 清空画布时所有光轨淡出消失 5. 导出为PNG时包含所有光轨 6. 控制面板用毛玻璃圆角设计，带柔和阴影，按钮有微缓动悬停效果 7. 交互响应流畅，帧率保持60fps"
+}
