@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星轨回廊</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; }
+
+    #panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 240px;
+      padding: 20px;
+      background: rgba(10, 10, 30, 0.45);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(120, 100, 255, 0.2);
+      border-radius: 16px;
+      color: #c8c0f0;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 13px;
+      z-index: 100;
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                  box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+    #panel:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(80, 60, 200, 0.25);
+    }
+
+    #panel h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #e0d8ff;
+      letter-spacing: 2px;
+      text-align: center;
+    }
+
+    .ctrl-group {
+      margin-bottom: 14px;
+    }
+    .ctrl-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #a8a0d0;
+    }
+    .ctrl-group .value-display {
+      float: right;
+      font-variant-numeric: tabular-nums;
+      color: #c8b8ff;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(120, 100, 255, 0.2);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #8b6cff;
+      border: 2px solid #b8a8ff;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #8b6cff;
+      border: 2px solid #b8a8ff;
+      cursor: pointer;
+    }
+
+    select {
+      width: 100%;
+      padding: 6px 10px;
+      background: rgba(20, 15, 50, 0.6);
+      border: 1px solid rgba(120, 100, 255, 0.3);
+      border-radius: 8px;
+      color: #c8c0f0;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    select:focus {
+      border-color: rgba(140, 108, 255, 0.6);
+    }
+    select option {
+      background: #1a1530;
+      color: #c8c0f0;
+    }
+
+    #reset-btn {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      background: rgba(120, 100, 255, 0.15);
+      border: 1px solid rgba(120, 100, 255, 0.3);
+      border-radius: 8px;
+      color: #c8b8ff;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.25s ease, transform 0.15s ease;
+      letter-spacing: 1px;
+    }
+    #reset-btn:hover {
+      background: rgba(120, 100, 255, 0.3);
+    }
+    #reset-btn:active {
+      transform: scale(0.96);
+    }
+
+    #hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(180, 170, 220, 0.5);
+      font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+      font-size: 12px;
+      letter-spacing: 1px;
+      pointer-events: none;
+      transition: opacity 1.5s ease;
+      z-index: 100;
+    }
+
+    @media (max-width: 768px) {
+      #panel {
+        width: 200px;
+        padding: 14px;
+        top: 12px;
+        right: 12px;
+        font-size: 11px;
+      }
+      #panel h2 { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h2>星 轨 回 廊</h2>
+
+    <div class="ctrl-group">
+      <label>飞行速度 <span class="value-display" id="speed-val">1.0x</span></label>
+      <input type="range" id="speed-slider" min="0.5" max="2" step="0.1" value="1" />
+    </div>
+
+    <div class="ctrl-group">
+      <label>粒子密度 <span class="value-display" id="density-val">中等</span></label>
+      <input type="range" id="density-slider" min="0" max="1" step="0.05" value="0.5" />
+    </div>
+
+    <div class="ctrl-group">
+      <label>颜色主题</label>
+      <select id="theme-select">
+        <option value="default">星云渐变</option>
+        <option value="coldBlue">冷蓝深空</option>
+        <option value="warmPurple">暖紫星尘</option>
+        <option value="orangeYellow">橙黄烈焰</option>
+      </select>
+    </div>
+
+    <button id="reset-btn">重置视角</button>
+  </div>
+
+  <div id="hint">拖拽旋转 · 滚轮飞行 · 点击释放冲击波</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
