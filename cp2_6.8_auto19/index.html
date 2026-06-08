@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>物理平台跳跃</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a1a;
+      font-family: 'Courier New', monospace;
+      touch-action: none;
+      user-select: none;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #touch-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      display: none;
+      justify-content: space-between;
+      padding: 0 20px;
+      pointer-events: none;
+    }
+    .touch-group {
+      display: flex;
+      gap: 15px;
+      pointer-events: auto;
+    }
+    .touch-btn {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .touch-btn:active {
+      background: rgba(255, 255, 255, 0.35);
+      transform: scale(0.95);
+    }
+    .double-btn {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .double-btn .touch-btn {
+      width: 55px;
+      height: 55px;
+      font-size: 18px;
+    }
+    @media (pointer: coarse) {
+      #touch-controls {
+        display: flex;
+      }
+    }
+    #restart-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      z-index: 100;
+    }
+    #restart-overlay h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #ffcc00;
+    }
+    #restart-overlay p {
+      font-size: 24px;
+      margin-bottom: 30px;
+    }
+    #restart-btn {
+      padding: 15px 40px;
+      font-size: 22px;
+      background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: bold;
+      box-shadow: 0 5px 20px rgba(238, 90, 111, 0.5);
+    }
+    #restart-btn:active {
+      transform: scale(0.97);
+    }
+    .hint {
+      position: absolute;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 14px;
+      text-align: center;
+    }
+    @media (pointer: coarse) {
+      .hint { bottom: 170px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="restart-overlay">
+      <h1 id="overlay-title">游戏结束</h1>
+      <p id="overlay-score">得分: 0</p>
+      <button id="restart-btn">重新开始</button>
+    </div>
+    <div class="hint">← → 或 A D 移动 &nbsp;|&nbsp; 空格/W/↑ 跳跃(可二段跳) &nbsp;|&nbsp; S/↓ 下蹲</div>
+    <div id="touch-controls">
+      <div class="touch-group">
+        <button class="touch-btn" data-action="left">◀</button>
+        <button class="touch-btn" data-action="right">▶</button>
+      </div>
+      <div class="touch-group">
+        <div class="double-btn">
+          <button class="touch-btn" data-action="jump">▲</button>
+          <button class="touch-btn" data-action="crouch">▼</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

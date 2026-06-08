@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T05:06:18.021Z",
+  "task_name": "auto19",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个基于真实物理模拟的2D平台跳跃小游戏，想法是让玩家控制一个角色在随机生成的地形上跳跃前进，避开陷阱并收集金币，适合用于休闲娱乐或游戏机制原型演示。希望它能做到：第一，角色支持左右移动、跳跃（可二段跳）和下蹲，移动和跳跃有加速减速的惯性感，落地时有轻微粒子特效；第二，地形由程序化算法生成，包含平台（不同高度和宽度）、尖刺陷阱（触碰即死亡）和金币（收集增加分数），每次重新开始生成全新的地图；第三，实现一个简单的物理引擎，处理重力、碰撞检测（角色与平台、尖刺、金币的碰撞）和摩擦力，碰撞后角色不能穿透平台，平台边缘有下滑效果。界面上希望是横版卷轴风格，背景采用渐变星空（深蓝到紫色渐变，点缀闪烁星星），平台用大地色系（棕褐色渐变），角色是一个圆润的卡通方块（带眼睛），尖刺用红色三角形，金币用金色圆形带光泽动画。左侧显示分数和生命数（3条命），右侧有一个小地图缩略图。整体画面像素风但保持清晰，支持键盘和触屏操作。性能上需要维持60FPS，当金币和尖刺数量超过50个时不能出现明显卡顿。\n\n实现用TypeScript、HTML5 Canvas和Vite，把代码拆成以下文件：\n - package.json（含依赖：typescript、vite，启动脚本：npm run dev）\n - index.html（入口页面，全屏canvas，含响应式基础样式）\n - vite.config.js（Vite构建配置）\n - tsconfig.json（严格模式，ES模块）\n - src/main.ts（初始化游戏循环、加载场景、处理输入、更新和渲染每一帧）\n - src/engine.ts（物理引擎核心：重力、碰撞检测、摩擦力、二段跳逻辑，导出PhysicsEngine类）\n - src/world.ts（地形生成器：程序化生成平台、尖刺、金币，提供生成和重置方法，导出WorldGenerator类）\n - src/player.ts（角色控制器：状态管理、移动跳跃逻辑、粒子特效触发，导出Player类）\n\n跑 npm install && npm run dev 就能直接看到效果。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:55cf647b7dd1c86d8a17fadfa7994952_6a264c64fdd163d05ca1b16f.6a264da6fdd163d05ca1b23a.6a264da6a1277161d5ae4ba6:Trae CN.T(2026/6/8 13:05:42)",
+    "user_id": "218182458805051",
+    "trace_id": "55cf647b7dd1c86d8a17fadfa7994952",
+    "session_id": "6a264c64fdd163d05ca1b16f",
+    "task_id": "6a264da6fdd163d05ca1b23a",
+    "message_id": "6a264da6a1277161d5ae4ba6",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 13:05:42",
+    "format": "full"
+  },
+  "trace": "null"
+}
