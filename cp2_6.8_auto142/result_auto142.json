@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T09:11:24.571Z",
+  "task_name": "auto142",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "开发一个微型在线个性化情绪日记与趋势分析应用，让用户每天记录自己的情绪状态、活动类型和简短文字描述，系统自动生成每周情绪热力图和活动偏好雷达图，并支持按日期范围筛选查看。使用TypeScript、React前端（含recharts图表库）和FastAPI后端实现，文件结构如下：\n - package.json（依赖：react、react-dom、typescript、@types/react、@types/react-dom、vite、@vitejs/plugin-react、recharts、axios，启动脚本：npm run dev）\n - index.html（入口页面）\n - vite.config.js（Vite构建配置）\n - tsconfig.json（严格模式）\n - src/App.tsx（主应用组件，管理路由和全局状态）\n - src/api.ts（封装的axios请求函数，负责与后端通信）\n - src/components/EmotionForm.tsx（情绪记录表单组件，包含emoji选择、活动标签勾选和文本框）\n - src/components/Heatmap.tsx（根据后端返回数据生成周情绪热力图，使用recharts的Heatmap）\n - src/components/ActivityRadar.tsx（根据后端返回数据生成活动偏好雷达图，使用recharts的RadarChart）\n - server/main.py（FastAPI后端入口，定义POST /journal和GET /journal/trends接口）\n - server/models.py（Pydantic模型，定义日记条目数据结构）\n - server/storage.py（内存存储模块，基于字典模拟数据库）\n\n具体需求：\n1. 用户可以在表单中选择情绪（通过点击emoji，包括开心、伤心、焦虑、平静、兴奋五种，每种对应不同颜色并带有轻微放大和颜色加深的点击动画），勾选活动标签（如运动、阅读、社交、工作、学习，支持多选，选中标签背景高亮为蓝色#3182CE并带0.2秒的渐显效果），并在文本框中输入简短日记（最多200字，实时显示剩余字数）。点击提交后，表单区域出现一个打勾的提交成功动画（一个圆圈从中心缩放展开并渐变为绿色#48BB78持续0.5秒），然后清空表单。\n2. 主页面下方展示一个7x24的周情绪热力图（横轴为小时0-23，纵轴为周一到周日），每个方格根据该时间段记录的情绪用对应颜色填充（开心#E53E3E、伤心#3182CE、焦虑#DD6B20、平静#38A169、兴奋#D53F8C），无记录时为浅灰#EDF2F7，鼠标悬停时显示具体时间和情绪名称的工具提示（背景黑色#1A202C、白色文字、圆角6px）。\n3. 热力图下方展示一个活动偏好雷达图，以用户最近7天记录的活动标签为维度，展示各标签的累计使用次数（雷达图填充颜色为#4FD1C5，透明度0.3，网格线为浅灰#E2E8F0）。\n4. 页面顶部有一个日期范围选择器（起始和结束日期输入框，样式为白色背景、圆角8px、边框#CBD5E0，聚焦时边框变蓝色#3182CE并带box-shadow过渡），选择后热力图和雷达图自动重新请求数据并更新。\n5. 页面整体布局为上下结构，顶部是标题栏（深紫#553C9A背景，白色文字，居中显示“情绪日记本”），中部是表单区（宽度最大500px，居中），底部是图表区（热力图和雷达图左右并排，各占50%宽度，间距20px），所有元素在小于768px宽度时堆叠为上下排列。\n\n界面要求：整体配色以暖紫和白色为主，标题栏和提交按钮使用深紫#553C9A，表单区域为白色背景圆角12px带浅灰#E2E8F0阴影，图表使用浅灰#F7FAFC背景，白色卡片风格。emoji点击、标签选中、表单提交均有平滑的过渡动画（0.2-0.5秒），图表数据更新时有渐入效果（透明度从0到1，持续0.3秒）。响应式适配确保在移动设备上表单和图表都能正常显示。\n\n性能要求：情绪数据提交后热力图和雷达图应在200ms内完成刷新显示，图表初次加载不超过500ms。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:45698fae131c6f67b036c302a9de120e_6a2686ef85f864bf2bb96ef0.6a26872d85f864bf2bb96f00.6a26872d5694fecd18da88a9:Trae CN.T(2026/6/8 17:11:09)",
+    "user_id": "218182458805051",
+    "trace_id": "45698fae131c6f67b036c302a9de120e",
+    "session_id": "6a2686ef85f864bf2bb96ef0",
+    "task_id": "6a26872d85f864bf2bb96f00",
+    "message_id": "6a26872d5694fecd18da88a9",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 17:11:09",
+    "format": "full"
+  },
+  "trace": "null"
+}

@@ -1,0 +1,366 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background-color: #F7FAFC;
+  color: #1A202C;
+}
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  background-color: #553C9A;
+  color: white;
+  padding: 20px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.date-filter {
+  padding: 20px;
+  background-color: white;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.date-filter label {
+  font-size: 14px;
+  color: #4A5568;
+  font-weight: 500;
+}
+
+.date-filter input {
+  padding: 8px 12px;
+  border: 1px solid #CBD5E0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  background-color: white;
+  color: #1A202C;
+}
+
+.date-filter input:focus {
+  outline: none;
+  border-color: #3182CE;
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+}
+
+.content-wrapper {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-section {
+  max-width: 500px;
+  margin: 0 auto;
+  width: 100%;
+  position: relative;
+}
+
+.emotion-form {
+  background-color: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2D3748;
+  margin-bottom: 4px;
+}
+
+.emoji-selector {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.emoji-btn {
+  font-size: 36px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+  transform: scale(1);
+}
+
+.emoji-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.emoji-btn.selected {
+  opacity: 1;
+  transform: scale(1.2);
+  filter: saturate(1.5) brightness(1.1);
+}
+
+.emoji-btn.happy.selected { background-color: rgba(229, 62, 62, 0.1); }
+.emoji-btn.sad.selected { background-color: rgba(49, 130, 206, 0.1); }
+.emoji-btn.anxious.selected { background-color: rgba(221, 107, 32, 0.1); }
+.emoji-btn.calm.selected { background-color: rgba(56, 161, 105, 0.1); }
+.emoji-btn.excited.selected { background-color: rgba(213, 63, 140, 0.1); }
+
+.activity-tags {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.activity-tag {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 2px solid #E2E8F0;
+  background-color: white;
+  cursor: pointer;
+  font-size: 14px;
+  color: #4A5568;
+  transition: all 0.2s ease;
+  opacity: 1;
+}
+
+.activity-tag:hover {
+  border-color: #CBD5E0;
+  background-color: #F7FAFC;
+}
+
+.activity-tag.selected {
+  background-color: #3182CE;
+  border-color: #3182CE;
+  color: white;
+  animation: fadeInTag 0.2s ease;
+}
+
+@keyframes fadeInTag {
+  from {
+    opacity: 0.7;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.textarea-wrapper {
+  position: relative;
+}
+
+.journal-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.journal-textarea:focus {
+  outline: none;
+  border-color: #553C9A;
+}
+
+.char-count {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  font-size: 12px;
+  color: #A0AEC0;
+}
+
+.char-count.warning {
+  color: #DD6B20;
+}
+
+.char-count.danger {
+  color: #E53E3E;
+}
+
+.submit-btn {
+  background-color: #553C9A;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background-color: #6B46C1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(85, 60, 154, 0.3);
+}
+
+.submit-btn:disabled {
+  background-color: #A0AEC0;
+  cursor: not-allowed;
+}
+
+.success-animation {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.success-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: #48BB78;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: successPop 0.5s ease forwards;
+}
+
+.success-checkmark {
+  color: white;
+  font-size: 40px;
+  font-weight: bold;
+  animation: checkmarkPop 0.3s ease 0.2s forwards;
+  opacity: 0;
+  transform: scale(0);
+}
+
+@keyframes successPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+    background-color: rgba(72, 187, 120, 0.3);
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    background-color: #48BB78;
+  }
+}
+
+@keyframes checkmarkPop {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.charts-section {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.chart-card {
+  flex: 1;
+  background-color: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px #E2E8F0;
+  animation: chartFadeIn 0.3s ease;
+}
+
+.chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2D3748;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+@keyframes chartFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.custom-tooltip {
+  background-color: #1A202C;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.tooltip-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+  .charts-section {
+    flex-direction: column;
+  }
+
+  .content-wrapper {
+    padding: 16px;
+  }
+
+  .header {
+    font-size: 20px;
+    padding: 16px;
+  }
+
+  .date-filter {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .emoji-btn {
+    font-size: 32px;
+    padding: 6px;
+  }
+
+  .emoji-selector {
+    gap: 12px;
+  }
+}
