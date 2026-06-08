@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuroWave 3D Visualizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0a0a2a;
+      color: #ffffff;
+    }
+
+    body {
+      position: relative;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #canvas-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #control-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 320px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      padding: 20px;
+      background: rgba(20, 20, 40, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    #control-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #control-panel::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+    }
+
+    #control-panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+    }
+
+    .panel-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #00d4ff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .panel-subtitle {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .wave-source {
+      margin-bottom: 16px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.2s ease;
+    }
+
+    .wave-source.active {
+      background: rgba(255, 60, 60, 0.1);
+      border-color: rgba(255, 60, 60, 0.3);
+    }
+
+    .wave-source-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .wave-source-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .source-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255, 60, 60, 0.4);
+      transition: all 0.2s ease;
+    }
+
+    .wave-source.active .source-dot {
+      background: #ff3c3c;
+      box-shadow: 0 0 10px #ff3c3c, 0 0 20px rgba(255, 60, 60, 0.5);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 10px #ff3c3c, 0 0 20px rgba(255, 60, 60, 0.5);
+      }
+      50% {
+        box-shadow: 0 0 15px #ff3c3c, 0 0 30px rgba(255, 60, 60, 0.8), 0 0 40px rgba(255, 60, 60, 0.4);
+      }
+    }
+
+    .toggle-btn {
+      padding: 4px 12px;
+      font-size: 12px;
+      font-family: inherit;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: #ffffff;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .wave-source.active .toggle-btn {
+      background: rgba(255, 60, 60, 0.4);
+      border-color: rgba(255, 60, 60, 0.6);
+    }
+
+    .slider-group {
+      margin-bottom: 10px;
+    }
+
+    .slider-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 4px;
+    }
+
+    .slider-value {
+      color: rgba(0, 212, 255, 0.9);
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00d4ff, #ff00ff);
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00d4ff, #ff00ff);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+    }
+
+    .info-section {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .info-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 8px;
+    }
+
+    .key-hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      line-height: 1.8;
+    }
+
+    .key-hint kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-family: 'Courier New', monospace;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      color: rgba(255, 255, 255, 0.8);
+      margin: 0 2px;
+    }
+
+    #mobile-warning {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 10, 42, 0.98);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+
+    #mobile-warning h2 {
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: #00d4ff;
+    }
+
+    #mobile-warning p {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+    }
+
+    @media (max-width: 1023px) {
+      #mobile-warning {
+        display: flex;
+      }
+    }
+
+    #stats {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: rgba(20, 20, 40, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      color: rgba(0, 212, 255, 0.9);
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .stat-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .stat-label {
+      color: rgba(255, 255, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="mobile-warning">
+    <div>
+      <h2>💫 NeuroWave Visualizer</h2>
+      <p>此应用需要桌面端浏览器体验，最小支持宽度为 1024px。<br>请在更大的屏幕上访问以获得最佳效果。</p>
+    </div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="control-panel">
+    <h1 class="panel-title">NeuroWave 3D</h1>
+    <p class="panel-subtitle">神经元脉冲波可视化<br>鼠标拖拽旋转视角 · 滚轮缩放</p>
+    <div id="wave-sources"></div>
+    <div class="info-section">
+      <div class="info-title">快捷键</div>
+      <div class="key-hint">
+        <kbd>1</kbd>-<kbd>9</kbd> 切换波源<br>
+        <kbd>Space</kbd> 暂停/继续自转<br>
+        <kbd>R</kbd> 重置视角
+      </div>
+    </div>
+  </div>
+
+  <div id="stats">
+    <div class="stat-line"><span class="stat-label">FPS</span><span id="fps">--</span></div>
+    <div class="stat-line"><span class="stat-label">粒子</span><span id="particle-count">--</span></div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
