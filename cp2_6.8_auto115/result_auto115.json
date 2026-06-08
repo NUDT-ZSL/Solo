@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T08:12:14.073Z",
+  "task_name": "auto115",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个微型在线知识卡片闪卡复习系统的项目，想法是让语言学习和考试复习者能创建自己的卡片库，通过间隔重复算法自动安排复习计划，并在浏览器里以随机顺序和翻转动画进行答题，系统会根据用户自评分动态调整下次复习时间。\n\n希望它能做到：第一，用户可以在首页看到所有已创建的卡片组以网格形式展示每个卡片组显示标题、卡片数量和下次复习时间，点击卡片组进入复习模式页面。第二，复习时每次显示一张卡片的正面问题，用户思考后点击翻转按钮，卡片以3D水平翻转动画过渡显示背面答案，同时下方出现三个评分按钮红色标记为困难（下次复习时间缩短）、黄色标记为良好（保持正常间隔）、绿色标记为简单（延长间隔），点击后自动显示下一张卡片。第三，在卡片组创建页面用户通过表单添加卡片，填写正面问题和背面答案支持多行文本输入，提交后新卡片立即出现在卡片组中。\n\n界面方面希望整体采用深蓝为主色调深蓝#1A365D作为导航栏底色，卡片背景为纯白#FFFFFF带圆角12px，翻转动画持续0.4秒并带缓入缓出效果，卡片组网格在鼠标悬停时向上浮动4px并出现淡蓝#63B3ED阴影，所有交互按钮在点击时有0.1秒的缩放反馈摸上去很清脆。页面布局左对齐，卡片组网格采用响应式自适应列数从手机单列到桌面四列平滑过渡。性能上希望翻转动画和评分切换的响应时间不超过100毫秒。\n\n实现用TypeScript前端React和Vite，后端用FastAPI提供数据接口存储卡片和卡片组数据到内存字典中。把代码拆成以下文件：\n - package.json（含依赖：react、react-dom、typescript、@types/react、@types/react-dom、vite、@vitejs/plugin-react、axios、uuid，启动脚本：npm run dev）\n - vite.config.js（Vite构建配置）\n - tsconfig.json（严格模式包含DOM和ESNext类型）\n - index.html（入口页面）\n - src/main.tsx（React入口挂载App组件）\n - src/App.tsx（主路由组件使用React Router管理首页、复习页和创建页的路由切换）\n - src/components/CardGrid.tsx（卡片组网格展示组件接收卡片组列表数据渲染网格并在用户点击时跳转到复习页面）\n - src/components/ReviewSession.tsx（复习会话组件管理当前卡片展示、翻转状态、评分按钮交互和下一张卡片的调度）\n - src/api.ts（封装axios请求与后端FastAPI通信包括获取卡片组列表、获取某组卡片、创建卡片组、添加卡片、提交评分等接口）\n - backend/main.py（FastAPI后端应用提供RESTful API接口数据默认预置两组示例卡片一组关于Vue.js基础问题一组关于CSS布局技巧）\n\n跑 npm install && cd backend && pip install fastapi uvicorn && uvicorn main:host 0.0.0.0:port 8000 就能直接在后端跑起来同时前端 npm run dev 启动，两个配合使用就能看到效果。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".218182458805051:99e884b048e1fae341ca7696c865f613_6a267813fed9abc7582a37d8.6a26794dfed9abc7582a38e4.6a26794d6aa5c24bdbc32545:Trae CN.T(2026/6/8 16:11:57)",
+    "user_id": "218182458805051",
+    "trace_id": "99e884b048e1fae341ca7696c865f613",
+    "session_id": "6a267813fed9abc7582a37d8",
+    "task_id": "6a26794dfed9abc7582a38e4",
+    "message_id": "6a26794d6aa5c24bdbc32545",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 16:11:57",
+    "format": "full"
+  },
+  "trace": "null"
+}
