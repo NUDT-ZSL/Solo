@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "游戏开发",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想做个叫「幻光藤蔓」的2D跑酷收集游戏，玩家操控一只发光的蝴蝶在幽暗森林中穿梭，沿着藤蔓路径飞行，收集光之鳞粉并躲避暗影蜘蛛。用TypeScript和React来实现。文件结构大概这样：src/下有GameEngine.ts（主循环、碰撞检测、得分与生命值管理）、Butterfly.ts（控制蝴蝶的飞行方向、加速度、粒子拖尾效果）、VinePath.ts（动态生成藤蔓路径、分支和移动平台，带有缓动摇摆动画）、ShadowSpider.ts（管理蜘蛛的巡逻AI、张网位置和追逐逻辑）、UILayer.tsx（React组件，显示光之鳞粉计数、生命值心形、当前分数和game over面板）。根目录放package.json（依赖包括react、typescript、react-dom、vite、@vitejs/plugin-react），tsconfig.json（配置target ES2020、module ESNext、jsx react-jsx、strict true），vite.config.ts（使用react插件），还有入口HTML index.html（挂载div id='root'并引入vite入口）。需求：1.蝴蝶用鼠标拖拽或键盘方向键控制移动，有惯性感，拖尾粒子渐变成蓝紫色。2.藤蔓路径随机生成，主路径带分支，分支末端有光之鳞粉（发光圆点），收集后加10分并播放上升音符。3.暗影蜘蛛在藤蔓节点间巡逻，碰到玩家蝴蝶则损失一条命（共3条），生命归零时游戏结束，显示最终分数和重玩按钮。4.界面：深蓝色渐变到紫黑色的森林背景，藤蔓用半透明荧光绿线条描绘并带有缓慢生长动画，玩家蝴蝶带呼吸光晕，蜘蛛用暗红色半透明主体。左上角半透明毛玻璃面板显示得分和生命值，游戏结束弹出毛玻璃模态框。5.性能方面：帧率稳定60fps，粒子数量控制在300以内，使用requestAnimationFrame循环。6.响应式适配：桌面和平板，触摸设备支持手指拖动蝴蝶。直接npm install && npm run dev就能跑。"
+}
