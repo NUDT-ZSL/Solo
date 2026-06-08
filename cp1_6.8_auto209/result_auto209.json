@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T22:31:13.657Z",
+  "task_name": "auto209",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「幻光迷巢」的2D解谜游戏，玩家在一片由动态光轨构成的迷宫中移动，通过拖拽光轨来改变路径，同时躲避不断旋转的暗影棱镜。迷宫布局和棱镜的旋转速度每次游戏都随机生成，不同区域的光轨颜色（蓝紫、青绿、暖黄）代表不同的速度加成或减速效果，玩家需要规划路线在限定时间内到达出口。整体视觉风格是几何光幻风：纯黑背景，光轨用渐变发光线条表示（颜色随区域变化），棱镜用半透明黑色三角形（带有淡紫色边缘光晕和旋转动画），玩家角色是一个发光小点（带有拖尾粒子效果），拖拽光轨时有波纹扩散反馈，到达出口时播放粒子爆散和闪烁动画。界面布局：左上角显示剩余时间和当前得分，右下角有一个半透明毛玻璃控制面板，包含两个滑块（光轨粗细调整、游戏速度）和一个重新开始按钮，响应式适配桌面和平板，交互反馈流畅，帧率保持60fps。\n用TypeScript和Phaser3来实现，配置要完整，带上package.json（含依赖和启动脚本，比如phaser、typescript、vite）、tsconfig.json、入口index.html以及vite.config.js，这样我npm install && npm run dev就能直接跑起来。文件结构大概是这样：\n- src/main.ts：游戏入口，初始化Phaser配置和场景管理\n- src/scenes/GameScene.ts：核心游戏场景，处理关卡逻辑、光轨拖拽、碰撞检测和UI更新\n- src/objects/Player.ts：玩家角色类（含移动、拖拽交互、状态管理）\n- src/objects/Prism.ts：暗影棱镜类（旋转、碰撞检测和视觉特效）\n- src/objects/LightTrack.ts：光轨类（动态路径生成、颜色管理、拖拽反馈）\n一共5个文件，加上构建配置，结构清晰，确保能直接运行。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:b906c107f498927a349a9fe8ff8123fd_6a25f0ed138b77c6a3d06244.6a25f121138b77c6a3d06254.6a25f12193be47c4e3f645f9:Trae CN.T(2026/6/8 06:30:57)",
+    "user_id": "2402906841289811",
+    "trace_id": "b906c107f498927a349a9fe8ff8123fd",
+    "session_id": "6a25f0ed138b77c6a3d06244",
+    "task_id": "6a25f121138b77c6a3d06254",
+    "message_id": "6a25f12193be47c4e3f645f9",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 06:30:57",
+    "format": "full"
+  },
+  "trace": "null"
+}
