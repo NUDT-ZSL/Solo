@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 材质光照实验室</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      background: #1a1a2e;
+      color: #e0e0ff;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #ui-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .panel {
+      position: absolute;
+      background: rgba(30, 30, 60, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px;
+      pointer-events: auto;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .panel-left {
+      top: 20px;
+      left: 20px;
+      width: 280px;
+      max-height: calc(100% - 40px);
+      overflow-y: auto;
+    }
+
+    .panel-right {
+      top: 20px;
+      right: 20px;
+      width: 300px;
+      max-height: calc(100% - 40px);
+      overflow-y: auto;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: #a0a0ff;
+      letter-spacing: 1px;
+    }
+
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-bottom: 6px;
+      color: #c0c0e0;
+    }
+
+    .control-value {
+      color: #8080ff;
+      font-weight: bold;
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+      font-family: 'Courier New', monospace;
+    }
+
+    select {
+      background: rgba(20, 20, 40, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e0e0ff;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: rgba(128, 128, 255, 0.5);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #1a1a6e, #6a1a9e);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #a080ff;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(160, 128, 255, 0.6);
+      transition: all 0.2s ease-in-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 12px rgba(160, 128, 255, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #a080ff;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #4a4a8e, #6a3a9e);
+      border: none;
+      color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    .btn:hover {
+      box-shadow: 0 0 15px rgba(160, 128, 255, 0.5), 0 0 30px rgba(160, 128, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .btn-reset {
+      background: linear-gradient(135deg, #8e4a4a, #9e3a3a);
+    }
+
+    .btn-reset:hover {
+      box-shadow: 0 0 15px rgba(255, 128, 128, 0.5), 0 0 30px rgba(255, 128, 128, 0.3);
+    }
+
+    .light-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .light-item {
+      background: rgba(20, 20, 40, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .light-item:hover {
+      border-color: rgba(160, 128, 255, 0.3);
+    }
+
+    .light-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .light-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .light-color-preview {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .light-type {
+      font-size: 11px;
+      color: #a0a0c0;
+    }
+
+    .btn-delete {
+      background: #ff4444;
+      border: none;
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .btn-delete:hover {
+      background: #ff6666;
+      transform: scale(1.1);
+    }
+
+    .pos-controls {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .pos-btn {
+      flex: 1;
+      background: rgba(60, 60, 100, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #c0c0e0;
+      padding: 4px 2px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .pos-btn:hover {
+      background: rgba(80, 80, 140, 0.8);
+    }
+
+    .pos-label {
+      font-size: 10px;
+      color: #8080a0;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 768px) {
+      .panel-left, .panel-right {
+        width: calc(100% - 20px);
+        max-height: 45vh;
+        left: 10px;
+        right: 10px;
+      }
+
+      .panel-left {
+        top: 10px;
+        bottom: auto;
+      }
+
+      .panel-right {
+        top: auto;
+        bottom: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="ui-container"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
