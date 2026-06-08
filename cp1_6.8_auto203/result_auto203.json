@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T22:16:57.854Z",
+  "task_name": "auto203",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「时空拓印」的2D解谜游戏，核心玩法是玩家在一张动态变化的时空地图上，通过点击和拖拽来放置时间印记，印记会短暂影响周围区域的时间流速（加速/减速/倒流），玩家需要利用时间差来激活隐藏的机器并解锁下一关。地图上的障碍物和机关会随时间变化，例如藤蔓随时间生长、移动平台周期性往返，玩家需要观察规律并精准放置印记。整体视觉风格是蒸汽时光风：暖棕和古铜色为主色调，背景有齿轮纹理缓慢旋转，场景元素有金属拉丝质地，时间印记用发光的怀表图标表示，激活时周围出现环形波纹扩散，时间倒流时画面出现类似老电影胶片的划痕和噪点效果。界面布局：左上角显示当前关卡和得分，右下角有一个半透明毛玻璃控制面板，包含两个滑块（时间流速、印记冷却时间）和一个重置关卡按钮。帧率保持60fps，交互反馈流畅（点击印记时有弹性缩放动画，放置时有轻微震动反馈）。用TypeScript和Phaser3来实现，配置要完整，带上package.json、tsconfig.json、入口HTML和vite.config.js，这样我npm install && npm run dev就能直接跑。文件结构大概这样：src/main.ts（游戏入口，初始化Phaser配置和场景管理）、src/scenes/GameScene.ts（核心游戏场景，处理关卡逻辑、时间印记放置、碰撞检测和UI更新）、src/objects/TimeStamp.ts（时间印记类，管理放置、计时、时间影响区域和动画）、src/objects/Level.ts（关卡数据类，包含地图布局、障碍物和机关配置）、src/utils/TimeManager.ts（时间管理器，控制全局时间流速和局部时间效果），最后根目录下放一个index.html作为入口。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:11f2cc24c11312c4726d2f095691650d_6a25ed0eb453298bec6472e3.6a25edb6b453298bec647354.6a25edb525e45e74b3538d37:Trae CN.T(2026/6/8 06:16:22)",
+    "user_id": "2402906841289811",
+    "trace_id": "11f2cc24c11312c4726d2f095691650d",
+    "session_id": "6a25ed0eb453298bec6472e3",
+    "task_id": "6a25edb6b453298bec647354",
+    "message_id": "6a25edb525e45e74b3538d37",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 06:16:22",
+    "format": "full"
+  },
+  "trace": "null"
+}
