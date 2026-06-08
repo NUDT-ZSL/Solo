@@ -1,0 +1,77 @@
+import * as THREE from "three";
+
+export const SCENE = {
+  BG_COLOR_TOP: new THREE.Color(0x000011),
+  BG_COLOR_BOTTOM: new THREE.Color(0x000005),
+  FOG_COLOR: new THREE.Color(0x000008),
+  FOG_NEAR: 80,
+  FOG_FAR: 200,
+  STAR_COUNT: 2000,
+  STAR_SPREAD: 180,
+};
+
+export const PLANET = {
+  COUNT: 8,
+  MIN_RADIUS: 0.3,
+  MAX_RADIUS: 0.8,
+  ORBIT_RADIUS_MIN: 8,
+  ORBIT_RADIUS_MAX: 40,
+  ORBIT_SPEED_MIN: 0.08,
+  ORBIT_SPEED_MAX: 0.35,
+  ORBIT_TILT_RANGE: 0.3,
+  ROTATION_SPEED_MIN: 0.3,
+  ROTATION_SPEED_MAX: 1.2,
+  GLOW_SCALE: 2.5,
+  COLORS: [
+    0x4fc3f7,
+    0xce93d8,
+    0xffab91,
+    0x80deea,
+    0xa5d6a7,
+    0xf48fb1,
+    0xffe082,
+    0xb39ddb,
+  ],
+};
+
+export const TRAIL = {
+  MAX_LENGTH: 120,
+  COLOR_START: new THREE.Color(0x7c4dff),
+  COLOR_END: new THREE.Color(0xe0e0e0),
+  OPACITY: 0.6,
+  WIDTH: 0.08,
+};
+
+export const GRAVITY_WAVE = {
+  DEFAULT_INTENSITY: 1.0,
+  SPEED: 15,
+  MAX_RADIUS: 80,
+  RING_SEGMENTS: 128,
+  RINGS_PER_WAVE: 5,
+  RING_SPACING: 2.5,
+  RING_WIDTH: 0.3,
+  DEFLECTION_FORCE: 2.5,
+  PULSE_DURATION: 0.15,
+  PULSE_INTENSITY: 0.4,
+};
+
+export const PARTICLE = {
+  DEFAULT_DENSITY: 1.0,
+  COUNT_PER_TRAIL: 40,
+  SIZE: 0.15,
+  LIFETIME: 2.0,
+  FADE_SPEED: 1.0,
+  SPREAD: 0.2,
+};
+
+export const CAMERA = {
+  INITIAL_POSITION: new THREE.Vector3(0, 30, 55),
+  LOOK_AT: new THREE.Vector3(0, 0, 0),
+  FOV: 60,
+  NEAR: 0.1,
+  FAR: 500,
+  ROTATION_SPEED: 0.003,
+  ZOOM_SPEED: 2,
+  MIN_DISTANCE: 15,
+  MAX_DISTANCE: 120,
+};
