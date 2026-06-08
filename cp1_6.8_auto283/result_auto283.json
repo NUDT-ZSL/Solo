@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T00:56:49.110Z",
+  "task_name": "auto283",
+  "task_type": "0-1代码生成",
+  "business_domain": "Web前端",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「流光印相」的交互式动态壁纸生成器，用户可以选择不同的基础图案（如万花筒、波纹、烟雾），系统会实时生成对应的动态壁纸，壁纸会随时间缓慢变化颜色和运动轨迹，用户还可以调整配色、运动速度和粒子密度。整体界面采用深色毛玻璃风格：纯黑到深灰渐变背景，控制面板是半透明毛玻璃圆角面板，带有发光边框和柔和阴影，按钮悬停时有光晕扩散效果，壁纸切换时有平滑的过渡动画。响应式适配桌面和移动端，交互反馈流畅，帧率保持60fps。 用TypeScript和React来实现，Vite构建。文件结构大概这样：src/main.tsx（入口，挂载React应用）、src/App.tsx（主组件，管理壁纸状态、图案切换和参数控制）、src/components/ControlPanel.tsx（控制面板组件，包含配色选择、速度滑块、密度滑块和图案切换按钮）、src/components/WallpaperCanvas.tsx（壁纸画布组件，负责用Canvas绘制动态图案粒子动画）。对了，顺便把package.json、tsconfig.json和vite.config.js也带上，这样我直接npm install && npm run dev就能跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:842ef5d5c9f4311e3e59d5c60e8904e6_6a2612d1879129aaaf011e63.6a261341879129aaaf011e9b.6a26134132be0600f66803d5:Trae CN.T(2026/6/8 08:56:33)",
+    "user_id": "2402906841289811",
+    "trace_id": "842ef5d5c9f4311e3e59d5c60e8904e6",
+    "session_id": "6a2612d1879129aaaf011e63",
+    "task_id": "6a261341879129aaaf011e9b",
+    "message_id": "6a26134132be0600f66803d5",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 08:56:33",
+    "format": "full"
+  },
+  "trace": "null"
+}
