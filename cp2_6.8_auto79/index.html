@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>蒸汽朋克工厂流水线模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      padding: 10px;
+      gap: 10px;
+    }
+
+    .game-container {
+      display: flex;
+      flex: 1;
+      gap: 10px;
+      min-height: 0;
+    }
+
+    .canvas-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      border: 2px solid #B87333;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #2a2a3a 0%, #1e1e2e 100%);
+      overflow: hidden;
+      box-shadow: 
+        0 0 20px rgba(184, 115, 51, 0.3),
+        inset 0 0 30px rgba(0, 0, 0, 0.5);
+    }
+
+    #gameCanvas {
+      border-radius: 8px;
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    .sidebar {
+      width: 200px;
+      background: linear-gradient(180deg, #4A3728 0%, #3a2820 100%);
+      border-radius: 8px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border: 1px solid #B87333;
+      overflow-y: auto;
+      box-shadow: 
+        0 0 15px rgba(184, 115, 51, 0.2),
+        inset 0 0 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .sidebar-title {
+      color: #D4AF37;
+      font-size: 16px;
+      font-weight: bold;
+      text-align: center;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #B87333;
+      text-shadow: 0 0 5px rgba(212, 175, 55, 0.5);
+      letter-spacing: 2px;
+    }
+
+    .module-item {
+      background: linear-gradient(145deg, #5C4033 0%, #4A3728 100%);
+      border: 1px solid #6a5040;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: grab;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .module-item:hover {
+      border-color: #D4AF37;
+      transform: scale(1.1);
+      box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+    }
+
+    .module-item:active {
+      cursor: grabbing;
+    }
+
+    .module-icon {
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .module-name {
+      color: #D4AF37;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .control-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .btn {
+      background: linear-gradient(145deg, #5C4033 0%, #4A3728 100%);
+      color: #D4AF37;
+      border: 1px solid #B87333;
+      border-radius: 6px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: linear-gradient(145deg, #6C5043 0%, #5A4738 100%);
+      box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+    }
+
+    .stats-panel {
+      height: 90px;
+      background: linear-gradient(180deg, #1E2A38 0%, #2C3E50 100%);
+      border: 2px solid #D4AF37;
+      border-radius: 8px;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      gap: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 
+        0 0 15px rgba(212, 175, 55, 0.3),
+        inset 0 0 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-label {
+      color: #808080;
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+
+    .stat-value {
+      color: #D4AF37;
+      font-size: 20px;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(212, 175, 55, 0.5);
+    }
+
+    .edit-menu {
+      position: absolute;
+      background: rgba(26, 26, 26, 0.95);
+      border: 1px solid #B87333;
+      border-radius: 12px;
+      padding: 15px;
+      z-index: 100;
+      min-width: 200px;
+      display: none;
+      backdrop-filter: blur(5px);
+      box-shadow: 0 0 20px rgba(184, 115, 51, 0.4);
+    }
+
+    .edit-menu-title {
+      color: #D4AF37;
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      text-align: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #B87333;
+    }
+
+    .edit-menu-section {
+      margin-bottom: 12px;
+    }
+
+    .edit-menu-label {
+      color: #808080;
+      font-size: 11px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .direction-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 36px);
+      grid-template-rows: repeat(3, 36px);
+      gap: 2px;
+      justify-content: center;
+    }
+
+    .dir-btn {
+      background: linear-gradient(145deg, #5C4033 0%, #4A3728 100%);
+      border: 1px solid #B87333;
+      color: #D4AF37;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .dir-btn:hover {
+      background: linear-gradient(145deg, #6C5043 0%, #5A4738 100%);
+    }
+
+    .dir-btn.active {
+      background: #D4AF37;
+      color: #1A1A1A;
+      box-shadow: 0 0 8px rgba(212, 175, 55, 0.6);
+    }
+
+    .dir-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #D4AF37;
+    }
+
+    .slider-value {
+      color: #D4AF37;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .edit-menu-close {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: #D4AF37;
+      font-size: 16px;
+      cursor: pointer;
+      opacity: 0.7;
+    }
+
+    .edit-menu-close:hover {
+      opacity: 1;
+    }
+
+    @media (max-width: 800px) {
+      .game-container {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        overflow-x: auto;
+        height: auto;
+        padding: 10px;
+      }
+
+      .sidebar-title {
+        display: none;
+      }
+
+      .module-item {
+        min-width: 80px;
+        flex-shrink: 0;
+      }
+
+      .control-buttons {
+        flex-direction: row;
+        margin-top: 0;
+      }
+
+      .stats-panel {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 10px;
+        gap: 10px;
+      }
+
+      .stat-value {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="game-container">
+      <div class="canvas-wrapper">
+        <canvas id="gameCanvas"></canvas>
+        <div id="editMenu" class="edit-menu">
+          <button class="edit-menu-close" id="editMenuClose">×</button>
+          <div class="edit-menu-title" id="editMenuTitle">模块设置</div>
+          <div id="editMenuContent"></div>
+        </div>
+      </div>
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-title">⚙ 工厂模块</div>
+        <div id="moduleList"></div>
+        <div class="control-buttons">
+          <button class="btn" id="saveBtn">💾 保存布局</button>
+          <button class="btn" id="loadBtn">📂 加载布局</button>
+          <button class="btn" id="clearBtn">🗑 清空网格</button>
+        </div>
+      </aside>
+    </div>
+    <div class="stats-panel">
+      <div class="stat-item">
+        <span class="stat-label">总物品数</span>
+        <span class="stat-value" id="statTotal">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">在制品</span>
+        <span class="stat-value" id="statInProgress">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">成品数量</span>
+        <span class="stat-value" id="statFinished">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">产出率/分钟</span>
+        <span class="stat-value" id="statRate">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">平均处理时间</span>
+        <span class="stat-value" id="statAvgTime">0s</span>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
