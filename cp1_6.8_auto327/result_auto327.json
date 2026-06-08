@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T03:20:27.603Z",
+  "task_name": "auto327",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「蚀月虫潮」的2D RTS微操游戏，玩家控制一只拥有虫群召唤能力的远古巨虫，在月球表面与敌对虫巢争夺资源并扩张领土。每局开始后，玩家通过点击地图上的“菌毯”节点来部署工兵虫采集月岩能量，累积到一定量后可以召唤三种兵虫：刺虫（远程攻击）、盾虫（近战肉盾）和疫虫（范围减速），并指定它们移动或攻击目标。敌方虫巢会定时派出巡逻队，并在地图中央的“月核”出现时触发大型攻防战。玩家需要实时微操兵虫编队，规避敌方虫群的AOE技能并利用高地地形差。游戏以摧毁敌方母巢或占领月核持续60秒为胜利条件。整体视觉走哥特式科幻手绘风：深紫到墨黑渐变背景，月球表面布满坑洞和脉动菌毯（颜色从暗红渐变到荧光紫），虫族单位用像素风线条绘制但带发光描边，攻击时有粒子溅射特效，界面UI用暗金边框和毛玻璃半透明面板。控制面板在屏幕底部，包含能量条（弧形）、兵种快捷召唤栏（带冷却CD数字）和当前选中单位的血条/技能图标；右侧小地图用低多边形显示战场势力和菌毯扩散动画。所有交互反馈都带缓动动画（比如单位选中时脚下出现脉冲光圈，指令下达路径有虚线追踪），帧率保持60fps。用TypeScript和Phaser 3来实现，Vite构建。文件结构大概这样：src/main.ts（Phaser游戏配置入口）、src/BootScene.ts（加载所有资源）、src/GameScene.ts（主场景，管理地图、单位、交互和AI逻辑）、src/units/Player.ts（玩家控制的巨虫，处理召唤和编队）、src/units/EnemyAI.ts（敌对虫巢AI和兵种行为）、src/ui/HUD.ts（控制面板和UI组件）。对了，顺便把package.json、tsconfig.json和vite.config.ts也带上，这样直接npm install && npm run dev就能跑起来。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:30878a438ee9ecc009e0481b297eff71_6a2633f0d463d36ec9c57c08.6a2634ebd463d36ec9c57cf9.6a2634eb9a99819c06e5bdb4:Trae CN.T(2026/6/8 11:20:11)",
+    "user_id": "2402906841289811",
+    "trace_id": "30878a438ee9ecc009e0481b297eff71",
+    "session_id": "6a2633f0d463d36ec9c57c08",
+    "task_id": "6a2634ebd463d36ec9c57cf9",
+    "message_id": "6a2634eb9a99819c06e5bdb4",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 11:20:11",
+    "format": "full"
+  },
+  "trace": "null"
+}
