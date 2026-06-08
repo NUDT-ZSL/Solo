@@ -1,0 +1,6 @@
+{
+    "任务类型": "0-1代码生成",
+    "业务领域": "全栈web应用",
+    "修改范围": "模块内多文件",
+    "提示词内容": "我想开发一个叫「灵感便签」的在线创意收集与可视化平台。用户可以快速记录零碎的灵感（支持文字、标签和优先级），系统会根据标签和优先级自动生成一个动态的「灵感星图」——每个便签变成一颗发光星点，星点大小代表优先级，颜色按标签分组（技术-蓝、设计-紫、生活-绿、其他-橙），星点会缓慢旋转并相互连接形成网状结构，鼠标悬停时显示便签内容，点击进入详情页。首页展示所有便签的瀑布流卡片（毛玻璃质感，带标签色条和优先级星标），卡片有微上浮和阴影动效，搜索框支持按标签和关键词过滤。整体界面采用深空极简风：深蓝灰渐变背景，毛玻璃卡片和面板，柔和的圆角，细微的发光边缘，背景有缓慢飘浮的细小星点，页面切换有缓动淡入动画，响应式适配桌面和平板，帧率保持60fps，交互反馈流畅。用TypeScript和React做前端，Node.js+Express做后端，前后端分离。文件结构大概这样：\n- server/src/index.ts：Express服务入口，定义REST API（获取、添加、更新、删除便签列表）\n- server/src/data.ts：存放便签的mock数据（用数组模拟，无需数据库）\n- client/src/main.tsx：React入口，挂载App组件\n- client/src/components/StarryMap.tsx：使用Canvas渲染动态星图可视化\n- client/src/App.tsx：主布局，包含导航、搜索和路由\n另外根目录需要package.json（含前后端依赖和启动脚本，比如同时启动前后端的concurrently）、client/vite.config.ts（配置代理到后端）、tsconfig.json（前端TypeScript配置）、一个入口HTML（放在client/index.html）。这样我npm install && npm run dev就能直接跑起来。"
+}
