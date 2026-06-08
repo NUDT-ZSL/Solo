@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>弹幕编辑器 · 粒子碰撞模拟器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #0D0D1A;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #FFFFFF;
+      user-select: none;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      gap: 12px;
+    }
+    .toolbar {
+      width: 1100px;
+      height: 80px;
+      background: #2A2A2E;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+      box-shadow: 0 0 20px rgba(85, 85, 170, 0.15);
+      border: 1px solid rgba(85, 85, 170, 0.3);
+    }
+    .toolbar-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #4FC3F7;
+      letter-spacing: 1px;
+      margin-right: 12px;
+      text-shadow: 0 0 10px rgba(79, 195, 247, 0.4);
+    }
+    .emitter-btn {
+      height: 44px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(79, 195, 247, 0.12);
+      color: #FFFFFF;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease-out;
+      border: 1px solid rgba(79, 195, 247, 0.35);
+      font-weight: 500;
+    }
+    .emitter-btn:hover {
+      transform: scale(1.05);
+      background: rgba(79, 195, 247, 0.25);
+      border-color: rgba(79, 195, 247, 0.7);
+      box-shadow: 0 0 15px rgba(79, 195, 247, 0.35);
+    }
+    .emitter-btn:active { transform: scale(0.98); }
+    .main-area {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .canvas-wrapper {
+      position: relative;
+      width: 1100px;
+      height: 600px;
+    }
+    #gameCanvas {
+      display: block;
+      width: 1100px;
+      height: 600px;
+      background: #1A1A2E;
+      border-radius: 8px;
+      box-shadow: inset 0 0 0 2px #5555AA, 0 0 30px rgba(85, 85, 170, 0.25);
+    }
+    .bullet-counter {
+      position: absolute;
+      top: 12px;
+      right: 16px;
+      font-family: monospace;
+      font-size: 14px;
+      color: #00FF88;
+      text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+      background: rgba(30, 30, 46, 0.7);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 255, 136, 0.25);
+    }
+    .side-panel {
+      width: 220px;
+      min-height: 600px;
+      background: rgba(30, 30, 46, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(85, 85, 170, 0.3);
+      box-shadow: 0 0 25px rgba(85, 85, 170, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .panel-label {
+      font-size: 13px;
+      color: #BBBBBB;
+      font-family: sans-serif;
+    }
+    .panel-value {
+      font-family: monospace;
+      font-size: 14px;
+      color: #00FF88;
+      text-shadow: 0 0 6px rgba(0, 255, 136, 0.5);
+    }
+    .fps-value { font-size: 20px; font-weight: bold; }
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(85, 85, 170, 0.5), transparent);
+      margin: 4px 0;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #4FC3F7;
+      margin-bottom: 4px;
+      text-shadow: 0 0 6px rgba(79, 195, 247, 0.3);
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .control-label {
+      font-size: 12px;
+      color: #BBBBBB;
+      min-width: 60px;
+    }
+    .control-value {
+      font-size: 11px;
+      color: #FFD700;
+      font-family: monospace;
+      min-width: 36px;
+      text-align: right;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(85, 85, 170, 0.4);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #4FC3F7;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(79, 195, 247, 0.7);
+      transition: transform 0.2s ease-out;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    input[type="color"] {
+      width: 100%;
+      height: 30px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch {
+      border: 1px solid rgba(85, 85, 170, 0.5);
+      border-radius: 6px;
+    }
+    select {
+      width: 100%;
+      height: 30px;
+      background: rgba(79, 195, 247, 0.1);
+      color: #FFFFFF;
+      border: 1px solid rgba(79, 195, 247, 0.35);
+      border-radius: 6px;
+      padding: 0 8px;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease-out;
+    }
+    select:hover {
+      border-color: rgba(79, 195, 247, 0.7);
+      box-shadow: 0 0 8px rgba(79, 195, 247, 0.25);
+    }
+    select option { background: #1E1E2E; color: #FFFFFF; }
+    .bottom-bar {
+      width: 1100px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px;
+    }
+    .bottom-buttons { display: flex; gap: 12px; }
+    .action-btn {
+      height: 36px;
+      padding: 0 20px;
+      border: none;
+      border-radius: 6px;
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease-out;
+    }
+    .action-btn:hover { transform: scale(1.05); }
+    .action-btn.clear {
+      background: #E74C3C;
+      box-shadow: 0 0 12px rgba(231, 76, 60, 0.4);
+    }
+    .action-btn.clear:hover { box-shadow: 0 0 20px rgba(231, 76, 60, 0.65); }
+    .action-btn.clear.shake { animation: shake 0.1s ease-in-out; }
+    .action-btn.reset {
+      background: #3498DB;
+      box-shadow: 0 0 12px rgba(52, 152, 219, 0.4);
+    }
+    .action-btn.reset:hover { box-shadow: 0 0 20px rgba(52, 152, 219, 0.65); }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-3px); }
+      75% { transform: translateX(3px); }
+    }
+    .scene-summary {
+      font-size: 12px;
+      color: #FFFFFF;
+      font-family: monospace;
+      opacity: 0.85;
+    }
+    .reset-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-out;
+      z-index: 9999;
+    }
+    .reset-overlay.active { opacity: 1; }
+    .hint {
+      font-size: 11px;
+      color: #888888;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    @media (max-width: 1400px) {
+      .main-area {
+        flex-direction: column;
+        align-items: center;
+      }
+      .side-panel {
+        width: 1100px;
+        min-height: 120px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .divider { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="toolbar">
+      <div class="toolbar-title">⚡ 弹幕编辑器</div>
+      <button class="emitter-btn" data-mode="linear">直线发射器</button>
+      <button class="emitter-btn" data-mode="sine">正弦波发射器</button>
+      <button class="emitter-btn" data-mode="spiral">螺旋线发射器</button>
+      <button class="emitter-btn" data-mode="mixed">混合模式发射器</button>
+    </div>
+    <div class="main-area">
+      <div class="canvas-wrapper">
+        <canvas id="gameCanvas" width="1100" height="600"></canvas>
+        <div class="bullet-counter" id="bulletCounter">子弹总数：0</div>
+      </div>
+      <div class="side-panel" id="sidePanel">
+        <div class="panel-section">
+          <div class="panel-label">FPS</div>
+          <div class="panel-value fps-value" id="fpsDisplay">60</div>
+        </div>
+        <div class="divider"></div>
+        <div class="panel-section" id="emitterControls" style="display:none;">
+          <div class="section-title">发射器参数</div>
+          <div class="control-group">
+            <div class="control-row">
+              <span class="control-label">子弹颜色</span>
+            </div>
+            <input type="color" id="bulletColor" value="#FF4444" />
+          </div>
+          <div class="control-group">
+            <div class="control-row">
+              <span class="control-label">发射频率</span>
+              <span class="control-value" id="freqValue">0.5s</span>
+            </div>
+            <input type="range" id="freqSlider" min="0.1" max="2" step="0.1" value="0.5" />
+          </div>
+          <div class="control-group">
+            <div class="control-row">
+              <span class="control-label">子弹速度</span>
+              <span class="control-value" id="speedValue">5</span>
+            </div>
+            <input type="range" id="speedSlider" min="1" max="10" step="1" value="5" />
+          </div>
+          <div class="control-group">
+            <div class="control-row">
+              <span class="control-label">轨迹模式</span>
+            </div>
+            <select id="modeSelect">
+              <option value="linear">直线</option>
+              <option value="sine">正弦波</option>
+              <option value="spiral">螺旋线</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-section" id="noSelection">
+          <div class="section-title">操作提示</div>
+          <div class="hint">
+            · 点击上方按钮创建发射器<br/>
+            · 拖拽发射器调整位置<br/>
+            · 点击发射器编辑参数<br/>
+            · WASD 移动飞船<br/>
+            · 空格键 发射子弹
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <div class="bottom-buttons">
+        <button class="action-btn clear" id="clearBtn">清空所有发射器</button>
+        <button class="action-btn reset" id="resetBtn">重置场景</button>
+      </div>
+      <div class="scene-summary" id="sceneSummary">发射器：0 | 敌人子弹：0 | 玩家子弹：0</div>
+    </div>
+  </div>
+  <div class="reset-overlay" id="resetOverlay"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
