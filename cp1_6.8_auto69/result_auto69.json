@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T18:01:34.834Z",
+  "task_name": "auto69",
+  "task_type": "0-1代码生成",
+  "business_domain": "游戏开发",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想开发一个叫「热浪突围」的2D俯视角赛车游戏，玩家操控一辆改装赛车在熔岩火山赛道上躲避火山喷发的滚石和裂缝，同时与其他AI赛车竞速，使用氮气加速和护盾道具来获得优势。用TypeScript和React来实现，游戏核心逻辑放在独立TS模块中，React负责UI和状态管理。文件结构大概这样：src/下有GameEngine.ts（主循环、碰撞检测、赛道生成和胜负判定）、VehicleController.ts（管理玩家和AI赛车的物理运动、漂移和加速）、HazardManager.ts（管理熔岩、滚石和裂缝的生成与动画）、UILayer.tsx（React组件，显示速度表、道具栏、小地图和排名）。另外根目录放package.json（依赖包括react、typescript、vite），tsconfig.json，vite.config.js，和一个index.html作为入口。配置好直接npm install && npm run dev就能跑。需求方面：1. 赛道由程序化生成的弯曲道路组成，两侧有熔岩流动的动画，道路偶尔断裂形成裂缝。2. 玩家用键盘WASD控制赛车方向，空格键放道具（氮气加速或护盾），按住Shift漂移过弯。3. AI赛车有不同风格：进攻型会靠近玩家挤压，防御型会提前放护盾。4. 界面顶部显示速度表（弧形带指针动画）和道具栏（圆形图标，带冷却旋转效果），底部有迷你地图显示所有赛车位置和赛道形状。5. 整体视觉风格为暗色调熔岩主题：赛道为焦黑色，边缘有橙红色熔岩发光，赛车颜色随机亮色带彩色尾迹，滚石有燃烧粒子效果。6. 交互反馈流畅：碰撞时赛车闪烁红色并短暂减速，氮气加速时屏幕边缘出现动态模糊特效，漂移时轮胎产生烟雾粒子，帧率保持60fps。7. 每局结束弹出结果面板，显示排名、最快圈速和收集道具数，并提供重新开始按钮。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:527b65d9a002f4ed6890e7e1e6cef2ea_6a25b1090ae7e4f1dc211631.6a25b1ee0ae7e4f1dc2116eb.6a25b1ee5a63782d44f82625:Trae CN.T(2026/6/8 02:01:18)",
+    "user_id": "2402906841289811",
+    "trace_id": "527b65d9a002f4ed6890e7e1e6cef2ea",
+    "session_id": "6a25b1090ae7e4f1dc211631",
+    "task_id": "6a25b1ee0ae7e4f1dc2116eb",
+    "message_id": "6a25b1ee5a63782d44f82625",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/8 02:01:18",
+    "format": "full"
+  },
+  "trace": "null"
+}
