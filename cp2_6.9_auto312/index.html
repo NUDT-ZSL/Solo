@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>流光藤径</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0F2B1A 0%, #1A3D2A 100%);
+      font-family: 'Microsoft YaHei', sans-serif;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    canvas { display: block; }
+    #guide-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 200px;
+      padding: 16px;
+      background: rgba(15, 43, 26, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      color: #B8D4B8;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+    #guide-panel.visible {
+      opacity: 1;
+    }
+    #guide-panel .title {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      color: #D4E8D4;
+    }
+    #guide-panel .item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    #guide-panel .icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    #status-bar {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      color: #B8D4B8;
+      font-size: 14px;
+      font-family: 'Consolas', monospace;
+      pointer-events: none;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    #info-card {
+      position: absolute;
+      width: 150px;
+      height: 80px;
+      background: rgba(15, 43, 26, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 10px;
+      color: #D4E8D4;
+      font-size: 12px;
+      display: none;
+      pointer-events: none;
+      backdrop-filter: blur(6px);
+      z-index: 10;
+    }
+    #info-card .row {
+      margin-bottom: 4px;
+    }
+    #info-card .label {
+      color: #8FBC8F;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="guide-panel">
+      <div class="title">操作指南</div>
+      <div class="item"><span class="icon">🌱</span><span>左键播种</span></div>
+      <div class="item"><span class="icon">🔍</span><span>右键查看</span></div>
+      <div class="item"><span class="icon">🔎</span><span>滚轮缩放</span></div>
+      <div class="item"><span class="icon">⚡</span><span>空格+滚轮加速</span></div>
+      <div class="item"><span class="icon">🍎</span><span>点击果实采摘</span></div>
+    </div>
+    <div id="status-bar">x1.0 - 00:00</div>
+    <div id="info-card">
+      <div class="row"><span class="label">年龄:</span><span id="info-age">0s</span></div>
+      <div class="row"><span class="label">层级:</span><span id="info-level">0</span></div>
+      <div class="row"><span class="label">阶段:</span><span id="info-stage">萌芽</span></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
