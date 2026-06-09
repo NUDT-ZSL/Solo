@@ -1,31 +1,127 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>磁流沙画</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      html, body {
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background-color: #1A0F08;
-      }
-      @media (max-width: 768px) {
-        html, body {
-          overflow-y: auto;
-          overflow-x: hidden;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>晶体生长·矿脉迷宫</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0B0B2B 0%, #1A1A3E 100%);
+      font-family: monospace;
+    }
+
+    #scene-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #ui-hints {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 16px 20px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      line-height: 1.8;
+      z-index: 10;
+    }
+
+    #ui-hints .title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: rgba(255, 255, 255, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      padding-bottom: 6px;
+    }
+
+    #ui-status {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 12px 18px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 10;
+      min-width: 160px;
+    }
+
+    #ui-status .status-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    #ui-status .status-value {
+      color: rgba(255, 255, 255, 0.95);
+      font-weight: bold;
+    }
+
+    #progress-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    #progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4A90D9, #9B59B6, #E74C3C);
+      border-radius: 3px;
+      transition: width 0.1s ease;
+      width: 0%;
+    }
+  </style>
+</head>
+<body>
+  <div id="scene-container">
+    <div id="ui-hints">
+      <div class="title">◈ 操作指南</div>
+      <div>🖱️ 左键拖拽：旋转视角</div>
+      <div>🔄 滚轮：缩放场景</div>
+      <div>💥 点击分支：引爆结晶</div>
+      <div>⏱️ 生长周期：30秒</div>
+    </div>
+    <div id="ui-status">
+      <div class="status-item">
+        <span>分支数量</span>
+        <span class="status-value" id="branch-count">0</span>
+      </div>
+      <div class="status-item">
+        <span>生长进度</span>
+        <span class="status-value" id="growth-progress">0%</span>
+      </div>
+      <div class="status-item">
+        <span>粒子数量</span>
+        <span class="status-value" id="particle-count">0</span>
+      </div>
+      <div id="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
 </html>
