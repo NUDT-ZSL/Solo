@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-06-08T16:14:20.035Z",
+  "task_name": "auto9",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我需要一个能够在线进行创意写作流程管理的web应用，主要解决写作者在长篇小说或项目写作中缺乏可视化进度追踪和灵感碎片整理的问题。\n\n它应当具备以下能力：\n1) 用户可以在左侧面板创建一个项目（包含项目名称、目标和预计字数），创建后显示在项目列表中，点击项目进入详情页，详情页顶部显示项目名称和总体进度条（已写字数/目标字数）。\n2) 在项目详情页中，用户能添加多个章节，每个章节可以输入标题和正文，正文支持富文本编辑（加粗、斜体、列表），编辑器右侧实时显示该章节字数统计，保存后更新项目总字数。\n3) 右侧有一个灵感碎片板，用户双击空白处可以添加一条灵感卡片（输入短文本并选择颜色标签，如剧情、人物、场景），卡片可以拖拽移动位置、双击编辑文字，长按删除（删除时有缩小淡出动画）。\n4) 主界面下方展示一个写作日历视图，每篇已完成的章节以圆点标记在对应日期上，鼠标悬停显示章节标题，点击跳转到该章节。\n5) 所有项目数据存储在浏览器的localStorage中，刷新页面后数据不丢失；项目列表支持搜索过滤（按名称匹配），搜索框有实时输入防抖300ms。\n\n界面方面要求采用卡片式布局，主色调是淡米白（#F5F0E8）搭配深灰（#2D2D2D）文字和温暖的琥珀色（#D4A373）作为强调色。项目列表以两列网格排列，每个项目卡片有遮罩渐变封面、圆角12px和轻微阴影（box-shadow: 0 2px 8px rgba(0,0,0,0.06)），悬停时阴影加深并上移3px过渡0.3秒。灵感碎片板采用瀑布流排列，卡片边缘有对应颜色的3px左边框。章节编辑器的字数统计用淡绿色高亮数字。左侧导航栏折叠时有300ms缓动动画。响应式适配：桌面端三栏布局，平板（小于768px）转为上下结构，移动端单栏全宽。\n\n性能上要求：章节保存和字数更新响应时间低于100ms（本地存储），灵感卡片拖拽帧率不低于30fps。\n\n实现采用TypeScript、React和Vite，按以下文件组织代码：\n - package.json（含依赖：react、react-dom、typescript、vite、@vitejs/plugin-react，启动脚本：npm run dev）\n - vite.config.js（配置React插件和基础构建）\n - tsconfig.json（严格模式，JSX保留，ESNext模块）\n - index.html（入口页面，挂载点id=\"root\"）\n - src/main.tsx（React入口，渲染App组件）\n - src/App.tsx（主应用组件，管理路由和全局状态，使用React Context分发项目和灵感数据）\n - src/components/ProjectList.tsx（左侧项目列表和搜索过滤）\n - src/components/ProjectDetail.tsx（项目详情页，包含章节编辑器和灵感碎片板）\n - src/components/CalendarView.tsx（底部写作日历视图）\n - src/utils/storage.ts（localStorage读写和防抖工具函数）\n\n运行方式：npm install && npm run dev。",
+  "session_id": null,
+  "trace": "null"
+}
