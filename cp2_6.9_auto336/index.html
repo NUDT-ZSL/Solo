@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>像素盆景</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #5C3A21 0%, #8B5E3C 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(
+        90deg,
+        transparent 0px,
+        transparent 40px,
+        rgba(92, 58, 33, 0.15) 40px,
+        rgba(92, 58, 33, 0.15) 42px
+      );
+      pointer-events: none;
+    }
+
+    #app {
+      position: relative;
+      z-index: 1;
+    }
+
+    #main-canvas {
+      display: block;
+      border-radius: 12px;
+      box-shadow:
+        inset 0 2px 8px rgba(0, 0, 0, 0.3),
+        0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .btn {
+      position: absolute;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.08s ease, filter 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.2);
+      user-select: none;
+    }
+
+    .btn:hover {
+      filter: brightness(1.15);
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    #btn-grow {
+      background: #4CAF50;
+    }
+
+    #btn-grow:hover {
+      background: #66BB6A;
+    }
+
+    #btn-reset {
+      background: #795548;
+    }
+
+    #btn-screenshot {
+      background: #5C6BC0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="main-canvas" width="560" height="720"></canvas>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
