@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>气泡诗</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0a0a0a;
+      font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #bg-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 150vmax;
+      height: 150vmax;
+      background: radial-gradient(circle, rgba(10, 20, 60, 0.6) 0%, rgba(5, 5, 15, 0.3) 30%, rgba(10, 10, 10, 0) 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    canvas {
+      display: block;
+      position: relative;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="bg-glow"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
