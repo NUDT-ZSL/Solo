@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-09T00:36:52.051Z",
+  "task_name": "auto263",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "开发一个名为「回声拼贴」的全栈Web应用，实现用户从预设的短音频片段库中挑选并拼接出属于自己的声音混搭作品，混搭完成后可生成一个动态的波形可视化页面并分享给他人。使用TypeScript和React实现前端，后端用Express提供REST API和音频片段数据管理。文件结构如下：\n - package.json（包含依赖：react、react-dom、express、axios、uuid、cors、body-parser、vite、@vitejs/plugin-react、typescript、@types/react、@types/react-dom、@types/express、@types/uuid、@types/cors、@types/body-parser，启动脚本：npm run dev，后端启动建议写在scripts中）\n - vite.config.js（React插件配置）\n - tsconfig.json（严格模式，jsx设为react-jsx）\n - index.html（入口页面，深色渐变背景，加载动画提示）\n - server.js（Express服务，提供音频片段列表API、保存/获取拼贴配置API，使用内存存储）\n - src/main.tsx（React应用入口，渲染App组件，挂载到#root）\n - src/App.tsx（路由和状态管理，包含拼贴编辑器页面和查看页面）\n - src/SoundClip.ts（类型定义：音频片段元数据包括id、name、duration、waveformData）\n\n具体需求：\n1. 音频片段浏览器：页面左侧展示一个可滚动的网格，显示12个预设音频片段卡片（每个卡片包含名称、时长、以及一段预生成的彩色波形缩略图）。点击卡片可试听该片段（使用AudioContext播放预先编码的短音频数据，用振荡器模拟不同音调），试听时卡片边框发光脉动。\n2. 拼贴编辑器：页面中央是一个时间轴轨道，用户可从左侧拖拽音频片段到轨道上任意位置，释放后片段以彩色矩形块形式固定在该轨道上。多个片段可以重叠放置（重叠部分音量叠加），用户可拖动片段左右移动或拖拽边缘调整时长（压缩或拉伸，通过改变播放速率模拟），调整时片段颜色渐变过渡。\n3. 实时混音预览：时间轴上方有一个播放控制条（播放/暂停、停止、播放进度条），点击播放后所有轨道上的片段按时间顺序混合输出到AudioContext，播放时轨道上的矩形块会随音量高低上下浮动（浮动幅度基于实时振幅），进度条同步更新。\n4. 可视化生成与分享：用户点击“生成可视化”按钮后，系统将混音配置（片段id、位置、时长调整）保存到后端（POST /api/mixes），返回一个唯一id，并自动跳转到 /view/:id 页面。该页面展示一个全屏的动态波形可视化——使用Canvas绘制，音频播放时波形线条随频率变化颜色（色相从蓝到红渐变），线条有流动光晕效果，同时页面URL可作为分享链接。\n5. 浏览他人作品：首页顶部有一个“探索拼贴”入口，点击后展示其他人保存的混合作品列表（卡片形式，每张显示预览波形缩略图和用户昵称），点击可跳转到对应查看页面。\n\n界面方面：采用深蓝到深紫渐变背景（#0a0a1a 到 #1a0a2a），卡片使用磨砂玻璃效果（背景半透明、模糊、边框发光），高亮色为青色和品红（#00ffff 和 #ff00ff）。卡片悬停时缩放1.05倍并增加亮度，点击和拖拽有弹性缓动动画（0.3秒 ease-out）。时间轴轨道为水平深色条带（带渐变刻度线），响应式布局支持移动端（卡片网格变为单列）。\n\n性能要求：播放和拖拽操作保持60FPS，音频同步延迟不超过50ms。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:ecf163355a6f977bf8aaedcdfc818ff8_6a275eeadd4afea8d4a792ec.6a276012dd4afea8d4a7940d.6a27601160cf4b0f9a03de3f:Trae CN.T(2026/6/9 08:36:34)",
+    "user_id": "2402906841289811",
+    "trace_id": "ecf163355a6f977bf8aaedcdfc818ff8",
+    "session_id": "6a275eeadd4afea8d4a792ec",
+    "task_id": "6a276012dd4afea8d4a7940d",
+    "message_id": "6a27601160cf4b0f9a03de3f",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/9 08:36:34",
+    "format": "full"
+  },
+  "trace": "null"
+}
