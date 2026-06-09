@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>地下熔岩洞穴 - 3D 可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0a0505 0%, #1a0808 50%, #0d0505 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #info-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(20, 5, 5, 0.75);
+      border: 1px solid rgba(255, 120, 50, 0.3);
+      border-radius: 8px;
+      padding: 16px 20px;
+      color: #ffaa77;
+      font-size: 13px;
+      line-height: 1.8;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      pointer-events: none;
+      max-width: 280px;
+    }
+
+    #info-panel h2 {
+      font-size: 15px;
+      color: #ff7733;
+      margin-bottom: 10px;
+      text-shadow: 0 0 10px rgba(255, 100, 50, 0.5);
+    }
+
+    #info-panel .key {
+      display: inline-block;
+      background: rgba(255, 120, 50, 0.15);
+      border: 1px solid rgba(255, 120, 50, 0.4);
+      padding: 1px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      margin: 0 2px;
+    }
+
+    #fps-counter {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(20, 5, 5, 0.75);
+      border: 1px solid rgba(255, 120, 50, 0.3);
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #7fff7f;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      pointer-events: none;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="info-panel">
+      <h2>🌋 地下熔岩洞穴</h2>
+      <div><span class="key">拖拽</span> 旋转视角</div>
+      <div><span class="key">滚轮</span> 缩放距离</div>
+      <div><span class="key">悬停</span> 晶体高亮</div>
+      <div><span class="key">点击</span> 触发能量脉冲</div>
+    </div>
+    <div id="fps-counter">FPS: 60</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
