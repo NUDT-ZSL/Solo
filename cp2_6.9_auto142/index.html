@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>古代剧场声学模拟器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      background: linear-gradient(135deg, #1A1512 0%, #2D221C 100%);
+      color: #D4AF8A;
+    }
+    #app {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    #scene-container {
+      flex: 1;
+      width: 80%;
+      height: 100%;
+      position: relative;
+    }
+    #scene-container canvas { display: block; }
+    #control-panel {
+      width: 250px;
+      height: 100%;
+      background: rgba(30, 25, 20, 0.85);
+      border: 1px solid #4A3728;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      overflow-y: auto;
+    }
+    .panel-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #E8C9A0;
+      border-bottom: 1px solid #4A3728;
+      padding-bottom: 12px;
+      letter-spacing: 1px;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .control-label {
+      font-size: 13px;
+      color: #B89878;
+      letter-spacing: 0.5px;
+    }
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(60, 45, 35, 0.8);
+      border: 2px solid #6B4F35;
+      border-radius: 4px;
+      color: #E8C9A0;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23D4AF8A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+    select:hover {
+      border-color: #8B6F47;
+      background-color: rgba(80, 60, 45, 0.9);
+    }
+    select:focus {
+      outline: none;
+      border-color: #A08060;
+    }
+    .button-group {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #play-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: #8B6F47;
+      color: #F5E6D0;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    #play-btn:hover {
+      filter: brightness(1.2);
+      transform: scale(1.05);
+    }
+    #play-btn:active {
+      transform: scale(0.95);
+    }
+    #play-btn.playing {
+      background: #6B8B47;
+    }
+    .reverb-display {
+      background: rgba(50, 38, 28, 0.6);
+      border: 1px solid #4A3728;
+      border-radius: 6px;
+      padding: 16px;
+      text-align: center;
+    }
+    .reverb-label {
+      font-size: 12px;
+      color: #B89878;
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    #reverb-value {
+      font-size: 42px;
+      font-weight: bold;
+      color: #D4AF8A;
+      line-height: 1;
+      animation: fadeInEase 0.5s ease-out;
+    }
+    .reverb-unit {
+      font-size: 14px;
+      color: #9B7E5E;
+      margin-top: 4px;
+    }
+    @keyframes fadeInEase {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .info-text {
+      font-size: 11px;
+      color: #8B7355;
+      line-height: 1.6;
+      padding: 10px;
+      background: rgba(40, 32, 25, 0.5);
+      border-radius: 4px;
+      border-left: 2px solid #6B4F35;
+    }
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+      }
+      #scene-container {
+        width: 100%;
+        flex: 1;
+      }
+      #control-panel {
+        width: 100%;
+        height: 150px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        gap: 12px;
+        overflow-y: hidden;
+      }
+      .panel-title { display: none; }
+      .control-group { flex: 1; min-width: 120px; }
+      .reverb-display { padding: 8px 12px; }
+      #reverb-value { font-size: 28px; }
+      .info-text { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="scene-container"></div>
+    <aside id="control-panel">
+      <div class="panel-title">剧场声学控制台</div>
+      <div class="control-group">
+        <label class="control-label">历史年代</label>
+        <select id="era-select">
+          <option value="-300">公元前 300 年</option>
+          <option value="100">公元 100 年</option>
+          <option value="500">公元 500 年</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label class="control-label">声学模拟</label>
+        <div class="button-group">
+          <button id="play-btn" title="播放/暂停">▶</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="reverb-display">
+          <div class="reverb-label">混响时间 RT60</div>
+          <div id="reverb-value">--</div>
+          <div class="reverb-unit">秒</div>
+        </div>
+      </div>
+      <div class="info-text">
+        提示：拖动鼠标旋转视角，滚轮缩放。不同年代剧场材质的吸声系数不同，影响声线反射强度。
+      </div>
+    </aside>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
