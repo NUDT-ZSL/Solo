@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 音乐可视化粒子星座</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #0a0a14;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #spectrum-canvas {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 240px;
+      height: 160px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #controls {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: filter 0.2s ease;
+      background: linear-gradient(135deg, #6a11cb, #2575fc);
+    }
+
+    .btn:hover {
+      filter: brightness(1.2);
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .sample-btn {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    #status {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <canvas id="spectrum-canvas" width="240" height="160"></canvas>
+    <div id="status">等待音频...</div>
+    <div id="controls">
+      <input type="file" id="file-input" accept="audio/mp3,audio/wav,audio/*">
+      <button class="btn" id="upload-btn">上传音频</button>
+      <button class="btn sample-btn" id="sample1">示例 1</button>
+      <button class="btn sample-btn" id="sample2">示例 2</button>
+      <button class="btn sample-btn" id="sample3">示例 3</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
