@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>火星拓荒者 - Mars Pioneer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #0a0000;
+      font-family: 'Courier New', Courier, monospace;
+      overflow: hidden;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 5%;
+    }
+    #game {
+      position: relative;
+      box-shadow: 0 0 60px rgba(139, 0, 0, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
