@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Art Generator</title>
+  <link rel="stylesheet" href="src/styles.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header class="top-bar">
+      <div class="left-controls">
+        <div class="pixel-counter" id="pixelCounter">0 像素</div>
+        <button class="btn" id="undoBtn" title="撤销 (Ctrl+Z)">撤销</button>
+        <button class="btn" id="clearBtn" title="清空画布">清空</button>
+      </div>
+      <div class="right-controls">
+        <button class="btn btn-primary" id="exportBtn" title="导出PNG">导出PNG</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <aside class="palette-panel" id="palettePanel">
+        <div class="palette-title">调色板</div>
+        <div class="palette-grid" id="paletteGrid"></div>
+        <div class="history-section">
+          <div class="history-title">按键历史</div>
+          <div class="history-dots" id="historyDots"></div>
+        </div>
+      </aside>
+
+      <section class="canvas-container">
+        <canvas id="mainCanvas" width="800" height="600"></canvas>
+        <div class="canvas-overlay" id="canvasOverlay"></div>
+      </section>
+    </main>
+
+    <footer class="bottom-bar">
+      <div class="brush-control">
+        <label for="brushSize">画笔大小:</label>
+        <input type="range" id="brushSize" min="1" max="4" value="1" />
+        <span id="brushSizeLabel">8x8</span>
+      </div>
+      <div class="hint">按下 A-Z / 0-9 在鼠标位置绘制色块</div>
+    </footer>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
