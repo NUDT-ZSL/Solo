@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>墨韵棋局</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: "SimSun", "宋体", "Songti SC", serif;
+      background: hsl(40, 10%, 95%);
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: none;
+    }
+
+    .toolbar {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: hsla(40, 5%, 98%, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .toolbar button {
+      font-family: inherit;
+      font-size: 15px;
+      padding: 8px 20px;
+      border: none;
+      background: transparent;
+      color: #333;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+      user-select: none;
+    }
+
+    .toolbar button:hover {
+      background: hsla(40, 5%, 98%, 0.9);
+    }
+
+    .toolbar button:active {
+      transform: scale(0.95);
+    }
+
+    .toolbar button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .toolbar button:disabled:hover {
+      background: transparent;
+    }
+
+    .toolbar button:disabled:active {
+      transform: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+    <div class="toolbar" role="toolbar">
+      <button id="btnUndo" type="button" aria-label="撤销">撤销</button>
+      <button id="btnRedo" type="button" aria-label="重做">重做</button>
+      <button id="btnExport" type="button" aria-label="导出">导出</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
