@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T21:13:47.472Z",
+  "task_name": "auto154",
+  "task_type": "0-1代码生成",
+  "business_domain": "3D/交互可视化",
+  "modification_scope": "模块内多文件",
+  "prompt": "我需要一个能够在浏览器中模拟「磁流变体」三维交互可视化的应用，主要解决传统物理模拟缺乏直观的磁场与磁性粒子动态交互体验的问题——用户可以通过鼠标拖拽和滚轮缩放，从任意角度观察一片由数千颗细小磁性粒子组成的悬浮云团，云团会响应一个或多个可拖拽的磁极（N/S极）的位置变化，粒子受到磁场力作用产生聚集、拉丝、旋转或排斥等动态行为，形成类似磁流体在磁场中“刺突”般的有机形态，并且每个粒子的颜色会随着其受到的磁场强度从冷色渐变到暖色。\n\n它应当具备以下能力：\n1) 磁极交互与粒子物理模拟：用户通过鼠标左键拖拽场景中两个磁极（红色N极、蓝色S极）到任意三维位置，磁极之间产生肉眼可见的渐变磁场线（半透明曲线，从N极发出指向S极，每条线由20个点构成，宽度1px，透明度随距离递减），系统使用简化的库仑力模型计算每个粒子所受的合力（F = k  q1  q2 / r^2，k=500，距离衰减系数0.8），粒子加速度累积后更新位置，粒子在运动时受到空气阻力（阻尼系数0.02），当两个粒子距离小于5px时产生排斥力防止重叠（排斥半径3px）。\n2) 粒子颜色随场强变化：每个粒子的颜色根据其当前所受合力的模长动态映射到色相——当模长在0-50时色相从蓝色(240°)渐变到青色(180°)，50-150时从青色渐变到黄色(60°)，150以上时从黄色渐变到红色(0°)，同时粒子透明度随场强从0.6提升到1.0，粒子大小固定为2px圆形。\n3) 粒子聚集与拉丝效果：当两个磁极靠近（距离小于200px）且形成强梯度场时，粒子会自动沿着磁场线方向排列成细丝状（每根丝由5-20个粒子串联，粒子间距不超过2px），并且当用户快速甩动磁极时，粒子丝会发生弹性延伸（丝的最大长度为初始长度2倍，牵拉超过阈值后断裂成独立粒子），断裂后粒子在0.5秒内重新计算会聚到最近的丝线上。\n4) 视觉反馈：磁极被拖拽时周围产生一圈扩散的同心圆波纹（从磁极中心向外扩散，半径从0到30px，透明度从0.6降到0，持续0.3秒），粒子被磁场捕获时产生微弱的闪烁（每帧随机亮度波动±10%），场景背景为深空色（#0a0a20），底部布置一个半透明的网格地面（网格线颜色#1a1a40，透明度0.3）以增强空间纵深感。\n\n界面方面：页面采用全屏Canvas渲染（无滚动条），场景占据100%视口，左上角显示一个紧凑的控制面板（宽度240px，半透明毛玻璃效果，背景rgba(10,10,32,0.7)，边框1px solid #2a2a5a，圆角8px），面板内包含一个下拉选择器预置3组磁极初始位置（\"双极平行\"、\"双极相对\"、\"单极散射\"）、一个滑块调节粒子总数（1000-5000，步长500，默认3000）、一个滑块调节磁场强度系数（0.5-2.0，步长0.1，默认1.0），面板右侧缩小时可点击箭头折叠/展开（展开时面板滑动出现，动画0.3秒ease-out），所有滑块带实时数值显示。页面颜色主题统一采用深色太空风格（主色#0a0a20、辅色#1a1a40、强调色随粒子颜色动态变化），鼠标悬停在磁极上时光标变为抓取指针（grab），拖拽时变为抓握指针（grabbing），所有UI控件带悬停渐变效果（背景色从#2a2a5a过渡到#3a3a7a，前后0.2秒），整体设计响应式，在1920x1080和1440x900下均完美适配，Canvas在窗口缩放时自动重设尺寸并重绘。\n\n性能方面：粒子数量峰值5000时保持帧率不低于45FPS，磁极拖拽响应延迟不超过50ms，粒子物理更新使用requestAnimationFrame循环，每帧最多更新6000个粒子位置（超过时自动降采样），粒子渲染使用PointsMaterial以启用GPU加速。\n\n实现采用TypeScript和React，Three.js进行3D渲染（@react-three/fiber + @react-three/drei），Vite构建。按以下文件组织代码：\n - package.json（含依赖：react、react-dom、typescript、vite、@vitejs/plugin-react、three、@types/three、@react-three/fiber、@react-three/drei，启动脚本：npm run dev，构建脚本：npm run build）\n - vite.config.js（Vite构建配置，设置base: \"./\"，输出目录dist）\n - tsconfig.json（严格模式，target: ES2020，module: ESNext）\n - index.html（入口HTML，包含一个id为root的div，加载script type=\"module\" src=\"/src/main.tsx\"）\n - src/main.tsx（React入口，渲染App组件，挂载到root节点）\n - src/App.tsx（主组件，创建Canvas和Three.js场景，实例化MagneticField和ParticleSystem，管理UI状态与交互逻辑，调用关系：App接收UI状态→传递给MagneticField和ParticleSystem，ParticleSystem每帧从MagneticField获取场强数据更新粒子）\n - src/MagneticField.ts（磁极与磁场计算模块，导出MagneticField类，包含poleA/poleB位置、磁场线生成方法getFieldLines()、场强计算方法getFieldStrength(position: Vector3): number，数据流向：App传递磁极位置变化→MagneticField更新场→ParticleSystem每帧查询场强）\n - src/ParticleSystem.ts（粒子系统模块，导出ParticleSystem类，包含粒子数组、初始化方法init(count: number)、更新方法update(delta: number, field: MagneticField)、渲染方法render(scene: THREE.Scene)，数据流向：App传递粒子总数→ParticleSystem初始化粒子→每帧从MagneticField获取场强数据更新粒子位置和颜色→渲染到场景）\n - src/ControlPanel.tsx（UI控制面板组件，渲染滑块和下拉选择器，导出选择的配置参数，数据流向：用户交互→更新配置→通过回调传递给App）\n\n运行方式：npm install && npm run dev。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:9674609a4bf26ac8106a144d18cf2c8b_6a272ffffa0ce2b536f35da5.6a27307bfa0ce2b536f35e08.6a27307b5e8abfe15bbd3805:Trae CN.T(2026/6/9 05:13:31)",
+    "user_id": "2402906841289811",
+    "trace_id": "9674609a4bf26ac8106a144d18cf2c8b",
+    "session_id": "6a272ffffa0ce2b536f35da5",
+    "task_id": "6a27307bfa0ce2b536f35e08",
+    "message_id": "6a27307b5e8abfe15bbd3805",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/9 05:13:31",
+    "format": "full"
+  },
+  "trace": "null"
+}
