@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>植物根茎3D生长可视化系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            color: #ffffff;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: background 0.3s ease;
+        }
+
+        .glass-panel:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #top-bar {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 24px;
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            font-size: 13px;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        #top-bar .hint {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.9;
+        }
+
+        #top-bar .hint .key {
+            padding: 2px 8px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        #info-panel {
+            position: fixed;
+            right: 16px;
+            bottom: 16px;
+            padding: 16px 20px;
+            min-width: 240px;
+            z-index: 100;
+            font-size: 13px;
+        }
+
+        #info-panel h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #87CEEB;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 6px;
+        }
+
+        #info-panel .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+        }
+
+        #info-panel .info-label {
+            opacity: 0.7;
+        }
+
+        #info-panel .info-value {
+            font-weight: 600;
+            color: #00FF00;
+        }
+
+        #info-panel .no-selection {
+            opacity: 0.5;
+            font-style: italic;
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        #control-panel {
+            position: fixed;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 16px 20px;
+            width: 260px;
+            z-index: 100;
+        }
+
+        #control-panel h3 {
+            font-size: 14px;
+            margin-bottom: 14px;
+            color: #87CEEB;
+        }
+
+        .slider-group {
+            margin: 14px 0;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .slider-label .value {
+            color: #FFFF00;
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #87CEEB;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(135, 206, 235, 0.6);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #87CEEB;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 8px rgba(135, 206, 235, 0.6);
+        }
+
+        #status-bar {
+            position: fixed;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 20px;
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            z-index: 100;
+        }
+
+        #status-bar .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #status-bar .status-item .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00FF00;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        #drawer-toggle {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px;
+            text-align: center;
+            z-index: 101;
+            cursor: pointer;
+            border-radius: 0;
+        }
+
+        @media (max-width: 768px) {
+            #top-bar {
+                font-size: 11px;
+                padding: 8px 16px;
+                gap: 12px;
+                top: 8px;
+            }
+
+            #top-bar .hint {
+                display: none;
+            }
+
+            #top-bar .hint:first-child {
+                display: flex;
+            }
+
+            #control-panel {
+                display: none;
+                position: fixed;
+                left: 0;
+                right: 0;
+                top: auto;
+                bottom: 0;
+                transform: none;
+                width: 100%;
+                border-radius: 16px 16px 0 0;
+                max-height: 60vh;
+                overflow-y: auto;
+            }
+
+            #control-panel.open {
+                display: block;
+            }
+
+            #info-panel {
+                right: 8px;
+                bottom: 60px;
+                min-width: 180px;
+                font-size: 11px;
+                padding: 10px 14px;
+            }
+
+            #status-bar {
+                display: none;
+            }
+
+            #drawer-toggle {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="top-bar" class="glass-panel">
+        <div class="hint"><span class="key">拖拽</span>旋转视角</div>
+        <div class="hint"><span class="key">滚轮</span>缩放</div>
+        <div class="hint"><span class="key">点击</span>选中根节点</div>
+        <div class="hint"><span class="key">拖动</span>移动障碍物</div>
+    </div>
+
+    <div id="control-panel" class="glass-panel">
+        <h3>控制面板</h3>
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>营养切片透明度</span>
+                <span class="value" id="slice-opacity-value">1.0</span>
+            </div>
+            <input type="range" id="slice-opacity" min="0.1" max="2.0" step="0.1" value="1.0">
+        </div>
+    </div>
+
+    <div id="info-panel" class="glass-panel">
+        <h3>节点信息</h3>
+        <div id="node-info-content">
+            <div class="no-selection">点击节点查看详情</div>
+        </div>
+    </div>
+
+    <div id="status-bar" class="glass-panel">
+        <div class="status-item"><div class="dot"></div><span>生长中</span></div>
+        <div class="status-item"><span id="root-count">根数量: 0</span></div>
+        <div class="status-item"><span id="fps-counter">FPS: 0</span></div>
+        <div class="status-item"><span id="elapsed-time">时间: 0s</span></div>
+    </div>
+
+    <div id="drawer-toggle" class="glass-panel">
+        ▲ 展开控制面板
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
