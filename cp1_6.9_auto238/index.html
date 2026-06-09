@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星芒织机</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0a0a2e 0%, #1a1a3e 100%);
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    #info {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: rgba(200, 200, 255, 0.7);
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 13px;
+      line-height: 1.8;
+      pointer-events: none;
+      text-shadow: 0 0 10px rgba(100, 100, 255, 0.5);
+    }
+    #info strong {
+      color: rgba(255, 220, 180, 0.9);
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="info">
+    <strong>星芒织机</strong><br/>
+    点击空白处：生成星芒节点<br/>
+    点击节点：触发局部脉冲<br/>
+    鼠标拖拽：旋转视角<br/>
+    Shift + 拖拽：平移视角<br/>
+    滚轮：缩放<br/>
+    空格键：全局星芒爆发
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
