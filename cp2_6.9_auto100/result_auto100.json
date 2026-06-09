@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-06-08T18:38:12.429Z",
+  "task_name": "auto100",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个基于用户手部姿势识别来操控虚拟乐器的在线音乐创作项目，想法是让用户不靠鼠标键盘，而是通过摄像头捕捉手部动作（比如握拳是鼓点，五指张开是吉他扫弦，食指指向是笛声），在网页上即兴演奏并录制一段旋律。希望它能做到：第一，页面加载后自动请求摄像头权限，在左侧显示实时视频流（镜像翻转，宽480px高360px，四周有发光边框），视频上方叠加显示手部关键点骨架连线（21个关键点，浅绿色半透明线条，每0.1秒更新一次），同时右侧是一个可以自由拖拽布局的5x5彩色音阶矩阵，每个格子（50x50px）代表一个音符，颜色从暖色到冷色渐变（#FF6B35到#1E90FF），鼠标悬停时格子放大1.2倍并显示音名（C4、D4等），点击格子可以更换音色。第二，用户做特定手势时，系统会与矩阵交互：握拳手势（拇指与四指并拢）触发鼓声，随机点亮矩阵中三个格子发出#FF4500脉冲并播放对应音符；五指张开手势触发吉他扫弦，按从左到右顺序快速亮起五个格子（每个亮0.2秒，颜色为#00FF7F）并播放序列音；食指指向手势（食指伸直其他握拳）触发笛声，根据食指的左右移动幅度在矩阵中平滑切换高亮格子（移动50像素切换一格，颜色为#FFD700），手势识别准确率不低于80%，误触率低于5%，响应时间不超过150毫秒。界面上希望整体采用深色背景（#1a1a2e），顶部有一个半透明控制栏（毛玻璃效果，blur(10px)），包含开始录制、停止播放、清除轨道三个按钮和一个音色选择下拉框，操作后会有平滑的淡入淡出过渡（0.3秒），页面在手机和电脑上都能自适应（视频区在手机端缩小到300px宽，矩阵变成3x3）。性能上要求手势识别帧率不低于25FPS，音频播放无延迟超过50毫秒。实现用TypeScript、React前端和Node.js+Express后端，使用MediaPipe Hands库做手部识别，用Tone.js生成音符，用Vite构建项目。把代码拆成以下文件：\n - package.json（含依赖：react、react-dom、typescript、vite、@mediapipe/hands、tone、express、cors，启动脚本：npm run dev）\n - index.html（入口页面，挂载React根组件）\n - tsconfig.json（严格模式，目标ES2020）\n - vite.config.js（基本Vite配置）\n - src/main.tsx（React根节点，渲染App组件）\n - src/App.tsx（主组件，管理摄像头流、手势识别结果和音阶矩阵状态，将视频流传给HandDetector，将手势指令传给SoundEngine）\n - src/HandDetector.ts（封装MediaPipe Hands，接收视频帧返回关键点坐标数组，暴露onFrame回调）\n - src/SoundEngine.ts（封装Tone.js，根据手势类型和矩阵位置播放对应音符，暴露playNote和改变音色方法）\n - src/components/VideoPanel.tsx（显示镜像视频和关键点骨架，接收手势关键点数据，绘制叠加层）\n - src/components/NoteMatrix.tsx（5x5音阶矩阵组件，支持拖拽布局和点击更换音色，接收手势高亮格子数据）\n随后跑 npm install && npm run dev 就能直接看到效果。",
+  "session_id": null,
+  "trace": "null"
+}
