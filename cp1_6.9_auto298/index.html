@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>叶脉时光 · VeinTime</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-primary: hsl(140, 30%, 20%);
+        --bg-secondary: hsl(140, 28%, 24%);
+        --text-primary: hsl(40, 10%, 95%);
+        --text-secondary: hsl(40, 8%, 75%);
+        --vein-purple: hsla(270, 60%, 80%, 0.75);
+        --vein-purple-solid: hsl(270, 60%, 80%);
+        --accent-gold: #FFD700;
+        --accent-gold-soft: hsla(45, 100%, 60%, 0.9);
+        --accent-orange: hsl(30, 80%, 85%);
+        --accent-orange-hover: hsl(30, 75%, 75%);
+        --divider-gradient: linear-gradient(to bottom, transparent, hsl(140, 40%, 80%), transparent);
+        --card-bg: rgba(255, 255, 255, 0.1);
+        --card-bg-hover: rgba(255, 255, 255, 0.3);
+        --sidebar-width: 280px;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      h1, h2, h3, h4, h5, h6, .font-serif {
+        font-family: 'Noto Serif SC', 'Times New Roman', serif;
+        letter-spacing: 0.02em;
+      }
+
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+        transition: background 300ms ease-out;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.4);
+      }
+
+      @keyframes breathe {
+        0%, 100% { opacity: 0.6; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.15); }
+      }
+
+      @keyframes pulse-ring {
+        0% { transform: scale(1); opacity: 0.8; }
+        100% { transform: scale(4); opacity: 0; }
+      }
+
+      @keyframes flash-expand {
+        0% { opacity: 0.9; transform: scale(0); }
+        100% { opacity: 0; transform: scale(3); }
+      }
+
+      @keyframes border-blink {
+        0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,0.9); }
+        50% { box-shadow: 0 0 0 2px rgba(255,255,255,0.2); }
+      }
+
+      @keyframes toast-in {
+        from { opacity: 0; transform: translateX(30px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+
+      @keyframes toast-out {
+        from { opacity: 1; transform: translateX(0); }
+        to { opacity: 0; transform: translateX(30px); }
+      }
+
+      @keyframes fade-modal {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .animate-breathe {
+        animation: breathe 0.8s ease-in-out infinite;
+      }
+
+      .animate-pulse-ring {
+        animation: pulse-ring 0.5s ease-out forwards;
+      }
+
+      .animate-flash {
+        animation: flash-expand 0.3s ease-out forwards;
+      }
+
+      .animate-border-blink {
+        animation: border-blink 0.6s ease-in-out infinite;
+      }
+
+      .animate-toast-in {
+        animation: toast-in 300ms ease-out;
+      }
+
+      .animate-toast-out {
+        animation: toast-out 300ms ease-out forwards;
+      }
+
+      .animate-modal {
+        animation: fade-modal 300ms ease-out;
+      }
+
+      .transition-smooth {
+        transition: all 300ms ease-out;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
