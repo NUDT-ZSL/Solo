@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>分子结构编辑器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      overflow: hidden;
+      background-color: #0a0a1a;
+      color: #ffffff;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #canvas-container canvas {
+      display: block;
+    }
+
+    #toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 20px;
+      z-index: 100;
+      background: linear-gradient(180deg, rgba(10, 10, 26, 0.9) 0%, rgba(10, 10, 26, 0) 100%);
+      pointer-events: none;
+    }
+
+    #toolbar h1 {
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #64b5ff, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    #control-panel {
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      width: 180px;
+      padding: 20px;
+      border-radius: 12px;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .btn {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(100, 150, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .btn:hover {
+      background: rgba(100, 150, 255, 0.2);
+      border-color: rgba(100, 150, 255, 0.4);
+      transform: scale(1.03);
+    }
+
+    .btn:hover::before {
+      left: 100%;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:active::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(100, 150, 255, 0.4);
+      transform: translate(-50%, -50%);
+      animation: pulse 0.4s ease-out;
+    }
+
+    @keyframes pulse {
+      0% {
+        width: 0;
+        height: 0;
+        opacity: 1;
+      }
+      100% {
+        width: 200%;
+        height: 200%;
+        opacity: 0;
+      }
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    #info-panel {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      width: 240px;
+      padding: 20px;
+      border-radius: 12px;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    #info-panel.hidden {
+      opacity: 0.4;
+    }
+
+    .info-title {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .info-value {
+      color: #64b5ff;
+      font-weight: 500;
+    }
+
+    .element-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    .empty-state {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+      text-align: center;
+      padding: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="toolbar">
+    <h1>MOLECULE EDITOR</h1>
+  </div>
+
+  <div id="control-panel">
+    <div class="panel-title">控制面板</div>
+    <button class="btn" id="btn-add-atom">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="23"/><line x1="1" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="23" y2="12"/></svg>
+      添加碳原子
+    </button>
+    <button class="btn" id="btn-undo">
+      <svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+      撤销移动
+    </button>
+    <button class="btn" id="btn-reset-view">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      重置视角
+    </button>
+  </div>
+
+  <div id="info-panel" class="hidden">
+    <div class="info-title">原子信息</div>
+    <div id="info-content">
+      <div class="empty-state">请点击选中一个原子</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
