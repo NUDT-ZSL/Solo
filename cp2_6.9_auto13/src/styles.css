@@ -1,0 +1,241 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+  color: #F1F5F9;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px;
+  width: 60px;
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(6, 182, 212, 0.2);
+  z-index: 10;
+}
+
+.toolbar button {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, 0.05);
+  color: #F1F5F9;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 18px;
+}
+
+.toolbar button:hover {
+  background: rgba(6, 182, 212, 0.2);
+  transform: scale(1.1);
+}
+
+.toolbar button.active {
+  background: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.5);
+}
+
+.toolbar-divider {
+  width: 32px;
+  height: 1px;
+  background: rgba(241, 245, 249, 0.15);
+  margin: 4px 0;
+}
+
+.canvas-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-svg {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  display: block;
+}
+
+.canvas-svg.connecting {
+  cursor: copy;
+}
+
+.node-group {
+  cursor: grab;
+}
+
+.node-group:active {
+  cursor: grabbing;
+}
+
+.node-rect {
+  fill: rgba(241, 245, 249, 0.95);
+  stroke: #CBD5E1;
+  stroke-width: 2;
+  rx: 8;
+  ry: 8;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  transition: filter 0.2s ease, stroke 0.2s ease;
+}
+
+.node-rect.selected {
+  stroke: #06B6D4;
+  stroke-width: 2.5;
+  stroke-dasharray: 6, 3;
+  filter: drop-shadow(0 4px 8px rgba(6, 182, 212, 0.5));
+}
+
+.node-diamond {
+  fill: rgba(241, 245, 249, 0.95);
+  stroke: #CBD5E1;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  transition: filter 0.2s ease, stroke 0.2s ease;
+}
+
+.node-diamond.selected {
+  stroke: #06B6D4;
+  stroke-width: 2.5;
+  stroke-dasharray: 6, 3;
+  filter: drop-shadow(0 4px 8px rgba(6, 182, 212, 0.5));
+}
+
+.node-circle {
+  fill: rgba(241, 245, 249, 0.95);
+  stroke: #CBD5E1;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  transition: filter 0.2s ease, stroke 0.2s ease;
+}
+
+.node-circle.selected {
+  stroke: #06B6D4;
+  stroke-width: 2.5;
+  stroke-dasharray: 6, 3;
+  filter: drop-shadow(0 4px 8px rgba(6, 182, 212, 0.5));
+}
+
+.node-text {
+  fill: #1E293B;
+  font-size: 13px;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.edge-path {
+  fill: none;
+  stroke: #94A3B8;
+  stroke-width: 2;
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+  cursor: pointer;
+}
+
+.edge-path.selected {
+  stroke: #06B6D4;
+  stroke-width: 3;
+}
+
+.edge-path.temp {
+  stroke: #06B6D4;
+  stroke-dasharray: 5, 5;
+  pointer-events: none;
+}
+
+.edge-label {
+  fill: #1E293B;
+  font-size: 12px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: all;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.edge-label-bg {
+  fill: rgba(241, 245, 249, 0.95);
+  stroke: #CBD5E1;
+  stroke-width: 1;
+  rx: 4;
+  ry: 4;
+}
+
+.arrow-head {
+  fill: #94A3B8;
+}
+
+.arrow-head.selected {
+  fill: #06B6D4;
+}
+
+.text-edit-input {
+  position: absolute;
+  background: white;
+  border: 2px solid #06B6D4;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1E293B;
+  outline: none;
+  text-align: center;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column-reverse;
+  }
+
+  .toolbar {
+    flex-direction: row;
+    width: 100%;
+    height: 50px;
+    padding: 8px 16px;
+    border-right: none;
+    border-top: 1px solid rgba(6, 182, 212, 0.2);
+    justify-content: space-around;
+  }
+
+  .toolbar button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 32px;
+    margin: 0 4px;
+  }
+}
