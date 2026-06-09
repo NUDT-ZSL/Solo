@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星灵漫游</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(ellipse at center, #1a1a3e 0%, #0b0b2e 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    #game-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #game-canvas {
+      display: block;
+      border-radius: 8px;
+      box-shadow: 0 0 60px rgba(74, 0, 224, 0.3);
+    }
+    #page-title {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      text-shadow: 0 0 20px rgba(255, 215, 0, 0.5), 0 0 40px rgba(74, 0, 224, 0.4);
+      z-index: 10;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="page-title">星 灵 漫 游</div>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
