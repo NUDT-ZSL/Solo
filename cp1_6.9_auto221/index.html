@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>晶簇幻境 · Crystal Illusion</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(ellipse at center, #1a0a2e 0%, #05020d 70%, #020108 100%);
+      color: #e9d5ff;
+      cursor: grab;
+      user-select: none;
+    }
+
+    body:active {
+      cursor: grabbing;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      outline: none;
+    }
+
+    .title {
+      position: fixed;
+      top: 28px;
+      left: 36px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .title h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 8px;
+      color: rgba(233, 213, 255, 0.9);
+      text-shadow: 0 0 24px rgba(168, 85, 247, 0.5), 0 0 48px rgba(168, 85, 247, 0.25);
+    }
+
+    .title p {
+      margin-top: 6px;
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: rgba(167, 139, 250, 0.6);
+    }
+
+    .fps-counter {
+      position: fixed;
+      top: 28px;
+      right: 36px;
+      z-index: 10;
+      pointer-events: none;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      color: rgba(167, 139, 250, 0.7);
+      letter-spacing: 1px;
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      z-index: 20;
+      width: 300px;
+      padding: 22px 22px 18px;
+      border-radius: 18px;
+      background: rgba(20, 10, 40, 0.52);
+      backdrop-filter: blur(18px) saturate(1.2);
+      -webkit-backdrop-filter: blur(18px) saturate(1.2);
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+        0 0 40px rgba(168, 85, 247, 0.12);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(168, 85, 247, 0.15);
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      color: rgba(233, 213, 255, 0.92);
+      text-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+    }
+
+    .panel-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #a855f7;
+      box-shadow: 0 0 12px #a855f7, 0 0 24px rgba(168, 85, 247, 0.6);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .slider-group {
+      margin-bottom: 18px;
+    }
+
+    .slider-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .slider-label {
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      color: rgba(196, 181, 253, 0.8);
+    }
+
+    .slider-value {
+      font-size: 12px;
+      font-family: "Courier New", monospace;
+      font-weight: 600;
+      color: rgba(233, 213, 255, 0.95);
+      padding: 2px 8px;
+      background: rgba(168, 85, 247, 0.15);
+      border-radius: 6px;
+      min-width: 42px;
+      text-align: center;
+    }
+
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(
+        to right,
+        rgba(168, 85, 247, 0.7) 0%,
+        rgba(45, 212, 191, 0.7) 100%
+      );
+      outline: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .slider:hover {
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e9d5ff 0%, #a855f7 100%);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(168, 85, 247, 0.5), 0 0 16px rgba(168, 85, 247, 0.3);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .slider:hover::-webkit-slider-thumb {
+      transform: scale(1.15);
+      box-shadow: 0 2px 12px rgba(168, 85, 247, 0.7), 0 0 24px rgba(168, 85, 247, 0.5);
+    }
+
+    .slider:active::-webkit-slider-thumb {
+      transform: scale(0.95);
+      background: linear-gradient(135deg, #c4b5fd 0%, #7c3aed 100%);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e9d5ff 0%, #a855f7 100%);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(168, 85, 247, 0.5);
+    }
+
+    .theme-group {
+      margin-bottom: 20px;
+    }
+
+    .theme-label {
+      display: block;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      color: rgba(196, 181, 253, 0.8);
+      margin-bottom: 10px;
+    }
+
+    .theme-options {
+      display: flex;
+      gap: 10px;
+    }
+
+    .theme-btn {
+      flex: 1;
+      height: 44px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .theme-btn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: inherit;
+      filter: blur(8px);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: -1;
+    }
+
+    .theme-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .theme-btn:hover::after {
+      opacity: 0.6;
+    }
+
+    .theme-btn:active {
+      transform: translateY(0);
+    }
+
+    .theme-btn.active {
+      border-color: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15), 0 0 24px currentColor;
+    }
+
+    .theme-lava {
+      background: linear-gradient(135deg, #ff7b3d 0%, #6b0f1a 100%);
+      color: #ff7b3d;
+    }
+
+    .theme-deepsea {
+      background: linear-gradient(135deg, #00d4aa 0%, #5a4a7a 100%);
+      color: #00d4aa;
+    }
+
+    .theme-aurora {
+      background: linear-gradient(135deg, #a855f7 0%, #2dd4bf 100%);
+      color: #a855f7;
+    }
+
+    .reset-btn {
+      width: 100%;
+      height: 42px;
+      border: none;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 4px;
+      color: rgba(233, 213, 255, 0.95);
+      cursor: pointer;
+      position: relative;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.35) 0%, rgba(45, 212, 191, 0.35) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      transition: all 0.2s ease;
+      overflow: hidden;
+    }
+
+    .reset-btn::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(45, 212, 191, 0.2) 100%);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .reset-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(168, 85, 247, 0.35);
+      border-color: rgba(168, 85, 247, 0.6);
+    }
+
+    .reset-btn:hover::before {
+      opacity: 1;
+    }
+
+    .reset-btn:active {
+      transform: translateY(1px);
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.5) 0%, rgba(13, 148, 136, 0.5) 100%);
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .reset-btn span {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hint {
+      position: fixed;
+      bottom: 32px;
+      left: 36px;
+      z-index: 10;
+      pointer-events: none;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: rgba(167, 139, 250, 0.45);
+      line-height: 1.8;
+    }
+
+    .hint kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      margin: 0 2px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      border-radius: 4px;
+      font-family: "Courier New", monospace;
+      color: rgba(233, 213, 255, 0.7);
+      font-size: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .control-panel {
+        width: calc(100% - 32px);
+        right: 16px;
+        bottom: 16px;
+        left: 16px;
+      }
+      .title { left: 20px; top: 20px; }
+      .title h1 { font-size: 16px; letter-spacing: 4px; }
+      .hint { display: none; }
+      .fps-counter { right: 20px; top: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div class="title">
+    <h1>晶簇幻境</h1>
+    <p>CRYSTAL · ILLUSION</p>
+  </div>
+
+  <div class="fps-counter" id="fps">60 FPS</div>
+
+  <div class="hint">
+    <div><kbd>拖拽</kbd> 旋转视角</div>
+    <div><kbd>滚轮</kbd> 缩放远近</div>
+    <div><kbd>悬停</kbd> 晶体高亮</div>
+    <div><kbd>点击</kbd> 脉冲扩散</div>
+  </div>
+
+  <div class="control-panel" id="controlPanel">
+    <div class="panel-header">
+      <div class="panel-title">场景控制</div>
+      <div class="panel-dot"></div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label-row">
+        <span class="slider-label">晶体簇数量</span>
+        <span class="slider-value" id="countValue">15</span>
+      </div>
+      <input type="range" class="slider" id="countSlider" min="5" max="30" step="1" value="15" />
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label-row">
+        <span class="slider-label">光纹速度</span>
+        <span class="slider-value" id="speedValue">1.0</span>
+      </div>
+      <input type="range" class="slider" id="speedSlider" min="0.1" max="2.0" step="0.05" value="1.0" />
+    </div>
+
+    <div class="theme-group">
+      <span class="theme-label">颜色主题</span>
+      <div class="theme-options">
+        <button class="theme-btn theme-lava" data-theme="lava" title="熔岩之心"></button>
+        <button class="theme-btn theme-deepsea" data-theme="deepSea" title="深海遗珠"></button>
+        <button class="theme-btn theme-aurora active" data-theme="aurora" title="极夜极光"></button>
+      </div>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">
+      <span>重 置 视 角</span>
+    </button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
