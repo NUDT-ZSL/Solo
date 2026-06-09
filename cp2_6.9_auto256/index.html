@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>影迹·浮光</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000000;
+    }
+
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    #info-panel {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      font: 12px monospace;
+      color: rgba(255, 255, 255, 0.5);
+      pointer-events: none;
+      z-index: 10;
+      user-select: none;
+    }
+
+    #info-panel span {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    #controls {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    #color-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid #ffffff;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      padding: 0;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.1);
+    }
+
+    .color-swatch.active {
+      border-width: 2px;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+    }
+
+    #custom-color {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid #ffffff;
+      cursor: pointer;
+      padding: 0;
+      overflow: hidden;
+      background: linear-gradient(45deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+    }
+
+    #custom-color input[type="color"] {
+      width: 40px;
+      height: 40px;
+      margin: -8px;
+      padding: 0;
+      border: none;
+      cursor: pointer;
+      background: transparent;
+    }
+
+    #clear-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: none;
+      background-color: #222222;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease;
+      position: relative;
+    }
+
+    #clear-btn:hover {
+      background-color: #444444;
+    }
+
+    #clear-btn::before,
+    #clear-btn::after {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 2px;
+      background-color: #ffffff;
+    }
+
+    #clear-btn::before {
+      transform: rotate(45deg);
+    }
+
+    #clear-btn::after {
+      transform: rotate(-45deg);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="info-panel">
+    <span id="point-count">光迹点: 0</span>
+    <span id="fps-counter">FPS: 0</span>
+  </div>
+
+  <div id="controls">
+    <div id="color-picker">
+      <button class="color-swatch active" data-color="#FF6666" style="background-color: #FF6666;"></button>
+      <button class="color-swatch" data-color="#FFFF00" style="background-color: #FFFF00;"></button>
+      <button class="color-swatch" data-color="#00FF88" style="background-color: #00FF88;"></button>
+      <button class="color-swatch" data-color="#FF66B2" style="background-color: #FF66B2;"></button>
+      <button class="color-swatch" data-color="#33CCFF" style="background-color: #33CCFF;"></button>
+      <button class="color-swatch" data-color="#FFAA00" style="background-color: #FFAA00;"></button>
+      <div id="custom-color" title="自定义颜色">
+        <input type="color" id="custom-color-input" value="#FF6666">
+      </div>
+    </div>
+    <button id="clear-btn" title="清除画布"></button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
