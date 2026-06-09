@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-08T17:57:19.286Z",
+  "task_name": "auto60",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "场景：一位独立播客主希望快速生成每个音频节目的可视化摘要卡片，用于社交媒体分享，卡片能动态捕捉音频的情绪曲线和关键节点。\n\n构建一个名为「声纹摘要卡」的全栈Web应用，让用户上传或录制一段音频（最长5分钟），系统自动分析其波形、频谱和音量包络，生成一张包含情绪曲线、高频亮点标注和渐变色背景的动态SVG卡片，用户可调整配色和布局后预览并导出为PNG。使用TypeScript和React实现前端，Express和Node.js实现后端，Web Audio API做音频分析，Vite构建。文件结构按职责模块化，并注明各文件间的调用关系和数据流向：\n - package.json（含依赖：react、react-dom、typescript、vite、@vitejs/plugin-react、express、ts-node、@types/express、multiparty、html-to-image，启动脚本：npm run dev）\n - vite.config.js（构建配置）\n - tsconfig.json（严格模式）\n - index.html（入口）\n - server/server.ts（Express后端，接收文件上传，使用multiparty解析，将音频文件路径传回前端，数据流向：接收formData→解析文件→返回路径）\n - src/App.tsx（主组件，包含上传区、编辑器、预览区三栏布局，状态管理上传、分析结果、卡片配置）\n - src/audioAnalyzer.ts（分析音频文件，使用Web Audio API的OfflineAudioContext，提取波形数组、频谱峰值时间戳和音量包络曲线，数据流向：接收AudioBuffer→处理→输出分析结果）\n - src/cardGenerator.ts（基于分析结果和用户配置生成SVG卡片字符串，包含情绪曲线path、渐变色defs和标注元素，数据流向：接收analysisResult和themeConfig→输出SVG字符串）\n\n功能需求：\n1) 音频上传与录制：支持点击按钮选择文件或拖拽上传mp3/wav/ogg格式（最大50MB），同时支持浏览器麦克风录制（最长5分钟），上传或录制完成后自动开始分析。\n2) 动态SVG卡片生成：卡片尺寸为1200x630px（社交分享标准），包含三条核心曲线——上方音量包络（半透明青色#00E5FF）、中间情绪曲线（根据频谱能量变化，用贝塞尔曲线平滑连接，颜色根据能量值从#FF6B6B渐变到#48C774）、底部波形（深色#1A1A2E），曲线下方标注出频谱峰值出现的时间点（小圆点+秒数标签）。\n3) 卡片主题定制：用户可从5组预置配色方案中选择（深空极光、暖阳落日、草甸微风、深海荧蓝、赛博霓虹），也可手动调整背景渐变两个端点色（色相滑块），调整后卡片实时预览更新。\n4) 导出PNG：点击导出按钮后使用html-to-image库将预览区的SVG卡片转换为PNG图片（分辨率2x），浏览器自动下载为“声纹摘要_日期.png”，用户也可复制卡片URL（服务端临时存储的SVG字符串，有效期5分钟）。\n5) 历史记录面板：左侧边栏展示最近10次生成的卡片缩略图（生成时间、音频文件名），点击缩略图可恢复之前配置并重新导出。\n\n界面方面：整体布局采用三栏式——左侧为历史记录面板（宽250px，半透明磨砂背景rgba(255,255,255,0.05)，深色主题），中间为主编辑区（上传区/录制按钮/卡片实时预览），右侧为控制面板（配色选择和导出按钮，圆角卡片样式）。预览区域内的动态SVG卡片在调整配色时有0.4秒的渐变过渡动画（颜色平滑变化，曲线无跳动），鼠标悬停在曲线上会显示该点的具体数值（音量dB值、情绪指数）。所有按钮在点击时有微妙的弹性缩放效果（transform: scale 0.95->1.05，持续0.2秒），拖拽上传区有高亮边框动画。页面在移动端自动调整为垂直单栏布局（卡片宽度自适应，控制面板折叠为抽屉式）。整体视觉风格统一使用深色模式+霓虹色彩，字体使用monospace字体家族营造科技感。\n\n性能约束：音频分析必须在5秒内完成（对于30秒以内的音频），导出PNG操作响应时间不超过2秒，历史记录最多保留10条以避免内存泄露。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:102aee8de1e130d2df3e234872ce5751_6a27018cda12d07cbcff82a0.6a27026eda12d07cbcff833d.6a27026e0c9c6fb5d58ef2e6:Trae CN.T(2026/6/9 01:57:02)",
+    "user_id": "2402906841289811",
+    "trace_id": "102aee8de1e130d2df3e234872ce5751",
+    "session_id": "6a27018cda12d07cbcff82a0",
+    "task_id": "6a27026eda12d07cbcff833d",
+    "message_id": "6a27026e0c9c6fb5d58ef2e6",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/9 01:57:02",
+    "format": "full"
+  },
+  "trace": "null"
+}
