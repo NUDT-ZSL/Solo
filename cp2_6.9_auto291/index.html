@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>城市热流</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(180deg, #0D0D1A 0%, #1A1A2E 100%);
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #title {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      font-size: 24px;
+      color: #00E5FF;
+      text-shadow: 0 0 8px #00E5FF;
+      font-weight: 600;
+      z-index: 10;
+      user-select: none;
+    }
+
+    #info-panel {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 18px;
+      background: rgba(30, 30, 50, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      color: #FFFFFF;
+      font-size: 14px;
+      z-index: 10;
+      user-select: none;
+      min-width: 160px;
+    }
+
+    #info-panel .label {
+      color: #8888AA;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    #info-panel .value {
+      color: #00E5FF;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    #info-panel .empty {
+      color: #555577;
+      font-size: 13px;
+    }
+
+    #control-panel {
+      position: absolute;
+      top: 50%;
+      right: 24px;
+      transform: translateY(-50%);
+      width: 180px;
+      padding: 16px;
+      background: rgba(30, 30, 50, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      border: 1px solid transparent;
+      z-index: 10;
+      user-select: none;
+    }
+
+    #control-panel .panel-title {
+      color: #00E5FF;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    #control-panel .slider-label {
+      color: #AAAAAC;
+      font-size: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    #control-panel .slider-value {
+      color: #00E5FF;
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width:  100%;
+      height: 4px;
+      background: #3A3A5A;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #00E5FF;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+      transition: box-shadow 0.2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.9);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #00E5FF;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+    }
+
+    #label-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .building-label {
+      position: absolute;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.533);
+      color: #FFFFFF;
+      font-size: 12px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      transform: translate(-50%, -100%);
+      font-weight: 500;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="title">城市热流</div>
+    <div id="control-panel">
+      <div class="panel-title">控制面板</div>
+      <div class="slider-label">
+        <span>热力阈值</span>
+        <span class="slider-value" id="threshold-value">50</span>
+      </div>
+      <input type="range" id="threshold-slider" min="0" max="100" step="1" value="50" />
+    </div>
+    <div id="info-panel">
+      <div class="label">当前选中区域</div>
+      <div class="value" id="selected-info"><span class="empty">未选择</span></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
