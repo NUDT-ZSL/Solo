@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CYBERNETIC INTRUSION v2.077</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Courier New', monospace;
+    }
+
+    body {
+      background: #0A0A0A;
+      color: #00FF41;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .app-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      grid-template-rows: auto 1fr 200px;
+      gap: 16px;
+      width: 100%;
+      max-width: 1140px;
+      height: 100vh;
+      max-height: 900px;
+    }
+
+    .header {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: rgba(26, 26, 46, 0.85);
+      border: 1px solid #00FF41;
+      border-radius: 4px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      letter-spacing: 3px;
+      text-shadow: 0 0 10px #00FF41;
+    }
+
+    .difficulty-selector {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .difficulty-selector label {
+      font-size: 12px;
+      color: #00FFFF;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .difficulty-selector input[type="radio"] {
+      accent-color: #00FF41;
+      cursor: pointer;
+    }
+
+    .panel {
+      background: rgba(26, 26, 46, 0.85);
+      border: 1px solid #00FF41;
+      border-radius: 4px;
+      padding: 16px;
+    }
+
+    .command-panel {
+      grid-row: 2;
+      grid-column: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .command-panel h2 {
+      font-size: 14px;
+      color: #00FFFF;
+      letter-spacing: 2px;
+      border-bottom: 1px solid #00FF41;
+      padding-bottom: 8px;
+    }
+
+    .command-panel .instructions {
+      font-size: 11px;
+      color: #AAAAAA;
+      line-height: 1.6;
+    }
+
+    .command-panel .instructions code {
+      color: #FFFF00;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    #commandInput {
+      background: #0A0A0A;
+      border: 1px solid #00FF41;
+      color: #00FF41;
+      padding: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      border-radius: 4px;
+      outline: none;
+      transition: box-shadow 0.2s;
+      caret-color: #00FF41;
+    }
+
+    #commandInput::placeholder {
+      color: #003300;
+    }
+
+    #commandInput:focus {
+      box-shadow: 0 0 8px 2px rgba(0, 255, 65, 0.6);
+    }
+
+    #submitBtn {
+      background: transparent;
+      border: 1px solid #00FF41;
+      color: #00FF41;
+      padding: 10px 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 4px;
+      letter-spacing: 2px;
+      transition: all 0.2s;
+    }
+
+    #submitBtn:hover {
+      background: #00FF41;
+      color: #0A0A0A;
+      box-shadow: 0 0 10px #00FF41;
+    }
+
+    #submitBtn:active {
+      transform: scale(0.98);
+    }
+
+    .canvas-container {
+      grid-row: 2;
+      grid-column: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #gameCanvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    .flash-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #FFFFFF;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+      z-index: 10;
+    }
+
+    .flash-overlay.active {
+      opacity: 1;
+      transition: opacity 0s;
+    }
+
+    .log-panel {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .log-panel h2 {
+      font-size: 14px;
+      color: #00FFFF;
+      letter-spacing: 2px;
+      border-bottom: 1px solid #00FF41;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+
+    #logContainer {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column-reverse;
+      padding-right: 8px;
+    }
+
+    #logContainer::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #logContainer::-webkit-scrollbar-track {
+      background: #0A0A0A;
+    }
+
+    #logContainer::-webkit-scrollbar-thumb {
+      background: #00FF41;
+      border-radius: 3px;
+    }
+
+    .log-entry {
+      padding: 2px 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .log-time {
+      color: #666666;
+      margin-right: 8px;
+    }
+
+    .log-user { color: #00FF41; }
+    .log-system { color: #AAAAAA; }
+    .log-warning { color: #FF6600; }
+    .log-alert { color: #FF0000; }
+
+    .typing-text {
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="header">
+      <h1>[ CYBERNETIC INTRUSION v2.077 ]</h1>
+      <div class="difficulty-selector">
+        <label><input type="radio" name="difficulty" value="easy" /> EASY</label>
+        <label><input type="radio" name="difficulty" value="normal" checked /> NORMAL</label>
+        <label><input type="radio" name="difficulty" value="hard" /> HARD</label>
+      </div>
+    </div>
+
+    <div class="panel command-panel">
+      <h2>// COMMAND TERMINAL</h2>
+      <div class="instructions">
+        Available commands:<br/><br/>
+        <code>CONNECT [ID]</code> - Establish connection<br/>
+        <code>DISRUPT [ID]</code> - Overload defenses<br/>
+        <code>SCAN [ID]</code> - Analyze node topology<br/><br/>
+        Nodes are numbered 0-N
+      </div>
+      <div class="input-group">
+        <input type="text" id="commandInput" placeholder="> ENTER COMMAND..." autocomplete="off" />
+        <button id="submitBtn">EXECUTE</button>
+      </div>
+    </div>
+
+    <div class="panel canvas-container">
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+      <div class="flash-overlay" id="flashOverlay"></div>
+    </div>
+
+    <div class="panel log-panel">
+      <h2>// SYSTEM LOG</h2>
+      <div id="logContainer"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
