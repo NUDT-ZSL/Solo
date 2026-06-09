@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>魔法卷轴 - 交互式书法</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="scrollCanvas"></canvas>
+    
+    <div id="toolbar" class="toolbar-vertical">
+      <div class="tool-item">
+        <label class="tool-label" data-tip="笔刷大小">笔</label>
+        <input type="range" id="brushSize" min="1" max="20" value="8" />
+      </div>
+      <div class="tool-item">
+        <label class="tool-label" data-tip="墨色浓淡">墨</label>
+        <input type="range" id="inkDensity" min="0.1" max="1" step="0.05" value="0.8" />
+      </div>
+      <div class="tool-item">
+        <label class="tool-label" data-tip="卷轴颜色">纸</label>
+        <div class="color-options">
+          <button class="color-btn active" data-color="#F5E6C8" style="background:#F5E6C8"></button>
+          <button class="color-btn" data-color="#F0E0C0" style="background:#F0E0C0"></button>
+          <button class="color-btn" data-color="#E8D8B0" style="background:#E8D8B0"></button>
+        </div>
+      </div>
+    </div>
+
+    <button id="mountBtn" class="mount-btn">装裱</button>
+
+    <div id="statusBar" class="status-bar">
+      <span id="strokeCount">笔触 0</span>
+      <span id="timer">00:00</span>
+      <button id="undoBtn" class="undo-btn">撤销</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
