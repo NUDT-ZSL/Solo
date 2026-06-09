@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-06-08T23:43:38.212Z",
+  "task_name": "auto287",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我需要一个能够帮助用户在浏览器中创建和管理个人「情绪调色盘」的全栈Web应用，主要解决用户难以用直觉化的方式记录和回顾每日情绪变化，以及无法将抽象的情绪与具象的色彩关联起来进行视觉化探索的问题。\n\n它应当具备以下能力：\n1) 加载后显示一个米白背景（#FDF8F0）的页面，左侧是调色盘画布（600x500px），右侧是情绪输入区和历史记录。画布初始为空，用户点击颜色选择器（预设10种情绪颜色：快乐#FFD700、忧伤#5B8FA8、愤怒#E74C3C、平静#A8D5BA、焦虑#C9A0DC、希望#F4A261、疲惫#8E8E8E、爱#FF6B81、惊讶#6AB0E3、内疚#9C7C6B）后在画布上点击，生成一个半径随机（10-30px）的圆形色块，色块带有轻微扩散动画（0.3秒内从半径0膨胀到目标半径，透明度从0.4到0.8），色块之间自动以柔和贝塞尔曲线连接（颜色取两端平均色，透明度0.2，线宽2px）。\n2) 用户可拖拽画布上已有色块重新排布，色块拖拽时有弹性缩放效果（放大1.1倍，释放后回弹），拖拽后所有连接线自动重绘。双击色块弹出编辑框，可修改颜色、添加文字标签（最多20字）和日期时间戳。\n3) 右侧历史区域（宽280px）按日期分组显示情绪卡片，每个卡片是缩略版色块图，点击卡片可恢复画布到该日期的状态（色块位置和连接线完整还原），卡片有淡入动画（0.2秒，从下向上滑动20px）。支持按情绪颜色筛选（多选下拉菜单）和按日期范围搜索。\n4) 顶部工具栏包含“保存快照”按钮（将当前画布状态存储到localStorage并同步到后端）、“清空画布”按钮（带二次确认弹窗，弹窗有震动动画）和“导出为图片”按钮（调用Canvas的toDataURL生成PNG并自动下载，文件名格式为“情绪调色盘_YYYY-MM-DD_HHmmss.png”）。\n\n界面方面要求：整体采用暖白+浅木色主题，卡片区域（#F5F0E8，圆角16px，阴影0 4px 12px rgba(0,0,0,0.06)），字体使用系统默认无衬线，按钮圆角8px，悬停时有0.2秒背景色渐变（从#E8E0D4到#D4CAB8）。情绪色块在画布上柔和发光（box-shadow: 0 0 8px rgba(当前色,0.3)），连接线为流动虚线（stroke-dasharray: 4 4，带0.5秒循环的stroke-dashoffset动画）。页面高度100vh，响应式：画布和历史区域在宽度<768px时上下堆叠。\n\n性能上需要：画布渲染帧率稳定在30FPS以上，支持最多100个色块同时显示而不卡顿，拖拽色块时无延迟（响应时间<50ms）。\n\n实现采用TypeScript（前端React 18）、Node.js（后端Express 4）和Vite构建，按以下文件组织代码：\n - package.json（含依赖：react、react-dom、express、cors、uuid、typescript、vite、@vitejs/plugin-react、@types/react、@types/express、@types/cors、@types/uuid，启动脚本：npm run dev）\n - vite.config.js（配置Vite，支持React HMR，代理/api到后端3001端口）\n - tsconfig.json（严格模式，目标ES2020）\n - index.html（入口页面，加载React应用，标题“情绪调色盘”）\n - src/App.tsx（主组件，管理画布状态和路由，调用后端API保存/读取数据）\n - src/CanvasArea.tsx（处理Canvas画布：色块生成、拖拽、贝塞尔连线、双击编辑，导出图片功能）\n - src/HistoryPanel.tsx（显示历史记录列表，支持按颜色/日期筛选，点击恢复画布状态）\n - src/api.ts（封装fetch请求，提供saveSnapshot、loadSnapshots、searchSnapshots等函数）\n - server/index.ts（Express后端，提供RESTful API：POST /api/snapshots保存数据，GET /api/snapshots加载列表，GET /api/snapshots/search?color=xxx&date=xxx搜索，返回JSON格式，数据存储于内存数组）\n\n运行方式：npm install && npm run dev。",
+  "session_id": null,
+  "trace": "null"
+}
