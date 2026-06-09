@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
+  <title>神经元交响 - Neuron Symphony</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      overflow: hidden;
+      min-width: 800px;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #info {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: rgba(0, 255, 255, 0.7);
+      font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+      font-size: 13px;
+      line-height: 1.8;
+      pointer-events: none;
+      text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+      z-index: 10;
+    }
+    #info b {
+      color: rgba(0, 191, 255, 0.9);
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <b>神经元交响 / Neuron Symphony</b><br/>
+    拖拽旋转视角 · 滚轮缩放 · 点击神经元触发电风暴
+  </div>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
