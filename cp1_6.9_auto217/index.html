@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>墨韵流光 · 水墨交互画卷</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-start: #0a0a0a;
+      --bg-end: #1a1a1a;
+      --glass-bg: rgba(255, 255, 255, 0.05);
+      --glass-bg-hover: rgba(255, 255, 255, 0.1);
+      --glass-border: rgba(255, 255, 255, 0.2);
+      --gold-start: #d4a853;
+      --gold-end: #b8860b;
+      --text-primary: rgba(255, 255, 255, 0.92);
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --radius: 8px;
+      --transition: 0.2s ease;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text-primary);
+      background: var(--bg-start);
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+
+    body {
+      background: linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .app-title {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Noto Serif SC', serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: 12px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(212, 168, 83, 0.85));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      z-index: 5;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .app-subtitle {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Noto Serif SC', serif;
+      font-size: 12px;
+      letter-spacing: 6px;
+      color: var(--text-secondary);
+      z-index: 5;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .canvas-wrapper {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    #mainCanvas {
+      width: 90%;
+      height: 90%;
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+      border-radius: 4px;
+      cursor: crosshair;
+      background: radial-gradient(ellipse at center, rgba(30, 30, 30, 0.6) 0%, rgba(15, 15, 15, 0.95) 100%);
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.06),
+        0 20px 60px -10px rgba(0, 0, 0, 0.8),
+        inset 0 0 80px rgba(0, 0, 0, 0.3);
+    }
+
+    .glass-panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(16px) saturate(1.4);
+      -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      box-shadow:
+        0 8px 32px -8px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .toolbar {
+      position: absolute;
+      left: 24px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 24px 20px;
+      width: 220px;
+      z-index: 10;
+    }
+
+    .tool-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tool-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+      user-select: none;
+    }
+
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brush-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+
+    .brush-slider:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .brush-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold-start), var(--gold-end));
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(212, 168, 83, 0.4);
+      transition: transform var(--transition), box-shadow var(--transition);
+    }
+
+    .brush-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 4px 12px rgba(212, 168, 83, 0.6);
+    }
+
+    .brush-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold-start), var(--gold-end));
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+    }
+
+    .brush-value {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 36px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+
+    .color-palette {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .color-swatch {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 2px solid transparent;
+      border-radius: var(--radius);
+      cursor: pointer;
+      position: relative;
+      transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+      padding: 0;
+    }
+
+    .color-swatch::after {
+      content: attr(title);
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity var(--transition), transform var(--transition);
+      pointer-events: none;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.08);
+      box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.5);
+    }
+
+    .color-swatch:hover::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .color-swatch.selected {
+      border-color: var(--gold-start);
+      box-shadow:
+        0 0 0 2px rgba(212, 168, 83, 0.25),
+        0 0 20px -4px rgba(212, 168, 83, 0.5);
+      transform: scale(1.05);
+    }
+
+    .clear-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 16px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background var(--transition), transform var(--transition), border-color var(--transition);
+    }
+
+    .clear-btn:hover {
+      background: var(--glass-bg-hover);
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .clear-btn:active {
+      transform: translateY(0);
+    }
+
+    .clear-btn svg {
+      flex-shrink: 0;
+    }
+
+    .export-btn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 28px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1408;
+      background: linear-gradient(135deg, var(--gold-start) 0%, var(--gold-end) 100%);
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      overflow: hidden;
+      position: absolute;
+      z-index: 10;
+      box-shadow:
+        0 4px 20px -4px rgba(212, 168, 83, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      transition: transform var(--transition), box-shadow var(--transition);
+      letter-spacing: 2px;
+    }
+
+    .export-btn:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 8px 28px -4px rgba(212, 168, 83, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .export-btn:active {
+      transform: translateY(0);
+    }
+
+    .export-btn .shine {
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.45) 50%,
+        transparent 100%
+      );
+      transform: skewX(-25deg);
+      animation: shine-sweep 3s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes shine-sweep {
+      0% { left: -100%; }
+      30% { left: 150%; }
+      100% { left: 150%; }
+    }
+
+    .export-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.3s ease;
+    }
+
+    .export-modal {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 40px 56px;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 3px solid rgba(212, 168, 83, 0.2);
+      border-top-color: var(--gold-start);
+      border-right-color: var(--gold-start);
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .export-text {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 16px;
+      letter-spacing: 6px;
+      color: var(--text-primary);
+    }
+
+    .hint-bar {
+      position: absolute;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 24px;
+      padding: 8px 20px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 1px;
+      user-select: none;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .hint-bar kbd {
+      display: inline-block;
+      padding: 2px 6px;
+      margin: 0 2px;
+      font-family: inherit;
+      font-size: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: var(--text-primary);
+    }
+
+    @media (max-width: 768px), (orientation: portrait) {
+      .app-title {
+        font-size: 18px;
+        letter-spacing: 8px;
+        top: 16px;
+      }
+      .app-subtitle {
+        font-size: 10px;
+        letter-spacing: 4px;
+        top: 46px;
+      }
+
+      .canvas-wrapper {
+        padding: 96px 16px 140px 16px;
+      }
+
+      #mainCanvas {
+        width: 100%;
+        height: 100%;
+      }
+
+      .toolbar {
+        left: 12px;
+        right: 12px;
+        top: auto;
+        bottom: 16px;
+        transform: none;
+        flex-direction: row;
+        width: calc(100% - 24px);
+        padding: 14px 16px;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: space-between;
+      }
+
+      .tool-section {
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .tool-section:nth-child(1) {
+        flex-basis: 45%;
+      }
+      .tool-section:nth-child(2) {
+        flex-basis: 45%;
+      }
+      .tool-section:nth-child(3) {
+        flex-basis: 100%;
+      }
+
+      .color-palette {
+        grid-template-columns: repeat(8, 1fr);
+        gap: 6px;
+      }
+
+      .color-swatch::after {
+        display: none;
+      }
+
+      .clear-btn {
+        padding: 10px;
+      }
+
+      .export-btn {
+        top: 16px;
+        right: 16px;
+        padding: 10px 18px;
+        font-size: 12px;
+        letter-spacing: 1px;
+      }
+
+      .hint-bar {
+        display: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .tool-section:nth-child(1),
+      .tool-section:nth-child(2) {
+        flex-basis: 100%;
+      }
+      .color-palette {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    @media (min-width: 2000px) {
+      .toolbar {
+        left: calc((100vw - 1800px) / 2 + 32px);
+      }
+      .export-btn {
+        right: calc((100vw - 1800px) / 2 + 32px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1 class="app-title">墨韵流光</h1>
+    <p class="app-subtitle">水 墨 交 互 画 卷</p>
+
+    <div class="canvas-wrapper">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+
+    <div class="hint-bar">
+      <span><kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤销</span>
+      <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 重做</span>
+      <span>拖拽画布 · 开始创作</span>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
