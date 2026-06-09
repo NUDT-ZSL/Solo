@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>协作白板</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f0eb;
+    }
+
+    .toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: white;
+      border-bottom: 1px solid #dddddd;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 12px;
+      z-index: 100;
+      user-select: none;
+    }
+
+    .room-code {
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+      background: #f5f0eb;
+      padding: 6px 14px;
+      border-radius: 6px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .room-code:hover {
+      background: #e8e0d8;
+    }
+
+    .room-code-label {
+      font-size: 13px;
+      color: #888;
+      margin-right: -4px;
+    }
+
+    .divider {
+      width: 1px;
+      height: 28px;
+      background: #e0dcd7;
+      margin: 0 4px;
+    }
+
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #555;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .tool-btn:hover {
+      background: #e8e0d8;
+    }
+
+    .tool-btn.active {
+      background: #e8e0d8;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .tool-btn.active-delete {
+      background: #ffdddd;
+      color: #d32f2f;
+      font-weight: 600;
+    }
+
+    .tool-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .color-palette {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .color-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .color-dot:hover {
+      transform: scale(1.15);
+    }
+
+    .color-dot.selected {
+      border-color: #424242;
+      box-shadow: 0 0 0 2px white, 0 0 0 3px #424242;
+    }
+
+    .canvas-container {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+
+    canvas.tool-select {
+      cursor: default;
+    }
+
+    canvas.tool-delete {
+      cursor: not-allowed;
+    }
+
+    .status-indicator {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: white;
+      padding: 8px 14px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      font-size: 13px;
+      color: #666;
+      z-index: 100;
+    }
+
+    .status-indicator .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .status-indicator.connected .dot {
+      background: #66BB6A;
+    }
+
+    .status-indicator.disconnected .dot {
+      background: #FF5252;
+    }
+
+    .user-cursor {
+      position: absolute;
+      pointer-events: none;
+      z-index: 50;
+      transform: translate(-50%, -50%);
+      transition: transform 0.05s linear;
+    }
+
+    .user-cursor-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .user-cursor-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: white;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <span class="room-code-label">房间码:</span>
+    <span class="room-code" id="roomCode" title="点击复制">----</span>
+
+    <div class="divider"></div>
+
+    <button class="tool-btn" id="btnSticky" title="便签">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8l-5-5z"/>
+        <path d="M16 3v5h5"/>
+        <path d="M8 13h8M8 17h5"/>
+      </svg>
+      便签
+    </button>
+
+    <button class="tool-btn" id="btnBrush" title="画笔">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.83 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.83L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3z"/>
+        <path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/>
+        <path d="M14.5 17.5 4.5 15"/>
+      </svg>
+      画笔
+    </button>
+
+    <div class="divider"></div>
+
+    <div class="color-palette" id="colorPalette"></div>
+
+    <div class="divider"></div>
+
+    <button class="tool-btn" id="btnUndo" title="撤销 (Ctrl+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 7v6h6"/>
+        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+      </svg>
+      撤销
+    </button>
+
+    <button class="tool-btn" id="btnDelete" title="删除模式">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 6h18"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      </svg>
+      删除
+    </button>
+  </div>
+
+  <div class="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="status-indicator" id="statusIndicator">
+    <span class="dot"></span>
+    <span id="statusText">连接中...</span>
+  </div>
+
+  <script type="module" src="/src/client.ts"></script>
+</body>
+</html>
