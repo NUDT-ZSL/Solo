@@ -1,25 +1,37 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>螺音灯塔·珊瑚回声</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>心情地图 · Mood Map</title>
     <style>
-      html, body, #root {
+      * {
         margin: 0;
         padding: 0;
+        box-sizing: border-box;
+      }
+      html, body, #root {
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #000000;
+        background: #1A1A2E;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+        color: #fff;
       }
-      * {
-        box-sizing: border-box;
+      button {
+        font-family: inherit;
+        cursor: pointer;
+        border: none;
+        outline: none;
+      }
+      input, textarea {
+        font-family: inherit;
+        outline: none;
       }
     </style>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/client/main.tsx"></script>
   </body>
 </html>
