@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>炼金坩埚</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="game-header">
+      <h1 class="game-title">炼金坩埚</h1>
+      <div class="header-controls">
+        <div id="progress-display" class="progress-display">已发现：0/8</div>
+        <button id="notebook-toggle" class="notebook-btn" title="炼金笔记">📖 笔记</button>
+        <button id="reset-button" class="reset-btn" title="重置进度">↺</button>
+      </div>
+    </header>
+
+    <main class="game-main">
+      <aside id="potion-shelf" class="potion-shelf">
+        <h2 class="shelf-title">药剂架</h2>
+      </aside>
+
+      <section class="crucible-area">
+        <canvas id="crucible-canvas" class="crucible-canvas"></canvas>
+        <div class="crucible-hint">将两种药剂拖入坩埚进行炼金</div>
+      </section>
+
+      <aside id="notebook-panel" class="notebook-panel">
+        <div class="notebook-header">
+          <h2>📜 炼金笔记</h2>
+          <button id="notebook-close" class="notebook-close">×</button>
+        </div>
+        <div id="notebook-content" class="notebook-content"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
