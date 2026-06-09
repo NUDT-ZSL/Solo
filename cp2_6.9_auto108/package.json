@@ -1,0 +1,19 @@
+{
+  "name": "lava-tube-cave-simulator",
+  "version": "1.0.0",
+  "description": "熔岩管洞穴生态模拟器 - 3D可视化发光生物行为",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
