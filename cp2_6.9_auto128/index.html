@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>流体艺术工作室</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #2a2a3a;
+    }
+
+    .app-container {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      grid-template-columns: 1fr auto;
+      width: 100vw;
+      height: 100vh;
+      padding: 20px;
+      gap: 16px;
+    }
+
+    .canvas-wrapper {
+      grid-row: 1;
+      grid-column: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    #mainCanvas {
+      background: #F5F0E1;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      cursor: crosshair;
+    }
+
+    .canvas-info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(30, 30, 46, 0.7);
+      backdrop-filter: blur(8px);
+      padding: 10px 16px;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 13px;
+    }
+
+    .color-preview {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .count-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .count-value {
+      font-weight: 600;
+      color: #FFD700;
+      min-width: 30px;
+      text-align: right;
+    }
+
+    #controlPanel {
+      grid-row: 1;
+      grid-column: 2;
+      width: 220px;
+      background: rgba(30, 30, 46, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 12px;
+      color: #fff;
+      overflow: hidden;
+      transition: width 0.3s ease;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #controlPanel.collapsed {
+      width: 48px;
+    }
+
+    .panel-collapsed-icon {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      font-size: 20px;
+      cursor: pointer;
+      writing-mode: vertical-rl;
+      letter-spacing: 4px;
+      color: #FFD700;
+    }
+
+    #controlPanel.collapsed .panel-content {
+      display: none;
+    }
+
+    #controlPanel.collapsed .panel-collapsed-icon {
+      display: flex;
+    }
+
+    .panel-content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+      overflow-y: auto;
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #FFD700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .color-palette {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .color-swatch {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      border: 1px solid #fff;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+      z-index: 2;
+    }
+
+    .color-swatch.active {
+      border-color: #FFD700;
+      box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+    }
+
+    .slider-label {
+      font-size: 12px;
+      color: #ccc;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .slider-value {
+      color: #FFD700;
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #FFD700;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #FFD700;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+
+    .slider-floating-label {
+      position: absolute;
+      top: -8px;
+      background: #FFD700;
+      color: #1E1E2E;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+
+    .slider-floating-label.visible {
+      opacity: 1;
+    }
+
+    #clearBtn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #FF6B6B, #EE5A5A);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: auto;
+    }
+
+    #clearBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+    }
+
+    #clearBtn.flashing {
+      animation: flashRed 0.5s ease;
+    }
+
+    @keyframes flashRed {
+      0%, 100% { background: linear-gradient(135deg, #FF6B6B, #EE5A5A); }
+      50% { background: linear-gradient(135deg, #FF0000, #CC0000); box-shadow: 0 0 20px rgba(255, 0, 0, 0.8); }
+    }
+
+    .timeline-container {
+      grid-row: 2;
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #timeline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(30, 30, 46, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 10px 20px;
+      border-radius: 12px;
+      overflow: hidden;
+      width: 80%;
+      max-width: 600px;
+      height: 44px;
+    }
+
+    .timeline-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+
+    .timeline-dot:hover {
+      transform: scale(2);
+    }
+
+    .timeline-empty {
+      color: #666;
+      font-size: 12px;
+      flex: 1;
+      text-align: center;
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        grid-template-rows: 1fr auto auto;
+        grid-template-columns: 1fr;
+        padding: 10px;
+        gap: 10px;
+      }
+
+      #controlPanel {
+        grid-row: 2;
+        grid-column: 1;
+        width: 100% !important;
+        height: 80px;
+      }
+
+      #controlPanel.collapsed {
+        width: 100% !important;
+        height: 40px;
+      }
+
+      .panel-collapsed-icon {
+        writing-mode: horizontal-tb;
+      }
+
+      .panel-content {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        padding: 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      .panel-section {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .section-title {
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .color-palette {
+        grid-template-columns: repeat(10, 1fr);
+        gap: 4px;
+      }
+
+      .color-swatch {
+        width: 24px;
+        height: 24px;
+      }
+
+      .slider-group {
+        min-width: 100px;
+      }
+
+      #clearBtn {
+        margin-top: 0;
+        min-width: 80px;
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      .timeline-container {
+        grid-row: 3;
+      }
+
+      #timeline {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="canvas-wrapper">
+      <canvas id="mainCanvas"></canvas>
+      <div class="canvas-info">
+        <div id="colorPreview" class="color-preview"></div>
+        <div class="count-label">
+          <span>色块:</span>
+          <span id="countValue" class="count-value">0</span>
+        </div>
+      </div>
+    </div>
+
+    <aside id="controlPanel">
+      <div class="panel-collapsed-icon">控制面板</div>
+      <div class="panel-content">
+        <div class="panel-section">
+          <div class="section-title">颜色设置</div>
+          <div id="colorPalette" class="color-palette"></div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-title">笔触大小</div>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>大小</span>
+              <span id="brushSizeValue" class="slider-value">15px</span>
+            </div>
+            <input type="range" id="brushSizeSlider" min="5" max="30" value="15" />
+            <div id="brushSizeFloat" class="slider-floating-label">15px</div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-title">扩散速度</div>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>速度</span>
+              <span id="diffSpeedValue" class="slider-value">0.30</span>
+            </div>
+            <input type="range" id="diffSpeedSlider" min="0.1" max="0.8" step="0.01" value="0.3" />
+            <div id="diffSpeedFloat" class="slider-floating-label">0.30</div>
+          </div>
+        </div>
+
+        <button id="clearBtn">清空画布</button>
+      </div>
+    </aside>
+
+    <div class="timeline-container">
+      <div id="timeline">
+        <span class="timeline-empty">暂无操作记录</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
