@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>磁暴脉冲场可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0A1A;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      color: #ffffff;
+      user-select: none;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, #050508 0%, #100A1A 100%);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #hud {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      padding: 12px 18px;
+      background: rgba(26, 26, 46, 0.6);
+      border: 1px solid rgba(124, 77, 255, 0.3);
+      border-radius: 8px;
+      backdrop-filter: blur(8px);
+      font-size: 13px;
+      line-height: 1.8;
+      z-index: 100;
+    }
+
+    #hud .label {
+      color: #18FFFF;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    #hud .value {
+      color: #E040FB;
+      font-family: 'Consolas', monospace;
+    }
+
+    #control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 280px;
+      padding: 20px;
+      background: rgba(26, 26, 46, 0.7);
+      border: 1px solid rgba(124, 77, 255, 0.35);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s ease-in;
+    }
+
+    #control-panel.visible {
+      opacity: 1;
+    }
+
+    #control-panel h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #18FFFF;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+    }
+
+    .control-group {
+      margin-bottom: 18px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.85);
+      margin-bottom: 8px;
+    }
+
+    .control-value {
+      color: #E040FB;
+      font-family: 'Consolas', monospace;
+      font-weight: 600;
+    }
+
+    .slider-container {
+      position: relative;
+      height: 6px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #B388FF 0%, #7C4DFF 60%, #651FFF 100%);
+      box-shadow: 0 0 12px rgba(124, 77, 255, 0.8);
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 18px rgba(124, 77, 255, 1);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #B388FF 0%, #7C4DFF 60%, #651FFF 100%);
+      box-shadow: 0 0 12px rgba(124, 77, 255, 0.8);
+      cursor: pointer;
+      border: none;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.2s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 18px rgba(124, 77, 255, 1);
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="hud">
+    <div><span class="label">粒子数:</span><span class="value" id="particle-count">0 / 0</span></div>
+    <div><span class="label">FPS:</span><span class="value" id="fps-counter">0</span></div>
+  </div>
+
+  <div id="control-panel">
+    <h3>磁暴控制台</h3>
+    <div class="control-group">
+      <div class="control-label">
+        <span>磁暴强度</span>
+        <span class="control-value" id="intensity-value">50</span>
+      </div>
+      <div class="slider-container">
+        <input type="range" id="intensity-slider" min="0" max="100" value="50" step="1" />
+      </div>
+    </div>
+    <div class="control-group">
+      <div class="control-label">
+        <span>颜色轮转速度</span>
+        <span class="control-value" id="color-speed-value">2</span>
+      </div>
+      <div class="slider-container">
+        <input type="range" id="color-speed-slider" min="0" max="5" value="2" step="0.1" />
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
