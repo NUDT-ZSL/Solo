@@ -1,0 +1,18 @@
+{
+  "name": "star-track-surf",
+  "version": "1.0.0",
+  "description": "星轨踏浪 - 2D跑酷游戏",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "3.70.0"
+  },
+  "devDependencies": {
+    "typescript": "5.3.3",
+    "vite": "5.0.10"
+  }
+}
