@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    hmr: true,
-    host: true
+    host: true,
+    port: 5173,
+    open: true
+  },
+  optimizeDeps: {
+    exclude: ['@react-three/fiber', '@react-three/drei']
   }
 })
