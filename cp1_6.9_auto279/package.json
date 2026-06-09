@@ -1,0 +1,19 @@
+{
+  "name": "star-trail-traveler",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "星轨旅人 - 2D无尽滑行游戏",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}
