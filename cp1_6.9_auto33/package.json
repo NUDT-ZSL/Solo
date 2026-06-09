@@ -1,29 +1,23 @@
 {
-  "name": "book-recommendation-engine",
-  "version": "1.0.0",
+  "name": "narrative-box-storyboard-generator",
   "private": true,
-  "description": "书海导览·个性推荐引擎 - 基于标签权重的个性化书单推荐系统",
+  "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "ts-node server/index.ts",
-    "client": "vite",
-    "build": "tsc --noEmit && vite build",
-    "check": "tsc --noEmit"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "check": "tsc -b --noEmit"
   },
   "dependencies": {
-    "express": "^4.19.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^20.12.12",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "concurrently": "^8.2.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5",
-    "vite": "^5.2.11"
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
   }
 }
