@@ -1,149 +1,158 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
-import * as THREE from 'three'
-import ControlPanel, { ControlParams } from './ui/ControlPanel'
-import Tower from './scene/Tower'
-import { startLoop, stopLoop, ORBIT_RADIUS } from './utils/animationLoop'
+import { useCallback, useEffect, useRef, useState } from 'react';
+import TextInput from './components/TextInput';
+import BrushSelector from './components/BrushSelector';
+import CanvasRenderer, { CanvasRendererHandle } from './components/CanvasRenderer';
+import { BRUSH_PRESETS, BrushPreset, TextureParams } from './utils/textureEngine';
 
-const titleStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: '20px',
-  left: '20px',
-  fontSize: '16px',
-  color: 'rgba(255,255,255,0.75)',
-  letterSpacing: '2px',
-  fontWeight: 400,
-  zIndex: 100,
-  textShadow: '0 0 10px rgba(0,255,255,0.3)',
-  transition: 'all 0.3s ease',
-  pointerEvents: 'none',
-  userSelect: 'none',
-}
+function App() {
+  const [text, setText] = useState('质墨 Texture');
+  const [fontFamily, setFontFamily] = useState('"Microsoft YaHei", "PingFang SC", sans-serif');
+  const [preset, setPreset] = useState<BrushPreset>(BRUSH_PRESETS[0]);
+  const [customParams, setCustomParams] = useState<Partial<TextureParams>>({});
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [redrawing, setRedrawing] = useState(false);
+  const renderRef = useRef<CanvasRendererHandle>(null);
+  const debounceRef = useRef<number | null>(null);
 
-const AutoOrbit: React.FC<{ isBreathing: boolean }> = ({ isBreathing }) => {
-  const { camera } = useThree()
-  const orbitAngle = useRef(0)
-  const initialCameraPos = useRef(new THREE.Vector3(5, 3, 5))
-  const controlsRef = useRef<any>(null)
+  const handlePresetChange = useCallback((p: BrushPreset) => {
+    setPreset(p);
+    setCustomParams({});
+  }, []);
 
-  useFrame((state, delta) => {
-    if (isBreathing) {
-      orbitAngle.current += 0.01 * delta * 60
-      const x = Math.cos(orbitAngle.current) * ORBIT_RADIUS
-      const z = Math.sin(orbitAngle.current) * ORBIT_RADIUS
-      const y = 2 + Math.sin(orbitAngle.current * 0.5) * 0.8
-      camera.position.lerp(new THREE.Vector3(x, y, z), 0.02)
-      camera.lookAt(0, 0, 0)
+  const handleParamChange = useCallback((key: keyof TextureParams, value: number) => {
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
     }
-  })
-
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      enablePan={false}
-      minDistance={3}
-      maxDistance={12}
-      enableDamping
-      dampingFactor={0.08}
-      makeDefault
-    />
-  )
-}
-
-const App: React.FC = () => {
-  const [params, setParams] = useState<ControlParams>({
-    cableCount: 120,
-    rotationSpeed: 0.05,
-    brightness: 0.6,
-    starDensity: 1200,
-  })
-  const [isBreathing, setIsBreathing] = useState(false)
-  const [breathingIntensity, setBreathingIntensity] = useState(1.0)
-  const [fov, setFov] = useState(45)
-  const isBreathingRef = useRef(false)
-
-  useEffect(() => {
-    const checkMobile = () => {
-      if (window.innerWidth < 768) {
-        setFov(55)
-      } else {
-        setFov(45)
-      }
-    }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
-
-  useEffect(() => {
-    startLoop({
-      onBreathModeChange: (breathing) => {
-        setIsBreathing(breathing)
-        isBreathingRef.current = breathing
-      },
-      onTick: (delta, intensity) => {
-        if (isBreathingRef.current) {
-          setBreathingIntensity(intensity)
+    debounceRef.current = window.setTimeout(() => {
+      setCustomParams(prev => {
+        const next: Partial<TextureParams> = { ...prev };
+        if (key === 'opacityMax') {
+          next.opacityMax = value;
+          next.opacityMin = Math.min(value, 0.3 + value * 0.3);
         } else {
-          setBreathingIntensity(1.0)
+          (next as Record<string, unknown>)[key] = value;
         }
-      },
-      onAutoOrbit: (delta) => {},
-    })
+        return next;
+      });
+    }, 480);
+  }, []);
+
+  useEffect(() => {
     return () => {
-      stopLoop()
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = await renderRef.current?.exportHighRes(1920, 1080);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeText = (text || 'zhimo').replace(/[\\/:*?"<>|\s]/g, '_').slice(0, 20);
+        a.download = `zhimo_${preset.name}_${safeText}_${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } finally {
+      setTimeout(() => setExporting(false), 300);
     }
-  }, [])
-
-  const handleParamsChange = useCallback((newParams: ControlParams) => {
-    setParams(newParams)
-  }, [])
-
-  const effectiveRotationSpeed = isBreathing ? 0.02 : params.rotationSpeed
+  }, [exporting, text, preset.name]);
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0A0A1A', position: 'relative' }}>
-      <div style={titleStyle}>经纬塔</div>
+    <div className="app-root">
+      <header className="app-header">
+        <div className="header-left">
+          <div className="logo-mark">质</div>
+          <div className="logo-title">
+            <h1>质墨</h1>
+            <span>ZhiMo · 肌理艺术字</span>
+          </div>
+        </div>
+        <div className="header-right">
+          <div className="status-indicator">
+            <span className={`status-dot ${redrawing ? 'busy' : 'idle'}`} />
+            <span className="status-text">{redrawing ? '绘制中...' : '就绪'}</span>
+          </div>
+          <button
+            className={`export-btn ${exporting ? 'exporting' : ''}`}
+            onClick={handleExport}
+            disabled={exporting}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            {exporting ? '导出中...' : '导出 PNG'}
+          </button>
+          <button
+            className={`mobile-toggle ${panelOpen ? 'open' : ''}`}
+            onClick={() => setPanelOpen(o => !o)}
+            aria-label="控制面板"
+          >
+            <span /><span /><span />
+          </button>
+        </div>
+      </header>
 
-      <ControlPanel params={params} onChange={handleParamsChange} />
+      <div className="app-body">
+        <aside className={`control-panel ${panelOpen ? 'open' : ''}`}>
+          <div className="panel-scroll">
+            <TextInput
+              value={text}
+              fontFamily={fontFamily}
+              onTextChange={setText}
+              onFontChange={setFontFamily}
+            />
+            <BrushSelector
+              selected={preset}
+              customParams={customParams}
+              onSelectPreset={handlePresetChange}
+              onParamChange={handleParamChange}
+            />
+            <div className="control-section info-section">
+              <div className="section-header">
+                <span className="section-title">操作提示</span>
+              </div>
+              <ul className="tips-list">
+                <li>· 切换笔触会有 2 秒渐变过渡</li>
+                <li>· 调整滑块会在 0.5 秒后重绘</li>
+                <li>· 拖拽画布可平移检查纹理细节</li>
+                <li>· 导出为 1920×1080 透明背景 PNG</li>
+              </ul>
+            </div>
+          </div>
+        </aside>
 
-      <Canvas
-        style={{ width: '100%', height: '100%' }}
-        camera={{
-          position: [5, 3, 5],
-          fov: fov,
-          near: 0.1,
-          far: 1000,
-          aspect: window.innerWidth / window.innerHeight,
-        }}
-        gl={{
-          antialias: true,
-          alpha: false,
-          powerPreference: 'high-performance',
-        }}
-        dpr={[1, 2]}
-        onCreated={({ gl, scene }) => {
-          gl.setClearColor('#0A0A1A')
-          scene.fog = new THREE.FogExp2('#0A0A1A', 0.04)
-        }}
-      >
-        <ambientLight intensity={0.3} color="#8888FF" />
-        <pointLight position={[10, 10, 10]} intensity={0.6} color="#FFFFFF" />
-        <pointLight position={[-10, -5, -10]} intensity={0.4} color="#00FFFF" />
-        <directionalLight position={[0, 5, 5]} intensity={0.3} color="#FFFFFF" />
+        <main className="canvas-area">
+          <CanvasRenderer
+            ref={renderRef}
+            text={text}
+            fontFamily={fontFamily}
+            preset={preset}
+            customParams={customParams}
+            transitionDuration={2000}
+            onRedrawStart={() => setRedrawing(true)}
+            onRedrawEnd={() => setRedrawing(false)}
+          />
+        </main>
+      </div>
 
-        <AutoOrbit isBreathing={isBreathing} />
-
-        <Tower
-          params={params}
-          isBreathing={isBreathing}
-          breathingIntensity={breathingIntensity}
-          rotationSpeed={effectiveRotationSpeed}
+      {panelOpen && (
+        <div
+          className="mobile-overlay"
+          onClick={() => setPanelOpen(false)}
         />
-      </Canvas>
+      )}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
