@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>潮汐碑文·遗迹解谜</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #050a14; }
+      #loading {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(circle at center, #0D1B2A 0%, #050a14 100%);
+        transition: opacity 0.6s ease;
+      }
+      #loading.hide { opacity: 0; pointer-events: none; }
+      .loader {
+        width: 80px; height: 80px; position: relative;
+      }
+      .loader::before, .loader::after {
+        content: ''; position: absolute; border-radius: 50%;
+        border: 3px solid transparent;
+      }
+      .loader::before {
+        inset: 0;
+        border-top-color: #4FC3F7;
+        border-right-color: #1A237E;
+        animation: spin 1.5s linear infinite;
+      }
+      .loader::after {
+        inset: 12px;
+        border-bottom-color: #FFD54F;
+        border-left-color: #CE93D8;
+        animation: spin 1s linear infinite reverse;
+      }
+      .loader-text {
+        position: absolute; bottom: -50px; left: 50%; transform: translateX(-50%);
+        font-family: 'Cinzel', serif; color: #4FC3F7; font-size: 14px; letter-spacing: 3px;
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    </style>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="loader"><div class="loader-text">LOADING</div></div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
