@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>墨迹谜格</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div class="scroll-container">
+    <header class="scroll-header">
+      <h1 class="title">墨迹谜格</h1>
+      <div class="divider"></div>
+    </header>
+    <main class="scroll-body">
+      <div class="canvas-wrapper">
+        <div class="info-bar top-info" id="resultDisplay"></div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="info-bar bottom-info">
+          <span id="timer">用时: 00:00</span>
+          <span id="progress">进度: 0/0</span>
+        </div>
+      </div>
+    </main>
+    <button class="reset-btn" id="resetBtn" title="重置">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+        <path d="M3 3v5h5" />
+      </svg>
+    </button>
+    <div class="achievement-modal" id="achievementModal" style="display:none;">
+      <div class="modal-overlay" id="modalOverlay"></div>
+      <div class="achievement-card" id="achievementCard">
+        <canvas id="cardCanvas" width="300" height="400"></canvas>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
