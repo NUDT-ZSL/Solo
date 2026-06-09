@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
+  <title>碳基旋律 - 植物生长音乐盒</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, #0D1B2A 0%, #1B2E21 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      width: 800px;
+      height: 500px;
+      background: rgba(10, 10, 18, 0.7);
+      border-radius: 16px;
+      border: 1px solid transparent;
+      background-image: 
+        linear-gradient(rgba(10, 10, 18, 0.7), rgba(10, 10, 18, 0.7)),
+        linear-gradient(135deg, #2E7D32, #1B5E20);
+      background-origin: border-box;
+      background-clip: padding-box, border-box;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      overflow: hidden;
+      transition: all 0.3s ease-out;
+    }
+
+    #main-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+
+    .progress-container {
+      width: 400px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      transition: all 0.3s ease-out;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #FFD54F, #FF8F00);
+      border-radius: 3px;
+      transition: width 0.3s ease-out;
+    }
+
+    .title {
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      letter-spacing: 4px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 12px;
+      letter-spacing: 2px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    @media (max-width: 768px) {
+      .canvas-wrapper {
+        width: 95vw;
+        height: 60vw;
+      }
+      .progress-container {
+        width: 80vw;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="canvas-wrapper">
+      <div class="title">碳 基 旋 律</div>
+      <canvas id="main-canvas"></canvas>
+      <div class="hint">点击节点 · 聆听旋律</div>
+    </div>
+    <div class="progress-container">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
