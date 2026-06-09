@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>海洋生态3D可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0a0a0f;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #a0c0ff;
+    }
+
+    #root {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #scene-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #control-panel {
+      position: fixed;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 200px;
+      background: rgba(10, 20, 40, 0.7);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(100, 180, 255, 0.2);
+      z-index: 100;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(100, 180, 255, 0.2);
+    }
+
+    .toggle-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .toggle-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 8px;
+      color: #a0c0ff;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .toggle-btn.active {
+      background: rgba(100, 180, 255, 0.3);
+      color: #ffffff;
+      transform: scale(1.02);
+    }
+
+    .toggle-btn .icon {
+      width: 16px;
+      height: 16px;
+      transform: translateX(20px);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-btn.active .icon {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slider-label {
+      font-size: 12px;
+      color: #a0c0ff;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .slider-label .value {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #1a2a3a;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4a8aff;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(74, 138, 255, 0.8);
+      transition: box-shadow 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 20px rgba(74, 138, 255, 1);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4a8aff;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px rgba(74, 138, 255, 0.8);
+    }
+
+    #info-card {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 280px;
+      background: rgba(10, 20, 40, 0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(100, 180, 255, 0.3);
+      z-index: 100;
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    #info-card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .info-header {
+      font-size: 16px;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(100, 180, 255, 0.2);
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 6px 0;
+    }
+
+    .info-row .label {
+      color: #a0c0ff;
+    }
+
+    .info-row .value {
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        top: 20px;
+        right: 20px;
+        left: 20px;
+        transform: none;
+        width: auto;
+      }
+
+      .toggle-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+
+      .toggle-btn {
+        flex: 1;
+        min-width: 100px;
+      }
+
+      #info-card {
+        top: auto;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <canvas id="scene-canvas"></canvas>
+
+    <div id="control-panel">
+      <div class="panel-title">控制面板</div>
+      <div class="toggle-group">
+        <button class="toggle-btn active" data-layer="shallow">
+          <span>浅层 (磷虾)</span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12l5 5L20 7"></path>
+          </svg>
+        </button>
+        <button class="toggle-btn active" data-layer="mid">
+          <span>中层 (水母)</span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12l5 5L20 7"></path>
+          </svg>
+        </button>
+        <button class="toggle-btn active" data-layer="deep">
+          <span>深层 (鲨鱼)</span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12l5 5L20 7"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="slider-container">
+        <div class="slider-label">
+          <span>速度倍率</span>
+          <span class="value" id="speed-value">1.0x</span>
+        </div>
+        <input type="range" id="speed-slider" min="0.5" max="2" step="0.1" value="1" />
+      </div>
+    </div>
+
+    <div id="info-card">
+      <div class="info-header" id="info-name">生物信息</div>
+      <div class="info-row">
+        <span class="label">深度范围</span>
+        <span class="value" id="info-depth">-</span>
+      </div>
+      <div class="info-row">
+        <span class="label">当前坐标</span>
+        <span class="value" id="info-coord">-</span>
+      </div>
+      <div class="info-row">
+        <span class="label">种群数量</span>
+        <span class="value" id="info-count">-</span>
+      </div>
+      <div class="info-row">
+        <span class="label">所在层级</span>
+        <span class="value" id="info-layer">-</span>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
