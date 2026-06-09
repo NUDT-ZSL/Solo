@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>灵境回声</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(180deg, #0A0515 0%, #1A0A2E 100%);
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    #progress-bar-container {
+      position: absolute;
+      top: 8%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      overflow: hidden;
+      z-index: 10;
+    }
+
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #FF6B6B, #FFD93D, #6BCB77, #4D96FF, #9B59B6);
+      border-radius: 3px;
+      transition: width 0.1s ease-out;
+    }
+
+    #controls {
+      position: absolute;
+      bottom: 8%;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 16px;
+      z-index: 10;
+    }
+
+    .control-btn {
+      padding: 12px 28px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      color: #FFFFFF;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: all 0.2s ease-out;
+      min-width: 90px;
+    }
+
+    .control-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      color: #FFD700;
+      transform: scale(1.05);
+    }
+
+    .control-btn:active {
+      transform: scale(0.95);
+    }
+
+    .control-btn.active {
+      background: rgba(255, 215, 0, 0.3);
+      border-color: #FFD700;
+      color: #FFD700;
+    }
+
+    @media (max-width: 768px) {
+      #progress-bar-container {
+        top: 5%;
+        width: 70%;
+      }
+
+      #controls {
+        bottom: 5%;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 80%;
+        gap: 12px;
+      }
+
+      .control-btn {
+        flex: 0 0 calc(50% - 6px);
+        padding: 14px 16px;
+        font-size: 14px;
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+    <div id="progress-bar-container">
+      <div id="progress-bar"></div>
+    </div>
+    <div id="controls">
+      <button class="control-btn" id="btn-play">播放</button>
+      <button class="control-btn" id="btn-loop">循环</button>
+      <button class="control-btn" id="btn-clear">清空</button>
+      <button class="control-btn" id="btn-random">随机</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
