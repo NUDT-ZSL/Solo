@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>光绢画轴</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: "FangSong", "STFangsong", "华文仿宋", "SimSun", serif;
+    }
+
+    body {
+      position: relative;
+      background: #f5efe0;
+    }
+
+    #app {
+      position: fixed;
+      inset: 30px;
+      background: #f7f1e3;
+      border-radius: 2px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(139, 119, 87, 0.15) inset;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    #titletag {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: rgba(245, 236, 217, 0.3);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #titletext {
+      font-size: 18px;
+      color: hsl(0, 0%, 40%);
+      letter-spacing: 8px;
+      font-weight: 300;
+      white-space: nowrap;
+      position: absolute;
+      animation: scrolltext 2s linear infinite;
+    }
+
+    @keyframes scrolltext {
+      0% {
+        transform: translateX(-100%);
+        opacity: 0;
+      }
+      20% {
+        opacity: 1;
+      }
+      80% {
+        opacity: 1;
+      }
+      100% {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+
+    #seal-btn {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      width: 52px;
+      height: 52px;
+      background: hsl(0, 100%, 50%);
+      border: 2px solid hsl(0, 80%, 40%);
+      color: #fff;
+      font-size: 14px;
+      font-family: "KaiTi", "STKaiti", "华文楷体", serif;
+      cursor: pointer;
+      writing-mode: vertical-rl;
+      letter-spacing: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      user-select: none;
+    }
+
+    #seal-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 3px 3px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    #seal-btn:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+    <div id="titletag">
+      <span id="titletext">远岫之境</span>
+    </div>
+    <button id="seal-btn" type="button">朱印</button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
