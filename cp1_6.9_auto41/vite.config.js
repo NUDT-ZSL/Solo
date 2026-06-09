@@ -6,13 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/ws': {
-        target: 'ws://localhost:3001',
-        ws: true,
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/ws/, ''),
-      },
-      '/health': {
+      '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
