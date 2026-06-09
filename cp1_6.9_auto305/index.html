@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-width=800px" />
+  <title>泥语流光 - 数字陶艺工坊</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="control-panel left-panel">
+    <div class="panel-title">捏塑工坊</div>
+    <div class="stat-item">
+      <div class="stat-label">捏压力度</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="pressure-fill"></div>
+      </div>
+      <div class="stat-value" id="pressure-value">0%</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">形变顶点</div>
+      <div class="stat-value big" id="vertex-count">0</div>
+    </div>
+  </div>
+
+  <div class="control-panel right-panel">
+    <div class="panel-title">彩釉流光</div>
+    <div class="stat-item">
+      <div class="stat-label">色相偏移</div>
+      <div class="hue-dial">
+        <div class="dial-ring"></div>
+        <div class="dial-pointer" id="hue-pointer"></div>
+        <div class="dial-center" id="hue-value">0°</div>
+      </div>
+    </div>
+    <button class="reset-btn" id="reset-btn" title="重置 (R)">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <path d="M16 4C9.373 4 4 9.373 4 16C4 22.627 9.373 28 16 28C22.627 28 28 22.627 28 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M16 10V16L20 20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="16" y="9" text-anchor="middle" fill="currentColor" font-size="8" font-family="Arial" font-weight="bold">R</text>
+      </svg>
+    </button>
+  </div>
+
+  <div class="hint-text">左键拖拽捏塑 · 中键旋转视角 · 滚轮缩放 · 右键偏移色相 · R键重置</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
