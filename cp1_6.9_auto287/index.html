@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐱</text></svg>" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🐾 灵猫纸牌屋 🧶</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #3B2F2F 0%, #2B1F1F 100%);
+      font-family: 'Comic Sans MS', 'Marker Felt', 'Bradley Hand', cursive;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    #game-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 8px #4A3728, 0 0 0 12px #2B1F1F;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    #game-title {
+      position: absolute;
+      top: -60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 42px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #FFD700, #FFA500, #FF6347);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3);
+      letter-spacing: 4px;
+      white-space: nowrap;
+      animation: titleWiggle 3s ease-in-out infinite;
+    }
+
+    @keyframes titleWiggle {
+      0%, 100% { transform: translateX(-50%) rotate(-1deg); }
+      50% { transform: translateX(-50%) rotate(1deg); }
+    }
+
+    .title-icon {
+      -webkit-text-fill-color: initial;
+      display: inline-block;
+      animation: bounceIcon 2s ease-in-out infinite;
+    }
+
+    .title-icon:nth-child(2) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes bounceIcon {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(10deg); }
+    }
+
+    #game {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="game-title">
+    <span class="title-icon">🐾</span>
+    灵猫纸牌屋
+    <span class="title-icon">🧶</span>
+  </h1>
+  <div id="game-container">
+    <canvas id="game"></canvas>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
