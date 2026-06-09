@@ -1,0 +1,17 @@
+{
+  "name": "aurora-feather",
+  "version": "1.0.0",
+  "description": "极光栖羽 - 2D横向卷轴收集游戏",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.70.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}
