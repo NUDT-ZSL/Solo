@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>城市空气质量可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #ffffff;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #canvas {
+      display: block;
+      cursor: grab;
+    }
+
+    #canvas:active {
+      cursor: grabbing;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    .glass:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .glass:active {
+      transform: scale(0.98);
+    }
+
+    #top-right {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-end;
+      z-index: 10;
+    }
+
+    #time-control {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 280px;
+    }
+
+    #time-control label {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+      white-space: nowrap;
+    }
+
+    #time-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    #time-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #00ffaa;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    #time-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    #time-value {
+      font-size: 14px;
+      color: #00ffaa;
+      font-weight: 600;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    #wind-control {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 280px;
+    }
+
+    #wind-control label {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+      white-space: nowrap;
+    }
+
+    #wind-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    #wind-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #00ffaa;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    #wind-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    #wind-value {
+      font-size: 14px;
+      color: #00ffaa;
+      font-weight: 600;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    #bottom-left {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 10;
+    }
+
+    #legend {
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #legend-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 2px;
+    }
+
+    #legend-bar {
+      width: 200px;
+      height: 20px;
+      border-radius: 4px;
+    }
+
+    #legend-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    #legend-particles {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+      margin-top: 4px;
+    }
+
+    .particle-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .particle-dot.white {
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .particle-dot.yellow {
+      background: rgba(255, 235, 130, 0.9);
+    }
+
+    #bottom-right {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10;
+    }
+
+    #data-panel {
+      padding: 14px 18px;
+      min-width: 200px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      cursor: move;
+      user-select: none;
+    }
+
+    #data-panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+
+    .data-label {
+      color: rgba(255, 255, 255, 0.75);
+    }
+
+    .data-value {
+      color: #00ffaa;
+      font-weight: 600;
+      font-family: "SF Mono", Monaco, Consolas, monospace;
+    }
+
+    #mobile-toggle-legend,
+    #mobile-toggle-panel {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      #legend, #data-panel {
+        display: none;
+      }
+
+      #legend.collapsed, #data-panel.collapsed {
+        display: none;
+      }
+
+      #legend.expanded, #data-panel.expanded {
+        display: flex;
+      }
+
+      #mobile-toggle-legend,
+      #mobile-toggle-panel {
+        display: block;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: #ffffff;
+        cursor: pointer;
+      }
+
+      #top-right {
+        top: 10px;
+        right: 10px;
+      }
+
+      #time-control, #wind-control {
+        min-width: auto;
+        padding: 8px 12px;
+        gap: 8px;
+      }
+
+      #time-control label, #wind-control label {
+        font-size: 11px;
+      }
+
+      #bottom-left {
+        bottom: 10px;
+        left: 10px;
+      }
+
+      #bottom-right {
+        bottom: 10px;
+        right: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+
+    <div id="top-right">
+      <div id="time-control" class="glass">
+        <label for="time-slider">时间</label>
+        <input type="range" id="time-slider" min="0" max="24" step="1" value="12" />
+        <span id="time-value">12:00</span>
+      </div>
+      <div id="wind-control" class="glass">
+        <label for="wind-slider">风向</label>
+        <input type="range" id="wind-slider" min="0" max="360" step="10" value="90" />
+        <span id="wind-value">90°</span>
+      </div>
+    </div>
+
+    <div id="bottom-left">
+      <button id="mobile-toggle-legend" class="glass">图例 ▾</button>
+      <div id="legend" class="glass expanded">
+        <div id="legend-title">污染物浓度 (μg/m³)</div>
+        <canvas id="legend-bar" width="200" height="20"></canvas>
+        <div id="legend-labels">
+          <span>0</span>
+          <span>500</span>
+        </div>
+        <div id="legend-particles">
+          <span class="particle-dot white"></span>
+          <span>低浓度区</span>
+          <span class="particle-dot yellow"></span>
+          <span>高浓度区</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="bottom-right">
+      <button id="mobile-toggle-panel" class="glass">数据 ▾</button>
+      <div id="data-panel" class="expanded">
+        <div id="data-panel-title">实时数据</div>
+        <div class="data-row">
+          <span class="data-label">当前热力值:</span>
+          <span class="data-value" id="heat-value">0</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">粒子总数:</span>
+          <span class="data-value" id="particle-count">0</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">平均流速:</span>
+          <span class="data-value" id="avg-velocity">0.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
