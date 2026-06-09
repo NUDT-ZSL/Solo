@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>符文绘咒 - Rune Spellcraft</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0015;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, #1a0a3e 0%, #0d0520 40%, #050010 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Georgia', 'Times New Roman', serif;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      cursor: none;
+    }
+
+    .game-title {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #d4af37;
+      font-size: 28px;
+      letter-spacing: 8px;
+      text-shadow: 
+        0 0 10px #d4af37,
+        0 0 20px #9370db,
+        0 0 40px #663399;
+      pointer-events: none;
+      z-index: 10;
+      font-weight: bold;
+    }
+
+    .loading-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #d4af37;
+      font-size: 24px;
+      letter-spacing: 4px;
+      animation: pulse 1.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; text-shadow: 0 0 10px #d4af37; }
+      50% { opacity: 1; text-shadow: 0 0 30px #d4af37, 0 0 50px #9370db; }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="game-title">符 文 绘 咒</div>
+    <div id="game"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
