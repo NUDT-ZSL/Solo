@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#F5E6CA" />
+  <title>琥珀诗痕</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand+SC&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #F5E6CA;
+      font-family: 'Patrick Hand SC', 'Ma Shan Zheng', cursive;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      touch-action: none;
+      cursor: pointer;
+    }
+
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #ui-layer > * {
+      pointer-events: auto;
+    }
+
+    .poem-input-wrapper {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(560px, 85vw);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .poem-input-wrapper.hidden {
+      display: none;
+    }
+
+    #poem-input {
+      width: 100%;
+      min-height: 160px;
+      padding: 24px 28px;
+      background: rgba(255, 250, 240, 0.7);
+      border: 2px solid rgba(74, 55, 40, 0.3);
+      border-radius: 6px;
+      font-family: 'Patrick Hand SC', 'Ma Shan Zheng', cursive;
+      font-size: 22px;
+      line-height: 1.8;
+      color: #4A3728;
+      resize: none;
+      outline: none;
+      box-shadow: inset 0 0 30px rgba(180, 140, 90, 0.1);
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    #poem-input::placeholder {
+      color: rgba(74, 55, 40, 0.4);
+      font-family: 'Patrick Hand SC', 'Ma Shan Zheng', cursive;
+    }
+
+    #poem-input:focus {
+      border-color: rgba(74, 55, 40, 0.6);
+      box-shadow: inset 0 0 30px rgba(180, 140, 90, 0.15), 0 0 20px rgba(232, 168, 124, 0.2);
+    }
+
+    #char-counter {
+      align-self: flex-end;
+      font-size: 14px;
+      color: rgba(74, 55, 40, 0.6);
+      margin-top: -12px;
+    }
+
+    #seal-btn {
+      padding: 14px 52px;
+      background: linear-gradient(135deg, #8B2635 0%, #A53A4A 50%, #8B2635 100%);
+      color: #F8E7D6;
+      font-family: 'Ma Shan Zheng', 'Patrick Hand SC', cursive;
+      font-size: 24px;
+      letter-spacing: 6px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(139, 38, 53, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+
+    #seal-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(139, 38, 53, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    #seal-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 10px rgba(139, 38, 53, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    #seal-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #reset-btn {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 32px;
+      background: rgba(74, 55, 40, 0.15);
+      color: #4A3728;
+      font-family: 'Patrick Hand SC', cursive;
+      font-size: 16px;
+      border: 1.5px solid rgba(74, 55, 40, 0.3);
+      border-radius: 4px;
+      cursor: pointer;
+      display: none;
+      transition: background 0.2s;
+    }
+
+    #reset-btn:hover {
+      background: rgba(74, 55, 40, 0.25);
+    }
+
+    #reset-btn.show {
+      display: block;
+    }
+
+    @media (max-width: 640px) {
+      .poem-input-wrapper {
+        width: 88vw;
+      }
+
+      #poem-input {
+        min-height: 200px;
+        font-size: 20px;
+        padding: 20px 22px;
+      }
+
+      #seal-btn {
+        padding: 12px 44px;
+        font-size: 20px;
+        letter-spacing: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+    <div id="ui-layer">
+      <div class="poem-input-wrapper" id="input-wrapper">
+        <textarea id="poem-input" placeholder="在此写下或粘贴一段短诗...（最多140字）" maxlength="140"></textarea>
+        <div id="char-counter">0 / 140</div>
+        <button id="seal-btn" disabled>封　印</button>
+      </div>
+      <button id="reset-btn">重新题诗</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
