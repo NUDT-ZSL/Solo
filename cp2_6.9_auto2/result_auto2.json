@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-06-08T16:01:37.745Z",
+  "task_name": "auto2",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我想做一个基于Web的实时协作白板项目，想法是让团队成员能在浏览器中一起画图、贴便签、拖拽聊天，类似Miro的轻量版。希望它能做到：第一，支持多用户同时在线绘制，每个人的笔迹用不同颜色区分，而且延迟要低于200ms；第二，提供便签功能，双击空白处可以添加彩色便签，便签可以拖拽移动位置和输入文本；第三，支持撤销和重做操作，每个人独立的历史记录，不会互相干扰；第四，画布要能无限缩放和平移，缩放动画用0.2秒缓动过渡，不能卡顿；第五，支持导出为PNG图片，要包含所有便签和绘制内容。界面上希望主色调是柔和的蓝灰搭配白色，工具条在左侧竖排布局，每个工具图标用微妙的hover缩放动画和颜色渐变反馈，光标样式随工具变化（画笔变十字，橡皮变圆形）。画布背景是浅灰网格线，当用户绘画时笔触有半透明光晕效果。便签采用圆角卡片设计，搭配明快配色（柠檬黄、薄荷绿、珊瑚粉），拖拽时带弹簧般的弹性动画。整个页面需要适配从平板到桌面屏幕，工具条在窄屏下自动收折成汉堡菜单。性能上要求连续快速绘画时帧率不低于30FPS，内存占用不能超过200MB。实现用TypeScript和React，后端用Node.js配合WebSocket处理协作同步。把代码拆成以下文件：\n - package.json（含依赖：react, react-dom, socket.io-client, roughjs, typescript, vite, @vitejs/plugin-react, 启动脚本：dev: vite）\n - vite.config.ts（React插件配置）\n - tsconfig.json（严格模式，JSX保留）\n - index.html（入口html，带全屏挂载点）\n - src/main.tsx（ReactDOM渲染根组件）\n - src/App.tsx（主布局：左侧工具栏、中央画布、底部状态栏，管理Socket连接和全局状态）\n - src/Whiteboard.tsx（画布核心组件：处理鼠标事件、绘制图形、缩放平移变换、便签渲染，依赖roughjs）\n - src/Toolbar.tsx（工具选择组件：画笔、橡皮、便签、撤销、重做、导出，响应式收折）\n - src/socket.ts（WebSocket连接管理：发送绘制事件、接收广播、心跳保活，导出connect和disconnect函数）\n - src/types.ts（定义Point, Stroke, StickyNote等类型接口）\n - server/index.ts（后端：Express + socket.io，分发绘制事件和便签数据，管理房间状态）\n - server/package.json（含依赖：express, socket.io, 启动脚本：node index.ts）\n - server/tsconfig.json（Node目标）\n跑的时候先 cd server && npm install && npm run dev，再另开终端 cd .. && npm install && npm run dev，打开浏览器就能看到白板。",
+  "session_id": null,
+  "trace": "null"
+}
