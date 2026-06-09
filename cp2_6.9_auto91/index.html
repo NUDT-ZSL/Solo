@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>基因序列可视化与比对</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100vh;
+    }
+
+    .toolbar {
+      flex-shrink: 0;
+      height: 56px;
+      background: #21262d;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+    }
+
+    .toolbar-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .toolbar-item label {
+      font-size: 11px;
+      color: #8b949e;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .seq-input {
+      width: 280px;
+      height: 32px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 0 10px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .seq-input:focus {
+      border-color: #58a6ff;
+    }
+
+    .seq-input.invalid {
+      border-color: #f85149;
+    }
+
+    .char-count {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px;
+      color: #8b949e;
+      pointer-events: none;
+      font-family: inherit;
+    }
+
+    .char-count.invalid {
+      color: #f85149;
+    }
+
+    .type-select {
+      height: 32px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: 13px;
+      padding: 0 8px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+    }
+
+    .type-select:focus {
+      border-color: #58a6ff;
+    }
+
+    .btn {
+      height: 32px;
+      padding: 0 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #ffffff;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #238636 0%, #2ea043 100%);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(180deg, #2ea043 0%, #3fb950 100%);
+    }
+
+    .btn-secondary {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+    }
+
+    .btn-secondary:hover {
+      background: #30363d;
+    }
+
+    .canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #0d1117;
+    }
+
+    #mainCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    #mainCanvas:active {
+      cursor: grabbing;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #21262d;
+      border-radius: 5px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #484f58;
+      border-radius: 5px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #58a6ff;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+      min-width: 160px;
+    }
+
+    .tooltip-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #e6edf3;
+    }
+
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      line-height: 1.6;
+      color: #8b949e;
+    }
+
+    .tooltip-row span:last-child {
+      color: #e6edf3;
+      font-family: 'Courier New', monospace;
+    }
+
+    .status-bar {
+      flex-shrink: 0;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      font-size: 12px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-label {
+      color: #8b949e;
+    }
+
+    .status-value {
+      color: #e6edf3;
+      font-family: 'Courier New', monospace;
+      font-weight: 600;
+    }
+
+    .match-progress {
+      flex: 1;
+      min-width: 120px;
+      height: 8px;
+      background: #21262d;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .match-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #00FF88 0%, #FFD93D 50%, #FF6B6B 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .export-area {
+      flex-shrink: 0;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      padding: 10px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.53);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 1s ease;
+      pointer-events: none;
+    }
+
+    .loading-overlay.fade-out {
+      opacity: 0;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #30363d;
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .toolbar {
+        height: auto;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px;
+        gap: 10px;
+      }
+
+      .toolbar-item {
+        width: 100%;
+      }
+
+      .seq-input {
+        width: 100%;
+      }
+
+      .canvas-container {
+        height: 55vh;
+      }
+
+      .status-bar {
+        gap: 12px;
+        padding: 8px 12px;
+      }
+
+      .export-area {
+        padding: 8px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="toolbar">
+      <div class="toolbar-item">
+        <label>序列 1</label>
+        <div class="input-wrapper">
+          <input type="text" id="seq1" class="seq-input" maxlength="2000" placeholder="输入DNA/RNA序列 (50-2000 bp)" />
+          <span class="char-count" id="count1">0/2000</span>
+        </div>
+      </div>
+      <div class="toolbar-item">
+        <label>序列 2</label>
+        <div class="input-wrapper">
+          <input type="text" id="seq2" class="seq-input" maxlength="2000" placeholder="输入DNA/RNA序列 (50-2000 bp)" />
+          <span class="char-count" id="count2">0/2000</span>
+        </div>
+      </div>
+      <div class="toolbar-item">
+        <label>序列类型</label>
+        <select id="seqType" class="type-select">
+          <option value="DNA">DNA (A/T/C/G)</option>
+          <option value="RNA">RNA (A/U/C/G)</option>
+        </select>
+      </div>
+      <div class="toolbar-item" style="justify-content: flex-end;">
+        <label>&nbsp;</label>
+        <div style="display: flex; gap: 8px;">
+          <button id="alignBtn" class="btn btn-primary">比对</button>
+          <button id="clearBtn" class="btn btn-secondary">清除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="canvas-container" id="canvasContainer">
+      <canvas id="mainCanvas"></canvas>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-label">序列1长度:</span>
+        <span class="status-value" id="len1">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">序列2长度:</span>
+        <span class="status-value" id="len2">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">GC含量:</span>
+        <span class="status-value" id="gcContent">0.0%</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">比对得分:</span>
+        <span class="status-value" id="alignScore">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">匹配:</span>
+        <span class="status-value" style="color: #00FF88;" id="matchCount">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">错配:</span>
+        <span class="status-value" style="color: #FF6B6B;" id="mismatchCount">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">缺口:</span>
+        <span class="status-value" style="color: #FF8800;" id="gapCount">0</span>
+      </div>
+      <div class="match-progress">
+        <div class="match-progress-bar" id="matchProgress" style="width: 0%;"></div>
+      </div>
+    </div>
+
+    <div class="export-area">
+      <button id="exportReport" class="btn btn-secondary">导出比对报告</button>
+      <button id="exportImage" class="btn btn-secondary">截图保存</button>
+      <span style="font-size: 11px; color: #8b949e;" id="exportHint"></span>
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
