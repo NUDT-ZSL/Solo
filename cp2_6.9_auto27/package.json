@@ -1,0 +1,20 @@
+{
+  "name": "city-light-show",
+  "version": "1.0.0",
+  "description": "Interactive 3D city light show visualization",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "tone": "^14.7.77",
+    "@types/three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "typescript": "^5.3.0"
+  }
+}
