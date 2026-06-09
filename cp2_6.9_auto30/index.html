@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>考古遗址点云重建</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(to bottom, #2a2a2e 0%, #0a0a0c 100%);
+      color: #e0e0e0;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #glass-hint {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      padding: 14px 22px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      font-size: 14px;
+      color: #cfd8dc;
+      letter-spacing: 0.5px;
+      z-index: 10;
+      user-select: none;
+    }
+
+    #tool-panel {
+      position: fixed;
+      top: 50%;
+      left: 24px;
+      transform: translateY(-50%);
+      width: 140px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      z-index: 10;
+      user-select: none;
+    }
+
+    #tool-panel h3 {
+      font-size: 12px;
+      font-weight: 500;
+      color: #90a4ae;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .tool-btn {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: #b0bec5;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.18);
+      color: #eceff1;
+    }
+
+    .tool-btn.active {
+      background: linear-gradient(135deg, rgba(255, 193, 7, 0.25), rgba(255, 152, 0, 0.25));
+      border-color: rgba(255, 193, 7, 0.5);
+      color: #ffd54f;
+    }
+
+    #info-panel {
+      position: fixed;
+      top: 50%;
+      right: 24px;
+      transform: translateY(-50%);
+      width: 220px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      z-index: 10;
+      user-select: none;
+    }
+
+    #info-panel h3 {
+      font-size: 12px;
+      font-weight: 500;
+      color: #90a4ae;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 13px;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: #78909c;
+    }
+
+    .info-value {
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+    }
+
+    .color-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      display: inline-block;
+    }
+
+    #progress-container {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      max-width: 600px;
+      z-index: 10;
+      user-select: none;
+    }
+
+    #progress-label {
+      text-align: center;
+      font-size: 12px;
+      color: #90a4ae;
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+
+    #progress-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    #progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #4caf50, #2196f3);
+      border-radius: 3px;
+      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #view-switcher {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+      user-select: none;
+    }
+
+    .view-btn {
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #b0bec5;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .view-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #eceff1;
+    }
+
+    .view-btn.active {
+      background: rgba(33, 150, 243, 0.25);
+      border-color: rgba(33, 150, 243, 0.5);
+      color: #64b5f6;
+    }
+
+    @media (max-width: 1024px) {
+      #tool-panel, #info-panel {
+        width: 120px;
+        padding: 12px;
+      }
+      #info-panel {
+        width: 180px;
+      }
+      #glass-hint {
+        font-size: 12px;
+        padding: 10px 16px;
+      }
+      #progress-container {
+        width: 80%;
+      }
+    }
+
+    @media (min-width: 1920px) {
+      #tool-panel, #info-panel {
+        width: 180px;
+      }
+      #info-panel {
+        width: 260px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="glass-hint">拖拽旋转 | 点击拾取</div>
+
+  <div id="view-switcher">
+    <button class="view-btn active" data-view="aerial">鸟瞰</button>
+    <button class="view-btn" data-view="side">侧视</button>
+    <button class="view-btn" data-view="front">正视</button>
+  </div>
+
+  <div id="tool-panel">
+    <h3>工具</h3>
+    <button class="tool-btn active" id="pick-btn">拾取</button>
+    <button class="tool-btn" id="rotate-btn">旋转</button>
+  </div>
+
+  <div id="info-panel">
+    <h3>粒子信息</h3>
+    <div class="info-row">
+      <span class="info-label">状态</span>
+      <span class="info-value" id="info-status">未选择</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">X</span>
+      <span class="info-value" id="info-x">--</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Y</span>
+      <span class="info-value" id="info-y">--</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Z</span>
+      <span class="info-value" id="info-z">--</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">颜色</span>
+      <span class="info-value" id="info-color">
+        <span class="color-swatch" id="color-swatch" style="background: #333;"></span>
+        <span id="color-rgb">--</span>
+      </span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">已选数</span>
+      <span class="info-value" id="info-count">0 / 20</span>
+    </div>
+  </div>
+
+  <div id="progress-container">
+    <div id="progress-label">关键点收集进度：0 / 5</div>
+    <div id="progress-bar">
+      <div id="progress-fill"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
