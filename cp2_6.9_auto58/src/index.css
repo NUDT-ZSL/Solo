@@ -1,0 +1,63 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #fff;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at center, #1e0b2e 0%, #0a0a14 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #d4a843; }
+  50% { border-color: #ffffff; }
+}
+
+@keyframes flash-white {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(2.5); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes slide-in {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes fade-in-out {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.card-selected {
+  animation: pulse-border 0.5s ease-in-out infinite;
+}
+
+.card-flash {
+  animation: flash-white 0.2s ease-out;
+}
+
+.log-entry {
+  animation: slide-in 0.3s ease-out;
+}
+
+.log-fade-out {
+  animation: fade-out 0.5s ease-out forwards;
+}
+
+.reset-animation {
+  animation: fade-in-out 0.3s ease-in-out;
+}
