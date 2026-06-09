@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>手绘稿矢量转换器</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <div class="canvas-area">
+      <div class="toolbar">
+        <label class="upload-btn">
+          <input type="file" id="fileInput" accept="image/png,image/jpeg" hidden>
+          <span>上传图片</span>
+        </label>
+        <div class="threshold-control">
+          <label for="threshold">阈值:</label>
+          <input type="range" id="threshold" min="0" max="255" value="128">
+          <span id="thresholdValue">128</span>
+        </div>
+        <button id="extractBtn" class="action-btn">提取路径</button>
+        <button id="exportBtn" class="action-btn" disabled>导出 SVG</button>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas id="mainCanvas"></canvas>
+      </div>
+      <div class="status-bar">
+        <span id="imageInfo">未加载图片</span>
+        <span id="progressInfo"></span>
+      </div>
+    </div>
+
+    <div class="control-panel" id="controlPanel">
+      <div class="panel-header">
+        <h2>路径管理</h2>
+        <button class="toggle-btn" id="togglePanel">☰</button>
+      </div>
+      <div class="paths-container" id="pathsContainer">
+        <p class="empty-hint">请先上传图片并提取路径</p>
+      </div>
+    </div>
+
+    <div class="color-picker-overlay" id="colorPickerOverlay">
+      <div class="color-picker-popup">
+        <canvas id="colorWheel" width="200" height="200"></canvas>
+        <div class="picker-controls">
+          <label>色相: <span id="hueVal">0</span>°</label>
+          <input type="range" id="hueSlider" min="0" max="360" value="0">
+          <label>饱和度: <span id="satVal">100</span>%</label>
+          <input type="range" id="satSlider" min="0" max="100" value="100">
+          <label>亮度: <span id="lightVal">50</span>%</label>
+          <input type="range" id="lightSlider" min="0" max="100" value="50">
+        </div>
+        <div class="picker-buttons">
+          <button id="cancelColor">取消</button>
+          <button id="confirmColor">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
