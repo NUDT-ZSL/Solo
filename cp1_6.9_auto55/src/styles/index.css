@@ -1,0 +1,136 @@
+:root {
+  --bg-main: #1E1E2E;
+  --bg-card: #2D2D44;
+  --text-primary: #E0E0F0;
+  --text-secondary: #A0A0C0;
+  --text-muted: #707090;
+  --border-color: rgba(255, 255, 255, 0.1);
+
+  --mood-happy: #FFD700;
+  --mood-calm: #7EC8E3;
+  --mood-melancholy: #6C5CE7;
+  --mood-anger: #FF6B6B;
+  --mood-anxiety: #A29BFE;
+
+  --card-slot-width: 180px;
+  --card-slot-height: 120px;
+  --stats-ring-size: 60px;
+}
+
+@media (max-width: 1199px) {
+  :root {
+    --card-slot-width: 150px;
+    --stats-ring-size: 50px;
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+body {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Playfair Display', 'Noto Sans SC', serif;
+  letter-spacing: 0.02em;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+}
+
+input, textarea {
+  font-family: inherit;
+  outline: none;
+  border: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+@keyframes capsule-fly {
+  0% {
+    transform: translate(var(--start-x, 0), var(--start-y, 0)) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(var(--mid-x, 0), var(--mid-y, -60px)) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--end-x, 0), var(--end-y, 0)) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 0.6;
+  }
+  50% {
+    box-shadow: 0 0 20px 4px currentColor;
+    opacity: 1;
+  }
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
