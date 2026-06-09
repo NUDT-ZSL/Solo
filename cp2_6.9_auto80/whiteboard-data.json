@@ -1,0 +1,35 @@
+{
+  "nodes": [
+    {
+      "id": "eec5d2c8-bd76-4edf-8cba-24a94926388a",
+      "x": 554.5,
+      "y": 406.5,
+      "shape": "rectangle",
+      "color": "#FFFACD",
+      "text": "",
+      "rotation": 0,
+      "scale": 1
+    },
+    {
+      "id": "4bed537a-3d05-4cf6-bf2e-f4c49f5ea017",
+      "x": 754.5,
+      "y": 306.5,
+      "shape": "circle",
+      "color": "#FFDAB9",
+      "text": "",
+      "rotation": 0,
+      "scale": 1
+    },
+    {
+      "id": "02893f45-9892-40b9-985d-f0321ae0949b",
+      "x": 954.5,
+      "y": 406.5,
+      "shape": "diamond",
+      "color": "#D8BFD8",
+      "text": "",
+      "rotation": 0,
+      "scale": 1
+    }
+  ],
+  "connectors": []
+}
