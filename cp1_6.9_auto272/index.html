@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星尘编织者 - Stardust Weaver</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, hsl(250, 60%, 8%) 0%, hsl(220, 70%, 12%) 50%, hsl(240, 50%, 10%) 100%);
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      max-width: 1600px;
+      max-height: 900px;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 0 80px rgba(100, 120, 255, 0.25), 0 20px 60px rgba(0, 0, 0, 0.5);
+      position: relative;
+      background: radial-gradient(ellipse at center, hsl(250, 60%, 15%) 0%, hsl(235, 80%, 5%) 70%);
+    }
+    #canvas-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .hint {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(180, 200, 255, 0.6);
+      font-size: 14px;
+      letter-spacing: 2px;
+      pointer-events: none;
+      user-select: none;
+      text-shadow: 0 0 10px rgba(120, 150, 255, 0.5);
+    }
+    .title {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(220, 230, 255, 0.9);
+      font-size: 24px;
+      letter-spacing: 6px;
+      pointer-events: none;
+      user-select: none;
+      text-shadow: 0 0 20px rgba(150, 180, 255, 0.6);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container">
+      <div class="title">星 尘 编 织 者</div>
+      <div class="hint">按住鼠标拖拽编织星网 · 滚轮缩放视角</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
