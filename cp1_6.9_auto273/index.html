@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>浮空信标</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      font-family: sans-serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    #info {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+      font-family: sans-serif;
+      line-height: 1.6;
+      pointer-events: none;
+      user-select: none;
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+    }
+    #colorPicker {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+  </div>
+  <div id="info">
+    <div>信标数量: <span id="beaconCount">0</span> / 30</div>
+    <div>连接线数量: <span id="connectionCount">0</span> / 40</div>
+  </div>
+  <div id="colorPicker"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
