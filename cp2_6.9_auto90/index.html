@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>双星系统轨道模拟与光变曲线</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0a0a2e 0%, #1a1a4e 100%);
+      color: #fff;
+    }
+
+    #app {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #scene-container {
+      flex: 3;
+      min-width: 0;
+      position: relative;
+      background: linear-gradient(180deg, #0a0a2e 0%, #1a1a4e 100%);
+    }
+
+    #scene-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #side-panel {
+      flex: 1;
+      min-width: 280px;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      overflow-y: auto;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #00d4ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .control-group {
+      margin-bottom: 14px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .control-value {
+      color: #00d4ff;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(0, 212, 255, 0.2);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #00d4ff;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #fff;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: #00d4ff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      background: #fff;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+    }
+
+    input[type="number"] {
+      width: 70px;
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      border-radius: 4px;
+      color: #00d4ff;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="number"]:hover,
+    input[type="number"]:focus {
+      border-color: #fff;
+      color: #fff;
+    }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      opacity: 1;
+    }
+
+    #light-curve-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: rgba(28, 28, 46, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 300px;
+    }
+
+    #light-curve-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    #light-curve-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #00d4ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #light-curve-stats {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .stat-label {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .stat-value {
+      color: #76ff03;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #light-curve-svg {
+      flex: 1;
+      width: 100%;
+      min-height: 200px;
+    }
+
+    .axis-label {
+      font-size: 10px;
+      fill: rgba(255, 255, 255, 0.5);
+    }
+
+    .tick-line {
+      stroke: rgba(255, 255, 255, 0.1);
+      stroke-width: 1;
+    }
+
+    .tick-text {
+      font-size: 9px;
+      fill: rgba(255, 255, 255, 0.4);
+    }
+
+    #crosshair-h, #crosshair-v {
+      stroke: #76ff03;
+      stroke-width: 1;
+      stroke-dasharray: 4 2;
+      opacity: 0.8;
+    }
+
+    #crosshair-point {
+      fill: #76ff03;
+    }
+
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+      }
+
+      #scene-container {
+        flex: 1;
+        min-height: 50vh;
+      }
+
+      #side-panel {
+        flex: 1;
+        max-width: none;
+        min-height: 50vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="scene-container">
+      <canvas id="scene-canvas"></canvas>
+    </div>
+    <div id="side-panel">
+      <div class="panel">
+        <div class="panel-title">轨道参数</div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>质量比 (M伴/M主)</span>
+            <span class="control-value" id="massRatio-value">1.0</span>
+          </div>
+          <input type="range" id="massRatio" min="0.3" max="3.0" step="0.1" value="1.0" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>轨道倾角 (°)</span>
+            <span class="control-value" id="inclination-value">75</span>
+          </div>
+          <input type="range" id="inclination" min="0" max="90" step="1" value="75" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>偏心率</span>
+            <span class="control-value" id="eccentricity-value">0.20</span>
+          </div>
+          <input type="range" id="eccentricity" min="0" max="0.9" step="0.01" value="0.20" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>公转周期 (天)</span>
+            <span class="control-value" id="period-value">5</span>
+          </div>
+          <input type="range" id="period" min="1" max="30" step="1" value="5" />
+        </div>
+      </div>
+      <div id="light-curve-panel">
+        <div id="light-curve-header">
+          <span id="light-curve-title">光变曲线</span>
+          <div id="light-curve-stats">
+            <div class="stat-item">
+              <span class="stat-label">亮度</span>
+              <span class="stat-value" id="brightness-value">100.0%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">周期</span>
+              <span class="stat-value" id="cycle-value">0</span>
+            </div>
+          </div>
+        </div>
+        <svg id="light-curve-svg" viewBox="0 0 400 250" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="curveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:#ff5722;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#2196f3;stop-opacity:1" />
+            </linearGradient>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
