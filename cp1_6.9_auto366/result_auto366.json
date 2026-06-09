@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-09T03:58:31.599Z",
+  "task_name": "auto366",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "开发一个名为「时光胶囊」的全栈Web应用，实现让用户以时间胶囊的形式匿名写下当前的心情、愿望或秘密，并设定一个未来的解锁时间（最短1小时，最长365天），系统在到达解锁时间后通过浏览器通知提醒用户阅读，同时每个胶囊在后台以渐变的颜色圆点呈现在一个时间轴上——圆点颜色根据心情标签（快乐#FFD700、忧伤#6A5ACD、愤怒#FF4500、平静#2E8B57、惊喜#FF69B4）而定，圆点大小与内容长度正相关（50~120像素），鼠标悬停显示标题和剩余时间，点击可预览摘要（仅限用户本人）。使用TypeScript和React实现前端，后端用Flask提供胶囊创建、查询和到期提醒API，Vite构建。文件结构如下：\n - package.json（含依赖：react、react-dom、vite、typescript、@vitejs/plugin-react、axios、flask、flask-cors、apscheduler、uuid，启动脚本：npm run dev）\n - vite.config.js（Vite构建配置，开发服务器端口3000，代理API到5000端口，开启HMR）\n - tsconfig.json（严格模式，ES2020目标，模块系统ESNext）\n - index.html（入口页面，引用src/main.tsx，包含加载动画和页面标题）\n - src/main.tsx（React入口，挂载App组件，配置路由，设置全局样式）\n - src/App.tsx（路由容器，管理页面切换，提供全局上下文）\n - src/components/TimeLine.tsx（时间轴组件，接收胶囊数组，渲染渐变圆点，处理悬停和点击交互）\n - src/components/CapsuleForm.tsx（创建胶囊表单组件，含心情选择、内容输入、解锁时间设置，提交后调用API并显示成功动画）\n - src/api/capsuleApi.ts（封装前端API请求函数，如createCapsule、getUserCapsules、getCapsuleDetail，使用axios实例，统一错误处理）\n - src/types.ts（定义TypeScript接口：Capsule、Mood、TimeRange等类型）\n - server/app.py（Flask服务入口，配置CORS，注册API路由，初始化调度器）\n - server/capsule_service.py（业务逻辑层：创建胶囊（存储到内存列表，分配UUID）、按用户ID查询胶囊、检测并触发到期通知）\n - server/models.py（数据模型定义：Capsule类的dataclass，含id、user_id、title、content、mood、created_at、unlock_at、is_read字段）\n - server/notifier.py（通知功能：使用apscheduler在服务器内存中调度到期任务，到期时在日志中输出提醒信息，未来可扩展为WebSocket推送）\n\n具体需求：\n1. 用户首次访问时自动生成一个匿名用户ID（存储在localStorage中），后续所有操作都基于该ID识别用户，无需登录注册。\n2. 时间轴展示：加载所有属于当前用户的胶囊，按创建时间倒序排列，每个胶囊渲染为一个彩色圆点（直径根据内容长度在50~120像素之间动态变化），圆点颜色由心情标签决定，圆点之间用半透明浅灰线条连接成一条细线形成时间轴。鼠标悬停时圆点放大1.2倍并显示标题和距离解锁的剩余时间（格式如“3天2小时15分”），点击圆点弹出预览浮层显示标题和内容摘要（前30字+省略号），若已到期则显示完整内容。\n3. 创建胶囊：用户在表单中输入标题（必填，最多50字）、内容（必填，最多2000字）、选择一个心情标签（5选1），并设定解锁时间（从当前时间起1小时到365天之间，精确到分钟）。提交后，表单下方出现一个渐变的胶囊图标从底部升起并放大至消失的动画（持续0.5秒），随后自动返回时间轴页面并显示新创建的胶囊圆点。\n4. 到期通知：服务器在胶囊到期时，若用户浏览器打开页面则通过轮询接口（每30秒调用一次checkNotifications API）获取提醒列表，弹出浏览器原生通知或页面内浮层提示（文字为“你的时光胶囊已解锁”），点击提示跳转到该胶囊详情页。\n5. 详情查看：点击已到期的胶囊预览浮层中的“查看完整内容”按钮跳转到详情页，展示完整的标题、内容、心情颜色标签、创建时间和解锁时间，页面底部有“返回时间轴”按钮。未到期的胶囊预览浮层不提供查看按钮，仅显示剩余时间。\n\n界面方面：整体采用深色主题（背景#0f0f23，卡片背景#1a1a2e，主要文字#e0e0e0），时间轴居中布局，两侧留白。创建胶囊页面表单使用柔和的圆角输入框（边框#3a3a5e，聚焦时#6a6a8a），按钮使用渐变色（从#6c63ff到#8b5cf6），悬停时轻微上移3px并加深颜色。时间轴页面的胶囊圆点带有微弱的发光效果（box-shadow同色系半透明），鼠标悬停时发光增强。页面切换使用淡入淡出过渡（持续0.3秒），响应式适配手机端（时间轴变为纵向滚动，圆点间距缩小）。性能要求：时间轴首次加载时间不超过1秒，页面可交互时间控制在1.5秒以内（使用代码分割和懒加载优化），动画帧率保持在50FPS以上。\n\n运行方式：cd server && pip install -r requirements.txt && python app.py & cd .. && npm install && npm run dev。",
+  "session_id": {
+    "valid": true,
+    "full_id": ".2402906841289811:9ac5d75362a55094677cf78024964927_6a278e5670269ee22120bf62.6a278f5770269ee22120c065.6a278f576c44da3c4d699fe6:Trae CN.T(2026/6/9 11:58:15)",
+    "user_id": "2402906841289811",
+    "trace_id": "9ac5d75362a55094677cf78024964927",
+    "session_id": "6a278e5670269ee22120bf62",
+    "task_id": "6a278f5770269ee22120c065",
+    "message_id": "6a278f576c44da3c4d699fe6",
+    "app_name": "Trae CN",
+    "timestamp": "2026/6/9 11:58:15",
+    "format": "full"
+  },
+  "trace": "null"
+}
