@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-06-09T03:57:28.274Z",
+  "task_name": "auto364",
+  "task_type": "0-1代码生成",
+  "business_domain": "全栈web应用",
+  "modification_scope": "模块内多文件",
+  "prompt": "我需要一个能够「灵感热力图」的全栈Web应用，主要解决创意工作者在日常工作中面对大量碎片化灵感时无法有效组织和发现关联的问题。\n\n它应当具备以下能力：\n1) 用户可以在一个无限画布上创建灵感卡片（每张卡片包含标题、简短描述、标签和一张可选图片），卡片在画布上自由拖拽摆放，拖拽时有平滑的弹性动画（拖动时卡片轻微放大1.05倍，释放后弹回原大小）。\n2) 系统基于卡片标签和描述文本的语义相似度（使用TF-IDF和余弦相似度算法在前端完成），自动在相近卡片之间绘制半透明的发光连线——连线颜色从蓝紫#4a00e0到橙红#ff4d4d渐变（相似度越高越偏橙红），连线宽度为1-4像素（相似度越高越宽），连线末端带有微弱的闪烁粒子（大小1-2像素，透明度0.2-0.5随机变化）。\n3) 用户可以框选（鼠标拖拽矩形选区）多张卡片并打上组合标签，组合后的卡片组形成一个更大的半透明方框容器，容器内卡片保持相对位置不变，容器边缘有柔和的光晕动画（光晕透明度在0.1-0.3之间缓慢呼吸）。\n4) 提供搜索和筛选功能：搜索框支持实时按标题和标签过滤卡片，匹配的卡片以淡入动画（0.3秒）高亮显示（边框变为金色#FFD700，发光强度增加），不匹配的卡片半透明化（透明度降为0.2）。\n5) 导出功能：将当前画布上所有卡片及其位置关系导出为一个JSON文件，并支持导入恢复会话。\n\n界面方面要求：页面采用深色主题（主背景色#0f0f1a，画布背景为从#0f0f1a到#1a1a2e的径向渐变），卡片采用毛玻璃效果（背景色rgba(255,255,255,0.08)，边框1px solid rgba(255,255,255,0.15)，背模糊10px），卡片悬停时阴影加深并产生微上浮效果（transform: translateY(-4px)，box-shadow增大50%）。布局上画布占满整个视口，左上角悬浮工具栏（半透明背景，圆角12px），右下角显示当前卡片数量。响应式适配确保在1280px到1920px宽度的屏幕上都能正常使用（工具栏在小屏时折叠为图标）。性能上需要交互帧率稳定在50fps以上，卡片数量支持到500张时拖拽和连线动画不卡顿。\n\n实现采用TypeScript和React+Flask的技术栈，前端使用Vite构建，后端提供卡片数据的增删改查和图片上传API。按以下文件组织代码：\n - package.json（含依赖：react、react-dom、react-dnd、framer-motion、compute-cosine-similarity（用于TF-IDF计算）、vite、@vitejs/plugin-react、typescript、@types/react、@types/react-dom、flask、flask-cors、Pillow，启动脚本：npm run dev 和 python app.py）\n - index.html（入口页面，标题包含元信息）\n - vite.config.js（构建配置，代理API到Flask端口5000）\n - tsconfig.json（严格模式，ES2020目标）\n - src/App.tsx（主组件，管理画布状态和卡片列表，提供拖拽上下文和搜索筛选逻辑，调用后端API）\n - src/components/Card.tsx（单个灵感卡片组件，实现拖拽、弹性动画、悬停效果和选中交互）\n - src/utils/similarity.ts（TF-IDF计算和余弦相似度算法，用于自动生成卡片连线数据）\n - backend/app.py（Flask后端，提供RESTful API：GET /api/cards、POST /api/cards、PUT /api/cards/<id>、DELETE /api/cards/<id>、POST /api/upload，返回JSON数据并处理CORS）\n\n运行方式：先运行 python backend/app.py 启动后端（端口5000），再在前端目录执行 npm install && npm run dev（端口5173）即可访问。",
+  "session_id": null,
+  "trace": "null"
+}
