@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>虹纹织机</title>
+    <style>
+      :root {
+        --linen: #f5f0e6;
+        --linen-dark: #e8dfc9;
+        --wood-dark: #5c3317;
+        --wood-mid: #8b4513;
+        --wood-light: #a0612a;
+        --ink: #3b2410;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+        color: var(--ink);
+        background-color: var(--linen);
+        background-image:
+          repeating-linear-gradient(
+            0deg,
+            rgba(139, 69, 19, 0.04) 0px,
+            rgba(139, 69, 19, 0.04) 1px,
+            transparent 1px,
+            transparent 3px
+          ),
+          repeating-linear-gradient(
+            90deg,
+            rgba(139, 69, 19, 0.04) 0px,
+            rgba(139, 69, 19, 0.04) 1px,
+            transparent 1px,
+            transparent 3px
+          ),
+          radial-gradient(
+            ellipse at 30% 20%,
+            rgba(160, 97, 42, 0.06),
+            transparent 60%
+          ),
+          radial-gradient(
+            ellipse at 70% 80%,
+            rgba(92, 51, 23, 0.06),
+            transparent 60%
+          );
+        background-attachment: fixed;
+        cursor: crosshair;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      #loom-frame {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        max-width: 1400px;
+        max-height: 900px;
+        border-radius: 4px;
+        background: transparent;
+        box-shadow:
+          inset 0 0 0 2px var(--wood-dark),
+          inset 0 0 0 5px var(--wood-mid),
+          inset 0 0 0 8px var(--wood-dark),
+          inset 0 0 30px rgba(92, 51, 23, 0.25),
+          0 6px 24px rgba(59, 36, 16, 0.25),
+          0 2px 4px rgba(59, 36, 16, 0.15);
+      }
+
+      #loom-canvas {
+        position: absolute;
+        inset: 8px;
+        display: block;
+        width: calc(100% - 16px);
+        height: calc(100% - 16px);
+        background-color: rgba(255, 253, 247, 0.55);
+        border-radius: 2px;
+      }
+
+      #loom-corner-tl,
+      #loom-corner-tr,
+      #loom-corner-bl,
+      #loom-corner-br {
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        pointer-events: none;
+        background:
+          linear-gradient(135deg, var(--wood-light), var(--wood-dark));
+        border-radius: 2px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      }
+      #loom-corner-tl { top: -2px; left: -2px; clip-path: polygon(0 0, 100% 0, 0 100%); }
+      #loom-corner-tr { top: -2px; right: -2px; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+      #loom-corner-bl { bottom: -2px; left: -2px; clip-path: polygon(0 0, 0 100%, 100% 100%); }
+      #loom-corner-br { bottom: -2px; right: -2px; clip-path: polygon(100% 0, 0 100%, 100% 100%); }
+
+      #ui-panel {
+        position: fixed;
+        right: 28px;
+        bottom: 28px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        z-index: 10;
+      }
+
+      #status-box {
+        text-align: right;
+        font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+        color: var(--wood-dark);
+        line-height: 1.5;
+        text-shadow: 0 1px 2px rgba(255, 253, 247, 0.7);
+      }
+
+      #status-box .label {
+        font-size: 12px;
+        opacity: 0.8;
+        letter-spacing: 1px;
+      }
+
+      #status-box .value {
+        font-size: 18px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #reset-btn {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        border: 2px solid rgba(92, 51, 23, 0.7);
+        background-color: rgba(139, 69, 19, 0.65);
+        color: #fff8ee;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 14px;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.2),
+          0 4px 12px rgba(59, 36, 16, 0.3);
+        transition:
+          background-color 0.25s ease,
+          box-shadow 0.25s ease,
+          transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        backdrop-filter: blur(2px);
+      }
+
+      #reset-btn:hover {
+        background-color: rgba(139, 69, 19, 0.9);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.25),
+          0 6px 18px rgba(59, 36, 16, 0.4);
+      }
+
+      #reset-btn:active {
+        transform: scale(0.88);
+        transition-duration: 0.1s;
+      }
+
+      #hint {
+        position: fixed;
+        top: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+        color: var(--wood-dark);
+        font-size: 14px;
+        letter-spacing: 2px;
+        opacity: 0.55;
+        pointer-events: none;
+        z-index: 5;
+        text-shadow: 0 1px 2px rgba(255, 253, 247, 0.8);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hint">按住鼠标 / 手指，在织机上拖过一缕丝线</div>
+    <div id="app">
+      <div id="loom-frame">
+        <canvas id="loom-canvas"></canvas>
+        <div id="loom-corner-tl"></div>
+        <div id="loom-corner-tr"></div>
+        <div id="loom-corner-bl"></div>
+        <div id="loom-corner-br"></div>
+      </div>
+    </div>
+    <div id="ui-panel">
+      <div id="status-box">
+        <div>
+          <span class="label">丝线</span>
+          <span class="value" id="ribbon-count">0</span>
+        </div>
+        <div>
+          <span class="label">色谱</span>
+          <span class="value" id="color-count">0</span>
+        </div>
+      </div>
+      <button id="reset-btn" title="清空画布">重置</button>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
