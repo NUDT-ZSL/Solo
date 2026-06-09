@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分形树生长模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      min-width: 800px;
+      min-height: 600px;
+      font-family: Arial, sans-serif;
+    }
+
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(to bottom, #87CEEB 0%, #228B22 100%);
+      cursor: crosshair;
+    }
+
+    #control-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      padding: 10px;
+      z-index: 100;
+      color: #FFFFFF;
+      backdrop-filter: blur(5px);
+    }
+
+    .season-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      padding: 5px;
+    }
+
+    .season-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      opacity: 0.7;
+    }
+
+    .season-btn:hover {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+
+    .season-btn.active {
+      opacity: 1;
+      border-color: #FFFFFF;
+      transform: scale(1.1);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    .season-btn.spring { background: #2ECC71; }
+    .season-btn.summer { background: #3498DB; }
+    .season-btn.autumn { background: #E67E22; }
+    .season-btn.winter { background: #ECF0F1; }
+
+    .slider-group {
+      margin-bottom: 12px;
+    }
+
+    .slider-group label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 5px;
+      color: #FFFFFF;
+    }
+
+    .slider-value {
+      float: right;
+      color: #3498DB;
+      font-weight: bold;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: #95A5A6;
+      border-radius: 8px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #3498DB;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #2980B9;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #3498DB;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #BDC3C7;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="control-panel">
+    <div class="season-buttons">
+      <button class="season-btn spring active" data-season="spring" title="春季"></button>
+      <button class="season-btn summer" data-season="summer" title="夏季"></button>
+      <button class="season-btn autumn" data-season="autumn" title="秋季"></button>
+      <button class="season-btn winter" data-season="winter" title="冬季"></button>
+    </div>
+
+    <div class="slider-group">
+      <label>
+        递归深度
+        <span class="slider-value" id="depth-value">5</span>
+      </label>
+      <input type="range" id="depth-slider" min="3" max="8" value="5" step="1">
+    </div>
+
+    <div class="slider-group">
+      <label>
+        枝干角度
+        <span class="slider-value" id="angle-value">30</span>
+      </label>
+      <input type="range" id="angle-slider" min="15" max="45" value="30" step="1">
+    </div>
+
+    <div class="slider-group">
+      <label>
+        生长速度
+        <span class="slider-value" id="speed-value">1</span>
+      </label>
+      <input type="range" id="speed-slider" min="0.5" max="3" value="1" step="0.1">
+    </div>
+
+    <div class="hint">
+      点击画布种植树木 · 拖拽改变角度<br>
+      悬停查看提示 · 点击根部移除
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
