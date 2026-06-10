@@ -66,10 +66,13 @@ class MemoryGardenApp {
   }
 
   private createRenderer(): THREE.WebGLRenderer {
+    const canvas = document.createElement('canvas')
     const renderer = new THREE.WebGLRenderer({
+      canvas,
       antialias: true,
       alpha: true,
-      powerPreference: 'high-performance'
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: false
     })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(window.innerWidth, window.innerHeight)

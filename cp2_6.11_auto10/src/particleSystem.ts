@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 
+export type ParticleState = 'inactive' | 'spawning' | 'alive' | 'exploding' | 'dead'
+
 export interface ParticleData {
   position: THREE.Vector3
   targetPosition: THREE.Vector3
@@ -10,24 +12,25 @@ export interface ParticleData {
   baseSize: number
   life: number
   maxLife: number
-  active: boolean
+  state: ParticleState
   isChild: boolean
-  rippleProgress: number
-  rippleTriggered: boolean
-  complementaryColor: THREE.Color | null
+  rippleTime: number
+  rippleColor: THREE.Color | null
   scaleMultiplier: number
-  spawnProgress: number
   spawnDelay: number
+  spawnProgress: number
   bloomIntensity: number
 }
 
-export interface RippleBFS {
-  center: THREE.Vector3
-  currentRadius: number
-  maxRadius: number
-  propagationSpeed: number
+export interface BFSRipple {
   active: boolean
-  affectedParticles: Set<number>
+  cellSize: number
+  visited: Set<string>
+  currentFront: Array<{ cx: number; cy: number; cz: number }>
+  nextFront: Array<{ cx: number; cy: number; cz: number }>
+  maxRadius: number
+  origin: THREE.Vector3
+  cellsPerFrame: number
 }
 
 export interface GardenState {
@@ -51,7 +54,7 @@ export class ParticleSystem {
   private points: THREE.Points
   private maxParticles: number = 5000
   private maxChildParticles: number = 5000
-  private ripples: RippleBFS[] = []
+  private bfsRipples: BFSRipple[] = []
   private positions: Float32Array
   private colors: Float32Array
   private sizes: Float32Array
@@ -64,11 +67,14 @@ export class ParticleSystem {
   private dissolveStartTime: number = 0
   private dissolveDuration: number = 1.5
 
-  private targetRotationY: number = 0
-  private targetRotationX: number = 0
-  private currentRotationY: number = 0
-  private currentRotationX: number = 0
-  private rotationDamping: number = 0.05
+  private targetRotX: number = 0
+  private targetRotY: number = 0
+  private curRotX: number = 0
+  private curRotY: number = 0
+  private rotVelX: number = 0
+  private rotVelY: number = 0
+  private springK: number = 25
+  private damping: number = 6
 
   constructor(scene: THREE.Scene, maxParticles: number = 5000) {
     this.scene = scene
@@ -84,50 +90,14 @@ export class ParticleSystem {
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3))
     this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1))
 
-    const vertexShader = `
-      attribute float size;
-      varying vec3 vColor;
-      
-      void main() {
-        vColor = color;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = size * (350.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `
-
-    const fragmentShader = `
-      varying vec3 vColor;
-      
-      void main() {
-        vec2 uv = gl_PointCoord - vec2(0.5);
-        float dist = length(uv);
-        
-        if (dist > 0.5) {
-          discard;
-        }
-        
-        float edgeGlow = smoothstep(0.0, 0.5, dist);
-        float core = smoothstep(0.5, 0.15, dist);
-        float alpha = smoothstep(0.5, 0.0, dist) * 0.95;
-        
-        vec3 edgeColor = vColor * 1.8;
-        vec3 coreColor = vColor * 0.9;
-        vec3 finalColor = mix(coreColor, edgeColor, edgeGlow);
-        finalColor += vColor * core * 0.3;
-        
-        gl_FragColor = vec4(finalColor, alpha);
-      }
-    `
-
-    this.material = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
+    this.material = new THREE.PointsMaterial({
+      size: 1.5,
+      sizeAttenuation: true,
       vertexColors: true,
       transparent: true,
+      opacity: 0.95,
       blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      uniforms: {}
+      depthWrite: false
     })
 
     this.points = new THREE.Points(this.geometry, this.material)
@@ -148,14 +118,13 @@ export class ParticleSystem {
         baseSize: 1,
         life: 0,
         maxLife: 10,
-        active: false,
+        state: 'inactive',
         isChild: false,
-        rippleProgress: 0,
-        rippleTriggered: false,
-        complementaryColor: null,
+        rippleTime: 0,
+        rippleColor: null,
         scaleMultiplier: 1,
-        spawnProgress: 0,
         spawnDelay: 0,
+        spawnProgress: 0,
         bloomIntensity: 0
       })
     }
@@ -171,26 +140,21 @@ export class ParticleSystem {
         baseSize: 0.5,
         life: 0,
         maxLife: 3,
-        active: false,
+        state: 'inactive',
         isChild: true,
-        rippleProgress: 0,
-        rippleTriggered: false,
-        complementaryColor: null,
+        rippleTime: 0,
+        rippleColor: null,
         scaleMultiplier: 1,
-        spawnProgress: 1,
         spawnDelay: 0,
+        spawnProgress: 1,
         bloomIntensity: 0
       })
     }
   }
 
   public setCameraRotation(targetX: number, targetY: number): void {
-    this.targetRotationX = targetX
-    this.targetRotationY = targetY
-  }
-
-  public getParticleCount(): number {
-    return this.particles.filter(p => p.active).length
+    this.targetRotX = targetX
+    this.targetRotY = targetY
   }
 
   public getEmotion(): string {
@@ -220,21 +184,23 @@ export class ParticleSystem {
   }
 
   public reset(): void {
-    this.particles.forEach(p => {
-      p.active = false
-      p.life = 0
-    })
-    this.childParticles.forEach(p => {
-      p.active = false
-      p.life = 0
-    })
-    this.ripples = []
+    for (let i = 0; i < this.maxParticles; i++) {
+      this.particles[i].state = 'inactive'
+      this.particles[i].life = 0
+    }
+    for (let i = 0; i < this.maxChildParticles; i++) {
+      this.childParticles[i].state = 'inactive'
+      this.childParticles[i].life = 0
+    }
+    this.bfsRipples = []
     this.dissolving = false
     this.spawning = false
-    this.currentRotationX = 0
-    this.currentRotationY = 0
-    this.targetRotationX = 0
-    this.targetRotationY = 0
+    this.curRotX = 0
+    this.curRotY = 0
+    this.targetRotX = 0
+    this.targetRotY = 0
+    this.rotVelX = 0
+    this.rotVelY = 0
     this.updateBuffers()
   }
 
@@ -251,28 +217,29 @@ export class ParticleSystem {
     const maxCount = isChild ? this.maxChildParticles : this.maxParticles
 
     for (let i = 0; i < maxCount; i++) {
-      if (!pool[i].active) {
+      if (pool[i].state === 'inactive') {
         const p = pool[i]
         p.targetPosition.copy(position)
         if (isChild) {
           p.position.copy(position)
+          p.state = 'alive'
+          p.spawnProgress = 1
         } else {
           p.position.set(0, 0, 0)
+          p.state = 'spawning'
+          p.spawnProgress = 0
         }
         p.velocity.copy(velocity)
         p.color.copy(color)
         p.baseColor.copy(color)
         p.size = size
-        p.baseSize = size
+        p.baseSize = Math.max(0.5, Math.min(3, size))
         p.life = life
         p.maxLife = life
-        p.active = true
         p.isChild = isChild
-        p.rippleProgress = 0
-        p.rippleTriggered = false
-        p.complementaryColor = null
+        p.rippleTime = 0
+        p.rippleColor = null
         p.scaleMultiplier = 1
-        p.spawnProgress = isChild ? 1 : 0
         p.spawnDelay = spawnDelay
         p.bloomIntensity = 0
         return true
@@ -282,20 +249,39 @@ export class ParticleSystem {
   }
 
   public triggerRipple(worldPosition: THREE.Vector3, maxRadius: number = 15): void {
-    this.ripples.push({
-      center: worldPosition.clone(),
-      currentRadius: 0,
-      maxRadius: maxRadius,
-      propagationSpeed: 12,
+    const cellSize = 1.5
+    const origin = worldPosition
+    const cx = Math.floor(origin.x / cellSize)
+    const cy = Math.floor(origin.y / cellSize)
+    const cz = Math.floor(origin.z / cellSize)
+
+    this.bfsRipples.push({
       active: true,
-      affectedParticles: new Set()
+      cellSize,
+      visited: new Set([`${cx},${cy},${cz}`]),
+      currentFront: [{ cx, cy, cz }],
+      nextFront: [],
+      maxRadius,
+      origin: origin.clone(),
+      cellsPerFrame: 30
     })
   }
 
   public triggerHoverEffect(worldPosition: THREE.Vector3, radius: number = 3): void {
-    const allParticles = [...this.particles.filter(p => p.active && p.spawnProgress >= 1), ...this.childParticles.filter(p => p.active)]
-    
-    for (const p of allParticles) {
+    for (let i = 0; i < this.maxParticles; i++) {
+      const p = this.particles[i]
+      if (p.state !== 'alive' && p.state !== 'spawning') continue
+      if (p.spawnProgress < 1) continue
+      const dist = p.position.distanceTo(worldPosition)
+      if (dist < radius) {
+        const intensity = 1 - dist / radius
+        p.scaleMultiplier = Math.max(p.scaleMultiplier, 1 + intensity * 0.2)
+        p.bloomIntensity = Math.max(p.bloomIntensity, intensity)
+      }
+    }
+    for (let i = 0; i < this.maxChildParticles; i++) {
+      const p = this.childParticles[i]
+      if (p.state !== 'alive') continue
       const dist = p.position.distanceTo(worldPosition)
       if (dist < radius) {
         const intensity = 1 - dist / radius
@@ -305,27 +291,26 @@ export class ParticleSystem {
     }
   }
 
-  private explodeParticle(particle: ParticleData): void {
+  private explodeParticle(p: ParticleData): void {
     const childCount = 10
     for (let i = 0; i < childCount; i++) {
       const theta = (i / childCount) * Math.PI * 2
       const phi = Math.acos(2 * Math.random() - 1)
-      const speed = 3 + Math.random() * 4
+      const speed = 4 + Math.random() * 5
       
-      const velocity = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta) * speed,
-        Math.sin(phi) * Math.sin(theta) * speed,
-        Math.cos(phi) * speed
-      )
+      const vx = Math.sin(phi) * Math.cos(theta) * speed
+      const vy = Math.sin(phi) * Math.sin(theta) * speed
+      const vz = Math.cos(phi) * speed
 
-      const childColor = particle.color.clone()
-      childColor.lerp(new THREE.Color(0xffffff), 0.6)
+      const velocity = new THREE.Vector3(vx, vy, vz)
+      const childColor = p.color.clone()
+      childColor.lerp(new THREE.Color(0xffffff), 0.7)
 
       this.spawnParticle(
-        particle.position.clone(),
+        p.position.clone(),
         velocity,
         childColor,
-        particle.baseSize * 0.35,
+        p.baseSize * 0.35,
         3,
         true
       )
@@ -334,58 +319,103 @@ export class ParticleSystem {
 
   public update(delta: number): void {
     const now = performance.now() / 1000
+    const dt = Math.min(delta, 0.05)
 
-    this.currentRotationX += (this.targetRotationX - this.currentRotationX) * this.rotationDamping
-    this.currentRotationY += (this.targetRotationY - this.currentRotationY) * this.rotationDamping
+    this.updateSpringRotation(dt)
 
     if (this.dissolving) {
-      const dissolveProgress = (now - this.dissolveStartTime) / this.dissolveDuration
-      if (dissolveProgress >= 1) {
+      const progress = (now - this.dissolveStartTime) / this.dissolveDuration
+      if (progress >= 1) {
         this.dissolving = false
         this.reset()
         return
       }
     }
 
-    this.updateRipples(delta)
-    this.updateMainParticles(delta, now)
-    this.updateChildParticles(delta)
+    this.updateBFSRipples(dt)
+    this.updateMainParticles(dt, now)
+    this.updateChildParticles(dt)
     this.updateBuffers()
   }
 
-  private updateRipples(delta: number): void {
-    for (let i = this.ripples.length - 1; i >= 0; i--) {
-      const ripple = this.ripples[i]
+  private updateSpringRotation(dt: number): void {
+    const ax = (this.targetRotX - this.curRotX) * this.springK
+    const ay = (this.targetRotY - this.curRotY) * this.springK
+
+    this.rotVelX += ax * dt
+    this.rotVelY += ay * dt
+
+    this.rotVelX *= (1 - this.damping * dt)
+    this.rotVelY *= (1 - this.damping * dt)
+
+    this.curRotX += this.rotVelX * dt
+    this.curRotY += this.rotVelY * dt
+  }
+
+  private updateBFSRipples(dt: number): void {
+    for (let r = this.bfsRipples.length - 1; r >= 0; r--) {
+      const ripple = this.bfsRipples[r]
       if (!ripple.active) continue
 
-      const prevRadius = ripple.currentRadius
-      ripple.currentRadius += ripple.propagationSpeed * delta
+      let processed = 0
+      const cs = ripple.cellSize
 
-      const activeParticles = this.particles.filter(p => p.active && p.spawnProgress >= 1)
-      
-      for (let idx = 0; idx < activeParticles.length; idx++) {
-        const p = activeParticles[idx]
-        const globalIdx = this.particles.indexOf(p)
-        
-        if (ripple.affectedParticles.has(globalIdx)) continue
+      while (processed < ripple.cellsPerFrame && ripple.currentFront.length > 0) {
+        const cell = ripple.currentFront.shift()!
+        processed++
 
-        const dist = p.position.distanceTo(ripple.center)
-        if (dist >= prevRadius && dist <= ripple.currentRadius) {
-          ripple.affectedParticles.add(globalIdx)
-          const compColor = new THREE.Color(
-            1 - p.baseColor.r,
-            1 - p.baseColor.g,
-            1 - p.baseColor.b
-          )
-          p.complementaryColor = compColor
-          p.rippleProgress = 1.5
-          p.rippleTriggered = true
+        for (let i = 0; i < this.maxParticles; i++) {
+          const p = this.particles[i]
+          if (p.state !== 'alive') continue
+          if (p.spawnProgress < 1) continue
+          const pcx = Math.floor(p.position.x / cs)
+          const pcy = Math.floor(p.position.y / cs)
+          const pcz = Math.floor(p.position.z / cs)
+          if (pcx === cell.cx && pcy === cell.cy && pcz === cell.cz) {
+            if (p.rippleTime <= 0) {
+              const comp = new THREE.Color(
+                1 - p.baseColor.r,
+                1 - p.baseColor.g,
+                1 - p.baseColor.b
+              )
+              p.rippleColor = comp
+              p.rippleTime = 1.5
+            }
+          }
+        }
+
+        const dirs = [
+          [1, 0, 0], [-1, 0, 0],
+          [0, 1, 0], [0, -1, 0],
+          [0, 0, 1], [0, 0, -1]
+        ]
+        for (const d of dirs) {
+          const nx = cell.cx + d[0]
+          const ny = cell.cy + d[1]
+          const nz = cell.cz + d[2]
+          const key = `${nx},${ny},${nz}`
+          if (!ripple.visited.has(key)) {
+            const cellCenter = new THREE.Vector3(
+              (nx + 0.5) * cs,
+              (ny + 0.5) * cs,
+              (nz + 0.5) * cs
+            )
+            if (cellCenter.distanceTo(ripple.origin) <= ripple.maxRadius) {
+              ripple.visited.add(key)
+              ripple.nextFront.push({ cx: nx, cy: ny, cz: nz })
+            }
+          }
         }
       }
 
-      if (ripple.currentRadius >= ripple.maxRadius) {
-        ripple.active = false
-        this.ripples.splice(i, 1)
+      if (ripple.currentFront.length === 0) {
+        if (ripple.nextFront.length === 0) {
+          ripple.active = false
+          this.bfsRipples.splice(r, 1)
+        } else {
+          ripple.currentFront = ripple.nextFront
+          ripple.nextFront = []
+        }
       }
     }
   }
@@ -394,7 +424,7 @@ export class ParticleSystem {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
   }
 
-  private updateMainParticles(delta: number, now: number): void {
+  private updateMainParticles(dt: number, now: number): void {
     let globalSpawnProgress = 0
     if (this.spawning) {
       globalSpawnProgress = Math.min(1, (now - this.spawnStartTime) / this.spawnDuration)
@@ -403,158 +433,175 @@ export class ParticleSystem {
       }
     }
 
-    const cosRX = Math.cos(this.currentRotationX)
-    const sinRX = Math.sin(this.currentRotationX)
-    const cosRY = Math.cos(this.currentRotationY)
-    const sinRY = Math.sin(this.currentRotationY)
+    const cosRX = Math.cos(this.curRotX)
+    const sinRX = Math.sin(this.curRotX)
+    const cosRY = Math.cos(this.curRotY)
+    const sinRY = Math.sin(this.curRotY)
 
     for (let i = 0; i < this.maxParticles; i++) {
       const p = this.particles[i]
-      if (!p.active) continue
+      if (p.state === 'inactive') continue
 
-      if (!p.isChild && p.spawnProgress < 1) {
+      if (p.state === 'spawning') {
         const effectiveProgress = Math.max(0, globalSpawnProgress - p.spawnDelay)
         p.spawnProgress = Math.min(1, effectiveProgress)
+        if (p.spawnProgress >= 1) {
+          p.state = 'alive'
+        }
       }
 
-      p.life -= delta
-
-      if (p.life <= 0 && p.spawnProgress >= 1 && !this.dissolving) {
-        this.explodeParticle(p)
-        p.active = false
-        continue
+      if (p.state === 'alive') {
+        p.life -= dt
+        if (p.life <= 0) {
+          p.state = 'exploding'
+          this.explodeParticle(p)
+          p.state = 'inactive'
+          continue
+        }
       }
 
-      let baseX: number, baseY: number, baseZ: number
+      let bx: number, by: number, bz: number
 
       if (this.dissolving) {
-        p.position.addScaledVector(p.velocity, delta * 3)
-        p.velocity.y -= delta * 8
+        p.position.addScaledVector(p.velocity, dt * 3)
+        p.velocity.y -= dt * 8
         p.velocity.multiplyScalar(0.99)
-        baseX = p.position.x
-        baseY = p.position.y
-        baseZ = p.position.z
-        const dissolveProgress = (now - this.dissolveStartTime) / this.dissolveDuration
-        p.size = p.baseSize * (1 - this.easeInOutCubic(dissolveProgress))
-      } else if (!p.isChild && p.spawnProgress < 1) {
-        const easedSpawn = this.easeInOutCubic(p.spawnProgress)
-        const origin = new THREE.Vector3(0, 0, 0)
-        baseX = origin.x + (p.targetPosition.x - origin.x) * easedSpawn
-        baseY = origin.y + (p.targetPosition.y - origin.y) * easedSpawn
-        baseZ = origin.z + (p.targetPosition.z - origin.z) * easedSpawn
-        p.size = p.baseSize * easedSpawn
+        bx = p.position.x
+        by = p.position.y
+        bz = p.position.z
+        const dp = (now - this.dissolveStartTime) / this.dissolveDuration
+        p.size = p.baseSize * (1 - this.easeInOutCubic(dp))
+      } else if (p.state === 'spawning') {
+        const es = this.easeInOutCubic(p.spawnProgress)
+        bx = p.targetPosition.x * es
+        by = p.targetPosition.y * es
+        bz = p.targetPosition.z * es
+        p.size = p.baseSize * es
       } else {
-        p.position.addScaledVector(p.velocity, delta * this.speedMultiplier)
+        p.position.addScaledVector(p.velocity, dt * this.speedMultiplier)
         const dx = p.targetPosition.x - p.position.x
         const dy = p.targetPosition.y - p.position.y
         const dz = p.targetPosition.z - p.position.z
-        p.position.x += dx * 0.02
-        p.position.y += dy * 0.02
-        p.position.z += dz * 0.02
-        baseX = p.position.x
-        baseY = p.position.y
-        baseZ = p.position.z
+        p.position.x += dx * 0.015
+        p.position.y += dy * 0.015
+        p.position.z += dz * 0.015
+        bx = p.position.x
+        by = p.position.y
+        bz = p.position.z
       }
 
-      const lifeRatio = Math.max(0, Math.min(1, p.life / p.maxLife))
+      const lifeRatio = p.state === 'alive' 
+        ? Math.max(0, Math.min(1, p.life / p.maxLife)) 
+        : 1
       p.color.copy(p.baseColor)
-      p.color.lerp(new THREE.Color(0xffffff), (1 - lifeRatio) * 0.85)
+      if (p.state === 'alive') {
+        p.color.lerp(new THREE.Color(0xffffff), (1 - lifeRatio) * 0.9)
+      }
 
-      if (p.rippleTriggered && p.rippleProgress > 0 && p.complementaryColor) {
-        p.rippleProgress -= delta
-        const rippleRatio = Math.min(1, Math.max(0, p.rippleProgress / 1.5))
-        const transitionEase = this.easeInOutCubic(rippleRatio)
-        p.color.lerp(p.complementaryColor, transitionEase)
-        if (p.rippleProgress <= 0) {
-          p.rippleTriggered = false
-          p.complementaryColor = null
+      if (p.rippleColor && p.rippleTime > 0) {
+        p.rippleTime -= dt
+        const rr = Math.min(1, Math.max(0, p.rippleTime / 1.5))
+        const te = this.easeInOutCubic(rr)
+        p.color.lerp(p.rippleColor, te)
+        if (p.rippleTime <= 0) {
+          p.rippleColor = null
         }
       }
 
       if (p.scaleMultiplier > 1) {
-        p.scaleMultiplier = Math.max(1, p.scaleMultiplier - delta * 5)
+        p.scaleMultiplier = Math.max(1, p.scaleMultiplier - dt * 5)
       }
-
       if (p.bloomIntensity > 0) {
-        p.bloomIntensity = Math.max(0, p.bloomIntensity - delta * 5)
+        p.bloomIntensity = Math.max(0, p.bloomIntensity - dt * 5)
       }
 
       if (!this.dissolving && (p.isChild || p.spawnProgress >= 1)) {
-        const cx = baseX
-        const cy = baseY - 2
-        const cz = baseZ
+        const cx = bx
+        const cy = by - 2
+        const cz = bz
         const rx = cx * cosRY + cz * sinRY
         const rz = -cx * sinRY + cz * cosRY
         const ry = cy * cosRX - rz * sinRX
-        const finalZ = cy * sinRX + rz * cosRX
+        const fz = cy * sinRX + rz * cosRX
         p.position.x = rx
         p.position.y = ry + 2
-        p.position.z = finalZ
+        p.position.z = fz
       } else {
-        p.position.x = baseX
-        p.position.y = baseY
-        p.position.z = baseZ
+        p.position.x = bx
+        p.position.y = by
+        p.position.z = bz
       }
     }
   }
 
-  private updateChildParticles(delta: number): void {
+  private updateChildParticles(dt: number): void {
     for (let i = 0; i < this.maxChildParticles; i++) {
       const p = this.childParticles[i]
-      if (!p.active) continue
+      if (p.state !== 'alive') continue
 
-      p.life -= delta
-
+      p.life -= dt
       if (p.life <= 0) {
-        p.active = false
+        p.state = 'inactive'
         continue
       }
 
-      p.position.addScaledVector(p.velocity, delta)
+      p.position.addScaledVector(p.velocity, dt)
       p.velocity.multiplyScalar(0.97)
-      p.velocity.y -= delta * 2
+      p.velocity.y -= dt * 2
 
       const lifeRatio = Math.max(0, p.life / p.maxLife)
       p.color.copy(p.baseColor)
-      p.color.lerp(new THREE.Color(0xffffff), (1 - lifeRatio) * 0.7)
+      p.color.lerp(new THREE.Color(0xffffff), (1 - lifeRatio) * 0.8)
       p.size = p.baseSize * this.easeInOutCubic(lifeRatio)
 
-      if (p.rippleTriggered && p.rippleProgress > 0 && p.complementaryColor) {
-        p.rippleProgress -= delta
-        const rippleRatio = Math.min(1, Math.max(0, p.rippleProgress / 1.5))
-        p.color.lerp(p.complementaryColor, this.easeInOutCubic(rippleRatio))
-        if (p.rippleProgress <= 0) {
-          p.rippleTriggered = false
-          p.complementaryColor = null
+      if (p.rippleColor && p.rippleTime > 0) {
+        p.rippleTime -= dt
+        const rr = Math.min(1, Math.max(0, p.rippleTime / 1.5))
+        p.color.lerp(p.rippleColor, this.easeInOutCubic(rr))
+        if (p.rippleTime <= 0) {
+          p.rippleColor = null
         }
       }
     }
   }
 
   private updateBuffers(): void {
-    const activeMain = this.particles.filter(p => p.active)
-    const activeChild = this.childParticles.filter(p => p.active)
-    const allActive = [...activeMain, ...activeChild]
+    let writeIdx = 0
 
-    for (let i = 0; i < allActive.length; i++) {
-      const p = allActive[i]
-      const idx = i * 3
+    for (let i = 0; i < this.maxParticles; i++) {
+      const p = this.particles[i]
+      if (p.state === 'inactive') continue
+      if (!this.dissolving && p.state !== 'alive' && p.spawnProgress < 0.01) continue
 
+      const idx = writeIdx * 3
       this.positions[idx] = p.position.x
       this.positions[idx + 1] = p.position.y
       this.positions[idx + 2] = p.position.z
-
       this.colors[idx] = p.color.r
       this.colors[idx + 1] = p.color.g
       this.colors[idx + 2] = p.color.b
+      const bloom = 1 + p.bloomIntensity * 0.8
+      this.sizes[writeIdx] = Math.max(0.5, Math.min(3, p.size * p.scaleMultiplier * bloom))
+      writeIdx++
+    }
 
-      const bloomBoost = 1 + p.bloomIntensity * 0.8
-      const finalSize = p.size * p.scaleMultiplier * bloomBoost
-      this.sizes[i] = finalSize
+    for (let i = 0; i < this.maxChildParticles; i++) {
+      const p = this.childParticles[i]
+      if (p.state !== 'alive') continue
+
+      const idx = writeIdx * 3
+      this.positions[idx] = p.position.x
+      this.positions[idx + 1] = p.position.y
+      this.positions[idx + 2] = p.position.z
+      this.colors[idx] = p.color.r
+      this.colors[idx + 1] = p.color.g
+      this.colors[idx + 2] = p.color.b
+      this.sizes[writeIdx] = Math.max(0.5, Math.min(3, p.size))
+      writeIdx++
     }
 
     const totalCount = this.maxParticles + this.maxChildParticles
-    for (let i = allActive.length; i < totalCount; i++) {
+    for (let i = writeIdx; i < totalCount; i++) {
       const idx = i * 3
       this.positions[idx] = 0
       this.positions[idx + 1] = -10000
@@ -572,15 +619,21 @@ export class ParticleSystem {
   }
 
   public getState(): GardenState {
-    const activeParticles = this.particles.filter(p => p.active)
+    const result: GardenState['particles'] = []
+    for (let i = 0; i < this.maxParticles; i++) {
+      const p = this.particles[i]
+      if (p.state === 'alive' || p.state === 'spawning') {
+        result.push({
+          position: { x: p.position.x, y: p.position.y, z: p.position.z },
+          color: { r: p.color.r, g: p.color.g, b: p.color.b },
+          size: p.size,
+          life: p.life,
+          maxLife: p.maxLife
+        })
+      }
+    }
     return {
-      particles: activeParticles.map(p => ({
-        position: { x: p.position.x, y: p.position.y, z: p.position.z },
-        color: { r: p.color.r, g: p.color.g, b: p.color.b },
-        size: p.size,
-        life: p.life,
-        maxLife: p.maxLife
-      })),
+      particles: result,
       emotion: this.emotion,
       timestamp: Date.now()
     }
