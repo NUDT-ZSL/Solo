@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>潮汐棋盘</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(180deg, #0B2D4E 0%, #E8D5B7 100%);
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 24px;
+    }
+
+    .game-container {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      position: relative;
+    }
+
+    .game-container::after {
+      content: '';
+      position: absolute;
+      left: calc(100% + 24px + 240px / 2);
+      top: 0;
+      width: 0.5px;
+      height: 100%;
+      background: linear-gradient(180deg, transparent 0%, #3A7CA5 20%, #3A7CA5 80%, transparent 100%);
+      opacity: 0.4;
+      box-shadow: 0 0 8px #3A7CA5;
+      pointer-events: none;
+    }
+
+    #game-canvas {
+      display: block;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .info-panel {
+      width: 240px;
+      background: rgba(0, 0, 0, 0.31);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .panel-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #3A7CA5;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .btn:hover {
+      background: #5B9CBD;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(58, 124, 165, 0.4);
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .info-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .info-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.6;
+      margin-bottom: 4px;
+    }
+
+    .round-display {
+      font-size: 28px;
+      font-weight: 700;
+      color: #E8D5B7;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .player-info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      transition: all 0.3s ease;
+    }
+
+    .player-row.active {
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.2);
+    }
+
+    .player-indicator {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .player-indicator.p1 {
+      background: radial-gradient(circle, #4FC3F7 0%, #1E88E5 100%);
+      box-shadow: 0 0 8px #4FC3F7;
+    }
+
+    .player-indicator.p2 {
+      background: radial-gradient(circle, #FFD54F 0%, #F9A825 100%);
+      box-shadow: 0 0 8px #FFD54F;
+    }
+
+    .player-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .player-name {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .player-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .stat-value {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .game-status {
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      text-align: center;
+      font-size: 14px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .game-status.winner {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+        padding: 16px;
+        gap: 16px;
+        overflow-y: auto;
+      }
+
+      .game-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .game-container::after {
+        display: none;
+      }
+
+      .info-panel {
+        width: 100%;
+        max-width: 360px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="game-container">
+      <canvas id="game-canvas"></canvas>
+      <div class="info-panel">
+        <div class="panel-buttons">
+          <button class="btn" id="start-btn">开始游戏</button>
+          <button class="btn" id="reset-btn">重置</button>
+        </div>
+        <div class="info-section">
+          <div class="info-title">当前回合</div>
+          <div class="round-display" id="round-display">1</div>
+        </div>
+        <div class="info-section">
+          <div class="info-title">玩家信息</div>
+          <div class="player-info">
+            <div class="player-row active" id="player1-row">
+              <div class="player-indicator p1"></div>
+              <div class="player-details">
+                <div class="player-name">蓝色浪花</div>
+                <div class="player-stats">
+                  <span>得分: <span class="stat-value" id="p1-score">0</span></span>
+                  <span>剩余: <span class="stat-value" id="p1-remaining">18</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="player-row" id="player2-row">
+              <div class="player-indicator p2"></div>
+              <div class="player-details">
+                <div class="player-name">金色漩涡</div>
+                <div class="player-stats">
+                  <span>得分: <span class="stat-value" id="p2-score">0</span></span>
+                  <span>剩余: <span class="stat-value" id="p2-remaining">18</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="game-status" id="game-status">点击「开始游戏」开始对战</div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
