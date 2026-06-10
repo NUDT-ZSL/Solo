@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>符咒叠塔</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(180deg, #0B0B2B 0%, #1A0A3A 100%);
+    }
+    
+    #game-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    
+    #game-canvas {
+      display: block;
+      cursor: pointer;
+    }
+    
+    .game-over-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 32px 48px;
+      color: white;
+      text-align: center;
+      z-index: 100;
+      min-width: 320px;
+    }
+    
+    .game-over-modal h2 {
+      font-size: 28px;
+      color: #FFD700;
+      margin-bottom: 20px;
+    }
+    
+    .game-over-modal .final-score {
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    
+    .game-over-modal .final-score span {
+      color: #FFD700;
+      font-weight: bold;
+      font-size: 32px;
+    }
+    
+    .leaderboard {
+      margin: 20px 0;
+      text-align: left;
+    }
+    
+    .leaderboard h3 {
+      font-size: 18px;
+      color: #C5A55A;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    
+    .leaderboard-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .leaderboard-item.current {
+      color: #FFD700;
+      font-weight: bold;
+    }
+    
+    .modal-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 24px;
+    }
+    
+    .modal-btn {
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    
+    .modal-btn.primary {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      color: #1A0A3A;
+      font-weight: bold;
+    }
+    
+    .modal-btn.primary:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 16px rgba(255, 215, 0, 0.5);
+    }
+    
+    .modal-btn.secondary {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .modal-btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    .score-popup {
+      position: absolute;
+      pointer-events: none;
+      color: #FFD700;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+      animation: scoreFloat 0.5s ease-out forwards;
+      z-index: 50;
+    }
+    
+    @keyframes scoreFloat {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-30px) scale(1.2);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="game-over-modal" class="game-over-modal hidden">
+      <h2>游戏结束</h2>
+      <div class="final-score">最终得分: <span id="final-score">0</span></div>
+      <div class="leaderboard">
+        <h3>🏆 排行榜</h3>
+        <div id="leaderboard-list"></div>
+      </div>
+      <div class="modal-buttons">
+        <button id="restart-btn" class="modal-btn primary">再来一次</button>
+        <button id="share-btn" class="modal-btn secondary">分享成绩</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
