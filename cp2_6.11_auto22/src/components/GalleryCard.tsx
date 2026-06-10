@@ -1,8 +1,18 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Trash2, Share2 } from "lucide-react"
 import SpectrumCanvas from "@/components/SpectrumCanvas"
-import type { Voiceprint } from "./Gallery"
+
+interface Voiceprint {
+  id: string
+  userId: string
+  filename: string
+  createdAt: string
+  spectrum: { high: number; mid: number; low: number; mfcc: number[] }
+  story: string
+  tags: string[]
+  favorited: boolean
+}
 
 interface GalleryCardProps {
   vp: Voiceprint
@@ -12,6 +22,7 @@ interface GalleryCardProps {
 export default function GalleryCard({ vp, onDelete }: GalleryCardProps) {
   const [fading, setFading] = useState(false)
   const [toast, setToast] = useState(false)
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const navigate = useNavigate()
 
   const handleDelete = useCallback(
@@ -27,7 +38,8 @@ export default function GalleryCard({ vp, onDelete }: GalleryCardProps) {
     e.stopPropagation()
     navigator.clipboard.writeText(window.location.origin + `/voiceprint/${vp.id}`)
     setToast(true)
-    setTimeout(() => setToast(false), 1500)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(false), 1500)
   }, [vp.id])
 
   const date = vp.createdAt ? vp.createdAt.slice(0, 10) : ""
@@ -35,7 +47,7 @@ export default function GalleryCard({ vp, onDelete }: GalleryCardProps) {
   return (
     <div
       onClick={() => navigate(`/voiceprint/${vp.id}`)}
-      className={`rounded-xl border border-white/5 bg-base-700/50 backdrop-blur-glass p-4 cursor-pointer transition-all duration-300 hover:-translate-y-[5px] hover:shadow-lg hover:shadow-black/30 ${
+      className={`relative rounded-xl border border-white/5 bg-base-700/50 backdrop-blur-glass p-4 cursor-pointer transition-all duration-300 hover:-translate-y-[5px] hover:shadow-lg hover:shadow-black/30 ${
         fading ? "card-fade-out" : ""
       }`}
     >
@@ -71,8 +83,8 @@ export default function GalleryCard({ vp, onDelete }: GalleryCardProps) {
         </div>
       </div>
       {toast && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-base-800 border border-white/10 rounded-lg text-xs text-white toast-fade">
-          链接已复制
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-black/60 backdrop-blur-sm pointer-events-none">
+          <span className="px-4 py-2 text-sm text-white toast-fade">链接已复制</span>
         </div>
       )}
     </div>

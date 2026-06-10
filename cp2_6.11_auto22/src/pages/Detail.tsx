@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Heart, Share2, Tag, Save } from "lucide-react"
 import { useStore } from "@/store"
@@ -7,7 +7,7 @@ import SpectrumCanvas from "@/components/SpectrumCanvas"
 function RingProgress({ value, color, label }: { value: number; color: string; label: string }) {
   const radius = 40
   const circumference = 2 * Math.PI * radius
-  const offset = circumference - value * circumference
+  const offset = circumference - (value / 100) * circumference
   return (
     <div className="flex flex-col items-center gap-2">
       <svg width={100} height={100} viewBox="0 0 100 100">
@@ -23,10 +23,10 @@ function RingProgress({ value, color, label }: { value: number; color: string; l
           strokeDashoffset={offset}
           strokeLinecap="round"
           transform="rotate(-90 50 50)"
-          className="transition-all duration-500"
+          className="transition-all duration-700 ease-out"
         />
-        <text x="50" y="50" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="16" fontWeight="bold">
-          {Math.round(value * 100)}%
+        <text x="50" y="50" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="16" fontWeight="bold" fontFamily="Outfit, sans-serif">
+          {value}%
         </text>
       </svg>
       <span className="text-xs text-base-500">{label}</span>
@@ -42,9 +42,10 @@ export default function Detail() {
   const setActiveTag = useStore((s) => s.setActiveTag)
   const [story, setStory] = useState("")
   const [tagInput, setTagInput] = useState("")
-  const [heartAnim, setHeartAnim] = useState(false)
+  const [heartKey, setHeartKey] = useState(0)
   const [toast, setToast] = useState(false)
   const [saving, setSaving] = useState(false)
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const vp = voiceprints.find((v) => v.id === id)
 
@@ -52,10 +53,15 @@ export default function Detail() {
     if (vp) setStory(vp.story)
   }, [vp])
 
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current)
+    }
+  }, [])
+
   const handleFavorite = useCallback(async () => {
     if (!vp) return
-    setHeartAnim(true)
-    setTimeout(() => setHeartAnim(false), 200)
+    setHeartKey((k) => k + 1)
     await updateVoiceprint(vp.id, { favorited: !vp.favorited })
   }, [vp, updateVoiceprint])
 
@@ -88,7 +94,8 @@ export default function Detail() {
   const handleShare = useCallback(() => {
     navigator.clipboard.writeText(window.location.origin + `/voiceprint/${id}`)
     setToast(true)
-    setTimeout(() => setToast(false), 1500)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(false), 1500)
   }, [id])
 
   if (!vp) {
@@ -131,9 +138,10 @@ export default function Detail() {
               className="p-2 rounded-lg hover:bg-base-600 transition-colors duration-200"
             >
               <Heart
-                className={`w-5 h-5 ${vp.favorited ? "text-red-500 fill-red-500" : "text-base-500"} ${
-                  heartAnim ? "heart-pop" : ""
-                }`}
+                key={heartKey}
+                className={`w-5 h-5 transition-colors duration-200 ${
+                  vp.favorited ? "text-red-500 fill-red-500" : "text-base-500"
+                } ${heartKey > 0 ? "heart-pop" : ""}`}
               />
             </button>
             <button
@@ -205,8 +213,10 @@ export default function Detail() {
       </div>
 
       {toast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 bg-base-800 border border-white/10 rounded-lg text-sm text-white toast-fade z-50">
-          链接已复制
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="px-6 py-3 bg-black/70 rounded-xl text-sm text-white toast-fade backdrop-blur-sm">
+            链接已复制
+          </div>
         </div>
       )}
     </div>

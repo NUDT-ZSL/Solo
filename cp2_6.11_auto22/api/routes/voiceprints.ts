@@ -11,14 +11,14 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase()
     if (ext === '.wav' || ext === '.mp3') cb(null, true)
-    else cb(new Error('Only WAV and MP3 files allowed'))
+    else cb(new Error('仅支持 WAV 和 MP3 文件'))
   }
 })
 
 function authMiddleware(req: Request, res: Response, next: Function): void {
   const token = req.headers.authorization?.replace('Bearer ', '')
   if (!token) {
-    res.status(401).json({ error: 'Unauthorized' })
+    res.status(401).json({ error: '未登录' })
     return
   }
   try {
@@ -26,7 +26,7 @@ function authMiddleware(req: Request, res: Response, next: Function): void {
     ;(req as any).userId = decoded.userId
     next()
   } catch {
-    res.status(401).json({ error: 'Invalid token' })
+    res.status(401).json({ error: '无效的登录凭证' })
   }
 }
 
@@ -39,11 +39,11 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response): Pr
     const file = req.file
 
     if (!file) {
-      res.status(400).json({ error: 'Audio file is required' })
+      res.status(400).json({ error: '请上传音频文件' })
       return
     }
 
-    const spectrum = analyzeSpectrum(file.path)
+    const spectrum = await analyzeSpectrum(file.path)
 
     const id = uuidv4()
     const voiceprint = {
@@ -59,9 +59,10 @@ router.post('/', upload.single('audio'), async (req: Request, res: Response): Pr
 
     voiceprints.set(id, voiceprint)
 
-    res.status(201).json(voiceprint)
+    res.status(201).json({ voiceprint })
   } catch (err) {
-    res.status(500).json({ error: 'Failed to analyze audio' })
+    console.error('Spectrum analysis error:', err)
+    res.status(500).json({ error: '音频分析失败' })
   }
 })
 
@@ -69,7 +70,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   const userId = (req as any).userId as string
   const { search, tag } = req.query
 
-  let results = Array.from(voiceprints.values()).filter(vp => vp.userId === userId)
+  let results = voiceprints.getByUserId(userId)
 
   if (search && typeof search === 'string') {
     const q = search.toLowerCase()
@@ -84,7 +85,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     results = results.filter(vp => vp.tags.includes(tag))
   }
 
-  res.json(results)
+  res.json({ voiceprints: results })
 })
 
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {
@@ -92,11 +93,11 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   const vp = voiceprints.get(req.params.id)
 
   if (!vp || vp.userId !== userId) {
-    res.status(404).json({ error: 'Voiceprint not found' })
+    res.status(404).json({ error: '声纹不存在' })
     return
   }
 
-  res.json(vp)
+  res.json({ voiceprint: vp })
 })
 
 router.put('/:id', async (req: Request, res: Response): Promise<void> => {
@@ -104,7 +105,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   const vp = voiceprints.get(req.params.id)
 
   if (!vp || vp.userId !== userId) {
-    res.status(404).json({ error: 'Voiceprint not found' })
+    res.status(404).json({ error: '声纹不存在' })
     return
   }
 
@@ -116,7 +117,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
   voiceprints.set(req.params.id, vp)
 
-  res.json(vp)
+  res.json({ voiceprint: vp })
 })
 
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
@@ -124,7 +125,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   const vp = voiceprints.get(req.params.id)
 
   if (!vp || vp.userId !== userId) {
-    res.status(404).json({ error: 'Voiceprint not found' })
+    res.status(404).json({ error: '声纹不存在' })
     return
   }
 
