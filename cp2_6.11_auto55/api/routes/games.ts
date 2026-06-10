@@ -6,7 +6,7 @@ const router = Router();
 
 router.get('/', gamesController.getGames);
 router.get('/:id', gamesController.getGameById);
-router.post('/:id/rate', gamesController.rateGame);
+router.post('/:id/rating', gamesController.rateGame);
 router.post('/:id/like', gamesController.toggleLike);
 router.get('/:gameId/comments', gamesController.getComments);
 router.post('/:gameId/comments', gamesController.addComment);

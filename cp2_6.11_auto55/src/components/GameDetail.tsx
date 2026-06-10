@@ -99,7 +99,7 @@ export default function GameDetail() {
         setIsLiked(result.liked);
         setLikeCount(result.likeCount);
       }
-      setTimeout(() => setLikeAnimating(false), 400);
+      setTimeout(() => setLikeAnimating(false), 300);
     } catch (error) {
       console.error('点赞失败:', error);
     } finally {
@@ -153,17 +153,18 @@ export default function GameDetail() {
         const displayRating = interactive && hoveredStar ? hoveredStar : rating;
         const isActive = displayRating >= starNum;
         const isHovered = interactive && hoveredStar >= starNum;
+        const showFlash = interactive && ratingFlash && Math.round(rating) >= starNum;
         return (
           <Star
             key={starNum}
             size={size}
             fill={isActive ? (isHovered ? '#FCD34D' : '#F59E0B') : 'none'}
+            className={showFlash ? 'animate-flash-score' : ''}
             style={{
               color: isActive ? (isHovered ? '#FCD34D' : '#F59E0B') : '#D1D5DB',
               cursor: interactive ? 'pointer' : 'default',
-              transition: 'all 0.2s ease-out',
-              padding: '2px',
-              transform: interactive && ratingFlash && Math.round(rating) >= starNum ? 'scale(1.2)' : 'scale(1)'
+              transition: 'color 0.2s ease-out, fill 0.2s ease-out, transform 0.2s ease-out',
+              padding: '2px'
             }}
             onMouseEnter={interactive ? () => setHoveredStar(starNum) : undefined}
             onClick={interactive ? () => handleRating(starNum) : undefined}
@@ -576,11 +577,10 @@ export default function GameDetail() {
                       <Heart
                         size={20}
                         fill={isLiked ? '#EF4444' : 'none'}
+                        className={likeAnimating ? 'animate-bounce-heart' : ''}
                         style={{
                           color: isLiked ? '#EF4444' : 'currentColor',
-                          transition: 'all 0.2s ease-out',
-                          transform: likeAnimating ? 'scale(0.8)' : 'scale(1)',
-                          animation: likeAnimating ? 'heartBounce 0.4s ease-out' : 'none'
+                          transition: 'all 0.2s ease-out'
                         }}
                       />
                       {isLiked ? '已点赞' : '点赞'} · {likeCount}

@@ -1,18 +1,25 @@
 import type { Game, Comment, Rating, SortBy, AddCommentData } from '../types/index.js';
 import {
   getGames as storeGetGames,
+  getGamesPaginated as storeGetGamesPaginated,
   getGameById as storeGetGameById,
   updateGame as storeUpdateGame,
   getComments as storeGetComments,
   addComment as storeAddComment,
+  addOrUpdateRating as storeAddOrUpdateRating,
+  toggleLike as storeToggleLike,
 } from '../store/memoryStore.js';
 
 export const calculateHeat = (game: Game): number => {
   return game.likeCount * 2 + game.commentsCount * 3 + game.ratingsCount * 1;
 };
 
-export const getGames = (sortBy: SortBy = 'heat'): Game[] => {
-  const games = storeGetGames();
+export const getGames = (
+  sortBy: SortBy = 'heat',
+  page: number = 1,
+  limit: number = 20,
+): { games: Game[]; total: number; page: number; limit: number } => {
+  const { games, total } = storeGetGamesPaginated(page, limit);
   const sorted = [...games];
 
   if (sortBy === 'heat') {
@@ -21,14 +28,18 @@ export const getGames = (sortBy: SortBy = 'heat'): Game[] => {
     sorted.sort((a, b) => b.averageRating - a.averageRating);
   }
 
-  return sorted;
+  return { games: sorted, total, page, limit };
 };
 
 export const getGameById = (id: string): Game | undefined => {
   return storeGetGameById(id);
 };
 
-export const rateGame = (id: string, userId: string, score: number): Game | undefined => {
+export const rateGame = (
+  id: string,
+  userId: string,
+  score: number,
+): { game: Game; ratings: Rating[] } | undefined => {
   const game = storeGetGameById(id);
   if (!game) return undefined;
 
@@ -36,49 +47,20 @@ export const rateGame = (id: string, userId: string, score: number): Game | unde
     throw new Error('评分必须在1-5之间');
   }
 
-  const existingIndex = game.ratings.findIndex((r) => r.userId === userId);
-  const newRating: Rating = {
-    userId,
-    score,
-    createdAt: new Date().toISOString(),
-  };
+  const ratings = storeAddOrUpdateRating(id, userId, score);
+  const updatedGame = storeGetGameById(id);
 
-  if (existingIndex >= 0) {
-    game.ratings[existingIndex] = newRating;
-  } else {
-    game.ratings.push(newRating);
-  }
-
-  game.ratingsCount = game.ratings.length;
-  const total = game.ratings.reduce((sum, r) => sum + r.score, 0);
-  game.averageRating = Number((total / game.ratings.length).toFixed(1));
-  game.heat = calculateHeat(game);
-
-  return storeUpdateGame(id, game);
+  return { game: updatedGame!, ratings };
 };
 
 export const toggleLike = (id: string, userId: string): { game: Game; liked: boolean } | undefined => {
   const game = storeGetGameById(id);
   if (!game) return undefined;
 
-  const index = game.likedBy.indexOf(userId);
-  let liked: boolean;
+  const liked = storeToggleLike(id, userId);
+  const updatedGame = storeGetGameById(id);
 
-  if (index >= 0) {
-    game.likedBy.splice(index, 1);
-    liked = false;
-  } else {
-    game.likedBy.push(userId);
-    liked = true;
-  }
-
-  game.likeCount = game.likedBy.length;
-  game.heat = calculateHeat(game);
-
-  const updated = storeUpdateGame(id, game);
-  if (!updated) return undefined;
-
-  return { game: updated, liked };
+  return { game: updatedGame!, liked };
 };
 
 export const getComments = (gameId: string): Comment[] => {

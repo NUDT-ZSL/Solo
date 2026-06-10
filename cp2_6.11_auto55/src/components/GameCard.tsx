@@ -55,7 +55,7 @@ export default function GameCard({ game, onUpdate, onNavigate, userId }: GameCar
         setIsLiked(result.liked);
         setLikeCount(result.likeCount);
       }
-      setTimeout(() => setLikeAnimating(false), 400);
+      setTimeout(() => setLikeAnimating(false), 300);
       onUpdate();
     } catch (error) {
       console.error('点赞失败:', error);
@@ -210,11 +210,10 @@ export default function GameCard({ game, onUpdate, onNavigate, userId }: GameCar
             <Heart
               size={20}
               fill={isLiked ? '#EF4444' : 'none'}
+              className={likeAnimating ? 'animate-bounce-heart' : ''}
               style={{
                 color: isLiked ? '#EF4444' : '#9CA3AF',
-                transition: 'all 0.2s ease-out',
-                transform: likeAnimating ? 'scale(0.8)' : 'scale(1)',
-                animation: likeAnimating ? 'heartBounce 0.4s ease-out' : 'none'
+                transition: 'all 0.2s ease-out'
               }}
             />
             <span
@@ -231,14 +230,6 @@ export default function GameCard({ game, onUpdate, onNavigate, userId }: GameCar
         </div>
       </div>
 
-      <style>{`
-        @keyframes heartBounce {
-          0% { transform: scale(1); }
-          30% { transform: scale(0.8); }
-          60% { transform: scale(1.15); }
-          100% { transform: scale(1); }
-        }
-      `}</style>
     </div>
   );
 }

@@ -15,7 +15,7 @@ function HomePage() {
   const fetchGames = async () => {
     try {
       setLoading(true);
-      const data = await gameApi.getGames('heat');
+      const data = await gameApi.getGames('heat', 1, 20);
       setGames(data);
     } catch (error) {
       console.error('获取游戏列表失败:', error);

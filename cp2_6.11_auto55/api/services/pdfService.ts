@@ -1,5 +1,29 @@
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer';
 import type { Game } from '../types/index.js';
+
+let browser: Browser | null = null;
+
+const initBrowser = async (): Promise<Browser> => {
+  browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+  return browser;
+};
+
+const getBrowser = async (): Promise<Browser> => {
+  if (!browser) {
+    return await initBrowser();
+  }
+  return browser;
+};
+
+const closeBrowser = async (): Promise<void> => {
+  if (browser) {
+    await browser.close();
+    browser = null;
+  }
+};
 
 const markdownToHtml = (markdown: string): string => {
   let html = markdown;
@@ -214,13 +238,10 @@ const buildHtmlTemplate = (game: Game): string => {
 };
 
 export const generatePdf = async (game: Game): Promise<Buffer> => {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  const browserInstance = await getBrowser();
+  const page = await browserInstance.newPage();
 
   try {
-    const page = await browser.newPage();
     const htmlContent = buildHtmlTemplate(game);
 
     await page.setContent(htmlContent, {
@@ -243,10 +264,15 @@ export const generatePdf = async (game: Game): Promise<Buffer> => {
 
     return pdfBuffer;
   } finally {
-    await browser.close();
+    await page.close();
   }
 };
 
+export { initBrowser, getBrowser, closeBrowser };
+
 export default {
   generatePdf,
+  initBrowser,
+  getBrowser,
+  closeBrowser,
 };

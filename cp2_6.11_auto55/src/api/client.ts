@@ -9,11 +9,15 @@ const apiClient = axios.create({
 });
 
 export const gameApi = {
-  getGames: async (sortBy: 'heat' | 'rating' = 'heat'): Promise<Game[]> => {
-    const response = await apiClient.get<ApiResponse<Game[]>>('/games', {
-      params: { sortBy }
+  getGames: async (sortBy: 'heat' | 'rating' = 'heat', page = 1, limit = 20): Promise<Game[]> => {
+    const response = await apiClient.get<ApiResponse<Game[] | { games: Game[]; total: number; page: number; limit: number }>>('/games', {
+      params: { sortBy, page, limit }
     });
-    return response.data.data || [];
+    const data = response.data.data;
+    if (data && typeof data === 'object' && 'games' in data) {
+      return data.games;
+    }
+    return (data as Game[]) || [];
   },
 
   getGameById: async (id: string): Promise<Game | null> => {

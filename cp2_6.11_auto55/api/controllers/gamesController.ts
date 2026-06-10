@@ -5,11 +5,34 @@ import * as gamesService from '../services/gamesService.js';
 export const getGames = async (req: Request, res: Response): Promise<void> => {
   try {
     const sortBy = (req.query.sortBy as 'heat' | 'rating') || 'heat';
-    const games = gamesService.getGames(sortBy);
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = parseInt(req.query.limit as string, 10) || 20;
 
-    const response: ApiResponse<typeof games> = {
+    if (page < 1 || !Number.isInteger(page)) {
+      const response: ApiResponse<null> = {
+        success: false,
+        data: null,
+        message: 'page 必须是正整数',
+      };
+      res.status(400).json(response);
+      return;
+    }
+
+    if (limit < 1 || !Number.isInteger(limit)) {
+      const response: ApiResponse<null> = {
+        success: false,
+        data: null,
+        message: 'limit 必须是正整数',
+      };
+      res.status(400).json(response);
+      return;
+    }
+
+    const result = gamesService.getGames(sortBy, page, limit);
+
+    const response: ApiResponse<typeof result> = {
       success: true,
-      data: games,
+      data: result,
       message: '获取游戏列表成功',
     };
 
@@ -81,9 +104,9 @@ export const rateGame = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const game = gamesService.rateGame(id, userId, score);
+    const result = gamesService.rateGame(id, userId, score);
 
-    if (!game) {
+    if (!result) {
       const response: ApiResponse<null> = {
         success: false,
         data: null,
@@ -93,9 +116,17 @@ export const rateGame = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const response: ApiResponse<typeof game> = {
+    const response: ApiResponse<{
+      game: typeof result.game;
+      averageRating: number;
+      ratingsCount: number;
+    }> = {
       success: true,
-      data: game,
+      data: {
+        game: result.game,
+        averageRating: result.game.averageRating,
+        ratingsCount: result.game.ratingsCount,
+      },
       message: '评分成功',
     };
 
