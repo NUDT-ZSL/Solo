@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>浮游礁石</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0A1C3A 0%, #0F3A2A 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+    
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    
+    #canvas-container canvas {
+      display: block;
+      cursor: grab;
+    }
+    
+    #canvas-container canvas:active {
+      cursor: grabbing;
+    }
+    
+    #stats-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #E0E8F0;
+      font-size: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 100;
+      min-width: 140px;
+    }
+    
+    #stats-panel .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    
+    #stats-panel .stat-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    #stats-panel .stat-label {
+      opacity: 0.7;
+    }
+    
+    #stats-panel .stat-value {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    
+    #control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 100;
+      width: 280px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .control-group {
+      margin-bottom: 16px;
+    }
+    
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+    
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #E0E8F0;
+      font-size: 13px;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    .control-value {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: #FFD93D;
+    }
+    
+    .slider-container {
+      position: relative;
+      width: 100%;
+      height: 6px;
+    }
+    
+    .slider-track {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 6px;
+      transform: translateY(-50%);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    
+    .slider-track.temp {
+      background: linear-gradient(90deg, #4A90D9, #9B59B6, #FF6B6B, #FFD93D);
+    }
+    
+    .slider-track.salinity {
+      background: linear-gradient(90deg, #0F3A2A, #1A5F4A, #2E8B6B, #52BE80);
+    }
+    
+    .slider-track.light {
+      background: linear-gradient(90deg, #1a1a2e, #16213e, #0f3460, #FFD93D);
+    }
+    
+    .slider-thumb {
+      position: absolute;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      background: #ffffff;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      cursor: grab;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s ease, width 0.15s ease, height 0.15s ease;
+      z-index: 10;
+    }
+    
+    .slider-thumb:hover {
+      width: 20px;
+      height: 20px;
+    }
+    
+    .slider-thumb:active {
+      cursor: grabbing;
+    }
+    
+    @media (max-width: 768px) {
+      #control-panel {
+        bottom: 16px;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: calc(100% - 32px);
+        max-width: 400px;
+        padding: 14px;
+      }
+      
+      .control-group {
+        margin-bottom: 12px;
+      }
+      
+      #stats-panel {
+        top: 12px;
+        right: 12px;
+        padding: 8px 12px;
+        font-size: 11px;
+        min-width: auto;
+      }
+      
+      #stats-panel .stat-label {
+        display: none;
+      }
+      
+      #stats-panel .stat-item {
+        display: inline-block;
+        margin-right: 8px;
+        margin-bottom: 0;
+      }
+      
+      #stats-panel .stat-item:last-child {
+        margin-right: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  
+  <div id="stats-panel">
+    <div class="stat-item">
+      <span class="stat-label">温度</span>
+      <span class="stat-value" id="stat-temp">22.0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">盐度</span>
+      <span class="stat-value" id="stat-salinity">32.0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">光照</span>
+      <span class="stat-value" id="stat-light">0.5</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">珊瑚节点</span>
+      <span class="stat-value" id="stat-coral">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">粒子数</span>
+      <span class="stat-value" id="stat-particles">0</span>
+    </div>
+  </div>
+  
+  <div id="control-panel">
+    <div class="control-group">
+      <div class="control-label">
+        <span>水温</span>
+        <span class="control-value" id="value-temp">22.0°C</span>
+      </div>
+      <div class="slider-container" data-type="temp">
+        <div class="slider-track temp"></div>
+        <div class="slider-thumb" id="thumb-temp"></div>
+      </div>
+    </div>
+    <div class="control-group">
+      <div class="control-label">
+        <span>盐度</span>
+        <span class="control-value" id="value-salinity">32.0 ppt</span>
+      </div>
+      <div class="slider-container" data-type="salinity">
+        <div class="slider-track salinity"></div>
+        <div class="slider-thumb" id="thumb-salinity"></div>
+      </div>
+    </div>
+    <div class="control-group">
+      <div class="control-label">
+        <span>光照</span>
+        <span class="control-value" id="value-light">0.5</span>
+      </div>
+      <div class="slider-container" data-type="light">
+        <div class="slider-track light"></div>
+        <div class="slider-thumb" id="thumb-light"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
