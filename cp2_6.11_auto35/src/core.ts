@@ -243,7 +243,8 @@ export class CombatSystem {
     if (terrain === 'highland') def += 2;
     if (terrain === 'swamp') atk = Math.max(0, atk - 2);
     const baseDamage = atk - def;
-    const damage = Math.max(1, Math.round(baseDamage));
+    const minGuarantee = Math.max(1, Math.ceil(attacker.attack * 0.2));
+    const damage = Math.max(minGuarantee, Math.round(baseDamage));
     return damage;
   }
 }
@@ -439,10 +440,12 @@ export class Game {
 
     events.push({ type: 'move', pieceId, from, to });
 
-    if (toCell && toCell.terrain === 'altar' && toCell.altarOwner !== piece.faction) {
+    const sameCoord = from.q === to.q && from.r === to.r;
+    if (!sameCoord) {
       piece.altarTurns = 0;
-    } else {
-      piece.altarTurns = 0;
+      if (toCell && toCell.terrain === 'altar' && toCell.altarOwner !== piece.faction) {
+        piece.altarTurns = 0;
+      }
     }
 
     this.checkWinCondition();

@@ -81,9 +81,7 @@ interface QuadBezier {
 
 function computeBezierControlPoint(
   from: { x: number; y: number },
-  to: { x: number; y: number },
-  originX: number,
-  originY: number
+  to: { x: number; y: number }
 ): { x: number; y: number } {
   const midX = (from.x + to.x) / 2;
   const midY = (from.y + to.y) / 2;
@@ -92,14 +90,10 @@ function computeBezierControlPoint(
   const dist = Math.sqrt(dx * dx + dy * dy);
   const perpX = -dy / (dist || 1);
   const perpY = dx / (dist || 1);
-  const dirX = midX - originX;
-  const dirY = midY - originY;
-  const dot = perpX * dirX + perpY * dirY;
-  const sign = dot >= 0 ? 1 : -1;
   const arcHeight = Math.min(45, dist * 0.3 + 12);
   return {
-    x: midX + perpX * arcHeight * sign,
-    y: midY + perpY * arcHeight * sign - 10
+    x: midX + perpX * arcHeight,
+    y: midY + perpY * arcHeight - 10
   };
 }
 
@@ -346,10 +340,17 @@ export class Renderer {
     const margin = (HEX_SIZE + HEX_GAP) * 2;
     cells.forEach(cell => {
       const pos = axialToPixel(cell.coord, this.originX, this.originY);
-      if (
-        pos.x < -margin || pos.x > canvasW + margin ||
-        pos.y < -margin || pos.y > canvasH + margin
-      ) {
+      const yOffset = cell.terrain === 'highland' ? -10 : 0;
+      const corners = hexCorners(pos.x, pos.y + yOffset, HEX_SIZE);
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < corners.length; i++) {
+        const c = corners[i];
+        if (c.x < minX) minX = c.x;
+        if (c.x > maxX) maxX = c.x;
+        if (c.y < minY) minY = c.y;
+        if (c.y > maxY) maxY = c.y;
+      }
+      if (maxX < -margin || minX > canvasW + margin || maxY < -margin || minY > canvasH + margin) {
         return;
       }
       this.drawHexCell(ctx, cell);
@@ -499,7 +500,7 @@ export class Renderer {
       const t = easeInOutCubic(moveAnim.elapsed / moveAnim.duration);
       const from = { x: moveAnim.fromX, y: moveAnim.fromY };
       const to = { x: moveAnim.toX, y: moveAnim.toY };
-      const cp = computeBezierControlPoint(from, to, this.originX, this.originY);
+      const cp = computeBezierControlPoint(from, to);
       return quadraticBezier({ p0: from, p1: cp, p2: to }, t);
     }
     return axialToPixel(piece.position, this.originX, this.originY);
@@ -656,18 +657,18 @@ export class Renderer {
     this.animations.filter(a => a.type === 'move').forEach(a => {
       const anim = a as MoveAnim;
       const rawT = anim.elapsed / anim.duration;
-      const easedT = easeInOutCubic(rawT);
       const from = { x: anim.fromX, y: anim.fromY };
       const to = { x: anim.toX, y: anim.toY };
-      const cp = computeBezierControlPoint(from, to, this.originX, this.originY);
+      const cp = computeBezierControlPoint(from, to);
       const curve: QuadBezier = { p0: from, p1: cp, p2: to };
 
       ctx.save();
       ctx.beginPath();
       const steps = 28;
       for (let i = 0; i <= steps; i++) {
-        const st = (i / steps) * easedT;
-        const pt = quadraticBezier(curve, st);
+        const linearParam = (i / steps) * rawT;
+        const easedParam = easeInOutCubic(linearParam);
+        const pt = quadraticBezier(curve, easedParam);
         if (i === 0) ctx.moveTo(pt.x, pt.y);
         else ctx.lineTo(pt.x, pt.y);
       }
