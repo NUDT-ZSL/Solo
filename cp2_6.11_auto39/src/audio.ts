@@ -7,7 +7,7 @@ export class AudioEngine {
   private dataArray: Float32Array | null = null;
   public isMicAuthorized: boolean = false;
   public micAuthorizeFailed: boolean = false;
-  private volumeThreshold: number = 30;
+  private volumeThreshold: number = 50;
   private minDb: number = -60;
   private maxDb: number = 0;
   private smoothedVolume: number = 0;

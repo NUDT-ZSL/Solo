@@ -162,24 +162,27 @@ export class ParticleSystem {
   }
 
   private checkCollisions(): void {
+    const halfStringWidth = this.stringWidth / 2;
+    const collisionPadding = 2;
+
     for (const particle of this.particles) {
       if (particle.collisionCooldown > 0) {
         particle.collisionCooldown -= 1 / 60;
         continue;
       }
 
-      const particleRadius = particle.size;
-      const hitThreshold = particleRadius + this.stringWidth / 2 + 2;
+      const particleRadius = particle.size / 2;
+      const hitThreshold = particleRadius + halfStringWidth + collisionPadding;
 
       for (const str of this.stringManager.strings) {
         if (str.isRemoving) continue;
         if (str.isFullyRemoved()) continue;
         if (particle.collidedWith.has(str.index)) continue;
 
-        if (particle.y < str.topY - particleRadius || particle.y > str.bottomY + particleRadius) continue;
+        if (particle.y + particleRadius < str.topY || particle.y - particleRadius > str.bottomY) continue;
 
         const dist = Math.abs(particle.x - str.originalX);
-        if (dist < hitThreshold) {
+        if (dist <= hitThreshold) {
           const contactY = Math.max(str.topY, Math.min(str.bottomY, particle.y));
           const amplitude = 8 + (particle.baseSpeed / 1.2) * 7;
           str.triggerVibration(contactY, amplitude);
@@ -340,6 +343,14 @@ export class ParticleSystem {
     this.updateStrongWind(deltaTime);
     this.updateStars(deltaTime);
     this.enforceMaxParticles();
+
+    while (this.burstParticles.length > this.maxBurstParticles) {
+      this.burstParticles.shift();
+    }
+
+    if (this.stars.length > 100) {
+      this.stars.splice(0, this.stars.length - 100);
+    }
   }
 
   public render(ctx: CanvasRenderingContext2D): void {

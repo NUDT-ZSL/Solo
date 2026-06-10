@@ -71,8 +71,10 @@ export class InputManager {
       }
       if (volumeBar) {
         volumeBar.classList.add('visible');
+        volumeBar.classList.remove('error');
       }
       if (volumeFill) {
+        volumeFill.classList.remove('error');
         volumeFill.style.background = 'linear-gradient(90deg, #4ECDC4, #FF6B6B)';
       }
       if (this.onMicAuthorizedCallback) {
@@ -86,9 +88,10 @@ export class InputManager {
         micBtn.style.opacity = '1';
       }
       if (volumeBar) {
-        volumeBar.classList.add('visible');
+        volumeBar.classList.add('visible', 'error');
       }
       if (volumeFill) {
+        volumeFill.classList.add('error');
         volumeFill.style.background = '#FF4444';
         volumeFill.style.width = '100%';
       }

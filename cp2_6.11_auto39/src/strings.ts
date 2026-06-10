@@ -62,24 +62,43 @@ export class HarpString {
   public setYPosition(bottomY: number): void {
     this.bottomY = bottomY;
     this.topY = bottomY - this.baseLength;
+    this.baseColor = this.calculateColorByPitchAndPosition();
+    this.currentColor = this.baseColor;
+    this.baseColorRgb = this.parseRgb(this.baseColor);
+    this.shiftedColorRgb = { ...this.baseColorRgb };
   }
 
   private calculateColorByPitchAndPosition(): string {
     const totalStrings = this.audioEngine.getTotalStrings();
-    const pitchT = this.index / (totalStrings - 1);
+    const minFreq = this.audioEngine.getNoteFrequency(0);
+    const maxFreq = this.audioEngine.getNoteFrequency(totalStrings - 1);
 
-    const positionT = 1 - (this.baseLength - 120) / (280 - 120);
+    const pitchLogT = (Math.log2(this.baseFrequency) - Math.log2(minFreq)) / (Math.log2(maxFreq) - Math.log2(minFreq));
 
-    const combinedT = pitchT * 0.7 + positionT * 0.3;
+    const canvasHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+    const harpBottomY = canvasHeight - 80;
+    const minTopY = harpBottomY - 280;
+    const maxTopY = harpBottomY - 120;
+    const yT = maxTopY > minTopY ? (this.topY - minTopY) / (maxTopY - minTopY) : 0.5;
+    const yPositionT = Math.max(0, Math.min(1, yT));
 
-    const warmR = 255, warmG = 107, warmB = 107;
-    const coolR = 78, coolG = 205, coolB = 196;
+    const pitchWeight = 0.6;
+    const yWeight = 0.4;
+    const combinedT = pitchLogT * pitchWeight + yPositionT * yWeight;
 
-    const r = Math.round(warmR + (coolR - warmR) * combinedT);
-    const g = Math.round(warmG + (coolG - warmG) * combinedT);
-    const b = Math.round(warmB + (coolB - warmB) * combinedT);
+    const warm = { h: 0, s: 0.8, l: 0.6 };
+    const cool = { h: 0.5, s: 0.7, l: 0.55 };
 
-    return `rgb(${r}, ${g}, ${b})`;
+    const smoothT = combinedT < 0.5
+      ? 2 * combinedT * combinedT
+      : 1 - Math.pow(-2 * combinedT + 2, 2) / 2;
+
+    const h = warm.h + (cool.h - warm.h) * smoothT;
+    const s = warm.s + (cool.s - warm.s) * smoothT;
+    const l = warm.l + (cool.l - warm.l) * smoothT;
+
+    const rgb = this.hslToRgb(h, s, l);
+    return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
   }
 
   private parseRgb(color: string): { r: number; g: number; b: number } {
@@ -238,19 +257,20 @@ export class HarpString {
     if (this.pitchShiftDuration > 0 && this.pitchShiftElapsed < this.pitchShiftDuration) {
       this.pitchShiftElapsed += deltaTime;
       const t = Math.min(1, this.pitchShiftElapsed / this.pitchShiftDuration);
-      const easeT = 1 - Math.pow(1 - t, 2);
 
-      this.pitchShift = this.targetPitchShift + (0 - this.targetPitchShift) * easeT;
-      this.currentColor = this.lerpColor(this.shiftedColorRgb, this.baseColorRgb, easeT);
+      this.pitchShift = this.targetPitchShift * (1 - t);
+      this.currentColor = this.lerpColor(this.shiftedColorRgb, this.baseColorRgb, t);
 
       if (t >= 1) {
         this.pitchShift = 0;
         this.currentColor = this.baseColor;
         this.pitchShiftDuration = 0;
         this.targetPitchShift = 0;
+        this.pitchShiftElapsed = 0;
         if (this.onPitchRecovered) {
-          this.onPitchRecovered();
+          const callback = this.onPitchRecovered;
           this.onPitchRecovered = null;
+          callback();
         }
       }
     }

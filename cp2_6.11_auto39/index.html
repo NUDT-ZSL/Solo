@@ -61,12 +61,23 @@
     #volume-bar.visible {
       opacity: 1;
     }
+    #volume-bar.error {
+      box-shadow: 0 0 12px rgba(255, 68, 68, 0.8);
+    }
     #volume-fill {
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #4ECDC4, #FF6B6B);
       border-radius: 3px;
-      transition: width 0.05s linear;
+      transition: width 0.05s linear, background 0.3s ease;
+    }
+    #volume-fill.error {
+      background: #FF4444;
+      animation: errorPulse 1s ease-in-out infinite;
+    }
+    @keyframes errorPulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
     }
   </style>
 </head>
