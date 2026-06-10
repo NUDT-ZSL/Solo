@@ -23,22 +23,28 @@ export class HarpString {
   public baseLength: number;
   public baseColor: string;
   public currentColor: string;
-  public topY: number;
-  public bottomY: number;
+  public topY: number = 0;
+  public bottomY: number = 0;
   public isDragging: boolean = false;
   public isRemoving: boolean = false;
   public removeProgress: number = 0;
   public pitchShift: number = 0;
-  public pitchShiftTime: number = 0;
+  public targetPitchShift: number = 0;
+  public pitchShiftDuration: number = 3;
+  public pitchShiftElapsed: number = 0;
   public flashTime: number = 0;
   public brightnessBoost: number = 0;
   public brightnessTime: number = 0;
+  public onPitchRecovered: (() => void) | null = null;
 
   private vibrations: Vibration[] = [];
   private ripples: Ripple[] = [];
   private baseFrequency: number;
   private audioEngine: AudioEngine;
   private time: number = 0;
+  private basePitchShift: number = 0;
+  private baseColorRgb: { r: number; g: number; b: number };
+  private shiftedColorRgb: { r: number; g: number; b: number };
 
   constructor(index: number, x: number, length: number, audioEngine: AudioEngine) {
     this.index = index;
@@ -47,8 +53,10 @@ export class HarpString {
     this.baseLength = length;
     this.audioEngine = audioEngine;
     this.baseFrequency = audioEngine.getNoteFrequency(index);
-    this.baseColor = this.calculateColor(index / 29);
+    this.baseColor = this.calculateColorByPitchAndPosition();
     this.currentColor = this.baseColor;
+    this.baseColorRgb = this.parseRgb(this.baseColor);
+    this.shiftedColorRgb = { ...this.baseColorRgb };
   }
 
   public setYPosition(bottomY: number): void {
@@ -56,25 +64,51 @@ export class HarpString {
     this.topY = bottomY - this.baseLength;
   }
 
-  private calculateColor(t: number): string {
-    const r1 = 255, g1 = 107, b1 = 107;
-    const r2 = 78, g2 = 205, b2 = 196;
-    const r = Math.round(r1 + (r2 - r1) * t);
-    const g = Math.round(g1 + (g2 - g1) * t);
-    const b = Math.round(b1 + (b2 - b1) * t);
+  private calculateColorByPitchAndPosition(): string {
+    const totalStrings = this.audioEngine.getTotalStrings();
+    const pitchT = this.index / (totalStrings - 1);
+
+    const positionT = 1 - (this.baseLength - 120) / (280 - 120);
+
+    const combinedT = pitchT * 0.7 + positionT * 0.3;
+
+    const warmR = 255, warmG = 107, warmB = 107;
+    const coolR = 78, coolG = 205, coolB = 196;
+
+    const r = Math.round(warmR + (coolR - warmR) * combinedT);
+    const g = Math.round(warmG + (coolG - warmG) * combinedT);
+    const b = Math.round(warmB + (coolB - warmB) * combinedT);
+
     return `rgb(${r}, ${g}, ${b})`;
   }
 
-  private shiftColor(color: string, degrees: number): string {
+  private parseRgb(color: string): { r: number; g: number; b: number } {
     const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (!match) return color;
-    let r = parseInt(match[1]);
-    let g = parseInt(match[2]);
-    let b = parseInt(match[3]);
-    const hsl = this.rgbToHsl(r, g, b);
-    hsl.h = (hsl.h + degrees / 360) % 1;
+    if (match) {
+      return {
+        r: parseInt(match[1]),
+        g: parseInt(match[2]),
+        b: parseInt(match[3])
+      };
+    }
+    return { r: 255, g: 255, b: 255 };
+  }
+
+  private lerpColor(from: { r: number; g: number; b: number }, to: { r: number; g: number; b: number }, t: number): string {
+    const r = Math.round(from.r + (to.r - from.r) * t);
+    const g = Math.round(from.g + (to.g - from.g) * t);
+    const b = Math.round(from.b + (to.b - from.b) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  private shiftColorBySemitones(baseColor: { r: number; g: number; b: number }, semitones: number): { r: number; g: number; b: number } {
+    const hsl = this.rgbToHsl(baseColor.r, baseColor.g, baseColor.b);
+    const shiftDegrees = semitones * 8;
+    hsl.h = (hsl.h + shiftDegrees / 360 + 1) % 1;
+    hsl.s = Math.min(1, hsl.s + semitones * 0.02);
+    hsl.l = Math.min(0.9, hsl.l + semitones * 0.01);
     const rgb = this.hslToRgb(hsl.h, hsl.s, hsl.l);
-    return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+    return rgb;
   }
 
   private rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
@@ -166,10 +200,12 @@ export class HarpString {
   }
 
   public shiftPitch(semitones: number, duration: number = 3): void {
-    this.pitchShift += semitones;
-    this.pitchShiftTime = duration;
-    const shiftAmount = semitones * 10;
-    this.currentColor = this.shiftColor(this.baseColor, shiftAmount);
+    this.basePitchShift = this.pitchShift;
+    this.targetPitchShift = this.pitchShift + semitones;
+    this.pitchShiftDuration = duration;
+    this.pitchShiftElapsed = 0;
+
+    this.shiftedColorRgb = this.shiftColorBySemitones(this.baseColorRgb, this.targetPitchShift);
   }
 
   public startRemove(): void {
@@ -199,11 +235,23 @@ export class HarpString {
       }
     }
 
-    if (this.pitchShiftTime > 0) {
-      this.pitchShiftTime -= deltaTime;
-      if (this.pitchShiftTime <= 0) {
+    if (this.pitchShiftDuration > 0 && this.pitchShiftElapsed < this.pitchShiftDuration) {
+      this.pitchShiftElapsed += deltaTime;
+      const t = Math.min(1, this.pitchShiftElapsed / this.pitchShiftDuration);
+      const easeT = 1 - Math.pow(1 - t, 2);
+
+      this.pitchShift = this.targetPitchShift + (0 - this.targetPitchShift) * easeT;
+      this.currentColor = this.lerpColor(this.shiftedColorRgb, this.baseColorRgb, easeT);
+
+      if (t >= 1) {
         this.pitchShift = 0;
         this.currentColor = this.baseColor;
+        this.pitchShiftDuration = 0;
+        this.targetPitchShift = 0;
+        if (this.onPitchRecovered) {
+          this.onPitchRecovered();
+          this.onPitchRecovered = null;
+        }
       }
     }
 
@@ -438,6 +486,13 @@ export class StringManager {
         this.rearrangeStrings();
       }
     }, 400);
+  }
+
+  public onStringPitchRecovered(string: HarpString): void {
+    const allRecovered = this.strings.every(s => s.pitchShiftDuration === 0 || s.isRemoving);
+    if (allRecovered) {
+      this.rearrangeStrings();
+    }
   }
 
   public getStringAt(x: number, y: number): HarpString | null {

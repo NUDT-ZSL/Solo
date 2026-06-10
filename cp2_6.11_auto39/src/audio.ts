@@ -4,9 +4,13 @@ export class AudioEngine {
   private analyser: AnalyserNode | null = null;
   private microphoneStream: MediaStream | null = null;
   private micSource: MediaStreamAudioSourceNode | null = null;
-  private dataArray: Uint8Array | null = null;
+  private dataArray: Float32Array | null = null;
   public isMicAuthorized: boolean = false;
+  public micAuthorizeFailed: boolean = false;
   private volumeThreshold: number = 30;
+  private minDb: number = -60;
+  private maxDb: number = 0;
+  private smoothedVolume: number = 0;
 
   private noteFrequencies: number[] = [];
 
@@ -37,8 +41,9 @@ export class AudioEngine {
     this.masterGain.gain.value = 0.3;
     this.masterGain.connect(this.audioContext.destination);
     this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 256;
-    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.fftSize = 2048;
+    this.analyser.smoothingTimeConstant = 0.8;
+    this.dataArray = new Float32Array(this.analyser.fftSize);
   }
 
   public async authorizeMicrophone(): Promise<boolean> {
@@ -51,22 +56,34 @@ export class AudioEngine {
         this.micSource.connect(this.analyser!);
       }
       this.isMicAuthorized = true;
+      this.micAuthorizeFailed = false;
       return true;
     } catch (e) {
       console.error('Microphone authorization failed:', e);
+      this.micAuthorizeFailed = true;
+      this.isMicAuthorized = false;
       return false;
     }
   }
 
   public getVolume(): number {
     if (!this.analyser || !this.dataArray || !this.isMicAuthorized) return 0;
-    this.analyser.getByteFrequencyData(this.dataArray);
-    let sum = 0;
+    (this.analyser.getFloatTimeDomainData as any)(this.dataArray);
+
+    let sumSquares = 0;
     for (let i = 0; i < this.dataArray.length; i++) {
-      sum += this.dataArray[i];
+      sumSquares += this.dataArray[i] * this.dataArray[i];
     }
-    const average = sum / this.dataArray.length;
-    return (average / 255) * 100;
+    const rms = Math.sqrt(sumSquares / this.dataArray.length);
+
+    let db = 20 * Math.log10(rms + 0.0001);
+    db = Math.max(this.minDb, Math.min(this.maxDb, db));
+
+    const normalizedVolume = ((db - this.minDb) / (this.maxDb - this.minDb)) * 100;
+
+    this.smoothedVolume = this.smoothedVolume * 0.7 + normalizedVolume * 0.3;
+
+    return this.smoothedVolume;
   }
 
   public getVolumeThreshold(): number {
@@ -76,6 +93,7 @@ export class AudioEngine {
   public playNote(frequency: number, duration: number = 0.3, volume: number = 0.3): void {
     if (!this.audioContext || !this.masterGain) return;
     const ctx = this.audioContext;
+    const masterGain = this.masterGain;
     const now = ctx.currentTime;
 
     const osc1 = ctx.createOscillator();
@@ -87,7 +105,7 @@ export class AudioEngine {
     gain1.gain.linearRampToValueAtTime(volume, now + 0.02);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + duration);
     osc1.connect(gain1);
-    gain1.connect(this.masterGain);
+    gain1.connect(masterGain);
     osc1.start(now);
     osc1.stop(now + duration + 0.1);
 
@@ -100,7 +118,7 @@ export class AudioEngine {
     gain2.gain.linearRampToValueAtTime(volume * 0.3, now + 0.02);
     gain2.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.7);
     osc2.connect(gain2);
-    gain2.connect(this.masterGain);
+    gain2.connect(masterGain);
     osc2.start(now);
     osc2.stop(now + duration + 0.1);
 
@@ -113,7 +131,7 @@ export class AudioEngine {
     gain3.gain.linearRampToValueAtTime(volume * 0.15, now + 0.02);
     gain3.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.5);
     osc3.connect(gain3);
-    gain3.connect(this.masterGain);
+    gain3.connect(masterGain);
     osc3.start(now);
     osc3.stop(now + duration + 0.1);
   }
@@ -129,6 +147,7 @@ export class AudioEngine {
   public playStrongWindChord(frequencies: number[], duration: number = 1.2): void {
     if (!this.audioContext || !this.masterGain) return;
     const ctx = this.audioContext;
+    const masterGain = this.masterGain;
     const now = ctx.currentTime;
 
     const avgFreq = frequencies.reduce((a, b) => a + b, 0) / frequencies.length;
@@ -144,7 +163,7 @@ export class AudioEngine {
       gain.gain.linearRampToValueAtTime(0.05, now + 0.8);
       gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(masterGain);
       osc.start(now);
       osc.stop(now + duration + 0.1);
     });
@@ -158,7 +177,7 @@ export class AudioEngine {
     bassGain.gain.linearRampToValueAtTime(0.1, now + 0.15);
     bassGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
     bassOsc.connect(bassGain);
-    bassGain.connect(this.masterGain);
+    bassGain.connect(masterGain);
     bassOsc.start(now);
     bassOsc.stop(now + duration + 0.1);
   }

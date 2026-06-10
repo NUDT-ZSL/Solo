@@ -44,6 +44,9 @@ export class ParticleSystem {
   private canvasWidth: number = 0;
   private canvasHeight: number = 0;
   private time: number = 0;
+  private readonly maxParticles: number = 50;
+  private readonly maxBurstParticles: number = 40;
+  private readonly stringWidth: number = 2;
 
   private isBurstActive: boolean = false;
   private burstCenterX: number = 0;
@@ -81,8 +84,15 @@ export class ParticleSystem {
   public init(): void {
     this.particles = [];
     const count = 30 + Math.floor(Math.random() * 21);
-    for (let i = 0; i < count; i++) {
+    const actualCount = Math.min(count, this.maxParticles);
+    for (let i = 0; i < actualCount; i++) {
       this.particles.push(this.createFirefly());
+    }
+  }
+
+  private enforceMaxParticles(): void {
+    while (this.particles.length > this.maxParticles) {
+      this.particles.shift();
     }
   }
 
@@ -134,8 +144,9 @@ export class ParticleSystem {
     this.burstTime = 0;
 
     this.burstParticles = [];
-    for (let i = 0; i < 40; i++) {
-      const angle = (Math.PI * 2 * i) / 40 + Math.random() * 0.3;
+    const burstCount = Math.min(40, this.maxBurstParticles);
+    for (let i = 0; i < burstCount; i++) {
+      const angle = (Math.PI * 2 * i) / burstCount + Math.random() * 0.3;
       const speed = 2 + Math.random() * 3;
       this.burstParticles.push({
         x: x + (Math.random() - 0.5) * 20,
@@ -157,16 +168,21 @@ export class ParticleSystem {
         continue;
       }
 
+      const particleRadius = particle.size;
+      const hitThreshold = particleRadius + this.stringWidth / 2 + 2;
+
       for (const str of this.stringManager.strings) {
         if (str.isRemoving) continue;
         if (str.isFullyRemoved()) continue;
         if (particle.collidedWith.has(str.index)) continue;
 
-        if (particle.y < str.topY || particle.y > str.bottomY) continue;
+        if (particle.y < str.topY - particleRadius || particle.y > str.bottomY + particleRadius) continue;
 
         const dist = Math.abs(particle.x - str.originalX);
-        if (dist < 8) {
-          str.triggerVibration(particle.y, 8 + Math.random() * 7);
+        if (dist < hitThreshold) {
+          const contactY = Math.max(str.topY, Math.min(str.bottomY, particle.y));
+          const amplitude = 8 + (particle.baseSpeed / 1.2) * 7;
+          str.triggerVibration(contactY, amplitude);
           particle.collidedWith.add(str.index);
           particle.collisionCooldown = 0.3;
 
@@ -323,6 +339,7 @@ export class ParticleSystem {
 
     this.updateStrongWind(deltaTime);
     this.updateStars(deltaTime);
+    this.enforceMaxParticles();
   }
 
   public render(ctx: CanvasRenderingContext2D): void {

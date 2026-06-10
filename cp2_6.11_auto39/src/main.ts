@@ -132,22 +132,26 @@ class WindHarpApp {
     if (!this.strongWindLight.active) return;
 
     const progress = this.strongWindLight.time / this.strongWindLight.duration;
-    const alpha = 0.4 * (1 - Math.abs(progress - 0.5) * 2);
+    const alpha = 0.5 * (1 - Math.pow(progress - 0.5, 2) * 4);
 
+    const lightWidth = 60;
     const gradient = this.ctx.createLinearGradient(
-      this.strongWindLight.x - 15, 0,
-      this.strongWindLight.x + 15, 0
+      this.strongWindLight.x - lightWidth, 0,
+      this.strongWindLight.x + lightWidth, 0
     );
     gradient.addColorStop(0, 'rgba(100, 180, 255, 0)');
-    gradient.addColorStop(0.5, `rgba(150, 200, 255, ${alpha})`);
+    gradient.addColorStop(0.2, `rgba(130, 200, 255, ${alpha * 0.3})`);
+    gradient.addColorStop(0.5, `rgba(180, 220, 255, ${alpha})`);
+    gradient.addColorStop(0.8, `rgba(130, 200, 255, ${alpha * 0.3})`);
     gradient.addColorStop(1, 'rgba(100, 180, 255, 0)');
 
     this.ctx.save();
+    this.ctx.globalCompositeOperation = 'screen';
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(
-      this.strongWindLight.x - 15,
+      this.strongWindLight.x - lightWidth,
       0,
-      30,
+      lightWidth * 2,
       this.height
     );
     this.ctx.restore();

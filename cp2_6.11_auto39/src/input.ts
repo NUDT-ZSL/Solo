@@ -55,18 +55,42 @@ export class InputManager {
   }
 
   private async onMicClick(): Promise<void> {
+    const micBtn = document.getElementById('mic-authorize') as HTMLButtonElement;
+    const volumeBar = document.getElementById('volume-bar');
+    const volumeFill = document.getElementById('volume-fill');
+
+    if (micBtn) {
+      micBtn.textContent = '授权中...';
+      micBtn.style.opacity = '0.7';
+    }
+
     const success = await this.audioEngine.authorizeMicrophone();
     if (success) {
-      const micBtn = document.getElementById('mic-authorize');
-      const volumeBar = document.getElementById('volume-bar');
       if (micBtn) {
         micBtn.style.display = 'none';
       }
       if (volumeBar) {
         volumeBar.classList.add('visible');
       }
+      if (volumeFill) {
+        volumeFill.style.background = 'linear-gradient(90deg, #4ECDC4, #FF6B6B)';
+      }
       if (this.onMicAuthorizedCallback) {
         this.onMicAuthorizedCallback();
+      }
+    } else {
+      if (micBtn) {
+        micBtn.textContent = '麦克风授权失败，点击重试';
+        micBtn.style.background = 'rgba(255, 68, 68, 0.3)';
+        micBtn.style.borderColor = 'rgba(255, 68, 68, 0.6)';
+        micBtn.style.opacity = '1';
+      }
+      if (volumeBar) {
+        volumeBar.classList.add('visible');
+      }
+      if (volumeFill) {
+        volumeFill.style.background = '#FF4444';
+        volumeFill.style.width = '100%';
       }
     }
   }
@@ -169,6 +193,9 @@ export class InputManager {
       } else {
         str.shiftPitch(2, 3);
         str.currentX = str.originalX;
+        str.onPitchRecovered = () => {
+          this.stringManager.onStringPitchRecovered(str);
+        };
       }
 
       str.isDragging = false;
@@ -214,6 +241,8 @@ export class InputManager {
       volumeFill.style.width = `${Math.min(100, volume)}%`;
     }
 
-    this.particleSystem.setWindStrength(volume, threshold);
+    if (volume >= threshold) {
+      this.particleSystem.setWindStrength(volume, threshold);
+    }
   }
 }
