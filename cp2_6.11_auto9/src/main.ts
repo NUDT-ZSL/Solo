@@ -120,9 +120,9 @@ class Game {
         this.canvas.width = displayWidth * dpr;
         this.canvas.height = displayHeight * dpr;
 
-        this.ctx.scale(dpr, dpr);
-        this.canvas.width = displayWidth;
-        this.canvas.height = displayHeight;
+        (this.canvas as unknown as { logicalWidth: number; logicalHeight: number; dpr: number }).logicalWidth = displayWidth;
+        (this.canvas as unknown as { logicalWidth: number; logicalHeight: number; dpr: number }).logicalHeight = displayHeight;
+        (this.canvas as unknown as { logicalWidth: number; logicalHeight: number; dpr: number }).dpr = dpr;
     }
 
     private loadProgress(): void {
@@ -232,7 +232,8 @@ class Game {
         if (!emitter) return;
 
         const emitterPixel = gridToPixel(emitter.position, this.gridOffset);
-        this.player = new Player(emitterPixel);
+        const dpr = window.devicePixelRatio || 1;
+        this.player = new Player(emitterPixel, dpr);
 
         this.player.onProjectileHit = (receiverId: string) => {
             this.handleReceiverHit(receiverId);
@@ -319,7 +320,14 @@ class Game {
         }
 
         this.gameState = GameState.TRANSITION;
-        this.uiManager.startWaveTransition();
+
+        const { rows, cols } = this.currentLevel.gridSize;
+        const centerGrid = {
+            row: Math.floor(rows / 2),
+            col: Math.floor(cols / 2)
+        };
+        const centerPixel = gridToPixel(centerGrid, this.gridOffset);
+        this.uiManager.startWaveTransition(centerPixel.x, centerPixel.y);
 
         setTimeout(() => {
             if (this.currentLevelId >= 9) {
@@ -327,7 +335,7 @@ class Game {
             } else {
                 this.loadLevel(this.currentLevelId + 1);
             }
-        }, 1500);
+        }, 1000);
     }
 
     private resetLevel(): void {
@@ -413,11 +421,16 @@ class Game {
 
     private render(): void {
         const ctx = this.ctx;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
+        const dpr = (this.canvas as unknown as { logicalWidth: number; logicalHeight: number; dpr: number }).dpr || 1;
+        const logicalWidth = (this.canvas as unknown as { logicalWidth: number; logicalHeight: number; dpr: number }).logicalWidth || this.canvas.width;
+        const logicalHeight = (this.canvas as unknown as { logicalWidth: number; logicalHeight: number; dpr: number }).logicalHeight || this.canvas.height;
+
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
 
         ctx.fillStyle = '#0A0A0F';
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
         this.uiManager.draw();
 
@@ -432,6 +445,8 @@ class Game {
         if (this.gameState === GameState.GAME_OVER) {
             this.uiManager.drawGameOver();
         }
+
+        ctx.restore();
     }
 
     private renderGameScene(): void {

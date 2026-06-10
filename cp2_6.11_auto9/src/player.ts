@@ -39,12 +39,14 @@ export interface CollisionHalo {
 
 export interface ProjectileState {
     position: PixelPos;
+    basePosition: PixelPos;
     velocity: PixelPos;
-    baseVelocity: PixelPos;
+    initialVelocity: PixelPos;
+    gravity: number;
+    launchAngle: number;
     active: boolean;
     trailPositions: PixelPos[];
-    parabolaTime: number;
-    parabolaAmplitude: number;
+    elapsedFrames: number;
     direction: Direction;
 }
 
@@ -57,10 +59,14 @@ export interface PlayerState {
 }
 
 const MAX_PARTICLES = 50;
-const PROJECTILE_SPEED = 6;
+const PROJECTILE_BASE_SPEED = 6;
 const TRAIL_LENGTH = 25;
-const PARABOLA_AMPLITUDE = 15;
-const PARABOLA_FREQUENCY = 0.08;
+const GRAVITY = 0.18;
+const LAUNCH_ANGLE = Math.PI / 7;
+const EXPLOSION_PARTICLE_COUNT = 10;
+const EXPLOSION_LIFETIME = 300;
+const EXPLOSION_BASE_SPEED = 2.5;
+const EXPLOSION_SPEED_VARIANCE = 2;
 
 export class ParticlePool {
     private pool: Particle[];
@@ -281,11 +287,12 @@ export class Player {
     audioManager: AudioManager;
     emitterPosition: PixelPos;
     private keyState: Set<string>;
+    private dpr: number;
     onProjectileHit?: (receiverId: string) => void;
     onProjectileFail?: () => void;
     onDirectionChange?: (direction: Direction) => void;
 
-    constructor(emitterPosition: PixelPos) {
+    constructor(emitterPosition: PixelPos, dpr?: number) {
         this.state = {
             direction: Direction.RIGHT,
             selectedDirection: Direction.RIGHT,
@@ -298,6 +305,11 @@ export class Player {
         this.audioManager = new AudioManager();
         this.emitterPosition = { ...emitterPosition };
         this.keyState = new Set();
+        this.dpr = dpr ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+    }
+
+    setDpr(dpr: number): void {
+        this.dpr = dpr;
     }
 
     handleKeyDown(key: string): void {
@@ -346,16 +358,31 @@ export class Player {
         return this.state.selectedDirection;
     }
 
-    private getVelocityForDirection(direction: Direction): PixelPos {
+    private getInitialVelocityForDirection(direction: Direction): PixelPos {
+        const angle = LAUNCH_ANGLE;
+        const speed = PROJECTILE_BASE_SPEED;
+
         switch (direction) {
             case Direction.UP:
-                return { x: 0, y: -PROJECTILE_SPEED };
+                return {
+                    x: 0,
+                    y: -speed * Math.cos(angle)
+                };
             case Direction.DOWN:
-                return { x: 0, y: PROJECTILE_SPEED };
+                return {
+                    x: 0,
+                    y: speed * Math.cos(angle)
+                };
             case Direction.LEFT:
-                return { x: -PROJECTILE_SPEED, y: 0 };
+                return {
+                    x: -speed * Math.cos(angle),
+                    y: -speed * Math.sin(angle)
+                };
             case Direction.RIGHT:
-                return { x: PROJECTILE_SPEED, y: 0 };
+                return {
+                    x: speed * Math.cos(angle),
+                    y: -speed * Math.sin(angle)
+                };
         }
     }
 
@@ -368,33 +395,40 @@ export class Player {
         }
 
         const direction = this.state.selectedDirection;
-        const velocity = this.getVelocityForDirection(direction);
+        const initialVelocity = this.getInitialVelocityForDirection(direction);
 
         this.state.projectile = {
             position: { ...this.emitterPosition },
-            velocity: { ...velocity },
-            baseVelocity: { ...velocity },
+            basePosition: { ...this.emitterPosition },
+            velocity: { ...initialVelocity },
+            initialVelocity: { ...initialVelocity },
+            gravity: GRAVITY,
+            launchAngle: LAUNCH_ANGLE,
             active: true,
             trailPositions: [],
-            parabolaTime: 0,
-            parabolaAmplitude: PARABOLA_AMPLITUDE,
+            elapsedFrames: 0,
             direction: direction
         };
     }
 
     createExplosion(position: PixelPos): void {
-        for (let i = 0; i < 10; i++) {
-            const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.3;
-            const speed = 2 + Math.random() * 3;
+        const particleSize = 2 * this.dpr;
+
+        for (let i = 0; i < EXPLOSION_PARTICLE_COUNT; i++) {
+            const baseAngle = (Math.PI * 2 * i) / EXPLOSION_PARTICLE_COUNT;
+            const randomOffset = (Math.random() - 0.5) * 0.35;
+            const angle = baseAngle + randomOffset;
+            const speed = EXPLOSION_BASE_SPEED + Math.random() * EXPLOSION_SPEED_VARIANCE;
+
             this.particlePool.acquire(
                 { ...position },
                 {
                     x: Math.cos(angle) * speed,
                     y: Math.sin(angle) * speed
                 },
-                300,
+                EXPLOSION_LIFETIME,
                 '#00FFAA',
-                2,
+                particleSize,
                 'explosion',
                 Math.random() * Math.PI * 2,
                 0
@@ -414,7 +448,7 @@ export class Player {
                 },
                 800,
                 '#FFD700',
-                6,
+                6 * this.dpr,
                 'lockUnlock',
                 Math.random() * Math.PI * 2,
                 0.08 + Math.random() * 0.06
@@ -432,59 +466,65 @@ export class Player {
         const v = this.state.projectile.velocity;
         const dot = v.x * normalX + v.y * normalY;
 
-        this.state.projectile.velocity.x = v.x - 2 * dot * normalX;
-        this.state.projectile.velocity.y = v.y - 2 * dot * normalY;
+        const reflectedX = v.x - 2 * dot * normalX;
+        const reflectedY = v.y - 2 * dot * normalY;
 
-        this.state.projectile.baseVelocity.x = this.state.projectile.velocity.x;
-        this.state.projectile.baseVelocity.y = this.state.projectile.velocity.y;
+        this.state.projectile.velocity.x = reflectedX;
+        this.state.projectile.velocity.y = reflectedY;
 
-        const speed = Math.sqrt(
-            this.state.projectile.velocity.x ** 2 +
-            this.state.projectile.velocity.y ** 2
-        );
-        const targetSpeed = PROJECTILE_SPEED;
+        this.state.projectile.initialVelocity.x = reflectedX;
+        this.state.projectile.initialVelocity.y = reflectedY;
+        this.state.projectile.basePosition = { ...this.state.projectile.position };
+        this.state.projectile.elapsedFrames = 0;
+
+        const speed = Math.sqrt(reflectedX ** 2 + reflectedY ** 2);
+        const targetSpeed = PROJECTILE_BASE_SPEED;
         if (speed > 0) {
-            this.state.projectile.velocity.x = (this.state.projectile.velocity.x / speed) * targetSpeed;
-            this.state.projectile.velocity.y = (this.state.projectile.velocity.y / speed) * targetSpeed;
-            this.state.projectile.baseVelocity.x = this.state.projectile.velocity.x;
-            this.state.projectile.baseVelocity.y = this.state.projectile.velocity.y;
+            this.state.projectile.velocity.x = (reflectedX / speed) * targetSpeed;
+            this.state.projectile.velocity.y = (reflectedY / speed) * targetSpeed;
+            this.state.projectile.initialVelocity.x = this.state.projectile.velocity.x;
+            this.state.projectile.initialVelocity.y = this.state.projectile.velocity.y;
         }
 
         this.spawnHalo({ ...this.state.projectile.position });
         this.audioManager.playBounceSound();
     }
 
+    calculateProjectilePosition(proj: ProjectileState, frames: number): PixelPos {
+        const t = frames;
+        const baseX = proj.basePosition.x + proj.initialVelocity.x * t;
+        const baseY = proj.basePosition.y + proj.initialVelocity.y * t;
+        const gravityY = 0.5 * proj.gravity * t * t;
+
+        return {
+            x: baseX,
+            y: baseY + gravityY
+        };
+    }
+
     calculateTrajectory(startPos: PixelPos, direction: Direction, steps: number = 80): PixelPos[] {
         const points: PixelPos[] = [];
-        const baseVel = this.getVelocityForDirection(direction);
+        const initialVelocity = this.getInitialVelocityForDirection(direction);
 
-        let pos = { ...startPos };
-        let parabolaTime = 0;
+        const simProj: ProjectileState = {
+            position: { ...startPos },
+            basePosition: { ...startPos },
+            velocity: { ...initialVelocity },
+            initialVelocity: { ...initialVelocity },
+            gravity: GRAVITY,
+            launchAngle: LAUNCH_ANGLE,
+            active: false,
+            trailPositions: [],
+            elapsedFrames: 0,
+            direction: direction
+        };
 
         for (let i = 0; i < steps; i++) {
-            const parabolaOffset = this.calculateParabolaOffset(parabolaTime, direction);
-
-            points.push({
-                x: pos.x + parabolaOffset.x,
-                y: pos.y + parabolaOffset.y
-            });
-
-            pos.x += baseVel.x;
-            pos.y += baseVel.y;
-            parabolaTime++;
+            const pos = this.calculateProjectilePosition(simProj, i);
+            points.push(pos);
         }
 
         return points;
-    }
-
-    private calculateParabolaOffset(time: number, direction: Direction): PixelPos {
-        const sineWave = Math.sin(time * PARABOLA_FREQUENCY) * PARABOLA_AMPLITUDE;
-
-        if (direction === Direction.LEFT || direction === Direction.RIGHT) {
-            return { x: 0, y: sineWave };
-        } else {
-            return { x: sineWave, y: 0 };
-        }
     }
 
     update(
@@ -504,18 +544,10 @@ export class Player {
 
         if (this.state.projectile && this.state.projectile.active) {
             const proj = this.state.projectile;
+            proj.elapsedFrames++;
 
-            proj.parabolaTime++;
-
-            const parabolaOffset = this.calculateParabolaOffset(proj.parabolaTime, proj.direction);
-
-            proj.position.x += proj.velocity.x;
-            proj.position.y += proj.velocity.y;
-
-            const renderPos = {
-                x: proj.position.x + parabolaOffset.x,
-                y: proj.position.y + parabolaOffset.y
-            };
+            const renderPos = this.calculateProjectilePosition(proj, proj.elapsedFrames);
+            proj.position = { ...renderPos };
 
             proj.trailPositions.unshift({ ...renderPos });
             if (proj.trailPositions.length > TRAIL_LENGTH) {
@@ -640,11 +672,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void 
 
     if (player.state.projectile && player.state.projectile.active) {
         const proj = player.state.projectile;
-        const parabolaOffset = player['calculateParabolaOffset'](proj.parabolaTime, proj.direction);
-        const renderPos = {
-            x: proj.position.x + parabolaOffset.x,
-            y: proj.position.y + parabolaOffset.y
-        };
+        const renderPos = { ...proj.position };
 
         for (let i = 0; i < proj.trailPositions.length; i++) {
             const trail = proj.trailPositions[i];

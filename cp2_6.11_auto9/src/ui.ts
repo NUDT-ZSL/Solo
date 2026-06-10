@@ -61,6 +61,8 @@ export interface WaveTransition {
     centerY: number;
     fadeOutStartTime: number;
     fadingOut: boolean;
+    brightenDuration: number;
+    fadeOutDuration: number;
 }
 
 export interface GridCellBrightness {
@@ -127,6 +129,8 @@ export class UIManager {
     topBar: TopBarState;
     levelMenu: LevelMenuState;
     responsiveScale: number;
+    logicalWidth: number;
+    logicalHeight: number;
     private themeDisplayTime: number;
     private themeDisplayAlpha: number;
     private currentThemeName: string;
@@ -139,6 +143,10 @@ export class UIManager {
         this.themeDisplayAlpha = 0;
         this.currentThemeName = '';
 
+        const info = canvas as unknown as { logicalWidth?: number; logicalHeight?: number };
+        this.logicalWidth = info.logicalWidth ?? canvas.width;
+        this.logicalHeight = info.logicalHeight ?? canvas.height;
+
         this.hexagonClusters = this.generateHexagonClusters();
         this.waveTransition = {
             active: false,
@@ -147,7 +155,9 @@ export class UIManager {
             centerX: 0,
             centerY: 0,
             fadeOutStartTime: 0,
-            fadingOut: false
+            fadingOut: false,
+            brightenDuration: 700,
+            fadeOutDuration: 300
         };
         this.lockUnlockAnimations = [];
         this.gameOverUI = {
@@ -181,8 +191,8 @@ export class UIManager {
         for (let i = 0; i < clusterCount; i++) {
             clusters.push({
                 position: {
-                    x: Math.random() * this.canvas.width,
-                    y: Math.random() * this.canvas.height
+                    x: Math.random() * this.logicalWidth,
+                    y: Math.random() * this.logicalHeight
                 },
                 size: 15 + Math.random() * 40,
                 rotation: Math.random() * Math.PI * 2,
@@ -202,8 +212,8 @@ export class UIManager {
         const rows = 3;
         const total = 9;
         const spacing = 25;
-        const canvasWidth = this.canvas.width;
-        const canvasHeight = this.canvas.height;
+        const canvasWidth = this.logicalWidth;
+        const canvasHeight = this.logicalHeight;
         const buttonSize = Math.min(canvasWidth, canvasHeight) / 5;
         const gridWidth = cols * buttonSize + (cols - 1) * spacing;
         const gridHeight = rows * buttonSize + (rows - 1) * spacing;
@@ -229,10 +239,13 @@ export class UIManager {
     }
 
     updateResponsiveScale(): void {
-        this.responsiveScale = Math.min(this.canvas.width / 1280, this.canvas.height / 720);
+        this.responsiveScale = Math.min(this.logicalWidth / 1280, this.logicalHeight / 720);
     }
 
     resize(): void {
+        const info = this.canvas as unknown as { logicalWidth?: number; logicalHeight?: number };
+        this.logicalWidth = info.logicalWidth ?? this.canvas.width;
+        this.logicalHeight = info.logicalHeight ?? this.canvas.height;
         this.updateResponsiveScale();
         this.hexagonClusters = this.generateHexagonClusters();
         this.initLevelMenuButtons();
@@ -247,8 +260,8 @@ export class UIManager {
     startWaveTransition(centerX?: number, centerY?: number): void {
         this.waveTransition.active = true;
         this.waveTransition.startTime = Date.now();
-        this.waveTransition.centerX = centerX ?? this.canvas.width / 2;
-        this.waveTransition.centerY = centerY ?? this.canvas.height / 2;
+        this.waveTransition.centerX = centerX ?? this.logicalWidth / 2;
+        this.waveTransition.centerY = centerY ?? this.logicalHeight / 2;
         this.waveTransition.fadingOut = false;
         this.waveTransition.fadeOutStartTime = 0;
     }
@@ -338,8 +351,8 @@ export class UIManager {
     handleGameOverClick(x: number, y: number): boolean {
         if (!this.gameOverUI.active) return false;
 
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2 + 60;
+        const centerX = this.logicalWidth / 2;
+        const centerY = this.logicalHeight / 2 + 60;
         const buttonWidth = 180 * this.responsiveScale;
         const buttonHeight = 50 * this.responsiveScale;
 
@@ -352,8 +365,8 @@ export class UIManager {
     handleGameOverHover(x: number, y: number): void {
         if (!this.gameOverUI.active) return;
 
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2 + 60;
+        const centerX = this.logicalWidth / 2;
+        const centerY = this.logicalHeight / 2 + 60;
         const buttonWidth = 180 * this.responsiveScale;
         const buttonHeight = 50 * this.responsiveScale;
 
@@ -366,7 +379,7 @@ export class UIManager {
     handleResetClick(x: number, y: number): boolean {
         const barHeight = 70 * this.responsiveScale;
         const buttonRadius = 22 * this.responsiveScale;
-        const centerX = this.canvas.width - buttonRadius - 30;
+        const centerX = this.logicalWidth - buttonRadius - 30;
         const centerY = barHeight / 2;
         const dx = x - centerX;
         const dy = y - centerY;
@@ -413,11 +426,10 @@ export class UIManager {
         }
         this.lockUnlockAnimations = this.lockUnlockAnimations.filter(a => a.active);
 
-        if (this.waveTransition.active && !this.waveTransition.fadingOut) {
+        if (this.waveTransition.active) {
             const elapsed = Date.now() - this.waveTransition.startTime;
             if (elapsed >= this.waveTransition.duration) {
-                this.waveTransition.fadingOut = true;
-                this.waveTransition.fadeOutStartTime = Date.now();
+                this.waveTransition.active = false;
             }
         }
     }
@@ -438,46 +450,53 @@ export class UIManager {
 
         const ctx = this.ctx;
         const elapsed = Date.now() - this.waveTransition.startTime;
-        const progress = Math.min(1, elapsed / this.waveTransition.duration);
+        const totalDuration = this.waveTransition.duration;
+        const brightenDuration = this.waveTransition.brightenDuration;
+        const fadeOutDuration = this.waveTransition.fadeOutDuration;
 
-        const centerGrid = {
-            row: Math.floor(gridSize.rows / 2),
-            col: Math.floor(gridSize.cols / 2)
-        };
-        const centerPixel = gridToPixel(centerGrid, offset);
+        let brightnessProgress: number;
+        let fadeAlpha: number;
+
+        if (elapsed < brightenDuration) {
+            brightnessProgress = elapsed / brightenDuration;
+            fadeAlpha = 1;
+        } else {
+            brightnessProgress = 1;
+            const fadeElapsed = elapsed - brightenDuration;
+            fadeAlpha = Math.max(0, 1 - fadeElapsed / fadeOutDuration);
+        }
+
+        const centerX = this.waveTransition.centerX;
+        const centerY = this.waveTransition.centerY;
 
         const maxDistance = Math.sqrt(
-            (gridSize.rows * gridSize.rows) + (gridSize.cols * gridSize.cols)
-        ) * offset.tileWidth / 2;
+            this.logicalWidth * this.logicalWidth + this.logicalHeight * this.logicalHeight
+        );
 
-        const waveWidth = maxDistance * 0.35;
-        const currentWaveRadius = maxDistance * progress;
-
-        const fadeAlpha = this.waveTransition.fadingOut
-            ? Math.max(0, 1 - (Date.now() - this.waveTransition.fadeOutStartTime) / 300)
-            : 1;
+        const waveWidth = maxDistance * 0.25;
+        const currentWaveRadius = maxDistance * brightnessProgress;
 
         for (let row = 0; row < gridSize.rows; row++) {
             for (let col = 0; col < gridSize.cols; col++) {
                 const cellPixel = gridToPixel({ row, col }, offset);
-                const dx = cellPixel.x - centerPixel.x;
-                const dy = cellPixel.y - centerPixel.y;
+                const dx = cellPixel.x - centerX;
+                const dy = cellPixel.y - centerY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                const brightness = smoothstep(
+                const cellBrightness = smoothstep(
                     currentWaveRadius - waveWidth,
                     currentWaveRadius,
                     distance
                 );
 
-                if (brightness > 0) {
-                    const cellColor = lerpColor('#1A1A2E', '#FFFFFF', brightness);
+                if (cellBrightness > 0) {
+                    const cellColor = lerpColor('#1A1A2E', '#FFFFFF', cellBrightness);
 
                     ctx.save();
-                    ctx.globalAlpha = brightness * fadeAlpha * 0.9;
+                    ctx.globalAlpha = cellBrightness * fadeAlpha * 0.9;
                     ctx.fillStyle = cellColor;
                     ctx.shadowColor = '#FFFFFF';
-                    ctx.shadowBlur = 15 * brightness;
+                    ctx.shadowBlur = 15 * cellBrightness;
 
                     this.drawDiamondCell(cellPixel, offset.tileWidth, offset.tileHeight);
 
@@ -486,22 +505,21 @@ export class UIManager {
             }
         }
 
-        ctx.save();
-        ctx.globalAlpha = fadeAlpha * 0.5;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 * (1 - progress)})`;
-        ctx.lineWidth = 3;
-        ctx.shadowColor = '#FFFFFF';
-        ctx.shadowBlur = 30;
-        ctx.beginPath();
-        ctx.arc(centerPixel.x, centerPixel.y, currentWaveRadius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
+        if (brightnessProgress < 1) {
+            ctx.save();
+            ctx.globalAlpha = fadeAlpha * 0.5;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 * (1 - brightnessProgress * 0.3)})`;
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#FFFFFF';
+            ctx.shadowBlur = 30;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, currentWaveRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
 
-        if (progress >= 1 && this.waveTransition.fadingOut) {
-            const fadeProgress = (Date.now() - this.waveTransition.fadeOutStartTime) / 300;
-            if (fadeProgress >= 1) {
-                this.waveTransition.active = false;
-            }
+        if (elapsed >= totalDuration) {
+            this.waveTransition.active = false;
         }
     }
 
@@ -526,13 +544,13 @@ export class UIManager {
 
         ctx.save();
         ctx.fillStyle = 'rgba(10, 10, 15, 0.92)';
-        ctx.fillRect(0, 0, this.canvas.width, barHeight);
+        ctx.fillRect(0, 0, this.logicalWidth, barHeight);
 
         ctx.strokeStyle = 'rgba(0, 255, 170, 0.3)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(0, barHeight);
-        ctx.lineTo(this.canvas.width, barHeight);
+        ctx.lineTo(this.logicalWidth, barHeight);
         ctx.stroke();
 
         ctx.fillStyle = '#FFFFFF';
@@ -541,8 +559,8 @@ export class UIManager {
         ctx.textBaseline = 'middle';
         ctx.fillText(this.topBar.levelName, 30, barHeight / 2);
 
-        this.drawLives(this.canvas.width / 2, barHeight / 2, this.topBar.lives, this.topBar.maxLives);
-        this.drawResetButton(this.canvas.width - 50, barHeight / 2);
+        this.drawLives(this.logicalWidth / 2, barHeight / 2, this.topBar.lives, this.topBar.maxLives);
+        this.drawResetButton(this.logicalWidth - 50, barHeight / 2);
 
         ctx.restore();
 
@@ -700,7 +718,7 @@ export class UIManager {
         ctx.textBaseline = 'middle';
         ctx.shadowColor = '#00FFAA';
         ctx.shadowBlur = 20;
-        ctx.fillText(this.currentThemeName, this.canvas.width / 2, this.canvas.height / 2);
+        ctx.fillText(this.currentThemeName, this.logicalWidth / 2, this.logicalHeight / 2);
         ctx.restore();
     }
 
@@ -742,7 +760,7 @@ export class UIManager {
 
         ctx.save();
         ctx.fillStyle = 'rgba(10, 10, 15, 0.95)';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.fillRect(0, 0, this.logicalWidth, this.logicalHeight);
 
         ctx.fillStyle = '#FFFFFF';
         ctx.font = `bold ${fontSize}px "Segoe UI", sans-serif`;
@@ -750,12 +768,12 @@ export class UIManager {
         ctx.textBaseline = 'top';
         ctx.shadowColor = '#00FFAA';
         ctx.shadowBlur = 20;
-        ctx.fillText('量子迷宫：粒子跃迁', this.canvas.width / 2, 40);
+        ctx.fillText('量子迷宫：粒子跃迁', this.logicalWidth / 2, 40);
 
         ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.font = `${subFontSize}px "Segoe UI", sans-serif`;
-        ctx.fillText(`已解锁至第 ${this.levelMenu.maxUnlockedLevel} 关`, this.canvas.width / 2, 40 + fontSize + 10);
+        ctx.fillText(`已解锁至第 ${this.levelMenu.maxUnlockedLevel} 关`, this.logicalWidth / 2, 40 + fontSize + 10);
 
         for (const button of this.levelMenu.buttons) {
             this.drawLevelButton(button);
@@ -904,15 +922,15 @@ export class UIManager {
         const ctx = this.ctx;
         const titleFontSize = this.getResponsiveFontSize(36, 5, 72);
         const buttonFontSize = this.getResponsiveFontSize(18, 2, 28);
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2;
+        const centerX = this.logicalWidth / 2;
+        const centerY = this.logicalHeight / 2;
         const buttonWidth = 180 * this.responsiveScale;
         const buttonHeight = 50 * this.responsiveScale;
 
         ctx.save();
 
         ctx.fillStyle = 'rgba(10, 10, 15, 0.85)';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.fillRect(0, 0, this.logicalWidth, this.logicalHeight);
 
         ctx.fillStyle = '#FFFFFF';
         ctx.font = `bold ${titleFontSize}px "Segoe UI", sans-serif`;

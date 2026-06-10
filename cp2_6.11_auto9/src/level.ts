@@ -104,37 +104,72 @@ export function checkCollision(
     for (const obstacle of obstacles) {
         if (isSameGridPos(gridPos, obstacle.position)) {
             const obstaclePixel = gridToPixel(obstacle.position, offset);
-            const dx = pixelPos.x - obstaclePixel.x;
-            const dy = pixelPos.y - obstaclePixel.y;
+
+            const halfTileW = offset.tileWidth / 2;
+            const halfTileH = offset.tileHeight / 2;
+            const cellLeft = obstaclePixel.x - halfTileW;
+            const cellRight = obstaclePixel.x + halfTileW;
+            const cellTop = obstaclePixel.y - halfTileH;
+            const cellBottom = obstaclePixel.y + halfTileH;
 
             let normalX = 0;
             let normalY = 0;
 
             if (lastPixelPos) {
-                const moveDx = pixelPos.x - lastPixelPos.x;
-                const moveDy = pixelPos.y - lastPixelPos.y;
+                const prevInsideX = lastPixelPos.x >= cellLeft && lastPixelPos.x <= cellRight;
+                const prevInsideY = lastPixelPos.y >= cellTop && lastPixelPos.y <= cellBottom;
+                const currInsideX = pixelPos.x >= cellLeft && pixelPos.x <= cellRight;
+                const currInsideY = pixelPos.y >= cellTop && pixelPos.y <= cellBottom;
 
-                if (Math.abs(moveDx) > Math.abs(moveDy)) {
-                    normalX = moveDx > 0 ? -1 : 1;
+                if (!prevInsideX && currInsideX) {
+                    normalX = lastPixelPos.x < cellLeft ? -1 : 1;
                     normalY = 0;
-                } else {
+                } else if (!prevInsideY && currInsideY) {
                     normalX = 0;
-                    normalY = moveDy > 0 ? -1 : 1;
+                    normalY = lastPixelPos.y < cellTop ? -1 : 1;
+                } else {
+                    const distToLeft = Math.abs(pixelPos.x - cellLeft);
+                    const distToRight = Math.abs(pixelPos.x - cellRight);
+                    const distToTop = Math.abs(pixelPos.y - cellTop);
+                    const distToBottom = Math.abs(pixelPos.y - cellBottom);
+
+                    const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+
+                    if (minDist === distToLeft) {
+                        normalX = -1;
+                        normalY = 0;
+                    } else if (minDist === distToRight) {
+                        normalX = 1;
+                        normalY = 0;
+                    } else if (minDist === distToTop) {
+                        normalX = 0;
+                        normalY = -1;
+                    } else {
+                        normalX = 0;
+                        normalY = 1;
+                    }
                 }
             } else {
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    normalX = dx > 0 ? 1 : -1;
+                const distToLeft = Math.abs(pixelPos.x - cellLeft);
+                const distToRight = Math.abs(pixelPos.x - cellRight);
+                const distToTop = Math.abs(pixelPos.y - cellTop);
+                const distToBottom = Math.abs(pixelPos.y - cellBottom);
+
+                const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+
+                if (minDist === distToLeft) {
+                    normalX = -1;
                     normalY = 0;
+                } else if (minDist === distToRight) {
+                    normalX = 1;
+                    normalY = 0;
+                } else if (minDist === distToTop) {
+                    normalX = 0;
+                    normalY = -1;
                 } else {
                     normalX = 0;
-                    normalY = dy > 0 ? 1 : -1;
+                    normalY = 1;
                 }
-            }
-
-            const len = Math.sqrt(normalX * normalX + normalY * normalY);
-            if (len > 0) {
-                normalX /= len;
-                normalY /= len;
             }
 
             if (obstacle.type === 'energy') {
