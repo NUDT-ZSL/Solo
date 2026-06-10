@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>胶卷回忆录</title>
+    <style>
+      body {
+        margin: 0;
+        background: #EAE5DD;
+      }
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(#EAE5DD, #F5F0E8);
+        z-index: 9999;
+      }
+      .film-roll-loader {
+        width: 80px;
+        height: 80px;
+        position: relative;
+        animation: spin 1.2s linear infinite;
+      }
+      .film-roll-loader::before,
+      .film-roll-loader::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 6px solid transparent;
+        border-top-color: #B8860B;
+        border-right-color: #D4AF37;
+      }
+      .film-roll-loader::after {
+        inset: 12px;
+        animation: spin 0.8s linear infinite reverse;
+        border-top-color: #8B6914;
+        border-right-color: #B8860B;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+    <script type="module">
+      if (import.meta.hot?.on) {
+        import.meta.hot.on('vite:error', (error) => {
+          if (error.err) {
+            console.error([error.err.message, error.err.frame].filter(Boolean).join('\n'));
+          }
+        });
+      }
+      window.addEventListener('load', () => {
+        const l = document.getElementById('loading');
+        if (l) setTimeout(() => l.remove(), 300);
+      });
+    </script>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="film-roll-loader"></div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
