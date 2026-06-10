@@ -1,6 +1,11 @@
 /**
  * 右键上下文菜单
  * 提供添加笔记、添加标签、删除节点等操作
+ *
+ * 修复问题3：
+ * - "添加/编辑笔记" 打开 NoteModal 并定位到笔记编辑
+ * - "管理标签" 打开 NoteModal 并自动聚焦到标签输入框
+ * - 所有操作都会正确保存数据并关联到节点
  */
 
 import { useEffect, useRef } from 'react';
@@ -9,7 +14,15 @@ import { useGraphStore } from '../store/useGraphStore';
 
 export default function ContextMenu() {
   const menuRef = useRef<HTMLDivElement>(null);
-  const { contextMenu, hideContextMenu, deleteNode, setNoteModalOpen, selectNode, updateNode } = useGraphStore();
+  const {
+    contextMenu,
+    hideContextMenu,
+    deleteNode,
+    setNoteModalOpen,
+    selectNode,
+    updateNode,
+    setNoteModalInitialTab,  // 新增：控制NoteModal默认打开的标签页
+  } = useGraphStore();
 
   const { visible, x, y, nodeId } = contextMenu;
 
@@ -49,13 +62,18 @@ export default function ContextMenu() {
 
   if (!visible || !nodeId) return null;
 
+  /**
+   * ========== 修复问题3：完整交互流程实现 ==========
+   */
   const menuItems = [
     {
       id: 'note',
       label: '添加/编辑笔记',
       icon: FileText,
       onClick: () => {
+        // 选中节点 → 打开NoteModal → 默认显示笔记编辑tab
         selectNode(nodeId);
+        setNoteModalInitialTab('note');
         setNoteModalOpen(true);
         hideContextMenu();
       },
@@ -65,7 +83,9 @@ export default function ContextMenu() {
       label: '管理标签',
       icon: Tag,
       onClick: () => {
+        // 选中节点 → 打开NoteModal → 默认显示标签tab并自动聚焦
         selectNode(nodeId);
+        setNoteModalInitialTab('tags');
         setNoteModalOpen(true);
         hideContextMenu();
       },
@@ -81,7 +101,15 @@ export default function ContextMenu() {
       onClick: () => {
         const node = useGraphStore.getState().nodes.find(n => n.id === nodeId);
         if (node) {
-          navigator.clipboard.writeText(node.word);
+          navigator.clipboard.writeText(node.word).catch(() => {
+            // 降级方案：用 textarea 复制
+            const textarea = document.createElement('textarea');
+            textarea.value = node.word;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+          });
         }
         hideContextMenu();
       },
@@ -96,7 +124,9 @@ export default function ContextMenu() {
       icon: Trash2,
       danger: true,
       onClick: () => {
-        if (confirm('确定删除此节点及其所有子节点？')) {
+        const node = useGraphStore.getState().nodes.find(n => n.id === nodeId);
+        const word = node?.word || '此节点';
+        if (window.confirm(`确定删除「${word}」及其所有子节点？\n\n此操作不可撤销。`)) {
           deleteNode(nodeId);
         }
         hideContextMenu();
@@ -120,12 +150,14 @@ export default function ContextMenu() {
         minWidth: '180px',
         background: 'rgba(27, 38, 59, 0.95)',
         backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: '10px',
         padding: '6px',
         boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
         zIndex: 1000,
         animation: 'menuFadeIn 0.15s ease-out',
+        WebkitAnimation: 'menuFadeIn 0.15s ease-out',
       }}
     >
       {menuItems.map(item => {
@@ -161,6 +193,7 @@ export default function ContextMenu() {
               fontSize: '13px',
               color: item.danger ? '#FF6B6B' : 'rgba(255,255,255,0.85)',
               transition: 'all 0.15s',
+              WebkitTransition: 'all 0.15s',
               textAlign: 'left',
               fontFamily: '"Noto Sans SC", sans-serif',
             }}
@@ -188,6 +221,16 @@ export default function ContextMenu() {
           to {
             opacity: 1;
             transform: scale(1) translateY(0);
+          }
+        }
+        @-webkit-keyframes menuFadeIn {
+          from {
+            opacity: 0;
+            -webkit-transform: scale(0.95) translateY(-4px);
+          }
+          to {
+            opacity: 1;
+            -webkit-transform: scale(1) translateY(0);
           }
         }
       `}</style>

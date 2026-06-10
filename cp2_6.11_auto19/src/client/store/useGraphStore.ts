@@ -23,6 +23,7 @@ interface GraphState {
   isLoading: boolean;
   isSidebarOpen: boolean;
   isNoteModalOpen: boolean;
+  noteModalInitialTab: 'note' | 'tags';  // 修复问题3：NoteModal初始打开的tab
   isSaveDialogOpen: boolean;
   savedGraphs: KnowledgeGraph[];
   contextMenu: {
@@ -53,6 +54,7 @@ interface GraphState {
   setLoading: (loading: boolean) => void;
   setSidebarOpen: (open: boolean) => void;
   setNoteModalOpen: (open: boolean) => void;
+  setNoteModalInitialTab: (tab: 'note' | 'tags') => void;  // 修复问题3
   setSaveDialogOpen: (open: boolean) => void;
   setSavedGraphs: (graphs: KnowledgeGraph[]) => void;
   setCurrentGraphId: (id: string | null) => void;
@@ -84,6 +86,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isLoading: false,
   isSidebarOpen: true,
   isNoteModalOpen: false,
+  noteModalInitialTab: 'note',  // 修复问题3
   isSaveDialogOpen: false,
   savedGraphs: [],
   contextMenu: { visible: false, x: 0, y: 0, nodeId: null },
@@ -154,6 +157,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setSidebarOpen: (open) => set({ isSidebarOpen: open }),
   setNoteModalOpen: (open) => set({ isNoteModalOpen: open }),
+  setNoteModalInitialTab: (tab) => set({ noteModalInitialTab: tab }),  // 修复问题3
   setSaveDialogOpen: (open) => set({ isSaveDialogOpen: open }),
   setSavedGraphs: (graphs) => set({ savedGraphs: graphs }),
   setCurrentGraphId: (id) => set({ currentGraphId: id }),

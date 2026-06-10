@@ -86,6 +86,8 @@ export default function App() {
         display: 'flex',
         flexDirection: 'column',
         background: '#0D1B2A',
+        background: 'linear-gradient(135deg, #0D1B2A 0%, #1B263B 100%)',
+        background: '-webkit-linear-gradient(135deg, #0D1B2A 0%, #1B263B 100%)',
         overflow: 'hidden',
       }}
       onClick={handleMainClick}
@@ -219,7 +221,9 @@ export default function App() {
           style={{
             flex: 1,
             position: 'relative',
+            background: '#0D1B2A',
             background: 'linear-gradient(135deg, #0D1B2A 0%, #1B263B 100%)',
+            background: '-webkit-linear-gradient(135deg, #0D1B2A 0%, #1B263B 100%)',
           }}
         >
           {canvasSize.width > 0 && canvasSize.height > 0 && (

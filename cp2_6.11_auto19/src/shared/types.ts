@@ -3,6 +3,18 @@
  * 前后端共享，确保数据结构一致
  */
 
+// ========== 修复问题4：扩展关联关系类型 ==========
+/** 关联关系类型：用于区分不同类型的词间关系 */
+export type RelationType =
+  | 'synonym'      // 同义词
+  | 'antonym'      // 反义词
+  | 'hyponym'      // 下位词（子类）
+  | 'hypernym'     // 上位词（父类）
+  | 'related'      // 相关词（通用）
+  | 'part_of'      // 组成部分
+  | 'instance_of'  // 实例
+  | 'attribute';   // 属性
+
 export interface GraphNode {
   id: string;
   word: string;
@@ -30,6 +42,9 @@ export interface GraphEdge {
   sourceId: string;
   targetId: string;
   strength: number;     // 关联强度 0-1，决定线粗
+  // ========== 修复问题4：新增关系类型和权重字段 ==========
+  relationType: RelationType;  // 关系类型，前端可用于样式区分
+  weight: number;              // 权重值（与strength等价，但语义更明确）
 }
 
 export interface KnowledgeGraph {
@@ -103,3 +118,15 @@ export const TAG_COLORS = [
   '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
   '#BB8FCE', '#85C1E9', '#F8B500', '#00CED1',
 ];
+
+// ========== 修复问题4：关系类型到中文名称的映射 ==========
+export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
+  synonym: '同义词',
+  antonym: '反义词',
+  hyponym: '下位词',
+  hypernym: '上位词',
+  related: '相关词',
+  part_of: '组成部分',
+  instance_of: '实例',
+  attribute: '属性',
+};

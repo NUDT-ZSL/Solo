@@ -1,10 +1,16 @@
 /**
  * 词络图谱 API 路由
  * 处理图谱生成、节点展开、保存/加载、节点更新等操作
+ *
+ * 修复问题4：
+ * - /graph/save 接口真正写入本地JSON文件持久化
+ * - /graph/expand 接口返回关联词的关系类型和权重字段
  */
 
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   GraphNode,
   GraphEdge,
@@ -16,16 +22,55 @@ import {
   UpdateNodeRequest,
   SaveGraphRequest,
   THEME,
+  RelationType,
 } from '../../shared/types';
 import { getRelatedWords } from '../../shared/wordRelations';
 
 const router = Router();
 
-/**
- * 内存存储 - 模拟数据库
- * 生产环境应替换为真实数据库
- */
-let savedGraphs: Map<string, KnowledgeGraph> = new Map();
+// ========== 修复问题4：本地JSON文件持久化 ==========
+// 数据存储目录
+const DATA_DIR = path.join(process.cwd(), 'data');
+const GRAPHS_FILE = path.join(DATA_DIR, 'graphs.json');
+
+/** 确保数据目录存在 */
+function ensureDataDir(): void {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    console.log(`  📁 创建数据目录: ${DATA_DIR}`);
+  }
+  if (!fs.existsSync(GRAPHS_FILE)) {
+    fs.writeFileSync(GRAPHS_FILE, JSON.stringify({}, null, 2), 'utf-8');
+    console.log(`  📄 创建图谱存储文件: ${GRAPHS_FILE}`);
+  }
+}
+
+/** 从JSON文件加载所有图谱 */
+function loadGraphsFromFile(): Map<string, KnowledgeGraph> {
+  ensureDataDir();
+  try {
+    const raw = fs.readFileSync(GRAPHS_FILE, 'utf-8');
+    const obj = JSON.parse(raw) as { [id: string]: KnowledgeGraph };
+    return new Map(Object.entries(obj));
+  } catch (error) {
+    console.error('  ⚠ 加载图谱文件失败，使用空数据:', error);
+    return new Map();
+  }
+}
+
+/** 将所有图谱保存到JSON文件 */
+function saveGraphsToFile(graphs: Map<string, KnowledgeGraph>): void {
+  ensureDataDir();
+  try {
+    const obj = Object.fromEntries(graphs);
+    fs.writeFileSync(GRAPHS_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('  ❌ 保存图谱文件失败:', error);
+  }
+}
+
+/** 内存缓存（启动时从文件加载） */
+let savedGraphs: Map<string, KnowledgeGraph> = loadGraphsFromFile();
 
 /**
  * 根据层级和关联强度计算节点颜色
@@ -71,6 +116,25 @@ function calculateRadialPositions(
   }
 
   return positions;
+}
+
+/**
+ * ========== 修复问题4：生成带关系类型和权重的边 ==========
+ */
+function createEdge(
+  sourceId: string,
+  targetId: string,
+  strength: number,
+  relationType: RelationType
+): GraphEdge {
+  return {
+    id: uuidv4(),
+    sourceId,
+    targetId,
+    strength,
+    weight: strength,
+    relationType,
+  };
 }
 
 /**
@@ -131,12 +195,8 @@ router.post('/generate', (req: Request<{}, {}, GenerateGraphRequest>, res: Respo
     };
     nodes.push(childNode);
 
-    edges.push({
-      id: uuidv4(),
-      sourceId: rootNode.id,
-      targetId: childNode.id,
-      strength: item.strength,
-    });
+    // 使用带关系类型的边
+    edges.push(createEdge(rootNode.id, childNode.id, item.strength, item.relationType));
   });
 
   res.json({ nodes, edges });
@@ -145,6 +205,8 @@ router.post('/generate', (req: Request<{}, {}, GenerateGraphRequest>, res: Respo
 /**
  * POST /api/graph/expand
  * 展开指定节点的下一级关联词
+ *
+ * 修复问题4：返回的边包含relationType和weight字段
  */
 router.post('/expand', (req: Request<{}, {}, ExpandNodeRequest>, res: Response<ExpandNodeResponse>) => {
   const { nodeId, word, parentX, parentY, parentLevel } = req.body;
@@ -184,12 +246,8 @@ router.post('/expand', (req: Request<{}, {}, ExpandNodeRequest>, res: Response<E
     };
     nodes.push(childNode);
 
-    edges.push({
-      id: uuidv4(),
-      sourceId: nodeId,
-      targetId: childNode.id,
-      strength: item.strength,
-    });
+    // 使用带关系类型和权重的边
+    edges.push(createEdge(nodeId, childNode.id, item.strength, item.relationType));
   });
 
   res.json({ nodes, edges });
@@ -200,6 +258,8 @@ router.post('/expand', (req: Request<{}, {}, ExpandNodeRequest>, res: Response<E
  * 获取所有已保存图谱列表
  */
 router.get('/saved', (_req: Request, res: Response<KnowledgeGraph[]>) => {
+  // 重新从文件加载（确保多进程/重启后数据一致）
+  savedGraphs = loadGraphsFromFile();
   const graphs = Array.from(savedGraphs.values()).sort(
     (a, b) => b.updatedAt - a.updatedAt
   );
@@ -212,6 +272,7 @@ router.get('/saved', (_req: Request, res: Response<KnowledgeGraph[]>) => {
  */
 router.get('/:id', (req: Request<{ id: string }>, res: Response<KnowledgeGraph | { error: string }>) => {
   const { id } = req.params;
+  savedGraphs = loadGraphsFromFile();
   const graph = savedGraphs.get(id);
 
   if (!graph) {
@@ -224,13 +285,15 @@ router.get('/:id', (req: Request<{ id: string }>, res: Response<KnowledgeGraph |
 
 /**
  * POST /api/graph/save
- * 保存图谱
+ * 保存图谱到本地JSON文件
+ *
+ * 修复问题4：真正写入data/graphs.json文件持久化
  */
-router.post('/save', (req: Request<{}, {}, SaveGraphRequest>, res: Response<{ id: string; success: boolean }>) => {
+router.post('/save', (req: Request<{}, {}, SaveGraphRequest>, res: Response<{ id: string; success: boolean; message?: string }>) => {
   const { name, rootWord, nodes, edges } = req.body;
 
   if (!name || !rootWord || !nodes || nodes.length === 0) {
-    res.status(400).json({ id: '', success: false });
+    res.status(400).json({ id: '', success: false, message: '参数不完整' });
     return;
   }
 
@@ -246,20 +309,24 @@ router.post('/save', (req: Request<{}, {}, SaveGraphRequest>, res: Response<{ id
   };
 
   savedGraphs.set(graph.id, graph);
-  res.json({ id: graph.id, success: true });
+  saveGraphsToFile(savedGraphs);
+
+  console.log(`  💾 图谱已保存: "${name}" (${graph.id})`);
+  res.json({ id: graph.id, success: true, message: '保存成功' });
 });
 
 /**
  * PUT /api/graph/save/:id
  * 更新已保存的图谱
  */
-router.put('/save/:id', (req: Request<{ id: string }, {}, SaveGraphRequest>, res: Response<{ id: string; success: boolean }>) => {
+router.put('/save/:id', (req: Request<{ id: string }, {}, SaveGraphRequest>, res: Response<{ id: string; success: boolean; message?: string }>) => {
   const { id } = req.params;
   const { name, rootWord, nodes, edges } = req.body;
 
+  savedGraphs = loadGraphsFromFile();
   const existing = savedGraphs.get(id);
   if (!existing) {
-    res.status(404).json({ id: '', success: false });
+    res.status(404).json({ id: '', success: false, message: '图谱不存在' });
     return;
   }
 
@@ -273,28 +340,40 @@ router.put('/save/:id', (req: Request<{ id: string }, {}, SaveGraphRequest>, res
   };
 
   savedGraphs.set(id, updated);
-  res.json({ id, success: true });
+  saveGraphsToFile(savedGraphs);
+
+  console.log(`  📝 图谱已更新: "${updated.name}" (${id})`);
+  res.json({ id, success: true, message: '更新成功' });
 });
 
 /**
  * DELETE /api/graph/:id
  * 删除指定图谱
  */
-router.delete('/:id', (req: Request<{ id: string }>, res: Response<{ success: boolean }>) => {
+router.delete('/:id', (req: Request<{ id: string }>, res: Response<{ success: boolean; message?: string }>) => {
   const { id } = req.params;
+  savedGraphs = loadGraphsFromFile();
   const deleted = savedGraphs.delete(id);
-  res.json({ success: deleted });
+
+  if (deleted) {
+    saveGraphsToFile(savedGraphs);
+    console.log(`  🗑 图谱已删除: ${id}`);
+  }
+
+  res.json({ success: deleted, message: deleted ? '删除成功' : '图谱不存在' });
 });
 
 /**
  * PUT /api/graph/node/:id
  * 更新节点的笔记和标签
+ * 同步持久化到JSON文件
  */
-router.put('/node/:id', (req: Request<{ id: string }, {}, UpdateNodeRequest>, res: Response<{ note?: string; tags?: string[]; success: boolean }>) => {
+router.put('/node/:id', (req: Request<{ id: string }, {}, UpdateNodeRequest>, res: Response<{ note?: string; tags?: string[]; success: boolean; message?: string }>) => {
   const { id } = req.params;
   const { note, tags } = req.body;
 
-  // 在所有保存的图谱中查找并更新节点
+  savedGraphs = loadGraphsFromFile();
+
   let updated = false;
   let resultNote: string | undefined;
   let resultTags: string[] | undefined;
@@ -317,10 +396,12 @@ router.put('/node/:id', (req: Request<{ id: string }, {}, UpdateNodeRequest>, re
   }
 
   if (!updated) {
-    res.status(404).json({ success: false });
+    res.status(404).json({ success: false, message: '节点不存在' });
     return;
   }
 
+  // 同步写入文件
+  saveGraphsToFile(savedGraphs);
   res.json({ note: resultNote, tags: resultTags, success: true });
 });
 
