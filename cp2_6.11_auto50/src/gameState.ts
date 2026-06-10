@@ -9,10 +9,13 @@ export interface Talisman {
   removeProgress: number;
   isNew: boolean;
   newProgress: number;
+  startRow: number;
+  startCol: number;
   targetRow: number;
   targetCol: number;
   isMoving: boolean;
   moveProgress: number;
+  moveDuration: number;
 }
 
 export interface Position {
@@ -23,6 +26,7 @@ export interface Position {
 export interface MatchGroup {
   element: ElementType;
   positions: Position[];
+  matchType: 'horizontal' | 'vertical' | 'lshape';
 }
 
 export interface LavaSpot {
@@ -57,11 +61,20 @@ export interface ScorePopup {
   isCombo: boolean;
 }
 
+export type AdjacencyKey = string;
+
 const ELEMENT_COLORS: Record<ElementType, string> = {
   fire: '#FF4500',
   water: '#00BFFF',
   wind: '#32CD32',
   earth: '#8B4513'
+};
+
+const ELEMENT_NAMES: Record<ElementType, string> = {
+  fire: '火',
+  water: '水',
+  wind: '风',
+  earth: '土'
 };
 
 const ELEMENT_COUNTER: Record<ElementType, ElementType> = {
@@ -77,6 +90,13 @@ const BASE_SCORE = 30;
 const BONUS_SCORE = 15;
 const LEADERBOARD_KEY = 'talisman_stack_leaderboard';
 
+function adjKey(r1: number, c1: number, r2: number, c2: number): AdjacencyKey {
+  if (r1 < r2 || (r1 === r2 && c1 < c2)) {
+    return `${r1},${c1}-${r2},${c2}`;
+  }
+  return `${r2},${c2}-${r1},${c1}`;
+}
+
 export class GameState {
   grid: (Talisman | null)[][];
   score: number;
@@ -84,20 +104,22 @@ export class GameState {
   isGameOver: boolean;
   isPlaying: boolean;
   selectedTalisman: Talisman | null;
-  lastElement: ElementType | null;
+  lastMatchedElement: ElementType | null;
   leaderboard: number[];
-  
+
   lavaSpots: LavaSpot[];
   iceEffects: IceEffect[];
   stoneWalls: StoneWall[];
   scorePopups: ScorePopup[];
-  
+  blockedAdjacencies: Set<AdjacencyKey>;
+
   private nextId: number;
   private isResolving: boolean;
   private resolveTimer: number;
-  
+
   onScoreChange?: (score: number) => void;
   onGameOver?: (score: number) => void;
+  onCombo?: () => void;
 
   constructor() {
     this.grid = [];
@@ -106,45 +128,46 @@ export class GameState {
     this.isGameOver = false;
     this.isPlaying = false;
     this.selectedTalisman = null;
-    this.lastElement = null;
+    this.lastMatchedElement = null;
     this.leaderboard = this.loadLeaderboard();
-    
+
     this.lavaSpots = [];
     this.iceEffects = [];
     this.stoneWalls = [];
     this.scorePopups = [];
-    
+    this.blockedAdjacencies = new Set();
+
     this.nextId = 1;
     this.isResolving = false;
     this.resolveTimer = 0;
-    
+
     this.initGrid();
   }
 
   private initGrid(): void {
     this.grid = [];
-    for (let row = 0; row < GRID_SIZE; row++) {
-      this.grid[row] = [];
-      for (let col = 0; col < GRID_SIZE; col++) {
-        this.grid[row][col] = null;
+    for (let r = 0; r < GRID_SIZE; r++) {
+      this.grid[r] = [];
+      for (let c = 0; c < GRID_SIZE; c++) {
+        this.grid[r][c] = null;
       }
     }
-    
+
     let attempts = 0;
     do {
-      for (let row = 0; row < GRID_SIZE; row++) {
-        for (let col = 0; col < GRID_SIZE; col++) {
-          this.grid[row][col] = this.createTalisman(row, col, true);
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          this.grid[r][c] = this.createTalisman(r, c, true);
         }
       }
       attempts++;
-    } while (this.findMatches().length > 0 && attempts < 100);
+    } while (this.findAllMatches().length > 0 && attempts < 100);
   }
 
   private createTalisman(row: number, col: number, initial: boolean = false): Talisman {
     const elements: ElementType[] = ['fire', 'water', 'wind', 'earth'];
     const element = elements[Math.floor(Math.random() * elements.length)];
-    
+
     return {
       id: this.nextId++,
       element,
@@ -154,10 +177,13 @@ export class GameState {
       removeProgress: 0,
       isNew: !initial,
       newProgress: initial ? 1 : 0,
+      startRow: row,
+      startCol: col,
       targetRow: row,
       targetCol: col,
       isMoving: false,
-      moveProgress: 0
+      moveProgress: 0,
+      moveDuration: 0.3
     };
   }
 
@@ -167,11 +193,12 @@ export class GameState {
     this.isGameOver = false;
     this.isPlaying = true;
     this.selectedTalisman = null;
-    this.lastElement = null;
+    this.lastMatchedElement = null;
     this.lavaSpots = [];
     this.iceEffects = [];
     this.stoneWalls = [];
     this.scorePopups = [];
+    this.blockedAdjacencies = new Set();
     this.nextId = 1;
     this.isResolving = false;
     this.resolveTimer = 0;
@@ -190,11 +217,11 @@ export class GameState {
 
     this.updateTalismans(deltaTime);
     this.updateEffects(deltaTime);
-    
+
     if (this.isResolving) {
       this.resolveTimer -= deltaTime;
       if (this.resolveTimer <= 0) {
-        this.continueResolve();
+        this.finishResolve();
       }
     } else {
       this.checkAndResolveMatches();
@@ -202,33 +229,33 @@ export class GameState {
   }
 
   private updateTalismans(deltaTime: number): void {
-    for (let row = 0; row < GRID_SIZE; row++) {
-      for (let col = 0; col < GRID_SIZE; col++) {
-        const talisman = this.grid[row][col];
-        if (!talisman) continue;
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const t = this.grid[r][c];
+        if (!t) continue;
 
-        if (talisman.isRemoving) {
-          talisman.removeProgress += deltaTime / 0.15;
-          if (talisman.removeProgress >= 1) {
-            this.grid[row][col] = null;
+        if (t.isRemoving) {
+          t.removeProgress += deltaTime / 0.15;
+          if (t.removeProgress >= 1) {
+            this.grid[r][c] = null;
           }
+          continue;
         }
 
-        if (talisman.isNew && talisman.newProgress < 1) {
-          talisman.newProgress += deltaTime / 0.3;
-          if (talisman.newProgress >= 1) {
-            talisman.newProgress = 1;
-            talisman.isNew = false;
-          }
+        if (t.isNew && t.newProgress < 1) {
+          t.newProgress = Math.min(1, t.newProgress + deltaTime / 0.3);
+          if (t.newProgress >= 1) t.isNew = false;
         }
 
-        if (talisman.isMoving) {
-          talisman.moveProgress += deltaTime * 3;
-          if (talisman.moveProgress >= 1) {
-            talisman.moveProgress = 1;
-            talisman.isMoving = false;
-            talisman.row = talisman.targetRow;
-            talisman.col = talisman.targetCol;
+        if (t.isMoving) {
+          t.moveProgress += deltaTime / t.moveDuration;
+          if (t.moveProgress >= 1) {
+            t.moveProgress = 1;
+            t.isMoving = false;
+            t.row = t.targetRow;
+            t.col = t.targetCol;
+            t.startRow = t.targetRow;
+            t.startCol = t.targetCol;
           }
         }
       }
@@ -236,130 +263,142 @@ export class GameState {
   }
 
   private updateEffects(deltaTime: number): void {
-    this.lavaSpots = this.lavaSpots.filter(spot => {
-      spot.life -= deltaTime;
-      return spot.life > 0;
+    this.lavaSpots = this.lavaSpots.filter(s => {
+      s.life -= deltaTime;
+      return s.life > 0;
     });
 
-    this.iceEffects = this.iceEffects.filter(effect => {
-      effect.life -= deltaTime;
-      return effect.life > 0;
+    this.iceEffects = this.iceEffects.filter(e => {
+      e.life -= deltaTime;
+      return e.life > 0;
     });
 
-    this.stoneWalls = this.stoneWalls.filter(wall => {
-      wall.life -= deltaTime;
-      if (wall.life <= 0.5 && !wall.isCollapsing) {
-        wall.isCollapsing = true;
+    const wallsToRemove: StoneWall[] = [];
+    this.stoneWalls = this.stoneWalls.filter(w => {
+      w.life -= deltaTime;
+      if (w.life <= 0.5 && !w.isCollapsing) {
+        w.isCollapsing = true;
       }
-      return wall.life > 0;
+      if (w.life <= 0) {
+        wallsToRemove.push(w);
+        return false;
+      }
+      return true;
     });
 
-    this.scorePopups = this.scorePopups.filter(popup => {
-      popup.life -= deltaTime;
-      return popup.life > 0;
+    for (const w of wallsToRemove) {
+      this.removeWallBlock(w);
+    }
+
+    this.scorePopups = this.scorePopups.filter(p => {
+      p.life -= deltaTime;
+      return p.life > 0;
     });
   }
 
+  static isCounter(attackElement: ElementType, defenseElement: ElementType): boolean {
+    return ELEMENT_COUNTER[attackElement] === defenseElement;
+  }
+
+  static getCounterMap(): Record<ElementType, ElementType> {
+    return { ...ELEMENT_COUNTER };
+  }
+
+  static getElementName(e: ElementType): string {
+    return ELEMENT_NAMES[e];
+  }
+
   private checkAndResolveMatches(): void {
-    const matches = this.findMatches();
+    const matches = this.findAllMatches();
     if (matches.length === 0) return;
 
     this.isResolving = true;
     this.resolveTimer = 0.2;
 
     const allPositions = new Set<string>();
-
-    for (const match of matches) {
-      for (const pos of match.positions) {
-        allPositions.add(`${pos.row},${pos.col}`);
+    for (const m of matches) {
+      for (const p of m.positions) {
+        allPositions.add(`${p.row},${p.col}`);
       }
     }
 
     let totalScore = 0;
     let hasCombo = false;
 
-    for (const match of matches) {
-      const count = match.positions.length;
-      let matchScore = BASE_SCORE + (count - 3) * BONUS_SCORE;
+    for (const m of matches) {
+      const count = m.positions.length;
+      let matchScore = BASE_SCORE + Math.max(0, count - 3) * BONUS_SCORE;
 
-      if (this.lastElement && ELEMENT_COUNTER[match.element] === this.lastElement) {
+      if (this.lastMatchedElement !== null &&
+          GameState.isCounter(m.element, this.lastMatchedElement)) {
         matchScore *= 2;
         hasCombo = true;
       }
 
       totalScore += matchScore;
-      this.lastElement = match.element;
-      this.triggerElementEffect(match);
+      this.lastMatchedElement = m.element;
+      this.triggerElementEffect(m);
     }
 
     this.score += totalScore;
 
-    const firstMatch = matches[0];
-    const centerPos = firstMatch.positions[Math.floor(firstMatch.positions.length / 2)];
+    const fm = matches[0];
+    const cp = fm.positions[Math.floor(fm.positions.length / 2)];
     this.scorePopups.push({
-      x: centerPos.col,
-      y: centerPos.row,
+      x: cp.col,
+      y: cp.row,
       score: totalScore,
       life: 0.5,
       maxLife: 0.5,
       isCombo: hasCombo
     });
 
-    for (const posKey of allPositions) {
-      const [row, col] = posKey.split(',').map(Number);
-      const talisman = this.grid[row][col];
-      if (talisman && !talisman.isRemoving) {
-        talisman.isRemoving = true;
-        talisman.removeProgress = 0;
+    if (hasCombo && this.onCombo) {
+      this.onCombo();
+    }
+
+    for (const key of allPositions) {
+      const [r, c] = key.split(',').map(Number);
+      const t = this.grid[r][c];
+      if (t && !t.isRemoving) {
+        t.isRemoving = true;
+        t.removeProgress = 0;
       }
     }
   }
 
-  private continueResolve(): void {
+  private finishResolve(): void {
     this.dropTalismans();
     this.fillEmptySpaces();
     this.isResolving = false;
   }
 
-  private findMatches(): MatchGroup[] {
+  findAllMatches(): MatchGroup[] {
     const matches: MatchGroup[] = [];
-    const visitedPositions = new Set<string>();
+    const usedCells = new Set<string>();
 
-    for (let row = 0; row < GRID_SIZE; row++) {
-      for (let col = 0; col < GRID_SIZE; col++) {
-        const talisman = this.grid[row][col];
-        if (!talisman || talisman.isRemoving) continue;
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        if (usedCells.has(`${r},${c}`)) continue;
+        const t = this.grid[r][c];
+        if (!t || t.isRemoving) continue;
 
-        const horizontalMatch = this.findHorizontalMatch(row, col);
-        if (horizontalMatch.length >= 3) {
-          if (!this.hasOverlap(visitedPositions, horizontalMatch)) {
-            this.addPositionsToSet(visitedPositions, horizontalMatch);
-            matches.push({
-              element: talisman.element,
-              positions: horizontalMatch
-            });
+        const lineMatches = this.findLineMatches(r, c, t.element);
+        for (const lm of lineMatches) {
+          if (!this.hasAnyOverlap(usedCells, lm.positions)) {
+            this.markUsed(usedCells, lm.positions);
+            matches.push(lm);
           }
         }
 
-        const verticalMatch = this.findVerticalMatch(row, col);
-        if (verticalMatch.length >= 3) {
-          if (!this.hasOverlap(visitedPositions, verticalMatch)) {
-            this.addPositionsToSet(visitedPositions, verticalMatch);
-            matches.push({
-              element: talisman.element,
-              positions: verticalMatch
-            });
-          }
-        }
-
-        const lMatches = this.findLShapedMatches(row, col);
-        for (const lMatch of lMatches) {
-          if (!this.hasOverlap(visitedPositions, lMatch)) {
-            this.addPositionsToSet(visitedPositions, lMatch);
-            matches.push({
-              element: talisman.element,
-              positions: lMatch
-            });
+        if (!usedCells.has(`${r},${c}`)) {
+          const lmatches = this.findLShapedMatches(r, c, t.element);
+          for (const lm of lmatches) {
+            if (!this.hasAnyOverlap(usedCells, lm.positions)) {
+              this.markUsed(usedCells, lm.positions);
+              matches.push(lm);
+              break;
+            }
           }
         }
       }
@@ -368,264 +407,309 @@ export class GameState {
     return matches;
   }
 
-  private addPositionsToSet(set: Set<string>, positions: Position[]): void {
-    for (const pos of positions) {
-      set.add(`${pos.row},${pos.col}`);
-    }
-  }
+  private findLineMatches(row: number, col: number, element: ElementType): MatchGroup[] {
+    const results: MatchGroup[] = [];
 
-  private hasOverlap(visited: Set<string>, positions: Position[]): boolean {
-    for (const pos of positions) {
-      const key = `${pos.row},${pos.col}`;
-      if (visited.has(key)) return true;
-    }
-    return false;
-  }
-
-  private findHorizontalMatch(row: number, col: number): Position[] {
-    const talisman = this.grid[row][col];
-    if (!talisman) return [];
-
-    const positions: Position[] = [{ row, col }];
-    const element = talisman.element;
-
+    const hPositions: Position[] = [{ row, col }];
     for (let c = col + 1; c < GRID_SIZE; c++) {
-      const t = this.grid[row][c];
-      if (t && t.element === element && !t.isRemoving) {
-        positions.push({ row, col: c });
-      } else {
-        break;
-      }
+      if (!this.isMatchable(row, c, element)) break;
+      hPositions.push({ row, col: c });
+    }
+    for (let c = col - 1; c >= 0; c--) {
+      if (!this.isMatchable(row, c, element)) break;
+      hPositions.unshift({ row, col: c });
+    }
+    if (hPositions.length >= 3) {
+      results.push({ element, positions: hPositions, matchType: 'horizontal' });
     }
 
-    return positions;
-  }
-
-  private findVerticalMatch(row: number, col: number): Position[] {
-    const talisman = this.grid[row][col];
-    if (!talisman) return [];
-
-    const positions: Position[] = [{ row, col }];
-    const element = talisman.element;
-
+    const vPositions: Position[] = [{ row, col }];
     for (let r = row + 1; r < GRID_SIZE; r++) {
-      const t = this.grid[r][col];
-      if (t && t.element === element && !t.isRemoving) {
-        positions.push({ row: r, col });
-      } else {
-        break;
-      }
+      if (!this.isMatchable(r, col, element)) break;
+      vPositions.push({ row: r, col });
     }
-
-    return positions;
-  }
-
-  private findLShapedMatches(row: number, col: number): Position[][] {
-    const results: Position[][] = [];
-    const element = this.grid[row][col]?.element;
-    if (!element) return results;
-
-    const directions = [
-      { dr: 1, dc: 0 },
-      { dr: -1, dc: 0 },
-      { dr: 0, dc: 1 },
-      { dr: 0, dc: -1 }
-    ];
-
-    for (let i = 0; i < directions.length; i++) {
-      for (let j = 0; j < directions.length; j++) {
-        if (i === j) continue;
-        const d1 = directions[i];
-        const d2 = directions[j];
-        
-        if (d1.dr === -d2.dr && d1.dc === -d2.dc) continue;
-
-        for (let len1 = 2; len1 <= 4; len1++) {
-          for (let len2 = 2; len2 <= 4; len2++) {
-            const match = this.tryLMatch(row, col, d1, len1, d2, len2, element);
-            if (match && match.length >= 3) {
-              results.push(match);
-            }
-          }
-        }
-      }
+    for (let r = row - 1; r >= 0; r--) {
+      if (!this.isMatchable(r, col, element)) break;
+      vPositions.unshift({ row: r, col });
+    }
+    if (vPositions.length >= 3) {
+      results.push({ element, positions: vPositions, matchType: 'vertical' });
     }
 
     return results;
   }
 
-  private tryLMatch(
-    row: number,
-    col: number,
-    dir1: { dr: number; dc: number },
-    len1: number,
-    dir2: { dr: number; dc: number },
-    len2: number,
-    element: ElementType
-  ): Position[] | null {
-    const positions: Position[] = [{ row, col }];
+  private findLShapedMatches(row: number, col: number, element: ElementType): MatchGroup[] {
+    const results: MatchGroup[] = [];
 
-    let r = row;
-    let c = col;
+    const right = this.countDirection(row, col, 0, 1, element);
+    const left = this.countDirection(row, col, 0, -1, element);
+    const down = this.countDirection(row, col, 1, 0, element);
+    const up = this.countDirection(row, col, -1, 0, element);
 
-    for (let i = 1; i < len1; i++) {
-      r += dir1.dr;
-      c += dir1.dc;
-      if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return null;
-      const t = this.grid[r][c];
-      if (!t || t.element !== element || t.isRemoving) return null;
-      positions.push({ row: r, col: c });
+    if (right >= 1 && down >= 1) {
+      for (let r = 1; r <= right; r++) {
+        for (let d = 1; d <= down; d++) {
+          if (r + d + 1 >= 3) {
+            const positions: Position[] = [{ row, col }];
+            for (let i = 1; i <= r; i++) positions.push({ row, col: col + i });
+            for (let i = 1; i <= d; i++) positions.push({ row: row + i, col: col + r });
+            results.push({ element, positions, matchType: 'lshape' });
+          }
+        }
+      }
     }
 
-    for (let i = 1; i < len2; i++) {
-      r += dir2.dr;
-      c += dir2.dc;
-      if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return null;
-      const t = this.grid[r][c];
-      if (!t || t.element !== element || t.isRemoving) return null;
-      positions.push({ row: r, col: c });
+    if (right >= 1 && up >= 1) {
+      for (let r = 1; r <= right; r++) {
+        for (let u = 1; u <= up; u++) {
+          if (r + u + 1 >= 3) {
+            const positions: Position[] = [{ row, col }];
+            for (let i = 1; i <= r; i++) positions.push({ row, col: col + i });
+            for (let i = 1; i <= u; i++) positions.push({ row: row - i, col: col + r });
+            results.push({ element, positions, matchType: 'lshape' });
+          }
+        }
+      }
     }
 
-    if (positions.length < 3) return null;
-    
-    const uniquePositions = new Set(positions.map(p => `${p.row},${p.col}`));
-    if (uniquePositions.size !== positions.length) return null;
+    if (left >= 1 && down >= 1) {
+      for (let l = 1; l <= left; l++) {
+        for (let d = 1; d <= down; d++) {
+          if (l + d + 1 >= 3) {
+            const positions: Position[] = [{ row, col }];
+            for (let i = 1; i <= l; i++) positions.push({ row, col: col - i });
+            for (let i = 1; i <= d; i++) positions.push({ row: row + i, col: col - l });
+            results.push({ element, positions, matchType: 'lshape' });
+          }
+        }
+      }
+    }
 
-    return positions;
+    if (left >= 1 && up >= 1) {
+      for (let l = 1; l <= left; l++) {
+        for (let u = 1; u <= up; u++) {
+          if (l + u + 1 >= 3) {
+            const positions: Position[] = [{ row, col }];
+            for (let i = 1; i <= l; i++) positions.push({ row, col: col - i });
+            for (let i = 1; i <= u; i++) positions.push({ row: row - i, col: col - l });
+            results.push({ element, positions, matchType: 'lshape' });
+          }
+        }
+      }
+    }
+
+    results.sort((a, b) => b.positions.length - a.positions.length);
+    return results;
+  }
+
+  private countDirection(row: number, col: number, dr: number, dc: number, element: ElementType): number {
+    let count = 0;
+    let r = row + dr;
+    let c = col + dc;
+    while (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+      if (!this.isConnected(row, col, r, c)) break;
+      if (!this.isMatchable(r, c, element)) break;
+      count++;
+      r += dr;
+      c += dc;
+    }
+    return count;
+  }
+
+  private isMatchable(row: number, col: number, element: ElementType): boolean {
+    const t = this.grid[row][col];
+    return t !== null && !t.isRemoving && t.element === element;
+  }
+
+  isConnected(r1: number, c1: number, r2: number, c2: number): boolean {
+    if (r1 < 0 || r1 >= GRID_SIZE || c1 < 0 || c1 >= GRID_SIZE) return false;
+    if (r2 < 0 || r2 >= GRID_SIZE || c2 < 0 || c2 >= GRID_SIZE) return false;
+    const rd = Math.abs(r1 - r2);
+    const cd = Math.abs(c1 - c2);
+    if (rd + cd !== 1) return false;
+    return !this.blockedAdjacencies.has(adjKey(r1, c1, r2, c2));
+  }
+
+  private hasAnyOverlap(used: Set<string>, positions: Position[]): boolean {
+    for (const p of positions) {
+      if (used.has(`${p.row},${p.col}`)) return true;
+    }
+    return false;
+  }
+
+  private markUsed(used: Set<string>, positions: Position[]): void {
+    for (const p of positions) {
+      used.add(`${p.row},${p.col}`);
+    }
   }
 
   private triggerElementEffect(match: MatchGroup): void {
-    const element = match.element;
-
-    switch (element) {
-      case 'fire':
-        this.triggerFireEffect(match);
-        break;
-      case 'water':
-        this.triggerWaterEffect(match);
-        break;
-      case 'wind':
-        this.triggerWindEffect(match);
-        break;
-      case 'earth':
-        this.triggerEarthEffect(match);
-        break;
+    switch (match.element) {
+      case 'fire': this.fireEffect(match); break;
+      case 'water': this.waterEffect(match); break;
+      case 'wind': this.windEffect(match); break;
+      case 'earth': this.earthEffect(match); break;
     }
   }
 
-  private triggerFireEffect(match: MatchGroup): void {
-    for (const pos of match.positions) {
+  private fireEffect(match: MatchGroup): void {
+    for (const p of match.positions) {
       this.lavaSpots.push({
-        x: pos.col,
-        y: pos.row,
+        x: p.col,
+        y: p.row,
         life: 1.2,
         maxLife: 1.2
       });
     }
   }
 
-  private triggerWaterEffect(match: MatchGroup): void {
-    const adjacentPositions = new Set<string>();
-
-    for (const pos of match.positions) {
-      const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      for (const [dr, dc] of directions) {
-        const nr = pos.row + dr;
-        const nc = pos.col + dc;
+  private waterEffect(match: MatchGroup): void {
+    const adj = new Set<string>();
+    for (const p of match.positions) {
+      const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      for (const [dr, dc] of dirs) {
+        const nr = p.row + dr;
+        const nc = p.col + dc;
         if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
-          adjacentPositions.add(`${nr},${nc}`);
+          adj.add(`${nr},${nc}`);
         }
       }
     }
-
-    for (const posKey of adjacentPositions) {
-      const [row, col] = posKey.split(',').map(Number);
-      this.iceEffects.push({
-        row,
-        col,
-        life: 2,
-        maxLife: 2
-      });
+    for (const k of adj) {
+      const [r, c] = k.split(',').map(Number);
+      this.iceEffects.push({ row: r, col: c, life: 2, maxLife: 2 });
     }
   }
 
-  private triggerWindEffect(match: MatchGroup): void {
-    const centerPos = match.positions[Math.floor(match.positions.length / 2)];
-    const directions = [
+  private windEffect(match: MatchGroup): void {
+    const center = match.positions[Math.floor(match.positions.length / 2)];
+    const dirs = [
       { dr: -1, dc: 0 },
       { dr: 1, dc: 0 },
       { dr: 0, dc: -1 },
       { dr: 0, dc: 1 }
     ];
 
-    const moveTargets: Array<{ from: Position; to: Position; talisman: Talisman }> = [];
+    const plannedMoves: Array<{ from: Position; to: Position; t: Talisman }> = [];
+    const occupiedTargets = new Set<string>();
 
-    for (const dir of directions) {
-      for (let i = 1; i <= 2; i++) {
-        const nr = centerPos.row + dir.dr * i;
-        const nc = centerPos.col + dir.dc * i;
-        if (nr < 0 || nr >= GRID_SIZE || nc < 0 || nc >= GRID_SIZE) break;
+    for (const d of dirs) {
+      for (let dist = 1; dist <= 2; dist++) {
+        const fr = center.row + d.dr * dist;
+        const fc = center.col + d.dc * dist;
+        if (fr < 0 || fr >= GRID_SIZE || fc < 0 || fc >= GRID_SIZE) break;
 
-        const talisman = this.grid[nr][nc];
-        if (talisman && !talisman.isRemoving && !talisman.isMoving) {
-          const targetRow = centerPos.row + dir.dr * (i - 1);
-          const targetCol = centerPos.col + dir.dc * (i - 1);
-          
-          if (targetRow >= 0 && targetRow < GRID_SIZE && 
-              targetCol >= 0 && targetCol < GRID_SIZE) {
-            moveTargets.push({
-              from: { row: nr, col: nc },
-              to: { row: targetRow, col: targetCol },
-              talisman
-            });
-          }
-        }
+        const t = this.grid[fr][fc];
+        if (!t || t.isRemoving || t.isMoving) continue;
+
+        const tr = center.row + d.dr * (dist - 1);
+        const tc = center.col + d.dc * (dist - 1);
+        if (tr < 0 || tr >= GRID_SIZE || tc < 0 || tc >= GRID_SIZE) break;
+
+        const targetKey = `${tr},${tc}`;
+        if (occupiedTargets.has(targetKey)) continue;
+
+        const occupyingTalisman = this.grid[tr][tc];
+        if (occupyingTalisman && !occupyingTalisman.isRemoving) continue;
+
+        plannedMoves.push({
+          from: { row: fr, col: fc },
+          to: { row: tr, col: tc },
+          t
+        });
+        occupiedTargets.add(targetKey);
       }
     }
 
-    for (const move of moveTargets) {
-      if (!this.grid[move.to.row][move.to.col]) {
-        move.talisman.targetRow = move.to.row;
-        move.talisman.targetCol = move.to.col;
-        move.talisman.isMoving = true;
-        move.talisman.moveProgress = 0;
-        
-        this.grid[move.to.row][move.to.col] = move.talisman;
-        this.grid[move.from.row][move.from.col] = null;
+    for (const m of plannedMoves) {
+      if (this.grid[m.from.row][m.from.col] === m.t) {
+        m.t.startRow = m.from.row;
+        m.t.startCol = m.from.col;
+        m.t.targetRow = m.to.row;
+        m.t.targetCol = m.to.col;
+        m.t.isMoving = true;
+        m.t.moveProgress = 0;
+        m.t.moveDuration = 0.5;
+
+        this.grid[m.to.row][m.to.col] = m.t;
+        this.grid[m.from.row][m.from.col] = null;
       }
     }
   }
 
-  private triggerEarthEffect(match: MatchGroup): void {
-    const directions: Array<'horizontal' | 'vertical'> = ['horizontal', 'vertical'];
+  private earthEffect(match: MatchGroup): void {
+    const dirs: Array<'horizontal' | 'vertical'> = ['horizontal', 'vertical'];
 
-    for (const pos of match.positions) {
-      const direction = directions[Math.floor(Math.random() * directions.length)];
-      this.stoneWalls.push({
-        row: pos.row,
-        col: pos.col,
-        direction,
+    for (const p of match.positions) {
+      const dir = dirs[Math.floor(Math.random() * dirs.length)];
+      const wall: StoneWall = {
+        row: p.row,
+        col: p.col,
+        direction: dir,
         life: 3,
         maxLife: 3,
         isCollapsing: false
-      });
+      };
+      this.stoneWalls.push(wall);
+      this.addWallBlock(wall);
+    }
+  }
+
+  private addWallBlock(wall: StoneWall): void {
+    const { row, col, direction } = wall;
+    if (direction === 'horizontal') {
+      if (col - 1 >= 0) {
+        this.blockedAdjacencies.add(adjKey(row, col - 1, row, col));
+      }
+      if (col + 1 < GRID_SIZE) {
+        this.blockedAdjacencies.add(adjKey(row, col, row, col + 1));
+      }
+    } else {
+      if (row - 1 >= 0) {
+        this.blockedAdjacencies.add(adjKey(row - 1, col, row, col));
+      }
+      if (row + 1 < GRID_SIZE) {
+        this.blockedAdjacencies.add(adjKey(row, col, row + 1, col));
+      }
+    }
+  }
+
+  private removeWallBlock(wall: StoneWall): void {
+    const { row, col, direction } = wall;
+    if (direction === 'horizontal') {
+      if (col - 1 >= 0) {
+        this.blockedAdjacencies.delete(adjKey(row, col - 1, row, col));
+      }
+      if (col + 1 < GRID_SIZE) {
+        this.blockedAdjacencies.delete(adjKey(row, col, row, col + 1));
+      }
+    } else {
+      if (row - 1 >= 0) {
+        this.blockedAdjacencies.delete(adjKey(row - 1, col, row, col));
+      }
+      if (row + 1 < GRID_SIZE) {
+        this.blockedAdjacencies.delete(adjKey(row, col, row + 1, col));
+      }
     }
   }
 
   private dropTalismans(): void {
-    for (let col = 0; col < GRID_SIZE; col++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
       let writeRow = GRID_SIZE - 1;
-      
-      for (let readRow = GRID_SIZE - 1; readRow >= 0; readRow--) {
-        const talisman = this.grid[readRow][col];
-        if (talisman && !talisman.isRemoving) {
-          if (readRow !== writeRow) {
-            this.grid[writeRow][col] = talisman;
-            this.grid[readRow][col] = null;
-            talisman.targetRow = writeRow;
-            talisman.targetCol = col;
-            talisman.isMoving = true;
-            talisman.moveProgress = 0;
+      for (let r = GRID_SIZE - 1; r >= 0; r--) {
+        const t = this.grid[r][c];
+        if (t && !t.isRemoving) {
+          if (r !== writeRow) {
+            this.grid[writeRow][c] = t;
+            this.grid[r][c] = null;
+            t.startRow = r;
+            t.startCol = c;
+            t.targetRow = writeRow;
+            t.targetCol = c;
+            t.isMoving = true;
+            t.moveProgress = 0;
+            t.moveDuration = 0.3;
           }
           writeRow--;
         }
@@ -634,27 +718,27 @@ export class GameState {
   }
 
   private fillEmptySpaces(): void {
-    for (let col = 0; col < GRID_SIZE; col++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
       let emptyCount = 0;
-      for (let row = 0; row < GRID_SIZE; row++) {
-        if (!this.grid[row][col]) {
-          emptyCount++;
-        }
+      for (let r = 0; r < GRID_SIZE; r++) {
+        if (!this.grid[r][c]) emptyCount++;
       }
-
-      let fillIndex = 0;
-      for (let row = 0; row < GRID_SIZE; row++) {
-        if (!this.grid[row][col]) {
-          const startRow = -emptyCount + fillIndex;
-          const newTalisman = this.createTalisman(startRow, col);
-          newTalisman.targetRow = row;
-          newTalisman.targetCol = col;
-          newTalisman.isMoving = true;
-          newTalisman.moveProgress = 0;
-          newTalisman.isNew = true;
-          newTalisman.newProgress = 0;
-          this.grid[row][col] = newTalisman;
-          fillIndex++;
+      let idx = 0;
+      for (let r = 0; r < GRID_SIZE; r++) {
+        if (!this.grid[r][c]) {
+          const startR = -emptyCount + idx;
+          const t = this.createTalisman(startR, c);
+          t.startRow = startR;
+          t.startCol = c;
+          t.targetRow = r;
+          t.targetCol = c;
+          t.isMoving = true;
+          t.moveProgress = 0;
+          t.moveDuration = 0.4;
+          t.isNew = true;
+          t.newProgress = 0;
+          this.grid[r][c] = t;
+          idx++;
         }
       }
     }
@@ -663,102 +747,80 @@ export class GameState {
   selectTalisman(row: number, col: number): boolean {
     if (!this.isPlaying || this.isGameOver || this.isResolving) return false;
 
-    const talisman = this.grid[row][col];
-    if (!talisman || talisman.isRemoving || talisman.isMoving) return false;
+    const t = this.grid[row][col];
+    if (!t || t.isRemoving || t.isMoving) return false;
 
     if (this.selectedTalisman) {
-      if (this.selectedTalisman.id === talisman.id) {
+      if (this.selectedTalisman.id === t.id) {
         this.selectedTalisman = null;
         return true;
       }
-
-      const canSwap = this.canSwap(this.selectedTalisman, talisman);
-      
-      if (canSwap) {
-        this.swapTalismans(this.selectedTalisman, talisman);
+      if (this.isAdjacent(this.selectedTalisman, t)) {
+        this.swapTalismans(this.selectedTalisman, t);
         this.selectedTalisman = null;
         return true;
-      } else {
-        this.selectedTalisman = talisman;
-        return true;
       }
-    } else {
-      this.selectedTalisman = talisman;
+      this.selectedTalisman = t;
       return true;
     }
+    this.selectedTalisman = t;
+    return true;
   }
 
-  private canSwap(t1: Talisman, t2: Talisman): boolean {
-    const rowDiff = Math.abs(t1.row - t2.row);
-    const colDiff = Math.abs(t1.col - t2.col);
-    return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
+  private isAdjacent(a: Talisman, b: Talisman): boolean {
+    const rd = Math.abs(a.row - b.row);
+    const cd = Math.abs(a.col - b.col);
+    return (rd === 1 && cd === 0) || (rd === 0 && cd === 1);
   }
 
-  private swapTalismans(t1: Talisman, t2: Talisman): void {
-    const r1 = t1.row;
-    const c1 = t1.col;
-    const r2 = t2.row;
-    const c2 = t2.col;
+  private swapTalismans(a: Talisman, b: Talisman): void {
+    const ra = a.row, ca = a.col;
+    const rb = b.row, cb = b.col;
 
-    this.grid[r1][c1] = t2;
-    this.grid[r2][c2] = t1;
+    this.grid[ra][ca] = b;
+    this.grid[rb][cb] = a;
+    a.row = rb; a.col = cb;
+    b.row = ra; b.col = ca;
+    a.startRow = rb; a.startCol = cb;
+    a.targetRow = rb; a.targetCol = cb;
+    b.startRow = ra; b.startCol = ca;
+    b.targetRow = ra; b.targetCol = ca;
 
-    t1.row = r2;
-    t1.col = c2;
-    t2.row = r1;
-    t2.col = c1;
-
-    const matches = this.findMatches();
+    const matches = this.findAllMatches();
     if (matches.length === 0) {
-      this.grid[r1][c1] = t1;
-      this.grid[r2][c2] = t2;
-      
-      t1.row = r1;
-      t1.col = c1;
-      t2.row = r2;
-      t2.col = c2;
+      this.grid[ra][ca] = a;
+      this.grid[rb][cb] = b;
+      a.row = ra; a.col = ca;
+      b.row = rb; b.col = cb;
+      a.startRow = ra; a.startCol = ca;
+      a.targetRow = ra; a.targetCol = ca;
+      b.startRow = rb; b.startCol = cb;
+      b.targetRow = rb; b.targetCol = cb;
     }
-  }
-
-  getTalismanAt(row: number, col: number): Talisman | null {
-    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) {
-      return null;
-    }
-    return this.grid[row][col];
   }
 
   private endGame(): void {
     this.isGameOver = true;
     this.isPlaying = false;
     this.saveScore(this.score);
-    
-    if (this.onGameOver) {
-      this.onGameOver(this.score);
-    }
+    if (this.onGameOver) this.onGameOver(this.score);
   }
 
   private loadLeaderboard(): number[] {
     try {
-      const data = localStorage.getItem(LEADERBOARD_KEY);
-      if (data) {
-        return JSON.parse(data);
-      }
-    } catch (e) {
-      console.error('Failed to load leaderboard:', e);
-    }
+      const s = localStorage.getItem(LEADERBOARD_KEY);
+      if (s) return JSON.parse(s);
+    } catch (e) { /* ignore */ }
     return [];
   }
 
   private saveScore(score: number): void {
     this.leaderboard.push(score);
-    this.leaderboard.sort((a, b) => b - a);
+    this.leaderboard.sort((x, y) => y - x);
     this.leaderboard = this.leaderboard.slice(0, 5);
-    
     try {
       localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(this.leaderboard));
-    } catch (e) {
-      console.error('Failed to save leaderboard:', e);
-    }
+    } catch (e) { /* ignore */ }
   }
 
   getRank(score: number): number {
@@ -769,15 +831,7 @@ export class GameState {
     return rank;
   }
 
-  static get GRID_SIZE(): number {
-    return GRID_SIZE;
-  }
-
-  static get GAME_DURATION(): number {
-    return GAME_DURATION;
-  }
-
-  static get ELEMENT_COLORS(): Record<ElementType, string> {
-    return ELEMENT_COLORS;
-  }
+  static get GRID_SIZE(): number { return GRID_SIZE; }
+  static get GAME_DURATION(): number { return GAME_DURATION; }
+  static get ELEMENT_COLORS(): Record<ElementType, string> { return { ...ELEMENT_COLORS }; }
 }
