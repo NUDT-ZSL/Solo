@@ -81,23 +81,237 @@ export const DEFAULT_CONFIG: GenerateConfig = {
   template: 'neon-cyber',
 };
 
+const SHAPE_POOL_SIZE = 5;
+
+interface CachedShape {
+  path: Path2D;
+  type: 'triangle' | 'circle' | 'polygon';
+  variant: number;
+}
+
+interface CachedTexture {
+  canvas: HTMLCanvasElement;
+  type: string;
+}
+
+const shapePool: CachedShape[] = [];
+const textureCache: Map<string, CachedTexture> = new Map();
+const randomCache: number[] = [];
+let randomIndex = 0;
+
+function initRandomCache(): void {
+  randomCache.length = 0;
+  for (let i = 0; i < 10000; i++) {
+    randomCache.push(Math.random());
+  }
+  randomIndex = 0;
+}
+
 function rand(min: number, max: number): number {
-  return Math.random() * (max - min) + min;
+  const r = randomCache[randomIndex++];
+  if (randomIndex >= randomCache.length) randomIndex = 0;
+  return r * (max - min) + min;
 }
 
 function randInt(min: number, max: number): number {
   return Math.floor(rand(min, max + 1));
 }
 
+function buildShapePool(): void {
+  shapePool.length = 0;
+  const types: Array<'triangle' | 'circle' | 'polygon'> = ['triangle', 'circle', 'polygon'];
+
+  for (const type of types) {
+    for (let variant = 0; variant < SHAPE_POOL_SIZE; variant++) {
+      const path = new Path2D();
+      const cx = 0;
+      const cy = 0;
+
+      if (type === 'circle') {
+        const r = 0.7 + variant * 0.06;
+        path.arc(cx, cy, r, 0, Math.PI * 2);
+      } else if (type === 'triangle') {
+        const angle = variant * 0.3;
+        const scale = 0.8 + variant * 0.04;
+        for (let i = 0; i < 3; i++) {
+          const a = angle + (Math.PI * 2 * i) / 3;
+          const px = cx + Math.cos(a) * scale;
+          const py = cy + Math.sin(a) * scale;
+          if (i === 0) path.moveTo(px, py);
+          else path.lineTo(px, py);
+        }
+        path.closePath();
+      } else if (type === 'polygon') {
+        const sides = 5 + (variant % 4);
+        const angle = variant * 0.25;
+        const scale = 0.85 + variant * 0.03;
+        for (let i = 0; i < sides; i++) {
+          const a = angle + (Math.PI * 2 * i) / sides;
+          const px = cx + Math.cos(a) * scale;
+          const py = cy + Math.sin(a) * scale;
+          if (i === 0) path.moveTo(px, py);
+          else path.lineTo(px, py);
+        }
+        path.closePath();
+      }
+
+      shapePool.push({ path, type, variant });
+    }
+  }
+}
+
+function prebuildTextures(): void {
+  textureCache.clear();
+  const types = ['noise', 'gradient', 'stripes', 'thin-stripes', 'grid', 'glow', 'blur', 'halftone'];
+  for (const type of types) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 800;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#1E1E2E';
+    ctx.fillRect(0, 0, 800, 800);
+    renderTextureToCanvas(ctx, type, 800, 800);
+    textureCache.set(type, { canvas, type });
+  }
+}
+
+function renderTextureToCanvas(ctx: CanvasRenderingContext2D, type: string, w: number, h: number): void {
+  const palette = ['#FF00FF', '#00FFFF', '#FF6B35', '#6C63FF', '#FFB3C6'];
+  const saveIndex = randomIndex;
+
+  if (type === 'noise') {
+    const img = ctx.createImageData(w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const n = Math.floor(rand(-30, 30));
+      d[i] = 30 + n;
+      d[i + 1] = 30 + n;
+      d[i + 2] = 46 + n;
+      d[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  } else if (type === 'gradient') {
+    const c1 = palette[Math.floor(rand(0, palette.length))];
+    const c2 = palette[Math.floor(rand(0, palette.length))];
+    const grad = ctx.createLinearGradient(rand(0, w), rand(0, h), rand(0, w), rand(0, h));
+    grad.addColorStop(0, c1);
+    grad.addColorStop(1, c2);
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+  } else if (type === 'stripes' || type === 'thin-stripes') {
+    const gap = type === 'thin-stripes' ? Math.floor(rand(4, 7)) : Math.floor(rand(12, 20));
+    const ang = rand(0, Math.PI);
+    const col = palette[Math.floor(rand(0, palette.length))];
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = type === 'thin-stripes' ? 1 : 2;
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(ang);
+    for (let i = -w; i < w * 2; i += gap) {
+      ctx.beginPath();
+      ctx.moveTo(i, -h);
+      ctx.lineTo(i, h * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (type === 'grid') {
+    const gap = Math.floor(rand(25, 40));
+    const col = palette[Math.floor(rand(0, palette.length))];
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += gap) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    for (let y = 0; y < h; y += gap) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (type === 'glow') {
+    const cx = rand(w * 0.2, w * 0.8);
+    const cy = rand(h * 0.2, h * 0.8);
+    const r = rand(150, 300);
+    const col = palette[Math.floor(rand(0, palette.length))];
+    const rr = parseInt(col.slice(1, 3), 16);
+    const gg = parseInt(col.slice(3, 5), 16);
+    const bb = parseInt(col.slice(5, 7), 16);
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    grad.addColorStop(0, `rgba(${rr},${gg},${bb},0.35)`);
+    grad.addColorStop(1, `rgba(${rr},${gg},${bb},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  } else if (type === 'blur') {
+    for (let i = 0; i < 5; i++) {
+      const cx = rand(0, w);
+      const cy = rand(0, h);
+      const r = rand(60, 200);
+      const col = palette[Math.floor(rand(0, palette.length))];
+      const rr = parseInt(col.slice(1, 3), 16);
+      const gg = parseInt(col.slice(3, 5), 16);
+      const bb = parseInt(col.slice(5, 7), 16);
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grad.addColorStop(0, `rgba(${rr},${gg},${bb},0.3)`);
+      grad.addColorStop(0.6, `rgba(${rr},${gg},${bb},0.1)`);
+      grad.addColorStop(1, `rgba(${rr},${gg},${bb},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  } else if (type === 'halftone') {
+    const gap = Math.floor(rand(10, 14));
+    const col = palette[Math.floor(rand(0, palette.length))];
+    const rr = parseInt(col.slice(1, 3), 16);
+    const gg = parseInt(col.slice(3, 5), 16);
+    const bb = parseInt(col.slice(5, 7), 16);
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
+    for (let x = gap / 2; x < w; x += gap) {
+      for (let y = gap / 2; y < h; y += gap) {
+        const dr = rand(1, gap / 3);
+        ctx.beginPath();
+        ctx.arc(x, y, dr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  randomIndex = saveIndex;
+}
+
+function initCache(): void {
+  initRandomCache();
+  buildShapePool();
+  prebuildTextures();
+}
+
+function getRandomShape(type: 'triangle' | 'circle' | 'polygon'): CachedShape {
+  const candidates = shapePool.filter(s => s.type === type);
+  return candidates[Math.floor(rand(0, candidates.length))];
+}
+
+function getCachedTexture(type: string): CachedTexture | undefined {
+  return textureCache.get(type);
+}
+
 function pickWeighted(weights: { triangle: number; circle: number; polygon: number }): 'triangle' | 'circle' | 'polygon' {
-  const r = Math.random();
+  const r = rand(0, 1);
   if (r < weights.triangle) return 'triangle';
   if (r < weights.triangle + weights.circle) return 'circle';
   return 'polygon';
 }
 
-function pickColor(palette: string[], saturation: number): string {
-  const hex = palette[randInt(0, palette.length - 1)];
+function applySaturation(hex: string, saturation: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -109,163 +323,29 @@ function pickColor(palette: string[], saturation: number): string {
   return `rgba(${nr},${ng},${nb}`;
 }
 
-function drawTriangle(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, colorBase: string, opacity: number): void {
-  ctx.beginPath();
-  const angle = rand(0, Math.PI * 2);
-  for (let i = 0; i < 3; i++) {
-    const a = angle + (Math.PI * 2 * i) / 3;
-    const px = x + Math.cos(a) * size;
-    const py = y + Math.sin(a) * size;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fillStyle = colorBase + ',' + opacity.toFixed(2) + ')';
-  ctx.fill();
-}
-
-function drawCircle(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, colorBase: string, opacity: number): void {
-  ctx.beginPath();
-  ctx.arc(x, y, size, 0, Math.PI * 2);
-  ctx.fillStyle = colorBase + ',' + opacity.toFixed(2) + ')';
-  ctx.fill();
-}
-
-function drawPolygon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, colorBase: string, opacity: number): void {
-  const sides = randInt(5, 8);
-  const angle = rand(0, Math.PI * 2);
-  ctx.beginPath();
-  for (let i = 0; i < sides; i++) {
-    const a = angle + (Math.PI * 2 * i) / sides;
-    const px = x + Math.cos(a) * size;
-    const py = y + Math.sin(a) * size;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fillStyle = colorBase + ',' + opacity.toFixed(2) + ')';
-  ctx.fill();
-}
-
-function drawNoiseTexture(ctx: CanvasRenderingContext2D, w: number, h: number, opacity: number): void {
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const noise = Math.random() * 40 - 20;
-    data[i] = Math.min(255, Math.max(0, data[i] + noise));
-    data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
-    data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
-  }
-  ctx.putImageData(imageData, 0, 0);
-}
-
-function drawGradientTexture(ctx: CanvasRenderingContext2D, w: number, h: number, palette: string[], opacity: number): void {
-  const color1 = palette[randInt(0, palette.length - 1)];
-  const color2 = palette[randInt(0, palette.length - 1)];
-  const gradient = ctx.createLinearGradient(rand(0, w), rand(0, h), rand(0, w), rand(0, h));
-  gradient.addColorStop(0, color1);
-  gradient.addColorStop(1, color2);
-  ctx.globalAlpha = opacity * 0.3;
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, w, h);
-  ctx.globalAlpha = 1;
-}
-
-function drawStripesTexture(ctx: CanvasRenderingContext2D, w: number, h: number, palette: string[], thin: boolean, opacity: number): void {
-  const gap = thin ? randInt(3, 6) : randInt(10, 25);
-  const angle = rand(0, Math.PI);
-  const color = palette[randInt(0, palette.length - 1)];
+function drawShapeFromPool(
+  ctx: CanvasRenderingContext2D,
+  type: 'triangle' | 'circle' | 'polygon',
+  x: number,
+  y: number,
+  size: number,
+  colorBase: string,
+  opacity: number
+): void {
+  const cached = getRandomShape(type);
   ctx.save();
-  ctx.globalAlpha = opacity * 0.25;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = thin ? 1 : 2;
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate(angle);
-  for (let i = -w; i < w * 2; i += gap) {
-    ctx.beginPath();
-    ctx.moveTo(i, -h);
-    ctx.lineTo(i, h * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawGridTexture(ctx: CanvasRenderingContext2D, w: number, h: number, palette: string[], opacity: number): void {
-  const gap = randInt(20, 50);
-  const color = palette[randInt(0, palette.length - 1)];
-  ctx.save();
-  ctx.globalAlpha = opacity * 0.2;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  for (let x = 0; x < w; x += gap) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
-    ctx.stroke();
-  }
-  for (let y = 0; y < h; y += gap) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawGlowTexture(ctx: CanvasRenderingContext2D, w: number, h: number, palette: string[], opacity: number): void {
-  const cx = rand(w * 0.2, w * 0.8);
-  const cy = rand(h * 0.2, h * 0.8);
-  const r = rand(100, 300);
-  const color = palette[randInt(0, palette.length - 1)];
-  const rr = parseInt(color.slice(1, 3), 16);
-  const gg = parseInt(color.slice(3, 5), 16);
-  const bb = parseInt(color.slice(5, 7), 16);
-  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  gradient.addColorStop(0, `rgba(${rr},${gg},${bb},${(opacity * 0.5).toFixed(2)})`);
-  gradient.addColorStop(1, `rgba(${rr},${gg},${bb},0)`);
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, w, h);
-}
-
-function drawBlurTexture(ctx: CanvasRenderingContext2D, w: number, h: number, palette: string[], opacity: number): void {
-  for (let i = 0; i < 5; i++) {
-    const cx = rand(0, w);
-    const cy = rand(0, h);
-    const r = rand(50, 200);
-    const color = palette[randInt(0, palette.length - 1)];
-    const rr = parseInt(color.slice(1, 3), 16);
-    const gg = parseInt(color.slice(3, 5), 16);
-    const bb = parseInt(color.slice(5, 7), 16);
-    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    gradient.addColorStop(0, `rgba(${rr},${gg},${bb},${(opacity * 0.4).toFixed(2)})`);
-    gradient.addColorStop(0.6, `rgba(${rr},${gg},${bb},${(opacity * 0.15).toFixed(2)})`);
-    gradient.addColorStop(1, `rgba(${rr},${gg},${bb},0)`);
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, w, h);
-  }
-}
-
-function drawHalftoneTexture(ctx: CanvasRenderingContext2D, w: number, h: number, palette: string[], opacity: number): void {
-  const gap = randInt(8, 16);
-  const color = palette[randInt(0, palette.length - 1)];
-  const rr = parseInt(color.slice(1, 3), 16);
-  const gg = parseInt(color.slice(3, 5), 16);
-  const bb = parseInt(color.slice(5, 7), 16);
-  ctx.save();
-  ctx.globalAlpha = opacity * 0.3;
-  ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
-  for (let x = gap / 2; x < w; x += gap) {
-    for (let y = gap / 2; y < h; y += gap) {
-      const dotR = rand(1, gap / 3);
-      ctx.beginPath();
-      ctx.arc(x, y, dotR, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  ctx.translate(x, y);
+  ctx.scale(size, size);
+  ctx.fillStyle = colorBase + ',' + opacity.toFixed(2) + ')';
+  ctx.fill(cached.path);
   ctx.restore();
 }
 
 export function generate(ctx: CanvasRenderingContext2D, config: GenerateConfig): ImageData {
+  if (shapePool.length === 0) {
+    initCache();
+  }
+
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const template = TEMPLATES.find(t => t.type === config.template) || TEMPLATES[0];
@@ -282,54 +362,28 @@ export function generate(ctx: CanvasRenderingContext2D, config: GenerateConfig):
   }
 
   const avgOpacity = (config.opacityMin + config.opacityMax) / 2;
+
   for (const texType of allTextures) {
-    switch (texType) {
-      case 'noise':
-        drawNoiseTexture(ctx, w, h, avgOpacity);
-        break;
-      case 'gradient':
-        drawGradientTexture(ctx, w, h, template.palette, avgOpacity);
-        break;
-      case 'stripes':
-        drawStripesTexture(ctx, w, h, template.palette, false, avgOpacity);
-        break;
-      case 'thin-stripes':
-        drawStripesTexture(ctx, w, h, template.palette, true, avgOpacity);
-        break;
-      case 'grid':
-        drawGridTexture(ctx, w, h, template.palette, avgOpacity);
-        break;
-      case 'glow':
-        drawGlowTexture(ctx, w, h, template.palette, avgOpacity);
-        break;
-      case 'blur':
-        drawBlurTexture(ctx, w, h, template.palette, avgOpacity);
-        break;
-      case 'halftone':
-        drawHalftoneTexture(ctx, w, h, template.palette, avgOpacity);
-        break;
+    const cachedTex = getCachedTexture(texType);
+    if (cachedTex) {
+      ctx.save();
+      ctx.globalAlpha = avgOpacity * 0.35;
+      ctx.drawImage(cachedTex.canvas, 0, 0, w, h);
+      ctx.restore();
     }
   }
 
+  const palette = template.palette;
+  const paletteMax = palette.length - 1;
   for (let i = 0; i < config.shapeCount; i++) {
     const shapeType = pickWeighted(template.shapeWeights);
     const x = rand(0, w);
     const y = rand(0, h);
     const size = rand(15, 120);
-    const colorBase = pickColor(template.palette, config.saturation);
+    const hexColor = palette[randInt(0, paletteMax)];
+    const colorBase = applySaturation(hexColor, config.saturation);
     const opacity = rand(config.opacityMin, config.opacityMax);
-
-    switch (shapeType) {
-      case 'triangle':
-        drawTriangle(ctx, x, y, size, colorBase, opacity);
-        break;
-      case 'circle':
-        drawCircle(ctx, x, y, size, colorBase, opacity);
-        break;
-      case 'polygon':
-        drawPolygon(ctx, x, y, size, colorBase, opacity);
-        break;
-    }
+    drawShapeFromPool(ctx, shapeType, x, y, size, colorBase, opacity);
   }
 
   return ctx.getImageData(0, 0, w, h);
@@ -346,8 +400,8 @@ export function exportPNG(canvas: HTMLCanvasElement): void {
   ectx.fillStyle = '#FFFFFF';
   ectx.fillRect(0, 0, exportSize, exportSize);
 
-  const scale = (exportSize - border * 2) / canvas.width;
-  ectx.drawImage(canvas, border, border, canvas.width * scale, canvas.height * scale);
+  const innerSize = exportSize - border * 2;
+  ectx.drawImage(canvas, border, border, innerSize, innerSize);
 
   ectx.fillStyle = 'rgba(0,0,0,0.3)';
   ectx.font = '12px "Noto Sans SC", sans-serif';
