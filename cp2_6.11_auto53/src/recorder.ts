@@ -191,6 +191,10 @@ export class Recorder {
     this.playIndex = 0;
     this.playEvents = [];
     
+    if (this.onPlaybackProgress) {
+      this.onPlaybackProgress(0, this.playDuration);
+    }
+    
     if (this.onPlaybackStop) {
       this.onPlaybackStop();
     }

@@ -28,62 +28,70 @@ const AIR_TURBULENCE = 1;
 export class ParticleSystem {
   private particles: Particle[] = [];
   private maxParticles: number = MAX_PARTICLES;
+  private isModifying: boolean = false;
 
   constructor() {}
 
   public emit(x: number, y: number, baseColor: string, count: number = 40): void {
-    const emitCount = Math.min(count, this.maxParticles);
-    
-    if (this.particles.length + emitCount > this.maxParticles) {
-      const removeCount = this.particles.length + emitCount - this.maxParticles;
-      this.removeOldest(removeCount);
-    }
+    if (this.isModifying) return;
+    this.isModifying = true;
 
-    for (let i = 0; i < emitCount; i++) {
-      if (this.particles.length >= this.maxParticles) {
-        this.removeOldest(1);
+    try {
+      const emitCount = Math.min(count, this.maxParticles);
+      
+      if (this.particles.length + emitCount > this.maxParticles) {
+        const removeCount = this.particles.length + emitCount - this.maxParticles;
+        this.removeOldest(removeCount);
       }
 
-      const angle = (Math.random() - 0.5) * (Math.PI / 3) - Math.PI / 2;
-      const speed = 120 + Math.random() * 80;
-      const size = 2 + Math.random() * 3;
-      const life = 1.5;
-      const hueShift = (Math.random() - 0.5) * 20;
+      for (let i = 0; i < emitCount; i++) {
+        if (this.particles.length >= this.maxParticles) {
+          this.removeOldest(1);
+        }
 
-      const color = this.shiftHue(baseColor, hueShift);
-      const sineOffset = Math.random() * Math.PI * 2;
-      const sineAmplitude = 15 + Math.random() * 25;
-      const sineFrequency = 1.5 + Math.random() * 2;
+        const angle = (Math.random() - 0.5) * (Math.PI / 3) - Math.PI / 2;
+        const speed = 120 + Math.random() * 80;
+        const size = 2 + Math.random() * 3;
+        const life = 1.5;
+        const hueShift = (Math.random() - 0.5) * 20;
 
-      const vx = Math.cos(angle) * speed;
-      const vy = Math.sin(angle) * speed;
-      const perpX = -vy / speed;
-      const perpY = vx / speed;
+        const color = this.shiftHue(baseColor, hueShift);
+        const sineOffset = Math.random() * Math.PI * 2 + angle * 2;
+        const sineAmplitude = 10 + Math.random() * 20;
+        const sineFrequency = 1 + Math.random() * 2.5;
 
-      const particle: Particle = {
-        x,
-        y,
-        baseX: x,
-        baseY: y,
-        vx,
-        vy,
-        initialVx: vx,
-        initialVy: vy,
-        initialSpeed: speed,
-        size,
-        color,
-        alpha: 1,
-        life,
-        maxLife: life,
-        elapsed: 0,
-        sineOffset,
-        sineAmplitude,
-        sineFrequency,
-        perpX,
-        perpY,
-      };
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        const perpX = -vy / speed;
+        const perpY = vx / speed;
 
-      this.particles.push(particle);
+        const particle: Particle = {
+          x,
+          y,
+          baseX: x,
+          baseY: y,
+          vx,
+          vy,
+          initialVx: vx,
+          initialVy: vy,
+          initialSpeed: speed,
+          size,
+          color,
+          alpha: 1,
+          life,
+          maxLife: life,
+          elapsed: 0,
+          sineOffset,
+          sineAmplitude,
+          sineFrequency,
+          perpX,
+          perpY,
+        };
+
+        this.particles.push(particle);
+      }
+    } finally {
+      this.isModifying = false;
     }
   }
 
@@ -145,36 +153,39 @@ export class ParticleSystem {
   }
 
   public update(deltaTime: number): void {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-      
-      p.life -= deltaTime;
-      p.elapsed += deltaTime;
-      
-      if (p.life <= 0) {
-        this.particles.splice(i, 1);
-        continue;
+    if (this.isModifying) return;
+    this.isModifying = true;
+
+    try {
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        const p = this.particles[i];
+        
+        p.life -= deltaTime;
+        p.elapsed += deltaTime;
+        
+        if (p.life <= 0) {
+          this.particles.splice(i, 1);
+          continue;
+        }
+
+        p.alpha = Math.max(0, p.life / p.maxLife);
+
+        p.vy += GRAVITY * deltaTime;
+
+        const turbulenceX = (Math.random() - 0.5) * AIR_TURBULENCE * 60 * deltaTime;
+        const turbulenceY = (Math.random() - 0.5) * AIR_TURBULENCE * 60 * deltaTime;
+
+        p.baseX += p.vx * deltaTime;
+        p.baseY += p.vy * deltaTime;
+
+        const sinePhase = p.elapsed * p.sineFrequency * Math.PI * 2 + p.sineOffset;
+        const sineWave = Math.sin(sinePhase) * p.sineAmplitude;
+
+        p.x = p.baseX + p.perpX * sineWave + turbulenceX;
+        p.y = p.baseY + p.perpY * sineWave + turbulenceY;
       }
-
-      p.alpha = Math.max(0, p.life / p.maxLife);
-
-      p.vy += GRAVITY * deltaTime;
-
-      const turbulenceX = (Math.random() - 0.5) * AIR_TURBULENCE * 60 * deltaTime;
-      const turbulenceY = (Math.random() - 0.5) * AIR_TURBULENCE * 60 * deltaTime;
-
-      p.baseX += p.vx * deltaTime;
-      p.baseY += p.vy * deltaTime;
-
-      const sinePhase = p.elapsed * p.sineFrequency * Math.PI * 2 + p.sineOffset;
-      const sineWave = Math.sin(sinePhase) * p.sineAmplitude;
-
-      const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-      const perpX = -p.vy / speed;
-      const perpY = p.vx / speed;
-
-      p.x = p.baseX + perpX * sineWave + turbulenceX;
-      p.y = p.baseY + perpY * sineWave + turbulenceY;
+    } finally {
+      this.isModifying = false;
     }
   }
 

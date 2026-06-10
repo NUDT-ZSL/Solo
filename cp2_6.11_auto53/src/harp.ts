@@ -311,6 +311,9 @@ export class Harp {
         } else {
           const decayRate = Math.log(1 / 0.001) / VIBRATION_DURATION;
           str.vibrationAmplitude = MAX_VIBRATION_AMPLITUDE * this.scale * Math.exp(-decayRate * str.triggerTime);
+          if (str.vibrationAmplitude < 0.01) {
+            str.vibrationAmplitude = 0;
+          }
           str.vibrationPhase += deltaTime * 25;
         }
 
@@ -400,7 +403,7 @@ export class Harp {
 
     ctx.beginPath();
     
-    if (str.vibrationAmplitude > 0) {
+    if (str.vibrationAmplitude > 0 && str.triggerTime < VIBRATION_DURATION) {
       const segments = 24;
       for (let i = 0; i <= segments; i++) {
         const t = i / segments;
@@ -467,5 +470,9 @@ export class Harp {
 
   public getStrings(): StringState[] {
     return this.strings;
+  }
+
+  public getGlideTimeouts(): number[] {
+    return this.glideTimeouts;
   }
 }
