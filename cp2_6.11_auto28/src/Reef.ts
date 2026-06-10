@@ -67,7 +67,7 @@ export class Reef {
   
   private burstParticles: BurstParticle[] = [];
   private burstPoints: THREE.Points | null = null;
-  private maxBurstParticles = 500;
+  private maxBurstParticles = 1000;
   
   private ripples: Ripple[] = [];
   private rippleMeshes: THREE.Mesh[] = [];
@@ -282,11 +282,11 @@ export class Reef {
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
     
     const material = new THREE.PointsMaterial({
-      size: 1.2,
+      size: 2,
       map: this.glowTexture,
       vertexColors: true,
       transparent: true,
-      opacity: 0,
+      opacity: 1,
       sizeAttenuation: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false
@@ -415,16 +415,17 @@ export class Reef {
     this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     
     this.raycaster.setFromCamera(this.mouse, camera);
-    this.raycaster.params.Points = { threshold: 2 };
+    this.raycaster.params.Points = { threshold: 4 };
     
     if (!this.coralPoints) return;
     
-    const intersects = this.raycaster.intersectObject(this.coralPoints, false);
+    const intersects = this.raycaster.intersectObject(this.coralPoints, true);
     
     if (intersects.length > 0) {
-      const point = intersects[0].point;
-      this.triggerBurstAtPoint(point);
-      this.createRippleAtPoint(point);
+      const worldPoint = intersects[0].point;
+      const localPoint = this.container.worldToLocal(worldPoint.clone());
+      this.triggerBurstAtPoint(localPoint);
+      this.createRippleAtPoint(localPoint);
     }
   }
 
@@ -441,7 +442,7 @@ export class Reef {
     
     if (nearbyNodes.length === 0) return;
     
-    const particleCount = 30 + Math.floor(Math.random() * 21);
+    const particleCount = 40 + Math.floor(Math.random() * 31);
     
     for (let i = 0; i < particleCount; i++) {
       if (this.burstParticles.length >= this.maxBurstParticles) break;
@@ -451,7 +452,7 @@ export class Reef {
       
       const angle1 = Math.random() * Math.PI * 2;
       const angle2 = Math.random() * Math.PI - Math.PI / 2;
-      const speed = 0.15 + Math.random() * 0.2;
+      const speed = 0.2 + Math.random() * 0.25;
       
       const velocity = new THREE.Vector3(
         Math.cos(angle1) * Math.cos(angle2) * speed,
@@ -459,22 +460,20 @@ export class Reef {
         Math.sin(angle1) * Math.cos(angle2) * speed
       );
       
-      const baseHue = this.baseHue;
-      const complementaryHue = (baseHue + 0.5) % 1;
-      const hueVariation = (Math.random() - 0.5) * 0.1;
-      const burstColor = new THREE.Color().setHSL(
-        complementaryHue + hueVariation,
-        0.8,
-        0.7
+      const baseColor = node.baseColor.clone();
+      const burstColor = new THREE.Color(
+        1 - baseColor.r,
+        1 - baseColor.g,
+        1 - baseColor.b
       );
       
       this.burstParticles.push({
         position: node.position.clone(),
         velocity,
         color: burstColor,
-        life: 1.2,
-        maxLife: 1.2,
-        size: 2 + Math.random() * 2
+        life: 1.5,
+        maxLife: 1.5,
+        size: 3 + Math.random() * 3
       });
     }
   }

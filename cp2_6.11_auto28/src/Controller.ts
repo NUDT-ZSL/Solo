@@ -37,6 +37,7 @@ export class Controller {
     this.onParamsChange = onParamsChange;
     this.initSliders();
     this.updateSliderPositions();
+    this.updateSliderColors();
     this.updateDisplayValues();
   }
 
@@ -146,6 +147,7 @@ export class Controller {
     
     this.updateSliderPosition(type, ratio);
     this.updateDisplayValues();
+    this.updateSliderColors();
     this.onParamsChange({ ...this.params });
   }
 
@@ -153,6 +155,32 @@ export class Controller {
     const thumb = document.getElementById(`thumb-${type}`);
     if (thumb) {
       thumb.style.left = `${ratio * 100}%`;
+    }
+  }
+
+  private updateSliderColors(): void {
+    const tempRatio = (this.params.temperature - this.tempMin) / (this.tempMax - this.tempMin);
+    const tempThumb = document.getElementById('thumb-temp');
+    if (tempThumb) {
+      const hue = 240 - tempRatio * 200;
+      tempThumb.style.backgroundColor = `hsl(${hue}, 80%, 65%)`;
+      tempThumb.style.boxShadow = `0 0 10px hsl(${hue}, 80%, 60%)`;
+    }
+    
+    const salinityRatio = (this.params.salinity - this.salinityMin) / (this.salinityMax - this.salinityMin);
+    const salinityThumb = document.getElementById('thumb-salinity');
+    if (salinityThumb) {
+      const hue = 140 + salinityRatio * 40;
+      salinityThumb.style.backgroundColor = `hsl(${hue}, 60%, 55%)`;
+      salinityThumb.style.boxShadow = `0 0 8px hsl(${hue}, 60%, 50%)`;
+    }
+    
+    const lightRatio = (this.params.light - this.lightMin) / (this.lightMax - this.lightMin);
+    const lightThumb = document.getElementById('thumb-light');
+    if (lightThumb) {
+      const brightness = 60 + lightRatio * 35;
+      lightThumb.style.backgroundColor = `hsl(45, 90%, ${brightness}%)`;
+      lightThumb.style.boxShadow = `0 0 10px hsl(45, 90%, ${brightness - 10}%)`;
     }
   }
 

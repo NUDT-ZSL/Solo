@@ -33,6 +33,7 @@ class FloatingReefApp {
   private rotationSpeed = 0.005;
   private zoomSpeed = 0.001;
   private smoothFactor = 0.1;
+  private dragThreshold = 8;
   
   private minRotationX = -Math.PI / 6;
   private maxRotationX = Math.PI / 6;
@@ -194,7 +195,7 @@ class FloatingReefApp {
     const totalDeltaX = Math.abs(e.clientX - this.dragStartX);
     const totalDeltaY = Math.abs(e.clientY - this.dragStartY);
     
-    if (totalDeltaX > 5 || totalDeltaY > 5) {
+    if (!this.isViewDrag && (totalDeltaX > this.dragThreshold || totalDeltaY > this.dragThreshold)) {
       this.isViewDrag = true;
       this.renderer.domElement.style.cursor = 'grabbing';
     }
@@ -205,6 +206,15 @@ class FloatingReefApp {
       
       this.targetRotationX = Math.max(this.minRotationX, Math.min(this.maxRotationX, this.targetRotationX));
       this.targetRotationY = Math.max(this.minRotationY, Math.min(this.maxRotationY, this.targetRotationY));
+      
+      if (this.particleFlow) {
+        const dragDir = new THREE.Vector3(
+          deltaX * 0.05,
+          -deltaY * 0.05,
+          0.02
+        );
+        this.particleFlow.applyDragForce(dragDir);
+      }
     }
     
     this.previousMouseX = e.clientX;
@@ -252,7 +262,7 @@ class FloatingReefApp {
     const totalDeltaX = Math.abs(touch.clientX - this.dragStartX);
     const totalDeltaY = Math.abs(touch.clientY - this.dragStartY);
     
-    if (totalDeltaX > 10 || totalDeltaY > 10) {
+    if (!this.isViewDrag && (totalDeltaX > this.dragThreshold || totalDeltaY > this.dragThreshold)) {
       this.isViewDrag = true;
     }
     
@@ -262,6 +272,15 @@ class FloatingReefApp {
       
       this.targetRotationX = Math.max(this.minRotationX, Math.min(this.maxRotationX, this.targetRotationX));
       this.targetRotationY = Math.max(this.minRotationY, Math.min(this.maxRotationY, this.targetRotationY));
+      
+      if (this.particleFlow) {
+        const dragDir = new THREE.Vector3(
+          deltaX * 0.05,
+          -deltaY * 0.05,
+          0.02
+        );
+        this.particleFlow.applyDragForce(dragDir);
+      }
     }
     
     this.previousMouseX = touch.clientX;

@@ -184,8 +184,8 @@ export class ParticleFlow {
   }
 
   public applyDragForce(direction: THREE.Vector3): void {
-    this.dragInfluence.copy(direction).multiplyScalar(0.3);
-    this.targetFlowDirection.lerp(direction.clone().normalize(), 0.1);
+    this.dragInfluence.copy(direction).multiplyScalar(0.8);
+    this.targetFlowDirection.lerp(direction.clone().normalize(), 0.15);
   }
 
   public setFlowDirection(direction: THREE.Vector3): void {
