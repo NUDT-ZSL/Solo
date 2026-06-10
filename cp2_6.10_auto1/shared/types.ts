@@ -19,6 +19,7 @@ export interface Letter {
   id: string
   userId: string
   title: string
+  recipientEmail: string
   content: string
   emotion: Emotion
   unlockAt: number
@@ -29,14 +30,17 @@ export interface Letter {
 export interface LetterListItem {
   id: string
   title: string
+  recipientEmail: string
   emotion: Emotion
   unlockAt: number
   createdAt: number
   isUnlocked: boolean
+  status: 'sent' | 'unlocked' | 'expired'
 }
 
 export interface CreateLetterReq {
   title: string
+  recipientEmail: string
   content: string
   emotion: Emotion
   unlockAt: number
@@ -48,12 +52,14 @@ export interface CreateLetterRes {
   emotion: Emotion
   unlockAt: number
   createdAt: number
+  shareUrl: string
 }
 
 export interface GetLetterRes {
   id: string
   title: string
-  content: string
+  recipientEmail: string
+  content?: string
   emotion: Emotion
   unlockAt: number
   createdAt: number
@@ -61,8 +67,10 @@ export interface GetLetterRes {
 }
 
 export interface LetterListRes {
-  letters: LetterListItem[]
+  items: LetterListItem[]
   total: number
+  page: number
+  pageSize: number
 }
 
 export interface RegisterReq {
@@ -85,4 +93,10 @@ export interface AuthRes {
 
 export interface ServerTimeRes {
   serverTime: number
+}
+
+export interface UserStatsRes {
+  total: number
+  unlocked: number
+  locked: number
 }

@@ -2,9 +2,11 @@ import React from 'react';
 import { useCountdown } from '../hooks/useCountdown';
 
 interface CountdownProps {
-  targetTime: Date | string | number;
+  targetTime: number;
   serverTimeOffset?: number;
   onComplete?: () => void;
+  syncServerTime?: () => Promise<number>;
+  syncInterval?: number;
   className?: string;
 }
 
@@ -39,12 +41,15 @@ export const Countdown: React.FC<CountdownProps> = ({
   targetTime,
   serverTimeOffset = 0,
   onComplete,
+  syncServerTime,
+  syncInterval = 1000,
   className = '',
 }) => {
   const { days, hours, minutes, seconds } = useCountdown({
     targetTime,
-    serverTimeOffset,
     onComplete,
+    syncServerTime,
+    syncInterval,
   });
 
   return (

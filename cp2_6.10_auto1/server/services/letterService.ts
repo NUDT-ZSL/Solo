@@ -8,6 +8,7 @@ import type {
   GetLetterRes,
   LetterListRes,
   LetterListItem,
+  UserStatsRes,
 } from '../../shared/types.js'
 
 function checkUnlock(letter: Letter, now: number): Letter {
@@ -17,12 +18,22 @@ function checkUnlock(letter: Letter, now: number): Letter {
   return letter
 }
 
+function getLetterStatus(letter: Letter, now: number): 'sent' | 'unlocked' | 'expired' {
+  if (letter.isUnlocked || now >= letter.unlockAt) {
+    return 'unlocked'
+  }
+  return 'sent'
+}
+
 export function createLetter(
   userId: string,
   req: CreateLetterReq
 ): CreateLetterRes {
   if (!req.title?.trim()) {
     throw new AppError('标题不能为空')
+  }
+  if (!req.recipientEmail?.trim()) {
+    throw new AppError('收件人邮箱不能为空')
   }
   if (!req.content?.trim()) {
     throw new AppError('内容不能为空')
@@ -35,6 +46,7 @@ export function createLetter(
     id: generateId(),
     userId,
     title: req.title.trim(),
+    recipientEmail: req.recipientEmail.trim(),
     content: req.content.trim(),
     emotion: req.emotion,
     unlockAt: req.unlockAt,
@@ -43,13 +55,43 @@ export function createLetter(
   }
   jsonStore.createLetter(letter)
 
+  const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/letter/${letter.id}`
+
   return {
     id: letter.id,
     title: letter.title,
     emotion: letter.emotion,
     unlockAt: letter.unlockAt,
     createdAt: letter.createdAt,
+    shareUrl,
   }
+}
+
+export function getPublicLetter(letterId: string): GetLetterRes {
+  const letter = jsonStore.findLetterById(letterId)
+  if (!letter) {
+    throw new AppError('信件不存在', 404)
+  }
+
+  const now = Date.now()
+  const checked = checkUnlock(letter, now)
+  const isUnlocked = checked.isUnlocked || now >= checked.unlockAt
+
+  const result: GetLetterRes = {
+    id: checked.id,
+    title: checked.title,
+    recipientEmail: checked.recipientEmail,
+    emotion: checked.emotion,
+    unlockAt: checked.unlockAt,
+    createdAt: checked.createdAt,
+    isUnlocked,
+  }
+
+  if (isUnlocked) {
+    result.content = checked.content
+  }
+
+  return result
 }
 
 export function getLetter(userId: string, letterId: string): GetLetterRes {
@@ -63,40 +105,53 @@ export function getLetter(userId: string, letterId: string): GetLetterRes {
 
   const now = Date.now()
   const checked = checkUnlock(letter, now)
+  const isUnlocked = checked.isUnlocked || now >= checked.unlockAt
 
-  if (!checked.isUnlocked) {
-    throw new AppError('信件尚未解锁', 403)
-  }
-
-  return {
+  const result: GetLetterRes = {
     id: checked.id,
     title: checked.title,
-    content: checked.content,
+    recipientEmail: checked.recipientEmail,
     emotion: checked.emotion,
     unlockAt: checked.unlockAt,
     createdAt: checked.createdAt,
-    isUnlocked: checked.isUnlocked,
+    isUnlocked,
   }
+
+  if (isUnlocked) {
+    result.content = checked.content
+  }
+
+  return result
 }
 
-export function listLetters(userId: string): LetterListRes {
-  const all = jsonStore.findLettersByUserId(userId)
+export function listLetters(
+  userId: string,
+  page = 1,
+  pageSize = 20
+): LetterListRes {
+  const { items, total } = jsonStore.listLettersByUserIdPaged(userId, page, pageSize)
   const now = Date.now()
-  const items: LetterListItem[] = all.map((l) => {
+
+  const listItems: LetterListItem[] = items.map((l) => {
     const checked = checkUnlock(l, now)
+    const status = getLetterStatus(checked, now)
     return {
       id: checked.id,
       title: checked.title,
+      recipientEmail: checked.recipientEmail,
       emotion: checked.emotion,
       unlockAt: checked.unlockAt,
       createdAt: checked.createdAt,
       isUnlocked: checked.isUnlocked,
+      status,
     }
   })
 
   return {
-    letters: items,
-    total: items.length,
+    items: listItems,
+    total,
+    page,
+    pageSize,
   }
 }
 
@@ -111,7 +166,7 @@ export function deleteLetter(userId: string, letterId: string): void {
   jsonStore.deleteLetter(letterId)
 }
 
-export function getUserStats(userId: string): { total: number; unlocked: number; locked: number } {
+export function getUserStats(userId: string): UserStatsRes {
   const all = jsonStore.findLettersByUserId(userId)
   const now = Date.now()
   let unlocked = 0

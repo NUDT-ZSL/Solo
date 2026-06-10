@@ -1,53 +1,53 @@
-import type { Response, NextFunction } from 'express'
+import type { Response, NextFunction, Request } from 'express'
 import type { AuthRequest } from '../middleware/auth.js'
 import * as authService from '../services/authService.js'
-import type { RegisterReq, LoginReq, AuthRes, ServerTimeRes } from '../../shared/types.js'
+import type { RegisterReq, LoginReq, ServerTimeRes } from '../../shared/types.js'
 
 export async function register(
-  req: AuthRequest,
-  res: Response<AuthRes>,
+  req: Request,
+  res: Response,
   _next: NextFunction
 ): Promise<void> {
   const body = req.body as RegisterReq
   const result = authService.register(body.username, body.password)
-  res.json(result)
+  res.json({ code: 0, data: result, message: 'ok' })
 }
 
 export async function login(
-  req: AuthRequest,
-  res: Response<AuthRes>,
+  req: Request,
+  res: Response,
   _next: NextFunction
 ): Promise<void> {
   const body = req.body as LoginReq
   const result = authService.login(body.username, body.password)
-  res.json(result)
+  res.json({ code: 0, data: result, message: 'ok' })
 }
 
 export async function me(
   req: AuthRequest,
-  res: Response<{ id: string; username: string }>,
+  res: Response,
   _next: NextFunction
 ): Promise<void> {
   const userId = req.userId!
   const result = authService.getMe(userId)
-  res.json(result)
+  res.json({ code: 0, data: result, message: 'ok' })
 }
 
 export async function logout(
   req: AuthRequest,
-  res: Response<{ success: true }>,
+  res: Response,
   _next: NextFunction
 ): Promise<void> {
   const authHeader = req.headers.authorization!
   const token = authHeader.slice(7)
   authService.logout(token)
-  res.json({ success: true })
+  res.json({ code: 0, data: null, message: 'ok' })
 }
 
 export async function serverTime(
-  _req: AuthRequest,
-  res: Response<ServerTimeRes>,
+  _req: Request,
+  res: Response<{ code: number; data: ServerTimeRes; message: string }>,
   _next: NextFunction
 ): Promise<void> {
-  res.json({ serverTime: Date.now() })
+  res.json({ code: 0, data: { serverTime: Date.now() }, message: 'ok' })
 }

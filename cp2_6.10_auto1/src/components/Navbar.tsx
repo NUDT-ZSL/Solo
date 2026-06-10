@@ -5,7 +5,8 @@ import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Navbar() {
-  const { isAuthenticated, logout, user } = useAuthStore();
+  const { token, logout, user } = useAuthStore();
+  const isAuthenticated = !!token;
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 

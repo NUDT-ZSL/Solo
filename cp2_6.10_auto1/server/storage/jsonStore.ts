@@ -23,6 +23,8 @@ class JsonStore {
   private readonly filePath: string
   private flushTimer: NodeJS.Timeout | null = null
   private dirty = false
+  private writeLock = false
+  private pendingFlush = false
 
   constructor() {
     this.filePath = path.join(DATA_DIR, 'store.json')
@@ -36,7 +38,7 @@ class JsonStore {
       fs.mkdirSync(DATA_DIR, { recursive: true })
     }
     if (!fs.existsSync(this.filePath)) {
-      this.writeAtomic(DEFAULT_DATA)
+      this.writeAtomicSync(DEFAULT_DATA)
     }
   }
 
@@ -45,39 +47,71 @@ class JsonStore {
       const raw = fs.readFileSync(this.filePath, 'utf-8')
       return JSON.parse(raw) as StoreData
     } catch {
-      return { ...DEFAULT_DATA }
+      return { ...DEFAULT_DATA, users: [], sessions: [], letters: [] }
     }
   }
 
-  private writeAtomic(data: StoreData): void {
+  private writeAtomicSync(data: StoreData): void {
     const tempPath = `${this.filePath}.tmp`
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8')
     fs.renameSync(tempPath, this.filePath)
+  }
+
+  private async writeAtomic(data: StoreData): Promise<void> {
+    const tempPath = `${this.filePath}.tmp`
+    await fs.promises.writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8')
+    await fs.promises.rename(tempPath, this.filePath)
   }
 
   private scheduleFlush(): void {
     this.dirty = true
     if (this.flushTimer === null) {
       this.flushTimer = setTimeout(() => {
-        this.flush()
+        void this.flush()
       }, 1000)
     }
   }
 
-  flush(): void {
-    if (this.dirty) {
-      this.writeAtomic(this.data)
-      this.dirty = false
+  async flush(): Promise<void> {
+    if (!this.dirty) {
+      if (this.flushTimer !== null) {
+        clearTimeout(this.flushTimer)
+        this.flushTimer = null
+      }
+      return
     }
+
+    if (this.writeLock) {
+      this.pendingFlush = true
+      return
+    }
+
+    this.writeLock = true
+    const snapshot = { ...this.data }
+    this.dirty = false
+
     if (this.flushTimer !== null) {
       clearTimeout(this.flushTimer)
       this.flushTimer = null
+    }
+
+    try {
+      await this.writeAtomic(snapshot)
+    } catch (err) {
+      console.error('Failed to flush store:', err)
+      this.dirty = true
+    } finally {
+      this.writeLock = false
+      if (this.pendingFlush) {
+        this.pendingFlush = false
+        void this.flush()
+      }
     }
   }
 
   private startAutoFlush(): void {
     setInterval(() => {
-      this.flush()
+      void this.flush()
     }, 5000)
   }
 
@@ -120,6 +154,14 @@ class JsonStore {
       .sort((a, b) => b.createdAt - a.createdAt)
   }
 
+  listLettersByUserIdPaged(userId: string, page: number, pageSize: number): { items: Letter[]; total: number } {
+    const all = this.findLettersByUserId(userId)
+    const total = all.length
+    const start = (page - 1) * pageSize
+    const items = all.slice(start, start + pageSize)
+    return { items, total }
+  }
+
   createLetter(letter: Letter): Letter {
     this.data.letters.push(letter)
     this.scheduleFlush()
@@ -146,6 +188,16 @@ class JsonStore {
 
   countLettersByUserId(userId: string): number {
     return this.data.letters.filter((l) => l.userId === userId).length
+  }
+
+  countUnlockedLettersByUserId(userId: string): number {
+    const now = Date.now()
+    return this.data.letters.filter((l) => l.userId === userId && l.unlockAt <= now).length
+  }
+
+  countLockedLettersByUserId(userId: string): number {
+    const now = Date.now()
+    return this.data.letters.filter((l) => l.userId === userId && l.unlockAt > now).length
   }
 }
 

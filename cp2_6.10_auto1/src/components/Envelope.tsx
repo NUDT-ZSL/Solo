@@ -1,7 +1,7 @@
 import React from 'react';
 import { Hourglass } from './Hourglass';
-
-type Emotion = 'joy' | 'calm' | 'hope' | 'nostalgia';
+import type { Emotion } from '../../shared/types';
+import { emotionColors } from '../utils/emotion';
 
 interface EnvelopeProps {
   emotion: Emotion;
@@ -10,14 +10,7 @@ interface EnvelopeProps {
   className?: string;
 }
 
-const emotionColors: Record<Emotion, string> = {
-  joy: '#FF7E67',
-  calm: '#6B8E8E',
-  hope: '#9ED39E',
-  nostalgia: '#A67B9B',
-};
-
-export const Envelope: React.FC<EnvelopeProps> = ({
+const Envelope: React.FC<EnvelopeProps> = ({
   emotion,
   isUnlocked,
   showHourglass = true,
@@ -189,3 +182,5 @@ export const Envelope: React.FC<EnvelopeProps> = ({
     </div>
   );
 };
+
+export default Envelope;

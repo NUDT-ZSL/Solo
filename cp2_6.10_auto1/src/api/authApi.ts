@@ -1,38 +1,33 @@
-import { httpClient, ApiResponse } from './client';
+import { httpClient } from './client';
 
-export interface User {
+export interface UserInfo {
   id: string;
   username: string;
-  email?: string;
-  createdAt?: string;
 }
 
-export interface LoginRequest {
-  username: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  username: string;
-  email: string;
-  password: string;
-}
-
-export interface AuthResponse {
+export interface AuthResult {
   token: string;
-  user: User;
+  user: UserInfo;
 }
 
 export const authApi = {
-  register: (data: RegisterRequest) => {
-    return httpClient.post<AuthResponse>('/auth/register', data);
+  register: (username: string, password: string) => {
+    return httpClient.post<AuthResult>('/auth/register', { username, password });
   },
 
-  login: (data: LoginRequest) => {
-    return httpClient.post<AuthResponse>('/auth/login', data);
+  login: (username: string, password: string) => {
+    return httpClient.post<AuthResult>('/auth/login', { username, password });
   },
 
-  getCurrentUser: () => {
-    return httpClient.get<User>('/auth/me');
+  getMe: () => {
+    return httpClient.get<UserInfo>('/auth/me');
+  },
+
+  logout: () => {
+    return httpClient.post<void>('/auth/logout');
+  },
+
+  getServerTime: () => {
+    return httpClient.get<{ serverTime: number }>('/auth/time');
   },
 };

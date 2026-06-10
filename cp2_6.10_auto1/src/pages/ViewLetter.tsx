@@ -1,97 +1,162 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
-import { renderMarkdown } from '@/utils/markdown';
-import { emotionNames, emotionColors } from '@/utils/emotion';
-import { playUnlockSound } from '@/utils/audio';
-import type { Letter } from '../../shared/types';
+import { letterApi, type LetterDetail } from '../api/letterApi';
+import { authApi } from '../api/authApi';
+import Envelope from '../components/Envelope';
+import { Countdown } from '../components/Countdown';
+import GoldParticles from '../components/GoldParticles';
+import { emotionNames, emotionColors } from '../utils/emotion';
+import { renderMarkdown } from '../utils/markdown';
+import { playUnlockSound } from '../utils/audio';
+import styles from './ViewLetter.module.css';
 
 export default function ViewLetter() {
   const { id } = useParams<{ id: string }>();
-  const { token } = useAuthStore();
-  const [letter, setLetter] = useState<Letter | null>(null);
+  const [letter, setLetter] = useState<LetterDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [showContent, setShowContent] = useState(false);
   const [hasPlayed, setHasPlayed] = useState(false);
 
-  useEffect(() => {
-    const fetchLetter = async () => {
-      if (!token || !id) return;
-      try {
-        const res = await fetch(`/api/letters/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setLetter(data);
-          if (data.isUnlocked && !hasPlayed) {
-            playUnlockSound();
-            setHasPlayed(true);
-          }
-        }
-      } finally {
-        setLoading(false);
+  const fetchLetter = useCallback(async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      const data = await letterApi.getPublicLetter(id);
+      setLetter(data);
+      if (data.isUnlocked) {
+        setShowContent(true);
       }
-    };
-    fetchLetter();
-  }, [id, token, hasPlayed]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void fetchLetter();
+  }, [fetchLetter]);
+
+  const syncServerTime = async (): Promise<number> => {
+    const data = await authApi.getServerTime();
+    return data.serverTime;
+  };
+
+  const handleUnlock = () => {
+    if (isUnlocking || showContent) return;
+    setIsUnlocking(true);
+    if (!hasPlayed) {
+      try {
+        playUnlockSound();
+      } catch {
+        // ignore audio errors
+      }
+      setHasPlayed(true);
+    }
+    setTimeout(() => {
+      setShowContent(true);
+      setIsUnlocking(false);
+    }, 2000);
+  };
+
+  const handleCountdownComplete = () => {
+    if (letter && !letter.isUnlocked) {
+      handleUnlock();
+    }
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-[var(--color-text-muted)]">加载中...</div>
+      <div className={styles.page}>
+        <div className={styles.loading}>加载中...</div>
       </div>
     );
   }
 
-  if (!letter) {
+  if (error || !letter) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-16 text-center">
-        <div className="glass-card-strong p-12">
-          <p className="text-[var(--color-text-secondary)] mb-6">信件不存在或你没有权限查看</p>
-          <Link to="/dashboard" className="text-[var(--color-primary)] hover:underline">
-            返回个人面板
-          </Link>
+      <div className={styles.page}>
+        <div className={styles.errorCard}>
+          <div className={styles.errorIcon}>💌</div>
+          <h2 className={styles.errorTitle}>找不到这封信</h2>
+          <p className={styles.errorText}>{error || '信件不存在'}</p>
+          <Link to="/" className={styles.homeBtn}>返回首页</Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="glass-card-strong p-8">
-        <div className="mb-6 pb-6 border-b border-[var(--color-border)]">
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <span
-              className="px-3 py-1 rounded-full text-sm font-medium text-white"
-              style={{ backgroundColor: emotionColors[letter.emotion] }}
+    <div className={styles.page}>
+      <GoldParticles active={isUnlocking} />
+
+      {!showContent ? (
+        <div className={styles.envelopeSection}>
+          <div className={styles.envelopeWrapper}>
+            <Envelope
+              emotion={letter.emotion}
+              isUnlocked={isUnlocking}
+              showHourglass
+              className={styles.envelope}
+            />
+          </div>
+
+          <div className={styles.infoSection}>
+            <div
+              className={styles.emotionBadge}
+              style={{ backgroundColor: emotionColors[letter.emotion] + '20', color: emotionColors[letter.emotion] }}
             >
               {emotionNames[letter.emotion]}
-            </span>
-            <span className="text-sm text-[var(--color-text-muted)]">
-              {new Date(letter.createdAt).toLocaleString('zh-CN')} 封存
-            </span>
+            </div>
+            <h1 className={styles.letterTitle}>{letter.title}</h1>
+            <p className={styles.recipient}>致 {letter.recipientEmail}</p>
           </div>
-          <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-family-serif)' }}>
-            {letter.title}
-          </h1>
-        </div>
 
-        {letter.isUnlocked ? (
-          <div
-            className="prose prose-lg max-w-none"
-            style={{ fontFamily: 'var(--font-family-serif)' }}
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(letter.content) }}
-          />
-        ) : (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🔒</div>
-            <p className="text-[var(--color-text-secondary)] mb-2">这封信还在时光中封存</p>
-            <p className="text-[var(--color-primary-dark)] font-medium">
-              解锁时间：{new Date(letter.unlockAt).toLocaleString('zh-CN')}
-            </p>
+          <div className={styles.countdownSection}>
+            <p className={styles.countdownLabel}>距离解锁还有</p>
+            <Countdown
+              targetTime={letter.unlockAt}
+              syncServerTime={syncServerTime}
+              syncInterval={5000}
+              onComplete={handleCountdownComplete}
+              className={styles.countdown}
+            />
           </div>
-        )}
-      </div>
+
+          <p className={styles.hint}>
+            时光正在缓缓流淌，请耐心等待...
+          </p>
+        </div>
+      ) : (
+        <div className={styles.contentSection}>
+          <div className={styles.contentCard}>
+            <div className={styles.contentHeader}>
+              <div
+                className={styles.emotionBadge}
+                style={{ backgroundColor: emotionColors[letter.emotion] + '20', color: emotionColors[letter.emotion] }}
+              >
+                {emotionNames[letter.emotion]}
+              </div>
+              <h1 className={styles.contentTitle}>{letter.title}</h1>
+              <p className={styles.contentMeta}>
+                <span>收件人：{letter.recipientEmail}</span>
+                <span>封存于 {new Date(letter.createdAt).toLocaleDateString('zh-CN')}</span>
+              </p>
+            </div>
+
+            <div
+              className={styles.contentBody}
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(letter.content || '') }}
+            />
+
+            <div className={styles.contentFooter}>
+              <Link to="/" className={styles.backBtn}>← 回到首页</Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

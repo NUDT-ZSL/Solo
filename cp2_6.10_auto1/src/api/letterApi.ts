@@ -1,42 +1,81 @@
-import { httpClient, ApiResponse } from './client';
+import { httpClient } from './client';
+import type { Emotion } from '../../shared/types';
 
-export interface Letter {
-  id: string;
+export interface CreateLetterRequest {
+  title: string;
+  recipientEmail: string;
   content: string;
-  emotion: 'joy' | 'calm' | 'hope' | 'nostalgia';
-  unlockTime: string;
-  createdAt: string;
-  userId: string;
-  isUnlocked?: boolean;
+  emotion: Emotion;
+  unlockAt: number;
+}
+
+export interface CreateLetterResult {
+  id: string;
+  title: string;
+  emotion: Emotion;
+  unlockAt: number;
+  createdAt: number;
+  shareUrl: string;
+}
+
+export interface LetterDetail {
+  id: string;
+  title: string;
+  recipientEmail: string;
+  content?: string;
+  emotion: Emotion;
+  unlockAt: number;
+  createdAt: number;
+  isUnlocked: boolean;
+}
+
+export interface LetterListItem {
+  id: string;
+  title: string;
+  recipientEmail: string;
+  emotion: Emotion;
+  unlockAt: number;
+  createdAt: number;
+  isUnlocked: boolean;
+  status: 'sent' | 'unlocked' | 'expired';
+}
+
+export interface LetterListResult {
+  items: LetterListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface UserStats {
-  totalLetters: number;
-  unlockedLetters: number;
-  pendingLetters: number;
-}
-
-export interface CreateLetterRequest {
-  content: string;
-  emotion: Letter['emotion'];
-  unlockTime: string;
+  total: number;
+  unlocked: number;
+  locked: number;
 }
 
 export const letterApi = {
   createLetter: (data: CreateLetterRequest) => {
-    return httpClient.post<Letter>('/letters', data);
+    return httpClient.post<CreateLetterResult>('/letters', data);
+  },
+
+  getPublicLetter: (id: string) => {
+    return httpClient.get<LetterDetail>(`/letters/public/${id}`);
   },
 
   getLetter: (id: string) => {
-    return httpClient.get<Letter>(`/letters/${id}`);
+    return httpClient.get<LetterDetail>(`/letters/${id}`);
   },
 
-  getServerTime: () => {
-    return httpClient.get<{ serverTime: string }>('/server/time');
+  deleteLetter: (id: string) => {
+    return httpClient.delete<void>(`/letters/${id}`);
   },
 
-  getUserLetters: () => {
-    return httpClient.get<Letter[]>('/users/letters');
+  getUserLetters: (page = 1, pageSize = 20) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return httpClient.get<LetterListResult>(`/users/letters?${params.toString()}`);
   },
 
   getUserStats: () => {

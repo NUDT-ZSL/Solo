@@ -1,65 +1,100 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { authApi } from '../api/authApi';
-
-interface User {
-  id: string;
-  username: string;
-  email?: string;
-  createdAt?: string;
-}
+import { authApi, type UserInfo, type AuthResult } from '../api/authApi';
 
 interface AuthState {
   token: string | null;
-  user: User | null;
-  isAuthenticated: boolean;
+  user: UserInfo | null;
+  isLoading: boolean;
+
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
-  checkAuth: () => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<boolean>;
+  setAuth: (result: AuthResult) => void;
+  clearAuth: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
+export const useAuthStore = create<AuthState>((set) => ({
+  token: localStorage.getItem('auth_token'),
+  user: null,
+  isLoading: false,
+
+  setAuth: (result: AuthResult) => {
+    localStorage.setItem('auth_token', result.token);
+    set({
+      token: result.token,
+      user: result.user,
+      isLoading: false,
+    });
+  },
+
+  clearAuth: () => {
+    localStorage.removeItem('auth_token');
+    set({
       token: null,
       user: null,
-      isAuthenticated: false,
+      isLoading: false,
+    });
+  },
 
-      login: async (username: string, password: string) => {
-        const response = await authApi.login({ username, password });
-        const { token, user } = response.data;
-        set({ token, user, isAuthenticated: true });
-      },
-
-      register: async (username: string, email: string, password: string) => {
-        const response = await authApi.register({ username, email, password });
-        const { token, user } = response.data;
-        set({ token, user, isAuthenticated: true });
-      },
-
-      logout: () => {
-        set({ token: null, user: null, isAuthenticated: false });
-        localStorage.removeItem('auth-storage');
-      },
-
-      checkAuth: async () => {
-        const token = useAuthStore.getState().token;
-        if (!token) {
-          set({ isAuthenticated: false });
-          return;
-        }
-        try {
-          const response = await authApi.getCurrentUser();
-          set({ user: response.data, isAuthenticated: true });
-        } catch {
-          set({ token: null, user: null, isAuthenticated: false });
-        }
-      },
-    }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({ token: state.token, user: state.user, isAuthenticated: state.isAuthenticated }),
+  login: async (username: string, password: string) => {
+    set({ isLoading: true });
+    try {
+      const result = await authApi.login(username, password);
+      localStorage.setItem('auth_token', result.token);
+      set({
+        token: result.token,
+        user: result.user,
+        isLoading: false,
+      });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
     }
-  )
-);
+  },
+
+  register: async (username: string, password: string) => {
+    set({ isLoading: true });
+    try {
+      const result = await authApi.register(username, password);
+      localStorage.setItem('auth_token', result.token);
+      set({
+        token: result.token,
+        user: result.user,
+        isLoading: false,
+      });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
+    }
+  },
+
+  logout: async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('auth_token');
+    set({ token: null, user: null, isLoading: false });
+  },
+
+  checkAuth: async (): Promise<boolean> => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      set({ token: null, user: null });
+      return false;
+    }
+
+    set({ isLoading: true });
+    try {
+      const user = await authApi.getMe();
+      set({ token, user, isLoading: false });
+      return true;
+    } catch {
+      localStorage.removeItem('auth_token');
+      set({ token: null, user: null, isLoading: false });
+      return false;
+    }
+  },
+}));
