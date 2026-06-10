@@ -36,54 +36,102 @@ const BOARD_BORDER_WIDTH = 1.5;
 const PIECE_DIAMETER = 28;
 const PIECE_GLOW_BLUR = 6;
 
-const DESKTOP_CELL_SIZE = 80;
-const MOBILE_CELL_SIZE = 60;
-const MOBILE_BREAKPOINT = 768;
+const MIN_CELL_SIZE = 50;
+const MAX_CELL_SIZE = 80;
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private game: Game;
-  private cellSize: number = DESKTOP_CELL_SIZE;
+  private cellSize: number = 80;
   private boardPixelSize: number = 0;
+  private currentLayout: 'horizontal' | 'vertical' = 'horizontal';
   private offscreenCanvas: OffscreenCanvas;
   private offscreenCtx: OffscreenCanvasRenderingContext2D;
   private hoveredCell: { x: number; y: number } | null = null;
+  private maskCanvasCache: HTMLCanvasElement | null = null;
+  private frameCount: number = 0;
+  private lastFpsUpdate: number = 0;
 
   constructor(canvas: HTMLCanvasElement, game: Game) {
     this.canvas = canvas;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Failed to get canvas context');
     this.ctx = ctx;
     this.game = game;
 
     this.offscreenCanvas = new OffscreenCanvas(1, 1);
-    const offCtx = this.offscreenCanvas.getContext('2d');
+    const offCtx = this.offscreenCanvas.getContext('2d', { alpha: false });
     if (!offCtx) throw new Error('Failed to get offscreen context');
     this.offscreenCtx = offCtx;
 
     this.updateCellSize();
     this.resize();
-    window.addEventListener('resize', () => {
-      this.updateCellSize();
-      this.resize();
-    });
+    window.addEventListener('resize', this.handleResize.bind(this));
+  }
+
+  private handleResize(): void {
+    this.updateCellSize();
+    this.resize();
+  }
+
+  private calculateResponsiveCellSize(): { cellSize: number; layout: 'horizontal' | 'vertical' } {
+    const screenWidth = window.innerWidth;
+    const infoPanelWidth = 240;
+    const gap = 24;
+    const boardSize = this.game.getBoardSize();
+
+    if (screenWidth >= 768) {
+      const availableWidth = screenWidth - infoPanelWidth - gap * 3 - 48;
+      const cellSizeByWidth = Math.floor(availableWidth / boardSize);
+
+      const availableHeight = window.innerHeight - 48;
+      const cellSizeByHeight = Math.floor(availableHeight / boardSize);
+
+      let cellSize = Math.min(cellSizeByWidth, cellSizeByHeight, MAX_CELL_SIZE);
+      cellSize = Math.max(cellSize, MIN_CELL_SIZE);
+
+      cellSize = Math.round(cellSize / 5) * 5;
+
+      return { cellSize, layout: 'horizontal' };
+    } else {
+      const availableWidth = Math.min(screenWidth - 32, 360);
+      const cellSize = Math.floor(availableWidth / boardSize);
+      const clampedSize = Math.max(Math.min(cellSize, 60), MIN_CELL_SIZE);
+      return { cellSize: clampedSize, layout: 'vertical' };
+    }
   }
 
   private updateCellSize(): void {
-    this.cellSize = window.innerWidth < MOBILE_BREAKPOINT
-      ? MOBILE_CELL_SIZE
-      : DESKTOP_CELL_SIZE;
+    const { cellSize, layout } = this.calculateResponsiveCellSize();
+    this.cellSize = cellSize;
+    this.currentLayout = layout;
+    this.updateInfoPanelLayout();
+  }
+
+  private updateInfoPanelLayout(): void {
+    const container = document.querySelector('.game-container') as HTMLElement;
+    if (!container) return;
+
+    if (this.currentLayout === 'horizontal') {
+      container.style.flexDirection = 'row';
+      container.style.alignItems = 'flex-start';
+    } else {
+      container.style.flexDirection = 'column';
+      container.style.alignItems = 'center';
+    }
   }
 
   private resize(): void {
     const boardSize = this.game.getBoardSize();
     this.boardPixelSize = boardSize * this.cellSize;
 
-    this.canvas.width = this.boardPixelSize;
-    this.canvas.height = this.boardPixelSize;
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = this.boardPixelSize * dpr;
+    this.canvas.height = this.boardPixelSize * dpr;
     this.canvas.style.width = `${this.boardPixelSize}px`;
     this.canvas.style.height = `${this.boardPixelSize}px`;
+    this.ctx.scale(dpr, dpr);
 
     this.offscreenCanvas.width = this.boardPixelSize;
     this.offscreenCanvas.height = this.boardPixelSize;
@@ -109,8 +157,12 @@ export class Renderer {
         ctx.lineWidth = BOARD_BORDER_WIDTH;
         ctx.shadowColor = BOARD_BORDER_COLOR;
         ctx.shadowBlur = 4;
-        ctx.strokeRect(px + BOARD_BORDER_WIDTH / 2, py + BOARD_BORDER_WIDTH / 2,
-          this.cellSize - BOARD_BORDER_WIDTH, this.cellSize - BOARD_BORDER_WIDTH);
+        ctx.strokeRect(
+          px + BOARD_BORDER_WIDTH / 2,
+          py + BOARD_BORDER_WIDTH / 2,
+          this.cellSize - BOARD_BORDER_WIDTH,
+          this.cellSize - BOARD_BORDER_WIDTH
+        );
         ctx.shadowBlur = 0;
       }
     }
@@ -132,12 +184,14 @@ export class Renderer {
 
   render(): void {
     const state = this.game.getState();
+    this.frameCount++;
 
     this.ctx.clearRect(0, 0, this.boardPixelSize, this.boardPixelSize);
     this.ctx.drawImage(this.offscreenCanvas, 0, 0);
 
     this.renderTerrain(state.board);
-    this.renderHoverEffect();
+    this.renderGridLines(state.board);
+    this.renderHoverEffect(state);
     this.renderRipples(state.ripples);
     this.renderPieces(state);
     this.renderAnimations(state.animations);
@@ -152,7 +206,7 @@ export class Renderer {
         const px = x * this.cellSize;
         const py = y * this.cellSize;
 
-        if (cell.terrainAnimProgress < 1) {
+        if (cell.terrainAnimDelay === 0 && cell.terrainAnimProgress < 1) {
           this.renderDissolveTerrain(cell, px, py);
         } else {
           const color = this.getTerrainColor(cell.terrain);
@@ -161,6 +215,10 @@ export class Renderer {
         }
       }
     }
+  }
+
+  private renderGridLines(board: Cell[][]): void {
+    const ctx = this.ctx;
 
     ctx.strokeStyle = BOARD_BORDER_COLOR;
     ctx.lineWidth = BOARD_BORDER_WIDTH;
@@ -182,6 +240,17 @@ export class Renderer {
     ctx.shadowBlur = 0;
   }
 
+  private getMaskCanvas(size: number): HTMLCanvasElement {
+    if (!this.maskCanvasCache ||
+        this.maskCanvasCache.width !== size ||
+        this.maskCanvasCache.height !== size) {
+      this.maskCanvasCache = document.createElement('canvas');
+      this.maskCanvasCache.width = size;
+      this.maskCanvasCache.height = size;
+    }
+    return this.maskCanvasCache;
+  }
+
   private renderDissolveTerrain(cell: Cell, px: number, py: number): void {
     const ctx = this.ctx;
     const progress = cell.terrainAnimProgress;
@@ -199,14 +268,14 @@ export class Renderer {
     ctx.fillStyle = fromColor;
     ctx.fillRect(px + 1, py + 1, size, size);
 
-    ctx.fillStyle = toColor;
-    ctx.globalAlpha = progress;
-
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = size;
-    maskCanvas.height = size;
+    const maskCanvas = this.getMaskCanvas(size);
     const maskCtx = maskCanvas.getContext('2d');
-    if (!maskCtx) return;
+    if (!maskCtx) {
+      ctx.restore();
+      return;
+    }
+
+    maskCtx.clearRect(0, 0, size, size);
 
     const gradient = maskCtx.createLinearGradient(0, 0, size, size);
     const threshold = progress * 1.2 - 0.1;
@@ -218,13 +287,16 @@ export class Renderer {
     maskCtx.fillStyle = gradient;
     maskCtx.fillRect(0, 0, size, size);
 
-    for (let i = 0; i < 50; i++) {
-      const rx = Math.random() * size;
-      const ry = Math.random() * size;
-      const rSize = 3 + Math.random() * 8;
+    const seed = cell.x * 100 + cell.y;
+    for (let i = 0; i < 40; i++) {
+      const pseudoRandom = ((seed * 9301 + i * 49297) % 233280) / 233280;
+      const pseudoRandom2 = ((seed * 7919 + i * 6271) % 233280) / 233280;
+      const rx = pseudoRandom * size;
+      const ry = pseudoRandom2 * size;
+      const rSize = 3 + pseudoRandom * 8;
       const noiseProgress = (progress * 1.5) - (ry / size) * 0.5;
-      if (noiseProgress > Math.random()) {
-        maskCtx.fillStyle = `rgba(0, 0, 0, ${0.3 + Math.random() * 0.7})`;
+      if (noiseProgress > pseudoRandom2) {
+        maskCtx.fillStyle = `rgba(0, 0, 0, ${0.3 + pseudoRandom * 0.7})`;
         maskCtx.beginPath();
         maskCtx.arc(rx, ry, rSize, 0, Math.PI * 2);
         maskCtx.fill();
@@ -234,6 +306,7 @@ export class Renderer {
     ctx.globalCompositeOperation = 'source-over';
     ctx.drawImage(maskCanvas, px + 1, py + 1);
     ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = toColor;
     ctx.fillRect(px + 1, py + 1, size, size);
 
     ctx.restore();
@@ -249,13 +322,12 @@ export class Renderer {
     }
   }
 
-  private renderHoverEffect(): void {
+  private renderHoverEffect(state: GameState): void {
     if (!this.hoveredCell) return;
 
-    const state = this.game.getState();
     const cell = this.game.getCellAt(this.hoveredCell.x, this.hoveredCell.y);
     if (!cell || cell.piece !== Player.NONE) return;
-    if (!state.isStarted || state.isGameOver) return;
+    if (!state.isStarted || state.isGameOver || state.isAnimating) return;
 
     const ctx = this.ctx;
     const px = this.hoveredCell.x * this.cellSize;
@@ -322,7 +394,7 @@ export class Renderer {
     const animatingCells = new Set<string>();
 
     for (const anim of state.animations) {
-      if (anim.type === 'drop' || anim.type === 'knockback') {
+      if (anim.type === 'drop' || anim.type === 'knockback' || anim.type === 'eliminate') {
         animatingCells.add(`${anim.x},${anim.y}`);
       }
     }
@@ -346,6 +418,8 @@ export class Renderer {
         this.renderDropAnimation(ctx, anim);
       } else if (anim.type === 'knockback') {
         this.renderKnockbackAnimation(ctx, anim);
+      } else if (anim.type === 'eliminate') {
+        this.renderEliminateAnimation(ctx, anim);
       }
     }
   }
@@ -357,17 +431,18 @@ export class Renderer {
     const currentY = anim.startY + (anim.endY - anim.startY) * easeProgress;
     const alpha = Math.min(1, progress * 2);
 
+    const scale = 0.8 + easeProgress * 0.2;
+
     const cell = this.game.getCellAt(anim.endX, anim.endY);
     if (cell && cell.piece === anim.player) {
       ctx.save();
       ctx.globalAlpha = alpha;
-      this.drawPieceAtPixel(
-        ctx,
+      ctx.translate(
         (anim.endX + 0.5) * this.cellSize,
-        (currentY + 0.5) * this.cellSize,
-        anim.player,
-        alpha
+        (currentY + 0.5) * this.cellSize
       );
+      ctx.scale(scale, scale);
+      this.drawPieceAtPixel(ctx, 0, 0, anim.player, alpha);
       ctx.restore();
     }
   }
@@ -379,13 +454,15 @@ export class Renderer {
     const currentX = anim.startX + (anim.endX - anim.startX) * easeProgress;
     const currentY = anim.startY + (anim.endY - anim.startY) * easeProgress;
 
-    const alpha = progress > 0.8 ? 1 - (progress - 0.8) / 0.2 : 1;
-
     const targetCell = this.game.getCellAt(anim.endX, anim.endY);
     const isEliminated = !targetCell || targetCell.piece !== anim.player;
 
+    const alpha = isEliminated && progress > 0.7
+      ? 1 - (progress - 0.7) / 0.3
+      : 1;
+
     ctx.save();
-    ctx.globalAlpha = isEliminated ? alpha : 1;
+    ctx.globalAlpha = alpha;
 
     this.drawPieceAtPixel(
       ctx,
@@ -395,21 +472,68 @@ export class Renderer {
       1
     );
 
-    if (isEliminated && progress > 0.5) {
-      ctx.globalAlpha = (1 - progress) * 2;
-      const particleCount = 6;
+    ctx.restore();
+  }
+
+  private renderEliminateAnimation(ctx: CanvasRenderingContext2D, anim: PieceAnimation): void {
+    const progress = anim.progress;
+    const easeProgress = progress;
+
+    const currentX = anim.startX + (anim.endX - anim.startX) * easeProgress;
+    const currentY = anim.startY + (anim.endY - anim.startY) * easeProgress;
+
+    const alpha = 1 - progress;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const scale = 1 + progress * 0.3;
+    const rotation = progress * Math.PI * 0.5;
+
+    ctx.translate(
+      (currentX + 0.5) * this.cellSize,
+      (currentY + 0.5) * this.cellSize
+    );
+    ctx.rotate(rotation);
+    ctx.scale(scale, scale);
+
+    const colors = PLAYER_COLORS[anim.player];
+    ctx.strokeStyle = colors.inner;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = alpha * 0.5;
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + rotation;
+      const dist = progress * this.cellSize * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * dist * 0.5, Math.sin(angle) * dist * 0.5);
+      ctx.lineTo(Math.cos(angle) * dist, Math.sin(angle) * dist);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = alpha;
+    this.drawPieceAtPixel(ctx, 0, 0, anim.player, 1);
+
+    if (progress > 0.3) {
+      ctx.globalAlpha = (1 - progress) * 1.5;
+      const particleCount = 8;
       for (let i = 0; i < particleCount; i++) {
         const angle = (i / particleCount) * Math.PI * 2;
-        const dist = (progress - 0.5) * this.cellSize * 1.5;
-        const px = (currentX + 0.5) * this.cellSize + Math.cos(angle) * dist;
-        const py = (currentY + 0.5) * this.cellSize + Math.sin(angle) * dist;
+        const dist = (progress - 0.3) * this.cellSize * 2;
+        const px = Math.cos(angle) * dist;
+        const py = Math.sin(angle) * dist;
 
-        const colors = PLAYER_COLORS[anim.player];
         ctx.fillStyle = colors.inner;
         ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.arc(px, py, 4 * (1 - progress), 0, Math.PI * 2);
         ctx.fill();
       }
+
+      const flashAlpha = (1 - progress) * 0.5;
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, PIECE_DIAMETER * (0.5 + progress), 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.restore();
@@ -438,13 +562,15 @@ export class Renderer {
 
     const colors = PLAYER_COLORS[player];
     const radius = PIECE_DIAMETER / 2;
+    const scale = Math.min(1, this.cellSize / 80);
+    const scaledRadius = radius * scale;
 
     ctx.save();
 
     ctx.shadowColor = colors.inner;
-    ctx.shadowBlur = PIECE_GLOW_BLUR;
+    ctx.shadowBlur = PIECE_GLOW_BLUR * scale;
 
-    const gradient = ctx.createRadialGradient(px, py, 0, px, py, radius);
+    const gradient = ctx.createRadialGradient(px, py, 0, px, py, scaledRadius);
     gradient.addColorStop(0, colors.inner);
     gradient.addColorStop(0.7, colors.outer);
     gradient.addColorStop(1, colors.outer);
@@ -452,14 +578,20 @@ export class Renderer {
     ctx.fillStyle = gradient;
     ctx.globalAlpha = alpha;
     ctx.beginPath();
-    ctx.arc(px, py, radius, 0, Math.PI * 2);
+    ctx.arc(px, py, scaledRadius, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.shadowBlur = 0;
     ctx.globalAlpha = alpha * 0.6;
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
-    ctx.arc(px - radius * 0.3, py - radius * 0.3, radius * 0.25, 0, Math.PI * 2);
+    ctx.arc(
+      px - scaledRadius * 0.3,
+      py - scaledRadius * 0.3,
+      scaledRadius * 0.25,
+      0,
+      Math.PI * 2
+    );
     ctx.fill();
 
     ctx.restore();
@@ -467,5 +599,16 @@ export class Renderer {
 
   getCellSize(): number {
     return this.cellSize;
+  }
+
+  getLayout(): 'horizontal' | 'vertical' {
+    return this.currentLayout;
+  }
+
+  updateFpsDisplay(currentTime: number): void {
+    if (currentTime - this.lastFpsUpdate >= 1000) {
+      this.lastFpsUpdate = currentTime;
+      this.frameCount = 0;
+    }
   }
 }
