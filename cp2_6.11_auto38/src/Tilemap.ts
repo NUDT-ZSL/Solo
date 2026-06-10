@@ -18,6 +18,7 @@ export interface Position {
 export interface Rune {
   position: Position;
   activated: boolean;
+  startTime: number;
   progress: number;
 }
 
@@ -47,49 +48,25 @@ export class Tilemap {
     for (let y = 0; y < GRID_SIZE; y++) {
       this.grid[y] = [];
       for (let x = 0; x < GRID_SIZE; x++) {
-        this.grid[y][x] = TileType.WALL;
+        this.grid[y][x] = TileType.PASSAGE;
       }
     }
 
     const totalCells = GRID_SIZE * GRID_SIZE;
     const wallCount = Math.floor(totalCells * WALL_RATIO);
-    let passageCount = totalCells - wallCount;
 
-    const startX = Math.floor(Math.random() * GRID_SIZE);
-    const startY = Math.floor(Math.random() * GRID_SIZE);
-    this.grid[startY][startX] = TileType.PASSAGE;
-    passageCount--;
-
-    const frontier: Position[] = this.getNeighbors(startX, startY)
-      .filter(p => this.grid[p.y][p.x] === TileType.WALL);
-
-    while (passageCount > 0 && frontier.length > 0) {
-      const idx = Math.floor(Math.random() * frontier.length);
-      const current = frontier.splice(idx, 1)[0];
-
-      const passageNeighbors = this.getNeighbors(current.x, current.y)
-        .filter(p => this.grid[p.y][p.x] === TileType.PASSAGE);
-
-      if (passageNeighbors.length >= 1) {
-        this.grid[current.y][current.x] = TileType.PASSAGE;
-        passageCount--;
-
-        const newFrontier = this.getNeighbors(current.x, current.y)
-          .filter(p => this.grid[p.y][p.x] === TileType.WALL && 
-            !frontier.some(f => f.x === p.x && f.y === p.y));
-        frontier.push(...newFrontier);
+    const allPositions: Position[] = [];
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        allPositions.push({ x, y });
       }
     }
 
-    while (passageCount > 0) {
-      for (let y = 0; y < GRID_SIZE && passageCount > 0; y++) {
-        for (let x = 0; x < GRID_SIZE && passageCount > 0; x++) {
-          if (this.grid[y][x] === TileType.WALL) {
-            this.grid[y][x] = TileType.PASSAGE;
-            passageCount--;
-          }
-        }
-      }
+    this.shuffleArray(allPositions);
+
+    for (let i = 0; i < wallCount && i < allPositions.length; i++) {
+      const pos = allPositions[i];
+      this.grid[pos.y][pos.x] = TileType.WALL;
     }
 
     const passages: Position[] = [];
@@ -101,22 +78,63 @@ export class Tilemap {
       }
     }
 
-    for (let i = 0; i < RUNE_COUNT && passages.length > 0; i++) {
-      const idx = Math.floor(Math.random() * passages.length);
-      const pos = passages.splice(idx, 1)[0];
+    this.shuffleArray(passages);
+
+    for (let i = 0; i < RUNE_COUNT && i < passages.length; i++) {
+      const pos = passages[i];
       this.runes.push({
         position: pos,
         activated: false,
+        startTime: 0,
         progress: 0
       });
     }
 
-    this.portalPosition = { x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) };
-    if (this.grid[this.portalPosition.y][this.portalPosition.x] === TileType.WALL) {
-      this.grid[this.portalPosition.y][this.portalPosition.x] = TileType.PASSAGE;
+    const usedPositions = new Set(this.runes.map(r => `${r.position.x},${r.position.y}`));
+    const centerX = Math.floor(GRID_SIZE / 2);
+    const centerY = Math.floor(GRID_SIZE / 2);
+
+    const searchOrder: Position[] = [{ x: centerX, y: centerY }];
+    for (let d = 1; d < GRID_SIZE; d++) {
+      for (let dx = -d; dx <= d; dx++) {
+        for (let dy = -d; dy <= d; dy++) {
+          if (Math.abs(dx) === d || Math.abs(dy) === d) {
+            const nx = centerX + dx;
+            const ny = centerY + dy;
+            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+              searchOrder.push({ x: nx, y: ny });
+            }
+          }
+        }
+      }
+    }
+
+    for (const pos of searchOrder) {
+      const key = `${pos.x},${pos.y}`;
+      if (this.grid[pos.y][pos.x] === TileType.PASSAGE && !usedPositions.has(key)) {
+        this.portalPosition = { x: pos.x, y: pos.y };
+        break;
+      }
+    }
+
+    if (!this.portalPosition) {
+      for (const pos of searchOrder) {
+        if (!usedPositions.has(`${pos.x},${pos.y}`)) {
+          this.grid[pos.y][pos.x] = TileType.PASSAGE;
+          this.portalPosition = { x: pos.x, y: pos.y };
+          break;
+        }
+      }
     }
 
     this.generateWallCracks();
+  }
+
+  private shuffleArray<T>(array: T[]): void {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
   }
 
   private generateWallCracks(): void {
@@ -199,23 +217,35 @@ export class Tilemap {
     };
   }
 
-  public updateRuneProgress(runeIndex: number, deltaTime: number): boolean {
-    if (runeIndex < 0 || runeIndex >= this.runes.length) return false;
+  public startRuneRubbing(runeIndex: number, currentTime: number): void {
+    if (runeIndex < 0 || runeIndex >= this.runes.length) return;
     const rune = this.runes[runeIndex];
-    if (rune.activated) return false;
+    if (rune.activated) return;
+    rune.startTime = currentTime;
+    rune.progress = 0;
+  }
 
-    rune.progress += deltaTime;
-    if (rune.progress >= 1000) {
+  public updateRuneProgress(runeIndex: number, currentTime: number): { completed: boolean; progress: number } {
+    if (runeIndex < 0 || runeIndex >= this.runes.length) return { completed: false, progress: 0 };
+    const rune = this.runes[runeIndex];
+    if (rune.activated) return { completed: true, progress: 1000 };
+    if (rune.startTime === 0) return { completed: false, progress: 0 };
+
+    const elapsed = currentTime - rune.startTime;
+    rune.progress = Math.min(elapsed, 1000);
+
+    if (elapsed >= 1000) {
       rune.activated = true;
       rune.progress = 1000;
-      return true;
+      return { completed: true, progress: 1000 };
     }
-    return false;
+    return { completed: false, progress: rune.progress };
   }
 
   public resetRuneProgress(runeIndex: number): void {
     if (runeIndex >= 0 && runeIndex < this.runes.length) {
       if (!this.runes[runeIndex].activated) {
+        this.runes[runeIndex].startTime = 0;
         this.runes[runeIndex].progress = 0;
       }
     }

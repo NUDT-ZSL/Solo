@@ -133,7 +133,15 @@ export class GameEngine {
     if (e.code === 'ArrowRight' || e.code === 'KeyD') this.input.right = true;
     if (e.code === 'Space') {
       e.preventDefault();
-      this.input.space = true;
+      if (!this.input.space) {
+        this.input.space = true;
+        const result = this.tilemap.checkCollision(this.state.playerPos);
+        if (result.onRune && result.runeIndex >= 0 && !this.state.rubbing) {
+          this.state.rubbing = true;
+          this.state.currentRune = result.runeIndex;
+          this.tilemap.startRuneRubbing(result.runeIndex, performance.now());
+        }
+      }
     }
     if (e.code === 'KeyR' && this.state.victory) {
       this.restart();
@@ -202,7 +210,7 @@ export class GameEngine {
     this.updateInkSpread(deltaTime);
     this.updatePortal(deltaTime);
     this.updateTrail(currentTime);
-    this.updateRuneRubbing(deltaTime);
+    this.updateRuneRubbing(currentTime);
     this.updateHintText();
     this.checkVictoryCondition();
   }
@@ -333,16 +341,18 @@ export class GameEngine {
     this.state.trail = this.state.trail.filter(p => currentTime - p.timestamp < 1500);
   }
 
-  private updateRuneRubbing(deltaTime: number): void {
+  private updateRuneRubbing(currentTime: number): void {
     const result = this.tilemap.checkCollision(this.state.playerPos);
 
-    if (result.onRune && this.input.space && result.runeIndex >= 0) {
-      if (!this.state.rubbing) {
-        this.state.rubbing = true;
-        this.state.currentRune = result.runeIndex;
+    if (this.state.rubbing && this.state.currentRune >= 0) {
+      if (!result.onRune || !this.input.space) {
+        this.state.rubbing = false;
+        this.tilemap.resetRuneProgress(this.state.currentRune);
+        this.state.currentRune = -1;
+        return;
       }
 
-      const completed = this.tilemap.updateRuneProgress(this.state.currentRune, deltaTime);
+      const { completed } = this.tilemap.updateRuneProgress(this.state.currentRune, currentTime);
       
       if (this.state.inkSpread === null) {
         this.state.inkSpread = {
@@ -368,10 +378,6 @@ export class GameEngine {
         this.state.muralFragments.push(fragment);
         this.state.currentRune = -1;
       }
-    } else if (this.state.rubbing && (!result.onRune || !this.input.space)) {
-      this.state.rubbing = false;
-      this.tilemap.resetRuneProgress(this.state.currentRune);
-      this.state.currentRune = -1;
     }
   }
 

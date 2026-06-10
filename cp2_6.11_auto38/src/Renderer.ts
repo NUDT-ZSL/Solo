@@ -442,20 +442,44 @@ export class Renderer {
   }
 
   private drawMuralFragments(fragments: MuralFragment[], time: number): void {
-    const startX = 760;
-    const startY = 60;
     const size = 64;
     const gap = 12;
+    const padding = 20;
+    const panelWidth = size * 2 + gap + padding * 2;
+    const panelHeight = size * 3 + gap * 2 + padding * 2 + 25;
+    const startX = this.width - panelWidth - 20;
+    const startY = 60;
+    const contentX = startX + padding;
+    const contentY = startY + padding + 20;
+
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(26, 35, 58, 0.55)';
+    this.beginRoundedRect(startX, startY, panelWidth, panelHeight, 6);
+    this.ctx.fill();
+
+    this.ctx.strokeStyle = COLORS.GOLD;
+    this.ctx.lineWidth = 1;
+    this.beginRoundedRect(startX, startY, panelWidth, panelHeight, 6);
+    this.ctx.stroke();
+
+    this.ctx.fillStyle = 'rgba(210, 201, 182, 0.08)';
+    for (let i = 0; i < 50; i++) {
+      const dotX = startX + Math.random() * panelWidth;
+      const dotY = startY + Math.random() * panelHeight;
+      this.ctx.beginPath();
+      this.ctx.arc(dotX, dotY, 0.5 + Math.random() * 1, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
 
     this.ctx.fillStyle = COLORS.GOLD;
     this.ctx.font = '14px "Songti SC", "SimSun", serif';
-    this.ctx.fillText('壁画碎片', startX, startY - 10);
+    this.ctx.fillText('壁画碎片', startX + padding, startY + padding + 5);
 
     for (let i = 0; i < 6; i++) {
       const row = Math.floor(i / 2);
       const col = i % 2;
-      const x = startX + col * (size + gap);
-      const y = startY + row * (size + gap);
+      const x = contentX + col * (size + gap);
+      const y = contentY + row * (size + gap);
 
       this.ctx.save();
       this.ctx.fillStyle = COLORS.MURAL_BG;
@@ -479,6 +503,8 @@ export class Renderer {
 
       this.ctx.restore();
     }
+
+    this.ctx.restore();
   }
 
   private drawMuralFragment(fragment: MuralFragment, x: number, y: number, size: number, time: number): void {
