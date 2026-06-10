@@ -28,11 +28,13 @@ export class NoteManager {
   private hitCallbacks: HitCallback[] = [];
   private missCallbacks: MissCallback[] = [];
   private noteSize = 24;
-  private lastBeatTime = 0;
   private notePatternIndex = 0;
   private replayRecords: ReplayRecord[] = [];
   private isReplayMode = false;
   private replayIndex = 0;
+  private replayStartTime = 0;
+  private gameStartTime = 0;
+  private generatedNoteIds: Set<number> = new Set();
 
   setCanvasSize(width: number, height: number): void {
     this.canvasWidth = width;
@@ -56,7 +58,11 @@ export class NoteManager {
     return this.judgeLineX;
   }
 
-  spawnNote(shape: NoteShape, time: number): void {
+  getNoteSpeed(): number {
+    return this.noteSpeed;
+  }
+
+  spawnNote(shape: NoteShape, time: number): Note {
     const shapes: NoteShape[] = ['circle', 'triangle', 'diamond'];
     const actualShape = shape || shapes[Math.floor(Math.random() * shapes.length)];
 
@@ -75,33 +81,36 @@ export class NoteManager {
 
     this.notes.push(note);
     this.totalNotes++;
+    return note;
   }
 
-  spawnPatternedNote(time: number): void {
-    const patterns: NoteShape[][] = [
+  spawnPatternedNote(time: number, intensity: number = 1): void {
+    const basePatterns: NoteShape[][] = [
       ['circle'],
       ['triangle'],
       ['diamond'],
-      ['circle', 'triangle'],
       ['circle', 'diamond'],
-      ['triangle', 'diamond'],
+      ['triangle', 'circle'],
       ['circle', 'triangle', 'diamond']
     ];
 
-    const difficulty = Math.min(Math.floor(this.bpm / 60), patterns.length - 1);
-    const patternIndex = this.notePatternIndex % patterns.length;
-    const pattern = patterns[Math.min(patternIndex + difficulty, patterns.length - 1)];
+    const difficultyIdx = Math.min(Math.floor(this.bpm / 60) - 1, basePatterns.length - 1);
+    const patternIdx = this.notePatternIndex % (basePatterns.length - difficultyIdx);
+    const pattern = basePatterns[Math.min(patternIdx + difficultyIdx, basePatterns.length - 1)];
 
-    const yStep = (this.playAreaBottom - this.playAreaTop) / (pattern.length + 1);
+    const numNotes = Math.min(pattern.length, Math.ceil(1 + intensity * 2));
+    const selectedPattern = pattern.slice(0, numNotes);
 
-    pattern.forEach((shape, i) => {
-      const y = this.playAreaTop + yStep * (i + 1);
+    const yStep = (this.playAreaBottom - this.playAreaTop) / (selectedPattern.length + 1);
+
+    selectedPattern.forEach((shape, i) => {
+      const y = this.playAreaTop + yStep * (i + 1) + (Math.random() - 0.5) * 20;
       const note: Note = {
         id: this.nextNoteId++,
         shape,
         x: this.canvasWidth + this.noteSize,
         y,
-        speed: this.noteSpeed,
+        speed: this.noteSpeed * (0.9 + Math.random() * 0.2),
         color: NOTE_COLORS[shape],
         size: this.noteSize,
         spawnTime: time
@@ -129,16 +138,69 @@ export class NoteManager {
 
       if (!note.hit && !note.missed && !note.falling && note.x < this.judgeLineX - this.goodRange) {
         note.missed = true;
-      this.handleMiss(note);
+        this.handleMiss(note);
       }
 
       if (note.x < -this.noteSize * 2 || note.y > this.canvasHeight + this.noteSize) {
         this.notes.splice(i, 1);
       }
     }
+
+    if (this.isReplayMode) {
+      this.updateReplay(deltaTime);
+    }
+  }
+
+  private updateReplay(deltaTime: number): void {
+    const currentTime = (performance.now() - this.replayStartTime) / 1000;
+
+    while (this.replayIndex < this.replayRecords.length) {
+      const record = this.replayRecords[this.replayIndex];
+      const recordTime = (record.timestamp - this.gameStartTime) / 1000;
+
+      if (recordTime <= currentTime) {
+        if (record.hitResult && record.shape) {
+          this.simulateReplayHit(record.shape);
+        }
+        this.replayIndex++;
+      } else {
+        break;
+      }
+    }
+  }
+
+  private simulateReplayHit(shape: NoteShape): void {
+    let closestNote: Note | null = null;
+    let closestDistance = Infinity;
+
+    for (const note of this.notes) {
+      if (note.hit || note.missed || note.falling) continue;
+      if (note.shape !== shape) continue;
+
+      const distance = Math.abs(note.x - this.judgeLineX);
+      if (distance < this.goodRange * 1.5 && distance < closestDistance) {
+        closestNote = note;
+        closestDistance = distance;
+      }
+    }
+
+    if (closestNote) {
+      closestNote.hit = true;
+      let hitType: HitType = closestDistance <= this.perfectRange ? 'perfect' : 'good';
+
+      const result: HitResult = {
+        note: closestNote,
+        type: hitType,
+        position: { x: closestNote.x, y: closestNote.y }
+      };
+
+      this.hitCallbacks.forEach(cb => cb(result));
+    }
   }
 
   hitTest(shape?: NoteShape): HitResult | null {
+    if (this.isReplayMode) return null;
+
     let closestNote: Note | null = null;
     let closestDistance = Infinity;
 
@@ -177,13 +239,13 @@ export class NoteManager {
     this.hitNotes++;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
 
+    const comboMultiplier = this.combo >= 10 ? 1.5 : 1;
+
     if (type === 'perfect') {
       this.perfectNotes++;
-      const comboMultiplier = this.combo >= 10 ? 1.5 : 1;
       this.score += Math.floor(100 * comboMultiplier);
     } else {
       this.goodNotes++;
-      const comboMultiplier = this.combo >= 10 ? 1.5 : 1;
       this.score += Math.floor(50 * comboMultiplier);
     }
 
@@ -270,20 +332,30 @@ export class NoteManager {
     this.missedNotes = 0;
     this.nextNoteId = 0;
     this.notePatternIndex = 0;
-    this.lastBeatTime = 0;
+    this.isReplayMode = false;
+    this.replayIndex = 0;
+    this.generatedNoteIds.clear();
   }
 
   clearReplayRecords(): void {
     this.replayRecords = [];
+    this.gameStartTime = 0;
   }
 
   getReplayRecords(): ReplayRecord[] {
     return this.replayRecords;
   }
 
+  setGameStartTime(time: number): void {
+    this.gameStartTime = time;
+  }
+
   setReplayMode(enabled: boolean): void {
     this.isReplayMode = enabled;
     this.replayIndex = 0;
+    if (enabled) {
+      this.replayStartTime = performance.now();
+    }
   }
 
   isInCombo(): boolean {
@@ -292,5 +364,13 @@ export class NoteManager {
 
   isFullCombo(): boolean {
     return this.combo >= 20;
+  }
+
+  getPerfectRange(): number {
+    return this.perfectRange;
+  }
+
+  getGoodRange(): number {
+    return this.goodRange;
   }
 }

@@ -1,42 +1,66 @@
 import type { Track } from './types';
 
-type BeatCallback = (time: number) => void;
+type BeatCallback = (time: number, intensity: number) => void;
 
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private source: AudioBufferSourceNode | null = null;
   private gainNode: GainNode | null = null;
+  private lowpassFilter: BiquadFilterNode | null = null;
   private audioBuffer: AudioBuffer | null = null;
   private bpm = 120;
   private startTime = 0;
   private pausedTime = 0;
   private isPlaying = false;
   private beatCallbacks: BeatCallback[] = [];
-  private lastBeatTime = 0;
-  private beatInterval = 0.5;
-  private beatCount = 0;
   private currentTrack: Track | null = null;
   private soundEnabled = true;
+
+  private frequencyData: Uint8Array<ArrayBuffer> | null = null;
+  private energyHistory: number[] = [];
+  private historySize = 43;
+  private lastBeatDetectedTime = -1;
+  private minBeatInterval = 0.25;
+  private beatSensitivity = 1.3;
+  private detectedBeats: number[] = [];
+  private beatCount = 0;
+
+  private lastFrameLowEnergy = 0;
+  private energyDiffs: number[] = [];
+  private diffThreshold = 15;
 
   async loadTrack(track: Track): Promise<void> {
     this.currentTrack = track;
     this.bpm = track.bpm;
-    this.beatInterval = 60 / this.bpm;
-    this.lastBeatTime = 0;
+    this.minBeatInterval = 60 / (this.bpm * 2);
+    this.detectedBeats = [];
     this.beatCount = 0;
+    this.lastBeatDetectedTime = -1;
+    this.energyHistory = [];
 
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = 256;
+      this.analyser.fftSize = 2048;
+      this.analyser.smoothingTimeConstant = 0.6;
+
+      this.lowpassFilter = this.audioContext.createBiquadFilter();
+      this.lowpassFilter.type = 'lowpass';
+      this.lowpassFilter.frequency.value = 200;
+
       this.gainNode = this.audioContext.createGain();
       this.gainNode.gain.value = 0.3;
+
+      this.lowpassFilter.connect(this.analyser);
       this.analyser.connect(this.gainNode);
       this.gainNode.connect(this.audioContext.destination);
+
+      this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
     }
 
     this.audioBuffer = this.generateSyntheticTrack(track);
+    this.analyzeOfflineBPM(this.audioBuffer);
   }
 
   private generateSyntheticTrack(track: Track): AudioBuffer {
@@ -53,49 +77,77 @@ export class AudioAnalyzer {
 
     for (let i = 0; i < buffer.length; i++) {
       const time = i / sampleRate;
-      const beatTime = (time * beatFreq) % 1;
+      const beatPhase = (time * beatFreq) % 1;
 
-      const envelope = Math.exp(-beatTime * 8);
+      const kickEnv = Math.exp(-beatPhase * 12) * 0.8;
+      const kickFreq = 80 + beatPhase * -40;
+      const kick = Math.sin(2 * Math.PI * kickFreq * time) * kickEnv;
 
-      let sample = 0;
+      const snareEnv = Math.exp(-((beatPhase - 0.5) ** 2) * 50) * 0.3;
+      const snare = (Math.random() * 2 - 1) * snareEnv;
 
-      const kickFreq = 60 + Math.sin(time * 0.5) * 10;
-      const kick = Math.sin(2 * Math.PI * kickFreq * time) * envelope * 0.5;
-      sample += kick;
-
-      const bassFreq = 110;
       const bassNote = Math.floor(time * beatFreq) % 4;
-      const bassFreqs = [110, 130.81, 146.83, 164.81];
-      const bass = Math.sin(2 * Math.PI * bassFreqs[bassNote] * time) * 0.15;
-      sample += bass;
+      const bassFreqs = [55, 65.41, 73.42, 82.41];
+      const bass = Math.sin(2 * Math.PI * bassFreqs[bassNote] * time) * 0.2;
 
-      if (track.color === 'cool') {
-        const leadFreq = 440 * Math.pow(2, Math.floor(time * beatFreq * 2) % 8 / 12);
-        const lead = Math.sin(2 * Math.PI * leadFreq * time) * 0.08 * envelope;
-        sample += lead;
-      }
+      const chordFreqs = [261.63, 329.63, 392.0, 523.25];
+      let chord = 0;
+      chordFreqs.forEach((freq) => {
+        chord += Math.sin(2 * Math.PI * freq * time) * 0.03;
+      });
 
-      if (track.color === 'warm') {
-        const pianoFreq = 261.63 * Math.pow(2, Math.floor(time * beatFreq) % 7 / 12);
-        const piano = Math.sin(2 * Math.PI * pianoFreq * time) * 0.1 * envelope;
-        sample += piano;
-      }
+      const hihatPhase = (time * beatFreq * 2) % 1;
+      const hihatEnv = Math.exp(-hihatPhase * 30) * 0.15;
+      const hihat = (Math.random() * 2 - 1) * hihatEnv;
 
-      if (track.color === 'dark') {
-        const synthFreq = 200 + Math.sin(time * 3) * 50;
-        const synth = Math.sin(2 * Math.PI * synthFreq * time) * 0.12 * envelope;
-        sample += synth;
-      }
+      let sample = kick + snare + bass + chord + hihat;
+      sample = Math.max(-1, Math.min(1, sample * 0.7));
 
-      leftChannel[i] = sample * 0.8;
-      rightChannel[i] = sample * 0.8;
+      leftChannel[i] = sample;
+      rightChannel[i] = sample;
     }
 
     return buffer;
   }
 
+  private analyzeOfflineBPM(buffer: AudioBuffer): void {
+    const sampleRate = buffer.sampleRate;
+    const channelData = buffer.getChannelData(0);
+    const windowSize = Math.floor(sampleRate * 0.02);
+    const hopSize = Math.floor(windowSize / 2);
+    const energies: number[] = [];
+
+    for (let i = 0; i < channelData.length - windowSize; i += hopSize) {
+      let sum = 0;
+      for (let j = 0; j < windowSize; j++) {
+        sum += Math.abs(channelData[i + j]);
+      }
+      energies.push(sum / windowSize);
+    }
+
+    let beatCount = 0;
+    let lastBeatIdx = -10;
+    const minBeatHop = Math.floor(60 / 200 / (hopSize / sampleRate));
+
+    for (let i = 3; i < energies.length - 3; i++) {
+      const localAvg = (energies[i - 1] + energies[i - 2] + energies[i - 3] +
+                       energies[i + 1] + energies[i + 2] + energies[i + 3]) / 6;
+      if (energies[i] > localAvg * 1.4 && i - lastBeatIdx > minBeatHop) {
+        beatCount++;
+        lastBeatIdx = i;
+      }
+    }
+
+    const duration = buffer.duration;
+    const detectedBPM = (beatCount / duration) * 60;
+    if (detectedBPM > 60 && detectedBPM < 240) {
+      this.bpm = Math.round(detectedBPM);
+      this.minBeatInterval = 60 / (this.bpm * 1.5);
+    }
+  }
+
   start(): void {
-    if (!this.audioContext || !this.audioBuffer || !this.analyser || !this.gainNode) return;
+    if (!this.audioContext || !this.audioBuffer || !this.lowpassFilter || !this.analyser || !this.gainNode) return;
 
     if (this.audioContext.state === 'suspended') {
       this.audioContext.resume();
@@ -103,6 +155,7 @@ export class AudioAnalyzer {
 
     this.source = this.audioContext.createBufferSource();
     this.source.buffer = this.audioBuffer;
+    this.source.connect(this.lowpassFilter);
     this.source.connect(this.analyser);
 
     this.source.onended = () => {
@@ -114,6 +167,8 @@ export class AudioAnalyzer {
     this.source.start(0, this.pausedTime);
     this.startTime = this.audioContext.currentTime - this.pausedTime;
     this.isPlaying = true;
+    this.lastBeatDetectedTime = this.pausedTime;
+    this.energyHistory = [];
   }
 
   pause(): void {
@@ -138,8 +193,10 @@ export class AudioAnalyzer {
     }
     this.isPlaying = false;
     this.pausedTime = 0;
-    this.lastBeatTime = 0;
+    this.detectedBeats = [];
     this.beatCount = 0;
+    this.lastBeatDetectedTime = -1;
+    this.energyHistory = [];
   }
 
   getBPM(): number {
@@ -178,28 +235,78 @@ export class AudioAnalyzer {
   }
 
   update(): void {
-    if (!this.isPlaying) return;
+    if (!this.isPlaying || !this.analyser || !this.frequencyData) return;
 
     const currentTime = this.getCurrentTime();
 
-    while (this.lastBeatTime + this.beatInterval <= currentTime) {
-      this.lastBeatTime += this.beatInterval;
+    this.analyser.getByteFrequencyData(this.frequencyData);
+
+    const lowFreqEnergy = this.calculateBandEnergy(0, 20);
+    const midFreqEnergy = this.calculateBandEnergy(20, 80);
+
+    const totalEnergy = lowFreqEnergy * 2 + midFreqEnergy;
+
+    this.energyHistory.push(totalEnergy);
+    if (this.energyHistory.length > this.historySize) {
+      this.energyHistory.shift();
+    }
+
+    const avgEnergy = this.energyHistory.reduce((a, b) => a + b, 0) / this.energyHistory.length;
+    const variance = this.energyHistory.reduce((sum, val) => sum + (val - avgEnergy) ** 2, 0) / this.energyHistory.length;
+    const stdDev = Math.sqrt(variance);
+
+    const energyDiff = totalEnergy - this.lastFrameLowEnergy;
+    this.lastFrameLowEnergy = totalEnergy;
+
+    this.energyDiffs.push(energyDiff);
+    if (this.energyDiffs.length > 10) {
+      this.energyDiffs.shift();
+    }
+
+    const timeSinceLastBeat = currentTime - this.lastBeatDetectedTime;
+
+    const beatThreshold = avgEnergy + stdDev * this.beatSensitivity;
+
+    if (totalEnergy > beatThreshold &&
+        energyDiff > this.diffThreshold &&
+        timeSinceLastBeat > this.minBeatInterval &&
+        this.energyHistory.length >= 10) {
+
+      this.lastBeatDetectedTime = currentTime;
       this.beatCount++;
-      this.beatCallbacks.forEach(cb => cb(this.lastBeatTime));
+      this.detectedBeats.push(currentTime);
+
+      const intensity = Math.min(1, totalEnergy / (beatThreshold * 1.5));
+
+      this.beatCallbacks.forEach(cb => cb(currentTime, intensity));
     }
   }
 
-  getBeatIntensity(): number {
-    if (!this.analyser) return 0;
+  private calculateBandEnergy(startBin: number, endBin: number): number {
+    if (!this.frequencyData) return 0;
 
-    const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteFrequencyData(dataArray);
+    const start = Math.max(0, startBin);
+    const end = Math.min(this.frequencyData.length, endBin);
 
     let sum = 0;
-    for (let i = 0; i < dataArray.length; i++) {
-      sum += dataArray[i];
+    for (let i = start; i < end; i++) {
+      sum += this.frequencyData[i];
     }
 
-    return sum / dataArray.length / 255;
+    return sum / (end - start);
+  }
+
+  getBeatIntensity(): number {
+    if (!this.analyser || !this.frequencyData) return 0;
+    return this.calculateBandEnergy(0, 50) / 255;
+  }
+
+  getLowFrequencyEnergy(): number {
+    if (!this.frequencyData) return 0;
+    return this.calculateBandEnergy(0, 15);
+  }
+
+  getBeatCount(): number {
+    return this.beatCount;
   }
 }
