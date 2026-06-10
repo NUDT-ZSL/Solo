@@ -3,8 +3,9 @@ import {
   getPixelMap,
   renderCharToOffscreen,
   layoutChars,
-  CHAR_CELL_W,
-  CHAR_CELL_H,
+  computeOptimalScale,
+  getCharCellSize,
+  BASE_PIXEL_SIZE,
 } from './pixelEngine';
 import {
   InteractionState,
@@ -13,7 +14,6 @@ import {
   setCharsAppear,
   exportCanvas,
   updateGlobalColor,
-  renderBackground,
 } from './interaction';
 
 const PALETTE = [
@@ -24,10 +24,12 @@ const PALETTE = [
 
 const DEFAULT_COLOR = '#4A6FA5';
 const MAX_CHARS = 20;
+const MAX_PER_ROW = 10;
 
 let interactionState: InteractionState | null = null;
 let rafId = 0;
 let currentColor = DEFAULT_COLOR;
+let isLoopRunning = false;
 
 interface AppConfig {
   canvasBaseWidth: number;
@@ -151,14 +153,23 @@ function generatePixelArt(text: string): void {
   canvas.width = config.canvasBaseWidth;
   canvas.height = config.canvasHeight;
 
-  const layout = layoutChars(text, canvas.width, 40);
+  const scale = computeOptimalScale(
+    text.length,
+    canvas.width,
+    canvas.height,
+    40,
+    40,
+    MAX_PER_ROW
+  );
+  const { w: cellW, h: cellH } = getCharCellSize(scale);
+  const layout = layoutChars(text, canvas.width, scale, 40, MAX_PER_ROW);
   const pixelChars: PixelChar[] = [];
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     const code = ch.charCodeAt(0);
     const map = getPixelMap(code, ch);
-    const offscreen = renderCharToOffscreen(map, currentColor, 5);
+    const offscreen = renderCharToOffscreen(map, currentColor, scale);
     const pos = layout[i];
     pixelChars.push({
       char: ch,
@@ -169,11 +180,12 @@ function generatePixelArt(text: string): void {
       baseY: pos.baseY,
       pixelMap: map,
       color: currentColor,
-      glowStartTime: -99999,
-      pulseStartTime: -99999,
+      glowStartTime: -9999999,
+      pulseStartTime: -9999999,
       offscreenCanvas: offscreen,
-      charWidth: CHAR_CELL_W,
-      charHeight: CHAR_CELL_H,
+      charWidth: cellW,
+      charHeight: cellH,
+      pixelScale: scale,
     });
   }
 
@@ -183,13 +195,11 @@ function generatePixelArt(text: string): void {
 }
 
 function handlePaletteChange(color: string): void {
-  if (!interactionState) {
-    currentColor = color;
-    return;
-  }
   currentColor = color;
+  if (!interactionState) return;
   updateGlobalColor(interactionState, color, (pc, newColor) => {
-    pc.offscreenCanvas = renderCharToOffscreen(pc.pixelMap, newColor, 5);
+    pc.offscreenCanvas = renderCharToOffscreen(pc.pixelMap, newColor, pc.pixelScale || BASE_PIXEL_SIZE);
+    pc.color = newColor;
   });
   renderFrame(interactionState, true);
 }
@@ -248,6 +258,8 @@ function handleSaveImage(): void {
 }
 
 function startRenderLoop(): void {
+  if (isLoopRunning) return;
+  isLoopRunning = true;
   const loop = () => {
     if (interactionState) {
       renderFrame(interactionState);
