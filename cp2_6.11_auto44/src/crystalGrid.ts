@@ -42,13 +42,14 @@ const SELF_ROTATION_SPEED_MAX = 0.03;
 const HOVER_TWEEN = 0.3;
 const RESONANCE_TWEEN = 0.2;
 const DISTORT_TWEEN = 0.5;
-const RECOVER_TWEEN = 0.8;
+const RECOVER_TWEEN = 0.5;
 
 const WAVE_ANGLE_MAX = THREE.MathUtils.degToRad(15);
 const HEIGHT_CENTER_MAX = 2.0;
 const HEIGHT_OUTER_MIN = 0.7;
 
-const HALO_RADIUS = 1.2;
+const HALO_DISTANCE = 3;
+const HALO_DECAY = 2;
 
 const WARM_COLOR_START = new THREE.Color('#FF6F00');
 const WARM_COLOR_END = new THREE.Color('#FFAB00');
@@ -105,8 +106,9 @@ export class CrystalGrid {
     this.ringGeometry = new THREE.TorusGeometry(CRYSTAL_RADIUS * 1.8, 0.035, 8, 64);
     this.ringGeometry.rotateX(Math.PI / 2);
 
-    this.haloLight = new THREE.PointLight(0xffffff, 0, HALO_RADIUS * 2, 2);
-    this.haloLight.distance = HALO_RADIUS * 2;
+    this.haloLight = new THREE.PointLight(0xffffff, 0, HALO_DISTANCE, HALO_DECAY);
+    this.haloLight.distance = HALO_DISTANCE;
+    this.haloLight.decay = HALO_DECAY;
     this.haloLight.visible = false;
     this.group.add(this.haloLight);
     this.haloIndex = -1;
