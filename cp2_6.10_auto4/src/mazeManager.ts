@@ -72,16 +72,8 @@ export interface MirrorShard {
   crackAnim: CrackAnimation | null;
   edgeGlowIntensity: number;
   edgeGlowPhase: number;
-  clickPivotX?: number;
-  clickPivotY?: number;
-  origCenterX?: number;
-  origCenterY?: number;
   origRotation?: number;
-  pivotOffsetX?: number;
-  pivotOffsetY?: number;
   startMouseAngle?: number;
-  snapStartX?: number;
-  snapStartY?: number;
 }
 
 export interface LevelTransition {
@@ -250,33 +242,16 @@ export class MazeManager {
   startDrag(shard: MirrorShard, mouseX: number, mouseY: number): void {
     shard.isDragging = true;
     shard.isSnapping = false;
-    shard.clickPivotX = mouseX;
-    shard.clickPivotY = mouseY;
-    shard.origCenterX = shard.x;
-    shard.origCenterY = shard.y;
     shard.origRotation = shard.rotation;
-    shard.pivotOffsetX = mouseX - shard.x;
-    shard.pivotOffsetY = mouseY - shard.y;
-    shard.startMouseAngle = Math.atan2(mouseY - mouseY, mouseX - mouseX);
+    shard.startMouseAngle = Math.atan2(mouseY - shard.y, mouseX - shard.x);
   }
 
   updateDrag(shard: MirrorShard, mouseX: number, mouseY: number): void {
-    if (!shard.isDragging) return;
-    if (shard.clickPivotX === undefined || shard.clickPivotY === undefined ||
-        shard.origRotation === undefined || shard.pivotOffsetX === undefined ||
-        shard.pivotOffsetY === undefined || shard.startMouseAngle === undefined) return;
+    if (!shard.isDragging || shard.origRotation === undefined || shard.startMouseAngle === undefined) return;
 
-    const currentAngle = Math.atan2(mouseY - shard.clickPivotY, mouseX - shard.clickPivotX);
-    const deltaAngle = currentAngle - shard.startMouseAngle;
-
+    const currentMouseAngle = Math.atan2(mouseY - shard.y, mouseX - shard.x);
+    const deltaAngle = currentMouseAngle - shard.startMouseAngle;
     shard.rotation = shard.origRotation + deltaAngle;
-
-    const cos = Math.cos(deltaAngle);
-    const sin = Math.sin(deltaAngle);
-    const rotatedDx = shard.pivotOffsetX * cos - shard.pivotOffsetY * sin;
-    const rotatedDy = shard.pivotOffsetX * sin + shard.pivotOffsetY * cos;
-    shard.x = shard.clickPivotX - rotatedDx;
-    shard.y = shard.clickPivotY - rotatedDy;
 
     shard.edgeGlowPhase = Math.min(1, shard.edgeGlowPhase + 0.08);
   }
@@ -297,9 +272,6 @@ export class MazeManager {
         bestNeighbor = neighbor;
       }
     }
-
-    shard.snapStartX = shard.x;
-    shard.snapStartY = shard.y;
 
     if (bestNeighbor && bestDiff < ALIGN_THRESHOLD) {
       const snapRot = bestNeighbor.rotation;
@@ -396,57 +368,83 @@ export class MazeManager {
     const adjacency: Map<number, number[]> = new Map();
     for (const s of this.shards) adjacency.set(s.id, []);
 
-    for (const [, path] of this.paths) {
-      const fromList = adjacency.get(path.fromShardId);
-      const toList = adjacency.get(path.toShardId);
-      if (fromList) fromList.push(path.toShardId);
-      if (toList) toList.push(path.fromShardId);
+    for (const s of this.shards) {
+      for (const nid of s.neighbors) {
+        const neighbor = this.shards.find(sh => sh.id === nid);
+        if (!neighbor) continue;
+        const key = this.pathKey(s.id, nid);
+        if (this.paths.has(key)) {
+          const list = adjacency.get(s.id);
+          if (list && !list.includes(nid)) list.push(nid);
+          const list2 = adjacency.get(nid);
+          if (list2 && !list2.includes(s.id)) list2.push(s.id);
+        }
+      }
     }
 
-    const visited: Set<number> = new Set();
-    let loopComponent: Set<number> | null = null;
+    const globalVisited: Set<number> = new Set();
 
     for (const s of this.shards) {
-      if (visited.has(s.id)) continue;
-      const component: Set<number> = new Set();
-      const hasLoop = this.detectCycle(s.id, -1, adjacency, visited, component);
-      if (hasLoop && component.size >= 3) {
-        loopComponent = component;
-        break;
+      if (globalVisited.has(s.id)) continue;
+
+      const component: number[] = [];
+      const queue: number[] = [s.id];
+      const localVisited: Set<number> = new Set();
+      localVisited.add(s.id);
+
+      while (queue.length > 0) {
+        const node = queue.shift() as number;
+        component.push(node);
+        globalVisited.add(node);
+        const neigh = adjacency.get(node) || [];
+        for (const n of neigh) {
+          if (!localVisited.has(n)) {
+            localVisited.add(n);
+            queue.push(n);
+          }
+        }
+      }
+
+      if (component.length >= 3) {
+        const hasLoop = this.componentHasLoop(component, adjacency);
+        if (hasLoop) {
+          this.activatedLoopShards = new Set(component);
+          let cx = 0, cy = 0;
+          for (const id of component) {
+            const sh = this.shards.find(shard => shard.id === id);
+            if (sh) { cx += sh.x; cy += sh.y; }
+          }
+          cx /= component.length;
+          cy /= component.length;
+          return { found: true, centerX: cx, centerY: cy };
+        }
       }
     }
 
-    if (loopComponent && loopComponent.size >= 3) {
-      this.activatedLoopShards = new Set(loopComponent);
-      let cx = 0, cy = 0, cnt = 0;
-      for (const id of loopComponent) {
-        const sh = this.shards.find(s => s.id === id);
-        if (sh) { cx += sh.x; cy += sh.y; cnt++; }
-      }
-      if (cnt > 0) { cx /= cnt; cy /= cnt; }
-      return { found: true, centerX: cx, centerY: cy };
-    }
     return { found: false, centerX: 0, centerY: 0 };
   }
 
-  private detectCycle(
-    node: number,
-    parent: number,
-    adjacency: Map<number, number[]>,
-    visited: Set<number>,
-    component: Set<number>
-  ): boolean {
-    visited.add(node);
-    component.add(node);
+  private componentHasLoop(nodes: number[], adjacency: Map<number, number[]>): boolean {
+    const nodeSet = new Set(nodes);
+    const visited: Set<number> = new Set();
 
-    const neighbors = adjacency.get(node) || [];
-    for (const neighbor of neighbors) {
-      if (!visited.has(neighbor)) {
-        if (this.detectCycle(neighbor, node, adjacency, visited, component)) {
+    const dfs = (node: number, parent: number): boolean => {
+      visited.add(node);
+      const neighbors = adjacency.get(node) || [];
+      for (const neighbor of neighbors) {
+        if (!nodeSet.has(neighbor)) continue;
+        if (!visited.has(neighbor)) {
+          if (dfs(neighbor, node)) return true;
+        } else if (neighbor !== parent) {
           return true;
         }
-      } else if (neighbor !== parent) {
-        return true;
+      }
+      return false;
+    };
+
+    for (const start of nodes) {
+      if (!visited.has(start)) {
+        if (dfs(start, -1)) return true;
       }
     }
     return false;
@@ -471,21 +469,9 @@ export class MazeManager {
         const diff = s.targetRotation - s.rotation;
         const ease = 0.18;
         s.rotation += diff * ease;
-
-        if (s.snapStartX !== undefined && s.snapStartY !== undefined) {
-          s.x += (s.baseX - s.x) * ease;
-          s.y += (s.baseY - s.y) * ease;
-        }
-
-        const posDiffX = Math.abs(s.baseX - s.x);
-        const posDiffY = Math.abs(s.baseY - s.y);
-        if (Math.abs(diff) < 0.003 && posDiffX < 0.5 && posDiffY < 0.5) {
+        if (Math.abs(diff) < 0.003) {
           s.rotation = s.targetRotation;
-          s.x = s.baseX;
-          s.y = s.baseY;
           s.isSnapping = false;
-          s.snapStartX = undefined;
-          s.snapStartY = undefined;
         }
       }
       if (!s.isDragging && !s.isSnapping) {
