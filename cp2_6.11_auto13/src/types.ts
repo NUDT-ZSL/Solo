@@ -4,12 +4,14 @@ export interface Beam {
   baseHeight: number;
   width: number;
   height: number;
-  currentBrightness: number;
-  targetBrightness: number;
-  isTriggered: boolean;
-  soundFrequency: number;
+  brightness: number;
   triggerTime: number;
+  holdDuration: number;
+  fadeDuration: number;
+  soundFrequency: number;
   hoverSegments: number;
+  color: string;
+  index: number;
 }
 
 export interface Particle {
@@ -65,6 +67,24 @@ export const SCALE_FREQUENCIES: number[] = [
   415.30, 440.00, 466.16, 493.88
 ];
 
-export const PARTICLE_COLORS: string[] = [
-  '#4A9EFF', '#7A7AFF', '#AADDFF'
+export const BEAM_COLORS: string[] = [
+  '#4A9EFF', '#5A88FF', '#6A7AFF', '#7A7AFF',
+  '#8A8AFF', '#9A9AFF', '#8ABBFF', '#7AC8FF',
+  '#6AD5FF', '#5AE2FF', '#4AEEFF', '#AADDFF'
 ];
+
+export interface BeamManagerLike {
+  beamStartY: number;
+  beamStartX: number;
+  arrayHeight: number;
+  arrayBaseWidth: number;
+  baseBeamHeight: number;
+  beams: Array<{
+    x: number;
+    width: number;
+    soundFrequency: number;
+    color: string;
+    brightness: number;
+  }>;
+  findBeamIndexAt(x: number, y: number): number;
+}

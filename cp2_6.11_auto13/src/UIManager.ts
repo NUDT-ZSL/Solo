@@ -1,4 +1,4 @@
-import type { AppState, CursorState, Recording, RecordEntry } from './types';
+import type { AppState, CursorState, Recording, RecordEntry, BeamManagerLike } from './types';
 
 export class UIManager {
   public state: AppState = {
@@ -20,12 +20,13 @@ export class UIManager {
   public recordings: Map<string, Recording> = new Map();
   private currentRecording: Recording | null = null;
   private recordingStartTime: number = 0;
-  private readonly MAX_RECORD_DURATION = 20000;
+  private readonly MAX_RECORD_DURATION: number = 20000;
+  private readonly PROGRESS_SPEED_PX_PER_SEC: number = 200;
 
   public playStartTime: number = 0;
   public playRecording: Recording | null = null;
   public playIndex: number = 0;
-  public playbackProgress: number = 0;
+  public playbackProgressX: number = 0;
 
   private lastTriggeredIndex: number = -1;
   private lastTriggeredChord: Set<number> = new Set();
@@ -93,21 +94,15 @@ export class UIManager {
     const canvas = this.domElements.canvas;
     if (!canvas) return;
 
-    canvas.addEventListener('mousemove', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      this.cursor.x = (e.clientX - rect.left) * (canvas.width / rect.width);
-      this.cursor.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    canvas.addEventListener('mousemove', (e: MouseEvent) => {
+      this.updateCursorFromEvent(e.clientX, e.clientY);
       this.cursor.isActive = true;
-      this.handleCursorMove();
     });
 
-    canvas.addEventListener('mousedown', (e) => {
+    canvas.addEventListener('mousedown', (e: MouseEvent) => {
       this.cursor.isDown = true;
-      const rect = canvas.getBoundingClientRect();
-      this.cursor.x = (e.clientX - rect.left) * (canvas.width / rect.width);
-      this.cursor.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      this.updateCursorFromEvent(e.clientX, e.clientY);
       this.cursor.isActive = true;
-      this.handleCursorMove();
     });
 
     window.addEventListener('mouseup', () => {
@@ -122,28 +117,26 @@ export class UIManager {
       this.lastTriggeredChord.clear();
     });
 
-    canvas.addEventListener('touchstart', (e) => {
+    canvas.addEventListener('touchstart', (e: TouchEvent) => {
       e.preventDefault();
-      const touch = e.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      this.cursor.x = (touch.clientX - rect.left) * (canvas.width / rect.width);
-      this.cursor.y = (touch.clientY - rect.top) * (canvas.height / rect.height);
-      this.cursor.isActive = true;
-      this.cursor.isDown = true;
-      this.handleCursorMove();
+      const touch: Touch | undefined = e.touches[0];
+      if (touch) {
+        this.updateCursorFromEvent(touch.clientX, touch.clientY);
+        this.cursor.isActive = true;
+        this.cursor.isDown = true;
+      }
     }, { passive: false });
 
-    canvas.addEventListener('touchmove', (e) => {
+    canvas.addEventListener('touchmove', (e: TouchEvent) => {
       e.preventDefault();
-      const touch = e.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      this.cursor.x = (touch.clientX - rect.left) * (canvas.width / rect.width);
-      this.cursor.y = (touch.clientY - rect.top) * (canvas.height / rect.height);
-      this.cursor.isActive = true;
-      this.handleCursorMove();
+      const touch: Touch | undefined = e.touches[0];
+      if (touch) {
+        this.updateCursorFromEvent(touch.clientX, touch.clientY);
+        this.cursor.isActive = true;
+      }
     }, { passive: false });
 
-    canvas.addEventListener('touchend', (e) => {
+    canvas.addEventListener('touchend', (e: TouchEvent) => {
       e.preventDefault();
       this.cursor.isDown = false;
       this.cursor.isActive = false;
@@ -151,30 +144,39 @@ export class UIManager {
       this.lastTriggeredChord.clear();
     }, { passive: false });
 
-    canvas.addEventListener('wheel', (e) => {
+    canvas.addEventListener('wheel', (e: WheelEvent) => {
       e.preventDefault();
       this.handleWheel(e.deltaY);
     }, { passive: false });
   }
 
+  private updateCursorFromEvent(clientX: number, clientY: number): void {
+    const canvas = this.domElements.canvas;
+    if (!canvas) return;
+
+    const rect: DOMRect = canvas.getBoundingClientRect();
+    const scaleX: number = canvas.width / rect.width;
+    const scaleY: number = canvas.height / rect.height;
+    this.cursor.x = (clientX - rect.left) * scaleX;
+    this.cursor.y = (clientY - rect.top) * scaleY;
+  }
+
   private handleWheel(deltaY: number): void {
-    const delta = deltaY > 0 ? -0.1 : 0.1;
-    const newScale = Math.max(0.5, Math.min(2.0, this.state.scaleFactor + delta));
-    if (newScale !== this.state.scaleFactor) {
+    const delta: number = deltaY > 0 ? -0.1 : 0.1;
+    const newScale: number = Math.max(0.5, Math.min(2.0, this.state.scaleFactor + delta));
+    if (Math.abs(newScale - this.state.scaleFactor) > 0.001) {
       this.state.scaleFactor = newScale;
       this.state.scaleTextTime = 150;
       this.onScaleChange?.(newScale);
     }
   }
 
-  public handleCursorMove(): void {}
-
-  public triggerBeamIndex(index: number, beamManager: any): void {
+  public triggerBeamIndex(index: number, beamManager: BeamManagerLike): void {
     if (index < 0 || index > 11) return;
 
-    const beamAreaY = beamManager.beamStartY;
-    const beamHeight = beamManager.arrayHeight;
-    const cursorInBeamY = this.cursor.y >= beamAreaY && this.cursor.y <= beamAreaY + beamHeight + 40;
+    const beamAreaY: number = beamManager.beamStartY;
+    const beamHeight: number = beamManager.arrayHeight;
+    const cursorInBeamY: boolean = this.cursor.y >= beamAreaY && this.cursor.y <= beamAreaY + beamHeight + 40;
 
     if (!cursorInBeamY && !this.state.isPlaying) return;
 
@@ -186,13 +188,13 @@ export class UIManager {
         }
       }
     } else {
-      const chordSet = new Set<number>();
+      const chordSet: Set<number> = new Set<number>();
       chordSet.add(index);
       if (index > 0) chordSet.add(index - 1);
       if (index < 11) chordSet.add(index + 1);
 
       if (this.cursor.isDown || this.state.isPlaying) {
-        let changed = false;
+        let changed: boolean = false;
         for (const idx of chordSet) {
           if (!this.lastTriggeredChord.has(idx)) {
             changed = true;
@@ -210,35 +212,40 @@ export class UIManager {
     this.onTriggerBeam?.(index);
 
     if (this.state.isRecording && this.currentRecording) {
-      const elapsed = performance.now() - this.recordingStartTime;
+      const elapsed: number = performance.now() - this.recordingStartTime;
       if (elapsed <= this.MAX_RECORD_DURATION) {
-        this.currentRecording.entries.push({
+        const entry: RecordEntry = {
           beamIndex: index,
           timestamp: elapsed
-        });
+        };
+        this.currentRecording.entries.push(entry);
       }
     }
   }
 
   private toggleRecording(): void {
     if (!this.state.isRecording) {
-      this.state.isRecording = true;
-      this.currentRecording = {
-        code: '',
-        entries: [],
-        duration: 0
-      };
-      this.recordingStartTime = performance.now();
-      this.domElements.recordBtn?.classList.add('recording');
-
-      setTimeout(() => {
-        if (this.state.isRecording) {
-          this.stopRecording();
-        }
-      }, this.MAX_RECORD_DURATION);
+      this.startRecording();
     } else {
       this.stopRecording();
     }
+  }
+
+  private startRecording(): void {
+    this.state.isRecording = true;
+    this.currentRecording = {
+      code: '',
+      entries: [],
+      duration: 0
+    };
+    this.recordingStartTime = performance.now();
+    this.domElements.recordBtn?.classList.add('recording');
+
+    setTimeout(() => {
+      if (this.state.isRecording) {
+        this.stopRecording();
+      }
+    }, this.MAX_RECORD_DURATION);
   }
 
   private stopRecording(): void {
@@ -246,13 +253,10 @@ export class UIManager {
     this.state.isRecording = false;
     this.domElements.recordBtn?.classList.remove('recording');
 
-    const elapsed = performance.now() - this.recordingStartTime;
+    const elapsed: number = performance.now() - this.recordingStartTime;
     this.currentRecording.duration = Math.min(elapsed, this.MAX_RECORD_DURATION);
 
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += Math.floor(Math.random() * 10).toString();
-    }
+    const code: string = this.generateUniqueCode();
     this.currentRecording.code = code;
     this.recordings.set(code, this.currentRecording);
 
@@ -266,6 +270,22 @@ export class UIManager {
     }, 5000);
 
     this.currentRecording = null;
+  }
+
+  private generateUniqueCode(): string {
+    let code: string = '';
+    let attempts: number = 0;
+    const maxAttempts: number = 100;
+
+    do {
+      code = '';
+      for (let i: number = 0; i < 6; i++) {
+        code += Math.floor(Math.random() * 10).toString();
+      }
+      attempts++;
+    } while (this.recordings.has(code) && attempts < maxAttempts);
+
+    return code;
   }
 
   private setMode(mode: 'single' | 'chord'): void {
@@ -288,7 +308,7 @@ export class UIManager {
     const container = this.domElements.rippleContainer;
     if (!container) return;
 
-    const ripple = document.createElement('div');
+    const ripple: HTMLDivElement = document.createElement('div');
     ripple.className = 'ripple animate';
     container.appendChild(ripple);
 
@@ -298,19 +318,15 @@ export class UIManager {
   }
 
   private startPlayback(): void {
-    const code = this.domElements.codeInput?.value.trim() || '';
-    if (code.length !== 6) return;
+    const code: string = this.domElements.codeInput?.value.trim() || '';
+    if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+      this.shakeInput();
+      return;
+    }
 
-    const recording = this.recordings.get(code);
+    const recording: Recording | undefined = this.recordings.get(code);
     if (!recording) {
-      if (this.domElements.codeInput) {
-        this.domElements.codeInput.style.borderColor = '#FF4040';
-        setTimeout(() => {
-          if (this.domElements.codeInput) {
-            this.domElements.codeInput.style.borderColor = '';
-          }
-        }, 600);
-      }
+      this.shakeInput();
       return;
     }
 
@@ -318,21 +334,36 @@ export class UIManager {
     this.playRecording = recording;
     this.playStartTime = performance.now();
     this.playIndex = 0;
-    this.playbackProgress = 0;
+    this.playbackProgressX = 0;
   }
 
-  public updatePlayback(beamManager: any): void {
+  private shakeInput(): void {
+    const input = this.domElements.codeInput;
+    if (!input) return;
+    input.style.borderColor = '#FF4040';
+    setTimeout(() => {
+      if (input) {
+        input.style.borderColor = '';
+      }
+    }, 600);
+  }
+
+  public updatePlayback(beamStartX: number, beamArrayWidth: number): void {
     if (!this.state.isPlaying || !this.playRecording) return;
 
-    const elapsed = performance.now() - this.playStartTime;
-    const duration = this.playRecording.duration;
-    this.playbackProgress = Math.min(1, elapsed / duration);
+    const elapsed: number = performance.now() - this.playStartTime;
+    const duration: number = this.playRecording.duration;
+
+    this.playbackProgressX = Math.min(
+      beamArrayWidth,
+      (elapsed / 1000) * this.PROGRESS_SPEED_PX_PER_SEC
+    );
 
     while (
       this.playIndex < this.playRecording.entries.length &&
       this.playRecording.entries[this.playIndex].timestamp <= elapsed
     ) {
-      const entry = this.playRecording.entries[this.playIndex];
+      const entry: RecordEntry = this.playRecording.entries[this.playIndex];
       this.fireTrigger(entry.beamIndex);
       this.playIndex++;
     }
@@ -340,19 +371,19 @@ export class UIManager {
     if (elapsed >= duration + 500) {
       this.state.isPlaying = false;
       this.playRecording = null;
-      this.playbackProgress = 0;
+      this.playbackProgressX = 0;
     }
   }
 
-  public handleInput(beamManager: any): void {
-    this.updatePlayback(beamManager);
+  public handleInput(beamManager: BeamManagerLike, beamStartX: number, beamArrayWidth: number): void {
+    this.updatePlayback(beamStartX, beamArrayWidth);
 
     if (this.state.scaleTextTime > 0) {
       this.state.scaleTextTime--;
     }
 
     if (this.cursor.isActive) {
-      const idx = beamManager.findBeamIndexAt(this.cursor.x, this.cursor.y);
+      const idx: number = beamManager.findBeamIndexAt(this.cursor.x, this.cursor.y);
       if (idx >= 0) {
         this.triggerBeamIndex(idx, beamManager);
       } else {
@@ -365,8 +396,8 @@ export class UIManager {
   public drawScaleText(ctx: CanvasRenderingContext2D, canvasWidth: number, beamStartY: number): void {
     if (this.state.scaleTextTime <= 0) return;
 
-    const alpha = Math.min(1, this.state.scaleTextTime / 60);
-    const text = this.state.scaleFactor.toFixed(1) + 'x';
+    const alpha: number = Math.min(1, this.state.scaleTextTime / 60);
+    const text: string = this.state.scaleFactor.toFixed(1) + 'x';
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -388,26 +419,26 @@ export class UIManager {
   ): void {
     if (!this.state.isPlaying) return;
 
-    const barY = beamStartY + beamHeight + 20;
-    const barHeight = 3;
-    const totalWidth = beamArrayWidth;
+    const barY: number = beamStartY + beamHeight + 20;
+    const barHeight: number = 3;
+    const progressX: number = this.playbackProgressX;
 
-    const progressWidth = totalWidth * this.playbackProgress;
-    const speedPxPerSec = 200;
+    const clampedProgress: number = Math.max(0, Math.min(beamArrayWidth, progressX));
 
     ctx.save();
-    const grad = ctx.createLinearGradient(beamStartX, barY, beamStartX + totalWidth, barY);
+    const grad: CanvasGradient = ctx.createLinearGradient(beamStartX, barY, beamStartX + clampedProgress, barY);
     grad.addColorStop(0, 'rgba(74, 158, 255, 0.3)');
     grad.addColorStop(1, 'rgba(74, 158, 255, 0.9)');
 
     ctx.fillStyle = grad;
     ctx.shadowColor = '#4A9EFF';
     ctx.shadowBlur = 10;
-    ctx.fillRect(beamStartX, barY, progressWidth, barHeight);
+    ctx.fillRect(beamStartX, barY, clampedProgress, barHeight);
 
     ctx.fillStyle = '#4A9EFF';
+    ctx.shadowBlur = 15;
     ctx.beginPath();
-    ctx.arc(beamStartX + progressWidth, barY + barHeight / 2, 5, 0, Math.PI * 2);
+    ctx.arc(beamStartX + clampedProgress, barY + barHeight / 2, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }

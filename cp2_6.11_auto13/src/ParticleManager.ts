@@ -1,5 +1,4 @@
 import type { Particle, Ribbon } from './types';
-import { PARTICLE_COLORS } from './types';
 
 export class ParticleManager {
   public particles: Particle[] = [];
@@ -14,53 +13,48 @@ export class ParticleManager {
     this.canvasHeight = h;
   }
 
-  public addBeamNoteTrigger(beamIndex: number, x: number, y: number): void {
-    for (let i = 0; i < 3; i++) {
-      const startX = x + (Math.random() - 0.5) * 10;
-      const startY = y;
-      const offsetX = 50 + Math.random() * 100;
-      const offsetY = -80 - Math.random() * 120;
-      const targetX = startX + offsetX + (Math.random() - 0.5) * 50;
-      const targetY = startY + offsetY - Math.random() * 80;
-      const color = PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
-      const maxLife = Math.floor(72 * (1.0 + Math.random() * 0.2));
-
-      this.particles.push({
-        x: startX,
-        y: startY,
-        startX,
-        startY,
-        targetX,
-        targetY,
-        lifeTime: maxLife,
-        maxLife,
-        color,
-        size: 2 + Math.random() * 2
-      });
-    }
-
+  public addBeamNoteTrigger(beamIndex: number, x: number, y: number, color: string): void {
     const startX = x;
     const startY = y;
+    const targetX = x + (Math.random() - 0.3) * 80;
+    const targetY = y - 60 - Math.random() * 100;
+    const maxLife = Math.floor(72);
+
+    this.particles.push({
+      x: startX,
+      y: startY,
+      startX,
+      startY,
+      targetX,
+      targetY,
+      lifeTime: maxLife,
+      maxLife,
+      color,
+      size: 3
+    });
+
+    const ribbonStartX = x;
+    const ribbonStartY = y;
     const cpOffsetX = 50 + Math.random() * 50;
     const cpOffsetY = -100 - Math.random() * 80;
-    const endX = this.canvasWidth * 0.75 + Math.random() * (this.canvasWidth * 0.2);
-    const endY = Math.max(60, this.canvasHeight * 0.15 + Math.random() * 100);
+    const endX = this.canvasWidth * 0.75 + Math.random() * (this.canvasWidth * 0.15);
+    const endY = Math.max(60, this.canvasHeight * 0.15 + Math.random() * 80);
 
-    const controlX = startX + cpOffsetX;
-    const controlY = startY + cpOffsetY;
+    const controlX = ribbonStartX + cpOffsetX;
+    const controlY = ribbonStartY + cpOffsetY;
 
     const points: Array<{ x: number; y: number }> = [];
     const ribbonLength = 30;
     for (let i = 0; i < ribbonLength; i++) {
       const t = i / (ribbonLength - 1);
-      const px = this.quadBezier(startX, controlX, endX, t);
-      const py = this.quadBezier(startY, controlY, endY, t);
+      const px = this.quadBezier(ribbonStartX, controlX, endX, t);
+      const py = this.quadBezier(ribbonStartY, controlY, endY, t);
       points.push({ x: px, y: py });
     }
 
     this.ribbons.push({
       points,
-      color: '#4A9EFF',
+      color: color,
       lifeTime: 60,
       maxLife: 60
     });
@@ -94,8 +88,8 @@ export class ParticleManager {
         if (r.points.length > 0) {
           const last = r.points[r.points.length - 1];
           r.points.push({
-            x: last.x + (Math.random() - 0.5) * 2,
-            y: last.y - 1
+            x: last.x + (Math.random() - 0.5) * 1.5,
+            y: last.y - 0.8
           });
         }
       }
@@ -117,7 +111,7 @@ export class ParticleManager {
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.shadowColor = p.color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -132,13 +126,13 @@ export class ParticleManager {
 
       const alpha = r.lifeTime / r.maxLife;
       ctx.save();
-      ctx.globalAlpha = alpha * 0.6;
+      ctx.globalAlpha = alpha * 0.7;
       ctx.strokeStyle = r.color;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.shadowColor = r.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 10;
 
       ctx.beginPath();
       ctx.moveTo(r.points[0].x, r.points[0].y);
@@ -147,9 +141,9 @@ export class ParticleManager {
       }
       ctx.stroke();
 
-      ctx.globalAlpha = alpha * 0.2;
+      ctx.globalAlpha = alpha * 0.25;
       ctx.lineWidth = 6;
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 18;
       ctx.beginPath();
       ctx.moveTo(r.points[0].x, r.points[0].y);
       for (let i = 1; i < r.points.length; i++) {
