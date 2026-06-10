@@ -20,6 +20,7 @@ const GRID_COLS = 8;
 const GRID_ROWS = 6;
 const FPS = 30;
 const FRAME_INTERVAL = 1000 / FPS;
+const VISIBILITY_CHANGE_DELAY = 100;
 
 function generateBaseField(w: number, h: number): { x: number; y: number }[][] {
   const field: { x: number; y: number }[][] = [];
@@ -38,12 +39,17 @@ function generateBaseField(w: number, h: number): { x: number; y: number }[][] {
 }
 
 function bilinearSample(
-  px: number, py: number,
+  px: number,
+  py: number,
   field: { x: number; y: number }[][],
-  w: number, h: number
+  w: number,
+  h: number
 ): { x: number; y: number } {
-  const gx = (px / w) * (GRID_COLS - 1);
-  const gy = (py / h) * (GRID_ROWS - 1);
+  if (w <= 0 || h <= 0) return { x: 0, y: 0 };
+  const safeW = Math.max(w, 1);
+  const safeH = Math.max(h, 1);
+  const gx = (px / safeW) * (GRID_COLS - 1);
+  const gy = (py / safeH) * (GRID_ROWS - 1);
 
   const x0 = Math.floor(gx);
   const y0 = Math.floor(gy);
@@ -53,10 +59,10 @@ function bilinearSample(
   const fx = gx - x0;
   const fy = gy - y0;
 
-  const v00 = field[y0][x0];
-  const v10 = field[y0][x1];
-  const v01 = field[y1][x0];
-  const v11 = field[y1][x1];
+  const v00 = field[y0]?.[x0] || { x: 0, y: 0 };
+  const v10 = field[y0]?.[x1] || { x: 0, y: 0 };
+  const v01 = field[y1]?.[x0] || { x: 0, y: 0 };
+  const v11 = field[y1]?.[x1] || { x: 0, y: 0 };
 
   const topX = v00.x * (1 - fx) + v10.x * fx;
   const topY = v00.y * (1 - fx) + v10.y * fx;
@@ -79,6 +85,8 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
   const animFrameRef = useRef<number>(0);
   const lastFrameRef = useRef<number>(0);
   const fieldRef = useRef<{ x: number; y: number }[][]>([]);
+  const isVisibleRef = useRef(true);
+  const pendingFrameRef = useRef(false);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
 
   const initParticles = useCallback((w: number, h: number) => {
@@ -92,8 +100,8 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
         vx: 0,
         vy: 0,
         baseAlpha: 0.2 + Math.random() * 0.3,
-        gridX: Math.floor((x / w) * GRID_COLS),
-        gridY: Math.floor((y / h) * GRID_ROWS)
+        gridX: Math.floor((x / Math.max(w, 1)) * GRID_COLS),
+        gridY: Math.floor((y / Math.max(h, 1)) * GRID_ROWS)
       });
     }
     particlesRef.current = particles;
@@ -122,9 +130,18 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
     ro.observe(container);
     window.addEventListener('resize', onResize);
 
+    const onVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden;
+      if (isVisibleRef.current && !pendingFrameRef.current) {
+        lastFrameRef.current = 0;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [initParticles]);
 
@@ -180,12 +197,24 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
     if (!ctx) return;
 
     const render = (time: number) => {
-      const delta = time - lastFrameRef.current;
-      if (delta < FRAME_INTERVAL) {
+      pendingFrameRef.current = false;
+
+      if (!isVisibleRef.current) {
         animFrameRef.current = requestAnimationFrame(render);
         return;
       }
-      lastFrameRef.current = time - (delta % FRAME_INTERVAL);
+
+      const delta = time - lastFrameRef.current;
+      if (lastFrameRef.current && delta < FRAME_INTERVAL) {
+        animFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      if (lastFrameRef.current && delta > FRAME_INTERVAL * 10) {
+        lastFrameRef.current = time;
+      } else {
+        lastFrameRef.current = time - (delta % FRAME_INTERVAL);
+      }
 
       const w = size.w;
       const h = size.h;
@@ -193,6 +222,11 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
       const my = mouseRef.current.y;
       const hoveredId = hoveredBottleRef.current;
       const field = fieldRef.current;
+
+      if (w <= 0 || h <= 0) {
+        animFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
 
       const grad = ctx.createLinearGradient(0, 0, 0, h);
       grad.addColorStop(0, '#003366');
@@ -240,11 +274,11 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
 
       for (const b of bottles) {
         if (b.trajectory && b.trajectory.length > 1) {
-          for (let i = 1; i < b.trajectory.length; i++) {
+          const trajLen = b.trajectory.length;
+          for (let i = 1; i < trajLen; i++) {
             const prev = b.trajectory[i - 1];
             const cur = b.trajectory[i];
-            const t = i / b.trajectory.length;
-            const alpha = t * 0.6;
+            const alpha = (i / (trajLen - 1 || 1)) * 0.6;
             ctx.beginPath();
             ctx.moveTo(prev.x, prev.y);
             ctx.lineTo(cur.x, cur.y);

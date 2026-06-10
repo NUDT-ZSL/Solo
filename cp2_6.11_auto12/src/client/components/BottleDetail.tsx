@@ -20,11 +20,13 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
   const [volume, setVolume] = useState(0.8);
   const [isCollected, setIsCollected] = useState(bottle.collected);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const loadPromiseRef = useRef<Promise<void> | null>(null);
+  const unmountedRef = useRef(false);
 
   const formatDate = (ts: number) => {
     const d = new Date(ts);
@@ -42,6 +44,13 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
     setIsCollected(bottle.collected);
   }, [bottle.collected]);
 
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+    };
+  }, []);
+
   const loadAudioBuffer = useCallback(async (): Promise<AudioBuffer | null> => {
     if (audioBufferRef.current) return audioBufferRef.current;
     if (loadPromiseRef.current) {
@@ -56,11 +65,20 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
         }
         const ctx = audioCtxRef.current;
         const response = await fetch(bottle.audioData);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-        audioBufferRef.current = audioBuffer;
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        if (!unmountedRef.current) {
+          audioBufferRef.current = audioBuffer;
+        }
       } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Unknown error';
         console.error('Failed to decode audio:', e);
+        if (!unmountedRef.current) {
+          setLoadError(msg);
+        }
       }
       loadPromiseRef.current = null;
     })();
@@ -71,6 +89,8 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
 
   const playClip = useCallback(async (startPercent?: number, duration?: number) => {
     try {
+      setLoadError(null);
+
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
@@ -82,9 +102,13 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
 
       const buffer = await loadAudioBuffer();
       if (!buffer) return;
+      if (unmountedRef.current) return;
 
       if (sourceRef.current) {
-        try { sourceRef.current.stop(); } catch (e) {}
+        try {
+          sourceRef.current.onended = null;
+          sourceRef.current.stop();
+        } catch (e) {}
         sourceRef.current = null;
       }
 
@@ -109,24 +133,58 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
       }
 
       source.onended = () => {
-        setIsPlaying(false);
+        if (!unmountedRef.current) {
+          setIsPlaying(false);
+        }
         sourceRef.current = null;
+      };
+
+      (source as any).onerror = (err: any) => {
+        console.error('Audio playback error:', err);
+        if (!unmountedRef.current) {
+          setLoadError('播放失败');
+          setIsPlaying(false);
+        }
       };
 
       source.start(0, startTime, clipDuration);
       setIsPlaying(true);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Playback error';
       console.error('Playback error:', e);
+      if (!unmountedRef.current) {
+        setLoadError(msg);
+      }
     }
   }, [volume, isCollected, loadAudioBuffer]);
 
   const stopPlayback = useCallback(() => {
     if (sourceRef.current) {
-      try { sourceRef.current.stop(); } catch (e) {}
+      try {
+        sourceRef.current.onended = null;
+        sourceRef.current.stop();
+      } catch (e) {}
       sourceRef.current = null;
     }
     setIsPlaying(false);
   }, []);
+
+  const closeAudioContext = useCallback(() => {
+    stopPlayback();
+    if (audioCtxRef.current) {
+      const ctx = audioCtxRef.current;
+      if (ctx.state !== 'closed') {
+        try {
+          ctx.close();
+        } catch (e) {
+          console.warn('Failed to close AudioContext:', e);
+        }
+      }
+      audioCtxRef.current = null;
+    }
+    gainNodeRef.current = null;
+    audioBufferRef.current = null;
+  }, [stopPlayback]);
 
   useEffect(() => {
     if (!isCollected) {
@@ -147,6 +205,13 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
       gainNodeRef.current.gain.value = volume;
     }
   }, [volume]);
+
+  useEffect(() => {
+    return () => {
+      unmountedRef.current = true;
+      closeAudioContext();
+    };
+  }, [closeAudioContext]);
 
   const handleClose = () => {
     setIsClosing(true);
@@ -210,6 +275,11 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
       </div>
 
       <div className="audio-player">
+        {loadError && (
+          <div style={{ fontSize: '12px', color: '#ff6b6b', textAlign: 'center', padding: '8px' }}>
+            ⚠ {loadError}
+          </div>
+        )}
         {isCollected ? (
           <div>
             <button
@@ -233,7 +303,7 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
           </div>
         ) : (
           <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '8px' }}>
-            🔊 正在播放随机片段...
+            🔊 {loadError ? '音频加载失败' : '正在播放随机片段...'}
           </div>
         )}
       </div>

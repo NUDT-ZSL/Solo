@@ -14,6 +14,7 @@ interface InteractionPoint {
   intensity: number;
   timestamp: number;
   direction: { x: number; y: number };
+  bottleId?: string;
 }
 
 export class BottleManager {
@@ -51,18 +52,25 @@ export class BottleManager {
     return { cols: GRID_COLS, rows: GRID_ROWS };
   }
 
-  addInteraction(x: number, y: number, intensity: number = 1, direction?: { x: number; y: number }) {
+  addInteraction(
+    x: number,
+    y: number,
+    intensity: number = 1,
+    direction?: { x: number; y: number },
+    bottleId?: string
+  ) {
     const dir = direction || {
       x: (Math.random() - 0.5) * 2,
       y: (Math.random() - 0.5) * 2
     };
-    const len = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+    const len = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
     this.interactions.push({
       x,
       y,
       intensity,
       timestamp: Date.now(),
-      direction: { x: dir.x / len, y: dir.y / len }
+      direction: { x: dir.x / len, y: dir.y / len },
+      bottleId
     });
   }
 
@@ -92,7 +100,7 @@ export class BottleManager {
     };
 
     this.bottles.set(id, bottle);
-    this.addInteraction(x, y, 0.5, { x: bottle.vx, y: bottle.vy });
+    this.addInteraction(x, y, 0.5, { x: bottle.vx, y: bottle.vy }, id);
     this.cleanupOldBottles();
     return bottle;
   }
@@ -111,7 +119,7 @@ export class BottleManager {
       bottle.collected = true;
       bottle.collectedCount++;
       bottle.lastInteractionAt = Date.now();
-      this.addInteraction(bottle.x, bottle.y, 2, { x: 0, y: -1 });
+      this.addInteraction(bottle.x, bottle.y, 2, { x: 0, y: -1 }, id);
     }
     return bottle;
   }
@@ -126,7 +134,7 @@ export class BottleManager {
       bottle.vx = Math.cos(angle) * speed;
       bottle.vy = Math.sin(angle) * speed;
       bottle.speed = speed;
-      this.addInteraction(bottle.x, bottle.y, 1.5, { x: bottle.vx, y: bottle.vy });
+      this.addInteraction(bottle.x, bottle.y, 1.5, { x: bottle.vx, y: bottle.vy }, id);
     }
     return bottle;
   }
@@ -135,7 +143,7 @@ export class BottleManager {
     const bottle = this.bottles.get(id);
     if (bottle) {
       bottle.lastInteractionAt = Date.now();
-      this.addInteraction(bottle.x, bottle.y, 0.8, { x: bottle.vx, y: bottle.vy });
+      this.addInteraction(bottle.x, bottle.y, 0.8, { x: bottle.vx, y: bottle.vy }, id);
     }
   }
 
@@ -172,8 +180,27 @@ export class BottleManager {
           totalInfluence += influence;
         }
 
-        vx /= totalInfluence;
-        vy /= totalInfluence;
+        for (const bottle of this.bottles.values()) {
+          if (bottle.collected) continue;
+
+          const bdx = bottle.x - gx;
+          const bdy = bottle.y - gy;
+          const bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+          const bMaxDist = Math.max(this.canvasWidth, this.canvasHeight) * 0.25;
+          if (bdist > bMaxDist) continue;
+
+          const bInfluence = (1 - bdist / bMaxDist) * bottle.speed * 0.3;
+          const bvLen = Math.sqrt(bottle.vx * bottle.vx + bottle.vy * bottle.vy) || 1;
+
+          vx += (bottle.vx / bvLen) * bInfluence;
+          vy += (bottle.vy / bvLen) * bInfluence;
+          totalInfluence += bInfluence;
+        }
+
+        if (totalInfluence > 0) {
+          vx /= totalInfluence;
+          vy /= totalInfluence;
+        }
 
         const len = Math.sqrt(vx * vx + vy * vy);
         if (len > 0) {
@@ -255,8 +282,15 @@ export class BottleManager {
       (a, b) => a.lastInteractionAt - b.lastInteractionAt
     );
     const toRemove = sorted.slice(0, this.bottles.size - MAX_BOTTLES);
+    const removedIds = new Set<string>();
+
     for (const b of toRemove) {
       this.bottles.delete(b.id);
+      removedIds.add(b.id);
     }
+
+    this.interactions = this.interactions.filter(
+      (i) => !i.bottleId || !removedIds.has(i.bottleId)
+    );
   }
 }
