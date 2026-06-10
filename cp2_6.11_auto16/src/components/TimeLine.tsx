@@ -258,7 +258,7 @@ const styles: Record<string, React.CSSProperties> = {
   markerAnimating: {
     transform: 'translateY(20px)',
     opacity: 0,
-    animation: 'bounceIn 0.3s ease forwards',
+    animation: 'slideInUp 300ms ease forwards',
   },
   marker: {
     borderRadius: '50%',

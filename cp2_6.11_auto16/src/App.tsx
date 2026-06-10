@@ -43,7 +43,6 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginError, setLoginError] = useState('')
   const [isRegister, setIsRegister] = useState(false)
-  const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([])
 
   useEffect(() => {
     const checkMobile = () => {
@@ -175,9 +174,22 @@ export default function App() {
     const y = e.clientY - rect.top
     const id = Date.now()
 
-    setRipples((prev) => [...prev, { id, x, y }])
+    const ripple = document.createElement('span')
+    ripple.className = 'ripple-effect'
+    ripple.style.position = 'absolute'
+    ripple.style.borderRadius = '50%'
+    ripple.style.background = 'rgba(255, 255, 255, 0.4)'
+    ripple.style.left = `${x - 10}px`
+    ripple.style.top = `${y - 10}px`
+    ripple.style.width = '20px'
+    ripple.style.height = '20px'
+    ripple.style.transform = 'scale(0)'
+    ripple.style.animation = 'ripple 400ms ease-out forwards'
+    ripple.style.pointerEvents = 'none'
+    button.appendChild(ripple)
+
     setTimeout(() => {
-      setRipples((prev) => prev.filter((r) => r.id !== id))
+      ripple.remove()
     }, 400)
 
     handleGenerate()
@@ -336,12 +348,24 @@ export default function App() {
       <div
         style={{
           ...styles.sidebarWrapper,
+          width: isMobile ? '100%' : 280,
+          flexShrink: 0,
           ...(isMobile
-            ? sidebarOpen
-              ? { transform: 'translateY(0)' }
-              : { transform: `translateY(calc(100% - 120px))` }
-            : {}),
-          ...(isMobile ? { width: '100%', height: 'auto', maxHeight: '70%' } : {}),
+            ? {
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 'auto',
+                maxHeight: '70%',
+                zIndex: 50,
+                transform: sidebarOpen ? 'translateY(0)' : 'translateY(calc(100% - 120px))',
+                transition: 'transform 0.3s ease-in-out',
+              }
+            : {
+                position: 'relative',
+                zIndex: 10,
+              }),
         }}
       >
         <Sidebar
@@ -353,7 +377,7 @@ export default function App() {
         />
       </div>
 
-      <div style={styles.mainContent}>
+      <div style={{ ...styles.mainContent, flex: 1, minWidth: 0 }}>
         {!isViewingShared && (
           <div style={styles.inputSection}>
             <input
@@ -383,18 +407,6 @@ export default function App() {
               }}
               disabled={dailyRemaining <= 0 || !inputText.trim() || isGenerating}
             >
-              {ripples.map((ripple) => (
-                <span
-                  key={ripple.id}
-                  className="ripple-effect"
-                  style={{
-                    left: ripple.x - 10,
-                    top: ripple.y - 10,
-                    width: 20,
-                    height: 20,
-                  }}
-                />
-              ))}
               {isGenerating
                 ? '生成中...'
                 : dailyRemaining <= 0
@@ -441,10 +453,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sidebarWrapper: {
     width: 280,
+    minWidth: 280,
+    maxWidth: 280,
     flexShrink: 0,
     position: 'relative',
     zIndex: 10,
-    transition: 'transform 0.3s ease-in-out',
   },
   mainContent: {
     flex: 1,
@@ -454,6 +467,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     padding: '20px',
     gap: '16px',
+    minWidth: 0,
   },
   inputSection: {
     display: 'flex',

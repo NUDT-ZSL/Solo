@@ -19,7 +19,10 @@ interface DrawingLine {
   id: string
   points: { x: number; y: number }[]
   color: string
+  targetColor: string
   width: number
+  transitioning: boolean
+  transitionStart: number
 }
 
 interface CanvasAreaProps {
@@ -39,6 +42,7 @@ interface BubbleInfo {
 export default function CanvasArea({ record, isViewingShared, onSaveDrawings }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const animationRef = useRef<number>(0)
   const [isDrawing, setIsDrawing] = useState(false)
   const [currentLine, setCurrentLine] = useState<{ x: number; y: number }[]>([])
   const [drawings, setDrawings] = useState<DrawingLine[]>([])
@@ -48,10 +52,17 @@ export default function CanvasArea({ record, isViewingShared, onSaveDrawings }: 
 
   const CANVAS_WIDTH = 800
   const CANVAS_HEIGHT = 600
+  const TRANSITION_DURATION = 500
 
   useEffect(() => {
     if (record) {
-      setDrawings(record.drawings || [])
+      const savedDrawings = (record.drawings || []).map((d) => ({
+        ...d,
+        targetColor: d.color,
+        transitioning: false,
+        transitionStart: 0,
+      }))
+      setDrawings(savedDrawings)
     } else {
       setDrawings([])
     }
@@ -73,7 +84,7 @@ export default function CanvasArea({ record, isViewingShared, onSaveDrawings }: 
           width = height * ratio
         }
 
-        setCanvasSize({ width: Math.floor(width), height: Math.floor(height) })
+        setCanvasSize({ width: Math.max(200, Math.floor(width)), height: Math.max(150, Math.floor(height)) })
       }
     }
 
@@ -147,6 +158,22 @@ export default function CanvasArea({ record, isViewingShared, onSaveDrawings }: 
     return '#B0C4DE'
   }, [findBlockAtPosition])
 
+  const lerpColor = (color1: string, color2: string, t: number): string => {
+    const r1 = parseInt(color1.slice(1, 3), 16)
+    const g1 = parseInt(color1.slice(3, 5), 16)
+    const b1 = parseInt(color1.slice(5, 7), 16)
+
+    const r2 = parseInt(color2.slice(1, 3), 16)
+    const g2 = parseInt(color2.slice(3, 5), 16)
+    const b2 = parseInt(color2.slice(5, 7), 16)
+
+    const r = Math.round(r1 + (r2 - r1) * t)
+    const g = Math.round(g1 + (g2 - g1) * t)
+    const b = Math.round(b1 + (b2 - b1) * t)
+
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+  }
+
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isViewingShared) return
 
@@ -189,18 +216,27 @@ export default function CanvasArea({ record, isViewingShared, onSaveDrawings }: 
     }
 
     const lastPoint = currentLine[currentLine.length - 1]
-    const baseColor = getColorAtPosition(lastPoint.x, lastPoint.y)
+    const targetColor = getColorAtPosition(lastPoint.x, lastPoint.y)
 
     const newLine: DrawingLine = {
       id: `line-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       points: currentLine,
-      color: baseColor,
+      color: '#FFFFFF',
+      targetColor,
       width: 3,
+      transitioning: true,
+      transitionStart: Date.now(),
     }
 
     setDrawings((prev) => {
       const updated = [...prev, newLine]
-      onSaveDrawings(updated)
+      const savedForApi = updated.map(({ id, points, color: c, targetColor: tc, width: w }) => ({
+        id,
+        points,
+        color: tc,
+        width: w,
+      }))
+      onSaveDrawings(savedForApi as unknown as DrawingLine[])
       return updated
     })
 
@@ -219,108 +255,151 @@ export default function CanvasArea({ record, isViewingShared, onSaveDrawings }: 
   }, [isDrawing, handleCanvasMouseUp])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-
-    const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-    gradient.addColorStop(0, '#B0C4DE')
-    gradient.addColorStop(1, '#F5F5DC')
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-
-    if (!record) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
-      ctx.font = '24px -apple-system, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('输入心情，生成你的情绪调色盘', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2)
-      return
-    }
-
-    const blocks = record.emotionResult.colorBlocks
-
-    for (const block of blocks) {
-      ctx.save()
-
-      const centerX = block.x + block.width / 2
-      const centerY = block.y + block.height / 2
-      const isActive = block.id === activeBlockId
-      const scale = isActive ? 1.3 : 1
-
-      ctx.translate(centerX, centerY)
-      ctx.rotate((block.rotation * Math.PI) / 180)
-      ctx.scale(scale, scale)
-      ctx.translate(-centerX, -centerY)
-
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'
-      drawRoundedRect(ctx, block.x + 3, block.y + 3, block.width, block.height, block.borderRadius)
-      ctx.fill()
-
-      const blockGradient = ctx.createLinearGradient(
-        block.x,
-        block.y,
-        block.x + block.width,
-        block.y + block.height
-      )
-      blockGradient.addColorStop(0, lightenColor(block.color, 20))
-      blockGradient.addColorStop(1, darkenColor(block.color, 10))
-      ctx.fillStyle = blockGradient
-
-      drawRoundedRect(ctx, block.x, block.y, block.width, block.height, block.borderRadius)
-      ctx.fill()
-
-      ctx.restore()
-    }
-
-    for (const line of drawings) {
-      if (line.points.length < 2) continue
-
-      ctx.strokeStyle = hexToRgba(line.color, 0.7)
-      ctx.lineWidth = line.width
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
-
-      ctx.beginPath()
-      ctx.moveTo(line.points[0].x, line.points[0].y)
-      for (let i = 1; i < line.points.length; i++) {
-        ctx.lineTo(line.points[i].x, line.points[i].y)
+    const render = () => {
+      const canvas = canvasRef.current
+      if (!canvas) {
+        animationRef.current = requestAnimationFrame(render)
+        return
       }
-      ctx.stroke()
-    }
 
-    if (isDrawing && currentLine.length > 1) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
-      ctx.lineWidth = 3
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
 
-      ctx.beginPath()
-      ctx.moveTo(currentLine[0].x, currentLine[0].y)
-      for (let i = 1; i < currentLine.length; i++) {
-        ctx.lineTo(currentLine[i].x, currentLine[i].y)
+      const now = Date.now()
+
+      setDrawings((prevDrawings) => {
+        let hasChanges = false
+        const updatedDrawings = prevDrawings.map((line) => {
+          if (line.transitioning) {
+            const elapsed = now - line.transitionStart
+            const t = Math.min(1, elapsed / TRANSITION_DURATION)
+            if (t >= 1) {
+              hasChanges = true
+              return { ...line, color: line.targetColor, transitioning: false }
+            }
+          }
+          return line
+        })
+        return hasChanges ? updatedDrawings : prevDrawings
+      })
+
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+      const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+      gradient.addColorStop(0, '#B0C4DE')
+      gradient.addColorStop(1, '#F5F5DC')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+      if (!record) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
+        ctx.font = '24px -apple-system, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.fillText('输入心情，生成你的情绪调色盘', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2)
+        animationRef.current = requestAnimationFrame(render)
+        return
       }
-      ctx.stroke()
 
-      const lastPoint = currentLine[currentLine.length - 1]
-      const glowGradient = ctx.createRadialGradient(
-        lastPoint.x,
-        lastPoint.y,
-        0,
-        lastPoint.x,
-        lastPoint.y,
-        20
-      )
-      glowGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)')
-      glowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-      ctx.fillStyle = glowGradient
-      ctx.beginPath()
-      ctx.arc(lastPoint.x, lastPoint.y, 20, 0, Math.PI * 2)
-      ctx.fill()
+      const blocks = record.emotionResult.colorBlocks
+
+      for (const block of blocks) {
+        ctx.save()
+
+        const centerX = block.x + block.width / 2
+        const centerY = block.y + block.height / 2
+        const isActive = block.id === activeBlockId
+        const blockScale = isActive ? 1.3 : 1
+
+        ctx.translate(centerX, centerY)
+        ctx.rotate((block.rotation * Math.PI) / 180)
+        ctx.scale(blockScale, blockScale)
+        ctx.translate(-centerX, -centerY)
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'
+        drawRoundedRect(ctx, block.x + 3, block.y + 3, block.width, block.height, block.borderRadius)
+        ctx.fill()
+
+        const blockGradient = ctx.createLinearGradient(
+          block.x,
+          block.y,
+          block.x + block.width,
+          block.y + block.height
+        )
+        blockGradient.addColorStop(0, lightenColor(block.color, 20))
+        blockGradient.addColorStop(1, darkenColor(block.color, 10))
+        ctx.fillStyle = blockGradient
+
+        drawRoundedRect(ctx, block.x, block.y, block.width, block.height, block.borderRadius)
+        ctx.fill()
+
+        if (isActive) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'
+          ctx.lineWidth = 3
+          drawRoundedRect(ctx, block.x - 2, block.y - 2, block.width + 4, block.height + 4, block.borderRadius + 2)
+          ctx.stroke()
+        }
+
+        ctx.restore()
+      }
+
+      for (const line of drawings) {
+        if (line.points.length < 2) continue
+
+        let displayColor = line.color
+        if (line.transitioning) {
+          const elapsed = now - line.transitionStart
+          const t = Math.min(1, elapsed / TRANSITION_DURATION)
+          displayColor = lerpColor(line.color, line.targetColor, t)
+        }
+
+        ctx.strokeStyle = hexToRgba(displayColor, 0.7)
+        ctx.lineWidth = line.width
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+
+        ctx.beginPath()
+        ctx.moveTo(line.points[0].x, line.points[0].y)
+        for (let i = 1; i < line.points.length; i++) {
+          ctx.lineTo(line.points[i].x, line.points[i].y)
+        }
+        ctx.stroke()
+      }
+
+      if (isDrawing && currentLine.length > 1) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+        ctx.lineWidth = 3
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+
+        ctx.beginPath()
+        ctx.moveTo(currentLine[0].x, currentLine[0].y)
+        for (let i = 1; i < currentLine.length; i++) {
+          ctx.lineTo(currentLine[i].x, currentLine[i].y)
+        }
+        ctx.stroke()
+
+        const lastPoint = currentLine[currentLine.length - 1]
+        const glowGradient = ctx.createRadialGradient(
+          lastPoint.x,
+          lastPoint.y,
+          0,
+          lastPoint.x,
+          lastPoint.y,
+          20
+        )
+        glowGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)')
+        glowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+        ctx.fillStyle = glowGradient
+        ctx.beginPath()
+        ctx.arc(lastPoint.x, lastPoint.y, 20, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      animationRef.current = requestAnimationFrame(render)
     }
+
+    animationRef.current = requestAnimationFrame(render)
+    return () => cancelAnimationFrame(animationRef.current)
   }, [record, drawings, currentLine, isDrawing, activeBlockId])
 
   function drawRoundedRect(
@@ -455,6 +534,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   canvas: {
     display: 'block',
+    transition: 'transform 0.2s ease',
   },
   bubble: {
     position: 'fixed',
