@@ -13,6 +13,7 @@ export interface InkAnalysis {
   terrainHeightMap: Float32Array;
   cloudDensityMap: Float32Array;
   edgeMap: Float32Array;
+  skeletonMap: Float32Array;
   dominantColor: string;
   mapWidth: number;
   mapHeight: number;
@@ -45,6 +46,7 @@ export class InkEngine {
   private baseCanvas: HTMLCanvasElement;
   private baseCtx: CanvasRenderingContext2D;
   private isDestroyed: boolean = false;
+  private pendingAnalysis: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -60,7 +62,7 @@ export class InkEngine {
     this.baseCtx = baseCtx;
 
     this.bindEvents();
-    this.startAnimation();
+    this.startAnimationLoop();
   }
 
   setColor(color: WeatherType): void {
@@ -84,12 +86,10 @@ export class InkEngine {
 
   private bindEvents(): void {
     const canvas = this.canvas;
-
     canvas.addEventListener('mousedown', this.handleMouseDown);
     canvas.addEventListener('mousemove', this.handleMouseMove);
     canvas.addEventListener('mouseup', this.handleMouseUp);
     canvas.addEventListener('mouseleave', this.handleMouseUp);
-
     canvas.addEventListener('touchstart', this.handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', this.handleMouseUp);
@@ -145,7 +145,6 @@ export class InkEngine {
   private interpolateStroke(x0: number, y0: number, x1: number, y1: number): void {
     const dist = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
     const steps = Math.max(1, Math.floor(dist / 5));
-
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
       const x = x0 + (x1 - x0) * t;
@@ -165,7 +164,6 @@ export class InkEngine {
       birthTime: performance.now(),
       duration: 1500
     });
-
     this.drawPermanentInk(x, y, this.brushSize * 0.3);
   }
 
@@ -188,19 +186,18 @@ export class InkEngine {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
-  private startAnimation(): void {
+  private startAnimationLoop(): void {
     const animate = (): void => {
       if (this.isDestroyed) return;
-      this.render();
+      this.renderStrokes();
       this.animationId = requestAnimationFrame(animate);
     };
     this.animationId = requestAnimationFrame(animate);
   }
 
-  private render(): void {
+  private renderStrokes(): void {
     const now = performance.now();
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
     this.ctx.drawImage(this.baseCanvas, 0, 0);
 
     const activeStrokes: InkStroke[] = [];
@@ -237,14 +234,19 @@ export class InkEngine {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    this.pendingAnalysis = true;
     this.debounceTimer = window.setTimeout(() => {
       this.debounceTimer = null;
-      requestAnimationFrame(() => {
-        const analysis = this.analyzeInk();
-        if (this.onAnalysisReady && !this.isDestroyed) {
-          this.onAnalysisReady(analysis);
-        }
-      });
+      if (this.pendingAnalysis && !this.isDestroyed) {
+        this.pendingAnalysis = false;
+        requestAnimationFrame(() => {
+          if (this.isDestroyed) return;
+          const analysis = this.analyzeInk();
+          if (this.onAnalysisReady) {
+            this.onAnalysisReady(analysis);
+          }
+        });
+      }
     }, 300);
   }
 
@@ -254,6 +256,7 @@ export class InkEngine {
     const terrainHeightMap = new Float32Array(width * height);
     const cloudDensityMap = new Float32Array(width * height);
     const edgeMap = new Float32Array(width * height);
+    const skeletonMap = new Float32Array(width * height);
     const densityMap = new Float32Array(width * height);
 
     const colorWeights: Record<WeatherType, number> = {
@@ -307,7 +310,8 @@ export class InkEngine {
     }
 
     this.computeEdgeMap(densityMap, edgeMap, width, height);
-    this.computeTerrainHeight(densityMap, edgeMap, terrainHeightMap, width, height);
+    this.computeSkeleton(densityMap, skeletonMap, width, height);
+    this.computeTerrainHeight(densityMap, edgeMap, skeletonMap, terrainHeightMap, width, height);
 
     for (let i = 0; i < 2; i++) {
       this.blurMap(terrainHeightMap, width, height);
@@ -328,6 +332,7 @@ export class InkEngine {
       terrainHeightMap,
       cloudDensityMap,
       edgeMap,
+      skeletonMap,
       dominantColor: WEATHER_COLORS[dominantType],
       mapWidth: width,
       mapHeight: height
@@ -342,7 +347,6 @@ export class InkEngine {
       for (let x = 1; x < w - 1; x++) {
         let gx = 0;
         let gy = 0;
-
         for (let ky = -1; ky <= 1; ky++) {
           for (let kx = -1; kx <= 1; kx++) {
             const idx = (y + ky) * w + (x + kx);
@@ -351,9 +355,80 @@ export class InkEngine {
             gy += density[idx] * sobelY[kidx];
           }
         }
-
         const magnitude = Math.sqrt(gx * gx + gy * gy);
-        edge[y * w + x] = Math.min(1, magnitude * 3);
+        edge[y * w + x] = Math.min(1, magnitude * 2.5);
+      }
+    }
+  }
+
+  private computeSkeleton(density: Float32Array, skeleton: Float32Array, w: number, h: number): void {
+    const threshold = 0.3;
+    const distMap = new Float32Array(w * h);
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (density[y * w + x] < threshold) {
+          distMap[y * w + x] = 0;
+        } else {
+          let minDist = Math.min(x, y, w - 1 - x, h - 1 - y);
+          for (let dy = -minDist; dy <= minDist && minDist > 0; dy++) {
+            for (let dx = -minDist; dx <= minDist && minDist > 0; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                if (density[ny * w + nx] < threshold) {
+                  const d = Math.sqrt(dx * dx + dy * dy);
+                  if (d < minDist) minDist = d;
+                }
+              }
+            }
+          }
+          distMap[y * w + x] = minDist;
+        }
+      }
+    }
+
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x;
+        if (distMap[idx] < 1.5) {
+          skeleton[idx] = 0;
+          continue;
+        }
+        let isPeak = true;
+        const center = distMap[idx];
+        for (let ky = -1; ky <= 1 && isPeak; ky++) {
+          for (let kx = -1; kx <= 1 && isPeak; kx++) {
+            if (kx === 0 && ky === 0) continue;
+            if (distMap[(y + ky) * w + (x + kx)] > center) {
+              isPeak = false;
+            }
+          }
+        }
+        if (isPeak && center > 2) {
+          skeleton[idx] = Math.min(1, center / 8);
+        } else {
+          skeleton[idx] = 0;
+        }
+      }
+    }
+
+    for (let i = 0; i < 2; i++) {
+      const temp = new Float32Array(skeleton);
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          if (skeleton[y * w + x] > 0) {
+            let sum = 0;
+            let count = 0;
+            for (let ky = -1; ky <= 1; ky++) {
+              for (let kx = -1; kx <= 1; kx++) {
+                sum += temp[(y + ky) * w + (x + kx)];
+                count++;
+              }
+            }
+            skeleton[y * w + x] = sum / count;
+          }
+        }
       }
     }
   }
@@ -361,58 +436,59 @@ export class InkEngine {
   private computeTerrainHeight(
     density: Float32Array,
     edge: Float32Array,
+    skeleton: Float32Array,
     height: Float32Array,
     w: number,
     h: number
   ): void {
     for (let i = 0; i < w * h; i++) {
-      const baseHeight = density[i] * 1.2;
-      const ridgeHeight = edge[i] * 1.5;
-      const combined = baseHeight + ridgeHeight * 0.6;
-      height[i] = Math.min(1, combined * 1.3);
+      const baseHeight = density[i] * 1.0;
+      const ridgeHeight = edge[i] * 1.2;
+      const spineHeight = skeleton[i] * 2.5;
+      const combined = baseHeight + ridgeHeight * 0.5 + spineHeight * 0.7;
+      height[i] = Math.min(1, combined * 1.2);
     }
   }
 
-  private blurMap(map: Float32Array, width: number, height: number): void {
-    const temp = new Float32Array(map.length);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+  private blurMap(map: Float32Array, w: number, h: number): void {
+    const temp = new Float32Array(map);
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
         let sum = 0;
         let count = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-              sum += map[ny * width + nx];
-              count++;
-            }
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            sum += temp[(y + ky) * w + (x + kx)];
+            count++;
           }
         }
-        temp[y * width + x] = sum / count;
+        map[y * w + x] = sum / count;
       }
-    }
-    for (let i = 0; i < map.length; i++) {
-      map[i] = temp[i];
     }
   }
 
   destroy(): void {
     this.isDestroyed = true;
+
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    this.canvas.removeEventListener('mousedown', this.handleMouseDown);
-    this.canvas.removeEventListener('mousemove', this.handleMouseMove);
-    this.canvas.removeEventListener('mouseup', this.handleMouseUp);
-    this.canvas.removeEventListener('mouseleave', this.handleMouseUp);
-    this.canvas.removeEventListener('touchstart', this.handleTouchStart);
-    this.canvas.removeEventListener('touchmove', this.handleTouchMove);
-    this.canvas.removeEventListener('touchend', this.handleMouseUp);
+
+    const canvas = this.canvas;
+    canvas.removeEventListener('mousedown', this.handleMouseDown);
+    canvas.removeEventListener('mousemove', this.handleMouseMove);
+    canvas.removeEventListener('mouseup', this.handleMouseUp);
+    canvas.removeEventListener('mouseleave', this.handleMouseUp);
+    canvas.removeEventListener('touchstart', this.handleTouchStart);
+    canvas.removeEventListener('touchmove', this.handleTouchMove);
+    canvas.removeEventListener('touchend', this.handleMouseUp);
+
+    this.strokes = [];
   }
 }
