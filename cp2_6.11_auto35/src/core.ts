@@ -238,12 +238,12 @@ export class Piece implements PieceState {
 export class CombatSystem {
   static calculateDamage(attacker: PieceState, defender: PieceState, terrain: TerrainType): number {
     const atkFactor = 0.8 + Math.random() * 0.4;
-    const defFactor = 0.8 + Math.random() * 0.4;
     let atk = attacker.attack * atkFactor;
-    let def = defender.defense * defFactor;
+    let def = defender.defense;
     if (terrain === 'highland') def += 2;
     if (terrain === 'swamp') atk = Math.max(0, atk - 2);
-    const damage = Math.max(1, Math.round(atk - def * 0.5));
+    const baseDamage = atk - def;
+    const damage = Math.max(1, Math.round(baseDamage));
     return damage;
   }
 }
@@ -440,29 +440,7 @@ export class Game {
     events.push({ type: 'move', pieceId, from, to });
 
     if (toCell && toCell.terrain === 'altar' && toCell.altarOwner !== piece.faction) {
-      piece.altarTurns++;
-      if (piece.altarTurns >= 2) {
-        if (toCell.altarOwner) {
-          this.altarCount[toCell.altarOwner]--;
-        }
-        toCell.altarOwner = piece.faction;
-        this.altarCount[piece.faction]++;
-        piece.hp = Math.max(1, piece.hp - 5);
-        piece.altarTurns = 0;
-
-        const adjEmpty = hexNeighbors(to).filter(n => {
-          if (!inGrid(n)) return false;
-          const c = this.grid.getCell(n);
-          return c && !c.pieceId;
-        });
-        if (adjEmpty.length > 0) {
-          this.pendingSummons.push({
-            altar: to,
-            faction: piece.faction,
-            delay: 3
-          });
-        }
-      }
+      piece.altarTurns = 0;
     } else {
       piece.altarTurns = 0;
     }
@@ -522,6 +500,42 @@ export class Game {
 
   endTurn(): void {
     if (this.gameOver) return;
+    const factionBeforeSwitch = this.currentFaction;
+    const events: GameEvent[] = [];
+
+    this.pieces.forEach(piece => {
+      if (piece.faction !== factionBeforeSwitch) return;
+      const cell = this.grid.getCell(piece.position);
+      if (cell && cell.terrain === 'altar' && cell.altarOwner !== piece.faction) {
+        piece.altarTurns++;
+        if (piece.altarTurns >= 2) {
+          if (cell.altarOwner) {
+            this.altarCount[cell.altarOwner]--;
+          }
+          cell.altarOwner = piece.faction;
+          this.altarCount[piece.faction]++;
+          piece.hp = Math.max(1, piece.hp - 5);
+          piece.altarTurns = 0;
+
+          const adjEmpty = hexNeighbors(piece.position).filter(n => {
+            if (!inGrid(n)) return false;
+            const c = this.grid.getCell(n);
+            return c && !c.pieceId;
+          });
+          if (adjEmpty.length > 0) {
+            this.pendingSummons.push({
+              altar: { ...piece.position },
+              faction: piece.faction,
+              delay: 3
+            });
+          }
+        }
+      } else if (cell && cell.terrain === 'altar' && cell.altarOwner === piece.faction) {
+        piece.altarTurns = 0;
+      } else {
+        piece.altarTurns = 0;
+      }
+    });
 
     this.pendingSummons = this.pendingSummons.filter(s => {
       s.delay--;
@@ -535,11 +549,11 @@ export class Game {
           const pos = adjEmpty[randInt(0, adjEmpty.length - 1)];
           const newPiece = new Piece(s.faction, 'shield', pos);
           this.addPiece(newPiece);
-          this.turnManager.emit([{
+          events.push({
             type: 'summon',
             piece: { ...newPiece, position: { ...newPiece.position } },
             fromAltar: s.altar
-          }]);
+          });
         }
         return false;
       }
@@ -555,7 +569,7 @@ export class Game {
     this.actionPoints[this.currentFaction] = MAX_ACTION_POINTS;
     if (this.currentFaction === 'player1') this.turn++;
     this.checkWinCondition();
-    this.turnManager.emit([]);
+    this.turnManager.emit(events);
   }
 
   private checkWinCondition(): void {

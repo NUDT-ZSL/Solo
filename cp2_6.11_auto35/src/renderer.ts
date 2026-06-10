@@ -73,6 +73,44 @@ const FACTION_COLORS: Record<Faction, { primary: string; secondary: string; glow
 
 const easeInOutCubic = (t: number): number => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
+interface QuadBezier {
+  p0: { x: number; y: number };
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+}
+
+function computeBezierControlPoint(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  originX: number,
+  originY: number
+): { x: number; y: number } {
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const perpX = -dy / (dist || 1);
+  const perpY = dx / (dist || 1);
+  const dirX = midX - originX;
+  const dirY = midY - originY;
+  const dot = perpX * dirX + perpY * dirY;
+  const sign = dot >= 0 ? 1 : -1;
+  const arcHeight = Math.min(45, dist * 0.3 + 12);
+  return {
+    x: midX + perpX * arcHeight * sign,
+    y: midY + perpY * arcHeight * sign - 10
+  };
+}
+
+function quadraticBezier(b: QuadBezier, t: number): { x: number; y: number } {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * b.p0.x + 2 * mt * t * b.p1.x + t * t * b.p2.x,
+    y: mt * mt * b.p0.y + 2 * mt * t * b.p1.y + t * t * b.p2.y
+  };
+}
+
 let animIdCounter = 0;
 const nextAnimId = () => ++animIdCounter;
 
@@ -303,7 +341,17 @@ export class Renderer {
 
   private drawGrid(ctx: CanvasRenderingContext2D): void {
     const cells = this.game.grid.getAllCells();
+    const canvasW = this.canvas.width;
+    const canvasH = this.canvas.height;
+    const margin = (HEX_SIZE + HEX_GAP) * 2;
     cells.forEach(cell => {
+      const pos = axialToPixel(cell.coord, this.originX, this.originY);
+      if (
+        pos.x < -margin || pos.x > canvasW + margin ||
+        pos.y < -margin || pos.y > canvasH + margin
+      ) {
+        return;
+      }
       this.drawHexCell(ctx, cell);
     });
   }
@@ -449,10 +497,10 @@ export class Renderer {
     const moveAnim = this.animations.find(a => a.type === 'move' && a.pieceId === piece.id) as MoveAnim | undefined;
     if (moveAnim) {
       const t = easeInOutCubic(moveAnim.elapsed / moveAnim.duration);
-      return {
-        x: moveAnim.fromX + (moveAnim.toX - moveAnim.fromX) * t,
-        y: moveAnim.fromY + (moveAnim.toY - moveAnim.fromY) * t - Math.sin(t * Math.PI) * 15
-      };
+      const from = { x: moveAnim.fromX, y: moveAnim.fromY };
+      const to = { x: moveAnim.toX, y: moveAnim.toY };
+      const cp = computeBezierControlPoint(from, to, this.originX, this.originY);
+      return quadraticBezier({ p0: from, p1: cp, p2: to }, t);
     }
     return axialToPixel(piece.position, this.originX, this.originY);
   }
@@ -607,26 +655,31 @@ export class Renderer {
   private drawMoveTrails(ctx: CanvasRenderingContext2D): void {
     this.animations.filter(a => a.type === 'move').forEach(a => {
       const anim = a as MoveAnim;
-      const t = anim.elapsed / anim.duration;
-      const eased = easeInOutCubic(t);
+      const rawT = anim.elapsed / anim.duration;
+      const easedT = easeInOutCubic(rawT);
+      const from = { x: anim.fromX, y: anim.fromY };
+      const to = { x: anim.toX, y: anim.toY };
+      const cp = computeBezierControlPoint(from, to, this.originX, this.originY);
+      const curve: QuadBezier = { p0: from, p1: cp, p2: to };
+
       ctx.save();
       ctx.beginPath();
-      const steps = 20;
+      const steps = 28;
       for (let i = 0; i <= steps; i++) {
-        const st = (i / steps) * eased;
-        const x = anim.fromX + (anim.toX - anim.fromX) * st;
-        const y = anim.fromY + (anim.toY - anim.fromY) * st - Math.sin(st * Math.PI) * 15;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        const st = (i / steps) * easedT;
+        const pt = quadraticBezier(curve, st);
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
       }
       const trailGrad = ctx.createLinearGradient(anim.fromX, anim.fromY, anim.toX, anim.toY);
       trailGrad.addColorStop(0, 'rgba(0, 255, 200, 0)');
-      trailGrad.addColorStop(1, 'rgba(0, 220, 255, 0.7)');
+      trailGrad.addColorStop(0.5, 'rgba(0, 230, 230, 0.35)');
+      trailGrad.addColorStop(1, 'rgba(0, 200, 255, 0.75)');
       ctx.strokeStyle = trailGrad;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.5;
       ctx.lineCap = 'round';
       ctx.shadowColor = '#00ffff';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
       ctx.stroke();
       ctx.restore();
     });
