@@ -7,31 +7,38 @@ export interface MazeCell {
   visited: boolean;
 }
 
+export type MazeColorScheme = 'indigo' | 'gold';
+
 export class Maze {
-  public width: number;
-  public height: number;
+  public readonly width: number;
+  public readonly height: number;
   public grid: MazeCell[][];
   public group: THREE.Group;
   public cells: MazeCell[] = [];
+
   private wallMeshes: THREE.Mesh[] = [];
-  private glowStrips: THREE.Mesh[] = [];
+  private glowStripMeshes: THREE.Mesh[] = [];
+  private wallMat: THREE.MeshPhysicalMaterial | null = null;
+  private glowMatCache: Map<string, THREE.MeshBasicMaterial> = new Map();
+
   private colorStart = new THREE.Color(0x4A00E0);
   private colorEnd = new THREE.Color(0x8E2DE2);
   private winColorStart = new THREE.Color(0xFFD700);
   private winColorEnd = new THREE.Color(0xFF4500);
-  private isWinMode = false;
+  private currentColorScheme: MazeColorScheme = 'indigo';
   private time = 0;
+  private cycle = 30;
 
   constructor(width: number = 20, height: number = 20) {
     this.width = width;
     this.height = height;
     this.grid = [];
     this.group = new THREE.Group();
-    this.generate();
+    this.generateDFS();
     this.buildMeshes();
   }
 
-  private generate(): void {
+  private generateDFS(): void {
     this.grid = [];
     this.cells = [];
     for (let z = 0; z < this.height; z++) {
@@ -53,8 +60,10 @@ export class Maze {
     const start = this.grid[0][0];
     start.visited = true;
     stack.push(start);
+    let visitedCount = 1;
+    const total = this.width * this.height;
 
-    while (stack.length > 0) {
+    while (visitedCount < total) {
       const current = stack[stack.length - 1];
       const neighbors = this.getUnvisitedNeighbors(current);
 
@@ -66,8 +75,46 @@ export class Maze {
         this.removeWall(current, next.cell);
         next.cell.visited = true;
         stack.push(next.cell);
+        visitedCount++;
       }
     }
+  }
+
+  public verifyConnectivity(): boolean {
+    if (this.grid.length === 0) return false;
+    const visited: boolean[][] = [];
+    for (let z = 0; z < this.height; z++) {
+      visited.push(new Array(this.width).fill(false));
+    }
+
+    const queue: [number, number][] = [[0, 0]];
+    visited[0][0] = true;
+    let count = 0;
+
+    while (queue.length > 0) {
+      const [x, z] = queue.shift()!;
+      count++;
+      const cell = this.grid[z][x];
+
+      if (!cell.walls.top && z > 0 && !visited[z - 1][x]) {
+        visited[z - 1][x] = true;
+        queue.push([x, z - 1]);
+      }
+      if (!cell.walls.bottom && z < this.height - 1 && !visited[z + 1][x]) {
+        visited[z + 1][x] = true;
+        queue.push([x, z + 1]);
+      }
+      if (!cell.walls.left && x > 0 && !visited[z][x - 1]) {
+        visited[z][x - 1] = true;
+        queue.push([x - 1, z]);
+      }
+      if (!cell.walls.right && x < this.width - 1 && !visited[z][x + 1]) {
+        visited[z][x + 1] = true;
+        queue.push([x + 1, z]);
+      }
+    }
+
+    return count === this.width * this.height;
   }
 
   private getUnvisitedNeighbors(cell: MazeCell): { cell: MazeCell; dir: string }[] {
@@ -115,30 +162,32 @@ export class Maze {
       this.group.remove(child);
     }
     this.wallMeshes = [];
-    this.glowStrips = [];
+    this.glowStripMeshes = [];
 
     const wallHeight = 2;
-    const wallThickness = 0.08;
+    const wallThickness = 0.1;
+    const glowSize = 0.12;
     const offsetX = -this.width / 2;
     const offsetZ = -this.height / 2;
 
-    const wallMat = new THREE.MeshPhysicalMaterial({
-      color: 0x1a1a3e,
+    this.wallMat = new THREE.MeshPhysicalMaterial({
+      color: 0x221a40,
       transparent: true,
-      opacity: 0.55,
-      roughness: 0.7,
-      metalness: 0.1,
-      transmission: 0.2,
-      thickness: 0.5,
+      opacity: 0.5,
+      roughness: 0.85,
+      metalness: 0.02,
+      transmission: 0.25,
+      thickness: 0.6,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.6,
+      ior: 1.3,
       side: THREE.DoubleSide
     });
 
-    const topGeo = new THREE.BoxGeometry(1, wallThickness, wallThickness);
-    const bottomGeo = new THREE.BoxGeometry(1, wallThickness, wallThickness);
-    const leftGeo = new THREE.BoxGeometry(wallThickness, wallThickness, 1);
-    const rightGeo = new THREE.BoxGeometry(wallThickness, wallThickness, 1);
-    const wallVerticalGeo = new THREE.BoxGeometry(1, wallHeight, wallThickness);
-    const wallHorizontalGeo = new THREE.BoxGeometry(wallThickness, wallHeight, 1);
+    const wallVertGeo = new THREE.BoxGeometry(1, wallHeight, wallThickness);
+    const wallHorizGeo = new THREE.BoxGeometry(wallThickness, wallHeight, 1);
+    const glowTopBotGeo = new THREE.BoxGeometry(1.02, glowSize, glowSize);
+    const glowLeftRightGeo = new THREE.BoxGeometry(glowSize, glowSize, 1.02);
 
     for (let z = 0; z < this.height; z++) {
       for (let x = 0; x < this.width; x++) {
@@ -147,132 +196,168 @@ export class Maze {
         const cz = z + offsetZ + 0.5;
 
         if (cell.walls.top) {
-          const wall = new THREE.Mesh(wallVerticalGeo, wallMat);
+          const wall = new THREE.Mesh(wallVertGeo, this.wallMat);
           wall.position.set(cx, wallHeight / 2, cz - 0.5 + wallThickness / 2);
           this.group.add(wall);
           this.wallMeshes.push(wall);
 
-          const glowTop = new THREE.Mesh(topGeo, this.createGlowMaterial(x, z, 0));
-          glowTop.position.set(cx, wallHeight - wallThickness / 2, cz - 0.5 + wallThickness / 2);
+          const glowTop = new THREE.Mesh(glowTopBotGeo, this.getGlowMaterial(x, z, 0, true));
+          glowTop.position.set(cx, wallHeight - glowSize / 2, cz - 0.5 + wallThickness / 2);
           this.group.add(glowTop);
-          this.glowStrips.push(glowTop);
+          this.glowStripMeshes.push(glowTop);
 
-          const glowBottom = new THREE.Mesh(bottomGeo, this.createGlowMaterial(x, z, 1));
-          glowBottom.position.set(cx, wallThickness / 2, cz - 0.5 + wallThickness / 2);
+          const glowBottom = new THREE.Mesh(glowTopBotGeo, this.getGlowMaterial(x, z, 1, false));
+          glowBottom.position.set(cx, glowSize / 2, cz - 0.5 + wallThickness / 2);
           this.group.add(glowBottom);
-          this.glowStrips.push(glowBottom);
+          this.glowStripMeshes.push(glowBottom);
         }
 
         if (cell.walls.bottom) {
-          const wall = new THREE.Mesh(wallVerticalGeo, wallMat);
+          const wall = new THREE.Mesh(wallVertGeo, this.wallMat);
           wall.position.set(cx, wallHeight / 2, cz + 0.5 - wallThickness / 2);
           this.group.add(wall);
           this.wallMeshes.push(wall);
 
-          const glowTop = new THREE.Mesh(topGeo, this.createGlowMaterial(x, z, 2));
-          glowTop.position.set(cx, wallHeight - wallThickness / 2, cz + 0.5 - wallThickness / 2);
+          const glowTop = new THREE.Mesh(glowTopBotGeo, this.getGlowMaterial(x, z, 2, true));
+          glowTop.position.set(cx, wallHeight - glowSize / 2, cz + 0.5 - wallThickness / 2);
           this.group.add(glowTop);
-          this.glowStrips.push(glowTop);
+          this.glowStripMeshes.push(glowTop);
 
-          const glowBottom = new THREE.Mesh(bottomGeo, this.createGlowMaterial(x, z, 3));
-          glowBottom.position.set(cx, wallThickness / 2, cz + 0.5 - wallThickness / 2);
+          const glowBottom = new THREE.Mesh(glowTopBotGeo, this.getGlowMaterial(x, z, 3, false));
+          glowBottom.position.set(cx, glowSize / 2, cz + 0.5 - wallThickness / 2);
           this.group.add(glowBottom);
-          this.glowStrips.push(glowBottom);
+          this.glowStripMeshes.push(glowBottom);
         }
 
         if (cell.walls.left) {
-          const wall = new THREE.Mesh(wallHorizontalGeo, wallMat);
+          const wall = new THREE.Mesh(wallHorizGeo, this.wallMat);
           wall.position.set(cx - 0.5 + wallThickness / 2, wallHeight / 2, cz);
           this.group.add(wall);
           this.wallMeshes.push(wall);
 
-          const glowTop = new THREE.Mesh(leftGeo, this.createGlowMaterial(x, z, 4));
-          glowTop.position.set(cx - 0.5 + wallThickness / 2, wallHeight - wallThickness / 2, cz);
+          const glowTop = new THREE.Mesh(glowLeftRightGeo, this.getGlowMaterial(x, z, 4, true));
+          glowTop.position.set(cx - 0.5 + wallThickness / 2, wallHeight - glowSize / 2, cz);
           this.group.add(glowTop);
-          this.glowStrips.push(glowTop);
+          this.glowStripMeshes.push(glowTop);
 
-          const glowBottom = new THREE.Mesh(rightGeo, this.createGlowMaterial(x, z, 5));
-          glowBottom.position.set(cx - 0.5 + wallThickness / 2, wallThickness / 2, cz);
+          const glowBottom = new THREE.Mesh(glowLeftRightGeo, this.getGlowMaterial(x, z, 5, false));
+          glowBottom.position.set(cx - 0.5 + wallThickness / 2, glowSize / 2, cz);
           this.group.add(glowBottom);
-          this.glowStrips.push(glowBottom);
+          this.glowStripMeshes.push(glowBottom);
         }
 
         if (cell.walls.right) {
-          const wall = new THREE.Mesh(wallHorizontalGeo, wallMat);
+          const wall = new THREE.Mesh(wallHorizGeo, this.wallMat);
           wall.position.set(cx + 0.5 - wallThickness / 2, wallHeight / 2, cz);
           this.group.add(wall);
           this.wallMeshes.push(wall);
 
-          const glowTop = new THREE.Mesh(leftGeo, this.createGlowMaterial(x, z, 6));
-          glowTop.position.set(cx + 0.5 - wallThickness / 2, wallHeight - wallThickness / 2, cz);
+          const glowTop = new THREE.Mesh(glowLeftRightGeo, this.getGlowMaterial(x, z, 6, true));
+          glowTop.position.set(cx + 0.5 - wallThickness / 2, wallHeight - glowSize / 2, cz);
           this.group.add(glowTop);
-          this.glowStrips.push(glowTop);
+          this.glowStripMeshes.push(glowTop);
 
-          const glowBottom = new THREE.Mesh(rightGeo, this.createGlowMaterial(x, z, 7));
-          glowBottom.position.set(cx + 0.5 - wallThickness / 2, wallThickness / 2, cz);
+          const glowBottom = new THREE.Mesh(glowLeftRightGeo, this.getGlowMaterial(x, z, 7, false));
+          glowBottom.position.set(cx + 0.5 - wallThickness / 2, glowSize / 2, cz);
           this.group.add(glowBottom);
-          this.glowStrips.push(glowBottom);
+          this.glowStripMeshes.push(glowBottom);
         }
       }
     }
   }
 
-  private createGlowMaterial(x: number, z: number, seed: number): THREE.MeshBasicMaterial {
-    const t = ((x + z * this.width + seed * 0.123) % (this.width * this.height)) / (this.width * this.height);
-    const color = this.colorStart.clone().lerp(this.colorEnd, t);
-    return new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.9
-    });
+  private getGlowColor(t: number): THREE.Color {
+    const start = this.currentColorScheme === 'indigo' ? this.colorStart : this.winColorStart;
+    const end = this.currentColorScheme === 'indigo' ? this.colorEnd : this.winColorEnd;
+    const clampedT = Math.max(0, Math.min(1, t));
+    return start.clone().lerp(end, clampedT);
+  }
+
+  private getGradientT(x: number, z: number): number {
+    const nx = x / (this.width - 1);
+    const nz = z / (this.height - 1);
+    const diag = (nx + nz) / 2;
+    const wave = Math.sin(nx * Math.PI * 1.5) * 0.08 + Math.cos(nz * Math.PI * 1.2) * 0.06;
+    return Math.max(0, Math.min(1, diag + wave));
+  }
+
+  private getGlowMaterial(x: number, z: number, seed: number, isTop: boolean): THREE.MeshBasicMaterial {
+    const t = this.getGradientT(x, z);
+    const color = this.getGlowColor(t);
+    const key = `${this.currentColorScheme}-${t.toFixed(3)}-${isTop ? 'top' : 'bot'}`;
+
+    let mat = this.glowMatCache.get(key);
+    if (!mat) {
+      mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: isTop ? 1.0 : 0.85
+      });
+      this.glowMatCache.set(key, mat);
+    }
+    return mat;
   }
 
   public update(dt: number): void {
     this.time += dt;
-    const cycle = 30;
-    const phase = (this.time % cycle) / cycle;
-    const start = this.isWinMode ? this.winColorStart : this.colorStart;
-    const end = this.isWinMode ? this.winColorEnd : this.colorEnd;
+    const phase = (this.time % this.cycle) / this.cycle;
 
-    this.glowStrips.forEach((mesh, i) => {
+    for (let i = 0; i < this.glowStripMeshes.length; i++) {
+      const mesh = this.glowStripMeshes[i];
       const mat = mesh.material as THREE.MeshBasicMaterial;
-      const localT = (i / this.glowStrips.length + phase) % 1;
-      mat.color.copy(start).lerp(end, localT);
-    });
+      const localT = ((i / this.glowStripMeshes.length) + phase) % 1;
+      mat.color.copy(this.getGlowColor(localT));
+    }
   }
 
-  public setWinMode(win: boolean): void {
-    this.isWinMode = win;
+  public setColorScheme(scheme: MazeColorScheme): void {
+    this.currentColorScheme = scheme;
+    this.glowMatCache.clear();
+    for (let i = 0; i < this.glowStripMeshes.length; i++) {
+      const mesh = this.glowStripMeshes[i];
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      const localT = (i / this.glowStripMeshes.length) % 1;
+      mat.color.copy(this.getGlowColor(localT));
+    }
   }
 
   public regenerate(): void {
-    this.generate();
+    this.generateDFS();
+    this.glowMatCache.clear();
     this.buildMeshes();
   }
 
   public getRandomEmptyPositions(count: number): THREE.Vector3[] {
     const positions: THREE.Vector3[] = [];
-    const used = new Set<string>();
+    const indices: number[] = [];
+    for (let i = 0; i < this.width * this.height; i++) {
+      indices.push(i);
+    }
+
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+
     const offsetX = -this.width / 2;
     const offsetZ = -this.height / 2;
 
-    while (positions.length < count) {
-      const x = Math.floor(Math.random() * this.width);
-      const z = Math.floor(Math.random() * this.height);
-      const key = `${x},${z}`;
-      if (!used.has(key) && !(x === 0 && z === 0)) {
-        used.add(key);
-        positions.push(new THREE.Vector3(
-          x + offsetX + 0.5,
-          0.8,
-          z + offsetZ + 0.5
-        ));
-      }
+    for (const idx of indices) {
+      if (positions.length >= count) break;
+      const x = idx % this.width;
+      const z = Math.floor(idx / this.width);
+      if (x === 0 && z === 0) continue;
+      positions.push(new THREE.Vector3(
+        x + offsetX + 0.5,
+        0.8,
+        z + offsetZ + 0.5
+      ));
     }
+
     return positions;
   }
 
-  public isWall(worldX: number, worldZ: number, radius: number = 0.25): boolean {
+  public isWall(worldX: number, worldZ: number, radius: number = 0.3): boolean {
     const offsetX = -this.width / 2;
     const offsetZ = -this.height / 2;
 
@@ -286,14 +371,58 @@ export class Maze {
     const cell = this.grid[gz][gx];
     const cx = gx + offsetX + 0.5;
     const cz = gz + offsetZ + 0.5;
-    const half = 0.5 - radius;
 
-    if (cell.walls.top && worldZ < cz - half + 0.04) return true;
-    if (cell.walls.bottom && worldZ > cz + half - 0.04) return true;
-    if (cell.walls.left && worldX < cx - half + 0.04) return true;
-    if (cell.walls.right && worldX > cx + half - 0.04) return true;
+    const halfCell = 0.5;
+    const wallThick = 0.05;
+
+    if (cell.walls.top) {
+      const wallZ = cz - halfCell + wallThick / 2;
+      if (worldZ - radius < wallZ + wallThick / 2 && worldZ + radius > wallZ - wallThick / 2) {
+        if (Math.abs(worldX - cx) < halfCell) {
+          return true;
+        }
+      }
+    }
+    if (cell.walls.bottom) {
+      const wallZ = cz + halfCell - wallThick / 2;
+      if (worldZ - radius < wallZ + wallThick / 2 && worldZ + radius > wallZ - wallThick / 2) {
+        if (Math.abs(worldX - cx) < halfCell) {
+          return true;
+        }
+      }
+    }
+    if (cell.walls.left) {
+      const wallX = cx - halfCell + wallThick / 2;
+      if (worldX - radius < wallX + wallThick / 2 && worldX + radius > wallX - wallThick / 2) {
+        if (Math.abs(worldZ - cz) < halfCell) {
+          return true;
+        }
+      }
+    }
+    if (cell.walls.right) {
+      const wallX = cx + halfCell - wallThick / 2;
+      if (worldX - radius < wallX + wallThick / 2 && worldX + radius > wallX - wallThick / 2) {
+        if (Math.abs(worldZ - cz) < halfCell) {
+          return true;
+        }
+      }
+    }
 
     return false;
+  }
+
+  public getCellCenter(gx: number, gz: number): THREE.Vector3 {
+    const offsetX = -this.width / 2;
+    const offsetZ = -this.height / 2;
+    return new THREE.Vector3(
+      gx + offsetX + 0.5,
+      0,
+      gz + offsetZ + 0.5
+    );
+  }
+
+  public getStartPosition(): THREE.Vector3 {
+    return this.getCellCenter(0, 0);
   }
 
   public getCenter(): THREE.Vector3 {

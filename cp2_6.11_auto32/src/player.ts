@@ -11,32 +11,28 @@ export interface PlayerInput {
 interface TrailPoint {
   mesh: THREE.Mesh;
   createdAt: number;
+  startPos: THREE.Vector3;
 }
 
 export class Player {
   public position: THREE.Vector3;
   public camera: THREE.PerspectiveCamera;
   public group: THREE.Group;
-  public yaw = 0;
   private speed = 2;
   private playerHeight = 1.6;
   private trailPoints: TrailPoint[] = [];
-  private trailLength = 8;
+  private trailDuration = 4;
+  private trailSpacing = 0.05;
   private lastTrailTime = 0;
-  private trailInterval = 0.06;
-  private isMoving = false;
   private maze: Maze;
+  private radius = 0.3;
 
   constructor(camera: THREE.PerspectiveCamera, maze: Maze) {
     this.maze = maze;
     this.camera = camera;
     this.group = new THREE.Group();
-    this.position = new THREE.Vector3(
-      -maze.width / 2 + 0.5,
-      this.playerHeight,
-      -maze.height / 2 + 0.5
-    );
-    this.syncCamera();
+    this.position = new THREE.Vector3();
+    this.reset(maze);
   }
 
   private syncCamera(): void {
@@ -53,27 +49,32 @@ export class Player {
     if (input.right) dir.add(right);
     if (input.left) dir.sub(right);
 
-    this.isMoving = dir.lengthSq() > 0;
+    const isMoving = dir.lengthSq() > 0;
 
-    if (this.isMoving) {
+    if (isMoving) {
       dir.normalize();
-      const delta = dir.multiplyScalar(this.speed * dt);
+      const moveDist = this.speed * dt;
+      const delta = dir.multiplyScalar(moveDist);
 
       const newX = this.position.x + delta.x;
       const newZ = this.position.z + delta.z;
 
-      const radius = 0.25;
-      if (!this.maze.isWall(newX, this.position.z, radius)) {
+      if (!this.maze.isWall(newX, this.position.z, this.radius)) {
         this.position.x = newX;
       }
-      if (!this.maze.isWall(this.position.x, newZ, radius)) {
+      if (!this.maze.isWall(this.position.x, newZ, this.radius)) {
         this.position.z = newZ;
       }
 
-      this.position.x = THREE.MathUtils.clamp(this.position.x, -this.maze.width / 2 + radius, this.maze.width / 2 - radius);
-      this.position.z = THREE.MathUtils.clamp(this.position.z, -this.maze.height / 2 + radius, this.maze.height / 2 - radius);
+      const minX = -this.maze.width / 2 + this.radius;
+      const maxX = this.maze.width / 2 - this.radius;
+      const minZ = -this.maze.height / 2 + this.radius;
+      const maxZ = this.maze.height / 2 - this.radius;
 
-      if (elapsed - this.lastTrailTime > this.trailInterval) {
+      this.position.x = THREE.MathUtils.clamp(this.position.x, minX, maxX);
+      this.position.z = THREE.MathUtils.clamp(this.position.z, minZ, maxZ);
+
+      if (elapsed - this.lastTrailTime > this.trailSpacing) {
         this.addTrailPoint(elapsed);
         this.lastTrailTime = elapsed;
       }
@@ -84,18 +85,22 @@ export class Player {
   }
 
   private addTrailPoint(elapsed: number): void {
-    const geo = new THREE.SphereGeometry(0.08, 8, 8);
+    const geo = new THREE.SphereGeometry(0.07, 12, 12);
     const mat = new THREE.MeshBasicMaterial({
-      color: 0x8E2DE2,
+      color: 0x9B30FF,
       transparent: true,
       opacity: 1
     });
     const sphere = new THREE.Mesh(geo, mat);
-    sphere.position.set(this.position.x, 0.5, this.position.z);
+    sphere.position.set(this.position.x, 0.6, this.position.z);
     this.group.add(sphere);
-    this.trailPoints.push({ mesh: sphere, createdAt: elapsed });
+    this.trailPoints.push({
+      mesh: sphere,
+      createdAt: elapsed,
+      startPos: sphere.position.clone()
+    });
 
-    while (this.trailPoints.length > 60) {
+    while (this.trailPoints.length > 100) {
       const oldest = this.trailPoints.shift();
       if (oldest) {
         this.group.remove(oldest.mesh);
@@ -106,40 +111,39 @@ export class Player {
   }
 
   private updateTrail(elapsed: number): void {
-    const fadeDuration = 2;
-    const maxTrailTime = this.trailLength / this.speed;
-    const effectiveDuration = Math.max(fadeDuration, maxTrailTime);
-
     for (let i = this.trailPoints.length - 1; i >= 0; i--) {
       const tp = this.trailPoints[i];
       const age = elapsed - tp.createdAt;
-      if (age > effectiveDuration) {
+
+      if (age > this.trailDuration) {
         this.group.remove(tp.mesh);
         tp.mesh.geometry.dispose();
         (tp.mesh.material as THREE.Material).dispose();
         this.trailPoints.splice(i, 1);
       } else {
-        const alpha = 1 - age / effectiveDuration;
-        (tp.mesh.material as THREE.MeshBasicMaterial).opacity = alpha * alpha;
-        const scale = Math.max(0.2, alpha);
-        tp.mesh.scale.setScalar(scale);
+        const alpha = 1 - age / this.trailDuration;
+        const easeAlpha = alpha * alpha;
+        const mat = tp.mesh.material as THREE.MeshBasicMaterial;
+        mat.opacity = easeAlpha;
+        const s = 0.2 + 0.8 * alpha;
+        tp.mesh.scale.setScalar(s);
+        mat.color.setHSL(0.75 + 0.05 * (1 - alpha), 1, 0.6 + 0.2 * alpha);
       }
     }
   }
 
   public reset(maze: Maze): void {
     this.maze = maze;
-    this.position.set(
-      -maze.width / 2 + 0.5,
-      this.playerHeight,
-      -maze.height / 2 + 0.5
-    );
+    const start = maze.getStartPosition();
+    this.position.set(start.x, this.playerHeight, start.z);
+
     for (const tp of this.trailPoints) {
       this.group.remove(tp.mesh);
       tp.mesh.geometry.dispose();
       (tp.mesh.material as THREE.Material).dispose();
     }
     this.trailPoints = [];
+    this.lastTrailTime = 0;
     this.syncCamera();
   }
 }

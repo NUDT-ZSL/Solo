@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Maze } from './maze';
+import { Maze, MazeColorScheme } from './maze';
 import { Player, PlayerInput } from './player';
 import { Collectibles } from './collectibles';
 
@@ -16,9 +16,15 @@ class App {
   private counterEl: HTMLElement | null;
   private winTextEl: HTMLElement | null;
   private hasWon = false;
+  private introTime = 2.5;
+  private introElapsed = 0;
+  private introStartPos = new THREE.Vector3(0, 8, 10);
+  private introEndPos = new THREE.Vector3();
+
   private touchStartX = 0;
   private touchStartY = 0;
   private touchMoved = false;
+  private touchDir: keyof PlayerInput | null = null;
 
   constructor() {
     const canvas = document.getElementById('app') as HTMLCanvasElement;
@@ -26,15 +32,16 @@ class App {
     this.winTextEl = document.getElementById('winText');
 
     this.scene = new THREE.Scene();
+    this.scene.fog = new THREE.FogExp2(0x0A1128, 0.05);
 
     this.camera = new THREE.PerspectiveCamera(
-      75,
+      70,
       window.innerWidth / window.innerHeight,
       0.1,
-      500
+      200
     );
-    this.camera.position.set(0, 8, 10);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.copy(this.introStartPos);
+    this.camera.lookAt(0, 1, 0);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -44,11 +51,19 @@ class App {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setClearColor(0x000000, 0);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
 
+    const genStart = performance.now();
     this.maze = new Maze(20, 20);
+    const genEnd = performance.now();
+    console.log(`迷宫生成耗时: ${(genEnd - genStart).toFixed(2)}ms`);
+    console.log(`迷宫连通性验证: ${this.maze.verifyConnectivity() ? '通过' : '失败'}`);
+
     this.scene.add(this.maze.group);
 
     this.player = new Player(this.camera, this.maze);
+    this.introEndPos.copy(this.player.position);
     this.scene.add(this.player.group);
 
     this.collectibles = new Collectibles(20);
@@ -60,8 +75,12 @@ class App {
     this.scene.add(ambientLight);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(10, 15, 10);
+    dirLight.position.set(15, 20, 12);
     this.scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x4A00E0, 0.3);
+    fillLight.position.set(-10, 5, -5);
+    this.scene.add(fillLight);
 
     this.clock = new THREE.Clock();
 
@@ -74,7 +93,7 @@ class App {
   }
 
   private setupInput(): void {
-    window.addEventListener('keydown', (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.code) {
         case 'ArrowUp':
         case 'KeyW':
@@ -97,9 +116,9 @@ class App {
           e.preventDefault();
           break;
       }
-    });
+    };
 
-    window.addEventListener('keyup', (e) => {
+    const handleKeyUp = (e: KeyboardEvent) => {
       switch (e.code) {
         case 'ArrowUp':
         case 'KeyW':
@@ -118,11 +137,12 @@ class App {
           this.input.right = false;
           break;
       }
-    });
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
     const el = this.renderer.domElement;
-    let touchTimer: ReturnType<typeof setTimeout> | null = null;
-    let touchDir: keyof PlayerInput | null = null;
 
     el.addEventListener('touchstart', (e) => {
       if (e.touches.length > 0) {
@@ -137,28 +157,24 @@ class App {
       if (e.touches.length > 0 && !this.touchMoved) {
         const dx = e.touches[0].clientX - this.touchStartX;
         const dy = e.touches[0].clientY - this.touchStartY;
-        const threshold = 20;
+        const threshold = 24;
         if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
           this.touchMoved = true;
           if (Math.abs(dx) > Math.abs(dy)) {
-            touchDir = dx > 0 ? 'right' : 'left';
+            this.touchDir = dx > 0 ? 'right' : 'left';
           } else {
-            touchDir = dy > 0 ? 'backward' : 'forward';
+            this.touchDir = dy > 0 ? 'backward' : 'forward';
           }
-          this.input[touchDir] = true;
+          this.input[this.touchDir] = true;
         }
       }
       e.preventDefault();
     }, { passive: false });
 
     const clearTouch = () => {
-      if (touchDir) {
-        this.input[touchDir] = false;
-        touchDir = null;
-      }
-      if (touchTimer) {
-        clearTimeout(touchTimer);
-        touchTimer = null;
+      if (this.touchDir) {
+        this.input[this.touchDir] = false;
+        this.touchDir = null;
       }
     };
 
@@ -181,13 +197,15 @@ class App {
   private triggerWin(): void {
     if (this.hasWon) return;
     this.hasWon = true;
+    console.log('🎉 通关！触发迷宫重组');
 
     if (this.counterEl) {
       this.counterEl.classList.add('blink');
     }
 
-    this.maze.setWinMode(true);
+    this.maze.setColorScheme('gold');
     this.maze.regenerate();
+    console.log(`新迷宫连通性验证: ${this.maze.verifyConnectivity() ? '通过' : '失败'}`);
     this.player.reset(this.maze);
 
     const newPositions = this.maze.getRandomEmptyPositions(20);
@@ -212,6 +230,26 @@ class App {
     }, 2200);
   }
 
+  private updateIntro(dt: number): boolean {
+    if (this.introElapsed >= this.introTime) {
+      return false;
+    }
+
+    this.introElapsed += dt;
+    const t = Math.min(this.introElapsed / this.introTime, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+
+    const pos = new THREE.Vector3().lerpVectors(this.introStartPos, this.introEndPos, ease);
+    pos.y = this.introStartPos.y * (1 - ease) + this.introEndPos.y * ease;
+    this.camera.position.copy(pos);
+
+    const lookTarget = new THREE.Vector3(0, 1, 0);
+    lookTarget.lerp(new THREE.Vector3(this.introEndPos.x, this.introEndPos.y - 0.5, this.introEndPos.z - 5), ease);
+    this.camera.lookAt(lookTarget);
+
+    return true;
+  }
+
   private animate = (): void => {
     requestAnimationFrame(this.animate);
 
@@ -219,14 +257,24 @@ class App {
     this.elapsed += dt;
 
     this.maze.update(dt);
-    this.player.update(dt, this.input, this.elapsed);
 
-    const changed = this.collectibles.update(dt, this.elapsed, this.player.position);
+    const inIntro = this.introElapsed < this.introTime;
+    if (inIntro) {
+      this.updateIntro(dt);
+    } else {
+      this.player.update(dt, this.input, this.elapsed);
+    }
+
+    const changed = this.collectibles.update(dt, this.player.position);
     if (changed) {
       this.updateCounter();
-      if (this.collectibles.isAllCollected()) {
+      if (this.collectibles.isAllCollected() && !this.hasWon) {
         this.triggerWin();
       }
+    }
+
+    if (this.collectibles.getActiveParticleCount() > 200) {
+      console.warn(`粒子数量超标: ${this.collectibles.getActiveParticleCount()}`);
     }
 
     this.renderer.render(this.scene, this.camera);
