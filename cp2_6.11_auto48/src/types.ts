@@ -22,21 +22,27 @@ export interface ClusterData {
   id: string;
   word: string;
   emotion: EmotionType;
+  emotionScore: number;
   position: Vector3;
   particleIds: string[];
   createdAt: number;
   index: number;
+  segmentIndex: number;
 }
 
 export interface ConnectionData {
   id: string;
   fromClusterId: string;
   toClusterId: string;
+  fromWord: string;
+  toWord: string;
   strength: number;
+  connectionType: 'same-segment' | 'adjacent' | 'proximity';
   opacity: number;
   targetOpacity: number;
   lineWidth: number;
   targetLineWidth: number;
+  midPoint: Vector3;
 }
 
 export interface NebulaState {

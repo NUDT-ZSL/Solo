@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CameraState, HoverInfo, Vector3, ClusterData } from './types';
+import type { CameraState, HoverInfo, Vector3, ClusterData, ConnectionData } from './types';
 import { ParticleSystem } from './particleSystem';
 import { ConnectionLines } from './connectionLines';
 
@@ -8,7 +8,7 @@ const MAX_ROTATION_X = Math.PI / 6;
 const MIN_DISTANCE = 10;
 const MAX_DISTANCE = 500;
 const PAN_LIMIT = 200;
-const SMOOTHING_FACTOR = 0.1;
+const TRANSITION_DURATION = 500;
 
 export class InteractionManager {
   private container: HTMLElement;
@@ -47,6 +47,10 @@ export class InteractionManager {
     screenY: 0
   };
 
+  private transitionStartTime = 0;
+  private isTransitioning = false;
+  private transitionStartState: CameraState | null = null;
+
   public onClusterClick: ((cluster: ClusterData) => void) | null = null;
   public onHoverChange: ((hover: HoverInfo) => void) | null = null;
   public onClusterDragEnd: ((cluster: ClusterData) => void) | null = null;
@@ -73,9 +77,9 @@ export class InteractionManager {
     this.container.addEventListener('mousemove', this.onMouseMove.bind(this));
     this.container.addEventListener('mouseup', this.onMouseUp.bind(this));
     this.container.addEventListener('mouseleave', this.onMouseLeave.bind(this));
-    this.container.addEventListener('wheel', this.onWheel.bind(this));
+    this.container.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
     this.container.addEventListener('contextmenu', this.onContextMenu.bind(this));
-    
+
     window.addEventListener('resize', this.onResize.bind(this));
   }
 
@@ -85,17 +89,30 @@ export class InteractionManager {
       if (cluster) {
         this.isClusterDragging = true;
         this.draggedCluster = cluster;
-        this.particleSystem.flashCluster(cluster.id);
+        this.particleSystem.clickCluster(cluster.id);
+        this.connectionLines.highlightConnectionsForCluster(cluster.id, true);
       } else {
         this.isLeftDragging = true;
+        this.startTransition();
       }
       this.previousMouseX = e.clientX;
       this.previousMouseY = e.clientY;
     } else if (e.button === 2) {
       this.isRightDragging = true;
+      this.startTransition();
       this.previousMouseX = e.clientX;
       this.previousMouseY = e.clientY;
     }
+  }
+
+  private startTransition(): void {
+    this.isTransitioning = true;
+    this.transitionStartTime = performance.now();
+    this.transitionStartState = { ...this.cameraState };
+  }
+
+  private easeOut(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
   }
 
   private onMouseMove(e: MouseEvent): void {
@@ -138,21 +155,27 @@ export class InteractionManager {
   private onMouseUp(e: MouseEvent): void {
     if (e.button === 0) {
       if (this.isClusterDragging && this.draggedCluster) {
+        this.connectionLines.createFromClusters(this.particleSystem.getClusters());
         if (this.onClusterDragEnd) {
           this.onClusterDragEnd(this.draggedCluster);
         }
       } else if (!this.isLeftDragging) {
         const cluster = this.getClusterAtMouse(e);
-        if (cluster && this.onClusterClick) {
-          this.onClusterClick(cluster);
+        if (cluster) {
+          this.particleSystem.clickCluster(cluster.id);
+          if (this.onClusterClick) {
+            this.onClusterClick(cluster);
+          }
         }
       }
-      
+
       this.isLeftDragging = false;
       this.isClusterDragging = false;
       this.draggedCluster = null;
+      this.isTransitioning = false;
     } else if (e.button === 2) {
       this.isRightDragging = false;
+      this.isTransitioning = false;
     }
   }
 
@@ -161,10 +184,18 @@ export class InteractionManager {
     this.isRightDragging = false;
     this.isClusterDragging = false;
     this.draggedCluster = null;
-    
+    this.isTransitioning = false;
+
+    if (this.hoverInfo.clusterId) {
+      this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
+      this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
+    }
+
     this.hoverInfo.type = null;
     this.hoverInfo.clusterId = null;
     this.hoverInfo.word = null;
+    this.hoverInfo.connectionWords = null;
+
     if (this.onHoverChange) {
       this.onHoverChange(this.hoverInfo);
     }
@@ -172,15 +203,17 @@ export class InteractionManager {
 
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
-    
+
     const zoomSpeed = 0.001;
     const delta = e.deltaY * zoomSpeed;
-    
+
     this.cameraState.targetDistance *= (1 + delta);
     this.cameraState.targetDistance = Math.max(
       MIN_DISTANCE,
       Math.min(MAX_DISTANCE, this.cameraState.targetDistance)
     );
+
+    this.startTransition();
   }
 
   private onContextMenu(e: MouseEvent): void {
@@ -188,14 +221,14 @@ export class InteractionManager {
   }
 
   private onResize(): void {
-    // Camera aspect ratio is handled by the main app
+    // handled by main app
   }
 
   private updateMousePosition(e: MouseEvent): void {
     const rect = this.container.getBoundingClientRect();
     this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    
+
     this.hoverInfo.screenX = e.clientX;
     this.hoverInfo.screenY = e.clientY;
   }
@@ -206,35 +239,91 @@ export class InteractionManager {
     return this.particleSystem.getClusterAtPosition(this.raycaster, this.camera);
   }
 
+  private getConnectionAtMouse(e: MouseEvent): ConnectionData | null {
+    const rect = this.container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    return this.connectionLines.getConnectionAtScreenPosition(
+      x, y,
+      this.camera,
+      rect.width,
+      rect.height
+    );
+  }
+
   private updateHoverState(e: MouseEvent): void {
     const cluster = this.getClusterAtMouse(e);
-    
+    const connection = this.getConnectionAtMouse(e);
+
     if (cluster) {
       if (this.hoverInfo.clusterId !== cluster.id) {
         if (this.hoverInfo.clusterId) {
           this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
           this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
         }
-        
+
         this.particleSystem.highlightCluster(cluster.id, true);
         this.connectionLines.highlightConnectionsForCluster(cluster.id, true);
-        
+
         this.hoverInfo.type = 'particle';
         this.hoverInfo.clusterId = cluster.id;
         this.hoverInfo.word = cluster.word;
-        
+        this.hoverInfo.connectionWords = null;
+
+        this.container.style.cursor = 'pointer';
+
         if (this.onHoverChange) {
           this.onHoverChange(this.hoverInfo);
         }
       }
-    } else if (this.hoverInfo.clusterId) {
-      this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
-      this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
-      
+    } else if (connection) {
+      if (this.hoverInfo.type !== 'connection' ||
+          (this.hoverInfo.connectionWords !== `${connection.fromWord}-${connection.toWord}`)) {
+        if (this.hoverInfo.clusterId) {
+          this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
+          this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
+        }
+
+        this.connectionLines.highlightConnection(connection.fromClusterId, connection.toClusterId, true);
+        this.particleSystem.highlightCluster(connection.fromClusterId, true);
+        this.particleSystem.highlightCluster(connection.toClusterId, true);
+
+        this.hoverInfo.type = 'connection';
+        this.hoverInfo.clusterId = connection.fromClusterId;
+        this.hoverInfo.word = null;
+        this.hoverInfo.connectionWords = `${connection.fromWord} — ${connection.toWord}`;
+
+        this.container.style.cursor = 'pointer';
+
+        if (this.onHoverChange) {
+          this.onHoverChange(this.hoverInfo);
+        }
+      }
+    } else if (this.hoverInfo.type !== null) {
+      if (this.hoverInfo.clusterId) {
+        this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
+        this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
+      }
+      if (this.hoverInfo.connectionWords) {
+        const [fromWord, toWord] = this.hoverInfo.connectionWords.split(' — ');
+        const clusters = this.particleSystem.getClusters();
+        const fromCluster = clusters.find(c => c.word === fromWord);
+        const toCluster = clusters.find(c => c.word === toWord);
+        if (fromCluster && toCluster) {
+          this.connectionLines.highlightConnection(fromCluster.id, toCluster.id, false);
+          this.particleSystem.highlightCluster(fromCluster.id, false);
+          this.particleSystem.highlightCluster(toCluster.id, false);
+        }
+      }
+
       this.hoverInfo.type = null;
       this.hoverInfo.clusterId = null;
       this.hoverInfo.word = null;
-      
+      this.hoverInfo.connectionWords = null;
+
+      this.container.style.cursor = 'grab';
+
       if (this.onHoverChange) {
         this.onHoverChange(this.hoverInfo);
       }
@@ -251,7 +340,7 @@ export class InteractionManager {
 
     const dir = vector.sub(this.camera.position).normalize();
     const distance = (targetZ - this.camera.position.z) / dir.z;
-    
+
     if (distance < 0) return null;
 
     const pos = this.camera.position.clone().add(dir.multiplyScalar(distance));
@@ -259,13 +348,28 @@ export class InteractionManager {
   }
 
   public update(_deltaTime: number): void {
-    const smoothing = SMOOTHING_FACTOR;
-    
+    const now = performance.now();
+    const elapsed = now - this.transitionStartTime;
+    const t = Math.min(1, elapsed / TRANSITION_DURATION);
+
+    let smoothing: number;
+
+    if (this.isTransitioning && this.transitionStartState) {
+      const easeFactor = this.easeOut(t);
+      smoothing = 0.05 + easeFactor * 0.15;
+    } else {
+      smoothing = 0.08;
+    }
+
     this.cameraState.rotationX += (this.cameraState.targetRotationX - this.cameraState.rotationX) * smoothing;
     this.cameraState.rotationY += (this.cameraState.targetRotationY - this.cameraState.rotationY) * smoothing;
     this.cameraState.distance += (this.cameraState.targetDistance - this.cameraState.distance) * smoothing;
     this.cameraState.panX += (this.cameraState.targetPanX - this.cameraState.panX) * smoothing;
     this.cameraState.panY += (this.cameraState.targetPanY - this.cameraState.panY) * smoothing;
+
+    if (t >= 1 && this.isTransitioning && !this.isLeftDragging && !this.isRightDragging) {
+      this.isTransitioning = false;
+    }
 
     this.updateCamera();
   }
@@ -282,6 +386,7 @@ export class InteractionManager {
   }
 
   public resetView(): void {
+    this.startTransition();
     this.cameraState.targetRotationX = 0;
     this.cameraState.targetRotationY = 0;
     this.cameraState.targetDistance = 120;
