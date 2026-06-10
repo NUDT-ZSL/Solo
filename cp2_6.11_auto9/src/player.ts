@@ -24,7 +24,7 @@ export interface Particle {
     color: string;
     size: number;
     active: boolean;
-    type: 'projectile' | 'explosion' | 'halo';
+    type: 'projectile' | 'explosion' | 'halo' | 'lockUnlock';
     rotation?: number;
     rotationSpeed?: number;
 }
@@ -40,8 +40,12 @@ export interface CollisionHalo {
 export interface ProjectileState {
     position: PixelPos;
     velocity: PixelPos;
+    baseVelocity: PixelPos;
     active: boolean;
     trailPositions: PixelPos[];
+    parabolaTime: number;
+    parabolaAmplitude: number;
+    direction: Direction;
 }
 
 export interface PlayerState {
@@ -53,9 +57,10 @@ export interface PlayerState {
 }
 
 const MAX_PARTICLES = 50;
-const GRAVITY = 0.15;
-const PROJECTILE_SPEED = 8;
-const TRAIL_LENGTH = 20;
+const PROJECTILE_SPEED = 6;
+const TRAIL_LENGTH = 25;
+const PARABOLA_AMPLITUDE = 15;
+const PARABOLA_FREQUENCY = 0.08;
 
 export class ParticlePool {
     private pool: Particle[];
@@ -89,7 +94,7 @@ export class ParticlePool {
         maxLife: number,
         color: string,
         size: number,
-        type: 'projectile' | 'explosion' | 'halo',
+        type: 'projectile' | 'explosion' | 'halo' | 'lockUnlock',
         rotation?: number,
         rotationSpeed?: number
     ): Particle | null {
@@ -122,12 +127,13 @@ export class ParticlePool {
         for (const particle of this.pool) {
             if (!particle.active) continue;
 
-            if (particle.type === 'explosion' || particle.type === 'projectile') {
-                particle.velocity.y += GRAVITY * 0.05;
-            }
-
             particle.position.x += particle.velocity.x;
             particle.position.y += particle.velocity.y;
+
+            if (particle.type === 'explosion') {
+                particle.velocity.x *= 0.98;
+                particle.velocity.y *= 0.98;
+            }
 
             if (particle.rotationSpeed !== undefined) {
                 particle.rotation = (particle.rotation ?? 0) + particle.rotationSpeed;
@@ -166,7 +172,7 @@ export class CollisionHaloManager {
 
     update(deltaTime: number): void {
         this.halos = this.halos.filter(halo => {
-            halo.radius += (halo.maxRadius - halo.radius) * 0.1;
+            halo.radius += (halo.maxRadius - halo.radius) * 0.12;
             halo.life -= deltaTime;
             return halo.life > 0;
         });
@@ -193,6 +199,9 @@ export class AudioManager {
             const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
             this.audioContext = new AudioContextClass();
         }
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
         return this.audioContext;
     }
 
@@ -204,6 +213,7 @@ export class AudioManager {
 
             oscillator.type = 'sine';
             oscillator.frequency.setValueAtTime(440, ctx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
 
             gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
@@ -239,6 +249,29 @@ export class AudioManager {
             console.error('Audio error:', e);
         }
     }
+
+    playBounceSound(): void {
+        try {
+            const ctx = this.ensureContext();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(660, ctx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(330, ctx.currentTime + 0.08);
+
+            gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.08);
+        } catch (e) {
+            console.error('Audio error:', e);
+        }
+    }
 }
 
 export class Player {
@@ -248,7 +281,7 @@ export class Player {
     audioManager: AudioManager;
     emitterPosition: PixelPos;
     private keyState: Set<string>;
-    onProjectileHit?: () => void;
+    onProjectileHit?: (receiverId: string) => void;
     onProjectileFail?: () => void;
     onDirectionChange?: (direction: Direction) => void;
 
@@ -313,6 +346,19 @@ export class Player {
         return this.state.selectedDirection;
     }
 
+    private getVelocityForDirection(direction: Direction): PixelPos {
+        switch (direction) {
+            case Direction.UP:
+                return { x: 0, y: -PROJECTILE_SPEED };
+            case Direction.DOWN:
+                return { x: 0, y: PROJECTILE_SPEED };
+            case Direction.LEFT:
+                return { x: -PROJECTILE_SPEED, y: 0 };
+            case Direction.RIGHT:
+                return { x: PROJECTILE_SPEED, y: 0 };
+        }
+    }
+
     fireProjectile(): void {
         if (this.state.projectile && this.state.projectile.active) {
             return;
@@ -322,42 +368,26 @@ export class Player {
         }
 
         const direction = this.state.selectedDirection;
-        let vx = 0;
-        let vy = 0;
-
-        switch (direction) {
-            case Direction.UP:
-                vx = 0;
-                vy = -PROJECTILE_SPEED;
-                break;
-            case Direction.DOWN:
-                vx = 0;
-                vy = PROJECTILE_SPEED;
-                break;
-            case Direction.LEFT:
-                vx = -PROJECTILE_SPEED;
-                vy = 0;
-                break;
-            case Direction.RIGHT:
-                vx = PROJECTILE_SPEED;
-                vy = 0;
-                break;
-        }
+        const velocity = this.getVelocityForDirection(direction);
 
         this.state.projectile = {
             position: { ...this.emitterPosition },
-            velocity: { x: vx, y: vy },
+            velocity: { ...velocity },
+            baseVelocity: { ...velocity },
             active: true,
-            trailPositions: []
+            trailPositions: [],
+            parabolaTime: 0,
+            parabolaAmplitude: PARABOLA_AMPLITUDE,
+            direction: direction
         };
     }
 
     createExplosion(position: PixelPos): void {
         for (let i = 0; i < 10; i++) {
-            const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.5;
+            const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.3;
             const speed = 2 + Math.random() * 3;
             this.particlePool.acquire(
-                position,
+                { ...position },
                 {
                     x: Math.cos(angle) * speed,
                     y: Math.sin(angle) * speed
@@ -365,100 +395,159 @@ export class Player {
                 300,
                 '#00FFAA',
                 2,
-                'explosion'
+                'explosion',
+                Math.random() * Math.PI * 2,
+                0
+            );
+        }
+    }
+
+    createLockUnlockParticles(position: PixelPos): void {
+        for (let i = 0; i < 5; i++) {
+            const angle = (Math.PI * 2 * i) / 5;
+            const speed = 2.5 + Math.random() * 1.5;
+            this.particlePool.acquire(
+                { ...position },
+                {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                },
+                800,
+                '#FFD700',
+                6,
+                'lockUnlock',
+                Math.random() * Math.PI * 2,
+                0.08 + Math.random() * 0.06
             );
         }
     }
 
     spawnHalo(position: PixelPos): void {
-        this.haloManager.spawn(position, 35);
+        this.haloManager.spawn(position, 40);
     }
 
     bounceProjectile(normalX: number, normalY: number): void {
         if (!this.state.projectile) return;
 
-        const dot = this.state.projectile.velocity.x * normalX + this.state.projectile.velocity.y * normalY;
+        const v = this.state.projectile.velocity;
+        const dot = v.x * normalX + v.y * normalY;
 
-        this.state.projectile.velocity.x = this.state.projectile.velocity.x - 2 * dot * normalX;
-        this.state.projectile.velocity.y = this.state.projectile.velocity.y - 2 * dot * normalY;
+        this.state.projectile.velocity.x = v.x - 2 * dot * normalX;
+        this.state.projectile.velocity.y = v.y - 2 * dot * normalY;
 
-        this.spawnHalo({ ...this.state.projectile.position });
-    }
+        this.state.projectile.baseVelocity.x = this.state.projectile.velocity.x;
+        this.state.projectile.baseVelocity.y = this.state.projectile.velocity.y;
 
-    calculateTrajectory(startPos: PixelPos, direction: Direction, steps: number = 60): PixelPos[] {
-        const points: PixelPos[] = [];
-        let vx = 0;
-        let vy = 0;
-
-        switch (direction) {
-            case Direction.UP:
-                vy = -PROJECTILE_SPEED;
-                break;
-            case Direction.DOWN:
-                vy = PROJECTILE_SPEED;
-                break;
-            case Direction.LEFT:
-                vx = -PROJECTILE_SPEED;
-                break;
-            case Direction.RIGHT:
-                vx = PROJECTILE_SPEED;
-                break;
+        const speed = Math.sqrt(
+            this.state.projectile.velocity.x ** 2 +
+            this.state.projectile.velocity.y ** 2
+        );
+        const targetSpeed = PROJECTILE_SPEED;
+        if (speed > 0) {
+            this.state.projectile.velocity.x = (this.state.projectile.velocity.x / speed) * targetSpeed;
+            this.state.projectile.velocity.y = (this.state.projectile.velocity.y / speed) * targetSpeed;
+            this.state.projectile.baseVelocity.x = this.state.projectile.velocity.x;
+            this.state.projectile.baseVelocity.y = this.state.projectile.velocity.y;
         }
 
+        this.spawnHalo({ ...this.state.projectile.position });
+        this.audioManager.playBounceSound();
+    }
+
+    calculateTrajectory(startPos: PixelPos, direction: Direction, steps: number = 80): PixelPos[] {
+        const points: PixelPos[] = [];
+        const baseVel = this.getVelocityForDirection(direction);
+
         let pos = { ...startPos };
-        let vel = { x: vx, y: vy };
+        let parabolaTime = 0;
 
         for (let i = 0; i < steps; i++) {
-            points.push({ ...pos });
-            vel.y += GRAVITY;
-            pos.x += vel.x;
-            pos.y += vel.y;
+            const parabolaOffset = this.calculateParabolaOffset(parabolaTime, direction);
+
+            points.push({
+                x: pos.x + parabolaOffset.x,
+                y: pos.y + parabolaOffset.y
+            });
+
+            pos.x += baseVel.x;
+            pos.y += baseVel.y;
+            parabolaTime++;
         }
 
         return points;
     }
 
-    update(deltaTime: number, checkCollision: (pos: PixelPos) => { hit: boolean; normalX?: number; normalY?: number; reachedReceiver?: boolean }): void {
+    private calculateParabolaOffset(time: number, direction: Direction): PixelPos {
+        const sineWave = Math.sin(time * PARABOLA_FREQUENCY) * PARABOLA_AMPLITUDE;
+
+        if (direction === Direction.LEFT || direction === Direction.RIGHT) {
+            return { x: 0, y: sineWave };
+        } else {
+            return { x: sineWave, y: 0 };
+        }
+    }
+
+    update(
+        deltaTime: number,
+        checkCollision: (pos: PixelPos) => {
+            hit: boolean;
+            absorbed?: boolean;
+            normalX?: number;
+            normalY?: number;
+            reachedReceiver?: boolean;
+            receiverId?: string;
+            outOfBounds?: boolean;
+        }
+    ): void {
         this.particlePool.update(deltaTime);
         this.haloManager.update(deltaTime);
 
         if (this.state.projectile && this.state.projectile.active) {
             const proj = this.state.projectile;
 
-            proj.trailPositions.unshift({ ...proj.position });
+            proj.parabolaTime++;
+
+            const parabolaOffset = this.calculateParabolaOffset(proj.parabolaTime, proj.direction);
+
+            proj.position.x += proj.velocity.x;
+            proj.position.y += proj.velocity.y;
+
+            const renderPos = {
+                x: proj.position.x + parabolaOffset.x,
+                y: proj.position.y + parabolaOffset.y
+            };
+
+            proj.trailPositions.unshift({ ...renderPos });
             if (proj.trailPositions.length > TRAIL_LENGTH) {
                 proj.trailPositions.pop();
             }
 
-            proj.velocity.y += GRAVITY;
-            proj.position.x += proj.velocity.x;
-            proj.position.y += proj.velocity.y;
+            const collision = checkCollision(renderPos);
 
-            const collision = checkCollision(proj.position);
-
-            if (collision.reachedReceiver) {
+            if (collision.reachedReceiver && collision.receiverId) {
                 proj.active = false;
                 this.state.projectile = null;
                 this.audioManager.playUnlockSound();
                 if (this.onProjectileHit) {
-                    this.onProjectileHit();
+                    this.onProjectileHit(collision.receiverId);
                 }
                 return;
             }
 
-            if (collision.hit) {
-                if (collision.normalX !== undefined && collision.normalY !== undefined) {
-                    this.bounceProjectile(collision.normalX, collision.normalY);
-                } else {
-                    this.createExplosion(proj.position);
-                    proj.active = false;
-                    this.state.projectile = null;
-                    this.state.lives--;
-                    this.audioManager.playErrorSound();
-                    if (this.onProjectileFail) {
-                        this.onProjectileFail();
-                    }
+            if (collision.outOfBounds || collision.absorbed) {
+                this.createExplosion(renderPos);
+                proj.active = false;
+                this.state.projectile = null;
+                this.state.lives--;
+                this.audioManager.playErrorSound();
+                if (this.onProjectileFail) {
+                    this.onProjectileFail();
                 }
+                return;
+            }
+
+            if (collision.hit && collision.normalX !== undefined && collision.normalY !== undefined) {
+                this.bounceProjectile(collision.normalX, collision.normalY);
             }
         }
     }
@@ -492,17 +581,17 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void 
         ctx.save();
         ctx.globalAlpha = Math.max(0, alpha);
 
-        if (particle.type === 'halo' || particle.type === 'explosion') {
+        if (particle.type === 'explosion' || particle.type === 'lockUnlock') {
             ctx.shadowColor = particle.color;
             ctx.shadowBlur = 15;
         }
 
         ctx.fillStyle = particle.color;
 
-        if (particle.rotation !== undefined && particle.type === 'explosion') {
+        if (particle.type === 'lockUnlock') {
             ctx.save();
             ctx.translate(particle.position.x, particle.position.y);
-            ctx.rotate(particle.rotation);
+            ctx.rotate(particle.rotation ?? 0);
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
                 const angle = (Math.PI * 2 * i) / 6;
@@ -515,6 +604,14 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void 
                 }
             }
             ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        } else if (particle.rotation !== undefined && particle.type === 'explosion') {
+            ctx.save();
+            ctx.translate(particle.position.x, particle.position.y);
+            ctx.rotate(particle.rotation);
+            ctx.beginPath();
+            ctx.arc(0, 0, particle.size, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
         } else {
@@ -543,17 +640,22 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void 
 
     if (player.state.projectile && player.state.projectile.active) {
         const proj = player.state.projectile;
+        const parabolaOffset = player['calculateParabolaOffset'](proj.parabolaTime, proj.direction);
+        const renderPos = {
+            x: proj.position.x + parabolaOffset.x,
+            y: proj.position.y + parabolaOffset.y
+        };
 
         for (let i = 0; i < proj.trailPositions.length; i++) {
             const trail = proj.trailPositions[i];
             const alpha = 1 - i / proj.trailPositions.length;
             ctx.save();
-            ctx.globalAlpha = alpha * 0.5;
+            ctx.globalAlpha = alpha * 0.6;
             ctx.fillStyle = '#00FFAA';
             ctx.shadowColor = '#00FFAA';
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 12;
             ctx.beginPath();
-            ctx.arc(trail.x, trail.y, 3 - i * 0.1, 0, Math.PI * 2);
+            ctx.arc(trail.x, trail.y, Math.max(1, 4 - i * 0.12), 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
         }
@@ -561,9 +663,15 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void 
         ctx.save();
         ctx.fillStyle = '#00FFAA';
         ctx.shadowColor = '#00FFAA';
-        ctx.shadowBlur = 25;
+        ctx.shadowBlur = 30;
         ctx.beginPath();
-        ctx.arc(proj.position.x, proj.position.y, 5, 0, Math.PI * 2);
+        ctx.arc(renderPos.x, renderPos.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(renderPos.x, renderPos.y, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
     }
@@ -571,9 +679,9 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void 
     if (player.state.isAiming || (!player.state.projectile || !player.state.projectile.active)) {
         const trajectory = player.calculateTrajectory(player.emitterPosition, player.state.selectedDirection);
         ctx.save();
-        ctx.strokeStyle = 'rgba(0, 255, 170, 0.3)';
+        ctx.strokeStyle = 'rgba(0, 255, 170, 0.25)';
         ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
+        ctx.setLineDash([4, 6]);
         ctx.beginPath();
         ctx.moveTo(trajectory[0].x, trajectory[0].y);
         for (let i = 1; i < trajectory.length; i++) {
@@ -590,27 +698,37 @@ function drawEmitter(ctx: CanvasRenderingContext2D, position: PixelPos, directio
     ctx.save();
     ctx.translate(position.x, position.y);
 
-    const gradient = ctx.createRadialGradient(0, 0, 5, 0, 0, 30);
-    gradient.addColorStop(0, 'rgba(0, 170, 187, 0.8)');
+    const gradient = ctx.createRadialGradient(0, 0, 5, 0, 0, 35);
+    gradient.addColorStop(0, 'rgba(0, 170, 187, 0.9)');
     gradient.addColorStop(1, 'rgba(0, 170, 187, 0)');
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(0, 0, 30, 0, Math.PI * 2);
+    ctx.arc(0, 0, 35, 0, Math.PI * 2);
     ctx.fill();
 
     const time = Date.now() / 1000;
     ctx.strokeStyle = '#00AABB';
     ctx.lineWidth = 2;
     ctx.shadowColor = '#00AABB';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 15;
     ctx.beginPath();
-    ctx.arc(0, 0, 15, time, time + Math.PI * 1.5);
+    ctx.arc(0, 0, 16, time * 1.5, time * 1.5 + Math.PI * 1.5);
     ctx.stroke();
 
-    ctx.shadowBlur = 15;
-    ctx.fillStyle = '#00AABB';
+    ctx.strokeStyle = 'rgba(0, 255, 170, 0.6)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.arc(0, 0, 20, -time * 0.8, -time * 0.8 + Math.PI);
+    ctx.stroke();
+
+    ctx.shadowBlur = 20;
+    const coreGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 10);
+    coreGradient.addColorStop(0, '#FFFFFF');
+    coreGradient.addColorStop(0.5, '#00FFAA');
+    coreGradient.addColorStop(1, '#00AABB');
+    ctx.fillStyle = coreGradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
     ctx.fill();
 
     let arrowX = 0;
@@ -619,33 +737,33 @@ function drawEmitter(ctx: CanvasRenderingContext2D, position: PixelPos, directio
 
     switch (direction) {
         case Direction.UP:
-            arrowY = -22;
+            arrowY = -24;
             break;
         case Direction.DOWN:
-            arrowY = 22;
+            arrowY = 24;
             break;
         case Direction.LEFT:
-            arrowX = -22;
+            arrowX = -24;
             break;
         case Direction.RIGHT:
-            arrowX = 22;
+            arrowX = 24;
             break;
     }
 
     ctx.fillStyle = '#00FFAA';
     ctx.shadowColor = '#00FFAA';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 15;
     ctx.beginPath();
     if (direction === Direction.UP || direction === Direction.DOWN) {
         const sign = direction === Direction.UP ? -1 : 1;
         ctx.moveTo(arrowX, arrowY + sign * arrowSize);
-        ctx.lineTo(arrowX - 6, arrowY - sign * 5);
-        ctx.lineTo(arrowX + 6, arrowY - sign * 5);
+        ctx.lineTo(arrowX - 7, arrowY - sign * 5);
+        ctx.lineTo(arrowX + 7, arrowY - sign * 5);
     } else {
         const sign = direction === Direction.LEFT ? -1 : 1;
         ctx.moveTo(arrowX + sign * arrowSize, arrowY);
-        ctx.lineTo(arrowX - sign * 5, arrowY - 6);
-        ctx.lineTo(arrowX - sign * 5, arrowY + 6);
+        ctx.lineTo(arrowX - sign * 5, arrowY - 7);
+        ctx.lineTo(arrowX - sign * 5, arrowY + 7);
     }
     ctx.closePath();
     ctx.fill();

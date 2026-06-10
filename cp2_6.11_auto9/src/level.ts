@@ -85,9 +85,82 @@ export function isInsideGrid(pos: GridPos, gridSize: { rows: number; cols: numbe
     return pos.row >= 0 && pos.row < gridSize.rows && pos.col >= 0 && pos.col < gridSize.cols;
 }
 
-export function checkCollision(pos: GridPos, obstacles: Obstacle[]): Obstacle | null {
+export interface CollisionResult {
+    hit: boolean;
+    obstacle?: Obstacle;
+    normalX?: number;
+    normalY?: number;
+    absorbed?: boolean;
+}
+
+export function checkCollision(
+    pixelPos: PixelPos,
+    obstacles: Obstacle[],
+    offset: GridOffset,
+    lastPixelPos?: PixelPos
+): CollisionResult {
+    const gridPos = pixelToGrid(pixelPos, offset);
+
     for (const obstacle of obstacles) {
-        if (isSameGridPos(pos, obstacle.position)) {
+        if (isSameGridPos(gridPos, obstacle.position)) {
+            const obstaclePixel = gridToPixel(obstacle.position, offset);
+            const dx = pixelPos.x - obstaclePixel.x;
+            const dy = pixelPos.y - obstaclePixel.y;
+
+            let normalX = 0;
+            let normalY = 0;
+
+            if (lastPixelPos) {
+                const moveDx = pixelPos.x - lastPixelPos.x;
+                const moveDy = pixelPos.y - lastPixelPos.y;
+
+                if (Math.abs(moveDx) > Math.abs(moveDy)) {
+                    normalX = moveDx > 0 ? -1 : 1;
+                    normalY = 0;
+                } else {
+                    normalX = 0;
+                    normalY = moveDy > 0 ? -1 : 1;
+                }
+            } else {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    normalX = dx > 0 ? 1 : -1;
+                    normalY = 0;
+                } else {
+                    normalX = 0;
+                    normalY = dy > 0 ? 1 : -1;
+                }
+            }
+
+            const len = Math.sqrt(normalX * normalX + normalY * normalY);
+            if (len > 0) {
+                normalX /= len;
+                normalY /= len;
+            }
+
+            if (obstacle.type === 'energy') {
+                return {
+                    hit: true,
+                    obstacle,
+                    absorbed: true
+                };
+            }
+
+            return {
+                hit: true,
+                obstacle,
+                normalX,
+                normalY,
+                absorbed: false
+            };
+        }
+    }
+
+    return { hit: false };
+}
+
+export function checkGridCollision(gridPos: GridPos, obstacles: Obstacle[]): Obstacle | null {
+    for (const obstacle of obstacles) {
+        if (isSameGridPos(gridPos, obstacle.position)) {
             return obstacle;
         }
     }

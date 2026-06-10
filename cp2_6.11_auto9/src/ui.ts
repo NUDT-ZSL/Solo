@@ -1,4 +1,5 @@
-import type { PixelPos } from './player';
+import type { PixelPos, GridPos } from './player';
+import { gridToPixel } from './level';
 
 export interface LevelTheme {
     id: number;
@@ -37,6 +38,14 @@ export interface LockParticle {
     active: boolean;
 }
 
+export interface LockUnlockAnimation {
+    position: PixelPos;
+    particles: LockParticle[];
+    life: number;
+    maxLife: number;
+    active: boolean;
+}
+
 export interface HexagonCluster {
     position: PixelPos;
     size: number;
@@ -50,6 +59,14 @@ export interface WaveTransition {
     duration: number;
     centerX: number;
     centerY: number;
+    fadeOutStartTime: number;
+    fadingOut: boolean;
+}
+
+export interface GridCellBrightness {
+    row: number;
+    col: number;
+    brightness: number;
 }
 
 export interface GameOverUI {
@@ -70,11 +87,42 @@ export interface LevelMenuState {
     maxUnlockedLevel: number;
 }
 
+export interface GridOffset {
+    x: number;
+    y: number;
+    tileWidth: number;
+    tileHeight: number;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : { r: 26, g: 26, b: 46 };
+}
+
+function lerpColor(color1: string, color2: string, t: number): string {
+    const c1 = hexToRgb(color1);
+    const c2 = hexToRgb(color2);
+    const r = Math.round(c1.r + (c2.r - c1.r) * t);
+    const g = Math.round(c1.g + (c2.g - c1.g) * t);
+    const b = Math.round(c1.b + (c2.b - c1.b) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+}
+
 export class UIManager {
     canvas: HTMLCanvasElement;
     ctx: CanvasRenderingContext2D;
     hexagonClusters: HexagonCluster[];
     waveTransition: WaveTransition;
+    lockUnlockAnimations: LockUnlockAnimation[];
     gameOverUI: GameOverUI;
     topBar: TopBarState;
     levelMenu: LevelMenuState;
@@ -97,8 +145,11 @@ export class UIManager {
             startTime: 0,
             duration: 1000,
             centerX: 0,
-            centerY: 0
+            centerY: 0,
+            fadeOutStartTime: 0,
+            fadingOut: false
         };
+        this.lockUnlockAnimations = [];
         this.gameOverUI = {
             active: false,
             buttonHovered: false
@@ -126,16 +177,16 @@ export class UIManager {
 
     private generateHexagonClusters(): HexagonCluster[] {
         const clusters: HexagonCluster[] = [];
-        const clusterCount = 12;
+        const clusterCount = 15;
         for (let i = 0; i < clusterCount; i++) {
             clusters.push({
                 position: {
                     x: Math.random() * this.canvas.width,
                     y: Math.random() * this.canvas.height
                 },
-                size: 15 + Math.random() * 35,
+                size: 15 + Math.random() * 40,
                 rotation: Math.random() * Math.PI * 2,
-                opacity: 0.05 + Math.random() * 0.1
+                opacity: 0.03 + Math.random() * 0.08
             });
         }
         return clusters;
@@ -145,19 +196,19 @@ export class UIManager {
         this.hexagonClusters = this.generateHexagonClusters();
     }
 
-    private initLevelMenuButtons(): void {
+    initLevelMenuButtons(): void {
         const buttons: LevelButtonState[] = [];
         const cols = 3;
         const rows = 3;
         const total = 9;
-        const spacing = 20;
+        const spacing = 25;
         const canvasWidth = this.canvas.width;
         const canvasHeight = this.canvas.height;
         const buttonSize = Math.min(canvasWidth, canvasHeight) / 5;
         const gridWidth = cols * buttonSize + (cols - 1) * spacing;
         const gridHeight = rows * buttonSize + (rows - 1) * spacing;
         const startX = (canvasWidth - gridWidth) / 2;
-        const startY = (canvasHeight - gridHeight) / 2 + 30;
+        const startY = (canvasHeight - gridHeight) / 2 + 40;
 
         for (let i = 0; i < total; i++) {
             const col = i % cols;
@@ -198,11 +249,40 @@ export class UIManager {
         this.waveTransition.startTime = Date.now();
         this.waveTransition.centerX = centerX ?? this.canvas.width / 2;
         this.waveTransition.centerY = centerY ?? this.canvas.height / 2;
+        this.waveTransition.fadingOut = false;
+        this.waveTransition.fadeOutStartTime = 0;
     }
 
     isWaveTransitionComplete(): boolean {
         if (!this.waveTransition.active) return true;
-        return Date.now() - this.waveTransition.startTime >= this.waveTransition.duration;
+        const totalDuration = this.waveTransition.duration + 300;
+        return Date.now() - this.waveTransition.startTime >= totalDuration;
+    }
+
+    startLockUnlockAnimation(position: PixelPos): void {
+        const particles: LockParticle[] = [];
+        for (let i = 0; i < 5; i++) {
+            const angle = (Math.PI * 2 * i) / 5 + Math.random() * 0.2;
+            particles.push({
+                position: { ...position },
+                velocity: {
+                    x: Math.cos(angle) * 2.5,
+                    y: Math.sin(angle) * 2.5
+                },
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: 0.1 + Math.random() * 0.08,
+                life: 1000,
+                maxLife: 1000,
+                active: true
+            });
+        }
+        this.lockUnlockAnimations.push({
+            position: { ...position },
+            particles,
+            life: 1000,
+            maxLife: 1000,
+            active: true
+        });
     }
 
     startUnlockAnimation(levelId: number, centerX: number, centerY: number): void {
@@ -311,6 +391,35 @@ export class UIManager {
                 }
             }
         }
+
+        for (const anim of this.lockUnlockAnimations) {
+            if (!anim.active) continue;
+            anim.life -= deltaTime;
+            for (const p of anim.particles) {
+                if (!p.active) continue;
+                p.position.x += p.velocity.x;
+                p.position.y += p.velocity.y;
+                p.velocity.x *= 0.98;
+                p.velocity.y *= 0.98;
+                p.rotation += p.rotationSpeed;
+                p.life -= deltaTime;
+                if (p.life <= 0) {
+                    p.active = false;
+                }
+            }
+            if (anim.life <= 0) {
+                anim.active = false;
+            }
+        }
+        this.lockUnlockAnimations = this.lockUnlockAnimations.filter(a => a.active);
+
+        if (this.waveTransition.active && !this.waveTransition.fadingOut) {
+            const elapsed = Date.now() - this.waveTransition.startTime;
+            if (elapsed >= this.waveTransition.duration) {
+                this.waveTransition.fadingOut = true;
+                this.waveTransition.fadeOutStartTime = Date.now();
+            }
+        }
     }
 
     draw(): void {
@@ -319,8 +428,95 @@ export class UIManager {
         if (this.levelMenu.active) {
             this.drawLevelMenu();
         }
+    }
 
-        this.drawWaveTransition();
+    drawGridWithWave(
+        gridSize: { rows: number; cols: number },
+        offset: GridOffset
+    ): void {
+        if (!this.waveTransition.active) return;
+
+        const ctx = this.ctx;
+        const elapsed = Date.now() - this.waveTransition.startTime;
+        const progress = Math.min(1, elapsed / this.waveTransition.duration);
+
+        const centerGrid = {
+            row: Math.floor(gridSize.rows / 2),
+            col: Math.floor(gridSize.cols / 2)
+        };
+        const centerPixel = gridToPixel(centerGrid, offset);
+
+        const maxDistance = Math.sqrt(
+            (gridSize.rows * gridSize.rows) + (gridSize.cols * gridSize.cols)
+        ) * offset.tileWidth / 2;
+
+        const waveWidth = maxDistance * 0.35;
+        const currentWaveRadius = maxDistance * progress;
+
+        const fadeAlpha = this.waveTransition.fadingOut
+            ? Math.max(0, 1 - (Date.now() - this.waveTransition.fadeOutStartTime) / 300)
+            : 1;
+
+        for (let row = 0; row < gridSize.rows; row++) {
+            for (let col = 0; col < gridSize.cols; col++) {
+                const cellPixel = gridToPixel({ row, col }, offset);
+                const dx = cellPixel.x - centerPixel.x;
+                const dy = cellPixel.y - centerPixel.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const brightness = smoothstep(
+                    currentWaveRadius - waveWidth,
+                    currentWaveRadius,
+                    distance
+                );
+
+                if (brightness > 0) {
+                    const cellColor = lerpColor('#1A1A2E', '#FFFFFF', brightness);
+
+                    ctx.save();
+                    ctx.globalAlpha = brightness * fadeAlpha * 0.9;
+                    ctx.fillStyle = cellColor;
+                    ctx.shadowColor = '#FFFFFF';
+                    ctx.shadowBlur = 15 * brightness;
+
+                    this.drawDiamondCell(cellPixel, offset.tileWidth, offset.tileHeight);
+
+                    ctx.restore();
+                }
+            }
+        }
+
+        ctx.save();
+        ctx.globalAlpha = fadeAlpha * 0.5;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 * (1 - progress)})`;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#FFFFFF';
+        ctx.shadowBlur = 30;
+        ctx.beginPath();
+        ctx.arc(centerPixel.x, centerPixel.y, currentWaveRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        if (progress >= 1 && this.waveTransition.fadingOut) {
+            const fadeProgress = (Date.now() - this.waveTransition.fadeOutStartTime) / 300;
+            if (fadeProgress >= 1) {
+                this.waveTransition.active = false;
+            }
+        }
+    }
+
+    private drawDiamondCell(center: PixelPos, tileWidth: number, tileHeight: number): void {
+        const ctx = this.ctx;
+        const hw = tileWidth / 2;
+        const hh = tileHeight / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y - hh);
+        ctx.lineTo(center.x + hw, center.y);
+        ctx.lineTo(center.x, center.y + hh);
+        ctx.lineTo(center.x - hw, center.y);
+        ctx.closePath();
+        ctx.fill();
     }
 
     drawTopBar(): void {
@@ -329,7 +525,7 @@ export class UIManager {
         const fontSize = this.getResponsiveFontSize(14, 1.5, 24);
 
         ctx.save();
-        ctx.fillStyle = 'rgba(10, 10, 15, 0.9)';
+        ctx.fillStyle = 'rgba(10, 10, 15, 0.92)';
         ctx.fillRect(0, 0, this.canvas.width, barHeight);
 
         ctx.strokeStyle = 'rgba(0, 255, 170, 0.3)';
@@ -353,6 +549,59 @@ export class UIManager {
         if (this.themeDisplayAlpha > 0) {
             this.drawLevelThemeDisplay();
         }
+
+        this.drawLockUnlockAnimations();
+    }
+
+    private drawLockUnlockAnimations(): void {
+        const ctx = this.ctx;
+
+        for (const anim of this.lockUnlockAnimations) {
+            if (!anim.active) continue;
+
+            const progress = 1 - anim.life / anim.maxLife;
+
+            ctx.save();
+            const lockAlpha = Math.max(0, 1 - progress * 2);
+            if (lockAlpha > 0) {
+                ctx.globalAlpha = lockAlpha;
+                this.drawOpenLockIcon(anim.position.x, anim.position.y, 20);
+            }
+            ctx.restore();
+
+            for (const p of anim.particles) {
+                if (!p.active) continue;
+                const alpha = p.life / p.maxLife;
+                this.drawSmallHexagon(p.position.x, p.position.y, 6, p.rotation, '#FFD700', alpha);
+            }
+        }
+    }
+
+    private drawOpenLockIcon(x: number, y: number, size: number): void {
+        const ctx = this.ctx;
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        ctx.fillStyle = '#FFD700';
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 15;
+
+        ctx.fillRect(-size * 0.5, -size * 0.1, size, size * 0.7);
+
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(-size * 0.2, -size * 0.1, size * 0.35, Math.PI, -Math.PI * 0.3, true);
+        ctx.stroke();
+
+        ctx.fillStyle = '#0A0A0F';
+        ctx.beginPath();
+        ctx.arc(size * 0.1, size * 0.25, size * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 
     private drawLives(centerX: number, centerY: number, lives: number, maxLives: number): void {
@@ -371,11 +620,20 @@ export class UIManager {
             ctx.rotate(Math.PI / 4);
 
             if (isActive) {
+                const lifeRatio = lives / maxLives;
                 const gradient = ctx.createLinearGradient(-diamondSize / 2, -diamondSize / 2, diamondSize / 2, diamondSize / 2);
-                gradient.addColorStop(0, '#00FFAA');
-                gradient.addColorStop(1, '#00AABB');
+                if (lifeRatio > 0.6) {
+                    gradient.addColorStop(0, '#00FF88');
+                    gradient.addColorStop(1, '#00CC66');
+                } else if (lifeRatio > 0.3) {
+                    gradient.addColorStop(0, '#FFCC00');
+                    gradient.addColorStop(1, '#FF9900');
+                } else {
+                    gradient.addColorStop(0, '#FF4444');
+                    gradient.addColorStop(1, '#CC0000');
+                }
                 ctx.fillStyle = gradient;
-                ctx.shadowColor = '#00FFAA';
+                ctx.shadowColor = lifeRatio > 0.3 ? '#00FF88' : '#FF4444';
                 ctx.shadowBlur = 10;
             } else {
                 ctx.fillStyle = 'rgba(100, 100, 100, 0.3)';
@@ -640,56 +898,6 @@ export class UIManager {
         ctx.restore();
     }
 
-    private drawWaveTransition(): void {
-        if (!this.waveTransition.active) return;
-
-        const ctx = this.ctx;
-        const elapsed = Date.now() - this.waveTransition.startTime;
-        const progress = Math.min(1, elapsed / this.waveTransition.duration);
-
-        if (progress >= 1) {
-            this.waveTransition.active = false;
-            return;
-        }
-
-        const maxRadius = Math.sqrt(
-            this.canvas.width * this.canvas.width + this.canvas.height * this.canvas.height
-        );
-        const currentRadius = maxRadius * progress;
-        const waveWidth = 100;
-
-        ctx.save();
-
-        ctx.fillStyle = 'rgba(26, 26, 46, 0.8)';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        ctx.globalCompositeOperation = 'destination-out';
-        const gradient = ctx.createRadialGradient(
-            this.waveTransition.centerX,
-            this.waveTransition.centerY,
-            Math.max(0, currentRadius - waveWidth),
-            this.waveTransition.centerX,
-            this.waveTransition.centerY,
-            currentRadius
-        );
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        ctx.restore();
-
-        ctx.save();
-        ctx.strokeStyle = `rgba(255, 255, 255, ${1 - progress})`;
-        ctx.lineWidth = 3;
-        ctx.shadowColor = '#FFFFFF';
-        ctx.shadowBlur = 20;
-        ctx.beginPath();
-        ctx.arc(this.waveTransition.centerX, this.waveTransition.centerY, currentRadius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-    }
-
     drawGameOver(): void {
         if (!this.gameOverUI.active) return;
 
@@ -710,7 +918,7 @@ export class UIManager {
         ctx.font = `bold ${titleFontSize}px "Segoe UI", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = '#00FFAA';
+        ctx.shadowColor = '#FF4444';
         ctx.shadowBlur = 30;
         ctx.fillText('粒子消散', centerX, centerY - 50);
 
@@ -796,9 +1004,13 @@ export class UIManager {
             button.isCurrent = button.id === levelId;
         }
     }
+
+    clearLockUnlockAnimations(): void {
+        this.lockUnlockAnimations = [];
+    }
 }
 
-export function drawReceiver(ctx: CanvasRenderingContext2D, position: PixelPos, unlocked: boolean): void {
+export function drawReceiver(ctx: CanvasRenderingContext2D, position: PixelPos, unlocked: boolean, hasLock: boolean): void {
     const time = Date.now() / 1000;
     const pulse = (Math.sin(time * 2) + 1) / 2;
     const baseRadius = 18;
@@ -808,28 +1020,37 @@ export function drawReceiver(ctx: CanvasRenderingContext2D, position: PixelPos, 
     ctx.translate(position.x, position.y);
 
     const outerColor = unlocked ? '#FFD700' : '#9B59B6';
-    const innerColor = unlocked ? '#FFD700' : '#BB88FF';
+    const innerColor = unlocked ? '#FFFF00' : '#BB88FF';
 
-    const gradient = ctx.createRadialGradient(0, 0, 5, 0, 0, 40);
-    gradient.addColorStop(0, unlocked ? 'rgba(255, 215, 0, 0.6)' : 'rgba(155, 89, 182, 0.6)');
+    const gradient = ctx.createRadialGradient(0, 0, 5, 0, 0, 45);
+    gradient.addColorStop(0, unlocked ? 'rgba(255, 215, 0, 0.7)' : 'rgba(155, 89, 182, 0.6)');
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(0, 0, 40, 0, Math.PI * 2);
+    ctx.arc(0, 0, 45, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = outerColor;
-    ctx.lineWidth = 2;
+    const outerRingGradient = ctx.createRadialGradient(0, 0, radius, 0, 0, radius + 8);
+    outerRingGradient.addColorStop(0, outerColor);
+    outerRingGradient.addColorStop(1, 'rgba(155, 89, 182, 0)');
+    ctx.strokeStyle = outerRingGradient;
+    ctx.lineWidth = 3;
     ctx.shadowColor = outerColor;
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 20;
     ctx.beginPath();
     ctx.arc(0, 0, radius + 5, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = innerColor;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 25;
     ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.25, 0, Math.PI * 2);
     ctx.fill();
 
     if (unlocked) {
@@ -837,9 +1058,38 @@ export function drawReceiver(ctx: CanvasRenderingContext2D, position: PixelPos, 
         ctx.lineWidth = 2;
         ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(0, 0, radius * 0.3, time, time + Math.PI);
+        ctx.arc(0, 0, radius * 0.8, time * 2, time * 2 + Math.PI * 1.2);
         ctx.stroke();
     }
+
+    ctx.restore();
+
+    if (hasLock && !unlocked) {
+        drawLockIconNextToPort(ctx, position.x + 25, position.y - 25, 14);
+    }
+}
+
+function drawLockIconNextToPort(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+
+    ctx.fillStyle = '#00AABB';
+    ctx.shadowColor = '#00AABB';
+    ctx.shadowBlur = 8;
+
+    ctx.fillRect(-size * 0.5, -size * 0.1, size, size * 0.7);
+
+    ctx.strokeStyle = '#00AABB';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.1, size * 0.35, Math.PI, 0, false);
+    ctx.stroke();
+
+    ctx.fillStyle = '#0A0A0F';
+    ctx.beginPath();
+    ctx.arc(0, size * 0.25, size * 0.08, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
 }
@@ -857,6 +1107,10 @@ export function drawObstacle(
         ctx.fillStyle = '#4A4A5A';
         ctx.strokeStyle = '#6A6A7A';
         ctx.lineWidth = 2;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
         ctx.beginPath();
         ctx.moveTo(-size / 2, size / 4);
         ctx.lineTo(-size / 3, -size / 3);
@@ -873,11 +1127,17 @@ export function drawObstacle(
         ctx.fillStyle = `rgba(255, 100, 100, ${0.7 + glow * 0.3})`;
         ctx.shadowColor = '#FF6464';
         ctx.shadowBlur = 15 + glow * 10;
-        ctx.fillRect(-size / 2, -size / 6, size, size / 3);
+        ctx.fillRect(-size / 2, -size / 5, size, size / 2.5);
+
+        ctx.strokeStyle = `rgba(255, 200, 200, ${0.5 + glow * 0.5})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-size / 2, -size / 5, size, size / 2.5);
     } else if (type === 'moving') {
-        ctx.fillStyle = '#FF88DD';
+        const time = Date.now() / 300;
+        const pulse = (Math.sin(time) + 1) / 2;
+        ctx.fillStyle = `rgba(255, 136, 221, ${0.8 + pulse * 0.2})`;
         ctx.shadowColor = '#FF88DD';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 12 + pulse * 8;
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = (Math.PI * 2 * i) / 6 - Math.PI / 2;
@@ -891,6 +1151,65 @@ export function drawObstacle(
         }
         ctx.closePath();
         ctx.fill();
+
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+export function drawGuideLine(
+    ctx: CanvasRenderingContext2D,
+    start: PixelPos,
+    end: PixelPos
+): void {
+    ctx.save();
+
+    const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+    gradient.addColorStop(0, 'rgba(0, 170, 255, 0.2)');
+    gradient.addColorStop(0.5, 'rgba(0, 170, 255, 0.4)');
+    gradient.addColorStop(1, 'rgba(0, 170, 255, 0.2)');
+
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+export function drawGrid(
+    ctx: CanvasRenderingContext2D,
+    gridSize: { rows: number; cols: number },
+    offset: GridOffset
+): void {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+
+    const hw = offset.tileWidth / 2;
+    const hh = offset.tileHeight / 2;
+
+    for (let row = 0; row < gridSize.rows; row++) {
+        for (let col = 0; col < gridSize.cols; col++) {
+            const pixel = gridToPixel({ row, col }, offset);
+
+            ctx.beginPath();
+            ctx.moveTo(pixel.x, pixel.y - hh);
+            ctx.lineTo(pixel.x + hw, pixel.y);
+            ctx.lineTo(pixel.x, pixel.y + hh);
+            ctx.lineTo(pixel.x - hw, pixel.y);
+            ctx.closePath();
+            ctx.stroke();
+        }
     }
 
     ctx.restore();
