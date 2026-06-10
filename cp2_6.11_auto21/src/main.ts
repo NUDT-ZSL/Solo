@@ -56,6 +56,11 @@ class GameApp {
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
   }
 
+  // 坐标转换逻辑：
+  //   e.clientX / e.clientY  →  浏览器视口坐标系（含滚动条偏移）
+  //   rect.left / rect.top   →  canvas元素左上角在视口中的偏移
+  //   canvas内坐标(x,y)      =  clientX - rect.left（结果单位：CSS像素）
+  //   游戏逻辑全部使用 canvas内坐标（CSS像素），DPR缩放由 ctx.scale() 在渲染层处理
   private getMousePos(e: MouseEvent): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     return {
@@ -143,12 +148,68 @@ declare global {
       triggerFail: () => void;
       goToWin: () => void;
       getState: () => any;
+      _gm: GameManager;
+      verifyLayout: () => any;
+      verifyEase: () => any;
+      resetToLevel1: () => void;
     };
   }
 }
 
 function createDebugAPI(gameManager: GameManager, audioEngine: AudioEngine) {
   return {
+    _gm: gameManager,
+    resetToLevel1: () => {
+      gameManager.state = 'playing';
+      gameManager.score = 0;
+      gameManager.level = 1;
+      (gameManager as any).initLevel();
+    },
+    verifyLayout: () => {
+      const PADDING = 20, HUD_OFF = 100, BW = 80, BH = 40, GAP = 8, COLS = 4;
+      const W = gameManager.canvasWidth, H = gameManager.canvasHeight;
+      const gridTotalWidth = COLS * BW + (COLS - 1) * GAP;
+      const horizontalFree = W - PADDING * 2 - gridTotalWidth;
+      const expected_gridStartX = PADDING + Math.max(0, horizontalFree / 2);
+      const expected_gridStartY = PADDING + HUD_OFF;
+      const tracks = gameManager.tracks;
+
+      const results: any = { W, H, expected_gridStartX, expected_gridStartY, trackCount: tracks.length };
+      if (tracks.length > 0) {
+        const t0 = tracks[0];
+        results.track0 = { x: t0.x, y: t0.y };
+        results.track0_X_OK = Math.abs(t0.x - expected_gridStartX) < 0.5;
+        results.track0_Y_OK = Math.abs(t0.y - expected_gridStartY) < 0.5;
+      }
+      if (tracks.length >= 2) {
+        results.colDeltaX = tracks[1].x - tracks[0].x;
+        results.expected_colDeltaX = BW + GAP;
+        results.colSpacing_OK = Math.abs(results.colDeltaX - results.expected_colDeltaX) < 0.1;
+      }
+      if (tracks.length >= 5) {
+        results.rowDeltaY = tracks[4].y - tracks[0].y;
+        results.expected_rowDeltaY = BH + GAP;
+        results.rowSpacing_OK = Math.abs(results.rowDeltaY - results.expected_rowDeltaY) < 0.1;
+      }
+      console.log('[verifyLayout]', JSON.stringify(results, null, 2));
+      return results;
+    },
+    verifyEase: () => {
+      const gm = gameManager as any;
+      if (!gm.easeOutCubic) return { error: 'easeOutCubic not found' };
+      const results: any = {};
+      [0, 0.25, 0.5, 0.75, 1.0].forEach(t => {
+        const expected = 1 - Math.pow(1 - t, 3);
+        const actual = gm.easeOutCubic(t);
+        results[`t=${t}`] = {
+          actual: actual.toFixed(6),
+          expected: expected.toFixed(6),
+          OK: Math.abs(actual - expected) < 0.001
+        };
+      });
+      console.log('[verifyEase] easeOutCubic = 1 - (1-t)^3', JSON.stringify(results, null, 2));
+      return results;
+    },
     fillAllSlotsWithTarget: () => {
       if (gameManager.state !== 'playing') return;
       gameManager.slots.forEach((slot, i) => {

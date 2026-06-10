@@ -57,11 +57,30 @@ const COLORS = [
 
 const NOTE_SYMBOLS = ['♩', '♪', '♫', '♬'];
 
-const BLOCK_WIDTH = 80;
-const BLOCK_HEIGHT = 40;
-const GAP = 8;
-const PADDING = 20;
-const GRID_COLS = 4;
+// ================= 布局硬编码参数（需求规定，请勿随意修改） =================
+const BLOCK_WIDTH = 80;                 // 音轨块宽度：80px
+const BLOCK_HEIGHT = 40;                // 音轨块高度：40px
+const GAP = 8;                          // 音轨块/槽位之间间距：8px
+const PADDING = 20;                     // 四边留白：20px
+const GRID_COLS = 4;                    // 网格列数：4列（4xN布局）
+const HUD_VERTICAL_OFFSET = 100;        // HUD占位高度，网格从 PADDING + 100px 开始
+const SLOT_BOTTOM_MARGIN = 20;          // 槽位距底部额外边距：20px
+const SLOT_HORIZONTAL_PADDING = 5;      // 槽位比音轨块宽10px（左右各5px）
+const SNAP_DISTANCE = 30;               // 吸附判定距离：30px
+const BOUNCE_DURATION = 200;            // 弹回动画时长：200ms
+// ============================================================================
+
+// ================= 特效硬编码参数（需求规定，请勿随意修改） =================
+const FLASH_COLOR = '#FFD700';          // 成功背景闪烁颜色：金色
+const FLASH_DURATION = 200;             // 成功背景闪烁时长：200ms
+const FLASH_PEAK_ALPHA = 0.6;           // 成功闪烁峰值透明度
+const SHAKE_AMOUNT = 5;                 // 失败屏幕抖动幅度：Y轴偏移5px
+const SHAKE_FREQUENCY_HZ = 10;          // 失败屏幕抖动频率：10Hz
+const SHAKE_DURATION = 300;             // 失败屏幕抖动时长：300ms
+const SUCCESS_FLY_DURATION = 1500;      // 成功音轨块飘散时长：1.5s
+const FAILURE_FLY_DURATION = 1000;      // 失败音轨块破碎时长：1s
+const WIN_MAX_PARTICLES = 500;          // 胜利画面最大粒子数：不超过500
+// ============================================================================
 
 export class GameManager {
   public state: GameState = 'menu';
@@ -239,19 +258,31 @@ export class GameManager {
   }
 
   private layoutLevel(): void {
+    // ========== 严格按照需求公式计算布局 ==========
+    // 四边留白: PADDING = 20px
+    // 每块尺寸: BLOCK_WIDTH=80px, BLOCK_HEIGHT=40px
+    // 间距: GAP = 8px
+    // 网格列数: GRID_COLS = 4
+    // 列 i 位置: gridStartX + col * (BLOCK_WIDTH + GAP)
+    // 行 j 位置: gridStartY + row * (BLOCK_HEIGHT + GAP)
+    // ==============================================
+
     const trackCount = this.tracks.length;
     const gridRows = Math.ceil(trackCount / GRID_COLS);
 
-    const gridWidth = GRID_COLS * BLOCK_WIDTH + (GRID_COLS - 1) * GAP;
-    const gridHeight = gridRows * BLOCK_HEIGHT + (gridRows - 1) * GAP;
+    // --- 音轨块网格布局 ---
+    const gridTotalWidth = GRID_COLS * BLOCK_WIDTH + (GRID_COLS - 1) * GAP;
+    const gridTotalHeight = gridRows * BLOCK_HEIGHT + (gridRows - 1) * GAP;
 
-    const availableWidth = this.canvasWidth - PADDING * 2;
-    const gridStartX = PADDING + Math.max(0, (availableWidth - gridWidth) / 2);
-    const gridStartY = PADDING + 100;
+    const horizontalFreeSpace = this.canvasWidth - PADDING * 2 - gridTotalWidth;
+    const gridStartX = PADDING + Math.max(0, horizontalFreeSpace / 2);
+    // 顶部留白 20px + HUD占位 100px = 120px 开始放网格
+    const gridStartY = PADDING + HUD_VERTICAL_OFFSET;
 
     this.tracks.forEach((track, i) => {
       const col = i % GRID_COLS;
       const row = Math.floor(i / GRID_COLS);
+      // 严格坐标公式: 起始点 + 索引 * (块尺寸 + 间距)
       const x = gridStartX + col * (BLOCK_WIDTH + GAP);
       const y = gridStartY + row * (BLOCK_HEIGHT + GAP);
 
@@ -265,17 +296,20 @@ export class GameManager {
       track.targetY = y;
     });
 
-    const slotWidth = BLOCK_WIDTH + 10;
+    // --- 槽位布局 ---
+    const slotWidth = BLOCK_WIDTH + SLOT_HORIZONTAL_PADDING * 2;
     const slotHeight = BLOCK_HEIGHT;
     const slotGap = GAP;
     const totalSlotWidth = trackCount * slotWidth + (trackCount - 1) * slotGap;
-    const availableSlotWidth = this.canvasWidth - PADDING * 2;
-    const slotStartX = PADDING + Math.max(0, (availableSlotWidth - totalSlotWidth) / 2);
-    const slotY = this.canvasHeight - PADDING - slotHeight - 20;
+
+    const slotFreeSpace = this.canvasWidth - PADDING * 2 - totalSlotWidth;
+    const slotStartX = PADDING + Math.max(0, slotFreeSpace / 2);
+    // 底部留白 20px + 额外边距 20px = 40px 从底部往上放槽位
+    const slotStartY = this.canvasHeight - PADDING - SLOT_BOTTOM_MARGIN - slotHeight;
 
     this.slots.forEach((slot, i) => {
       slot.x = slotStartX + i * (slotWidth + slotGap);
-      slot.y = slotY;
+      slot.y = slotStartY;
       slot.width = slotWidth;
       slot.height = slotHeight;
     });
@@ -333,7 +367,7 @@ export class GameManager {
         Math.pow(slotCenterX - trackCenterX, 2) + Math.pow(slotCenterY - trackCenterY, 2)
       );
 
-      if (dist < nearestDist && dist < 30 && !slot.filled) {
+      if (dist < nearestDist && dist < SNAP_DISTANCE && !slot.filled) {
         nearestDist = dist;
         nearestIndex = i;
       }
@@ -404,14 +438,14 @@ export class GameManager {
 
   private onSuccess(): void {
     this.score += 100;
-    this.flashColor = '#FFD700';
-    this.flashAlpha = 0.6;
-    this.flashDuration = 200;
+    this.flashColor = FLASH_COLOR;                       // 金色 #FFD700
+    this.flashAlpha = FLASH_PEAK_ALPHA;                  // 峰值透明度0.6
+    this.flashDuration = FLASH_DURATION;                 // 精确200ms
 
     this.slots.forEach(slot => {
       const track = this.tracks.find(t => t.id === slot.blockId);
       if (track) {
-        this.launchTrackFly(track, true);
+        this.launchTrackFly(track, true);                // success=true，向上飘散1.5s
         this.spawnSuccessParticles(track.x + BLOCK_WIDTH / 2, track.y + BLOCK_HEIGHT / 2, track.color);
       }
     });
@@ -423,14 +457,14 @@ export class GameManager {
 
   private onFailure(): void {
     this.score = 0;
-    this.shakeAmount = 5;
-    this.shakeTime = 300;
+    this.shakeAmount = SHAKE_AMOUNT;                     // 精确Y轴偏移5px
+    this.shakeTime = SHAKE_DURATION;                     // 精确300ms
     this.shakeElapsed = 0;
 
     this.slots.forEach(slot => {
       const track = this.tracks.find(t => t.id === slot.blockId);
       if (track) {
-        this.launchTrackFly(track, false);
+        this.launchTrackFly(track, false);               // success=false，红色破碎1s
         this.spawnFailureParticles(track.x + BLOCK_WIDTH / 2, track.y + BLOCK_HEIGHT / 2);
       }
     });
@@ -456,18 +490,18 @@ export class GameManager {
     track.flyProgress = 0;
     track.flyStartX = track.x;
     track.flyStartY = track.y;
-    track.flyColor = success ? track.color : '#FF4444';
+    track.flyColor = success ? track.color : '#FF4444';  // 失败红色
 
     const angle = success
-      ? (-Math.PI / 2) + (Math.random() - 0.5) * 0.8
-      : (Math.random() * Math.PI * 2);
+      ? (-Math.PI / 2) + (Math.random() - 0.5) * 0.8     // 成功：向上扇形飘散 ±23°
+      : (Math.random() * Math.PI * 2);                   // 失败：四面八方
     const distance = success
       ? 200 + Math.random() * 200
       : 80 + Math.random() * 100;
 
     track.flyTargetX = track.x + Math.cos(angle) * distance;
     track.flyTargetY = success
-      ? track.y - (150 + Math.random() * 200)
+      ? track.y - (150 + Math.random() * 200)            // 成功：向上飞150-350px
       : track.y + Math.sin(angle) * distance;
     track.flyRotation = (Math.random() - 0.5) * Math.PI * 2;
   }
@@ -484,8 +518,8 @@ export class GameManager {
         size: Math.random() * 5 + 2,
         color,
         alpha: 1,
-        life: 1500,
-        maxLife: 1500
+        life: SUCCESS_FLY_DURATION,                      // 精确1500ms
+        maxLife: SUCCESS_FLY_DURATION
       });
     }
   }
@@ -500,18 +534,19 @@ export class GameManager {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         size: Math.random() * 4 + 2,
-        color: '#FF4444',
+        color: '#FF4444',                                // 失败红色粒子
         alpha: 1,
-        life: 1000,
-        maxLife: 1000
+        life: FAILURE_FLY_DURATION,                      // 精确1000ms
+        maxLife: FAILURE_FLY_DURATION
       });
     }
   }
 
   private spawnWinParticles(): void {
-    const maxParticles = 500;
-    const availableSlots = Math.max(0, maxParticles - this.particles.length);
-    const toSpawn = Math.min(500, availableSlots);
+    // 粒子系统内部双重保护：严格不超过 WIN_MAX_PARTICLES = 500
+    const currentCount = this.particles.length;
+    if (currentCount >= WIN_MAX_PARTICLES) return;
+    const toSpawn = Math.min(WIN_MAX_PARTICLES - currentCount, 500);
 
     for (let i = 0; i < toSpawn; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -532,7 +567,7 @@ export class GameManager {
 
   public getShakeOffset(): number {
     if (this.shakeTime <= 0) return 0;
-    const frequency = 10;
+    const frequency = SHAKE_FREQUENCY_HZ;                // 精确10Hz
     const t = this.shakeElapsed / 1000;
     const decay = Math.max(0, 1 - this.shakeElapsed / this.shakeTime);
     return Math.sin(t * Math.PI * 2 * frequency) * this.shakeAmount * decay;
@@ -549,13 +584,15 @@ export class GameManager {
 
     this.tracks.forEach(track => {
       if (track.animating) {
-        track.animationProgress += deltaTime / 200;
+        // 弹回动画：BOUNCE_DURATION = 200ms，使用 easeOutCubic 缓动
+        track.animationProgress += deltaTime / BOUNCE_DURATION;
         if (track.animationProgress >= 1) {
           track.animationProgress = 1;
           track.animating = false;
           track.x = track.targetX;
           track.y = track.targetY;
         } else {
+          // 正确的ease-out插值公式：x = startX + (targetX - startX) * easeOutCubic(t)
           const t = this.easeOutCubic(track.animationProgress);
           track.x = track.startX + (track.targetX - track.startX) * t;
           track.y = track.startY + (track.targetY - track.startY) * t;
@@ -563,7 +600,8 @@ export class GameManager {
       }
 
       if (track.flying) {
-        const flyDuration = track.flyColor === '#FF4444' ? 1000 : 1500;
+        // 飞行动画：成功1500ms / 失败1000ms，同样使用 easeOutCubic
+        const flyDuration = track.flyColor === '#FF4444' ? FAILURE_FLY_DURATION : SUCCESS_FLY_DURATION;
         track.flyProgress += deltaTime / flyDuration;
         if (track.flyProgress >= 1) {
           track.flyProgress = 1;
@@ -575,6 +613,10 @@ export class GameManager {
       }
     });
 
+    // 粒子更新 + 粒子数上限兜底保护（每帧截断不超过WIN_MAX_PARTICLES）
+    if (this.particles.length > WIN_MAX_PARTICLES) {
+      this.particles = this.particles.slice(0, WIN_MAX_PARTICLES);
+    }
     this.particles = this.particles.filter(p => {
       p.life -= deltaTime;
       p.x += p.vx;
@@ -586,7 +628,7 @@ export class GameManager {
 
     if (this.flashColor !== null && this.flashDuration > 0) {
       this.flashDuration -= deltaTime;
-      this.flashAlpha = Math.max(0, (this.flashDuration / 200) * 0.6);
+      this.flashAlpha = Math.max(0, (this.flashDuration / FLASH_DURATION) * FLASH_PEAK_ALPHA);
       if (this.flashDuration <= 0) {
         this.flashAlpha = 0;
         this.flashColor = null;
