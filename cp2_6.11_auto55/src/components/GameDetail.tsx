@@ -159,11 +159,10 @@ export default function GameDetail() {
             key={starNum}
             size={size}
             fill={isActive ? (isHovered ? '#FCD34D' : '#F59E0B') : 'none'}
-            className={showFlash ? 'animate-flash-score' : ''}
+            className={`star-icon ${showFlash ? 'animate-flash-score' : ''}`}
             style={{
               color: isActive ? (isHovered ? '#FCD34D' : '#F59E0B') : '#D1D5DB',
               cursor: interactive ? 'pointer' : 'default',
-              transition: 'color 0.2s ease-out, fill 0.2s ease-out, transform 0.2s ease-out',
               padding: '2px'
             }}
             onMouseEnter={interactive ? () => setHoveredStar(starNum) : undefined}
@@ -687,10 +686,10 @@ export default function GameDetail() {
                             key={starNum}
                             size={24}
                             fill={commentRating >= starNum ? '#F59E0B' : 'none'}
+                            className="star-icon"
                             style={{
                               color: commentRating >= starNum ? '#F59E0B' : '#D1D5DB',
                               cursor: 'pointer',
-                              transition: 'all 0.2s ease-out',
                               padding: '2px'
                             }}
                             onClick={() => setCommentRating(starNum)}

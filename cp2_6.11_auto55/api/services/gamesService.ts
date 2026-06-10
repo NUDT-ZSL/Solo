@@ -1,7 +1,6 @@
 import type { Game, Comment, Rating, SortBy, AddCommentData } from '../types/index.js';
 import {
   getGames as storeGetGames,
-  getGamesPaginated as storeGetGamesPaginated,
   getGameById as storeGetGameById,
   updateGame as storeUpdateGame,
   getComments as storeGetComments,
@@ -19,8 +18,8 @@ export const getGames = (
   page: number = 1,
   limit: number = 20,
 ): { games: Game[]; total: number; page: number; limit: number } => {
-  const { games, total } = storeGetGamesPaginated(page, limit);
-  const sorted = [...games];
+  const allGames = storeGetGames();
+  const sorted = [...allGames];
 
   if (sortBy === 'heat') {
     sorted.sort((a, b) => b.heat - a.heat);
@@ -28,7 +27,12 @@ export const getGames = (
     sorted.sort((a, b) => b.averageRating - a.averageRating);
   }
 
-  return { games: sorted, total, page, limit };
+  const total = sorted.length;
+  const start = (page - 1) * limit;
+  const end = start + limit;
+  const games = sorted.slice(start, end);
+
+  return { games, total, page, limit };
 };
 
 export const getGameById = (id: string): Game | undefined => {

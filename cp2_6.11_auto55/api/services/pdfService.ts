@@ -3,7 +3,15 @@ import type { Game } from '../types/index.js';
 
 let browser: Browser | null = null;
 
-const initBrowser = async (): Promise<Browser> => {
+export const initBrowser = async (): Promise<Browser> => {
+  if (browser) {
+    try {
+      if (browser.connected) return browser;
+      await browser.close();
+    } catch {
+      // browser already closed or disconnected
+    }
+  }
   browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -12,15 +20,19 @@ const initBrowser = async (): Promise<Browser> => {
 };
 
 const getBrowser = async (): Promise<Browser> => {
-  if (!browser) {
+  if (!browser || !browser.connected) {
     return await initBrowser();
   }
   return browser;
 };
 
-const closeBrowser = async (): Promise<void> => {
+export const closeBrowser = async (): Promise<void> => {
   if (browser) {
-    await browser.close();
+    try {
+      await browser.close();
+    } catch {
+      // browser already closed
+    }
     browser = null;
   }
 };
@@ -268,11 +280,8 @@ export const generatePdf = async (game: Game): Promise<Buffer> => {
   }
 };
 
-export { initBrowser, getBrowser, closeBrowser };
-
 export default {
   generatePdf,
   initBrowser,
-  getBrowser,
   closeBrowser,
 };

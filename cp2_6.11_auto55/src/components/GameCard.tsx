@@ -180,12 +180,11 @@ export default function GameCard({ game, onUpdate, onNavigate, userId }: GameCar
                   key={starNum}
                   size={20}
                   fill={isActive ? (hoveredStar >= starNum ? '#FCD34D' : '#F59E0B') : 'none'}
+                  className={`star-icon ${ratingFlash && Math.round(averageRating) >= starNum ? 'animate-flash-score' : ''}`}
                   style={{
                     color: isActive ? (hoveredStar >= starNum ? '#FCD34D' : '#F59E0B') : '#D1D5DB',
                     cursor: 'pointer',
-                    transition: 'all 0.2s ease-out',
                     padding: '2px',
-                    transform: ratingFlash && Math.round(averageRating) >= starNum ? 'scale(1.2)' : 'scale(1)'
                   }}
                   onMouseEnter={() => setHoveredStar(starNum)}
                   onClick={(e) => handleStarClick(e, starNum)}
@@ -213,7 +212,7 @@ export default function GameCard({ game, onUpdate, onNavigate, userId }: GameCar
               className={likeAnimating ? 'animate-bounce-heart' : ''}
               style={{
                 color: isLiked ? '#EF4444' : '#9CA3AF',
-                transition: 'all 0.2s ease-out'
+                transition: 'color 0.2s ease-out',
               }}
             />
             <span

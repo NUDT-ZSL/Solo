@@ -3,8 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 const gamesMap = new Map<string, Game>();
 const commentsMap = new Map<string, Comment[]>();
-const ratingsMap = new Map<string, Map<string, Rating>>();
-const likesSetMap = new Map<string, Set<string>>();
+const ratingsMap = new Map<string, Rating>();
+const likesSet = new Set<string>();
 
 const createBase64Svg = (bgColor: string, textColor: string, title: string): string => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
@@ -180,25 +180,41 @@ const mockComments: Comment[] = [
   { id: 'c21', gameId: 'game5', userId: 'user6', userName: '选择困难症', avatar: '🤔', content: '每次都纠结种什么花好，每种都想种！资源分配让人头秃但很快乐。', createdAt: '2025-05-15T13:00:00Z' },
 ];
 
-const syncRatingsFromMap = (gameId: string): void => {
-  const game = gamesMap.get(gameId);
-  const userRatings = ratingsMap.get(gameId);
-  if (!game || !userRatings) return;
+const ratingKey = (gameId: string, userId: string) => `${userId}:${gameId}`;
+const likeKey = (gameId: string, userId: string) => `${userId}:${gameId}`;
 
-  game.ratings = Array.from(userRatings.values());
-  game.ratingsCount = game.ratings.length;
-  game.averageRating = calcAvg(game.ratings);
+const syncGameRatings = (gameId: string): void => {
+  const game = gamesMap.get(gameId);
+  if (!game) return;
+
+  const gameRatings: Rating[] = [];
+  ratingsMap.forEach((rating, key) => {
+    if (key.endsWith(`:${gameId}`)) {
+      gameRatings.push(rating);
+    }
+  });
+
+  game.ratings = gameRatings;
+  game.ratingsCount = gameRatings.length;
+  game.averageRating = calcAvg(gameRatings);
   game.heat = game.likeCount * 2 + game.commentsCount * 3 + game.ratingsCount * 1;
   game.updatedAt = new Date().toISOString();
 };
 
-const syncLikesFromSet = (gameId: string): void => {
+const syncGameLikes = (gameId: string): void => {
   const game = gamesMap.get(gameId);
-  const userLikes = likesSetMap.get(gameId);
-  if (!game || !userLikes) return;
+  if (!game) return;
 
-  game.likedBy = Array.from(userLikes);
-  game.likeCount = game.likedBy.length;
+  const gameLikedBy: string[] = [];
+  likesSet.forEach((key) => {
+    if (key.endsWith(`:${gameId}`)) {
+      const parts = key.split(':');
+      gameLikedBy.push(parts[0]);
+    }
+  });
+
+  game.likedBy = gameLikedBy;
+  game.likeCount = gameLikedBy.length;
   game.heat = game.likeCount * 2 + game.commentsCount * 3 + game.ratingsCount * 1;
   game.updatedAt = new Date().toISOString();
 };
@@ -208,11 +224,13 @@ const initStore = (): void => {
     game.heat = game.likeCount * 2 + game.commentsCount * 3 + game.ratingsCount * 1;
     gamesMap.set(game.id, game);
 
-    const userRatings = new Map<string, Rating>();
-    game.ratings.forEach((r) => userRatings.set(r.userId, r));
-    ratingsMap.set(game.id, userRatings);
+    game.ratings.forEach((r) => {
+      ratingsMap.set(ratingKey(game.id, r.userId), r);
+    });
 
-    likesSetMap.set(game.id, new Set<string>(game.likedBy));
+    game.likedBy.forEach((userId) => {
+      likesSet.add(likeKey(game.id, userId));
+    });
   });
 
   mockComments.forEach((comment) => {
@@ -248,41 +266,38 @@ export const updateGame = (id: string, game: Game): Game | undefined => {
 };
 
 export const addOrUpdateRating = (gameId: string, userId: string, score: number): Rating[] => {
-  let userRatings = ratingsMap.get(gameId);
-  if (!userRatings) {
-    userRatings = new Map<string, Rating>();
-    ratingsMap.set(gameId, userRatings);
-  }
-
-  const existing = userRatings.get(userId);
+  const key = ratingKey(gameId, userId);
+  const existing = ratingsMap.get(key);
   const rating: Rating = {
     userId,
     score,
     createdAt: existing?.createdAt || new Date().toISOString(),
   };
-  userRatings.set(userId, rating);
+  ratingsMap.set(key, rating);
 
-  syncRatingsFromMap(gameId);
-  return Array.from(userRatings.values());
+  syncGameRatings(gameId);
+
+  const gameRatings: Rating[] = [];
+  ratingsMap.forEach((r, k) => {
+    if (k.endsWith(`:${gameId}`)) {
+      gameRatings.push(r);
+    }
+  });
+  return gameRatings;
 };
 
 export const toggleLike = (gameId: string, userId: string): boolean => {
-  let userLikes = likesSetMap.get(gameId);
-  if (!userLikes) {
-    userLikes = new Set<string>();
-    likesSetMap.set(gameId, userLikes);
-  }
-
+  const key = likeKey(gameId, userId);
   let liked: boolean;
-  if (userLikes.has(userId)) {
-    userLikes.delete(userId);
+  if (likesSet.has(key)) {
+    likesSet.delete(key);
     liked = false;
   } else {
-    userLikes.add(userId);
+    likesSet.add(key);
     liked = true;
   }
 
-  syncLikesFromSet(gameId);
+  syncGameLikes(gameId);
   return liked;
 };
 
