@@ -124,33 +124,22 @@ export class StrokeManager {
       const n = this.points.length;
       const p0 = this.points[n - 3];
       const p1 = this.points[n - 2];
+      const p2 = this.points[n - 1];
 
-      const cx = (p1.x + p0.x) / 2;
-      const cy = (p1.y + p0.y) / 2;
-      const control: Point = {
-        x: cx, y: cy, timestamp: p1.timestamp,
-        velocity: p1.velocity, thickness: p1.thickness, color: p1.color
-      };
-
-      this.segments.push({
-        start: p0,
-        control,
-        end: p1,
-        thickness: p1.thickness,
-        color: p1.color,
-        alpha: 1,
-        createdAt: now
-      });
+      const segmentsToAdd = this.generateBezierSegments(p0, p1, p2, now);
+      this.segments.push(...segmentsToAdd);
 
       if (n >= 4) {
-        const p00 = this.points[n - 4];
-        const segIdx = this.segments.length - 2;
+        const pPrev = this.points[n - 4];
+        const segIdx = this.segments.length - segmentsToAdd.length - 1;
         if (this.segments[segIdx]) {
-          const cx2 = (p0.x + p00.x) / 2;
-          const cy2 = (p0.y + p00.y) / 2;
           this.segments[segIdx].control = {
-            x: cx2, y: cy2, timestamp: p0.timestamp,
-            velocity: p0.velocity, thickness: p0.thickness, color: p0.color
+            x: p0.x + (p1.x - pPrev.x) * 0.15,
+            y: p0.y + (p1.y - pPrev.y) * 0.15,
+            timestamp: p0.timestamp,
+            velocity: p0.velocity,
+            thickness: p0.thickness,
+            color: p0.color
           };
         }
       }
@@ -167,6 +156,77 @@ export class StrokeManager {
     return point;
   }
 
+  private generateBezierSegments(p0: Point, p1: Point, p2: Point, now: number): StrokeSegment[] {
+    const segments: StrokeSegment[] = [];
+    const steps = 6;
+    const avgThickness = (p0.thickness + p1.thickness) / 2;
+    const avgColor = this.interpolateColor(p0.color, p1.color, 0.5);
+
+    const control = {
+      x: p1.x + (p2.x - p0.x) * 0.15,
+      y: p1.y + (p2.y - p0.y) * 0.15
+    };
+
+    for (let i = 0; i < steps; i++) {
+      const t1 = i / steps;
+      const t2 = (i + 1) / steps;
+
+      const start = {
+        x: this.quadraticLerp(p0.x, control.x, p1.x, t1),
+        y: this.quadraticLerp(p0.y, control.y, p1.y, t1)
+      };
+      const end = {
+        x: this.quadraticLerp(p0.x, control.x, p1.x, t2),
+        y: this.quadraticLerp(p0.y, control.y, p1.y, t2)
+      };
+      const midT = (t1 + t2) / 2;
+      const midPoint = {
+        x: this.quadraticLerp(p0.x, control.x, p1.x, midT),
+        y: this.quadraticLerp(p0.y, control.y, p1.y, midT)
+      };
+      const segControl = {
+        x: start.x + (midPoint.x - start.x) * 1.8,
+        y: start.y + (midPoint.y - start.y) * 1.8
+      };
+
+      segments.push({
+        start: { ...p0, x: start.x, y: start.y },
+        control: { ...p1, x: segControl.x, y: segControl.y },
+        end: { ...p1, x: end.x, y: end.y },
+        thickness: avgThickness,
+        color: avgColor,
+        alpha: 1,
+        createdAt: now
+      });
+    }
+
+    return segments;
+  }
+
+  private quadraticLerp(a: number, b: number, c: number, t: number): number {
+    const mt = 1 - t;
+    return mt * mt * a + 2 * mt * t * b + t * t * c;
+  }
+
+  private interpolateColor(c1: string, c2: string, t: number): string {
+    const rgb1 = this.parseRgb(c1);
+    const rgb2 = this.parseRgb(c2);
+    if (!rgb1 || !rgb2) return c1;
+    const r = Math.round(lerp(rgb1.r, rgb2.r, t));
+    const g = Math.round(lerp(rgb1.g, rgb2.g, t));
+    const b = Math.round(lerp(rgb1.b, rgb2.b, t));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  private parseRgb(color: string): { r: number; g: number; b: number } | null {
+    if (color.startsWith('rgb(')) {
+      const inner = color.slice(4, -1);
+      const parts = inner.split(',').map(s => parseInt(s.trim(), 10));
+      return { r: parts[0], g: parts[1], b: parts[2] };
+    }
+    return null;
+  }
+
   private checkButterflyTrigger(pt: Point): void {
     if (pt.velocity > this.velocityThreshold) {
       if (this.highVelocityFrames === 0) {
@@ -174,6 +234,7 @@ export class StrokeManager {
       }
       this.highVelocityFrames++;
       if (this.highVelocityFrames >= this.consecutiveFrames) {
+        console.log(`[Stroke] 🦋 触发蝴蝶！速度${pt.velocity.toFixed(2)} > ${this.velocityThreshold} 且连续${this.consecutiveFrames}帧`);
         if (this.highVelocityStart && this.onButterflyTrigger) {
           this.onButterflyTrigger(this.highVelocityStart);
         }

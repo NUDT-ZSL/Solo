@@ -121,24 +121,40 @@ function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: n
 
 function getComplementaryColor(strokeColor: string): string {
   const { r, g, b } = parseRgb(strokeColor);
+  console.log(`[Butterfly] 墨迹颜色 r=${r},g=${g},b=${b}`);
   const cr = 255 - r;
   const cg = 255 - g;
   const cb = 255 - b;
-  const fr = cr * 0.7 + 255 * 0.3;
-  const fg = cg * 0.7 + 255 * 0.3;
-  const fb = cb * 0.7 + 255 * 0.3;
-  return rgbStr(fr, fg, fb);
+  console.log(`[Butterfly] 纯取反 r=${cr},g=${cg},b=${cb}`);
+  const hsv = rgbToHsv(cr, cg, cb);
+  console.log(`[Butterfly] HSV h=${hsv.h.toFixed(1)}°, s=${hsv.s.toFixed(2)}, v=${hsv.v.toFixed(2)}`);
+  const shifted = hsvToRgb(
+    hsv.h + 25,
+    clamp(hsv.s + 0.2, 0, 1),
+    clamp(hsv.v * 1.15, 0, 1)
+  );
+  console.log(`[Butterfly] HSV偏移后 r=${Math.round(shifted.r)},g=${Math.round(shifted.g)},b=${Math.round(shifted.b)}`);
+  const fr = shifted.r * 0.65 + 255 * 0.35;
+  const fg = shifted.g * 0.65 + 255 * 0.35;
+  const fb = shifted.b * 0.65 + 255 * 0.35;
+  const finalColor = rgbStr(fr, fg, fb);
+  console.log(`[Butterfly] 最终翅膀颜色 ${finalColor}`);
+  return finalColor;
 }
 
 function getPatternColor(wingColor: string): string {
   const { r, g, b } = parseRgb(wingColor);
-  const hsv = rgbToHsv(r, g, b);
-  const shifted = hsvToRgb(hsv.h + 35, clamp(hsv.s + 0.15, 0, 1), clamp(hsv.v * 1.1, 0, 1));
+  const wingHsv = rgbToHsv(r, g, b);
+  const shifted = hsvToRgb(
+    wingHsv.h + 50,
+    clamp(wingHsv.s + 0.25, 0, 1),
+    clamp(wingHsv.v * 1.2, 0, 1)
+  );
   const cr = 255 - r, cg = 255 - g, cb = 255 - b;
   return rgbStr(
-    shifted.r * 0.5 + cr * 0.5,
-    shifted.g * 0.5 + cg * 0.5,
-    shifted.b * 0.5 + cb * 0.5
+    shifted.r * 0.4 + cr * 0.6,
+    shifted.g * 0.4 + cg * 0.6,
+    shifted.b * 0.4 + cb * 0.6
   );
 }
 
@@ -178,18 +194,23 @@ export class ButterflyManager {
     spreadDuration?: number;
   }): void {
     const now = performance.now();
-    const { x, y, strokeColor } = options;
+    const { x, y, strokeColor, strokeVelocity } = options;
+    const isSpread = !!options.isSpread;
 
-    const velocityFactor = clamp((options.strokeVelocity || 5) / 10, 0, 1);
+    console.log(`[Butterfly] spawn() 被调用: pos=(${x.toFixed(1)},${y.toFixed(1)}), strokeColor=${strokeColor}, velocity=${strokeVelocity?.toFixed(2)}, isSpread=${isSpread}`);
+
+    const velocityFactor = clamp((strokeVelocity || 5) / 10, 0, 1);
     const minSize = 20 * this.sizeScale;
     const maxSize = 50 * this.sizeScale;
     const size = rand(minSize + velocityFactor * (maxSize - minSize) * 0.3, maxSize);
+    console.log(`[Butterfly] 尺寸: ${size.toFixed(1)}px (范围 ${minSize}-${maxSize})`);
 
     const wingColor = getComplementaryColor(strokeColor);
     const patternColor = getPatternColor(wingColor);
-    const lifetime = options.isSpread
+    const lifetime = isSpread
       ? (options.spreadDuration || 2000)
       : rand(5000, 8000);
+    console.log(`[Butterfly] 生命周期: ${lifetime.toFixed(0)}ms`);
 
     const butterfly: Butterfly = {
       id: ++_idCounter,
@@ -217,14 +238,17 @@ export class ButterflyManager {
     };
 
     this.butterflies.push(butterfly);
+    console.log(`[Butterfly] 已添加蝴蝶 #${butterfly.id}，总数 ${this.butterflies.length}/${MAX_BUTTERFLIES}`);
     this.enforceLimit();
+    console.log(`[Butterfly] 执行上限检查后数量: ${this.butterflies.length}`);
   }
 
   private enforceLimit(): void {
     if (this.butterflies.length > MAX_BUTTERFLIES) {
       const over = this.butterflies.length - MAX_BUTTERFLIES;
       this.butterflies.sort((a, b) => a.spawnTime - b.spawnTime);
-      this.butterflies.splice(0, over);
+      const removed = this.butterflies.splice(0, over);
+      console.log(`[Butterfly] 超过上限 ${MAX_BUTTERFLIES}，移除最旧的 ${over} 只蝴蝶 (ID: ${removed.map(b => b.id).join(',')})`);
     }
   }
 
@@ -259,8 +283,6 @@ export class ButterflyManager {
         const sElapsed = currentTime - b.spreadStartTime;
         const t = clamp(sElapsed / b.spreadDuration, 0, 1);
         const ease = 1 - Math.pow(1 - t, 2);
-        const startX = b.isSpreading ? b.x - (b.targetX - b.x) * 0 : b.x;
-        void startX;
         b.x = b.x + (b.targetX - b.x) * ease * clamp(deltaTime / (b.spreadDuration * 0.5), 0, 1);
         b.y = b.y + (b.targetY - b.y) * ease * clamp(deltaTime / (b.spreadDuration * 0.5), 0, 1);
         b.size = b.size * (1 + t * 0.3);
