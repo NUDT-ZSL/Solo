@@ -29,6 +29,11 @@ export class Puzzle {
   private canvasWidth: number;
   private canvasHeight: number;
   
+  private vanishX: number;
+  private vanishY: number;
+  private focalLength: number;
+  private corridorHalfWidth: number;
+  
   private door: DoorState;
   private endCandles: {
     left: { x: number; y: number; blue: boolean; blueProgress: number };
@@ -51,6 +56,11 @@ export class Puzzle {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     
+    this.vanishX = canvasWidth / 2;
+    this.vanishY = canvasHeight * 0.35;
+    this.focalLength = 500;
+    this.corridorHalfWidth = 280;
+    
     this.door = {
       crackProgress: 0,
       openProgress: 0,
@@ -68,6 +78,22 @@ export class Puzzle {
     
     this.initVortexParticles();
     this.setupPaintingCallbacks();
+  }
+
+  public setPerspective(vanishX: number, vanishY: number, focalLength: number, corridorHalfWidth: number): void {
+    this.vanishX = vanishX;
+    this.vanishY = vanishY;
+    this.focalLength = focalLength;
+    this.corridorHalfWidth = corridorHalfWidth;
+  }
+
+  private project3D(worldX: number, worldY: number, worldZ: number): { x: number; y: number; scale: number } {
+    const scale = this.focalLength / (this.focalLength + worldZ);
+    return {
+      x: this.vanishX + worldX * scale,
+      y: this.vanishY + worldY * scale,
+      scale
+    };
   }
 
   private setupPaintingCallbacks(): void {
@@ -235,6 +261,8 @@ export class Puzzle {
   public setCanvasSize(width: number, height: number): void {
     this.canvasWidth = width;
     this.canvasHeight = height;
+    this.vanishX = width / 2;
+    this.vanishY = height * 0.35;
   }
 
   public drawBackground(): void {
@@ -254,20 +282,19 @@ export class Puzzle {
     const w = this.canvasWidth;
     const h = this.canvasHeight;
     
-    const horizonY = h * 0.35;
-    const vanishX = w / 2;
+    const horizonY = this.vanishY;
+    const vanishX = this.vanishX;
     const floorTop = horizonY;
     const floorBottom = h;
     
-    const focalLength = 600;
-    const nearZ = 50;
+    const nearZ = 120;
     const farZ = 800;
-    const corridorHalfWidth = 350;
+    const corridorHalfWidth = this.corridorHalfWidth;
     
-    const nearLeft = vanishX - corridorHalfWidth * (focalLength / (focalLength + nearZ));
-    const nearRight = vanishX + corridorHalfWidth * (focalLength / (focalLength + nearZ));
-    const farLeft = vanishX - corridorHalfWidth * (focalLength / (focalLength + farZ));
-    const farRight = vanishX + corridorHalfWidth * (focalLength / (focalLength + farZ));
+    const nearLeft = vanishX - corridorHalfWidth * (this.focalLength / (this.focalLength + nearZ));
+    const nearRight = vanishX + corridorHalfWidth * (this.focalLength / (this.focalLength + nearZ));
+    const farLeft = vanishX - corridorHalfWidth * (this.focalLength / (this.focalLength + farZ));
+    const farRight = vanishX + corridorHalfWidth * (this.focalLength / (this.focalLength + farZ));
     
     ctx.save();
     
@@ -293,7 +320,7 @@ export class Puzzle {
     for (let i = 0; i < numPlanks; i++) {
       const t = (i + 1) / (numPlanks + 1);
       const z = nearZ + (farZ - nearZ) * t;
-      const perspectiveScale = focalLength / (focalLength + z);
+      const perspectiveScale = this.focalLength / (this.focalLength + z);
       
       const y = horizonY + (h - horizonY) * t;
       const leftX = vanishX - corridorHalfWidth * perspectiveScale;
@@ -310,7 +337,7 @@ export class Puzzle {
     for (let i = 0; i < woodLines; i++) {
       const t = (i + 0.5) / woodLines;
       const z = nearZ + (farZ - nearZ) * t;
-      const perspectiveScale = focalLength / (focalLength + z);
+      const perspectiveScale = this.focalLength / (this.focalLength + z);
       
       const y = horizonY + (h - horizonY) * t;
       const leftX = vanishX - corridorHalfWidth * perspectiveScale;
@@ -333,11 +360,21 @@ export class Puzzle {
     const w = this.canvasWidth;
     const h = this.canvasHeight;
     
-    const horizonY = h * 0.35;
+    const horizonY = this.vanishY;
+    const vanishX = this.vanishX;
+    
+    const nearZ = 120;
+    const farZ = 800;
+    const corridorHalfWidth = this.corridorHalfWidth;
+    
+    const nearLeft = vanishX - corridorHalfWidth * (this.focalLength / (this.focalLength + nearZ));
+    const nearRight = vanishX + corridorHalfWidth * (this.focalLength / (this.focalLength + nearZ));
+    const farLeft = vanishX - corridorHalfWidth * (this.focalLength / (this.focalLength + farZ));
+    const farRight = vanishX + corridorHalfWidth * (this.focalLength / (this.focalLength + farZ));
     
     ctx.save();
     
-    const leftWallGradient = ctx.createLinearGradient(0, 0, w * 0.3, 0);
+    const leftWallGradient = ctx.createLinearGradient(0, 0, nearLeft, 0);
     leftWallGradient.addColorStop(0, '#1a0f08');
     leftWallGradient.addColorStop(0.5, '#2C1810');
     leftWallGradient.addColorStop(1, '#3D2817');
@@ -345,14 +382,14 @@ export class Puzzle {
     ctx.fillStyle = leftWallGradient;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(w * 0.3, 0);
-    ctx.lineTo(w * 0.4, horizonY);
-    ctx.lineTo(w * 0.35, h);
+    ctx.lineTo(nearLeft, 0);
+    ctx.lineTo(farLeft, horizonY);
+    ctx.lineTo(nearLeft, h);
     ctx.lineTo(0, h);
     ctx.closePath();
     ctx.fill();
     
-    const rightWallGradient = ctx.createLinearGradient(w, 0, w * 0.7, 0);
+    const rightWallGradient = ctx.createLinearGradient(w, 0, nearRight, 0);
     rightWallGradient.addColorStop(0, '#1a0f08');
     rightWallGradient.addColorStop(0.5, '#2C1810');
     rightWallGradient.addColorStop(1, '#3D2817');
@@ -360,9 +397,9 @@ export class Puzzle {
     ctx.fillStyle = rightWallGradient;
     ctx.beginPath();
     ctx.moveTo(w, 0);
-    ctx.lineTo(w * 0.7, 0);
-    ctx.lineTo(w * 0.6, horizonY);
-    ctx.lineTo(w * 0.65, h);
+    ctx.lineTo(nearRight, 0);
+    ctx.lineTo(farRight, horizonY);
+    ctx.lineTo(nearRight, h);
     ctx.lineTo(w, h);
     ctx.closePath();
     ctx.fill();

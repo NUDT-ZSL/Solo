@@ -8,7 +8,6 @@ interface Particle {
   life: number;
   maxLife: number;
   alpha: number;
-  hue: number;
 }
 
 export class Candle {
@@ -26,6 +25,13 @@ export class Candle {
   private flameHeight: number;
   private targetFlameHeight: number;
   private glowIntensity: number;
+  
+  private static readonly MIN_FLAME_HEIGHT = 20;
+  private static readonly MAX_FLAME_HEIGHT = 40;
+  private static readonly ORANGE_START = { r: 255, g: 179, b: 71 };
+  private static readonly ORANGE_END = { r: 255, g: 109, b: 0 };
+  private static readonly BLUE_START = { r: 142, g: 45, b: 226 };
+  private static readonly BLUE_END = { r: 74, g: 0, b: 224 };
 
   constructor(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number = 1) {
     this.ctx = ctx;
@@ -53,23 +59,21 @@ export class Candle {
   }
 
   private createParticle(initial: boolean = false): Particle {
-    const width = this.baseWidth * this.scale;
-    const height = this.flameHeight * this.scale;
+    const flameHeight = this.flameHeight * this.scale;
     
     const life = initial ? Math.random() * 1 : 0;
     const maxLife = 0.8 + Math.random() * 0.6;
     
     return {
-      x: this.x + (Math.random() - 0.5) * width * 0.4,
-      y: this.y - Math.random() * height * 0.3,
+      x: this.x + (Math.random() - 0.5) * 12 * this.scale,
+      y: this.y - Math.random() * flameHeight * 0.3,
       vx: (Math.random() - 0.5) * 8 * this.scale,
       vy: -(20 + Math.random() * 25) * this.scale,
       size: (3 + Math.random() * 5) * this.scale,
       baseSize: (3 + Math.random() * 5) * this.scale,
       life: life,
       maxLife: maxLife,
-      alpha: 0,
-      hue: this.isBlue ? 270 : 30
+      alpha: 0
     };
   }
 
@@ -86,8 +90,13 @@ export class Candle {
   public update(deltaTime: number): void {
     this.time += deltaTime;
 
-    this.targetFlameHeight = 25 + Math.sin(this.time * 3 + Math.random() * 0.5) * 10 + Math.random() * 5;
+    const minH = Candle.MIN_FLAME_HEIGHT;
+    const maxH = Candle.MAX_FLAME_HEIGHT;
+    this.targetFlameHeight = minH + (Math.sin(this.time * 3 + Math.random() * 0.5) + 1) * 0.5 * (maxH - minH) * 0.8 + Math.random() * 3;
+    this.targetFlameHeight = Math.max(minH, Math.min(maxH, this.targetFlameHeight));
+    
     this.flameHeight += (this.targetFlameHeight - this.flameHeight) * deltaTime * 3;
+    this.flameHeight = Math.max(minH, Math.min(maxH, this.flameHeight));
 
     const targetTransition = this.isBlue ? 1 : 0;
     this.blueTransition += (targetTransition - this.blueTransition) * deltaTime * 1.5;
@@ -125,11 +134,46 @@ export class Candle {
         p.alpha = 1;
         p.size = p.baseSize;
       }
-
-      p.hue = this.isBlue 
-        ? 260 + (1 - lifeRatio) * 40 
-        : 25 + (1 - lifeRatio) * 20;
     }
+  }
+
+  private lerpColor(color1: { r: number; g: number; b: number }, color2: { r: number; g: number; b: number }, t: number): string {
+    const r = Math.round(color1.r + (color2.r - color1.r) * t);
+    const g = Math.round(color1.g + (color2.g - color1.g) * t);
+    const b = Math.round(color1.b + (color2.b - color1.b) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  private getFlameColor(lifeRatio: number, alpha: number): string {
+    if (this.blueTransition > 0) {
+      const orangeColor = this.lerpColor(Candle.ORANGE_START, Candle.ORANGE_END, 1 - lifeRatio);
+      const blueColor = this.lerpColor(Candle.BLUE_START, Candle.BLUE_END, 1 - lifeRatio);
+      
+      const orangeMatch = orangeColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+      const blueMatch = blueColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+      
+      if (orangeMatch && blueMatch) {
+        const or = parseInt(orangeMatch[1]);
+        const og = parseInt(orangeMatch[2]);
+        const ob = parseInt(orangeMatch[3]);
+        const br = parseInt(blueMatch[1]);
+        const bg = parseInt(blueMatch[2]);
+        const bb = parseInt(blueMatch[3]);
+        
+        const r = Math.round(or + (br - or) * this.blueTransition);
+        const g = Math.round(og + (bg - og) * this.blueTransition);
+        const b = Math.round(ob + (bb - ob) * this.blueTransition);
+        
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+    }
+    
+    const baseColor = this.lerpColor(Candle.ORANGE_START, Candle.ORANGE_END, 1 - lifeRatio);
+    const match = baseColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (match) {
+      return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${alpha})`;
+    }
+    return `rgba(255, 179, 71, ${alpha})`;
   }
 
   public draw(): void {
@@ -181,10 +225,9 @@ export class Candle {
     for (const p of this.particles) {
       if (p.alpha <= 0) continue;
       
-      const saturation = this.isBlue ? 80 : 100;
-      const lightness = 50 + (1 - p.life / p.maxLife) * 20;
+      const lifeRatio = p.life / p.maxLife;
+      ctx.fillStyle = this.getFlameColor(lifeRatio, p.alpha * 0.8);
       
-      ctx.fillStyle = `hsla(${p.hue}, ${saturation}%, ${lightness}%, ${p.alpha * 0.8})`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
@@ -211,22 +254,26 @@ export class Candle {
     );
     
     if (this.isBlue || this.blueTransition > 0) {
-      const orangeHue1 = 'rgba(255, 200, 100, 1)';
-      const orangeHue2 = 'rgba(255, 109, 0, 0.9)';
-      const blueHue1 = `rgba(200, 150, 255, ${this.blueTransition})`;
-      const blueHue2 = `rgba(100, 50, 200, ${this.blueTransition * 0.9})`;
+      const orange1 = 'rgba(255, 220, 150, 1)';
+      const orange2 = 'rgba(255, 179, 71, 1)';
+      const orange3 = 'rgba(255, 109, 0, 0.9)';
       
-      gradient.addColorStop(0, orangeHue1);
-      gradient.addColorStop(0.3, orangeHue2);
+      const blue1 = `rgba(200, 150, 255, ${this.blueTransition})`;
+      const blue2 = `rgba(142, 45, 226, ${this.blueTransition * 0.9})`;
+      const blue3 = `rgba(74, 0, 224, ${this.blueTransition * 0.8})`;
+      
+      gradient.addColorStop(0, orange1);
+      gradient.addColorStop(0.2, orange2);
+      gradient.addColorStop(0.4, orange3);
       if (this.blueTransition > 0) {
-        gradient.addColorStop(0.5, blueHue2);
-        gradient.addColorStop(0.8, blueHue1);
-        gradient.addColorStop(1, orangeHue1);
+        gradient.addColorStop(0.6, blue3);
+        gradient.addColorStop(0.8, blue2);
+        gradient.addColorStop(1, blue1);
       }
     } else {
       gradient.addColorStop(0, 'rgba(255, 220, 150, 1)');
-      gradient.addColorStop(0.2, 'rgba(255, 179, 71, 1)');
-      gradient.addColorStop(0.5, 'rgba(255, 109, 0, 0.9)');
+      gradient.addColorStop(0.3, 'rgba(255, 179, 71, 1)');
+      gradient.addColorStop(0.6, 'rgba(255, 109, 0, 0.9)');
       gradient.addColorStop(1, 'rgba(255, 80, 0, 0.4)');
     }
 
@@ -292,8 +339,7 @@ export class Candle {
 
     ctx.fillStyle = baseGradient;
     
-    ctx.beginPath();
-    ctx.roundRect(
+    this.roundRect(
       this.x - width / 2, baseY - height * 0.15,
       width, height * 0.15,
       3 * this.scale
@@ -309,8 +355,7 @@ export class Candle {
     stemGradient.addColorStop(1, '#5a3d1a');
 
     ctx.fillStyle = stemGradient;
-    ctx.beginPath();
-    ctx.roundRect(
+    this.roundRect(
       this.x - width * 0.15, baseY - height * 0.6,
       width * 0.3, height * 0.45,
       2 * this.scale
@@ -360,6 +405,21 @@ export class Candle {
     ctx.shadowBlur = 0;
 
     ctx.restore();
+  }
+
+  private roundRect(x: number, y: number, w: number, h: number, r: number): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 
   public getX(): number {

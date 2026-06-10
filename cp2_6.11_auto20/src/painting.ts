@@ -32,6 +32,7 @@ export interface PaintingOptions {
   height: number;
   scale: number;
   zDepth: number;
+  rotationY?: number;
 }
 
 export class Painting {
@@ -45,10 +46,12 @@ export class Painting {
   private baseHeight: number;
   private scale: number;
   private zDepth: number;
+  private rotationY: number;
   
   private isHovered: boolean;
   private hoverProgress: number;
   private targetHoverProgress: number;
+  private hoverStartTime: number;
   
   private collected: boolean;
   private collectProgress: number;
@@ -63,6 +66,8 @@ export class Painting {
   private saturationBase: number;
   
   private onCollect?: (painting: Painting) => void;
+  
+  private static readonly FADE_IN_DURATION = 1.5;
 
   constructor(ctx: CanvasRenderingContext2D, options: PaintingOptions) {
     this.ctx = ctx;
@@ -75,10 +80,12 @@ export class Painting {
     this.baseHeight = options.height;
     this.scale = options.scale;
     this.zDepth = options.zDepth;
+    this.rotationY = options.rotationY || 0;
     
     this.isHovered = false;
     this.hoverProgress = 0;
     this.targetHoverProgress = 0;
+    this.hoverStartTime = 0;
     
     this.collected = false;
     this.collectProgress = 0;
@@ -94,7 +101,7 @@ export class Painting {
     this.candle = new Candle(
       ctx,
       this.x,
-      this.y + this.baseHeight * this.scale * 0.5 + 30 * this.scale,
+      this.y + this.baseHeight * this.scale * 0.5 + 25 * this.scale,
       this.scale * 0.8
     );
   }
@@ -151,21 +158,29 @@ export class Painting {
     return shape;
   }
 
-  public setPosition(x: number, y: number, scale: number): void {
+  public setPosition(x: number, y: number, scale: number, rotationY?: number): void {
     this.x = x;
     this.y = y;
     this.scale = scale;
+    if (rotationY !== undefined) {
+      this.rotationY = rotationY;
+    }
     
     this.candle.setPosition(
       this.x,
-      this.y + this.baseHeight * this.scale * 0.5 + 30 * this.scale,
+      this.y + this.baseHeight * this.scale * 0.5 + 25 * this.scale,
       this.scale * 0.8
     );
   }
 
   public setHovered(hovered: boolean): void {
-    this.isHovered = hovered;
-    this.targetHoverProgress = hovered ? 1 : 0;
+    if (this.isHovered !== hovered) {
+      this.isHovered = hovered;
+      this.targetHoverProgress = hovered ? 1 : 0;
+      if (hovered) {
+        this.hoverStartTime = performance.now() / 1000;
+      }
+    }
   }
 
   public isCollected(): boolean {
@@ -205,6 +220,7 @@ export class Painting {
 
   public hitTestShape(px: number, py: number): boolean {
     if (!this.isHovered || this.collected) return false;
+    if (this.hoverProgress < 0.3) return false;
     
     const w = this.baseWidth * this.scale;
     const h = this.baseHeight * this.scale;
@@ -233,11 +249,12 @@ export class Painting {
   }
 
   public update(deltaTime: number, time: number): void {
-    const hoverSpeed = 1 / 0.4;
-    if (this.hoverProgress < this.targetHoverProgress) {
-      this.hoverProgress = Math.min(1, this.hoverProgress + deltaTime * hoverSpeed);
-    } else if (this.hoverProgress > this.targetHoverProgress) {
-      this.hoverProgress = Math.max(0, this.hoverProgress - deltaTime * hoverSpeed);
+    if (this.targetHoverProgress > this.hoverProgress) {
+      const elapsed = time - this.hoverStartTime;
+      const progress = Math.min(1, elapsed / Painting.FADE_IN_DURATION);
+      this.hoverProgress = this.easeOutCubic(progress);
+    } else if (this.hoverProgress > 0) {
+      this.hoverProgress = Math.max(0, this.hoverProgress - deltaTime * 2);
     }
     
     if (this.collected) {
@@ -261,8 +278,11 @@ export class Painting {
     ctx.save();
     ctx.translate(this.x, this.y);
     
-    const tilt = this.side === 'left' ? 0.05 : -0.05;
-    ctx.rotate(tilt);
+    const perspectiveSkew = this.rotationY;
+    ctx.transform(1, 0, Math.tan(perspectiveSkew), 1, 0, 0);
+    
+    const scaleX = Math.cos(perspectiveSkew);
+    ctx.scale(scaleX, 1);
     
     this.drawFrame(w, h);
     this.drawPaintingContent(w, h);
@@ -299,8 +319,7 @@ export class Painting {
     ctx.strokeStyle = '#8B6914';
     ctx.lineWidth = 1;
     
-    ctx.beginPath();
-    ctx.roundRect(-w / 2 - frameWidth, -h / 2 - frameWidth, w + frameWidth * 2, h + frameWidth * 2, 4 * this.scale);
+    this.roundRect(-w / 2 - frameWidth, -h / 2 - frameWidth, w + frameWidth * 2, h + frameWidth * 2, 4 * this.scale);
     ctx.fill();
     ctx.stroke();
     
@@ -318,10 +337,24 @@ export class Painting {
     if (this.hoverProgress > 0) {
       ctx.strokeStyle = `rgba(255, 215, 100, ${this.hoverProgress * 0.6})`;
       ctx.lineWidth = 2 * this.scale;
-      ctx.beginPath();
-      ctx.roundRect(-w / 2 - frameWidth * 0.3, -h / 2 - frameWidth * 0.3, w + frameWidth * 0.6, h + frameWidth * 0.6, 3 * this.scale);
+      this.roundRect(-w / 2 - frameWidth * 0.3, -h / 2 - frameWidth * 0.3, w + frameWidth * 0.6, h + frameWidth * 0.6, 3 * this.scale);
       ctx.stroke();
     }
+  }
+
+  private roundRect(x: number, y: number, w: number, h: number, r: number): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 
   private drawPaintingContent(w: number, h: number): void {
@@ -361,8 +394,7 @@ export class Painting {
         gradient.addColorStop(0.5, this.lightenColor(saturatedColor, 10));
         gradient.addColorStop(1, saturatedColor);
         ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 5 * this.scale);
+        this.roundRect(-bw / 2, -bh / 2, bw, bh, 5 * this.scale);
         ctx.fill();
       } else {
         ctx.strokeStyle = saturatedColor;
@@ -430,8 +462,7 @@ export class Painting {
     const sy = (shape.y - 0.5) * h * 0.8;
     const size = shape.size * Math.min(w, h) * 0.8;
     
-    const appearProgress = Math.min(1, this.hoverProgress * 1.5);
-    const fadeIn = this.easeOutCubic(appearProgress);
+    const fadeIn = this.easeOutCubic(this.hoverProgress);
     
     ctx.save();
     ctx.translate(sx, sy);
@@ -568,8 +599,7 @@ export class Painting {
     
     ctx.strokeStyle = `rgba(255, 215, 100, ${this.glowProgress})`;
     ctx.lineWidth = 3 * this.scale * this.glowProgress;
-    ctx.beginPath();
-    ctx.roundRect(-w / 2, -h / 2, w, h, 2 * this.scale);
+    this.roundRect(-w / 2, -h / 2, w, h, 2 * this.scale);
     ctx.stroke();
   }
 
