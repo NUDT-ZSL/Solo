@@ -1,20 +1,27 @@
 export interface Particle {
   x: number;
   y: number;
+  baseX: number;
+  baseY: number;
   vx: number;
   vy: number;
+  initialVx: number;
+  initialVy: number;
+  initialSpeed: number;
   size: number;
   color: string;
   alpha: number;
   life: number;
   maxLife: number;
-  baseVx: number;
+  elapsed: number;
   sineOffset: number;
   sineAmplitude: number;
   sineFrequency: number;
+  perpX: number;
+  perpY: number;
 }
 
-const MAX_PARTICLES = 200;
+const MAX_PARTICLES = 50;
 const GRAVITY = 50;
 const AIR_TURBULENCE = 1;
 
@@ -25,7 +32,7 @@ export class ParticleSystem {
   constructor() {}
 
   public emit(x: number, y: number, baseColor: string, count: number = 40): void {
-    const emitCount = Math.min(count, 50);
+    const emitCount = Math.min(count, this.maxParticles);
     
     if (this.particles.length + emitCount > this.maxParticles) {
       const removeCount = this.particles.length + emitCount - this.maxParticles;
@@ -33,6 +40,10 @@ export class ParticleSystem {
     }
 
     for (let i = 0; i < emitCount; i++) {
+      if (this.particles.length >= this.maxParticles) {
+        this.removeOldest(1);
+      }
+
       const angle = (Math.random() - 0.5) * (Math.PI / 3) - Math.PI / 2;
       const speed = 120 + Math.random() * 80;
       const size = 2 + Math.random() * 3;
@@ -41,26 +52,35 @@ export class ParticleSystem {
 
       const color = this.shiftHue(baseColor, hueShift);
       const sineOffset = Math.random() * Math.PI * 2;
-      const sineAmplitude = 5 + Math.random() * 15;
-      const sineFrequency = 2 + Math.random() * 3;
+      const sineAmplitude = 15 + Math.random() * 25;
+      const sineFrequency = 1.5 + Math.random() * 2;
 
       const vx = Math.cos(angle) * speed;
       const vy = Math.sin(angle) * speed;
+      const perpX = -vy / speed;
+      const perpY = vx / speed;
 
       const particle: Particle = {
         x,
         y,
+        baseX: x,
+        baseY: y,
         vx,
         vy,
-        baseVx: vx,
+        initialVx: vx,
+        initialVy: vy,
+        initialSpeed: speed,
         size,
         color,
         alpha: 1,
         life,
         maxLife: life,
+        elapsed: 0,
         sineOffset,
         sineAmplitude,
         sineFrequency,
+        perpX,
+        perpY,
       };
 
       this.particles.push(particle);
@@ -129,6 +149,7 @@ export class ParticleSystem {
       const p = this.particles[i];
       
       p.life -= deltaTime;
+      p.elapsed += deltaTime;
       
       if (p.life <= 0) {
         this.particles.splice(i, 1);
@@ -142,12 +163,18 @@ export class ParticleSystem {
       const turbulenceX = (Math.random() - 0.5) * AIR_TURBULENCE * 60 * deltaTime;
       const turbulenceY = (Math.random() - 0.5) * AIR_TURBULENCE * 60 * deltaTime;
 
-      const progress = 1 - p.life / p.maxLife;
-      const sineWave = Math.sin(progress * p.sineFrequency * Math.PI + p.sineOffset) * p.sineAmplitude * deltaTime * 2;
-      
-      p.vx = p.baseVx + sineWave;
-      p.x += p.vx * deltaTime + turbulenceX;
-      p.y += p.vy * deltaTime + turbulenceY;
+      p.baseX += p.vx * deltaTime;
+      p.baseY += p.vy * deltaTime;
+
+      const sinePhase = p.elapsed * p.sineFrequency * Math.PI * 2 + p.sineOffset;
+      const sineWave = Math.sin(sinePhase) * p.sineAmplitude;
+
+      const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      const perpX = -p.vy / speed;
+      const perpY = p.vx / speed;
+
+      p.x = p.baseX + perpX * sineWave + turbulenceX;
+      p.y = p.baseY + perpY * sineWave + turbulenceY;
     }
   }
 

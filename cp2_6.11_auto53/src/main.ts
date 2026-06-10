@@ -11,6 +11,9 @@ const audioSynth = new AudioSynthesizer();
 const harp = new Harp(particleSystem, audioSynth);
 const recorder = new Recorder();
 
+(window as any).particleSystem = particleSystem;
+(window as any).harp = harp;
+
 let lastTime = 0;
 let isDragging = false;
 let lastStringIndex = -1;
@@ -148,13 +151,17 @@ recordBtn.addEventListener('click', () => {
   if (recorder.isRecordingActive()) {
     recorder.stopRecording();
     recordBtn.classList.remove('recording');
+    recordBtn.classList.remove('playing');
     progressContainer.style.display = 'none';
     updatePlaylist();
   } else if (recorder.isPlayingActive()) {
     recorder.stopPlayback();
+    recordBtn.classList.remove('playing');
+    progressContainer.style.display = 'none';
   } else {
     recorder.startRecording(harp.getStringCount(), harp.getToneLevel());
     recordBtn.classList.add('recording');
+    recordBtn.classList.remove('playing');
     progressContainer.style.display = 'flex';
     progressText.textContent = '00:00/00:30';
     progressFill.style.width = '0%';
@@ -227,10 +234,13 @@ recorder.onTrigger = (index: number) => {
 
 recorder.onPlaybackStart = () => {
   progressContainer.style.display = 'flex';
+  recordBtn.classList.add('playing');
+  recordBtn.classList.remove('recording');
 };
 
 recorder.onPlaybackStop = () => {
   progressContainer.style.display = 'none';
+  recordBtn.classList.remove('playing');
 };
 
 recorder.onPlaybackProgress = (current: number, total: number) => {

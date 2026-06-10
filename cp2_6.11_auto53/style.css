@@ -221,6 +221,20 @@ html, body {
   height: 14px;
 }
 
+.record-btn.playing {
+  background: #6BCB77;
+}
+
+.record-btn.playing::before {
+  width: 0;
+  height: 0;
+  background: transparent;
+  border-left: 12px solid white;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-radius: 0;
+}
+
 @keyframes pulse {
   0%, 100% {
     background: #FF6B6B;

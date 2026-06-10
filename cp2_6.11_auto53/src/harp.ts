@@ -54,9 +54,8 @@ export class Harp {
   private scale: number = 1;
   private toneLevel: ToneLevel = 'mid';
   private hueShift: number = 0;
-  private glideDelay: number = 0.08;
-  private glideQueue: number[] = [];
-  private glideTimer: number = 0;
+  private glideDelayMs: number = 80;
+  private glideTimeouts: number[] = [];
 
   constructor(particleSystem: ParticleSystem, audioSynth: AudioSynthesizer) {
     this.particleSystem = particleSystem;
@@ -223,15 +222,18 @@ export class Harp {
     str.vibrationPhase = 0;
     str.glowIntensity = 1;
 
+    const midX = (str.topX + str.bottomX) / 2;
     const midY = (str.topY + str.bottomY) / 2;
     const particleCount = 30 + Math.floor(Math.random() * 21);
-    this.particleSystem.emit(str.x, midY, str.baseColor, particleCount);
+    this.particleSystem.emit(midX, midY, str.baseColor, particleCount);
 
     this.audioSynth.playNote(index, this.stringCount);
   }
 
   public handleDrag(fromIndex: number, toIndex: number): void {
     if (fromIndex === toIndex) return;
+    
+    this.clearGlideTimeouts();
     
     const direction = toIndex > fromIndex ? 1 : -1;
     const indices: number[] = [];
@@ -241,9 +243,20 @@ export class Harp {
     }
 
     if (indices.length > 0) {
-      this.glideQueue = indices;
-      this.glideTimer = 0;
+      indices.forEach((index, i) => {
+        const timeoutId = window.setTimeout(() => {
+          this.triggerString(index);
+        }, i * this.glideDelayMs);
+        this.glideTimeouts.push(timeoutId);
+      });
     }
+  }
+
+  private clearGlideTimeouts(): void {
+    for (const id of this.glideTimeouts) {
+      clearTimeout(id);
+    }
+    this.glideTimeouts = [];
   }
 
   public getStringAtPoint(x: number, y: number): number {
@@ -292,29 +305,17 @@ export class Harp {
       if (str.isTriggered) {
         str.triggerTime += deltaTime;
         
-        const vibrationProgress = str.triggerTime / VIBRATION_DURATION;
-        if (vibrationProgress >= 1) {
+        if (str.triggerTime >= VIBRATION_DURATION) {
           str.vibrationAmplitude = 0;
           str.isTriggered = false;
         } else {
-          const damping = 1 - vibrationProgress;
-          str.vibrationAmplitude = MAX_VIBRATION_AMPLITUDE * this.scale * damping;
-          str.vibrationPhase += deltaTime * 20;
+          const decayRate = Math.log(1 / 0.001) / VIBRATION_DURATION;
+          str.vibrationAmplitude = MAX_VIBRATION_AMPLITUDE * this.scale * Math.exp(-decayRate * str.triggerTime);
+          str.vibrationPhase += deltaTime * 25;
         }
 
         const glowProgress = str.triggerTime / GLOW_DURATION;
         str.glowIntensity = Math.max(0, 1 - glowProgress);
-      }
-    }
-
-    if (this.glideQueue.length > 0) {
-      this.glideTimer += deltaTime;
-      if (this.glideTimer >= this.glideDelay) {
-        const nextIndex = this.glideQueue.shift();
-        if (nextIndex !== undefined) {
-          this.triggerString(nextIndex);
-        }
-        this.glideTimer = 0;
       }
     }
   }
