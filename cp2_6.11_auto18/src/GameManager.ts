@@ -190,7 +190,7 @@ export class GameManager {
 
   private generateTotemPole(): void {
     this.state.layers = [];
-    const layerCount = randomInt(5, 8);
+    const layerCount = randomInt(10, 15);
     let prevColor = '';
 
     for (let i = 0; i < layerCount; i++) {
@@ -333,9 +333,9 @@ export class GameManager {
         this.spawnFallParticle(player.x, player.y);
       }
 
-      const groundY = this.canvas.height - 50 + this.state.cameraOffset;
-      if (player.y >= this.canvas.height - 50) {
-        player.y = this.canvas.height - 50;
+      const playerScreenY = player.y + this.state.cameraOffset;
+      if (playerScreenY >= this.canvas.height - 50) {
+        player.y = this.canvas.height - 50 - this.state.cameraOffset;
         this.state.isGameOver = true;
         this.state.isRunning = false;
       }
@@ -366,8 +366,12 @@ export class GameManager {
 
     this.updateParticles(dt);
 
-    const targetCameraOffset = Math.max(0, this.canvas.height * 0.6 - player.y);
-    this.state.cameraOffset = lerp(this.state.cameraOffset, targetCameraOffset, 0.08);
+    if (!player.isFalling) {
+      const targetCameraOffset = Math.max(0, this.canvas.height * 0.6 - player.y);
+      if (targetCameraOffset > this.state.cameraOffset) {
+        this.state.cameraOffset = lerp(this.state.cameraOffset, targetCameraOffset, 0.08);
+      }
+    }
 
     const topLayer = this.state.layers[this.state.layers.length - 1];
     if (topLayer && this.state.layerIndex >= topLayer.layerIndex - 2) {
@@ -420,32 +424,33 @@ export class GameManager {
     }
     if (this.state.player.isFalling) return;
 
+    const targetLayer = this.state.layers.find(
+      l => l.layerIndex === this.state.layerIndex + 1
+    );
+    if (!targetLayer) return;
+
     let hitGrip: { gripPoint: GripPoint; layer: RingLayer } | null = null;
     let minDist = Infinity;
 
-    for (const layer of this.state.layers) {
-      if (layer.layerIndex !== this.state.layerIndex + 1) continue;
+    for (const gp of targetLayer.gripPoints) {
+      const pos = calcGripScreenPos(
+        this.canvas.width,
+        this.state.cameraOffset,
+        this.state.rotation,
+        this.state.scale,
+        targetLayer.y,
+        gp.angle
+      );
 
-      for (const gp of layer.gripPoints) {
-        const pos = calcGripScreenPos(
-          this.canvas.width,
-          this.state.cameraOffset,
-          this.state.rotation,
-          this.state.scale,
-          layer.y,
-          gp.angle
-        );
+      if (!pos.visible) continue;
 
-        if (!pos.visible) continue;
+      const dx = screenX - pos.x;
+      const dy = screenY - pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
-        const dx = screenX - pos.x;
-        const dy = screenY - pos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < gp.radius * gp.scaleAnim * 2 && dist < minDist) {
-          minDist = dist;
-          hitGrip = { gripPoint: gp, layer };
-        }
+      if (dist < gp.radius * gp.scaleAnim * 2 && dist < minDist) {
+        minDist = dist;
+        hitGrip = { gripPoint: gp, layer: targetLayer };
       }
     }
 
@@ -473,7 +478,7 @@ export class GameManager {
     } else {
       this.state.score += 10;
       player.comboCount++;
-      if (player.comboCount >= 3) {
+      if (player.comboCount >= 2) {
         player.isCombo = true;
         player.pulseTimer = 0.5;
         player.comboGlowTimer = 0.8;
@@ -486,7 +491,7 @@ export class GameManager {
     player.attachedGripAngle = gripPoint.angle;
     player.attachedLayerY = layer.y;
 
-    if (this.state.totalLayersClimbed % 10 === 0) {
+    if (this.state.totalLayersClimbed % 5 === 0) {
       this.addNewLayer();
     }
 
@@ -496,7 +501,7 @@ export class GameManager {
   private handleWrongClick(): void {
     const player = this.state.player;
     player.isFalling = true;
-    player.fallSpeed = 0;
+    player.fallSpeed = 150;
     player.comboCount = 0;
     player.isCombo = false;
     player.shakeTimer = 0.2;
