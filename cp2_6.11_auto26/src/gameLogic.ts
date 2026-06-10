@@ -109,6 +109,7 @@ export function createInitialState(): GameState {
     hoveredButton: null,
     buttonClickAnim: null,
     runeAngle: 0,
+    vineCastingMode: false,
   };
 }
 
@@ -321,6 +322,7 @@ export function endTurn(state: GameState): void {
   decrementEntangle(state.pieces);
   state.selectedPiece = null;
   state.selectedCell = null;
+  state.vineCastingMode = false;
   state.phase = GamePhase.TURN_TRANSITION;
   state.transitionTimer = TURN_TRANSITION_DURATION;
   state.transitionAlpha = 0;
@@ -360,11 +362,30 @@ export function handleClick(
   if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
     state.selectedPiece = null;
     state.selectedCell = null;
+    state.vineCastingMode = false;
     return;
   }
 
   const cell = state.board[row][col];
   if (cell.fogAlpha > 0.7) {
+    state.selectedPiece = null;
+    state.selectedCell = null;
+    state.vineCastingMode = false;
+    return;
+  }
+
+  const piece = getPieceAt(state.pieces, row, col);
+
+  // Vine casting mode - click on visible enemy piece
+  if (state.vineCastingMode) {
+    if (piece && piece.side === PlayerSide.AMBER && piece.entangled === 0) {
+      const result = castVine(PlayerSide.GREEN, piece, state.mana[0]);
+      if (result.success) {
+        state.mana[0] = result.newMana;
+        state.vineAnim = { row: piece.row, col: piece.col, progress: 0 };
+      }
+    }
+    state.vineCastingMode = false;
     state.selectedPiece = null;
     state.selectedCell = null;
     return;
@@ -376,38 +397,57 @@ export function handleClick(
     const dr = Math.abs(row - sp.row);
     const dc = Math.abs(col - sp.col);
 
+    // Adjacent cell - try move
     if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
-      const success = movePiece(sp, row, col, state.pieces, state.board);
-      if (success) {
-        updateFog(state.pieces, state.board, PlayerSide.GREEN);
-        state.scores = countSpiritNodes(state.board);
-        state.selectedPiece = null;
-        state.selectedCell = null;
-        return;
+      if (!piece) {
+        const success = movePiece(sp, row, col, state.pieces, state.board);
+        if (success) {
+          updateFog(state.pieces, state.board, PlayerSide.GREEN);
+          state.scores = countSpiritNodes(state.board);
+          state.selectedPiece = sp;
+          state.selectedCell = { row, col };
+          return;
+        }
       }
     }
+
+    // Click on enemy piece - try vine cast if enough mana
+    if (piece && piece.side === PlayerSide.AMBER && piece.entangled === 0) {
+      if (state.mana[0] >= VINE_MANA_COST) {
+        const result = castVine(PlayerSide.GREEN, piece, state.mana[0]);
+        if (result.success) {
+          state.mana[0] = result.newMana;
+          state.vineAnim = { row: piece.row, col: piece.col, progress: 0 };
+          state.selectedPiece = null;
+          state.selectedCell = null;
+          return;
+        }
+      }
+    }
+
+    // Click on another own piece - switch selection
+    if (piece && piece.side === PlayerSide.GREEN) {
+      state.selectedPiece = piece;
+      state.selectedCell = { row, col };
+      return;
+    }
+
+    // Otherwise deselect
+    state.selectedPiece = null;
+    state.selectedCell = null;
+    return;
   }
 
-  // Select a piece
-  const piece = getPieceAt(state.pieces, row, col);
+  // No selection - select own piece
   if (piece && piece.side === PlayerSide.GREEN) {
     state.selectedPiece = piece;
     state.selectedCell = { row, col };
-  } else if (piece && piece.side === PlayerSide.AMBER && state.selectedPiece) {
-    // Try vine cast on enemy piece
-    if (state.mana[0] >= VINE_MANA_COST) {
-      const result = castVine(PlayerSide.GREEN, piece, state.mana[0]);
-      if (result.success) {
-        state.mana[0] = result.newMana;
-        state.vineAnim = { row: piece.row, col: piece.col, progress: 0 };
-        state.selectedPiece = null;
-        state.selectedCell = null;
-      }
-    }
-  } else {
-    state.selectedPiece = null;
-    state.selectedCell = null;
+    return;
   }
+
+  // No selection - click on empty/cell to select cell
+  state.selectedPiece = null;
+  state.selectedCell = { row, col };
 }
 
 function handleButtonClick(action: string, state: GameState): void {
@@ -440,7 +480,7 @@ function handleButtonClick(action: string, state: GameState): void {
       break;
     }
     case 'vine': {
-      state.selectedCell = null;
+      state.vineCastingMode = !state.vineCastingMode;
       break;
     }
   }
@@ -461,7 +501,18 @@ export function getButtons(state: GameState, boardX: number, boardY: number): Bu
     state.board[state.selectedCell.row][state.selectedCell.col].owner === PlayerSide.GREEN &&
     !getPieceAt(state.pieces, state.selectedCell.row, state.selectedCell.col);
 
-  const canVine = state.mana[0] >= VINE_MANA_COST;
+  let canVineTarget = false;
+  if (state.mana[0] >= VINE_MANA_COST) {
+    for (const p of state.pieces) {
+      if (p.side === PlayerSide.AMBER && p.entangled === 0) {
+        const cell = state.board[p.row][p.col];
+        if (cell.fogAlpha <= 0.7) {
+          canVineTarget = true;
+          break;
+        }
+      }
+    }
+  }
 
   return [
     {
@@ -487,8 +538,8 @@ export function getButtons(state: GameState, boardX: number, boardY: number): Bu
       y: btnY,
       w: btnW,
       h: btnH,
-      text: `藤蔓(${VINE_MANA_COST} Mana)`,
-      enabled: canVine,
+      text: state.vineCastingMode ? '取消藤蔓' : `藤蔓(${VINE_MANA_COST} Mana)`,
+      enabled: canVineTarget || state.vineCastingMode,
       action: 'vine',
     },
   ];

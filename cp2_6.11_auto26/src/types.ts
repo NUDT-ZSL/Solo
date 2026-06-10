@@ -85,6 +85,7 @@ export interface GameState {
   hoveredButton: string | null;
   buttonClickAnim: { action: string; progress: number } | null;
   runeAngle: number;
+  vineCastingMode: boolean;
 }
 
 export interface AiAction {

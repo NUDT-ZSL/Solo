@@ -118,9 +118,7 @@ export function updateFog(pieces: Piece[], board: Cell[][], currentSide: PlayerS
         }
       } else {
         if (cell.fogState === FogState.CLEAR || cell.fogState === FogState.FADING) {
-          if (cell.fogAlpha < 0.01) {
-            cell.fogState = FogState.RETURNING;
-          }
+          cell.fogState = FogState.RETURNING;
         }
       }
     }

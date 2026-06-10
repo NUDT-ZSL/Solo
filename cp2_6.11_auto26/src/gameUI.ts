@@ -175,6 +175,21 @@ function drawPieces(
     const y = oy + piece.row * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
     const radius = 25;
 
+    // Vine casting mode highlight on enemy pieces
+    if (state.vineCastingMode && piece.side === PlayerSide.AMBER && piece.entangled === 0) {
+      ctx.save();
+      const pulse = 0.5 + 0.5 * Math.sin(time * 0.008);
+      ctx.strokeStyle = `rgba(46, 204, 113, ${0.5 + 0.3 * pulse})`;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 4]);
+      ctx.lineDashOffset = -time * 0.03;
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     // Shadow
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
@@ -312,32 +327,40 @@ function drawSelectionHalo(
   ox: number,
   oy: number
 ): void {
-  if (state.selectedCell) {
-    const x = ox + state.selectedCell.col * (CELL_SIZE + CELL_GAP);
-    const y = oy + state.selectedCell.row * (CELL_SIZE + CELL_GAP);
-    const cx = x + CELL_SIZE / 2;
-    const cy = y + CELL_SIZE / 2;
-    const angle = (time / SELECT_HALO_PERIOD) * Math.PI * 2;
+  if (!state.selectedCell) return;
+  const x = ox + state.selectedCell.col * (CELL_SIZE + CELL_GAP);
+  const y = oy + state.selectedCell.row * (CELL_SIZE + CELL_GAP);
+  const cx = x + CELL_SIZE / 2;
+  const cy = y + CELL_SIZE / 2;
+  const angle = (time / SELECT_HALO_PERIOD) * Math.PI * 2;
+  const pulse = 0.7 + 0.3 * Math.sin(time * 0.005);
 
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angle);
+  // Extra inner glow
+  ctx.save();
+  const glowGrad = ctx.createRadialGradient(cx, cy, CELL_SIZE / 2 - 5, cx, cy, CELL_SIZE / 2 + 14);
+  glowGrad.addColorStop(0, `rgba(255, 215, 0, ${0.45 * pulse})`);
+  glowGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(x - 15, y - 15, CELL_SIZE + 30, CELL_SIZE + 30);
+  ctx.restore();
 
-    ctx.strokeStyle = COLORS.gold;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.7;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
 
-    const haloRadius = CELL_SIZE / 2 + 4;
-    const segments = 8;
-    for (let i = 0; i < segments; i++) {
-      const startAngle = (Math.PI * 2 * i) / segments;
-      const endAngle = startAngle + (Math.PI / segments) * 0.7;
-      ctx.beginPath();
-      ctx.arc(0, 0, haloRadius, startAngle, endAngle);
-      ctx.stroke();
-    }
-    ctx.restore();
+  ctx.strokeStyle = `rgba(255, 215, 0, ${0.85 * pulse})`;
+  ctx.lineWidth = 3;
+
+  const haloRadius = CELL_SIZE / 2 + 6;
+  const segments = 8;
+  for (let i = 0; i < segments; i++) {
+    const startAngle = (Math.PI * 2 * i) / segments;
+    const endAngle = startAngle + (Math.PI / segments) * 0.75;
+    ctx.beginPath();
+    ctx.arc(0, 0, haloRadius, startAngle, endAngle);
+    ctx.stroke();
   }
+  ctx.restore();
 }
 
 function drawRuneBorder(
@@ -482,6 +505,7 @@ function drawTurnTimer(
 function drawButton(ctx: CanvasRenderingContext2D, btn: ButtonDef, state: GameState): void {
   const isHovered = state.hoveredButton === btn.action;
   const isClicking = state.buttonClickAnim?.action === btn.action;
+  const isVineActive = btn.action === 'vine' && state.vineCastingMode;
 
   ctx.save();
 
@@ -502,15 +526,21 @@ function drawButton(ctx: CanvasRenderingContext2D, btn: ButtonDef, state: GameSt
   // Button background gradient
   const grad = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.h);
   if (btn.enabled) {
-    const brightFactor = isHovered ? 1.2 : 1;
-    const r1 = Math.floor(15 * brightFactor);
-    const g1 = Math.floor(60 * brightFactor);
-    const b1 = Math.floor(30 * brightFactor);
-    const r2 = Math.floor(8 * brightFactor);
-    const g2 = Math.floor(35 * brightFactor);
-    const b2 = Math.floor(18 * brightFactor);
-    grad.addColorStop(0, `rgb(${r1},${g1},${b1})`);
-    grad.addColorStop(1, `rgb(${r2},${g2},${b2})`);
+    const hoverBoost = isHovered ? 1.2 : 1.0;
+    let r1 = Math.floor(15 * hoverBoost);
+    let g1 = Math.floor(60 * hoverBoost);
+    let b1 = Math.floor(30 * hoverBoost);
+    let r2 = Math.floor(8 * hoverBoost);
+    let g2 = Math.floor(35 * hoverBoost);
+    let b2 = Math.floor(18 * hoverBoost);
+
+    if (isVineActive) {
+      r1 = 46; g1 = 204; b1 = 113;
+      r2 = 22; g2 = 160; b2 = 90;
+    }
+
+    grad.addColorStop(0, `rgb(${Math.min(255, r1)},${Math.min(255, g1)},${Math.min(255, b1)})`);
+    grad.addColorStop(1, `rgb(${Math.min(255, r2)},${Math.min(255, g2)},${Math.min(255, b2)})`);
   } else {
     grad.addColorStop(0, '#0A150D');
     grad.addColorStop(1, '#060E08');
