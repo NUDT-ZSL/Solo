@@ -1,7 +1,7 @@
 export class AudioEngine {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
-  private activeOscillators: OscillatorNode[] = [];
+  private activeNodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
   private startTime: number = 0;
 
   constructor() {}
@@ -19,30 +19,38 @@ export class AudioEngine {
     }
   }
 
-  public playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.3): void {
+  public playTone(
+    frequency: number,
+    duration: number,
+    type: OscillatorType = 'sine',
+    volume: number = 0.3,
+    when: number = 0
+  ): void {
     this.ensureContext();
     if (!this.audioContext || !this.masterGain) return;
+
+    const startAt = when > 0 ? when : this.audioContext.currentTime;
 
     const osc = this.audioContext.createOscillator();
     const gain = this.audioContext.createGain();
 
     osc.type = type;
-    osc.frequency.value = frequency;
+    osc.frequency.setValueAtTime(frequency, startAt);
 
-    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
-    gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.01);
-    gain.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + duration);
+    gain.gain.setValueAtTime(0, startAt);
+    gain.gain.linearRampToValueAtTime(volume, startAt + 0.01);
+    gain.gain.linearRampToValueAtTime(0, startAt + duration);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
 
-    osc.start();
-    osc.stop(this.audioContext.currentTime + duration);
+    osc.start(startAt);
+    osc.stop(startAt + duration + 0.02);
 
-    this.activeOscillators.push(osc);
+    this.activeNodes.push(osc);
     osc.onended = () => {
-      const idx = this.activeOscillators.indexOf(osc);
-      if (idx > -1) this.activeOscillators.splice(idx, 1);
+      const idx = this.activeNodes.indexOf(osc);
+      if (idx > -1) this.activeNodes.splice(idx, 1);
     };
   }
 
@@ -50,15 +58,26 @@ export class AudioEngine {
     this.playTone(800, 0.1, 'sine', 0.4);
   }
 
-  public playTrack(trackIndex: number, pitchLevel: number, startTime: number, duration: number): void {
+  public playTrack(
+    trackIndex: number,
+    pitchLevel: number,
+    startTime: number,
+    duration: number
+  ): void {
     const baseFreq = 261.63;
     const frequency = baseFreq * Math.pow(2, pitchLevel / 12);
     const types: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
     const type = types[trackIndex % types.length];
-    this.scheduleTone(frequency, startTime, duration, type, 0.25);
+    this.scheduleToneWithBuffer(frequency, startTime, duration, type, 0.25);
   }
 
-  private scheduleTone(frequency: number, startTime: number, duration: number, type: OscillatorType, volume: number): void {
+  private scheduleToneWithBuffer(
+    frequency: number,
+    startTime: number,
+    duration: number,
+    type: OscillatorType,
+    volume: number
+  ): void {
     this.ensureContext();
     if (!this.audioContext || !this.masterGain) return;
 
@@ -66,23 +85,27 @@ export class AudioEngine {
     const gain = this.audioContext.createGain();
 
     osc.type = type;
-    osc.frequency.value = frequency;
+    osc.frequency.setValueAtTime(frequency, startTime);
+
+    const attackTime = 0.02;
+    const releaseTime = 0.05;
+    const sustainTime = Math.max(0.05, duration - attackTime - releaseTime);
 
     gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(volume, startTime + 0.02);
-    gain.gain.linearRampToValueAtTime(volume, startTime + duration - 0.05);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+    gain.gain.linearRampToValueAtTime(volume, startTime + attackTime);
+    gain.gain.linearRampToValueAtTime(volume * 0.9, startTime + attackTime + sustainTime);
+    gain.gain.linearRampToValueAtTime(0, startTime + attackTime + sustainTime + releaseTime);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
 
     osc.start(startTime);
-    osc.stop(startTime + duration);
+    osc.stop(startTime + attackTime + sustainTime + releaseTime + 0.02);
 
-    this.activeOscillators.push(osc);
+    this.activeNodes.push(osc);
     osc.onended = () => {
-      const idx = this.activeOscillators.indexOf(osc);
-      if (idx > -1) this.activeOscillators.splice(idx, 1);
+      const idx = this.activeNodes.indexOf(osc);
+      if (idx > -1) this.activeNodes.splice(idx, 1);
     };
   }
 
@@ -90,21 +113,58 @@ export class AudioEngine {
     this.ensureContext();
     if (!this.audioContext) return;
 
-    const noteDuration = 3 / pitches.length;
-    const start = this.audioContext.currentTime + 0.1;
+    const ctx = this.audioContext;
+    const totalDuration = 3.0;
+    const noteCount = pitches.length;
+    const noteSpacing = totalDuration / noteCount;
+    const noteDuration = noteSpacing * 0.9;
+
+    const scheduleStart = ctx.currentTime + 0.05;
+
+    const types: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
+    const baseFreq = 261.63;
 
     pitches.forEach((pitch, i) => {
-      this.playTrack(i, pitch, start + i * noteDuration, noteDuration * 0.9);
+      const frequency = baseFreq * Math.pow(2, pitch / 12);
+      const type = types[i % types.length];
+      const noteStart = scheduleStart + i * noteSpacing;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, noteStart);
+
+      const attackTime = 0.015;
+      const releaseTime = 0.04;
+      const sustain = Math.max(0.05, noteDuration - attackTime - releaseTime);
+
+      gain.gain.setValueAtTime(0, noteStart);
+      gain.gain.linearRampToValueAtTime(0.25, noteStart + attackTime);
+      gain.gain.linearRampToValueAtTime(0.22, noteStart + attackTime + sustain);
+      gain.gain.linearRampToValueAtTime(0, noteStart + attackTime + sustain + releaseTime);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+
+      osc.start(noteStart);
+      osc.stop(noteStart + attackTime + sustain + releaseTime + 0.02);
+
+      this.activeNodes.push(osc);
+      osc.onended = () => {
+        const idx = this.activeNodes.indexOf(osc);
+        if (idx > -1) this.activeNodes.splice(idx, 1);
+      };
     });
   }
 
   public stopAll(): void {
-    this.activeOscillators.forEach(osc => {
+    this.activeNodes.forEach(node => {
       try {
-        osc.stop();
+        node.stop();
       } catch (e) {}
     });
-    this.activeOscillators = [];
+    this.activeNodes = [];
   }
 
   public getCurrentTime(): number {

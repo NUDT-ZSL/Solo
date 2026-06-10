@@ -13,10 +13,20 @@ export interface TrackBlock {
   originalY: number;
   targetX: number;
   targetY: number;
+  startX: number;
+  startY: number;
   animating: boolean;
   animationProgress: number;
   inSlot: boolean;
   slotIndex: number;
+  flying: boolean;
+  flyProgress: number;
+  flyStartX: number;
+  flyStartY: number;
+  flyTargetX: number;
+  flyTargetY: number;
+  flyRotation: number;
+  flyColor: string;
 }
 
 export interface Particle {
@@ -47,6 +57,12 @@ const COLORS = [
 
 const NOTE_SYMBOLS = ['♩', '♪', '♫', '♬'];
 
+const BLOCK_WIDTH = 80;
+const BLOCK_HEIGHT = 40;
+const GAP = 8;
+const PADDING = 20;
+const GRID_COLS = 4;
+
 export class GameManager {
   public state: GameState = 'menu';
   public score: number = 0;
@@ -65,8 +81,10 @@ export class GameManager {
 
   public flashColor: string | null = null;
   public flashAlpha: number = 0;
+  public flashDuration: number = 0;
   public shakeAmount: number = 0;
   public shakeTime: number = 0;
+  public shakeElapsed: number = 0;
 
   public playingMelody: boolean = false;
   public melodyStartTime: number = 0;
@@ -75,6 +93,10 @@ export class GameManager {
 
   public canvasWidth: number = 0;
   public canvasHeight: number = 0;
+
+  public frameCount: number = 0;
+  public fpsTimer: number = 0;
+  public currentFPS: number = 60;
 
   private audioEngine: AudioEngine;
 
@@ -156,6 +178,8 @@ export class GameManager {
     this.playingMelody = false;
     this.flashColor = null;
     this.flashAlpha = 0;
+    this.shakeTime = 0;
+    this.shakeElapsed = 0;
 
     const trackCount = Math.min(3 + this.level, 8);
     const pitchRange = Math.min(6 + this.level, 18);
@@ -183,10 +207,20 @@ export class GameManager {
         originalY: 0,
         targetX: 0,
         targetY: 0,
+        startX: 0,
+        startY: 0,
         animating: false,
         animationProgress: 0,
         inSlot: false,
-        slotIndex: -1
+        slotIndex: -1,
+        flying: false,
+        flyProgress: 0,
+        flyStartX: 0,
+        flyStartY: 0,
+        flyTargetX: 0,
+        flyTargetY: 0,
+        flyRotation: 0,
+        flyColor: COLORS[i % COLORS.length]
       });
     }
 
@@ -194,8 +228,8 @@ export class GameManager {
       this.slots.push({
         x: 0,
         y: 0,
-        width: 90,
-        height: 40,
+        width: BLOCK_WIDTH + 10,
+        height: BLOCK_HEIGHT,
         filled: false,
         blockId: null
       });
@@ -205,27 +239,23 @@ export class GameManager {
   }
 
   private layoutLevel(): void {
-    const padding = 20;
-    const blockWidth = 80;
-    const blockHeight = 40;
-    const gap = 8;
-
     const trackCount = this.tracks.length;
-    const gridCols = Math.ceil(Math.sqrt(trackCount * 1.5));
-    const gridRows = Math.ceil(trackCount / gridCols);
+    const gridRows = Math.ceil(trackCount / GRID_COLS);
 
-    const gridWidth = gridCols * blockWidth + (gridCols - 1) * gap;
-    const gridHeight = gridRows * blockHeight + (gridRows - 1) * gap;
-    const gridStartX = (this.canvasWidth - gridWidth) / 2;
-    const gridStartY = 140;
+    const gridWidth = GRID_COLS * BLOCK_WIDTH + (GRID_COLS - 1) * GAP;
+    const gridHeight = gridRows * BLOCK_HEIGHT + (gridRows - 1) * GAP;
+
+    const availableWidth = this.canvasWidth - PADDING * 2;
+    const gridStartX = PADDING + Math.max(0, (availableWidth - gridWidth) / 2);
+    const gridStartY = PADDING + 100;
 
     this.tracks.forEach((track, i) => {
-      const col = i % gridCols;
-      const row = Math.floor(i / gridCols);
-      const x = gridStartX + col * (blockWidth + gap);
-      const y = gridStartY + row * (blockHeight + gap);
+      const col = i % GRID_COLS;
+      const row = Math.floor(i / GRID_COLS);
+      const x = gridStartX + col * (BLOCK_WIDTH + GAP);
+      const y = gridStartY + row * (BLOCK_HEIGHT + GAP);
 
-      if (!track.animating && !track.inSlot) {
+      if (!track.animating && !track.inSlot && !track.flying) {
         track.x = x;
         track.y = y;
       }
@@ -235,12 +265,13 @@ export class GameManager {
       track.targetY = y;
     });
 
-    const slotWidth = 90;
-    const slotHeight = 40;
-    const slotGap = 8;
+    const slotWidth = BLOCK_WIDTH + 10;
+    const slotHeight = BLOCK_HEIGHT;
+    const slotGap = GAP;
     const totalSlotWidth = trackCount * slotWidth + (trackCount - 1) * slotGap;
-    const slotStartX = (this.canvasWidth - totalSlotWidth) / 2;
-    const slotY = this.canvasHeight - 100;
+    const availableSlotWidth = this.canvasWidth - PADDING * 2;
+    const slotStartX = PADDING + Math.max(0, (availableSlotWidth - totalSlotWidth) / 2);
+    const slotY = this.canvasHeight - PADDING - slotHeight - 20;
 
     this.slots.forEach((slot, i) => {
       slot.x = slotStartX + i * (slotWidth + slotGap);
@@ -255,8 +286,8 @@ export class GameManager {
 
     for (let i = this.tracks.length - 1; i >= 0; i--) {
       const track = this.tracks[i];
-      if (track.animating) continue;
-      if (x >= track.x && x <= track.x + 80 && y >= track.y && y <= track.y + 40) {
+      if (track.animating || track.flying) continue;
+      if (x >= track.x && x <= track.x + BLOCK_WIDTH && y >= track.y && y <= track.y + BLOCK_HEIGHT) {
         this.draggingTrack = track;
         this.dragOffsetX = x - track.x;
         this.dragOffsetY = y - track.y;
@@ -296,8 +327,8 @@ export class GameManager {
       const slot = this.slots[i];
       const slotCenterX = slot.x + slot.width / 2;
       const slotCenterY = slot.y + slot.height / 2;
-      const trackCenterX = track.x + 40;
-      const trackCenterY = track.y + 20;
+      const trackCenterX = track.x + BLOCK_WIDTH / 2;
+      const trackCenterY = track.y + BLOCK_HEIGHT / 2;
       const dist = Math.sqrt(
         Math.pow(slotCenterX - trackCenterX, 2) + Math.pow(slotCenterY - trackCenterY, 2)
       );
@@ -310,7 +341,7 @@ export class GameManager {
 
     if (nearestIndex >= 0) {
       const nearestSlot = this.slots[nearestIndex];
-      track.x = nearestSlot.x + (nearestSlot.width - 80) / 2;
+      track.x = nearestSlot.x + (nearestSlot.width - BLOCK_WIDTH) / 2;
       track.y = nearestSlot.y;
       track.inSlot = true;
       track.slotIndex = nearestIndex;
@@ -329,6 +360,8 @@ export class GameManager {
   }
 
   private animateTrackTo(track: TrackBlock, tx: number, ty: number): void {
+    track.startX = track.x;
+    track.startY = track.y;
     track.targetX = tx;
     track.targetY = ty;
     track.animating = true;
@@ -342,6 +375,10 @@ export class GameManager {
         slot.blockId = null;
       }
     });
+  }
+
+  private easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
   }
 
   private checkMelody(): void {
@@ -368,12 +405,14 @@ export class GameManager {
   private onSuccess(): void {
     this.score += 100;
     this.flashColor = '#FFD700';
-    this.flashAlpha = 0.5;
+    this.flashAlpha = 0.6;
+    this.flashDuration = 200;
 
     this.slots.forEach(slot => {
       const track = this.tracks.find(t => t.id === slot.blockId);
       if (track) {
-        this.spawnSuccessParticles(track.x + 40, track.y + 20, track.color);
+        this.launchTrackFly(track, true);
+        this.spawnSuccessParticles(track.x + BLOCK_WIDTH / 2, track.y + BLOCK_HEIGHT / 2, track.color);
       }
     });
 
@@ -386,11 +425,13 @@ export class GameManager {
     this.score = 0;
     this.shakeAmount = 5;
     this.shakeTime = 300;
+    this.shakeElapsed = 0;
 
     this.slots.forEach(slot => {
       const track = this.tracks.find(t => t.id === slot.blockId);
       if (track) {
-        this.spawnFailureParticles(track.x + 40, track.y + 20);
+        this.launchTrackFly(track, false);
+        this.spawnFailureParticles(track.x + BLOCK_WIDTH / 2, track.y + BLOCK_HEIGHT / 2);
       }
     });
 
@@ -400,24 +441,47 @@ export class GameManager {
         slot.blockId = null;
       });
       this.tracks.forEach(track => {
-        if (track.inSlot) {
-          this.animateTrackTo(track, track.originalX, track.originalY);
-        }
+        track.flying = false;
+        track.x = track.originalX;
+        track.y = track.originalY;
+        track.inSlot = false;
+        track.slotIndex = -1;
       });
       this.playingMelody = false;
     }, 1200);
   }
 
+  private launchTrackFly(track: TrackBlock, success: boolean): void {
+    track.flying = true;
+    track.flyProgress = 0;
+    track.flyStartX = track.x;
+    track.flyStartY = track.y;
+    track.flyColor = success ? track.color : '#FF4444';
+
+    const angle = success
+      ? (-Math.PI / 2) + (Math.random() - 0.5) * 0.8
+      : (Math.random() * Math.PI * 2);
+    const distance = success
+      ? 200 + Math.random() * 200
+      : 80 + Math.random() * 100;
+
+    track.flyTargetX = track.x + Math.cos(angle) * distance;
+    track.flyTargetY = success
+      ? track.y - (150 + Math.random() * 200)
+      : track.y + Math.sin(angle) * distance;
+    track.flyRotation = (Math.random() - 0.5) * Math.PI * 2;
+  }
+
   private spawnSuccessParticles(x: number, y: number, color: string): void {
-    for (let i = 0; i < 20; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 3 + 1;
+    for (let i = 0; i < 25; i++) {
+      const angle = (-Math.PI / 2) + (Math.random() - 0.5) * Math.PI;
+      const speed = Math.random() * 4 + 2;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 2,
-        size: Math.random() * 4 + 2,
+        vy: Math.sin(angle) * speed - 1,
+        size: Math.random() * 5 + 2,
         color,
         alpha: 1,
         life: 1500,
@@ -427,15 +491,15 @@ export class GameManager {
   }
 
   private spawnFailureParticles(x: number, y: number): void {
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 2 + 1;
+      const speed = Math.random() * 3 + 1;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        size: Math.random() * 3 + 2,
+        size: Math.random() * 4 + 2,
         color: '#FF4444',
         alpha: 1,
         life: 1000,
@@ -445,7 +509,11 @@ export class GameManager {
   }
 
   private spawnWinParticles(): void {
-    for (let i = 0; i < 500; i++) {
+    const maxParticles = 500;
+    const availableSlots = Math.max(0, maxParticles - this.particles.length);
+    const toSpawn = Math.min(500, availableSlots);
+
+    for (let i = 0; i < toSpawn; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 6 + 2;
       this.particles.push({
@@ -462,7 +530,23 @@ export class GameManager {
     }
   }
 
+  public getShakeOffset(): number {
+    if (this.shakeTime <= 0) return 0;
+    const frequency = 10;
+    const t = this.shakeElapsed / 1000;
+    const decay = Math.max(0, 1 - this.shakeElapsed / this.shakeTime);
+    return Math.sin(t * Math.PI * 2 * frequency) * this.shakeAmount * decay;
+  }
+
   public update(deltaTime: number): void {
+    this.frameCount++;
+    this.fpsTimer += deltaTime;
+    if (this.fpsTimer >= 1000) {
+      this.currentFPS = Math.round(this.frameCount * 1000 / this.fpsTimer);
+      this.frameCount = 0;
+      this.fpsTimer = 0;
+    }
+
     this.tracks.forEach(track => {
       if (track.animating) {
         track.animationProgress += deltaTime / 200;
@@ -472,9 +556,21 @@ export class GameManager {
           track.x = track.targetX;
           track.y = track.targetY;
         } else {
-          const t = 1 - Math.pow(1 - track.animationProgress, 3);
-          track.x = track.x + (track.targetX - track.x) * t;
-          track.y = track.y + (track.targetY - track.y) * t;
+          const t = this.easeOutCubic(track.animationProgress);
+          track.x = track.startX + (track.targetX - track.startX) * t;
+          track.y = track.startY + (track.targetY - track.startY) * t;
+        }
+      }
+
+      if (track.flying) {
+        const flyDuration = track.flyColor === '#FF4444' ? 1000 : 1500;
+        track.flyProgress += deltaTime / flyDuration;
+        if (track.flyProgress >= 1) {
+          track.flyProgress = 1;
+        } else {
+          const t = this.easeOutCubic(track.flyProgress);
+          track.x = track.flyStartX + (track.flyTargetX - track.flyStartX) * t;
+          track.y = track.flyStartY + (track.flyTargetY - track.flyStartY) * t;
         }
       }
     });
@@ -484,23 +580,25 @@ export class GameManager {
       p.x += p.vx;
       p.y += p.vy;
       p.vy += 0.05;
-      p.alpha = p.life / p.maxLife;
+      p.alpha = Math.max(0, p.life / p.maxLife);
       return p.life > 0;
     });
 
-    if (this.flashColor !== null && this.flashAlpha > 0) {
-      this.flashAlpha -= deltaTime / 400;
-      if (this.flashAlpha <= 0) {
+    if (this.flashColor !== null && this.flashDuration > 0) {
+      this.flashDuration -= deltaTime;
+      this.flashAlpha = Math.max(0, (this.flashDuration / 200) * 0.6);
+      if (this.flashDuration <= 0) {
         this.flashAlpha = 0;
         this.flashColor = null;
       }
     }
 
     if (this.shakeTime > 0) {
-      this.shakeTime -= deltaTime;
-      if (this.shakeTime <= 0) {
-        this.shakeAmount = 0;
+      this.shakeElapsed += deltaTime;
+      if (this.shakeElapsed >= this.shakeTime) {
         this.shakeTime = 0;
+        this.shakeElapsed = 0;
+        this.shakeAmount = 0;
       }
     }
 

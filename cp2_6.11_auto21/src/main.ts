@@ -135,8 +135,99 @@ class GameApp {
 
 let app: GameApp | null = null;
 
+declare global {
+  interface Window {
+    debugGame: {
+      fillAllSlotsWithTarget: () => void;
+      fillAllSlotsRandomly: () => void;
+      triggerFail: () => void;
+      goToWin: () => void;
+      getState: () => any;
+    };
+  }
+}
+
+function createDebugAPI(gameManager: GameManager, audioEngine: AudioEngine) {
+  return {
+    fillAllSlotsWithTarget: () => {
+      if (gameManager.state !== 'playing') return;
+      gameManager.slots.forEach((slot, i) => {
+        const targetPitch = gameManager.targetMelody[i];
+        const matchingTrack = gameManager.tracks.find(t =>
+          t.pitch === targetPitch && !t.inSlot && !t.animating && !t.flying
+        );
+        if (matchingTrack) {
+          matchingTrack.x = slot.x + (slot.width - 80) / 2;
+          matchingTrack.y = slot.y;
+          matchingTrack.inSlot = true;
+          matchingTrack.slotIndex = i;
+          slot.filled = true;
+          slot.blockId = matchingTrack.id;
+        }
+      });
+      audioEngine.playDing();
+      setTimeout(() => {
+        if (gameManager.slots.every(s => s.filled)) {
+          (gameManager as any).checkMelody();
+        }
+      }, 300);
+    },
+    fillAllSlotsRandomly: () => {
+      if (gameManager.state !== 'playing') return;
+      const available = gameManager.tracks.filter(t => !t.inSlot && !t.animating && !t.flying);
+      gameManager.slots.forEach((slot, i) => {
+        if (slot.filled) return;
+        const track = available[i % available.length];
+        if (track) {
+          track.x = slot.x + (slot.width - 80) / 2;
+          track.y = slot.y;
+          track.inSlot = true;
+          track.slotIndex = i;
+          slot.filled = true;
+          slot.blockId = track.id;
+        }
+      });
+      audioEngine.playDing();
+      setTimeout(() => {
+        if (gameManager.slots.every(s => s.filled)) {
+          (gameManager as any).checkMelody();
+        }
+      }, 300);
+    },
+    triggerFail: () => {
+      if (gameManager.state !== 'playing') return;
+      gameManager.score = 0;
+      (gameManager as any).onFailure();
+    },
+    goToWin: () => {
+      gameManager.level = gameManager.maxLevel;
+      gameManager.nextLevel();
+    },
+    getState: () => ({
+      state: gameManager.state,
+      level: gameManager.level,
+      score: gameManager.score,
+      fps: gameManager.currentFPS,
+      particles: gameManager.particles.length,
+      tracks: gameManager.tracks.length,
+      slots: gameManager.slots.length,
+      filledSlots: gameManager.slots.filter(s => s.filled).length,
+      shakeTime: gameManager.shakeTime,
+      flashAlpha: gameManager.flashAlpha
+    })
+  };
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   app = new GameApp();
+  setTimeout(() => {
+    if (app) {
+      const gm = (app as any).gameManager as GameManager;
+      const ae = (app as any).audioEngine as AudioEngine;
+      (window as any).debugGame = createDebugAPI(gm, ae);
+      console.log('debugGame API available:', Object.keys((window as any).debugGame));
+    }
+  }, 500);
 });
 
 window.addEventListener('beforeunload', () => {

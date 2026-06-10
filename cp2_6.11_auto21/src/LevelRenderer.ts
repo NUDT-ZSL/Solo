@@ -11,6 +11,9 @@ interface Button {
   type: 'primary' | 'secondary';
 }
 
+const BLOCK_WIDTH = 80;
+const BLOCK_HEIGHT = 40;
+
 export class LevelRenderer {
   private ctx: CanvasRenderingContext2D;
   private gameManager: GameManager;
@@ -117,9 +120,9 @@ export class LevelRenderer {
 
     ctx.save();
 
-    if (gm.shakeTime > 0) {
-      const shake = Math.sin(this.time * 0.06) * gm.shakeAmount;
-      ctx.translate(0, shake);
+    const shakeOffset = gm.getShakeOffset();
+    if (shakeOffset !== 0) {
+      ctx.translate(0, shakeOffset);
     }
 
     this.drawBackground();
@@ -141,6 +144,7 @@ export class LevelRenderer {
     }
 
     this.drawFlash();
+    this.drawFPS();
 
     ctx.restore();
   }
@@ -163,7 +167,7 @@ export class LevelRenderer {
     const centerY = this.gameManager.canvasHeight / 2;
     const rotation = (this.time / 1000) * (Math.PI * 2 / 8);
 
-    this.gameManager.nebulaParticles.forEach((p, i) => {
+    this.gameManager.nebulaParticles.forEach((p) => {
       const angle = Math.atan2(p.vy, p.vx) + rotation;
       const radius = p.life * 0.5;
       const x = centerX + Math.cos(angle) * radius;
@@ -323,12 +327,12 @@ export class LevelRenderer {
     ctx.textBaseline = 'top';
     ctx.shadowColor = '#9370DB';
     ctx.shadowBlur = 10;
-    ctx.fillText(`Level ${gm.level}`, 30, 30);
+    ctx.fillText(`Level ${gm.level}`, 20, 20);
 
     ctx.font = '18px "Segoe UI", "Microsoft YaHei", sans-serif';
     ctx.fillStyle = '#C0C0C0';
     ctx.shadowBlur = 0;
-    ctx.fillText(`Score: ${gm.score}`, 30, 65);
+    ctx.fillText(`Score: ${gm.score}`, 20, 55);
 
     if (gm.playingMelody) {
       ctx.textAlign = 'center';
@@ -336,9 +340,22 @@ export class LevelRenderer {
       ctx.fillStyle = '#FFD700';
       ctx.shadowColor = '#FFD700';
       ctx.shadowBlur = 15;
-      ctx.fillText('♪ 正在播放旋律... ♪', gm.canvasWidth / 2, 40);
+      ctx.fillText('♪ 正在播放旋律... ♪', gm.canvasWidth / 2, 30);
     }
 
+    ctx.restore();
+  }
+
+  private drawFPS(): void {
+    const ctx = this.ctx;
+    const gm = this.gameManager;
+
+    ctx.save();
+    ctx.font = '12px "Consolas", monospace';
+    ctx.fillStyle = gm.currentFPS >= 55 ? 'rgba(100, 255, 150, 0.7)' : 'rgba(255, 150, 100, 0.7)';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`FPS: ${gm.currentFPS} | Particles: ${gm.particles.length}`, gm.canvasWidth - 20, 20);
     ctx.restore();
   }
 
@@ -378,26 +395,47 @@ export class LevelRenderer {
       if (isDragging) {
         ctx.save();
         ctx.globalAlpha = 0.4;
-        this.drawTrackBlock(track.originalX, track.originalY, track);
+        this.drawTrackBlock(track.originalX, track.originalY, track, 1);
         ctx.restore();
       }
 
       ctx.save();
+
+      if (track.flying) {
+        ctx.globalAlpha = Math.max(0, 1 - track.flyProgress);
+        const cx = track.x + BLOCK_WIDTH / 2;
+        const cy = track.y + BLOCK_HEIGHT / 2;
+        ctx.translate(cx, cy);
+        const rotation = track.flyRotation * track.flyProgress;
+        ctx.rotate(rotation);
+        ctx.translate(-cx, -cy);
+
+        if (track.flyColor === '#FF4444') {
+          const shake = Math.sin(track.flyProgress * 50) * 2;
+          ctx.translate(shake, 0);
+        }
+      }
+
       if (isDragging) {
         ctx.shadowColor = track.color;
         ctx.shadowBlur = 20;
       }
-      this.drawTrackBlock(track.x, track.y, track);
+
+      const displayColor = track.flying ? track.flyColor : track.color;
+      this.drawTrackBlock(track.x, track.y, track, track.flying ? Math.max(0.2, 1 - track.flyProgress) : 1, displayColor);
+
       ctx.restore();
     });
   }
 
-  private drawTrackBlock(x: number, y: number, track: TrackBlock): void {
+  private drawTrackBlock(x: number, y: number, track: TrackBlock, alpha: number = 1, overrideColor?: string): void {
     const ctx = this.ctx;
-    const w = 80;
-    const h = 40;
+    const w = BLOCK_WIDTH;
+    const h = BLOCK_HEIGHT;
+    const color = overrideColor || track.color;
 
-    ctx.fillStyle = track.color;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = alpha;
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, 6);
     ctx.fill();
@@ -413,6 +451,7 @@ export class LevelRenderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(track.noteSymbol, x + w / 2, y + h / 2);
+    ctx.globalAlpha = 1;
   }
 
   private drawParticles(): void {
@@ -422,6 +461,8 @@ export class LevelRenderer {
       ctx.save();
       ctx.globalAlpha = p.alpha;
       ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = p.size * 1.5;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
