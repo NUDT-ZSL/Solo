@@ -45,7 +45,7 @@ class App {
     this.ui = new UI();
 
     this.resize();
-    this.loom.setViewport(this.canvas.width, this.canvas.height);
+    this.loom.setViewport(window.innerWidth, window.innerHeight);
     this.loom.initParticles(2000);
     this.ui.bindEvents(this.loom);
 

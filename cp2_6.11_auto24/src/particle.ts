@@ -5,6 +5,33 @@ export const STATE_DISTORTED = 1;
 export const STATE_BURSTING = 2;
 export const STATE_RETURNING = 3;
 
+export const STRIDE = 20;
+export const F_BASE_X = 0;
+export const F_BASE_Y = 1;
+export const F_X = 2;
+export const F_Y = 3;
+export const F_VX = 4;
+export const F_VY = 5;
+export const F_COLOR_R = 6;
+export const F_COLOR_G = 7;
+export const F_COLOR_B = 8;
+export const F_BASE_COLOR_T = 9;
+export const F_COLOR_OFFSET = 10;
+export const F_ALPHA = 11;
+export const F_SIZE = 12;
+export const F_PHASE = 13;
+export const F_RETURN_SX = 14;
+export const F_RETURN_SY = 15;
+export const F_BURST_TX = 16;
+export const F_BURST_TY = 17;
+export const F_FLASH_TIMER = 18;
+export const F_STATE_TIMER = 19;
+
+export const FLAG_STRIDE = 3;
+export const FL_ACTIVE = 0;
+export const FL_STATE = 1;
+export const FL_IS_WARM = 2;
+
 export interface PaletteColor {
   r: number;
   g: number;
@@ -32,7 +59,8 @@ export function samplePalette(palette: PaletteColor[], t: number): PaletteColor 
   const len = palette.length;
   if (len === 0) return { r: 255, g: 255, b: 255 };
   if (len === 1) return palette[0];
-  const scaled = t * len;
+  const clamped = ((t % 1) + 1) % 1;
+  const scaled = clamped * len;
   const idx = Math.floor(scaled) % len;
   const frac = scaled - Math.floor(scaled);
   const a = palette[idx];
@@ -40,62 +68,22 @@ export function samplePalette(palette: PaletteColor[], t: number): PaletteColor 
   return lerpColor(a, b, frac);
 }
 
+export function luminance(c: PaletteColor): number {
+  return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+}
+
 export class ParticlePool {
   readonly size: number;
-
-  baseX: Float32Array;
-  baseY: Float32Array;
-  x: Float32Array;
-  y: Float32Array;
-  vx: Float32Array;
-  vy: Float32Array;
-  colorR: Float32Array;
-  colorG: Float32Array;
-  colorB: Float32Array;
-  baseColorT: Float32Array;
-  colorOffset: Float32Array;
-  alpha: Float32Array;
-  particleSize: Float32Array;
-  phase: Float32Array;
-  state: Uint8Array;
-  stateTimer: Float32Array;
-  returnStartX: Float32Array;
-  returnStartY: Float32Array;
-  burstTargetX: Float32Array;
-  burstTargetY: Float32Array;
-  flashTimer: Float32Array;
-  active: Uint8Array;
-  isWarm: Uint8Array;
+  data: Float32Array;
+  flags: Uint8Array;
 
   private nextFree: number;
   private freeList: Int32Array;
 
   constructor(poolSize: number = POOL_SIZE) {
     this.size = poolSize;
-
-    this.baseX = new Float32Array(poolSize);
-    this.baseY = new Float32Array(poolSize);
-    this.x = new Float32Array(poolSize);
-    this.y = new Float32Array(poolSize);
-    this.vx = new Float32Array(poolSize);
-    this.vy = new Float32Array(poolSize);
-    this.colorR = new Float32Array(poolSize);
-    this.colorG = new Float32Array(poolSize);
-    this.colorB = new Float32Array(poolSize);
-    this.baseColorT = new Float32Array(poolSize);
-    this.colorOffset = new Float32Array(poolSize);
-    this.alpha = new Float32Array(poolSize);
-    this.particleSize = new Float32Array(poolSize);
-    this.phase = new Float32Array(poolSize);
-    this.state = new Uint8Array(poolSize);
-    this.stateTimer = new Float32Array(poolSize);
-    this.returnStartX = new Float32Array(poolSize);
-    this.returnStartY = new Float32Array(poolSize);
-    this.burstTargetX = new Float32Array(poolSize);
-    this.burstTargetY = new Float32Array(poolSize);
-    this.flashTimer = new Float32Array(poolSize);
-    this.active = new Uint8Array(poolSize);
-    this.isWarm = new Uint8Array(poolSize);
+    this.data = new Float32Array(poolSize * STRIDE);
+    this.flags = new Uint8Array(poolSize * FLAG_STRIDE);
 
     this.freeList = new Int32Array(poolSize);
     for (let i = 0; i < poolSize; i++) {
@@ -108,20 +96,23 @@ export class ParticlePool {
     if (this.nextFree <= 0) return -1;
     this.nextFree--;
     const idx = this.freeList[this.nextFree];
-    this.active[idx] = 1;
-    this.state[idx] = STATE_IDLE;
-    this.stateTimer[idx] = 0;
-    this.alpha[idx] = 1;
-    this.vx[idx] = 0;
-    this.vy[idx] = 0;
-    this.flashTimer[idx] = 0;
+    const fb = idx * FLAG_STRIDE;
+    const db = idx * STRIDE;
+    this.flags[fb + FL_ACTIVE] = 1;
+    this.flags[fb + FL_STATE] = STATE_IDLE;
+    this.data[db + F_STATE_TIMER] = 0;
+    this.data[db + F_ALPHA] = 1;
+    this.data[db + F_VX] = 0;
+    this.data[db + F_VY] = 0;
+    this.data[db + F_FLASH_TIMER] = 0;
     return idx;
   }
 
   release(idx: number): void {
     if (idx < 0 || idx >= this.size) return;
-    if (!this.active[idx]) return;
-    this.active[idx] = 0;
+    const fb = idx * FLAG_STRIDE;
+    if (!this.flags[fb + FL_ACTIVE]) return;
+    this.flags[fb + FL_ACTIVE] = 0;
     this.freeList[this.nextFree] = idx;
     this.nextFree++;
   }
@@ -131,7 +122,7 @@ export class ParticlePool {
   }
 
   reset(): void {
-    this.active.fill(0);
+    this.flags.fill(0);
     for (let i = 0; i < this.size; i++) {
       this.freeList[i] = this.size - 1 - i;
     }

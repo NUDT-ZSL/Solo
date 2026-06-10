@@ -13,8 +13,12 @@ export class UI {
   colorSpeedDisplay: HTMLSpanElement;
   previewCanvas: HTMLCanvasElement;
   previewCtx: CanvasRenderingContext2D;
+  private offscreenCanvas: HTMLCanvasElement;
+  private offscreenCtx: CanvasRenderingContext2D;
   resetBtn: HTMLButtonElement;
   saveBtn: HTMLButtonElement;
+  private previewFrame: number = 0;
+  private readonly PREVIEW_SKIP = 3;
 
   private onResetCb: (() => void) | null = null;
   private onSaveCb: (() => void) | null = null;
@@ -54,6 +58,13 @@ export class UI {
     const pctx = this.previewCanvas.getContext('2d');
     if (!pctx) throw new Error('Preview canvas 2D context unavailable');
     this.previewCtx = pctx;
+
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCanvas.width = 200;
+    this.offscreenCanvas.height = 100;
+    const octx = this.offscreenCanvas.getContext('2d');
+    if (!octx) throw new Error('Offscreen canvas 2D context unavailable');
+    this.offscreenCtx = octx;
 
     const btnGroup = document.createElement('div');
     btnGroup.className = 'btn-group';
@@ -145,7 +156,10 @@ export class UI {
   }
 
   updatePreview(loom: Loom): void {
-    loom.renderPreview(this.previewCtx, this.previewCanvas.width, this.previewCanvas.height);
+    this.previewFrame++;
+    if (this.previewFrame % this.PREVIEW_SKIP !== 0 && !loom.dirty) return;
+    loom.renderPreview(this.offscreenCtx, this.offscreenCanvas.width, this.offscreenCanvas.height);
+    this.previewCtx.drawImage(this.offscreenCanvas, 0, 0);
   }
 
   onReset(cb: () => void): void {
