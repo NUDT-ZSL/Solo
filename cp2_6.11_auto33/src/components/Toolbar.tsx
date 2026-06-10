@@ -7,7 +7,6 @@ import {
   RotateCcw,
   Download,
   Images,
-  Menu,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { renderCollageToImage } from '@/utils/collageEngine';
@@ -29,15 +28,19 @@ export const Toolbar: React.FC = () => {
 
   const handleExport = async () => {
     if (!sourceImage || fragments.length === 0) return;
+
     const dataUrl = renderCollageToImage(fragments, sourceImage, currentStyle, 1920, 1080);
+
     const thumbCanvas = document.createElement('canvas');
     thumbCanvas.width = 440;
     thumbCanvas.height = 320;
     const tctx = thumbCanvas.getContext('2d')!;
-    const tmp = new Image();
-    tmp.onload = async () => {
-      tctx.drawImage(tmp, 0, 0, 440, 320);
+
+    const tmpImg = new Image();
+    tmpImg.onload = async () => {
+      tctx.drawImage(tmpImg, 0, 0, 440, 320);
       const thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.8);
+
       const item: GalleryItem = {
         id: uuidv4(),
         title: `拼贴作品 ${new Date().toLocaleDateString('zh-CN')}`,
@@ -46,6 +49,7 @@ export const Toolbar: React.FC = () => {
         dataUrl,
         createdAt: Date.now(),
       };
+
       try {
         await fetch('/api/gallery', {
           method: 'POST',
@@ -53,15 +57,17 @@ export const Toolbar: React.FC = () => {
           body: JSON.stringify(item),
         });
       } catch {
-        /* ignore */
+        /* silently ignore network errors */
       }
+
       addGalleryItem(item);
+
       const link = document.createElement('a');
       link.download = `imprint-workshop-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
     };
-    tmp.src = dataUrl;
+    tmpImg.src = dataUrl;
   };
 
   const handleRotateSelection = (deg: number) => {
@@ -79,8 +85,8 @@ export const Toolbar: React.FC = () => {
     selectedIds.forEach((id) => {
       const frag = fragments.find((f) => f.id === id);
       if (frag) {
-        const ns = Math.max(0.5, Math.min(3, frag.scale + delta));
-        updateFragment(id, { scale: parseFloat(ns.toFixed(2)) });
+        const newScale = Math.max(0.5, Math.min(3, frag.scale + delta));
+        updateFragment(id, { scale: parseFloat(newScale.toFixed(2)) });
       }
     });
   };
@@ -103,7 +109,7 @@ export const Toolbar: React.FC = () => {
         borderRadius: 16,
         boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
         zIndex: 60,
-        minWidth: 500,
+        minWidth: 520,
       }}
     >
       <div
@@ -280,8 +286,13 @@ export const Toolbar: React.FC = () => {
       <div style={{ flex: 1 }} />
 
       {renderProgress > 0 && (
-        <div className="progress-bar" style={{ width: 80, marginRight: 12 }}>
-          <div className="progress-fill" style={{ width: `${renderProgress}%` }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 12 }}>
+          <div className="progress-bar" style={{ width: 80 }}>
+            <div className="progress-fill" style={{ width: `${renderProgress}%` }} />
+          </div>
+          <span style={{ fontSize: 11, color: '#6B5B4F', fontFamily: 'monospace' }}>
+            {renderProgress}%
+          </span>
         </div>
       )}
 
@@ -300,20 +311,6 @@ export const Toolbar: React.FC = () => {
       >
         <Download size={15} />
         导出
-      </button>
-
-      <button
-        className="toolbar-icon hover-lift"
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          display: 'none',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Menu size={17} />
       </button>
     </div>
   );

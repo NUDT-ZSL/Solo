@@ -17,6 +17,7 @@ export const Gallery: React.FC = () => {
   const { gallery, removeGalleryItem, setGallery } = useStore();
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [styleFilter, setStyleFilter] = useState<string>('all');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/gallery')
@@ -24,25 +25,28 @@ export const Gallery: React.FC = () => {
       .then((data: GalleryItem[]) => {
         setGallery(data);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* silently ignore */
+      });
   }, [setGallery]);
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleDelete = async (id: string) => {
     try {
       await fetch(`/api/gallery/${id}`, { method: 'DELETE' });
-      removeGalleryItem(id);
     } catch {
-      removeGalleryItem(id);
+      /* silently ignore */
     }
+    removeGalleryItem(id);
+    setShowDeleteConfirm(null);
   };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const filteredGallery = gallery.filter((item) => {
     if (styleFilter !== 'all' && item.style !== styleFilter) return false;
     if (dateFilter !== 'all') {
       const itemDate = new Date(item.createdAt).toISOString().slice(0, 10);
-      const today = new Date().toISOString().slice(0, 10);
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       if (dateFilter === 'today' && itemDate !== today) return false;
       if (dateFilter === 'week' && itemDate < weekAgo) return false;
     }
@@ -74,6 +78,8 @@ export const Gallery: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottom: '1px solid rgba(74,63,53,0.1)',
+          background: 'rgba(255,255,255,0.3)',
+          backdropFilter: 'blur(8px)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -184,7 +190,7 @@ export const Gallery: React.FC = () => {
         style={{
           flex: 1,
           overflow: 'auto',
-          padding: '32px 48px 80px',
+          padding: '32px 48px 48px',
         }}
       >
         {filteredGallery.length === 0 ? (
@@ -216,13 +222,39 @@ export const Gallery: React.FC = () => {
             }}
           >
             {filteredGallery.map((item) => (
-              <div key={item.id} className="gallery-card">
+              <div
+                key={item.id}
+                className="gallery-card"
+                onMouseEnter={(e) => {
+                  const overlay = e.currentTarget.querySelector(
+                    '[data-overlay]'
+                  ) as HTMLElement;
+                  const deleteBtn = e.currentTarget.querySelector(
+                    '[data-delete]'
+                  ) as HTMLElement;
+                  if (overlay) overlay.style.opacity = '1';
+                  if (deleteBtn) deleteBtn.style.opacity = '1';
+                }}
+                onMouseLeave={(e) => {
+                  const overlay = e.currentTarget.querySelector(
+                    '[data-overlay]'
+                  ) as HTMLElement;
+                  const deleteBtn = e.currentTarget.querySelector(
+                    '[data-delete]'
+                  ) as HTMLElement;
+                  if (overlay) overlay.style.opacity = '0';
+                  if (deleteBtn && showDeleteConfirm !== item.id)
+                    deleteBtn.style.opacity = '0';
+                }}
+                style={{ position: 'relative' }}
+              >
                 <img
                   src={item.thumbnail}
                   alt={item.title}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
                 <div
+                  data-overlay
                   style={{
                     position: 'absolute',
                     inset: 0,
@@ -230,11 +262,11 @@ export const Gallery: React.FC = () => {
                       'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)',
                     opacity: 0,
                     transition: 'opacity 0.3s ease-in-out',
+                    pointerEvents: 'none',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
                 />
                 <div
+                  data-overlay
                   style={{
                     position: 'absolute',
                     bottom: 0,
@@ -244,9 +276,8 @@ export const Gallery: React.FC = () => {
                     color: 'white',
                     opacity: 0,
                     transition: 'opacity 0.3s ease-in-out',
+                    pointerEvents: 'none',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
                 >
                   <div
                     style={{
@@ -272,39 +303,81 @@ export const Gallery: React.FC = () => {
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => handleDelete(e, item.id)}
-                  className="hover-lift"
-                  style={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    background: 'rgba(239, 68, 68, 0.9)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: 0,
-                    transition: 'opacity 0.3s ease-in-out',
-                    color: 'white',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
-                  onFocus={(e) => (e.currentTarget.style.opacity = '1')}
-                  onBlur={(e) => (e.currentTarget.style.opacity = '0')}
-                >
-                  <Trash2 size={13} />
-                </button>
-                <style>{`
-                  .gallery-card:hover > div[style*="opacity: 0"],
-                  .gallery-card:hover > button[style*="opacity: 0"] {
-                    opacity: 1 !important;
-                  }
-                `}</style>
+
+                {showDeleteConfirm === item.id ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      display: 'flex',
+                      gap: 4,
+                      background: 'rgba(255,255,255,0.95)',
+                      borderRadius: 6,
+                      padding: 4,
+                      zIndex: 10,
+                    }}
+                  >
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: '#EF4444',
+                        background: 'rgba(239,68,68,0.1)',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      删除
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(null)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: '#4A3F35',
+                        background: 'rgba(74,63,53,0.1)',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    data-delete
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDeleteConfirm(item.id);
+                    }}
+                    className="hover-lift"
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      width: 28,
+                      height: 28,
+                      borderRadius: 6,
+                      background: 'rgba(239, 68, 68, 0.9)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: 0,
+                      transition: 'opacity 0.3s ease-in-out',
+                      color: 'white',
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             ))}
           </div>

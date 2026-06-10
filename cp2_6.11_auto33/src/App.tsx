@@ -22,6 +22,7 @@ const EditorPage: React.FC = () => {
       }}
     >
       <Toolbar />
+
       <div
         style={{
           position: 'fixed',
@@ -33,8 +34,11 @@ const EditorPage: React.FC = () => {
       >
         <UploadPanel />
       </div>
+
       <Workspace />
+
       <PropertyPanel />
+
       <StylePanel />
     </div>
   );

@@ -10,11 +10,12 @@ export const UploadPanel: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { sourceImage, setSourceImage, setFragments, resetWorkspace } = useStore();
+  const { sourceImage, setSourceImage, setFragments, resetWorkspace, setSelectedIds } = useStore();
 
   const handleFile = useCallback(
     (file: File) => {
       setError(null);
+
       if (!ACCEPTED_TYPES.includes(file.type)) {
         setError('仅支持 PNG、JPG、WebP 格式');
         return;
@@ -23,6 +24,7 @@ export const UploadPanel: React.FC = () => {
         setError('图片大小不能超过 5MB');
         return;
       }
+
       const reader = new FileReader();
       reader.onload = (e) => {
         const url = e.target?.result as string;
@@ -32,12 +34,13 @@ export const UploadPanel: React.FC = () => {
           const count = Math.floor(Math.random() * 5) + 12;
           const fragments = splitImage(img.width, img.height, count);
           setFragments(fragments);
+          setSelectedIds([]);
         };
         img.src = url;
       };
       reader.readAsDataURL(file);
     },
-    [setSourceImage, setFragments]
+    [setSourceImage, setFragments, setSelectedIds]
   );
 
   const handleDrop = useCallback(
@@ -55,6 +58,7 @@ export const UploadPanel: React.FC = () => {
   };
 
   if (sourceImage) {
+    const state = useStore.getState();
     return (
       <div
         className="glass hover-lift transition-all-smooth"
@@ -103,17 +107,27 @@ export const UploadPanel: React.FC = () => {
           }}
         >
           <img
-            src={useStore.getState().sourceImageUrl}
+            src={state.sourceImageUrl}
             alt="uploaded"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            fontSize: 11,
+            color: '#8B7D6F',
+            textAlign: 'center',
+            marginBottom: 8,
+          }}
+        >
+          已分割为 <strong style={{ color: '#D48B60' }}>{state.fragments.length}</strong> 块碎片
         </div>
         <button
           onClick={handleClick}
           className="hover-lift"
           style={{
             width: '100%',
-            marginTop: 12,
             padding: '8px 12px',
             borderRadius: 8,
             border: '1px solid rgba(74,63,53,0.2)',
@@ -148,7 +162,7 @@ export const UploadPanel: React.FC = () => {
 
   return (
     <div
-      className={`glass hover-lift transition-all-smooth`}
+      className="glass hover-lift transition-all-smooth"
       style={{
         width: 200,
         borderRadius: 16,
@@ -199,13 +213,18 @@ export const UploadPanel: React.FC = () => {
             justifyContent: 'center',
           }}
         >
-          {dragOver ? <ImageIcon size={22} color="#D48B60" /> : <Upload size={22} color="#D48B60" />}
+          {dragOver ? (
+            <ImageIcon size={22} color="#D48B60" />
+          ) : (
+            <Upload size={22} color="#D48B60" />
+          )}
         </div>
         <div style={{ textAlign: 'center', padding: '0 8px' }}>
           <p style={{ fontSize: 13, fontWeight: 600, color: '#4A3F35', marginBottom: 4 }}>
             拖拽或点击上传
           </p>
-          <p style={{ fontSize: 11, color: '#8B7D6F' }}>PNG / JPG / WebP · 5MB</p>
+          <p style={{ fontSize: 11, color: '#8B7D6F' }}>PNG / JPG / WebP</p>
+          <p style={{ fontSize: 11, color: '#8B7D6F' }}>最大 5MB</p>
         </div>
       </div>
       {error && (
