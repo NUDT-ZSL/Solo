@@ -87,6 +87,27 @@ export class Puzzle {
     this.corridorHalfWidth = corridorHalfWidth;
   }
 
+  public getVanishPoint(): { x: number; y: number } {
+    return { x: this.vanishX, y: this.vanishY };
+  }
+
+  public getFocalLength(): number {
+    return this.focalLength;
+  }
+
+  public getCorridorHalfWidth(): number {
+    return this.corridorHalfWidth;
+  }
+
+  public getWallBoundsAtZ(z: number): { left: number; right: number; scale: number } {
+    const scale = this.focalLength / (this.focalLength + z);
+    return {
+      left: this.vanishX - this.corridorHalfWidth * scale,
+      right: this.vanishX + this.corridorHalfWidth * scale,
+      scale
+    };
+  }
+
   private project3D(worldX: number, worldY: number, worldZ: number): { x: number; y: number; scale: number } {
     const scale = this.focalLength / (this.focalLength + worldZ);
     return {
@@ -445,10 +466,12 @@ export class Puzzle {
     const ctx = this.ctx;
     const w = this.canvasWidth;
     const h = this.canvasHeight;
-    const horizonY = h * 0.35;
+    const horizonY = this.vanishY;
     
-    const wallLeft = w * 0.4;
-    const wallRight = w * 0.6;
+    const farZ = 800;
+    const farBounds = this.getWallBoundsAtZ(farZ);
+    const wallLeft = farBounds.left;
+    const wallRight = farBounds.right;
     const wallTop = 0;
     const wallBottom = horizonY;
     

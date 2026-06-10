@@ -33,6 +33,9 @@ export interface PaintingOptions {
   scale: number;
   zDepth: number;
   rotationY?: number;
+  transformA?: number;
+  transformB?: number;
+  transformD?: number;
 }
 
 export class Painting {
@@ -47,6 +50,9 @@ export class Painting {
   private scale: number;
   private zDepth: number;
   private rotationY: number;
+  private transformA: number;
+  private transformB: number;
+  private transformD: number;
   
   private isHovered: boolean;
   private hoverProgress: number;
@@ -81,6 +87,9 @@ export class Painting {
     this.scale = options.scale;
     this.zDepth = options.zDepth;
     this.rotationY = options.rotationY || 0;
+    this.transformA = options.transformA !== undefined ? options.transformA : options.scale;
+    this.transformB = options.transformB !== undefined ? options.transformB : 0;
+    this.transformD = options.transformD !== undefined ? options.transformD : options.scale;
     
     this.isHovered = false;
     this.hoverProgress = 0;
@@ -158,12 +167,29 @@ export class Painting {
     return shape;
   }
 
-  public setPosition(x: number, y: number, scale: number, rotationY?: number): void {
+  public setPosition(
+    x: number,
+    y: number,
+    scale: number,
+    rotationY?: number,
+    transformA?: number,
+    transformB?: number,
+    transformD?: number
+  ): void {
     this.x = x;
     this.y = y;
     this.scale = scale;
     if (rotationY !== undefined) {
       this.rotationY = rotationY;
+    }
+    if (transformA !== undefined) {
+      this.transformA = transformA;
+    }
+    if (transformB !== undefined) {
+      this.transformB = transformB;
+    }
+    if (transformD !== undefined) {
+      this.transformD = transformD;
     }
     
     this.candle.setPosition(
@@ -173,12 +199,12 @@ export class Painting {
     );
   }
 
-  public setHovered(hovered: boolean): void {
+  public setHovered(hovered: boolean, currentTime?: number): void {
     if (this.isHovered !== hovered) {
       this.isHovered = hovered;
       this.targetHoverProgress = hovered ? 1 : 0;
       if (hovered) {
-        this.hoverStartTime = performance.now() / 1000;
+        this.hoverStartTime = currentTime !== undefined ? currentTime : performance.now() / 1000;
       }
     }
   }
@@ -278,11 +304,9 @@ export class Painting {
     ctx.save();
     ctx.translate(this.x, this.y);
     
-    const perspectiveSkew = this.rotationY;
-    ctx.transform(1, 0, Math.tan(perspectiveSkew), 1, 0, 0);
-    
-    const scaleX = Math.cos(perspectiveSkew);
-    ctx.scale(scaleX, 1);
+    const corrA = this.transformD !== 0 ? this.transformA / this.transformD : 1;
+    const corrB = this.transformD !== 0 ? this.transformB / this.transformD : 0;
+    ctx.transform(corrA, corrB, 0, 1, 0, 0);
     
     this.drawFrame(w, h);
     this.drawPaintingContent(w, h);

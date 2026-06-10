@@ -137,10 +137,36 @@ export class Candle {
     }
   }
 
+  private srgbToLinear(c: number): number {
+    const s = c / 255;
+    if (s <= 0.04045) {
+      return s / 12.92;
+    }
+    return Math.pow((s + 0.055) / 1.055, 2.4);
+  }
+
+  private linearToSrgb(c: number): number {
+    let s: number;
+    if (c <= 0.0031308) {
+      s = c * 12.92;
+    } else {
+      s = 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+    }
+    return Math.round(s * 255);
+  }
+
   private lerpColor(color1: { r: number; g: number; b: number }, color2: { r: number; g: number; b: number }, t: number): string {
-    const r = Math.round(color1.r + (color2.r - color1.r) * t);
-    const g = Math.round(color1.g + (color2.g - color1.g) * t);
-    const b = Math.round(color1.b + (color2.b - color1.b) * t);
+    const r1 = this.srgbToLinear(color1.r);
+    const g1 = this.srgbToLinear(color1.g);
+    const b1 = this.srgbToLinear(color1.b);
+    const r2 = this.srgbToLinear(color2.r);
+    const g2 = this.srgbToLinear(color2.g);
+    const b2 = this.srgbToLinear(color2.b);
+    
+    const r = this.linearToSrgb(r1 + (r2 - r1) * t);
+    const g = this.linearToSrgb(g1 + (g2 - g1) * t);
+    const b = this.linearToSrgb(b1 + (b2 - b1) * t);
+    
     return `rgb(${r}, ${g}, ${b})`;
   }
 

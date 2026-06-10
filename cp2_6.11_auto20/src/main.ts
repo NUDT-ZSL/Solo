@@ -4,7 +4,8 @@ import { Puzzle } from './puzzle';
 const PERSPECTIVE = {
   vanishYRatio: 0.35,
   focalLength: 500,
-  corridorHalfWidth: 280,
+  corridorScreenRatio: 0.7,
+  corridorHalfWidth: 0,
   paintingWorldWidth: 100,
   paintingWorldHeight: 140,
   paintingWorldY: -60,
@@ -12,6 +13,12 @@ const PERSPECTIVE = {
   nearZ: 120,
   farZ: 800
 };
+
+function computeCorridorHalfWidth(screenWidth: number): number {
+  const scaleNear = PERSPECTIVE.focalLength / (PERSPECTIVE.focalLength + PERSPECTIVE.nearZ);
+  const pixelHalfWidth = (screenWidth * PERSPECTIVE.corridorScreenRatio) / 2;
+  return pixelHalfWidth / scaleNear;
+}
 
 interface GameState {
   paintings: Painting[];
@@ -97,6 +104,8 @@ function resizeCanvas(): void {
   gameState.vanishX = w / 2;
   gameState.vanishY = h * PERSPECTIVE.vanishYRatio;
   
+  PERSPECTIVE.corridorHalfWidth = computeCorridorHalfWidth(w);
+  
   if (gameState && gameState.paintings.length > 0) {
     updatePaintingPositions();
     if (gameState.puzzle) {
@@ -111,6 +120,28 @@ function resizeCanvas(): void {
   }
 }
 
+function computePaintingTransform(
+  worldX: number,
+  worldY: number,
+  worldZ: number,
+  rotY: number
+): { a: number; b: number; d: number; cx: number; cy: number; scale: number } {
+  const { vanishX, vanishY } = gameState;
+  const f = PERSPECTIVE.focalLength;
+  const scale0 = f / (f + worldZ);
+  const cx = vanishX + worldX * scale0;
+  const cy = vanishY + worldY * scale0;
+  
+  const cosR = Math.cos(rotY);
+  const sinR = Math.sin(rotY);
+  
+  const a = scale0 * (cosR + (worldX * sinR) / (f + worldZ));
+  const b = scale0 * (worldY * sinR) / (f + worldZ);
+  const d = scale0;
+  
+  return { a, b, d, cx, cy, scale: scale0 };
+}
+
 function createPaintings(): void {
   const numPaintingsPerSide = 8;
   const paintings: Painting[] = [];
@@ -122,22 +153,25 @@ function createPaintings(): void {
     const worldX = -PERSPECTIVE.corridorHalfWidth;
     const worldY = PERSPECTIVE.paintingWorldY;
     
-    const proj = project3D(worldX, worldY, worldZ);
-    
     const angle = Math.atan2(worldX, PERSPECTIVE.focalLength + worldZ);
     const rotationY = angle * 0.3;
+    
+    const transform = computePaintingTransform(worldX, worldY, worldZ, rotationY);
     
     const painting = new Painting(ctx, {
       id: i,
       side: 'left',
       index: i,
-      x: proj.x,
-      y: proj.y,
+      x: transform.cx,
+      y: transform.cy,
       width: PERSPECTIVE.paintingWorldWidth,
       height: PERSPECTIVE.paintingWorldHeight,
-      scale: proj.scale,
+      scale: transform.scale,
       zDepth: worldZ,
-      rotationY: rotationY
+      rotationY: rotationY,
+      transformA: transform.a,
+      transformB: transform.b,
+      transformD: transform.d
     });
     
     paintings.push(painting);
@@ -150,22 +184,25 @@ function createPaintings(): void {
     const worldX = PERSPECTIVE.corridorHalfWidth;
     const worldY = PERSPECTIVE.paintingWorldY;
     
-    const proj = project3D(worldX, worldY, worldZ);
-    
     const angle = Math.atan2(worldX, PERSPECTIVE.focalLength + worldZ);
     const rotationY = angle * 0.3;
+    
+    const transform = computePaintingTransform(worldX, worldY, worldZ, rotationY);
     
     const painting = new Painting(ctx, {
       id: numPaintingsPerSide + i,
       side: 'right',
       index: i,
-      x: proj.x,
-      y: proj.y,
+      x: transform.cx,
+      y: transform.cy,
       width: PERSPECTIVE.paintingWorldWidth,
       height: PERSPECTIVE.paintingWorldHeight,
-      scale: proj.scale,
+      scale: transform.scale,
       zDepth: worldZ,
-      rotationY: rotationY
+      rotationY: rotationY,
+      transformA: transform.a,
+      transformB: transform.b,
+      transformD: transform.d
     });
     
     paintings.push(painting);
@@ -184,12 +221,20 @@ function updatePaintingPositions(): void {
     const worldX = -PERSPECTIVE.corridorHalfWidth;
     const worldY = PERSPECTIVE.paintingWorldY;
     
-    const proj = project3D(worldX, worldY, worldZ);
-    
     const angle = Math.atan2(worldX, PERSPECTIVE.focalLength + worldZ);
     const rotationY = angle * 0.3;
     
-    gameState.paintings[i].setPosition(proj.x, proj.y, proj.scale, rotationY);
+    const transform = computePaintingTransform(worldX, worldY, worldZ, rotationY);
+    
+    gameState.paintings[i].setPosition(
+      transform.cx,
+      transform.cy,
+      transform.scale,
+      rotationY,
+      transform.a,
+      transform.b,
+      transform.d
+    );
   }
   
   for (let i = 0; i < numPaintingsPerSide; i++) {
@@ -199,12 +244,20 @@ function updatePaintingPositions(): void {
     const worldX = PERSPECTIVE.corridorHalfWidth;
     const worldY = PERSPECTIVE.paintingWorldY;
     
-    const proj = project3D(worldX, worldY, worldZ);
-    
     const angle = Math.atan2(worldX, PERSPECTIVE.focalLength + worldZ);
     const rotationY = angle * 0.3;
     
-    gameState.paintings[numPaintingsPerSide + i].setPosition(proj.x, proj.y, proj.scale, rotationY);
+    const transform = computePaintingTransform(worldX, worldY, worldZ, rotationY);
+    
+    gameState.paintings[numPaintingsPerSide + i].setPosition(
+      transform.cx,
+      transform.cy,
+      transform.scale,
+      rotationY,
+      transform.a,
+      transform.b,
+      transform.d
+    );
   }
 }
 
@@ -361,7 +414,7 @@ function updateHoverState(x: number, y: number): void {
     gameState.hoveredPainting = hovered;
     
     if (hovered) {
-      hovered.setHovered(true);
+      hovered.setHovered(true, gameState.time);
     }
   }
 }
