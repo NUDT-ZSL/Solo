@@ -1,18 +1,20 @@
 import * as THREE from 'three';
 
-export enum VeinLevel {
-  Main = 0,
-  Branch = 1,
-  Tip = 2
-}
+export const VeinLevel = {
+  Main: 0,
+  Branch: 1,
+  Tip: 2
+} as const;
+export type VeinLevelType = typeof VeinLevel[keyof typeof VeinLevel];
 
 export interface ParticleMeta {
-  veinLevel: VeinLevel;
-  clusterId: number;
   curveIndex: number;
+  veinLevel: VeinLevelType;
+  clusterId: number;
   t: number;
   speed: number;
   colorPhase: number;
+  baseOffset: THREE.Vector3;
 }
 
 export interface ClusterInfo {
@@ -21,7 +23,9 @@ export interface ClusterInfo {
   radius: number;
   baseColor: THREE.Color;
   avgSpeed: number;
-  particleIndices: number[];
+  veinLevel: VeinLevelType;
+  particleStart: number;
+  particleCount: number;
   hovered: boolean;
   burst: boolean;
   burstStartTime: number;
@@ -30,9 +34,9 @@ export interface ClusterInfo {
 
 interface VeinCurve {
   curve: THREE.CatmullRomCurve3;
-  level: VeinLevel;
-  parentId: number;
+  level: VeinLevelType;
   clusterId: number;
+  parentClusterId: number;
 }
 
 const MAIN_COLOR_A = new THREE.Color('#FF8C00');
@@ -50,15 +54,16 @@ export class VeinParticles {
   public geometry: THREE.BufferGeometry;
   public material: THREE.PointsMaterial;
 
-  private positions: Float32Array;
-  private colors: Float32Array;
-  private sizes: Float32Array;
+  private positionAttr: THREE.BufferAttribute;
+  private colorAttr: THREE.BufferAttribute;
+  private sizeAttr: THREE.BufferAttribute;
+
   private meta: ParticleMeta[] = [];
   private clusters: Map<number, ClusterInfo> = new Map();
   private curves: VeinCurve[] = [];
-  private originalPositions: Float32Array;
-  private burstOffsets: Float32Array;
-  private burstDirections: Float32Array;
+
+  private burstDirections: Float32Array = new Float32Array(0);
+  private originalPositions: Float32Array = new Float32Array(0);
 
   private particleCount: number = 0;
   private baseDensity: number = 1.0;
@@ -71,6 +76,9 @@ export class VeinParticles {
   private rippleTime: number = -1;
   private rippleOrigin: THREE.Vector3 = new THREE.Vector3();
   private rippleColor: THREE.Color = new THREE.Color();
+
+  private tmpVec = new THREE.Vector3();
+  private tmpColor = new THREE.Color();
 
   constructor() {
     this.geometry = new THREE.BufferGeometry();
@@ -85,46 +93,67 @@ export class VeinParticles {
     this.points = new THREE.Points(this.geometry, this.material);
     this.points.frustumCulled = true;
 
-    this.generateVeinStructure();
-    this.buildBuffers();
-    this.uploadBuffers();
+    this.positionAttr = new THREE.BufferAttribute(new Float32Array(0), 3);
+    this.colorAttr = new THREE.BufferAttribute(new Float32Array(0), 3);
+    this.sizeAttr = new THREE.BufferAttribute(new Float32Array(0), 1);
+
+    this.geometry.setAttribute('position', this.positionAttr);
+    this.geometry.setAttribute('color', this.colorAttr);
+    this.geometry.setAttribute('size', this.sizeAttr);
+
+    this.generateFractalStructure();
+    this.allocateBuffers();
+    this.populateParticles(this.baseDensity);
+    this.uploadInitialData();
+
+    console.log('[VeinParticles] 粒子总数:', this.particleCount);
+    console.log('[VeinParticles] 主脉数:', this.countCurvesByLevel(VeinLevel.Main));
+    console.log('[VeinParticles] 分支数:', this.countCurvesByLevel(VeinLevel.Branch));
+    console.log('[VeinParticles] 末端簇数:', this.countCurvesByLevel(VeinLevel.Tip));
+    console.log('[VeinParticles] 总簇数:', this.clusters.size);
   }
 
-  private generateVeinStructure(): void {
+  private countCurvesByLevel(level: VeinLevelType): number {
+    return this.curves.filter(c => c.level === level).length;
+  }
+
+  private generateFractalStructure(): void {
     this.curves = [];
     this.clusters.clear();
-    this.meta = [];
     this.nextClusterId = 0;
 
     const mainCount = 5 + Math.floor(Math.random() * 4);
-    const mainLength = 12 + Math.random() * 6;
+    const mainLength = 14 + Math.random() * 6;
 
     for (let i = 0; i < mainCount; i++) {
-      const angle = (i / mainCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
-      const elevation = (Math.random() - 0.5) * 0.8;
+      const angle = (i / mainCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const elevation = (Math.random() - 0.5) * 0.9;
       const dir = new THREE.Vector3(
         Math.cos(angle) * Math.cos(elevation),
-        Math.sin(elevation) * 0.4,
+        Math.sin(elevation) * 0.5,
         Math.sin(angle) * Math.cos(elevation)
       ).normalize();
 
-      const curvePoints = this.generateCurvePoints(
+      const points = this.buildCurvePoints(
         new THREE.Vector3(0, 0, 0),
         dir,
         mainLength,
-        6
+        7
       );
-      const curve = new THREE.CatmullRomCurve3(curvePoints);
+      const curve = new THREE.CatmullRomCurve3(points);
       const clusterId = this.nextClusterId++;
-      this.curves.push({ curve, level: VeinLevel.Main, parentId: -1, clusterId });
 
+      const midPoint = curve.getPoint(0.5);
+      this.curves.push({ curve, level: VeinLevel.Main, clusterId, parentClusterId: -1 });
       this.clusters.set(clusterId, {
         id: clusterId,
-        center: curve.getPoint(0.5),
-        radius: 1.0,
+        center: midPoint,
+        radius: 1.2,
         baseColor: MAIN_COLOR_A.clone().lerp(MAIN_COLOR_B, 0.5),
-        avgSpeed: 0.2,
-        particleIndices: [],
+        avgSpeed: 0.15,
+        veinLevel: VeinLevel.Main,
+        particleStart: 0,
+        particleCount: 0,
         hovered: false,
         burst: false,
         burstStartTime: 0,
@@ -133,74 +162,67 @@ export class VeinParticles {
 
       const branchCount = 2 + Math.floor(Math.random() * 2);
       for (let b = 0; b < branchCount; b++) {
-        const branchT = 0.3 + Math.random() * 0.5;
+        const branchT = 0.35 + (b / branchCount) * 0.35 + (Math.random() - 0.5) * 0.1;
         const branchOrigin = curve.getPoint(branchT);
-        const branchTangent = curve.getTangent(branchT);
+        const branchTangent = curve.getTangent(branchT).normalize();
 
-        const branchAngle = ((b + 1) / (branchCount + 1)) * Math.PI - Math.PI / 2;
-        const up = new THREE.Vector3(0, 1, 0);
-        const side = new THREE.Vector3().crossVectors(branchTangent, up).normalize();
-        if (side.length() < 0.01) {
-          side.set(1, 0, 0);
-        }
+        const upApprox = new THREE.Vector3(0, 1, 0);
+        const side = new THREE.Vector3().crossVectors(branchTangent, upApprox).normalize();
+        if (side.length() < 0.01) side.set(1, 0, 0);
+        const up = new THREE.Vector3().crossVectors(side, branchTangent).normalize();
 
+        const angleOffset = ((b + 0.5) / branchCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+        const tiltAmount = 0.4 + Math.random() * 0.3;
         const branchDir = new THREE.Vector3()
           .copy(branchTangent)
-          .applyAxisAngle(side, branchAngle * 0.5)
-          .add(
-            side.clone().multiplyScalar(Math.sin(branchAngle) * 0.6)
-          )
+          .add(side.clone().multiplyScalar(Math.cos(angleOffset) * tiltAmount))
+          .add(up.clone().multiplyScalar(Math.sin(angleOffset) * tiltAmount))
           .normalize();
 
-        const branchLength = mainLength * (0.3 + Math.random() * 0.3);
-        const branchPoints = this.generateCurvePoints(
-          branchOrigin,
-          branchDir,
-          branchLength,
-          4
-        );
+        const branchLength = mainLength * (0.35 + Math.random() * 0.3);
+        const branchPoints = this.buildCurvePoints(branchOrigin, branchDir, branchLength, 5);
         const branchCurve = new THREE.CatmullRomCurve3(branchPoints);
         const branchClusterId = this.nextClusterId++;
+
+        const branchMid = branchCurve.getPoint(0.5);
         this.curves.push({
           curve: branchCurve,
           level: VeinLevel.Branch,
-          parentId: clusterId,
-          clusterId: branchClusterId
+          clusterId: branchClusterId,
+          parentClusterId: clusterId
         });
-
-        const tipPositions: THREE.Vector3[] = [];
-        const branchCenter = branchCurve.getPoint(0.5);
-        tipPositions.push(branchCenter);
-
-        const tipClusterId = this.nextClusterId++;
-        this.curves.push({
-          curve: branchCurve,
-          level: VeinLevel.Tip,
-          parentId: branchClusterId,
-          clusterId: tipClusterId
-        });
-
         this.clusters.set(branchClusterId, {
           id: branchClusterId,
-          center: branchCenter,
-          radius: 0.6,
+          center: branchMid,
+          radius: 0.7,
           baseColor: BRANCH_COLOR_A.clone().lerp(BRANCH_COLOR_B, 0.5),
-          avgSpeed: 0.35,
-          particleIndices: [],
+          avgSpeed: 0.28,
+          veinLevel: VeinLevel.Branch,
+          particleStart: 0,
+          particleCount: 0,
           hovered: false,
           burst: false,
           burstStartTime: 0,
           merged: false
         });
 
-        const tipCenter = branchCurve.getPoint(0.9);
+        const tipClusterId = this.nextClusterId++;
+        const tipCenter = branchCurve.getPoint(0.92);
+        this.curves.push({
+          curve: branchCurve,
+          level: VeinLevel.Tip,
+          clusterId: tipClusterId,
+          parentClusterId: branchClusterId
+        });
         this.clusters.set(tipClusterId, {
           id: tipClusterId,
           center: tipCenter,
-          radius: 0.4,
+          radius: 0.5,
           baseColor: TIP_COLOR_A.clone().lerp(TIP_COLOR_B, 0.5),
-          avgSpeed: 0.45,
-          particleIndices: [],
+          avgSpeed: 0.4,
+          veinLevel: VeinLevel.Tip,
+          particleStart: 0,
+          particleCount: 0,
           hovered: false,
           burst: false,
           burstStartTime: 0,
@@ -208,11 +230,9 @@ export class VeinParticles {
         });
       }
     }
-
-    this.populateParticles(this.baseDensity);
   }
 
-  private generateCurvePoints(
+  private buildCurvePoints(
     origin: THREE.Vector3,
     direction: THREE.Vector3,
     length: number,
@@ -225,9 +245,9 @@ export class VeinParticles {
     for (let i = 0; i < segments; i++) {
       const segLen = length / segments;
       const perturbation = new THREE.Vector3(
-        (Math.random() - 0.5) * 1.5,
-        (Math.random() - 0.5) * 0.8,
-        (Math.random() - 0.5) * 1.5
+        (Math.random() - 0.5) * 1.8,
+        (Math.random() - 0.5) * 0.9,
+        (Math.random() - 0.5) * 1.8
       );
       dir.add(perturbation).normalize();
       current = current.clone().add(dir.clone().multiplyScalar(segLen));
@@ -237,293 +257,285 @@ export class VeinParticles {
     return points;
   }
 
+  private allocateBuffers(): void {
+    const buf = new Float32Array(MAX_PARTICLES * 3);
+    const colBuf = new Float32Array(MAX_PARTICLES * 3);
+    const sizeBuf = new Float32Array(MAX_PARTICLES);
+    this.burstDirections = new Float32Array(MAX_PARTICLES * 3);
+    this.originalPositions = new Float32Array(MAX_PARTICLES * 3);
+
+    this.positionAttr = new THREE.BufferAttribute(buf, 3);
+    this.colorAttr = new THREE.BufferAttribute(colBuf, 3);
+    this.sizeAttr = new THREE.BufferAttribute(sizeBuf, 1);
+
+    this.geometry.setAttribute('position', this.positionAttr);
+    this.geometry.setAttribute('color', this.colorAttr);
+    this.geometry.setAttribute('size', this.sizeAttr);
+  }
+
   private populateParticles(density: number): void {
     this.meta = [];
-    for (const cluster of this.clusters.values()) {
-      cluster.particleIndices = [];
-    }
+    const mainCount = Math.floor(200 * density);
+    const branchCount = Math.floor(110 * density);
+    const tipCount = Math.floor(50 * density);
 
-    const mainParticlesPerCurve = Math.floor(180 * density);
-    const branchParticlesPerCurve = Math.floor(100 * density);
-    const tipParticlesPerCluster = Math.floor(40 * density);
-
-    let count = 0;
+    let total = 0;
 
     for (const vc of this.curves) {
-      let numParticles: number;
-      let speed: number;
-      let veinLevel: VeinLevel;
+      const cluster = this.clusters.get(vc.clusterId);
+      if (!cluster || cluster.merged) continue;
 
-      if (vc.level === VeinLevel.Main) {
-        numParticles = mainParticlesPerCurve;
-        speed = 0.1 + Math.random() * 0.15;
-        veinLevel = VeinLevel.Main;
-      } else if (vc.level === VeinLevel.Branch) {
-        numParticles = branchParticlesPerCurve;
-        speed = 0.2 + Math.random() * 0.15;
-        veinLevel = VeinLevel.Branch;
-      } else {
-        numParticles = tipParticlesPerCluster;
-        speed = 0.35 + Math.random() * 0.15;
-        veinLevel = VeinLevel.Tip;
+      let numParticles: number;
+      let speedBase: number;
+
+      switch (vc.level) {
+        case VeinLevel.Main:
+          numParticles = mainCount;
+          speedBase = 0.12;
+          break;
+        case VeinLevel.Branch:
+          numParticles = branchCount;
+          speedBase = 0.22;
+          break;
+        case VeinLevel.Tip:
+          numParticles = tipCount;
+          speedBase = 0.35;
+          break;
       }
 
-      if (count + numParticles > MAX_PARTICLES) {
-        numParticles = MAX_PARTICLES - count;
+      if (total + numParticles > MAX_PARTICLES) {
+        numParticles = MAX_PARTICLES - total;
         if (numParticles <= 0) break;
       }
 
-      const cluster = this.clusters.get(vc.clusterId);
-      if (!cluster) continue;
+      cluster.particleStart = total;
+      cluster.particleCount = numParticles;
 
       for (let i = 0; i < numParticles; i++) {
         const t = Math.random();
+        const lateralSpread = vc.level === VeinLevel.Main ? 0.35 : vc.level === VeinLevel.Branch ? 0.2 : 0.5;
 
+        let offset: THREE.Vector3;
         if (vc.level === VeinLevel.Tip) {
-          const basePoint = vc.curve.getPoint(0.85 + Math.random() * 0.15);
-          const spread = 0.5 + Math.random() * 0.5;
-          const offset = new THREE.Vector3(
-            (Math.random() - 0.5) * spread,
-            (Math.random() - 0.5) * spread,
-            (Math.random() - 0.5) * spread
+          const r = lateralSpread * Math.cbrt(Math.random());
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          offset = new THREE.Vector3(
+            r * Math.sin(phi) * Math.cos(theta),
+            r * Math.sin(phi) * Math.sin(theta),
+            r * Math.cos(phi)
           );
-
-          const idx = count + i;
-          this.meta.push({
-            veinLevel,
-            clusterId: vc.clusterId,
-            curveIndex: this.curves.indexOf(vc),
-            t: 0.85 + Math.random() * 0.15,
-            speed: speed * (0.8 + Math.random() * 0.4),
-            colorPhase: Math.random() * Math.PI * 2
-          });
-          cluster.particleIndices.push(idx);
         } else {
-          const curveLen = vc.curve.getLength();
-          const lateralSpread = vc.level === VeinLevel.Main ? 0.3 : 0.2;
-          const point = vc.curve.getPoint(t);
-          const offset = new THREE.Vector3(
+          offset = new THREE.Vector3(
             (Math.random() - 0.5) * lateralSpread,
             (Math.random() - 0.5) * lateralSpread,
             (Math.random() - 0.5) * lateralSpread
           );
-          point.add(offset);
-
-          const idx = count + i;
-          this.meta.push({
-            veinLevel,
-            clusterId: vc.clusterId,
-            curveIndex: this.curves.indexOf(vc),
-            t,
-            speed: speed * (0.8 + Math.random() * 0.4),
-            colorPhase: Math.random() * Math.PI * 2
-          });
-          cluster.particleIndices.push(idx);
         }
+
+        const idx = total + i;
+        this.meta.push({
+          curveIndex: this.curves.indexOf(vc),
+          veinLevel: vc.level,
+          clusterId: vc.clusterId,
+          t,
+          speed: speedBase * (0.7 + Math.random() * 0.6),
+          colorPhase: Math.random() * Math.PI * 2,
+          baseOffset: offset
+        });
+
+        const dir = new THREE.Vector3(
+          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 2
+        ).normalize().multiplyScalar(2 + Math.random() * 3);
+        this.burstDirections[idx * 3] = dir.x;
+        this.burstDirections[idx * 3 + 1] = dir.y;
+        this.burstDirections[idx * 3 + 2] = dir.z;
       }
 
-      count += numParticles;
+      total += numParticles;
     }
 
-    this.particleCount = count;
+    this.particleCount = total;
+    this.geometry.setDrawRange(0, total);
   }
 
-  private buildBuffers(): void {
+  private uploadInitialData(): void {
     const n = this.particleCount;
-    this.positions = new Float32Array(n * 3);
-    this.colors = new Float32Array(n * 3);
-    this.sizes = new Float32Array(n);
-    this.originalPositions = new Float32Array(n * 3);
-    this.burstOffsets = new Float32Array(n * 3);
-    this.burstDirections = new Float32Array(n * 3);
-
     for (let i = 0; i < n; i++) {
-      const m = this.meta[i];
-      const vc = this.curves[m.curveIndex];
-
-      let pos: THREE.Vector3;
-      if (m.veinLevel === VeinLevel.Tip) {
-        pos = vc.curve.getPoint(m.t);
-        const spread = 0.5 + Math.random() * 0.5;
-        pos.add(new THREE.Vector3(
-          (Math.random() - 0.5) * spread,
-          (Math.random() - 0.5) * spread,
-          (Math.random() - 0.5) * spread
-        ));
-      } else {
-        const lateralSpread = m.veinLevel === VeinLevel.Main ? 0.3 : 0.2;
-        pos = vc.curve.getPoint(m.t);
-        pos.add(new THREE.Vector3(
-          (Math.random() - 0.5) * lateralSpread,
-          (Math.random() - 0.5) * lateralSpread,
-          (Math.random() - 0.5) * lateralSpread
-        ));
-      }
-
-      this.positions[i * 3] = pos.x;
-      this.positions[i * 3 + 1] = pos.y;
-      this.positions[i * 3 + 2] = pos.z;
-      this.originalPositions[i * 3] = pos.x;
-      this.originalPositions[i * 3 + 1] = pos.y;
-      this.originalPositions[i * 3 + 2] = pos.z;
-
-      const color = this.computeColor(m);
-      this.colors[i * 3] = color.r;
-      this.colors[i * 3 + 1] = color.g;
-      this.colors[i * 3 + 2] = color.b;
-
-      if (m.veinLevel === VeinLevel.Main) {
-        this.sizes[i] = 3.0;
-      } else if (m.veinLevel === VeinLevel.Branch) {
-        this.sizes[i] = 2.0;
-      } else {
-        this.sizes[i] = 1.5;
-      }
-
-      const dir = new THREE.Vector3(
-        (Math.random() - 0.5),
-        (Math.random() - 0.5),
-        (Math.random() - 0.5)
-      ).normalize();
-      this.burstDirections[i * 3] = dir.x;
-      this.burstDirections[i * 3 + 1] = dir.y;
-      this.burstDirections[i * 3 + 2] = dir.z;
+      this.updateParticlePosition(i);
+      this.updateParticleColor(i);
+      this.updateParticleSize(i);
     }
+    this.positionAttr.needsUpdate = true;
+    this.colorAttr.needsUpdate = true;
+    this.sizeAttr.needsUpdate = true;
   }
 
-  private uploadBuffers(): void {
-    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
-    this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
-    this.geometry.attributes.position.needsUpdate = true;
-    this.geometry.attributes.color.needsUpdate = true;
-    this.geometry.attributes.size.needsUpdate = true;
+  private updateParticlePosition(idx: number): void {
+    const m = this.meta[idx];
+    if (!m) return;
+
+    const vc = this.curves[m.curveIndex];
+    if (!vc) return;
+
+    const pos = vc.curve.getPoint(m.t);
+    pos.add(m.baseOffset);
+
+    this.originalPositions[idx * 3] = pos.x;
+    this.originalPositions[idx * 3 + 1] = pos.y;
+    this.originalPositions[idx * 3 + 2] = pos.z;
+
+    this.positionAttr.setXYZ(idx, pos.x, pos.y, pos.z);
   }
 
-  private computeColor(m: ParticleMeta): THREE.Color {
+  private updateParticleColor(idx: number): void {
+    const m = this.meta[idx];
+    if (!m) return;
+
     const t = (Math.sin(m.colorPhase) + 1) * 0.5;
-    if (m.veinLevel === VeinLevel.Main) {
-      return MAIN_COLOR_A.clone().lerp(MAIN_COLOR_B, t);
-    } else if (m.veinLevel === VeinLevel.Branch) {
-      return BRANCH_COLOR_A.clone().lerp(BRANCH_COLOR_B, t);
-    } else {
-      return TIP_COLOR_A.clone().lerp(TIP_COLOR_B, t);
+    let color: THREE.Color;
+
+    switch (m.veinLevel) {
+      case VeinLevel.Main:
+        color = this.tmpColor.copy(MAIN_COLOR_A).lerp(MAIN_COLOR_B, t);
+        break;
+      case VeinLevel.Branch:
+        color = this.tmpColor.copy(BRANCH_COLOR_A).lerp(BRANCH_COLOR_B, t);
+        break;
+      case VeinLevel.Tip:
+      default:
+        color = this.tmpColor.copy(TIP_COLOR_A).lerp(TIP_COLOR_B, t);
+        break;
     }
+
+    const cluster = this.clusters.get(m.clusterId);
+    let brightness = 1.0;
+    if (cluster && cluster.hovered) brightness = 1.5;
+
+    this.colorAttr.setXYZ(
+      idx,
+      Math.min(1, color.r * brightness),
+      Math.min(1, color.g * brightness),
+      Math.min(1, color.b * brightness)
+    );
+  }
+
+  private updateParticleSize(idx: number): void {
+    const m = this.meta[idx];
+    if (!m) return;
+
+    let baseSize: number;
+    switch (m.veinLevel) {
+      case VeinLevel.Main: baseSize = 3.0; break;
+      case VeinLevel.Branch: baseSize = 2.0; break;
+      case VeinLevel.Tip: baseSize = 1.5; break;
+    }
+
+    const x = this.positionAttr.getX(idx);
+    const y = this.positionAttr.getY(idx);
+    const z = this.positionAttr.getZ(idx);
+    const dist = Math.sqrt(x * x + y * y + z * z);
+    const sizeMul = 1.0 / (1.0 + dist * 0.03);
+
+    const cluster = this.clusters.get(m.clusterId);
+    if (cluster && cluster.hovered) baseSize *= 1.8;
+
+    this.sizeAttr.setX(idx, baseSize * sizeMul);
   }
 
   public update(deltaTime: number, elapsedTime: number): void {
     const n = this.particleCount;
-    const posAttr = this.geometry.attributes.position as THREE.BufferAttribute;
-    const colAttr = this.geometry.attributes.color as THREE.BufferAttribute;
-    const sizeAttr = this.geometry.attributes.size as THREE.BufferAttribute;
+    const dt = Math.min(deltaTime, 0.05);
 
     for (let i = 0; i < n; i++) {
       const m = this.meta[i];
-      const vc = this.curves[m.curveIndex];
+      if (!m) continue;
 
-      m.t += m.speed * this.speedMultiplier * deltaTime * 0.05;
+      m.t += m.speed * this.speedMultiplier * dt * 0.3;
       if (m.t > 1.0) m.t -= 1.0;
       if (m.t < 0.0) m.t += 1.0;
 
-      m.colorPhase += deltaTime * this.colorGradientSpeed * 2.0;
+      m.colorPhase += dt * this.colorGradientSpeed * 2.0;
 
-      const tangent = vc.curve.getTangent(m.t);
-      const lateralSpread = m.veinLevel === VeinLevel.Main ? 0.3 : m.veinLevel === VeinLevel.Branch ? 0.2 : 0.0;
-
-      let posX: number, posY: number, posZ: number;
-      if (m.veinLevel === VeinLevel.Tip) {
-        const basePoint = vc.curve.getPoint(m.t);
-        posX = basePoint.x + this.originalPositions[i * 3] - vc.curve.getPoint(0.9).x;
-        posY = basePoint.y + this.originalPositions[i * 3 + 1] - vc.curve.getPoint(0.9).y;
-        posZ = basePoint.z + this.originalPositions[i * 3 + 2] - vc.curve.getPoint(0.9).z;
-      } else {
-        const basePoint = vc.curve.getPoint(m.t);
-        posX = basePoint.x;
-        posY = basePoint.y;
-        posZ = basePoint.z;
-      }
+      this.updateParticlePosition(i);
 
       const cluster = this.clusters.get(m.clusterId);
-      let burstOffset = 0;
-      let brightnessMul = 1.0;
-
       if (cluster && cluster.burst) {
         const elapsed = elapsedTime - cluster.burstStartTime;
         if (elapsed < BURST_DURATION) {
           const progress = elapsed / BURST_DURATION;
-          const burstPower = Math.sin(progress * Math.PI) * 3.0;
-          posX += this.burstDirections[i * 3] * burstPower;
-          posY += this.burstDirections[i * 3 + 1] * burstPower;
-          posZ += this.burstDirections[i * 3 + 2] * burstPower;
+          const envelope = Math.sin(progress * Math.PI);
+          const distance = envelope * 4.0;
+
+          const px = this.positionAttr.getX(i);
+          const py = this.positionAttr.getY(i);
+          const pz = this.positionAttr.getZ(i);
+
+          const bx = this.burstDirections[i * 3];
+          const by = this.burstDirections[i * 3 + 1];
+          const bz = this.burstDirections[i * 3 + 2];
+
+          const len = Math.sqrt(bx * bx + by * by + bz * bz) || 1;
+
+          this.positionAttr.setXYZ(
+            i,
+            px + (bx / len) * distance,
+            py + (by / len) * distance,
+            pz + (bz / len) * distance
+          );
         } else {
           cluster.burst = false;
         }
       }
 
-      if (cluster && cluster.hovered) {
-        brightnessMul = 1.5;
-      }
-
-      this.positions[i * 3] = posX;
-      this.positions[i * 3 + 1] = posY;
-      this.positions[i * 3 + 2] = posZ;
-
-      const color = this.computeColor(m);
-      this.colors[i * 3] = color.r * brightnessMul;
-      this.colors[i * 3 + 1] = color.g * brightnessMul;
-      this.colors[i * 3 + 2] = color.b * brightnessMul;
-
-      let baseSize: number;
-      if (m.veinLevel === VeinLevel.Main) {
-        baseSize = 3.0;
-      } else if (m.veinLevel === VeinLevel.Branch) {
-        baseSize = 2.0;
-      } else {
-        baseSize = 1.5;
-      }
-
-      const distFromCenter = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
-      const sizeMul = 1.0 / (1.0 + distFromCenter * 0.02);
-
-      if (cluster && cluster.hovered) {
-        baseSize *= 1.8;
-      }
-
-      this.sizes[i] = baseSize * sizeMul;
+      this.updateParticleColor(i);
+      this.updateParticleSize(i);
     }
 
     if (this.rippleTime >= 0) {
-      this.rippleTime += deltaTime;
+      this.rippleTime += dt;
       if (this.rippleTime > 3.0) {
         this.rippleTime = -1;
       } else {
-        const rippleRadius = this.rippleTime * 8.0;
-        const rippleWidth = 2.0;
+        const rippleRadius = this.rippleTime * 10.0;
+        const rippleWidth = 2.5;
+        const ri = this.rippleOrigin;
+        const rc = this.rippleColor;
+
         for (let i = 0; i < n; i++) {
-          const px = this.positions[i * 3];
-          const py = this.positions[i * 3 + 1];
-          const pz = this.positions[i * 3 + 2];
-          const dist = Math.sqrt(
-            (px - this.rippleOrigin.x) ** 2 +
-            (py - this.rippleOrigin.y) ** 2 +
-            (pz - this.rippleOrigin.z) ** 2
-          );
-          if (Math.abs(dist - rippleRadius) < rippleWidth) {
-            const intensity = 1.0 - Math.abs(dist - rippleRadius) / rippleWidth;
-            this.colors[i * 3] = Math.min(1.0, this.colors[i * 3] + this.rippleColor.r * intensity * 0.5);
-            this.colors[i * 3 + 1] = Math.min(1.0, this.colors[i * 3 + 1] + this.rippleColor.g * intensity * 0.5);
-            this.colors[i * 3 + 2] = Math.min(1.0, this.colors[i * 3 + 2] + this.rippleColor.b * intensity * 0.5);
+          const px = this.positionAttr.getX(i);
+          const py = this.positionAttr.getY(i);
+          const pz = this.positionAttr.getZ(i);
+          const dx = px - ri.x;
+          const dy = py - ri.y;
+          const dz = pz - ri.z;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          const diff = Math.abs(dist - rippleRadius);
+
+          if (diff < rippleWidth) {
+            const intensity = (1.0 - diff / rippleWidth) * 0.7;
+            const cr = this.colorAttr.getX(i);
+            const cg = this.colorAttr.getY(i);
+            const cb = this.colorAttr.getZ(i);
+            this.colorAttr.setXYZ(
+              i,
+              Math.min(1, cr + rc.r * intensity),
+              Math.min(1, cg + rc.g * intensity),
+              Math.min(1, cb + rc.b * intensity)
+            );
           }
         }
       }
     }
 
-    posAttr.needsUpdate = true;
-    colAttr.needsUpdate = true;
-    sizeAttr.needsUpdate = true;
+    this.positionAttr.needsUpdate = true;
+    this.colorAttr.needsUpdate = true;
+    this.sizeAttr.needsUpdate = true;
   }
 
-  public getClusterAtPosition(worldPos: THREE.Vector3, maxDist: number = 2.0): number {
+  public getClusterAtPosition(worldPos: THREE.Vector3, maxDist: number = 2.5): number {
     let closestId = -1;
     let closestDist = maxDist;
 
@@ -557,20 +569,23 @@ export class VeinParticles {
 
   public triggerBurst(clusterId: number, elapsedTime: number): void {
     const cluster = this.clusters.get(clusterId);
-    if (!cluster || cluster.burst) return;
+    if (!cluster || cluster.burst || cluster.merged) return;
 
     cluster.burst = true;
     cluster.burstStartTime = elapsedTime;
 
-    for (const idx of cluster.particleIndices) {
+    const start = cluster.particleStart;
+    const count = cluster.particleCount;
+    for (let i = start; i < start + count; i++) {
+      if (i >= this.particleCount) break;
       const dir = new THREE.Vector3(
-        (Math.random() - 0.5),
-        (Math.random() - 0.5),
-        (Math.random() - 0.5)
-      ).normalize();
-      this.burstDirections[idx * 3] = dir.x;
-      this.burstDirections[idx * 3 + 1] = dir.y;
-      this.burstDirections[idx * 3 + 2] = dir.z;
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2
+      ).normalize().multiplyScalar(2 + Math.random() * 3);
+      this.burstDirections[i * 3] = dir.x;
+      this.burstDirections[i * 3 + 1] = dir.y;
+      this.burstDirections[i * 3 + 2] = dir.z;
     }
   }
 
@@ -578,6 +593,7 @@ export class VeinParticles {
     const a = this.clusters.get(idA);
     const b = this.clusters.get(idB);
     if (!a || !b || a.merged || b.merged) return false;
+    if (idA === idB) return false;
 
     const dist = a.center.distanceTo(b.center);
     if (dist >= 5.0) return false;
@@ -592,24 +608,18 @@ export class VeinParticles {
     a.baseColor.copy(newColor);
     a.avgSpeed = newSpeed;
 
-    for (const idx of b.particleIndices) {
-      const m = this.meta[idx];
-      m.clusterId = idA;
-      m.speed = newSpeed * (0.8 + Math.random() * 0.4);
-      a.particleIndices.push(idx);
+    const bStart = b.particleStart;
+    const bCount = b.particleCount;
+    for (let i = bStart; i < bStart + bCount; i++) {
+      if (i >= this.particleCount) break;
+      const m = this.meta[i];
+      if (m) {
+        m.clusterId = idA;
+        m.speed = newSpeed * (0.7 + Math.random() * 0.6);
+      }
     }
 
     b.merged = true;
-    b.particleIndices = [];
-
-    for (const idx of a.particleIndices) {
-      const m = this.meta[idx];
-      const offset = newCenter.clone().sub(this.originalPositions[idx] ? new THREE.Vector3(
-        this.originalPositions[idx * 3],
-        this.originalPositions[idx * 3 + 1],
-        this.originalPositions[idx * 3 + 2]
-      ) : new THREE.Vector3());
-    }
 
     this.rippleOrigin.copy(newCenter);
     this.rippleColor.copy(newColor);
@@ -627,11 +637,10 @@ export class VeinParticles {
   }
 
   public setDensity(val: number): void {
-    if (Math.abs(val - this.baseDensity) < 0.01) return;
+    if (Math.abs(val - this.baseDensity) < 0.05) return;
     this.baseDensity = val;
     this.populateParticles(val);
-    this.buildBuffers();
-    this.uploadBuffers();
+    this.uploadInitialData();
   }
 
   public getClusters(): Map<number, ClusterInfo> {
@@ -642,7 +651,7 @@ export class VeinParticles {
     return this.particleCount;
   }
 
-  public getPositions(): Float32Array {
-    return this.positions;
+  public getCurves(): VeinCurve[] {
+    return this.curves;
   }
 }

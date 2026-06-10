@@ -9,34 +9,36 @@
     html, body { width: 100%; height: 100%; overflow: hidden; }
     body {
       background: radial-gradient(ellipse at center, #2E2B28 0%, #0D0806 100%);
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     }
     #canvas-container {
       width: 100%; height: 100%; position: fixed; top: 0; left: 0;
     }
-    canvas { display: block; }
+    canvas { display: block; cursor: grab; }
+    canvas:active { cursor: grabbing; }
 
     #control-panel {
       position: fixed;
       left: 20px;
       bottom: 20px;
       width: 200px;
-      background: rgba(26, 26, 26, 0.75);
+      background: rgba(26, 26, 26, 0.72);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-radius: 8px;
-      padding: 16px 14px;
+      padding: 14px 14px 10px;
       z-index: 100;
-      font-family: 'Segoe UI', 'PingFang SC', sans-serif;
       color: #ccc;
-      font-size: 12px;
       user-select: none;
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
     #control-panel .panel-title {
       font-size: 13px;
       font-weight: 600;
       color: #FFD700;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       letter-spacing: 1px;
+      text-align: center;
     }
     .slider-group {
       margin-bottom: 10px;
@@ -45,7 +47,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 4px;
+      margin-bottom: 5px;
       font-size: 11px;
       color: #aaa;
     }
@@ -53,7 +55,7 @@
       color: #FFD700;
       font-weight: 600;
       font-size: 11px;
-      min-width: 30px;
+      min-width: 32px;
       text-align: right;
     }
 
@@ -75,11 +77,12 @@
       border-radius: 50%;
       background: #FFD700;
       cursor: pointer;
-      transition: transform 0.15s ease-out;
-      box-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+      box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
     }
     input[type="range"]::-webkit-slider-thumb:hover {
       transform: scale(1.2);
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
     }
     input[type="range"]::-moz-range-thumb {
       width: 14px;
@@ -88,11 +91,33 @@
       background: #FFD700;
       cursor: pointer;
       border: none;
-      transition: transform 0.15s ease-out;
-      box-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+      box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
     }
     input[type="range"]::-moz-range-thumb:hover {
       transform: scale(1.2);
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
+    }
+    input[type="range"]::-moz-range-track {
+      height: 4px;
+      border-radius: 2px;
+      background: #555;
+      border: none;
+    }
+
+    .tip {
+      font-size: 10px;
+      color: #666;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .tip kbd {
+      background: #333;
+      color: #FFD700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-family: inherit;
     }
   </style>
 </head>
@@ -112,6 +137,10 @@
     <div class="slider-group">
       <label><span>粒子密度</span><span class="val" id="density-val">1.0</span></label>
       <input type="range" id="density-slider" min="0.5" max="2.0" step="0.1" value="1.0" />
+    </div>
+    <div class="tip">
+      拖拽旋转 · 滚轮缩放<br/>
+      点击爆裂 · <kbd>Shift</kbd>+点击合并
     </div>
   </div>
 

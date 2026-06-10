@@ -5,7 +5,7 @@ import { InteractionHandler } from './InteractionHandler';
 function main(): void {
   const container = document.getElementById('canvas-container');
   if (!container) {
-    console.error('Canvas container not found');
+    console.error('[main] Canvas container not found');
     return;
   }
 
@@ -17,8 +17,6 @@ function main(): void {
     0.1,
     200
   );
-  camera.position.set(0, 8, 20);
-  camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -29,10 +27,12 @@ function main(): void {
   renderer.setClearColor(0x000000, 0);
   container.appendChild(renderer.domElement);
 
+  console.log('[main] 初始化场景...');
+
   const veinParticles = new VeinParticles();
   scene.add(veinParticles.points);
 
-  console.log(`粒子总数: ${veinParticles.getParticleCount()}`);
+  console.log('[main] 粒子系统创建完成');
 
   const interactionHandler = new InteractionHandler(
     camera,
@@ -41,18 +41,30 @@ function main(): void {
     renderer
   );
 
+  console.log('[main] 交互处理器创建完成');
+
   const clock = new THREE.Clock();
+  let frameCount = 0;
+  let lastFpsTime = 0;
 
   function animate(): void {
     requestAnimationFrame(animate);
 
-    const deltaTime = Math.min(clock.getDelta(), 0.05);
-    const elapsedTime = clock.getElapsedTime();
+    const delta = Math.min(clock.getDelta(), 0.05);
+    const elapsed = clock.getElapsedTime();
 
-    veinParticles.update(deltaTime, elapsedTime);
-    interactionHandler.update(deltaTime, elapsedTime);
+    veinParticles.update(delta, elapsed);
+    interactionHandler.update(delta, elapsed);
 
     renderer.render(scene, camera);
+
+    frameCount++;
+    if (elapsed - lastFpsTime > 2.0) {
+      const fps = frameCount / (elapsed - lastFpsTime);
+      console.debug(`[main] FPS: ${fps.toFixed(1)} 粒子: ${veinParticles.getParticleCount()}`);
+      frameCount = 0;
+      lastFpsTime = elapsed;
+    }
   }
 
   animate();
@@ -63,14 +75,14 @@ function main(): void {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  const speedSlider = document.getElementById('speed-slider') as HTMLInputElement;
-  const speedVal = document.getElementById('speed-val') as HTMLSpanElement;
-  const colorSlider = document.getElementById('color-slider') as HTMLInputElement;
-  const colorVal = document.getElementById('color-val') as HTMLSpanElement;
-  const densitySlider = document.getElementById('density-slider') as HTMLInputElement;
-  const densityVal = document.getElementById('density-val') as HTMLSpanElement;
+  const speedSlider = document.getElementById('speed-slider') as HTMLInputElement | null;
+  const speedVal = document.getElementById('speed-val') as HTMLSpanElement | null;
+  const colorSlider = document.getElementById('color-slider') as HTMLInputElement | null;
+  const colorVal = document.getElementById('color-val') as HTMLSpanElement | null;
+  const densitySlider = document.getElementById('density-slider') as HTMLInputElement | null;
+  const densityVal = document.getElementById('density-val') as HTMLSpanElement | null;
 
-  if (speedSlider) {
+  if (speedSlider && speedVal) {
     speedSlider.addEventListener('input', () => {
       const v = parseFloat(speedSlider.value);
       speedVal.textContent = v.toFixed(1);
@@ -78,7 +90,7 @@ function main(): void {
     });
   }
 
-  if (colorSlider) {
+  if (colorSlider && colorVal) {
     colorSlider.addEventListener('input', () => {
       const v = parseFloat(colorSlider.value);
       colorVal.textContent = v.toFixed(2);
@@ -86,13 +98,15 @@ function main(): void {
     });
   }
 
-  if (densitySlider) {
+  if (densitySlider && densityVal) {
     densitySlider.addEventListener('input', () => {
       const v = parseFloat(densitySlider.value);
       densityVal.textContent = v.toFixed(1);
       veinParticles.setDensity(v);
     });
   }
+
+  console.log('[main] 初始化完成，开始渲染');
 }
 
 main();
