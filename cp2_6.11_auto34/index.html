@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>拼贴梦境机</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-start: #0A1128;
+      --bg-end: #1B0A2E;
+      --canvas-bg: #1E1E2E;
+      --accent: #6C63FF;
+      --accent-hover: #9B8FF7;
+      --accent-btn: #7C6FF7;
+      --panel-start: #2A2D35;
+      --panel-end: #1C1E26;
+      --track-color: #3D3F4E;
+      --card-bg: #F0EFF4;
+      --text-primary: #E8E6F0;
+      --text-secondary: #A0A0B8;
+      --text-dim: #6B6B80;
+      --border-glow: #6C63FF;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
+      font-family: 'Noto Sans SC', sans-serif;
+      color: var(--text-primary);
+    }
+
+    .app-container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      padding: 16px;
+      gap: 16px;
+    }
+
+    .canvas-section {
+      flex: 0 0 70%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .app-title {
+      font-family: 'ZCOOL KuaiLe', cursive;
+      font-size: 28px;
+      letter-spacing: 4px;
+      background: linear-gradient(90deg, #6C63FF, #B8A9FF, #FF6BCA);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+      text-align: center;
+      user-select: none;
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      border: 2px solid var(--border-glow);
+      box-shadow: 0 0 20px rgba(108, 99, 255, 0.3), 0 0 60px rgba(108, 99, 255, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--canvas-bg);
+      line-height: 0;
+    }
+
+    #mainCanvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .loading-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      margin: -20px 0 0 -20px;
+      border: 3px solid transparent;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 10;
+    }
+
+    .loading-ring.active {
+      opacity: 1;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .control-panel {
+      flex: 0 0 28%;
+      background: linear-gradient(180deg, var(--panel-start) 0%, var(--panel-end) 100%);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      overflow-y: auto;
+      border: 1px solid rgba(108, 99, 255, 0.15);
+    }
+
+    .control-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .control-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .control-panel::-webkit-scrollbar-thumb {
+      background: var(--track-color);
+      border-radius: 2px;
+    }
+
+    .panel-title {
+      font-family: 'ZCOOL KuaiLe', cursive;
+      font-size: 18px;
+      color: var(--accent);
+      letter-spacing: 2px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(108, 99, 255, 0.2);
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .control-value {
+      color: var(--accent);
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--track-color);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-btn);
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: var(--accent-hover);
+      transform: scale(1.15);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-btn);
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.15s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      background: var(--accent-hover);
+      transform: scale(1.15);
+    }
+
+    .template-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .section-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 60px);
+      gap: 8px;
+    }
+
+    .template-card {
+      width: 60px;
+      height: 60px;
+      border-radius: 10px;
+      background: var(--card-bg);
+      border: 2px solid transparent;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.3s ease, transform 0.3s ease;
+      user-select: none;
+    }
+
+    .template-card:hover {
+      transform: scale(1.05);
+    }
+
+    .template-card.selected {
+      border-color: var(--selected-color, var(--accent));
+      transform: scale(1.05);
+    }
+
+    .template-card .tpl-icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .template-card .tpl-name {
+      font-size: 9px;
+      color: #3A3A4A;
+      margin-top: 3px;
+      font-weight: 500;
+      text-align: center;
+      line-height: 1.1;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Noto Sans SC', sans-serif;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+      user-select: none;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6C63FF, #9B6FFF);
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(108, 99, 255, 0.35);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(108, 99, 255, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(108, 99, 255, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(108, 99, 255, 0.3);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(108, 99, 255, 0.25);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-group .btn {
+      flex: 1;
+    }
+
+    .history-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .history-thumb {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s, transform 0.2s;
+      object-fit: cover;
+      background: var(--canvas-bg);
+    }
+
+    .history-thumb:hover {
+      border-color: var(--accent);
+      transform: scale(1.05);
+    }
+
+    .history-empty {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 12px;
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        flex-direction: column;
+        padding: 8px;
+        gap: 8px;
+      }
+
+      .canvas-section {
+        flex: 0 0 70%;
+      }
+
+      .control-panel {
+        flex: 0 0 auto;
+        max-height: 30vh;
+      }
+
+      .app-title {
+        font-size: 20px;
+        margin-bottom: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="canvas-section">
+      <h1 class="app-title">拼贴梦境机</h1>
+      <div class="canvas-wrapper">
+        <canvas id="mainCanvas" width="800" height="800"></canvas>
+        <div class="loading-ring" id="loadingRing"></div>
+      </div>
+    </div>
+    <div class="control-panel" id="controlPanel"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
