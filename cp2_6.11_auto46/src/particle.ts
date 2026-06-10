@@ -59,41 +59,63 @@ class ObjectPool<T extends PooledParticle> {
   private pool: T[];
   private factory: () => T;
   private maxSize: number;
+  private freeStack: number[];
+  private activeCount: number;
 
   constructor(factory: () => T, initialSize: number, maxSize: number) {
     this.factory = factory;
     this.maxSize = maxSize;
     this.pool = [];
+    this.freeStack = [];
+    this.activeCount = 0;
     for (let i = 0; i < initialSize; i++) {
-      this.pool.push(this.factory());
+      const p = this.factory();
+      p.active = false;
+      this.pool.push(p);
+      this.freeStack.push(i);
     }
   }
 
   acquire(): T {
-    const particle = this.pool.find(p => !p.active) || this.createNew();
-    particle.active = true;
-    return particle;
-  }
-
-  private createNew(): T {
-    if (this.pool.length >= this.maxSize) {
-      const oldest = this.pool.find(p => p.active);
-      if (oldest) {
-        oldest.active = false;
-        return oldest;
+    let idx: number;
+    if (this.freeStack.length > 0) {
+      idx = this.freeStack.pop()!;
+    } else if (this.pool.length < this.maxSize) {
+      idx = this.pool.length;
+      const newP = this.factory();
+      newP.active = false;
+      this.pool.push(newP);
+    } else {
+      idx = -1;
+      for (let i = 0; i < this.pool.length; i++) {
+        if (!this.pool[i]!.active) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx === -1) {
+        idx = 0;
+        this.pool[idx]!.active = false;
       }
     }
-    const newParticle = this.factory();
-    this.pool.push(newParticle);
-    return newParticle;
+    const p = this.pool[idx]!;
+    p.active = true;
+    this.activeCount++;
+    return p;
   }
 
   release(particle: T): void {
+    if (!particle.active) return;
     particle.active = false;
+    const idx = this.pool.indexOf(particle);
+    if (idx !== -1) {
+      this.freeStack.push(idx);
+    }
+    this.activeCount--;
   }
 
-  getActive(): T[] {
-    return this.pool.filter(p => p.active);
+  getActiveCount(): number {
+    return this.activeCount;
   }
 
   getAll(): T[] {
@@ -101,7 +123,12 @@ class ObjectPool<T extends PooledParticle> {
   }
 
   clear(): void {
-    this.pool.forEach(p => p.active = false);
+    this.freeStack.length = 0;
+    for (let i = 0; i < this.pool.length; i++) {
+      this.pool[i]!.active = false;
+      this.freeStack.push(i);
+    }
+    this.activeCount = 0;
   }
 }
 
@@ -166,10 +193,38 @@ export class ParticleSystem {
     this.trailPool = new ObjectPool<TrailPoint>(createTrailPoint, 2000, 5000);
   }
 
-  get bullets(): Bullet[] { return this.bulletPool.getActive(); }
-  get fragments(): Fragment[] { return this.fragmentPool.getActive(); }
-  get shockwaves(): Shockwave[] { return this.shockwavePool.getActive(); }
-  get thrusters(): ThrusterParticle[] { return this.thrusterPool.getActive(); }
+  get bullets(): Bullet[] { 
+    const result: Bullet[] = [];
+    const all = this.bulletPool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      if (all[i]!.active) result.push(all[i]!);
+    }
+    return result;
+  }
+  get fragments(): Fragment[] {
+    const result: Fragment[] = [];
+    const all = this.fragmentPool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      if (all[i]!.active) result.push(all[i]!);
+    }
+    return result;
+  }
+  get shockwaves(): Shockwave[] {
+    const result: Shockwave[] = [];
+    const all = this.shockwavePool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      if (all[i]!.active) result.push(all[i]!);
+    }
+    return result;
+  }
+  get thrusters(): ThrusterParticle[] {
+    const result: ThrusterParticle[] = [];
+    const all = this.thrusterPool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      if (all[i]!.active) result.push(all[i]!);
+    }
+    return result;
+  }
 
   update(dt: number): void {
     this.updateBullets(dt);
@@ -179,13 +234,15 @@ export class ParticleSystem {
   }
 
   private updateBullets(dt: number): void {
-    const activeBullets = this.bulletPool.getActive();
-    for (const bullet of activeBullets) {
+    const allBullets = this.bulletPool.getAll();
+    for (let i = 0; i < allBullets.length; i++) {
+      const bullet = allBullets[i]!;
+      if (!bullet.active) continue;
+
       const trailPoint = this.trailPool.acquire();
       trailPoint.x = bullet.x;
       trailPoint.y = bullet.y;
       trailPoint.alpha = 0.7;
-      trailPoint.active = true;
       
       bullet.trail.unshift(trailPoint);
       if (bullet.trail.length > 10) {
@@ -209,8 +266,11 @@ export class ParticleSystem {
   }
 
   private updateFragments(dt: number): void {
-    const activeFragments = this.fragmentPool.getActive();
-    for (const frag of activeFragments) {
+    const all = this.fragmentPool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      const frag = all[i]!;
+      if (!frag.active) continue;
+
       frag.x += frag.vx * dt;
       frag.y += frag.vy * dt;
       frag.vx *= 0.98;
@@ -234,8 +294,11 @@ export class ParticleSystem {
   }
 
   private updateShockwaves(dt: number): void {
-    const activeShockwaves = this.shockwavePool.getActive();
-    for (const sw of activeShockwaves) {
+    const all = this.shockwavePool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      const sw = all[i]!;
+      if (!sw.active) continue;
+
       sw.life -= dt;
       sw.radius = sw.maxRadius * (1 - sw.life / sw.maxLife);
       
@@ -247,8 +310,11 @@ export class ParticleSystem {
   }
 
   private updateThrusters(dt: number): void {
-    const activeThrusters = this.thrusterPool.getActive();
-    for (const p of activeThrusters) {
+    const all = this.thrusterPool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      const p = all[i]!;
+      if (!p.active) continue;
+
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.life -= dt;
@@ -260,8 +326,8 @@ export class ParticleSystem {
   }
 
   private releaseBullet(bullet: Bullet): void {
-    for (const t of bullet.trail) {
-      this.trailPool.release(t);
+    for (let i = 0; i < bullet.trail.length; i++) {
+      this.trailPool.release(bullet.trail[i]!);
     }
     bullet.trail.length = 0;
     this.bulletPool.release(bullet);
@@ -275,11 +341,12 @@ export class ParticleSystem {
   }
 
   private renderShockwaves(ctx: CanvasRenderingContext2D): void {
-    const active = this.shockwavePool.getActive();
-    if (active.length === 0) return;
-    
+    const all = this.shockwavePool.getAll();
     ctx.lineWidth = 2;
-    for (const sw of active) {
+    for (let i = 0; i < all.length; i++) {
+      const sw = all[i]!;
+      if (!sw.active) continue;
+
       const alpha = sw.life / sw.maxLife;
       ctx.beginPath();
       ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
@@ -289,9 +356,11 @@ export class ParticleSystem {
   }
 
   private renderFragments(ctx: CanvasRenderingContext2D): void {
-    const active = this.fragmentPool.getActive();
-    for (const frag of active) {
-      if (frag.life <= 0) continue;
+    const all = this.fragmentPool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      const frag = all[i]!;
+      if (!frag.active || frag.life <= 0) continue;
+
       const alpha = frag.life / frag.maxLife;
       ctx.beginPath();
       ctx.arc(frag.x, frag.y, frag.radius, 0, Math.PI * 2);
@@ -301,12 +370,15 @@ export class ParticleSystem {
   }
 
   private renderBullets(ctx: CanvasRenderingContext2D): void {
-    const active = this.bulletPool.getActive();
+    const all = this.bulletPool.getAll();
     
-    for (const bullet of active) {
-      for (let i = bullet.trail.length - 1; i >= 0; i--) {
-        const t = bullet.trail[i]!;
-        const size = bullet.radius * (1 - i / bullet.trail.length * 0.5);
+    for (let i = 0; i < all.length; i++) {
+      const bullet = all[i]!;
+      if (!bullet.active) continue;
+
+      for (let j = bullet.trail.length - 1; j >= 0; j--) {
+        const t = bullet.trail[j]!;
+        const size = bullet.radius * (1 - j / bullet.trail.length * 0.5);
         ctx.beginPath();
         ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
         ctx.fillStyle = bullet.color + Math.floor(t.alpha * 255).toString(16).padStart(2, '0');
@@ -315,7 +387,10 @@ export class ParticleSystem {
     }
     
     ctx.shadowBlur = 8;
-    for (const bullet of active) {
+    for (let i = 0; i < all.length; i++) {
+      const bullet = all[i]!;
+      if (!bullet.active) continue;
+
       ctx.beginPath();
       ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
       ctx.fillStyle = bullet.color;
@@ -326,9 +401,11 @@ export class ParticleSystem {
   }
 
   private renderThrusters(ctx: CanvasRenderingContext2D): void {
-    const active = this.thrusterPool.getActive();
-    for (const p of active) {
-      if (p.life <= 0) continue;
+    const all = this.thrusterPool.getAll();
+    for (let i = 0; i < all.length; i++) {
+      const p = all[i]!;
+      if (!p.active || p.life <= 0) continue;
+
       const alpha = p.life / p.maxLife;
       const size = p.size * alpha;
       ctx.beginPath();
@@ -347,8 +424,8 @@ export class ParticleSystem {
     b.radius = data.radius;
     b.color = data.color;
     if (b.trail.length > 0) {
-      for (const t of b.trail) {
-        this.trailPool.release(t);
+      for (let i = 0; i < b.trail.length; i++) {
+        this.trailPool.release(b.trail[i]!);
       }
       b.trail.length = 0;
     }
@@ -358,7 +435,8 @@ export class ParticleSystem {
   }
 
   addFragments(fragments: Array<Omit<Fragment, 'active' | 'spawnedShockwave'>>): void {
-    for (const f of fragments) {
+    for (let i = 0; i < fragments.length; i++) {
+      const f = fragments[i]!;
       const frag = this.fragmentPool.acquire();
       frag.x = f.x;
       frag.y = f.y;
@@ -397,11 +475,15 @@ export class ParticleSystem {
   }
 
   checkBulletShockwaveCollisions(): void {
-    const activeShockwaves = this.shockwavePool.getActive();
-    const activeBullets = this.bulletPool.getActive();
+    const allShockwaves = this.shockwavePool.getAll();
+    const allBullets = this.bulletPool.getAll();
     
-    for (const sw of activeShockwaves) {
-      for (const bullet of activeBullets) {
+    for (let i = 0; i < allShockwaves.length; i++) {
+      const sw = allShockwaves[i]!;
+      if (!sw.active) continue;
+
+      for (let j = 0; j < allBullets.length; j++) {
+        const bullet = allBullets[j]!;
         if (!bullet.active) continue;
         if (sw.hitBullets.has(bullet.id)) continue;
         
@@ -430,14 +512,14 @@ export class ParticleSystem {
     const dx = bullet.x - enemyX;
     const dy = bullet.y - enemyY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    return dist <= enemyRadius + bullet.radius + 2;
+    return dist <= enemyRadius + bullet.radius;
   }
 
   checkBulletCoreCollision(bullet: Bullet, coreX: number, coreY: number, coreRadius: number): boolean {
     const dx = bullet.x - coreX;
     const dy = bullet.y - coreY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    return dist <= coreRadius + bullet.radius + 2;
+    return dist <= coreRadius + bullet.radius;
   }
 
   checkCircleRectCollision(
@@ -448,7 +530,7 @@ export class ParticleSystem {
     const closestY = Math.max(ry, Math.min(cy, ry + rh));
     const dx = cx - closestX;
     const dy = cy - closestY;
-    return (dx * dx + dy * dy) <= (cr + 2) * (cr + 2);
+    return (dx * dx + dy * dy) <= (cr * cr);
   }
 
   removeBullet(bullet: Bullet): void {
@@ -456,8 +538,10 @@ export class ParticleSystem {
   }
 
   getTotalParticles(): number {
-    return this.bullets.length + this.fragments.length + 
-           this.shockwaves.length + this.thrusters.length;
+    return this.bulletPool.getActiveCount() + 
+           this.fragmentPool.getActiveCount() + 
+           this.shockwavePool.getActiveCount() + 
+           this.thrusterPool.getActiveCount();
   }
 
   getMaxEnemies(): number {

@@ -20,7 +20,7 @@ export class Player {
   lastShotTime: number = 0;
   shotInterval: number = 0.2;
   energyRegenTimer: number = 0;
-  energyRegenInterval: number = 2;
+  energyRegenInterval: number = 0.2;
   lowEnergyFlashTimer: number = 0;
   lowEnergyThreshold: number = 20;
   chargeRingAngle: number = 0;
@@ -134,15 +134,15 @@ export class Player {
   }
 
   handleSpaceRelease(): boolean {
-    if (this.isCharging && this.chargeTime >= this.maxChargeTime) {
-      this.isCharging = false;
-      this.chargeTime = 0;
+    const wasCharging = this.isCharging;
+    const currentChargeTime = this.chargeTime;
+    this.isCharging = false;
+    this.chargeTime = 0;
+    if (wasCharging && currentChargeTime >= this.maxChargeTime - 0.05 && this.energy >= this.chargeCost) {
       this.energy = Math.max(0, this.energy - this.chargeCost);
       this.silentModeCooldown = 0.5;
       return true;
     }
-    this.isCharging = false;
-    this.chargeTime = 0;
     return false;
   }
 

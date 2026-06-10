@@ -6,4 +6,5 @@ if (!canvas) {
 }
 
 const game = new Game(canvas);
-game.init();
+(game as any).init();
+(window as any).__game = game;
