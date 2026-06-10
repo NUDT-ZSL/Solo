@@ -25,9 +25,8 @@ export class Renderer {
   bgCtx: CanvasRenderingContext2D;
   frostCanvas: HTMLCanvasElement;
   frostCtx: CanvasRenderingContext2D;
-  steleBodyCanvas: HTMLCanvasElement;
-  steleBodyCtx: CanvasRenderingContext2D;
-  lastSteleSize: { w: number; h: number; isGolden: boolean; goldenT: number } = { w: 0, h: 0, isGolden: false, goldenT: 0 };
+  frostCachedW: number = 0;
+  frostCachedH: number = 0;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -35,8 +34,6 @@ export class Renderer {
     this.bgCtx = this.bgCanvas.getContext('2d')!;
     this.frostCanvas = document.createElement('canvas');
     this.frostCtx = this.frostCanvas.getContext('2d')!;
-    this.steleBodyCanvas = document.createElement('canvas');
-    this.steleBodyCtx = this.steleBodyCanvas.getContext('2d')!;
     this.generateStars(150);
   }
 
@@ -227,10 +224,13 @@ export class Renderer {
       data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
     }
     fctx.putImageData(imageData, 0, 0);
+
+    this.frostCachedW = w;
+    this.frostCachedH = h;
   }
 
   private drawFrostedGlass(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    if (this.frostCanvas.width !== w || this.frostCanvas.height !== h) {
+    if (this.frostCachedW !== w || this.frostCachedH !== h) {
       this.generateFrostTexture(w, h);
     }
 
@@ -342,9 +342,7 @@ export class Renderer {
 
     const gradient = ctx.createLinearGradient(0, beam.bottomY, 0, beam.topY);
     gradient.addColorStop(0, `rgba(255, 255, 255, 0)`);
-    gradient.addColorStop(0.3, `rgba(255, 255, 255, ${opacity * 0.5})`);
-    gradient.addColorStop(0.7, `rgba(255, 255, 255, ${opacity * 0.3})`);
-    gradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+    gradient.addColorStop(1, `rgba(255, 255, 255, ${opacity * 0.5})`);
 
     ctx.save();
     ctx.fillStyle = gradient;
@@ -361,8 +359,7 @@ export class Renderer {
 
     const coreGradient = ctx.createLinearGradient(0, beam.bottomY, 0, beam.topY);
     coreGradient.addColorStop(0, `rgba(200, 230, 255, 0)`);
-    coreGradient.addColorStop(0.5, `rgba(200, 230, 255, ${opacity * 0.8})`);
-    coreGradient.addColorStop(1, `rgba(200, 230, 255, 0)`);
+    coreGradient.addColorStop(1, `rgba(200, 230, 255, ${opacity * 0.5})`);
 
     ctx.fillStyle = coreGradient;
     ctx.shadowBlur = 15;

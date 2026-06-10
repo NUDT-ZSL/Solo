@@ -41,8 +41,9 @@ export class RuneManager {
       const progress = (i + 1) / (count + 1);
       rune.lifeStage = 'floating';
       rune.lifeTime = progress * rune.floatDuration * 0.6;
-      rune.y = this.steleRect.y + this.steleRect.h - 20 - progress * (this.steleRect.h - 60);
-      rune.baseY = rune.y;
+      const currentY = rune.emergeTargetY - progress * (this.steleRect.h - 60);
+      rune.y = currentY;
+      rune.floatingStartY = currentY + rune.floatSpeed * rune.lifeTime;
       rune.brightness = 1;
     }
   }

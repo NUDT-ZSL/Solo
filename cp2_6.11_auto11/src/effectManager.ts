@@ -90,6 +90,8 @@ export class EffectManager {
   }
 
   addRandomCrack(): void {
+    const clamp01 = (v: number) => Math.max(0.05, Math.min(0.95, v));
+
     const side = Math.floor(Math.random() * 4);
     let startX: number, startY: number, angle: number;
 
@@ -116,12 +118,15 @@ export class EffectManager {
         break;
     }
 
+    startX = clamp01(startX);
+    startY = clamp01(startY);
+
     const length = 0.2 + Math.random() * 0.4;
     let endX = startX + Math.cos(angle) * length;
     let endY = startY + Math.sin(angle) * length;
 
-    endX = Math.max(0.05, Math.min(0.95, endX));
-    endY = Math.max(0.05, Math.min(0.95, endY));
+    endX = clamp01(endX);
+    endY = clamp01(endY);
 
     const segments: { x: number; y: number }[] = [];
     const segCount = 3 + Math.floor(Math.random() * 4);
@@ -132,10 +137,9 @@ export class EffectManager {
       const segLength = length / segCount;
       const prevX = i === 1 ? startX : segments[i - 2].x;
       const prevY = i === 1 ? startY : segments[i - 2].y;
-      segments.push({
-        x: prevX + Math.cos(currentAngle) * segLength,
-        y: prevY + Math.sin(currentAngle) * segLength,
-      });
+      const segX = clamp01(prevX + Math.cos(currentAngle) * segLength);
+      const segY = clamp01(prevY + Math.sin(currentAngle) * segLength);
+      segments.push({ x: segX, y: segY });
     }
 
     this.cracks.push({

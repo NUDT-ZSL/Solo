@@ -25,12 +25,15 @@ export class Rune {
   fadeDuration: number = 800;
   floatSpeed: number;
   activeGlowIntensity: number = 0;
-  baseY: number;
+  startY: number;
+  emergeTargetY: number;
+  floatingStartY: number = 0;
 
   constructor(config: RuneConfig) {
     this.x = config.x;
-    this.y = config.y;
-    this.baseY = config.y;
+    this.y = config.y + 30;
+    this.startY = config.y + 30;
+    this.emergeTargetY = config.y;
     this.char = config.char;
     this.size = config.size ?? 32;
     this.floatSpeed = config.floatSpeed ?? 0.02;
@@ -56,30 +59,38 @@ export class Rune {
     }
 
     switch (this.lifeStage) {
-      case 'emerging':
-        this.brightness = easeInOutCubic(Math.min(1, this.lifeTime / this.emergeDuration));
-        this.y = this.baseY + (1 - this.brightness) * 30;
+      case 'emerging': {
+        const rawT = Math.min(1, this.lifeTime / this.emergeDuration);
+        const easedT = easeInOutCubic(rawT);
+        this.brightness = easedT;
+        this.y = this.startY + (this.emergeTargetY - this.startY) * easedT;
         if (this.lifeTime >= this.emergeDuration) {
           this.lifeStage = 'floating';
           this.lifeTime = 0;
           this.brightness = 1;
+          this.y = this.emergeTargetY;
+          this.floatingStartY = this.emergeTargetY;
         }
         break;
+      }
 
-      case 'floating':
-        this.y -= this.floatSpeed * dt;
+      case 'floating': {
+        this.y = this.floatingStartY - this.floatSpeed * this.lifeTime;
         this.brightness = 1;
         if (this.lifeTime >= this.floatDuration) {
           this.fadeOut();
         }
         break;
+      }
 
-      case 'fading':
-        this.brightness = easeInOutCubic(Math.max(0, 1 - this.lifeTime / this.fadeDuration));
+      case 'fading': {
+        const rawT = Math.min(1, this.lifeTime / this.fadeDuration);
+        this.brightness = 1 - easeInOutCubic(rawT);
         if (this.lifeTime >= this.fadeDuration) {
           return false;
         }
         break;
+      }
     }
 
     return true;
