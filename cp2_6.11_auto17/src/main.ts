@@ -13,6 +13,7 @@ class App {
   private statusEl!: HTMLElement;
   private resonanceEl!: HTMLElement;
   private loadingEl!: HTMLElement;
+  private lastResonanceAt: Date | null = null;
 
   public async start(): Promise<void> {
     this.cacheDom();
@@ -78,12 +79,19 @@ class App {
   }
 
   private updateResonanceUI(time: Date | null): void {
-    if (!time) {
+    this.lastResonanceAt = time;
+    this.refreshResonanceDisplay();
+  }
+
+  private refreshResonanceDisplay(): void {
+    if (!this.lastResonanceAt) {
       this.resonanceEl.textContent = '--:--';
       return;
     }
-    const m = String(time.getMinutes()).padStart(2, '0');
-    const s = String(time.getSeconds()).padStart(2, '0');
+    const now = new Date();
+    const elapsed = Math.floor((now.getTime() - this.lastResonanceAt.getTime()) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const s = String(elapsed % 60).padStart(2, '0');
     this.resonanceEl.textContent = `${m}:${s}`;
   }
 
@@ -94,6 +102,7 @@ class App {
     const delta = Math.min(this.clock.getDelta(), 0.1);
     const elapsed = this.clock.getElapsedTime();
 
+    this.refreshResonanceDisplay();
     this.scene.update(delta, elapsed);
   };
 

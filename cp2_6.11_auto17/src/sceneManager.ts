@@ -13,6 +13,7 @@ export interface GlyphSymbol {
   group: THREE.Group;
   pathProgress: number;
   spawnDelay: number;
+  progressPerSecond: number;
   active: boolean;
   hovered: boolean;
   basePosition: THREE.Vector3;
@@ -157,26 +158,133 @@ export class SceneManager {
     canvas.height = 1024;
     const ctx = canvas.getContext('2d')!;
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, 1024);
-    gradient.addColorStop(0, '#6a6a75');
-    gradient.addColorStop(0.5, '#4a4a55');
-    gradient.addColorStop(1, '#5a5a65');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 512, 1024);
+    const W = 512, H = 1024;
 
-    for (let i = 0; i < 40; i++) {
-      ctx.strokeStyle = `rgba(30, 30, 40, ${Math.random() * 0.4 + 0.1})`;
-      ctx.lineWidth = Math.random() * 2 + 0.5;
-      ctx.beginPath();
-      let x = Math.random() * 512;
-      let y = Math.random() * 1024;
-      ctx.moveTo(x, y);
-      for (let j = 0; j < 5; j++) {
-        x += (Math.random() - 0.5) * 80;
-        y += (Math.random() - 0.5) * 80;
-        ctx.lineTo(x, y);
+    const gradient = ctx.createLinearGradient(0, 0, 0, H);
+    gradient.addColorStop(0, '#70707c');
+    gradient.addColorStop(0.4, '#52525e');
+    gradient.addColorStop(0.8, '#484855');
+    gradient.addColorStop(1, '#5c5c6a');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, W, H);
+
+    const noise2D = (x: number, y: number, seed: number): number => {
+      const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
+      return n - Math.floor(n);
+    };
+    const smoothNoise = (x: number, y: number, seed: number): number => {
+      const ix = Math.floor(x), iy = Math.floor(y);
+      const fx = x - ix, fy = y - iy;
+      const a = noise2D(ix, iy, seed);
+      const b = noise2D(ix + 1, iy, seed);
+      const c = noise2D(ix, iy + 1, seed);
+      const d = noise2D(ix + 1, iy + 1, seed);
+      const ux = fx * fx * (3 - 2 * fx);
+      const uy = fy * fy * (3 - 2 * fy);
+      return a * (1 - ux) * (1 - uy) + b * ux * (1 - uy) + c * (1 - ux) * uy + d * ux * uy;
+    };
+    const fbm = (x: number, y: number, seed: number, octaves = 5): number => {
+      let val = 0, amp = 1, freq = 1, sum = 0;
+      for (let i = 0; i < octaves; i++) {
+        val += smoothNoise(x * freq, y * freq, seed + i * 17) * amp;
+        sum += amp;
+        amp *= 0.5;
+        freq *= 2;
       }
-      ctx.stroke();
+      return val / sum;
+    };
+
+    const grainCanvas = document.createElement('canvas');
+    grainCanvas.width = W;
+    grainCanvas.height = H;
+    const gctx = grainCanvas.getContext('2d')!;
+    const grainImg = gctx.createImageData(W, H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const idx = (y * W + x) * 4;
+        const n = fbm(x / 40, y / 40, 1, 4);
+        const fine = fbm(x / 6, y / 6, 2, 3);
+        const shade = 70 + n * 50 + (fine - 0.5) * 30;
+        grainImg.data[idx] = shade;
+        grainImg.data[idx + 1] = shade;
+        grainImg.data[idx + 2] = shade * 1.02;
+        grainImg.data[idx + 3] = 255;
+      }
+    }
+    gctx.putImageData(grainImg, 0, 0);
+    ctx.drawImage(grainCanvas, 0, 0);
+
+    const crackSeeds: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < 14; i++) {
+      crackSeeds.push({
+        x: fbm(i * 0.7, 3.1, 10) * W,
+        y: fbm(i * 1.3, 7.7, 11) * H,
+      });
+    }
+
+    for (const seed of crackSeeds) {
+      const branchCount = 3 + Math.floor(fbm(seed.x, seed.y, 20) * 4);
+      for (let b = 0; b < branchCount; b++) {
+        const baseAngle = fbm(seed.x + b, seed.y * b, 30) * Math.PI * 2;
+        let cx = seed.x, cy = seed.y;
+        let angle = baseAngle;
+        const totalLen = 80 + fbm(seed.x * b, seed.y, 40) * 220;
+        const steps = Math.floor(totalLen / 3);
+
+        ctx.strokeStyle = `rgba(18, 18, 28, ${0.22 + fbm(seed.x, seed.y + b, 50) * 0.35})`;
+        ctx.lineWidth = 0.6 + fbm(seed.x, seed.y, 60) * 1.8;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+
+        for (let s = 0; s < steps; s++) {
+          angle += (fbm(cx / 30, cy / 30, b * 13 + 70) - 0.5) * 0.55;
+          const step = 2 + fbm(cx / 15, cy / 15, b * 7 + 80) * 3;
+          cx += Math.cos(angle) * step;
+          cy += Math.sin(angle) * step;
+          if (cx < 0 || cx >= W || cy < 0 || cy >= H) break;
+
+          if (fbm(cx / 8, cy / 8, b * 11 + 90) > 0.72 && s > 6) {
+            ctx.stroke();
+            const subAngle = angle + (fbm(cx, cy, 100) - 0.5) * 1.3;
+            ctx.strokeStyle = `rgba(18, 18, 28, 0.14)`;
+            ctx.lineWidth = 0.4;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            let sx = cx, sy = cy, sa = subAngle;
+            for (let k = 0; k < 15; k++) {
+              sa += (fbm(sx / 25, sy / 25, k + 110) - 0.5) * 0.4;
+              sx += Math.cos(sa) * 2;
+              sy += Math.sin(sa) * 2;
+              if (sx < 0 || sx >= W || sy < 0 || sy >= H) break;
+              ctx.lineTo(sx, sy);
+            }
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(18, 18, 28, ${0.22 + fbm(seed.x, seed.y + b, 50) * 0.35})`;
+            ctx.lineWidth = 0.6 + fbm(seed.x, seed.y, 60) * 1.8;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+          } else {
+            ctx.lineTo(cx, cy);
+          }
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.03 + fbm(seed.x, seed.y + b, 120) * 0.05})`;
+        ctx.lineWidth = 0.3;
+        ctx.beginPath();
+        ctx.moveTo(seed.x + 0.6, seed.y + 0.6);
+        let lx = seed.x + 0.6, ly = seed.y + 0.6;
+        let la = baseAngle;
+        for (let s = 0; s < Math.floor(totalLen / 6); s++) {
+          la += (fbm(lx / 32, ly / 32, b * 13 + 130) - 0.5) * 0.45;
+          lx += Math.cos(la) * 2.5;
+          ly += Math.sin(la) * 2.5;
+          if (lx < 0 || lx >= W || ly < 0 || ly >= H) break;
+          ctx.lineTo(lx, ly);
+        }
+        ctx.stroke();
+      }
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -390,12 +498,16 @@ export class SceneManager {
       points.push(new THREE.Vector3(endX, this.steleHeight * 0.5, 0.05));
 
       const curve = new THREE.CatmullRomCurve3(points);
+      const progressPerSecond = 1 / TIMING.SYMBOL_TRAVEL_SECONDS;
+      const spawnDelay = TIMING.SYMBOL_SPAWN_MIN +
+        Math.random() * (TIMING.SYMBOL_SPAWN_MAX - TIMING.SYMBOL_SPAWN_MIN);
 
       const symbol: GlyphSymbol = {
         id: i,
         group,
         pathProgress: 0,
-        spawnDelay: Math.random() * 3,
+        spawnDelay,
+        progressPerSecond,
         active: false,
         hovered: false,
         basePosition: new THREE.Vector3(),
@@ -409,14 +521,21 @@ export class SceneManager {
   }
 
   public spawnResonanceParticles(): void {
-    const colors = [0xff6b35, 0xffd93d, 0xff9f1c, 0xff4757, 0xffa502, 0xff6348];
+    const warmColors = [
+      0xff0000, 0xff1a1a, 0xff3333, 0xff4d4d,
+      0xff6b35, 0xff884d, 0xff9f1c, 0xffa502,
+      0xffb347, 0xffc04a, 0xffd93d, 0xffe066,
+      0xffeb3b, 0xfff176, 0xfff59d, 0xff4757,
+      0xff6b9d, 0xff8fab, 0xffc0cb, 0xffb6c1,
+      0xff6f61, 0xff7f50, 0xff6347, 0xff5c4a,
+    ];
 
     for (let i = 0; i < PARTICLES.RESONANCE_COUNT; i++) {
       if (this.particles.length >= PARTICLES.MAX_TOTAL) break;
 
       const size = (PARTICLES.MIN_SIZE + Math.random() * (PARTICLES.MAX_SIZE - PARTICLES.MIN_SIZE)) / 100;
       const geo = new THREE.SphereGeometry(size, 8, 8);
-      const color = colors[Math.floor(Math.random() * colors.length)];
+      const color = warmColors[Math.floor(Math.random() * warmColors.length)];
       const mat = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
@@ -607,7 +726,7 @@ export class SceneManager {
       }
 
       if (!symbol.active) {
-        symbol.pathProgress += delta * 0.15;
+        symbol.pathProgress += delta * symbol.progressPerSecond;
         if (symbol.pathProgress >= 1) {
           symbol.pathProgress = 0;
           symbol.spawnDelay = TIMING.SYMBOL_MIN_INTERVAL +
