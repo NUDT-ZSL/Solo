@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>云海幻境</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <canvas id="cloud-canvas"></canvas>
+
+  <div id="app-title">
+    <span class="title-text">云海幻境</span>
+    <span class="title-sub">CLOUD ILLUSION</span>
+  </div>
+
+  <div id="control-panel">
+    <div class="panel-header">
+      <span class="panel-title">参数控制</span>
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>风速</span>
+        <span class="slider-value" id="wind-value">0.0</span>
+      </div>
+      <div class="slider-track-wrapper">
+        <input type="range" id="wind-slider" min="-5" max="5" step="0.1" value="0">
+        <div class="slider-glow" id="wind-glow"></div>
+      </div>
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>湿度</span>
+        <span class="slider-value" id="humidity-value">50</span>
+      </div>
+      <div class="slider-track-wrapper">
+        <input type="range" id="humidity-slider" min="0" max="100" step="1" value="50">
+        <div class="slider-glow" id="humidity-glow"></div>
+      </div>
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>温度</span>
+        <span class="slider-value" id="temp-value">15°C</span>
+      </div>
+      <div class="slider-track-wrapper">
+        <input type="range" id="temp-slider" min="-10" max="40" step="1" value="15">
+        <div class="slider-glow" id="temp-glow"></div>
+      </div>
+    </div>
+    <button id="snapshot-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      记录快照
+    </button>
+  </div>
+
+  <div id="snapshot-list">
+    <div class="snapshot-header">快照记录</div>
+    <div class="snapshot-cards" id="snapshot-cards"></div>
+  </div>
+
+  <div id="particle-label">
+    <div class="label-coords" id="label-coords"></div>
+    <div class="label-density" id="label-density"></div>
+  </div>
+
+  <div id="fps-counter">FPS: --</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
