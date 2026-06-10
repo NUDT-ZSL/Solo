@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>星尘织衣</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body {
+    background: linear-gradient(135deg, #0B0C10 0%, #1F0B2E 100%);
+  }
+  #canvas-container {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  }
+  canvas { display: block; }
+
+  #panel {
+    position: fixed; bottom: 24px; right: 24px;
+    width: 320px; padding: 20px;
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    z-index: 10;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  #textInput {
+    width: 100%; min-height: 72px; max-height: 120px;
+    padding: 10px 12px; resize: vertical;
+    background: #1A1A1A; color: #fff;
+    border: 1px solid #4A4A4A; border-radius: 6px;
+    font-size: 14px; line-height: 1.5;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #textInput:focus { border-color: #66FCF1; }
+  #textInput::placeholder { color: #666; }
+
+  .btn-row { display: flex; gap: 8px; }
+  .btn {
+    flex: 1; padding: 10px 0;
+    border: none; border-radius: 6px;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; color: #fff;
+    transition: transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease;
+    position: relative; overflow: hidden;
+  }
+  .btn:active { transform: scale(0.95); }
+  .btn::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(255,255,255,0.1); opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .btn:hover::after { opacity: 1; }
+
+  #weaveBtn {
+    background: linear-gradient(135deg, #66FCF1, #FF4D6D);
+  }
+  #weaveBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 20px rgba(102,252,241,0.3);
+  }
+  #recordBtn {
+    background: #FF3B3B;
+  }
+  #recordBtn:hover { background: #CC0000; }
+  #recordBtn.recording {
+    animation: blink 0.5s ease-in-out 2;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  #playbackBtn {
+    background: #4D96FF;
+  }
+  #playbackBtn:hover { background: #2B6CB0; }
+
+  .options-row { display: flex; gap: 8px; align-items: center; }
+  #genderSelect {
+    flex: 1; padding: 6px 10px;
+    background: #1A1A1A; color: #ccc;
+    border: 1px solid #4A4A4A; border-radius: 6px;
+    font-size: 13px; outline: none;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  #modeIndicator {
+    text-align: center; font-size: 12px; color: rgba(255,255,255,0.5);
+    letter-spacing: 0.5px;
+  }
+
+  #recordingOverlay {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    display: none; align-items: center; gap: 8px;
+    padding: 8px 16px;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+    border-radius: 20px; z-index: 20;
+    font-size: 14px; color: #fff; font-weight: 600;
+  }
+  .rec-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #FF3B3B;
+    animation: pulse-dot 1s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  #modeToast {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    padding: 12px 28px;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+    border-radius: 8px; z-index: 15;
+    font-size: 18px; color: #fff; font-weight: 700;
+    letter-spacing: 2px;
+    opacity: 0; transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  #modeToast.show { opacity: 1; }
+
+  #loadingOverlay {
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, #0B0C10, #1F0B2E);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; transition: opacity 0.8s ease;
+  }
+  #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
+  .loading-text {
+    font-size: 24px; color: #66FCF1;
+    animation: load-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes load-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div id="loadingOverlay"><span class="loading-text">星尘织衣 · 加载中</span></div>
+<div id="canvas-container"></div>
+
+<div id="panel">
+  <textarea id="textInput" placeholder="输入文字或诗词（10-100字）" maxlength="100"></textarea>
+  <div class="btn-row">
+    <button id="weaveBtn" class="btn">织衣</button>
+    <button id="recordBtn" class="btn">录制</button>
+    <button id="playbackBtn" class="btn">回放</button>
+  </div>
+  <div class="options-row">
+    <select id="genderSelect">
+      <option value="male">男性比例</option>
+      <option value="female">女性比例</option>
+    </select>
+  </div>
+  <div id="modeIndicator">星尘斗篷 [1] &nbsp;|&nbsp; 流光长袍 [2] &nbsp;|&nbsp; 辉光铠甲 [3]</div>
+</div>
+
+<div id="recordingOverlay">
+  <span class="rec-dot"></span>
+  <span id="countdown">30</span>秒
+</div>
+<div id="modeToast"></div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
