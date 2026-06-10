@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import NoteCanvas from './NoteCanvas';
 import GraphView from './GraphView';
 import type { Note, MindMapNode, MindMapConnection } from './types';
@@ -17,6 +17,9 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
     fetch('/api/notes')
@@ -72,9 +75,10 @@ const App: React.FC = () => {
         setNotes(prev => prev.filter(n => n.id !== noteId));
         if (currentNote?.id === noteId) {
           const remaining = notes.filter(n => n.id !== noteId);
-          setCurrentNote(remaining.length > 0 ? null : null);
           if (remaining.length > 0) {
             loadNote(remaining[0].id);
+          } else {
+            setCurrentNote(null);
           }
         }
       })
@@ -121,19 +125,38 @@ const App: React.FC = () => {
     updateNote({ mindMapNodes: [...currentNote.mindMapNodes, newNode] });
   }, [currentNote, updateNote]);
 
+  const showToastMessage = useCallback((message: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToastMessage(message);
+    setShowToast(true);
+    setToastVisible(true);
+
+    toastTimerRef.current = setTimeout(() => {
+      setToastVisible(false);
+      setTimeout(() => {
+        setShowToast(false);
+      }, 500);
+    }, 3000);
+  }, []);
+
   const handleShare = useCallback(() => {
     if (!currentNote) return;
     fetch(`/api/notes/${currentNote.id}/share`, { method: 'POST' })
       .then(res => res.json())
       .then(data => {
         navigator.clipboard.writeText(data.shareUrl).then(() => {
-          setToastMessage('✅ 分享链接已复制到剪贴板!');
-          setShowToast(true);
-          setTimeout(() => setShowToast(false), 3000);
+          showToastMessage('✅ 分享链接已复制到剪贴板!');
+        }).catch(() => {
+          showToastMessage('⚠️ 请手动复制: ' + data.shareUrl);
         });
       })
-      .catch(err => console.error('生成分享链接失败:', err));
-  }, [currentNote]);
+      .catch(err => {
+        console.error('生成分享链接失败:', err);
+        showToastMessage('❌ 生成分享链接失败');
+      });
+  }, [currentNote, showToastMessage]);
 
   const filteredNotes = notes.filter(n =>
     n.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -141,13 +164,13 @@ const App: React.FC = () => {
 
   const highlightText = (text: string, query: string) => {
     if (!query.trim()) return text;
-    const regex = new RegExp(`(${query})`, 'gi');
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     const parts = text.split(regex);
     return parts.map((part, i) =>
       regex.test(part) ? (
-        <mark key={i} style={{ background: '#F1C40F', color: '#2C3E50', borderRadius: '2px', padding: '0 2px' }}>
+        <span key={i} className="app-search-highlight">
           {part}
-        </mark>
+        </span>
       ) : (
         part
       )
@@ -158,16 +181,342 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div style={styles.app}>
-      {showToast && <div style={styles.toast}>{toastMessage}</div>}
+    <div className="app-container">
+      <style>{`
+        * {
+          box-sizing: border-box;
+        }
+        .app-container {
+          display: flex;
+          width: 100%;
+          height: 100vh;
+          overflow: hidden;
+        }
 
-      <aside style={styles.sidebar}>
-        <div style={styles.sidebarHeader}>
-          <h1 style={styles.appTitle}>📝 织梦笔记</h1>
+        /* Toast 提示条 */
+        .app-toast {
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%) translateY(-20px);
+          background: linear-gradient(135deg, #2ECC71 0%, #27AE60 100%);
+          color: #FFFFFF;
+          padding: 12px 28px;
+          border-radius: 8px;
+          box-shadow: 0 4px 16px rgba(46, 204, 113, 0.4);
+          z-index: 9999;
+          font-weight: 500;
+          font-size: 14px;
+          opacity: 0;
+          transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+          pointer-events: none;
+        }
+        .app-toast.visible {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+
+        /* 侧栏 */
+        .app-sidebar {
+          width: 280px;
+          min-width: 280px;
+          background: rgba(44, 62, 80, 0.9);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border-right: 1px solid #BDC3C7;
+          display: flex;
+          flex-direction: column;
+          padding: 20px 16px;
+          gap: 16px;
+          overflow: hidden;
+        }
+        .app-sidebar-header {
+          padding-bottom: 12px;
+          border-bottom: 1px solid rgba(255,255,255,0.15);
+        }
+        .app-title {
+          font-size: 20px;
+          font-weight: 700;
+          color: #FFFFFF;
+          margin: 0;
+        }
+
+        /* 搜索框 */
+        .app-search-container {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+        .app-search-icon {
+          position: absolute;
+          left: 14px;
+          pointer-events: none;
+          color: #7F8C8D;
+        }
+        .app-search-input {
+          width: 260px;
+          padding: 10px 14px 10px 38px;
+          border-radius: 20px;
+          border: none;
+          background: #FFFFFF;
+          font-size: 13px;
+          color: #2C3E50;
+          outline: none;
+          transition: all 0.3s ease-out;
+        }
+        .app-search-input:focus {
+          box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
+        }
+        .app-search-highlight {
+          background: #F1C40F;
+          color: #2C3E50;
+          border-radius: 2px;
+          padding: 0 3px;
+          font-weight: 600;
+        }
+
+        /* 新建笔记按钮 */
+        .app-new-note-btn {
+          padding: 10px 16px;
+          border-radius: 8px;
+          border: none;
+          background: linear-gradient(135deg, #3498DB 0%, #2980B9 100%);
+          color: #FFFFFF;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.3s ease-out;
+        }
+        .app-new-note-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+        }
+        .app-new-note-btn:active {
+          transform: translateY(0);
+        }
+
+        /* 笔记列表 */
+        .app-note-list {
+          flex: 1;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding-right: 4px;
+        }
+        .app-note-list::-webkit-scrollbar {
+          width: 6px;
+        }
+        .app-note-list::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .app-note-list::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.2);
+          border-radius: 3px;
+        }
+        .app-empty-list {
+          text-align: center;
+          color: #95A5A6;
+          padding: 30px 20px;
+          font-size: 13px;
+        }
+
+        .app-note-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 14px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.3s ease-out;
+          color: #ECF0F1;
+        }
+        .app-note-item:hover {
+          background: linear-gradient(135deg, #34495E 0%, #2C3E50 100%);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .app-note-item.active {
+          background: linear-gradient(135deg, #34495E 0%, #2C3E50 100%);
+          color: #FFFFFF;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .app-note-item-content {
+          flex: 1;
+          min-width: 0;
+        }
+        .app-note-item-title {
+          font-size: 14px;
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .app-note-item-date {
+          font-size: 11px;
+          opacity: 0.6;
+          margin-top: 3px;
+        }
+        .app-delete-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          color: inherit;
+          opacity: 0;
+          cursor: pointer;
+          font-size: 18px;
+          line-height: 26px;
+          text-align: center;
+          padding: 0;
+          transition: all 0.3s ease-out;
+          flex-shrink: 0;
+          margin-left: 8px;
+        }
+        .app-note-item:hover .app-delete-btn {
+          opacity: 0.7;
+        }
+        .app-delete-btn:hover {
+          opacity: 1 !important;
+          background: rgba(231, 76, 60, 0.3) !important;
+          color: #E74C3C;
+        }
+
+        /* 主区域 */
+        .app-main-area {
+          flex: 1;
+          display: flex;
+          overflow: hidden;
+          min-width: 0;
+        }
+        .app-editor-panel {
+          flex: 2;
+          display: flex;
+          flex-direction: column;
+          border-right: 1px solid #BDC3C7;
+          overflow: hidden;
+          min-width: 0;
+          background: rgba(255,255,255,0.3);
+        }
+        .app-graph-panel {
+          flex: 1.5;
+          min-width: 0;
+          overflow: hidden;
+        }
+
+        /* 笔记头部 */
+        .app-note-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid #BDC3C7;
+          background: rgba(255,255,255,0.8);
+          gap: 12px;
+          flex-shrink: 0;
+        }
+        .app-note-title-input {
+          font-size: 20px;
+          font-weight: 600;
+          color: #2C3E50;
+          border: 1px solid transparent;
+          background: transparent;
+          outline: none;
+          flex: 1;
+          padding: 6px 10px;
+          border-radius: 6px;
+          transition: all 0.3s ease-out;
+          min-width: 0;
+        }
+        .app-note-title-input:hover,
+        .app-note-title-input:focus {
+          border-color: #BDC3C7;
+          background: #FFFFFF;
+        }
+
+        /* 分享按钮 */
+        .app-share-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: none;
+          background: linear-gradient(135deg, #2ECC71 0%, #27AE60 100%);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(46, 204, 113, 0.3);
+          transition: all 0.3s ease-out;
+          flex-shrink: 0;
+        }
+        .app-share-btn:hover {
+          transform: scale(1.1);
+          box-shadow: 0 4px 16px rgba(46, 204, 113, 0.5);
+        }
+        .app-share-btn:active {
+          transform: scale(0.95);
+        }
+
+        /* 空状态 */
+        .app-no-note {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .app-no-note-content {
+          text-align: center;
+        }
+
+        /* 响应式布局 */
+        @media (max-width: 768px) {
+          .app-container {
+            flex-direction: column;
+            height: auto;
+            min-height: 100vh;
+          }
+          .app-sidebar {
+            width: 100% !important;
+            min-width: 100% !important;
+            height: auto;
+            max-height: 250px;
+            border-right: none;
+            border-bottom: 1px solid #BDC3C7;
+          }
+          .app-search-input {
+            width: 100% !important;
+          }
+          .app-main-area {
+            flex-direction: column;
+            flex: 1;
+            height: auto;
+          }
+          .app-editor-panel {
+            border-right: none;
+            border-bottom: 1px solid #BDC3C7;
+            min-height: 60vh;
+          }
+          .app-graph-panel {
+            min-height: 500px;
+            height: 500px;
+          }
+        }
+      `}</style>
+
+      {showToast && (
+        <div className={`app-toast ${toastVisible ? 'visible' : ''}`}>
+          {toastMessage}
+        </div>
+      )}
+
+      <aside className="app-sidebar">
+        <div className="app-sidebar-header">
+          <h1 className="app-title">📝 织梦笔记</h1>
         </div>
 
-        <div style={styles.searchContainer}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7F8C8D" strokeWidth="2" style={styles.searchIcon}>
+        <div className="app-search-container">
+          <svg className="app-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
@@ -176,38 +525,41 @@ const App: React.FC = () => {
             placeholder="搜索笔记..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            style={styles.searchInput}
+            className="app-search-input"
           />
         </div>
 
-        <button style={styles.newNoteBtn} onClick={createNote}>
+        <button className="app-new-note-btn" onClick={createNote}>
           + 新建笔记
         </button>
 
-        <div style={styles.noteList}>
+        <div className="app-note-list">
           {filteredNotes.length === 0 ? (
-            <div style={styles.emptyList}>暂无笔记</div>
+            <div className="app-empty-list">
+              {searchQuery ? '没有找到匹配的笔记' : '暂无笔记'}
+            </div>
           ) : (
             filteredNotes.map(note => (
               <div
                 key={note.id}
-                style={{
-                  ...styles.noteItem,
-                  background: currentNote?.id === note.id
-                    ? 'linear-gradient(135deg, #34495E 0%, #2C3E50 100%)'
-                    : 'transparent',
-                  color: currentNote?.id === note.id ? '#FFFFFF' : '#ECF0F1',
-                }}
+                className={`app-note-item ${currentNote?.id === note.id ? 'active' : ''}`}
                 onClick={() => loadNote(note.id)}
               >
-                <div style={styles.noteItemContent}>
-                  <div style={styles.noteTitle}>{highlightText(note.title, searchQuery)}</div>
-                  <div style={styles.noteDate}>
-                    {new Date(note.updatedAt).toLocaleDateString('zh-CN')}
+                <div className="app-note-item-content">
+                  <div className="app-note-item-title">
+                    {highlightText(note.title, searchQuery)}
+                  </div>
+                  <div className="app-note-item-date">
+                    {new Date(note.updatedAt).toLocaleDateString('zh-CN', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </div>
                 </div>
                 <button
-                  style={styles.deleteBtn}
+                  className="app-delete-btn"
                   onClick={(e) => deleteNote(note.id, e)}
                   title="删除笔记"
                 >
@@ -219,18 +571,18 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      <main style={styles.mainArea}>
+      <main className="app-main-area">
         {currentNote ? (
           <>
-            <div style={styles.editorPanel}>
-              <div style={styles.noteHeader}>
+            <div className="app-editor-panel">
+              <div className="app-note-header">
                 <input
                   type="text"
                   value={currentNote.title}
                   onChange={e => updateNote({ title: e.target.value })}
-                  style={styles.noteTitleInput}
+                  className="app-note-title-input"
                 />
-                <button style={styles.shareBtn} onClick={handleShare} title="分享笔记">
+                <button className="app-share-btn" onClick={handleShare} title="分享笔记">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2">
                     <circle cx="18" cy="5" r="3" />
                     <circle cx="6" cy="12" r="3" />
@@ -248,7 +600,7 @@ const App: React.FC = () => {
               />
             </div>
 
-            <div style={styles.graphPanel}>
+            <div className="app-graph-panel">
               <GraphView
                 nodes={currentNote.mindMapNodes}
                 connections={currentNote.mindMapConnections}
@@ -259,8 +611,8 @@ const App: React.FC = () => {
             </div>
           </>
         ) : (
-          <div style={styles.noNote}>
-            <div style={styles.noNoteContent}>
+          <div className="app-no-note">
+            <div className="app-no-note-content">
               <div style={{ fontSize: '64px', marginBottom: '16px' }}>📚</div>
               <div style={{ fontSize: '18px', color: '#7F8C8D' }}>请选择或创建一篇笔记</div>
             </div>
@@ -269,195 +621,6 @@ const App: React.FC = () => {
       </main>
     </div>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  app: {
-    display: 'flex',
-    width: '100%',
-    height: '100vh',
-    overflow: 'hidden',
-  },
-  toast: {
-    position: 'fixed',
-    top: '20px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    background: 'linear-gradient(135deg, #2ECC71 0%, #27AE60 100%)',
-    color: '#FFFFFF',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(46, 204, 113, 0.4)',
-    zIndex: 9999,
-    animation: 'slideDown 0.3s ease-out',
-    fontWeight: 500,
-  },
-  sidebar: {
-    width: '280px',
-    minWidth: '280px',
-    background: 'rgba(44, 62, 80, 0.85)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    borderRight: '1px solid #BDC3C7',
-    display: 'flex',
-    flexDirection: 'column',
-    padding: '20px 16px',
-    gap: '16px',
-    overflow: 'hidden',
-  },
-  sidebarHeader: {
-    paddingBottom: '12px',
-    borderBottom: '1px solid rgba(255,255,255,0.1)',
-  },
-  appTitle: {
-    fontSize: '20px',
-    fontWeight: 700,
-    color: '#FFFFFF',
-    margin: 0,
-  },
-  searchContainer: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  searchIcon: {
-    position: 'absolute',
-    left: '14px',
-    pointerEvents: 'none',
-  },
-  searchInput: {
-    width: '260px',
-    padding: '10px 14px 10px 38px',
-    borderRadius: '20px',
-    border: 'none',
-    background: '#FFFFFF',
-    fontSize: '13px',
-    color: '#2C3E50',
-    outline: 'none',
-    transition: 'all 0.3s ease-out',
-  },
-  newNoteBtn: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    background: 'linear-gradient(135deg, #3498DB 0%, #2980B9 100%)',
-    color: '#FFFFFF',
-    fontSize: '14px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    transition: 'all 0.3s ease-out',
-  },
-  noteList: {
-    flex: 1,
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  emptyList: {
-    textAlign: 'center',
-    color: '#95A5A6',
-    padding: '20px',
-    fontSize: '13px',
-  },
-  noteItem: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 14px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease-out',
-  },
-  noteItemContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-  noteTitle: {
-    fontSize: '14px',
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  noteDate: {
-    fontSize: '11px',
-    opacity: 0.7,
-    marginTop: '2px',
-  },
-  deleteBtn: {
-    width: '24px',
-    height: '24px',
-    borderRadius: '50%',
-    border: 'none',
-    background: 'transparent',
-    color: 'inherit',
-    opacity: 0.5,
-    cursor: 'pointer',
-    fontSize: '16px',
-    lineHeight: '24px',
-    transition: 'all 0.3s ease-out',
-  },
-  mainArea: {
-    flex: 1,
-    display: 'flex',
-    overflow: 'hidden',
-  },
-  editorPanel: {
-    flex: 2,
-    display: 'flex',
-    flexDirection: 'column',
-    borderRight: '1px solid #BDC3C7',
-    overflow: 'hidden',
-    minWidth: 0,
-  },
-  graphPanel: {
-    flex: 1.5,
-    minWidth: 0,
-    overflow: 'hidden',
-  },
-  noteHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '16px 20px',
-    borderBottom: '1px solid #BDC3C7',
-    background: 'rgba(255,255,255,0.7)',
-  },
-  noteTitleInput: {
-    fontSize: '20px',
-    fontWeight: 600,
-    color: '#2C3E50',
-    border: 'none',
-    background: 'transparent',
-    outline: 'none',
-    flex: 1,
-    padding: '4px 8px',
-    borderRadius: '4px',
-    transition: 'all 0.3s ease-out',
-  },
-  shareBtn: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    border: 'none',
-    background: 'linear-gradient(135deg, #2ECC71 0%, #27AE60 100%)',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 2px 8px rgba(46, 204, 113, 0.3)',
-    transition: 'all 0.3s ease-out',
-  },
-  noNote: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noNoteContent: {
-    textAlign: 'center',
-  },
 };
 
 export default App;
