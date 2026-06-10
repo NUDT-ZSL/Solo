@@ -39,6 +39,7 @@ export class Timeline {
   timelineW = 0;
   NODE_SIZE = 40;
   NODE_SPACING = 80;
+  uiScale = 1;
 
   constructor() {
     this.currentYear = new Date().getFullYear();
@@ -58,12 +59,15 @@ export class Timeline {
     }
   }
 
-  updateLayout(viewportW: number, viewportH: number, isVertical: boolean): void {
+  updateLayout(viewportW: number, viewportH: number, isVertical: boolean, uiScale: number = 1): void {
     this.isVertical = isVertical;
+    this.uiScale = uiScale;
+    this.NODE_SIZE = 40 * uiScale;
+
     if (isVertical) {
-      this.timelineX = viewportW * 0.5 - 30;
+      this.timelineX = viewportW * 0.5 - 30 * uiScale;
       this.timelineY = 0;
-      this.timelineW = 60;
+      this.timelineW = 60 * uiScale;
       this.timelineH = viewportH * 0.7;
       this.NODE_SPACING = (viewportH * 0.7) / 22;
     } else {
@@ -109,15 +113,15 @@ export class Timeline {
       const y = this.timelineY;
       const h = this.timelineH;
       ctx.beginPath();
-      ctx.roundRect(x, y, 60, h, 16);
+      ctx.roundRect(x, y, this.timelineW, h, 16 * this.uiScale);
       ctx.fill();
       ctx.stroke();
       
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(x + 30, y + 20);
-      ctx.lineTo(x + 30, y + h - 20);
+      ctx.moveTo(x + this.timelineW / 2, y + 20 * this.uiScale);
+      ctx.lineTo(x + this.timelineW / 2, y + h - 20 * this.uiScale);
       ctx.stroke();
     } else {
       const y = this.timelineY;
@@ -140,6 +144,7 @@ export class Timeline {
 
   drawYearNodes(ctx: CanvasRenderingContext2D): void {
     const now = performance.now() / 1000;
+    const s = this.uiScale;
     
     for (const node of this.nodes) {
       const isPast = node.year < this.currentYear;
@@ -147,9 +152,9 @@ export class Timeline {
       const isCurrent = node.year === this.currentYear;
       
       const pulse = Math.sin(now * 2) * 0.3 + 0.7;
-      const baseGlow = isCurrent ? 25 : 15;
+      const glowRadius = this.NODE_SIZE;
       
-      const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, this.NODE_SIZE);
+      const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, glowRadius);
       
       if (isFuture) {
         gradient.addColorStop(0, `rgba(180, 200, 220, ${0.15 * pulse})`);
@@ -165,7 +170,7 @@ export class Timeline {
       
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(node.x, node.y, this.NODE_SIZE, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
       
       ctx.beginPath();
@@ -187,11 +192,12 @@ export class Timeline {
       ctx.stroke();
       
       ctx.save();
-      ctx.font = "300 13px 'Cormorant Garamond', serif";
+      const fontSize = 13 * s;
+      ctx.font = `300 ${fontSize}px 'Cormorant Garamond', serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      const textGradient = ctx.createLinearGradient(node.x - 20, node.y, node.x + 20, node.y);
+      const textGradient = ctx.createLinearGradient(node.x - 20 * s, node.y, node.x + 20 * s, node.y);
       if (isFuture) {
         textGradient.addColorStop(0, 'rgba(150, 170, 190, 0.6)');
         textGradient.addColorStop(1, 'rgba(180, 200, 220, 0.6)');
@@ -204,11 +210,7 @@ export class Timeline {
       }
       ctx.fillStyle = textGradient;
       
-      if (this.isVertical) {
-        ctx.fillText(String(node.year), node.x, node.y + this.NODE_SIZE / 2 + 12);
-      } else {
-        ctx.fillText(String(node.year), node.x, node.y + this.NODE_SIZE / 2 + 12);
-      }
+      ctx.fillText(String(node.year), node.x, node.y + this.NODE_SIZE / 2 + 12 * s);
       ctx.restore();
     }
   }
@@ -230,6 +232,7 @@ export class Timeline {
   }
 
   drawCollectedOnTimeline(ctx: CanvasRenderingContext2D): void {
+    const s = this.uiScale;
     for (const node of this.nodes) {
       if (node.collected.length === 0) continue;
       
@@ -239,19 +242,20 @@ export class Timeline {
         
         if (this.isVertical) {
           const side = i % 2 === 0 ? -1 : 1;
-          cx += side * (50 + Math.floor(i / 2) * 30);
-          cy += 80 + Math.floor(i / 2) * 60;
+          cx += side * (50 * s + Math.floor(i / 2) * 30 * s);
+          cy += 80 * s + Math.floor(i / 2) * 60 * s;
         } else {
           const above = i % 2 === 0 ? -1 : 1;
-          cy += above * (50 + Math.floor(i / 2) * 30);
-          cx += 80 + Math.floor(i / 2) * 60;
+          cy += above * (50 * s + Math.floor(i / 2) * 30 * s);
+          cx += 80 * s + Math.floor(i / 2) * 60 * s;
         }
         
         ctx.save();
         ctx.fillStyle = frag.color;
         ctx.shadowColor = frag.color;
-        ctx.shadowBlur = 8;
-        ctx.fillRect(cx - 6, cy - 6, 12, 12);
+        ctx.shadowBlur = 8 * s;
+        const size = 12 * s;
+        ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
         ctx.restore();
       });
     }
@@ -262,16 +266,16 @@ export class Timeline {
       x,
       y,
       radius: 0,
-      maxRadius: 120,
+      maxRadius: 120 * this.uiScale,
       alpha: 1,
       life: 0,
       maxLife: 72
     });
   }
 
-  update(): void {
+  update(dt: number = 1): void {
     this.ripples = this.ripples.filter(r => {
-      r.life++;
+      r.life += dt;
       return r.life < r.maxLife;
     });
   }
@@ -281,7 +285,7 @@ export class Timeline {
       const dx = x - node.x;
       const dy = y - node.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= this.NODE_SIZE / 2 + 5) {
+      if (dist <= this.NODE_SIZE / 2 + 5 * this.uiScale) {
         this.addRipple(node.x, node.y);
         return node;
       }
@@ -291,14 +295,24 @@ export class Timeline {
 
   openPopup(node: YearNode, viewportW: number, viewportH: number): FragmentPopup {
     const fragments = generateFragmentsForYear(node.year, 5);
+    const s = this.uiScale;
     let popupX: number, popupY: number;
+    const popupW = 500 * s;
+    const popupH = 250 * s;
     
     if (this.isVertical) {
-      popupX = node.x + 60;
-      popupY = Math.max(80, Math.min(viewportH - 280, node.y - 100));
+      popupX = node.x + 40 * s;
+      if (popupX + popupW > viewportW - 10 * s) {
+        popupX = node.x - popupW - 40 * s;
+      }
+      popupX = Math.max(10 * s, Math.min(viewportW - popupW - 10 * s, popupX));
+      popupY = Math.max(80 * s, Math.min(viewportH - popupH - 10 * s, node.y - popupH / 2));
     } else {
-      popupX = Math.max(20, Math.min(viewportW - 540, node.x - 260));
-      popupY = node.y + 70;
+      popupX = Math.max(20, Math.min(viewportW - popupW - 20, node.x - popupW / 2));
+      popupY = node.y + 70 * s;
+      if (popupY + popupH > viewportH - 20) {
+        popupY = node.y - popupH - 20 * s;
+      }
     }
     
     this.popup = {

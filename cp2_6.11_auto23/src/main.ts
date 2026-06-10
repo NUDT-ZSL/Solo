@@ -34,6 +34,8 @@ if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D
   };
 }
 
+const FRAME_DURATION = 1000 / 60;
+
 class Game {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -41,6 +43,7 @@ class Game {
   viewportH = 0;
   dpr = 1;
   isVertical = false;
+  uiScale = 1;
 
   timeline: Timeline;
   particles: Particle[] = [];
@@ -50,6 +53,9 @@ class Game {
   draggingFragment: PixelData | null = null;
   dragX = 0;
   dragY = 0;
+  dragStartX = 0;
+  dragStartY = 0;
+  hasDragged = false;
 
   collectZoneX = 0;
   collectZoneY = 0;
@@ -60,8 +66,12 @@ class Game {
   hoveredCard: CollectedCard | null = null;
   hoveredFragment: PixelData | null = null;
 
-  lastTime = 0;
+  lastFrameTime = 0;
+  accumulator = 0;
   animationId = 0;
+
+  cardWidth = 120;
+  cardHeight = 160;
 
   constructor() {
     this.canvas = document.getElementById('mainCanvas') as HTMLCanvasElement;
@@ -70,6 +80,16 @@ class Game {
     this.resize();
     this.bindEvents();
     this.loop = this.loop.bind(this);
+  }
+
+  getPointerPos(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = (this.canvas.width / this.dpr) / rect.width;
+    const scaleY = (this.canvas.height / this.dpr) / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
   }
 
   resize(): void {
@@ -86,54 +106,74 @@ class Game {
 
     this.isVertical = this.viewportW < 768;
 
-    if (this.isVertical) {
-      this.collectZoneX = this.viewportW * 0.05;
-      this.collectZoneY = this.viewportH * 0.75;
-      this.collectZoneW = this.viewportW * 0.9;
-      this.collectZoneH = this.viewportH * 0.2;
+    if (this.viewportW < 480) {
+      this.uiScale = 0.7;
+    } else if (this.viewportW < 768) {
+      this.uiScale = 0.85;
     } else {
-      this.collectZoneX = this.viewportW * 0.75;
-      this.collectZoneY = this.viewportH * 0.7;
-      this.collectZoneW = this.viewportW * 0.22;
-      this.collectZoneH = this.viewportH * 0.25;
+      this.uiScale = 1;
     }
 
-    this.timeline.updateLayout(this.viewportW, this.viewportH, this.isVertical);
+    this.cardWidth = 120 * this.uiScale;
+    this.cardHeight = 160 * this.uiScale;
+
+    if (this.isVertical) {
+      this.collectZoneX = this.viewportW * 0.05;
+      this.collectZoneY = this.viewportH * 0.72;
+      this.collectZoneW = this.viewportW * 0.9;
+      this.collectZoneH = this.viewportH * 0.26;
+    } else {
+      this.collectZoneX = this.viewportW * 0.75;
+      this.collectZoneY = this.viewportH * 0.68;
+      this.collectZoneW = this.viewportW * 0.22;
+      this.collectZoneH = this.viewportH * 0.28;
+    }
+
+    this.timeline.updateLayout(this.viewportW, this.viewportH, this.isVertical, this.uiScale);
     this.rearrangeCards();
   }
 
   rearrangeCards(): void {
-    const padding = 10;
-    const cardW = 120;
-    const cardH = 160;
-    const cols = Math.max(1, Math.floor((this.collectZoneW - padding * 2) / (cardW + padding)));
+    const padding = 10 * this.uiScale;
+    const cols = Math.max(1, Math.floor((this.collectZoneW - padding * 2) / (this.cardWidth + padding)));
 
     this.collectedCards.forEach((card, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      card.x = this.collectZoneX + padding + col * (cardW + padding);
-      card.y = this.collectZoneY + padding + row * (cardH + padding);
+      card.x = this.collectZoneX + padding + col * (this.cardWidth + padding);
+      card.y = this.collectZoneY + padding + row * (this.cardHeight + padding) + 30;
     });
   }
 
   bindEvents(): void {
     window.addEventListener('resize', () => this.resize());
 
-    this.canvas.addEventListener('mousedown', (e) => this.onPointerDown(e.clientX, e.clientY));
-    this.canvas.addEventListener('mousemove', (e) => this.onPointerMove(e.clientX, e.clientY));
-    this.canvas.addEventListener('mouseup', (e) => this.onPointerUp(e.clientX, e.clientY));
+    this.canvas.addEventListener('mousedown', (e) => {
+      const pos = this.getPointerPos(e.clientX, e.clientY);
+      this.onPointerDown(pos.x, pos.y);
+    });
+    this.canvas.addEventListener('mousemove', (e) => {
+      const pos = this.getPointerPos(e.clientX, e.clientY);
+      this.onPointerMove(pos.x, pos.y);
+    });
+    this.canvas.addEventListener('mouseup', (e) => {
+      const pos = this.getPointerPos(e.clientX, e.clientY);
+      this.onPointerUp(pos.x, pos.y);
+    });
     this.canvas.addEventListener('mouseleave', () => this.onPointerUp(-1, -1));
 
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const t = e.touches[0];
-      this.onPointerDown(t.clientX, t.clientY);
+      const pos = this.getPointerPos(t.clientX, t.clientY);
+      this.onPointerDown(pos.x, pos.y);
     }, { passive: false });
 
     this.canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
       const t = e.touches[0];
-      this.onPointerMove(t.clientX, t.clientY);
+      const pos = this.getPointerPos(t.clientX, t.clientY);
+      this.onPointerMove(pos.x, pos.y);
     }, { passive: false });
 
     this.canvas.addEventListener('touchend', (e) => {
@@ -149,8 +189,31 @@ class Game {
   }
 
   onPointerDown(x: number, y: number): void {
+    this.dragStartX = x;
+    this.dragStartY = y;
+    this.hasDragged = false;
+
     if (this.timeline.popup && this.timeline.popup.visible) {
+      console.log('[DEBUG] Pointer down at:', x, y);
+      console.log('[DEBUG] Popup at:', this.timeline.popup.x, this.timeline.popup.y);
+      console.log('[DEBUG] uiScale:', this.uiScale);
+      
+      const startX = this.timeline.popup.x + 20 * this.uiScale;
+      const startY = this.timeline.popup.y + 60 * this.uiScale;
+      const gap = 90 * this.uiScale;
+      const fragW = 64 * this.uiScale;
+      const fragH = 80 * this.uiScale;
+      
+      this.timeline.popup.fragments.forEach((f, i) => {
+        console.log(`[DEBUG] Fragment ${i}:`, 
+          startX + i * gap, startY, 
+          'to', startX + i * gap + fragW, startY + fragH,
+          f.title);
+      });
+      
       const frag = this.getFragmentAt(x, y, this.timeline.popup);
+      console.log('[DEBUG] Hit fragment:', frag ? frag.title : 'null');
+      
       if (frag) {
         this.draggingFragment = frag;
         this.dragX = x;
@@ -158,6 +221,7 @@ class Game {
         return;
       }
       if (!this.isPointInPopup(x, y, this.timeline.popup)) {
+        console.log('[DEBUG] Click outside popup, closing');
         this.timeline.closePopup();
       }
       return;
@@ -177,6 +241,12 @@ class Game {
     this.dragX = x;
     this.dragY = y;
 
+    const dx = x - this.dragStartX;
+    const dy = y - this.dragStartY;
+    if (Math.sqrt(dx * dx + dy * dy) > 5) {
+      this.hasDragged = true;
+    }
+
     this.collectZoneHover = this.isPointInCollectZone(x, y);
 
     this.hoveredFragment = null;
@@ -187,7 +257,7 @@ class Game {
     this.hoveredCard = null;
     for (const card of this.collectedCards) {
       card.hover = false;
-      if (x >= card.x && x <= card.x + 120 && y >= card.y && y <= card.y + 160) {
+      if (x >= card.x && x <= card.x + this.cardWidth && y >= card.y && y <= card.y + this.cardHeight) {
         this.hoveredCard = card;
         card.hover = true;
       }
@@ -202,8 +272,8 @@ class Game {
   }
 
   isPointInPopup(x: number, y: number, popup: FragmentPopup): boolean {
-    const w = 500;
-    const h = 250;
+    const w = 500 * this.uiScale;
+    const h = 250 * this.uiScale;
     return x >= popup.x && x <= popup.x + w && y >= popup.y && y <= popup.y + h;
   }
 
@@ -213,14 +283,16 @@ class Game {
   }
 
   getFragmentAt(x: number, y: number, popup: FragmentPopup): PixelData | null {
-    const startX = popup.x + 20;
-    const startY = popup.y + 60;
-    const gap = 90;
+    const startX = popup.x + 20 * this.uiScale;
+    const startY = popup.y + 60 * this.uiScale;
+    const gap = 90 * this.uiScale;
+    const fragW = 64 * this.uiScale;
+    const fragH = 80 * this.uiScale;
 
     for (let i = 0; i < popup.fragments.length; i++) {
       const fx = startX + i * gap;
       const fy = startY;
-      if (x >= fx && x <= fx + 64 && y >= fy && y <= fy + 80) {
+      if (x >= fx && x <= fx + fragW && y >= fy && y <= fy + fragH) {
         return popup.fragments[i];
       }
     }
@@ -234,18 +306,16 @@ class Game {
 
     this.timeline.addToTimeline(fragment);
 
-    const cardW = 120;
-    const cardH = 160;
-    const padding = 10;
-    const cols = Math.max(1, Math.floor((this.collectZoneW - padding * 2) / (cardW + padding)));
+    const padding = 10 * this.uiScale;
+    const cols = Math.max(1, Math.floor((this.collectZoneW - padding * 2) / (this.cardWidth + padding)));
     const idx = this.collectedCards.length;
     const col = idx % cols;
     const row = Math.floor(idx / cols);
 
     this.collectedCards.push({
       fragment,
-      x: this.collectZoneX + padding + col * (cardW + padding),
-      y: this.collectZoneY + padding + row * (cardH + padding),
+      x: this.collectZoneX + padding + col * (this.cardWidth + padding),
+      y: this.collectZoneY + padding + row * (this.cardHeight + padding) + 30,
       scale: 0,
       targetScale: 1,
       hover: false
@@ -254,45 +324,47 @@ class Game {
     this.floatingParticles = this.floatingParticles.filter(p => p.ownerId !== fragment.id);
   }
 
-  update(): void {
-    this.timeline.update();
+  update(deltaTime: number): void {
+    const dt = deltaTime / FRAME_DURATION;
+
+    this.timeline.update(dt);
 
     this.particles = this.particles.filter(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.05;
-      p.life++;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 0.05 * dt;
+      p.life += dt;
       return p.life < p.maxLife;
     });
 
-    this.updateFloatingParticles();
+    this.updateFloatingParticles(dt);
 
     for (const card of this.collectedCards) {
       const target = card.hover ? 1.05 : card.targetScale;
-      card.scale += (target - card.scale) * 0.15;
+      card.scale += (target - card.scale) * 0.15 * dt;
     }
   }
 
-  updateFloatingParticles(): void {
+  updateFloatingParticles(dt: number): void {
     if (!this.timeline.popup) return;
 
     const popup = this.timeline.popup;
-    const startX = popup.x + 20;
-    const startY = popup.y + 60;
-    const gap = 90;
+    const startX = popup.x + 20 * this.uiScale;
+    const startY = popup.y + 60 * this.uiScale;
+    const gap = 90 * this.uiScale;
 
     for (let i = 0; i < popup.fragments.length; i++) {
       const frag = popup.fragments[i];
-      const fx = startX + i * gap + 32;
-      const fy = startY + 32;
+      const fx = startX + i * gap + 32 * this.uiScale;
+      const fy = startY + 32 * this.uiScale;
 
       for (const p of this.floatingParticles) {
         if (p.ownerId !== frag.id) continue;
-        p.angle += 0.02;
-        p.x += Math.cos(p.angle) * 0.8 + (fx - p.x) * 0.02;
-        p.y += Math.sin(p.angle * 0.7) * 0.6 + (fy - p.y) * 0.02;
-        p.x += (Math.random() - 0.5) * 0.5;
-        p.y += (Math.random() - 0.5) * 0.5;
+        p.angle += 0.02 * dt;
+        p.x += (Math.cos(p.angle) * 0.8 + (fx - p.x) * 0.02) * dt;
+        p.y += (Math.sin(p.angle * 0.7) * 0.6 + (fy - p.y) * 0.02) * dt;
+        p.x += (Math.random() - 0.5) * 0.5 * dt;
+        p.y += (Math.random() - 0.5) * 0.5 * dt;
       }
     }
   }
@@ -335,14 +407,16 @@ class Game {
 
     this.ctx.shadowBlur = 0;
 
-    this.ctx.font = "300 16px 'Cormorant Garamond', serif";
+    const fontSize = 16 * this.uiScale;
+    this.ctx.font = `300 ${fontSize}px 'Cormorant Garamond', serif`;
     this.ctx.fillStyle = 'rgba(200, 230, 220, 0.7)';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('◆  收集区  ◆', this.collectZoneX + this.collectZoneW / 2, this.collectZoneY + 24);
+    this.ctx.fillText('◆  收集区  ◆', this.collectZoneX + this.collectZoneW / 2, this.collectZoneY + 24 * this.uiScale);
 
     if (this.collectedCards.length === 0) {
-      this.ctx.font = "300 13px 'Cormorant Garamond', serif";
+      const hintSize = 13 * this.uiScale;
+      this.ctx.font = `300 ${hintSize}px 'Cormorant Garamond', serif`;
       this.ctx.fillStyle = 'rgba(200, 230, 220, 0.4)';
       this.ctx.fillText('拖拽碎片至此处', this.collectZoneX + this.collectZoneW / 2, this.collectZoneY + this.collectZoneH / 2);
     }
@@ -351,8 +425,9 @@ class Game {
   }
 
   drawPopup(popup: FragmentPopup): void {
-    const w = 500;
-    const h = 250;
+    const w = 500 * this.uiScale;
+    const h = 250 * this.uiScale;
+    const s = this.uiScale;
 
     this.ctx.save();
 
@@ -362,28 +437,33 @@ class Game {
     this.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
     this.ctx.shadowBlur = 30;
     this.ctx.beginPath();
-    this.ctx.roundRect(popup.x, popup.y, w, h, 12);
+    this.ctx.roundRect(popup.x, popup.y, w, h, 12 * s);
     this.ctx.fill();
     this.ctx.stroke();
 
     this.ctx.shadowBlur = 0;
 
-    this.ctx.font = "400 22px 'Cormorant Garamond', serif";
-    const textGrad = this.ctx.createLinearGradient(popup.x, popup.y, popup.x + 100, popup.y);
+    const titleSize = 22 * s;
+    this.ctx.font = `400 ${titleSize}px 'Cormorant Garamond', serif`;
+    const textGrad = this.ctx.createLinearGradient(popup.x, popup.y, popup.x + 100 * s, popup.y);
     textGrad.addColorStop(0, 'rgba(240, 250, 255, 1)');
     textGrad.addColorStop(1, 'rgba(255, 230, 120, 1)');
     this.ctx.fillStyle = textGrad;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
-    this.ctx.fillText(`${popup.year} 年 · 文化裂隙`, popup.x + 20, popup.y + 18);
+    this.ctx.fillText(`${popup.year} 年 · 文化裂隙`, popup.x + 20 * s, popup.y + 18 * s);
 
-    this.ctx.font = "300 12px 'Cormorant Garamond', serif";
+    const subSize = 12 * s;
+    this.ctx.font = `300 ${subSize}px 'Cormorant Garamond', serif`;
     this.ctx.fillStyle = 'rgba(200, 220, 230, 0.5)';
-    this.ctx.fillText('点击并拖拽碎片至收集区', popup.x + 20, popup.y + 42);
+    this.ctx.fillText('点击并拖拽碎片至收集区', popup.x + 20 * s, popup.y + 42 * s);
 
-    const startX = popup.x + 20;
-    const startY = popup.y + 60;
-    const gap = 90;
+    const startX = popup.x + 20 * s;
+    const startY = popup.y + 60 * s;
+    const gap = 90 * s;
+    const fragW = 64 * s;
+    const fragH = 64 * s;
+    const iconPixelSize = 2 * s;
 
     popup.fragments.forEach((frag, i) => {
       const fx = startX + i * gap;
@@ -392,24 +472,27 @@ class Game {
       const scale = isHover ? 1.05 : 1;
 
       this.ctx.save();
-      this.ctx.translate(fx + 32, fy + 40);
+      this.ctx.translate(fx + fragW / 2, fy + fragH / 2 + 8 * s);
       this.ctx.scale(scale, scale);
-      this.ctx.translate(-32, -40);
+      this.ctx.translate(-fragW / 2, -(fragH / 2 + 8 * s));
 
       this.ctx.fillStyle = frag.color;
       this.ctx.shadowColor = frag.color;
       this.ctx.shadowBlur = isHover ? 15 : 8;
       this.ctx.beginPath();
-      this.ctx.roundRect(0, 0, 64, 64, 8);
+      this.ctx.roundRect(0, 0, fragW, fragH, 8 * s);
       this.ctx.fill();
       this.ctx.shadowBlur = 0;
 
-      drawPixelIcon(this.ctx, frag.icon, 16, 12, 2, 'rgba(255,255,255,0.95)');
+      const iconX = (fragW - 16 * iconPixelSize) / 2;
+      const iconY = (fragH - 16 * iconPixelSize) / 2;
+      drawPixelIcon(this.ctx, frag.icon, iconX, iconY, iconPixelSize, 'rgba(255,255,255,0.95)');
 
-      this.ctx.font = "300 11px 'Cormorant Garamond', serif";
+      const labelSize = 11 * s;
+      this.ctx.font = `300 ${labelSize}px 'Cormorant Garamond', serif`;
       this.ctx.fillStyle = 'rgba(240, 250, 255, 0.85)';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(frag.title.split(' ')[1], 32, 72);
+      this.ctx.fillText(frag.title.split(' ')[1], fragW / 2, fragH + 12 * s);
 
       this.ctx.restore();
     });
@@ -418,14 +501,19 @@ class Game {
   }
 
   drawCollectedCards(): void {
+    const s = this.uiScale;
+
     for (const card of this.collectedCards) {
-      const s = card.scale;
-      if (s < 0.01) continue;
+      const scale = card.scale;
+      if (scale < 0.01) continue;
+
+      const cw = this.cardWidth;
+      const ch = this.cardHeight;
 
       this.ctx.save();
-      this.ctx.translate(card.x + 60, card.y + 80);
-      this.ctx.scale(s, s);
-      this.ctx.translate(-60, -80);
+      this.ctx.translate(card.x + cw / 2, card.y + ch / 2);
+      this.ctx.scale(scale, scale);
+      this.ctx.translate(-cw / 2, -ch / 2);
 
       const shadowBlur = card.hover ? 20 : 10;
       this.ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
@@ -434,43 +522,66 @@ class Game {
       this.ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
       this.ctx.lineWidth = 1;
       this.ctx.beginPath();
-      this.ctx.roundRect(0, 0, 120, 160, 12);
+      this.ctx.roundRect(0, 0, cw, ch, 12 * s);
       this.ctx.fill();
       this.ctx.stroke();
 
       this.ctx.shadowBlur = 0;
 
+      const imgW = cw - 30 * s;
+      const imgH = ch * 0.4;
       this.ctx.fillStyle = card.fragment.color;
       this.ctx.beginPath();
-      this.ctx.roundRect(15, 15, 90, 70, 8);
+      this.ctx.roundRect(15 * s, 15 * s, imgW, imgH, 8 * s);
       this.ctx.fill();
 
-      drawPixelIcon(this.ctx, card.fragment.icon, 32, 24, 4, 'rgba(255,255,255,0.95)');
+      const iconPixel = 4 * s;
+      const iconX = (cw - 16 * iconPixel) / 2;
+      const iconY = 15 * s + (imgH - 16 * iconPixel) / 2;
+      drawPixelIcon(this.ctx, card.fragment.icon, iconX, iconY, iconPixel, 'rgba(255,255,255,0.95)');
 
-      this.ctx.font = "400 14px 'Cormorant Garamond', serif";
+      const yearSize = 14 * s;
+      this.ctx.font = `400 ${yearSize}px 'Cormorant Garamond', serif`;
       this.ctx.fillStyle = 'rgba(255, 240, 200, 1)';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'top';
-      this.ctx.fillText(`${card.fragment.year}`, 60, 95);
+      this.ctx.fillText(`${card.fragment.year}`, cw / 2, ch * 0.58);
 
-      this.ctx.font = "300 12px 'Cormorant Garamond', serif";
+      const typeSize = 12 * s;
+      this.ctx.font = `300 ${typeSize}px 'Cormorant Garamond', serif`;
       this.ctx.fillStyle = 'rgba(200, 220, 230, 0.8)';
-      this.ctx.fillText(card.fragment.title.split(' ')[1], 60, 115);
+      this.ctx.fillText(card.fragment.title.split(' ')[1], cw / 2, ch * 0.68);
 
       this.ctx.beginPath();
-      this.ctx.rect(12, 135, 96, 1);
+      this.ctx.rect(12 * s, ch * 0.82, cw - 24 * s, 1);
       this.ctx.fillStyle = 'rgba(212, 175, 55, 0.2)';
       this.ctx.fill();
 
-      this.ctx.font = "300 10px 'Cormorant Garamond', serif";
-      this.ctx.fillStyle = 'rgba(180, 200, 210, 0.6)';
+      // 滚动文字
       const text = card.fragment.description;
-      const scrollOffset = (performance.now() / 30) % (text.length * 8 + 120);
+      const scrollText = `${text}  ·  ${text}  ·  `;
+      const scrollSpeed = 40;
+      const textWidth = scrollText.length * 6 * s;
+      const scrollOffset = (performance.now() / 1000 * scrollSpeed) % (textWidth / 2);
+
+      const descSize = 10 * s;
+      this.ctx.font = `300 ${descSize}px 'Cormorant Garamond', serif`;
+      this.ctx.fillStyle = 'rgba(180, 200, 210, 0.6)';
+
       this.ctx.save();
       this.ctx.beginPath();
-      this.ctx.rect(12, 140, 96, 18);
+      this.ctx.rect(12 * s, ch * 0.85, cw - 24 * s, ch * 0.12);
       this.ctx.clip();
-      this.ctx.fillText(text, 60 - scrollOffset + 60, 143);
+
+      // 两端渐隐
+      const grad = this.ctx.createLinearGradient(12 * s, 0, cw - 12 * s, 0);
+      grad.addColorStop(0, 'rgba(180, 200, 210, 0)');
+      grad.addColorStop(0.15, 'rgba(180, 200, 210, 0.6)');
+      grad.addColorStop(0.85, 'rgba(180, 200, 210, 0.6)');
+      grad.addColorStop(1, 'rgba(180, 200, 210, 0)');
+      this.ctx.fillStyle = grad;
+
+      this.ctx.fillText(scrollText, cw / 2 - scrollOffset, ch * 0.86);
       this.ctx.restore();
 
       this.ctx.restore();
@@ -491,12 +602,13 @@ class Game {
   }
 
   drawFloatingParticles(): void {
+    const now = performance.now();
     for (const p of this.floatingParticles) {
       this.ctx.save();
-      this.ctx.globalAlpha = 0.6 + Math.sin(performance.now() / 300 + p.angle) * 0.3;
+      this.ctx.globalAlpha = 0.6 + Math.sin(now / 300 + p.angle) * 0.3;
       this.ctx.fillStyle = p.color;
       this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      this.ctx.arc(p.x, p.y, p.size * this.uiScale, 0, Math.PI * 2);
       this.ctx.fill();
       this.ctx.restore();
     }
@@ -505,31 +617,56 @@ class Game {
   drawDraggingFragment(): void {
     if (!this.draggingFragment) return;
     const f = this.draggingFragment;
+    const s = this.uiScale;
 
     this.ctx.save();
     this.ctx.globalAlpha = 0.85;
     this.ctx.translate(this.dragX, this.dragY);
 
+    const fragW = 64 * s;
+    const fragH = 64 * s;
     this.ctx.fillStyle = f.color;
     this.ctx.shadowColor = f.color;
     this.ctx.shadowBlur = 20;
     this.ctx.beginPath();
-    this.ctx.roundRect(-32, -32, 64, 64, 8);
+    this.ctx.roundRect(-fragW / 2, -fragH / 2, fragW, fragH, 8 * s);
     this.ctx.fill();
     this.ctx.shadowBlur = 0;
 
-    drawPixelIcon(this.ctx, f.icon, -16, -20, 2, 'rgba(255,255,255,0.95)');
+    const iconPixelSize = 2 * s;
+    const iconX = -8 * iconPixelSize;
+    const iconY = -8 * iconPixelSize;
+    drawPixelIcon(this.ctx, f.icon, iconX, iconY, iconPixelSize, 'rgba(255,255,255,0.95)');
 
     this.ctx.restore();
   }
 
   loop(time: number): void {
     this.animationId = requestAnimationFrame(this.loop);
-    this.update();
+
+    if (this.lastFrameTime === 0) {
+      this.lastFrameTime = time;
+    }
+
+    let deltaTime = time - this.lastFrameTime;
+    this.lastFrameTime = time;
+
+    if (deltaTime > 100) {
+      deltaTime = 100;
+    }
+
+    this.accumulator += deltaTime;
+
+    while (this.accumulator >= FRAME_DURATION) {
+      this.update(FRAME_DURATION);
+      this.accumulator -= FRAME_DURATION;
+    }
+
     this.draw();
   }
 
   start(): void {
+    this.lastFrameTime = 0;
     this.animationId = requestAnimationFrame(this.loop);
   }
 
