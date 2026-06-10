@@ -18,83 +18,44 @@ export interface Talisman {
   moveDuration: number;
 }
 
-export interface Position {
-  row: number;
-  col: number;
-}
+export interface Position { row: number; col: number; }
 
 export interface MatchGroup {
   element: ElementType;
   positions: Position[];
-  matchType: 'horizontal' | 'vertical' | 'lshape';
 }
 
-export interface LavaSpot {
-  x: number;
-  y: number;
-  life: number;
-  maxLife: number;
-}
-
-export interface IceEffect {
-  row: number;
-  col: number;
-  life: number;
-  maxLife: number;
-}
-
+export interface LavaSpot { x: number; y: number; life: number; maxLife: number; }
+export interface IceEffect { row: number; col: number; life: number; maxLife: number; }
 export interface StoneWall {
-  row: number;
-  col: number;
+  row: number; col: number;
   direction: 'horizontal' | 'vertical';
-  life: number;
-  maxLife: number;
+  life: number; maxLife: number;
   isCollapsing: boolean;
 }
-
 export interface ScorePopup {
-  x: number;
-  y: number;
-  score: number;
-  life: number;
-  maxLife: number;
+  x: number; y: number;
+  score: number; life: number; maxLife: number;
   isCombo: boolean;
 }
 
-export type AdjacencyKey = string;
-
 const ELEMENT_COLORS: Record<ElementType, string> = {
-  fire: '#FF4500',
-  water: '#00BFFF',
-  wind: '#32CD32',
-  earth: '#8B4513'
+  fire: '#FF4500', water: '#00BFFF', wind: '#32CD32', earth: '#8B4513'
 };
 
-const ELEMENT_NAMES: Record<ElementType, string> = {
-  fire: '火',
-  water: '水',
-  wind: '风',
-  earth: '土'
+const COUNTER_MAP: Record<ElementType, ElementType> = {
+  fire: 'wind', wind: 'earth', earth: 'water', water: 'fire'
 };
 
-const ELEMENT_COUNTER: Record<ElementType, ElementType> = {
-  fire: 'wind',
-  wind: 'earth',
-  earth: 'water',
-  water: 'fire'
-};
+const GRID = 7;
+const DURATION = 60;
+const BASE_PTS = 30;
+const EXTRA_PTS = 15;
+const LB_KEY = 'talisman_lb';
 
-const GRID_SIZE = 7;
-const GAME_DURATION = 60;
-const BASE_SCORE = 30;
-const BONUS_SCORE = 15;
-const LEADERBOARD_KEY = 'talisman_stack_leaderboard';
-
-function adjKey(r1: number, c1: number, r2: number, c2: number): AdjacencyKey {
-  if (r1 < r2 || (r1 === r2 && c1 < c2)) {
-    return `${r1},${c1}-${r2},${c2}`;
-  }
-  return `${r2},${c2}-${r1},${c1}`;
+function adjKey(r1: number, c1: number, r2: number, c2: number): string {
+  if (r1 < r2 || (r1 === r2 && c1 < c2)) return `${r1},${c1}|${r2},${c2}`;
+  return `${r2},${c2}|${r1},${c1}`;
 }
 
 export class GameState {
@@ -104,151 +65,127 @@ export class GameState {
   isGameOver: boolean;
   isPlaying: boolean;
   selectedTalisman: Talisman | null;
-  lastMatchedElement: ElementType | null;
+  lastMatchElement: ElementType | null;
   leaderboard: number[];
 
   lavaSpots: LavaSpot[];
   iceEffects: IceEffect[];
   stoneWalls: StoneWall[];
   scorePopups: ScorePopup[];
-  blockedAdjacencies: Set<AdjacencyKey>;
+  blockedAdj: Set<string>;
 
   private nextId: number;
-  private isResolving: boolean;
+  private resolving: boolean;
   private resolveTimer: number;
 
-  onScoreChange?: (score: number) => void;
   onGameOver?: (score: number) => void;
   onCombo?: () => void;
 
   constructor() {
     this.grid = [];
     this.score = 0;
-    this.timeLeft = GAME_DURATION;
+    this.timeLeft = DURATION;
     this.isGameOver = false;
     this.isPlaying = false;
     this.selectedTalisman = null;
-    this.lastMatchedElement = null;
-    this.leaderboard = this.loadLeaderboard();
-
+    this.lastMatchElement = null;
+    this.leaderboard = this._loadLB();
     this.lavaSpots = [];
     this.iceEffects = [];
     this.stoneWalls = [];
     this.scorePopups = [];
-    this.blockedAdjacencies = new Set();
-
+    this.blockedAdj = new Set();
     this.nextId = 1;
-    this.isResolving = false;
+    this.resolving = false;
     this.resolveTimer = 0;
-
-    this.initGrid();
+    this._initGrid();
   }
 
-  private initGrid(): void {
+  static isCounter(atk: ElementType, def: ElementType): boolean {
+    return COUNTER_MAP[atk] === def;
+  }
+
+  static counterMap(): Record<ElementType, ElementType> { return { ...COUNTER_MAP }; }
+  static get GRID() { return GRID; }
+  static get DURATION() { return DURATION; }
+  static get COLORS() { return { ...ELEMENT_COLORS }; }
+
+  private _initGrid(): void {
     this.grid = [];
-    for (let r = 0; r < GRID_SIZE; r++) {
+    for (let r = 0; r < GRID; r++) {
       this.grid[r] = [];
-      for (let c = 0; c < GRID_SIZE; c++) {
-        this.grid[r][c] = null;
-      }
+      for (let c = 0; c < GRID; c++) this.grid[r][c] = null;
     }
-
-    let attempts = 0;
+    let tries = 0;
     do {
-      for (let r = 0; r < GRID_SIZE; r++) {
-        for (let c = 0; c < GRID_SIZE; c++) {
-          this.grid[r][c] = this.createTalisman(r, c, true);
-        }
-      }
-      attempts++;
-    } while (this.findAllMatches().length > 0 && attempts < 100);
+      for (let r = 0; r < GRID; r++)
+        for (let c = 0; c < GRID; c++)
+          this.grid[r][c] = this._make(r, c, true);
+      tries++;
+    } while (this._findAllMatches().length > 0 && tries < 200);
   }
 
-  private createTalisman(row: number, col: number, initial: boolean = false): Talisman {
-    const elements: ElementType[] = ['fire', 'water', 'wind', 'earth'];
-    const element = elements[Math.floor(Math.random() * elements.length)];
-
+  private _make(row: number, col: number, initial: boolean): Talisman {
+    const els: ElementType[] = ['fire', 'water', 'wind', 'earth'];
+    const element = els[Math.floor(Math.random() * els.length)];
     return {
-      id: this.nextId++,
-      element,
-      row,
-      col,
-      isRemoving: false,
-      removeProgress: 0,
-      isNew: !initial,
-      newProgress: initial ? 1 : 0,
-      startRow: row,
-      startCol: col,
-      targetRow: row,
-      targetCol: col,
-      isMoving: false,
-      moveProgress: 0,
-      moveDuration: 0.3
+      id: this.nextId++, element, row, col,
+      isRemoving: false, removeProgress: 0,
+      isNew: !initial, newProgress: initial ? 1 : 0,
+      startRow: row, startCol: col,
+      targetRow: row, targetCol: col,
+      isMoving: false, moveProgress: 0, moveDuration: 0.3
     };
   }
 
   startGame(): void {
     this.score = 0;
-    this.timeLeft = GAME_DURATION;
+    this.timeLeft = DURATION;
     this.isGameOver = false;
     this.isPlaying = true;
     this.selectedTalisman = null;
-    this.lastMatchedElement = null;
+    this.lastMatchElement = null;
     this.lavaSpots = [];
     this.iceEffects = [];
     this.stoneWalls = [];
     this.scorePopups = [];
-    this.blockedAdjacencies = new Set();
+    this.blockedAdj = new Set();
     this.nextId = 1;
-    this.isResolving = false;
+    this.resolving = false;
     this.resolveTimer = 0;
-    this.initGrid();
+    this._initGrid();
   }
 
-  update(deltaTime: number): void {
+  update(dt: number): void {
     if (!this.isPlaying || this.isGameOver) return;
-
-    this.timeLeft -= deltaTime;
-    if (this.timeLeft <= 0) {
-      this.timeLeft = 0;
-      this.endGame();
-      return;
-    }
-
-    this.updateTalismans(deltaTime);
-    this.updateEffects(deltaTime);
-
-    if (this.isResolving) {
-      this.resolveTimer -= deltaTime;
-      if (this.resolveTimer <= 0) {
-        this.finishResolve();
-      }
+    this.timeLeft -= dt;
+    if (this.timeLeft <= 0) { this.timeLeft = 0; this._endGame(); return; }
+    this._updateTalismans(dt);
+    this._updateEffects(dt);
+    if (this.resolving) {
+      this.resolveTimer -= dt;
+      if (this.resolveTimer <= 0) this._finishResolve();
     } else {
-      this.checkAndResolveMatches();
+      this._tryResolve();
     }
   }
 
-  private updateTalismans(deltaTime: number): void {
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
+  private _updateTalismans(dt: number): void {
+    for (let r = 0; r < GRID; r++) {
+      for (let c = 0; c < GRID; c++) {
         const t = this.grid[r][c];
         if (!t) continue;
-
         if (t.isRemoving) {
-          t.removeProgress += deltaTime / 0.15;
-          if (t.removeProgress >= 1) {
-            this.grid[r][c] = null;
-          }
+          t.removeProgress += dt / 0.15;
+          if (t.removeProgress >= 1) this.grid[r][c] = null;
           continue;
         }
-
         if (t.isNew && t.newProgress < 1) {
-          t.newProgress = Math.min(1, t.newProgress + deltaTime / 0.3);
+          t.newProgress = Math.min(1, t.newProgress + dt / 0.3);
           if (t.newProgress >= 1) t.isNew = false;
         }
-
         if (t.isMoving) {
-          t.moveProgress += deltaTime / t.moveDuration;
+          t.moveProgress += dt / t.moveDuration;
           if (t.moveProgress >= 1) {
             t.moveProgress = 1;
             t.isMoving = false;
@@ -262,318 +199,151 @@ export class GameState {
     }
   }
 
-  private updateEffects(deltaTime: number): void {
-    this.lavaSpots = this.lavaSpots.filter(s => {
-      s.life -= deltaTime;
-      return s.life > 0;
-    });
-
-    this.iceEffects = this.iceEffects.filter(e => {
-      e.life -= deltaTime;
-      return e.life > 0;
-    });
-
-    const wallsToRemove: StoneWall[] = [];
+  private _updateEffects(dt: number): void {
+    this.lavaSpots = this.lavaSpots.filter(s => { s.life -= dt; return s.life > 0; });
+    this.iceEffects = this.iceEffects.filter(e => { e.life -= dt; return e.life > 0; });
+    const dead: StoneWall[] = [];
     this.stoneWalls = this.stoneWalls.filter(w => {
-      w.life -= deltaTime;
-      if (w.life <= 0.5 && !w.isCollapsing) {
-        w.isCollapsing = true;
-      }
-      if (w.life <= 0) {
-        wallsToRemove.push(w);
-        return false;
-      }
+      w.life -= dt;
+      if (w.life <= 0.5 && !w.isCollapsing) w.isCollapsing = true;
+      if (w.life <= 0) { dead.push(w); return false; }
       return true;
     });
-
-    for (const w of wallsToRemove) {
-      this.removeWallBlock(w);
-    }
-
-    this.scorePopups = this.scorePopups.filter(p => {
-      p.life -= deltaTime;
-      return p.life > 0;
-    });
+    for (const w of dead) this._removeWall(w);
+    this.scorePopups = this.scorePopups.filter(p => { p.life -= dt; return p.life > 0; });
   }
 
-  static isCounter(attackElement: ElementType, defenseElement: ElementType): boolean {
-    return ELEMENT_COUNTER[attackElement] === defenseElement;
-  }
-
-  static getCounterMap(): Record<ElementType, ElementType> {
-    return { ...ELEMENT_COUNTER };
-  }
-
-  static getElementName(e: ElementType): string {
-    return ELEMENT_NAMES[e];
-  }
-
-  private checkAndResolveMatches(): void {
-    const matches = this.findAllMatches();
-    if (matches.length === 0) return;
-
-    this.isResolving = true;
-    this.resolveTimer = 0.2;
-
-    const allPositions = new Set<string>();
-    for (const m of matches) {
-      for (const p of m.positions) {
-        allPositions.add(`${p.row},${p.col}`);
-      }
-    }
-
-    let totalScore = 0;
-    let hasCombo = false;
-
-    for (const m of matches) {
-      const count = m.positions.length;
-      let matchScore = BASE_SCORE + Math.max(0, count - 3) * BONUS_SCORE;
-
-      if (this.lastMatchedElement !== null &&
-          GameState.isCounter(m.element, this.lastMatchedElement)) {
-        matchScore *= 2;
-        hasCombo = true;
-      }
-
-      totalScore += matchScore;
-      this.lastMatchedElement = m.element;
-      this.triggerElementEffect(m);
-    }
-
-    this.score += totalScore;
-
-    const fm = matches[0];
-    const cp = fm.positions[Math.floor(fm.positions.length / 2)];
-    this.scorePopups.push({
-      x: cp.col,
-      y: cp.row,
-      score: totalScore,
-      life: 0.5,
-      maxLife: 0.5,
-      isCombo: hasCombo
-    });
-
-    if (hasCombo && this.onCombo) {
-      this.onCombo();
-    }
-
-    for (const key of allPositions) {
-      const [r, c] = key.split(',').map(Number);
-      const t = this.grid[r][c];
-      if (t && !t.isRemoving) {
-        t.isRemoving = true;
-        t.removeProgress = 0;
-      }
-    }
-  }
-
-  private finishResolve(): void {
-    this.dropTalismans();
-    this.fillEmptySpaces();
-    this.isResolving = false;
-  }
-
-  findAllMatches(): MatchGroup[] {
+  private _findAllMatches(): MatchGroup[] {
     const matches: MatchGroup[] = [];
-    const usedCells = new Set<string>();
-
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        if (usedCells.has(`${r},${c}`)) continue;
+    const used = new Set<string>();
+    for (let r = 0; r < GRID; r++) {
+      for (let c = 0; c < GRID; c++) {
         const t = this.grid[r][c];
         if (!t || t.isRemoving) continue;
-
-        const lineMatches = this.findLineMatches(r, c, t.element);
-        for (const lm of lineMatches) {
-          if (!this.hasAnyOverlap(usedCells, lm.positions)) {
-            this.markUsed(usedCells, lm.positions);
-            matches.push(lm);
+        if (used.has(`${r},${c}`)) continue;
+        const found = this._bfsFind(r, c, t.element);
+        for (const g of found) {
+          let hasNew = false;
+          for (const p of g.positions) {
+            if (!used.has(`${p.row},${p.col}`)) { hasNew = true; break; }
           }
+          if (!hasNew) continue;
+          for (const p of g.positions) used.add(`${p.row},${p.col}`);
+          matches.push(g);
         }
+      }
+    }
+    return matches;
+  }
 
-        if (!usedCells.has(`${r},${c}`)) {
-          const lmatches = this.findLShapedMatches(r, c, t.element);
-          for (const lm of lmatches) {
-            if (!this.hasAnyOverlap(usedCells, lm.positions)) {
-              this.markUsed(usedCells, lm.positions);
-              matches.push(lm);
-              break;
+  private _bfsFind(sr: number, sc: number, el: ElementType): MatchGroup[] {
+    const results: MatchGroup[] = [];
+    const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+    for (const [dr, dc] of dirs) {
+      const line: Position[] = [{ row: sr, col: sc }];
+      let r = sr + dr, c = sc + dc;
+      while (r >= 0 && r < GRID && c >= 0 && c < GRID && this._ok(r, c, el) && this._conn(r - dr, c - dc, r, c)) {
+        line.push({ row: r, col: c });
+        r += dr; c += dc;
+      }
+      if (line.length >= 3) results.push({ element: el, positions: [...line] });
+
+      for (let ti = 1; ti < line.length; ti++) {
+        const tp = line[ti];
+        const perpDr = dr === 0 ? 1 : 0;
+        const perpDc = dc === 0 ? 1 : 0;
+        for (const tdr of [perpDr, -perpDr]) {
+          for (const tdc of [perpDc, -perpDc]) {
+            if (tdr === 0 && tdc === 0) continue;
+            if (Math.abs(tdr) + Math.abs(tdc) !== 1) continue;
+            const lp: Position[] = [...line.slice(0, ti + 1)];
+            let lr = tp.row + tdr, lc = tp.col + tdc;
+            while (lr >= 0 && lr < GRID && lc >= 0 && lc < GRID && this._ok(lr, lc, el) && this._conn(lr - tdr, lc - tdc, lr, lc)) {
+              lp.push({ row: lr, col: lc });
+              lr += tdr; lc += tdc;
+            }
+            if (lp.length >= 3) {
+              const u = new Map<string, Position>();
+              for (const p of lp) u.set(`${p.row},${p.col}`, p);
+              const d = Array.from(u.values());
+              if (d.length >= 3) results.push({ element: el, positions: d });
             }
           }
         }
       }
     }
-
-    return matches;
-  }
-
-  private findLineMatches(row: number, col: number, element: ElementType): MatchGroup[] {
-    const results: MatchGroup[] = [];
-
-    const hPositions: Position[] = [{ row, col }];
-    for (let c = col + 1; c < GRID_SIZE; c++) {
-      if (!this.isMatchable(row, c, element)) break;
-      hPositions.push({ row, col: c });
-    }
-    for (let c = col - 1; c >= 0; c--) {
-      if (!this.isMatchable(row, c, element)) break;
-      hPositions.unshift({ row, col: c });
-    }
-    if (hPositions.length >= 3) {
-      results.push({ element, positions: hPositions, matchType: 'horizontal' });
-    }
-
-    const vPositions: Position[] = [{ row, col }];
-    for (let r = row + 1; r < GRID_SIZE; r++) {
-      if (!this.isMatchable(r, col, element)) break;
-      vPositions.push({ row: r, col });
-    }
-    for (let r = row - 1; r >= 0; r--) {
-      if (!this.isMatchable(r, col, element)) break;
-      vPositions.unshift({ row: r, col });
-    }
-    if (vPositions.length >= 3) {
-      results.push({ element, positions: vPositions, matchType: 'vertical' });
-    }
-
+    if (results.length > 1) results.sort((a, b) => b.positions.length - a.positions.length);
     return results;
   }
 
-  private findLShapedMatches(row: number, col: number, element: ElementType): MatchGroup[] {
-    const results: MatchGroup[] = [];
+  private _ok(r: number, c: number, el: ElementType): boolean {
+    const t = this.grid[r][c];
+    return t !== null && !t.isRemoving && t.element === el;
+  }
 
-    const right = this.countDirection(row, col, 0, 1, element);
-    const left = this.countDirection(row, col, 0, -1, element);
-    const down = this.countDirection(row, col, 1, 0, element);
-    const up = this.countDirection(row, col, -1, 0, element);
+  private _conn(r1: number, c1: number, r2: number, c2: number): boolean {
+    if (r1 < 0 || r1 >= GRID || c1 < 0 || c1 >= GRID) return false;
+    if (r2 < 0 || r2 >= GRID || c2 < 0 || c2 >= GRID) return false;
+    if (Math.abs(r1 - r2) + Math.abs(c1 - c2) !== 1) return false;
+    return !this.blockedAdj.has(adjKey(r1, c1, r2, c2));
+  }
 
-    if (right >= 1 && down >= 1) {
-      for (let r = 1; r <= right; r++) {
-        for (let d = 1; d <= down; d++) {
-          if (r + d + 1 >= 3) {
-            const positions: Position[] = [{ row, col }];
-            for (let i = 1; i <= r; i++) positions.push({ row, col: col + i });
-            for (let i = 1; i <= d; i++) positions.push({ row: row + i, col: col + r });
-            results.push({ element, positions, matchType: 'lshape' });
-          }
-        }
+  private _tryResolve(): void {
+    const matches = this._findAllMatches();
+    if (matches.length === 0) return;
+    this.resolving = true;
+    this.resolveTimer = 0.2;
+    const all = new Set<string>();
+    for (const m of matches) for (const p of m.positions) all.add(`${p.row},${p.col}`);
+    let total = 0;
+    let combo = false;
+    for (const m of matches) {
+      const n = m.positions.length;
+      let pts = BASE_PTS + Math.max(0, n - 3) * EXTRA_PTS;
+      if (this.lastMatchElement !== null && GameState.isCounter(m.element, this.lastMatchElement)) {
+        pts *= 2;
+        combo = true;
       }
+      total += pts;
+      this.lastMatchElement = m.element;
+      this._fx(m);
     }
-
-    if (right >= 1 && up >= 1) {
-      for (let r = 1; r <= right; r++) {
-        for (let u = 1; u <= up; u++) {
-          if (r + u + 1 >= 3) {
-            const positions: Position[] = [{ row, col }];
-            for (let i = 1; i <= r; i++) positions.push({ row, col: col + i });
-            for (let i = 1; i <= u; i++) positions.push({ row: row - i, col: col + r });
-            results.push({ element, positions, matchType: 'lshape' });
-          }
-        }
-      }
-    }
-
-    if (left >= 1 && down >= 1) {
-      for (let l = 1; l <= left; l++) {
-        for (let d = 1; d <= down; d++) {
-          if (l + d + 1 >= 3) {
-            const positions: Position[] = [{ row, col }];
-            for (let i = 1; i <= l; i++) positions.push({ row, col: col - i });
-            for (let i = 1; i <= d; i++) positions.push({ row: row + i, col: col - l });
-            results.push({ element, positions, matchType: 'lshape' });
-          }
-        }
-      }
-    }
-
-    if (left >= 1 && up >= 1) {
-      for (let l = 1; l <= left; l++) {
-        for (let u = 1; u <= up; u++) {
-          if (l + u + 1 >= 3) {
-            const positions: Position[] = [{ row, col }];
-            for (let i = 1; i <= l; i++) positions.push({ row, col: col - i });
-            for (let i = 1; i <= u; i++) positions.push({ row: row - i, col: col - l });
-            results.push({ element, positions, matchType: 'lshape' });
-          }
-        }
-      }
-    }
-
-    results.sort((a, b) => b.positions.length - a.positions.length);
-    return results;
-  }
-
-  private countDirection(row: number, col: number, dr: number, dc: number, element: ElementType): number {
-    let count = 0;
-    let r = row + dr;
-    let c = col + dc;
-    while (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
-      if (!this.isConnected(row, col, r, c)) break;
-      if (!this.isMatchable(r, c, element)) break;
-      count++;
-      r += dr;
-      c += dc;
-    }
-    return count;
-  }
-
-  private isMatchable(row: number, col: number, element: ElementType): boolean {
-    const t = this.grid[row][col];
-    return t !== null && !t.isRemoving && t.element === element;
-  }
-
-  isConnected(r1: number, c1: number, r2: number, c2: number): boolean {
-    if (r1 < 0 || r1 >= GRID_SIZE || c1 < 0 || c1 >= GRID_SIZE) return false;
-    if (r2 < 0 || r2 >= GRID_SIZE || c2 < 0 || c2 >= GRID_SIZE) return false;
-    const rd = Math.abs(r1 - r2);
-    const cd = Math.abs(c1 - c2);
-    if (rd + cd !== 1) return false;
-    return !this.blockedAdjacencies.has(adjKey(r1, c1, r2, c2));
-  }
-
-  private hasAnyOverlap(used: Set<string>, positions: Position[]): boolean {
-    for (const p of positions) {
-      if (used.has(`${p.row},${p.col}`)) return true;
-    }
-    return false;
-  }
-
-  private markUsed(used: Set<string>, positions: Position[]): void {
-    for (const p of positions) {
-      used.add(`${p.row},${p.col}`);
+    this.score += total;
+    const cp = matches[0].positions[Math.floor(matches[0].positions.length / 2)];
+    this.scorePopups.push({ x: cp.col, y: cp.row, score: total, life: 0.5, maxLife: 0.5, isCombo: combo });
+    if (combo && this.onCombo) this.onCombo();
+    for (const k of all) {
+      const [r, c] = k.split(',').map(Number);
+      const t = this.grid[r][c];
+      if (t && !t.isRemoving) { t.isRemoving = true; t.removeProgress = 0; }
     }
   }
 
-  private triggerElementEffect(match: MatchGroup): void {
-    switch (match.element) {
-      case 'fire': this.fireEffect(match); break;
-      case 'water': this.waterEffect(match); break;
-      case 'wind': this.windEffect(match); break;
-      case 'earth': this.earthEffect(match); break;
+  private _finishResolve(): void {
+    this._dropFill();
+    this.resolving = false;
+  }
+
+  private _fx(m: MatchGroup): void {
+    switch (m.element) {
+      case 'fire': this._fireFx(m); break;
+      case 'water': this._waterFx(m); break;
+      case 'wind': this._windFx(m); break;
+      case 'earth': this._earthFx(m); break;
     }
   }
 
-  private fireEffect(match: MatchGroup): void {
-    for (const p of match.positions) {
-      this.lavaSpots.push({
-        x: p.col,
-        y: p.row,
-        life: 1.2,
-        maxLife: 1.2
-      });
-    }
+  private _fireFx(m: MatchGroup): void {
+    for (const p of m.positions) this.lavaSpots.push({ x: p.col, y: p.row, life: 1.2, maxLife: 1.2 });
   }
 
-  private waterEffect(match: MatchGroup): void {
+  private _waterFx(m: MatchGroup): void {
     const adj = new Set<string>();
-    for (const p of match.positions) {
-      const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      for (const [dr, dc] of dirs) {
-        const nr = p.row + dr;
-        const nc = p.col + dc;
-        if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
-          adj.add(`${nr},${nc}`);
-        }
+    for (const p of m.positions) {
+      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr = p.row + dr, nc = p.col + dc;
+        if (nr >= 0 && nr < GRID && nc >= 0 && nc < GRID) adj.add(`${nr},${nc}`);
       }
     }
     for (const k of adj) {
@@ -582,161 +352,96 @@ export class GameState {
     }
   }
 
-  private windEffect(match: MatchGroup): void {
-    const center = match.positions[Math.floor(match.positions.length / 2)];
-    const dirs = [
-      { dr: -1, dc: 0 },
-      { dr: 1, dc: 0 },
-      { dr: 0, dc: -1 },
-      { dr: 0, dc: 1 }
-    ];
-
-    const plannedMoves: Array<{ from: Position; to: Position; t: Talisman }> = [];
-    const occupiedTargets = new Set<string>();
-
-    for (const d of dirs) {
-      for (let dist = 1; dist <= 2; dist++) {
-        const fr = center.row + d.dr * dist;
-        const fc = center.col + d.dc * dist;
-        if (fr < 0 || fr >= GRID_SIZE || fc < 0 || fc >= GRID_SIZE) break;
-
+  private _windFx(m: MatchGroup): void {
+    const ctr = m.positions[Math.floor(m.positions.length / 2)];
+    const moves: { from: Position; to: Position; t: Talisman }[] = [];
+    const taken = new Set<string>();
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      for (let d = 1; d <= 2; d++) {
+        const fr = ctr.row + dr * d, fc = ctr.col + dc * d;
+        if (fr < 0 || fr >= GRID || fc < 0 || fc >= GRID) break;
         const t = this.grid[fr][fc];
         if (!t || t.isRemoving || t.isMoving) continue;
-
-        const tr = center.row + d.dr * (dist - 1);
-        const tc = center.col + d.dc * (dist - 1);
-        if (tr < 0 || tr >= GRID_SIZE || tc < 0 || tc >= GRID_SIZE) break;
-
-        const targetKey = `${tr},${tc}`;
-        if (occupiedTargets.has(targetKey)) continue;
-
-        const occupyingTalisman = this.grid[tr][tc];
-        if (occupyingTalisman && !occupyingTalisman.isRemoving) continue;
-
-        plannedMoves.push({
-          from: { row: fr, col: fc },
-          to: { row: tr, col: tc },
-          t
-        });
-        occupiedTargets.add(targetKey);
+        const tr = ctr.row + dr * (d - 1), tc = ctr.col + dc * (d - 1);
+        if (tr < 0 || tr >= GRID || tc < 0 || tc >= GRID) break;
+        const tk = `${tr},${tc}`;
+        if (taken.has(tk)) continue;
+        const occ = this.grid[tr][tc];
+        if (occ && !occ.isRemoving) continue;
+        moves.push({ from: { row: fr, col: fc }, to: { row: tr, col: tc }, t });
+        taken.add(tk);
       }
     }
-
-    for (const m of plannedMoves) {
-      if (this.grid[m.from.row][m.from.col] === m.t) {
-        m.t.startRow = m.from.row;
-        m.t.startCol = m.from.col;
-        m.t.targetRow = m.to.row;
-        m.t.targetCol = m.to.col;
-        m.t.isMoving = true;
-        m.t.moveProgress = 0;
-        m.t.moveDuration = 0.5;
-
-        this.grid[m.to.row][m.to.col] = m.t;
-        this.grid[m.from.row][m.from.col] = null;
-      }
+    for (const mv of moves) {
+      if (this.grid[mv.from.row][mv.from.col] !== mv.t) continue;
+      mv.t.startRow = mv.from.row; mv.t.startCol = mv.from.col;
+      mv.t.targetRow = mv.to.row; mv.t.targetCol = mv.to.col;
+      mv.t.isMoving = true; mv.t.moveProgress = 0; mv.t.moveDuration = 0.5;
+      this.grid[mv.to.row][mv.to.col] = mv.t;
+      this.grid[mv.from.row][mv.from.col] = null;
     }
   }
 
-  private earthEffect(match: MatchGroup): void {
-    const dirs: Array<'horizontal' | 'vertical'> = ['horizontal', 'vertical'];
-
-    for (const p of match.positions) {
-      const dir = dirs[Math.floor(Math.random() * dirs.length)];
-      const wall: StoneWall = {
-        row: p.row,
-        col: p.col,
-        direction: dir,
-        life: 3,
-        maxLife: 3,
-        isCollapsing: false
-      };
-      this.stoneWalls.push(wall);
-      this.addWallBlock(wall);
+  private _earthFx(m: MatchGroup): void {
+    const ds: Array<'horizontal' | 'vertical'> = ['horizontal', 'vertical'];
+    for (const p of m.positions) {
+      const dir = ds[Math.floor(Math.random() * ds.length)];
+      const w: StoneWall = { row: p.row, col: p.col, direction: dir, life: 3, maxLife: 3, isCollapsing: false };
+      this.stoneWalls.push(w);
+      this._addWall(w);
     }
   }
 
-  private addWallBlock(wall: StoneWall): void {
-    const { row, col, direction } = wall;
+  private _addWall(w: StoneWall): void {
+    const { row, col, direction } = w;
     if (direction === 'horizontal') {
-      if (col - 1 >= 0) {
-        this.blockedAdjacencies.add(adjKey(row, col - 1, row, col));
-      }
-      if (col + 1 < GRID_SIZE) {
-        this.blockedAdjacencies.add(adjKey(row, col, row, col + 1));
-      }
+      if (col - 1 >= 0) this.blockedAdj.add(adjKey(row, col - 1, row, col));
+      if (col + 1 < GRID) this.blockedAdj.add(adjKey(row, col, row, col + 1));
     } else {
-      if (row - 1 >= 0) {
-        this.blockedAdjacencies.add(adjKey(row - 1, col, row, col));
-      }
-      if (row + 1 < GRID_SIZE) {
-        this.blockedAdjacencies.add(adjKey(row, col, row + 1, col));
-      }
+      if (row - 1 >= 0) this.blockedAdj.add(adjKey(row - 1, col, row, col));
+      if (row + 1 < GRID) this.blockedAdj.add(adjKey(row, col, row + 1, col));
     }
   }
 
-  private removeWallBlock(wall: StoneWall): void {
-    const { row, col, direction } = wall;
+  private _removeWall(w: StoneWall): void {
+    const { row, col, direction } = w;
     if (direction === 'horizontal') {
-      if (col - 1 >= 0) {
-        this.blockedAdjacencies.delete(adjKey(row, col - 1, row, col));
-      }
-      if (col + 1 < GRID_SIZE) {
-        this.blockedAdjacencies.delete(adjKey(row, col, row, col + 1));
-      }
+      if (col - 1 >= 0) this.blockedAdj.delete(adjKey(row, col - 1, row, col));
+      if (col + 1 < GRID) this.blockedAdj.delete(adjKey(row, col, row, col + 1));
     } else {
-      if (row - 1 >= 0) {
-        this.blockedAdjacencies.delete(adjKey(row - 1, col, row, col));
-      }
-      if (row + 1 < GRID_SIZE) {
-        this.blockedAdjacencies.delete(adjKey(row, col, row + 1, col));
-      }
+      if (row - 1 >= 0) this.blockedAdj.delete(adjKey(row - 1, col, row, col));
+      if (row + 1 < GRID) this.blockedAdj.delete(adjKey(row, col, row + 1, col));
     }
   }
 
-  private dropTalismans(): void {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      let writeRow = GRID_SIZE - 1;
-      for (let r = GRID_SIZE - 1; r >= 0; r--) {
+  private _dropFill(): void {
+    for (let c = 0; c < GRID; c++) {
+      let wr = GRID - 1;
+      for (let r = GRID - 1; r >= 0; r--) {
         const t = this.grid[r][c];
         if (t && !t.isRemoving) {
-          if (r !== writeRow) {
-            this.grid[writeRow][c] = t;
-            this.grid[r][c] = null;
-            t.startRow = r;
-            t.startCol = c;
-            t.targetRow = writeRow;
-            t.targetCol = c;
-            t.isMoving = true;
-            t.moveProgress = 0;
-            t.moveDuration = 0.3;
+          if (r !== wr) {
+            this.grid[wr][c] = t; this.grid[r][c] = null;
+            t.startRow = r; t.startCol = c;
+            t.targetRow = wr; t.targetCol = c;
+            t.isMoving = true; t.moveProgress = 0; t.moveDuration = 0.3;
           }
-          writeRow--;
+          wr--;
         }
       }
     }
-  }
-
-  private fillEmptySpaces(): void {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      let emptyCount = 0;
-      for (let r = 0; r < GRID_SIZE; r++) {
-        if (!this.grid[r][c]) emptyCount++;
-      }
+    for (let c = 0; c < GRID; c++) {
+      let emp = 0;
+      for (let r = 0; r < GRID; r++) if (!this.grid[r][c]) emp++;
       let idx = 0;
-      for (let r = 0; r < GRID_SIZE; r++) {
+      for (let r = 0; r < GRID; r++) {
         if (!this.grid[r][c]) {
-          const startR = -emptyCount + idx;
-          const t = this.createTalisman(startR, c);
-          t.startRow = startR;
-          t.startCol = c;
-          t.targetRow = r;
-          t.targetCol = c;
-          t.isMoving = true;
-          t.moveProgress = 0;
-          t.moveDuration = 0.4;
-          t.isNew = true;
-          t.newProgress = 0;
+          const sr = -emp + idx;
+          const t = this._make(sr, c, false);
+          t.startRow = sr; t.startCol = c;
+          t.targetRow = r; t.targetCol = c;
+          t.isMoving = true; t.moveProgress = 0; t.moveDuration = 0.4;
+          t.isNew = true; t.newProgress = 0;
           this.grid[r][c] = t;
           idx++;
         }
@@ -745,18 +450,13 @@ export class GameState {
   }
 
   selectTalisman(row: number, col: number): boolean {
-    if (!this.isPlaying || this.isGameOver || this.isResolving) return false;
-
+    if (!this.isPlaying || this.isGameOver || this.resolving) return false;
     const t = this.grid[row][col];
     if (!t || t.isRemoving || t.isMoving) return false;
-
     if (this.selectedTalisman) {
-      if (this.selectedTalisman.id === t.id) {
-        this.selectedTalisman = null;
-        return true;
-      }
-      if (this.isAdjacent(this.selectedTalisman, t)) {
-        this.swapTalismans(this.selectedTalisman, t);
+      if (this.selectedTalisman.id === t.id) { this.selectedTalisman = null; return true; }
+      if (this._adj(this.selectedTalisman, t)) {
+        this._swap(this.selectedTalisman, t);
         this.selectedTalisman = null;
         return true;
       }
@@ -767,71 +467,42 @@ export class GameState {
     return true;
   }
 
-  private isAdjacent(a: Talisman, b: Talisman): boolean {
-    const rd = Math.abs(a.row - b.row);
-    const cd = Math.abs(a.col - b.col);
-    return (rd === 1 && cd === 0) || (rd === 0 && cd === 1);
+  private _adj(a: Talisman, b: Talisman): boolean {
+    return (Math.abs(a.row - b.row) + Math.abs(a.col - b.col)) === 1;
   }
 
-  private swapTalismans(a: Talisman, b: Talisman): void {
-    const ra = a.row, ca = a.col;
-    const rb = b.row, cb = b.col;
-
-    this.grid[ra][ca] = b;
-    this.grid[rb][cb] = a;
-    a.row = rb; a.col = cb;
-    b.row = ra; b.col = ca;
-    a.startRow = rb; a.startCol = cb;
-    a.targetRow = rb; a.targetCol = cb;
-    b.startRow = ra; b.startCol = ca;
-    b.targetRow = ra; b.targetCol = ca;
-
-    const matches = this.findAllMatches();
-    if (matches.length === 0) {
-      this.grid[ra][ca] = a;
-      this.grid[rb][cb] = b;
-      a.row = ra; a.col = ca;
-      b.row = rb; b.col = cb;
-      a.startRow = ra; a.startCol = ca;
-      a.targetRow = ra; a.targetCol = ca;
-      b.startRow = rb; b.startCol = cb;
-      b.targetRow = rb; b.targetCol = cb;
+  private _swap(a: Talisman, b: Talisman): void {
+    const ra = a.row, ca = a.col, rb = b.row, cb = b.col;
+    this.grid[ra][ca] = b; this.grid[rb][cb] = a;
+    a.row = rb; a.col = cb; a.startRow = rb; a.startCol = cb; a.targetRow = rb; a.targetCol = cb;
+    b.row = ra; b.col = ca; b.startRow = ra; b.startCol = ca; b.targetRow = ra; b.targetCol = ca;
+    if (this._findAllMatches().length === 0) {
+      this.grid[ra][ca] = a; this.grid[rb][cb] = b;
+      a.row = ra; a.col = ca; a.startRow = ra; a.startCol = ca; a.targetRow = ra; a.targetCol = ca;
+      b.row = rb; b.col = cb; b.startRow = rb; b.startCol = cb; b.targetRow = rb; b.targetCol = cb;
     }
   }
 
-  private endGame(): void {
-    this.isGameOver = true;
-    this.isPlaying = false;
-    this.saveScore(this.score);
+  private _endGame(): void {
+    this.isGameOver = true; this.isPlaying = false;
+    this._saveLB(this.score);
     if (this.onGameOver) this.onGameOver(this.score);
   }
 
-  private loadLeaderboard(): number[] {
-    try {
-      const s = localStorage.getItem(LEADERBOARD_KEY);
-      if (s) return JSON.parse(s);
-    } catch (e) { /* ignore */ }
-    return [];
+  private _loadLB(): number[] {
+    try { const s = localStorage.getItem(LB_KEY); return s ? JSON.parse(s) : []; } catch { return []; }
   }
 
-  private saveScore(score: number): void {
+  private _saveLB(score: number): void {
     this.leaderboard.push(score);
-    this.leaderboard.sort((x, y) => y - x);
+    this.leaderboard.sort((a, b) => b - a);
     this.leaderboard = this.leaderboard.slice(0, 5);
-    try {
-      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(this.leaderboard));
-    } catch (e) { /* ignore */ }
+    try { localStorage.setItem(LB_KEY, JSON.stringify(this.leaderboard)); } catch { /* */ }
   }
 
   getRank(score: number): number {
     let rank = 1;
-    for (const s of this.leaderboard) {
-      if (score < s) rank++;
-    }
+    for (const s of this.leaderboard) if (score < s) rank++;
     return rank;
   }
-
-  static get GRID_SIZE(): number { return GRID_SIZE; }
-  static get GAME_DURATION(): number { return GAME_DURATION; }
-  static get ELEMENT_COLORS(): Record<ElementType, string> { return { ...ELEMENT_COLORS }; }
 }

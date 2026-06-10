@@ -1,188 +1,150 @@
 import { GameState } from './gameState';
 import { Renderer } from './renderer';
 
-const MAX_FRAME_TIME = 1000 / 30;
+const MAX_DT = 1 / 30;
 
 class Game {
-  private gameState: GameState;
-  private renderer: Renderer;
-  private lastFrameTime: number;
-  private rafId: number;
-  private running: boolean;
-  private fps: number;
-  private fpsFrames: number;
-  private fpsTimer: number;
+  private gs: GameState;
+  private ren: Renderer;
+  private prev: number;
+  private raf: number;
+  private on: boolean;
+  private fpsCnt: number;
+  private fpsAcc: number;
 
   constructor() {
-    const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-    if (!canvas) throw new Error('Canvas #game-canvas not found');
-
-    this.gameState = new GameState();
-    this.renderer = new Renderer(canvas, this.gameState);
-    this.lastFrameTime = 0;
-    this.rafId = 0;
-    this.running = false;
-    this.fps = 60;
-    this.fpsFrames = 0;
-    this.fpsTimer = 0;
-
-    this.bindEvents();
-    this.gameState.onGameOver = (score) => this.showGameOver(score);
+    const cvs = document.getElementById('game-canvas') as HTMLCanvasElement;
+    if (!cvs) throw new Error('no canvas');
+    this.gs = new GameState();
+    this.ren = new Renderer(cvs, this.gs);
+    this.prev = 0;
+    this.raf = 0;
+    this.on = false;
+    this.fpsCnt = 0;
+    this.fpsAcc = 0;
+    this._bind();
+    this.gs.onGameOver = (s) => this._showEnd(s);
   }
 
-  private bindEvents(): void {
-    const canvas = this.renderer.getCanvas();
+  private _bind(): void {
+    const cvs = this.ren.getCanvas();
 
-    canvas.addEventListener('click', (e) => {
-      const cell = this.renderer.getCellAtPosition(e.clientX, e.clientY);
-      if (cell) this.gameState.selectTalisman(cell.row, cell.col);
+    cvs.addEventListener('click', (e) => {
+      const c = this.ren.hitTest(e.clientX, e.clientY);
+      if (c) this.gs.selectTalisman(c.row, c.col);
     });
 
-    canvas.addEventListener('mousemove', (e) => {
-      const cell = this.renderer.getCellAtPosition(e.clientX, e.clientY);
-      if (cell) {
-        this.renderer.setHoveredCell(cell.row, cell.col);
-      } else {
-        this.renderer.setHoveredCell(null, null);
+    cvs.addEventListener('mousemove', (e) => {
+      const c = this.ren.hitTest(e.clientX, e.clientY);
+      this.ren.setHover(c ? c.row : null, c ? c.col : null);
+    });
+
+    cvs.addEventListener('mouseleave', () => this.ren.setHover(null, null));
+
+    let ds: { row: number; col: number } | null = null;
+    cvs.addEventListener('mousedown', (e) => {
+      const c = this.ren.hitTest(e.clientX, e.clientY);
+      if (c) ds = c;
+    });
+    cvs.addEventListener('mouseup', (e) => {
+      if (!ds) return;
+      const ec = this.ren.hitTest(e.clientX, e.clientY);
+      if (ec && (ec.row !== ds.row || ec.col !== ds.col)) {
+        this.gs.selectTalisman(ds.row, ds.col);
+        this.gs.selectTalisman(ec.row, ec.col);
       }
+      ds = null;
     });
 
-    canvas.addEventListener('mouseleave', () => {
-      this.renderer.setHoveredCell(null, null);
-    });
-
-    let dragStart: { row: number; col: number } | null = null;
-
-    canvas.addEventListener('mousedown', (e) => {
-      const cell = this.renderer.getCellAtPosition(e.clientX, e.clientY);
-      if (cell) dragStart = cell;
-    });
-
-    canvas.addEventListener('mouseup', (e) => {
-      if (!dragStart) return;
-      const endCell = this.renderer.getCellAtPosition(e.clientX, e.clientY);
-      if (endCell &&
-          (endCell.row !== dragStart.row || endCell.col !== dragStart.col)) {
-        this.gameState.selectTalisman(dragStart.row, dragStart.col);
-        this.gameState.selectTalisman(endCell.row, endCell.col);
-      }
-      dragStart = null;
-    });
-
-    const restart = document.getElementById('restart-btn');
-    if (restart) restart.addEventListener('click', () => this.restart());
-
-    const share = document.getElementById('share-btn');
-    if (share) share.addEventListener('click', () => this.share());
+    const rb = document.getElementById('restart-btn');
+    if (rb) rb.addEventListener('click', () => this._restart());
+    const sb = document.getElementById('share-btn');
+    if (sb) sb.addEventListener('click', () => this._share());
   }
 
   start(): void {
-    if (this.running) return;
-    this.running = true;
-    this.gameState.startGame();
-    this.lastFrameTime = performance.now();
-    this.loop();
+    if (this.on) return;
+    this.on = true;
+    this.gs.startGame();
+    this.prev = performance.now();
+    this._loop();
   }
 
-  private loop(): void {
-    if (!this.running) return;
-    this.rafId = requestAnimationFrame(() => this.loop());
-
+  private _loop(): void {
+    if (!this.on) return;
+    this.raf = requestAnimationFrame(() => this._loop());
     const now = performance.now();
-    let dt = (now - this.lastFrameTime) / 1000;
-    this.lastFrameTime = now;
-
-    if (dt > MAX_FRAME_TIME / 1000) dt = MAX_FRAME_TIME / 1000;
-
-    this.fpsFrames++;
-    this.fpsTimer += dt;
-    if (this.fpsTimer >= 1) {
-      this.fps = this.fpsFrames;
-      this.fpsFrames = 0;
-      this.fpsTimer = 0;
+    let dt = (now - this.prev) / 1000;
+    this.prev = now;
+    if (dt > MAX_DT) dt = MAX_DT;
+    this.fpsCnt++;
+    this.fpsAcc += dt;
+    if (this.fpsAcc >= 1) {
+      this.fpsCnt = 0;
+      this.fpsAcc = 0;
     }
-
-    this.gameState.update(dt);
-    this.renderer.update(dt);
-    this.renderer.render();
+    this.gs.update(dt);
+    this.ren.update(dt);
+    this.ren.render();
   }
 
-  private showGameOver(_score: number): void {
-    const modal = document.getElementById('game-over-modal');
-    const finalEl = document.getElementById('final-score');
-    const list = document.getElementById('leaderboard-list');
-
-    if (modal) modal.classList.remove('hidden');
-    if (finalEl) finalEl.textContent = String(this.gameState.score);
-    if (list) {
-      list.innerHTML = '';
-      const currentRank = this.gameState.getRank(this.gameState.score);
-      const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
-      let matchedCurrent = false;
-
-      this.gameState.leaderboard.forEach((s, idx) => {
-        const item = document.createElement('div');
-        item.className = 'leaderboard-item';
-        const isCurrent = !matchedCurrent && s === this.gameState.score && idx + 1 === currentRank;
-        if (isCurrent) {
-          item.classList.add('current');
-          matchedCurrent = true;
+  private _showEnd(_s: number): void {
+    const m = document.getElementById('game-over-modal');
+    const f = document.getElementById('final-score');
+    const l = document.getElementById('leaderboard-list');
+    if (m) m.classList.remove('hidden');
+    if (f) f.textContent = String(this.gs.score);
+    if (l) {
+      l.innerHTML = '';
+      const cr = this.gs.getRank(this.gs.score);
+      const md = ['🥇', '🥈', '🥉', '4.', '5.'];
+      let hit = false;
+      this.gs.leaderboard.forEach((s, i) => {
+        const d = document.createElement('div');
+        d.className = 'leaderboard-item';
+        if (!hit && s === this.gs.score && i + 1 === cr) {
+          d.classList.add('current');
+          hit = true;
         }
-        item.innerHTML = `<span>${medals[idx]} 第${idx + 1}名</span><span>${s}分</span>`;
-        list.appendChild(item);
+        d.innerHTML = `<span>${md[i]} 第${i + 1}名</span><span>${s}分</span>`;
+        l.appendChild(d);
       });
     }
   }
 
-  private restart(): void {
-    const modal = document.getElementById('game-over-modal');
-    if (modal) modal.classList.add('hidden');
-    this.gameState.startGame();
+  private _restart(): void {
+    const m = document.getElementById('game-over-modal');
+    if (m) m.classList.add('hidden');
+    this.gs.startGame();
   }
 
-  private async share(): Promise<void> {
-    const rank = this.gameState.getRank(this.gameState.score);
-    const text = `我在符咒叠塔中获得了${this.gameState.score}分，排名第${rank}！`;
+  private async _share(): Promise<void> {
+    const r = this.gs.getRank(this.gs.score);
+    const txt = `我在符咒叠塔中获得了${this.gs.score}分，排名第${r}！`;
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(txt);
       alert('成绩已复制到剪贴板！');
     } catch {
       const ta = document.createElement('textarea');
-      ta.value = text;
+      ta.value = txt;
       document.body.appendChild(ta);
       ta.select();
-      try {
-        document.execCommand('copy');
-        alert('成绩已复制到剪贴板！');
-      } catch {
-        alert('复制失败，请手动复制：' + text);
-      }
+      try { document.execCommand('copy'); alert('成绩已复制到剪贴板！'); }
+      catch { alert('复制失败：' + txt); }
       document.body.removeChild(ta);
     }
   }
 
-  destroy(): void {
-    this.running = false;
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-  }
-
-  getFPS(): number { return this.fps; }
+  destroy(): void { this.on = false; if (this.raf) cancelAnimationFrame(this.raf); }
 }
 
 let game: Game | null = null;
-
 function boot(): void {
   try {
     game = new Game();
     game.start();
     (window as any).game = game;
-  } catch (err) {
-    console.error('Failed to boot game:', err);
-  }
+  } catch (e) { console.error('boot fail:', e); }
 }
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot);
-} else {
-  boot();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
