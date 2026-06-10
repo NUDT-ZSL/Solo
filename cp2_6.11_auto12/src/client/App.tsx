@@ -269,7 +269,7 @@ const App: React.FC = () => {
               <label className="file-upload">
                 <input type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" onChange={handleAudioSelect} disabled={submitting} />
                 <div>📁 点击选择音频文件</div>
-                {audioFile && <div className="file-name">{audioFile.name} ({audioDuration.toFixed(1)}s</div>}
+                {audioFile && <div className="file-name">{audioFile.name} ({audioDuration.toFixed(1)}s)</div>}
               </label>
             </div>
 

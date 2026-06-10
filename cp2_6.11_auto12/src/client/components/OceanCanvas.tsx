@@ -7,6 +7,8 @@ interface OceanParticle {
   vx: number;
   vy: number;
   baseAlpha: number;
+  gridX: number;
+  gridY: number;
 }
 
 interface OceanCanvasProps {
@@ -14,39 +16,116 @@ interface OceanCanvasProps {
   onBottleClick: (bottle: Bottle, x: number, y: number) => void;
 }
 
+const GRID_COLS = 8;
+const GRID_ROWS = 6;
+const FPS = 30;
+const FRAME_INTERVAL = 1000 / FPS;
+
+function generateBaseField(w: number, h: number): { x: number; y: number }[][] {
+  const field: { x: number; y: number }[][] = [];
+  for (let r = 0; r < GRID_ROWS; r++) {
+    const row: { x: number; y: number }[] = [];
+    for (let c = 0; c < GRID_COLS; c++) {
+      const angle = (c / GRID_COLS) * Math.PI * 2 + (r / GRID_ROWS) * Math.PI;
+      row.push({
+        x: Math.cos(angle) * 0.5,
+        y: Math.sin(angle) * 0.5
+      });
+    }
+    field.push(row);
+  }
+  return field;
+}
+
+function bilinearSample(
+  px: number, py: number,
+  field: { x: number; y: number }[][],
+  w: number, h: number
+): { x: number; y: number } {
+  const gx = (px / w) * (GRID_COLS - 1);
+  const gy = (py / h) * (GRID_ROWS - 1);
+
+  const x0 = Math.floor(gx);
+  const y0 = Math.floor(gy);
+  const x1 = Math.min(GRID_COLS - 1, x0 + 1);
+  const y1 = Math.min(GRID_ROWS - 1, y0 + 1);
+
+  const fx = gx - x0;
+  const fy = gy - y0;
+
+  const v00 = field[y0][x0];
+  const v10 = field[y0][x1];
+  const v01 = field[y1][x0];
+  const v11 = field[y1][x1];
+
+  const topX = v00.x * (1 - fx) + v10.x * fx;
+  const topY = v00.y * (1 - fx) + v10.y * fx;
+  const botX = v01.x * (1 - fx) + v11.x * fx;
+  const botY = v01.y * (1 - fx) + v11.y * fx;
+
+  return {
+    x: topX * (1 - fy) + botX * fy,
+    y: topY * (1 - fy) + botY * fy
+  };
+}
+
 export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<OceanParticle[]>([]);
   const ripplesRef = useRef<Ripple[]>([]);
   const mouseRef = useRef({ x: -9999, y: -9999 });
   const hoveredBottleRef = useRef<string | null>(null);
   const animFrameRef = useRef<number>(0);
+  const lastFrameRef = useRef<number>(0);
+  const fieldRef = useRef<{ x: number; y: number }[][]>([]);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
 
   const initParticles = useCallback((w: number, h: number) => {
     const particles: OceanParticle[] = [];
     for (let i = 0; i < 200; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
       particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        baseAlpha: 0.2 + Math.random() * 0.3
+        x,
+        y,
+        vx: 0,
+        vy: 0,
+        baseAlpha: 0.2 + Math.random() * 0.3,
+        gridX: Math.floor((x / w) * GRID_COLS),
+        gridY: Math.floor((y / h) * GRID_ROWS)
       });
     }
     particlesRef.current = particles;
   }, []);
 
   useEffect(() => {
+    fieldRef.current = generateBaseField(size.w, size.h);
+  }, [size.w, size.h]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
     const onResize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      const rect = container.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
       setSize({ w, h });
       initParticles(w, h);
+      fieldRef.current = generateBaseField(w, h);
     };
+
     onResize();
+
+    const ro = new ResizeObserver(onResize);
+    ro.observe(container);
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', onResize);
+    };
   }, [initParticles]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -100,12 +179,20 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const render = () => {
+    const render = (time: number) => {
+      const delta = time - lastFrameRef.current;
+      if (delta < FRAME_INTERVAL) {
+        animFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
+      lastFrameRef.current = time - (delta % FRAME_INTERVAL);
+
       const w = size.w;
       const h = size.h;
       const mx = mouseRef.current.x;
       const my = mouseRef.current.y;
       const hoveredId = hoveredBottleRef.current;
+      const field = fieldRef.current;
 
       const grad = ctx.createLinearGradient(0, 0, 0, h);
       grad.addColorStop(0, '#003366');
@@ -114,8 +201,13 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
       ctx.fillRect(0, 0, w, h);
 
       for (const p of particlesRef.current) {
+        const vec = bilinearSample(p.x, p.y, field, w, h);
+        p.vx = p.vx * 0.9 + vec.x * 0.5;
+        p.vy = p.vy * 0.9 + vec.y * 0.5;
+
         p.x += p.vx;
         p.y += p.vy;
+
         if (p.x < 0) p.x += w;
         if (p.x > w) p.x -= w;
         if (p.y < 0) p.y += h;
@@ -125,7 +217,7 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
         const ddy = p.y - my;
         const dist = Math.sqrt(ddx * ddx + ddy * ddy);
         const influence = Math.max(0, 1 - dist / 200);
-        const alpha = p.baseAlpha + influence * 0.6;
+        const alpha = Math.min(0.8, p.baseAlpha + influence * 0.6);
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
@@ -151,7 +243,8 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
           for (let i = 1; i < b.trajectory.length; i++) {
             const prev = b.trajectory[i - 1];
             const cur = b.trajectory[i];
-            const alpha = (i / b.trajectory.length) * 0.6;
+            const t = i / b.trajectory.length;
+            const alpha = t * 0.6;
             ctx.beginPath();
             ctx.moveTo(prev.x, prev.y);
             ctx.lineTo(cur.x, cur.y);
@@ -202,7 +295,11 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
           const bx = b.x - tw / 2;
           const by = b.y - radius - 22;
           ctx.beginPath();
-          ctx.roundRect(bx, by, tw, 18, 6);
+          if (ctx.roundRect) {
+            ctx.roundRect(bx, by, tw, 18, 6);
+          } else {
+            ctx.rect(bx, by, tw, 18);
+          }
           ctx.fill();
           ctx.fillStyle = '#fff';
           ctx.fillText(label, b.x, by + 13);
@@ -217,14 +314,16 @@ export const OceanCanvas: React.FC<OceanCanvasProps> = ({ bottles, onBottleClick
   }, [size, bottles]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={size.w}
-      height={size.h}
-      className="canvas-container"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-    />
+    <div ref={containerRef} className="canvas-container">
+      <canvas
+        ref={canvasRef}
+        width={size.w}
+        height={size.h}
+        style={{ width: '100%', height: '100%', display: 'block' }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+      />
+    </div>
   );
 };

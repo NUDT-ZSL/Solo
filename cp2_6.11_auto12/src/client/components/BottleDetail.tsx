@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Bottle } from '../../shared/types';
 
 interface BottleDetailProps {
@@ -19,8 +19,12 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
   const [isClosing, setIsClosing] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [isCollected, setIsCollected] = useState(bottle.collected);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const clipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const loadPromiseRef = useRef<Promise<void> | null>(null);
 
   const formatDate = (ts: number) => {
     const d = new Date(ts);
@@ -38,34 +42,111 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
     setIsCollected(bottle.collected);
   }, [bottle.collected]);
 
+  const loadAudioBuffer = useCallback(async (): Promise<AudioBuffer | null> => {
+    if (audioBufferRef.current) return audioBufferRef.current;
+    if (loadPromiseRef.current) {
+      await loadPromiseRef.current;
+      return audioBufferRef.current;
+    }
+
+    loadPromiseRef.current = (async () => {
+      try {
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        const ctx = audioCtxRef.current;
+        const response = await fetch(bottle.audioData);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        audioBufferRef.current = audioBuffer;
+      } catch (e) {
+        console.error('Failed to decode audio:', e);
+      }
+      loadPromiseRef.current = null;
+    })();
+
+    await loadPromiseRef.current;
+    return audioBufferRef.current;
+  }, [bottle.audioData]);
+
+  const playClip = useCallback(async (startPercent?: number, duration?: number) => {
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
+      const buffer = await loadAudioBuffer();
+      if (!buffer) return;
+
+      if (sourceRef.current) {
+        try { sourceRef.current.stop(); } catch (e) {}
+        sourceRef.current = null;
+      }
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volume;
+
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      sourceRef.current = source;
+      gainNodeRef.current = gainNode;
+
+      let startTime = 0;
+      let clipDuration = buffer.duration;
+
+      if (!isCollected && startPercent !== undefined && duration !== undefined) {
+        startTime = startPercent * Math.max(0, buffer.duration - duration);
+        clipDuration = duration;
+      }
+
+      source.onended = () => {
+        setIsPlaying(false);
+        sourceRef.current = null;
+      };
+
+      source.start(0, startTime, clipDuration);
+      setIsPlaying(true);
+    } catch (e) {
+      console.error('Playback error:', e);
+    }
+  }, [volume, isCollected, loadAudioBuffer]);
+
+  const stopPlayback = useCallback(() => {
+    if (sourceRef.current) {
+      try { sourceRef.current.stop(); } catch (e) {}
+      sourceRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
+
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.volume = volume;
-
-    if (!bottle.collected && !isCollected) {
-      const clipDuration = 1000 + Math.random() * 2000;
-      const maxStart = Math.max(0, (bottle.audioDuration || 5) - clipDuration / 1000);
-      const startTime = Math.random() * maxStart;
-
-      audio.currentTime = startTime;
-      audio.play().catch(() => {});
-
-      clipTimeoutRef.current = setTimeout(() => {
-        audio.pause();
-      }, clipDuration);
+    if (!isCollected) {
+      const clipDuration = 1 + Math.random() * 2;
+      const startPercent = Math.random();
+      playClip(startPercent, clipDuration);
     } else {
-      audio.play().catch(() => {});
+      playClip(0, undefined);
     }
 
     return () => {
-      if (clipTimeoutRef.current) {
-        clearTimeout(clipTimeoutRef.current);
-      }
-      audio.pause();
+      stopPlayback();
     };
-  }, [bottle.id, bottle.collected, isCollected, bottle.audioDuration]);
+  }, [bottle.id, isCollected, playClip, stopPlayback]);
+
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = volume;
+    }
+  }, [volume]);
 
   const handleClose = () => {
     setIsClosing(true);
@@ -80,6 +161,14 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
   const handleRelease = () => {
     handleClose();
     setTimeout(() => onRelease(bottle.id), 280);
+  };
+
+  const handlePlayFull = () => {
+    if (isPlaying) {
+      stopPlayback();
+    } else {
+      playClip(0, undefined);
+    }
   };
 
   const cardStyle: React.CSSProperties = {
@@ -121,22 +210,33 @@ export const BottleDetail: React.FC<BottleDetailProps> = ({
       </div>
 
       <div className="audio-player">
-        <audio ref={audioRef} src={bottle.audioData} controls={isCollected} />
+        {isCollected ? (
+          <div>
+            <button
+              className="action-btn release"
+              onClick={handlePlayFull}
+              style={{ width: '100%', marginBottom: '8px' }}
+            >
+              {isPlaying ? '⏸ 暂停' : '▶ 播放完整音频'}
+            </button>
+            <div className="volume-control">
+              <label>音量</label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+              />
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '8px' }}>
+            🔊 正在播放随机片段...
+          </div>
+        )}
       </div>
-
-      {isCollected && (
-        <div className="volume-control">
-          <label>音量</label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-          />
-        </div>
-      )}
 
       {!isCollected && (
         <div className="card-actions">
