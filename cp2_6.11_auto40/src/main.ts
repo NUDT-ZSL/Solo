@@ -80,7 +80,6 @@ function main(): void {
   });
 
   let touchId: number | null = null;
-  let touchStartPos = { x: 0, y: 0 };
 
   canvas.addEventListener('touchstart', (e: TouchEvent) => {
     if (e.touches.length > 0) {
@@ -88,7 +87,6 @@ function main(): void {
       const t = e.touches[0];
       touchId = t.identifier;
       const pos = getCanvasPos(t.clientX, t.clientY);
-      touchStartPos = pos;
       mouseDownPos = pos;
       renderer.handleMouseDown(pos.x, pos.y);
     }

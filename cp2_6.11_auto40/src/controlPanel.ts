@@ -12,11 +12,17 @@ interface SliderConfig {
   unit: string;
 }
 
+interface SliderComponents {
+  wrapper: HTMLDivElement;
+  input: HTMLInputElement;
+  valueLabel: HTMLSpanElement;
+}
+
 export class ControlPanel {
   private containerEl: HTMLDivElement | null = null;
-  private flowRateSlider: HTMLInputElement | null = null;
-  private hueSlider: HTMLInputElement | null = null;
-  private shapeSlider: HTMLInputElement | null = null;
+  private flowRateSlider: SliderComponents | null = null;
+  private hueSlider: SliderComponents | null = null;
+  private shapeSlider: SliderComponents | null = null;
   private resetBtn: HTMLButtonElement | null = null;
 
   private flowRateCallbacks: FlowRateCallback[] = [];
@@ -69,22 +75,24 @@ export class ControlPanel {
       unit: ''
     });
 
-    this.containerEl.appendChild(this.flowRateSlider.wrapper);
-    this.containerEl.appendChild(this.hueSlider.wrapper);
-    this.containerEl.appendChild(this.shapeSlider.wrapper);
+    if (this.containerEl) {
+      this.containerEl.appendChild(this.flowRateSlider.wrapper);
+      this.containerEl.appendChild(this.hueSlider.wrapper);
+      this.containerEl.appendChild(this.shapeSlider.wrapper);
+    }
 
     this.resetBtn = document.createElement('button');
     this.resetBtn.className = 'reset-button';
     this.resetBtn.innerHTML = '↺';
     this.applyResetBtnStyle(this.resetBtn);
-    this.containerEl.appendChild(this.resetBtn);
 
     parentEl.appendChild(this.containerEl);
+    parentEl.appendChild(this.resetBtn);
 
     this.bindEvents();
   }
 
-  private createSlider(config: SliderConfig): { wrapper: HTMLDivElement; input: HTMLInputElement; valueLabel: HTMLSpanElement } {
+  private createSlider(config: SliderConfig): SliderComponents {
     const wrapper = document.createElement('div');
     wrapper.className = 'slider-group';
     this.applySliderGroupStyle(wrapper);
@@ -125,8 +133,12 @@ export class ControlPanel {
     return { wrapper, input, valueLabel };
   }
 
+  private applyStyle(el: HTMLElement, styles: Partial<CSSStyleDeclaration>): void {
+    Object.assign(el.style, styles);
+  }
+
   private applyPanelStyle(el: HTMLDivElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       position: 'fixed',
       left: '24px',
       top: '50%',
@@ -135,52 +147,52 @@ export class ControlPanel {
       padding: '20px 18px',
       background: 'rgba(255, 255, 255, 0.69)',
       backdropFilter: 'blur(12px)',
-      WebkitBackdropFilter: 'blur(12px)',
       borderRadius: '12px',
       boxShadow: '0 8px 32px rgba(184, 134, 11, 0.15), 0 2px 8px rgba(0, 0, 0, 0.06)',
       border: '1px solid rgba(212, 175, 55, 0.3)',
       zIndex: '100',
       fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
       userSelect: 'none'
-    } as CSSStyleDeclaration);
+    });
+    (el.style as unknown as Record<string, string>).webkitBackdropFilter = 'blur(12px)';
   }
 
   private applyTitleStyle(el: HTMLDivElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       fontSize: '15px',
       fontWeight: '600',
       color: '#8B6914',
       marginBottom: '18px',
       textAlign: 'center',
       letterSpacing: '2px'
-    } as CSSStyleDeclaration);
+    });
   }
 
   private applySliderGroupStyle(el: HTMLDivElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       marginBottom: '18px'
-    } as CSSStyleDeclaration);
+    });
   }
 
   private applySliderHeaderStyle(el: HTMLDivElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: '8px'
-    } as CSSStyleDeclaration);
+    });
   }
 
   private applySliderLabelStyle(el: HTMLSpanElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       fontSize: '12px',
       color: '#6B5A1E',
       fontWeight: '500'
-    } as CSSStyleDeclaration);
+    });
   }
 
   private applySliderValueStyle(el: HTMLSpanElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       fontSize: '11px',
       color: '#B8860B',
       fontWeight: '600',
@@ -188,20 +200,20 @@ export class ControlPanel {
       background: 'rgba(212, 175, 55, 0.1)',
       padding: '2px 7px',
       borderRadius: '4px'
-    } as CSSStyleDeclaration);
+    });
   }
 
   private applySliderInputStyle(el: HTMLInputElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       width: '100%',
       height: '4px',
       appearance: 'none',
-      WebkitAppearance: 'none',
       background: 'linear-gradient(90deg, rgba(212, 175, 55, 0.6) 0%, rgba(184, 134, 11, 0.6) 100%)',
       borderRadius: '2px',
       outline: 'none',
       cursor: 'pointer'
-    } as CSSStyleDeclaration);
+    });
+    (el.style as unknown as Record<string, string>).webkitAppearance = 'none';
 
     const styleId = 'sand-slider-style';
     if (!document.getElementById(styleId)) {
@@ -241,7 +253,7 @@ export class ControlPanel {
   }
 
   private applyResetBtnStyle(el: HTMLButtonElement): void {
-    Object.assign(el.style, {
+    this.applyStyle(el, {
       position: 'fixed',
       right: '30px',
       bottom: '30px',
@@ -262,55 +274,53 @@ export class ControlPanel {
       alignItems: 'center',
       justifyContent: 'center',
       outline: 'none'
-    } as CSSStyleDeclaration);
+    });
 
     el.addEventListener('mouseenter', () => {
-      if (el) {
-        el.style.boxShadow = '0 6px 20px rgba(184, 134, 11, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4)';
-      }
+      el.style.boxShadow = '0 6px 20px rgba(184, 134, 11, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4)';
     });
 
     el.addEventListener('mouseleave', () => {
-      if (el) {
-        el.style.boxShadow = '0 4px 16px rgba(184, 134, 11, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3)';
-      }
+      el.style.boxShadow = '0 4px 16px rgba(184, 134, 11, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3)';
     });
 
     el.addEventListener('mousedown', () => {
-      if (el) {
-        el.style.transform = 'scale(0.9)';
-      }
+      el.style.transform = 'scale(0.9)';
     });
 
     el.addEventListener('mouseup', () => {
-      if (el) {
-        el.style.transform = 'scale(1.05)';
-        setTimeout(() => {
-          if (el) el.style.transform = 'scale(1)';
-        }, 100);
-      }
+      el.style.transform = 'scale(1.05)';
+      setTimeout(() => {
+        el.style.transform = 'scale(1)';
+      }, 100);
     });
   }
 
   private bindEvents(): void {
     if (this.flowRateSlider) {
-      this.flowRateSlider.addEventListener('input', () => {
-        const v = parseFloat(this.flowRateSlider!.value);
-        this.flowRateCallbacks.forEach(cb => cb(v));
+      this.flowRateSlider.input.addEventListener('input', () => {
+        if (this.flowRateSlider) {
+          const v = parseFloat(this.flowRateSlider.input.value);
+          this.flowRateCallbacks.forEach(cb => cb(v));
+        }
       });
     }
 
     if (this.hueSlider) {
-      this.hueSlider.addEventListener('input', () => {
-        const v = parseInt(this.hueSlider!.value, 10);
-        this.hueCallbacks.forEach(cb => cb(v));
+      this.hueSlider.input.addEventListener('input', () => {
+        if (this.hueSlider) {
+          const v = parseInt(this.hueSlider.input.value, 10);
+          this.hueCallbacks.forEach(cb => cb(v));
+        }
       });
     }
 
     if (this.shapeSlider) {
-      this.shapeSlider.addEventListener('input', () => {
-        const v = parseInt(this.shapeSlider!.value, 10);
-        this.shapeCallbacks.forEach(cb => cb(v));
+      this.shapeSlider.input.addEventListener('input', () => {
+        if (this.shapeSlider) {
+          const v = parseInt(this.shapeSlider.input.value, 10);
+          this.shapeCallbacks.forEach(cb => cb(v));
+        }
       });
     }
 

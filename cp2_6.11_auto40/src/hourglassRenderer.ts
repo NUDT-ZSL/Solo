@@ -22,9 +22,10 @@ interface ResetParticle {
   y: number;
   targetX: number;
   targetY: number;
+  startX: number;
+  startY: number;
   vx: number;
   vy: number;
-  phase: 'explode' | 'gather';
   color: string;
   size: number;
 }
@@ -36,7 +37,6 @@ export class HourglassRenderer {
 
   particles: SandParticle[] = [];
   private maxParticles: number = 3000;
-  private activeParticles: number = 0;
 
   containerBounds: ContainerBounds = { x: 0, y: 0, width: 0, height: 0 };
   private neckY: number = 0;
@@ -63,14 +63,11 @@ export class HourglassRenderer {
     moveDY: 0
   };
 
-  private gravity: number = 0.12;
+  private gravity: number = 0.15;
   private friction: number = 0.985;
 
   private spawnTimer: number = 0;
   private spawnRate: number = 0.008;
-
-  private topSandHeight: number = 0;
-  private bottomSandProfile: number[] = [];
 
   private noiseTexture: HTMLCanvasElement | null = null;
 
@@ -80,6 +77,9 @@ export class HourglassRenderer {
   private resetParticles: ResetParticle[] = [];
 
   private lastTime: number = 0;
+
+  private spatialGrid: Map<string, SandParticle[]> = new Map();
+  private cellSize: number = 8;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -97,12 +97,11 @@ export class HourglassRenderer {
     const nctx = this.noiseTexture.getContext('2d')!;
     const imageData = nctx.createImageData(256, 256);
     for (let i = 0; i < imageData.data.length; i += 4) {
-      const v = Math.floor(Math.random() * 60);
+      const v = Math.floor(Math.random() * 55);
       imageData.data[i] = 255;
       imageData.data[i + 1] = 255;
-      imageData.data[i + 2] = 255;
       imageData.data[i + 2] = v;
-      imageData.data[i + 3] = Math.floor(Math.random() * 40 + 20);
+      imageData.data[i + 3] = Math.floor(Math.random() * 35 + 20);
     }
     nctx.putImageData(imageData, 0, 0);
   }
@@ -115,7 +114,7 @@ export class HourglassRenderer {
     this.canvas.height = height * this.dpr;
     this.canvas.style.width = width + 'px';
     this.canvas.style.height = height + 'px';
-    this.ctx.scale(this.dpr, this.dpr);
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     const containerWidth = width * 0.5;
     const containerHeight = height * 0.7;
@@ -128,25 +127,16 @@ export class HourglassRenderer {
 
     this.neckY = this.containerBounds.y + this.containerBounds.height / 2;
     this.neckWidth = Math.max(8, containerWidth * 0.06);
-
-    this.initBottomSandProfile();
-  }
-
-  private initBottomSandProfile(): void {
-    const w = Math.floor(this.containerBounds.width);
-    this.bottomSandProfile = new Array(w).fill(0);
   }
 
   init(): void {
     this.particles = [];
-    this.activeParticles = 0;
 
     const container = this.containerBounds;
     const topAreaHeight = container.height / 2 - 20;
     const particlesInTop = Math.floor(this.maxParticles * 0.6);
 
     for (let i = 0; i < particlesInTop; i++) {
-      const px = container.x + 20 + Math.random() * (container.width - 40);
       const pyramidTop = container.y + 30;
       const pyramidBase = container.y + topAreaHeight;
       const t = Math.random();
@@ -157,18 +147,15 @@ export class HourglassRenderer {
 
       const p = new SandParticle(finalX, py, this.hue);
       p.settled = true;
-      p.settledY = py;
       p.vx = 0;
       p.vy = 0;
       this.particles.push(p);
     }
 
-    this.activeParticles = particlesInTop;
-    this.topSandHeight = topAreaHeight;
-    this.initBottomSandProfile();
     this.rotation = 0;
     this.targetRotation = 0;
     this.isFlipping = false;
+    this.spawnTimer = 0;
   }
 
   setFlowRate(value: number): void {
@@ -179,7 +166,7 @@ export class HourglassRenderer {
   setHue(value: number): void {
     this.hue = Math.max(0, Math.min(360, value));
     for (const p of this.particles) {
-      p.baseHue = this.hue + (Math.random() - 0.5) * 15;
+      p.baseHue = this.hue + (Math.random() - 0.5) * 12;
     }
   }
 
@@ -197,15 +184,16 @@ export class HourglassRenderer {
 
     if (this.isResetting) return;
 
+    const localPoint = this.screenToLocal(x, y);
     for (const p of this.particles) {
-      if (p.containsPoint(x, y) && !p.isHighlighted) {
+      if (p.containsPoint(localPoint.x, localPoint.y) && !p.isHighlighted) {
         p.highlight();
         break;
       }
     }
 
     if (this.mouseState.isDown) {
-      this.applyPushForce(x, y, this.mouseState.moveDX, this.mouseState.moveDY);
+      this.applyPushForce(localPoint.x, localPoint.y, this.mouseState.moveDX, this.mouseState.moveDY);
     }
   }
 
@@ -215,6 +203,8 @@ export class HourglassRenderer {
     this.mouseState.y = y;
     this.mouseState.prevX = x;
     this.mouseState.prevY = y;
+    this.mouseState.moveDX = 0;
+    this.mouseState.moveDY = 0;
   }
 
   handleMouseUp(): void {
@@ -225,30 +215,51 @@ export class HourglassRenderer {
 
   handleClick(x: number, y: number): void {
     if (this.isResetting) return;
-    this.triggerExplosion(x, y, 30);
+    const localPoint = this.screenToLocal(x, y);
+    this.triggerExplosion(localPoint.x, localPoint.y, 30);
+  }
+
+  private screenToLocal(sx: number, sy: number): { x: number; y: number } {
+    const cb = this.containerBounds;
+    const cx = cb.x + cb.width / 2;
+    const cy = cb.y + cb.height / 2;
+    const angle = -(this.rotation * Math.PI) / 180;
+    const dx = sx - cx;
+    const dy = sy - cy;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: cx + dx * cos - dy * sin,
+      y: cy + dx * sin + dy * cos
+    };
   }
 
   private applyPushForce(cx: number, cy: number, dx: number, dy: number): void {
     const radius = 40;
     const radiusSq = radius * radius;
-    const forceMag = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.08, 1.5);
+    const moveDist = Math.sqrt(dx * dx + dy * dy);
+    if (moveDist < 0.5) return;
 
-    if (forceMag < 0.05) return;
-
-    const fx = (dx / Math.max(1, Math.sqrt(dx * dx + dy * dy))) * forceMag;
-    const fy = (dy / Math.max(1, Math.sqrt(dx * dx + dy * dy))) * forceMag;
+    const forceMag = Math.min(moveDist * 0.12, 2.0);
+    const dirX = dx / Math.max(0.1, moveDist);
+    const dirY = dy / Math.max(0.1, moveDist);
 
     for (const p of this.particles) {
       const ddx = p.x - cx;
       const ddy = p.y - cy;
       const distSq = ddx * ddx + ddy * ddy;
+
       if (distSq < radiusSq) {
-        const falloff = 1 - distSq / radiusSq;
-        const angle = Math.atan2(ddy, ddx) + (Math.random() - 0.5) * 0.8;
-        const speed = forceMag * falloff * (0.5 + Math.random());
+        const dist = Math.sqrt(distSq);
+        const falloff = 1 - dist / radius;
+        const angle = Math.atan2(ddy, ddx) + (Math.random() - 0.5) * 1.0;
+        const speed = forceMag * falloff * (0.6 + Math.random() * 0.8);
+
         p.settled = false;
-        p.vx += Math.cos(angle) * speed + fx * falloff * 0.5;
-        p.vy += Math.sin(angle) * speed + fy * falloff * 0.5 - 0.5;
+        p.applyForce(
+          Math.cos(angle) * speed + dirX * forceMag * falloff * 0.4,
+          Math.sin(angle) * speed + dirY * forceMag * falloff * 0.4 - 0.8
+        );
       }
     }
   }
@@ -256,16 +267,32 @@ export class HourglassRenderer {
   private triggerExplosion(cx: number, cy: number, radius: number): void {
     const radiusSq = radius * radius;
     let count = 0;
+    const maxExplode = 100;
 
     for (const p of this.particles) {
-      if (count >= 80) break;
+      if (count >= maxExplode) break;
       const ddx = p.x - cx;
       const ddy = p.y - cy;
       const distSq = ddx * ddx + ddy * ddy;
+
       if (distSq < radiusSq) {
         p.settled = false;
         p.explode(0.8);
         count++;
+      }
+    }
+
+    if (count === 0) {
+      for (const p of this.particles) {
+        const ddx = p.x - cx;
+        const ddy = p.y - cy;
+        const distSq = ddx * ddx + ddy * ddy;
+        if (distSq < (radius * 2) * (radius * 2)) {
+          p.settled = false;
+          p.explode(0.8);
+          count++;
+          if (count >= maxExplode) break;
+        }
       }
     }
   }
@@ -276,54 +303,56 @@ export class HourglassRenderer {
     this.resetStartTime = performance.now() / 1000;
 
     this.resetParticles = [];
-    const count = 200;
-    for (let i = 0; i < count; i++) {
-      const cx = this.containerBounds.x + this.containerBounds.width / 2;
-      const cy = this.containerBounds.y + this.containerBounds.height / 2;
-      const angle = Math.random() * Math.PI * 2;
-      const startR = Math.random() * 50;
-      const targetR = 60 + Math.random() * Math.min(this.containerBounds.width, this.containerBounds.height) * 0.35;
+    const cx = this.containerBounds.x + this.containerBounds.width / 2;
+    const cy = this.containerBounds.y + this.containerBounds.height / 2;
+
+    for (const p of this.particles) {
+      p.explode(0.5);
+      p.settled = false;
+    }
+
+    const resetCount = 300;
+    for (let i = 0; i < resetCount; i++) {
+      const startAngle = Math.random() * Math.PI * 2;
+      const startR = Math.random() * Math.min(this.containerBounds.width, this.containerBounds.height) * 0.3;
       const targetAngle = Math.random() * Math.PI * 2;
+      const targetR = 50 + Math.random() * Math.min(this.containerBounds.width, this.containerBounds.height) * 0.3;
 
       this.resetParticles.push({
-        x: cx + Math.cos(angle) * startR,
-        y: cy + Math.sin(angle) * startR,
+        x: cx + Math.cos(startAngle) * startR,
+        y: cy + Math.sin(startAngle) * startR,
+        startX: cx + Math.cos(startAngle) * startR,
+        startY: cy + Math.sin(startAngle) * startR,
         targetX: cx + Math.cos(targetAngle) * targetR,
         targetY: cy + Math.sin(targetAngle) * targetR,
-        vx: Math.cos(angle) * (3 + Math.random() * 5),
-        vy: Math.sin(angle) * (3 + Math.random() * 5),
-        phase: 'explode',
+        vx: Math.cos(startAngle) * (4 + Math.random() * 6),
+        vy: Math.sin(startAngle) * (4 + Math.random() * 6) - 2,
         color: `hsl(${this.hue + (Math.random() - 0.5) * 30}, ${55 + Math.random() * 20}%, ${60 + Math.random() * 20}%)`,
         size: 1 + Math.random() * 2
       });
     }
-
-    for (const p of this.particles) {
-      p.explode(0.5);
-    }
   }
 
-  private updateReset(deltaTime: number): void {
+  private updateReset(): void {
     const elapsed = performance.now() / 1000 - this.resetStartTime;
-    const progress = elapsed / this.resetDuration;
+    const progress = Math.min(1, elapsed / this.resetDuration);
 
     if (progress < 0.5) {
       const t = progress / 0.5;
       for (const rp of this.resetParticles) {
         rp.x += rp.vx;
         rp.y += rp.vy;
-        rp.vx *= 0.96;
-        rp.vy *= 0.96;
-        rp.vy += 0.1;
+        rp.vx *= 0.97;
+        rp.vy *= 0.97;
+        rp.vy += 0.12;
+        void t;
       }
     } else {
       const t = (progress - 0.5) / 0.5;
       const easeT = t * t * (3 - 2 * t);
       for (const rp of this.resetParticles) {
-        const sx = rp.targetX - (rp.targetX - rp.x) * (1 - easeT);
-        const sy = rp.targetY - (rp.targetY - rp.y) * (1 - easeT);
-        rp.x = sx;
-        rp.y = sy;
+        rp.x = rp.startX + (rp.targetX - rp.startX) * easeT;
+        rp.y = rp.startY + (rp.targetY - rp.startY) * easeT;
       }
     }
 
@@ -360,13 +389,71 @@ export class HourglassRenderer {
 
     for (let i = 0; i < spawnCount; i++) {
       for (const p of this.particles) {
-        if (p.settled && ((gravityDir > 0 && p.y < this.neckY - 30) || (gravityDir < 0 && p.y > this.neckY + 30))) {
+        const inTopGravity = gravityDir > 0 && p.y < this.neckY - 30;
+        const inBottomGravity = gravityDir < 0 && p.y > this.neckY + 30;
+        if (p.settled && (inTopGravity || inBottomGravity)) {
           p.settled = false;
-          p.x = centerX + (Math.random() - 0.5) * this.neckWidth * 0.5;
+          p.x = centerX + (Math.random() - 0.5) * this.neckWidth * 0.4;
           p.y = topNeckY;
-          p.vx = (Math.random() - 0.5) * 0.5;
-          p.vy = gravityDir > 0 ? 0.5 + Math.random() * 0.5 : -(0.5 + Math.random() * 0.5);
+          p.vx = (Math.random() - 0.5) * 0.6;
+          p.vy = gravityDir > 0
+            ? 0.6 + Math.random() * 0.6
+            : -(0.6 + Math.random() * 0.6);
           break;
+        }
+      }
+    }
+  }
+
+  private buildSpatialGrid(): void {
+    this.spatialGrid.clear();
+    const cb = this.containerBounds;
+
+    for (const p of this.particles) {
+      if (p.settled) continue;
+      const gx = Math.floor((p.x - cb.x) / this.cellSize);
+      const gy = Math.floor((p.y - cb.y) / this.cellSize);
+      const key = `${gx},${gy}`;
+      let cell = this.spatialGrid.get(key);
+      if (!cell) {
+        cell = [];
+        this.spatialGrid.set(key, cell);
+      }
+      cell.push(p);
+    }
+  }
+
+  private getNearbyParticles(p: SandParticle): SandParticle[] {
+    const cb = this.containerBounds;
+    const gx = Math.floor((p.x - cb.x) / this.cellSize);
+    const gy = Math.floor((p.y - cb.y) / this.cellSize);
+    const nearby: SandParticle[] = [];
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const key = `${gx + dx},${gy + dy}`;
+        const cell = this.spatialGrid.get(key);
+        if (cell) {
+          for (const other of cell) {
+            if (other !== p) {
+              nearby.push(other);
+            }
+          }
+        }
+      }
+    }
+    return nearby;
+  }
+
+  private handleCollisions(): void {
+    this.buildSpatialGrid();
+
+    for (const p of this.particles) {
+      if (p.settled) continue;
+      const nearby = this.getNearbyParticles(p);
+      for (const other of nearby) {
+        if (p.x < other.x || (p.x === other.x && p.y < other.y)) {
+          p.resolveCollision(other);
         }
       }
     }
@@ -379,13 +466,22 @@ export class HourglassRenderer {
 
     for (const p of this.particles) {
       p.update(effectiveGravity, this.friction, deltaTime);
+    }
 
+    this.handleCollisions();
+
+    const leftBound = container.x + 4;
+    const rightBound = container.x + container.width - 4;
+    const topBound = container.y + 4;
+    const bottomBound = container.y + container.height - 4;
+    const neckLeft = container.x + container.width / 2 - this.neckWidth / 2;
+    const neckRight = container.x + container.width / 2 + this.neckWidth / 2;
+    const neckTop = this.neckY - 12;
+    const neckBottom = this.neckY + 12;
+    const slopeMargin = 15;
+
+    for (const p of this.particles) {
       if (p.settled) continue;
-
-      const leftBound = container.x + 4;
-      const rightBound = container.x + container.width - 4;
-      const topBound = container.y + 4;
-      const bottomBound = container.y + container.height - 4;
 
       if (p.x < leftBound) {
         p.x = leftBound;
@@ -395,11 +491,6 @@ export class HourglassRenderer {
         p.x = rightBound;
         p.vx = -p.vx * 0.3;
       }
-
-      const neckLeft = container.x + container.width / 2 - this.neckWidth / 2;
-      const neckRight = container.x + container.width / 2 + this.neckWidth / 2;
-      const neckTop = this.neckY - 12;
-      const neckBottom = this.neckY + 12;
 
       if (p.y > neckTop && p.y < neckBottom) {
         if (p.x < neckLeft) {
@@ -411,7 +502,6 @@ export class HourglassRenderer {
           p.vx = -Math.abs(p.vx) * 0.3;
         }
       } else {
-        const slopeMargin = 15;
         if (p.y > neckTop - slopeMargin && p.y < neckTop) {
           const t = (p.y - (neckTop - slopeMargin)) / slopeMargin;
           const boundaryLeft = container.x + 5 + (neckLeft - container.x - 5) * t;
@@ -445,7 +535,7 @@ export class HourglassRenderer {
           p.y = bottomBound;
           p.vy = -p.vy * 0.1;
           p.vx *= 0.7;
-          if (Math.abs(p.vy) < 0.3) {
+          if (Math.abs(p.vy) < 0.25 && Math.abs(p.vx) < 0.15) {
             p.settled = true;
             p.vx = 0;
             p.vy = 0;
@@ -460,7 +550,7 @@ export class HourglassRenderer {
           p.y = topBound;
           p.vy = -p.vy * 0.1;
           p.vx *= 0.7;
-          if (Math.abs(p.vy) < 0.3) {
+          if (Math.abs(p.vy) < 0.25 && Math.abs(p.vx) < 0.15) {
             p.settled = true;
             p.vx = 0;
             p.vy = 0;
@@ -471,13 +561,6 @@ export class HourglassRenderer {
           p.vy = -Math.abs(p.vy) * 0.2;
         }
       }
-
-      const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-      if (speed < 0.15 && ((gravityDir > 0 && p.y > bottomBound - 2) || (gravityDir < 0 && p.y < topBound + 2))) {
-        p.settled = true;
-        p.vx = 0;
-        p.vy = 0;
-      }
     }
   }
 
@@ -486,13 +569,17 @@ export class HourglassRenderer {
 
     const gravityDir = Math.cos(this.rotation * Math.PI / 180) > 0 ? 1 : -1;
     let settledInTop = 0;
+    let flowingInTop = 0;
 
     for (const p of this.particles) {
-      if (gravityDir > 0 && p.y < this.neckY - 30 && p.settled) settledInTop++;
-      if (gravityDir < 0 && p.y > this.neckY + 30 && p.settled) settledInTop++;
+      const inTop = gravityDir > 0 ? p.y < this.neckY - 30 : p.y > this.neckY + 30;
+      if (inTop) {
+        if (p.settled) settledInTop++;
+        else flowingInTop++;
+      }
     }
 
-    if (settledInTop < 5) {
+    if (settledInTop < 5 && flowingInTop < 3) {
       this.flip();
     }
   }
@@ -503,9 +590,15 @@ export class HourglassRenderer {
     this.flipStartTime = performance.now() / 1000;
     this.flipStartRotation = this.rotation;
     this.targetRotation = this.rotation + 180;
+
+    for (const p of this.particles) {
+      p.settled = false;
+      p.vx = (Math.random() - 0.5) * 0.4;
+      p.vy = (Math.random() - 0.5) * 0.4;
+    }
   }
 
-  private updateFlip(deltaTime: number): void {
+  private updateFlip(): void {
     if (!this.isFlipping) return;
 
     const elapsed = performance.now() / 1000 - this.flipStartTime;
@@ -518,13 +611,8 @@ export class HourglassRenderer {
 
     if (t >= 1) {
       this.isFlipping = false;
-      this.rotation = this.targetRotation;
-
-      for (const p of this.particles) {
-        p.settled = false;
-        p.vx = (Math.random() - 0.5) * 0.3;
-        p.vy = (Math.random() - 0.5) * 0.3;
-      }
+      this.rotation = this.targetRotation % 360;
+      this.spawnTimer = 0;
     }
   }
 
@@ -539,8 +627,8 @@ export class HourglassRenderer {
     ctx.rotate((this.rotation * Math.PI) / 180);
     ctx.translate(-cx, -cy);
 
-    ctx.save();
     const radius = 8;
+    ctx.save();
     ctx.beginPath();
     ctx.moveTo(cb.x + radius, cb.y);
     ctx.lineTo(cb.x + cb.width - radius, cb.y);
@@ -575,28 +663,14 @@ export class HourglassRenderer {
 
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(cb.x + radius, cb.y);
-    ctx.lineTo(cb.x + cb.width - radius, cb.y);
-    ctx.quadraticCurveTo(cb.x + cb.width, cb.y, cb.x + cb.width, cb.y + radius);
-    ctx.lineTo(cb.x + cb.width, cb.y + cb.height - radius);
-    ctx.quadraticCurveTo(cb.x + cb.width, cb.y + cb.height, cb.x + cb.width - radius, cb.y + cb.height);
-    ctx.lineTo(cb.x + radius, cb.y + cb.height);
-    ctx.quadraticCurveTo(cb.x, cb.y + cb.height, cb.x, cb.y + cb.height - radius);
-    ctx.lineTo(cb.x, cb.y + radius);
-    ctx.quadraticCurveTo(cb.x, cb.y, cb.x + radius, cb.y);
-    ctx.closePath();
-
-    const neckWidth = this.neckWidth;
-    const neckY = this.neckY;
-
-    ctx.moveTo(cb.x + 4, neckY - 15);
-    ctx.lineTo(cx - neckWidth / 2, neckY - 3);
-    ctx.moveTo(cb.x + cb.width - 4, neckY - 15);
-    ctx.lineTo(cx + neckWidth / 2, neckY - 3);
-    ctx.moveTo(cb.x + 4, neckY + 15);
-    ctx.lineTo(cx - neckWidth / 2, neckY + 3);
-    ctx.moveTo(cb.x + cb.width - 4, neckY + 15);
-    ctx.lineTo(cx + neckWidth / 2, neckY + 3);
+    ctx.moveTo(cb.x + 4, this.neckY - 15);
+    ctx.lineTo(cx - this.neckWidth / 2, this.neckY - 3);
+    ctx.moveTo(cb.x + cb.width - 4, this.neckY - 15);
+    ctx.lineTo(cx + this.neckWidth / 2, this.neckY - 3);
+    ctx.moveTo(cb.x + 4, this.neckY + 15);
+    ctx.lineTo(cx - this.neckWidth / 2, this.neckY + 3);
+    ctx.moveTo(cb.x + cb.width - 4, this.neckY + 15);
+    ctx.lineTo(cx + this.neckWidth / 2, this.neckY + 3);
 
     ctx.lineWidth = 2.5;
     ctx.strokeStyle = '#B8860B';
@@ -611,14 +685,13 @@ export class HourglassRenderer {
     const ctx = this.ctx;
     const cb = this.containerBounds;
     const cx = cb.x + cb.width / 2;
-    const cy = cb.y + cb.height / 2;
 
     ctx.save();
-    ctx.translate(cx, cy);
+    const centerY = cb.y + cb.height / 2;
+    ctx.translate(cx, centerY);
     ctx.rotate((this.rotation * Math.PI) / 180);
-    ctx.translate(-cx, -cy);
+    ctx.translate(-cx, -centerY);
 
-    const gravityDir = 1;
     const topParticles: SandParticle[] = [];
     const bottomParticles: SandParticle[] = [];
 
@@ -632,10 +705,8 @@ export class HourglassRenderer {
 
     if (topParticles.length > 10) {
       const sorted = [...topParticles].sort((a, b) => a.y - b.y);
-      const avgY = sorted.reduce((s, p) => s + p.y, 0) / sorted.length;
       const topY = sorted[0].y;
       const baseY = this.neckY - 25;
-      const height = baseY - topY;
 
       ctx.beginPath();
       const pileWidth = cb.width * 0.4;
@@ -652,10 +723,7 @@ export class HourglassRenderer {
     }
 
     if (bottomParticles.length > 10) {
-      const sorted = [...bottomParticles].sort((a, b) => b.y - a.y);
       const baseY = cb.y + cb.height - 4;
-      const shapeExponent = 0.5 + (this.shapeFactor / 100) * 2;
-
       const cols = 40;
       const colWidth = (cb.width - 20) / cols;
       const heights: number[] = new Array(cols).fill(0);
@@ -679,6 +747,13 @@ export class HourglassRenderer {
         }
       }
 
+      const shapeT = this.shapeFactor / 100;
+      for (let i = 0; i < cols; i++) {
+        const distFromCenter = Math.abs(i - cols / 2) / (cols / 2);
+        const shapeMod = 1 + (shapeT - 0.5) * distFromCenter * 1.5;
+        smoothHeights[i] *= Math.max(0.3, shapeMod);
+      }
+
       ctx.beginPath();
       ctx.moveTo(cb.x + 10, baseY);
       for (let i = 0; i < cols; i++) {
@@ -700,18 +775,17 @@ export class HourglassRenderer {
     ctx.restore();
   }
 
-  private renderSandStream(deltaTime: number): void {
+  private renderSandStream(): void {
     const ctx = this.ctx;
     const cb = this.containerBounds;
     const cx = cb.x + cb.width / 2;
-    const cy = cb.y + cb.height / 2;
 
     ctx.save();
-    ctx.translate(cx, cy);
+    const centerY = cb.y + cb.height / 2;
+    ctx.translate(cx, centerY);
     ctx.rotate((this.rotation * Math.PI) / 180);
-    ctx.translate(-cx, -cy);
+    ctx.translate(-cx, -centerY);
 
-    const gravityDir = 1;
     const flowingParticles = this.particles.filter(p =>
       !p.settled &&
       p.y > this.neckY - 15 &&
@@ -721,13 +795,13 @@ export class HourglassRenderer {
 
     if (flowingParticles.length > 0) {
       ctx.globalAlpha = 0.4;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         const jitterX = (Math.random() - 0.5) * 1.5;
         const width = 2 + Math.random() * 2;
         ctx.beginPath();
-        ctx.moveTo(cx + jitterX, this.neckY - 8);
-        ctx.lineTo(cx + jitterX + (Math.random() - 0.5) * 1, this.neckY + 8);
-        ctx.strokeStyle = `hsla(${this.hue}, 55%, 65%, 0.6)`;
+        ctx.moveTo(cx + jitterX, this.neckY - 10);
+        ctx.lineTo(cx + jitterX + (Math.random() - 0.5) * 1.5, this.neckY + 10);
+        ctx.strokeStyle = `hsla(${this.hue}, 55%, 65%, 0.55)`;
         ctx.lineWidth = width;
         ctx.lineCap = 'round';
         ctx.stroke();
@@ -760,12 +834,12 @@ export class HourglassRenderer {
     if (!this.isResetting || this.resetParticles.length === 0) return;
     const ctx = this.ctx;
     const elapsed = performance.now() / 1000 - this.resetStartTime;
-    const progress = elapsed / this.resetDuration;
+    const progress = Math.min(1, elapsed / this.resetDuration);
 
     for (const rp of this.resetParticles) {
       const alpha = progress < 0.5
-        ? 1 - progress * 0.5
-        : 1 - (progress - 0.5) * 1.5;
+        ? 1 - progress * 0.4
+        : 1 - (progress - 0.5) * 1.8;
       ctx.globalAlpha = Math.max(0, alpha);
       ctx.fillStyle = rp.color;
       ctx.beginPath();
@@ -782,10 +856,10 @@ export class HourglassRenderer {
     if (!this.isResetting) {
       this.spawnFromTop(deltaTime);
       this.updateParticles(deltaTime);
-      this.updateFlip(deltaTime);
+      this.updateFlip();
       this.checkFlip();
     } else {
-      this.updateReset(deltaTime);
+      this.updateReset();
     }
 
     const ctx = this.ctx;
@@ -793,7 +867,7 @@ export class HourglassRenderer {
 
     this.renderSandPiles();
     this.renderContainer();
-    this.renderSandStream(deltaTime);
+    this.renderSandStream();
     this.renderParticles();
     this.renderResetParticles();
   }

@@ -25,18 +25,19 @@ export class SandParticle {
   explodeDuration: number;
   explodeColor: string;
   settled: boolean;
-  settledY: number;
+  mass: number;
 
   constructor(x: number, y: number, hue: number = 40) {
     this.x = x;
     this.y = y;
-    this.vx = (Math.random() - 0.5) * 0.5;
-    this.vy = Math.random() * 0.5;
-    this.radius = 1.2 + Math.random() * 0.8;
-    this.baseHue = hue + (Math.random() - 0.5) * 15;
-    this.saturation = 55 + Math.random() * 15;
-    this.lightness = 62 + Math.random() * 18;
-    this.alpha = 0.75 + Math.random() * 0.25;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = 0;
+    this.radius = 1.0 + Math.random() * 0.6;
+    this.mass = this.radius * this.radius;
+    this.baseHue = hue + (Math.random() - 0.5) * 12;
+    this.saturation = 52 + Math.random() * 12;
+    this.lightness = 60 + Math.random() * 16;
+    this.alpha = 0.78 + Math.random() * 0.22;
     this.life = 0;
     this.maxLife = Infinity;
     this.isHighlighted = false;
@@ -47,22 +48,21 @@ export class SandParticle {
     this.explodeDuration = 0.8;
     this.explodeColor = this.getRandomExplodeColor();
     this.settled = false;
-    this.settledY = y;
   }
 
   private getRandomExplodeColor(): string {
     const colors = [
-      'hsl(45, 90%, 65%)',
-      'hsl(35, 85%, 60%)',
-      'hsl(25, 80%, 55%)',
-      'hsl(55, 95%, 70%)',
-      'hsl(15, 75%, 55%)'
+      'hsl(45, 92%, 68%)',
+      'hsl(38, 88%, 62%)',
+      'hsl(28, 82%, 58%)',
+      'hsl(52, 96%, 72%)',
+      'hsl(18, 78%, 56%)'
     ];
     return colors[Math.floor(Math.random() * colors.length)];
   }
 
   setHue(hue: number): void {
-    this.baseHue = hue + (Math.random() - 0.5) * 15;
+    this.baseHue = hue + (Math.random() - 0.5) * 12;
   }
 
   highlight(): void {
@@ -76,14 +76,16 @@ export class SandParticle {
     this.explodeDuration = duration;
     this.explodeColor = this.getRandomExplodeColor();
     const angle = Math.random() * Math.PI * 2;
-    const speed = 2 + Math.random() * 4;
+    const speed = 2.5 + Math.random() * 4.5;
     this.vx = Math.cos(angle) * speed;
-    this.vy = Math.sin(angle) * speed - 2;
+    this.vy = Math.sin(angle) * speed - 2.5;
+    this.settled = false;
   }
 
   applyForce(fx: number, fy: number): void {
-    this.vx += fx;
-    this.vy += fy;
+    this.vx += fx / this.mass;
+    this.vy += fy / this.mass;
+    this.settled = false;
   }
 
   update(gravity: number, friction: number, deltaTime: number): void {
@@ -102,7 +104,8 @@ export class SandParticle {
         this.isExploding = false;
         this.trail = [];
       } else {
-        if (this.trail.length > 0 || Math.abs(this.vx) > 0.5 || Math.abs(this.vy) > 0.5) {
+        const shouldAddTrail = Math.abs(this.vx) > 0.4 || Math.abs(this.vy) > 0.4;
+        if (shouldAddTrail) {
           this.trail.push({
             x: this.x,
             y: this.y,
@@ -114,36 +117,103 @@ export class SandParticle {
           }
         }
       }
-    } else {
-      if (this.trail.length > 0) {
-        this.trail = [];
-      }
+    } else if (this.trail.length > 0) {
+      this.trail = [];
     }
 
-    if (!this.settled) {
-      this.vy += gravity * deltaTime * 60;
-      this.vx *= Math.pow(friction, deltaTime * 60);
-      this.vy *= Math.pow(friction, deltaTime * 60);
+    if (this.settled) return;
 
-      const maxSpeed = 8;
-      const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-      if (speed > maxSpeed) {
-        this.vx = (this.vx / speed) * maxSpeed;
-        this.vy = (this.vy / speed) * maxSpeed;
-      }
+    this.vy += gravity * deltaTime * 60;
+    this.vx *= Math.pow(friction, deltaTime * 60);
+    this.vy *= Math.pow(friction, deltaTime * 60);
 
-      this.x += this.vx * deltaTime * 60;
-      this.y += this.vy * deltaTime * 60;
+    const maxSpeed = 10;
+    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (speed > maxSpeed) {
+      const scale = maxSpeed / speed;
+      this.vx *= scale;
+      this.vy *= scale;
     }
+
+    this.x += this.vx * deltaTime * 60;
+    this.y += this.vy * deltaTime * 60;
+
+    if (Math.abs(this.vx) < 0.05 && Math.abs(this.vy) < 0.08) {
+      this.vx = 0;
+      this.vy = 0;
+      this.settled = true;
+    }
+  }
+
+  resolveCollision(other: SandParticle): boolean {
+    const dx = other.x - this.x;
+    const dy = other.y - this.y;
+    const minDist = this.radius + other.radius;
+    const distSq = dx * dx + dy * dy;
+
+    if (distSq >= minDist * minDist) return false;
+
+    const dist = Math.sqrt(distSq) || 0.01;
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    const overlap = minDist - dist;
+    const totalMass = this.mass + other.mass;
+
+    const thisMove = (overlap * other.mass) / totalMass;
+    const otherMove = (overlap * this.mass) / totalMass;
+
+    this.x -= nx * thisMove;
+    this.y -= ny * thisMove;
+    other.x += nx * otherMove;
+    other.y += ny * otherMove;
+
+    const dvx = this.vx - other.vx;
+    const dvy = this.vy - other.vy;
+    const dvn = dvx * nx + dvy * ny;
+
+    if (dvn > 0) return true;
+
+    const restitution = 0.15;
+    const impulse = (-(1 + restitution) * dvn) / totalMass;
+
+    this.vx += impulse * other.mass * nx;
+    this.vy += impulse * other.mass * ny;
+    other.vx -= impulse * this.mass * nx;
+    other.vy -= impulse * this.mass * ny;
+
+    const shearForce = 0.4;
+    const tx = -ny;
+    const ty = nx;
+    const dvt = dvx * tx + dvy * ty;
+    this.vx -= dvt * shearForce * tx;
+    this.vy -= dvt * shearForce * ty;
+    other.vx += dvt * shearForce * tx;
+    other.vy += dvt * shearForce * ty;
+
+    if (this.settled && !other.settled) {
+      this.vx *= 0.5;
+      this.vy *= 0.5;
+      this.settled = false;
+    }
+    if (other.settled && !this.settled) {
+      other.vx *= 0.5;
+      other.vy *= 0.5;
+      other.settled = false;
+    }
+
+    return true;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
     for (let i = 0; i < this.trail.length; i++) {
       const t = this.trail[i];
-      ctx.globalAlpha = t.alpha * 0.6 * (i / this.trail.length);
+      const trailAlpha = t.alpha * 0.6 * (i / this.trail.length);
+      const trailSize = this.radius * (0.35 + 0.65 * (i / this.trail.length));
+      ctx.globalAlpha = trailAlpha;
       ctx.fillStyle = t.color;
       ctx.beginPath();
-      ctx.arc(t.x, t.y, this.radius * (0.4 + 0.6 * (i / this.trail.length)), 0, Math.PI * 2);
+      ctx.arc(t.x, t.y, trailSize, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -153,10 +223,10 @@ export class SandParticle {
     if (this.isHighlighted) {
       const glowAlpha = Math.min(1, this.highlightTime / 0.3);
       ctx.save();
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.92)';
       ctx.shadowBlur = 6 * glowAlpha;
       ctx.globalAlpha = this.alpha;
-      ctx.fillStyle = `hsl(${this.baseHue}, ${this.saturation}%, 95%)`;
+      ctx.fillStyle = `hsl(${this.baseHue}, ${this.saturation}%, 96%)`;
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
       ctx.fill();
@@ -196,8 +266,8 @@ export class SandParticle {
   reset(x: number, y: number): void {
     this.x = x;
     this.y = y;
-    this.vx = (Math.random() - 0.5) * 0.5;
-    this.vy = Math.random() * 0.5;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = 0;
     this.life = 0;
     this.isHighlighted = false;
     this.highlightTime = 0;
