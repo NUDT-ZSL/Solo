@@ -8,6 +8,9 @@ function computeFFT(samples: Float64Array, numBins: number): Float64Array {
   const imag = new Float64Array(N)
   for (let i = 0; i < N; i++) real[i] = samples[i]
 
+  bitReverse(real, N)
+  bitReverse(imag, N)
+
   for (let s = 1; s < N; s *= 2) {
     const half = s
     const step = s * 2
