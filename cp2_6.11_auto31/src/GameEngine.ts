@@ -273,17 +273,17 @@ export class GameEngine {
       img.lifetime -= dt;
 
       if (nearest && nearestDist < 25) {
-        if (img.bouncesLeft > 0 && Math.random() < 0.15) {
+        this.resolveAfterimageCollision(img, nearest);
+        if (img.bouncesLeft > 0) {
           img.bouncesLeft--;
           const dir = HEX_DIRECTIONS[Math.floor(Math.random() * HEX_DIRECTIONS.length)];
           const angle = Math.atan2(dir.r, dir.q);
           const spd = Math.hypot(img.velocityX, img.velocityY) || 80;
           img.velocityX = Math.cos(angle) * spd;
           img.velocityY = Math.sin(angle) * spd;
-          img.worldX += img.velocityX * dt * 2;
-          img.worldY += img.velocityY * dt * 2;
+          img.worldX += img.velocityX * dt * 4;
+          img.worldY += img.velocityY * dt * 4;
         } else {
-          this.resolveAfterimageCollision(img, nearest);
           continue;
         }
       }
@@ -336,7 +336,7 @@ export class GameEngine {
           lifetime: 0.5,
           maxLifetime: 0.5,
           opacity: 0.8,
-          lastHitTime: 0,
+          lastHitTime: -0.2,
         });
       }
       if (target.hp <= 0) {
@@ -364,6 +364,7 @@ export class GameEngine {
   private updateFragments(dt: number): void {
     const alivePieces = this.state.pieces.filter(p => p.hp > 0);
     const keep: Fragment[] = [];
+    const currentTime = this.state.time;
 
     for (const f of this.state.fragments) {
       f.x += f.vx * dt;
@@ -371,15 +372,14 @@ export class GameEngine {
       f.vy += 80 * dt;
       f.rotation += f.rotationSpeed * dt;
       f.lifetime -= dt;
-      f.lastHitTime = Math.max(0, f.lastHitTime - dt);
 
       for (const target of alivePieces) {
         if (target.hp <= 0) continue;
         const tw = this.gridToWorld(target.position);
         const d = Math.hypot(tw.x - f.x, tw.y - f.y);
-        if (d < 22 && f.lastHitTime <= 0) {
+        if (d < 22 && (currentTime - f.lastHitTime) >= 0.2) {
           target.hp -= 10;
-          f.lastHitTime = 0.2;
+          f.lastHitTime = currentTime;
           if (target.hp <= 0) {
             this.onPieceDestroyed(target);
           }
@@ -432,7 +432,7 @@ export class GameEngine {
         lifetime: 1,
         maxLifetime: 1,
         opacity: 0.7,
-        lastHitTime: 0,
+        lastHitTime: -0.2,
       });
     }
 

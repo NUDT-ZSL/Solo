@@ -12,8 +12,8 @@ import { GameEngine } from './GameEngine';
 
 const TILT_X = 15 * Math.PI / 180;
 const TILT_Y = 5 * Math.PI / 180;
-const CAMERA_DISTANCE = 800;
-const FOCAL_LENGTH = 500;
+const CAMERA_DISTANCE = 3000;
+const FOCAL_LENGTH = 2000;
 const FLOAT_AMPLITUDE = 3;
 const FLOAT_SPEED = 2;
 const FLOAT_BASE_HEIGHT = 20;
@@ -225,22 +225,7 @@ export class Renderer {
   }
 
   private drawBoardCached(ctx: CanvasRenderingContext2D, _state: GameState): void {
-    if (this.boardDirty) {
-      const oc = this.ensureOffscreen();
-      oc.save();
-      oc.setTransform(this.viewport.dpr, 0, 0, this.viewport.dpr, 0, 0);
-      const bg = oc.createLinearGradient(0, 0, this.viewport.width, this.viewport.height);
-      bg.addColorStop(0, 'rgba(0,0,0,0)');
-      bg.addColorStop(1, 'rgba(0,0,0,0)');
-      oc.fillStyle = bg;
-      oc.fillRect(0, 0, this.viewport.width, this.viewport.height);
-      this.drawBoardGrids(oc);
-      oc.restore();
-      this.boardDirty = false;
-    }
-    if (this.offscreenBoard) {
-      ctx.drawImage(this.offscreenBoard, 0, 0, this.canvas.width, this.canvas.height, 0, 0, this.viewport.width, this.viewport.height);
-    }
+    this.drawBoardGrids(ctx);
   }
 
   private drawBoardGrids(ctx: CanvasRenderingContext2D): void {
@@ -441,7 +426,7 @@ export class Renderer {
     }
 
     const flowPos = (flowPhase / (Math.PI * 2)) % 1;
-    const flowY = size - size * 2 * flowPos;
+    const flowY = -size + size * 2 * flowPos;
     const flowWidth = size * 0.7;
 
     ctx.save();
@@ -739,7 +724,6 @@ export class Renderer {
     const r = 12;
     const blurAmount = 12;
     const pad = blurAmount * 2;
-    const dpr = this.viewport.dpr;
 
     ctx.save();
     ctx.beginPath();
@@ -757,22 +741,20 @@ export class Renderer {
     ctx.save();
     ctx.clip();
 
-    const srcX = Math.max(0, (x - pad) * dpr);
-    const srcY = Math.max(0, (y - pad) * dpr);
-    const srcW = Math.min(ctx.canvas.width - srcX, (w + pad * 2) * dpr);
-    const srcH = Math.min(ctx.canvas.height - srcY, (h + pad * 2) * dpr);
-    const dstX = x - pad;
-    const dstY = y - pad;
-    const dstW = w + pad * 2;
-    const dstH = h + pad * 2;
+    const srcX = Math.max(0, x - pad);
+    const srcY = Math.max(0, y - pad);
+    const srcW = Math.min(this.viewport.width - srcX, w + pad * 2);
+    const srcH = Math.min(this.viewport.height - srcY, h + pad * 2);
 
-    ctx.filter = `blur(${blurAmount}px)`;
-    ctx.drawImage(
-      ctx.canvas,
-      srcX, srcY, srcW, srcH,
-      dstX, dstY, dstW, dstH
-    );
-    ctx.filter = 'none';
+    if (srcW > 0 && srcH > 0) {
+      ctx.filter = `blur(${blurAmount}px)`;
+      ctx.drawImage(
+        ctx.canvas,
+        srcX, srcY, srcW, srcH,
+        srcX, srcY, srcW, srcH
+      );
+      ctx.filter = 'none';
+    }
     ctx.restore();
 
     const bgGrad = ctx.createLinearGradient(x, y, x, y + h);
