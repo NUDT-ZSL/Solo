@@ -1,7 +1,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { BASE_SCENTS } from './types';
-import type { ScentCard, ScentRatio } from './types';
+import { createDefaultScents, getTotalScentsValue } from './types';
+import type { ScentCard, ScentItem } from './types';
 
 interface CreatePageProps {
   onCreated: (card: ScentCard) => void;
@@ -9,26 +9,15 @@ interface CreatePageProps {
   showToast: (msg: string) => void;
 }
 
-const DEFAULT_RATIOS: ScentRatio = {
-  rose: 0,
-  sandalwood: 0,
-  seaSalt: 0,
-  pine: 0,
-  incense: 0
-};
-
-function getTotalRatio(r: ScentRatio) {
-  return r.rose + r.sandalwood + r.seaSalt + r.pine + r.incense;
-}
-
 function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
   const [description, setDescription] = useState('');
   const [imageData, setImageData] = useState<string | undefined>(undefined);
-  const [ratios, setRatios] = useState<ScentRatio>({ ...DEFAULT_RATIOS });
+  const [scents, setScents] = useState<ScentItem[]>(createDefaultScents());
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
   const drawPalette = useCallback(() => {
     const canvas = canvasRef.current;
@@ -44,7 +33,7 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
 
     ctx.clearRect(0, 0, w, h);
 
-    const total = getTotalRatio(ratios);
+    const total = getTotalScentsValue(scents);
 
     if (total === 0) {
       ctx.beginPath();
@@ -56,10 +45,9 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
 
     let startAngle = -Math.PI / 2;
 
-    BASE_SCENTS.forEach(scent => {
-      const val = ratios[scent.key];
-      if (val <= 0) return;
-      const sliceAngle = (val / total) * Math.PI * 2;
+    scents.forEach(scent => {
+      if (scent.value <= 0) return;
+      const sliceAngle = (scent.value / total) * Math.PI * 2;
       const endAngle = startAngle + sliceAngle;
 
       ctx.beginPath();
@@ -75,7 +63,7 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
 
       startAngle = endAngle;
     });
-  }, [ratios]);
+  }, [scents]);
 
   useEffect(() => {
     drawPalette();
@@ -96,15 +84,45 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
     reader.readAsDataURL(file);
   }, [showToast]);
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
+    dragCounter.current = 0;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleFile(files[0]);
+    }
   }, [handleFile]);
 
-  const handleSliderChange = (key: keyof ScentRatio, value: number) => {
-    setRatios(prev => ({ ...prev, [key]: Math.round(value) }));
+  const handleSliderChange = (key: string, value: number) => {
+    setScents(prev =>
+      prev.map(s => (s.key === key ? { ...s, value: Math.round(value) } : s))
+    );
   };
 
   const handleSubmit = async () => {
@@ -114,7 +132,7 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
       showToast('请填写气味描述文字');
       return;
     }
-    if (getTotalRatio(ratios) === 0) {
+    if (getTotalScentsValue(scents) === 0) {
       showToast('请至少调整一个气味比例');
       return;
     }
@@ -127,7 +145,7 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
         body: JSON.stringify({
           description: description.trim(),
           imageData,
-          scentRatios: ratios
+          scents
         })
       });
       const data = await res.json();
@@ -170,12 +188,15 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
             <div
               className={`upload-area ${isDragging ? 'dragging' : ''}`}
               onClick={() => fileInputRef.current?.click()}
-              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
               onDrop={handleDrop}
             >
               {imageData ? (
-                <img src={imageData} alt="preview" className="image-preview" />
+                <div className="image-preview-wrapper">
+                  <img src={imageData} alt="preview" />
+                </div>
               ) : (
                 <>
                   <div style={{ fontSize: 32, color: '#D4A574' }}>📷</div>
@@ -207,7 +228,7 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
           <div className="form-group">
             <label>气味调色盘</label>
             <div className="slider-group">
-              {BASE_SCENTS.map(scent => (
+              {scents.map(scent => (
                 <div key={scent.key} className="slider-item">
                   <span className="slider-label">
                     <span className="slider-color-dot" style={{ backgroundColor: scent.color }} />
@@ -217,15 +238,15 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
                     type="range"
                     min={0}
                     max={100}
-                    value={ratios[scent.key]}
+                    value={scent.value}
                     onChange={e => handleSliderChange(scent.key, Number(e.target.value))}
                     style={{
                       color: scent.color,
-                      background: `linear-gradient(to right, ${scent.color} ${ratios[scent.key]}%, #E8E0D8 ${ratios[scent.key]}%)`
+                      background: `linear-gradient(to right, ${scent.color} ${scent.value}%, #E8E0D8 ${scent.value}%)`
                     }}
                   />
                   <span className="slider-value" style={{ color: scent.color }}>
-                    {ratios[scent.key]}
+                    {scent.value}
                   </span>
                 </div>
               ))}
@@ -250,7 +271,7 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
           <div style={{ fontSize: 12, color: 'rgba(62,39,35,0.6)', textAlign: 'center' }}>
             当前气味比例总和<br />
             <span style={{ fontSize: 20, fontWeight: 600, color: '#D4A574' }}>
-              {getTotalRatio(ratios)}
+              {getTotalScentsValue(scents)}
             </span>
           </div>
         </div>

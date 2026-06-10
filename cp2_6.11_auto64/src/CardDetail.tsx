@@ -1,8 +1,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { BASE_SCENTS } from './types';
-import type { ScentCard, ScentRatio, BaseScent } from './types';
+import { getTotalScentsValue } from './types';
+import type { ScentCard, ScentItem } from './types';
 
 interface CardDetailProps {
   cards: ScentCard[];
@@ -14,32 +14,32 @@ interface Particle {
   y: number;
   vx: number;
   vy: number;
-  size: number;
+  baseSize: number;
   color: string;
   phase: number;
-  life: number;
+  speed: number;
+  active: boolean;
 }
 
-function getTotalRatio(r: ScentRatio) {
-  return r.rose + r.sandalwood + r.seaSalt + r.pine + r.incense;
-}
+const PARTICLE_COUNT = 200;
+const DURATION = 20000;
 
-function getActiveScents(ratios: ScentRatio): { scent: BaseScent; weight: number }[] {
-  const total = getTotalRatio(ratios);
+function getActiveScents(card: ScentCard): { scent: ScentItem; weight: number }[] {
+  const total = getTotalScentsValue(card.scents);
   if (total === 0) return [];
-  return BASE_SCENTS
-    .filter(s => ratios[s.key] > 0)
-    .map(s => ({ scent: s, weight: ratios[s.key] / total }));
+  return card.scents
+    .filter(s => s.value > 0)
+    .map(s => ({ scent: s, weight: s.value / total }));
 }
 
-function getDominantColor(ratios: ScentRatio): string {
-  const active = getActiveScents(ratios);
+function getDominantColor(card: ScentCard): string {
+  const active = getActiveScents(card);
   if (active.length === 0) return '#D4A574';
   active.sort((a, b) => b.weight - a.weight);
   return active[0].scent.color;
 }
 
-function pickWeightedColor(active: { scent: BaseScent; weight: number }[]): string {
+function pickWeightedColor(active: { scent: ScentItem; weight: number }[]): string {
   const r = Math.random();
   let acc = 0;
   for (const item of active) {
@@ -49,8 +49,8 @@ function pickWeightedColor(active: { scent: BaseScent; weight: number }[]): stri
   return active[active.length - 1].scent.color;
 }
 
-function getAverageWarmFrequency(ratios: ScentRatio): number {
-  const active = getActiveScents(ratios);
+function getAverageWarmFrequency(card: ScentCard): number {
+  const active = getActiveScents(card);
   if (active.length === 0) return 300;
   let warmTotal = 0;
   let coolTotal = 0;
@@ -81,6 +81,36 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
   ].join(' ');
 }
 
+function createParticlePool(count: number): Particle[] {
+  const pool: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    pool.push({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      baseSize: 0,
+      color: '#ffffff',
+      phase: 0,
+      speed: 0,
+      active: false
+    });
+  }
+  return pool;
+}
+
+function resetParticle(p: Particle, canvasWidth: number, canvasHeight: number, activeScents: { scent: ScentItem; weight: number }[]) {
+  p.x = Math.random() * canvasWidth;
+  p.y = canvasHeight + Math.random() * 100;
+  p.vx = (Math.random() - 0.5) * 0.6;
+  p.vy = -(0.4 + Math.random() * 1.0);
+  p.baseSize = 2 + Math.random() * 4;
+  p.color = activeScents.length > 0 ? pickWeightedColor(activeScents) : '#D4A574';
+  p.phase = Math.random() * Math.PI * 2;
+  p.speed = 0.8 + Math.random() * 0.4;
+  p.active = true;
+}
+
 function CardDetail({ cards, onBack }: CardDetailProps) {
   const { id } = useParams<{ id: string }>();
   const [card, setCard] = useState<ScentCard | null>(null);
@@ -90,11 +120,12 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
   const [hoveredScent, setHoveredScent] = useState<{ name: string; ratio: number; x: number; y: number } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Particle[]>([]);
+  const particlePoolRef = useRef<Particle[]>(createParticlePool(PARTICLE_COUNT));
   const animFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioNodesRef = useRef<{ stop: () => void } | null>(null);
+  const playingRef = useRef(false);
 
   useEffect(() => {
     const existing = cards.find(c => c.id === id);
@@ -115,14 +146,14 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
     }
   }, [id, cards]);
 
-  const startAudio = useCallback((ratios: ScentRatio) => {
+  const startAudio = useCallback((c: ScentCard) => {
     try {
-      const AudioCtx = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new AudioCtx();
       audioCtxRef.current = ctx;
 
-      const baseFreq = getAverageWarmFrequency(ratios);
-      const activeCount = Math.max(1, getActiveScents(ratios).length);
+      const baseFreq = getAverageWarmFrequency(c);
+      const activeCount = Math.max(1, getActiveScents(c).length);
 
       const masterGain = ctx.createGain();
       masterGain.gain.value = 0.08;
@@ -194,87 +225,84 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
     }
   }, []);
 
-  const startParticles = useCallback((ratios: ScentRatio) => {
+  const startParticles = useCallback((c: ScentCard) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const resize = () => {
+    const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     };
-    resize();
-    window.addEventListener('resize', resize);
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
 
-    const active = getActiveScents(ratios);
-    const particles: Particle[] = [];
-    const PARTICLE_COUNT = 200;
-    const DURATION = 20000;
+    const activeScents = getActiveScents(c);
+    const pool = particlePoolRef.current;
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: canvas.height + Math.random() * 100,
-        vx: (Math.random() - 0.5) * 0.8,
-        vy: -(0.5 + Math.random() * 1.2),
-        size: 2 + Math.random() * 4,
-        color: active.length > 0 ? pickWeightedColor(active) : '#D4A574',
-        phase: Math.random() * Math.PI * 2,
-        life: 0
-      });
+      resetParticle(pool[i], canvas.width, canvas.height, activeScents);
+      pool[i].y = Math.random() * canvas.height;
     }
-    particlesRef.current = particles;
+
     startTimeRef.current = performance.now();
+    playingRef.current = true;
 
     const animate = () => {
+      if (!playingRef.current) return;
+
       const elapsed = performance.now() - startTimeRef.current;
       if (elapsed > DURATION) {
+        playingRef.current = false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         setIsPlaying(false);
         stopAudio();
-        window.removeEventListener('resize', resize);
+        window.removeEventListener('resize', resizeCanvas);
         return;
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const time = elapsed / 1000;
+      const time = elapsed * 0.001;
+      const sin = Math.sin;
 
-      particles.forEach(p => {
-        p.x += p.vx + Math.sin(time * 2 + p.phase) * 0.3;
-        p.y += p.vy;
-        p.life += 0.01;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const p = pool[i];
+        if (!p.active) continue;
 
-        const sizeVar = 2 + Math.sin(time * 3 + p.phase) * 2;
-        const displaySize = Math.max(2, Math.min(6, sizeVar));
+        p.x += p.vx + sin(time * 2 + p.phase) * 0.25;
+        p.y += p.vy * p.speed;
 
-        const alpha = Math.max(0, Math.min(1, 1 - (p.y / canvas.height)));
+        const sizeVar = 2 + sin(time * 3 + p.phase) * 2;
+        const displaySize = sizeVar < 2 ? 2 : sizeVar > 6 ? 6 : sizeVar;
+
+        const alphaRaw = 1 - (p.y / canvas.height);
+        const alpha = alphaRaw < 0 ? 0 : alphaRaw > 1 ? 1 : alphaRaw;
+
         ctx.beginPath();
         ctx.arc(p.x, p.y, displaySize, 0, Math.PI * 2);
         ctx.fillStyle = p.color;
         ctx.globalAlpha = alpha * 0.8;
         ctx.fill();
-        ctx.globalAlpha = 1;
 
         if (p.y < -20) {
-          p.y = canvas.height + 20;
           p.x = Math.random() * canvas.width;
+          p.y = canvas.height + 20;
         }
-      });
+      }
+
+      ctx.globalAlpha = 1;
 
       animFrameRef.current = requestAnimationFrame(animate);
     };
 
     animFrameRef.current = requestAnimationFrame(animate);
     setIsPlaying(true);
-    startAudio(ratios);
-
-    return () => {
-      window.removeEventListener('resize', resize);
-    };
+    startAudio(c);
   }, [startAudio, stopAudio]);
 
   const stopParticles = useCallback(() => {
+    playingRef.current = false;
     if (animFrameRef.current !== null) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
@@ -282,9 +310,10 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
     const canvas = canvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     }
-    particlesRef.current = [];
     stopAudio();
     setIsPlaying(false);
   }, [stopAudio]);
@@ -300,7 +329,7 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
     if (isPlaying) {
       stopParticles();
     } else {
-      startParticles(card.scentRatios);
+      startParticles(card);
     }
   };
 
@@ -331,12 +360,12 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
     );
   }
 
-  const total = getTotalRatio(card.scentRatios);
-  const dominantColor = getDominantColor(card.scentRatios);
+  const total = getTotalScentsValue(card.scents);
+  const dominantColor = getDominantColor(card);
   const cx = 90, cy = 90, outerR = 80, innerR = 55;
 
   return (
-    <div className="detail-page">
+    <div className={`detail-page ${closing ? 'closing' : ''}`}>
       <canvas ref={canvasRef} className="particle-canvas" />
 
       <div className={`detail-card ${closing ? 'closing' : ''}`}>
@@ -364,18 +393,18 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
               ) : (
                 (() => {
                   let startAngle = 0;
-                  return BASE_SCENTS.map(scent => {
-                    const val = card.scentRatios[scent.key];
-                    if (val <= 0) return null;
-                    const angle = (val / total) * Math.PI * 2;
+                  return card.scents.map(scent => {
+                    if (scent.value <= 0) return null;
+                    const angle = (scent.value / total) * Math.PI * 2;
                     const endAngle = startAngle + angle;
                     const midAngle = (startAngle + endAngle) / 2;
                     const midR = (outerR + innerR) / 2;
                     const tipX = cx + midR * Math.cos(midAngle);
                     const tipY = cy + midR * Math.sin(midAngle);
 
-                    const path = describeArc(cx, cy, outerR, startAngle, endAngle);
+                    const outerPath = describeArc(cx, cy, outerR, startAngle, endAngle);
                     const innerPath = describeArc(cx, cy, innerR, startAngle, endAngle);
+                    const innerReversed = innerPath.replace(/M ([\d.]+) ([\d.]+)/, 'L $1 $2').replace(/Z/g, '');
 
                     startAngle = endAngle;
 
@@ -383,13 +412,13 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
                       <g key={scent.key}>
                         <path
                           className="ring-segment"
-                          d={`${path} ${innerPath.replace('M', 'L').replace(/Z/g, '')} Z`}
+                          d={`${outerPath} ${innerReversed} Z`}
                           fill={scent.color}
                           stroke="#1A1A1A"
                           strokeWidth={1}
                           onMouseEnter={() => setHoveredScent({
                             name: scent.name,
-                            ratio: Math.round((val / total) * 100),
+                            ratio: Math.round((scent.value / total) * 100),
                             x: tipX,
                             y: tipY
                           })}
