@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
-import type { WeatherParams, PresetName } from '../types'
+import React, { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react'
+import type { WeatherParams } from '../types'
 
 export interface WeatherCanvasHandle {
   captureScreenshot: () => string
@@ -10,47 +10,255 @@ interface WeatherCanvasProps {
   transitionDuration?: number
 }
 
+type ParticleType = 'snow' | 'rain' | 'sand' | 'cloud'
+
 interface Particle {
   x: number
   y: number
   vx: number
   vy: number
+  targetVx: number
+  targetVy: number
   size: number
+  targetSize: number
+  alpha: number
+  targetAlpha: number
+  color: number[]
+  targetColor: number[]
   life: number
   maxLife: number
-  type: 'snow' | 'rain' | 'sand' | 'cloud'
+  type: ParticleType
+  targetType: ParticleType
   rotation: number
   seed: number
+  active: boolean
+  spawnTime: number
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
-
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
-
-const lerpColor = (c1: number[], c2: number[], t: number): number[] => [
-  lerp(c1[0] + (c2[0] - c1[0]) * t,
-  lerp(c1[1] + (c2[1] - c1[1]) * t,
-  lerp(c1[2] + (c2[2] - c1[2]) * t,
-]
-
+const lerpArr = (a: number[], b: number[], t: number): number[] => a.map((v, i) => lerp(v, b[i] || 0, t))
 const rgbToString = (rgb: number[], alpha = 1): string =>
   `rgba(${Math.round(rgb[0])},${Math.round(rgb[1])},${Math.round(rgb[2])},${alpha})`
 
 const MAX_PARTICLES = 5000
+const TRANSITION_DURATION = 1500
+
+const WIND_SPEED_MAP = (windSpeed: number): number => {
+  if (windSpeed <= 0) return 0
+  return windSpeed * 0.8
+}
+
+interface ParticleConfig {
+  type: ParticleType
+  count: number
+  color: number[]
+  baseSize: number
+  baseSpeed: number
+}
+
+const getParticleConfigs = (params: WeatherParams): ParticleConfig[] => {
+  const { temperature, humidity, windSpeed } = params
+  const configs: ParticleConfig[] = []
+
+  if (temperature < 5 && humidity > 40) {
+    const intensity = clamp(((5 - temperature) / 15) * (humidity / 100), 0, 1)
+    configs.push({
+      type: 'snow',
+      count: Math.round(MAX_PARTICLES * 0.6 * intensity),
+      color: [255, 255, 255],
+      baseSize: 3,
+      baseSpeed: 1.5,
+    })
+  }
+
+  if (temperature >= 5 && temperature <= 30 && humidity > 60) {
+    const intensity = clamp(humidity / 100, 0, 1)
+    configs.push({
+      type: 'rain',
+      count: Math.round(MAX_PARTICLES * 0.7 * intensity),
+      color: [150, 180, 230],
+      baseSize: 1.5,
+      baseSpeed: 10 + windSpeed * 0.3,
+    })
+  }
+
+  if (temperature > 25 && humidity < 40 && windSpeed > 5) {
+    const intensity = clamp(((temperature - 25) / 15) * ((windSpeed - 5) / 15), 0, 1)
+    configs.push({
+      type: 'sand',
+      count: Math.round(MAX_PARTICLES * 0.5 * intensity),
+      color: [210, 175, 130],
+      baseSize: 2,
+      baseSpeed: 4 + windSpeed * 0.4,
+    })
+  }
+
+  if (humidity > 50 && humidity < 90 && windSpeed < 10) {
+    const intensity = clamp(humidity / 100, 0.2, 1)
+    configs.push({
+      type: 'cloud',
+      count: Math.round(MAX_PARTICLES * 0.08 * intensity),
+      color: params.preset === 'thunder' ? [100, 100, 120] : [255, 255, 255],
+      baseSize: 80,
+      baseSpeed: 0.5 + windSpeed * 0.05,
+    })
+  }
+
+  return configs
+}
+
+const createParticle = (
+  type: ParticleType,
+  width: number,
+  height: number,
+  params: WeatherParams,
+  now: number,
+): Particle => {
+  const windPixelSpeed = WIND_SPEED_MAP(params.windSpeed)
+  const lightFactor = params.lightLevel / 100
+  const baseAlpha = 0.4 + lightFactor * 0.5
+
+  let x = 0
+  let y = 0
+  let vx = 0
+  let vy = 0
+  let size = 3
+
+  switch (type) {
+    case 'snow':
+      x = Math.random() * width
+      y = -10 - Math.random() * height * 0.3
+      vx = (Math.random() - 0.5) * windPixelSpeed * 0.3
+      vy = 1 + Math.random() * 2
+      size = 2 + Math.random() * 4
+      break
+    case 'rain':
+      x = Math.random() * width
+      y = -10 - Math.random() * height * 0.2
+      vx = windPixelSpeed * 0.5
+      vy = 12 + Math.random() * 8
+      size = 1 + Math.random() * 2
+      break
+    case 'sand':
+      x = windPixelSpeed >= 0 ? -10 : width + 10
+      y = Math.random() * height
+      vx = (windPixelSpeed >= 0 ? 1 : -1) * (3 + Math.random() * 4)
+      vy = (Math.random() - 0.5) * 2
+      size = 1 + Math.random() * 3
+      break
+    case 'cloud':
+      x = -100 - Math.random() * width
+      y = Math.random() * height * 0.6
+      vx = 0.3 + windPixelSpeed * 0.1
+      vy = (Math.random() - 0.5) * 0.2
+      size = 60 + Math.random() * 120
+      break
+  }
+
+  const color: number[] =
+    type === 'snow' ? [255, 255, 255]
+      : type === 'rain' ? [150, 180, 230]
+        : type === 'sand' ? [210, 175, 130]
+          : params.preset === 'thunder' ? [100, 100, 120] : [255, 255, 255]
+
+  return {
+    x,
+    y,
+    vx,
+    targetVx: vx,
+    vy,
+    targetVy: vy,
+    size,
+    targetSize: size,
+    alpha: baseAlpha * (0.6 + Math.random() * 0.4),
+    targetAlpha: baseAlpha * (0.6 + Math.random() * 0.4),
+    color: [...color],
+    targetColor: [...color],
+    life: 1,
+    maxLife: 1,
+    type,
+    targetType: type,
+    rotation: Math.random() * Math.PI * 2,
+    seed: Math.random(),
+    active: true,
+    spawnTime: now,
+  }
+}
+
+const getBackgroundColors = (params: WeatherParams): { top: number[]; bottom: number[] } => {
+  const { temperature, lightLevel, humidity, preset } = params
+  const tempRatio = (temperature + 10) / 50
+  const lightFactor = lightLevel / 100
+
+  let topColor: number[]
+  let bottomColor: number[]
+
+  if (preset === 'sunset') {
+    topColor = [255, 107, 53]
+    bottomColor = [255, 200, 100]
+  } else if (preset === 'rainbow') {
+    topColor = [100, 180, 255]
+    bottomColor = [255, 200, 220]
+  } else if (preset === 'thunder') {
+    topColor = [20, 20, 40]
+    bottomColor = [60, 60, 90]
+  } else if (preset === 'blizzard') {
+    topColor = [180, 200, 220]
+    bottomColor = [220, 230, 245]
+  } else if (preset === 'clear') {
+    topColor = [135, 206, 250]
+    bottomColor = [200, 230, 255]
+  } else if (preset === 'mist') {
+    topColor = [150, 160, 170]
+    bottomColor = [200, 210, 220]
+  } else {
+    if (tempRatio < 0.5) {
+      const t = tempRatio * 2
+      topColor = lerpArr([10, 22, 40], [40, 80, 140], t)
+      bottomColor = lerpArr([30, 60, 110], [100, 150, 200], t)
+    } else {
+      const t = (tempRatio - 0.5) * 2
+      topColor = lerpArr([40, 80, 140], [255, 107, 53], t)
+      bottomColor = lerpArr([100, 150, 200], [255, 200, 150], t)
+    }
+  }
+
+  topColor = topColor.map((c) => Math.round(c * (0.4 + lightFactor * 0.6)))
+  bottomColor = bottomColor.map((c) => Math.round(c * (0.5 + lightFactor * 0.5)))
+
+  const mistFactor = humidity / 100
+  const gray = [128, 128, 128]
+  topColor = lerpArr(topColor, gray, mistFactor * 0.3)
+  bottomColor = lerpArr(bottomColor, gray, mistFactor * 0.3)
+
+  return { top: topColor.map((c) => Math.round(c)), bottom: bottomColor.map((c) => Math.round(c)) }
+}
 
 export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>(function WeatherCanvas(
-  { params, transitionDuration = 1500 },
+  { params, transitionDuration = TRANSITION_DURATION },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number>(0)
+  const lastTimeRef = useRef<number>(0)
   const particlesRef = useRef<Particle[]>([])
+  const particlePoolRef = useRef<(Particle | null)[]>([])
   const currentParamsRef = useRef<WeatherParams>({ ...params })
   const targetParamsRef = useRef<WeatherParams>({ ...params })
-  const lightningRef = useRef({ active: false, intensity: 0, timer: 0 })
   const transitionStartRef = useRef<number>(0)
+  const isTransitioningRef = useRef<boolean>(false)
   const sizeRef = useRef({ width: 0, height: 0, dpr: 1 })
+  const bgColorsRef = useRef({
+    currentTop: [0, 0, 0] as number[],
+    currentBottom: [0, 0, 0] as number[],
+    targetTop: [0, 0, 0] as number[],
+    targetBottom: [0, 0, 0] as number[],
+  })
+  const lightningRef = useRef({ active: false, intensity: 0, startTime: 0, timer: 0 })
   const lightningTimerRef = useRef<number>(0)
+  const configsRef = useRef<ParticleConfig[]>([])
+  const targetConfigsRef = useRef<ParticleConfig[]>([])
 
   useImperativeHandle(ref, () => ({
     captureScreenshot: (): string => {
@@ -62,8 +270,59 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
 
   useEffect(() => {
     targetParamsRef.current = { ...params }
+    targetConfigsRef.current = getParticleConfigs(params)
+    const bg = getBackgroundColors(params)
+    bgColorsRef.current.targetTop = bg.top
+    bgColorsRef.current.targetBottom = bg.bottom
     transitionStartRef.current = performance.now()
+    isTransitioningRef.current = true
   }, [params])
+
+  const updateParticleTargets = useCallback((params: WeatherParams, configs: ParticleConfig[]): void => {
+    const particles = particlesRef.current
+    const windPixelSpeed = WIND_SPEED_MAP(params.windSpeed)
+    const lightFactor = params.lightLevel / 100
+    const baseAlpha = 0.4 + lightFactor * 0.5
+
+    const typeCounts: Record<ParticleType, number> = { snow: 0, rain: 0, sand: 0, cloud: 0 }
+    configs.forEach((c) => {
+      typeCounts[c.type] = c.count
+    })
+
+    particles.forEach((p) => {
+      if (!p.active) return
+
+      const targetConfig = configs.find((c) => c.type === p.targetType)
+      if (targetConfig) {
+        switch (p.targetType) {
+          case 'snow':
+            p.targetVx = (Math.random() - 0.5) * windPixelSpeed * 0.3
+            p.targetVy = 1 + (p.seed * 2)
+            p.targetAlpha = baseAlpha * (0.6 + p.seed * 0.4)
+            p.targetColor = [255, 255, 255]
+            break
+          case 'rain':
+            p.targetVx = windPixelSpeed * 0.5
+            p.targetVy = 12 + p.seed * 8
+            p.targetAlpha = baseAlpha * (0.5 + p.seed * 0.3)
+            p.targetColor = [150, 180, 230]
+            break
+          case 'sand':
+            p.targetVx = (windPixelSpeed >= 0 ? 1 : -1) * (3 + p.seed * 4)
+            p.targetVy = (p.seed - 0.5) * 2
+            p.targetAlpha = baseAlpha * (0.5 + p.seed * 0.3)
+            p.targetColor = [210, 175, 130]
+            break
+          case 'cloud':
+            p.targetVx = 0.3 + windPixelSpeed * 0.1
+            p.targetVy = (p.seed - 0.5) * 0.2
+            p.targetAlpha = 0.12 * baseAlpha
+            p.targetColor = params.preset === 'thunder' ? [100, 100, 120] : [255, 255, 255]
+            break
+        }
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -85,19 +344,41 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
 
     const handleResize = (): void => {
       setupCanvas()
-      const { width, height } = sizeRef.current
-      particlesRef.current = particlesRef.current.map((p) => ({
-        ...p,
-        x: Math.random() * width,
-        y: Math.random() * height,
-      }))
     }
     window.addEventListener('resize', handleResize)
 
-    const initParticles = (): void => {
-      particlesRef.current = []
+    const pool = particlePoolRef.current
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+      pool.push(null)
     }
-    initParticles()
+
+    const initialConfigs = getParticleConfigs(params)
+    configsRef.current = initialConfigs
+    targetConfigsRef.current = initialConfigs
+    updateParticleTargets(params, initialConfigs)
+
+    const initialBg = getBackgroundColors(params)
+    bgColorsRef.current = {
+      currentTop: [...initialBg.top],
+      currentBottom: [...initialBg.bottom],
+      targetTop: [...initialBg.top],
+      targetBottom: [...initialBg.bottom],
+    }
+
+    const { width, height } = sizeRef.current
+    const totalInitial = initialConfigs.reduce((sum, c) => sum + c.count, 0)
+    const particles = particlesRef.current
+
+    for (const config of initialConfigs) {
+      for (let i = 0; i < config.count; i++) {
+        if (particles.length >= MAX_PARTICLES) break
+        const p = createParticle(config.type, width, height, params, 0)
+        p.x = Math.random() * width
+        p.y = Math.random() * height
+        particles.push(p)
+      }
+    }
+    void totalInitial
 
     const animate = (now: number): void => {
       const ctx = canvas.getContext('2d')
@@ -106,14 +387,22 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
         return
       }
 
+      const deltaTime = Math.min((now - lastTimeRef.current) / 1000, 0.1)
+      lastTimeRef.current = now
+
       const { width, height } = sizeRef.current
 
-      const transitionProgress = clamp(
-        (now - transitionStartRef.current) / transitionDuration,
-        0,
-        1,
-      )
+      let transitionProgress = 1
+      if (isTransitioningRef.current) {
+        transitionProgress = clamp((now - transitionStartRef.current) / transitionDuration, 0, 1)
+        if (transitionProgress >= 1) {
+          isTransitioningRef.current = false
+          currentParamsRef.current = { ...targetParamsRef.current }
+          configsRef.current = [...targetConfigsRef.current]
+        }
+      }
       const easeProgress = 1 - Math.pow(1 - transitionProgress, 3)
+
       const cp = currentParamsRef.current
       const tp = targetParamsRef.current
 
@@ -125,86 +414,39 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
         preset: tp.preset,
       }
 
-      if (transitionProgress >= 1) {
-        currentParamsRef.current = { ...tp }
+      if (isTransitioningRef.current) {
+        updateParticleTargets(curParams, targetConfigsRef.current)
       }
 
-      drawBackground(ctx, width, height, curParams)
+      const bc = bgColorsRef.current
+      bc.currentTop = lerpArr(bc.currentTop, bc.targetTop, easeProgress * 0.08)
+      bc.currentBottom = lerpArr(bc.currentBottom, bc.targetBottom, easeProgress * 0.08)
 
-      const particleCounts = calculateParticleCounts(curParams)
-      manageParticles(width, height, particleCounts, curParams)
-      updateAndDrawParticles(ctx, width, height, curParams, now)
+      drawBackground(ctx, width, height, bc.currentTop.map(Math.round), bc.currentBottom.map(Math.round))
+
+      manageParticles(width, height, curParams, now, transitionProgress)
+      updateAndDrawParticles(ctx, width, height, deltaTime, curParams)
       drawEffects(ctx, width, height, curParams, now)
 
       animationRef.current = requestAnimationFrame(animate)
     }
 
+    lastTimeRef.current = performance.now()
     animationRef.current = requestAnimationFrame(animate)
 
     return () => {
       window.removeEventListener('resize', handleResize)
       cancelAnimationFrame(animationRef.current)
     }
-  }, [transitionDuration])
+  }, [transitionDuration, updateParticleTargets, params])
 
   const drawBackground = (
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
-    params: WeatherParams,
+    topColor: number[],
+    bottomColor: number[],
   ): void => {
-    const { temperature, lightLevel, humidity,
-    preset = params.preset
-    const tempRatio = (temperature + 10) / 50
-
-    let topColor: number[]
-    let bottomColor: number[]
-
-    if (preset === 'sunset') {
-      topColor = [255, 107, 53]
-      bottomColor = [255, 200, 100]
-    } else if (preset === 'rainbow') {
-      topColor = [100, 180, 255]
-      bottomColor = [255, 200, 220]
-    } else if (preset === 'thunder') {
-      topColor = [20, 20, 40]
-      bottomColor = [60, 60, 90]
-    } else if (preset === 'blizzard') {
-      topColor = [180, 200, 220]
-      bottomColor = [220, 230, 245]
-    } else if (preset === 'clear') {
-      topColor = [135, 206, 250]
-      bottomColor = [200, 230, 255]
-    } else if (preset === 'mist') {
-      topColor = [150, 160, 170]
-      bottomColor = [200, 210, 220]
-    } else {
-      const coldTop = [10, 22, 40]
-      const hotTop2 = [10, 16, 40]
-      const warmTop = [255, 107, 53]
-      const coldBottom = [30, 60, 110]
-      const warmBottom = [255, 200, 150]
-
-      if (tempRatio < 0.5) {
-        const t = tempRatio * 2
-        topColor = lerpColor(coldTop, hotTop2, t)
-        bottomColor = lerpColor(coldBottom, [100, 150, 200], t)
-      } else {
-        const t = (tempRatio - 0.5) * 2
-        topColor = lerpColor(hotTop2, warmTop, t)
-        bottomColor = lerpColor([100, 150, 200], warmBottom, t)
-      }
-    }
-
-    const lightFactor = lightLevel / 100
-    topColor = topColor.map((c) => Math.round(c * (0.4 + lightFactor * 0.6)) as number[]
-    bottomColor = bottomColor.map((c) => Math.round(c * (0.5 + lightFactor * 0.5)) as number[]
-
-    const mistFactor = humidity / 100
-    const grayOverlay = [128
-    topColor = topColor.map((c, i) => Math.round(lerp(c, grayOverlay[i] || 128, mistFactor * 0.3)) as number[]
-    bottomColor = bottomColor.map((c, i) => Math.round(lerp(c, grayOverlay[i] || 128, mistFactor * 0.3)) as number[]
-
     const gradient = ctx.createLinearGradient(0, 0, 0, height)
     gradient.addColorStop(0, rgbToString(topColor))
     gradient.addColorStop(1, rgbToString(bottomColor))
@@ -212,163 +454,128 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
     ctx.fillRect(0, 0, width, height)
   }
 
-  const calculateParticleCounts = (params: WeatherParams) => {
-    const { temperature, humidity, windSpeed } = params
-    const counts = { snow: 0, rain: 0, sand: 0, cloud: 0 }
-
-    if (temperature < 5 && humidity > 40) {
-      const intensity = ((5 - temperature) / 15 + humidity / 200
-      counts.snow = Math.round(MAX_PARTICLES * 0.6 * clamp(intensity, 0, 1))
-    }
-
-    if (temperature >= 5 && temperature <= 30 && humidity > 60) {
-      const intensity = humidity / 100
-      counts.rain = Math.round(MAX_PARTICLES * 0.7 * clamp(intensity, 0, 1))
-    }
-
-    if (temperature > 25 && humidity < 40 && windSpeed > 5) {
-      const intensity = (temperature - 25) / 15 + (windSpeed - 5) / 30
-      counts.sand = Math.round(MAX_PARTICLES * 0.5 * clamp(intensity, 0, 1))
-    }
-
-    if (humidity > 50 && humidity < 90 && windSpeed < 10) {
-      counts.cloud = Math.round(MAX_PARTICLES * 0.08 * clamp(humidity / 100, 0.2, 1))
-    }
-
-    return counts
-  }
-
   const manageParticles = (
     width: number,
     height: number,
-    counts: { snow: number; rain: number; sand: number; cloud: number },
     params: WeatherParams,
+    now: number,
+    transitionProgress: number,
   ): void => {
     const particles = particlesRef.current
-    const total = counts.snow + counts.rain + counts.sand + counts.cloud
-    const currentCounts = { snow: 0, rain: 0, sand: 0, cloud: 0 }
+    const configs = targetConfigsRef.current
+    const windSpeed = WIND_SPEED_MAP(params.windSpeed)
+
+    const typeCounts: Record<ParticleType, { current: number; target: number }> = {
+      snow: { current: 0, target: 0 },
+      rain: { current: 0, target: 0 },
+      sand: { current: 0, target: 0 },
+      cloud: { current: 0, target: 0 },
+    }
+
+    configs.forEach((c) => {
+      typeCounts[c.type].target = c.count
+    })
 
     particles.forEach((p) => {
-      currentCounts[p.type]++
+      if (p.active) typeCounts[p.type].current++
     })
 
-    const addParticle = (type: Particle['type']): void => {
-      const baseSpeed = 0.5 + params.windSpeed / 10
-      let p: Particle
-
-      if (type === 'snow') {
-        p = {
-          x: Math.random() * width,
-          y: -10 - Math.random() * height * 0.3,
-          vx: (Math.random() - 0.5) * baseSpeed * 0.5,
-          vy: 0.5 + Math.random() * 1.5 * baseSpeed,
-          size: 2 + Math.random() * 4,
-          life: 1,
-          maxLife: 1,
-          type,
-          rotation: Math.random() * Math.PI * 2,
-          seed: Math.random(),
-        }
-      } else if (type === 'rain') {
-        p = {
-          x: Math.random() * width,
-          y: -10 - Math.random() * height * 0.2,
-          vx: params.windSpeed * 0.15,
-          vy: 8 + Math.random() * 6 * baseSpeed,
-          size: 1 + Math.random() * 2,
-          life: 1,
-          maxLife: 1,
-          type,
-          rotation: 0,
-          seed: Math.random(),
-        }
-      } else if (type === 'sand') {
-        const fromLeft = params.windSpeed > 0
-        p = {
-          x: fromLeft ? -10 : width + 10,
-          y: Math.random() * height,
-          vx: (fromLeft ? 1 : -1) * (3 + Math.random() * 5 * (params.windSpeed / 10)),
-          vy: (Math.random() - 0.5) * 2,
-          size: 1 + Math.random() * 3,
-          life: 1,
-          maxLife: 1,
-          type,
-          rotation: 0,
-          seed: Math.random(),
-        }
-      } else {
-        p = {
-          x: -100 - Math.random() * width,
-          y: Math.random() * height * 0.6,
-          vx: 0.2 + Math.random() * 0.5 + params.windSpeed * 0.05,
-          vy: (Math.random() - 0.5) * 0.1,
-          size: 60 + Math.random() * 120,
-          life: 1,
-          maxLife: 1,
-          type,
-          rotation: 0,
-          seed: Math.random(),
-        }
-      }
-      particles.push(p)
-    }
-
-    const removeExcess = (type: Particle['type'], excess: number): void => {
-      for (let i = particles.length - 1; i >= 0 && excess > 0; i--) {
-        if (particles[i].type === type) {
-          particles.splice(i, 1)
-          excess--
-        }
-      }
-    }
-
-    const types: Particle['type'][] = ['snow', 'rain', 'sand', 'cloud']
+    const types: ParticleType[] = ['snow', 'rain', 'sand', 'cloud']
     types.forEach((type) => {
-      const count = counts[type]
-      const current = currentCounts[type]
-      if (current < count) {
-        const toAdd = Math.min(count - current, Math.ceil((count - current) * 0.1) + 5)
+      const { current, target } = typeCounts[type]
+      if (current < target) {
+        const toAdd = Math.min(
+          target - current,
+          Math.max(2, Math.ceil((target - current) * 0.05 * (1 + transitionProgress * 2))),
+        )
         for (let i = 0; i < toAdd && particles.length < MAX_PARTICLES; i++) {
-          addParticle(type)
+          const p = createParticle(type, width, height, params, now)
+          p.alpha = 0
+          particles.push(p)
+          typeCounts[type].current++
         }
-      } else if (current > count) {
-        removeExcess(type, current - count)
+      } else if (current > target) {
+        let toRemove = current - target
+        for (let i = particles.length - 1; i >= 0 && toRemove > 0; i--) {
+          if (particles[i].type === type && particles[i].active) {
+            particles[i].targetAlpha = 0
+            setTimeout(() => {
+              if (particles[i]) particles[i].active = false
+            }, 500)
+            toRemove--
+          }
+        }
       }
     })
 
-    if (particles.length > MAX_PARTICLES) {
-      particles.length = MAX_PARTICLES
+    for (let i = particles.length - 1; i >= 0; i--) {
+      if (!particles[i].active) {
+        particles.splice(i, 1)
+      }
     }
-    void total
+    void windSpeed
   }
 
   const updateAndDrawParticles = (
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
+    deltaTime: number,
     params: WeatherParams,
-    now: number,
   ): void => {
     const particles = particlesRef.current
-    const { lightLevel, preset } = params
-    const brightness = 0.3 + (lightLevel / 100) * 0.7
+    const isTransitioning = isTransitioningRef.current
 
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i]
-      p.x += p.vx
-      p.y += p.vy
+      if (!p.active) continue
 
-      let remove = false
+      const lerpFactor = isTransitioning ? 0.05 : 0.15
+      p.vx = lerp(p.vx, p.targetVx, lerpFactor)
+      p.vy = lerp(p.vy, p.targetVy, lerpFactor)
+      p.size = lerp(p.size, p.targetSize, lerpFactor * 0.5)
+      p.alpha = lerp(p.alpha, p.targetAlpha, lerpFactor * 2)
+      p.color = lerpArr(p.color, p.targetColor, lerpFactor)
 
+      p.x += p.vx * deltaTime * 60
+      p.y += p.vy * deltaTime * 60
+      p.rotation += 0.02 * deltaTime * 60
+
+      let respawn = false
       if (p.type === 'snow') {
-        if (p.y > height + 10) remove = true
-        if (p.x < -20 || p.x > width + 20) remove = true
-        p.rotation += 0.02
+        if (p.y > height + 20 || p.x < -50 || p.x > width + 50) respawn = true
+      } else if (p.type === 'rain') {
+        if (p.y > height + 30 || p.x < -100 || p.x > width + 100) respawn = true
+      } else if (p.type === 'sand') {
+        if (p.x < -50 || p.x > width + 50 || p.y < -50 || p.y > height + 50) respawn = true
+      } else if (p.type === 'cloud') {
+        if (p.x - p.size > width + 200) respawn = true
+      }
 
+      if (respawn && p.targetAlpha > 0) {
+        const newP = createParticle(p.type, width, height, params, performance.now())
+        p.x = newP.x
+        p.y = newP.y
+        p.vx = newP.vx
+        p.vy = newP.vy
+        p.targetVx = newP.targetVx
+        p.targetVy = newP.targetVy
+        p.spawnTime = performance.now()
+      }
+
+      drawParticle(ctx, p)
+    }
+  }
+
+  const drawParticle = (ctx: CanvasRenderingContext2D, p: Particle): void => {
+    if (p.alpha <= 0) return
+
+    switch (p.type) {
+      case 'snow':
         ctx.save()
         ctx.translate(p.x, p.y)
         ctx.rotate(p.rotation)
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * brightness})`
+        ctx.fillStyle = rgbToString(p.color, p.alpha)
         ctx.beginPath()
         for (let j = 0; j < 6; j++) {
           const angle = (j / 6) * Math.PI * 2
@@ -380,51 +587,27 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
         ctx.closePath()
         ctx.fill()
         ctx.restore()
-      } else if (p.type === 'rain') {
-        if (p.y > height + 20) remove = true
-        if (p.x < -50 || p.x > width + 50) remove = true
-
+        break
+      case 'rain':
         const length = p.size * 8
-        const alpha = 0.4 + p.seed * 0.3
-        const isThunder = preset === 'thunder'
-        const strokeColor = isThunder
-          ? `rgba(180, 200, 255, ${alpha * brightness})`
-          : `rgba(150, 180, 230, ${alpha * brightness})`
-
-        ctx.strokeStyle = strokeColor
+        ctx.strokeStyle = rgbToString(p.color, p.alpha)
         ctx.lineWidth = p.size * 0.8
         ctx.lineCap = 'round'
         ctx.beginPath()
         ctx.moveTo(p.x, p.y)
-        ctx.lineTo(p.x + p.vx * 0.3, p.y + length)
+        ctx.lineTo(p.x + p.vx * 0.1, p.y + length)
         ctx.stroke()
-      } else if (p.type === 'sand') {
-        if (p.x < -50 || p.x > width + 50) remove = true
-        if (p.y < -50 || p.y > height + 50) remove = true
-
-        const colors = [
-          [210, 180, 140],
-          [205, 163, 115],
-          [222, 184, 135],
-        ]
-        const color = colors[Math.floor(p.seed * colors.length)]
-        ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${0.6 * brightness})`
+        break
+      case 'sand':
+        ctx.fillStyle = rgbToString(p.color, p.alpha)
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
         ctx.fill()
-      } else if (p.type === 'cloud') {
-        if (p.x - p.size > width + 100) remove = true
-
-        const cloudAlpha = 0.12 * brightness * (params.humidity / 100)
-        const cloudColor = preset === 'thunder' ? [80, 80, 100] : [255, 255, 255]
-        drawCloud(ctx, p.x, p.y, p.size, cloudColor, cloudAlpha)
-      }
-
-      if (remove) {
-        particles.splice(i, 1)
-      }
+        break
+      case 'cloud':
+        drawCloud(ctx, p.x, p.y, p.size, p.color, p.alpha)
+        break
     }
-    void now
   }
 
   const drawCloud = (
@@ -435,7 +618,7 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
     color: number[],
     alpha: number,
   ): void => {
-    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`
+    ctx.fillStyle = rgbToString(color, alpha)
     const circles = [
       { dx: 0, dy: 0, r: size * 0.5 },
       { dx: -size * 0.4, dy: size * 0.1, r: size * 0.4 },
@@ -457,7 +640,7 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
     params: WeatherParams,
     now: number,
   ): void => {
-    const { preset, humidity } = params
+    const { preset } = params
 
     if (preset === 'rainbow') {
       drawRainbow(ctx, width, height)
@@ -467,11 +650,9 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
       drawLightning(ctx, width, height, now)
     }
 
-    if (preset === 'sunset' || params.temperature > 20) {
+    if (preset === 'sunset' || preset === 'clear') {
       drawSun(ctx, width, height, params)
     }
-
-    void humidity
   }
 
   const drawRainbow = (
@@ -480,18 +661,17 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
     height: number,
   ): void => {
     const centerX = width * 0.5
-
     const centerY = height * 1.2
     const baseRadius = Math.min(width, height * 1.5)
 
     const colors = [
-      { color: [255, 0, 0, alpha: 0.18 },
-      { color: [255, 127, 0, alpha: 0.18 },
-      { color: [255, 255, 0, alpha: 0.18 },
-      { color: [0, 255, 0, alpha: 0.18 },
-      { color: [0, 0, 255, alpha: 0.18 },
-      { color: [75, 0, 130, alpha: 0.18 },
-      { color: [148, 0, 211, alpha: 0.18 },
+      { color: [255, 0, 0], alpha: 0.18 },
+      { color: [255, 127, 0], alpha: 0.18 },
+      { color: [255, 255, 0], alpha: 0.18 },
+      { color: [0, 255, 0], alpha: 0.18 },
+      { color: [0, 0, 255], alpha: 0.18 },
+      { color: [75, 0, 130], alpha: 0.18 },
+      { color: [148, 0, 211], alpha: 0.18 },
     ]
 
     colors.forEach((c, i) => {
@@ -512,27 +692,26 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
   ): void => {
     const lightning = lightningRef.current
 
-    if (now - lightningTimerRef.current > 3000 + Math.random() * 5000
-) {
+    if (!lightning.active && now - lightningTimerRef.current > 3000 + Math.random() * 5000) {
       lightningTimerRef.current = now
       lightning.active = true
       lightning.intensity = 0.7 + Math.random() * 0.3
-
+      lightning.startTime = now
+      lightning.timer = 0
     }
 
     if (lightning.active) {
-      const elapsed = now - lightningTimerRef.current
+      const elapsed = now - lightning.startTime
 
-      if (elapsed < 80) {
-        lightning.timer += 0.08
-
+      if (elapsed < 120) {
+        lightning.timer += 0.06
         const flashAlpha = Math.sin(lightning.timer * Math.PI) * lightning.intensity * 0.35
         if (flashAlpha > 0) {
           ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`
           ctx.fillRect(0, 0, width, height)
         }
 
-        if (elapsed < 60 && elapsed > 20) {
+        if (elapsed < 100 && elapsed > 30) {
           drawLightningBolt(ctx, width, height)
         }
       } else {
@@ -574,7 +753,7 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
         ctx.moveTo(x, y)
         let bx = x
         let by = y
-        for (let j = 0 j < 3 j++) {
+        for (let j = 0; j < 3; j++) {
           bx += (Math.random() - 0.5) * 40
           by += 20 + Math.random() * 30
           ctx.lineTo(bx, by)
@@ -619,7 +798,7 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
     if (intensity > 0.3) {
       ctx.fillStyle = preset === 'sunset'
         ? `rgba(255, 220, 150, ${0.95 * intensity})`
-        : `rgba(255, 255, 245, ${intensity})`,
+        : `rgba(255, 255, 245, ${intensity})`
       ctx.beginPath()
       ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2)
       ctx.fill()
@@ -629,11 +808,7 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
   return (
     <canvas
       ref={canvasRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'block',
-      }}
+      style={{ width: '100%', height: '100%', display: 'block' }}
     />
   )
 })

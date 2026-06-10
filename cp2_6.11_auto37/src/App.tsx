@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom'
 import { WeatherCanvas, type WeatherCanvasHandle } from './components/WeatherCanvas'
 import { ControlPanel } from './components/ControlPanel'
@@ -11,6 +11,8 @@ const defaultParams: WeatherParams = {
   windSpeed: 5,
   lightLevel: 70,
 }
+
+const PAGE_SIZE = 15
 
 const Navbar: React.FC = () => (
   <nav style={styles.navbar}>
@@ -28,7 +30,7 @@ const Navbar: React.FC = () => (
 const ShareModal: React.FC<{ shareUrl: string; onClose: () => void }> = ({ shareUrl, onClose }) => {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = async (): Promise<void> => {
+  const handleCopy = useCallback(async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
@@ -36,7 +38,7 @@ const ShareModal: React.FC<{ shareUrl: string; onClose: () => void }> = ({ share
     } catch {
       // ignore
     }
-  }
+  }, [shareUrl])
 
   return (
     <div style={styles.modalOverlay} onClick={onClose}>
@@ -123,11 +125,12 @@ interface GalleryItemProps {
 const GalleryItem: React.FC<GalleryItemProps> = ({ artwork, onClick }) => {
   const [loaded, setLoaded] = useState(false)
   const [visible, setVisible] = useState(false)
-  const imgRef = useRef<HTMLDivElement>(null)
+  const itemRef = useRef<HTMLDivElement>(null)
 
-  React.useEffect(() => {
-    const el = imgRef.current
+  useEffect(() => {
+    const el = itemRef.current
     if (!el) return
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -137,7 +140,7 @@ const GalleryItem: React.FC<GalleryItemProps> = ({ artwork, onClick }) => {
           }
         })
       },
-      { threshold: 0.1 },
+      { threshold: 0.05, rootMargin: '100px' },
     )
     observer.observe(el)
     return () => observer.disconnect()
@@ -145,7 +148,7 @@ const GalleryItem: React.FC<GalleryItemProps> = ({ artwork, onClick }) => {
 
   return (
     <div
-      ref={imgRef}
+      ref={itemRef}
       onClick={onClick}
       style={{
         ...styles.galleryItem,
@@ -186,31 +189,74 @@ const GalleryPage: React.FC = () => {
   const navigate = useNavigate()
   const [artworks, setArtworks] = useState<WeatherArtwork[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [total, setTotal] = useState(0)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+  const initialLoadDone = useRef(false)
 
-  React.useEffect(() => {
-    const fetchArtworks = async (): Promise<void> => {
-      try {
-        const response = await fetch('/api/artworks')
-        if (response.ok) {
-          const data = await response.json()
-          setArtworks(data.artworks || [])
+  const loadArtworks = useCallback(async (pageNum: number, append = false): Promise<void> => {
+    try {
+      if (append) setLoadingMore(true)
+      const response = await fetch(`/api/artworks?page=${pageNum}&limit=${PAGE_SIZE}`)
+      if (response.ok) {
+        const data = await response.json()
+        const newArtworks = data.artworks || []
+        if (append) {
+          setArtworks((prev) => [...prev, ...newArtworks])
+        } else {
+          setArtworks(newArtworks)
         }
-      } catch (error) {
-        console.error('Failed to load gallery:', error)
-      } finally {
-        setLoading(false)
+        setTotal(data.total || 0)
+        setHasMore(append ? newArtworks.length === PAGE_SIZE : newArtworks.length < (data.total || 0))
       }
+    } catch (error) {
+      console.error('Failed to load gallery:', error)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
     }
-    fetchArtworks()
   }, [])
+
+  useEffect(() => {
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true
+      loadArtworks(1, false)
+    }
+  }, [loadArtworks])
+
+  useEffect(() => {
+    if (page > 1) {
+      loadArtworks(page, true)
+    }
+  }, [page, loadArtworks])
+
+  useEffect(() => {
+    const el = loadMoreRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && hasMore && !loadingMore && !loading) {
+            setPage((prev) => prev + 1)
+          }
+        })
+      },
+      { threshold: 0.1 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, loadingMore, loading])
 
   return (
     <div style={styles.page}>
       <Navbar />
       <main style={styles.galleryMain}>
         <h1 style={styles.pageTitle}>公共画廊</h1>
-        <p style={styles.pageSubtitle}>探索社区创作者构建的奇幻天气世界</p>
-        {loading ? (
+        <p style={styles.pageSubtitle}>探索社区创作者构建的奇幻天气世界 · 共 {total} 件作品</p>
+        {loading && artworks.length === 0 ? (
           <div style={styles.loadingContainer}>
             <div style={styles.loadingSpinner} />
             <p style={styles.loadingText}>加载中...</p>
@@ -221,15 +267,32 @@ const GalleryPage: React.FC = () => {
             <Link to="/" style={styles.emptyButton}>开始创作 →</Link>
           </div>
         ) : (
-          <div style={styles.galleryGrid}>
-            {artworks.map((artwork) => (
-              <GalleryItem
-                key={artwork.id}
-                artwork={artwork}
-                onClick={() => navigate(`/detail/${artwork.id}`)}
-              />
-            ))}
-          </div>
+          <>
+            <div style={styles.galleryGrid}>
+              {artworks.map((artwork) => (
+                <GalleryItem
+                  key={artwork.id}
+                  artwork={artwork}
+                  onClick={() => navigate(`/detail/${artwork.id}`)}
+                />
+              ))}
+            </div>
+
+            {hasMore && (
+              <div ref={loadMoreRef} style={styles.loadMoreContainer}>
+                {loadingMore && (
+                  <>
+                    <div style={styles.loadingSpinnerSmall} />
+                    <p style={styles.loadingText}>加载更多...</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {!hasMore && artworks.length > 0 && (
+              <p style={styles.endText}>— 已加载全部作品 —</p>
+            )}
+          </>
         )}
       </main>
     </div>
@@ -245,7 +308,7 @@ const DetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!id) return
     const fetchArtwork = async (): Promise<void> => {
       try {
@@ -267,7 +330,7 @@ const DetailPage: React.FC = () => {
     fetchArtwork()
   }, [id])
 
-  const handleCopy = async (): Promise<void> => {
+  const handleCopy = useCallback(async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(window.location.href)
       setCopied(true)
@@ -275,7 +338,7 @@ const DetailPage: React.FC = () => {
     } catch {
       // ignore
     }
-  }
+  }, [])
 
   if (loading) {
     return (
@@ -487,9 +550,18 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
   },
+  loadingSpinnerSmall: {
+    width: '24px',
+    height: '24px',
+    border: '2px solid rgba(100, 181, 246, 0.2)',
+    borderTopColor: '#64B5F6',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+  },
   loadingText: {
     color: '#888',
     fontSize: '14px',
+    margin: 0,
   },
   emptyState: {
     display: 'flex',
@@ -558,6 +630,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: '#9E9E9E',
   },
+  loadMoreContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '40px 24px',
+  },
+  endText: {
+    textAlign: 'center',
+    color: '#555',
+    fontSize: '13px',
+    padding: '40px 24px',
+    margin: 0,
+  },
   detailMain: {
     maxWidth: '1100px',
     margin: '0 auto',
@@ -571,6 +657,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     padding: '8px 0',
     marginBottom: '20px',
+    fontFamily: 'inherit',
   },
   detailCanvasWrapper: {
     width: '100%',
@@ -663,6 +750,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     transition: 'all 0.2s ease',
+    fontFamily: 'inherit',
   },
   createButton: {
     padding: '14px 24px',
@@ -732,6 +820,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
+    fontFamily: 'inherit',
   },
 }
 
@@ -757,8 +846,7 @@ const injectGlobalStyles = (): void => {
     }
     @media (hover: hover) {
       a[style*="navLink"]:hover { background: rgba(255,255,255,0.06); color: #64B5F6; }
-      button[style*="presetButton"]:hover { transform: scale(1.05); background: rgba(100,181,246,0.1); }
-      button[style*="saveButton"]:hover:not([disabled]) { transform: scale(1.05); }
+      button[style*="saveButton"]:hover:not([disabled]) { transform: scale(1.05) !important; }
       button[style*="copyButton"]:hover { background: rgba(100,181,246,0.25); }
       button[style*="createButton"]:hover { transform: scale(1.02); }
       button[style*="closeButton"]:hover { background: rgba(255,255,255,0.05); }
@@ -783,26 +871,6 @@ const injectGlobalStyles = (): void => {
     }
     @media (max-width: 480px) {
       div[style*="galleryGrid"] { column-count: 1; }
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #fff;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      border: 2px solid #64B5F6;
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #fff;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      border: 2px solid #64B5F6;
     }
   `
   document.head.appendChild(style)

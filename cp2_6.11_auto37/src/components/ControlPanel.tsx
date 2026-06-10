@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import type { WeatherParams, PresetConfig } from '../types'
 import { PRESETS } from '../types'
 
@@ -20,11 +20,45 @@ interface SliderProps {
   onChange: (value: number) => void
 }
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(handler)
+  }, [value, delay])
+  return debouncedValue
+}
+
 const Slider: React.FC<SliderProps> = ({ label, value, min, max, step, unit, onChange }) => {
+  const [localValue, setLocalValue] = useState(value)
+  const debouncedValue = useDebounce(localValue, 30)
+  const isDraggingRef = useRef(false)
+
+  useEffect(() => {
+    if (!isDraggingRef.current) {
+      setLocalValue(value)
+    }
+  }, [value])
+
+  useEffect(() => {
+    if (isDraggingRef.current) {
+      onChange(debouncedValue)
+    }
+  }, [debouncedValue, onChange])
+
   const percentage = ((value - min) / (max - min)) * 100
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    onChange(parseFloat(e.target.value))
+    isDraggingRef.current = true
+    const val = parseFloat(e.target.value)
+    setLocalValue(val)
+  }
+
+  const handleMouseUp = (): void => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false
+      onChange(localValue)
+    }
   }
 
   return (
@@ -35,7 +69,17 @@ const Slider: React.FC<SliderProps> = ({ label, value, min, max, step, unit, onC
           {value.toFixed(step < 1 ? 1 : 0)}{unit}
         </span>
       </div>
-      <div style={styles.sliderTrackContainer}>
+      <div
+        style={styles.sliderTrackContainer}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchEnd={handleMouseUp}
+      >
+        <div
+          style={{
+            ...styles.sliderTrack,
+          }}
+        />
         <div
           style={{
             ...styles.sliderFill,
@@ -47,7 +91,7 @@ const Slider: React.FC<SliderProps> = ({ label, value, min, max, step, unit, onC
           min={min}
           max={max}
           step={step}
-          value={value}
+          value={localValue}
           onChange={handleChange}
           style={styles.sliderInput}
         />
@@ -74,7 +118,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             max={40}
             step={1}
             unit="°C"
-            onChange={(v) => onChange({ temperature: v })}
+            onChange={useCallback((v) => onChange({ temperature: v }), [onChange])}
           />
           <Slider
             label="湿度"
@@ -83,7 +127,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             max={100}
             step={1}
             unit="%"
-            onChange={(v) => onChange({ humidity: v })}
+            onChange={useCallback((v) => onChange({ humidity: v }), [onChange])}
           />
           <Slider
             label="风速"
@@ -92,7 +136,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             max={20}
             step={1}
             unit="级"
-            onChange={(v) => onChange({ windSpeed: v })}
+            onChange={useCallback((v) => onChange({ windSpeed: v }), [onChange])}
           />
           <Slider
             label="光照"
@@ -101,7 +145,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             max={100}
             step={1}
             unit="%"
-            onChange={(v) => onChange({ lightLevel: v })}
+            onChange={useCallback((v) => onChange({ lightLevel: v }), [onChange])}
           />
         </div>
 
@@ -153,7 +197,7 @@ const styles: Record<string, React.CSSProperties> = {
     WebkitBackdropFilter: 'blur(15px)',
     borderTop: '1px solid rgba(255, 255, 255, 0.08)',
     color: '#E0E0E0',
-    maxHeight: '40vh',
+    maxHeight: '45vh',
     overflowY: 'auto',
   },
   content: {
@@ -205,8 +249,18 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     height: '8px',
     borderRadius: '4px',
-    background: 'rgba(255, 255, 255, 0.08)',
     overflow: 'visible',
+    touchAction: 'none',
+  },
+  sliderTrack: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: '4px',
+    background: 'linear-gradient(90deg, #3A7BD5 0%, #F39C12 100%)',
+    opacity: 0.25,
   },
   sliderFill: {
     position: 'absolute',
@@ -226,6 +280,7 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     opacity: 0,
     cursor: 'pointer',
+    padding: 0,
   },
   presetsGrid: {
     display: 'grid',
@@ -246,6 +301,8 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     minHeight: '64px',
+    fontSize: '14px',
+    fontFamily: 'inherit',
   },
   presetButtonActive: {
     background: 'rgba(100, 181, 246, 0.15)',
@@ -254,6 +311,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   presetIcon: {
     fontSize: '22px',
+    lineHeight: 1,
   },
   presetLabel: {
     fontSize: '12px',
@@ -277,6 +335,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s ease',
     whiteSpace: 'nowrap',
     boxShadow: '0 4px 20px rgba(58, 123, 213, 0.3)',
+    fontFamily: 'inherit',
   },
   saveButtonDisabled: {
     opacity: 0.6,
@@ -286,18 +345,51 @@ const styles: Record<string, React.CSSProperties> = {
 
 export default ControlPanel
 
-if (typeof window !== 'undefined' && window.matchMedia) {
-  const mobileQuery = window.matchMedia('(max-width: 767px)')
-
-  const updateResponsiveStyles = (): void => {
-    if (mobileQuery.matches) {
-      ;(styles.content as React.CSSProperties).flexDirection = 'column'
-      ;(styles.content as React.CSSProperties).gap = '20px'
-      ;(styles.presetsGrid as React.CSSProperties).gridTemplateColumns = 'repeat(2, 1fr)'
-      ;(styles.actionsSection as React.CSSProperties).width = '100%'
-      ;(styles.actionsSection as React.CSSProperties).minHeight = 'auto'
-    }
+if (typeof window !== 'undefined') {
+  const injectSliderStyles = (): void => {
+    const styleId = 'weather-dreamweaver-slider-styles'
+    if (document.getElementById(styleId)) return
+    const style = document.createElement('style')
+    style.id = styleId
+    style.textContent = `
+      @media (max-width: 767px) {
+        div[style*="content"] { flex-direction: column !important; gap: 20px !important; }
+        div[style*="presetsGrid"] { grid-template-columns: repeat(2, 1fr) !important; }
+        div[style*="actionsSection"] { width: 100% !important; min-height: auto !important; }
+        button[style*="saveButton"] { width: 100% !important; }
+      }
+      @media (hover: hover) {
+        button[style*="presetButton"]:hover { transform: scale(1.05) !important; background: rgba(100,181,246,0.1) !important; }
+        button[style*="saveButton"]:hover:not([disabled]) { transform: scale(1.05) !important; }
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        width: 18px !important;
+        height: 18px !important;
+        border-radius: 50% !important;
+        background: #fff !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        border: 2px solid #64B5F6 !important;
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 18px !important;
+        height: 18px !important;
+        border-radius: 50% !important;
+        background: #fff !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        border: 2px solid #64B5F6 !important;
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        background: transparent !important;
+      }
+      input[type="range"]::-moz-range-track {
+        background: transparent !important;
+      }
+    `
+    document.head.appendChild(style)
   }
-  updateResponsiveStyles()
-  mobileQuery.addEventListener('change', updateResponsiveStyles)
+  injectSliderStyles()
 }

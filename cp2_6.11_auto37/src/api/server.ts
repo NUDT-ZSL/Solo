@@ -4,12 +4,16 @@ import { v4 as uuidv4 } from 'uuid'
 import type { WeatherArtwork, SaveRequest, SaveResponse, GalleryListResponse, WeatherParams } from '../types'
 
 const app = express()
-const PORT = 3001
+const PORT = 3002
 
 app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 
 const artworks = new Map<string, WeatherArtwork>()
+
+const generateShareId = (): string => {
+  return uuidv4()
+}
 
 const createSeedArtworks = (): void => {
   const seedPresets: { name: string; params: WeatherParams }[] = [
@@ -24,7 +28,7 @@ const createSeedArtworks = (): void => {
   ]
 
   seedPresets.forEach((seed, index) => {
-    const id = uuidv4()
+    const id = generateShareId()
     const thumbnail = generatePlaceholderThumbnail(seed.params, index)
     artworks.set(id, {
       id,
@@ -75,7 +79,7 @@ app.post('/api/artworks', (req: Request<unknown, SaveResponse, SaveRequest>, res
       return
     }
 
-    const id = uuidv4()
+    const id = generateShareId()
     const artwork: WeatherArtwork = {
       id,
       params,
@@ -85,7 +89,9 @@ app.post('/api/artworks', (req: Request<unknown, SaveResponse, SaveRequest>, res
 
     artworks.set(id, artwork)
 
-    const shareUrl = `${req.protocol}://${req.get('host') || 'localhost:5173'}/detail/${id}`
+    const host = req.get('host') || 'localhost:5173'
+    const protocol = req.protocol || 'http'
+    const shareUrl = `${protocol}://${host}/detail/${id}`
     const response: SaveResponse = { id, shareUrl }
     res.status(201).json(response)
   } catch (error) {
@@ -111,13 +117,21 @@ app.get('/api/artworks/:id', (req: Request<{ id: string }>, res: Response<Weathe
   }
 })
 
-app.get('/api/artworks', (_req: Request, res: Response<GalleryListResponse>) => {
+app.get('/api/artworks', (req: Request, res: Response<GalleryListResponse>) => {
   try {
+    const page = parseInt(req.query.page as string) || 1
+    const limit = parseInt(req.query.limit as string) || 15
+    const start = (page - 1) * limit
+    const end = start + limit
+
     const artworkList = Array.from(artworks.values()).sort(
       (a, b) => b.createdAt - a.createdAt,
     )
+
+    const paginatedArtworks = artworkList.slice(start, end)
+
     const response: GalleryListResponse = {
-      artworks: artworkList,
+      artworks: paginatedArtworks,
       total: artworkList.length,
     }
     res.json(response)
