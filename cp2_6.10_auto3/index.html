@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>生态瓶微缩世界</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+
+    <div id="panel" class="panel">
+      <div class="panel-toggle" id="panelToggle">
+        <span>⟫</span>
+      </div>
+      <div class="panel-header">
+        <h3>元素工具箱</h3>
+        <p>拖拽元素到生态瓶中</p>
+      </div>
+      <div class="panel-items" id="panelItems">
+      </div>
+    </div>
+
+    <div id="dragGhost" class="drag-ghost" style="display:none;">
+      <div class="ghost-icon" id="ghostIcon"></div>
+      <div class="ghost-label" id="ghostLabel"></div>
+    </div>
+
+    <div id="chartBtn" class="chart-btn" title="查看生态指标">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22,12 18,12 15,21 9,3 6,15 2,15"></polyline>
+      </svg>
+    </div>
+
+    <div id="chartPanel" class="chart-panel" style="display:none;">
+      <div class="chart-panel-header">
+        <h3>实时生态指标</h3>
+        <button id="chartClose" class="chart-close">×</button>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="chartCanvas"></canvas>
+      </div>
+      <div class="chart-legend">
+        <span class="legend-item"><i class="legend-dot humidity"></i>湿度</span>
+        <span class="legend-item"><i class="legend-dot temperature"></i>温度</span>
+        <span class="legend-item"><i class="legend-dot biodiversity"></i>生物多样性</span>
+      </div>
+    </div>
+
+    <div id="tooltip" class="tooltip" style="display:none;"></div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
