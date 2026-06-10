@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>刃语棋局</title>
+  <link rel="stylesheet" href="./reset.css" />
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Georgia, 'Times New Roman', Times, serif;
+    }
+    body {
+      background: linear-gradient(135deg, #2C3E50 0%, #8B0000 100%);
+      position: relative;
+    }
+    #gameCanvas {
+      display: block;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .panel {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 200px;
+      padding: 20px;
+      background: rgba(20, 20, 30, 0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 6px;
+      color: #e8dcc4;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .panel-left { left: 30px; }
+    .panel-right { right: 30px; }
+    .panel-title {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      text-align: center;
+      letter-spacing: 2px;
+      color: #d4a758;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    }
+    .panel-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 12px 0;
+      font-size: 15px;
+    }
+    .panel-label {
+      color: #b0a080;
+    }
+    .panel-value {
+      color: #ffffff;
+      font-weight: bold;
+      min-width: 40px;
+      text-align: right;
+    }
+    .panel-active {
+      box-shadow: 0 0 25px rgba(0, 255, 136, 0.3), 0 4px 20px rgba(0, 0, 0, 0.4);
+      border-color: rgba(0, 255, 136, 0.35);
+    }
+    .rivet {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #8B7355;
+      box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.5);
+    }
+    .rivet-tl { top: 4px; left: 4px; }
+    .rivet-tr { top: 4px; right: 4px; }
+    .rivet-bl { bottom: 4px; left: 4px; }
+    .rivet-br { bottom: 4px; right: 4px; }
+    #gameOverOverlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    #gameOverOverlay.visible {
+      display: flex;
+    }
+    #resultText {
+      font-size: 64px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #FFD700 0%, #FF4500 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 4px 20px rgba(255, 215, 0, 0.4);
+      letter-spacing: 8px;
+      margin-bottom: 40px;
+      animation: resultZoom 1.5s ease-out forwards;
+    }
+    @keyframes resultZoom {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    #restartBtn {
+      width: 160px;
+      height: 50px;
+      border: none;
+      border-radius: 25px;
+      font-family: Georgia, 'Times New Roman', Times, serif;
+      font-size: 18px;
+      color: #ffffff;
+      cursor: pointer;
+      background: linear-gradient(135deg, #1A237E 0%, #7B1FA2 100%);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+      transition: background 0.3s ease, transform 0.2s ease;
+      letter-spacing: 3px;
+    }
+    #restartBtn:hover {
+      background: linear-gradient(135deg, #7B1FA2 0%, #1A237E 100%);
+      transform: translateY(-2px);
+    }
+    #restartBtn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="panel panel-left" id="panel1">
+    <div class="rivet rivet-tl"></div>
+    <div class="rivet rivet-tr"></div>
+    <div class="rivet rivet-bl"></div>
+    <div class="rivet rivet-br"></div>
+    <div class="panel-title">玩家 I</div>
+    <div class="panel-row">
+      <span class="panel-label">棋子总数</span>
+      <span class="panel-value" id="p1Pieces">0</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">行动力</span>
+      <span class="panel-value" id="p1AP">0</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">占领祭坛</span>
+      <span class="panel-value" id="p1Altars">0</span>
+    </div>
+  </div>
+
+  <div class="panel panel-right" id="panel2">
+    <div class="rivet rivet-tl"></div>
+    <div class="rivet rivet-tr"></div>
+    <div class="rivet rivet-bl"></div>
+    <div class="rivet rivet-br"></div>
+    <div class="panel-title">玩家 II</div>
+    <div class="panel-row">
+      <span class="panel-label">棋子总数</span>
+      <span class="panel-value" id="p2Pieces">0</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">行动力</span>
+      <span class="panel-value" id="p2AP">0</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">占领祭坛</span>
+      <span class="panel-value" id="p2Altars">0</span>
+    </div>
+  </div>
+
+  <canvas id="gameCanvas" width="1100" height="900"></canvas>
+
+  <div id="gameOverOverlay">
+    <div id="resultText">胜 利</div>
+    <button id="restartBtn">再 来 一 局</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
