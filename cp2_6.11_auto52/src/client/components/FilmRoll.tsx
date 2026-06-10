@@ -1,31 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Share2 } from 'lucide-react'
-import api from '../api.js'
-
-interface Photo {
-  url: string
-}
-
-interface FilmRoll {
-  id: string
-  title: string
-  photos: Photo[]
-  shareLink: string
-}
+import * as api from '../api'
+import type { FilmRoll } from '../types'
 
 export function FilmRollList() {
   const navigate = useNavigate()
   const [filmRolls, setFilmRolls] = useState<FilmRoll[]>([])
   const [loading, setLoading] = useState(true)
-  const addBtnRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const fetchFilmRolls = async () => {
       try {
         setLoading(true)
-        const data = await api.getFilmRolls()
-        setFilmRolls(data?.data || data || [])
+        const data = await api.getRolls()
+        setFilmRolls(Array.isArray(data) ? data : [])
       } catch (err) {
         console.error('Failed to fetch film rolls:', err)
         setFilmRolls([])
@@ -79,7 +68,6 @@ export function FilmRollList() {
       >
         <h1 className="gradient-gold-text font-bold text-[28px]">胶卷回忆录</h1>
         <button
-          ref={addBtnRef}
           onClick={handleAddClick}
           className="ripple-wrap gradient-gold rounded-full flex items-center justify-center cursor-pointer text-white text-2xl font-light select-none"
           style={{ width: '48px', height: '48px' }}

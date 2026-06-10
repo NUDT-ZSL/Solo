@@ -140,7 +140,7 @@ app.post(
       const outputPath = path.join(UPLOADS_DIR, fileName);
 
       await sharp(file.buffer)
-        .resize(640, null, { withoutEnlargement: true })
+        .resize({ width: 640, height: 960, fit: 'inside', withoutEnlargement: true })
         .toFormat('jpeg', { quality: 80 })
         .toFile(outputPath);
 
@@ -239,7 +239,7 @@ app.use((req: Request, res: Response) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 if (process.env.NODE_ENV !== 'test' && process.env.VERCEL !== '1') {
   app.listen(PORT, () => {
