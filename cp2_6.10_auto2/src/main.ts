@@ -10,23 +10,34 @@ class Game {
   private audioAnalyzer: AudioAnalyzer;
   private noteManager: NoteManager;
   private particleSystem: ParticleSystem;
+
   private state: GameState = 'menu';
   private currentTrack: Track | null = null;
   private lastTime = 0;
   private animationId: number | null = null;
+
   private canvasWidth = 0;
   private canvasHeight = 0;
-  private themeColor = '#FF8C42';
-  private targetThemeColor = '#FF8C42';
+
+  private themeColorRgb = { r: 255, g: 140, b: 66 };
+  private targetThemeColorRgb = { r: 255, g: 140, b: 66 };
   private colorTransitionProgress = 1;
+  private colorTransitionDuration = 1.5;
+
   private comboBounceTime = 0;
-  private fullScreenFlashTime = 0;
+  private fullscreenFlashTime = 0;
+  private fullscreenFlashAlpha = 0;
   private lastComboValue = 0;
+
   private noteSize = 24;
   private isMobile = false;
+
   private fps = 0;
-  private fpsUpdateTime = 0;
+  private fpsUpdateTimer = 0;
   private frameCount = 0;
+
+  private replayNoteSpawnTimes: { time: number; shape: NoteShape; y: number }[] = [];
+  private replayNoteIndex = 0;
 
   private scoreEl: HTMLElement;
   private comboEl: HTMLElement;
@@ -77,7 +88,7 @@ class Game {
     window.addEventListener('resize', () => this.resizeCanvas());
 
     this.audioAnalyzer.onBeat((time, intensity) => {
-      if (this.state === 'playing' || this.state === 'replay') {
+      if (this.state === 'playing') {
         this.noteManager.spawnPatternedNote(time, intensity);
       }
     });
@@ -104,11 +115,13 @@ class Game {
     this.fpsEl.style.top = '10px';
     this.fpsEl.style.right = '10px';
     this.fpsEl.style.fontSize = '12px';
-    this.fpsEl.style.color = 'rgba(255,255,255,0.5)';
+    this.fpsEl.style.color = 'rgba(255,255,255,0.6)';
     this.fpsEl.style.fontFamily = 'monospace';
     this.fpsEl.style.pointerEvents = 'none';
     this.fpsEl.style.zIndex = '1000';
-    this.fpsEl.textContent = 'FPS: 0';
+    this.fpsEl.style.textAlign = 'right';
+    this.fpsEl.textContent = 'FPS: 0\n粒子: 0';
+    this.fpsEl.style.whiteSpace = 'pre';
     document.getElementById('game-container')?.appendChild(this.fpsEl);
   }
 
@@ -216,6 +229,21 @@ class Game {
     });
   }
 
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        }
+      : { r: 255, g: 140, b: 66 };
+  }
+
+  private easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+  }
+
   private async startGame(track: Track): Promise<void> {
     this.currentTrack = track;
     this.state = 'loading';
@@ -232,8 +260,9 @@ class Game {
       this.noteManager.clearReplayRecords();
       this.particleSystem.clear();
       this.lastComboValue = 0;
+      this.comboBounceTime = 0;
 
-      this.targetThemeColor = track.themeColor;
+      this.targetThemeColorRgb = this.hexToRgb(track.themeColor);
       this.colorTransitionProgress = 0;
 
       this.updatePlayPauseIcon();
@@ -244,12 +273,13 @@ class Game {
       this.gameFooterEl.classList.remove('hidden');
       this.keyHintsEl.classList.remove('hidden');
 
-      this.state = 'playing';
-      this.audioAnalyzer.start();
-      this.noteManager.setGameStartTime(performance.now());
-
       this.comboGlowEl.classList.remove('active');
       this.fullscreenFlashEl.classList.remove('active');
+
+      this.state = 'playing';
+
+      this.audioAnalyzer.start();
+      this.noteManager.setGameStartTime(performance.now());
 
       this.updateUI();
     } catch (error) {
@@ -296,12 +326,13 @@ class Game {
     this.particleSystem.spawnRingParticles(result.position.x, result.position.y, result.note.color, perfect);
 
     if (perfect) {
+      this.particleSystem.spawnStarParticles(result.position.x, result.position.y, result.note.color);
       this.particleSystem.spawnSparkleParticles(result.position.x, result.position.y, '#FFD700');
     }
 
     const combo = this.noteManager.getCombo();
 
-    if (combo > this.lastComboValue) {
+    if (combo > this.lastComboValue && combo > 0) {
       this.triggerComboBounce();
     }
 
@@ -334,14 +365,8 @@ class Game {
   }
 
   private triggerFullscreenFlash(): void {
-    this.fullScreenFlashTime = 0.3;
-    this.fullscreenFlashEl.classList.remove('active');
-    void this.fullscreenFlashEl.offsetWidth;
-    this.fullscreenFlashEl.classList.add('active');
-
-    setTimeout(() => {
-      this.fullscreenFlashEl.classList.remove('active');
-    }, 300);
+    this.fullscreenFlashTime = 0.4;
+    this.fullscreenFlashAlpha = 0.6;
   }
 
   private endGame(): void {
@@ -355,19 +380,23 @@ class Game {
       : 0;
 
     let stars = 1;
-    if (accuracy >= 80) stars = 2;
-    if (accuracy >= 95) stars = 3;
+    if (accuracy >= 70) stars = 2;
+    if (accuracy >= 90) stars = 3;
 
     const starRatingEl = document.getElementById('star-rating');
     if (starRatingEl) {
       starRatingEl.innerHTML = Array(3).fill(0).map((_, i) =>
-        `<span class="${i < stars ? '' : 'star-empty'}">★</span>`
+        `<span class="${i < stars ? '' : 'star-empty'}" style="color:${i < stars ? '#FFD700' : 'inherit'}">★</span>`
       ).join('');
     }
 
-    document.getElementById('final-score')!.textContent = stats.score.toLocaleString();
-    document.getElementById('final-accuracy')!.textContent = accuracy + '%';
-    document.getElementById('final-maxcombo')!.textContent = stats.maxCombo.toString();
+    const finalScoreEl = document.getElementById('final-score');
+    const finalAccuracyEl = document.getElementById('final-accuracy');
+    const finalMaxcomboEl = document.getElementById('final-maxcombo');
+
+    if (finalScoreEl) finalScoreEl.textContent = stats.score.toLocaleString();
+    if (finalAccuracyEl) finalAccuracyEl.textContent = accuracy + '%';
+    if (finalMaxcomboEl) finalMaxcomboEl.textContent = stats.maxCombo.toString();
 
     this.gameHeaderEl.classList.add('hidden');
     this.gameFooterEl.classList.add('hidden');
@@ -383,7 +412,9 @@ class Game {
 
   private startReplay(): void {
     if (!this.currentTrack) return;
-    if (this.noteManager.getReplayRecords().length === 0) {
+
+    const records = this.noteManager.getReplayRecords();
+    if (records.length === 0) {
       alert('暂无回放记录，请先完成一局游戏');
       return;
     }
@@ -393,17 +424,56 @@ class Game {
     this.gameFooterEl.classList.remove('hidden');
 
     this.noteManager.reset();
-    this.noteManager.setReplayMode(true);
     this.noteManager.setBPM(this.currentTrack.bpm);
+    this.noteManager.setReplayMode(true);
     this.particleSystem.clear();
     this.lastComboValue = 0;
+    this.comboBounceTime = 0;
+    this.comboGlowEl.classList.remove('active');
 
-    this.targetThemeColor = this.currentTrack.themeColor;
+    const targetColor = this.hexToRgb(this.currentTrack.themeColor);
+    this.themeColorRgb = { ...targetColor };
+    this.targetThemeColorRgb = { ...targetColor };
     this.colorTransitionProgress = 1;
-    this.themeColor = this.currentTrack.themeColor;
+
+    this.replayNoteIndex = 0;
+    this.generateReplayNoteSchedule();
 
     this.state = 'replay';
     this.audioAnalyzer.start();
+  }
+
+  private generateReplayNoteSchedule(): void {
+    this.replayNoteSpawnTimes = [];
+
+    if (!this.currentTrack) return;
+
+    const bpm = this.currentTrack.bpm;
+    const beatInterval = 60 / bpm;
+    const duration = this.currentTrack.duration;
+
+    const playAreaTop = this.canvasHeight * 0.1;
+    const playAreaBottom = this.canvasHeight * 0.9;
+    const shapes: NoteShape[] = ['circle', 'triangle', 'diamond'];
+
+    let seed = 42;
+    const seededRandom = () => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+
+    const beatCount = Math.floor(duration / beatInterval);
+    for (let i = 0; i < beatCount; i++) {
+      const time = i * beatInterval;
+      const numNotes = 1 + Math.floor(seededRandom() * 2);
+      const yStep = (playAreaBottom - playAreaTop) / (numNotes + 1);
+
+      for (let j = 0; j < numNotes; j++) {
+        const y = playAreaTop + yStep * (j + 1) + (seededRandom() - 0.5) * 20;
+        const shape = shapes[Math.floor(seededRandom() * shapes.length)];
+        this.replayNoteSpawnTimes.push({ time, shape, y });
+      }
+    }
   }
 
   private backToMenu(): void {
@@ -419,13 +489,34 @@ class Game {
 
   private update(deltaTime: number, currentTime: number): void {
     this.frameCount++;
-    this.fpsUpdateTime += deltaTime;
-    if (this.fpsUpdateTime >= 0.5) {
-      this.fps = Math.round(this.frameCount / this.fpsUpdateTime);
+    this.fpsUpdateTimer += deltaTime;
+    if (this.fpsUpdateTimer >= 0.5) {
+      this.fps = Math.round(this.frameCount / this.fpsUpdateTimer);
       this.frameCount = 0;
-      this.fpsUpdateTime = 0;
+      this.fpsUpdateTimer = 0;
       if (this.fpsEl) {
-        this.fpsEl.textContent = `FPS: ${this.fps} | 粒子: ${this.particleSystem.getParticles().length}`;
+        this.fpsEl.textContent = `FPS: ${this.fps}\n粒子: ${this.particleSystem.getActiveCount()}`;
+      }
+    }
+
+    if (this.colorTransitionProgress < 1) {
+      this.colorTransitionProgress += deltaTime / this.colorTransitionDuration;
+      if (this.colorTransitionProgress > 1) this.colorTransitionProgress = 1;
+      this.updateThemeColor();
+    }
+
+    if (this.comboBounceTime > 0) {
+      this.comboBounceTime -= deltaTime;
+      if (this.comboBounceTime <= 0) {
+        this.comboDisplayEl.classList.remove('combo-bounce');
+      }
+    }
+
+    if (this.fullscreenFlashTime > 0) {
+      this.fullscreenFlashTime -= deltaTime;
+      this.fullscreenFlashAlpha = Math.max(0, this.fullscreenFlashTime / 0.4 * 0.6);
+      if (this.fullscreenFlashTime <= 0) {
+        this.fullscreenFlashAlpha = 0;
       }
     }
 
@@ -434,72 +525,68 @@ class Game {
       this.noteManager.update(deltaTime);
       this.particleSystem.update(deltaTime);
 
-      if (this.colorTransitionProgress < 1) {
-        this.colorTransitionProgress += deltaTime * 0.8;
-        if (this.colorTransitionProgress > 1) this.colorTransitionProgress = 1;
-        this.updateThemeColor();
-      }
-
-      if (this.comboBounceTime > 0) {
-        this.comboBounceTime -= deltaTime;
-        if (this.comboBounceTime <= 0) {
-          this.comboDisplayEl.classList.remove('combo-bounce');
-        }
-      }
-
-      if (this.fullScreenFlashTime > 0) {
-        this.fullScreenFlashTime -= deltaTime;
+      if (this.state === 'replay') {
+        this.updateReplayNotes();
       }
 
       const currentTimeAudio = this.audioAnalyzer.getCurrentTime();
       const duration = this.audioAnalyzer.getDuration();
 
-      if (currentTimeAudio >= duration - 0.1 && (this.state === 'playing' || this.state === 'replay')) {
+      if (currentTimeAudio >= duration - 0.05 && (this.state === 'playing' || this.state === 'replay')) {
         this.endGame();
+        return;
       }
 
       this.updateUI();
     }
   }
 
-  private updateThemeColor(): void {
-    const t = this.easeInOutQuad(this.colorTransitionProgress);
-    const startColor = this.hexToRgb(this.themeColor.startsWith('rgb') ? this.rgbToHex(this.themeColor) : this.themeColor);
-    const endColor = this.hexToRgb(this.targetThemeColor);
+  private updateReplayNotes(): void {
+    const currentTime = this.audioAnalyzer.getCurrentTime();
+    const judgeX = this.noteManager.getJudgeLineX();
+    const noteSpeed = this.noteManager.getNoteSpeed();
 
-    const r = Math.round(startColor.r + (endColor.r - startColor.r) * t);
-    const g = Math.round(startColor.g + (endColor.g - startColor.g) * t);
-    const b = Math.round(startColor.b + (endColor.b - startColor.b) * t);
+    while (this.replayNoteIndex < this.replayNoteSpawnTimes.length) {
+      const noteInfo = this.replayNoteSpawnTimes[this.replayNoteIndex];
+      const travelTime = (this.canvasWidth - judgeX) / noteSpeed;
+      const spawnTime = noteInfo.time - travelTime * 0.9;
 
-    this.themeColor = `rgb(${r}, ${g}, ${b})`;
-
-    if (t >= 1) {
-      this.themeColor = this.targetThemeColor;
+      if (spawnTime <= currentTime) {
+        this.spawnReplayNote(noteInfo.shape, noteInfo.y, noteInfo.time);
+        this.replayNoteIndex++;
+      } else {
+        break;
+      }
     }
   }
 
-  private easeInOutQuad(t: number): number {
-    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+  private spawnReplayNote(shape: NoteShape, y: number, targetTime: number): void {
+    const note = this.noteManager.getNotes().find(n =>
+      n.shape === shape && Math.abs(n.y - y) < 30 && !n.hit && !n.missed
+    );
+
+    if (note) return;
+
+    const spawnedNote = this.noteManager.spawnNote(shape, targetTime);
+    spawnedNote.y = y;
   }
 
-  private rgbToHex(rgb: string): string {
-    const match = rgb.match(/\d+/g);
-    if (!match || match.length < 3) return '#FF8C42';
-    const r = parseInt(match[0]);
-    const g = parseInt(match[1]);
-    const b = parseInt(match[2]);
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-  }
+  private updateThemeColor(): void {
+    const t = this.easeInOutCubic(this.colorTransitionProgress);
 
-  private hexToRgb(hex: string): { r: number; g: number; b: number } {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16)
-        }
-      : { r: 255, g: 140, b: 66 };
+    this.themeColorRgb.r = Math.round(
+      this.themeColorRgb.r + (this.targetThemeColorRgb.r - this.themeColorRgb.r) * t * 0.05
+    );
+    this.themeColorRgb.g = Math.round(
+      this.themeColorRgb.g + (this.targetThemeColorRgb.g - this.themeColorRgb.g) * t * 0.05
+    );
+    this.themeColorRgb.b = Math.round(
+      this.themeColorRgb.b + (this.targetThemeColorRgb.b - this.themeColorRgb.b) * t * 0.05
+    );
+
+    if (this.colorTransitionProgress >= 1) {
+      this.themeColorRgb = { ...this.targetThemeColorRgb };
+    }
   }
 
   private updateUI(): void {
@@ -520,6 +607,11 @@ class Game {
       return;
     }
 
+    if (this.fullscreenFlashAlpha > 0) {
+      ctx.fillStyle = `rgba(255, 215, 0, ${this.fullscreenFlashAlpha})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
     this.drawJudgeLine(ctx, w, h);
     this.drawNotes(ctx);
     this.drawParticles(ctx);
@@ -528,11 +620,12 @@ class Game {
   private drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     const gradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
 
-    const themeColor = this.themeColor;
-    const rgb = this.hexToRgb(themeColor.startsWith('#') ? themeColor : this.rgbToHex(themeColor));
+    const r = this.themeColorRgb.r;
+    const g = this.themeColorRgb.g;
+    const b = this.themeColorRgb.b;
 
-    const darkColor = `rgb(${Math.floor(rgb.r * 0.1)}, ${Math.floor(rgb.g * 0.1)}, ${Math.floor(rgb.b * 0.2)})`;
-    const darkerColor = `rgb(${Math.floor(rgb.r * 0.03)}, ${Math.floor(rgb.g * 0.03)}, ${Math.floor(rgb.b * 0.06)})`;
+    const darkColor = `rgb(${Math.floor(r * 0.1)}, ${Math.floor(g * 0.1)}, ${Math.floor(b * 0.2)})`;
+    const darkerColor = `rgb(${Math.floor(r * 0.03)}, ${Math.floor(g * 0.03)}, ${Math.floor(b * 0.06)})`;
 
     gradient.addColorStop(0, darkColor);
     gradient.addColorStop(1, darkerColor);
@@ -543,19 +636,17 @@ class Game {
     if (this.state === 'playing' || this.state === 'replay') {
       const intensity = this.audioAnalyzer.getBeatIntensity();
       const glowGradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.min(w, h) * 0.5);
-      glowGradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${0.08 + intensity * 0.15})`);
+      glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${0.08 + intensity * 0.15})`);
       glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = glowGradient;
       ctx.fillRect(0, 0, w, h);
-    }
 
-    if (this.state === 'playing' || this.state === 'replay') {
       const beatEnergy = this.audioAnalyzer.getLowFrequencyEnergy() / 255;
-      ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${0.1 + beatEnergy * 0.3})`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.08 + beatEnergy * 0.25})`;
       ctx.lineWidth = 1;
-      const ringCount = 3;
+      const ringCount = 4;
       for (let i = 0; i < ringCount; i++) {
-        const radius = (w * 0.2 + i * w * 0.15) * (1 + beatEnergy * 0.05);
+        const radius = (w * 0.15 + i * w * 0.12) * (1 + beatEnergy * 0.08);
         ctx.beginPath();
         ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2);
         ctx.stroke();
@@ -566,52 +657,51 @@ class Game {
   private drawJudgeLine(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     const judgeX = this.noteManager.getJudgeLineX();
 
-    const gradient = ctx.createLinearGradient(judgeX - 40, 0, judgeX + 40, 0);
+    const gradient = ctx.createLinearGradient(judgeX - 50, 0, judgeX + 50, 0);
     gradient.addColorStop(0, 'rgba(238, 238, 238, 0)');
-    gradient.addColorStop(0.4, 'rgba(238, 238, 238, 0.08)');
+    gradient.addColorStop(0.4, 'rgba(238, 238, 238, 0.06)');
     gradient.addColorStop(0.5, 'rgba(238, 238, 238, 0.5)');
-    gradient.addColorStop(0.6, 'rgba(238, 238, 238, 0.08)');
+    gradient.addColorStop(0.6, 'rgba(238, 238, 238, 0.06)');
     gradient.addColorStop(1, 'rgba(238, 238, 238, 0)');
 
     ctx.fillStyle = gradient;
-    ctx.fillRect(judgeX - 40, h * 0.08, 80, h * 0.84);
+    ctx.fillRect(judgeX - 50, h * 0.06, 100, h * 0.88);
 
     ctx.strokeStyle = 'rgba(238, 238, 238, 0.8)';
     ctx.lineWidth = 2;
     ctx.shadowColor = 'rgba(238, 238, 238, 0.8)';
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 15;
     ctx.beginPath();
-    ctx.moveTo(judgeX, h * 0.08);
-    ctx.lineTo(judgeX, h * 0.92);
+    ctx.moveTo(judgeX, h * 0.06);
+    ctx.lineTo(judgeX, h * 0.94);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     const goodRange = this.noteManager.getGoodRange();
     const perfectRange = this.noteManager.getPerfectRange();
 
-    ctx.strokeStyle = 'rgba(255, 107, 107, 0.3)';
+    ctx.strokeStyle = 'rgba(255, 107, 107, 0.25)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
+    ctx.setLineDash([5, 5]);
     ctx.beginPath();
-    ctx.moveTo(judgeX - goodRange, h * 0.15);
-    ctx.lineTo(judgeX - goodRange, h * 0.85);
+    ctx.moveTo(judgeX - goodRange, h * 0.12);
+    ctx.lineTo(judgeX - goodRange, h * 0.88);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(judgeX + goodRange, h * 0.15);
-    ctx.lineTo(judgeX + goodRange, h * 0.85);
+    ctx.moveTo(judgeX + goodRange, h * 0.12);
+    ctx.lineTo(judgeX + goodRange, h * 0.88);
     ctx.stroke();
-    ctx.setLineDash([]);
 
     ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([2, 4]);
+    ctx.setLineDash([3, 5]);
     ctx.beginPath();
-    ctx.moveTo(judgeX - perfectRange, h * 0.2);
-    ctx.lineTo(judgeX - perfectRange, h * 0.8);
+    ctx.moveTo(judgeX - perfectRange, h * 0.15);
+    ctx.lineTo(judgeX - perfectRange, h * 0.85);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(judgeX + perfectRange, h * 0.2);
-    ctx.lineTo(judgeX + perfectRange, h * 0.8);
+    ctx.moveTo(judgeX + perfectRange, h * 0.15);
+    ctx.lineTo(judgeX + perfectRange, h * 0.85);
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -633,27 +723,29 @@ class Game {
 
     ctx.globalAlpha = alpha;
 
-    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 1.8);
-    gradient.addColorStop(0, note.color + '80');
-    gradient.addColorStop(0.5, note.color + '30');
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 2);
+    gradient.addColorStop(0, note.color + '90');
+    gradient.addColorStop(0.4, note.color + '30');
     gradient.addColorStop(1, note.color + '00');
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(0, 0, size * 1.8, 0, Math.PI * 2);
+    ctx.arc(0, 0, size * 2, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = note.color;
     ctx.shadowColor = note.color;
-    ctx.shadowBlur = note.hit ? 30 : 15;
+    ctx.shadowBlur = note.hit ? 35 : 18;
 
     switch (note.shape) {
       case 'circle':
         ctx.beginPath();
         ctx.arc(0, 0, size, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.shadowBlur = 0;
         ctx.beginPath();
-        ctx.arc(-size * 0.3, -size * 0.3, size * 0.3, 0, Math.PI * 2);
+        ctx.arc(-size * 0.3, -size * 0.35, size * 0.35, 0, Math.PI * 2);
         ctx.fill();
         break;
 
@@ -664,6 +756,15 @@ class Game {
         ctx.lineTo(-size * 0.866, size * 0.5);
         ctx.closePath();
         ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(0, -size * 0.5);
+        ctx.lineTo(size * 0.4, size * 0.25);
+        ctx.lineTo(-size * 0.4, size * 0.25);
+        ctx.closePath();
+        ctx.fill();
         break;
 
       case 'diamond':
@@ -672,6 +773,16 @@ class Game {
         ctx.lineTo(size * 0.7, 0);
         ctx.lineTo(0, size);
         ctx.lineTo(-size * 0.7, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(0, -size * 0.5);
+        ctx.lineTo(size * 0.35, 0);
+        ctx.lineTo(0, size * 0.5);
+        ctx.lineTo(-size * 0.35, 0);
         ctx.closePath();
         ctx.fill();
         break;
@@ -686,7 +797,7 @@ class Game {
 
     for (const p of particles) {
       const alpha = p.life / p.maxLife;
-      const size = p.size * (0.4 + alpha * 0.6);
+      const size = p.size * (0.3 + alpha * 0.7);
 
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -694,18 +805,18 @@ class Game {
       if (p.type === 'star') {
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rotation || 0);
-        this.drawStar(ctx, 0, 0, 5, size, size * 0.45, p.color);
+        this.drawStar(ctx, 0, 0, 5, size, size * 0.4, p.color);
       } else if (p.type === 'ring') {
         ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 15;
         ctx.beginPath();
         ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
         ctx.fill();
       } else if (p.type === 'sparkle') {
         ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
         ctx.fill();
@@ -736,7 +847,7 @@ class Game {
 
     ctx.fillStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 25;
+    ctx.shadowBlur = 30;
     ctx.beginPath();
     ctx.moveTo(cx, cy - outerRadius);
 
@@ -759,7 +870,7 @@ class Game {
   }
 
   private loop = (currentTime: number): void => {
-    const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1);
+    const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.05);
     this.lastTime = currentTime;
 
     this.update(deltaTime, currentTime);
