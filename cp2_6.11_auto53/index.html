@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>流光琴韵</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  
+  <div class="control-bar">
+    <div class="control-left">
+      <span class="harp-icon">🎹</span>
+    </div>
+    
+    <div class="control-center">
+      <div class="slider-container">
+        <label for="stringCount">琴弦数</label>
+        <input type="range" id="stringCount" min="6" max="16" step="2" value="12">
+        <div class="slider-marks">
+          <span>6</span><span>8</span><span>10</span><span>12</span><span>14</span><span>16</span>
+        </div>
+      </div>
+      
+      <div class="select-container">
+        <label for="toneSelect">音调</label>
+        <select id="toneSelect">
+          <option value="low">低</option>
+          <option value="mid" selected>中</option>
+          <option value="high">高</option>
+        </select>
+      </div>
+      
+      <div class="progress-container" id="progressContainer" style="display: none;">
+        <span id="progressText">00:00/00:30</span>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="control-right">
+      <button class="record-btn" id="recordBtn" title="录音"></button>
+      <button class="playlist-btn" id="playlistBtn" title="回放列表">📂</button>
+    </div>
+  </div>
+  
+  <div class="playlist-panel" id="playlistPanel">
+    <div class="playlist-header">
+      <h3>回放列表</h3>
+      <button class="close-btn" id="closePlaylistBtn">✕</button>
+    </div>
+    <div class="playlist-content" id="playlistContent">
+      <p class="empty-text">暂无录音</p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
