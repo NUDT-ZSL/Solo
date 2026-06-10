@@ -17,6 +17,8 @@ export interface CrystalAttributes {
   floatOffset: number;
   centerWarmT: number;
   invColNorm: number;
+  colNorm: number;
+  centerT: number;
 }
 
 export interface InteractionState {
@@ -46,12 +48,15 @@ const WAVE_ANGLE_MAX = THREE.MathUtils.degToRad(15);
 const HEIGHT_CENTER_MAX = 2.0;
 const HEIGHT_OUTER_MIN = 0.7;
 
+const HALO_RADIUS = 1.2;
+
 const WARM_COLOR_START = new THREE.Color('#FF6F00');
 const WARM_COLOR_END = new THREE.Color('#FFAB00');
 const COOL_COLOR_START = new THREE.Color('#00BCD4');
 const COOL_COLOR_END = new THREE.Color('#00E5FF');
 const HOVER_COLOR = new THREE.Color('#FFFFFF');
 const SELECTED_COLOR = new THREE.Color('#76FF03');
+const BASE_BOTTOM_COLOR = new THREE.Color('#1A237E');
 
 type HoverEffectMap = Map<number, { progress: number; type: 'hover' | 'resonance'; tween: number; state: 'in' | 'out' }>;
 
@@ -74,7 +79,7 @@ export class CrystalGrid {
 
   private tmpColorA: THREE.Color = new THREE.Color();
   private tmpColorB: THREE.Color = new THREE.Color();
-  private tmpColorC: THREE.Color = new THREE.Color();
+  private tmpPos: THREE.Vector3 = new THREE.Vector3();
   private elapsedSeconds: number = 0;
 
   constructor() {
@@ -97,10 +102,11 @@ export class CrystalGrid {
     this.baseGeometry.translate(0, CRYSTAL_HEIGHT / 2, 0);
     this.addVertexNoise(this.baseGeometry);
 
-    this.ringGeometry = new THREE.TorusGeometry(CRYSTAL_RADIUS * 1.6, 0.03, 8, 48);
+    this.ringGeometry = new THREE.TorusGeometry(CRYSTAL_RADIUS * 1.8, 0.035, 8, 64);
     this.ringGeometry.rotateX(Math.PI / 2);
 
-    this.haloLight = new THREE.PointLight(0xffffff, 0, 2.5, 2);
+    this.haloLight = new THREE.PointLight(0xffffff, 0, HALO_RADIUS * 2, 2);
+    this.haloLight.distance = HALO_RADIUS * 2;
     this.haloLight.visible = false;
     this.group.add(this.haloLight);
     this.haloIndex = -1;
@@ -128,6 +134,9 @@ export class CrystalGrid {
 
         const centerWarmT = THREE.MathUtils.clamp(1 - distNorm, 0, 1);
         const staticTopColor = new THREE.Color().lerpColors(coolColor, warmColor, centerWarmT);
+        const colNorm = c / denom;
+        const invColNorm = 1 - colNorm;
+        const centerT = 1 - Math.abs(distNorm * 2 - 1);
 
         const attributes: CrystalAttributes = {
           row: r,
@@ -145,7 +154,9 @@ export class CrystalGrid {
           rotationDirection: Math.random() > 0.5 ? 1 : -1,
           floatOffset: Math.random() * Math.PI * 2,
           centerWarmT,
-          invColNorm: 1 - c / denom,
+          invColNorm,
+          colNorm,
+          centerT,
         };
         this.attributes.push(attributes);
 
@@ -205,9 +216,10 @@ export class CrystalGrid {
     if (this.haloLight) {
       this.haloLight.visible = true;
       this.haloLight.intensity = 0;
+      this.haloLight.color.copy(HOVER_COLOR);
       const attr = this.attributes[index];
       if (attr) {
-        this.haloLight.position.set(attr.basePosition.x, CRYSTAL_HEIGHT * 1.5, attr.basePosition.z);
+        this.haloLight.position.set(attr.basePosition.x, CRYSTAL_HEIGHT * 1.2, attr.basePosition.z);
       }
     }
   }
@@ -236,7 +248,7 @@ export class CrystalGrid {
       const ringMat = new THREE.MeshBasicMaterial({
         color: SELECTED_COLOR,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.9,
         side: THREE.DoubleSide,
       });
       const ring = new THREE.Mesh(this.ringGeometry!, ringMat);
@@ -265,7 +277,7 @@ export class CrystalGrid {
     const hasUp = up > 0.001;
     const hasDown = down > 0.001;
     const PI2 = Math.PI * 2;
-    const centerBoost = HEIGHT_CENTER_MAX - 1;
+    void HEIGHT_CENTER_MAX;
 
     for (let i = 0; i < this.crystals.length; i++) {
       const mesh = this.crystals[i];
@@ -273,52 +285,76 @@ export class CrystalGrid {
 
       const breathAngle = attr.breathPhase + (this.elapsedSeconds / attr.breathPeriod) * PI2;
       const breath = (Math.sin(breathAngle) + 1) * 0.5;
-      let heightMult = BREATH_MIN + breath * (BREATH_MAX - BREATH_MIN);
+      const breathScale = BREATH_MIN + breath * (BREATH_MAX - BREATH_MIN);
 
-      let hoverScaleBoost = 0;
+      let hoverScale = 0;
       let hoverEasedP = 0;
       const hoverEffect = this.hoverEffect.get(i);
       const isHover = hoverEffect !== undefined && hoverEffect.type === 'hover';
+      const isResonance = hoverEffect !== undefined && hoverEffect.type === 'resonance';
       if (hoverEffect) {
         const speed = hoverEffect.state === 'in' ? 1 / hoverEffect.tween : 1 / (hoverEffect.tween * 1.2);
         hoverEffect.progress += hoverEffect.state === 'in' ? dt * speed : -dt * speed;
         if (hoverEffect.progress >= 1) hoverEffect.progress = 1;
         if (hoverEffect.progress <= 0) {
           this.hoverEffect.delete(i);
-          hoverScaleBoost = 0;
+          hoverScale = 0;
         } else {
           const t = hoverEffect.progress;
           const eased = 1 - (1 - t) * (1 - t) * (1 - t);
           hoverEasedP = eased;
-          hoverScaleBoost = hoverEffect.type === 'hover' ? eased * 0.6 : eased * 0.1;
+          if (isHover) {
+            hoverScale = eased * 0.6;
+          } else if (isResonance) {
+            hoverScale = eased * 0.1;
+          }
         }
       }
-      heightMult += hoverScaleBoost;
 
-      const colNorm = 1 - attr.invColNorm;
-      const centerT = 1 - Math.abs(attr.distanceFromCenter * 2 - 1);
+      let baseHeightMult = 1 + hoverScale;
 
       if (hasUp) {
-        const lerpA = 1 * (1 - centerT) + HEIGHT_OUTER_MIN * centerT;
-        const base = 1 - centerT + lerpA * centerT;
-        heightMult = base + centerBoost * centerT * up;
+        const centerFactor = attr.centerT;
+        const outerFactor = 1 - centerFactor;
+        const centerExp = HEIGHT_CENTER_MAX;
+        const outerComp = HEIGHT_OUTER_MIN;
+        const targetHeight = outerComp * outerFactor + centerExp * centerFactor;
+        baseHeightMult = THREE.MathUtils.lerp(baseHeightMult, targetHeight, up);
       }
       if (hasDown) {
-        const compress = 1 - centerT;
-        heightMult = 1 * compress + HEIGHT_OUTER_MIN * (1 - compress) * down;
+        const centerFactor = attr.centerT;
+        const outerFactor = 1 - centerFactor;
+        const centerComp = HEIGHT_OUTER_MIN;
+        const outerExp = 1.0;
+        const targetHeight = outerExp * outerFactor + centerComp * centerFactor;
+        baseHeightMult = THREE.MathUtils.lerp(baseHeightMult, targetHeight, down);
       }
 
       let tiltX = 0;
-      if (hasLeft) tiltX = attr.invColNorm * WAVE_ANGLE_MAX * left;
-      if (hasRight) tiltX = -colNorm * WAVE_ANGLE_MAX * right;
+      let tiltZ = 0;
+      if (hasLeft) {
+        tiltX = attr.invColNorm * WAVE_ANGLE_MAX * left;
+        tiltZ = -attr.invColNorm * WAVE_ANGLE_MAX * left * 0.3;
+      }
+      if (hasRight) {
+        tiltX = -attr.colNorm * WAVE_ANGLE_MAX * right;
+        tiltZ = attr.colNorm * WAVE_ANGLE_MAX * right * 0.3;
+      }
 
-      mesh.scale.setScalar(heightMult);
+      const finalHeightMult = baseHeightMult * breathScale;
+
+      mesh.scale.setScalar(finalHeightMult);
       mesh.rotation.y += attr.rotationSpeed * attr.rotationDirection * dt;
       mesh.rotation.x = tiltX;
+      mesh.rotation.z = tiltZ;
 
       const floatAngle = attr.floatOffset + this.elapsedSeconds * 0.25 * PI2;
       const floatY = Math.sin(floatAngle) * 0.03 * attr.distanceFromCenter;
-      mesh.position.y = attr.basePosition.y + floatY * (2 - heightMult);
+      mesh.position.set(
+        attr.basePosition.x,
+        attr.basePosition.y + floatY,
+        attr.basePosition.z
+      );
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const isSelected = _state.selectedIndex === i;
@@ -326,12 +362,13 @@ export class CrystalGrid {
       if (isSelected) {
         const ring = this.rings[i];
         if (ring) {
-          ring.rotation.y += dt * 1.5;
-          ring.position.y = attr.basePosition.y + CRYSTAL_HEIGHT * heightMult * 1.1;
+          ring.rotation.y += dt * 2.0;
+          ring.position.y = attr.basePosition.y + CRYSTAL_HEIGHT * finalHeightMult * 1.1;
+          ring.scale.setScalar(1 + Math.sin(this.elapsedSeconds * 3) * 0.05);
         }
         mat.color.copy(SELECTED_COLOR);
         mat.emissive.copy(SELECTED_COLOR);
-        mat.emissiveIntensity = 0.5;
+        mat.emissiveIntensity = 0.6;
       } else if (isHover && hoverEasedP > 0) {
         const colorAngle = attr.colorPhase + (this.elapsedSeconds / attr.colorPeriod) * PI2;
         const colorT = (Math.sin(colorAngle) + 1) * 0.5;
@@ -339,14 +376,15 @@ export class CrystalGrid {
         this.tmpColorB.copy(this.tmpColorA).lerp(HOVER_COLOR, hoverEasedP);
         mat.color.copy(this.tmpColorB);
         mat.emissive.copy(HOVER_COLOR);
-        mat.emissiveIntensity = 0.3 + hoverEasedP * 0.6;
+        mat.emissiveIntensity = 0.3 + hoverEasedP * 0.7;
         if (this.haloLight && this.haloIndex === i) {
-          this.haloLight.intensity = hoverEasedP * 2.2;
-          this.haloLight.position.set(
+          this.haloLight.intensity = hoverEasedP * 2.5;
+          this.tmpPos.set(
             attr.basePosition.x,
-            attr.basePosition.y + CRYSTAL_HEIGHT * heightMult * 1.5,
+            attr.basePosition.y + CRYSTAL_HEIGHT * finalHeightMult * 1.2,
             attr.basePosition.z
           );
+          this.haloLight.position.copy(this.tmpPos);
         }
       } else {
         const colorAngle = attr.colorPhase + (this.elapsedSeconds / attr.colorPeriod) * PI2;
@@ -359,6 +397,7 @@ export class CrystalGrid {
       }
     }
     void _state;
+    void BASE_BOTTOM_COLOR;
   }
 
   private updateDistortValues(dt: number): void {
@@ -379,7 +418,7 @@ export class CrystalGrid {
       const noise = (Math.random() - 0.5) * 0.008;
       vertex.x += noise;
       vertex.z += noise;
-      vertex.y += (Math.random() - 0.5) * 0.012;
+      vertex.y += (Math.random() - 0.5) * 0.015;
       pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
     pos.needsUpdate = true;
@@ -387,8 +426,8 @@ export class CrystalGrid {
   }
 
   private createCrystalMaterial(distNorm: number): THREE.MeshStandardMaterial {
-    const roughness = 0.35 + distNorm * 0.2;
-    const metalness = 0.25 + (1 - distNorm) * 0.2;
+    const roughness = 0.4 + distNorm * 0.2;
+    const metalness = 0.15 + (1 - distNorm) * 0.15;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff,
       emissive: 0x000000,
@@ -413,7 +452,7 @@ export class CrystalGrid {
     }
     if (this.baseGeometry) this.baseGeometry.dispose();
     if (this.ringGeometry) this.ringGeometry.dispose();
-    if (this.haloLight) this.haloLight = null;
+    this.haloLight = null;
     this.crystals = [];
     this.rings = [];
     this.attributes = [];
