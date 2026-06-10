@@ -415,7 +415,7 @@ export class Reef {
     this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     
     this.raycaster.setFromCamera(this.mouse, camera);
-    this.raycaster.params.Points = { threshold: 4 };
+    this.raycaster.params.Points = { threshold: 5 };
     
     if (!this.coralPoints) return;
     
@@ -424,8 +424,11 @@ export class Reef {
     if (intersects.length > 0) {
       const worldPoint = intersects[0].point;
       const localPoint = this.container.worldToLocal(worldPoint.clone());
+      console.log('Hit coral at:', localPoint.x.toFixed(2), localPoint.y.toFixed(2), localPoint.z.toFixed(2));
       this.triggerBurstAtPoint(localPoint);
       this.createRippleAtPoint(localPoint);
+    } else {
+      console.log('Missed coral - no intersection');
     }
   }
 
@@ -442,7 +445,8 @@ export class Reef {
     
     if (nearbyNodes.length === 0) return;
     
-    const particleCount = 40 + Math.floor(Math.random() * 31);
+    const particleCount = 50 + Math.floor(Math.random() * 40);
+    console.log('Burst particles created:', particleCount, 'nearby nodes:', nearbyNodes.length);
     
     for (let i = 0; i < particleCount; i++) {
       if (this.burstParticles.length >= this.maxBurstParticles) break;
@@ -452,7 +456,7 @@ export class Reef {
       
       const angle1 = Math.random() * Math.PI * 2;
       const angle2 = Math.random() * Math.PI - Math.PI / 2;
-      const speed = 0.2 + Math.random() * 0.25;
+      const speed = 0.1 + Math.random() * 0.15;
       
       const velocity = new THREE.Vector3(
         Math.cos(angle1) * Math.cos(angle2) * speed,
@@ -466,14 +470,15 @@ export class Reef {
         1 - baseColor.g,
         1 - baseColor.b
       );
+      burstColor.multiplyScalar(1.5);
       
       this.burstParticles.push({
-        position: node.position.clone(),
+        position: node.position.clone().multiplyScalar(node.growthFactor),
         velocity,
         color: burstColor,
-        life: 1.5,
-        maxLife: 1.5,
-        size: 3 + Math.random() * 3
+        life: 2.0,
+        maxLife: 2.0,
+        size: 6 + Math.random() * 6
       });
     }
   }

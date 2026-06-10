@@ -49,7 +49,7 @@ export class ParticleFlow {
   private flowSmoothness = 0.02;
   
   private dragInfluence: THREE.Vector3 = new THREE.Vector3();
-  private dragDecay = 0.95;
+  private dragDecay = 0.98;
 
   constructor(container: THREE.Object3D, params: ParticleParams) {
     this.container = container;
@@ -154,7 +154,7 @@ export class ParticleFlow {
       totalForce.add(this.flowDirection.clone().multiplyScalar(0.5));
       totalForce.add(wanderForce);
       totalForce.add(sineForce);
-      totalForce.add(this.dragInfluence.clone().multiplyScalar(2));
+      totalForce.add(this.dragInfluence.clone().multiplyScalar(3));
       
       data.velocity.lerp(totalForce, 0.02);
       data.velocity.clampLength(0, this.speed * data.speed);
@@ -184,8 +184,10 @@ export class ParticleFlow {
   }
 
   public applyDragForce(direction: THREE.Vector3): void {
-    this.dragInfluence.copy(direction).multiplyScalar(0.8);
-    this.targetFlowDirection.lerp(direction.clone().normalize(), 0.15);
+    const magnitude = direction.length();
+    const intensity = Math.min(magnitude * 2, 3);
+    this.dragInfluence.copy(direction).normalize().multiplyScalar(intensity);
+    this.targetFlowDirection.lerp(direction.clone().normalize(), 0.2);
   }
 
   public setFlowDirection(direction: THREE.Vector3): void {

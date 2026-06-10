@@ -164,7 +164,8 @@ class FloatingReefApp {
     
     canvas.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
     canvas.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
-    canvas.addEventListener('touchend', () => this.onTouchEnd());
+    canvas.addEventListener('touchend', (e) => this.onTouchEnd(e));
+    canvas.addEventListener('touchcancel', (e) => this.onTouchEnd(e));
     
     window.addEventListener('resize', () => this.onResize());
   }
@@ -287,12 +288,19 @@ class FloatingReefApp {
     this.previousMouseY = touch.clientY;
   }
 
-  private onTouchEnd(): void {
-    if (this.isDragging && !this.isViewDrag) {
-      this.handleClick(this.previousMouseX, this.previousMouseY);
+  private onTouchEnd(e: TouchEvent): void {
+    if (e.touches.length === 0) {
+      if (this.isDragging && !this.isViewDrag) {
+        this.handleClick(this.previousMouseX, this.previousMouseY);
+      }
+      this.isDragging = false;
+      this.isViewDrag = false;
+    } else {
+      this.dragStartX = e.touches[0].clientX;
+      this.dragStartY = e.touches[0].clientY;
+      this.previousMouseX = e.touches[0].clientX;
+      this.previousMouseY = e.touches[0].clientY;
     }
-    this.isDragging = false;
-    this.isViewDrag = false;
   }
 
   private handleClick(clientX: number, clientY: number): void {
@@ -397,3 +405,4 @@ class FloatingReefApp {
 }
 
 const app = new FloatingReefApp();
+(window as any).reefApp = app;

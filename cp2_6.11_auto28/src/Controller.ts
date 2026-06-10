@@ -161,10 +161,30 @@ export class Controller {
   private updateSliderColors(): void {
     const tempRatio = (this.params.temperature - this.tempMin) / (this.tempMax - this.tempMin);
     const tempThumb = document.getElementById('thumb-temp');
+    const tempTrack = document.querySelector('.slider-container[data-type="temp"] .slider-track') as HTMLElement;
     if (tempThumb) {
       const hue = 240 - tempRatio * 200;
       tempThumb.style.backgroundColor = `hsl(${hue}, 80%, 65%)`;
       tempThumb.style.boxShadow = `0 0 10px hsl(${hue}, 80%, 60%)`;
+    }
+    if (tempTrack) {
+      const coldHue = 230;
+      const warmHue = 25;
+      const currentHue = coldHue - tempRatio * (coldHue - warmHue);
+      const darkOffset = 40;
+      
+      const leftHue = currentHue - darkOffset;
+      const rightHue = currentHue + darkOffset;
+      const leftSat = 60 + tempRatio * 15;
+      const rightSat = 55 + tempRatio * 20;
+      const leftLight = 38 + tempRatio * 5;
+      const rightLight = 42 + tempRatio * 8;
+      const centerLight = 55 + tempRatio * 10;
+      
+      tempTrack.style.background = `linear-gradient(90deg, 
+        hsl(${leftHue}, ${leftSat}%, ${leftLight}%) 0%, 
+        hsl(${currentHue}, 80%, ${centerLight}%) 50%, 
+        hsl(${rightHue}, ${rightSat}%, ${rightLight}%) 100%)`;
     }
     
     const salinityRatio = (this.params.salinity - this.salinityMin) / (this.salinityMax - this.salinityMin);
