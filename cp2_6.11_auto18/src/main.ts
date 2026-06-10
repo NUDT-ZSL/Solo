@@ -16,6 +16,29 @@ const renderer = new Renderer(canvas);
 
 gameManager.init();
 
+(window as any).gameManager = gameManager;
+(window as any).renderer = renderer;
+(window as any).calcGripPos = (layerIdx: number, gripIdx: number) => {
+  const state = gameManager.state;
+  const layer = state.layers[layerIdx];
+  if (!layer || !layer.gripPoints[gripIdx]) return null;
+  const gp = layer.gripPoints[gripIdx];
+  const centerX = canvas.width / 2;
+  const effectiveRadius = 60 * state.scale;
+  const cosVal = Math.cos(gp.angle + state.rotation);
+  const sinVal = Math.sin(gp.angle + state.rotation);
+  return {
+    x: centerX + effectiveRadius * sinVal,
+    y: layer.y + state.cameraOffset,
+    color: gp.color,
+    visible: cosVal > 0,
+    depth: cosVal,
+    radius: gp.radius * gp.scaleAnim * state.scale * (0.7 + 0.3 * cosVal),
+    targetColor: state.targetColor,
+    rotation: state.rotation,
+  };
+};
+
 let lastTime = performance.now();
 let dragStartX = 0;
 let isDragging = false;

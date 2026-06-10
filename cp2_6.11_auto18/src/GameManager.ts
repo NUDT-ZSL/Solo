@@ -298,10 +298,12 @@ export class GameManager {
 
     this.updateFps(dt);
     this.state.rotation += this.state.rotationSpeed * DEG_TO_RAD;
-    this.state.rotationSpeed = 0.5 + (this.state.score / 100) * 0.1;
-    this.state.scale = Math.max(0.7, 1.0 - this.state.totalLayersClimbed * 0.005);
+    this.state.rotationSpeed = 0.5 + Math.floor(this.state.score / 100) * 0.1;
 
-    const glowFactor = Math.min(1.05 + this.state.totalLayersClimbed * 0.01, 1.15);
+    const scoreForScale = Math.min(this.state.score, 600);
+    this.state.scale = 1.0 - 0.3 * (scoreForScale / 600);
+
+    const glowFactor = Math.min(1.05 + (this.state.score / 200) * 0.1, 1.15);
     for (const layer of this.state.layers) {
       for (const gp of layer.gripPoints) {
         gp.glowRadius = GRIP_RADIUS * 1.8 * glowFactor;
@@ -422,7 +424,7 @@ export class GameManager {
     let minDist = Infinity;
 
     for (const layer of this.state.layers) {
-      if (layer.layerIndex <= this.state.layerIndex) continue;
+      if (layer.layerIndex !== this.state.layerIndex + 1) continue;
 
       for (const gp of layer.gripPoints) {
         const pos = calcGripScreenPos(
