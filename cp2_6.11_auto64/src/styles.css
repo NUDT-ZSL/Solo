@@ -77,7 +77,7 @@ h1, h2, h3, .title-font {
   display: grid;
   grid-template-columns: repeat(3, 200px);
   gap: 12px;
-  justify-content: start;
+  justify-content: center;
   align-items: start;
 }
 
@@ -138,8 +138,9 @@ h1, h2, h3, .title-font {
 
 @media (max-width: 768px) {
   .card-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 45%);
     gap: 12px;
+    justify-content: center;
   }
   .scent-card {
     width: 100% !important;
@@ -150,6 +151,7 @@ h1, h2, h3, .title-font {
   .card-grid {
     grid-template-columns: 1fr;
     gap: 12px;
+    justify-content: center;
   }
   .create-layout,
   .detail-layout {
@@ -223,13 +225,20 @@ input[type='text']:focus {
   padding: 24px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.upload-area:hover,
-.upload-area.dragging {
+.upload-area:hover {
   border-color: #D4A574;
   background-color: rgba(212, 165, 116, 0.05);
+}
+
+.upload-area.dragging {
+  border-color: #D4A574;
+  border-style: solid;
+  background-color: rgba(212, 165, 116, 0.12);
+  box-shadow: 0 0 0 4px rgba(212, 165, 116, 0.15);
+  transform: scale(1.01);
 }
 
 .upload-area p {
@@ -561,18 +570,4 @@ input[type='text']:focus {
   opacity: 1;
   transform: translateY(0);
   transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.detail-transition-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  pointer-events: none;
-}
-
-.detail-transition-image {
-  position: absolute;
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }

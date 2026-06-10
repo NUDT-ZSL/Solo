@@ -69,9 +69,11 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
     drawPalette();
   }, [drawPalette]);
 
+  const ALLOWED_TYPES = ['image/png', 'image/jpeg'];
+
   const handleFile = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) {
-      showToast('请上传图片文件');
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      showToast('仅支持 PNG 和 JPEG 格式的图片');
       return;
     }
     const reader = new FileReader();
@@ -206,7 +208,7 @@ function CreatePage({ onCreated, onCancel, showToast }: CreatePageProps) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg"
                 style={{ display: 'none' }}
                 onChange={e => {
                   const f = e.target.files?.[0];

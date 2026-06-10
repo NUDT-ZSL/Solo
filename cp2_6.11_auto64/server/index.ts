@@ -119,20 +119,22 @@ function validateScents(scents: unknown): scents is ScentItem[] {
   if (scents.length !== 5) return false;
 
   const seenKeys = new Set<string>();
-  for (const item of scents) {
-    if (!item || typeof item !== 'object') return false;
+  for (let i = 0; i < scents.length; i++) {
+    const item = scents[i];
+    if (item === null || item === undefined || typeof item !== 'object') return false;
     const s = item as Record<string, unknown>;
 
-    if (typeof s.key !== 'string' || !BASE_SCENT_KEYS.includes(s.key)) return false;
+    if (typeof s.key !== 'string' || s.key.length === 0) return false;
+    if (!BASE_SCENT_KEYS.includes(s.key)) return false;
     if (seenKeys.has(s.key)) return false;
     seenKeys.add(s.key);
 
-    if (typeof s.value !== 'number') return false;
+    if (typeof s.value !== 'number' || !Number.isFinite(s.value)) return false;
     if (!Number.isInteger(s.value)) return false;
     if (s.value < 0 || s.value > 100) return false;
 
-    if (typeof s.name !== 'string') return false;
-    if (typeof s.color !== 'string') return false;
+    if (typeof s.name !== 'string' || s.name.length === 0) return false;
+    if (typeof s.color !== 'string' || s.color.length === 0) return false;
     if (typeof s.warm !== 'boolean') return false;
   }
 

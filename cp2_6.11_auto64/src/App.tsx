@@ -6,15 +6,26 @@ import CreatePage from './CreatePage';
 import CardDetail from './CardDetail';
 import type { ScentCard } from './types';
 
+function getDominantColor(card: ScentCard): string {
+  const active = card.scents.filter(s => s.value > 0);
+  if (active.length === 0) return '#D4A574';
+  active.sort((a, b) => b.value - a.value);
+  return active[0].color;
+}
+
+interface FlipState {
+  card: ScentCard;
+  rect: DOMRect;
+}
+
 function App() {
   const [cards, setCards] = useState<ScentCard[]>([]);
   const [toast, setToast] = useState<string | null>(null);
-  const [transitionCard, setTransitionCard] = useState<ScentCard | null>(null);
-  const [transitionRect, setTransitionRect] = useState<DOMRect | null>(null);
-  const [transitionPhase, setTransitionPhase] = useState<'idle' | 'entering' | 'leaving'>('idle');
+  const [flipState, setFlipState] = useState<FlipState | null>(null);
+  const [flipAnimating, setFlipAnimating] = useState(false);
+  const flipRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const transitionRef = useRef<HTMLDivElement>(null);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -50,17 +61,29 @@ function App() {
   const handleCardClick = useCallback((card: ScentCard, element?: HTMLElement) => {
     if (element) {
       const rect = element.getBoundingClientRect();
-      setTransitionCard(card);
-      setTransitionRect(rect);
-      setTransitionPhase('entering');
-      setTimeout(() => {
-        navigate(`/card/${card.id}`);
-        setTimeout(() => {
-          setTransitionPhase('idle');
-          setTransitionCard(null);
-          setTransitionRect(null);
-        }, 100);
-      }, 50);
+      setFlipState({ card, rect });
+      setFlipAnimating(true);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (flipRef.current) {
+            flipRef.current.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+            flipRef.current.style.left = '50%';
+            flipRef.current.style.top = '50%';
+            flipRef.current.style.width = '500px';
+            flipRef.current.style.height = 'auto';
+            flipRef.current.style.transform = 'translate(-50%, -50%)';
+            flipRef.current.style.borderRadius = '16px';
+            flipRef.current.style.opacity = '1';
+          }
+
+          setTimeout(() => {
+            setFlipAnimating(false);
+            setFlipState(null);
+            navigate(`/card/${card.id}`);
+          }, 400);
+        });
+      });
     } else {
       navigate(`/card/${card.id}`);
     }
@@ -69,8 +92,6 @@ function App() {
   const handleBackHome = useCallback(() => {
     navigate('/');
   }, [navigate]);
-
-  const isDetailPage = location.pathname.startsWith('/card/');
 
   return (
     <div className="app-container">
@@ -106,24 +127,34 @@ function App() {
         />
       </Routes>
 
-      {transitionCard && transitionRect && transitionPhase !== 'idle' && (
-        <div className="detail-transition-overlay" ref={transitionRef}>
+      {flipState && flipAnimating && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999,
+            backgroundColor: 'rgba(26, 26, 26, 0.9)',
+            pointerEvents: 'none'
+          }}
+        >
           <div
-            className="detail-transition-image"
+            ref={flipRef}
             style={{
-              left: transitionRect.left,
-              top: transitionRect.top,
-              width: transitionRect.width,
-              height: transitionRect.height,
-              transform: transitionPhase === 'entering'
-                ? `scale(${window.innerWidth / transitionRect.width * 0.6})`
-                : 'scale(1)',
-              opacity: transitionPhase === 'entering' ? 0.8 : 1
+              position: 'absolute',
+              left: flipState.rect.left + 'px',
+              top: flipState.rect.top + 'px',
+              width: flipState.rect.width + 'px',
+              height: flipState.rect.height + 'px',
+              overflow: 'hidden',
+              borderRadius: '12px',
+              opacity: '0.8',
+              transform: 'none',
+              willChange: 'transform, width, height, left, top, opacity, border-radius'
             }}
           >
-            {transitionCard.imageData ? (
+            {flipState.card.imageData ? (
               <img
-                src={transitionCard.imageData}
+                src={flipState.card.imageData}
                 alt=""
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
@@ -132,7 +163,7 @@ function App() {
                 style={{
                   width: '100%',
                   height: '100%',
-                  background: `radial-gradient(circle, ${getDominantColor(transitionCard)} 0%, transparent 70%)`
+                  background: `radial-gradient(circle, ${getDominantColor(flipState.card)} 0%, transparent 70%), #2A2A2A`
                 }}
               />
             )}
@@ -143,13 +174,6 @@ function App() {
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
-}
-
-function getDominantColor(card: ScentCard): string {
-  const active = card.scents.filter(s => s.value > 0);
-  if (active.length === 0) return '#D4A574';
-  active.sort((a, b) => b.value - a.value);
-  return active[0].color;
 }
 
 export default App;

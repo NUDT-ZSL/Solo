@@ -14,15 +14,14 @@ interface Particle {
   y: number;
   vx: number;
   vy: number;
-  baseSize: number;
   color: string;
   phase: number;
   speed: number;
-  active: boolean;
 }
 
 const PARTICLE_COUNT = 200;
 const DURATION = 20000;
+const COLOR_CACHE_SIZE = 10;
 
 function getActiveScents(card: ScentCard): { scent: ScentItem; weight: number }[] {
   const total = getTotalScentsValue(card.scents);
@@ -63,52 +62,35 @@ function getAverageWarmFrequency(card: ScentCard): number {
 }
 
 function polarToCartesian(cx: number, cy: number, r: number, angle: number) {
-  return {
-    x: cx + r * Math.cos(angle),
-    y: cy + r * Math.sin(angle)
-  };
+  return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
 }
 
 function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
   const start = polarToCartesian(cx, cy, r, endAngle);
   const end = polarToCartesian(cx, cy, r, startAngle);
   const largeArcFlag = endAngle - startAngle <= Math.PI ? '0' : '1';
-  return [
-    'M', start.x, start.y,
-    'A', r, r, 0, largeArcFlag, 0, end.x, end.y,
-    'L', cx, cy,
-    'Z'
-  ].join(' ');
+  return ['M', start.x, start.y, 'A', r, r, 0, largeArcFlag, 0, end.x, end.y, 'L', cx, cy, 'Z'].join(' ');
 }
 
-function createParticlePool(count: number): Particle[] {
-  const pool: Particle[] = [];
-  for (let i = 0; i < count; i++) {
-    pool.push({
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      baseSize: 0,
-      color: '#ffffff',
-      phase: 0,
-      speed: 0,
-      active: false
-    });
+function buildColorSpriteCache(colors: string[]): Map<string, HTMLCanvasElement[]> {
+  const cache = new Map<string, HTMLCanvasElement[]>();
+  const sizes = [2, 3, 4, 5, 6];
+  for (const color of colors) {
+    const sprites: HTMLCanvasElement[] = [];
+    for (const size of sizes) {
+      const c = document.createElement('canvas');
+      c.width = size * 2 + 2;
+      c.height = size * 2 + 2;
+      const ctx = c.getContext('2d')!;
+      ctx.beginPath();
+      ctx.arc(c.width / 2, c.height / 2, size, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      sprites.push(c);
+    }
+    cache.set(color, sprites);
   }
-  return pool;
-}
-
-function resetParticle(p: Particle, canvasWidth: number, canvasHeight: number, activeScents: { scent: ScentItem; weight: number }[]) {
-  p.x = Math.random() * canvasWidth;
-  p.y = canvasHeight + Math.random() * 100;
-  p.vx = (Math.random() - 0.5) * 0.6;
-  p.vy = -(0.4 + Math.random() * 1.0);
-  p.baseSize = 2 + Math.random() * 4;
-  p.color = activeScents.length > 0 ? pickWeightedColor(activeScents) : '#D4A574';
-  p.phase = Math.random() * Math.PI * 2;
-  p.speed = 0.8 + Math.random() * 0.4;
-  p.active = true;
+  return cache;
 }
 
 function CardDetail({ cards, onBack }: CardDetailProps) {
@@ -120,12 +102,14 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
   const [hoveredScent, setHoveredScent] = useState<{ name: string; ratio: number; x: number; y: number } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlePoolRef = useRef<Particle[]>(createParticlePool(PARTICLE_COUNT));
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const particlePoolRef = useRef<Particle[]>([]);
   const animFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioNodesRef = useRef<{ stop: () => void } | null>(null);
   const playingRef = useRef(false);
+  const spriteCacheRef = useRef<Map<string, HTMLCanvasElement[]>>(new Map());
 
   useEffect(() => {
     const existing = cards.find(c => c.id === id);
@@ -136,9 +120,7 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
       fetch(`/api/cards/${id}`)
         .then(r => r.json())
         .then(data => {
-          if (data.success) {
-            setCard(data.data);
-          }
+          if (data.success) setCard(data.data);
         })
         .finally(() => setLoading(false));
     } else {
@@ -175,20 +157,15 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
       const bufferSize = 2 * ctx.sampleRate;
       const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        output[i] = (Math.random() * 2 - 1) * 0.5;
-      }
+      for (let i = 0; i < bufferSize; i++) output[i] = (Math.random() * 2 - 1) * 0.5;
       const whiteNoise = ctx.createBufferSource();
       whiteNoise.buffer = noiseBuffer;
       whiteNoise.loop = true;
-
       const noiseFilter = ctx.createBiquadFilter();
       noiseFilter.type = 'lowpass';
       noiseFilter.frequency.value = 800;
-
       const noiseGain = ctx.createGain();
       noiseGain.gain.value = 0.04;
-
       whiteNoise.connect(noiseFilter);
       noiseFilter.connect(noiseGain);
       noiseGain.connect(masterGain);
@@ -228,26 +205,54 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
   const startParticles = useCallback((c: ScentCard) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const mainCtx = canvas.getContext('2d');
+    if (!mainCtx) return;
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+      if (offscreenRef.current) {
+        offscreenRef.current.width = canvas.width;
+        offscreenRef.current.height = canvas.height;
+      }
     };
+
+    if (!offscreenRef.current) {
+      offscreenRef.current = document.createElement('canvas');
+    }
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const activeScents = getActiveScents(c);
-    const pool = particlePoolRef.current;
+    const offscreen = offscreenRef.current;
+    offscreen.width = canvas.width;
+    offscreen.height = canvas.height;
+    const offCtx = offscreen.getContext('2d')!;
 
+    const activeScents = getActiveScents(c);
+    const uniqueColors = activeScents.length > 0
+      ? activeScents.map(a => a.scent.color)
+      : ['#D4A574'];
+
+    spriteCacheRef.current = buildColorSpriteCache(uniqueColors);
+
+    const pool: Particle[] = [];
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      resetParticle(pool[i], canvas.width, canvas.height, activeScents);
-      pool[i].y = Math.random() * canvas.height;
+      pool.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: -(0.4 + Math.random() * 1.0),
+        color: activeScents.length > 0 ? pickWeightedColor(activeScents) : '#D4A574',
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.8 + Math.random() * 0.4
+      });
     }
+    particlePoolRef.current = pool;
 
     startTimeRef.current = performance.now();
     playingRef.current = true;
+
+    const SIZES = [2, 3, 4, 5, 6];
 
     const animate = () => {
       if (!playingRef.current) return;
@@ -255,43 +260,46 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
       const elapsed = performance.now() - startTimeRef.current;
       if (elapsed > DURATION) {
         playingRef.current = false;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        mainCtx.clearRect(0, 0, canvas.width, canvas.height);
         setIsPlaying(false);
         stopAudio();
         window.removeEventListener('resize', resizeCanvas);
         return;
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const w = canvas.width;
+      const h = canvas.height;
       const time = elapsed * 0.001;
-      const sin = Math.sin;
+
+      offCtx.clearRect(0, 0, w, h);
 
       for (let i = 0; i < PARTICLE_COUNT; i++) {
         const p = pool[i];
-        if (!p.active) continue;
-
-        p.x += p.vx + sin(time * 2 + p.phase) * 0.25;
+        p.x += p.vx + Math.sin(time * 2 + p.phase) * 0.25;
         p.y += p.vy * p.speed;
 
-        const sizeVar = 2 + sin(time * 3 + p.phase) * 2;
-        const displaySize = sizeVar < 2 ? 2 : sizeVar > 6 ? 6 : sizeVar;
+        const sizeVar = 2 + Math.sin(time * 3 + p.phase) * 2;
+        const sizeIdx = sizeVar < 2.5 ? 0 : sizeVar < 3.5 ? 1 : sizeVar < 4.5 ? 2 : sizeVar < 5.5 ? 3 : 4;
+        const displaySize = SIZES[sizeIdx];
 
-        const alphaRaw = 1 - (p.y / canvas.height);
+        const alphaRaw = 1 - (p.y / h);
         const alpha = alphaRaw < 0 ? 0 : alphaRaw > 1 ? 1 : alphaRaw;
 
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, displaySize, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = alpha * 0.8;
-        ctx.fill();
+        const sprites = spriteCacheRef.current.get(p.color);
+        if (sprites && sprites[sizeIdx]) {
+          offCtx.globalAlpha = alpha * 0.8;
+          offCtx.drawImage(sprites[sizeIdx], p.x - displaySize - 1, p.y - displaySize - 1);
+        }
 
         if (p.y < -20) {
-          p.x = Math.random() * canvas.width;
-          p.y = canvas.height + 20;
+          p.x = Math.random() * w;
+          p.y = h + 20;
         }
       }
 
-      ctx.globalAlpha = 1;
+      offCtx.globalAlpha = 1;
+      mainCtx.clearRect(0, 0, w, h);
+      mainCtx.drawImage(offscreen, 0, 0);
 
       animFrameRef.current = requestAnimationFrame(animate);
     };
@@ -310,35 +318,26 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
     const canvas = canvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     stopAudio();
     setIsPlaying(false);
   }, [stopAudio]);
 
   useEffect(() => {
-    return () => {
-      stopParticles();
-    };
+    return () => { stopParticles(); };
   }, [stopParticles]);
 
   const handlePlay = () => {
     if (!card) return;
-    if (isPlaying) {
-      stopParticles();
-    } else {
-      startParticles(card);
-    }
+    if (isPlaying) stopParticles();
+    else startParticles(card);
   };
 
   const handleClose = () => {
     stopParticles();
     setClosing(true);
-    setTimeout(() => {
-      onBack();
-    }, 380);
+    setTimeout(() => { onBack(); }, 380);
   };
 
   if (loading) {
@@ -367,19 +366,13 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
   return (
     <div className={`detail-page ${closing ? 'closing' : ''}`}>
       <canvas ref={canvasRef} className="particle-canvas" />
-
       <div className={`detail-card ${closing ? 'closing' : ''}`}>
         <button className="close-btn" onClick={handleClose}>×</button>
 
         {card.imageData ? (
           <img src={card.imageData} alt={card.title} className="detail-image" />
         ) : (
-          <div
-            className="detail-image-placeholder"
-            style={{
-              background: `radial-gradient(circle at 30% 30%, ${dominantColor}99 0%, transparent 70%), #2A2A2A`
-            }}
-          />
+          <div className="detail-image-placeholder" style={{ background: `radial-gradient(circle at 30% 30%, ${dominantColor}99 0%, transparent 70%), #2A2A2A` }} />
         )}
 
         <h2 className="detail-title">{card.title}</h2>
@@ -405,7 +398,6 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
                     const outerPath = describeArc(cx, cy, outerR, startAngle, endAngle);
                     const innerPath = describeArc(cx, cy, innerR, startAngle, endAngle);
                     const innerReversed = innerPath.replace(/M ([\d.]+) ([\d.]+)/, 'L $1 $2').replace(/Z/g, '');
-
                     startAngle = endAngle;
 
                     return (
@@ -416,12 +408,7 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
                           fill={scent.color}
                           stroke="#1A1A1A"
                           strokeWidth={1}
-                          onMouseEnter={() => setHoveredScent({
-                            name: scent.name,
-                            ratio: Math.round((scent.value / total) * 100),
-                            x: tipX,
-                            y: tipY
-                          })}
+                          onMouseEnter={() => setHoveredScent({ name: scent.name, ratio: Math.round((scent.value / total) * 100), x: tipX, y: tipY })}
                           onMouseLeave={() => setHoveredScent(null)}
                         />
                       </g>
@@ -432,13 +419,7 @@ function CardDetail({ cards, onBack }: CardDetailProps) {
               <circle cx={cx} cy={cy} r={innerR} fill="#2A2A2A" />
             </svg>
             {hoveredScent && (
-              <div
-                className="scent-tooltip"
-                style={{
-                  left: `${(hoveredScent.x / 180) * 100}%`,
-                  top: `${(hoveredScent.y / 180) * 100}%`
-                }}
-              >
+              <div className="scent-tooltip" style={{ left: `${(hoveredScent.x / 180) * 100}%`, top: `${(hoveredScent.y / 180) * 100}%` }}>
                 {hoveredScent.name} · {hoveredScent.ratio}%
               </div>
             )}
