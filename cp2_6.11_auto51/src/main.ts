@@ -87,11 +87,9 @@ class App {
     this.statsEls = { butterfly: bEl, length: lEl, time: tEl };
 
     this.strokeManager.setButterflyTriggerCallback((pt) => this.onButterflyTrigger(pt));
-    console.log('[Main] 初始化完成，蝴蝶触发回调已绑定');
   }
 
   private onButterflyTrigger(pt: Point): void {
-    console.log(`[Main] 收到蝴蝶触发请求: pos=(${pt.x.toFixed(1)},${pt.y.toFixed(1)}), velocity=${pt.velocity.toFixed(2)}, color=${pt.color}`);
     try {
       this.butterflyManager.spawn({
         x: pt.x,
@@ -99,7 +97,6 @@ class App {
         strokeColor: pt.color,
         strokeVelocity: pt.velocity
       });
-      console.log(`[Main] 蝴蝶spawn调用成功，当前数量: ${this.butterflyManager.getCount()}`);
     } catch (e) {
       console.error('[Main] 蝴蝶spawn出错:', e);
     }
@@ -115,9 +112,35 @@ class App {
   }
 
   private applyResponsiveScales(): void {
-    const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
-    this.butterflyManager.setSizeScale(isMobile ? 0.5 : 1);
-    this.strokeManager.setTipBaseRadius(isMobile ? 2 : 4);
+    const vw = window.innerWidth;
+    let bfScale: number;
+    let tipRadius: number;
+
+    if (vw >= 1200) {
+      bfScale = 1.1;
+      tipRadius = 4.5;
+    } else if (vw >= 1024) {
+      bfScale = 1.0;
+      tipRadius = 4;
+    } else if (vw >= 768) {
+      const t = (vw - 768) / (1024 - 768);
+      bfScale = 0.75 + t * 0.25;
+      tipRadius = 3 + t * 1;
+    } else if (vw >= 480) {
+      const t = (vw - 480) / (768 - 480);
+      bfScale = 0.55 + t * 0.2;
+      tipRadius = 2.5 + t * 0.5;
+    } else {
+      const t = Math.max(0, vw - 320) / (480 - 320);
+      bfScale = 0.45 + t * 0.1;
+      tipRadius = 2 + t * 0.5;
+    }
+
+    bfScale = Math.max(0.45, Math.min(1.15, bfScale));
+    tipRadius = Math.max(1.8, Math.min(5, tipRadius));
+
+    this.butterflyManager.setSizeScale(bfScale);
+    this.strokeManager.setTipBaseRadius(tipRadius);
   }
 
   private bindEvents(): void {
@@ -193,7 +216,6 @@ class App {
   private endDraw(): void {
     if (!this.isDrawing) return;
     this.isDrawing = false;
-    console.log('[Main] 结束绘制，触发扩散蝴蝶');
 
     if (this.strokeStartTs !== null) {
       this.totalDrawTimeMs += performance.now() - this.strokeStartTs;
@@ -202,11 +224,9 @@ class App {
 
     const result = this.strokeManager.endStroke();
     const lastPoint = result.lastPoint;
-    console.log(`[Main] 最后轨迹点: ${lastPoint ? `(${lastPoint.x.toFixed(1)},${lastPoint.y.toFixed(1)})` : '无'}, 段长度: ${result.length.toFixed(1)}px`);
 
     if (lastPoint) {
       const count = Math.floor(Math.random() * 3) + 3;
-      console.log(`[Main] 生成 ${count} 只扩散蝴蝶`);
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = Math.random() * 50 + 30;

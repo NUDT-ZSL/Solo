@@ -121,25 +121,19 @@ function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: n
 
 function getComplementaryColor(strokeColor: string): string {
   const { r, g, b } = parseRgb(strokeColor);
-  console.log(`[Butterfly] 墨迹颜色 r=${r},g=${g},b=${b}`);
   const cr = 255 - r;
   const cg = 255 - g;
   const cb = 255 - b;
-  console.log(`[Butterfly] 纯取反 r=${cr},g=${cg},b=${cb}`);
   const hsv = rgbToHsv(cr, cg, cb);
-  console.log(`[Butterfly] HSV h=${hsv.h.toFixed(1)}°, s=${hsv.s.toFixed(2)}, v=${hsv.v.toFixed(2)}`);
   const shifted = hsvToRgb(
     hsv.h + 25,
     clamp(hsv.s + 0.2, 0, 1),
     clamp(hsv.v * 1.15, 0, 1)
   );
-  console.log(`[Butterfly] HSV偏移后 r=${Math.round(shifted.r)},g=${Math.round(shifted.g)},b=${Math.round(shifted.b)}`);
   const fr = shifted.r * 0.65 + 255 * 0.35;
   const fg = shifted.g * 0.65 + 255 * 0.35;
   const fb = shifted.b * 0.65 + 255 * 0.35;
-  const finalColor = rgbStr(fr, fg, fb);
-  console.log(`[Butterfly] 最终翅膀颜色 ${finalColor}`);
-  return finalColor;
+  return rgbStr(fr, fg, fb);
 }
 
 function getPatternColor(wingColor: string): string {
@@ -197,20 +191,15 @@ export class ButterflyManager {
     const { x, y, strokeColor, strokeVelocity } = options;
     const isSpread = !!options.isSpread;
 
-    console.log(`[Butterfly] spawn() 被调用: pos=(${x.toFixed(1)},${y.toFixed(1)}), strokeColor=${strokeColor}, velocity=${strokeVelocity?.toFixed(2)}, isSpread=${isSpread}`);
-
     const velocityFactor = clamp((strokeVelocity || 5) / 10, 0, 1);
     const minSize = 20 * this.sizeScale;
     const maxSize = 50 * this.sizeScale;
     const size = rand(minSize + velocityFactor * (maxSize - minSize) * 0.3, maxSize);
-    console.log(`[Butterfly] 尺寸: ${size.toFixed(1)}px (范围 ${minSize}-${maxSize})`);
 
     const wingColor = getComplementaryColor(strokeColor);
     const patternColor = getPatternColor(wingColor);
-    const lifetime = isSpread
-      ? (options.spreadDuration || 2000)
-      : rand(5000, 8000);
-    console.log(`[Butterfly] 生命周期: ${lifetime.toFixed(0)}ms`);
+    const spreadDur = options.spreadDuration || rand(4000, 6000);
+    const lifetime = isSpread ? spreadDur : rand(8000, 12000);
 
     const butterfly: Butterfly = {
       id: ++_idCounter,
@@ -230,7 +219,7 @@ export class ButterflyManager {
       trail: [],
       isSpreading: !!options.isSpread,
       spreadStartTime: now,
-      spreadDuration: options.spreadDuration || 2000,
+      spreadDuration: spreadDur,
       fadeInEnd: now + 1000,
       idlePhase: rand(0, Math.PI * 2),
       idleAmplitude: rand(2, 6),
@@ -238,17 +227,14 @@ export class ButterflyManager {
     };
 
     this.butterflies.push(butterfly);
-    console.log(`[Butterfly] 已添加蝴蝶 #${butterfly.id}，总数 ${this.butterflies.length}/${MAX_BUTTERFLIES}`);
     this.enforceLimit();
-    console.log(`[Butterfly] 执行上限检查后数量: ${this.butterflies.length}`);
   }
 
   private enforceLimit(): void {
     if (this.butterflies.length > MAX_BUTTERFLIES) {
       const over = this.butterflies.length - MAX_BUTTERFLIES;
       this.butterflies.sort((a, b) => a.spawnTime - b.spawnTime);
-      const removed = this.butterflies.splice(0, over);
-      console.log(`[Butterfly] 超过上限 ${MAX_BUTTERFLIES}，移除最旧的 ${over} 只蝴蝶 (ID: ${removed.map(b => b.id).join(',')})`);
+      this.butterflies.splice(0, over);
     }
   }
 
