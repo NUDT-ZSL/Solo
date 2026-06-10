@@ -91,7 +91,7 @@ export class GardenGenerator {
 
     this.particleSystem.reset()
     this.createParticles()
-    this.particleSystem.startBloom()
+    this.particleSystem.startSpawn()
   }
 
   public generateDefault(): void {
@@ -101,7 +101,7 @@ export class GardenGenerator {
     this.particleSystem.setSpeedMultiplier(1)
     this.particleSystem.reset()
     this.createParticles()
-    this.particleSystem.startBloom()
+    this.particleSystem.startSpawn()
   }
 
   private createParticles(): void {
@@ -109,8 +109,17 @@ export class GardenGenerator {
     const colorMap = this.getColorMap(this.currentEmotion)
     const speedBase = this.getSpeedBase(this.currentEmotion)
 
+    const positions: THREE.Vector3[] = []
+    let maxDist = 0
     for (let i = 0; i < this.particleCount; i++) {
-      const position = shapeFn(i, this.particleCount)
+      const pos = shapeFn(i, this.particleCount)
+      positions.push(pos)
+      const dist = pos.length()
+      if (dist > maxDist) maxDist = dist
+    }
+
+    for (let i = 0; i < this.particleCount; i++) {
+      const position = positions[i]
       const color = colorMap(i, this.particleCount)
       
       const life = 10 + Math.random() * 5
@@ -122,7 +131,10 @@ export class GardenGenerator {
         (Math.random() - 0.5) * speedBase.z
       )
 
-      this.particleSystem.spawnParticle(position, velocity, color, size, life)
+      const dist = position.length()
+      const spawnDelay = maxDist > 0 ? (dist / maxDist) * 0.9 : 0
+
+      this.particleSystem.spawnParticle(position, velocity, color, size, life, false, spawnDelay)
     }
   }
 

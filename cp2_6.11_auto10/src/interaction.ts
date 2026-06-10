@@ -29,7 +29,7 @@ export class InteractionController {
   private minPolarAngle: number = 0.2
   private maxPolarAngle: number = Math.PI / 2 - 0.1
 
-  private damping: number = 0.08
+  private cameraDamping: number = 0.12
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -155,11 +155,14 @@ export class InteractionController {
   }
 
   public update(delta: number): void {
-    const dampingFactor = this.damping
+    this.currentRotationX += (this.targetRotationX - this.currentRotationX) * this.cameraDamping
+    this.currentRotationY += (this.targetRotationY - this.currentRotationY) * this.cameraDamping
+    this.currentDistance += (this.targetDistance - this.currentDistance) * this.cameraDamping
 
-    this.currentRotationX += (this.targetRotationX - this.currentRotationX) * dampingFactor
-    this.currentRotationY += (this.targetRotationY - this.currentRotationY) * dampingFactor
-    this.currentDistance += (this.targetDistance - this.currentDistance) * dampingFactor
+    this.particleSystem.setCameraRotation(
+      this.targetRotationX,
+      this.targetRotationY
+    )
 
     this.updateCameraPosition()
   }
