@@ -1,45 +1,57 @@
-export interface TrailPoint {
-  x: number;
-  y: number;
-  hue: number;
-  saturation: number;
-  lightness: number;
-  alpha: number;
-  birthTime: number;
-  lifetime: number;
-}
-
 export interface Cell {
   baseX: number;
   baseY: number;
-  currentX: number;
-  currentY: number;
-  velocityX: number;
-  velocityY: number;
   baseHue: number;
-  targetHue: number;
-  currentHue: number;
   baseSaturation: number;
-  targetSaturation: number;
-  currentSaturation: number;
   baseLightness: number;
-  targetLightness: number;
-  currentLightness: number;
-  hueTransitionStart: number;
-  hueTransitionEnd: number;
-  satTransitionStart: number;
-  satTransitionEnd: number;
-  lightTransitionStart: number;
-  lightTransitionEnd: number;
   size: number;
   brownianPhase: number;
   brownianSpeed: number;
-  trail: TrailPoint[];
+  displacementPulses: DisplacementPulse[];
+  colorPulses: ColorPulse[];
   isExploding: boolean;
   explodeStartTime: number;
   explodeDirectionX: number;
   explodeDirectionY: number;
   explodeDistance: number;
+  cachedX: number;
+  cachedY: number;
+  cachedHue: number;
+  cachedSaturation: number;
+  cachedLightness: number;
+}
+
+export interface DisplacementPulse {
+  dx: number;
+  dy: number;
+  startTime: number;
+  duration: number;
+  peakRatio: number;
+}
+
+export interface ColorPulse {
+  targetHue: number;
+  targetSaturation: number;
+  targetLightness: number;
+  startTime: number;
+  riseDuration: number;
+  fallDuration: number;
+  startHue: number;
+  startSaturation: number;
+  startLightness: number;
+}
+
+export interface TrailParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  hue: number;
+  saturation: number;
+  lightness: number;
+  birthTime: number;
+  lifetime: number;
+  size: number;
 }
 
 export interface InteractionData {
@@ -61,6 +73,7 @@ export interface Ripple {
   strength: number;
   startTime: number;
   active: boolean;
+  triggered: Set<number>;
 }
 
 export interface ColorBurst {
