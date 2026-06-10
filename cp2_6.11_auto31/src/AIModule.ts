@@ -3,6 +3,7 @@ import {
   GameState,
   GridCoord,
   Piece,
+  Afterimage,
   gridDistance,
   HEX_DIRECTIONS,
   isInBoard,
@@ -35,37 +36,19 @@ export class AIModule {
       if (!unusedPieces.has(piece.id)) continue;
       if (this.isTimeout()) break;
 
-      const moveRange = this.getMoveRange(piece, occupiedPositions);
-      const attackableEnemies = this.getAttackableEnemies(piece, enemyPieces, occupiedPositions);
+      const attackableEnemies = this.getAttackableEnemies(piece, enemyPieces);
 
       if (attackableEnemies.length > 0) {
-        const afterimageTargets = this.prioritizeAfterimageTargets(piece, attackableEnemies, state);
-        if (afterimageTargets.length > 0) {
-          const target = afterimageTargets[0];
+        const target = this.chooseAttackTarget(piece, attackableEnemies, state, faction);
+        if (target) {
           actions.push({ type: 'attack', pieceId: piece.id, targetPieceId: target.id });
           unusedPieces.delete(piece.id);
           continue;
         }
-
-        const weakest = this.findWeakestEnemy(attackableEnemies);
-        if (weakest) {
-          actions.push({ type: 'attack', pieceId: piece.id, targetPieceId: weakest.id });
-          unusedPieces.delete(piece.id);
-          continue;
-        }
       }
 
-      let bestMove: GridCoord | null = null;
-      let bestScore = -Infinity;
-
-      for (const move of moveRange) {
-        if (this.isTimeout()) break;
-        const score = this.evaluateMovePosition(piece, move, enemyPieces, state);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = move;
-        }
-      }
+      const moveRange = this.getMoveRange(piece, occupiedPositions);
+      const bestMove = this.chooseBestMove(piece, moveRange, enemyPieces, state, faction);
 
       if (bestMove && (bestMove.q !== piece.position.q || bestMove.r !== piece.position.r)) {
         actions.push({ type: 'move', pieceId: piece.id, target: bestMove });
@@ -76,6 +59,127 @@ export class AIModule {
 
     actions.push({ type: 'end' });
     return actions;
+  }
+
+  private chooseAttackTarget(
+    piece: Piece,
+    attackableEnemies: Piece[],
+    state: GameState,
+    faction: Faction
+  ): Piece | null {
+    if (attackableEnemies.length === 0) return null;
+
+    const afterimageScores = this.scoreEnemiesByAfterimageProximity(attackableEnemies, state, faction);
+    const afterimageTargets = afterimageScores.filter(s => s.score > 0);
+
+    if (afterimageTargets.length > 0) {
+      afterimageTargets.sort((a, b) => b.score - a.score);
+      return afterimageTargets[0].enemy;
+    }
+
+    return this.findWeakestEnemy(attackableEnemies);
+  }
+
+  private scoreEnemiesByAfterimageProximity(
+    enemies: Piece[],
+    state: GameState,
+    faction: Faction
+  ): { enemy: Piece; score: number }[] {
+    const friendlyAfterimages = state.afterimages.filter(img => img.faction === faction);
+
+    return enemies.map(enemy => {
+      let minDist = Infinity;
+      const enemyWorld = this.gridToWorldApprox(enemy.position);
+
+      for (const img of friendlyAfterimages) {
+        const dist = Math.hypot(img.worldX - enemyWorld.x, img.worldY - enemyWorld.y);
+        if (dist < minDist) {
+          minDist = dist;
+        }
+      }
+
+      if (minDist === Infinity || minDist >= 150) {
+        return { enemy, score: 0 };
+      }
+
+      const score = Math.max(0, 150 - minDist);
+      return { enemy, score };
+    });
+  }
+
+  private gridToWorldApprox(g: GridCoord): { x: number; y: number } {
+    const cos30 = Math.cos(Math.PI / 6);
+    const sin30 = Math.sin(Math.PI / 6);
+    const step = 36;
+    const x = step * (cos30 * g.q + cos30 * 0.5 * g.r);
+    const y = step * (sin30 * g.r);
+    return { x, y };
+  }
+
+  private chooseBestMove(
+    piece: Piece,
+    moveRange: GridCoord[],
+    enemies: Piece[],
+    state: GameState,
+    faction: Faction
+  ): GridCoord | null {
+    if (moveRange.length === 0) return null;
+
+    let bestMove: GridCoord | null = null;
+    let bestScore = -Infinity;
+
+    for (const move of moveRange) {
+      if (this.isTimeout()) break;
+      const score = this.evaluateMovePosition(piece, move, enemies, state, faction);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+    }
+
+    return bestMove;
+  }
+
+  private evaluateMovePosition(
+    piece: Piece,
+    pos: GridCoord,
+    enemies: Piece[],
+    state: GameState,
+    faction: Faction
+  ): number {
+    const centerQ = 6;
+    const centerR = 6;
+    const distToCenter = gridDistance(pos, { q: centerQ, r: centerR });
+    const centerScore = -distToCenter * 5;
+
+    let minEnemyDist = Infinity;
+    for (const e of enemies) {
+      const d = gridDistance(pos, e.position);
+      if (d < minEnemyDist) minEnemyDist = d;
+    }
+
+    let attackScore = 0;
+    if (minEnemyDist <= piece.attackRange) {
+      attackScore = 30 - minEnemyDist * 3;
+    }
+
+    const approachScore = minEnemyDist < Infinity ? -minEnemyDist * 1 : 0;
+
+    let afterimageScore = 0;
+    const friendlyAfterimages = state.afterimages.filter(img => img.faction === faction);
+    if (friendlyAfterimages.length > 0) {
+      let minAfterimageDist = Infinity;
+      const posWorld = this.gridToWorldApprox(pos);
+      for (const img of friendlyAfterimages) {
+        const d = Math.hypot(img.worldX - posWorld.x, img.worldY - posWorld.y);
+        if (d < minAfterimageDist) minAfterimageDist = d;
+      }
+      if (minAfterimageDist < Infinity && minAfterimageDist < 200) {
+        afterimageScore = (200 - minAfterimageDist) * 0.05;
+      }
+    }
+
+    return centerScore + attackScore + approachScore + afterimageScore;
   }
 
   private isTimeout(): boolean {
@@ -110,8 +214,7 @@ export class AIModule {
 
   private getAttackableEnemies(
     piece: Piece,
-    enemies: Piece[],
-    _occupied: Set<string>
+    enemies: Piece[]
   ): Piece[] {
     const result: Piece[] = [];
     for (const enemy of enemies) {
@@ -123,24 +226,6 @@ export class AIModule {
     return result;
   }
 
-  private prioritizeAfterimageTargets(
-    piece: Piece,
-    enemies: Piece[],
-    state: GameState
-  ): Piece[] {
-    return enemies.filter(enemy => {
-      return state.afterimages.some(img => {
-        const dx = img.worldX;
-        const dy = img.worldY;
-        const dist = Math.sqrt(
-          Math.pow(dx - (enemy.position.q * 36), 2) +
-          Math.pow(dy - (enemy.position.r * 36), 2)
-        );
-        return dist < 100;
-      });
-    });
-  }
-
   private findWeakestEnemy(enemies: Piece[]): Piece | null {
     if (enemies.length === 0) return null;
     let weakest = enemies[0];
@@ -148,31 +233,5 @@ export class AIModule {
       if (e.hp < weakest.hp) weakest = e;
     }
     return weakest;
-  }
-
-  private evaluateMovePosition(
-    piece: Piece,
-    pos: GridCoord,
-    enemies: Piece[],
-    _state: GameState
-  ): number {
-    const centerQ = 6;
-    const centerR = 6;
-    const distToCenter = gridDistance(pos, { q: centerQ, r: centerR });
-
-    let minEnemyDist = Infinity;
-    for (const e of enemies) {
-      const d = gridDistance(pos, e.position);
-      if (d < minEnemyDist) minEnemyDist = d;
-    }
-
-    const centerScore = -distToCenter * 3;
-    let attackScore = 0;
-    if (minEnemyDist <= piece.attackRange) {
-      attackScore = 20 - (minEnemyDist * 2);
-    }
-    const approachScore = minEnemyDist < Infinity ? -minEnemyDist * 1.5 : 0;
-
-    return centerScore + attackScore + approachScore;
   }
 }

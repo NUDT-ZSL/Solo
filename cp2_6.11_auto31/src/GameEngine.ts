@@ -30,6 +30,7 @@ export class GameEngine {
   constructor() {
     this.ai = new AIModule();
     this.state = this.createInitialState();
+    this.spawnInitialAfterimages();
   }
 
   private createInitialState(): GameState {
@@ -51,6 +52,39 @@ export class GameEngine {
       hoveredPieceId: null,
       time: 0,
     };
+  }
+
+  private spawnInitialAfterimages(): void {
+    const centerPositions: GridCoord[] = [
+      { q: 6, r: 6 },
+      { q: 5, r: 6 },
+      { q: 7, r: 6 },
+      { q: 6, r: 5 },
+      { q: 6, r: 7 },
+      { q: 5, r: 7 },
+      { q: 7, r: 5 },
+    ];
+
+    for (let i = 0; i < centerPositions.length; i++) {
+      const pos = centerPositions[i];
+      const faction: Faction = i % 2 === 0 ? 'blue' : 'red';
+      const worldPos = this.gridToWorld(pos);
+
+      this.state.afterimages.push({
+        id: uid(),
+        faction,
+        gridQ: pos.q,
+        gridR: pos.r,
+        worldX: worldPos.x,
+        worldY: worldPos.y,
+        targetPieceId: null,
+        velocityX: 0,
+        velocityY: 0,
+        lifetime: 5 + Math.random() * 3,
+        bouncesLeft: 2,
+        opacity: 0.7,
+      });
+    }
   }
 
   private deployPieces(): Piece[] {
@@ -239,17 +273,19 @@ export class GameEngine {
       img.lifetime -= dt;
 
       if (nearest && nearestDist < 25) {
-        this.resolveAfterimageCollision(img, nearest);
-        continue;
-      }
-
-      if (Math.random() < 0.15 * dt * 60 && img.bouncesLeft > 0) {
-        img.bouncesLeft--;
-        const dir = HEX_DIRECTIONS[Math.floor(Math.random() * HEX_DIRECTIONS.length)];
-        const angle = Math.atan2(dir.r, dir.q);
-        const spd = Math.hypot(img.velocityX, img.velocityY) || 80;
-        img.velocityX = Math.cos(angle) * spd;
-        img.velocityY = Math.sin(angle) * spd * 0.5;
+        if (img.bouncesLeft > 0 && Math.random() < 0.15) {
+          img.bouncesLeft--;
+          const dir = HEX_DIRECTIONS[Math.floor(Math.random() * HEX_DIRECTIONS.length)];
+          const angle = Math.atan2(dir.r, dir.q);
+          const spd = Math.hypot(img.velocityX, img.velocityY) || 80;
+          img.velocityX = Math.cos(angle) * spd;
+          img.velocityY = Math.sin(angle) * spd;
+          img.worldX += img.velocityX * dt * 2;
+          img.worldY += img.velocityY * dt * 2;
+        } else {
+          this.resolveAfterimageCollision(img, nearest);
+          continue;
+        }
       }
 
       if (img.lifetime <= 0) {
@@ -338,6 +374,7 @@ export class GameEngine {
       f.lastHitTime = Math.max(0, f.lastHitTime - dt);
 
       for (const target of alivePieces) {
+        if (target.hp <= 0) continue;
         const tw = this.gridToWorld(target.position);
         const d = Math.hypot(tw.x - f.x, tw.y - f.y);
         if (d < 22 && f.lastHitTime <= 0) {
@@ -630,6 +667,7 @@ export class GameEngine {
 
   public restart(): void {
     this.state = this.createInitialState();
+    this.spawnInitialAfterimages();
   }
 
   public findPieceAtWorld(wx: number, wy: number): Piece | null {
@@ -648,7 +686,7 @@ export class GameEngine {
         const dx = wx - w.x;
         const dy = wy - w.y;
         const cos30 = Math.cos(Math.PI / 6);
-        const half = RHOMBUS_SIZE / 2;
+        const half = RHOMBUS_STEP / 2;
         if (Math.abs(dx) < cos30 * half && Math.abs(dy) < half && Math.abs(dx) / cos30 + Math.abs(dy) < half) {
           return { q, r };
         }

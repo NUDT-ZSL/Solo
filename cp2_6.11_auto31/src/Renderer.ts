@@ -12,6 +12,11 @@ import { GameEngine } from './GameEngine';
 
 const TILT_X = 15 * Math.PI / 180;
 const TILT_Y = 5 * Math.PI / 180;
+const CAMERA_DISTANCE = 800;
+const FOCAL_LENGTH = 500;
+const FLOAT_AMPLITUDE = 3;
+const FLOAT_SPEED = 2;
+const FLOAT_BASE_HEIGHT = 20;
 
 export interface UIElement {
   rect: { x: number; y: number; w: number; h: number };
@@ -91,20 +96,32 @@ export class Renderer {
     return this.offscreenCtx;
   }
 
-  public boardToScreen(gx: number, gy: number): { x: number; y: number } {
+  public boardToScreen(gx: number, gy: number, extraZ: number = 0): { x: number; y: number; scale: number } {
     const s = this.viewport.scale;
     const cosY = Math.cos(TILT_Y);
     const sinY = Math.sin(TILT_Y);
     const cosX = Math.cos(TILT_X);
     const sinX = Math.sin(TILT_X);
 
-    let x = gx * cosY;
-    let z = -gx * sinY;
-    let y = gy * cosX - z * sinX;
+    let x = gx;
+    let y = gy;
+    let z = 0 + extraZ;
+
+    let x1 = x * cosY + z * sinY;
+    let z1 = -x * sinY + z * cosY;
+    let y1 = y;
+
+    let y2 = y1 * cosX - z1 * sinX;
+    let z2 = y1 * sinX + z1 * cosX;
+    let x2 = x1;
+
+    const cameraZ = CAMERA_DISTANCE;
+    const perspectiveScale = FOCAL_LENGTH / (cameraZ - z2);
 
     return {
-      x: this.viewport.boardCenterX + x * s,
-      y: this.viewport.boardCenterY + y * s,
+      x: this.viewport.boardCenterX + x2 * s * perspectiveScale,
+      y: this.viewport.boardCenterY + y2 * s * perspectiveScale,
+      scale: perspectiveScale,
     };
   }
 
@@ -124,7 +141,7 @@ export class Renderer {
     return { x: gx, y: gy };
   }
 
-  public worldGridPoint(c: GridCoord): { x: number; y: number } {
+  public worldGridPoint(c: GridCoord): { x: number; y: number; scale: number } {
     const cos30 = Math.cos(Math.PI / 6);
     const sin30 = Math.sin(Math.PI / 6);
     const gx = RHOMBUS_STEP * (cos30 * c.q + cos30 * 0.5 * c.r);
@@ -132,7 +149,8 @@ export class Renderer {
     return this.boardToScreen(gx, gy);
   }
 
-  public getPieceRenderPos(piece: Piece): { x: number; y: number } {
+  public getPieceRenderPos(piece: Piece, time: number): { x: number; y: number; scale: number; floatOffset: number } {
+    const floatOffset = FLOAT_BASE_HEIGHT + FLOAT_AMPLITUDE * Math.sin(time * FLOAT_SPEED + piece.flowPhase);
     if (piece.isMoving && piece.movePath.length > 0) {
       const from = this.engine.gridToWorld(piece.position);
       const toCoord = piece.movePath[0];
@@ -140,9 +158,11 @@ export class Renderer {
       const t = piece.moveProgress;
       const gx = from.x + (to.x - from.x) * t;
       const gy = from.y + (to.y - from.y) * t;
-      return this.boardToScreen(gx, gy);
+      const result = this.boardToScreen(gx, gy);
+      return { ...result, floatOffset };
     }
-    return this.worldGridPoint(piece.position);
+    const result = this.worldGridPoint(piece.position);
+    return { ...result, floatOffset };
   }
 
   public render(state: GameState): void {
@@ -328,13 +348,14 @@ export class Renderer {
   }
 
   private drawSinglePiece(ctx: CanvasRenderingContext2D, piece: Piece, state: GameState): void {
-    const pos = this.getPieceRenderPos(piece);
+    const pos = this.getPieceRenderPos(piece, state.time);
     const isSelected = state.selectedPieceId === piece.id;
     const color = piece.faction === 'blue' ? COLORS.techBlue : COLORS.warningRed;
+    const pieceSize = 20 * pos.scale;
 
     ctx.save();
     ctx.beginPath();
-    ctx.ellipse(pos.x, pos.y + 8, 18, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(pos.x, pos.y + 8 * pos.scale, 18 * pos.scale, 6 * pos.scale, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.fill();
     ctx.restore();
@@ -343,7 +364,7 @@ export class Renderer {
       ctx.save();
       const pulse = 0.5 + 0.5 * Math.sin(state.time * 4);
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y - 8, 26 + pulse * 3, 0, Math.PI * 2);
+      ctx.arc(pos.x, pos.y - pos.floatOffset, 26 * pos.scale + pulse * 3, 0, Math.PI * 2);
       ctx.strokeStyle = piece.faction === 'blue' ? 'rgba(74,144,217,0.7)' : 'rgba(217,74,74,0.7)';
       ctx.lineWidth = 2;
       ctx.shadowColor = color;
@@ -354,10 +375,10 @@ export class Renderer {
 
     if (piece.attackPulsePhase > 0) {
       const p = 1 - piece.attackPulsePhase;
-      const rad = 15 + p * 30;
+      const rad = (15 + p * 30) * pos.scale;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y - 10, rad, 0, Math.PI * 2);
+      ctx.arc(pos.x, pos.y - pos.floatOffset, rad, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(217,74,74,${1 - p})`;
       ctx.lineWidth = 3;
       ctx.shadowColor = COLORS.warningRed;
@@ -367,7 +388,8 @@ export class Renderer {
     }
 
     ctx.save();
-    ctx.translate(pos.x, pos.y - 12);
+    ctx.translate(pos.x, pos.y - pos.floatOffset);
+    ctx.scale(pos.scale, pos.scale);
     this.drawOctahedron(ctx, 20, color, piece.flowPhase);
     ctx.restore();
 
@@ -378,7 +400,7 @@ export class Renderer {
     ctx.lineWidth = 3;
     ctx.fillStyle = '#ffffff';
     const txt = String(piece.hp);
-    const by = pos.y - 38;
+    const by = pos.y - pos.floatOffset - 28;
     ctx.strokeText(txt, pos.x, by);
     ctx.fillText(txt, pos.x, by);
     ctx.restore();
@@ -418,6 +440,58 @@ export class Renderer {
       ctx.fill();
     }
 
+    const flowPos = (flowPhase / (Math.PI * 2)) % 1;
+    const flowY = size - size * 2 * flowPos;
+    const flowWidth = size * 0.7;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y);
+    ctx.lineTo(fl.x, fl.y);
+    ctx.lineTo(bottom.x, bottom.y);
+    ctx.lineTo(fr.x, fr.y);
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.globalCompositeOperation = 'screen';
+
+    for (let layer = 0; layer < 3; layer++) {
+      const layerAlpha = 0.25 + layer * 0.2;
+      const layerWidth = flowWidth * (1 - layer * 0.15);
+      const g = ctx.createLinearGradient(0, flowY - layerWidth, 0, flowY + layerWidth);
+      g.addColorStop(0, 'rgba(255,255,255,0)');
+      g.addColorStop(0.5, `rgba(255,255,255,${layerAlpha})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(fl.x - 5, flowY - layerWidth, fr.x - fl.x + 10, layerWidth * 2);
+    }
+
+    const edgeVertGrad = ctx.createLinearGradient(0, flowY - flowWidth * 0.7, 0, flowY + flowWidth * 0.7);
+    edgeVertGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    edgeVertGrad.addColorStop(0.5, 'rgba(255,255,255,0.9)');
+    edgeVertGrad.addColorStop(1, 'rgba(255,255,255,0)');
+
+    const edgeWidth = size * 0.25;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(fl.x, flowY - flowWidth, edgeWidth, flowWidth * 2);
+    ctx.clip();
+    ctx.fillStyle = edgeVertGrad;
+    ctx.fillRect(fl.x, flowY - flowWidth, edgeWidth, flowWidth * 2);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(fr.x - edgeWidth, flowY - flowWidth, edgeWidth, flowWidth * 2);
+    ctx.clip();
+    ctx.fillStyle = edgeVertGrad;
+    ctx.fillRect(fr.x - edgeWidth, flowY - flowWidth, edgeWidth, flowWidth * 2);
+    ctx.restore();
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+
     ctx.beginPath();
     ctx.moveTo(top.x, top.y);
     ctx.lineTo(fl.x, fl.y);
@@ -440,20 +514,19 @@ export class Renderer {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    const flow = 0.5 + 0.5 * Math.sin(flowPhase);
-    const gradY = -size + flow * size * 2;
-    const grad = ctx.createLinearGradient(0, gradY - 10, 0, gradY + 10);
-    grad.addColorStop(0, 'rgba(255,255,255,0)');
-    grad.addColorStop(0.5, 'rgba(255,255,255,0.35)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save();
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 12;
     ctx.beginPath();
     ctx.moveTo(top.x, top.y);
     ctx.lineTo(fl.x, fl.y);
     ctx.lineTo(bottom.x, bottom.y);
     ctx.lineTo(fr.x, fr.y);
     ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawAfterimages(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -463,6 +536,7 @@ export class Renderer {
       ctx.save();
       ctx.globalAlpha = img.opacity * 0.6;
       ctx.translate(sp.x, sp.y - 10);
+      ctx.scale(sp.scale, sp.scale);
       this.drawOctahedron(ctx, 16, color, state.time * 2);
       ctx.restore();
     }
@@ -474,6 +548,7 @@ export class Renderer {
       ctx.save();
       ctx.translate(sp.x, sp.y - 8);
       ctx.rotate(f.rotation);
+      ctx.scale(sp.scale, sp.scale);
       ctx.globalAlpha = f.opacity;
       ctx.fillStyle = f.color;
       ctx.shadowColor = f.color;
@@ -493,7 +568,7 @@ export class Renderer {
       ctx.shadowColor = p.color;
       ctx.shadowBlur = 8;
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y - 6, p.size, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y - 6, p.size * sp.scale, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -662,6 +737,10 @@ export class Renderer {
 
   private drawGlassPanel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
     const r = 12;
+    const blurAmount = 12;
+    const pad = blurAmount * 2;
+    const dpr = this.viewport.dpr;
+
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -675,8 +754,33 @@ export class Renderer {
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
 
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.save();
+    ctx.clip();
+
+    const srcX = Math.max(0, (x - pad) * dpr);
+    const srcY = Math.max(0, (y - pad) * dpr);
+    const srcW = Math.min(ctx.canvas.width - srcX, (w + pad * 2) * dpr);
+    const srcH = Math.min(ctx.canvas.height - srcY, (h + pad * 2) * dpr);
+    const dstX = x - pad;
+    const dstY = y - pad;
+    const dstW = w + pad * 2;
+    const dstH = h + pad * 2;
+
+    ctx.filter = `blur(${blurAmount}px)`;
+    ctx.drawImage(
+      ctx.canvas,
+      srcX, srcY, srcW, srcH,
+      dstX, dstY, dstW, dstH
+    );
+    ctx.filter = 'none';
+    ctx.restore();
+
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + h);
+    bgGrad.addColorStop(0, 'rgba(255,255,255,0.12)');
+    bgGrad.addColorStop(1, 'rgba(255,255,255,0.06)');
+    ctx.fillStyle = bgGrad;
     ctx.fill();
+
     ctx.strokeStyle = 'rgba(255,255,255,0.18)';
     ctx.lineWidth = 1;
     ctx.stroke();
