@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星尘织机 · Stardust Loom</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, #1A1A1A 0%, #0B132B 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    #canvas-container {
+      position: relative;
+      width: 85vw;
+      height: 95vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: visible;
+    }
+
+    #loom-canvas {
+      display: block;
+      border-radius: 8px;
+      box-shadow: 0 0 80px rgba(155, 89, 182, 0.08);
+    }
+
+    #control-panel {
+      position: fixed;
+      top: 2.5vh;
+      right: calc((100vw - 85vw) / 2);
+      width: 220px;
+      min-height: 300px;
+      background: rgba(26, 26, 26, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      color: #fff;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    #panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      background: linear-gradient(90deg, #9B59B6, #3498DB, #1ABC9C, #F1C40F);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 1px;
+    }
+
+    .control-group {
+      margin-bottom: 18px;
+      position: relative;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .control-value {
+      font-size: 14px;
+      color: #F1C40F;
+      font-variant-numeric: tabular-nums;
+      transition: color 300ms ease-out;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      transition: background 300ms ease-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #9B59B6, #3498DB, #1ABC9C, #F1C40F);
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(155, 89, 182, 0.6);
+      transition: transform 300ms ease-out, box-shadow 300ms ease-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 14px rgba(241, 196, 15, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #9B59B6, #3498DB, #1ABC9C, #F1C40F);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(155, 89, 182, 0.6);
+    }
+
+    #light-rail {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(155, 89, 182, 0) 20%,
+        rgba(155, 89, 182, 0.9) 50%,
+        rgba(241, 196, 15, 0.9) 55%,
+        rgba(241, 196, 15, 0) 80%,
+        transparent 100%
+      );
+      transform: translateY(-100%);
+      pointer-events: none;
+    }
+
+    #fps-counter {
+      position: fixed;
+      bottom: 16px;
+      left: calc((100vw - 85vw) / 2 + 8px);
+      font-size: 14px;
+      color: #fff;
+      padding: 6px 12px;
+      background: rgba(26, 26, 26, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 20;
+      font-variant-numeric: tabular-nums;
+      transition: color 300ms ease-out;
+    }
+
+    #fps-counter.low {
+      color: #E67E22;
+    }
+
+    #fps-counter.critical {
+      color: #E74C3C;
+    }
+
+    .halo {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      border: 2px solid rgba(241, 196, 15, 0.8);
+      box-shadow: 0 0 30px rgba(241, 196, 15, 0.6), inset 0 0 20px rgba(241, 196, 15, 0.3);
+      animation: halo-expand 500ms ease-out forwards;
+    }
+
+    @keyframes halo-expand {
+      0% {
+        width: 0;
+        height: 0;
+        opacity: 0.8;
+        transform: translate(-50%, -50%);
+      }
+      100% {
+        width: 300px;
+        height: 300px;
+        opacity: 0;
+        transform: translate(-50%, -50%);
+      }
+    }
+
+    @media (max-width: 800px) {
+      #canvas-container {
+        width: 100vw;
+        height: 60vh;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+
+      #control-panel {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        min-height: unset;
+        border-radius: 12px 12px 0 0;
+      }
+
+      #fps-counter {
+        top: 16px;
+        bottom: auto;
+        left: 16px;
+        right: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="loom-canvas"></canvas>
+  </div>
+
+  <div id="control-panel">
+    <div id="panel-title">星尘织机</div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>纱线密度</span>
+        <span class="control-value" id="density-value">1.0</span>
+      </div>
+      <input type="range" id="density-slider" min="0.3" max="1.5" step="0.1" value="1.0" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>张力</span>
+        <span class="control-value" id="tension-value">1.0</span>
+      </div>
+      <input type="range" id="tension-slider" min="0.5" max="2.0" step="0.1" value="1.0" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>颜色渐变偏移</span>
+        <span class="control-value" id="shift-value">0.5</span>
+      </div>
+      <input type="range" id="shift-slider" min="0" max="1" step="0.01" value="0.5" />
+    </div>
+
+    <div id="light-rail"></div>
+  </div>
+
+  <div id="fps-counter">FPS: --</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
