@@ -10,7 +10,8 @@ interface Particle {
   maxLife: number;
   color: string;
   opacity: number;
-  returning: boolean;
+  phase: 'emerge' | 'idle' | 'returning' | 'fading';
+  fadeSpeed: number;
 }
 
 interface MouseState {
@@ -20,23 +21,28 @@ interface MouseState {
   prevY: number;
   velocity: number;
   isInScroll: boolean;
+  enteredAt: number;
 }
 
-const PARTICLE_COLORS = ['#D4AF37', '#E5C158', '#C58B3C', '#D9A04A', '#CC9940'];
-const MAX_PARTICLES = 50;
+const PARTICLE_COLORS = ['#D4AF37', '#E5C158', '#C58B3C', '#D9A04A', '#CC9940', '#E6C666'];
+const DEFAULT_MAX_PARTICLES = 50;
 
 export class ParticleSystem {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private particles: Particle[] = [];
   private mouse: MouseState = {
-    x: 0, y: 0, prevX: 0, prevY: 0, velocity: 0, isInScroll: false
+    x: 0, y: 0, prevX: 0, prevY: 0, velocity: 0,
+    isInScroll: false, enteredAt: 0
   };
   private canvasWidth = 0;
   private canvasHeight = 0;
   private scrollProgress = 0;
   private emitAccumulator = 0;
-  private burstParticles = 0;
+  private burstPending = 0;
+  private burstOriginX = 0;
+  private burstOriginY = 0;
+  private maxParticles = DEFAULT_MAX_PARTICLES;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -56,83 +62,125 @@ export class ParticleSystem {
     this.scrollProgress = Math.max(0, Math.min(1, progress));
   }
 
+  setMaxParticles(count: number): void {
+    this.maxParticles = Math.max(15, Math.min(DEFAULT_MAX_PARTICLES, count));
+  }
+
   setMouseInScroll(isIn: boolean): void {
+    if (isIn && !this.mouse.isInScroll) {
+      this.mouse.enteredAt = performance.now();
+    }
+    if (!isIn && this.mouse.isInScroll) {
+      for (const p of this.particles) {
+        if (p.phase === 'idle' || p.phase === 'emerge') {
+          p.phase = 'returning';
+        }
+      }
+    }
     this.mouse.isInScroll = isIn;
   }
 
   updateMouse(x: number, y: number): void {
-    const dx = x - this.mouse.x;
-    const dy = y - this.mouse.y;
     this.mouse.prevX = this.mouse.x;
     this.mouse.prevY = this.mouse.y;
     this.mouse.x = x;
     this.mouse.y = y;
+
+    const dx = this.mouse.x - this.mouse.prevX;
+    const dy = this.mouse.y - this.mouse.prevY;
     this.mouse.velocity = Math.sqrt(dx * dx + dy * dy);
   }
 
   triggerBurst(x: number, y: number): void {
-    this.burstParticles = 40;
-    this.mouse.x = x;
-    this.mouse.y = y;
+    this.burstPending = 45;
+    this.burstOriginX = x;
+    this.burstOriginY = y;
   }
 
   update(dt: number): void {
-    const revealW = this.canvasWidth * this.scrollProgress;
+    if (dt <= 0) dt = 1 / 60;
+    const revealW = Math.max(0, this.canvasWidth * this.scrollProgress);
+    const revealH = this.canvasHeight;
 
-    if (this.burstParticles > 0) {
-      const spawn = Math.min(this.burstParticles, 5);
+    if (this.burstPending > 0) {
+      const spawn = Math.min(this.burstPending, 6);
       for (let i = 0; i < spawn; i++) {
-        if (this.particles.length >= MAX_PARTICLES) break;
-        this.particles.push(this.createBurstParticle(this.mouse.x, this.mouse.y));
+        if (this.particles.length >= this.maxParticles) break;
+        this.particles.push(this.createBurstParticle(this.burstOriginX, this.burstOriginY));
       }
-      this.burstParticles -= spawn;
+      this.burstPending -= spawn;
     }
 
-    if (this.mouse.isInScroll && this.scrollProgress > 0.1) {
-      this.emitAccumulator += dt * 20;
-      while (this.emitAccumulator >= 1 && this.particles.length < MAX_PARTICLES) {
+    if (this.mouse.isInScroll && this.scrollProgress > 0.08 && revealW > 20) {
+      this.emitAccumulator += dt * 18;
+      while (this.emitAccumulator >= 1 && this.particles.length < this.maxParticles) {
         this.emitAccumulator -= 1;
-        this.particles.push(this.createAmbientParticle(revealW));
+        this.particles.push(this.createAmbientParticle(revealW, revealH));
       }
     }
 
-    const attraction = this.mouse.isInScroll ? 0.3 : 0;
-    const velocityOffset = this.mouse.velocity * attraction;
+    const mouseVel = this.mouse.velocity;
+    const pushStrength = mouseVel * 0.3;
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
 
-      if (this.mouse.isInScroll) {
-        const dx = this.mouse.x - p.x;
-        const dy = this.mouse.y - p.y;
+      if (this.mouse.isInScroll && (p.phase === 'idle' || p.phase === 'emerge')) {
+        const dx = p.x - this.mouse.x;
+        const dy = p.y - this.mouse.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 120 && dist > 0.1) {
-          const force = (1 - dist / 120) * velocityOffset * 0.02;
+        const influenceRadius = 140;
+
+        if (dist < influenceRadius && dist > 0.1) {
+          const falloff = 1 - dist / influenceRadius;
+          const force = pushStrength * falloff * 0.6;
           p.vx += (dx / dist) * force;
           p.vy += (dy / dist) * force * 0.5;
         }
       }
 
-      if (p.returning) {
-        p.vx += (p.baseX - p.x) * 0.04;
-        p.vy += (p.baseY - p.y) * 0.04;
+      if (p.phase === 'returning') {
+        const dx = p.baseX - p.x;
+        const dy = p.baseY - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 2) {
+          p.phase = 'fading';
+          p.fadeSpeed = 1.5;
+        } else {
+          p.vx += dx * 0.08;
+          p.vy += dy * 0.08;
+        }
       }
 
-      p.vy += 2 * dt;
-      p.vx *= 0.96;
-      p.vy *= 0.96;
+      if (p.phase === 'fading') {
+        p.life -= dt * p.fadeSpeed;
+      } else if (p.phase !== 'returning') {
+        p.life -= dt / p.maxLife;
+      }
+
+      p.vy += 4 * dt;
+      p.vx *= 0.94;
+      p.vy *= 0.94;
       p.x += p.vx;
       p.y += p.vy;
 
-      p.life -= dt / p.maxLife;
-      if (p.life <= 0) {
-        this.particles.splice(i, 1);
-        continue;
+      if (p.phase === 'emerge') {
+        p.opacity = Math.min(1, p.opacity + dt * 4);
+        if (p.opacity >= 0.95) {
+          p.phase = 'idle';
+          p.opacity = 1;
+        }
+      } else if (p.phase === 'fading') {
+        p.opacity = Math.max(0, p.opacity - dt * 2);
+      } else {
+        const targetOpacity = 0.7 + Math.sin((performance.now() / 1000 + p.x * 0.01)) * 0.15;
+        p.opacity += (targetOpacity - p.opacity) * 0.05;
       }
 
-      p.opacity = Math.max(0, Math.min(1, p.life)) * 0.85;
-
-      if (p.x < -50 || p.x > this.canvasWidth + 50 || p.y > this.canvasHeight + 50) {
+      if (p.life <= 0 || p.opacity <= 0.01 ||
+          p.x < -80 || p.x > this.canvasWidth + 80 ||
+          p.y > this.canvasHeight + 80) {
         this.particles.splice(i, 1);
       }
     }
@@ -142,63 +190,69 @@ export class ParticleSystem {
     const ctx = this.ctx;
     const revealW = this.canvasWidth * this.scrollProgress;
 
+    if (revealW <= 2) return;
+
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, revealW, this.canvasHeight);
     ctx.clip();
 
     for (const p of this.particles) {
-      ctx.globalAlpha = p.opacity;
+      const alpha = Math.max(0, Math.min(1, p.opacity * p.life));
+      if (alpha <= 0.02) continue;
+
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = p.opacity * 0.3;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * 2.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
     ctx.restore();
   }
 
-  private createAmbientParticle(revealWidth: number): Particle {
-    const x = Math.random() * Math.max(10, revealWidth - 10);
-    const y = Math.random() * this.canvasHeight * 0.9;
+  private createAmbientParticle(revealW: number, revealH: number): Particle {
+    const x = 10 + Math.random() * Math.max(10, revealW - 20);
+    const y = 10 + Math.random() * (revealH - 20);
     const maxLife = 5 + Math.random() * 3;
     return {
       x, y,
       baseX: x, baseY: y,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: -0.2 + Math.random() * 0.4,
-      size: 0.8 + Math.random() * 2.2,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: -0.3 + Math.random() * 0.4,
+      size: 0.8 + Math.random() * 2.4,
       life: 1,
       maxLife,
       color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
       opacity: 0,
-      returning: true
+      phase: 'emerge',
+      fadeSpeed: 1
     };
   }
 
   private createBurstParticle(cx: number, cy: number): Particle {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 80 + Math.random() * 160;
-    const x = cx;
-    const y = cy;
-    const maxLife = 2 + Math.random() * 2;
+    const speed = 120 + Math.random() * 200;
+    const maxLife = 1.8 + Math.random() * 2;
     return {
-      x, y,
-      baseX: cx + (Math.random() - 0.5) * 40,
-      baseY: cy + (Math.random() - 0.5) * 40,
+      x: cx, y: cy,
+      baseX: cx + (Math.random() - 0.5) * 50,
+      baseY: cy + (Math.random() - 0.5) * 50,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      size: 1 + Math.random() * 2.5,
+      size: 1.2 + Math.random() * 2.8,
       life: 1,
       maxLife,
       color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
-      opacity: 0,
-      returning: true
+      opacity: 1,
+      phase: 'returning',
+      fadeSpeed: 0.6
     };
   }
 }

@@ -4,15 +4,22 @@ import { ParticleSystem } from './ParticleSystem';
 interface ScrollState {
   progress: number;
   targetProgress: number;
+  shatterProgress: number;
+  targetShatter: number;
   currentChapter: number;
   totalChapters: number;
-  isAnimating: boolean;
   brightnessMultiplier: number;
   targetBrightness: number;
   rodRotation: number;
 }
 
-type TransitionState = 'idle' | 'collapsing' | 'expanding';
+type ChapterTransitionPhase =
+  | 'idle'
+  | 'shattering'
+  | 'collapsing'
+  | 'switching'
+  | 'expanding'
+  | 'assembling';
 
 export class ScrollManager {
   private renderer: Renderer;
@@ -24,7 +31,7 @@ export class ScrollManager {
   private scrollWrapper: HTMLElement;
 
   private state: ScrollState;
-  private transitionState: TransitionState = 'idle';
+  private transitionPhase: ChapterTransitionPhase = 'idle';
   private pendingChapter: number | null = null;
 
   private rafId = 0;
@@ -33,7 +40,12 @@ export class ScrollManager {
   private dragStartX = 0;
   private dragStartProgress = 0;
   private animationSpeed = 0.9;
-  private mouseVelAccum = 0;
+
+  private fpsSamples: number[] = [];
+  private currentFps = 60;
+  private fpsEma = 60;
+  private frameCount = 0;
+  private fpsUpdateTimer = 0;
 
   constructor(
     renderer: Renderer,
@@ -56,11 +68,12 @@ export class ScrollManager {
 
     const chapters = this.renderer.getChapters();
     this.state = {
-      progress: 0,
-      targetProgress: 0,
+      progress: 1,
+      targetProgress: 1,
+      shatterProgress: 0,
+      targetShatter: 0,
       currentChapter: 0,
       totalChapters: chapters.length,
-      isAnimating: false,
       brightnessMultiplier: 1,
       targetBrightness: 1,
       rodRotation: 0
@@ -111,23 +124,26 @@ export class ScrollManager {
   start(): void {
     this.lastTime = performance.now();
     this.loop(this.lastTime);
-    setTimeout(() => this.triggerAutoExpand(), 400);
+    // setTimeout(() => this.triggerAutoExpand(), 500);
   }
 
   triggerAutoExpand(): void {
+    if (this.transitionPhase !== 'idle') return;
+    this.state.targetShatter = 0;
     this.state.targetProgress = 1;
-    this.state.isAnimating = true;
+    this.transitionPhase = 'assembling';
   }
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    if (this.transitionState !== 'idle') return;
+    if (this.transitionPhase !== 'idle') return;
 
     const delta = e.deltaY > 0 ? 1 : -1;
     const step = 0.12;
     let newTarget = this.state.targetProgress + delta * step;
 
-    if (delta > 0 && this.state.progress >= 0.98 && this.state.currentChapter < this.state.totalChapters - 1) {
+    if (delta > 0 && this.state.progress >= 0.98 &&
+        this.state.currentChapter < this.state.totalChapters - 1) {
       this.goToChapter(this.state.currentChapter + 1);
       return;
     }
@@ -138,11 +154,10 @@ export class ScrollManager {
 
     newTarget = Math.max(0, Math.min(1, newTarget));
     this.state.targetProgress = newTarget;
-    this.state.isAnimating = true;
   };
 
   private onMouseDown = (e: MouseEvent): void => {
-    if (this.transitionState !== 'idle') return;
+    if (this.transitionPhase !== 'idle') return;
     this.isDragging = true;
     this.dragStartX = e.clientX;
     this.dragStartProgress = this.state.progress;
@@ -152,22 +167,20 @@ export class ScrollManager {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const inScroll = x >= 0 && x <= rect.width && y >= 0 && y <= rect.height;
+    const inScroll = x >= 0 && x <= rect.width && y >= 0 && y <= rect.height &&
+                     x <= this.state.progress * rect.width;
 
     this.particleSystem.setMouseInScroll(inScroll);
     if (inScroll) {
       this.particleSystem.updateMouse(x, y);
     }
 
-    if (this.isDragging && this.transitionState === 'idle') {
+    if (this.isDragging && this.transitionPhase === 'idle') {
       const dx = e.clientX - this.dragStartX;
       const delta = dx / rect.width;
       const newTarget = Math.max(0, Math.min(1, this.dragStartProgress + delta));
       this.state.targetProgress = newTarget;
-      this.state.isAnimating = true;
     }
-
-    this.mouseVelAccum *= 0.85;
   };
 
   private onMouseUp = (): void => {
@@ -175,7 +188,10 @@ export class ScrollManager {
   };
 
   private onMouseEnter = (): void => {
-    this.particleSystem.setMouseInScroll(true);
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width > 0) {
+      this.particleSystem.setMouseInScroll(true);
+    }
   };
 
   private onMouseLeave = (): void => {
@@ -184,27 +200,32 @@ export class ScrollManager {
   };
 
   private onClick = (e: MouseEvent): void => {
-    if (this.transitionState !== 'idle') return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    if (this.state.progress < 0.08) {
+    if (this.transitionPhase === 'idle' && this.state.progress < 0.08) {
+      this.state.targetShatter = 0;
       this.state.targetProgress = 1;
-      this.state.isAnimating = true;
+      this.transitionPhase = 'assembling';
       return;
     }
-    if (this.state.progress > 0.92 && x > rect.width * 0.9) {
+    if (this.transitionPhase === 'idle' && this.state.progress > 0.92 &&
+        x > rect.width * 0.9) {
+      this.state.targetShatter = 1;
       this.state.targetProgress = 0;
-      this.state.isAnimating = true;
+      this.transitionPhase = 'shattering';
       return;
     }
 
-    this.state.targetBrightness = 1.2;
-    this.particleSystem.triggerBurst(x, y);
-    setTimeout(() => {
-      this.state.targetBrightness = 1;
-    }, 500);
+    if (this.state.progress > 0.2) {
+      this.state.targetBrightness = 1.2;
+      this.particleSystem.triggerBurst(x, y);
+
+      setTimeout(() => {
+        this.state.targetBrightness = 1;
+      }, 500);
+    }
   };
 
   private onResize = (): void => {
@@ -213,71 +234,138 @@ export class ScrollManager {
   };
 
   goToChapter(index: number): void {
-    if (this.transitionState !== 'idle') return;
+    if (this.transitionPhase !== 'idle') return;
     if (index === this.state.currentChapter) return;
     if (index < 0 || index >= this.state.totalChapters) return;
 
     this.pendingChapter = index;
-    this.transitionState = 'collapsing';
-    this.state.targetProgress = 0;
-    this.state.isAnimating = true;
+    this.state.targetShatter = 1;
+    this.transitionPhase = 'shattering';
   }
 
   private loop = (time: number): void => {
     const dt = Math.min(0.05, (time - this.lastTime) / 1000);
     this.lastTime = time;
 
+    this.updateFps(dt);
     this.update(dt);
     this.draw();
 
     this.rafId = requestAnimationFrame(this.loop);
   };
 
-  private update(dt: number): void {
-    const s = this.state;
+  private updateFps(dt: number): void {
+    this.frameCount++;
+    this.fpsUpdateTimer += dt;
 
-    const lerpFactor = 1 - Math.pow(0.0001, dt * this.animationSpeed);
-    if (Math.abs(s.progress - s.targetProgress) > 0.001) {
-      const prev = s.progress;
-      s.progress += (s.targetProgress - s.progress) * lerpFactor;
-      s.rodRotation += (s.progress - prev) * 8;
-    } else {
-      s.progress = s.targetProgress;
-      s.isAnimating = false;
+    if (this.fpsUpdateTimer >= 0.5) {
+      const instantFps = this.frameCount / this.fpsUpdateTimer;
+      this.fpsEma = this.fpsEma * 0.7 + instantFps * 0.3;
+      this.currentFps = this.fpsEma;
+      this.frameCount = 0;
+      this.fpsUpdateTimer = 0;
 
-      if (this.transitionState === 'collapsing' && s.progress <= 0.001) {
-        if (this.pendingChapter !== null) {
-          s.currentChapter = this.pendingChapter;
-          this.pendingChapter = null;
-          this.updateChapterNavUI();
-        }
-        this.transitionState = 'expanding';
-        s.targetProgress = 1;
-        s.isAnimating = true;
-      } else if (this.transitionState === 'expanding' && s.progress >= 0.999) {
-        this.transitionState = 'idle';
+      if (this.currentFps < 52) {
+        this.particleSystem.setMaxParticles(30);
+      } else if (this.currentFps >= 58) {
+        this.particleSystem.setMaxParticles(50);
       }
     }
+  }
 
-    if (Math.abs(s.brightnessMultiplier - s.targetBrightness) > 0.005) {
-      s.brightnessMultiplier += (s.targetBrightness - s.brightnessMultiplier) * Math.min(1, dt * 8);
-    } else {
-      s.brightnessMultiplier = s.targetBrightness;
-    }
+  private update(dt: number): void {
+    if (dt <= 0) dt = 1 / 60;
+    const s = this.state;
+
+    const smoothSpeed = this.animationSpeed;
+    const lerp = (current: number, target: number, rate: number): number => {
+      const factor = 1 - Math.pow(0.0001, dt * rate);
+      return current + (target - current) * factor;
+    };
+
+    s.progress = lerp(s.progress, s.targetProgress, smoothSpeed);
+    s.shatterProgress = lerp(s.shatterProgress, s.targetShatter, smoothSpeed * 0.9);
+
+    const prevProgress = s.progress;
+    s.rodRotation += (s.progress - prevProgress) * 10;
+
+    s.brightnessMultiplier = lerp(s.brightnessMultiplier, s.targetBrightness, 6);
+
+    this.handleChapterTransition();
 
     this.renderer.setBrightness(s.brightnessMultiplier);
     this.particleSystem.setScrollProgress(s.progress);
     this.particleSystem.update(dt);
 
-    const rodDeg = s.rodRotation * 60;
+    const rodDeg = s.rodRotation * 55;
     this.leftRod.style.transform = `rotate(${rodDeg}deg)`;
     this.rightRod.style.transform = `rotate(${-rodDeg}deg)`;
-    s.rodRotation *= 0.88;
+    s.rodRotation *= 0.86;
+  }
+
+  private handleChapterTransition(): void {
+    const s = this.state;
+
+    switch (this.transitionPhase) {
+      case 'shattering':
+        if (s.shatterProgress >= 0.98) {
+          s.shatterProgress = 1;
+          this.transitionPhase = 'collapsing';
+          s.targetProgress = 0;
+        }
+        break;
+
+      case 'collapsing':
+        if (s.progress <= 0.02) {
+          s.progress = 0;
+          this.transitionPhase = 'switching';
+          if (this.pendingChapter !== null) {
+            s.currentChapter = this.pendingChapter;
+            this.pendingChapter = null;
+            this.updateChapterNavUI();
+          }
+          setTimeout(() => {
+            if (this.transitionPhase === 'switching') {
+              s.targetProgress = 1;
+              this.transitionPhase = 'expanding';
+            }
+          }, 150);
+        }
+        break;
+
+      case 'expanding':
+        if (s.progress >= 0.98) {
+          s.progress = 1;
+          this.transitionPhase = 'assembling';
+          s.targetShatter = 0;
+        }
+        break;
+
+      case 'assembling':
+        if (s.shatterProgress <= 0.02) {
+          s.shatterProgress = 0;
+          this.transitionPhase = 'idle';
+        }
+        break;
+
+      case 'idle':
+      case 'switching':
+      default:
+        break;
+    }
   }
 
   private draw(): void {
-    this.renderer.render(this.state.progress, this.state.currentChapter);
+    this.renderer.render(
+      this.state.progress,
+      this.state.currentChapter,
+      this.state.shatterProgress
+    );
     this.particleSystem.render();
+  }
+
+  getFps(): number {
+    return this.currentFps;
   }
 
   destroy(): void {
