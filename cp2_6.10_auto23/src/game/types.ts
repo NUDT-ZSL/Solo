@@ -17,6 +17,17 @@ export interface Particle {
   dy: number;
 }
 
+export interface WeightUpdate {
+  x: number;
+  y: number;
+  weight: number;
+}
+
+export interface PathResult {
+  path: Position[];
+  weights: number[][];
+}
+
 export interface GameState {
   board: CellState[][];
   playerPos: Position;
@@ -32,3 +43,9 @@ export interface GameState {
 }
 
 export type CellClickHandler = (x: number, y: number) => void;
+
+export interface BoardProps {
+  state: GameState;
+  onCellClick: CellClickHandler;
+  cellSize?: number;
+}

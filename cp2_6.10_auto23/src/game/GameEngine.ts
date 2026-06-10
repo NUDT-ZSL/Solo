@@ -1,4 +1,4 @@
-import { Position, CellState, GameState } from './types';
+import { Position, CellState, GameState, WeightUpdate } from './types';
 import { Pathfinder } from './Pathfinder';
 
 export class GameEngine {
@@ -7,6 +7,7 @@ export class GameEngine {
   private playerStart: Position;
   private aiStart: Position;
   private goalPos: Position;
+  private weights: number[][];
 
   constructor(size: number = 6) {
     this.size = size;
@@ -14,9 +15,37 @@ export class GameEngine {
     this.playerStart = { x: 0, y: 0 };
     this.aiStart = { x: size - 1, y: size - 1 };
     this.goalPos = { x: 0, y: 0 };
+    this.weights = this.initializeWeights();
+  }
+
+  private initializeWeights(): number[][] {
+    const w: number[][] = [];
+    for (let y = 0; y < this.size; y++) {
+      w[y] = [];
+      for (let x = 0; x < this.size; x++) {
+        w[y][x] = 1;
+      }
+    }
+    return w;
+  }
+
+  public updateWeight(update: WeightUpdate): void {
+    if (update.x >= 0 && update.x < this.size && update.y >= 0 && update.y < this.size) {
+      this.weights[update.y][update.x] = update.weight;
+      if (update.weight === Infinity) {
+        this.pathfinder.setTrapWeight(update.x, update.y);
+      } else {
+        this.pathfinder.resetWeight(update.x, update.y);
+      }
+    }
+  }
+
+  public getWeights(): number[][] {
+    return this.weights.map(row => [...row]);
   }
 
   public initializeGame(): GameState {
+    this.weights = this.initializeWeights();
     this.pathfinder.resetAllWeights();
     
     const board: CellState[][] = [];
@@ -35,7 +64,7 @@ export class GameEngine {
       }
     }
 
-    const path = this.pathfinder.findRandomPath(this.aiStart, this.goalPos);
+    const path = this.generateRandomPath();
 
     return {
       board,
@@ -45,11 +74,78 @@ export class GameEngine {
       path,
       turn: 1,
       score: 0,
-      aiStepsRemaining: path.length,
+      aiStepsRemaining: Math.max(0, path.length - 1),
       isGameOver: false,
       winner: null,
       aiPaused: false
     };
+  }
+
+  private generateRandomPath(): Position[] {
+    const path: Position[] = [this.aiStart];
+    let current = { ...this.aiStart };
+    const visited = new Set<string>();
+    visited.add(`${current.x},${current.y}`);
+
+    const maxIterations = this.size * this.size * 2;
+    let iterations = 0;
+
+    while ((current.x !== this.goalPos.x || current.y !== this.goalPos.y) && iterations < maxIterations) {
+      iterations++;
+
+      const directions = this.getWeightedDirections(current, this.goalPos);
+
+      let moved = false;
+      for (const dir of directions) {
+        const nx = current.x + dir.dx;
+        const ny = current.y + dir.dy;
+        const key = `${nx},${ny}`;
+
+        if (this.isValidPosition(nx, ny) && !visited.has(key) && this.weights[ny][nx] !== Infinity) {
+          current = { x: nx, y: ny };
+          path.push({ ...current });
+          visited.add(key);
+          moved = true;
+          break;
+        }
+      }
+
+      if (!moved) {
+        const shortestPath = this.pathfinder.findPath(this.aiStart, this.goalPos);
+        if (shortestPath.length > 0) {
+          return shortestPath;
+        }
+        break;
+      }
+    }
+
+    return path.length > 1 ? path : [this.aiStart, this.goalPos];
+  }
+
+  private getWeightedDirections(current: Position, goal: Position): Array<{ dx: number; dy: number; priority: number }> {
+    const baseDirs = [
+      { dx: 0, dy: -1 },
+      { dx: 1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 }
+    ];
+
+    return baseDirs
+      .map(dir => {
+        const nx = current.x + dir.dx;
+        const ny = current.y + dir.dy;
+        const distToGoal = Math.abs(nx - goal.x) + Math.abs(ny - goal.y);
+        const randomFactor = Math.random() * 2;
+        return {
+          ...dir,
+          priority: distToGoal + randomFactor
+        };
+      })
+      .sort((a, b) => a.priority - b.priority);
+  }
+
+  private isValidPosition(x: number, y: number): boolean {
+    return x >= 0 && x < this.size && y >= 0 && y < this.size;
   }
 
   public placeTrap(state: GameState, x: number, y: number): GameState {
@@ -60,24 +156,62 @@ export class GameEngine {
     if (x === state.aiPos.x && y === state.aiPos.y) return state;
     if (x === state.playerPos.x && y === state.playerPos.y) return state;
 
+    this.updateWeight({ x, y, weight: Infinity });
+
     const newBoard = state.board.map(row => row.map(c => ({ ...c })));
     newBoard[y][x] = { ...newBoard[y][x], type: 'trap', isFlashing: true };
 
-    this.pathfinder.setTrapWeight(x, y);
-    const newPath = this.pathfinder.findPath(state.aiPos, state.goalPos);
-
+    const newPath = this.recalculatePath(state.aiPos, state.goalPos);
     const finalPath = newPath.length > 0 ? newPath : state.path;
 
     setTimeout(() => {
-      newBoard[y][x].isFlashing = false;
+      if (newBoard[y] && newBoard[y][x]) {
+        newBoard[y][x].isFlashing = false;
+      }
     }, 500);
 
     return {
       ...state,
       board: newBoard,
       path: finalPath,
-      aiStepsRemaining: finalPath.length
+      aiStepsRemaining: Math.max(0, finalPath.length - 1)
     };
+  }
+
+  private recalculatePath(from: Position, to: Position): Position[] {
+    const aStarPath = this.pathfinder.findPath(from, to);
+    if (aStarPath.length > 0) {
+      return aStarPath;
+    }
+
+    const fallbackPath: Position[] = [from];
+    let current = { ...from };
+    const visited = new Set<string>([`${current.x},${current.y}`]);
+    let iterations = 0;
+
+    while ((current.x !== to.x || current.y !== to.y) && iterations < 100) {
+      iterations++;
+      const dirs = this.getWeightedDirections(current, to);
+      let moved = false;
+
+      for (const dir of dirs) {
+        const nx = current.x + dir.dx;
+        const ny = current.y + dir.dy;
+        const key = `${nx},${ny}`;
+
+        if (this.isValidPosition(nx, ny) && !visited.has(key) && this.weights[ny][nx] !== Infinity) {
+          current = { x: nx, y: ny };
+          fallbackPath.push({ ...current });
+          visited.add(key);
+          moved = true;
+          break;
+        }
+      }
+
+      if (!moved) break;
+    }
+
+    return fallbackPath;
   }
 
   public addCellParticles(state: GameState, x: number, y: number): GameState {
