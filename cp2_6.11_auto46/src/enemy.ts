@@ -12,6 +12,7 @@ export class Enemy {
   isStunned: boolean = false;
   stunTimer: number = 0;
   showCore: boolean = false;
+  coreRadius: number = 12;
   health: number = 1;
   flickerPhase: number;
   isAlive: boolean = true;
@@ -63,15 +64,21 @@ export class Enemy {
 
   render(ctx: CanvasRenderingContext2D, isSilentMode: boolean): void {
     if (!isSilentMode) {
-      ctx.globalAlpha = this.alpha * 0.3;
+      ctx.globalAlpha = this.alpha * 0.2;
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius + 4, 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      
+      ctx.globalAlpha = this.alpha * 0.35;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
       ctx.fillStyle = this.color;
       ctx.fill();
       
       ctx.globalAlpha = this.alpha * 0.5;
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
       ctx.fillStyle = this.color;
       ctx.fill();
     }
@@ -90,12 +97,17 @@ export class Enemy {
 
     if (this.showCore) {
       ctx.beginPath();
-      ctx.arc(this.x, this.y, 12, 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, this.coreRadius, 0, Math.PI * 2);
       ctx.fillStyle = '#FF5555';
       ctx.shadowColor = '#FF5555';
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
       ctx.fill();
       ctx.shadowBlur = 0;
+      
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.coreRadius * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = '#FF8888';
+      ctx.fill();
     }
   }
 
@@ -118,9 +130,9 @@ export class Enemy {
     this.showCore = true;
   }
 
-  getFragments(): Omit<Fragment, 'spawnedShockwave'>[] {
+  getFragments(): Array<Omit<Fragment, 'active' | 'spawnedShockwave'>> {
     const count = 12 + Math.floor(Math.random() * 5);
-    const fragments: Omit<Fragment, 'spawnedShockwave'>[] = [];
+    const fragments: Array<Omit<Fragment, 'active' | 'spawnedShockwave'>> = [];
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
       const speed = 80 + Math.random() * 120;
@@ -138,16 +150,13 @@ export class Enemy {
     return fragments;
   }
 
-  getShockwave(): Shockwave {
+  getShockwave(): Omit<Shockwave, 'active' | 'radius' | 'life' | 'hitBullets'> {
     return {
       x: this.x,
       y: this.y,
-      radius: 0,
       maxRadius: 60,
-      life: 0.4,
       maxLife: 0.4,
-      color: '#8BE9FD',
-      hitBullets: new Set<number>()
+      color: '#8BE9FD'
     };
   }
 

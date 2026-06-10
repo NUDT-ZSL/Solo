@@ -29,7 +29,10 @@ export class Game {
   frameCount: number = 0;
   private bgCanvas: HTMLCanvasElement;
   private bgCtx: CanvasRenderingContext2D;
+  private gameCanvas: HTMLCanvasElement;
+  private gameCtx: CanvasRenderingContext2D;
   private stars: { x: number; y: number; size: number; alpha: number }[] = [];
+  private silentFlashTimer: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -43,6 +46,11 @@ export class Game {
     this.bgCanvas.width = this.width;
     this.bgCanvas.height = this.height;
     this.bgCtx = this.bgCanvas.getContext('2d')!;
+    
+    this.gameCanvas = document.createElement('canvas');
+    this.gameCanvas.width = this.width;
+    this.gameCanvas.height = this.height;
+    this.gameCtx = this.gameCanvas.getContext('2d')!;
     
     this.initStars();
     this.renderBackgroundToCache();
@@ -113,6 +121,8 @@ export class Game {
       this.canvas.height = this.height;
       this.bgCanvas.width = this.width;
       this.bgCanvas.height = this.height;
+      this.gameCanvas.width = this.width;
+      this.gameCanvas.height = this.height;
       this.renderBackgroundToCache();
     });
   }
@@ -152,8 +162,10 @@ export class Game {
 
     if (this.isSilentMode) {
       this.silentModeTimer -= dt;
+      this.silentFlashTimer += dt;
       if (this.silentModeTimer <= 0) {
         this.isSilentMode = false;
+        this.silentFlashTimer = 0;
       }
     }
 
@@ -165,7 +177,7 @@ export class Game {
       this.particles
     );
     if (bullet) {
-      this.particles.addBullet(bullet as Omit<Bullet, 'trail' | 'isReflected' | 'reflectedAt'>);
+      this.particles.addBullet(bullet);
     }
 
     if (this.spaceJustReleased) {
@@ -229,43 +241,61 @@ export class Game {
 
   checkCollisions(): void {
     const bullets = this.particles.bullets;
+    const bulletsToRemove: Bullet[] = [];
     
     for (let i = bullets.length - 1; i >= 0; i--) {
       const bullet = bullets[i]!;
+      if (!bullet.active) continue;
+      
       for (const enemy of this.enemies) {
         if (!enemy.isAlive) continue;
         
-        const dx = bullet.x - enemy.x;
-        const dy = bullet.y - enemy.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        let hitEnemy = false;
+        let hitCore = false;
         
-        if (dist <= enemy.radius + bullet.radius + 2) {
-          const hitCore = enemy.showCore && dist <= 12 + bullet.radius;
+        if (enemy.showCore) {
+          hitCore = this.particles.checkBulletCoreCollision(
+            bullet, enemy.x, enemy.y, enemy.coreRadius
+          );
+          hitEnemy = hitCore;
+        }
+        
+        if (!hitEnemy) {
+          hitEnemy = this.particles.checkBulletEnemyCollision(
+            bullet, enemy.x, enemy.y, enemy.radius
+          );
+        }
+        
+        if (hitEnemy) {
           if (enemy.hit(hitCore)) {
             this.particles.addFragments(enemy.getFragments());
             this.particles.addShockwave(enemy.getShockwave());
-            bullets.splice(i, 1);
+            bulletsToRemove.push(bullet);
             break;
           }
+          
           if (!bullet.isReflected) {
-            bullets.splice(i, 1);
+            bulletsToRemove.push(bullet);
             break;
           }
         }
       }
+    }
+    
+    for (const bullet of bulletsToRemove) {
+      this.particles.removeBullet(bullet);
     }
 
     const playerBounds = this.player.getBounds();
     for (const enemy of this.enemies) {
       if (!enemy.isAlive || enemy.isStunned) continue;
       
-      const closestX = Math.max(playerBounds.x, Math.min(enemy.x, playerBounds.x + playerBounds.width));
-      const closestY = Math.max(playerBounds.y, Math.min(enemy.y, playerBounds.y + playerBounds.height));
-      const dx = enemy.x - closestX;
-      const dy = enemy.y - closestY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const collides = this.particles.checkCircleRectCollision(
+        enemy.x, enemy.y, enemy.radius,
+        playerBounds.x, playerBounds.y, playerBounds.width, playerBounds.height
+      );
       
-      if (dist <= enemy.radius + 2) {
+      if (collides) {
         this.player.takeDamage();
       }
     }
@@ -274,6 +304,7 @@ export class Game {
   startSilentMode(): void {
     this.isSilentMode = true;
     this.silentModeTimer = this.silentModeDuration;
+    this.silentFlashTimer = 0;
     
     for (const enemy of this.enemies) {
       enemy.stun(this.stunDuration);
@@ -281,31 +312,66 @@ export class Game {
   }
 
   render(): void {
-    this.renderBackground();
-
     if (this.isSilentMode) {
-      this.ctx.save();
-      this.ctx.filter = 'grayscale(100%) brightness(1.2)';
-    }
-
-    for (const enemy of this.enemies) {
-      enemy.render(this.ctx, this.isSilentMode);
-    }
-
-    this.particles.render(this.ctx);
-    this.player.render(this.ctx);
-
-    if (this.isSilentMode) {
-      this.ctx.restore();
+      this.gameCtx.clearRect(0, 0, this.width, this.height);
+      this.renderGameContent(this.gameCtx);
+      this.applySilentModeEffect();
+    } else {
+      this.ctx.clearRect(0, 0, this.width, this.height);
+      this.renderBackground();
+      this.renderGameContent(this.ctx);
     }
 
     this.player.renderEnergyBar(this.ctx, this.width, this.height);
-
     this.renderFPS();
   }
 
+  private renderGameContent(ctx: CanvasRenderingContext2D): void {
+    for (const enemy of this.enemies) {
+      enemy.render(ctx, this.isSilentMode);
+    }
+    this.particles.render(ctx);
+    this.player.render(ctx);
+  }
+
+  private applySilentModeEffect(): void {
+    this.ctx.clearRect(0, 0, this.width, this.height);
+    this.renderBackground();
+    
+    this.ctx.save();
+    
+    const flashIntensity = Math.sin(this.silentFlashTimer * 20) * 0.1 + 0.9;
+    this.ctx.filter = `grayscale(100%) brightness(${flashIntensity}) contrast(1.1)`;
+    
+    if (this.gameCanvas.width > 0 && this.gameCanvas.height > 0) {
+      this.ctx.drawImage(this.gameCanvas, 0, 0);
+    }
+    
+    this.ctx.restore();
+    
+    const vignetteGradient = this.ctx.createRadialGradient(
+      this.width / 2, this.height / 2, 0,
+      this.width / 2, this.height / 2, Math.max(this.width, this.height) / 2
+    );
+    vignetteGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    vignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+    this.ctx.fillStyle = vignetteGradient;
+    this.ctx.fillRect(0, 0, this.width, this.height);
+  }
+
   private renderBackground(): void {
-    this.ctx.drawImage(this.bgCanvas, 0, 0);
+    if (this.bgCanvas.width > 0 && this.bgCanvas.height > 0) {
+      this.ctx.drawImage(this.bgCanvas, 0, 0);
+    } else {
+      const gradient = this.ctx.createRadialGradient(
+        this.width / 2, this.height / 2, 0,
+        this.width / 2, this.height / 2, Math.max(this.width, this.height) / 1.5
+      );
+      gradient.addColorStop(0, '#0B1026');
+      gradient.addColorStop(1, '#1A0E30');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, this.width, this.height);
+    }
   }
 
   private renderFPS(): void {

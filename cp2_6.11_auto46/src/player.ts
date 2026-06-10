@@ -13,23 +13,31 @@ export class Player {
   chargeTime: number = 0;
   chargeThreshold: number = 0.5;
   maxChargeTime: number = 1.5;
+  chargeCost: number = 20;
   isInvincible: boolean = false;
   invincibleTimer: number = 0;
+  invincibleDuration: number = 0.5;
   lastShotTime: number = 0;
   shotInterval: number = 0.2;
   energyRegenTimer: number = 0;
   energyRegenInterval: number = 2;
   lowEnergyFlashTimer: number = 0;
+  lowEnergyThreshold: number = 20;
   chargeRingAngle: number = 0;
   blinkTimer: number = 0;
   thrusterTimer: number = 0;
+  silentModeCooldown: number = 0;
 
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
 
-  update(dt: number, keys: Set<string>, spaceJustPressed: boolean, spaceJustReleased: boolean, particles: ParticleSystem): Omit<Bullet, 'trail' | 'isReflected' | 'reflectedAt'> | null {
+  update(dt: number, keys: Set<string>, spaceJustPressed: boolean, spaceJustReleased: boolean, particles: ParticleSystem): Omit<Bullet, 'active' | 'trail' | 'isReflected' | 'reflectedAt' | 'id'> | null {
+    if (this.silentModeCooldown > 0) {
+      this.silentModeCooldown -= dt;
+    }
+
     if (this.isInvincible) {
       this.invincibleTimer -= dt;
       this.blinkTimer += dt;
@@ -47,7 +55,7 @@ export class Player {
       }
     }
 
-    if (this.energy < 20) {
+    if (this.energy < this.lowEnergyThreshold) {
       this.lowEnergyFlashTimer += dt;
     } else {
       this.lowEnergyFlashTimer = 0;
@@ -85,7 +93,7 @@ export class Player {
       this.spawnThrusterParticles(particles);
     }
 
-    if (spaceJustPressed && this.energy >= 20) {
+    if (spaceJustPressed && this.energy >= this.chargeCost && this.silentModeCooldown <= 0) {
       this.isCharging = true;
       this.chargeTime = 0;
       return null;
@@ -129,7 +137,8 @@ export class Player {
     if (this.isCharging && this.chargeTime >= this.maxChargeTime) {
       this.isCharging = false;
       this.chargeTime = 0;
-      this.energy = Math.max(0, this.energy - 20);
+      this.energy = Math.max(0, this.energy - this.chargeCost);
+      this.silentModeCooldown = 0.5;
       return true;
     }
     this.isCharging = false;
@@ -137,7 +146,7 @@ export class Player {
     return false;
   }
 
-  private shoot(): Omit<Bullet, 'trail' | 'isReflected' | 'reflectedAt'> {
+  private shoot(): Omit<Bullet, 'active' | 'trail' | 'isReflected' | 'reflectedAt' | 'id'> {
     return {
       x: this.x,
       y: this.y - this.height / 2 - 8,
@@ -154,8 +163,8 @@ export class Player {
   }
 
   releaseCharge(): boolean {
-    if (this.chargeTime >= this.maxChargeTime && this.energy >= 20) {
-      this.energy -= 20;
+    if (this.chargeTime >= this.maxChargeTime && this.energy >= this.chargeCost) {
+      this.energy -= this.chargeCost;
       this.isCharging = false;
       this.chargeTime = 0;
       return true;
@@ -169,12 +178,16 @@ export class Player {
     if (this.isInvincible) return;
     this.energy = Math.max(0, this.energy - 10);
     this.isInvincible = true;
-    this.invincibleTimer = 0.5;
+    this.invincibleTimer = this.invincibleDuration;
+    this.blinkTimer = 0;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    if (this.isInvincible && Math.floor(this.blinkTimer * 10) % 2 === 0) {
-      return;
+    if (this.isInvincible) {
+      const blinkPhase = Math.sin(this.blinkTimer * 20);
+      if (blinkPhase > 0) {
+        return;
+      }
     }
 
     ctx.save();
@@ -223,17 +236,17 @@ export class Player {
     const fillWidth = Math.max(0, barWidth * fillPercent - 4);
     
     if (fillWidth > 0) {
-      const isLowEnergy = this.energy < 20;
+      const isLowEnergy = this.energy < this.lowEnergyThreshold;
       
       ctx.beginPath();
       ctx.roundRect(barX + 2, barY + 2, fillWidth, barHeight - 4, radius - 2);
       
       if (isLowEnergy) {
-        const flash = Math.sin(this.lowEnergyFlashTimer * 8) > 0 ? 1 : 0.5;
-        const barColor = `#FF5555${Math.floor(128 + flash * 127).toString(16).padStart(2, '0')}`;
-        ctx.fillStyle = barColor;
+        const flash = (Math.sin(this.lowEnergyFlashTimer * 8) + 1) / 2;
+        const alpha = 128 + Math.floor(flash * 127);
+        ctx.fillStyle = `#FF5555${alpha.toString(16).padStart(2, '0')}`;
       } else {
-        const gradient = ctx.createLinearGradient(barX + 2, 0, barX + barWidth - 2, 0);
+        const gradient = ctx.createLinearGradient(barX + 2, barY + 2, barX + barWidth - 2, barY + barHeight - 2);
         gradient.addColorStop(0, '#50FA7B');
         gradient.addColorStop(1, '#8BE9FD');
         ctx.fillStyle = gradient;
@@ -246,6 +259,13 @@ export class Player {
     ctx.strokeStyle = '#66D9EF66';
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    if (this.energy < this.lowEnergyThreshold) {
+      const flash = (Math.sin(this.lowEnergyFlashTimer * 8) + 1) / 2;
+      ctx.strokeStyle = `#FF5555${Math.floor(128 + flash * 127).toString(16).padStart(2, '0')}`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
   }
 
   renderChargeRing(ctx: CanvasRenderingContext2D): void {
@@ -256,19 +276,28 @@ export class Player {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.chargeRingAngle);
 
-    const chargeProgress = (this.chargeTime - this.chargeThreshold) / (this.maxChargeTime - this.chargeThreshold);
+    const chargeProgress = Math.max(0, (this.chargeTime - this.chargeThreshold) / (this.maxChargeTime - this.chargeThreshold));
     const alpha = Math.min(1, chargeProgress * 2);
+    const pulseScale = 1 + Math.sin(this.chargeRingAngle * 2) * 0.05;
 
     ctx.strokeStyle = `#FF79C6${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
     ctx.lineWidth = 3;
     ctx.shadowColor = '#FF79C6';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 15;
 
     for (let i = 0; i < segments; i++) {
       const startAngle = (Math.PI * 2 * i) / segments;
       const endAngle = startAngle + Math.PI / segments;
       ctx.beginPath();
-      ctx.arc(0, 0, ringRadius, startAngle, endAngle);
+      ctx.arc(0, 0, ringRadius * pulseScale, startAngle, endAngle);
+      ctx.stroke();
+    }
+
+    if (chargeProgress >= 1) {
+      ctx.strokeStyle = `#FFD700${Math.floor(alpha * 200).toString(16).padStart(2, '0')}`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, ringRadius * 1.2 * pulseScale, 0, Math.PI * 2);
       ctx.stroke();
     }
 
