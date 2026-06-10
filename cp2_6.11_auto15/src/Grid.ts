@@ -21,7 +21,7 @@ export class Grid {
   unlockedCount: number = 0;
 
   static offsetToCube(q: number, r: number): CubeCoord {
-    const x = q - Math.floor(r / 2);
+    const x = q - (r - (r & 1)) / 2;
     const z = r;
     const y = -x - z;
     return { x, y, z };
@@ -29,7 +29,7 @@ export class Grid {
 
   static cubeToOffset(cube: CubeCoord): { q: number; r: number } {
     const r = cube.z;
-    const q = cube.x + Math.floor(cube.z / 2);
+    const q = cube.x + (r - (r & 1)) / 2;
     return { q, r };
   }
 
@@ -44,7 +44,7 @@ export class Grid {
   static getHexVertices(cx: number, cy: number, size: number): { x: number; y: number }[] {
     const vertices: { x: number; y: number }[] = [];
     for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i - Math.PI / 6;
+      const angle = (Math.PI / 180) * (60 * i - 30);
       vertices.push({
         x: cx + size * Math.cos(angle),
         y: cy + size * Math.sin(angle),
@@ -69,17 +69,17 @@ export class Grid {
     const adjustedX = px - this.offsetX;
     const adjustedY = py - this.offsetY;
 
-    const q = (2 / 3 * adjustedX) / size;
-    const r = (-1 / 3 * adjustedX + Math.sqrt(3) / 3 * adjustedY) / size;
+    const fracQ = (2 / 3 * adjustedX) / size;
+    const fracR = (-1 / 3 * adjustedX + Math.sqrt(3) / 3 * adjustedY) / size;
 
-    return this.roundToHex(q, r);
+    return this.roundToHex(fracQ, fracR);
   }
 
   private roundToHex(q: number, r: number): { q: number; r: number } {
     const cube: CubeCoord = {
-      x: q - Math.floor(r / 2),
+      x: q - (r - (r & 1)) / 2,
       z: r,
-      y: -(q - Math.floor(r / 2)) - r,
+      y: -(q - (r - (r & 1)) / 2) - r,
     };
 
     let rx = Math.round(cube.x);
@@ -113,9 +113,9 @@ export class Grid {
     const gridAreaW = canvasWidth * 0.65;
     const gridAreaH = canvasHeight * 0.8;
 
-    const hexSizeByW = gridAreaW / (GRID_COLS * 1.5 + 0.5) - HEX_GAP / 2;
-    const hexSizeByH = gridAreaH / ((GRID_ROWS + 0.5) * Math.sqrt(3)) - HEX_GAP / 2;
-    this.hexSize = Math.max(MIN_HEX_SIZE, Math.min(hexSizeByW, hexSizeByH));
+    const sizeByW = gridAreaW / (GRID_COLS * 1.5 + 0.5) - HEX_GAP / 2;
+    const sizeByH = gridAreaH / ((GRID_ROWS + 0.5) * Math.sqrt(3)) - HEX_GAP / 2;
+    this.hexSize = Math.max(MIN_HEX_SIZE, Math.min(sizeByW, sizeByH));
 
     const size = this.hexSize + HEX_GAP / 2;
     const totalW = size * 1.5 * (GRID_COLS - 1) + size * 2;
@@ -139,6 +139,9 @@ export class Grid {
           isPassable: !isLocked,
           activationCount: 0,
           lastActivatedTime: -Infinity,
+          displayColorLevel: 0,
+          displayColorTransitionStart: -Infinity,
+          targetColorLevel: 0,
           x: pos.x,
           y: pos.y,
           pulseTime: 0,
@@ -187,7 +190,7 @@ export class Grid {
       const dx = px - cell.x;
       const dy = py - cell.y;
       const dist = dx * dx + dy * dy;
-      if (dist < closestDist && dist < (this.hexSize * 1.1) ** 2) {
+      if (dist < closestDist && dist < (this.hexSize * 1.0) ** 2) {
         closestDist = dist;
         closest = cell;
       }
@@ -340,6 +343,10 @@ export class Grid {
     cell.isUnlockAnimating = true;
     cell.unlockAnimTime = 0.6;
     cell.symbol = RUNE_SYMBOLS[Math.floor(Math.random() * RUNE_SYMBOLS.length)];
+    cell.activationCount = 0;
+    cell.displayColorLevel = 0;
+    cell.targetColorLevel = 0;
+    cell.displayColorTransitionStart = -Infinity;
     this.unlockedCount++;
 
     this.expandGrid(cell);
@@ -361,6 +368,9 @@ export class Grid {
           isPassable: true,
           activationCount: 0,
           lastActivatedTime: -Infinity,
+          displayColorLevel: 0,
+          displayColorTransitionStart: -Infinity,
+          targetColorLevel: 0,
           x: pos.x,
           y: pos.y,
           pulseTime: 0,
@@ -397,10 +407,21 @@ export class Grid {
         }
       }
 
+      if (cell.targetColorLevel !== cell.displayColorLevel && cell.displayColorTransitionStart > 0) {
+        const transitionElapsed = currentTime - cell.displayColorTransitionStart;
+        const transitionDuration = 0.5;
+        if (transitionElapsed >= transitionDuration) {
+          cell.displayColorLevel = cell.targetColorLevel;
+          cell.displayColorTransitionStart = -Infinity;
+        }
+      }
+
       if (cell.activationCount > 0 && !cell.isLocked && cell.lastActivatedTime > 0) {
         const elapsed = currentTime - cell.lastActivatedTime;
-        if (elapsed > ACTIVATION_DECAY_TIME) {
-          cell.activationCount = Math.max(0, cell.activationCount - 1);
+        if (elapsed > ACTIVATION_DECAY_TIME && cell.targetColorLevel > 0) {
+          cell.targetColorLevel = Math.max(0, cell.targetColorLevel - 1);
+          cell.displayColorTransitionStart = currentTime;
+          cell.activationCount = cell.targetColorLevel;
           cell.lastActivatedTime = cell.activationCount > 0 ? currentTime : -Infinity;
         }
       }
@@ -409,6 +430,35 @@ export class Grid {
     for (const node of this.intersections) {
       node.rainbowPhase += dt * 3;
     }
+  }
+
+  activateCell(cell: HexCell, currentTime: number) {
+    const newCount = Math.min(3, (cell.activationCount || 0) + 1);
+    cell.activationCount = newCount;
+    cell.targetColorLevel = newCount;
+    cell.displayColorTransitionStart = currentTime;
+    cell.lastActivatedTime = currentTime;
+    cell.pulseTime = 0.2;
+  }
+
+  getCellDisplayColor(cell: HexCell, currentTime: number): string {
+    if (cell.isLocked) {
+      return '#2A2A3A';
+    }
+
+    const fromIdx = cell.displayColorLevel;
+    const toIdx = cell.targetColorLevel;
+
+    if (fromIdx === toIdx || cell.displayColorTransitionStart < 0) {
+      const idx = Math.min(cell.targetColorLevel, RUNE_ACTIVATION_COLORS.length - 1);
+      return RUNE_ACTIVATION_COLORS[idx];
+    }
+
+    const transitionDuration = 0.5;
+    const t = Math.min(1, (currentTime - cell.displayColorTransitionStart) / transitionDuration);
+    const fromColor = RUNE_ACTIVATION_COLORS[Math.min(fromIdx, RUNE_ACTIVATION_COLORS.length - 1)];
+    const toColor = RUNE_ACTIVATION_COLORS[Math.min(toIdx, RUNE_ACTIVATION_COLORS.length - 1)];
+    return this.lerpColor(fromColor, toColor, t);
   }
 
   draw(ctx: CanvasRenderingContext2D, currentTime: number) {
@@ -476,6 +526,8 @@ export class Grid {
     const isHovered = cell === this.hoveredCell;
     const isSelected = cell === this.selectedStart;
 
+    const displayColor = this.getCellDisplayColor(cell, currentTime);
+
     let fillColor: string;
     let strokeColor: string;
     let strokeAlpha = 0.25;
@@ -484,9 +536,8 @@ export class Grid {
       fillColor = '#2A2A3A';
       strokeColor = COLORS.lockRune;
     } else {
-      const colorIdx = Math.min(cell.activationCount, RUNE_ACTIVATION_COLORS.length - 1);
-      fillColor = RUNE_ACTIVATION_COLORS[colorIdx];
-      strokeColor = fillColor;
+      fillColor = displayColor;
+      strokeColor = displayColor;
     }
 
     if (isHovered || isSelected) {
@@ -536,9 +587,9 @@ export class Grid {
       ctx.globalAlpha = 1;
     }
 
-    if (cell.activationCount > 0 && !cell.isLocked && cell.pulseTime <= 0) {
+    if (!cell.isLocked && cell.pulseTime <= 0) {
       const elapsed = currentTime - cell.lastActivatedTime;
-      if (elapsed < 1) {
+      if (elapsed < 1 && cell.lastActivatedTime > 0) {
         const glow = 1 - elapsed;
         this.drawHexagon(ctx, x, y, size + 3);
         ctx.strokeStyle = this.hexToRgba(COLORS.runePulseEnd, glow * 0.6);
@@ -718,6 +769,8 @@ export class Grid {
       isLocked: c.isLocked, isPassable: c.isPassable,
       activationCount: c.activationCount,
       lastActivatedTime: c.lastActivatedTime,
+      targetColorLevel: c.targetColorLevel,
+      displayColorLevel: c.displayColorLevel,
     }));
   }
 }

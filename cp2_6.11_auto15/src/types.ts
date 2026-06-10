@@ -67,6 +67,9 @@ export interface HexCell {
   isPassable: boolean;
   activationCount: number;
   lastActivatedTime: number;
+  displayColorLevel: number;
+  displayColorTransitionStart: number;
+  targetColorLevel: number;
   x: number;
   y: number;
   pulseTime: number;
@@ -129,7 +132,7 @@ export interface GameSaveState {
   combo: number;
   comboTimer: number;
   unlockedCount: number;
-  gridData: { q: number; r: number; symbol: string; isLocked: boolean; isPassable: boolean; activationCount: number; lastActivatedTime: number }[];
+  gridData: { q: number; r: number; symbol: string; isLocked: boolean; isPassable: boolean; activationCount: number; lastActivatedTime: number; targetColorLevel: number; displayColorLevel: number }[];
   paths: { fromQ: number; fromR: number; toQ: number; toR: number; cpX: number; cpY: number }[];
   timestamp: number;
 }

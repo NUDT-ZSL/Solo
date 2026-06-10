@@ -16,7 +16,12 @@ export class Pendulum {
     this.effectManager = effectManager;
   }
 
-  createBall(fromCell: HexCell, toCell: HexCell, path: PathSegment, isMain: boolean = true): EnergyBall {
+  createBall(fromCell: HexCell, toCell: HexCell, path: PathSegment, isMain: boolean = true): EnergyBall | null {
+    const existingActive = this.balls.filter(b => b.active).length;
+    if (existingActive >= 2) return null;
+
+    if (!isMain && this.balls.filter(b => !b.isMain && b.active).length >= 1) return null;
+
     const ball: EnergyBall = {
       id: this.ballIdCounter++,
       x: fromCell.x,
@@ -32,14 +37,6 @@ export class Pendulum {
       intersectionCell: null,
       lastVisitedCell: null,
     };
-
-    if (!isMain && this.balls.filter(b => !b.isMain && b.active).length >= 1) {
-      return ball;
-    }
-
-    if (this.balls.filter(b => b.active).length >= 2) {
-      return ball;
-    }
 
     this.balls.push(ball);
     return ball;
@@ -59,7 +56,7 @@ export class Pendulum {
     dt: number,
     currentTime: number,
     onBallArrive: (ball: EnergyBall, cell: HexCell) => void,
-    onBallVisitCell: (ball: EnergyBall, cell: HexCell) => void
+    onBallVisitCell: (ball: EnergyBall, cell: HexCell, timestamp: number) => void
   ) {
     for (const ball of this.balls) {
       if (!ball.active) continue;
@@ -78,12 +75,15 @@ export class Pendulum {
       const oldProgress = ball.pathProgress;
       ball.pathProgress += progressStep;
 
-      const midProgress = (oldProgress + ball.pathProgress) / 2;
-      const midPos = this.grid.getPointOnPath(path, midProgress);
-      const midCell = this.grid.getCellAtPixel(midPos.x, midPos.y);
-      if (midCell && midCell !== ball.lastVisitedCell && midCell !== ball.currentCell) {
-        ball.lastVisitedCell = midCell;
-        onBallVisitCell(ball, midCell);
+      const sampleCount = Math.max(1, Math.ceil(Math.abs(progressStep) / 0.05));
+      for (let s = 1; s <= sampleCount; s++) {
+        const sampleT = oldProgress + (progressStep * s) / sampleCount;
+        const samplePos = this.grid.getPointOnPath(path, Math.min(1, sampleT));
+        const visitedCell = this.grid.getCellAtPixel(samplePos.x, samplePos.y);
+        if (visitedCell && visitedCell !== ball.lastVisitedCell) {
+          ball.lastVisitedCell = visitedCell;
+          onBallVisitCell(ball, visitedCell, currentTime - dt * (1 - s / sampleCount));
+        }
       }
 
       if (ball.pathProgress >= 1) {
@@ -95,7 +95,7 @@ export class Pendulum {
         ball.active = false;
 
         toCell.ballVisits.push({ ballId: ball.id, time: currentTime });
-        onBallVisitCell(ball, toCell);
+        onBallVisitCell(ball, toCell, currentTime);
         onBallArrive(ball, toCell);
         continue;
       }
@@ -173,7 +173,10 @@ export class Pendulum {
     }
   }
 
-  draw(ctx: CanvasRenderingContext2D, isReplay: boolean = false) {
+  draw(ctx: CanvasRenderingContext2D, isReplay: boolean = false, replaySpeed: number = 2) {
+    const trailAlphaMul = isReplay ? 0.4 / replaySpeed : 0.6;
+    const glowMul = isReplay ? 0.6 : 1;
+
     for (const ball of this.balls) {
       if (ball.trail.length > 0) {
         for (let i = 0; i < ball.trail.length - 1; i++) {
@@ -181,7 +184,7 @@ export class Pendulum {
           ctx.beginPath();
           ctx.arc(t.x, t.y, 3 * t.alpha, 0, Math.PI * 2);
           ctx.fillStyle = ball.color;
-          ctx.globalAlpha = isReplay ? t.alpha * 0.4 : t.alpha * 0.6;
+          ctx.globalAlpha = Math.max(0, t.alpha * trailAlphaMul);
           ctx.fill();
         }
         ctx.globalAlpha = 1;
@@ -198,7 +201,7 @@ export class Pendulum {
         gradient.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = gradient;
         ctx.shadowColor = ball.color;
-        ctx.shadowBlur = isReplay ? 8 : 15;
+        ctx.shadowBlur = 15 * glowMul;
         ctx.globalAlpha = isReplay ? 0.6 : 1;
         ctx.fill();
 
