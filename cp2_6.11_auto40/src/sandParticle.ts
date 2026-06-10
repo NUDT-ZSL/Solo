@@ -50,7 +50,7 @@ export class SandParticle {
     this.settled = false;
   }
 
-  private getRandomExplodeColor(): string {
+  getRandomExplodeColor(): string {
     const colors = [
       'hsl(45, 92%, 68%)',
       'hsl(38, 88%, 62%)',
@@ -145,7 +145,7 @@ export class SandParticle {
     }
   }
 
-  resolveCollision(other: SandParticle): boolean {
+  resolveCollision(other: SandParticle, restitution: number = 0.12, friction: number = 0.08): boolean {
     const dx = other.x - this.x;
     const dy = other.y - this.y;
     const minDist = this.radius + other.radius;
@@ -153,15 +153,16 @@ export class SandParticle {
 
     if (distSq >= minDist * minDist) return false;
 
-    const dist = Math.sqrt(distSq) || 0.01;
+    const dist = Math.sqrt(distSq) || 0.001;
     const nx = dx / dist;
     const ny = dy / dist;
 
     const overlap = minDist - dist;
     const totalMass = this.mass + other.mass;
 
-    const thisMove = (overlap * other.mass) / totalMass;
-    const otherMove = (overlap * this.mass) / totalMass;
+    const positionCorrection = overlap * 0.8;
+    const thisMove = (positionCorrection * other.mass) / totalMass;
+    const otherMove = (positionCorrection * this.mass) / totalMass;
 
     this.x -= nx * thisMove;
     this.y -= ny * thisMove;
@@ -172,33 +173,45 @@ export class SandParticle {
     const dvy = this.vy - other.vy;
     const dvn = dvx * nx + dvy * ny;
 
-    if (dvn > 0) return true;
+    if (dvn > 0) {
+      const tx = -ny;
+      const ty = nx;
+      const dvt = dvx * tx + dvy * ty;
+      const tangentImpulse = dvt / totalMass;
+      const maxTangent = Math.abs(dvn) * friction;
+      const clampedTangent = Math.max(-maxTangent, Math.min(maxTangent, tangentImpulse));
 
-    const restitution = 0.15;
-    const impulse = (-(1 + restitution) * dvn) / totalMass;
+      this.vx -= clampedTangent * other.mass * tx;
+      this.vy -= clampedTangent * other.mass * ty;
+      other.vx += clampedTangent * this.mass * tx;
+      other.vy += clampedTangent * this.mass * ty;
 
-    this.vx += impulse * other.mass * nx;
-    this.vy += impulse * other.mass * ny;
-    other.vx -= impulse * this.mass * nx;
-    other.vy -= impulse * this.mass * ny;
+      return true;
+    }
 
-    const shearForce = 0.4;
+    const jn = (-(1 + restitution) * dvn) / totalMass;
+
+    this.vx += jn * other.mass * nx;
+    this.vy += jn * other.mass * ny;
+    other.vx -= jn * this.mass * nx;
+    other.vy -= jn * this.mass * ny;
+
     const tx = -ny;
     const ty = nx;
     const dvt = dvx * tx + dvy * ty;
-    this.vx -= dvt * shearForce * tx;
-    this.vy -= dvt * shearForce * ty;
-    other.vx += dvt * shearForce * tx;
-    other.vy += dvt * shearForce * ty;
+    const jt = dvt / totalMass;
+    const maxJt = Math.abs(jn) * friction;
+    const clampedJt = Math.max(-maxJt, Math.min(maxJt, jt));
+
+    this.vx -= clampedJt * other.mass * tx;
+    this.vy -= clampedJt * other.mass * ty;
+    other.vx += clampedJt * this.mass * tx;
+    other.vy += clampedJt * this.mass * ty;
 
     if (this.settled && !other.settled) {
-      this.vx *= 0.5;
-      this.vy *= 0.5;
       this.settled = false;
     }
     if (other.settled && !this.settled) {
-      other.vx *= 0.5;
-      other.vy *= 0.5;
       other.settled = false;
     }
 

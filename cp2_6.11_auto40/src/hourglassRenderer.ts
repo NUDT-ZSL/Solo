@@ -15,6 +15,8 @@ export interface MouseState {
   prevY: number;
   moveDX: number;
   moveDY: number;
+  smoothDX: number;
+  smoothDY: number;
 }
 
 interface ResetParticle {
@@ -24,6 +26,8 @@ interface ResetParticle {
   targetY: number;
   startX: number;
   startY: number;
+  scatterEndX: number;
+  scatterEndY: number;
   vx: number;
   vy: number;
   color: string;
@@ -60,7 +64,9 @@ export class HourglassRenderer {
     prevX: -1000,
     prevY: -1000,
     moveDX: 0,
-    moveDY: 0
+    moveDY: 0,
+    smoothDX: 0,
+    smoothDY: 0
   };
 
   private gravity: number = 0.15;
@@ -75,11 +81,13 @@ export class HourglassRenderer {
   private resetStartTime: number = 0;
   private resetDuration: number = 1.0;
   private resetParticles: ResetParticle[] = [];
+  private resetPhase: 'scatter' | 'gather' = 'scatter';
 
   private lastTime: number = 0;
 
   private spatialGrid: Map<string, SandParticle[]> = new Map();
-  private cellSize: number = 8;
+  private cellSize: number = 6;
+  private collisionIterations: number = 4;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -182,6 +190,10 @@ export class HourglassRenderer {
     this.mouseState.moveDX = x - this.mouseState.prevX;
     this.mouseState.moveDY = y - this.mouseState.prevY;
 
+    const smoothFactor = 0.25;
+    this.mouseState.smoothDX = this.mouseState.smoothDX * (1 - smoothFactor) + this.mouseState.moveDX * smoothFactor;
+    this.mouseState.smoothDY = this.mouseState.smoothDY * (1 - smoothFactor) + this.mouseState.moveDY * smoothFactor;
+
     if (this.isResetting) return;
 
     const localPoint = this.screenToLocal(x, y);
@@ -193,7 +205,7 @@ export class HourglassRenderer {
     }
 
     if (this.mouseState.isDown) {
-      this.applyPushForce(localPoint.x, localPoint.y, this.mouseState.moveDX, this.mouseState.moveDY);
+      this.applyPushForce(localPoint.x, localPoint.y, this.mouseState.smoothDX, this.mouseState.smoothDY);
     }
   }
 
@@ -205,6 +217,8 @@ export class HourglassRenderer {
     this.mouseState.prevY = y;
     this.mouseState.moveDX = 0;
     this.mouseState.moveDY = 0;
+    this.mouseState.smoothDX = 0;
+    this.mouseState.smoothDY = 0;
   }
 
   handleMouseUp(): void {
@@ -238,9 +252,9 @@ export class HourglassRenderer {
     const radius = 40;
     const radiusSq = radius * radius;
     const moveDist = Math.sqrt(dx * dx + dy * dy);
-    if (moveDist < 0.5) return;
+    if (moveDist < 0.3) return;
 
-    const forceMag = Math.min(moveDist * 0.12, 2.0);
+    const forceMag = Math.min(moveDist * 0.15, 2.5);
     const dirX = dx / Math.max(0.1, moveDist);
     const dirY = dy / Math.max(0.1, moveDist);
 
@@ -250,15 +264,22 @@ export class HourglassRenderer {
       const distSq = ddx * ddx + ddy * ddy;
 
       if (distSq < radiusSq) {
-        const dist = Math.sqrt(distSq);
+        const dist = Math.sqrt(distSq) || 0.01;
+        const nx = ddx / dist;
+        const ny = ddy / dist;
         const falloff = 1 - dist / radius;
-        const angle = Math.atan2(ddy, ddx) + (Math.random() - 0.5) * 1.0;
-        const speed = forceMag * falloff * (0.6 + Math.random() * 0.8);
+        const falloffSq = falloff * falloff;
+
+        const dirDotNormal = dirX * nx + dirY * ny;
+        const tangentScale = Math.max(0, 1 - Math.abs(dirDotNormal));
+
+        const pushSpeed = forceMag * falloffSq * 0.8;
+        const spreadSpeed = forceMag * falloff * tangentScale * 0.3;
 
         p.settled = false;
         p.applyForce(
-          Math.cos(angle) * speed + dirX * forceMag * falloff * 0.4,
-          Math.sin(angle) * speed + dirY * forceMag * falloff * 0.4 - 0.8
+          dirX * pushSpeed + nx * spreadSpeed * (Math.random() * 0.5 + 0.5),
+          dirY * pushSpeed + ny * spreadSpeed * (Math.random() * 0.5 + 0.5) - 0.3
         );
       }
     }
@@ -267,39 +288,55 @@ export class HourglassRenderer {
   private triggerExplosion(cx: number, cy: number, radius: number): void {
     const radiusSq = radius * radius;
     let count = 0;
-    const maxExplode = 100;
+    const maxExplode = 120;
+
+    const candidates: { p: SandParticle; dist: number; nx: number; ny: number }[] = [];
 
     for (const p of this.particles) {
-      if (count >= maxExplode) break;
       const ddx = p.x - cx;
       const ddy = p.y - cy;
       const distSq = ddx * ddx + ddy * ddy;
 
-      if (distSq < radiusSq) {
-        p.settled = false;
-        p.explode(0.8);
-        count++;
+      if (distSq < radiusSq * 2.25) {
+        const dist = Math.sqrt(distSq) || 0.01;
+        candidates.push({
+          p,
+          dist,
+          nx: ddx / dist,
+          ny: ddy / dist
+        });
       }
     }
 
-    if (count === 0) {
-      for (const p of this.particles) {
-        const ddx = p.x - cx;
-        const ddy = p.y - cy;
-        const distSq = ddx * ddx + ddy * ddy;
-        if (distSq < (radius * 2) * (radius * 2)) {
-          p.settled = false;
-          p.explode(0.8);
-          count++;
-          if (count >= maxExplode) break;
-        }
-      }
+    candidates.sort((a, b) => a.dist - b.dist);
+
+    for (let i = 0; i < Math.min(maxExplode, candidates.length); i++) {
+      const { p, dist, nx, ny } = candidates[i];
+      p.settled = false;
+
+      const falloff = 1 - Math.min(1, dist / radius);
+      const baseSpeed = 2.5 + falloff * 4.5;
+      const spreadAngle = (Math.random() - 0.5) * 0.8;
+      const cos = Math.cos(spreadAngle);
+      const sin = Math.sin(spreadAngle);
+
+      const speed = baseSpeed * (0.7 + Math.random() * 0.6);
+      p.vx = (nx * cos - ny * sin) * speed;
+      p.vy = (nx * sin + ny * cos) * speed - 1.5;
+
+      p.isExploding = true;
+      p.explodeTime = 0;
+      p.explodeDuration = 0.8;
+      p.explodeColor = p.getRandomExplodeColor();
+
+      count++;
     }
   }
 
   reset(): void {
     if (this.isResetting) return;
     this.isResetting = true;
+    this.resetPhase = 'scatter';
     this.resetStartTime = performance.now() / 1000;
 
     this.resetParticles = [];
@@ -307,26 +344,38 @@ export class HourglassRenderer {
     const cy = this.containerBounds.y + this.containerBounds.height / 2;
 
     for (const p of this.particles) {
-      p.explode(0.5);
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 3 + Math.random() * 5;
+      p.vx = Math.cos(angle) * speed;
+      p.vy = Math.sin(angle) * speed - 2;
       p.settled = false;
+      p.isExploding = true;
+      p.explodeTime = 0;
+      p.explodeDuration = 0.5;
+      p.explodeColor = p.getRandomExplodeColor();
     }
 
-    const resetCount = 300;
+    const resetCount = 400;
     for (let i = 0; i < resetCount; i++) {
       const startAngle = Math.random() * Math.PI * 2;
-      const startR = Math.random() * Math.min(this.containerBounds.width, this.containerBounds.height) * 0.3;
+      const startR = Math.random() * Math.min(this.containerBounds.width, this.containerBounds.height) * 0.15;
       const targetAngle = Math.random() * Math.PI * 2;
-      const targetR = 50 + Math.random() * Math.min(this.containerBounds.width, this.containerBounds.height) * 0.3;
+      const targetR = 40 + Math.random() * Math.min(this.containerBounds.width, this.containerBounds.height) * 0.35;
+
+      const dirAngle = Math.random() * Math.PI * 2;
+      const dirSpeed = 2 + Math.random() * 4;
 
       this.resetParticles.push({
         x: cx + Math.cos(startAngle) * startR,
         y: cy + Math.sin(startAngle) * startR,
         startX: cx + Math.cos(startAngle) * startR,
         startY: cy + Math.sin(startAngle) * startR,
+        scatterEndX: 0,
+        scatterEndY: 0,
         targetX: cx + Math.cos(targetAngle) * targetR,
         targetY: cy + Math.sin(targetAngle) * targetR,
-        vx: Math.cos(startAngle) * (4 + Math.random() * 6),
-        vy: Math.sin(startAngle) * (4 + Math.random() * 6) - 2,
+        vx: Math.cos(dirAngle) * dirSpeed,
+        vy: Math.sin(dirAngle) * dirSpeed - 1.5,
         color: `hsl(${this.hue + (Math.random() - 0.5) * 30}, ${55 + Math.random() * 20}%, ${60 + Math.random() * 20}%)`,
         size: 1 + Math.random() * 2
       });
@@ -336,29 +385,38 @@ export class HourglassRenderer {
   private updateReset(): void {
     const elapsed = performance.now() / 1000 - this.resetStartTime;
     const progress = Math.min(1, elapsed / this.resetDuration);
+    const scatterEnd = 0.45;
 
-    if (progress < 0.5) {
-      const t = progress / 0.5;
+    if (progress < scatterEnd) {
+      const t = progress / scatterEnd;
+      const slowdown = 1 - t * 0.5;
       for (const rp of this.resetParticles) {
-        rp.x += rp.vx;
-        rp.y += rp.vy;
+        rp.x += rp.vx * slowdown;
+        rp.y += rp.vy * slowdown;
         rp.vx *= 0.97;
         rp.vy *= 0.97;
-        rp.vy += 0.12;
-        void t;
+        rp.vy += 0.06;
       }
     } else {
-      const t = (progress - 0.5) / 0.5;
-      const easeT = t * t * (3 - 2 * t);
+      if (this.resetPhase === 'scatter') {
+        this.resetPhase = 'gather';
+        for (const rp of this.resetParticles) {
+          rp.scatterEndX = rp.x;
+          rp.scatterEndY = rp.y;
+        }
+      }
+      const t = (progress - scatterEnd) / (1 - scatterEnd);
+      const easeT = this.easeInOutCubic(t);
       for (const rp of this.resetParticles) {
-        rp.x = rp.startX + (rp.targetX - rp.startX) * easeT;
-        rp.y = rp.startY + (rp.targetY - rp.startY) * easeT;
+        rp.x = rp.scatterEndX + (rp.targetX - rp.scatterEndX) * easeT;
+        rp.y = rp.scatterEndY + (rp.targetY - rp.scatterEndY) * easeT;
       }
     }
 
     if (progress >= this.resetDuration) {
       this.isResetting = false;
       this.resetParticles = [];
+      this.resetPhase = 'scatter';
       this.init();
       this.setHue(this.hue);
     }
@@ -445,15 +503,37 @@ export class HourglassRenderer {
     return nearby;
   }
 
-  private handleCollisions(): void {
-    this.buildSpatialGrid();
-
+  private updateCellSize(): void {
+    let avgRadius = 0;
+    let count = 0;
     for (const p of this.particles) {
-      if (p.settled) continue;
-      const nearby = this.getNearbyParticles(p);
-      for (const other of nearby) {
-        if (p.x < other.x || (p.x === other.x && p.y < other.y)) {
-          p.resolveCollision(other);
+      if (!p.settled) {
+        avgRadius += p.radius;
+        count++;
+      }
+    }
+    if (count > 0) {
+      avgRadius /= count;
+      const targetSize = avgRadius * 2.8;
+      this.cellSize = Math.max(4, Math.min(12, targetSize));
+    }
+  }
+
+  private handleCollisions(): void {
+    this.updateCellSize();
+
+    for (let iter = 0; iter < this.collisionIterations; iter++) {
+      this.buildSpatialGrid();
+
+      for (const p of this.particles) {
+        if (p.settled && iter > 1) continue;
+        const nearby = this.getNearbyParticles(p);
+        for (const other of nearby) {
+          if (p.x < other.x || (p.x === other.x && p.y < other.y)) {
+            const rest = 0.12 - iter * 0.02;
+            const fric = 0.06 + iter * 0.01;
+            p.resolveCollision(other, Math.max(0.02, rest), Math.min(0.12, fric));
+          }
         }
       }
     }
@@ -598,14 +678,18 @@ export class HourglassRenderer {
     }
   }
 
+  private easeInOutCubic(t: number): number {
+    return t < 0.5
+      ? 4 * t * t * t
+      : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
   private updateFlip(): void {
     if (!this.isFlipping) return;
 
     const elapsed = performance.now() / 1000 - this.flipStartTime;
     const t = Math.min(1, elapsed / this.flipDuration);
-    const easeT = t < 0.5
-      ? 2 * t * t
-      : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const easeT = this.easeInOutCubic(t);
 
     this.rotation = this.flipStartRotation + (this.targetRotation - this.flipStartRotation) * easeT;
 
@@ -613,6 +697,9 @@ export class HourglassRenderer {
       this.isFlipping = false;
       this.rotation = this.targetRotation % 360;
       this.spawnTimer = 0;
+      for (const p of this.particles) {
+        p.settled = false;
+      }
     }
   }
 
