@@ -129,9 +129,12 @@ export class ParticleSystem {
   }
 
   // 距离→透明度映射：中心1.0，边缘0.3
+  // 线性映射：alpha = 1.0 - (distance / maxDistance) * 0.7
   public distanceToAlpha(dist: number): number {
-    const ratio = Math.min(dist / this.maxRadius, 1);
-    return 1.0 - ratio * 0.7;
+    const clampedDist = Math.max(0, dist);
+    const ratio = Math.min(clampedDist / this.maxRadius, 1.0);
+    const alpha = 1.0 - ratio * 0.7;
+    return Math.max(0.3, Math.min(1.0, alpha));
   }
 
   // 根据经纬网格初始化粒子位置
@@ -256,17 +259,21 @@ export class ParticleSystem {
         const distSq = dx * dx + dy * dy;
 
         if (distSq < dragRadiusSq) {
-          const falloff = 1.0 - Math.sqrt(distSq) / this.dragState.radius;
+          const dist = Math.sqrt(distSq);
+          const distanceFalloff = 1.0 - dist / this.dragState.radius;
           // 偏移量与鼠标速度成正比，最大 30px
-          const speed = Math.sqrt(dragVX * dragVX + dragVY * dragVY);
+          const speed = Math.hypot(dragVX, dragVY);
           const speedFactor = Math.min(speed / 20, 1.0);
-          const maxOffset = 30 * falloff * speedFactor;
+          const maxOffset = 30 * distanceFalloff * speedFactor;
 
           if (speed > 0.1) {
             const dirX = dragVX / speed;
             const dirY = dragVY / speed;
             this.data[idx + OFFSET.DRAG_OFFSET_X] = dirX * maxOffset;
             this.data[idx + OFFSET.DRAG_OFFSET_Y] = dirY * maxOffset;
+          } else {
+            this.data[idx + OFFSET.DRAG_OFFSET_X] = 0;
+            this.data[idx + OFFSET.DRAG_OFFSET_Y] = 0;
           }
         }
       }
@@ -299,27 +306,38 @@ export class ParticleSystem {
           const dirX = dist > 0.001 ? ex / dist : (Math.random() - 0.5);
           const dirY = dist > 0.001 ? ey / dist : (Math.random() - 0.5);
 
+          // === 三段式爆炸动画 ===
+          // 阶段1: 0 ~ 0.2s  扩散：原色→白，位移 0→200px
+          // 阶段2: 0.2 ~ 0.6s 聚合前段：白→金，位移 200→100px
+          // 阶段3: 0.6 ~ 1.0s 聚合后段：金→原色，位移 100→0px
+
           if (explodeProgress < 0.2) {
-            // 0.2秒内扩散到半径 200px
+            // 阶段1：扩散
             const p = explodeProgress / 0.2;
             const easeP = 1 - Math.pow(1 - p, 3);
             const explodeDist = 200 * falloff * easeP;
             explodeX = dirX * explodeDist;
             explodeY = dirY * explodeDist;
-            explodeColorFactor = easeP; // 0→1 变白
-          } else {
-            // 0.8秒内重新聚合
-            const p = (explodeProgress - 0.2) / 0.8;
+            // 颜色：原色→白 (factor 0→1)
+            explodeColorFactor = easeP;
+          } else if (explodeProgress < 0.6) {
+            // 阶段2：聚合前段
+            const p = (explodeProgress - 0.2) / 0.4;
             const easeP = 1 - Math.pow(1 - p, 3);
-            const explodeDist = 200 * falloff * (1 - easeP);
+            const explodeDist = 200 * falloff * (1 - easeP * 0.5);
             explodeX = dirX * explodeDist;
             explodeY = dirY * explodeDist;
-            // 颜色 白→金→原色
-            if (p < 0.5) {
-              explodeColorFactor = 1.0 - p; // 1→0.5
-            } else {
-              explodeColorFactor = (1 - p) * 0.5; // 0.5→0
-            }
+            // 颜色：白→金 (factor 1→0.5)
+            explodeColorFactor = 1.0 - easeP * 0.5;
+          } else {
+            // 阶段3：聚合后段
+            const p = (explodeProgress - 0.6) / 0.4;
+            const easeP = 1 - Math.pow(1 - p, 3);
+            const explodeDist = 100 * falloff * (1 - easeP);
+            explodeX = dirX * explodeDist;
+            explodeY = dirY * explodeDist;
+            // 颜色：金→原色 (factor 0.5→0)
+            explodeColorFactor = 0.5 * (1 - easeP);
           }
         }
       }

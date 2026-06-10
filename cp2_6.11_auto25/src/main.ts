@@ -32,7 +32,6 @@ class App {
   private _lastTime: number = 0;
   private _fpsFrames: number = 0;
   private _fpsAccum: number = 0;
-  private _lightRailAnimationId: number | null = null;
   private _isNarrow: boolean = false;
 
   constructor() {
@@ -75,6 +74,9 @@ class App {
     // 绑定 UI
     this._bindControls();
 
+    // 初始化 FPS 显示位置
+    this._updateFpsPosition();
+
     // 响应式
     window.addEventListener('resize', this._handleResize);
   }
@@ -104,7 +106,27 @@ class App {
   private _handleResize = (): void => {
     this._isNarrow = window.innerWidth < 800;
     this._resizeCanvas();
+    this._updateFpsPosition();
   };
+
+  // 动态调整 FPS 显示位置
+  private _updateFpsPosition(): void {
+    const { fpsCounter } = this.ui;
+    if (this._isNarrow) {
+      // 窄屏：画布左上角
+      fpsCounter.style.top = '16px';
+      fpsCounter.style.bottom = 'auto';
+      fpsCounter.style.left = '16px';
+      fpsCounter.style.right = 'auto';
+    } else {
+      // 宽屏：画布左下角
+      const leftMargin = (window.innerWidth - Math.min(window.innerWidth * 0.85, window.innerWidth)) / 2 + 8;
+      fpsCounter.style.top = 'auto';
+      fpsCounter.style.bottom = '16px';
+      fpsCounter.style.left = leftMargin + 'px';
+      fpsCounter.style.right = 'auto';
+    }
+  }
 
   private _bindControls(): void {
     const { densitySlider, tensionSlider, shiftSlider,
@@ -113,55 +135,66 @@ class App {
     densitySlider.addEventListener('input', () => {
       const val = parseFloat(densitySlider.value);
       densityValue.textContent = val.toFixed(1);
-      this.loom.updateParam('density', val);
+      this._handleSliderChange('density', val);
     });
 
     tensionSlider.addEventListener('input', () => {
       const val = parseFloat(tensionSlider.value);
       tensionValue.textContent = val.toFixed(1);
-      this.loom.updateParam('tension', val);
+      this._handleSliderChange('tension', val);
     });
 
     shiftSlider.addEventListener('input', () => {
       const val = parseFloat(shiftSlider.value);
       shiftValue.textContent = val.toFixed(2);
-      this.loom.updateParam('colorShiftSpeed', val);
+      this._handleSliderChange('colorShiftSpeed', val);
     });
   }
 
+  // 统一处理滑块变化：更新参数 + 触发光线流动动画
+  private _handleSliderChange(key: 'density' | 'tension' | 'colorShiftSpeed', value: number): void {
+    const oldValue = this.loom.params[key];
+    this.loom.updateParam(key, value);
+
+    // 手动计算参数变化幅度并触发光线流动动画
+    const diff = Math.abs(value - oldValue);
+    let range = 0;
+    switch (key) {
+      case 'density': range = 1.5 - 0.3; break;
+      case 'tension': range = 2.0 - 0.5; break;
+      case 'colorShiftSpeed': range = 1.0 - 0.0; break;
+    }
+    const normalizedDiff = range > 0 ? diff / range : 0;
+    if (normalizedDiff > 0) {
+      this._triggerLightRail(normalizedDiff);
+    }
+  }
+
   // 参数变化 → 光线流动动画
+  // 流动速度随参数变化幅度：变化幅度>0.2 → 400ms，否则 400~1000ms 按比例延长
   private _triggerLightRail(normalizedDiff: number): void {
     const { lightRail } = this.ui;
 
-    // 速度：变化幅度>0.2 → 快（400ms），否则按比例延长
-    const durationMs = normalizedDiff > 0.2 ? 400 : 400 + (1 - normalizedDiff) * 600;
+    if (normalizedDiff <= 0) return;
 
-    if (this._lightRailAnimationId !== null) {
-      cancelAnimationFrame(this._lightRailAnimationId);
-    }
+    // 速度：变化幅度越大，流动越快
+    const durationMs = normalizedDiff > 0.2
+      ? 400
+      : 400 + (1 - normalizedDiff) * 600; // 400ms ~ 1000ms
 
+    // 先清除 transition，设置起始状态
     lightRail.style.transition = 'none';
-    lightRail.style.transform = 'translateY(-100%)';
     lightRail.style.opacity = '1';
+    lightRail.style.transform = 'translateY(-100%)';
 
-    const startTime = performance.now();
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const t = Math.min(elapsed / durationMs, 1);
-      // ease-out
-      const eased = 1 - Math.pow(1 - t, 3);
-      const translateY = -100 + eased * 200;
-      lightRail.style.transform = `translateY(${translateY}%)`;
+    // 强制回流 + 延迟后应用动画
+    lightRail.getBoundingClientRect();
 
-      if (t < 1) {
-        this._lightRailAnimationId = requestAnimationFrame(animate);
-      } else {
-        lightRail.style.opacity = '0';
-        this._lightRailAnimationId = null;
-      }
-    };
-
-    this._lightRailAnimationId = requestAnimationFrame(animate);
+    setTimeout(() => {
+      lightRail.style.transition = `transform ${durationMs}ms ease-out, opacity ${durationMs}ms ease-out`;
+      lightRail.style.transform = 'translateY(100%)';
+      lightRail.style.opacity = '0';
+    }, 20);
   }
 
   // 爆炸 → 环形光晕动画
@@ -228,9 +261,6 @@ class App {
 
   public stop(): void {
     if (this._rafId) cancelAnimationFrame(this._rafId);
-    if (this._lightRailAnimationId !== null) {
-      cancelAnimationFrame(this._lightRailAnimationId);
-    }
     window.removeEventListener('resize', this._handleResize);
     this.loom.destroy();
   }

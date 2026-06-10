@@ -89,12 +89,32 @@ export class Loom {
     canvas.addEventListener('mousedown', this._handleMouseDown);
     canvas.addEventListener('mousemove', this._handleMouseMove);
     canvas.addEventListener('mouseup', this._handleMouseUp);
-    canvas.addEventListener('mouseleave', this._handleMouseUp);
+    canvas.addEventListener('mouseleave', this._handleMouseLeave);
+    canvas.addEventListener('click', this._handleClick);
 
     canvas.addEventListener('touchstart', this._handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', this._handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', this._handleTouchEnd);
   }
+
+  // 直接点击事件（作为 mousedown/mouseup 的备用）
+  private _handleClick = (e: MouseEvent): void => {
+    // 如果已经触发了拖拽，不处理 click
+    if (this._isDragging) {
+      this._isDragging = false;
+      return;
+    }
+    const pos = this._toCanvasCoord(e.clientX, e.clientY);
+    this.particles.triggerExplosion(pos.x, pos.y);
+    if (this._onExplosion) {
+      this._onExplosion(pos.x, pos.y);
+    }
+  };
+
+  private _handleMouseLeave = (e: MouseEvent): void => {
+    const pos = this._toCanvasCoord(e.clientX, e.clientY);
+    this._endInteraction(pos.x, pos.y);
+  };
 
   // 坐标转换：页面坐标 → Canvas 坐标
   private _toCanvasCoord(clientX: number, clientY: number): { x: number; y: number } {
@@ -249,7 +269,8 @@ export class Loom {
     this._canvas.removeEventListener('mousedown', this._handleMouseDown);
     this._canvas.removeEventListener('mousemove', this._handleMouseMove);
     this._canvas.removeEventListener('mouseup', this._handleMouseUp);
-    this._canvas.removeEventListener('mouseleave', this._handleMouseUp);
+    this._canvas.removeEventListener('mouseleave', this._handleMouseLeave);
+    this._canvas.removeEventListener('click', this._handleClick);
     this._canvas.removeEventListener('touchstart', this._handleTouchStart);
     this._canvas.removeEventListener('touchmove', this._handleTouchMove);
     this._canvas.removeEventListener('touchend', this._handleTouchEnd);
