@@ -8,7 +8,9 @@ const MAX_ROTATION_X = Math.PI / 6;
 const MIN_DISTANCE = 10;
 const MAX_DISTANCE = 500;
 const PAN_LIMIT = 200;
-const TRANSITION_DURATION = 500;
+const VIEW_TRANSITION_DURATION = 500;
+const PARTICLE_CLICK_DURATION = 200;
+const CONNECTION_HOVER_DURATION = 300;
 
 export class InteractionManager {
   private container: HTMLElement;
@@ -47,9 +49,10 @@ export class InteractionManager {
     screenY: 0
   };
 
-  private transitionStartTime = 0;
-  private isTransitioning = false;
-  private transitionStartState: CameraState | null = null;
+  private viewTransitionStart = 0;
+  private isViewTransitioning = false;
+  private viewTransitionStartState: CameraState | null = null;
+  private viewTransitionTargetState: CameraState | null = null;
 
   public onClusterClick: ((cluster: ClusterData) => void) | null = null;
   public onHoverChange: ((hover: HoverInfo) => void) | null = null;
@@ -89,29 +92,52 @@ export class InteractionManager {
       if (cluster) {
         this.isClusterDragging = true;
         this.draggedCluster = cluster;
-        this.particleSystem.clickCluster(cluster.id);
+        this.triggerParticleClickEffect(cluster.id);
         this.connectionLines.highlightConnectionsForCluster(cluster.id, true);
       } else {
         this.isLeftDragging = true;
-        this.startTransition();
+        this.startViewTransition();
       }
       this.previousMouseX = e.clientX;
       this.previousMouseY = e.clientY;
     } else if (e.button === 2) {
       this.isRightDragging = true;
-      this.startTransition();
+      this.startViewTransition();
       this.previousMouseX = e.clientX;
       this.previousMouseY = e.clientY;
     }
   }
 
-  private startTransition(): void {
-    this.isTransitioning = true;
-    this.transitionStartTime = performance.now();
-    this.transitionStartState = { ...this.cameraState };
+  private triggerParticleClickEffect(clusterId: string): void {
+    this.particleSystem.clickCluster(clusterId);
+    this.connectionLines.highlightConnectionsForCluster(clusterId, true);
+    
+    setTimeout(() => {
+      if (!this.hoverInfo.clusterId || this.hoverInfo.clusterId !== clusterId) {
+        this.connectionLines.highlightConnectionsForCluster(clusterId, false);
+      }
+    }, CONNECTION_HOVER_DURATION);
   }
 
-  private easeOut(t: number): number {
+  private startViewTransition(): void {
+    this.isViewTransitioning = true;
+    this.viewTransitionStart = performance.now();
+    this.viewTransitionStartState = { ...this.cameraState };
+    this.viewTransitionTargetState = {
+      targetRotationX: this.cameraState.targetRotationX,
+      targetRotationY: this.cameraState.targetRotationY,
+      rotationX: this.cameraState.targetRotationX,
+      rotationY: this.cameraState.targetRotationY,
+      targetDistance: this.cameraState.targetDistance,
+      distance: this.cameraState.targetDistance,
+      targetPanX: this.cameraState.targetPanX,
+      targetPanY: this.cameraState.targetPanY,
+      panX: this.cameraState.targetPanX,
+      panY: this.cameraState.targetPanY
+    };
+  }
+
+  private easeOutCubic(t: number): number {
     return 1 - Math.pow(1 - t, 3);
   }
 
@@ -136,6 +162,9 @@ export class InteractionManager {
 
       this.previousMouseX = e.clientX;
       this.previousMouseY = e.clientY;
+      
+      this.viewTransitionStartState = { ...this.cameraState };
+      this.viewTransitionStart = performance.now();
     } else if (this.isRightDragging) {
       const deltaX = e.clientX - this.previousMouseX;
       const deltaY = e.clientY - this.previousMouseY;
@@ -147,6 +176,9 @@ export class InteractionManager {
 
       this.previousMouseX = e.clientX;
       this.previousMouseY = e.clientY;
+      
+      this.viewTransitionStartState = { ...this.cameraState };
+      this.viewTransitionStart = performance.now();
     } else {
       this.updateHoverState(e);
     }
@@ -162,7 +194,7 @@ export class InteractionManager {
       } else if (!this.isLeftDragging) {
         const cluster = this.getClusterAtMouse(e);
         if (cluster) {
-          this.particleSystem.clickCluster(cluster.id);
+          this.triggerParticleClickEffect(cluster.id);
           if (this.onClusterClick) {
             this.onClusterClick(cluster);
           }
@@ -172,10 +204,10 @@ export class InteractionManager {
       this.isLeftDragging = false;
       this.isClusterDragging = false;
       this.draggedCluster = null;
-      this.isTransitioning = false;
+      this.isViewTransitioning = false;
     } else if (e.button === 2) {
       this.isRightDragging = false;
-      this.isTransitioning = false;
+      this.isViewTransitioning = false;
     }
   }
 
@@ -184,11 +216,15 @@ export class InteractionManager {
     this.isRightDragging = false;
     this.isClusterDragging = false;
     this.draggedCluster = null;
-    this.isTransitioning = false;
+    this.isViewTransitioning = false;
 
     if (this.hoverInfo.clusterId) {
       this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
       this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
+    }
+
+    if (this.hoverInfo.type === 'connection') {
+      this.clearConnectionHover();
     }
 
     this.hoverInfo.type = null;
@@ -213,7 +249,7 @@ export class InteractionManager {
       Math.min(MAX_DISTANCE, this.cameraState.targetDistance)
     );
 
-    this.startTransition();
+    this.startViewTransition();
   }
 
   private onContextMenu(e: MouseEvent): void {
@@ -252,13 +288,32 @@ export class InteractionManager {
     );
   }
 
+  private clearConnectionHover(): void {
+    if (this.hoverInfo.connectionWords) {
+      const words = this.hoverInfo.connectionWords.split(' — ');
+      if (words.length === 2) {
+        const clusters = this.particleSystem.getClusters();
+        const fromCluster = clusters.find(c => c.word === words[0]);
+        const toCluster = clusters.find(c => c.word === words[1]);
+        if (fromCluster && toCluster) {
+          this.connectionLines.highlightConnection(fromCluster.id, toCluster.id, false);
+          this.particleSystem.highlightCluster(fromCluster.id, false);
+          this.particleSystem.highlightCluster(toCluster.id, false);
+        }
+      }
+    }
+  }
+
   private updateHoverState(e: MouseEvent): void {
     const cluster = this.getClusterAtMouse(e);
-    const connection = this.getConnectionAtMouse(e);
+    const connection = !cluster ? this.getConnectionAtMouse(e) : null;
 
     if (cluster) {
       if (this.hoverInfo.clusterId !== cluster.id) {
-        if (this.hoverInfo.clusterId) {
+        if (this.hoverInfo.type === 'connection') {
+          this.clearConnectionHover();
+        }
+        if (this.hoverInfo.clusterId && this.hoverInfo.clusterId !== cluster.id) {
           this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
           this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
         }
@@ -278,11 +333,15 @@ export class InteractionManager {
         }
       }
     } else if (connection) {
-      if (this.hoverInfo.type !== 'connection' ||
-          (this.hoverInfo.connectionWords !== `${connection.fromWord}-${connection.toWord}`)) {
+      const connKey = `${connection.fromWord} — ${connection.toWord}`;
+      
+      if (this.hoverInfo.connectionWords !== connKey) {
         if (this.hoverInfo.clusterId) {
           this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
           this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
+        }
+        if (this.hoverInfo.type === 'connection' && this.hoverInfo.connectionWords) {
+          this.clearConnectionHover();
         }
 
         this.connectionLines.highlightConnection(connection.fromClusterId, connection.toClusterId, true);
@@ -290,9 +349,21 @@ export class InteractionManager {
         this.particleSystem.highlightCluster(connection.toClusterId, true);
 
         this.hoverInfo.type = 'connection';
-        this.hoverInfo.clusterId = connection.fromClusterId;
+        this.hoverInfo.clusterId = null;
         this.hoverInfo.word = null;
-        this.hoverInfo.connectionWords = `${connection.fromWord} — ${connection.toWord}`;
+        this.hoverInfo.connectionWords = connKey;
+
+        const rect = this.container.getBoundingClientRect();
+        const midScreen = this.connectionLines.getConnectionMidpointScreenPosition(
+          connection,
+          this.camera,
+          rect.width,
+          rect.height
+        );
+        if (midScreen) {
+          this.hoverInfo.screenX = midScreen.x + rect.left;
+          this.hoverInfo.screenY = midScreen.y + rect.top;
+        }
 
         this.container.style.cursor = 'pointer';
 
@@ -305,16 +376,8 @@ export class InteractionManager {
         this.particleSystem.highlightCluster(this.hoverInfo.clusterId, false);
         this.connectionLines.highlightConnectionsForCluster(this.hoverInfo.clusterId, false);
       }
-      if (this.hoverInfo.connectionWords) {
-        const [fromWord, toWord] = this.hoverInfo.connectionWords.split(' — ');
-        const clusters = this.particleSystem.getClusters();
-        const fromCluster = clusters.find(c => c.word === fromWord);
-        const toCluster = clusters.find(c => c.word === toWord);
-        if (fromCluster && toCluster) {
-          this.connectionLines.highlightConnection(fromCluster.id, toCluster.id, false);
-          this.particleSystem.highlightCluster(fromCluster.id, false);
-          this.particleSystem.highlightCluster(toCluster.id, false);
-        }
+      if (this.hoverInfo.type === 'connection') {
+        this.clearConnectionHover();
       }
 
       this.hoverInfo.type = null;
@@ -349,26 +412,26 @@ export class InteractionManager {
 
   public update(_deltaTime: number): void {
     const now = performance.now();
-    const elapsed = now - this.transitionStartTime;
-    const t = Math.min(1, elapsed / TRANSITION_DURATION);
+    const elapsed = now - this.viewTransitionStart;
+    const t = Math.min(1, elapsed / VIEW_TRANSITION_DURATION);
 
-    let smoothing: number;
+    let easingFactor: number;
 
-    if (this.isTransitioning && this.transitionStartState) {
-      const easeFactor = this.easeOut(t);
-      smoothing = 0.05 + easeFactor * 0.15;
+    if (this.isViewTransitioning && this.viewTransitionStartState) {
+      const easeT = this.easeOutCubic(t);
+      easingFactor = 0.03 + easeT * 0.17;
     } else {
-      smoothing = 0.08;
+      easingFactor = 0.08;
     }
 
-    this.cameraState.rotationX += (this.cameraState.targetRotationX - this.cameraState.rotationX) * smoothing;
-    this.cameraState.rotationY += (this.cameraState.targetRotationY - this.cameraState.rotationY) * smoothing;
-    this.cameraState.distance += (this.cameraState.targetDistance - this.cameraState.distance) * smoothing;
-    this.cameraState.panX += (this.cameraState.targetPanX - this.cameraState.panX) * smoothing;
-    this.cameraState.panY += (this.cameraState.targetPanY - this.cameraState.panY) * smoothing;
+    this.cameraState.rotationX += (this.cameraState.targetRotationX - this.cameraState.rotationX) * easingFactor;
+    this.cameraState.rotationY += (this.cameraState.targetRotationY - this.cameraState.rotationY) * easingFactor;
+    this.cameraState.distance += (this.cameraState.targetDistance - this.cameraState.distance) * easingFactor;
+    this.cameraState.panX += (this.cameraState.targetPanX - this.cameraState.panX) * easingFactor;
+    this.cameraState.panY += (this.cameraState.targetPanY - this.cameraState.panY) * easingFactor;
 
-    if (t >= 1 && this.isTransitioning && !this.isLeftDragging && !this.isRightDragging) {
-      this.isTransitioning = false;
+    if (t >= 1 && this.isViewTransitioning && !this.isLeftDragging && !this.isRightDragging) {
+      this.isViewTransitioning = false;
     }
 
     this.updateCamera();
@@ -386,7 +449,7 @@ export class InteractionManager {
   }
 
   public resetView(): void {
-    this.startTransition();
+    this.startViewTransition();
     this.cameraState.targetRotationX = 0;
     this.cameraState.targetRotationY = 0;
     this.cameraState.targetDistance = 120;

@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import type { ClusterData, ConnectionData, Vector3 } from './types';
 
 const MAX_CONNECTIONS = 800;
+const SAME_SEGMENT_OPACITY = 0.6;
+const ADJACENT_OPACITY = 0.3;
+const PROXIMITY_OPACITY = 0.15;
 
 export class ConnectionLines {
   private scene: THREE.Scene;
@@ -12,6 +15,7 @@ export class ConnectionLines {
   private positions!: Float32Array;
   private colors!: Float32Array;
   private hoveredConnectionId: string | null = null;
+  private hoverStartTime: number = 0;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -31,7 +35,7 @@ export class ConnectionLines {
     this.material = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.8,
+      opacity: 1,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       linewidth: 1
@@ -43,6 +47,7 @@ export class ConnectionLines {
 
   public createFromClusters(clusters: ClusterData[]): ConnectionData[] {
     this.connections = [];
+    this.hoveredConnectionId = null;
 
     if (clusters.length < 2) {
       this.updateGeometry(clusters);
@@ -75,6 +80,8 @@ export class ConnectionLines {
             z: (clusterA.position.z + clusterB.position.z) / 2
           };
 
+          const baseOpacity = SAME_SEGMENT_OPACITY * strength;
+
           sameSegmentConnections.push({
             id: `conn-same-${clusterA.id}-${clusterB.id}`,
             fromClusterId: clusterA.id,
@@ -83,8 +90,8 @@ export class ConnectionLines {
             toWord: clusterB.word,
             strength,
             connectionType: 'same-segment',
-            opacity: 0.6 * strength,
-            targetOpacity: 0.6 * strength,
+            opacity: baseOpacity,
+            targetOpacity: baseOpacity,
             lineWidth: 1,
             targetLineWidth: 1,
             midPoint
@@ -113,6 +120,8 @@ export class ConnectionLines {
         );
 
         if (!alreadyExists) {
+          const baseOpacity = ADJACENT_OPACITY * strength;
+
           adjacentConnections.push({
             id: `conn-adj-${clusterA.id}-${clusterB.id}`,
             fromClusterId: clusterA.id,
@@ -121,8 +130,8 @@ export class ConnectionLines {
             toWord: clusterB.word,
             strength,
             connectionType: 'adjacent',
-            opacity: 0.3 * strength,
-            targetOpacity: 0.3 * strength,
+            opacity: baseOpacity,
+            targetOpacity: baseOpacity,
             lineWidth: 1,
             targetLineWidth: 1,
             midPoint
@@ -131,7 +140,10 @@ export class ConnectionLines {
       }
     }
 
-    const maxProximityConnections = Math.min(50, MAX_CONNECTIONS - sameSegmentConnections.length - adjacentConnections.length);
+    const maxProximityConnections = Math.min(
+      50,
+      MAX_CONNECTIONS - sameSegmentConnections.length - adjacentConnections.length
+    );
     let proximityCount = 0;
 
     const sortedByDistance: { a: ClusterData; b: ClusterData; dist: number }[] = [];
@@ -165,6 +177,8 @@ export class ConnectionLines {
           z: (pair.a.position.z + pair.b.position.z) / 2
         };
 
+        const baseOpacity = PROXIMITY_OPACITY * strength;
+
         proximityConnections.push({
           id: `conn-prox-${pair.a.id}-${pair.b.id}`,
           fromClusterId: pair.a.id,
@@ -173,8 +187,8 @@ export class ConnectionLines {
           toWord: pair.b.word,
           strength,
           connectionType: 'proximity',
-          opacity: 0.15 * strength,
-          targetOpacity: 0.15 * strength,
+          opacity: baseOpacity,
+          targetOpacity: baseOpacity,
           lineWidth: 1,
           targetLineWidth: 1,
           midPoint
@@ -201,7 +215,7 @@ export class ConnectionLines {
   }
 
   public update(clusters: ClusterData[], _deltaTime: number): void {
-    const transitionSpeed = 0.15;
+    const transitionSpeed = 0.12;
 
     for (const conn of this.connections) {
       if (Math.abs(conn.opacity - conn.targetOpacity) > 0.005) {
@@ -269,12 +283,12 @@ export class ConnectionLines {
   private getConnectionColor(conn: ConnectionData): { r: number; g: number; b: number } {
     switch (conn.connectionType) {
       case 'same-segment':
-        return { r: 180 / 255, g: 200 / 255, b: 255 / 255 };
+        return { r: 200 / 255, g: 210 / 255, b: 255 / 255 };
       case 'adjacent':
-        return { r: 150 / 255, g: 180 / 255, b: 255 / 255 };
+        return { r: 170 / 255, g: 190 / 255, b: 240 / 255 };
       case 'proximity':
       default:
-        return { r: 120 / 255, g: 140 / 255, b: 200 / 255 };
+        return { r: 140 / 255, g: 160 / 255, b: 220 / 255 };
     }
   }
 
@@ -288,6 +302,7 @@ export class ConnectionLines {
           conn.targetOpacity = Math.min(1, conn.strength * 2);
           conn.targetLineWidth = 3;
           this.hoveredConnectionId = conn.id;
+          this.hoverStartTime = performance.now();
         } else {
           this.resetConnectionOpacity(conn);
           if (this.hoveredConnectionId === conn.id) {
@@ -314,14 +329,14 @@ export class ConnectionLines {
   private resetConnectionOpacity(conn: ConnectionData): void {
     switch (conn.connectionType) {
       case 'same-segment':
-        conn.targetOpacity = 0.6 * conn.strength;
+        conn.targetOpacity = SAME_SEGMENT_OPACITY * conn.strength;
         break;
       case 'adjacent':
-        conn.targetOpacity = 0.3 * conn.strength;
+        conn.targetOpacity = ADJACENT_OPACITY * conn.strength;
         break;
       case 'proximity':
       default:
-        conn.targetOpacity = 0.15 * conn.strength;
+        conn.targetOpacity = PROXIMITY_OPACITY * conn.strength;
         break;
     }
     conn.targetLineWidth = 1;
@@ -340,9 +355,12 @@ export class ConnectionLines {
     containerWidth: number,
     containerHeight: number
   ): ConnectionData | null {
-    const threshold = 10;
+    let closestConnection: ConnectionData | null = null;
+    let closestDistance = 15;
 
     for (const conn of this.connections) {
+      if (conn.opacity < 0.1) continue;
+
       const midPoint = conn.midPoint;
       const screenPos = this.worldToScreen(midPoint, camera, containerWidth, containerHeight);
 
@@ -351,13 +369,14 @@ export class ConnectionLines {
         const dy = screenPos.y - screenY;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < threshold && conn.opacity > 0.1) {
-          return conn;
+        if (dist < closestDistance) {
+          closestDistance = dist;
+          closestConnection = conn;
         }
       }
     }
 
-    return null;
+    return closestConnection;
   }
 
   private worldToScreen(
@@ -369,12 +388,21 @@ export class ConnectionLines {
     const vector = new THREE.Vector3(point.x, point.y, point.z);
     vector.project(camera);
 
-    if (vector.z > 1) return null;
+    if (vector.z > 1 || vector.z < -1) return null;
 
     return {
       x: (vector.x + 1) / 2 * width,
       y: (-vector.y + 1) / 2 * height
     };
+  }
+
+  public getConnectionMidpointScreenPosition(
+    conn: ConnectionData,
+    camera: THREE.Camera,
+    containerWidth: number,
+    containerHeight: number
+  ): { x: number; y: number } | null {
+    return this.worldToScreen(conn.midPoint, camera, containerWidth, containerHeight);
   }
 
   public getConnections(): ConnectionData[] {
@@ -403,5 +431,10 @@ export class ConnectionLines {
 
   public getHoveredConnectionId(): string | null {
     return this.hoveredConnectionId;
+  }
+
+  public getHoveredConnection(): ConnectionData | null {
+    if (!this.hoveredConnectionId) return null;
+    return this.connections.find(c => c.id === this.hoveredConnectionId) || null;
   }
 }

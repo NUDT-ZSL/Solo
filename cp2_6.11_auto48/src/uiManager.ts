@@ -1,5 +1,5 @@
 import type { ClusterData, HoverInfo } from './types';
-import { getEmotionLabel } from './emotionAnalyzer';
+import { getEmotionLabel, getScoreLabel } from './emotionAnalyzer';
 
 export class UIManager {
   private detailCard: HTMLElement;
@@ -8,12 +8,14 @@ export class UIManager {
   private cardText: HTMLElement;
   private cardTime: HTMLElement;
   private closeButton: HTMLElement;
-  
+
   private hoverLabel: HTMLElement;
   private helpPanel: HTMLElement;
   private helpToggle: HTMLElement;
+  private mobileOverlay: HTMLElement;
   private toast: HTMLElement;
-  
+  private container: HTMLElement;
+
   private currentCluster: ClusterData | null = null;
   private isDragging = false;
   private dragOffsetX = 0;
@@ -21,7 +23,11 @@ export class UIManager {
   private cardStartX = 0;
   private cardStartY = 0;
 
+  private isMobile = false;
+  private helpPanelExpanded = false;
+
   constructor() {
+    this.container = document.getElementById('canvas-container')!;
     this.detailCard = document.getElementById('detail-card')!;
     this.cardTitle = document.getElementById('card-title')!;
     this.cardEmotion = document.getElementById('card-emotion')!;
@@ -33,7 +39,17 @@ export class UIManager {
     this.helpToggle = document.getElementById('help-toggle')!;
     this.toast = document.getElementById('toast')!;
 
+    this.checkMobile();
     this.bindEvents();
+  }
+
+  private checkMobile(): void {
+    this.isMobile = window.innerWidth < 768;
+
+    if (this.isMobile) {
+      this.helpPanel.classList.remove('mobile-expanded');
+      this.helpPanelExpanded = false;
+    }
   }
 
   private bindEvents(): void {
@@ -44,13 +60,13 @@ export class UIManager {
 
     this.detailCard.addEventListener('mousedown', (e) => {
       if ((e.target as HTMLElement).closest('.close-btn')) return;
-      
+
       this.isDragging = true;
       this.dragOffsetX = e.clientX;
       this.dragOffsetY = e.clientY;
       this.cardStartX = this.detailCard.offsetLeft;
       this.cardStartY = this.detailCard.offsetTop;
-      
+
       e.preventDefault();
     });
 
@@ -58,7 +74,7 @@ export class UIManager {
       if (this.isDragging) {
         const dx = e.clientX - this.dragOffsetX;
         const dy = e.clientY - this.dragOffsetY;
-        
+
         this.detailCard.style.left = `${this.cardStartX + dx}px`;
         this.detailCard.style.top = `${this.cardStartY + dy}px`;
         this.detailCard.style.transform = 'none';
@@ -82,20 +98,58 @@ export class UIManager {
       }
     });
 
-    this.helpToggle.addEventListener('click', () => {
-      this.helpPanel.classList.toggle('mobile-expanded');
+    this.helpToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleHelpPanel();
     });
+
+    document.addEventListener('click', (e) => {
+      if (
+        this.isMobile &&
+        this.helpPanelExpanded &&
+        !this.helpPanel.contains(e.target as Node) &&
+        !this.helpToggle.contains(e.target as Node)
+      ) {
+        this.collapseHelpPanel();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      this.checkMobile();
+    });
+  }
+
+  private toggleHelpPanel(): void {
+    if (this.helpPanelExpanded) {
+      this.collapseHelpPanel();
+    } else {
+      this.expandHelpPanel();
+    }
+  }
+
+  private expandHelpPanel(): void {
+    this.helpPanel.classList.add('mobile-expanded');
+    this.helpPanelExpanded = true;
+  }
+
+  private collapseHelpPanel(): void {
+    this.helpPanel.classList.remove('mobile-expanded');
+    this.helpPanelExpanded = false;
   }
 
   public showDetailCard(cluster: ClusterData, screenX: number, screenY: number): void {
     this.currentCluster = cluster;
-    
+
     this.cardTitle.textContent = cluster.word;
-    this.cardText.textContent = `这是一个关于「${cluster.word}」的记忆星团，由 ${cluster.particleIds.length} 颗星尘凝聚而成。`;
     
-    this.cardEmotion.textContent = getEmotionLabel(cluster.emotion);
+    const emotionLabel = getEmotionLabel(cluster.emotion);
+    const scoreLabel = getScoreLabel(cluster.emotionScore);
+    this.cardEmotion.textContent = scoreLabel || emotionLabel;
     this.cardEmotion.className = `emotion-tag ${cluster.emotion}`;
-    
+
+    const particleCount = cluster.particleIds.length;
+    this.cardText.textContent = `这是一个关于「${cluster.word}」的记忆星团，由 ${particleCount} 颗星尘凝聚而成。在星云中，它与其他星团通过语义连线相互连接，共同构成了你的记忆网络。`;
+
     const date = new Date(cluster.createdAt);
     this.cardTime.textContent = `创建于 ${date.toLocaleString('zh-CN')}`;
 
@@ -118,7 +172,12 @@ export class UIManager {
     if (hoverInfo.type === 'particle' && hoverInfo.word) {
       this.hoverLabel.textContent = hoverInfo.word;
       this.hoverLabel.style.left = `${hoverInfo.screenX}px`;
-      this.hoverLabel.style.top = `${hoverInfo.screenY}px`;
+      this.hoverLabel.style.top = `${hoverInfo.screenY - 10}px`;
+      this.hoverLabel.classList.add('visible');
+    } else if (hoverInfo.type === 'connection' && hoverInfo.connectionWords) {
+      this.hoverLabel.textContent = hoverInfo.connectionWords;
+      this.hoverLabel.style.left = `${hoverInfo.screenX}px`;
+      this.hoverLabel.style.top = `${hoverInfo.screenY - 10}px`;
       this.hoverLabel.classList.add('visible');
     } else {
       this.hoverLabel.classList.remove('visible');
@@ -128,7 +187,7 @@ export class UIManager {
   public showToast(message: string, duration: number = 2000): void {
     this.toast.textContent = message;
     this.toast.classList.add('visible');
-    
+
     setTimeout(() => {
       this.toast.classList.remove('visible');
     }, duration);
@@ -156,5 +215,17 @@ export class UIManager {
 
   public getCurrentCluster(): ClusterData | null {
     return this.currentCluster;
+  }
+
+  public getIsMobile(): boolean {
+    return this.isMobile;
+  }
+
+  public getHelpPanel(): HTMLElement {
+    return this.helpPanel;
+  }
+
+  public getHelpToggle(): HTMLElement {
+    return this.helpToggle;
   }
 }

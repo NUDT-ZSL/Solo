@@ -1,7 +1,8 @@
 import type { NebulaState, ClusterData, ParticleData, ConnectionData } from './types';
 
-const SHORT_CODE_PREFIX = 'nebula_';
-const SHORT_CODE_LENGTH = 8;
+const SHORT_API_URL = 'https://api.mcfly.one/api/shorten';
+const FALLBACK_SHORT_CODE_LENGTH = 8;
+const MAX_LOCAL_SHORT_CODES = 100;
 
 export class ShareManager {
   private static readonly STORAGE_KEY = 'memory_nebula_states';
@@ -59,52 +60,104 @@ export class ShareManager {
     );
   }
 
-  public static generateShareLink(state: NebulaState): string {
-    const shortCode = this.createShortCode(state);
+  public static async generateShareLink(state: NebulaState): Promise<string> {
+    try {
+      const shortUrl = await this.shortenWithAPI(state);
+      if (shortUrl) {
+        return shortUrl;
+      }
+    } catch {
+      // Fall through to local short code
+    }
+
+    return this.generateLocalShareLink(state);
+  }
+
+  private static async shortenWithAPI(state: NebulaState): Promise<string | null> {
+    try {
+      const fullUrl = this.generateFullShareLink(state);
+      
+      const response = await fetch(SHORT_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: fullUrl })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.shortUrl || data.short_url || data.url) {
+          return data.shortUrl || data.short_url || data.url;
+        }
+      }
+    } catch {
+      // API call failed, fall back to local
+    }
+
+    return null;
+  }
+
+  private static generateLocalShareLink(state: NebulaState): string {
+    const shortCode = this.createLocalShortCode(state);
     const baseUrl = window.location.origin + window.location.pathname;
     return `${baseUrl}?s=${shortCode}`;
   }
 
   public static generateFullShareLink(state: NebulaState): string {
-    const json = this.stateToJson(state);
-    const encoded = this.encodeBase64Url(json);
+    const compressed = this.compressState(state);
     const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}?nebula=${encoded}`;
+    return `${baseUrl}?nebula=${compressed}`;
   }
 
-  private static createShortCode(state: NebulaState): string {
+  private static createLocalShortCode(state: NebulaState): string {
     const shortCode = this.generateShortId();
     const shortCodes = this.getAllShortCodes();
+
+    const entries = Object.entries(shortCodes);
+    if (entries.length >= MAX_LOCAL_SHORT_CODES) {
+      const toRemove = entries.slice(0, entries.length - MAX_LOCAL_SHORT_CODES + 1);
+      for (const [key] of toRemove) {
+        delete shortCodes[key];
+      }
+    }
+
     shortCodes[shortCode] = this.stateToJson(state);
-    
+
     try {
       localStorage.setItem(this.SHORT_CODE_KEY, JSON.stringify(shortCodes));
     } catch {
-      // Storage full - clean up old entries
+      // Storage full - remove old entries
       this.cleanupOldShortCodes();
+      const sc = this.getAllShortCodes();
+      sc[shortCode] = this.stateToJson(state);
       try {
-        const sc = this.getAllShortCodes();
-        sc[shortCode] = this.stateToJson(state);
         localStorage.setItem(this.SHORT_CODE_KEY, JSON.stringify(sc));
       } catch {
-        // Fallback to full URL encoding
+        // Still failing, use full URL instead
       }
     }
-    
+
     return shortCode;
   }
 
   private static generateShortId(): string {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
-    const array = new Uint8Array(SHORT_CODE_LENGTH);
-    crypto.getRandomValues(array);
-    
-    for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
-      result += chars[array[i] % chars.length];
+
+    if (crypto && crypto.getRandomValues) {
+      const array = new Uint8Array(FALLBACK_SHORT_CODE_LENGTH);
+      crypto.getRandomValues(array);
+      for (let i = 0; i < FALLBACK_SHORT_CODE_LENGTH; i++) {
+        result += chars[array[i] % chars.length];
+      }
+    } else {
+      for (let i = 0; i < FALLBACK_SHORT_CODE_LENGTH; i++) {
+        result += chars[Math.floor(Math.random() * chars.length)];
+      }
     }
-    
-    return SHORT_CODE_PREFIX + result;
+
+    return 'nb_' + result;
   }
 
   private static getAllShortCodes(): Record<string, string> {
@@ -120,41 +173,43 @@ export class ShareManager {
     try {
       const shortCodes = this.getAllShortCodes();
       const keys = Object.keys(shortCodes);
-      
-      if (keys.length > 50) {
-        const keysToRemove = keys.slice(0, keys.length - 50);
+
+      if (keys.length > MAX_LOCAL_SHORT_CODES / 2) {
+        const keysToRemove = keys.slice(0, Math.floor(keys.length / 2));
         for (const key of keysToRemove) {
           delete shortCodes[key];
         }
         localStorage.setItem(this.SHORT_CODE_KEY, JSON.stringify(shortCodes));
       }
     } catch {
-      // Ignore
+      // Ignore errors
     }
   }
 
   public static parseShareLink(): NebulaState | null {
     const params = new URLSearchParams(window.location.search);
-    
+
     const shortCode = params.get('s');
-    if (shortCode && shortCode.startsWith(SHORT_CODE_PREFIX)) {
+    if (shortCode && shortCode.startsWith('nb_')) {
       const shortCodes = this.getAllShortCodes();
       const json = shortCodes[shortCode];
       if (json) {
         return this.jsonToState(json);
       }
     }
-    
+
     const encoded = params.get('nebula');
     if (encoded) {
       try {
-        const json = this.decodeBase64Url(encoded);
-        return this.jsonToState(json);
+        const state = this.decompressState(encoded);
+        if (state) {
+          return state;
+        }
       } catch {
-        return null;
+        // Fall through
       }
     }
-    
+
     return null;
   }
 
@@ -172,31 +227,19 @@ export class ShareManager {
     URL.revokeObjectURL(url);
   }
 
-  public static copyToClipboard(text: string): Promise<void> {
-    return navigator.clipboard.writeText(text);
-  }
-
-  public static async generateShortLinkWithAPI(state: NebulaState): Promise<string> {
-    const fullLink = this.generateFullShareLink(state);
-    
-    try {
-      const response = await fetch('https://api.mcfly.one/api/shorten', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url: fullLink })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return data.shortUrl || fullLink;
-      }
-    } catch {
-      // Fallback to local short code
+  public static async copyToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
     }
-    
-    return this.generateShareLink(state);
   }
 
   public static saveToLocalStorage(state: NebulaState, id: string): void {
@@ -224,6 +267,20 @@ export class ShareManager {
       return data ? JSON.parse(data) : {};
     } catch {
       return {};
+    }
+  }
+
+  public static compressState(state: NebulaState): string {
+    const json = this.stateToJson(state);
+    return this.encodeBase64Url(json);
+  }
+
+  public static decompressState(compressed: string): NebulaState | null {
+    try {
+      const json = this.decodeBase64Url(compressed);
+      return this.jsonToState(json);
+    } catch {
+      return null;
     }
   }
 
@@ -259,23 +316,5 @@ export class ShareManager {
 
     const decoder = new TextDecoder();
     return decoder.decode(bytes);
-  }
-
-  public static generateShortId(): string {
-    return Math.random().toString(36).substring(2, 10);
-  }
-
-  public static compressState(state: NebulaState): string {
-    const json = this.stateToJson(state);
-    return this.encodeBase64Url(json);
-  }
-
-  public static decompressState(compressed: string): NebulaState | null {
-    try {
-      const json = this.decodeBase64Url(compressed);
-      return this.jsonToState(json);
-    } catch {
-      return null;
-    }
   }
 }
