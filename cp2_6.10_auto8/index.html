@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>脉冲编织者</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0A1628 0%, #050A14 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: none;
+    }
+    #title {
+      position: absolute;
+      top: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(136, 204, 255, 0.35);
+      font-size: 20px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      pointer-events: none;
+      user-select: none;
+      text-shadow: 0 0 20px rgba(136, 204, 255, 0.2);
+    }
+    #hint {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(136, 204, 255, 0.25);
+      font-size: 13px;
+      letter-spacing: 2px;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+    <div id="title">脉 冲 编 织 者</div>
+    <div id="hint">按住鼠标拖动绘制曲线 · 松开生成音符 · 空格键清空</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
