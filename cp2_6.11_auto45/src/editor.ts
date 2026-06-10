@@ -613,19 +613,20 @@ export class PixelEditor {
     this.magnifierEl.className = 'pfw-magnifier';
     Object.assign(this.magnifierEl.style, {
       position: 'absolute',
-      width: '80px',
-      height: '80px',
-      border: '2px solid rgba(255,255,255,0.5)',
+      width: '160px',
+      height: '160px',
+      border: '3px solid rgba(212, 175, 55, 0.8)',
       borderRadius: '50%',
       pointerEvents: 'none',
       display: 'none',
       overflow: 'hidden',
-      boxShadow: '0 0 20px rgba(0,0,0,0.5)',
+      boxShadow: '0 0 30px rgba(0,0,0,0.7), inset 0 0 20px rgba(255,255,255,0.1)',
       zIndex: '100',
+      background: 'rgba(0,0,0,0.9)',
     });
     const magCanvas = document.createElement('canvas');
-    magCanvas.width = 32 * 5;
-    magCanvas.height = 32 * 5;
+    magCanvas.width = 160;
+    magCanvas.height = 160;
     magCanvas.style.imageRendering = 'pixelated';
     magCanvas.style.width = '100%';
     magCanvas.style.height = '100%';
@@ -750,6 +751,57 @@ export class PixelEditor {
     });
     this.timelineEl.appendChild(this.timelineFramesEl);
 
+    const fpsRow = document.createElement('div');
+    fpsRow.className = 'pfw-fps-row';
+    Object.assign(fpsRow.style, {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      marginTop: '4px',
+      padding: '6px 8px',
+      background: 'rgba(255,255,255,0.04)',
+      borderRadius: '6px',
+    });
+    const fpsLabel = document.createElement('span');
+    fpsLabel.textContent = '帧率';
+    Object.assign(fpsLabel.style, {
+      color: '#aaa',
+      fontSize: '11px',
+      minWidth: '28px',
+    });
+    const fpsSlider = document.createElement('input');
+    fpsSlider.type = 'range';
+    fpsSlider.min = '1';
+    fpsSlider.max = '30';
+    fpsSlider.step = '1';
+    fpsSlider.value = '24';
+    fpsSlider.className = 'pfw-fps-slider';
+    Object.assign(fpsSlider.style, {
+      flex: '1',
+      accentColor: '#4ECDC4',
+      height: '18px',
+      cursor: 'pointer',
+    });
+    const fpsValue = document.createElement('span');
+    fpsValue.textContent = '24 fps';
+    fpsValue.className = 'pfw-fps-value';
+    Object.assign(fpsValue.style, {
+      color: '#4ECDC4',
+      fontSize: '12px',
+      fontWeight: 'bold',
+      minWidth: '50px',
+      textAlign: 'right',
+    });
+    fpsSlider.addEventListener('input', (e) => {
+      const val = parseInt((e.target as HTMLInputElement).value, 10);
+      this.engine.setFps(val);
+      fpsValue.textContent = `${val} fps`;
+    });
+    fpsRow.appendChild(fpsLabel);
+    fpsRow.appendChild(fpsSlider);
+    fpsRow.appendChild(fpsValue);
+    this.timelineEl.appendChild(fpsRow);
+
     this.progressBarEl = document.createElement('div');
     this.progressBarEl.className = 'pfw-progress-bar';
     Object.assign(this.progressBarEl.style, {
@@ -758,6 +810,7 @@ export class PixelEditor {
       borderRadius: '2px',
       overflow: 'hidden',
       display: 'none',
+      marginTop: '2px',
     });
     const progressFill = document.createElement('div');
     progressFill.className = 'pfw-progress-fill';
@@ -1045,7 +1098,7 @@ export class PixelEditor {
     const magCtx = magCanvas.getContext('2d');
     if (!magCtx) return;
 
-    const magScale = 5;
+    const magScale = 10;
     magCtx.clearRect(0, 0, magCanvas.width, magCanvas.height);
 
     const pixels = this.engine.getCurrentFramePixels();
@@ -1053,6 +1106,9 @@ export class PixelEditor {
 
     const viewSize = 16;
     const halfView = Math.floor(viewSize / 2);
+    const offsetX = (magCanvas.width - viewSize * magScale) / 2;
+    const offsetY = (magCanvas.height - viewSize * magScale) / 2;
+
     for (let y = 0; y < viewSize; y++) {
       for (let x = 0; x < viewSize; x++) {
         const srcX = px - halfView + x;
@@ -1060,24 +1116,34 @@ export class PixelEditor {
         if (srcX >= 0 && srcX < CANVAS_WIDTH && srcY >= 0 && srcY < CANVAS_HEIGHT) {
           const idx = srcY * CANVAS_WIDTH + srcX;
           const colorIdx = pixels[idx];
+          const drawX = offsetX + x * magScale;
+          const drawY = offsetY + y * magScale;
           if (colorIdx < PALETTE.length) {
             magCtx.fillStyle = PALETTE[colorIdx];
-            magCtx.fillRect(x * magScale, y * magScale, magScale, magScale);
+            magCtx.fillRect(drawX, drawY, magScale, magScale);
+          } else {
+            magCtx.fillStyle = '#1A1A1A';
+            magCtx.fillRect(drawX, drawY, magScale, magScale);
           }
+          magCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+          magCtx.lineWidth = 1;
+          magCtx.strokeRect(drawX + 0.5, drawY + 0.5, magScale - 1, magScale - 1);
         }
       }
     }
 
-    const canvasRect = this.mainCanvas.parentElement!.getBoundingClientRect();
-    const parentRect = this.magnifierEl.parentElement!.getBoundingClientRect();
-    this.magnifierEl.style.left = `${clientX - parentRect.left - 40}px`;
-    this.magnifierEl.style.top = `${clientY - parentRect.top - 90}px`;
+    magCtx.strokeStyle = '#D4AF37';
+    magCtx.lineWidth = 2;
+    magCtx.strokeRect(
+      offsetX + halfView * magScale + 0.5,
+      offsetY + halfView * magScale + 0.5,
+      magScale - 1,
+      magScale - 1
+    );
 
-    if (clientX - canvasRect.left < 40 || clientY - canvasRect.top < 40) {
-      this.magnifierEl.style.transform = 'translate(20px, 20px)';
-    } else {
-      this.magnifierEl.style.transform = 'translate(-20px, -20px)';
-    }
+    const parentRect = this.magnifierEl.parentElement!.getBoundingClientRect();
+    this.magnifierEl.style.left = `${clientX - parentRect.left + 30}px`;
+    this.magnifierEl.style.top = `${clientY - parentRect.top - 80}px`;
   }
 
   private updateToolButtons(): void {

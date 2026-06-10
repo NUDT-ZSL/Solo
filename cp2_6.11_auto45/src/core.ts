@@ -90,43 +90,52 @@ export class PixelEngine {
   private getHistory(frameId: number): FrameHistory {
     let history = this.frameHistories.get(frameId);
     if (!history) {
-      history = { stack: [], index: -1 };
+      history = { stack: [], index: 0 };
       this.frameHistories.set(frameId, history);
     }
     return history;
   }
 
-  private pushHistory(frameId: number, pixels: Uint8Array): void {
+  private initHistory(frameId: number, initialPixels: Uint8Array): void {
     const history = this.getHistory(frameId);
-    const entry: HistoryEntry = { pixels: this.clonePixels(pixels) };
+    history.stack = [{ pixels: this.clonePixels(initialPixels) }];
+    history.index = 0;
+  }
+
+  private commitHistory(): void {
+    const frame = this.frames[this.currentFrameIndex];
+    if (!frame) return;
+    const history = this.getHistory(frame.id);
+    const current = history.stack[history.index];
+    if (current && this.arePixelsEqual(current.pixels, frame.pixels)) return;
     history.stack = history.stack.slice(0, history.index + 1);
-    history.stack.push(entry);
-    if (history.stack.length > MAX_HISTORY) {
-      history.stack.shift();
-    } else {
-      history.index++;
-    }
-    if (history.stack.length > MAX_HISTORY) {
-      history.stack = history.stack.slice(-MAX_HISTORY);
+    history.stack.push({ pixels: this.clonePixels(frame.pixels) });
+    if (history.stack.length > MAX_HISTORY + 1) {
+      history.stack = history.stack.slice(-(MAX_HISTORY + 1));
     }
     history.index = history.stack.length - 1;
   }
 
+  private arePixelsEqual(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
   beginOperation(): void {
-    const frame = this.frames[this.currentFrameIndex];
-    if (!frame) return;
-    this.pushHistory(frame.id, frame.pixels);
   }
 
   undo(): boolean {
     const frame = this.frames[this.currentFrameIndex];
     if (!frame) return false;
     const history = this.getHistory(frame.id);
-    if (history.index < 0) return false;
+    if (history.index <= 0) return false;
+    history.index--;
     const entry = history.stack[history.index];
     if (entry) {
       frame.pixels = this.clonePixels(entry.pixels);
-      history.index--;
       this.notifyPixelsChange();
       return true;
     }
@@ -152,7 +161,7 @@ export class PixelEngine {
     const frame = this.frames[this.currentFrameIndex];
     if (!frame) return false;
     const history = this.getHistory(frame.id);
-    return history.index >= 0;
+    return history.index > 0;
   }
 
   canRedo(): boolean {
@@ -166,7 +175,7 @@ export class PixelEngine {
     const frame = this.frames[this.currentFrameIndex];
     if (!frame) return 0;
     const history = this.getHistory(frame.id);
-    return history.index + 1;
+    return history.index;
   }
 
   getRedoCount(): number {
@@ -321,6 +330,7 @@ export class PixelEngine {
         }
       }
     }
+    this.commitHistory();
     this.notifyPixelsChange();
   }
 
@@ -378,6 +388,9 @@ export class PixelEngine {
   }
 
   handleMouseUp(): void {
+    if (this.isDrawing) {
+      this.commitHistory();
+    }
     this.isDrawing = false;
     this.lastPixelX = -1;
     this.lastPixelY = -1;
@@ -417,6 +430,7 @@ export class PixelEngine {
         ? this.clonePixels(this.frames[this.currentFrameIndex].pixels)
         : this.createEmptyPixels(),
     };
+    this.initHistory(newFrame.id, newFrame.pixels);
     this.frames.push(newFrame);
     this.currentFrameIndex = this.frames.length - 1;
     this.notifyFramesUpdate();
@@ -448,6 +462,7 @@ export class PixelEngine {
       id: this.frameIdCounter++,
       pixels: this.clonePixels(source.pixels),
     };
+    this.initHistory(newFrame.id, newFrame.pixels);
     this.frames.splice(index + 1, 0, newFrame);
     this.currentFrameIndex = index + 1;
     this.notifyFramesUpdate();
@@ -489,7 +504,7 @@ export class PixelEngine {
   }
 
   play(): void {
-    if (this.isPlaying || this.frames.length < 1) return;
+    if (this.isPlaying || this.frames.length < 2) return;
     this.isPlaying = true;
     this.playFrameIndex = 0;
     this.lastFrameTime = performance.now();
