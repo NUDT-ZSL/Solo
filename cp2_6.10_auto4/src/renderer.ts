@@ -100,11 +100,15 @@ export class Renderer {
   private drawStarDust(manager: MazeManager, now: number): void {
     const ctx = this.ctx;
     for (const s of manager.starDust) {
-      const twinkle = 0.6 + 0.4 * Math.sin(now * 0.001 + s.x * 0.01 + s.y * 0.01);
-      ctx.fillStyle = rgb(255, 255, 255, s.alpha * twinkle);
+      const twinkle = 0.5 + 0.5 * Math.sin(now * 0.003 + s.x * 0.01 + s.y * 0.01);
+      const a = s.alpha * twinkle;
+      ctx.fillStyle = rgb(255, 255, 255, a);
+      ctx.shadowColor = rgb(200, 220, 255, a * 0.8);
+      ctx.shadowBlur = s.size * 4;
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
   }
 
@@ -276,16 +280,6 @@ export class Renderer {
       const isBOn = manager.activatedLoopShards.has(shardB.id);
       const boost = (isAOn && isBOn) ? 2.2 : 1;
 
-      ctx.strokeStyle = rgb(126, 200, 255, 0.25 * boost);
-      ctx.lineWidth = 2.5 * boost;
-      ctx.shadowColor = rgb(126, 200, 255, 0.9 * boost);
-      ctx.shadowBlur = 15 * boost;
-      ctx.beginPath();
-      ctx.moveTo(shardA.x, shardA.y);
-      ctx.lineTo(shardB.x, shardB.y);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
       for (const p of path.particles) {
         const px = shardA.x + (shardB.x - shardA.x) * p.t;
         const py = shardA.y + (shardB.y - shardA.y) * p.t;
@@ -407,7 +401,7 @@ export class Renderer {
     ctx.save();
     ctx.clearRect(0, 0, w, h);
 
-    const source = this.offCtx;
+    const source = this.offCanvas;
     const tileSize = 8;
     const maxDist = Math.sqrt(w * w + h * h) * 0.6;
 
