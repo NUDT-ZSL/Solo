@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Story, Reply, EMOTION_COLORS, EMOTION_LABELS, EmotionType } from '../types';
 import { getRelativeTime } from '../utils/time';
-import { getEmotionGlow, hexToRgb } from '../utils/emotion';
+import { getEmotionGlow } from '../utils/emotion';   // ★ 情绪光晕函数
 import { useStore } from '../store/useStore';
 import RippleEffect from './RippleEffect';
 import ReplyModal from './ReplyModal';
@@ -13,47 +13,60 @@ interface StoryCardProps {
   index?: number;
 }
 
+/**
+ * ★★★ 故事卡片组件 ★★★
+ * 功能点1: box-shadow情绪色光晕 - 调用 getEmotionGlow(emotion, hovered)
+ *         默认光晕强度0.5，hover时0.75（+50%亮度）
+ * 功能点5: 响应式适配 - window.innerWidth <= 768 时圆角 8px
+ * 功能点2: 涟漪动画触发 - 提交回响后 trigger RippleEffect
+ */
 export default function StoryCard({ story, index = 0 }: StoryCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
-  const [rippleActive, setRippleActive] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [rippleTrigger, setRippleTrigger] = useState(false);
+  const [hovered, setHovered] = useState(false);   // ★ 控制光晕
+  const [mobile, setMobile] = useState(false);     // ★ 控制圆角
   const navigate = useNavigate();
 
   const loadReplies = useStore(s => s.loadReplies);
   const addReply = useStore(s => s.addReply);
   const replies = useStore(s => s.replies[story.id] || []);
 
+  // ★ 响应式：监听窗口大小变化
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    const check = () => setMobile(window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
   useEffect(() => {
-    if (expanded && replies.length === 0) {
-      loadReplies(story.id);
-    }
+    if (expanded && replies.length === 0) loadReplies(story.id);
   }, [expanded, story.id, replies.length, loadReplies]);
 
   const emotionColor = EMOTION_COLORS[story.emotion];
-  const { r, g, b } = hexToRgb(emotionColor);
-  const glowIntensity = hovered ? 0.75 : 0.5;
 
-  const summary = story.content.length > 100 ? story.content.slice(0, 100) + '...' : story.content;
+  // ★★★ 1. 情绪色光晕 box-shadow（根据hover状态，悬停时+50%）★★★
+  const glowStyle: React.CSSProperties = {
+    boxShadow: getEmotionGlow(story.emotion, hovered),
+  };
 
+  // ★★★ 5. 响应式：手机端圆角 8px ★★★
+  const cardRadius = mobile ? 8 : 20;
+
+  const summary = story.content.length > 100
+    ? story.content.slice(0, 100) + '...'
+    : story.content;
+
+  // 提交回响：触发涟漪动画 + 更新数据
   const handleReplySubmit = async (content: string, type: 'text' | 'voice', emotion: EmotionType) => {
     const reply = await api.createReply({
-      storyId: story.id,
-      content,
-      type,
-      emotion
+      storyId: story.id, content, type, emotion
     });
     addReply(reply);
     setShowReplyModal(false);
-    setRippleActive(true);
+    // ★★★ 2. 回响涟漪动画：JS触发CSS动画 ★★★
+    setRippleTrigger(true);
   };
 
   return (
@@ -61,128 +74,93 @@ export default function StoryCard({ story, index = 0 }: StoryCardProps) {
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        className="story-card"
         style={{
           position: 'relative',
-          background: `linear-gradient(135deg, var(--card-gradient-start) 0%, var(--card-gradient-end) 100%)`,
-          borderRadius: isMobile ? 8 : 20,
+          background: 'linear-gradient(135deg, #1B2A3A 0%, #0F1E2E 100%)',
+          borderRadius: cardRadius,     // ★ 响应式圆角
           padding: 20,
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: getEmotionGlow(story.emotion, glowIntensity),
-          transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+          border: '1px solid rgba(255,255,255,0.08)',
+          // ★★★ 1. 情绪色光晕 box-shadow ★★★
+          ...glowStyle,
+          transition: 'box-shadow 0.3s ease, transform 0.3s ease, border-radius 0.3s',
           transform: hovered ? 'translateY(-4px)' : 'none',
           cursor: 'pointer',
-          animation: `fadeIn 0.5s ease ${index * 0.05}s both`
+          animationDelay: `${index * 0.05}s`
         }}
       >
-        <RippleEffect active={rippleActive} emotion={story.emotion} onComplete={() => setRippleActive(false)} />
+        {/* ★★★ 2. 涟漪动画 ★★★ */}
+        <RippleEffect
+          trigger={rippleTrigger}
+          emotion={story.emotion}
+          onFinished={() => setRippleTrigger(false)}
+        />
 
+        {/* 情绪标签圆形色块 (左上角 直径20px) */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-          <div
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: '50%',
-              background: emotionColor,
-              boxShadow: `0 0 10px ${emotionColor}`,
-              flexShrink: 0
-            }}
-          />
+          <span style={{
+            width: 20, height: 20, borderRadius: '50%',
+            background: emotionColor, flexShrink: 0,
+            boxShadow: `0 0 10px ${emotionColor}88`
+          }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3
               onClick={() => navigate(`/story/${story.id}`)}
               style={{
-                fontSize: 16,
-                fontWeight: 500,
-                color: 'var(--text-primary)',
-                marginBottom: 4,
-                cursor: 'pointer',
-                fontFamily: "'Noto Serif SC', serif",
-                transition: 'color 0.3s'
+                fontSize: 16, color: '#fff', marginBottom: 4, cursor: 'pointer',
+                fontFamily: "'Noto Serif SC', serif"
               }}
-            >
-              {story.title}
-            </h3>
-            <span
-              style={{
-                fontSize: 11,
-                padding: '2px 8px',
-                borderRadius: 10,
-                background: `${emotionColor}33`,
-                color: emotionColor,
-                display: 'inline-block'
-              }}
-            >
-              {EMOTION_LABELS[story.emotion]}
-            </span>
+            >{story.title}</h3>
+            <span style={{
+              fontSize: 11, padding: '2px 8px', borderRadius: 10,
+              background: `${emotionColor}33`, color: emotionColor, display: 'inline-block'
+            }}>{EMOTION_LABELS[story.emotion]}</span>
           </div>
         </div>
 
-        <p
-          style={{
-            fontSize: 14,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.6,
-            marginBottom: 16,
-            whiteSpace: expanded ? 'pre-wrap' : 'normal',
-            overflow: expanded ? 'visible' : 'hidden'
-          }}
-        >
+        <p style={{
+          fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16,
+          whiteSpace: expanded ? 'pre-wrap' : 'normal'
+        }}>
           {expanded ? story.content : summary}
         </p>
 
+        {/* 回响列表（展开后显示） */}
         {expanded && replies.length > 0 && (
-          <div style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
               💬 回响 ({replies.length})
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {replies.map(reply => (
-                <ReplyItem key={reply.id} reply={reply} />
-              ))}
+              {replies.map(r => <ReplyItem key={r.id} reply={r} />)}
             </div>
           </div>
         )}
 
+        {/* 底部：回响数+时间+操作按钮 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {getRelativeTime(story.createdAt)}
           </span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span
-              style={{
-                fontSize: 12,
-                color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4
-              }}
-            >
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
               💬 {story.replyCount}
             </span>
             <button
-              onClick={e => {
-                e.stopPropagation();
-                setShowReplyModal(true);
-              }}
+              onClick={e => { e.stopPropagation(); setShowReplyModal(true); }}
               className="btn-primary"
               style={{ padding: '6px 14px', fontSize: 12 }}
-            >
-              回响
-            </button>
+            >回响</button>
             <button
-              onClick={e => {
-                e.stopPropagation();
-                setExpanded(!expanded);
-              }}
+              onClick={e => { e.stopPropagation(); setExpanded(!expanded); }}
               className="btn-primary"
               style={{ padding: '6px 14px', fontSize: 12 }}
-            >
-              {expanded ? '收起' : '展开'}
-            </button>
+            >{expanded ? '收起' : '展开'}</button>
           </div>
         </div>
       </div>
 
+      {/* 回响模态框 */}
       <ReplyModal
         open={showReplyModal}
         storyId={story.id}
@@ -195,19 +173,16 @@ export default function StoryCard({ story, index = 0 }: StoryCardProps) {
 }
 
 function ReplyItem({ reply }: { reply: Reply }) {
-  const color = EMOTION_COLORS[reply.emotion];
+  const c = EMOTION_COLORS[reply.emotion];
   return (
-    <div
-      style={{
-        padding: 12,
-        borderRadius: 12,
-        background: 'rgba(255, 255, 255, 0.03)',
-        borderLeft: `3px solid ${color}`
-      }}
-    >
+    <div style={{
+      padding: 12, borderRadius: 12,
+      background: 'rgba(255,255,255,0.03)',
+      borderLeft: `3px solid ${c}`
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         {reply.type === 'voice' && <span>🎤</span>}
-        <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 8, background: `${color}22`, color }}>
+        <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 8, background: `${c}22`, color: c }}>
           {EMOTION_LABELS[reply.emotion]}
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>

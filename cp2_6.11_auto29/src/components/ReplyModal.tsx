@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { EMOTION_COLORS, EMOTION_LABELS, EmotionType } from '../types';
 
-interface ReplyModalProps {
+interface Props {
   open: boolean;
   storyId: string;
   storyEmotion: EmotionType;
@@ -9,32 +9,28 @@ interface ReplyModalProps {
   onSubmit: (content: string, type: 'text' | 'voice', emotion: EmotionType) => Promise<void>;
 }
 
-export default function ReplyModal({ open, storyId, storyEmotion, onClose, onSubmit }: ReplyModalProps) {
+export default function ReplyModal({ open, storyEmotion, onClose, onSubmit }: Props) {
   const [content, setContent] = useState('');
   const [type, setType] = useState<'text' | 'voice'>('text');
   const [emotion, setEmotion] = useState<EmotionType>(storyEmotion);
   const [recording, setRecording] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   if (!open) return null;
 
   const emotions: EmotionType[] = ['joy', 'sadness', 'nostalgia', 'confusion', 'surprise'];
 
-  const handleSubmit = async () => {
-    if (!content.trim()) return;
-    setSubmitting(true);
+  const submit = async () => {
+    if (!content.trim() || busy) return;
+    setBusy(true);
     try {
       await onSubmit(content.trim(), type, emotion);
-      setContent('');
-      setType('text');
-      setEmotion(storyEmotion);
+      setContent(''); setType('text'); setEmotion(storyEmotion);
       onClose();
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setBusy(false); }
   };
 
-  const handleRecord = () => {
+  const toggleRecord = () => {
     if (recording) {
       setRecording(false);
       setContent('🎤 [语音回响] 一段温暖的话语...');
@@ -53,29 +49,19 @@ export default function ReplyModal({ open, storyId, storyEmotion, onClose, onSub
     <div
       onClick={onClose}
       style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.7)',
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        animation: 'fadeIn 0.3s ease'
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.7)',
+        zIndex: 1000, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 16, animation: 'fadeInUp 0.3s ease'
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         className="glass-card"
         style={{
-          padding: 32,
-          maxWidth: 500,
-          width: '100%',
-          animation: 'fadeIn 0.3s ease',
-          position: 'relative'
+          padding: 32, maxWidth: 500, width: '100%',
+          animation: 'fadeInUp 0.3s ease', position: 'relative'
         }}
       >
         <h3 style={{ fontSize: 20, marginBottom: 20, fontFamily: "'Noto Serif SC', serif" }}>
@@ -85,20 +71,16 @@ export default function ReplyModal({ open, storyId, storyEmotion, onClose, onSub
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <textarea
             placeholder="写下你的回响（最多200字）..."
+            rows={4}
             value={content}
             onChange={e => setContent(e.target.value.slice(0, 200))}
-            rows={4}
-            disabled={submitting || recording}
+            disabled={busy || recording}
             style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 12,
-              padding: 12,
-              color: 'var(--text-primary)',
-              fontSize: 14,
-              outline: 'none',
-              resize: 'none',
-              fontFamily: 'inherit'
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 12, padding: 12,
+              color: '#fff', fontSize: 14, outline: 'none',
+              resize: 'none', fontFamily: 'inherit'
             }}
           />
           <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', marginTop: -8 }}>
@@ -110,31 +92,20 @@ export default function ReplyModal({ open, storyId, storyEmotion, onClose, onSub
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {emotions.map(e => (
                 <button
-                  key={e}
-                  type="button"
+                  key={e} type="button"
                   onClick={() => setEmotion(e)}
-                  disabled={submitting}
+                  disabled={busy}
                   style={{
-                    padding: '6px 12px',
-                    borderRadius: 16,
+                    padding: '6px 12px', borderRadius: 16,
                     border: `2px solid ${emotion === e ? EMOTION_COLORS[e] : 'transparent'}`,
-                    background: emotion === e ? `${EMOTION_COLORS[e]}33` : 'rgba(255, 255, 255, 0.05)',
-                    color: 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    transition: 'all 0.3s'
+                    background: emotion === e ? `${EMOTION_COLORS[e]}33` : 'rgba(255,255,255,0.05)',
+                    color: '#fff', cursor: 'pointer', fontSize: 12, transition: 'all 0.3s'
                   }}
                 >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: EMOTION_COLORS[e],
-                      display: 'inline-block',
-                      marginRight: 6
-                    }}
-                  />
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: EMOTION_COLORS[e], display: 'inline-block', marginRight: 6
+                  }} />
                   {EMOTION_LABELS[e]}
                 </button>
               ))}
@@ -143,42 +114,31 @@ export default function ReplyModal({ open, storyId, storyEmotion, onClose, onSub
 
           <div style={{ display: 'flex', gap: 12 }}>
             <button
-              type="button"
-              onClick={handleRecord}
-              disabled={submitting}
+              type="button" onClick={toggleRecord} disabled={busy}
               className="btn-primary"
               style={{
-                flex: 0,
                 padding: '10px 16px',
-                background: recording ? 'rgba(255, 80, 80, 0.3)' : undefined,
-                borderColor: recording ? 'rgba(255, 80, 80, 0.5)' : undefined
+                background: recording ? 'rgba(255,80,80,0.3)' : undefined,
+                borderColor: recording ? 'rgba(255,80,80,0.5)' : undefined
               }}
             >
               {recording ? '⏺️ 录音中...' : '🎤 语音'}
             </button>
             <div style={{ flex: 1 }} />
             <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="btn-primary"
-              style={{ padding: '10px 20px' }}
-            >
-              取消
-            </button>
+              type="button" onClick={onClose} disabled={busy}
+              className="btn-primary" style={{ padding: '10px 20px' }}
+            >取消</button>
             <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || !content.trim()}
+              type="button" onClick={submit}
+              disabled={busy || !content.trim()}
               className="btn-primary"
               style={{
                 padding: '10px 24px',
                 background: `${EMOTION_COLORS[emotion]}33`,
                 border: `1px solid ${EMOTION_COLORS[emotion]}66`
               }}
-            >
-              {submitting ? '提交中...' : '发送回响'}
-            </button>
+            >{busy ? '提交中...' : '发送回响'}</button>
           </div>
         </div>
       </div>

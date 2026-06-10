@@ -1,46 +1,41 @@
 import { Story, Reply, PaginatedResponse, UserStats, CalendarData } from '../types';
 
-const BASE_URL = '/api';
+const BASE = '/api';
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(BASE_URL + url, options);
+async function req<T>(url: string, opts?: RequestInit): Promise<T> {
+  const res = await fetch(BASE + url, opts);
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: '请求失败' }));
-    throw new Error(error.error || `HTTP ${res.status}`);
+    const e = await res.json().catch(() => ({ error: '请求失败' }));
+    throw new Error(e.error || `HTTP ${res.status}`);
   }
   return res.json();
 }
 
 export const api = {
-  getStories: (page: number = 1, limit: number = 20) =>
-    request<PaginatedResponse<Story>>(`/stories?page=${page}&limit=${limit}`),
+  getStories: (p = 1, limit = 20) =>
+    req<PaginatedResponse<Story>>(`/stories?page=${p}&limit=${limit}`),
 
-  getStory: (id: string) =>
-    request<Story>(`/stories/${id}`),
+  getStory: (id: string) => req<Story>(`/stories/${id}`),
 
-  createStory: (data: { title: string; content: string; emotion: string }) =>
-    request<Story>('/stories', {
+  createStory: (d: { title: string; content: string; emotion: string }) =>
+    req<Story>('/stories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(d)
     }),
 
-  getStoriesByDate: (date: string) =>
-    request<Story[]>(`/stories/user/${date}`),
+  getStoriesByDate: (date: string) => req<Story[]>(`/stories/user/${date}`),
 
   getReplies: (storyId?: string) =>
-    request<Reply[]>(`/replies${storyId ? `?storyId=${storyId}` : ''}`),
+    req<Reply[]>(`/replies${storyId ? `?storyId=${storyId}` : ''}`),
 
-  createReply: (data: { storyId: string; content: string; type?: string; emotion?: string }) =>
-    request<Reply>('/replies', {
+  createReply: (d: { storyId: string; content: string; type?: string; emotion?: string }) =>
+    req<Reply>('/replies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(d)
     }),
 
-  getUserStats: () =>
-    request<UserStats>('/stats/user'),
-
-  getCalendarData: (weeks: number = 4) =>
-    request<CalendarData>(`/stats/calendar?weeks=${weeks}`)
+  getUserStats: () => req<UserStats>('/stats/user'),
+  getCalendarData: (w = 4) => req<CalendarData>(`/stats/calendar?weeks=${w}`)
 };

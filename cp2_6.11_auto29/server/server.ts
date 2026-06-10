@@ -8,9 +8,9 @@ const PORT = 3002;
 app.use(cors());
 app.use(express.json());
 
-export type EmotionType = 'joy' | 'sadness' | 'nostalgia' | 'confusion' | 'surprise';
+type EmotionType = 'joy' | 'sadness' | 'nostalgia' | 'confusion' | 'surprise';
 
-export interface Story {
+interface Story {
   id: string;
   title: string;
   content: string;
@@ -19,7 +19,7 @@ export interface Story {
   replyCount: number;
 }
 
-export interface Reply {
+interface Reply {
   id: string;
   storyId: string;
   content: string;
@@ -28,7 +28,7 @@ export interface Reply {
   createdAt: string;
 }
 
-export interface PaginatedResponse<T> {
+interface PaginatedResponse<T> {
   data: T[];
   hasMore: boolean;
   total: number;
@@ -41,8 +41,7 @@ const SAMPLE_TITLES = [
   '那个夏日的午后', '深夜食堂的偶遇', '雨中的告别', '第一次独自旅行',
   '图书馆里的秘密', '旧照片里的人', '地铁上的陌生人', '月光下的对话',
   '一封未寄出的信', '那年冬天的雪', '海边的清晨', '阁楼里的老盒子',
-  '毕业季的约定', '街角咖啡店', '最后一班公交', '童年的星空',
-  '离家的那一天', '重逢在秋天', '丢失的小熊', '生日的惊喜'
+  '毕业季的约定', '街角咖啡店', '最后一班公交', '童年的星空'
 ];
 
 const SAMPLE_CONTENTS = [
@@ -70,7 +69,7 @@ function randomDate(daysAgo: number): string {
 }
 
 function generateMockData() {
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 55; i++) {
     const story: Story = {
       id: uuidv4(),
       title: SAMPLE_TITLES[i % SAMPLE_TITLES.length],
@@ -115,27 +114,20 @@ app.get('/api/stories', (req, res) => {
 
 app.get('/api/stories/:id', (req, res) => {
   const story = stories.find(s => s.id === req.params.id);
-  if (!story) {
-    return res.status(404).json({ error: '故事不存在' });
-  }
+  if (!story) return res.status(404).json({ error: '故事不存在' });
   res.json(story);
 });
 
 app.post('/api/stories', (req, res) => {
   const { title, content, emotion } = req.body;
-  if (!title || !content || !emotion) {
-    return res.status(400).json({ error: '标题、内容和情绪标签为必填项' });
-  }
-  if (title.length > 30) {
-    return res.status(400).json({ error: '标题不能超过30字' });
-  }
-  if (content.length > 500) {
-    return res.status(400).json({ error: '内容不能超过500字' });
-  }
+  if (!title || !content || !emotion) return res.status(400).json({ error: '必填项缺失' });
+  if (title.length > 30) return res.status(400).json({ error: '标题不能超过30字' });
+  if (content.length > 500) return res.status(400).json({ error: '内容不能超过500字' });
+  
   const story: Story = {
     id: uuidv4(),
-    title,
-    content,
+    title: title.trim(),
+    content: content.trim(),
     emotion: emotion as EmotionType,
     createdAt: new Date().toISOString(),
     replyCount: 0
@@ -148,7 +140,6 @@ app.get('/api/stories/user/:date', (req, res) => {
   const targetDate = new Date(req.params.date);
   const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-  
   const dayStories = stories.filter(s => {
     const d = new Date(s.createdAt);
     return d >= dayStart && d < dayEnd;
@@ -158,35 +149,27 @@ app.get('/api/stories/user/:date', (req, res) => {
 
 app.get('/api/replies', (req, res) => {
   const { storyId } = req.query;
-  let storyReplies = replies;
-  if (storyId) {
-    storyReplies = replies.filter(r => r.storyId === storyId);
-  }
-  res.json(storyReplies);
+  const result = storyId ? replies.filter(r => r.storyId === storyId) : replies;
+  res.json(result);
 });
 
 app.post('/api/replies', (req, res) => {
   const { storyId, content, type = 'text', emotion = 'joy' } = req.body;
-  if (!storyId || !content) {
-    return res.status(400).json({ error: '故事ID和内容为必填项' });
-  }
-  if (content.length > 200) {
-    return res.status(400).json({ error: '回响内容不能超过200字' });
-  }
+  if (!storyId || !content) return res.status(400).json({ error: '必填项缺失' });
+  if (content.length > 200) return res.status(400).json({ error: '回响不能超过200字' });
+  
   const reply: Reply = {
     id: uuidv4(),
     storyId,
-    content,
-    type,
+    content: content.trim(),
+    type: type as 'text' | 'voice',
     emotion: emotion as EmotionType,
     createdAt: new Date().toISOString()
   };
   replies.push(reply);
   
   const story = stories.find(s => s.id === storyId);
-  if (story) {
-    story.replyCount++;
-  }
+  if (story) story.replyCount++;
   
   res.status(201).json(reply);
 });
@@ -204,25 +187,17 @@ app.get('/api/stats/user', (req, res) => {
       const d = new Date(s.createdAt);
       return d >= dayStart && d < dayEnd;
     });
-    if (hasStory) {
-      streak++;
-    } else if (i > 0) {
-      break;
-    }
+    if (hasStory) streak++;
+    else if (i > 0) break;
   }
   
   const emotionCounts: Record<string, number> = {};
-  stories.forEach(s => {
-    emotionCounts[s.emotion] = (emotionCounts[s.emotion] || 0) + 1;
-  });
+  stories.forEach(s => { emotionCounts[s.emotion] = (emotionCounts[s.emotion] || 0) + 1; });
   
   let mostCommon: EmotionType = 'joy';
   let maxCount = 0;
-  Object.entries(emotionCounts).forEach(([emotion, count]) => {
-    if (count > maxCount) {
-      maxCount = count;
-      mostCommon = emotion as EmotionType;
-    }
+  Object.entries(emotionCounts).forEach(([e, c]) => {
+    if (c > maxCount) { maxCount = c; mostCommon = e as EmotionType; }
   });
   
   res.json({
@@ -250,19 +225,14 @@ app.get('/api/stats/calendar', (req, res) => {
     });
     
     const emotions: Record<string, number> = {};
-    dayStories.forEach(s => {
-      emotions[s.emotion] = (emotions[s.emotion] || 0) + 1;
-    });
+    dayStories.forEach(s => { emotions[s.emotion] = (emotions[s.emotion] || 0) + 1; });
     
-    result[dateStr] = {
-      count: dayStories.length,
-      emotions
-    };
+    result[dateStr] = { count: dayStories.length, emotions };
   }
   
   res.json(result);
 });
 
 app.listen(PORT, () => {
-  console.log(`时光树洞后端服务器运行在 http://localhost:${PORT}`);
+  console.log(`时光树洞后端运行在 http://localhost:${PORT}`);
 });

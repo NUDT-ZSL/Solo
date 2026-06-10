@@ -13,21 +13,22 @@ export default function ProfilePage() {
     loadCalendarData();
   }, [loadUserStats, loadCalendarData]);
 
-  const weeklyEmotions = useMemo(() => {
+  const weekly = useMemo(() => {
     const result: Record<EmotionType, number> = {
       joy: 0, sadness: 0, nostalgia: 0, confusion: 0, surprise: 0
     };
-    if (!calendarData) return result;
+    const cal = calendarData as CalendarData | undefined;
+    if (!cal) return result;
 
     const now = new Date();
-    const dayOfWeek = now.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
+    const wd = now.getDay();
+    const off = wd === 0 ? -6 : 1 - wd;
+    const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + off);
 
     for (let i = 0; i < 7; i++) {
-      const date = new Date(thisMonday.getTime() + i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      const day = calendarData[dateStr];
+      const d = new Date(thisMonday.getTime() + i * 86400000);
+      const key = d.toISOString().split('T')[0];
+      const day = cal[key];
       if (day?.emotions) {
         Object.entries(day.emotions).forEach(([k, v]) => {
           result[k as EmotionType] += v;
@@ -44,9 +45,7 @@ export default function ProfilePage() {
           width: 64, height: 64, borderRadius: '50%',
           background: 'linear-gradient(135deg, #FFD700 0%, #FF6B6B 100%)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28
-        }}>
-          👤
-        </div>
+        }}>👤</div>
         <div>
           <h1 style={{ fontSize: 24, fontFamily: "'Noto Serif SC', serif" }}>我的树洞</h1>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>记录每一刻的情绪变化</p>
@@ -61,7 +60,7 @@ export default function ProfilePage() {
         <StatsCard icon="📝" label="总故事数" value={userStats?.totalStories ?? 0} color="#FFD700" />
         <StatsCard icon="💬" label="总回响数" value={userStats?.totalReplies ?? 0} color="#4A90D9" />
         <StatsCard
-          icon={userStats ? `${EMOTION_LABELS[userStats.mostCommonEmotion]}${EMOTION_LABELS[userStats.mostCommonEmotion] ? '' : ''}` : '😊'}
+          icon="😊"
           label="最常情绪"
           value={userStats ? EMOTION_LABELS[userStats.mostCommonEmotion] : '--'}
           color={userStats ? EMOTION_COLORS[userStats.mostCommonEmotion] : undefined}
@@ -75,7 +74,7 @@ export default function ProfilePage() {
         <h3 style={{ fontSize: 16, marginBottom: 20, fontFamily: "'Noto Serif SC', serif" }}>
           🥧 本周情绪分布
         </h3>
-        <EmotionPieChart data={weeklyEmotions} size={220} />
+        <EmotionPieChart data={weekly} size={220} />
       </div>
     </div>
   );

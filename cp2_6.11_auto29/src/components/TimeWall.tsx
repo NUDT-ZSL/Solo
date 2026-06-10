@@ -5,65 +5,55 @@ import StoryCard from './StoryCard';
 export default function TimeWall() {
   const { stories, hasMore, loading, loadStories } = useStore();
   const observerRef = useRef<HTMLDivElement>(null);
-  const [columns, setColumns] = useState(3);
+  const [cols, setCols] = useState(3);
 
-  useEffect(() => {
-    loadStories(1);
-  }, [loadStories]);
+  useEffect(() => { loadStories(1); }, [loadStories]);
 
+  // 响应式列数
   useEffect(() => {
-    const updateColumns = () => {
+    const update = () => {
       const w = window.innerWidth;
-      if (w < 768) setColumns(1);
-      else if (w < 1200) setColumns(2);
-      else setColumns(3);
+      if (w < 768) setCols(1);
+      else if (w < 1200) setCols(2);
+      else setCols(3);
     };
-    updateColumns();
-    window.addEventListener('resize', updateColumns);
-    return () => window.removeEventListener('resize', updateColumns);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, []);
 
+  // 无限滚动
   const handleObserver = useCallback(
     (entries: IntersectionObserverEntry[]) => {
-      const target = entries[0];
-      if (target.isIntersecting && hasMore && !loading) {
-        loadStories();
-      }
+      if (entries[0].isIntersecting && hasMore && !loading) loadStories();
     },
     [hasMore, loading, loadStories]
   );
 
   useEffect(() => {
-    const option = {
-      root: null,
-      rootMargin: '100px',
-      threshold: 0
-    };
-    const observer = new IntersectionObserver(handleObserver, option);
-    if (observerRef.current) observer.observe(observerRef.current);
-    return () => observer.disconnect();
+    const ob = new IntersectionObserver(handleObserver, {
+      root: null, rootMargin: '100px', threshold: 0
+    });
+    if (observerRef.current) ob.observe(observerRef.current);
+    return () => ob.disconnect();
   }, [handleObserver]);
 
-  const columnStories: typeof stories[] = Array.from({ length: columns }, () => []);
-  stories.forEach((story, i) => {
-    columnStories[i % columns].push(story);
-  });
-
-  const gap = columns === 1 ? 12 : columns === 2 ? 16 : 24;
+  // 瀑布流分栏
+  const colStories: typeof stories[] = Array.from({ length: cols }, () => []);
+  stories.forEach((s, i) => colStories[i % cols].push(s));
+  const gap = cols === 1 ? 12 : cols === 2 ? 16 : 24;
 
   return (
     <div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${columns}, 1fr)`,
-          gap
-        }}
-      >
-        {columnStories.map((col, colIndex) => (
-          <div key={colIndex} style={{ display: 'flex', flexDirection: 'column', gap }}>
-            {col.map((story, i) => (
-              <StoryCard key={story.id} story={story} index={colIndex + i * columns} />
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gap
+      }}>
+        {colStories.map((col, ci) => (
+          <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap }}>
+            {col.map((s, i) => (
+              <StoryCard key={s.id} story={s} index={ci + i * cols} />
             ))}
           </div>
         ))}

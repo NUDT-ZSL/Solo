@@ -16,14 +16,6 @@ export const EMOTION_LABELS: Record<EmotionType, string> = {
   surprise: '惊喜'
 };
 
-export const EMOTION_EMOJIS: Record<EmotionType, string> = {
-  joy: '😊',
-  sadness: '😢',
-  nostalgia: '🍂',
-  confusion: '🤔',
-  surprise: '✨'
-};
-
 export interface Story {
   id: string;
   title: string;

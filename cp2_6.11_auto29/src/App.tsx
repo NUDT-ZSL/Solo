@@ -1,12 +1,12 @@
-import { Routes, Route } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const StoryDetailPage = lazy(() => import('./pages/StoryDetailPage'));
 
-function App() {
+export default function App() {
   return (
     <div style={{ minHeight: '100vh' }}>
       <Header />
@@ -22,5 +22,3 @@ function App() {
     </div>
   );
 }
-
-export default App;
