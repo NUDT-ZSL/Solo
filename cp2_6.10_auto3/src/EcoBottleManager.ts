@@ -23,10 +23,14 @@ export class EcoBottleManager {
   private groundMesh: THREE.Mesh | null = null;
 
   private weatherParticles: THREE.Points | null = null;
-  private weatherParticleData: { positions: Float32Array; velocities: Float32Array; types: Float32Array } | null = null;
+  private weatherParticleData: { positions: Float32Array; velocities: Float32Array; types: Float32Array; rotations: Float32Array; rotSpeed: Float32Array; sizes: Float32Array } | null = null;
+  private weatherSnowMaterial: THREE.ShaderMaterial | null = null;
+  private weatherRainMaterial: THREE.PointsMaterial | null = null;
   private maxWeatherParticles = 1000;
   private weatherMode: 'none' | 'rain' | 'storm' | 'snow' = 'none';
-  private lightningMesh: THREE.Line | null = null;
+  private lightningGroup: THREE.Group | null = null;
+  private lightningLines: THREE.Line[] = [];
+  private lightningLight: THREE.PointLight | null = null;
   private lightningTimer = 0;
   private lightningActive = false;
   private flashOverlay: HTMLDivElement | null = null;
@@ -222,6 +226,9 @@ export class EcoBottleManager {
     const positions = new Float32Array(this.maxWeatherParticles * 3);
     const velocities = new Float32Array(this.maxWeatherParticles * 3);
     const types = new Float32Array(this.maxWeatherParticles);
+    const rotations = new Float32Array(this.maxWeatherParticles);
+    const rotSpeed = new Float32Array(this.maxWeatherParticles);
+    const sizes = new Float32Array(this.maxWeatherParticles);
 
     for (let i = 0; i < this.maxWeatherParticles; i++) {
       positions[i * 3] = 0;
@@ -231,35 +238,75 @@ export class EcoBottleManager {
       velocities[i * 3 + 1] = 0;
       velocities[i * 3 + 2] = 0;
       types[i] = 0;
+      rotations[i] = Math.random() * Math.PI * 2;
+      rotSpeed[i] = (Math.random() - 0.5) * 4;
+      sizes[i] = 0.04 + Math.random() * 0.04;
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('aRotation', new THREE.BufferAttribute(rotations, 1));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
 
-    const material = new THREE.PointsMaterial({
-      color: 0x4fc3f7,
-      size: 0.04,
+    this.weatherSnowMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+      },
+      vertexShader: `
+        attribute float aRotation;
+        attribute float aSize;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying float vRotation;
+        void main() {
+          vRotation = aRotation + uTime * 2.0;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          gl_PointSize = aSize * 300.0 * uPixelRatio / -mvPosition.z;
+        }
+      `,
+      fragmentShader: `
+        varying float vRotation;
+        void main() {
+          vec2 uv = gl_PointCoord - 0.5;
+          float c = cos(vRotation);
+          float s = sin(vRotation);
+          vec2 ruv = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c);
+          float r = length(ruv);
+          float angle = atan(ruv.y, ruv.x);
+          float hex = cos(3.0 * angle);
+          float hexDist = r * (1.0 + 0.08 * hex);
+          if (hexDist > 0.48) discard;
+          float edge = smoothstep(0.48, 0.42, hexDist);
+          float core = smoothstep(0.4, 0.1, r);
+          float alpha = edge * (0.7 + 0.3 * core);
+          gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
+        }
+      `,
       transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+    });
+
+    this.weatherRainMaterial = new THREE.PointsMaterial({
+      color: 0x4fc3f7,
+      size: 0.03,
+      transparent: true,
+      opacity: 0.55,
       depthWrite: false,
       sizeAttenuation: true,
+      blending: THREE.AdditiveBlending,
     });
 
-    this.weatherParticles = new THREE.Points(geometry, material);
-    this.weatherParticleData = { positions, velocities, types };
+    this.weatherParticles = new THREE.Points(geometry, this.weatherRainMaterial);
+    this.weatherParticleData = { positions, velocities, types, rotations, rotSpeed, sizes };
     this.bottleGroup.add(this.weatherParticles);
 
-    const lightningGeo = new THREE.BufferGeometry();
-    const lightningPos = new Float32Array(20 * 3);
-    lightningGeo.setAttribute('position', new THREE.BufferAttribute(lightningPos, 3));
-    const lightningMat = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0,
-      linewidth: 2,
-    });
-    this.lightningMesh = new THREE.Line(lightningGeo, lightningMat);
-    this.bottleGroup.add(this.lightningMesh);
+    this.lightningGroup = new THREE.Group();
+    this.bottleGroup.add(this.lightningGroup);
+
+    this.lightningLight = new THREE.PointLight(0xaaccff, 0, 20, 2);
+    this.lightningGroup.add(this.lightningLight);
   }
 
   private createPreviewRing(): void {
@@ -402,15 +449,10 @@ export class EcoBottleManager {
     }
 
     if (this.weatherMode !== prevMode && this.weatherParticles) {
-      const mat = this.weatherParticles.material as THREE.PointsMaterial;
       if (this.weatherMode === 'snow') {
-        mat.color.setHex(0xffffff);
-        mat.size = 0.06;
-        mat.opacity = 0.8;
-      } else if (this.weatherMode === 'rain' || this.weatherMode === 'storm') {
-        mat.color.setHex(0x4fc3f7);
-        mat.size = 0.035;
-        mat.opacity = 0.5;
+        this.weatherParticles.material = this.weatherSnowMaterial!;
+      } else {
+        this.weatherParticles.material = this.weatherRainMaterial!;
       }
     }
   }
@@ -454,8 +496,12 @@ export class EcoBottleManager {
   private updateWeatherParticles(delta: number, time: number): void {
     if (!this.weatherParticles || !this.weatherParticleData) return;
 
-    const { positions, velocities, types } = this.weatherParticleData;
-    const activeCount = this.weatherMode === 'none' ? 0 : this.weatherMode === 'snow' ? 400 : 600;
+    const { positions, velocities, types, rotations, rotSpeed } = this.weatherParticleData;
+    const activeCount = this.weatherMode === 'none' ? 0 : this.weatherMode === 'snow' ? 500 : 700;
+
+    if (this.weatherSnowMaterial) {
+      this.weatherSnowMaterial.uniforms.uTime.value = time;
+    }
 
     for (let i = 0; i < activeCount; i++) {
       let px = positions[i * 3];
@@ -463,23 +509,24 @@ export class EcoBottleManager {
       let pz = positions[i * 3 + 2];
 
       if (py < -this.bottleRadius + 0.05 || types[i] === 0) {
-        px = (Math.random() - 0.5) * this.bottleRadius * 1.6;
-        py = this.bottleRadius * 0.7 + Math.random() * 0.3;
-        pz = (Math.random() - 0.5) * this.bottleRadius * 1.6;
+        px = (Math.random() - 0.5) * this.bottleRadius * 1.7;
+        py = this.bottleRadius * 0.75 + Math.random() * 0.3;
+        pz = (Math.random() - 0.5) * this.bottleRadius * 1.7;
         types[i] = 1;
-        velocities[i * 3] = (Math.random() - 0.5) * 0.1;
-        velocities[i * 3 + 1] = -(0.5 + Math.random() * 0.5);
-        velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
+        velocities[i * 3] = (Math.random() - 0.5) * 0.15;
+        velocities[i * 3 + 1] = -(0.6 + Math.random() * 0.6);
+        velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.15;
       }
 
       if (this.weatherMode === 'snow') {
-        py += velocities[i * 3 + 1] * delta * 0.5;
-        px += Math.sin(time * 2 + i) * delta * 0.2;
-        pz += Math.cos(time * 1.5 + i * 0.7) * delta * 0.15;
+        py += velocities[i * 3 + 1] * delta * 0.35;
+        px += (Math.sin(time * 1.2 + i * 0.37) * 0.15 + velocities[i * 3]) * delta;
+        pz += (Math.cos(time * 0.9 + i * 0.53) * 0.12 + velocities[i * 3 + 2]) * delta;
+        rotations[i] += rotSpeed[i] * delta;
       } else {
-        py += velocities[i * 3 + 1] * delta * 2;
-        px += velocities[i * 3] * delta;
-        pz += velocities[i * 3 + 2] * delta;
+        py += velocities[i * 3 + 1] * delta * 2.2;
+        px += velocities[i * 3] * delta * 0.5;
+        pz += velocities[i * 3 + 2] * delta * 0.5;
       }
 
       positions[i * 3] = px;
@@ -493,62 +540,127 @@ export class EcoBottleManager {
     }
 
     this.weatherParticles.geometry.attributes.position.needsUpdate = true;
+    if (this.weatherParticles.geometry.attributes.aRotation) {
+      this.weatherParticles.geometry.attributes.aRotation.needsUpdate = true;
+    }
 
     if (this.weatherMode === 'storm') {
       this.lightningTimer += delta;
-      if (this.lightningTimer > 2 + Math.random() * 2) {
+      if (this.lightningTimer > 1.8 + Math.random() * 2.5) {
         this.triggerLightning();
         this.lightningTimer = 0;
       }
+    }
 
-      if (this.lightningActive && this.lightningMesh) {
-        const mat = this.lightningMesh.material as THREE.LineBasicMaterial;
-        mat.opacity -= delta * 8;
-        if (mat.opacity <= 0) {
-          this.lightningActive = false;
-          mat.opacity = 0;
-        }
+    for (let i = this.lightningLines.length - 1; i >= 0; i--) {
+      const line = this.lightningLines[i];
+      const mat = line.material as THREE.LineBasicMaterial;
+      mat.opacity -= delta * 5;
+      if (mat.opacity <= 0) {
+        this.lightningGroup!.remove(line);
+        line.geometry.dispose();
+        mat.dispose();
+        this.lightningLines.splice(i, 1);
       }
+    }
+
+    if (this.lightningLight) {
+      this.lightningLight.intensity = Math.max(0, this.lightningLight.intensity - delta * 15);
     }
   }
 
   private triggerLightning(): void {
-    if (!this.lightningMesh) return;
+    if (!this.lightningGroup) return;
 
-    const points: THREE.Vector3[] = [];
-    const startX = (Math.random() - 0.5) * this.bottleRadius * 1.2;
-    const startZ = (Math.random() - 0.5) * this.bottleRadius * 1.2;
-    let y = this.bottleRadius * 0.6;
-    let x = startX;
-    let z = startZ;
+    const baseX = (Math.random() - 0.5) * this.bottleRadius * 1.3;
+    const baseZ = (Math.random() - 0.5) * this.bottleRadius * 1.3;
 
-    const segments = 10;
-    for (let i = 0; i < segments; i++) {
-      points.push(new THREE.Vector3(x, y, z));
-      y -= (this.bottleRadius * 1.3) / segments;
-      x += (Math.random() - 0.5) * 0.4;
-      z += (Math.random() - 0.5) * 0.4;
+    const buildBolt = (startX: number, startY: number, startZ: number, endY: number): THREE.Vector3[] => {
+      const points: THREE.Vector3[] = [];
+      let x = startX, y = startY, z = startZ;
+      const segments = 14;
+      for (let i = 0; i < segments; i++) {
+        points.push(new THREE.Vector3(x, y, z));
+        y -= (startY - endY) / segments;
+        x += (Math.random() - 0.5) * 0.5;
+        z += (Math.random() - 0.5) * 0.5;
+      }
+      points.push(new THREE.Vector3(x, endY, z));
+      return points;
+    };
+
+    const mainPoints = buildBolt(baseX, this.bottleRadius * 0.7, baseZ, -this.bottleRadius * 0.85);
+    const mainGeo = new THREE.BufferGeometry().setFromPoints(mainPoints);
+    const mainMat = new THREE.LineBasicMaterial({
+      color: 0xe8f2ff,
+      transparent: true,
+      opacity: 1,
+    });
+    const mainLine = new THREE.Line(mainGeo, mainMat);
+    this.lightningGroup.add(mainLine);
+    this.lightningLines.push(mainLine);
+
+    const glowGeo = new THREE.BufferGeometry().setFromPoints(mainPoints);
+    const glowMat = new THREE.LineBasicMaterial({
+      color: 0x8ab4ff,
+      transparent: true,
+      opacity: 0.7,
+      linewidth: 4,
+    });
+    const glowLine = new THREE.Line(glowGeo, glowMat);
+    this.lightningGroup.add(glowLine);
+    this.lightningLines.push(glowLine);
+
+    const branchCount = 1 + Math.floor(Math.random() * 2);
+    for (let b = 0; b < branchCount; b++) {
+      const startIdx = 4 + Math.floor(Math.random() * 5);
+      const startPt = mainPoints[startIdx];
+      if (!startPt) continue;
+      const branchEndY = startPt.y - 0.5 - Math.random() * 0.5;
+      const branchPoints = buildBolt(startPt.x, startPt.y, startPt.z, branchEndY);
+      const bGeo = new THREE.BufferGeometry().setFromPoints(branchPoints);
+      const bMat = new THREE.LineBasicMaterial({
+        color: 0xccddff,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const bLine = new THREE.Line(bGeo, bMat);
+      this.lightningGroup.add(bLine);
+      this.lightningLines.push(bLine);
     }
 
-    const geo = this.lightningMesh.geometry;
-    const posArray = geo.attributes.position.array as Float32Array;
-    for (let i = 0; i < points.length && i < 20; i++) {
-      posArray[i * 3] = points[i].x;
-      posArray[i * 3 + 1] = points[i].y;
-      posArray[i * 3 + 2] = points[i].z;
+    if (this.lightningLight) {
+      this.lightningLight.position.set(
+        baseX,
+        this.bottleRadius * 0.2,
+        baseZ
+      );
+      this.lightningLight.intensity = 8;
     }
-    geo.setDrawRange(0, points.length);
-    geo.attributes.position.needsUpdate = true;
 
-    const mat = this.lightningMesh.material as THREE.LineBasicMaterial;
-    mat.opacity = 1;
     this.lightningActive = true;
 
     if (this.flashOverlay) {
-      this.flashOverlay.style.opacity = '0.35';
+      this.flashOverlay.style.transition = 'none';
+      this.flashOverlay.style.opacity = '0.55';
+      requestAnimationFrame(() => {
+        if (this.flashOverlay) {
+          this.flashOverlay.style.transition = 'opacity 0.15s ease-out';
+          this.flashOverlay.style.opacity = '0';
+        }
+      });
       setTimeout(() => {
-        if (this.flashOverlay) this.flashOverlay.style.opacity = '0';
-      }, 60);
+        if (this.flashOverlay) {
+          this.flashOverlay.style.transition = 'none';
+          this.flashOverlay.style.opacity = '0.3';
+          requestAnimationFrame(() => {
+            if (this.flashOverlay) {
+              this.flashOverlay.style.transition = 'opacity 0.1s ease-out';
+              this.flashOverlay.style.opacity = '0';
+            }
+          });
+        }
+      }, 70);
     }
   }
 

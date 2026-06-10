@@ -155,45 +155,96 @@ export class EcoElementFactory {
     const growDuration = 1.0;
     let isGrowing = true;
 
-    const roots: THREE.Line[] = [];
+    const roots: {
+      line: THREE.Line;
+      flowParticles: THREE.Points;
+      basePoints: THREE.Vector3[];
+      targetWaterId: string;
+      growth: number;
+      flowOffset: number;
+    }[] = [];
 
-    const createRoots = (targetPos: THREE.Vector3) => {
+    const bezierPoint = (p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, t: number): THREE.Vector3 => {
+      const mt = 1 - t;
+      return new THREE.Vector3(
+        mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
+        mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y,
+        mt * mt * p0.z + 2 * mt * t * p1.z + t * t * p2.z
+      );
+    };
+
+    const createRootsToWater = (waterWorldPos: THREE.Vector3, waterId: string) => {
+      const treeWorldPos = new THREE.Vector3();
+      group.getWorldPosition(treeWorldPos);
+      const waterLocal = waterWorldPos.clone().sub(treeWorldPos);
+
       for (let r = 0; r < 3; r++) {
+        const startLocal = new THREE.Vector3(
+          (Math.random() - 0.5) * 0.12,
+          -0.01,
+          (Math.random() - 0.5) * 0.12
+        );
+
+        const midControl = new THREE.Vector3(
+          (startLocal.x + waterLocal.x) / 2 + (Math.random() - 0.5) * 0.4,
+          Math.min(startLocal.y, waterLocal.y) - 0.15 - Math.random() * 0.2,
+          (startLocal.z + waterLocal.z) / 2 + (Math.random() - 0.5) * 0.4
+        );
+
+        const steps = 32;
         const rootPoints: THREE.Vector3[] = [];
-        const startPos = new THREE.Vector3(
-          (Math.random() - 0.5) * 0.1,
-          0,
-          (Math.random() - 0.5) * 0.1
-        );
-
-        const midOffset = new THREE.Vector3(
-          (Math.random() - 0.5) * 0.3,
-          -0.05 - Math.random() * 0.05,
-          (Math.random() - 0.5) * 0.3
-        );
-
-        const steps = 20;
         for (let i = 0; i <= steps; i++) {
           const t = i / steps;
-          const pt = new THREE.Vector3();
-          pt.lerpVectors(startPos, targetPos.clone().sub(group.position), t);
-          const midInfluence = Math.sin(t * Math.PI);
-          pt.add(midOffset.clone().multiplyScalar(midInfluence));
-          rootPoints.push(pt);
+          rootPoints.push(bezierPoint(startLocal, midControl, waterLocal, t));
         }
 
         const rootGeo = new THREE.BufferGeometry().setFromPoints(rootPoints);
         const rootMat = new THREE.LineBasicMaterial({
           color: 0x4fc3f7,
           transparent: true,
-          opacity: 0.3,
+          opacity: 0,
+          linewidth: 2,
         });
-        const root = new THREE.Line(rootGeo, rootMat);
-        root.userData = { growth: 0, targetOpacity: 0.7 };
-        roots.push(root);
-        group.add(root);
+        const line = new THREE.Line(rootGeo, rootMat);
+        group.add(line);
+
+        const flowParticleCount = 5;
+        const flowGeo = new THREE.BufferGeometry();
+        const flowPositions = new Float32Array(flowParticleCount * 3);
+        const flowSizes = new Float32Array(flowParticleCount);
+        for (let i = 0; i < flowParticleCount; i++) {
+          flowPositions[i * 3] = startLocal.x;
+          flowPositions[i * 3 + 1] = startLocal.y;
+          flowPositions[i * 3 + 2] = startLocal.z;
+          flowSizes[i] = 0.025 + Math.random() * 0.02;
+        }
+        flowGeo.setAttribute('position', new THREE.BufferAttribute(flowPositions, 3));
+        flowGeo.setAttribute('size', new THREE.BufferAttribute(flowSizes, 1));
+        const flowMat = new THREE.PointsMaterial({
+          color: 0x81d4fa,
+          size: 0.04,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          sizeAttenuation: true,
+        });
+        const flowParticles = new THREE.Points(flowGeo, flowMat);
+        group.add(flowParticles);
+
+        roots.push({
+          line,
+          flowParticles,
+          basePoints: rootPoints,
+          targetWaterId: waterId,
+          growth: 0,
+          flowOffset: r * 0.2,
+        });
       }
     };
+
+    let lastWaterCheck = 0;
+    let hasRoots = false;
 
     const update = (delta: number, time: number, ctx: UpdateContext) => {
       if (isGrowing) {
@@ -215,35 +266,68 @@ export class EcoElementFactory {
         }
       });
 
-      if (!isGrowing && roots.length === 0) {
-        let nearestWater: EcoElementData | null = null;
-        let nearestDist = Infinity;
-        for (const el of ctx.allElements) {
-          if (el.type === 'water' && el.id !== this.genId()) {
-            const d = el.position.distanceTo(group.position);
-            if (d < nearestDist && d < 2.5) {
-              nearestDist = d;
-              nearestWater = el;
+      if (!isGrowing) {
+        lastWaterCheck += delta;
+        if (lastWaterCheck > 0.5) {
+          lastWaterCheck = 0;
+
+          const existingWaterIds = new Set(roots.map(r => r.targetWaterId));
+
+          for (const el of ctx.allElements) {
+            if (el.type === 'water' && !existingWaterIds.has(el.id)) {
+              const treeWorldPos = new THREE.Vector3();
+              group.getWorldPosition(treeWorldPos);
+              const waterWorldPos = new THREE.Vector3();
+              el.group.getWorldPosition(waterWorldPos);
+              const dist = treeWorldPos.distanceTo(waterWorldPos);
+              if (dist < 2.0) {
+                createRootsToWater(waterWorldPos, el.id);
+                hasRoots = true;
+              }
             }
           }
         }
-        if (nearestWater) {
-          createRoots(nearestWater.position.clone());
-        }
       }
 
-      for (const root of roots) {
-        if (root.userData.growth < 1) {
-          root.userData.growth += delta * 0.3;
-          if (root.userData.growth > 1) root.userData.growth = 1;
-          const mat = root.material as THREE.LineBasicMaterial;
-          mat.opacity = 0.7 * root.userData.growth;
+      for (let ri = 0; ri < roots.length; ri++) {
+        const root = roots[ri];
+
+        if (root.growth < 1) {
+          root.growth += delta * 0.35;
+          if (root.growth > 1) root.growth = 1;
+
+          const showCount = Math.floor(root.basePoints.length * root.growth);
+          root.line.geometry.setDrawRange(0, showCount);
+          const lineMat = root.line.material as THREE.LineBasicMaterial;
+          lineMat.opacity = 0.75 * root.growth;
+
+          const flowMat = root.flowParticles.material as THREE.PointsMaterial;
+          flowMat.opacity = 0.9 * root.growth;
         }
-        const positions = root.geometry.attributes.position.array as Float32Array;
-        for (let i = 0; i < positions.length; i += 3) {
-          positions[i + 1] += Math.sin(time * 1.5 + i * 0.1) * 0.002;
+
+        if (root.growth >= 1) {
+          const positions = root.line.geometry.attributes.position.array as Float32Array;
+          for (let i = 0; i < root.basePoints.length; i++) {
+            const wave = Math.sin(time * 2 + i * 0.15 + ri) * (i / root.basePoints.length) * 0.015;
+            positions[i * 3] = root.basePoints[i].x + wave * 0.5;
+            positions[i * 3 + 1] = root.basePoints[i].y + wave;
+            positions[i * 3 + 2] = root.basePoints[i].z + wave * 0.5;
+          }
+          root.line.geometry.attributes.position.needsUpdate = true;
+
+          const flowCount = 5;
+          const flowPos = root.flowParticles.geometry.attributes.position.array as Float32Array;
+          for (let fi = 0; fi < flowCount; fi++) {
+            let t = (time * 0.4 + root.flowOffset + fi * 0.18) % 1;
+            const pt = root.basePoints[Math.floor(t * (root.basePoints.length - 1))];
+            if (pt) {
+              flowPos[fi * 3] = pt.x + (Math.random() - 0.5) * 0.01;
+              flowPos[fi * 3 + 1] = pt.y + (Math.random() - 0.5) * 0.01;
+              flowPos[fi * 3 + 2] = pt.z + (Math.random() - 0.5) * 0.01;
+            }
+          }
+          root.flowParticles.geometry.attributes.position.needsUpdate = true;
         }
-        root.geometry.attributes.position.needsUpdate = true;
       }
     };
 
@@ -346,12 +430,12 @@ export class EcoElementFactory {
 
   private buildSmallAnimal(group: THREE.Group): Partial<EcoElementData> {
     const particleGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array([0, 0.05, 0]);
+    const positions = new Float32Array([0, 0, 0]);
     particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     const particleMat = new THREE.PointsMaterial({
       color: 0xffd54f,
-      size: 0.12,
+      size: 0.13,
       transparent: true,
       opacity: 0.95,
       blending: THREE.AdditiveBlending,
@@ -359,87 +443,88 @@ export class EcoElementFactory {
       depthWrite: false,
     });
     const particle = new THREE.Points(particleGeo, particleMat);
+    particle.position.y = 0;
     group.add(particle);
 
     const trailGeo = new THREE.BufferGeometry();
     const trailPositions = new Float32Array(20 * 3);
-    const trailOpacities = new Float32Array(20);
     for (let i = 0; i < 20; i++) {
-      trailOpacities[i] = 1 - i / 20;
+      trailPositions[i * 3 + 1] = -10;
     }
     trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
-    trailGeo.setAttribute('opacity', new THREE.BufferAttribute(trailOpacities, 1));
 
     const trailMat = new THREE.PointsMaterial({
       color: 0xffd54f,
-      size: 0.05,
+      size: 0.045,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.5,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     const trail = new THREE.Points(trailGeo, trailMat);
     group.add(trail);
 
-    let targetPos = new THREE.Vector3(
-      (Math.random() - 0.5) * this.bottleRadius * 1.2,
-      0.05 + Math.random() * 0.3,
-      (Math.random() - 0.5) * this.bottleRadius * 1.2
-    );
+    let baseTargetX = (Math.random() - 0.5) * this.bottleRadius * 1.2;
+    let baseTargetY = 0;
+    let baseTargetZ = (Math.random() - 0.5) * this.bottleRadius * 1.2;
     let moveTimer = 0;
     const moveInterval = 2.0;
     let nearWaterTimer = 0;
     let isNearWater = false;
+    let nearWaterRemaining = 0;
     let jumpPhase = 0;
 
     const trailHistory: THREE.Vector3[] = [];
-    for (let i = 0; i < 20; i++) trailHistory.push(new THREE.Vector3());
+    for (let i = 0; i < 20; i++) trailHistory.push(new THREE.Vector3(0, -10, 0));
+
+    const clampToBottle = (x: number, z: number) => {
+      const dist = Math.sqrt(x * x + z * z);
+      const maxD = this.bottleRadius * 0.85;
+      if (dist > maxD) {
+        const s = maxD / dist;
+        return { x: x * s, z: z * s };
+      }
+      return { x, z };
+    };
 
     const update = (delta: number, time: number, ctx: UpdateContext) => {
       moveTimer += delta;
       if (moveTimer >= moveInterval) {
         moveTimer = 0;
-        let nearestPlant: EcoElementData | null = null;
+        let nearestTarget: EcoElementData | null = null;
         let nearestDist = Infinity;
         for (const el of ctx.allElements) {
-          if (el.type === 'tree' || el.type === 'water' || el.type === 'rock') {
+          if (el.type === 'tree' || el.type === 'water') {
             const d = el.position.distanceTo(group.position);
             if (d < nearestDist) {
               nearestDist = d;
-              nearestPlant = el;
+              nearestTarget = el;
             }
           }
         }
 
-        if (nearestPlant && Math.random() < 0.6) {
-          const dir = nearestPlant.position.clone().sub(group.position).normalize();
-          const dist = Math.min(nearestDist * 0.5, 0.8);
-          targetPos = group.position.clone().add(dir.multiplyScalar(dist));
-          targetPos.x += (Math.random() - 0.5) * 0.3;
-          targetPos.z += (Math.random() - 0.5) * 0.3;
+        if (nearestTarget && Math.random() < 0.7) {
+          const dir = nearestTarget.position.clone().sub(group.position).normalize();
+          const dist = Math.min(nearestDist * 0.6, 0.9);
+          baseTargetX = group.position.x + dir.x * dist + (Math.random() - 0.5) * 0.3;
+          baseTargetZ = group.position.z + dir.z * dist + (Math.random() - 0.5) * 0.3;
+          baseTargetY = 0;
         } else {
-          targetPos = new THREE.Vector3(
-            (Math.random() - 0.5) * this.bottleRadius * 1.2,
-            0.05 + Math.random() * 0.4,
-            (Math.random() - 0.5) * this.bottleRadius * 1.2
-          );
+          baseTargetX = (Math.random() - 0.5) * this.bottleRadius * 1.2;
+          baseTargetZ = (Math.random() - 0.5) * this.bottleRadius * 1.2;
+          baseTargetY = 0;
         }
 
-        const distFromCenter = Math.sqrt(targetPos.x ** 2 + targetPos.z ** 2);
-        if (distFromCenter > this.bottleRadius * 0.85) {
-          const scale = (this.bottleRadius * 0.8) / distFromCenter;
-          targetPos.x *= scale;
-          targetPos.z *= scale;
-        }
+        const clamped = clampToBottle(baseTargetX, baseTargetZ);
+        baseTargetX = clamped.x;
+        baseTargetZ = clamped.z;
       }
-
-      const moveSpeed = 0.8;
-      group.position.lerp(targetPos, delta * moveSpeed);
 
       let nearWater = false;
       for (const el of ctx.allElements) {
         if (el.type === 'water') {
-          if (el.position.distanceTo(group.position) < 0.5) {
+          const d = el.position.distanceTo(group.position);
+          if (d < 0.55) {
             nearWater = true;
             break;
           }
@@ -448,35 +533,58 @@ export class EcoElementFactory {
 
       if (nearWater) {
         nearWaterTimer += delta;
-        if (nearWaterTimer > 0.3 && !isNearWater) {
+        if (nearWaterTimer > 0.25) {
           isNearWater = true;
-        }
-        if (isNearWater) {
-          const mat = particle.material as THREE.PointsMaterial;
-          mat.color.setHex(0x4fc3f7);
-          const tmat = trail.material as THREE.PointsMaterial;
-          tmat.color.setHex(0x4fc3f7);
-          jumpPhase += delta * 8;
-          group.position.y = 0.05 + Math.abs(Math.sin(jumpPhase)) * 0.15;
+          nearWaterRemaining = 3.0;
         }
       } else {
         nearWaterTimer = 0;
-        if (isNearWater) {
+      }
+
+      if (nearWaterRemaining > 0) {
+        nearWaterRemaining -= delta;
+        if (nearWaterRemaining <= 0) {
           isNearWater = false;
-          const mat = particle.material as THREE.PointsMaterial;
-          mat.color.setHex(0xffd54f);
-          const tmat = trail.material as THREE.PointsMaterial;
-          tmat.color.setHex(0xffd54f);
         }
       }
 
-      trailHistory.unshift(group.position.clone());
+      const targetColor = isNearWater ? 0x4fc3f7 : 0xffd54f;
+      const pMat = particle.material as THREE.PointsMaterial;
+      const tMat = trail.material as THREE.PointsMaterial;
+      const currentColor = pMat.color.getHex();
+      if (currentColor !== targetColor) {
+        pMat.color.lerp(new THREE.Color(targetColor), delta * 6);
+        tMat.color.lerp(new THREE.Color(targetColor), delta * 6);
+      }
+
+      const moveSpeed = isNearWater ? 1.2 : 0.85;
+      group.position.x += (baseTargetX - group.position.x) * delta * moveSpeed;
+      group.position.z += (baseTargetZ - group.position.z) * delta * moveSpeed;
+
+      let baseY = 0;
+      if (isNearWater) {
+        jumpPhase += delta * 9;
+        baseY = Math.abs(Math.sin(jumpPhase)) * 0.22;
+        pMat.size = 0.13 + Math.sin(jumpPhase * 2) * 0.02;
+      } else {
+        jumpPhase = 0;
+        pMat.size = 0.13;
+      }
+      particle.position.y = baseY;
+
+      const worldParticlePos = new THREE.Vector3();
+      particle.getWorldPosition(worldParticlePos);
+      trailHistory.unshift(worldParticlePos.clone());
       if (trailHistory.length > 20) trailHistory.pop();
+
       const tp = trail.geometry.attributes.position.array as Float32Array;
+      const groupWorldPos = new THREE.Vector3();
+      group.getWorldPosition(groupWorldPos);
       for (let i = 0; i < 20; i++) {
-        tp[i * 3] = trailHistory[i].x - group.position.x;
-        tp[i * 3 + 1] = trailHistory[i].y - group.position.y;
-        tp[i * 3 + 2] = trailHistory[i].z - group.position.z;
+        const local = trailHistory[i].clone().sub(groupWorldPos);
+        tp[i * 3] = local.x;
+        tp[i * 3 + 1] = local.y;
+        tp[i * 3 + 2] = local.z;
       }
       trail.geometry.attributes.position.needsUpdate = true;
     };
@@ -489,90 +597,147 @@ export class EcoElementFactory {
     bodyGeo.scale(1, 0.6, 1.5);
     const bodyMat = new THREE.MeshLambertMaterial({ color: 0x8b5e3c });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.15;
+    body.position.y = 0.14;
     body.castShadow = true;
 
     const headGeo = new THREE.SphereGeometry(0.1, 10, 8);
     const head = new THREE.Mesh(headGeo, bodyMat);
-    head.position.set(0, 0.2, 0.2);
+    head.position.set(0, 0.19, 0.21);
     head.castShadow = true;
+
+    const eyeGeo = new THREE.SphereGeometry(0.015, 6, 4);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.035, 0.2, 0.28);
+    eyeR.position.set(0.035, 0.2, 0.28);
+    head.add(eyeL, eyeR);
 
     group.add(body, head);
 
-    let angle = Math.random() * Math.PI * 2;
-    const patrolRadius = this.bottleRadius * 0.65;
-    let speed = 0.3;
-    let targetAngle = angle;
-    let avoiding = false;
+    let currentAngle = Math.random() * Math.PI * 2;
+    let targetAngle = currentAngle;
+    const basePatrolRadius = this.bottleRadius * 0.62;
+    let currentPatrolRadius = basePatrolRadius;
+    let targetPatrolRadius = basePatrolRadius;
+    let moveSpeed = 0.22;
+    let avoidCooldown = 0;
+    let patrolPhase = Math.random() * Math.PI * 2;
 
     const trailGeo = new THREE.BufferGeometry();
-    const trailPos = new Float32Array(30 * 3);
-    const trailAlpha = new Float32Array(30);
-    for (let i = 0; i < 30; i++) trailAlpha[i] = 1 - i / 30;
+    const trailPos = new Float32Array(40 * 3);
+    for (let i = 0; i < 40; i++) trailPos[i * 3 + 1] = -10;
     trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
-    trailGeo.setAttribute('a', new THREE.BufferAttribute(trailAlpha, 1));
 
     const trailMat = new THREE.PointsMaterial({
-      color: 0x8b5e3c,
-      size: 0.03,
+      color: 0xb17c54,
+      size: 0.025,
       transparent: true,
-      opacity: 0.25,
+      opacity: 0.35,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
     const trail = new THREE.Points(trailGeo, trailMat);
     group.add(trail);
 
     const trailHistory: THREE.Vector3[] = [];
-    for (let i = 0; i < 30; i++) trailHistory.push(new THREE.Vector3());
+    for (let i = 0; i < 40; i++) trailHistory.push(new THREE.Vector3(0, -10, 0));
+
+    const getRockRadius = (rock: EcoElementData): number => {
+      return 0.3;
+    };
 
     const update = (delta: number, time: number, ctx: UpdateContext) => {
+      avoidCooldown -= delta;
+      patrolPhase += delta * 0.5;
+
       const rocks = ctx.allElements.filter(e => e.type === 'rock');
 
-      let nearestRockDist = Infinity;
-      let nearestRock: EcoElementData | null = null;
+      let targetX = Math.cos(currentAngle) * currentPatrolRadius;
+      let targetZ = Math.sin(currentAngle) * currentPatrolRadius;
+      const currentPos = new THREE.Vector2(group.position.x, group.position.z);
+
+      let collidingRock: EcoElementData | null = null;
+      let minRockDist = Infinity;
       for (const rock of rocks) {
-        const d = rock.position.distanceTo(group.position);
-        if (d < nearestRockDist) {
-          nearestRockDist = d;
-          nearestRock = rock;
+        const rockPos = new THREE.Vector2(rock.position.x, rock.position.z);
+        const rockR = getRockRadius(rock);
+        const dist = currentPos.distanceTo(rockPos);
+        if (dist < rockR + 0.35 && dist < minRockDist) {
+          minRockDist = dist;
+          collidingRock = rock;
         }
       }
 
-      if (nearestRock && nearestRockDist < 0.4) {
-        avoiding = true;
-        const awayDir = group.position.clone().sub(nearestRock.position).normalize();
-        targetAngle = Math.atan2(awayDir.z, awayDir.x);
-        speed = 0.6;
-      } else {
-        if (avoiding) {
-          avoiding = false;
+      if (collidingRock && avoidCooldown <= 0) {
+        avoidCooldown = 0.8;
+        const rockPos = new THREE.Vector2(collidingRock.position.x, collidingRock.position.z);
+        const awayVec = currentPos.clone().sub(rockPos);
+        if (awayVec.lengthSq() < 0.001) {
+          awayVec.set(Math.random() - 0.5, Math.random() - 0.5).normalize();
         }
-        targetAngle += delta * 0.15;
-        speed = 0.25;
+        awayVec.normalize();
+
+        const toCenter = new THREE.Vector2(-group.position.x, -group.position.z).normalize();
+        const tangent = new THREE.Vector2(-toCenter.y, toCenter.x);
+        const crossDir = awayVec.dot(tangent) > 0 ? tangent : tangent.negate();
+
+        targetX = group.position.x + (awayVec.x * 0.5 + crossDir.x * 0.5) * 0.6;
+        targetZ = group.position.z + (awayVec.y * 0.5 + crossDir.y * 0.5) * 0.6;
+
+        const targetDist = Math.sqrt(targetX * targetX + targetZ * targetZ);
+        const maxD = this.bottleRadius * 0.82;
+        if (targetDist > maxD) {
+          const s = maxD / targetDist;
+          targetX *= s;
+          targetZ *= s;
+        }
+        targetAngle = Math.atan2(targetZ, targetX);
+        targetPatrolRadius = Math.min(basePatrolRadius * 1.05, targetDist);
+        moveSpeed = 0.5;
+      } else if (avoidCooldown <= 0) {
+        targetAngle += delta * 0.22;
+        targetPatrolRadius = basePatrolRadius + Math.sin(patrolPhase) * 0.25;
+        moveSpeed = 0.28;
+        targetX = Math.cos(targetAngle) * targetPatrolRadius;
+        targetZ = Math.sin(targetAngle) * targetPatrolRadius;
       }
 
-      const angleDiff = targetAngle - angle;
-      angle += angleDiff * delta * 2;
+      const angleDiff = targetAngle - currentAngle;
+      let normalizedAngleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+      currentAngle += normalizedAngleDiff * delta * 3;
+      currentPatrolRadius += (targetPatrolRadius - currentPatrolRadius) * delta * 2;
 
-      const r = avoiding ? patrolRadius * 0.8 : patrolRadius;
-      const target = new THREE.Vector3(
-        Math.cos(angle) * r,
-        0.1,
-        Math.sin(angle) * r
-      );
+      const lerpFactor = Math.min(1, delta * moveSpeed);
+      group.position.x += (targetX - group.position.x) * lerpFactor;
+      group.position.z += (targetZ - group.position.z) * lerpFactor;
 
-      group.position.lerp(target, delta * speed);
-      group.rotation.y = angle + Math.PI / 2;
+      const bodyBob = Math.sin(time * 3) * 0.015;
+      body.position.y = 0.14 + bodyBob;
+      head.position.y = 0.19 + bodyBob * 1.2;
 
-      trailHistory.unshift(new THREE.Vector3(0, -0.05, 0));
-      if (trailHistory.length > 30) trailHistory.pop();
+      const facingAngle = currentAngle + Math.PI / 2;
+      group.rotation.y = facingAngle;
+
+      const worldFeetPos = new THREE.Vector3();
+      const groupWorldPos = new THREE.Vector3();
+      group.getWorldPosition(groupWorldPos);
+      worldFeetPos.set(groupWorldPos.x, groupWorldPos.y, groupWorldPos.z);
+
+      trailHistory.unshift(worldFeetPos.clone());
+      if (trailHistory.length > 40) trailHistory.pop();
+
       const tp = trail.geometry.attributes.position.array as Float32Array;
-      for (let i = 0; i < 30; i++) {
-        tp[i * 3] = 0;
-        tp[i * 3 + 1] = -0.08 - i * 0.002;
-        tp[i * 3 + 2] = 0;
+      for (let i = 0; i < 40; i++) {
+        const local = trailHistory[i].clone().sub(groupWorldPos);
+        tp[i * 3] = local.x + (Math.random() - 0.5) * 0.005;
+        tp[i * 3 + 1] = local.y - 0.08 - i * 0.001;
+        tp[i * 3 + 2] = local.z + (Math.random() - 0.5) * 0.005;
       }
       trail.geometry.attributes.position.needsUpdate = true;
+
+      const trailFade = Math.min(1, delta * 10);
+      trailMat.opacity = 0.35 * trailFade + 0.2 * (1 - trailFade);
     };
 
     return { update };

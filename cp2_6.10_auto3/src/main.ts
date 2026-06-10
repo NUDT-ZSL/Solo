@@ -181,5 +181,24 @@ class EcoBottleApp {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  new EcoBottleApp();
+  const app = new EcoBottleApp();
+  (window as any).__ecoBottleDebug = {
+    addElement: (type: string, x: number, z: number) => {
+      const manager = (app as any).bottleManager;
+      const pos = manager.getBottleWorldPosition().clone();
+      pos.x += x;
+      pos.z += z;
+      return manager.addElement(type, pos);
+    },
+    getElements: () => (app as any).bottleManager.getElements(),
+    getIndicators: () => (app as any).bottleManager.getIndicators(),
+    addWater: (x = 0.4, z = 0.2) => (window as any).__ecoBottleDebug.addElement('water', x, z),
+    addTree: (x = -0.5, z = -0.3) => (window as any).__ecoBottleDebug.addElement('tree', x, z),
+    addRock: (x = 0.3, z = -0.5) => (window as any).__ecoBottleDebug.addElement('rock', x, z),
+    addSmallAnimal: (x = 0.1, z = 0.1) => (window as any).__ecoBottleDebug.addElement('smallAnimal', x, z),
+    addLargeAnimal: (x = 0, z = 0) => (window as any).__ecoBottleDebug.addElement('largeAnimal', x, z),
+    addCloud: (x = 0, z = 0) => (window as any).__ecoBottleDebug.addElement('weather', x, z),
+    chart: () => (app as any).chart,
+  };
+  console.log('[EcoBottle] Debug API ready: window.__ecoBottleDebug');
 });
