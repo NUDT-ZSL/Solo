@@ -128,8 +128,11 @@ export default function StatsPanel({ stats }: Props) {
       style={{
         width: '280px',
         backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
         background: 'rgba(255,255,255,0.15)',
         border: '1px solid rgba(255,255,255,0.25)',
+        willChange: 'transform',
+        transform: 'translateZ(0)',
       }}
     >
       <h3 className="text-sm font-semibold text-white/80 mb-3">情绪统计</h3>

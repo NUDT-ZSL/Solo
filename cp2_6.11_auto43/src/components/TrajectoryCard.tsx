@@ -1,12 +1,14 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import type { EmotionRecord } from '../../../shared/types';
 
 interface Props {
   records: EmotionRecord[];
+  onBlobReady?: (blob: Blob | null) => void;
 }
 
-export default function TrajectoryCard({ records }: Props) {
+export default function TrajectoryCard({ records, onBlobReady }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [generating, setGenerating] = useState(true);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -75,47 +77,63 @@ export default function TrajectoryCard({ records }: Props) {
       ctx.stroke();
     });
 
-    ctx.fillStyle = 'rgba(120,100,140,0.4)';
-    ctx.font = '14px system-ui';
+    ctx.fillStyle = 'rgba(120,100,140,0.5)';
+    ctx.font = 'bold 16px system-ui';
     ctx.textAlign = 'right';
-    ctx.fillText('情绪轨迹图', W - 20, 30);
-  }, [records]);
+    ctx.fillText('情绪轨迹图', W - 24, 36);
+
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = 'rgba(120,100,140,0.3)';
+    ctx.fillText(new Date().toLocaleDateString('zh-CN'), W - 24, 54);
+
+    requestAnimationFrame(() => {
+      setGenerating(false);
+      if (onBlobReady && canvas) {
+        canvas.toBlob(
+          (blob) => {
+            onBlobReady(blob);
+          },
+          'image/png',
+          0.95
+        );
+      }
+    });
+  }, [records, onBlobReady]);
 
   useEffect(() => {
-    draw();
+    let rafId: number;
+    const run = () => {
+      rafId = requestAnimationFrame(draw);
+    };
+    Promise.resolve().then(run);
+    return () => cancelAnimationFrame(rafId);
   }, [draw]);
-
-  const handleCopyLink = async () => {
-    try {
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: 'user_default' }),
-      });
-      const data = await res.json();
-      const url = `${window.location.origin}/share/${data.shareId}`;
-      await navigator.clipboard.writeText(url);
-    } catch {}
-  };
 
   return (
     <div className="flex flex-col items-center gap-4">
       <div
         className="relative rounded-2xl overflow-hidden"
-        style={{ width: '800px', maxWidth: '100%', backdropFilter: 'blur(12px)', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)' }}
-      >
-        <canvas ref={canvasRef} className="w-full" style={{ height: '500px' }} />
-      </div>
-      <button
-        onClick={handleCopyLink}
-        className="px-6 py-2 rounded-xl text-white font-medium transition-all duration-300 hover:scale-105"
         style={{
-          background: 'linear-gradient(135deg, #FF8E53, #7C6EF6)',
-          boxShadow: '0 4px 15px rgba(124,110,246,0.3)',
+          width: '800px',
+          maxWidth: '100%',
+          backdropFilter: 'blur(12px)',
+          background: 'rgba(255,255,255,0.15)',
+          border: '1px solid rgba(255,255,255,0.25)',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
         }}
       >
-        复制分享链接
-      </button>
+        <canvas
+          ref={canvasRef}
+          className="w-full"
+          style={{ height: '500px', willChange: 'transform', transform: 'translateZ(0)' }}
+        />
+        {generating && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-sm">
+            <div className="text-white/70 text-sm">正在生成分享卡片...</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

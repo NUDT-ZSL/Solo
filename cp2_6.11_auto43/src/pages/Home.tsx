@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useEmotionStore } from '@/store/emotionStore';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEmotion } from '@/store/emotionReducer';
 import TrajectoryTimeline from '@/components/TrajectoryTimeline';
 import EmotionModal from '@/components/EmotionModal';
 import DetailCard from '@/components/DetailCard';
@@ -10,27 +10,33 @@ import { Link } from 'react-router-dom';
 
 export default function Home() {
   const {
-    records, echoes, selectedRecord, modalOpen, editingRecord, shareModalOpen,
-    toastMessage, toastVisible,
-    fetchTrajectories, createRecord, updateRecord, deleteRecord, updateRecord: updatePos,
-    setSelectedRecord, setModalOpen, setEditingRecord, setShareModalOpen, showToast,
-  } = useEmotionStore();
+    state,
+    dispatch,
+    fetchTrajectories,
+    createRecord,
+    updateRecord,
+    deleteRecord,
+    addEcho,
+    showToast,
+  } = useEmotion();
 
+  const { records, echoes, selectedRecord, modalOpen, editingRecord, shareModalOpen, toastMessage, toastVisible } = state;
   const [detailPos, setDetailPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareCardView, setShareCardView] = useState(false);
+  const shareBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     fetchTrajectories();
   }, [fetchTrajectories]);
 
   const handleDotClick = (record: typeof records[0], pos: { x: number; y: number }) => {
-    setSelectedRecord(record);
+    dispatch({ type: 'SET_SELECTED_RECORD', payload: record });
     setDetailPos(pos);
   };
 
   const handleEmptyClick = () => {
-    setEditingRecord(null);
-    setModalOpen(true);
+    dispatch({ type: 'SET_EDITING_RECORD', payload: null });
+    dispatch({ type: 'SET_MODAL_OPEN', payload: true });
   };
 
   const handleSave = async (data: { color: string; text: string; intensity: number; date: string }) => {
@@ -39,14 +45,14 @@ export default function Home() {
     } else {
       await createRecord(data);
     }
-    setModalOpen(false);
-    setEditingRecord(null);
+    dispatch({ type: 'SET_MODAL_OPEN', payload: false });
+    dispatch({ type: 'SET_EDITING_RECORD', payload: null });
   };
 
   const handleEdit = (record: typeof records[0]) => {
-    setEditingRecord(record);
-    setModalOpen(true);
-    setSelectedRecord(null);
+    dispatch({ type: 'SET_EDITING_RECORD', payload: record });
+    dispatch({ type: 'SET_MODAL_OPEN', payload: true });
+    dispatch({ type: 'SET_SELECTED_RECORD', payload: null });
   };
 
   const handleDelete = async (id: string) => {
@@ -54,30 +60,36 @@ export default function Home() {
   };
 
   const handleDrag = async (record: typeof records[0], newPos: { x: number; y: number }) => {
-    await updatePos(record.id, { position: newPos });
+    await updateRecord(record.id, { position: newPos });
   };
 
   const handleShare = () => {
+    shareBlobRef.current = null;
     setShareCardView(true);
-    setShareModalOpen(true);
   };
 
+  const handleBlobReady = useCallback((blob: Blob | null) => {
+    shareBlobRef.current = blob;
+  }, []);
+
   const handleCopyShare = async () => {
-    try {
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: 'user_default' }),
-      });
-      const data = await res.json();
-      const url = `${window.location.origin}/share/${data.shareId}`;
-      await navigator.clipboard.writeText(url);
-      showToast('链接已复制！');
-    } catch {
-      showToast('复制失败');
-    }
-    setShareCardView(false);
-    setShareModalOpen(false);
+    setTimeout(async () => {
+      try {
+        const res = await fetch('/api/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: 'user_default' }),
+        });
+        const data = await res.json();
+        const url = `${window.location.origin}/share/${data.shareId}`;
+        await navigator.clipboard.writeText(url);
+        showToast('链接已复制！');
+      } catch {
+        showToast('复制失败');
+      }
+      setShareCardView(false);
+      dispatch({ type: 'SET_SHARE_MODAL_OPEN', payload: false });
+    }, 300);
   };
 
   return (
@@ -85,19 +97,23 @@ export default function Home() {
       className="min-h-screen relative overflow-hidden"
       style={{
         background: 'linear-gradient(135deg, #FADDC6 0%, #E8D0F0 100%)',
+        minHeight: '100vh',
       }}
     >
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 min-h-screen flex flex-col" style={{ willChange: 'transform', transform: 'translateZ(0)' }}>
         <header className="flex items-center justify-between px-6 py-4">
-          <h1 className="text-xl font-bold text-white/90 tracking-wide">情绪轨迹图</h1>
+          <h1 className="text-xl font-bold text-white/90 tracking-wide" style={{ willChange: 'transform', transform: 'translateZ(0)' }}>情绪轨迹图</h1>
           <div className="flex items-center gap-3">
             <button
               onClick={handleShare}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110"
               style={{
                 backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
                 background: 'rgba(255,255,255,0.2)',
                 border: '1px solid rgba(255,255,255,0.3)',
+                willChange: 'transform',
+                transform: 'translateZ(0)',
               }}
             >
               <Send size={16} className="text-white/80" />
@@ -107,8 +123,11 @@ export default function Home() {
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110"
               style={{
                 backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
                 background: 'rgba(255,255,255,0.2)',
                 border: '1px solid rgba(255,255,255,0.3)',
+                willChange: 'transform',
+                transform: 'translateZ(0)',
               }}
             >
               <User size={16} className="text-white/80" />
@@ -136,13 +155,19 @@ export default function Home() {
         </div>
 
         <button
-          onClick={() => { setEditingRecord(null); setModalOpen(true); }}
+          onClick={() => {
+            dispatch({ type: 'SET_EDITING_RECORD', payload: null });
+            dispatch({ type: 'SET_MODAL_OPEN', payload: true });
+          }}
           className="fixed bottom-8 right-8 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 z-40"
           style={{
             backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
             background: 'rgba(255,255,255,0.25)',
             border: '1px solid rgba(255,255,255,0.35)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            willChange: 'transform',
+            transform: 'translateZ(0)',
           }}
         >
           <Plus size={24} className="text-white/80" />
@@ -152,7 +177,10 @@ export default function Home() {
       <EmotionModal
         open={modalOpen}
         editingRecord={editingRecord}
-        onClose={() => { setModalOpen(false); setEditingRecord(null); }}
+        onClose={() => {
+          dispatch({ type: 'SET_MODAL_OPEN', payload: false });
+          dispatch({ type: 'SET_EDITING_RECORD', payload: null });
+        }}
         onSave={handleSave}
       />
 
@@ -162,16 +190,23 @@ export default function Home() {
           position={detailPos}
           onEdit={handleEdit}
           onDelete={handleDelete}
-          onClose={() => setSelectedRecord(null)}
+          onClose={() => dispatch({ type: 'SET_SELECTED_RECORD', payload: null })}
         />
       )}
 
       {shareCardView && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShareCardView(false)}>
           <div className="absolute inset-0 bg-black/40" style={{ backdropFilter: 'blur(4px)' }} />
-          <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
-            <TrajectoryCard records={records} />
-            <div className="flex justify-center mt-4">
+          <div className="relative z-10 flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <TrajectoryCard records={records} onBlobReady={handleBlobReady} />
+            <div className="flex justify-center mt-4 gap-3">
+              <button
+                onClick={() => setShareCardView(false)}
+                className="px-6 py-2 rounded-xl text-white/70 font-medium transition-all duration-300 hover:bg-white/10"
+                style={{ border: '1px solid rgba(255,255,255,0.2)' }}
+              >
+                关闭
+              </button>
               <button
                 onClick={handleCopyShare}
                 className="px-8 py-2 rounded-xl text-white font-medium transition-all duration-300 hover:scale-105"
@@ -191,20 +226,21 @@ export default function Home() {
         open={shareModalOpen && !shareCardView}
         records={records}
         echoes={echoes}
-        onClose={() => setShareModalOpen(false)}
+        onClose={() => dispatch({ type: 'SET_SHARE_MODAL_OPEN', payload: false })}
         onAddEcho={async (echo) => {
-          await useEmotionStore.getState().addEcho(echo);
+          await addEcho(echo);
         }}
       />
 
       <div
-        className="fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm text-white font-medium transition-all duration-500 z-50"
+        className="fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 text-sm text-white font-medium transition-all duration-500 z-50"
         style={{
           background: '#4CAF50',
           borderRadius: '8px',
           opacity: toastVisible ? 1 : 0,
           transform: toastVisible ? 'translate(-50%, 0)' : 'translate(-50%, 10px)',
           pointerEvents: toastVisible ? 'auto' : 'none',
+          willChange: 'opacity, transform',
         }}
       >
         {toastMessage}
