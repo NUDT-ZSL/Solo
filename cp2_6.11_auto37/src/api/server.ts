@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { WeatherArtwork, SaveRequest, SaveResponse, GalleryListResponse, WeatherParams } from '../types'
 
 const app = express()
+// 使用3002端口，因为3001端口已被其他服务占用（PID 40704/34548）
 const PORT = 3002
 
 app.use(cors())
@@ -12,6 +13,7 @@ app.use(express.json({ limit: '50mb' }))
 const artworks = new Map<string, WeatherArtwork>()
 
 const generateShareId = (): string => {
+  // 使用 UUID v4 生成全局唯一的分享标识符，避免链接被轻易猜测
   return uuidv4()
 }
 
@@ -25,6 +27,23 @@ const createSeedArtworks = (): void => {
     { name: '雨后虹光', params: { temperature: 22, humidity: 70, windSpeed: 5, lightLevel: 80, preset: 'rainbow' } },
     { name: '黄沙漫天', params: { temperature: 36, humidity: 18, windSpeed: 16, lightLevel: 55 } },
     { name: '和风细雨', params: { temperature: 16, humidity: 85, windSpeed: 5, lightLevel: 45 } },
+    { name: '秋日暖阳', params: { temperature: 15, humidity: 45, windSpeed: 3, lightLevel: 85, preset: 'clear' } },
+    { name: '凛冽寒风', params: { temperature: -8, humidity: 35, windSpeed: 18, lightLevel: 50, preset: 'blizzard' } },
+    { name: '雷雨交加', params: { temperature: 25, humidity: 96, windSpeed: 12, lightLevel: 20, preset: 'thunder' } },
+    { name: '薄雾晨曦', params: { temperature: 8, humidity: 90, windSpeed: 2, lightLevel: 30, preset: 'mist' } },
+    { name: '落日熔金', params: { temperature: 21, humidity: 48, windSpeed: 3, lightLevel: 75, preset: 'sunset' } },
+    { name: '七彩虹桥', params: { temperature: 24, humidity: 68, windSpeed: 4, lightLevel: 88, preset: 'rainbow' } },
+    { name: '沙尘风暴', params: { temperature: 32, humidity: 12, windSpeed: 20, lightLevel: 40 } },
+    { name: '春风化雨', params: { temperature: 14, humidity: 78, windSpeed: 7, lightLevel: 55 } },
+    { name: '冰雪奇缘', params: { temperature: -5, humidity: 85, windSpeed: 8, lightLevel: 60, preset: 'blizzard' } },
+    { name: '烈日当空', params: { temperature: 38, humidity: 25, windSpeed: 1, lightLevel: 100, preset: 'clear' } },
+    { name: '烟雨江南', params: { temperature: 17, humidity: 95, windSpeed: 3, lightLevel: 38, preset: 'mist' } },
+    { name: '晚霞满天', params: { temperature: 23, humidity: 50, windSpeed: 6, lightLevel: 70, preset: 'sunset' } },
+    { name: '雷暴预警', params: { temperature: 27, humidity: 98, windSpeed: 17, lightLevel: 15, preset: 'thunder' } },
+    { name: '微风轻拂', params: { temperature: 25, humidity: 55, windSpeed: 2, lightLevel: 90, preset: 'clear' } },
+    { name: '霜降时节', params: { temperature: -1, humidity: 60, windSpeed: 4, lightLevel: 55 } },
+    { name: '多云转晴', params: { temperature: 20, humidity: 65, windSpeed: 5, lightLevel: 80 } },
+    { name: '烟雨迷蒙', params: { temperature: 12, humidity: 88, windSpeed: 6, lightLevel: 28, preset: 'rainbow' } },
   ]
 
   seedPresets.forEach((seed, index) => {

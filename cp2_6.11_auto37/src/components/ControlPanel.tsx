@@ -29,10 +29,78 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue
 }
 
+const sliderStyleInjected = { current: false }
+
 const Slider: React.FC<SliderProps> = ({ label, value, min, max, step, unit, onChange }) => {
   const [localValue, setLocalValue] = useState(value)
   const debouncedValue = useDebounce(localValue, 30)
   const isDraggingRef = useRef(false)
+
+  useEffect(() => {
+    if (!sliderStyleInjected.current) {
+      sliderStyleInjected.current = true
+      const styleEl = document.createElement('style')
+      styleEl.setAttribute('data-slider-styles', 'true')
+      styleEl.textContent = `
+        input[type="range"] {
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          accent-color: #3A7BD5;
+        }
+        input[type="range"]:focus {
+          outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #ffffff;
+          border: 3px solid #3A7BD5;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(58, 123, 213, 0.4);
+          margin-top: -6px;
+          transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.1);
+          border-color: #F39C12;
+          box-shadow: 0 3px 12px rgba(243, 156, 18, 0.5);
+        }
+        input[type="range"]::-webkit-slider-thumb:active {
+          transform: scale(0.95);
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: #ffffff;
+          border: 3px solid #3A7BD5;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(58, 123, 213, 0.4);
+          transition: border-color 0.2s ease, transform 0.15s ease;
+        }
+        input[type="range"]::-moz-range-thumb:hover {
+          transform: scale(1.1);
+          border-color: #F39C12;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+          -webkit-appearance: none;
+          height: 8px;
+          border-radius: 4px;
+          background: transparent;
+        }
+        input[type="range"]::-moz-range-track {
+          height: 8px;
+          border-radius: 4px;
+          background: transparent;
+        }
+      `
+      document.head.appendChild(styleEl)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isDraggingRef.current) {
@@ -46,7 +114,7 @@ const Slider: React.FC<SliderProps> = ({ label, value, min, max, step, unit, onC
     }
   }, [debouncedValue, onChange])
 
-  const percentage = ((value - min) / (max - min)) * 100
+  const percentage = ((localValue - min) / (max - min)) * 100
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     isDraggingRef.current = true

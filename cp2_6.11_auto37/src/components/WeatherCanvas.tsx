@@ -129,29 +129,29 @@ const createParticle = (
     case 'snow':
       x = Math.random() * width
       y = -10 - Math.random() * height * 0.3
-      vx = (Math.random() - 0.5) * windPixelSpeed * 0.3
-      vy = 1 + Math.random() * 2
+      vx = ((Math.random() - 0.5) * windPixelSpeed * 0.3) * 60
+      vy = (1 + Math.random() * 2) * 60
       size = 2 + Math.random() * 4
       break
     case 'rain':
       x = Math.random() * width
       y = -10 - Math.random() * height * 0.2
-      vx = windPixelSpeed * 0.5
-      vy = 12 + Math.random() * 8
+      vx = (windPixelSpeed * 0.5) * 60
+      vy = (12 + Math.random() * 8) * 60
       size = 1 + Math.random() * 2
       break
     case 'sand':
       x = windPixelSpeed >= 0 ? -10 : width + 10
       y = Math.random() * height
-      vx = (windPixelSpeed >= 0 ? 1 : -1) * (3 + Math.random() * 4)
-      vy = (Math.random() - 0.5) * 2
+      vx = ((windPixelSpeed >= 0 ? 1 : -1) * (3 + Math.random() * 4)) * 60
+      vy = ((Math.random() - 0.5) * 2) * 60
       size = 1 + Math.random() * 3
       break
     case 'cloud':
       x = -100 - Math.random() * width
       y = Math.random() * height * 0.6
-      vx = 0.3 + windPixelSpeed * 0.1
-      vy = (Math.random() - 0.5) * 0.2
+      vx = (0.3 + windPixelSpeed * 0.1) * 60
+      vy = ((Math.random() - 0.5) * 0.2) * 60
       size = 60 + Math.random() * 120
       break
   }
@@ -296,26 +296,26 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
       if (targetConfig) {
         switch (p.targetType) {
           case 'snow':
-            p.targetVx = (Math.random() - 0.5) * windPixelSpeed * 0.3
-            p.targetVy = 1 + (p.seed * 2)
+            p.targetVx = ((Math.random() - 0.5) * windPixelSpeed * 0.3) * 60
+            p.targetVy = (1 + (p.seed * 2)) * 60
             p.targetAlpha = baseAlpha * (0.6 + p.seed * 0.4)
             p.targetColor = [255, 255, 255]
             break
           case 'rain':
-            p.targetVx = windPixelSpeed * 0.5
-            p.targetVy = 12 + p.seed * 8
+            p.targetVx = (windPixelSpeed * 0.5) * 60
+            p.targetVy = (12 + p.seed * 8) * 60
             p.targetAlpha = baseAlpha * (0.5 + p.seed * 0.3)
             p.targetColor = [150, 180, 230]
             break
           case 'sand':
-            p.targetVx = (windPixelSpeed >= 0 ? 1 : -1) * (3 + p.seed * 4)
-            p.targetVy = (p.seed - 0.5) * 2
+            p.targetVx = ((windPixelSpeed >= 0 ? 1 : -1) * (3 + p.seed * 4)) * 60
+            p.targetVy = ((p.seed - 0.5) * 2) * 60
             p.targetAlpha = baseAlpha * (0.5 + p.seed * 0.3)
             p.targetColor = [210, 175, 130]
             break
           case 'cloud':
-            p.targetVx = 0.3 + windPixelSpeed * 0.1
-            p.targetVy = (p.seed - 0.5) * 0.2
+            p.targetVx = (0.3 + windPixelSpeed * 0.1) * 60
+            p.targetVy = ((p.seed - 0.5) * 0.2) * 60
             p.targetAlpha = 0.12 * baseAlpha
             p.targetColor = params.preset === 'thunder' ? [100, 100, 120] : [255, 255, 255]
             break
@@ -537,9 +537,9 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
       p.alpha = lerp(p.alpha, p.targetAlpha, lerpFactor * 2)
       p.color = lerpArr(p.color, p.targetColor, lerpFactor)
 
-      p.x += p.vx * deltaTime * 60
-      p.y += p.vy * deltaTime * 60
-      p.rotation += 0.02 * deltaTime * 60
+      p.x += p.vx * deltaTime
+      p.y += p.vy * deltaTime
+      p.rotation += 1.2 * deltaTime
 
       let respawn = false
       if (p.type === 'snow') {
@@ -590,12 +590,14 @@ export const WeatherCanvas = forwardRef<WeatherCanvasHandle, WeatherCanvasProps>
         break
       case 'rain':
         const length = p.size * 8
+        const rainDirX = p.vx * 0.0015
+        const rainDirY = length
         ctx.strokeStyle = rgbToString(p.color, p.alpha)
         ctx.lineWidth = p.size * 0.8
         ctx.lineCap = 'round'
         ctx.beginPath()
         ctx.moveTo(p.x, p.y)
-        ctx.lineTo(p.x + p.vx * 0.1, p.y + length)
+        ctx.lineTo(p.x + rainDirX, p.y + rainDirY)
         ctx.stroke()
         break
       case 'sand':

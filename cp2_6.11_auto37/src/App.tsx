@@ -125,6 +125,7 @@ interface GalleryItemProps {
 const GalleryItem: React.FC<GalleryItemProps> = ({ artwork, onClick }) => {
   const [loaded, setLoaded] = useState(false)
   const [visible, setVisible] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const itemRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -140,7 +141,7 @@ const GalleryItem: React.FC<GalleryItemProps> = ({ artwork, onClick }) => {
           }
         })
       },
-      { threshold: 0.05, rootMargin: '100px' },
+      { threshold: 0.05, rootMargin: '150px' },
     )
     observer.observe(el)
     return () => observer.disconnect()
@@ -150,25 +151,41 @@ const GalleryItem: React.FC<GalleryItemProps> = ({ artwork, onClick }) => {
     <div
       ref={itemRef}
       onClick={onClick}
-      style={{
-        ...styles.galleryItem,
-        opacity: loaded ? 1 : 0,
-        transform: loaded ? 'translateY(0)' : 'translateY(10px)',
-        transition: 'opacity 0.5s ease, transform 0.5s ease',
-      }}
+      style={styles.galleryItem}
     >
       <div style={styles.galleryImageContainer}>
-        {visible && (
+        {!loaded && !imgError && (
+          <div style={styles.gallerySkeleton} />
+        )}
+        {visible && !imgError && (
           <img
             src={artwork.thumbnail}
             alt="Weather artwork"
             onLoad={() => setLoaded(true)}
-            style={styles.galleryImage}
+            onError={() => {
+              setImgError(true)
+              setLoaded(true)
+            }}
+            style={{
+              ...styles.galleryImage,
+              opacity: loaded ? 1 : 0,
+              transform: loaded ? 'scale(1)' : 'scale(1.03)',
+              transition: 'opacity 0.5s ease-in-out, transform 0.5s ease-in-out',
+            }}
             loading="lazy"
           />
         )}
-        {!loaded && (
-          <div style={styles.gallerySkeleton} />
+        {imgError && (
+          <div style={{
+            ...styles.gallerySkeleton,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#888',
+            fontSize: '12px',
+          }}>
+            图片加载失败
+          </div>
         )}
       </div>
       <div style={styles.galleryItemInfo}>
@@ -195,6 +212,11 @@ const GalleryPage: React.FC = () => {
   const [total, setTotal] = useState(0)
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const initialLoadDone = useRef(false)
+  const artworksRef = useRef<WeatherArtwork[]>([])
+
+  useEffect(() => {
+    artworksRef.current = artworks
+  }, [artworks])
 
   const loadArtworks = useCallback(async (pageNum: number, append = false): Promise<void> => {
     try {
@@ -202,14 +224,27 @@ const GalleryPage: React.FC = () => {
       const response = await fetch(`/api/artworks?page=${pageNum}&limit=${PAGE_SIZE}`)
       if (response.ok) {
         const data = await response.json()
-        const newArtworks = data.artworks || []
+        const newArtworks: WeatherArtwork[] = data.artworks || []
+        const totalCount = data.total || 0
+
         if (append) {
-          setArtworks((prev) => [...prev, ...newArtworks])
+          setArtworks((prev) => {
+            const merged = [...prev]
+            newArtworks.forEach((item) => {
+              if (!merged.find((m) => m.id === item.id)) {
+                merged.push(item)
+              }
+            })
+            artworksRef.current = merged
+            setHasMore(merged.length < totalCount && newArtworks.length > 0)
+            return merged
+          })
         } else {
           setArtworks(newArtworks)
+          artworksRef.current = newArtworks
+          setHasMore(newArtworks.length < totalCount && newArtworks.length > 0)
         }
-        setTotal(data.total || 0)
-        setHasMore(append ? newArtworks.length === PAGE_SIZE : newArtworks.length < (data.total || 0))
+        setTotal(totalCount)
       }
     } catch (error) {
       console.error('Failed to load gallery:', error)
@@ -244,7 +279,7 @@ const GalleryPage: React.FC = () => {
           }
         })
       },
-      { threshold: 0.1 },
+      { threshold: 0.01, rootMargin: '200px' },
     )
     observer.observe(el)
     return () => observer.disconnect()
