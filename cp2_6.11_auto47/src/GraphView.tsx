@@ -182,11 +182,12 @@ const GraphView: React.FC<GraphViewProps> = ({ nodes, connections, onNodesChange
           fill="none"
           stroke={`url(#${gradientId})`}
           strokeWidth="2"
-          strokeDasharray={isHovered ? '8,4' : undefined}
+          strokeDasharray={isHovered ? '8,4' : 'none'}
+          className={isHovered ? 'graph-view-connection-hovered' : ''}
           style={{
             pointerEvents: 'none',
-            transition: 'stroke-dasharray 0.2s ease-out',
-            animation: isHovered ? 'dash 0.6s linear infinite' : undefined,
+            transition: 'stroke-dasharray 0.2s ease-out, opacity 0.2s ease-out',
+            opacity: isHovered ? 1 : 1,
           }}
         />
         <circle cx={start.x} cy={start.y} r="4" fill="#3498DB" style={{ pointerEvents: 'none' }} />
@@ -350,7 +351,17 @@ const GraphView: React.FC<GraphViewProps> = ({ nodes, connections, onNodesChange
           z-index: 30;
         }
         @keyframes dash {
-          to { stroke-dashoffset: -12; }
+          0% { stroke-dashoffset: 0; opacity: 1; }
+          50% { opacity: 0.5; }
+          100% { stroke-dashoffset: -12; opacity: 1; }
+        }
+        @keyframes connectionBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        .graph-view-connection-hovered {
+          animation: dash 0.6s linear infinite, connectionBlink 0.8s ease-in-out infinite !important;
+          stroke-dasharray: 8, 4 !important;
         }
       `}</style>
 

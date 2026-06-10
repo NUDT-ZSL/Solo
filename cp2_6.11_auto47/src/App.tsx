@@ -143,18 +143,23 @@ const App: React.FC = () => {
 
   const handleShare = useCallback(() => {
     if (!currentNote) return;
+    const shareUrl = `${window.location.origin}/share/${currentNote.id}`;
     fetch(`/api/notes/${currentNote.id}/share`, { method: 'POST' })
       .then(res => res.json())
       .then(data => {
-        navigator.clipboard.writeText(data.shareUrl).then(() => {
+        const finalUrl = data.shareUrl || shareUrl;
+        navigator.clipboard.writeText(finalUrl).then(() => {
           showToastMessage('✅ 分享链接已复制到剪贴板!');
         }).catch(() => {
-          showToastMessage('⚠️ 请手动复制: ' + data.shareUrl);
+          showToastMessage('⚠️ 请手动复制: ' + finalUrl);
         });
       })
-      .catch(err => {
-        console.error('生成分享链接失败:', err);
-        showToastMessage('❌ 生成分享链接失败');
+      .catch(() => {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showToastMessage('✅ 分享链接已复制到剪贴板!');
+        }).catch(() => {
+          showToastMessage('⚠️ 请手动复制: ' + shareUrl);
+        });
       });
   }, [currentNote, showToastMessage]);
 
@@ -196,9 +201,9 @@ const App: React.FC = () => {
         /* Toast 提示条 */
         .app-toast {
           position: fixed;
-          top: 20px;
+          top: -60px;
           left: 50%;
-          transform: translateX(-50%) translateY(-20px);
+          transform: translateX(-50%);
           background: linear-gradient(135deg, #2ECC71 0%, #27AE60 100%);
           color: #FFFFFF;
           padding: 12px 28px;
@@ -208,12 +213,17 @@ const App: React.FC = () => {
           font-weight: 500;
           font-size: 14px;
           opacity: 0;
-          transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+          transition: top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out;
           pointer-events: none;
+          white-space: nowrap;
         }
         .app-toast.visible {
           opacity: 1;
-          transform: translateX(-50%) translateY(0);
+          top: 20px;
+        }
+        .app-toast.fading {
+          opacity: 0;
+          top: 10px;
         }
 
         /* 侧栏 */
@@ -268,11 +278,12 @@ const App: React.FC = () => {
           box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
         }
         .app-search-highlight {
-          background: #F1C40F;
+          background-color: #F1C40F;
           color: #2C3E50;
           border-radius: 2px;
-          padding: 0 3px;
+          padding: 1px 4px;
           font-weight: 600;
+          display: inline;
         }
 
         /* 新建笔记按钮 */
@@ -398,11 +409,13 @@ const App: React.FC = () => {
           overflow: hidden;
           min-width: 0;
           background: rgba(255,255,255,0.3);
+          order: 1;
         }
         .app-graph-panel {
           flex: 1.5;
           min-width: 0;
           overflow: hidden;
+          order: 2;
         }
 
         /* 笔记头部 */
@@ -475,6 +488,7 @@ const App: React.FC = () => {
             flex-direction: column;
             height: auto;
             min-height: 100vh;
+            overflow-y: auto;
           }
           .app-sidebar {
             width: 100% !important;
@@ -483,6 +497,10 @@ const App: React.FC = () => {
             max-height: 250px;
             border-right: none;
             border-bottom: 1px solid #BDC3C7;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            order: 1;
           }
           .app-search-input {
             width: 100% !important;
@@ -491,21 +509,29 @@ const App: React.FC = () => {
             flex-direction: column;
             flex: 1;
             height: auto;
+            min-height: 0;
+            overflow: visible;
+            order: 2;
           }
           .app-editor-panel {
             border-right: none;
             border-bottom: 1px solid #BDC3C7;
-            min-height: 60vh;
+            min-height: 500px;
+            height: auto;
+            overflow: visible;
+            order: 1;
           }
           .app-graph-panel {
             min-height: 500px;
             height: 500px;
+            order: 2;
+            overflow: hidden;
           }
         }
       `}</style>
 
       {showToast && (
-        <div className={`app-toast ${toastVisible ? 'visible' : ''}`}>
+        <div className={`app-toast ${toastVisible ? 'visible' : 'fading'}`}>
           {toastMessage}
         </div>
       )}

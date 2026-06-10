@@ -20,6 +20,7 @@ const NoteCanvas: React.FC<NoteCanvasProps> = ({ note, onContentChange, onSketch
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<Point | null>(null);
   const lastLineWidthRef = useRef(4);
+  const isDraggableRef = useRef(false);
 
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== note.content) {
@@ -76,13 +77,17 @@ const NoteCanvas: React.FC<NoteCanvasProps> = ({ note, onContentChange, onSketch
     const dy = p2.y - p1.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     const timeDiff = Math.max(p2.time - p1.time, 1);
-    return distance / timeDiff;
+    const speed = distance / timeDiff;
+    return Math.max(speed, 0.15);
   };
 
   const getLineWidth = (speed: number): number => {
     const minWidth = 2;
     const maxWidth = 6;
-    const normalizedSpeed = Math.min(speed / 3, 1);
+    const minSpeed = 0.15;
+    const maxSpeed = 3;
+    const clampedSpeed = Math.max(Math.min(speed, maxSpeed), minSpeed);
+    const normalizedSpeed = (clampedSpeed - minSpeed) / (maxSpeed - minSpeed);
     return maxWidth - normalizedSpeed * (maxWidth - minWidth);
   };
 
@@ -116,7 +121,7 @@ const NoteCanvas: React.FC<NoteCanvasProps> = ({ note, onContentChange, onSketch
 
     const speed = calculateSpeed(last, current);
     const targetWidth = getLineWidth(speed);
-    const lineWidth = lerp(lastLineWidthRef.current, targetWidth, 0.3);
+    const lineWidth = lerp(lastLineWidthRef.current, targetWidth, 0.15);
     lastLineWidthRef.current = lineWidth;
 
     const midX = (last.x + current.x) / 2;
@@ -147,13 +152,38 @@ const NoteCanvas: React.FC<NoteCanvasProps> = ({ note, onContentChange, onSketch
     lastPointRef.current = null;
   }, [onSketchChange]);
 
+  const handleEditorMouseUp = () => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString() || '';
+    if (editorRef.current) {
+      editorRef.current.setAttribute('draggable', selectedText.trim() ? 'true' : 'false');
+      isDraggableRef.current = !!selectedText.trim();
+    }
+  };
+
   const handleEditorDragStart = (e: React.DragEvent) => {
     const selection = window.getSelection()?.toString() || '';
-    if (selection) {
-      e.dataTransfer.setData('text/plain', selection);
+    if (selection && selection.trim()) {
+      e.dataTransfer.setData('text/plain', selection.trim());
       e.dataTransfer.effectAllowed = 'copy';
-      onDragStart(selection);
+      e.dataTransfer.dropEffect = 'copy';
+      const dragImage = document.createElement('div');
+      dragImage.style.cssText = 'position:absolute;left:-9999px;padding:8px 16px;background:#3498DB;color:#fff;border-radius:4px;font-size:12px;';
+      dragImage.textContent = selection.trim().slice(0, 30) + (selection.length > 30 ? '...' : '');
+      document.body.appendChild(dragImage);
+      e.dataTransfer.setDragImage(dragImage, dragImage.offsetWidth / 2, dragImage.offsetHeight / 2);
+      setTimeout(() => document.body.removeChild(dragImage), 0);
+      onDragStart(selection.trim());
+    } else {
+      e.preventDefault();
     }
+  };
+
+  const handleEditorDragEnd = () => {
+    if (editorRef.current) {
+      editorRef.current.setAttribute('draggable', 'false');
+    }
+    isDraggableRef.current = false;
   };
 
   const handleInsertImage = () => {
@@ -205,7 +235,11 @@ const NoteCanvas: React.FC<NoteCanvasProps> = ({ note, onContentChange, onSketch
           className="note-canvas-editor-content"
           contentEditable
           onInput={handleInput}
+          onMouseUp={handleEditorMouseUp}
+          onKeyUp={handleEditorMouseUp}
           onDragStart={handleEditorDragStart}
+          onDragEnd={handleEditorDragEnd}
+          draggable={false}
           suppressContentEditableWarning
         />
       </div>
@@ -342,15 +376,26 @@ const NoteCanvas: React.FC<NoteCanvasProps> = ({ note, onContentChange, onSketch
           border-color: #7F8C8D;
         }
         .note-canvas-sketch-canvas {
-          width: 100%;
-          max-width: 800px;
+          width: 800px;
           height: 300px;
+          min-width: 800px;
+          min-height: 300px;
           background: #F5DEB3;
           border-radius: 8px;
           border: 1px solid #BDC3C7;
           cursor: crosshair;
           box-shadow: 0 2px 8px rgba(0,0,0,0.08);
           touch-action: none;
+          display: block;
+        }
+        @media (max-width: 1100px) {
+          .note-canvas-sketch-canvas {
+            width: 100%;
+            min-width: 100%;
+            height: auto;
+            aspect-ratio: 8/3;
+            min-height: 200px;
+          }
         }
       `}</style>
     </div>
