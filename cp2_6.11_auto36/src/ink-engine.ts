@@ -12,6 +12,7 @@ export interface InkAnalysis {
   weatherType: WeatherType;
   terrainHeightMap: Float32Array;
   cloudDensityMap: Float32Array;
+  edgeMap: Float32Array;
   dominantColor: string;
   mapWidth: number;
   mapHeight: number;
@@ -43,6 +44,7 @@ export class InkEngine {
   private debounceTimer: number | null = null;
   private baseCanvas: HTMLCanvasElement;
   private baseCtx: CanvasRenderingContext2D;
+  private isDestroyed: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -83,25 +85,52 @@ export class InkEngine {
   private bindEvents(): void {
     const canvas = this.canvas;
 
-    canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-    canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-    canvas.addEventListener('mouseup', () => this.handleMouseUp());
-    canvas.addEventListener('mouseleave', () => this.handleMouseUp());
+    canvas.addEventListener('mousedown', this.handleMouseDown);
+    canvas.addEventListener('mousemove', this.handleMouseMove);
+    canvas.addEventListener('mouseup', this.handleMouseUp);
+    canvas.addEventListener('mouseleave', this.handleMouseUp);
 
-    canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      this.handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent);
-    }, { passive: false });
-
-    canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      this.handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent);
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', () => this.handleMouseUp());
+    canvas.addEventListener('touchstart', this.handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', this.handleMouseUp);
   }
+
+  private handleMouseDown = (e: MouseEvent): void => {
+    const pos = this.getCanvasPos(e);
+    this.isDrawing = true;
+    this.lastX = pos.x;
+    this.lastY = pos.y;
+    this.addStroke(pos.x, pos.y);
+  };
+
+  private handleMouseMove = (e: MouseEvent): void => {
+    if (!this.isDrawing) return;
+    const pos = this.getCanvasPos(e);
+    this.interpolateStroke(this.lastX, this.lastY, pos.x, pos.y);
+    this.lastX = pos.x;
+    this.lastY = pos.y;
+  };
+
+  private handleMouseUp = (): void => {
+    if (this.isDrawing) {
+      this.isDrawing = false;
+      this.triggerAnalysis();
+    }
+  };
+
+  private handleTouchStart = (e: TouchEvent): void => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY } as MouseEvent;
+    this.handleMouseDown(fakeEvent);
+  };
+
+  private handleTouchMove = (e: TouchEvent): void => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY } as MouseEvent;
+    this.handleMouseMove(fakeEvent);
+  };
 
   private getCanvasPos(e: MouseEvent): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
@@ -113,36 +142,15 @@ export class InkEngine {
     };
   }
 
-  private handleMouseDown(e: MouseEvent): void {
-    const pos = this.getCanvasPos(e);
-    this.isDrawing = true;
-    this.lastX = pos.x;
-    this.lastY = pos.y;
-    this.addStroke(pos.x, pos.y);
-  }
-
-  private handleMouseMove(e: MouseEvent): void {
-    if (!this.isDrawing) return;
-    const pos = this.getCanvasPos(e);
-
-    const dist = Math.sqrt((pos.x - this.lastX) ** 2 + (pos.y - this.lastY) ** 2);
+  private interpolateStroke(x0: number, y0: number, x1: number, y1: number): void {
+    const dist = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
     const steps = Math.max(1, Math.floor(dist / 5));
 
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      const x = this.lastX + (pos.x - this.lastX) * t;
-      const y = this.lastY + (pos.y - this.lastY) * t;
+      const x = x0 + (x1 - x0) * t;
+      const y = y0 + (y1 - y0) * t;
       this.addStroke(x, y);
-    }
-
-    this.lastX = pos.x;
-    this.lastY = pos.y;
-  }
-
-  private handleMouseUp(): void {
-    if (this.isDrawing) {
-      this.isDrawing = false;
-      this.triggerAnalysis();
     }
   }
 
@@ -164,8 +172,8 @@ export class InkEngine {
   private drawPermanentInk(x: number, y: number, radius: number): void {
     const color = WEATHER_COLORS[this.currentColor];
     const gradient = this.baseCtx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, this.hexToRgba(color, 0.6));
-    gradient.addColorStop(0.5, this.hexToRgba(color, 0.3));
+    gradient.addColorStop(0, this.hexToRgba(color, 0.7));
+    gradient.addColorStop(0.4, this.hexToRgba(color, 0.4));
     gradient.addColorStop(1, this.hexToRgba(color, 0));
     this.baseCtx.fillStyle = gradient;
     this.baseCtx.beginPath();
@@ -181,11 +189,12 @@ export class InkEngine {
   }
 
   private startAnimation(): void {
-    const animate = () => {
+    const animate = (): void => {
+      if (this.isDestroyed) return;
       this.render();
       this.animationId = requestAnimationFrame(animate);
     };
-    animate();
+    this.animationId = requestAnimationFrame(animate);
   }
 
   private render(): void {
@@ -194,9 +203,11 @@ export class InkEngine {
 
     this.ctx.drawImage(this.baseCanvas, 0, 0);
 
-    this.strokes = this.strokes.filter(stroke => {
+    const activeStrokes: InkStroke[] = [];
+    for (let i = 0; i < this.strokes.length; i++) {
+      const stroke = this.strokes[i];
       const age = now - stroke.birthTime;
-      if (age > stroke.duration) return false;
+      if (age > stroke.duration) continue;
 
       const progress = age / stroke.duration;
       const expandedRadius = stroke.radius * (1 + progress * 0.8);
@@ -216,19 +227,24 @@ export class InkEngine {
       this.ctx.arc(stroke.x, stroke.y, expandedRadius, 0, Math.PI * 2);
       this.ctx.fill();
 
-      return true;
-    });
+      activeStrokes.push(stroke);
+    }
+    this.strokes = activeStrokes;
   }
 
   private triggerAnalysis(): void {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
     this.debounceTimer = window.setTimeout(() => {
-      const analysis = this.analyzeInk();
-      if (this.onAnalysisReady) {
-        this.onAnalysisReady(analysis);
-      }
+      this.debounceTimer = null;
+      requestAnimationFrame(() => {
+        const analysis = this.analyzeInk();
+        if (this.onAnalysisReady && !this.isDestroyed) {
+          this.onAnalysisReady(analysis);
+        }
+      });
     }, 300);
   }
 
@@ -237,6 +253,8 @@ export class InkEngine {
     const height = MAP_RESOLUTION;
     const terrainHeightMap = new Float32Array(width * height);
     const cloudDensityMap = new Float32Array(width * height);
+    const edgeMap = new Float32Array(width * height);
+    const densityMap = new Float32Array(width * height);
 
     const colorWeights: Record<WeatherType, number> = {
       rain: 0,
@@ -268,7 +286,7 @@ export class InkEngine {
         const brightness = (r + g + b) / 3;
         const density = a * (1 - brightness * 0.5);
 
-        terrainHeightMap[y * width + x] = Math.min(1, density * 1.5);
+        densityMap[y * width + x] = density;
         cloudDensityMap[y * width + x] = Math.min(1, density * 1.2);
 
         if (a > 0.1) {
@@ -288,6 +306,9 @@ export class InkEngine {
       }
     }
 
+    this.computeEdgeMap(densityMap, edgeMap, width, height);
+    this.computeTerrainHeight(densityMap, edgeMap, terrainHeightMap, width, height);
+
     for (let i = 0; i < 2; i++) {
       this.blurMap(terrainHeightMap, width, height);
       this.blurMap(cloudDensityMap, width, height);
@@ -306,10 +327,50 @@ export class InkEngine {
       weatherType: dominantType,
       terrainHeightMap,
       cloudDensityMap,
+      edgeMap,
       dominantColor: WEATHER_COLORS[dominantType],
       mapWidth: width,
       mapHeight: height
     };
+  }
+
+  private computeEdgeMap(density: Float32Array, edge: Float32Array, w: number, h: number): void {
+    const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+    const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        let gx = 0;
+        let gy = 0;
+
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const idx = (y + ky) * w + (x + kx);
+            const kidx = (ky + 1) * 3 + (kx + 1);
+            gx += density[idx] * sobelX[kidx];
+            gy += density[idx] * sobelY[kidx];
+          }
+        }
+
+        const magnitude = Math.sqrt(gx * gx + gy * gy);
+        edge[y * w + x] = Math.min(1, magnitude * 3);
+      }
+    }
+  }
+
+  private computeTerrainHeight(
+    density: Float32Array,
+    edge: Float32Array,
+    height: Float32Array,
+    w: number,
+    h: number
+  ): void {
+    for (let i = 0; i < w * h; i++) {
+      const baseHeight = density[i] * 1.2;
+      const ridgeHeight = edge[i] * 1.5;
+      const combined = baseHeight + ridgeHeight * 0.6;
+      height[i] = Math.min(1, combined * 1.3);
+    }
   }
 
   private blurMap(map: Float32Array, width: number, height: number): void {
@@ -337,11 +398,21 @@ export class InkEngine {
   }
 
   destroy(): void {
+    this.isDestroyed = true;
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
+      this.animationId = null;
     }
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
+    this.canvas.removeEventListener('mousedown', this.handleMouseDown);
+    this.canvas.removeEventListener('mousemove', this.handleMouseMove);
+    this.canvas.removeEventListener('mouseup', this.handleMouseUp);
+    this.canvas.removeEventListener('mouseleave', this.handleMouseUp);
+    this.canvas.removeEventListener('touchstart', this.handleTouchStart);
+    this.canvas.removeEventListener('touchmove', this.handleTouchMove);
+    this.canvas.removeEventListener('touchend', this.handleMouseUp);
   }
 }

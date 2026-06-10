@@ -5,12 +5,20 @@ import type { InkAnalysis, WeatherType } from './ink-engine';
 const TERRAIN_SIZE = 20;
 const TERRAIN_SEGMENTS = 128;
 const MAX_PARTICLES = 3000;
-const CLOUD_COUNT = 100;
+const CLOUD_COUNT = 120;
+const TERRAIN_HEIGHT_MAX = 3;
 
 interface ParticleData {
   velocity: THREE.Vector3;
   life: number;
   maxLife: number;
+  active: boolean;
+}
+
+interface LightningData {
+  line: THREE.Line;
+  opacity: number;
+  fadeSpeed: number;
 }
 
 export class WeatherScene {
@@ -20,17 +28,35 @@ export class WeatherScene {
   private renderer: THREE.WebGLRenderer;
   private controls: OrbitControls;
   private animationId: number | null = null;
+  private isDestroyed: boolean = false;
 
   private terrain: THREE.Mesh | null = null;
   private terrainGeometry: THREE.PlaneGeometry | null = null;
+  private terrainPositions: Float32Array | null = null;
+  private terrainTargetHeights: Float32Array | null = null;
+  private terrainTransitionProgress: number = 1;
+
   private clouds: THREE.Points | null = null;
+  private cloudPositions: Float32Array | null = null;
+  private cloudSizes: Float32Array | null = null;
+  private cloudAlphas: Float32Array | null = null;
+  private cloudNeedsUpdate: boolean = false;
+
   private particles: THREE.Points | null = null;
+  private particlePositions: Float32Array | null = null;
+  private particleColors: Float32Array | null = null;
+  private particleAlphas: Float32Array | null = null;
   private particleData: ParticleData[] = [];
-  private lightnings: THREE.Line[] = [];
+
+  private lightningPool: LightningData[] = [];
 
   private currentAnalysis: InkAnalysis | null = null;
   private clock: THREE.Clock = new THREE.Clock();
   private targetParticleCount: number = 0;
+  private weatherType: WeatherType = 'ink';
+  private weatherColor: THREE.Color = new THREE.Color(0x2c2c2c);
+
+  private frameTimeBudget: number = 8;
 
   constructor(container: HTMLElement, canvas: HTMLCanvasElement) {
     this.container = container;
@@ -50,72 +76,69 @@ export class WeatherScene {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
-      alpha: false
+      alpha: false,
+      powerPreference: 'high-performance'
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.enabled = false;
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
+    this.controls.dampingFactor = 0.08;
     this.controls.maxPolarAngle = Math.PI / 2.1;
     this.controls.minDistance = 5;
     this.controls.maxDistance = 40;
     this.controls.target.set(0, 2, 0);
+    this.controls.enablePan = false;
 
     this.setupLighting();
     this.createTerrain();
     this.createClouds();
     this.createParticles();
-    this.createLightnings();
+    this.createLightningPool();
 
     window.addEventListener('resize', this.handleResize);
     this.startAnimation();
   }
 
   private setupLighting(): void {
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+    const ambientLight = new THREE.AmbientLight(0x505070, 0.7);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 20, 10);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 50;
-    directionalLight.shadow.camera.left = -20;
-    directionalLight.shadow.camera.right = 20;
-    directionalLight.shadow.camera.top = 20;
-    directionalLight.shadow.camera.bottom = -20;
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    directionalLight.position.set(10, 18, 8);
     this.scene.add(directionalLight);
 
-    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x3d5c5c, 0.3);
+    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x2d4a3d, 0.3);
     this.scene.add(hemiLight);
   }
 
   private createTerrain(): void {
-    const geometry = new THREE.PlaneGeometry(
-      TERRAIN_SIZE,
-      TERRAIN_SIZE * 0.75,
-      TERRAIN_SEGMENTS,
-      Math.floor(TERRAIN_SEGMENTS * 0.75)
-    );
+    const segX = TERRAIN_SEGMENTS;
+    const segZ = Math.floor(TERRAIN_SEGMENTS * 0.75);
+
+    const geometry = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE * 0.75, segX, segZ);
     geometry.rotateX(-Math.PI / 2);
 
-    const positions = geometry.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-      positions.setY(i, 0);
+    const posAttr = geometry.attributes.position;
+    const count = posAttr.count;
+    this.terrainPositions = new Float32Array(posAttr.array);
+    this.terrainTargetHeights = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      this.terrainTargetHeights[i] = 0;
+      posAttr.setY(i, 0);
     }
-    positions.needsUpdate = true;
+    posAttr.needsUpdate = true;
     geometry.computeVertexNormals();
 
     const material = new THREE.MeshStandardMaterial({
-      color: 0x5d8a5d,
+      color: 0x4a6b4a,
       flatShading: false,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      roughness: 0.9,
+      metalness: 0.1
     });
 
     this.terrain = new THREE.Mesh(geometry, material);
@@ -126,19 +149,23 @@ export class WeatherScene {
   }
 
   private createClouds(): void {
-    const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(CLOUD_COUNT * 3);
     const sizes = new Float32Array(CLOUD_COUNT);
     const alphas = new Float32Array(CLOUD_COUNT);
 
     for (let i = 0; i < CLOUD_COUNT; i++) {
       positions[i * 3] = (Math.random() - 0.5) * TERRAIN_SIZE * 0.8;
-      positions[i * 3 + 1] = 5 + Math.random() * 5;
+      positions[i * 3 + 1] = -100;
       positions[i * 3 + 2] = (Math.random() - 0.5) * TERRAIN_SIZE * 0.6;
-      sizes[i] = 0.5 + Math.random() * 1.5;
-      alphas[i] = 0.3 + Math.random() * 0.4;
+      sizes[i] = 0;
+      alphas[i] = 0;
     }
 
+    this.cloudPositions = positions;
+    this.cloudSizes = sizes;
+    this.cloudAlphas = alphas;
+
+    const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
     geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
@@ -149,7 +176,7 @@ export class WeatherScene {
     const ctx = canvas.getContext('2d')!;
     const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
     gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
+    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.7)');
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 128, 128);
@@ -191,53 +218,55 @@ export class WeatherScene {
   }
 
   private createParticles(): void {
-    const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(MAX_PARTICLES * 3);
     const colors = new Float32Array(MAX_PARTICLES * 3);
     const alphas = new Float32Array(MAX_PARTICLES);
 
     for (let i = 0; i < MAX_PARTICLES; i++) {
-      positions[i * 3] = 0;
       positions[i * 3 + 1] = -100;
-      positions[i * 3 + 2] = 0;
       colors[i * 3] = 1;
       colors[i * 3 + 1] = 1;
       colors[i * 3 + 2] = 1;
       alphas[i] = 0;
     }
 
+    this.particlePositions = positions;
+    this.particleColors = colors;
+    this.particleAlphas = alphas;
+
+    const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
 
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 32;
+    canvas.height = 32;
     const ctx = canvas.getContext('2d')!;
-    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
     gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillRect(0, 0, 32, 32);
 
     const texture = new THREE.CanvasTexture(canvas);
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
         map: { value: texture },
-        size: { value: 0.1 }
+        uSize: { value: 0.15 }
       },
       vertexShader: `
         attribute vec3 color;
         attribute float alpha;
         varying vec3 vColor;
         varying float vAlpha;
-        uniform float size;
+        uniform float uSize;
         void main() {
           vColor = color;
           vAlpha = alpha;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * 200.0 / -mvPosition.z;
+          gl_PointSize = uSize * 200.0 / -mvPosition.z;
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
@@ -263,45 +292,52 @@ export class WeatherScene {
       this.particleData.push({
         velocity: new THREE.Vector3(),
         life: 0,
-        maxLife: 1
+        maxLife: 1,
+        active: false
       });
     }
   }
 
-  private createLightnings(): void {
-    for (let i = 0; i < 5; i++) {
-      const points: THREE.Vector3[] = [];
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  private createLightningPool(): void {
+    for (let i = 0; i < 8; i++) {
+      const geometry = new THREE.BufferGeometry();
       const material = new THREE.LineBasicMaterial({
         color: 0xffffff,
         transparent: true,
         opacity: 0
       });
-      const lightning = new THREE.Line(geometry, material);
-      lightning.visible = false;
-      this.scene.add(lightning);
-      this.lightnings.push(lightning);
+      const line = new THREE.Line(geometry, material);
+      line.visible = false;
+      this.scene.add(line);
+      this.lightningPool.push({ line, opacity: 0, fadeSpeed: 0 });
     }
   }
 
   updateWeather(analysis: InkAnalysis): void {
     this.currentAnalysis = analysis;
-    this.updateTerrain(analysis);
-    this.updateClouds(analysis);
+    this.weatherType = analysis.weatherType;
+    this.weatherColor = new THREE.Color(analysis.dominantColor);
+
+    this.prepareTerrainUpdate(analysis);
+    this.prepareCloudUpdate(analysis);
     this.updateParticleSystem(analysis);
     this.updateFogColor(analysis.weatherType);
+    this.updateTerrainColor();
   }
 
-  private updateTerrain(analysis: InkAnalysis): void {
-    if (!this.terrainGeometry) return;
+  private prepareTerrainUpdate(analysis: InkAnalysis): void {
+    if (!this.terrainGeometry || !this.terrainPositions || !this.terrainTargetHeights) return;
 
     const positions = this.terrainGeometry.attributes.position;
     const width = analysis.mapWidth;
     const height = analysis.mapHeight;
+    const count = positions.count;
 
-    for (let i = 0; i < positions.count; i++) {
-      const x = positions.getX(i);
-      const z = positions.getZ(i);
+    const targetHeights = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const x = this.terrainPositions[i * 3];
+      const z = this.terrainPositions[i * 3 + 2];
 
       const u = (x + TERRAIN_SIZE / 2) / TERRAIN_SIZE;
       const v = (z + TERRAIN_SIZE * 0.375) / (TERRAIN_SIZE * 0.75);
@@ -312,31 +348,22 @@ export class WeatherScene {
       const clampedY = Math.max(0, Math.min(height - 1, mapY));
 
       const heightValue = analysis.terrainHeightMap[clampedY * width + clampedX];
-      positions.setY(i, heightValue * 3);
+      targetHeights[i] = heightValue * TERRAIN_HEIGHT_MAX;
     }
 
-    positions.needsUpdate = true;
-    this.terrainGeometry.computeVertexNormals();
-
-    const color = new THREE.Color(analysis.dominantColor);
-    const terrainColor = color.multiplyScalar(0.5).offsetHSL(0, -0.3, 0.1);
-    if (this.terrain) {
-      (this.terrain.material as THREE.MeshStandardMaterial).color.lerp(terrainColor, 0.3);
-    }
+    this.terrainTargetHeights = targetHeights;
+    this.terrainTransitionProgress = 0;
   }
 
-  private updateClouds(analysis: InkAnalysis): void {
-    if (!this.clouds) return;
+  private prepareCloudUpdate(analysis: InkAnalysis): void {
+    if (!this.cloudPositions || !this.cloudSizes || !this.cloudAlphas) return;
 
-    const positions = this.clouds.geometry.attributes.position as THREE.BufferAttribute;
-    const sizes = this.clouds.geometry.attributes.size as THREE.BufferAttribute;
-    const alphas = this.clouds.geometry.attributes.alpha as THREE.BufferAttribute;
     const width = analysis.mapWidth;
     const height = analysis.mapHeight;
 
     for (let i = 0; i < CLOUD_COUNT; i++) {
-      const x = (Math.random() - 0.5) * TERRAIN_SIZE * 0.8;
-      const z = (Math.random() - 0.5) * TERRAIN_SIZE * 0.6;
+      const x = (Math.random() - 0.5) * TERRAIN_SIZE * 0.85;
+      const z = (Math.random() - 0.5) * TERRAIN_SIZE * 0.65;
 
       const u = (x + TERRAIN_SIZE / 2) / TERRAIN_SIZE;
       const v = (z + TERRAIN_SIZE * 0.375) / (TERRAIN_SIZE * 0.75);
@@ -348,57 +375,62 @@ export class WeatherScene {
 
       const density = analysis.cloudDensityMap[clampedY * width + clampedX];
 
-      if (density > 0.1) {
-        positions.setXYZ(i, x, 4 + density * 5 + Math.random() * 2, z);
-        sizes.setX(i, 0.5 + density * 1.5 + Math.random() * 0.5);
-        alphas.setX(i, density * 0.6 + Math.random() * 0.2);
+      const idx = i * 3;
+      if (density > 0.08) {
+        this.cloudPositions[idx] = x;
+        this.cloudPositions[idx + 1] = 4 + density * 5 + Math.random() * 2;
+        this.cloudPositions[idx + 2] = z;
+        this.cloudSizes[i] = 0.5 + density * 1.8 + Math.random() * 0.5;
+        this.cloudAlphas[i] = density * 0.55 + Math.random() * 0.15;
       } else {
-        alphas.setX(i, 0);
+        this.cloudAlphas[i] = 0;
+        this.cloudSizes[i] = 0;
       }
     }
 
-    positions.needsUpdate = true;
-    sizes.needsUpdate = true;
-    alphas.needsUpdate = true;
-
-    const cloudColor = new THREE.Color(analysis.dominantColor);
-    cloudColor.lerp(new THREE.Color(0xffffff), 0.6);
-    const material = this.clouds.material as THREE.ShaderMaterial;
-    material.uniforms.color.value.lerp(cloudColor, 0.5);
+    this.cloudNeedsUpdate = true;
   }
 
   private updateParticleSystem(analysis: InkAnalysis): void {
     let totalDensity = 0;
-    for (let i = 0; i < analysis.cloudDensityMap.length; i++) {
+    const len = analysis.cloudDensityMap.length;
+    for (let i = 0; i < len; i++) {
       totalDensity += analysis.cloudDensityMap[i];
     }
-    const avgDensity = totalDensity / analysis.cloudDensityMap.length;
-    this.targetParticleCount = Math.min(MAX_PARTICLES, Math.floor(avgDensity * MAX_PARTICLES * 3));
+    const avgDensity = totalDensity / len;
+    this.targetParticleCount = Math.min(MAX_PARTICLES, Math.floor(avgDensity * MAX_PARTICLES * 2.5));
+  }
+
+  private updateTerrainColor(): void {
+    if (!this.terrain) return;
+    const baseColor = this.weatherColor.clone();
+    baseColor.multiplyScalar(0.45);
+    baseColor.offsetHSL(0, -0.4, 0.15);
+    const material = this.terrain.material as THREE.MeshStandardMaterial;
+    material.color.lerp(baseColor, 0.03);
   }
 
   private updateFogColor(weatherType: WeatherType): void {
     const fogColors: Record<WeatherType, number> = {
       rain: 0x2a3a4a,
       heat: 0x4a2020,
-      thunder: 0x1a1a3a,
+      thunder: 0x151535,
       sand: 0x4a3a20,
       ink: 0x1a1a2e
     };
 
     const targetColor = new THREE.Color(fogColors[weatherType] ?? 0x1a1a2e);
     if (this.scene.fog) {
-      (this.scene.fog as THREE.Fog).color.lerp(targetColor, 0.1);
+      (this.scene.fog as THREE.Fog).color.lerp(targetColor, 0.03);
     }
     this.scene.background = (this.scene.fog as THREE.Fog).color.clone();
   }
 
   private spawnParticle(index: number): void {
-    if (!this.particles || !this.currentAnalysis) return;
+    if (!this.particlePositions || !this.particleColors || !this.particleAlphas || !this.currentAnalysis) return;
 
     const analysis = this.currentAnalysis;
-    const positions = this.particles.geometry.attributes.position as THREE.BufferAttribute;
-    const colors = this.particles.geometry.attributes.color as THREE.BufferAttribute;
-    const alphas = this.particles.geometry.attributes.alpha as THREE.BufferAttribute;
+    const data = this.particleData[index];
 
     const x = (Math.random() - 0.5) * TERRAIN_SIZE * 0.8;
     const z = (Math.random() - 0.5) * TERRAIN_SIZE * 0.6;
@@ -409,149 +441,236 @@ export class WeatherScene {
     const mapY = Math.max(0, Math.min(analysis.mapHeight - 1, Math.floor(v * analysis.mapHeight)));
     const density = analysis.cloudDensityMap[mapY * analysis.mapWidth + mapX];
 
-    const color = new THREE.Color(analysis.dominantColor);
-    const height = 5 + Math.random() * 5;
+    if (density < 0.05) return;
 
-    positions.setXYZ(index, x, height, z);
-    colors.setXYZ(index, color.r, color.g, color.b);
-    alphas.setX(index, density);
+    const startHeight = 5 + Math.random() * 5;
+    const idx = index * 3;
 
-    const data = this.particleData[index];
+    this.particlePositions[idx] = x;
+    this.particlePositions[idx + 1] = startHeight;
+    this.particlePositions[idx + 2] = z;
+
+    this.particleColors[idx] = this.weatherColor.r;
+    this.particleColors[idx + 1] = this.weatherColor.g;
+    this.particleColors[idx + 2] = this.weatherColor.b;
+
+    this.particleAlphas[index] = density * 0.8;
+
+    data.active = true;
     data.maxLife = 4 + Math.random() * 4;
     data.life = data.maxLife;
 
-    switch (analysis.weatherType) {
+    switch (this.weatherType) {
       case 'rain':
-        data.velocity.set((Math.random() - 0.5) * 0.5, -8 - Math.random() * 4, (Math.random() - 0.5) * 0.5);
+        data.velocity.set((Math.random() - 0.5) * 0.3, -10 - Math.random() * 5, (Math.random() - 0.5) * 0.3);
         break;
       case 'heat':
-        data.velocity.set((Math.random() - 0.5) * 0.3, 2 + Math.random() * 2, (Math.random() - 0.5) * 0.3);
+        data.velocity.set((Math.random() - 0.5) * 0.2, 2.5 + Math.random() * 2, (Math.random() - 0.5) * 0.2);
         break;
       case 'thunder':
-        data.velocity.set((Math.random() - 0.5) * 1, -6 - Math.random() * 3, (Math.random() - 0.5) * 1);
+        data.velocity.set((Math.random() - 0.5) * 0.8, -8 - Math.random() * 4, (Math.random() - 0.5) * 0.8);
         break;
       case 'sand':
-        data.velocity.set(2 + Math.random() * 2, (Math.random() - 0.5) * 1, (Math.random() - 0.5) * 1);
+        data.velocity.set(3 + Math.random() * 2, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.8);
         break;
       default:
-        data.velocity.set(0, 0.5 + Math.random(), 0);
+        data.velocity.set(0, 0.8 + Math.random() * 1.2, 0);
     }
   }
 
   private updateParticles(delta: number): void {
-    if (!this.particles) return;
+    if (!this.particlePositions || !this.particleAlphas) return;
 
-    const positions = this.particles.geometry.attributes.position as THREE.BufferAttribute;
-    const alphas = this.particles.geometry.attributes.alpha as THREE.BufferAttribute;
+    const positions = this.particlePositions;
+    const alphas = this.particleAlphas;
+    const targetCount = this.targetParticleCount;
+    const spawnRate = targetCount / 3;
+    let spawned = 0;
+    const maxSpawn = Math.ceil(spawnRate * delta);
 
-    const activeCount = Math.min(this.targetParticleCount, MAX_PARTICLES);
-    const spawnRate = activeCount / 4;
-    let spawnIndex = -1;
+    let activeCount = 0;
 
     for (let i = 0; i < MAX_PARTICLES; i++) {
       const data = this.particleData[i];
 
-      if (data.life > 0) {
+      if (data.active && data.life > 0) {
         data.life -= delta;
+        activeCount++;
 
-        const x = positions.getX(i) + data.velocity.x * delta;
-        const y = positions.getY(i) + data.velocity.y * delta;
-        const z = positions.getZ(i) + data.velocity.z * delta;
-
-        positions.setXYZ(i, x, y, z);
+        const idx = i * 3;
+        positions[idx] += data.velocity.x * delta;
+        positions[idx + 1] += data.velocity.y * delta;
+        positions[idx + 2] += data.velocity.z * delta;
 
         const lifeRatio = data.life / data.maxLife;
-        const fadeAlpha = lifeRatio < 0.2 ? lifeRatio * 5 : lifeRatio > 0.8 ? (1 - lifeRatio) * 5 : 1;
-        alphas.setX(i, Math.max(0, Math.min(1, fadeAlpha * 0.8)));
+        let fadeAlpha: number;
+        if (lifeRatio < 0.15) {
+          fadeAlpha = lifeRatio / 0.15;
+        } else if (lifeRatio > 0.85) {
+          fadeAlpha = (1 - lifeRatio) / 0.15;
+        } else {
+          fadeAlpha = 1;
+        }
+        alphas[i] = Math.max(0, Math.min(1, fadeAlpha * 0.75));
 
-        if (y < -2 || y > 15 || x < -TERRAIN_SIZE / 2 || x > TERRAIN_SIZE / 2) {
+        const y = positions[idx + 1];
+        const x = positions[idx];
+        if (y < -1 || y > 14 || x < -TERRAIN_SIZE * 0.6 || x > TERRAIN_SIZE * 0.6) {
           data.life = 0;
-          alphas.setX(i, 0);
+          data.active = false;
+          alphas[i] = 0;
+          positions[idx + 1] = -100;
         }
       }
 
-      if (data.life <= 0 && spawnIndex < 0 && Math.random() < spawnRate * delta / MAX_PARTICLES) {
-        spawnIndex = i;
+      if (!data.active && spawned < maxSpawn && activeCount < targetCount) {
+        this.spawnParticle(i);
+        if (data.active) {
+          spawned++;
+          activeCount++;
+        }
       }
     }
 
-    if (spawnIndex >= 0 && activeCount > 0) {
-      this.spawnParticle(spawnIndex);
+    if (this.particles) {
+      const posAttr = this.particles.geometry.attributes.position as THREE.BufferAttribute;
+      const alphaAttr = this.particles.geometry.attributes.alpha as THREE.BufferAttribute;
+      const colorAttr = this.particles.geometry.attributes.color as THREE.BufferAttribute;
+      posAttr.needsUpdate = true;
+      alphaAttr.needsUpdate = true;
+      colorAttr.needsUpdate = true;
+    }
+  }
+
+  private updateTerrainTransition(delta: number): boolean {
+    if (!this.terrainGeometry || !this.terrainPositions || !this.terrainTargetHeights) return false;
+    if (this.terrainTransitionProgress >= 1) return false;
+
+    const positions = this.terrainGeometry.attributes.position;
+    const count = positions.count;
+    const speed = 2.5;
+    const newProgress = Math.min(1, this.terrainTransitionProgress + delta * speed);
+    const t = newProgress;
+    const easeT = t * t * (3 - 2 * t);
+
+    const startTime = performance.now();
+    let processed = 0;
+
+    for (let i = 0; i < count; i++) {
+      const currentY = this.terrainPositions[i * 3 + 1];
+      const targetY = this.terrainTargetHeights[i];
+      const newY = currentY + (targetY - currentY) * easeT;
+      positions.setY(i, newY);
+
+      processed++;
+      if (processed % 2000 === 0 && performance.now() - startTime > this.frameTimeBudget) {
+        this.terrainTransitionProgress = newProgress;
+        (positions as THREE.BufferAttribute).needsUpdate = true;
+        this.terrainGeometry?.computeVertexNormals();
+        return true;
+      }
     }
 
-    positions.needsUpdate = true;
-    alphas.needsUpdate = true;
+    this.terrainTransitionProgress = 1;
+    for (let i = 0; i < count; i++) {
+      this.terrainPositions[i * 3 + 1] = this.terrainTargetHeights[i];
+    }
+
+    (positions as THREE.BufferAttribute).needsUpdate = true;
+    this.terrainGeometry.computeVertexNormals();
+    return true;
   }
 
   private updateCloudsAnimation(delta: number): void {
-    if (!this.clouds) return;
+    if (!this.clouds || !this.cloudPositions) return;
 
-    const positions = this.clouds.geometry.attributes.position as THREE.BufferAttribute;
+    const positions = this.cloudPositions;
     const time = this.clock.elapsedTime;
 
     for (let i = 0; i < CLOUD_COUNT; i++) {
-      const x = positions.getX(i);
-      const y = positions.getY(i);
+      const idx = i * 3;
+      const y = positions[idx + 1];
 
       if (y > 0) {
-        positions.setX(i, x + delta * 0.2);
-        positions.setY(i, y + Math.sin(time * 0.5 + i) * 0.01);
+        positions[idx] += delta * 0.25;
+        positions[idx + 1] += Math.sin(time * 0.4 + i * 0.5) * delta * 0.1;
 
-        if (x > TERRAIN_SIZE / 2) {
-          positions.setX(i, -TERRAIN_SIZE / 2);
+        if (positions[idx] > TERRAIN_SIZE * 0.5) {
+          positions[idx] = -TERRAIN_SIZE * 0.5;
         }
       }
     }
 
-    positions.needsUpdate = true;
+    if (this.cloudNeedsUpdate) {
+      const posAttr = this.clouds.geometry.attributes.position as THREE.BufferAttribute;
+      const sizeAttr = this.clouds.geometry.attributes.size as THREE.BufferAttribute;
+      const alphaAttr = this.clouds.geometry.attributes.alpha as THREE.BufferAttribute;
+      posAttr.needsUpdate = true;
+      sizeAttr.needsUpdate = true;
+      alphaAttr.needsUpdate = true;
+      this.cloudNeedsUpdate = false;
+    } else {
+      (this.clouds.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    }
+
+    const cloudColor = this.weatherColor.clone();
+    cloudColor.lerp(new THREE.Color(0xffffff), 0.65);
+    const material = this.clouds.material as THREE.ShaderMaterial;
+    material.uniforms.color.value.lerp(cloudColor, 0.02);
   }
 
   private triggerLightning(): void {
-    if (!this.currentAnalysis || this.currentAnalysis.weatherType !== 'thunder') return;
-    if (Math.random() > 0.02) return;
+    if (this.weatherType !== 'thunder') return;
+    if (Math.random() > 0.015) return;
 
-    const lightning = this.lightnings.find(l => !l.visible);
-    if (!lightning) return;
+    const available = this.lightningPool.find(l => !l.line.visible);
+    if (!available) return;
 
     const startX = (Math.random() - 0.5) * TERRAIN_SIZE * 0.6;
     const startZ = (Math.random() - 0.5) * TERRAIN_SIZE * 0.5;
-    const startY = 10;
+    const startY = 11;
     const endY = 0;
 
     const points: THREE.Vector3[] = [];
-    const segments = 10;
+    const segments = 12;
 
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
-      const x = startX + (Math.random() - 0.5) * 2 * (1 - t * 0.5);
+      const wobble = (1 - t * 0.6) * 2.5;
+      const x = startX + (Math.random() - 0.5) * wobble;
       const y = startY + (endY - startY) * t;
-      const z = startZ + (Math.random() - 0.5) * 2 * (1 - t * 0.5);
+      const z = startZ + (Math.random() - 0.5) * wobble;
       points.push(new THREE.Vector3(x, y, z));
     }
 
-    lightning.geometry.dispose();
-    lightning.geometry = new THREE.BufferGeometry().setFromPoints(points);
-    lightning.visible = true;
+    available.line.geometry.dispose();
+    available.line.geometry = new THREE.BufferGeometry().setFromPoints(points);
+    available.line.visible = true;
+    available.opacity = 1;
+    available.fadeSpeed = 3 + Math.random() * 3;
 
-    const material = lightning.material as THREE.LineBasicMaterial;
-    material.opacity = 1;
+    (available.line.material as THREE.LineBasicMaterial).opacity = 1;
+    (available.line.material as THREE.LineBasicMaterial).color.copy(this.weatherColor).lerp(new THREE.Color(0xffffff), 0.7);
+  }
 
-    setTimeout(() => {
-      const fadeOut = () => {
-        if (material.opacity > 0) {
-          material.opacity -= 0.1;
-          requestAnimationFrame(fadeOut);
-        } else {
-          lightning.visible = false;
-        }
-      };
-      fadeOut();
-    }, 100);
+  private updateLightnings(delta: number): void {
+    for (const lightning of this.lightningPool) {
+      if (!lightning.line.visible) continue;
+
+      lightning.opacity -= lightning.fadeSpeed * delta;
+      if (lightning.opacity <= 0) {
+        lightning.opacity = 0;
+        lightning.line.visible = false;
+      }
+      (lightning.line.material as THREE.LineBasicMaterial).opacity = Math.max(0, lightning.opacity);
+    }
   }
 
   private handleResize = (): void => {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
+
+    if (width === 0 || height === 0) return;
 
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -560,26 +679,72 @@ export class WeatherScene {
   };
 
   private startAnimation(): void {
-    const animate = () => {
+    let lastTime = performance.now();
+
+    const animate = (): void => {
+      if (this.isDestroyed) return;
       this.animationId = requestAnimationFrame(animate);
-      const delta = Math.min(this.clock.getDelta(), 0.1);
+
+      const now = performance.now();
+      let delta = (now - lastTime) / 1000;
+      lastTime = now;
+      delta = Math.min(delta, 0.1);
+
+      this.clock.getDelta();
 
       this.controls.update();
+
+      this.updateTerrainTransition(delta);
       this.updateParticles(delta);
       this.updateCloudsAnimation(delta);
+      this.updateLightnings(delta);
       this.triggerLightning();
+      this.updateTerrainColor();
 
       this.renderer.render(this.scene, this.camera);
     };
-    animate();
+
+    this.animationId = requestAnimationFrame(animate);
+  }
+
+  getControls(): OrbitControls {
+    return this.controls;
+  }
+
+  getParticleCount(): number {
+    return this.targetParticleCount;
   }
 
   destroy(): void {
+    this.isDestroyed = true;
+
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
+      this.animationId = null;
     }
+
     window.removeEventListener('resize', this.handleResize);
     this.controls.dispose();
     this.renderer.dispose();
+
+    this.terrainGeometry?.dispose();
+    if (this.terrain?.material) {
+      (this.terrain.material as THREE.Material).dispose();
+    }
+
+    this.clouds?.geometry.dispose();
+    if (this.clouds?.material) {
+      (this.clouds.material as THREE.Material).dispose();
+    }
+
+    this.particles?.geometry.dispose();
+    if (this.particles?.material) {
+      (this.particles.material as THREE.Material).dispose();
+    }
+
+    for (const lightning of this.lightningPool) {
+      lightning.line.geometry.dispose();
+      (lightning.line.material as THREE.Material).dispose();
+    }
   }
 }
