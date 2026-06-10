@@ -1,0 +1,15 @@
+{
+  "name": "collaborative-mindmap",
+  "version": "1.0.0",
+  "description": "Real-time collaborative mind map application",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "@types/node": "^20.10.5"
+  }
+}
