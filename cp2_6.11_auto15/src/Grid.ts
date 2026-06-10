@@ -1,8 +1,9 @@
 import {
-  HexCell, PathSegment, IntersectionNode, EnergyBall,
+  HexCell, PathSegment, IntersectionNode, EnergyBall, CubeCoord,
   GRID_COLS, GRID_ROWS, HEX_GAP, MIN_HEX_SIZE,
   RUNE_SYMBOLS, LOCK_SYMBOL, COLORS, RUNE_ACTIVATION_COLORS,
-  HEX_DIRECTIONS_EVEN, HEX_DIRECTIONS_ODD, LOCKS_PER_LEVEL,
+  HEX_DIRECTIONS_EVEN_R, HEX_DIRECTIONS_ODD_R, LOCKS_PER_LEVEL,
+  CELL_SPACING, ACTIVATION_DECAY_TIME,
 } from './types';
 
 export class Grid {
@@ -19,8 +20,85 @@ export class Grid {
   gridHeight: number = GRID_ROWS;
   unlockedCount: number = 0;
 
+  static offsetToCube(q: number, r: number): CubeCoord {
+    const x = q - Math.floor(r / 2);
+    const z = r;
+    const y = -x - z;
+    return { x, y, z };
+  }
+
+  static cubeToOffset(cube: CubeCoord): { q: number; r: number } {
+    const r = cube.z;
+    const q = cube.x + Math.floor(cube.z / 2);
+    return { q, r };
+  }
+
+  static cubeDistance(a: CubeCoord, b: CubeCoord): number {
+    return Math.max(
+      Math.abs(a.x - b.x),
+      Math.abs(a.y - b.y),
+      Math.abs(a.z - b.z)
+    );
+  }
+
+  static getHexVertices(cx: number, cy: number, size: number): { x: number; y: number }[] {
+    const vertices: { x: number; y: number }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i - Math.PI / 6;
+      vertices.push({
+        x: cx + size * Math.cos(angle),
+        y: cy + size * Math.sin(angle),
+      });
+    }
+    return vertices;
+  }
+
   private getHexDirections(r: number) {
-    return r % 2 === 0 ? HEX_DIRECTIONS_EVEN : HEX_DIRECTIONS_ODD;
+    return r % 2 === 0 ? HEX_DIRECTIONS_EVEN_R : HEX_DIRECTIONS_ODD_R;
+  }
+
+  private hexToPixel(q: number, r: number): { x: number; y: number } {
+    const size = this.hexSize + HEX_GAP / 2;
+    const x = this.offsetX + size * 1.5 * q;
+    const y = this.offsetY + size * Math.sqrt(3) * (r + 0.5 * (q & 1));
+    return { x, y };
+  }
+
+  private pixelToHex(px: number, py: number): { q: number; r: number } {
+    const size = this.hexSize + HEX_GAP / 2;
+    const adjustedX = px - this.offsetX;
+    const adjustedY = py - this.offsetY;
+
+    const q = (2 / 3 * adjustedX) / size;
+    const r = (-1 / 3 * adjustedX + Math.sqrt(3) / 3 * adjustedY) / size;
+
+    return this.roundToHex(q, r);
+  }
+
+  private roundToHex(q: number, r: number): { q: number; r: number } {
+    const cube: CubeCoord = {
+      x: q - Math.floor(r / 2),
+      z: r,
+      y: -(q - Math.floor(r / 2)) - r,
+    };
+
+    let rx = Math.round(cube.x);
+    let ry = Math.round(cube.y);
+    let rz = Math.round(cube.z);
+
+    const xDiff = Math.abs(rx - cube.x);
+    const yDiff = Math.abs(ry - cube.y);
+    const zDiff = Math.abs(rz - cube.z);
+
+    if (xDiff > yDiff && xDiff > zDiff) {
+      rx = -ry - rz;
+    } else if (yDiff > zDiff) {
+      ry = -rx - rz;
+    } else {
+      rz = -rx - ry;
+    }
+
+    return Grid.cubeToOffset({ x: rx, y: ry, z: rz });
   }
 
   initialize(canvasWidth: number, canvasHeight: number, level: number = 1) {
@@ -35,40 +113,41 @@ export class Grid {
     const gridAreaW = canvasWidth * 0.65;
     const gridAreaH = canvasHeight * 0.8;
 
-    const hexW = gridAreaW / (GRID_COLS * 1.5 + 0.5);
-    const hexH = gridAreaH / (GRID_ROWS * Math.sqrt(3) / 2 + 0.5);
-    this.hexSize = Math.max(MIN_HEX_SIZE, Math.min(hexW, hexH) - HEX_GAP);
+    const hexSizeByW = gridAreaW / (GRID_COLS * 1.5 + 0.5) - HEX_GAP / 2;
+    const hexSizeByH = gridAreaH / ((GRID_ROWS + 0.5) * Math.sqrt(3)) - HEX_GAP / 2;
+    this.hexSize = Math.max(MIN_HEX_SIZE, Math.min(hexSizeByW, hexSizeByH));
 
-    const totalW = GRID_COLS * (this.hexSize * 1.5 + HEX_GAP) + this.hexSize * 0.5;
-    const totalH = GRID_ROWS * (this.hexSize * Math.sqrt(3) + HEX_GAP) + this.hexSize * Math.sqrt(3) * 0.5;
+    const size = this.hexSize + HEX_GAP / 2;
+    const totalW = size * 1.5 * (GRID_COLS - 1) + size * 2;
+    const totalH = size * Math.sqrt(3) * (GRID_ROWS + 0.5);
 
-    this.offsetX = (canvasWidth - totalW) / 2 + this.hexSize;
-    this.offsetY = (canvasHeight - totalH) / 2 + this.hexSize * Math.sqrt(3) * 0.5 + canvasHeight * 0.05;
+    this.offsetX = (canvasWidth - totalW) / 2 + size;
+    this.offsetY = (canvasHeight - totalH) / 2 + size * Math.sqrt(3) / 2 + canvasHeight * 0.05;
 
     const lockPositions = this.generateLockPositions(level);
 
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let q = 0; q < GRID_COLS; q++) {
-        const x = this.offsetX + q * (this.hexSize * 1.5 + HEX_GAP);
-        const y = this.offsetY + r * (this.hexSize * Math.sqrt(3) + HEX_GAP)
-          + (q % 2 === 1 ? this.hexSize * Math.sqrt(3) * 0.5 : 0);
-
+        const cube = Grid.offsetToCube(q, r);
+        const pos = this.hexToPixel(q, r);
         const isLocked = lockPositions.some(lp => lp.q === q && lp.r === r);
 
         this.cells.push({
-          q, r,
+          q, r, cube,
           symbol: isLocked ? LOCK_SYMBOL : RUNE_SYMBOLS[Math.floor(Math.random() * RUNE_SYMBOLS.length)],
           isLocked,
           isPassable: !isLocked,
           activationCount: 0,
-          lastActivatedTime: 0,
-          x, y,
+          lastActivatedTime: -Infinity,
+          x: pos.x,
+          y: pos.y,
           pulseTime: 0,
           shakeTime: 0,
           shakeOffsetX: 0,
           shakeOffsetY: 0,
           unlockAnimTime: 0,
           isUnlockAnimating: false,
+          ballVisits: [],
         });
       }
     }
@@ -95,6 +174,11 @@ export class Grid {
     return this.cells.find(c => c.q === q && c.r === r) || null;
   }
 
+  getCellAtCube(cube: CubeCoord): HexCell | null {
+    const offset = Grid.cubeToOffset(cube);
+    return this.getCellAt(offset.q, offset.r);
+  }
+
   getCellAtPixel(px: number, py: number): HexCell | null {
     let closest: HexCell | null = null;
     let closestDist = Infinity;
@@ -103,7 +187,7 @@ export class Grid {
       const dx = px - cell.x;
       const dy = py - cell.y;
       const dist = dx * dx + dy * dy;
-      if (dist < closestDist && dist < this.hexSize * this.hexSize) {
+      if (dist < closestDist && dist < (this.hexSize * 1.1) ** 2) {
         closestDist = dist;
         closest = cell;
       }
@@ -111,9 +195,8 @@ export class Grid {
     return closest;
   }
 
-  getManhattanDistance(a: HexCell, b: HexCell): number {
-    const directions = this.getHexDirections(a.r);
-    return Math.abs(a.q - b.q) + Math.abs(a.r - b.r);
+  getHexDistance(a: HexCell, b: HexCell): number {
+    return Grid.cubeDistance(a.cube, b.cube);
   }
 
   getNeighbors(cell: HexCell): HexCell[] {
@@ -127,7 +210,7 @@ export class Grid {
   }
 
   isWithinRange(from: HexCell, to: HexCell, maxDist: number = 3): boolean {
-    return this.getManhattanDistance(from, to) <= maxDist;
+    return this.getHexDistance(from, to) <= maxDist;
   }
 
   addPath(from: HexCell, to: HexCell): PathSegment {
@@ -149,8 +232,8 @@ export class Grid {
     const midY = (from.y + to.y) / 2;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    const perpX = -dy * 0.3;
-    const perpY = dx * 0.3;
+    const perpX = -dy * 0.25;
+    const perpY = dx * 0.25;
     return { x: midX + perpX, y: midY + perpY };
   }
 
@@ -178,7 +261,7 @@ export class Grid {
     pathA: PathSegment,
     pathB: PathSegment
   ): { x: number; y: number } | null {
-    const steps = 20;
+    const steps = 30;
     for (let i = 1; i < steps; i++) {
       const tA = i / steps;
       const pA = this.getPointOnPath(pathA, tA);
@@ -187,7 +270,7 @@ export class Grid {
         const pB = this.getPointOnPath(pathB, tB);
         const dx = pA.x - pB.x;
         const dy = pA.y - pB.y;
-        if (dx * dx + dy * dy < (this.hexSize * 0.5) ** 2) {
+        if (dx * dx + dy * dy < (this.hexSize * 0.4) ** 2) {
           return { x: (pA.x + pB.x) / 2, y: (pA.y + pB.y) / 2 };
         }
       }
@@ -267,25 +350,26 @@ export class Grid {
     for (const dir of directions) {
       const nq = unlockedCell.q + dir.dq;
       const nr = unlockedCell.r + dir.dr;
-      if (!this.getCellAt(nq, nr)) {
-        const x = this.offsetX + nq * (this.hexSize * 1.5 + HEX_GAP);
-        const y = this.offsetY + nr * (this.hexSize * Math.sqrt(3) + HEX_GAP)
-          + (nq % 2 === 1 ? this.hexSize * Math.sqrt(3) * 0.5 : 0);
+      if (!this.getCellAt(nq, nr) && nq >= -1 && nr >= -1) {
+        const cube = Grid.offsetToCube(nq, nr);
+        const pos = this.hexToPixel(nq, nr);
 
         this.cells.push({
-          q: nq, r: nr,
+          q: nq, r: nr, cube,
           symbol: RUNE_SYMBOLS[Math.floor(Math.random() * RUNE_SYMBOLS.length)],
           isLocked: false,
           isPassable: true,
           activationCount: 0,
-          lastActivatedTime: 0,
-          x, y,
+          lastActivatedTime: -Infinity,
+          x: pos.x,
+          y: pos.y,
           pulseTime: 0,
           shakeTime: 0,
           shakeOffsetX: 0,
           shakeOffsetY: 0,
           unlockAnimTime: 0,
           isUnlockAnimating: false,
+          ballVisits: [],
         });
       }
     }
@@ -313,11 +397,11 @@ export class Grid {
         }
       }
 
-      if (cell.activationCount > 0 && !cell.isLocked) {
+      if (cell.activationCount > 0 && !cell.isLocked && cell.lastActivatedTime > 0) {
         const elapsed = currentTime - cell.lastActivatedTime;
-        if (elapsed > 10 && cell.activationCount > 0) {
+        if (elapsed > ACTIVATION_DECAY_TIME) {
           cell.activationCount = Math.max(0, cell.activationCount - 1);
-          cell.lastActivatedTime = currentTime;
+          cell.lastActivatedTime = cell.activationCount > 0 ? currentTime : -Infinity;
         }
       }
     }
@@ -354,7 +438,7 @@ export class Grid {
       maxY = Math.max(maxY, cell.y + this.hexSize);
     }
 
-    const pad = 10;
+    const pad = 15;
     ctx.strokeStyle = COLORS.glowBorder;
     ctx.lineWidth = 2;
     ctx.shadowColor = 'rgba(123, 107, 154, 0.5)';
@@ -394,7 +478,7 @@ export class Grid {
 
     let fillColor: string;
     let strokeColor: string;
-    let strokeAlpha = 0.3;
+    let strokeAlpha = 0.25;
 
     if (cell.isLocked) {
       fillColor = '#2A2A3A';
@@ -429,12 +513,12 @@ export class Grid {
     ctx.fillStyle = this.hexToRgba(fillColor, 0.15);
     ctx.fill();
     ctx.strokeStyle = this.hexToRgba(strokeColor, strokeAlpha);
-    ctx.lineWidth = isHovered || isSelected ? 2 : 1;
+    ctx.lineWidth = isHovered || isSelected ? 2 : 1.5;
     ctx.stroke();
 
     ctx.shadowBlur = 0;
 
-    ctx.font = `${size * 0.7}px serif`;
+    ctx.font = `bold ${size * 0.75}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = cell.isLocked ? COLORS.lockRune : fillColor;
@@ -446,7 +530,7 @@ export class Grid {
     if (cell.isUnlockAnimating) {
       const progress = 1 - cell.unlockAnimTime / 0.6;
       ctx.globalAlpha = 1 - progress;
-      ctx.font = `${size * 0.7}px serif`;
+      ctx.font = `bold ${size * 0.75}px serif`;
       ctx.fillStyle = COLORS.unlockGold;
       ctx.fillText(LOCK_SYMBOL, x, y + 1);
       ctx.globalAlpha = 1;
@@ -457,7 +541,7 @@ export class Grid {
       if (elapsed < 1) {
         const glow = 1 - elapsed;
         this.drawHexagon(ctx, x, y, size + 3);
-        ctx.strokeStyle = this.hexToRgba(COLORS.runePulseEnd, glow * 0.5);
+        ctx.strokeStyle = this.hexToRgba(COLORS.runePulseEnd, glow * 0.6);
         ctx.lineWidth = 2;
         ctx.stroke();
       }
@@ -466,14 +550,13 @@ export class Grid {
     ctx.restore();
   }
 
-  private drawHexagon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) {
+  drawHexagon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) {
+    const vertices = Grid.getHexVertices(cx, cy, size);
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i - Math.PI / 6;
-      const hx = cx + size * Math.cos(angle);
-      const hy = cy + size * Math.sin(angle);
-      if (i === 0) ctx.moveTo(hx, hy);
-      else ctx.lineTo(hx, hy);
+      const v = vertices[i];
+      if (i === 0) ctx.moveTo(v.x, v.y);
+      else ctx.lineTo(v.x, v.y);
     }
     ctx.closePath();
   }
@@ -568,7 +651,7 @@ export class Grid {
       ctx.fill();
 
       ctx.globalAlpha = 1;
-      ctx.font = '8px sans-serif';
+      ctx.font = 'bold 8px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#FFFFFF';
@@ -634,6 +717,7 @@ export class Grid {
       q: c.q, r: c.r, symbol: c.symbol,
       isLocked: c.isLocked, isPassable: c.isPassable,
       activationCount: c.activationCount,
+      lastActivatedTime: c.lastActivatedTime,
     }));
   }
 }

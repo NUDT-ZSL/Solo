@@ -7,6 +7,7 @@ const game = new GameManager();
 
 let lastTime = 0;
 let animFrameId = 0;
+let targetFPS = 60;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -21,6 +22,9 @@ function resize() {
 function gameLoop(timestamp: number) {
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
+
+  const fps = game.state === 'replay' ? 30 : 60;
+  const frameInterval = 1000 / fps;
 
   game.update(dt, window.innerWidth, window.innerHeight);
 
@@ -45,6 +49,11 @@ canvas.addEventListener('mousedown', (e) => {
   const pos = getEventPos(e);
   const now = performance.now();
 
+  if (game.state === 'replay') {
+    game['endReplay']();
+    return;
+  }
+
   const isDoubleClick =
     now - lastClickTime < 350 &&
     Math.abs(pos.x - lastClickPos.x) < 20 &&
@@ -56,7 +65,7 @@ canvas.addEventListener('mousedown', (e) => {
   } else {
     lastClickTime = now;
     lastClickPos = pos;
-    game.handleClick(pos.x, pos.y);
+    game.handleClick(pos.x, pos.y, window.innerWidth);
   }
 
   game.handleMouseDown(pos.x, pos.y);
@@ -64,6 +73,7 @@ canvas.addEventListener('mousedown', (e) => {
 
 canvas.addEventListener('mousemove', (e) => {
   const pos = getEventPos(e);
+  game.updateMousePos(pos.x, pos.y);
   game.handleMouseMove(pos.x, pos.y);
 });
 
@@ -83,6 +93,11 @@ canvas.addEventListener('touchstart', (e) => {
   const touch = e.touches[0];
   const pos = getEventPos(touch);
   const now = performance.now();
+
+  if (game.state === 'replay') {
+    game['endReplay']();
+    return;
+  }
 
   touchStartTime = now;
   touchStartPos = pos;
@@ -107,6 +122,7 @@ canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
   if (e.touches.length === 0) return;
   const pos = getEventPos(e.touches[0]);
+  game.updateMousePos(pos.x, pos.y);
   game.handleMouseMove(pos.x, pos.y);
 }, { passive: false });
 
@@ -115,14 +131,23 @@ canvas.addEventListener('touchend', (e) => {
   const now = performance.now();
   const duration = now - touchStartTime;
 
+  if (game.state === 'replay') {
+    return;
+  }
+
   if (duration < 250) {
-    game.handleClick(touchStartPos.x, touchStartPos.y);
+    game.handleClick(touchStartPos.x, touchStartPos.y, window.innerWidth);
   }
 
   game.handleMouseUp(touchStartPos.x, touchStartPos.y);
 }, { passive: false });
 
 canvas.addEventListener('click', (e) => {
+  if (game.state === 'replay') {
+    game['endReplay']();
+    return;
+  }
+
   const bounds = game.getReplayButtonBounds(window.innerWidth);
   const pos = getEventPos(e);
   if (
@@ -139,6 +164,12 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('beforeunload', () => {
   game.saveGame();
+});
+
+window.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    game.saveGame();
+  }
 });
 
 resize();

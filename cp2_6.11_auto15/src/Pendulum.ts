@@ -1,6 +1,6 @@
 import {
   EnergyBall, PathSegment, HexCell, IntersectionNode,
-  COLORS, ENERGY_BALL_SPEED, TRAIL_LENGTH,
+  COLORS, ENERGY_BALL_SPEED, CELL_SPACING, TRAIL_LENGTH,
 } from './types';
 import { Grid } from './Grid';
 import { EffectManager } from './EffectManager';
@@ -30,6 +30,7 @@ export class Pendulum {
       currentCell: fromCell,
       waitingAtIntersection: false,
       intersectionCell: null,
+      lastVisitedCell: null,
     };
 
     if (!isMain && this.balls.filter(b => !b.isMain && b.active).length >= 1) {
@@ -54,10 +55,14 @@ export class Pendulum {
     return this.createBall(fromCell, toCell, path, false);
   }
 
-  update(dt: number, currentTime: number, onBallArrive: (ball: EnergyBall, cell: HexCell) => void) {
+  update(
+    dt: number,
+    currentTime: number,
+    onBallArrive: (ball: EnergyBall, cell: HexCell) => void,
+    onBallVisitCell: (ball: EnergyBall, cell: HexCell) => void
+  ) {
     for (const ball of this.balls) {
       if (!ball.active) continue;
-
       if (ball.waitingAtIntersection) continue;
 
       const path = this.grid.paths[ball.pathIndex];
@@ -67,11 +72,19 @@ export class Pendulum {
       }
 
       const pathLen = this.grid.getPathLength(path);
-      const gridSize = this.grid.hexSize;
-      const speed = ENERGY_BALL_SPEED * gridSize;
+      const speed = ENERGY_BALL_SPEED * CELL_SPACING;
       const progressStep = (speed * dt) / Math.max(1, pathLen);
 
+      const oldProgress = ball.pathProgress;
       ball.pathProgress += progressStep;
+
+      const midProgress = (oldProgress + ball.pathProgress) / 2;
+      const midPos = this.grid.getPointOnPath(path, midProgress);
+      const midCell = this.grid.getCellAtPixel(midPos.x, midPos.y);
+      if (midCell && midCell !== ball.lastVisitedCell && midCell !== ball.currentCell) {
+        ball.lastVisitedCell = midCell;
+        onBallVisitCell(ball, midCell);
+      }
 
       if (ball.pathProgress >= 1) {
         ball.pathProgress = 1;
@@ -80,6 +93,9 @@ export class Pendulum {
         ball.y = toCell.y;
         ball.currentCell = toCell;
         ball.active = false;
+
+        toCell.ballVisits.push({ ballId: ball.id, time: currentTime });
+        onBallVisitCell(ball, toCell);
         onBallArrive(ball, toCell);
         continue;
       }
@@ -139,7 +155,6 @@ export class Pendulum {
 
         if (direction === 'B') {
           const newPath = node.pathB;
-          const currentProgress = ball.pathProgress;
           ball.pathIndex = this.grid.paths.indexOf(newPath);
           ball.pathProgress = 0;
 
@@ -158,26 +173,7 @@ export class Pendulum {
     }
   }
 
-  checkBallCollision(): { ball1: EnergyBall; ball2: EnergyBall } | null {
-    const activeBalls = this.balls.filter(b => b.active);
-    if (activeBalls.length < 2) return null;
-
-    for (let i = 0; i < activeBalls.length; i++) {
-      for (let j = i + 1; j < activeBalls.length; j++) {
-        const a = activeBalls[i];
-        const b = activeBalls[j];
-        const dx = a.x - b.x;
-        const dy = a.y - b.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < this.grid.hexSize * 0.8) {
-          return { ball1: a, ball2: b };
-        }
-      }
-    }
-    return null;
-  }
-
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, isReplay: boolean = false) {
     for (const ball of this.balls) {
       if (ball.trail.length > 0) {
         for (let i = 0; i < ball.trail.length - 1; i++) {
@@ -185,7 +181,7 @@ export class Pendulum {
           ctx.beginPath();
           ctx.arc(t.x, t.y, 3 * t.alpha, 0, Math.PI * 2);
           ctx.fillStyle = ball.color;
-          ctx.globalAlpha = t.alpha * 0.6;
+          ctx.globalAlpha = isReplay ? t.alpha * 0.4 : t.alpha * 0.6;
           ctx.fill();
         }
         ctx.globalAlpha = 1;
@@ -202,17 +198,20 @@ export class Pendulum {
         gradient.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = gradient;
         ctx.shadowColor = ball.color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = isReplay ? 8 : 15;
+        ctx.globalAlpha = isReplay ? 0.6 : 1;
         ctx.fill();
 
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, 5, 0, Math.PI * 2);
         ctx.fillStyle = ball.color;
+        ctx.globalAlpha = isReplay ? 0.6 : 1;
         ctx.fill();
 
         ctx.restore();
       }
     }
+    ctx.globalAlpha = 1;
   }
 
   clear() {
