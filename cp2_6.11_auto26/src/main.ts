@@ -1,4 +1,4 @@
-import { GamePhase, BOARD_SIZE, CELL_SIZE, CELL_GAP } from './types';
+import { GamePhase, BOARD_SIZE, CELL_SIZE, CELL_GAP, lerp, clamp } from './types';
 import { createInitialState, updateGameState, handleClick, handleHover } from './gameLogic';
 import { render } from './gameUI';
 import type { GameState } from './types';
@@ -10,6 +10,16 @@ let state: GameState = createInitialState();
 let lastTime = performance.now();
 let boardOriginX = 0;
 let boardOriginY = 0;
+
+declare global {
+  interface Window {
+    __gameDebug: {
+      state: GameState;
+      lerp: (a: number, b: number, t: number) => number;
+      clamp: (v: number, min: number, max: number) => number;
+    };
+  }
+}
 
 function resize(): void {
   canvas.width = window.innerWidth;
@@ -55,4 +65,5 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
 window.addEventListener('resize', resize);
 
 resize();
+window.__gameDebug = { state, lerp, clamp };
 requestAnimationFrame(gameLoop);

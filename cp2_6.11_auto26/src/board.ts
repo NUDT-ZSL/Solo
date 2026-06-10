@@ -2,11 +2,14 @@ import {
   CellType,
   FogState,
   PlayerSide,
+  CaptureState,
   Cell,
   Piece,
   BOARD_SIZE,
   FOG_FADE_DURATION,
   FOG_RETURN_DURATION,
+  lerp,
+  clamp,
 } from './types';
 
 export function createBoard(size: number): Cell[][] {
@@ -29,6 +32,8 @@ export function createBoard(size: number): Cell[][] {
         fogAlpha: 1.0,
         owner: null,
         captureProgress: 0,
+        captureState: CaptureState.IDLE,
+        captureSide: null,
         pulsePhase: Math.random() * Math.PI * 2,
       };
     }
@@ -129,24 +134,21 @@ export function updateFogAnimations(board: Cell[][], dt: number): void {
   for (let r = 0; r < BOARD_SIZE; r++) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const cell = board[r][c];
-      switch (cell.fogState) {
-        case FogState.FADING: {
-          const fadeSpeed = 1.0 / FOG_FADE_DURATION;
-          cell.fogAlpha -= fadeSpeed * dt;
-          if (cell.fogAlpha <= 0) {
-            cell.fogAlpha = 0;
-            cell.fogState = FogState.CLEAR;
-          }
-          break;
+      const targetAlpha = cell.fogState === FogState.CLEAR ? 0 : 1;
+
+      if (cell.fogState === FogState.FADING) {
+        const t = clamp(dt / FOG_FADE_DURATION, 0, 1);
+        cell.fogAlpha = lerp(cell.fogAlpha, targetAlpha, t);
+        if (Math.abs(cell.fogAlpha - targetAlpha) < 0.001) {
+          cell.fogAlpha = 0;
+          cell.fogState = FogState.CLEAR;
         }
-        case FogState.RETURNING: {
-          const returnSpeed = 1.0 / FOG_RETURN_DURATION;
-          cell.fogAlpha += returnSpeed * dt;
-          if (cell.fogAlpha >= 1) {
-            cell.fogAlpha = 1;
-            cell.fogState = FogState.FULL;
-          }
-          break;
+      } else if (cell.fogState === FogState.RETURNING) {
+        const t = clamp(dt / FOG_RETURN_DURATION, 0, 1);
+        cell.fogAlpha = lerp(cell.fogAlpha, targetAlpha, t);
+        if (Math.abs(cell.fogAlpha - targetAlpha) < 0.001) {
+          cell.fogAlpha = 1;
+          cell.fogState = FogState.FULL;
         }
       }
     }

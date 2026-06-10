@@ -3,7 +3,7 @@ import {
   PlayerSide,
   GamePhase,
   CellType,
-  FogState,
+  CaptureState,
   ButtonDef,
   BOARD_SIZE,
   CELL_SIZE,
@@ -13,6 +13,10 @@ import {
   VINE_ANIM_DURATION,
   SELECT_HALO_PERIOD,
   MAX_MANA,
+  CAPTURE_DURATION,
+  lerp,
+  clamp,
+  easeOutBack,
 } from './types';
 import { getButtons } from './gameLogic';
 
@@ -93,9 +97,11 @@ function drawBoard(
         ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
 
         // Capture progress bar
-        if (cell.captureProgress > 0 && cell.owner === null) {
-          const progress = cell.captureProgress / 3000;
-          ctx.fillStyle = `rgba(74, 230, 138, 0.7)`;
+        if (cell.captureState === CaptureState.CAPTURING || cell.captureState === CaptureState.DECAYING) {
+          const progress = cell.captureProgress / CAPTURE_DURATION;
+          const barColor = cell.captureSide === PlayerSide.GREEN ? '74, 230, 138' : '255, 179, 71';
+          const alpha = cell.captureState === CaptureState.DECAYING ? 0.5 : 0.8;
+          ctx.fillStyle = `rgba(${barColor}, ${alpha})`;
           ctx.fillRect(x + 4, y + CELL_SIZE - 6, (CELL_SIZE - 8) * progress, 3);
         }
       } else if (cell.type === CellType.THORN) {
@@ -332,13 +338,16 @@ function drawSelectionHalo(
   const y = oy + state.selectedCell.row * (CELL_SIZE + CELL_GAP);
   const cx = x + CELL_SIZE / 2;
   const cy = y + CELL_SIZE / 2;
-  const angle = (time / SELECT_HALO_PERIOD) * Math.PI * 2;
-  const pulse = 0.7 + 0.3 * Math.sin(time * 0.005);
+
+  const rotationProgress = (time / SELECT_HALO_PERIOD) % 1;
+  const angle = rotationProgress * Math.PI * 2;
+  const pulseT = (Math.sin((time / SELECT_HALO_PERIOD) * Math.PI * 2) + 1) / 2;
+  const brightness = 0.5 + pulseT * 0.5;
 
   // Extra inner glow
   ctx.save();
   const glowGrad = ctx.createRadialGradient(cx, cy, CELL_SIZE / 2 - 5, cx, cy, CELL_SIZE / 2 + 14);
-  glowGrad.addColorStop(0, `rgba(255, 215, 0, ${0.45 * pulse})`);
+  glowGrad.addColorStop(0, `rgba(255, 215, 0, ${0.45 * brightness})`);
   glowGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
   ctx.fillStyle = glowGrad;
   ctx.fillRect(x - 15, y - 15, CELL_SIZE + 30, CELL_SIZE + 30);
@@ -348,7 +357,7 @@ function drawSelectionHalo(
   ctx.translate(cx, cy);
   ctx.rotate(angle);
 
-  ctx.strokeStyle = `rgba(255, 215, 0, ${0.85 * pulse})`;
+  ctx.strokeStyle = `rgba(255, 215, 0, ${0.9 * brightness})`;
   ctx.lineWidth = 3;
 
   const haloRadius = CELL_SIZE / 2 + 6;
@@ -510,9 +519,10 @@ function drawButton(ctx: CanvasRenderingContext2D, btn: ButtonDef, state: GameSt
   ctx.save();
 
   let scale = 1;
-  if (isClicking && state.buttonClickAnim!) {
-    const p = state.buttonClickAnim.progress / 100;
-    scale = p < 0.5 ? 1 - 0.05 * (p * 2) : 0.95 + 0.05 * ((p - 0.5) * 2);
+  if (isClicking && state.buttonClickAnim) {
+    const t = clamp(state.buttonClickAnim.progress / 100, 0, 1);
+    const eased = easeOutBack(t);
+    scale = 0.95 + 0.05 * eased;
   }
 
   if (isClicking) {

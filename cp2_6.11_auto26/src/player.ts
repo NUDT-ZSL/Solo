@@ -3,12 +3,16 @@ import {
   Piece,
   Cell,
   CellType,
-  FogState,
+  CaptureState,
   AiAction,
   BOARD_SIZE,
   SUMMON_MANA_COST,
   VINE_MANA_COST,
   MAX_MANA,
+  CAPTURE_DURATION,
+  CAPTURE_DECAY_DURATION,
+  lerp,
+  clamp,
 } from './types';
 import { getPieceAt, isValidMove, getCellAt } from './board';
 
@@ -62,6 +66,74 @@ export function castVine(
 export function decrementEntangle(pieces: Piece[]): void {
   for (const p of pieces) {
     if (p.entangled > 0) p.entangled--;
+  }
+}
+
+export function updateCaptureStates(board: Cell[][], pieces: Piece[], dt: number): void {
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const cell = board[r][c];
+      if (cell.type !== CellType.SPIRIT) continue;
+
+      const pieceHere = getPieceAt(pieces, r, c);
+
+      switch (cell.captureState) {
+        case CaptureState.IDLE: {
+          if (pieceHere && pieceHere.side !== cell.owner) {
+            cell.captureState = CaptureState.CAPTURING;
+            cell.captureSide = pieceHere.side;
+            cell.captureProgress = 0;
+          }
+          break;
+        }
+
+        case CaptureState.CAPTURING: {
+          if (pieceHere && pieceHere.side === cell.captureSide) {
+            cell.captureProgress += dt;
+            if (cell.captureProgress >= CAPTURE_DURATION) {
+              cell.owner = cell.captureSide;
+              cell.captureState = CaptureState.CAPTURED;
+              cell.captureProgress = CAPTURE_DURATION;
+            }
+          } else if (pieceHere && pieceHere.side !== cell.captureSide) {
+            cell.captureSide = pieceHere.side;
+            cell.captureProgress = 0;
+          } else {
+            cell.captureState = CaptureState.DECAYING;
+          }
+          break;
+        }
+
+        case CaptureState.CAPTURED: {
+          if (cell.owner === null) {
+            cell.captureState = CaptureState.IDLE;
+            cell.captureProgress = 0;
+            cell.captureSide = null;
+          } else if (pieceHere && pieceHere.side !== cell.owner) {
+            cell.captureState = CaptureState.DECAYING;
+          }
+          break;
+        }
+
+        case CaptureState.DECAYING: {
+          if (pieceHere && pieceHere.side === cell.captureSide) {
+            cell.captureState = CaptureState.CAPTURING;
+          } else if (pieceHere && pieceHere.side !== cell.captureSide && pieceHere.side !== cell.owner) {
+            cell.captureSide = pieceHere.side;
+            cell.captureProgress = 0;
+            cell.captureState = CaptureState.CAPTURING;
+          } else {
+            cell.captureProgress -= dt * (CAPTURE_DURATION / CAPTURE_DECAY_DURATION);
+            if (cell.captureProgress <= 0) {
+              cell.captureProgress = 0;
+              cell.captureState = cell.owner !== null ? CaptureState.CAPTURED : CaptureState.IDLE;
+              cell.captureSide = cell.owner;
+            }
+          }
+          break;
+        }
+      }
+    }
   }
 }
 

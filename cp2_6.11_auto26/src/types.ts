@@ -23,12 +23,21 @@ export enum GamePhase {
   GAME_OVER = 3,
 }
 
+export enum CaptureState {
+  IDLE = 0,
+  CAPTURING = 1,
+  CAPTURED = 2,
+  DECAYING = 3,
+}
+
 export interface Cell {
   type: CellType;
   fogState: FogState;
   fogAlpha: number;
   owner: PlayerSide | null;
   captureProgress: number;
+  captureState: CaptureState;
+  captureSide: PlayerSide | null;
   pulsePhase: number;
 }
 
@@ -121,6 +130,7 @@ export const FOG_FADE_DURATION = 500;
 export const FOG_RETURN_DURATION = 250;
 export const SPIRIT_PULSE_PERIOD = 1500;
 export const CAPTURE_DURATION = 3000;
+export const CAPTURE_DECAY_DURATION = 4500;
 export const SUMMON_ANIM_DURATION = 600;
 export const VINE_ANIM_DURATION = 800;
 export const TURN_TRANSITION_DURATION = 1200;
@@ -130,3 +140,17 @@ export const SUMMON_MANA_COST = 2;
 export const VINE_MANA_COST = 3;
 export const MAX_TURNS = 20;
 export const SELECT_HALO_PERIOD = 1500;
+
+export function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+export function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+export function easeOutBack(t: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}

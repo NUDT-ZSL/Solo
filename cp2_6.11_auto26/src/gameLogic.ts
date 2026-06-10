@@ -4,6 +4,7 @@ import {
   GamePhase,
   CellType,
   FogState,
+  CaptureState,
   Particle,
   ButtonDef,
   AiAction,
@@ -24,7 +25,7 @@ import {
   VINE_MANA_COST,
 } from './types';
 import { getPieceAt, countSpiritNodes, updateFog, updateFogAnimations } from './board';
-import { movePiece, summonPiece, castVine, decrementEntangle, getAIAction } from './player';
+import { movePiece, summonPiece, castVine, decrementEntangle, getAIAction, updateCaptureStates } from './player';
 
 export function createInitialState(): GameState {
   const board: GameState['board'] = [];
@@ -37,6 +38,8 @@ export function createInitialState(): GameState {
         fogAlpha: 1.0,
         owner: null,
         captureProgress: 0,
+        captureState: CaptureState.IDLE,
+        captureSide: null,
         pulsePhase: Math.random() * Math.PI * 2,
       };
     }
@@ -128,37 +131,9 @@ export function updateGameState(state: GameState, dt: number): void {
     }
   }
 
-  // Capture progress
-  for (const p of state.pieces) {
-    const cell = state.board[p.row][p.col];
-    if (cell.type === CellType.SPIRIT && cell.owner !== p.side) {
-      cell.captureProgress += dt;
-      if (cell.captureProgress >= CAPTURE_DURATION) {
-        cell.owner = p.side;
-        cell.captureProgress = 0;
-        state.scores = countSpiritNodes(state.board);
-      }
-    } else {
-      if (cell.type !== CellType.SPIRIT || cell.owner === p.side) {
-        // reset if moved away
-      }
-    }
-  }
-
-  // Clear capture progress for cells without a piece
-  for (let r = 0; r < BOARD_SIZE; r++) {
-    for (let c = 0; c < BOARD_SIZE; c++) {
-      const cell = state.board[r][c];
-      if (cell.type === CellType.SPIRIT) {
-        const pieceHere = getPieceAt(state.pieces, r, c);
-        if (!pieceHere) {
-          cell.captureProgress = 0;
-        } else if (pieceHere.side === cell.owner) {
-          cell.captureProgress = 0;
-        }
-      }
-    }
-  }
+  // Capture state machine
+  updateCaptureStates(state.board, state.pieces, dt);
+  state.scores = countSpiritNodes(state.board);
 
   // Particles
   state.particles = state.particles.filter(p => {
