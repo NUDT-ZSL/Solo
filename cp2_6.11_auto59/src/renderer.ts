@@ -1,4 +1,4 @@
-import { MoodResult, blendColors } from './moodEngine';
+import { MoodResult, MoodType, blendColors } from './moodEngine';
 
 interface ColorBlob {
   x: number;
@@ -164,7 +164,7 @@ export class ArtRenderer {
     const w = rect.width;
     const h = rect.height;
 
-    const alphaMap: Record<string, [number, number]> = {
+    const alphaMap: Record<MoodType, [number, number]> = {
       joy: [0.25, 0.45],
       peace: [0.2, 0.4],
       sadness: [0.3, 0.5],
@@ -256,7 +256,7 @@ export class ArtRenderer {
       y,
       radius: 0,
       maxRadius: 200,
-      alpha: 0.6,
+      alpha: 1.0,
       startTime: performance.now(),
       duration: 1000
     });
@@ -315,25 +315,26 @@ export class ArtRenderer {
       blob.x += blob.vx;
       blob.y += blob.vy;
 
-      const effectiveLeft = blob.radius;
-      const effectiveRight = w - blob.radius;
-      const effectiveTop = blob.radius;
-      const effectiveBottom = h - blob.radius;
+      const r = blob.radius;
+      const minX = r;
+      const maxX = w - r;
+      const minY = r;
+      const maxY = h - r;
 
-      if (blob.x < effectiveLeft) {
-        blob.vx = Math.abs(blob.vx);
-        blob.x = effectiveLeft;
-      } else if (blob.x > effectiveRight) {
-        blob.vx = -Math.abs(blob.vx);
-        blob.x = effectiveRight;
+      if (blob.x < minX) {
+        blob.vx = Math.abs(blob.vx) * 0.95;
+        blob.x = minX;
+      } else if (blob.x > maxX) {
+        blob.vx = -Math.abs(blob.vx) * 0.95;
+        blob.x = maxX;
       }
 
-      if (blob.y < effectiveTop) {
-        blob.vy = Math.abs(blob.vy);
-        blob.y = effectiveTop;
-      } else if (blob.y > effectiveBottom) {
-        blob.vy = -Math.abs(blob.vy);
-        blob.y = effectiveBottom;
+      if (blob.y < minY) {
+        blob.vy = Math.abs(blob.vy) * 0.95;
+        blob.y = minY;
+      } else if (blob.y > maxY) {
+        blob.vy = -Math.abs(blob.vy) * 0.95;
+        blob.y = maxY;
       }
 
       if (this.mouse.isInCanvas) {
@@ -343,8 +344,8 @@ export class ArtRenderer {
         mouseBlobs.push({ blob, dist });
       }
 
-      const springStiffness = 0.12;
-      const damping = 0.82;
+      const springStiffness = 0.15;
+      const damping = 0.8;
       blob.pushVelocity.x += -blob.pushOffset.x * springStiffness;
       blob.pushVelocity.y += -blob.pushOffset.y * springStiffness;
       blob.pushVelocity.x *= damping;
@@ -354,23 +355,23 @@ export class ArtRenderer {
 
       const drawX = blob.x + blob.pushOffset.x;
       const drawY = blob.y + blob.pushOffset.y;
-      if (drawX < blob.radius) {
-        blob.pushOffset.x = blob.radius - blob.x;
-        blob.pushVelocity.x = Math.abs(blob.pushVelocity.x) * 0.3;
-      } else if (drawX > w - blob.radius) {
-        blob.pushOffset.x = w - blob.radius - blob.x;
-        blob.pushVelocity.x = -Math.abs(blob.pushVelocity.x) * 0.3;
+      const clampedX = Math.max(r, Math.min(w - r, drawX));
+      const clampedY = Math.max(r, Math.min(h - r, drawY));
+      if (clampedX !== drawX) {
+        blob.pushOffset.x = clampedX - blob.x;
+        if (blob.pushVelocity.x * (clampedX - drawX) < 0) {
+          blob.pushVelocity.x *= -0.3;
+        }
       }
-      if (drawY < blob.radius) {
-        blob.pushOffset.y = blob.radius - blob.y;
-        blob.pushVelocity.y = Math.abs(blob.pushVelocity.y) * 0.3;
-      } else if (drawY > h - blob.radius) {
-        blob.pushOffset.y = h - blob.radius - blob.y;
-        blob.pushVelocity.y = -Math.abs(blob.pushVelocity.y) * 0.3;
+      if (clampedY !== drawY) {
+        blob.pushOffset.y = clampedY - blob.y;
+        if (blob.pushVelocity.y * (clampedY - drawY) < 0) {
+          blob.pushVelocity.y *= -0.3;
+        }
       }
     }
 
-    this.resolveBlobCollisions();
+    this.resolveBlobCollisions(w, h);
 
     if (this.mouse.isInCanvas) {
       mouseBlobs.sort((a, b) => a.dist - b.dist);
@@ -391,38 +392,97 @@ export class ArtRenderer {
     }
   }
 
-  private resolveBlobCollisions(): void {
+  private resolveBlobCollisions(w: number, h: number): void {
     const blobs = this.blobs;
     const count = blobs.length;
+    if (count < 2) return;
 
-    for (let i = 0; i < count; i++) {
-      for (let j = i + 1; j < count; j++) {
-        const blobA = blobs[i];
-        const blobB = blobs[j];
+    let maxR = 0;
+    for (const blob of blobs) {
+      if (blob.radius > maxR) maxR = blob.radius;
+    }
+    const cellSize = maxR * 2 + 5;
+    const cols = Math.max(1, Math.ceil(w / cellSize));
+    const rows = Math.max(1, Math.ceil(h / cellSize));
+    const grid: ColorBlob[][] = new Array(cols * rows);
+    for (let i = 0; i < grid.length; i++) grid[i] = [];
 
-        const ax = blobA.x + blobA.pushOffset.x;
-        const ay = blobA.y + blobA.pushOffset.y;
-        const bx = blobB.x + blobB.pushOffset.x;
-        const by = blobB.y + blobB.pushOffset.y;
+    for (const blob of blobs) {
+      const cx = blob.x + blob.pushOffset.x;
+      const cy = blob.y + blob.pushOffset.y;
+      const col = Math.max(0, Math.min(cols - 1, Math.floor(cx / cellSize)));
+      const row = Math.max(0, Math.min(rows - 1, Math.floor(cy / cellSize)));
+      grid[row * cols + col].push(blob);
+    }
 
-        const dx = bx - ax;
-        const dy = by - ay;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const minDist = (blobA.radius + blobB.radius) * 0.6;
+    const checked = new Set<number>();
 
-        if (dist < minDist && dist > 0) {
-          const overlap = minDist - dist;
-          const nx = dx / dist;
-          const ny = dy / dist;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const cell = grid[row * cols + col];
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nr = row + dy;
+            const nc = col + dx;
+            if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+            const neighbor = grid[nr * cols + nc];
 
-          const separation = overlap * 0.5;
-          blobA.pushOffset.x -= nx * separation;
-          blobA.pushOffset.y -= ny * separation;
-          blobB.pushOffset.x += nx * separation;
-          blobB.pushOffset.y += ny * separation;
+            for (let i = 0; i < cell.length; i++) {
+              for (let j = 0; j < neighbor.length; j++) {
+                const blobA = cell[i];
+                const blobB = neighbor[j];
+                if (blobA === blobB) continue;
+
+                const idA = blobs.indexOf(blobA);
+                const idB = blobs.indexOf(blobB);
+                if (idA === idB) continue;
+                const pairKey = idA < idB ? idA * count + idB : idB * count + idA;
+                if (checked.has(pairKey)) continue;
+                checked.add(pairKey);
+
+                this.resolveSingleCollision(blobA, blobB, w, h);
+              }
+            }
+          }
         }
       }
     }
+  }
+
+  private resolveSingleCollision(blobA: ColorBlob, blobB: ColorBlob, w: number, h: number): void {
+    const ax = blobA.x + blobA.pushOffset.x;
+    const ay = blobA.y + blobA.pushOffset.y;
+    const bx = blobB.x + blobB.pushOffset.x;
+    const by = blobB.y + blobB.pushOffset.y;
+
+    const dx = bx - ax;
+    const dy = by - ay;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const minDist = blobA.radius + blobB.radius;
+
+    if (dist >= minDist || dist === 0) return;
+
+    const overlap = minDist - dist;
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    const totalR = blobA.radius + blobB.radius;
+    const weightA = blobB.radius / totalR;
+    const weightB = blobA.radius / totalR;
+
+    blobA.pushOffset.x -= nx * overlap * weightA;
+    blobA.pushOffset.y -= ny * overlap * weightA;
+    blobB.pushOffset.x += nx * overlap * weightB;
+    blobB.pushOffset.y += ny * overlap * weightB;
+
+    const rA = blobA.radius;
+    const rB = blobB.radius;
+    const drawAX = blobA.x + blobA.pushOffset.x;
+    const drawAY = blobA.y + blobA.pushOffset.y;
+    blobA.pushOffset.x = Math.max(rA - blobA.x, Math.min(w - rA - blobA.x, blobA.pushOffset.x));
+    blobA.pushOffset.y = Math.max(rA - blobA.y, Math.min(h - rA - blobA.y, blobA.pushOffset.y));
+    blobB.pushOffset.x = Math.max(rB - blobB.x, Math.min(w - rB - blobB.x, blobB.pushOffset.x));
+    blobB.pushOffset.y = Math.max(rB - blobB.y, Math.min(h - rB - blobB.y, blobB.pushOffset.y));
   }
 
   private updateArcs(): void {
@@ -457,8 +517,8 @@ export class ArtRenderer {
       if (elapsed >= pulse.duration) return false;
 
       const progress = elapsed / pulse.duration;
-      pulse.radius = pulse.maxRadius * (1 - Math.pow(1 - progress, 1.5));
-      pulse.alpha = 0.6 * Math.exp(-progress * 3);
+      pulse.radius = pulse.maxRadius * (1 - Math.exp(-progress * 2.5));
+      pulse.alpha = 1.0 * Math.exp(-progress * 4);
       return true;
     });
   }
