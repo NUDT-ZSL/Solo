@@ -8,8 +8,7 @@ import OutlinePanel from './OutlinePanel';
 import EditorPanel from './EditorPanel';
 import AnalysisPanel from './AnalysisPanel';
 import type { Project } from './types';
-
-const USER_COLORS = ['#4da6ff', '#ff9933', '#10b981', '#8b5cf6', '#f59e0b'];
+import { getUserColorById } from './utils/colorUtils';
 
 const Landing: React.FC = () => {
   const [userName, setUserName] = useState('');
@@ -19,7 +18,7 @@ const Landing: React.FC = () => {
   const handleEnter = () => {
     if (!userName.trim()) return;
     const userId = uuidv4();
-    const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+    const color = getUserColorById(userId);
     setUser(userId, userName.trim(), color);
     navigate('/project/demo-project');
   };
@@ -68,9 +67,12 @@ const ProjectPage: React.FC = () => {
   const onlineUsers = useStore((s) => s.onlineUsers);
   const analysisPanelWidth = useStore((s) => s.analysisPanelWidth);
   const drawerOpen = useStore((s) => s.drawerOpen);
+  const currentChapterId = useStore((s) => s.currentChapterId);
   const setProject = useStore((s) => s.setProject);
   const addOnlineUser = useStore((s) => s.addOnlineUser);
   const removeOnlineUser = useStore((s) => s.removeOnlineUser);
+  const updateRemoteCursor = useStore((s) => s.updateRemoteCursor);
+  const removeRemoteCursor = useStore((s) => s.removeRemoteCursor);
   const updateChapterContent = useStore((s) => s.updateChapterContent);
   const setAnalysisPanelWidth = useStore((s) => s.setAnalysisPanelWidth);
   const setDrawerOpen = useStore((s) => s.setDrawerOpen);
@@ -114,12 +116,14 @@ const ProjectPage: React.FC = () => {
 
     socket.on('user-joined', (user: { id: string; name: string; color: string }) => {
       if (user.id !== userId) {
-        addOnlineUser(user);
+        const userColorById = getUserColorById(user.id);
+        addOnlineUser({ ...user, color: userColorById });
       }
     });
 
     socket.on('user-left', (data: { userId: string }) => {
       removeOnlineUser(data.userId);
+      removeRemoteCursor(data.userId);
     });
 
     socket.on('edit-broadcast', (data: { userId: string; chapterId: string; content: string }) => {
@@ -128,11 +132,26 @@ const ProjectPage: React.FC = () => {
       }
     });
 
+    socket.on('cursor-broadcast', (data: { userId: string; cursor: any; chapterId?: string }) => {
+      if (data.userId !== userId) {
+        const onlineUser = onlineUsers.find((u) => u.id === data.userId);
+        if (onlineUser) {
+          updateRemoteCursor({
+            userId: data.userId,
+            userName: onlineUser.name,
+            color: getUserColorById(data.userId),
+            cursor: data.cursor,
+            chapterId: data.chapterId || currentChapterId || '',
+          });
+        }
+      }
+    });
+
     return () => {
       socket.emit('leave-project', { projectId, userId });
       socket.disconnect();
     };
-  }, [userId, userName, projectId, userColor]);
+  }, [userId, userName, projectId, userColor, onlineUsers, currentChapterId]);
 
   useEffect(() => {
     if (userId && userName) {

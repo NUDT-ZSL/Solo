@@ -5,6 +5,14 @@ export interface CursorPosition {
   selectionEnd?: number;
 }
 
+export interface RemoteCursor {
+  userId: string;
+  userName: string;
+  color: string;
+  cursor: CursorPosition;
+  chapterId: string;
+}
+
 export interface User {
   id: string;
   name: string;

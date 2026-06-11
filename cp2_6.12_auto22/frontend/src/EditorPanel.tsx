@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { MessageSquare, Highlighter, UserPlus } from 'lucide-react';
 import { useStore } from './store';
-import type { Annotation, Character } from './types';
+import type { Annotation, Character, RemoteCursor } from './types';
 import { v4 as uuidv4 } from 'uuid';
+import { getUserColorById } from './utils/colorUtils';
 
 interface SelectionInfo {
   text: string;
@@ -22,6 +23,7 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
   const userColor = useStore((s) => s.userColor);
   const userName = useStore((s) => s.userName);
   const userId = useStore((s) => s.userId);
+  const remoteCursors = useStore((s) => s.remoteCursors);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
@@ -48,6 +50,23 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [selection]);
 
+  const currentUserColor = useMemo(() => getUserColorById(userId), [userId]);
+
+  const sendCursorPosition = () => {
+    const textarea = textareaRef.current;
+    if (!textarea || !socket || !currentChapterId) return;
+    socket.emit('cursor-move', {
+      projectId: project?.id,
+      chapterId: currentChapterId,
+      cursor: {
+        line: 0,
+        column: textarea.selectionStart,
+        selectionStart: textarea.selectionStart,
+        selectionEnd: textarea.selectionEnd,
+      },
+    });
+  };
+
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const content = e.target.value;
     if (currentChapterId) {
@@ -64,6 +83,7 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
             selectionEnd: e.target.selectionEnd,
           },
         });
+        sendCursorPosition();
       }
     }
   };
@@ -73,6 +93,7 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
     if (!textarea) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
+    sendCursorPosition();
     if (start === end) {
       setSelection(null);
       return;
@@ -88,6 +109,24 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
     const x = rect.left + (lines[lines.length - 1].length * charWidth) % rect.width;
     setSelection({ text, start, end, x, y: y - 48 });
   };
+
+  const getRemoteCursorPosition = (cursor: RemoteCursor) => {
+    const textarea = textareaRef.current;
+    if (!textarea || !currentChapter) return { x: 0, y: 0 };
+    const content = currentChapter.content;
+    const position = cursor.cursor.selectionStart || cursor.cursor.column || 0;
+    const charsBefore = content.slice(0, position);
+    const lines = charsBefore.split('\n');
+    const lineHeight = 32;
+    const charWidth = 9;
+    const y = lines.length * lineHeight - textarea.scrollTop;
+    const x = lines[lines.length - 1].length * charWidth;
+    return { x, y };
+  };
+
+  const currentChapterRemoteCursors = remoteCursors.filter(
+    (c) => c.chapterId === currentChapterId
+  );
 
   const handleHighlight = () => {
     if (!selection || !currentChapterId) return;
@@ -211,23 +250,44 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
   };
 
   return (
-    <div className="editor-wrapper">
+    <div className="editor-wrapper" style={{ borderTop: `2px solid ${currentUserColor}` }}>
       <div className="editor-toolbar">
         <span className="editor-chapter-title">{currentChapter?.title || '未选择章节'}</span>
       </div>
       <div className="editor-container">
-        <div className="editor-paper">
+        <div className="editor-paper" style={{ borderTop: `2px solid ${currentUserColor}` }}>
           <textarea
             ref={textareaRef}
-            className={`editor-textarea ${userColor === '#4da6ff' ? 'user-a' : 'user-b'}`}
+            className="editor-textarea"
+            style={{ caretColor: currentUserColor }}
             value={currentChapter?.content || ''}
             onChange={handleTextChange}
             onSelect={handleSelect}
             onMouseUp={handleSelect}
             onKeyUp={handleSelect}
+            onClick={sendCursorPosition}
+            onKeyDown={sendCursorPosition}
             placeholder="在这里开始你的创作..."
             spellCheck={false}
           />
+          {currentChapterRemoteCursors.map((rc) => {
+            const pos = getRemoteCursorPosition(rc);
+            return (
+              <div
+                key={rc.userId}
+                className="remote-cursor"
+                style={{
+                  left: `${pos.x}px`,
+                  top: `${pos.y}px`,
+                  backgroundColor: rc.color,
+                }}
+              >
+                <div className="remote-cursor-label" style={{ backgroundColor: rc.color }}>
+                  {rc.userName}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

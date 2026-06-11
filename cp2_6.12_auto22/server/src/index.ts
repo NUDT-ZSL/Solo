@@ -182,10 +182,10 @@ io.on('connection', (socket) => {
     socket.to(projectId).emit('edit-broadcast', { userId: user.id, chapterId, content });
   });
 
-  socket.on('cursor-move', ({ projectId, cursor }: { projectId: string; cursor: any }) => {
+  socket.on('cursor-move', ({ projectId, chapterId, cursor }: { projectId: string; chapterId: string; cursor: any }) => {
     const user = socketUserMap.get(socket.id);
     if (!user) return;
-    socket.to(projectId).emit('cursor-broadcast', { userId: user.id, cursor });
+    socket.to(projectId).emit('cursor-broadcast', { userId: user.id, chapterId, cursor });
   });
 
   socket.on('leave-project', ({ projectId, userId }: { projectId: string; userId: string }) => {
@@ -242,68 +242,248 @@ app.post('/api/projects/:id/annotations', (req, res) => {
   res.json(annotation);
 });
 
-const POSITIVE_WORDS = ['笑', '喜欢', '爱', '温柔', '希望', '光', '温暖', '开心', '快乐', '勇敢', '美好', '星', '灯'];
-const NEGATIVE_WORDS = ['痛', '死', '哭', '恨', '恐惧', '黑', '冷', '悲伤', '愤怒', '害怕', '血', '危险', '伤', '杀'];
+const POSITIVE_STRONG = ['爱', '深爱', '热爱', '狂喜', '幸福', '完美', '精彩', '伟大', '太棒了', '最美'];
+const POSITIVE_MEDIUM = ['喜欢', '开心', '快乐', '高兴', '愉快', '温柔', '温暖', '美好', '希望', '勇敢', '光明', '善良', '真诚'];
+const POSITIVE_WEAK = ['笑', '微笑', '不错', '挺好', '还行', '舒服', '轻松', '平静', '安宁', '和谐', '灯', '星', '暖'];
 
-app.post('/api/analyze/sentiment', (req, res) => {
+const NEGATIVE_STRONG = ['恨', '痛恨', '仇恨', '痛苦', '绝望', '死亡', '杀戮', '毁灭', '恐怖', '噩梦', '残忍', '恶毒'];
+const NEGATIVE_MEDIUM = ['悲伤', '难过', '愤怒', '害怕', '恐惧', '危险', '伤害', '疼痛', '哭泣', '流泪', '黑暗', '冰冷', '威胁'];
+const NEGATIVE_WEAK = ['痛', '冷', '黑', '忧愁', '烦恼', '焦虑', '担心', '不安', '紧张', '疲惫', '伤', '血', '沙哑'];
+
+const NEGATION_WORDS = ['不', '没', '无', '非', '否', '别', '莫'];
+
+function calcSentiment(text: string): number {
+  let total = 0;
+  let wordCount = 0;
+
+  const allPositive: { word: string; score: number }[] = [
+    ...POSITIVE_STRONG.map((w) => ({ word: w, score: 0.7 })),
+    ...POSITIVE_MEDIUM.map((w) => ({ word: w, score: 0.4 })),
+    ...POSITIVE_WEAK.map((w) => ({ word: w, score: 0.2 })),
+  ];
+  const allNegative: { word: string; score: number }[] = [
+    ...NEGATIVE_STRONG.map((w) => ({ word: w, score: -0.7 })),
+    ...NEGATIVE_MEDIUM.map((w) => ({ word: w, score: -0.4 })),
+    ...NEGATIVE_WEAK.map((w) => ({ word: w, score: -0.2 })),
+  ];
+
+  const found: { pos: number; score: number; len: number }[] = [];
+
+  allPositive.forEach(({ word, score }) => {
+    let idx = text.indexOf(word);
+    while (idx !== -1) {
+      found.push({ pos: idx, score, len: word.length });
+      idx = text.indexOf(word, idx + 1);
+    }
+  });
+
+  allNegative.forEach(({ word, score }) => {
+    let idx = text.indexOf(word);
+    while (idx !== -1) {
+      found.push({ pos: idx, score, len: word.length });
+      idx = text.indexOf(word, idx + 1);
+    }
+  });
+
+  found.sort((a, b) => a.pos - b.pos);
+
+  const negationPositions: number[] = [];
+  NEGATION_WORDS.forEach((neg) => {
+    let idx = text.indexOf(neg);
+    while (idx !== -1) {
+      negationPositions.push(idx);
+      idx = text.indexOf(neg, idx + 1);
+    }
+  });
+  negationPositions.sort((a, b) => a - b);
+
+  const used = new Set<number>();
+  found.forEach((item) => {
+    if (used.has(item.pos)) return;
+    for (let i = item.pos; i < item.pos + item.len; i++) {
+      if (used.has(i)) return;
+    }
+    for (let i = item.pos; i < item.pos + item.len; i++) {
+      used.add(i);
+    }
+
+    let score = item.score;
+
+    for (const negPos of negationPositions) {
+      if (negPos < item.pos && item.pos - negPos <= 6) {
+        score = -score;
+        break;
+      }
+    }
+
+    total += score;
+    wordCount++;
+  });
+
+  if (wordCount === 0) return 0;
+
+  const avg = total / Math.sqrt(wordCount);
+  return Math.max(-1, Math.min(1, avg));
+}
+
+app.post('/api/analysis/sentiment', (req, res) => {
   const { content } = req.body as { content: string };
   if (!content) return res.json({ sentences: [] });
 
   const rawSentences = content.split(/(?<=[。！？!?\n])/g).filter((s) => s.trim().length > 0);
 
   const sentences: SentenceSentiment[] = rawSentences.map((text, index) => {
-    let value = 0;
-    POSITIVE_WORDS.forEach((w) => {
-      if (text.includes(w)) value += 0.3;
-    });
-    NEGATIVE_WORDS.forEach((w) => {
-      if (text.includes(w)) value -= 0.3;
-    });
-    value = Math.max(-1, Math.min(1, value + (Math.random() - 0.5) * 0.2));
+    const value = calcSentiment(text);
     return { index, value: Number(value.toFixed(3)), text: text.trim().slice(0, 30) };
   });
 
   res.json({ sentences });
 });
 
-app.post('/api/analyze/conflict', (req, res) => {
-  const { content } = req.body as { content: string };
+const OPPOSITION_VERBS = ['拒绝', '反对', '挡', '躲', '追', '打', '刺', '砸', '挣扎', '反抗', '抵抗', '对抗', '拦住', '推开', '甩开', '怒斥', '指责', '威胁', '攻击', '反击'];
+const TRANSITION_WORDS = ['但是', '然而', '可是', '不过', '却', '偏偏', '竟然', '居然', '不料', '谁知', '反倒'];
+const NEGATIVE_INTENT = ['不想', '不愿', '不肯', '不要', '不行', '不准', '不许', '不能', '不会', '不可能'];
+const CHARACTER_GOALS: Record<string, string[]> = {
+  林川: ['寻找', '追查', '找到', '真相', '日记', '父亲', '失踪', '回来', '面对'],
+  苏雨: ['帮助', '保护', '告诉', '隐瞒', '秘密', '担心', '关心'],
+  陈默: ['威胁', '阻止', '消失', '隐藏', '灭口', '真相', '掩盖', '害怕'],
+};
+const DEFAULT_CHARACTERS = ['林川', '苏雨', '陈默'];
+
+function extractDialogues(text: string): string[] {
+  const dialogues: string[] = [];
+  const regex = /"([^"]+)"/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    dialogues.push(match[1]);
+  }
+  return dialogues;
+}
+
+function hasOppositeIntent(dialogue: string): boolean {
+  let hasOpposite = false;
+  NEGATIVE_INTENT.forEach((w) => {
+    if (dialogue.includes(w)) hasOpposite = true;
+  });
+  TRANSITION_WORDS.forEach((w) => {
+    if (dialogue.includes(w)) hasOpposite = true;
+  });
+  return hasOpposite;
+}
+
+function findCharactersInText(text: string, charList: string[]): string[] {
+  const found: string[] = [];
+  charList.forEach((c) => {
+    if (text.includes(c) && !found.includes(c)) {
+      found.push(c);
+    }
+  });
+  return found;
+}
+
+function calcConflictScore(para: string, charsInPara: string[]): { score: number; reason: string } {
+  let score = 0;
+  let reasonParts: string[] = [];
+
+  let oppositionCount = 0;
+  OPPOSITION_VERBS.forEach((w) => {
+    if (para.includes(w)) oppositionCount++;
+  });
+  if (oppositionCount > 0) {
+    score += oppositionCount * 2;
+    reasonParts.push(`存在对立动作词（${OPPOSITION_VERBS.filter((w) => para.includes(w)).slice(0, 3).join('、')}）`);
+  }
+
+  let transitionCount = 0;
+  TRANSITION_WORDS.forEach((w) => {
+    if (para.includes(w)) transitionCount++;
+  });
+  if (transitionCount > 0) {
+    score += transitionCount * 1.5;
+    reasonParts.push('有转折关系词暗示冲突');
+  }
+
+  const dialogues = extractDialogues(para);
+  let dialogueConflict = 0;
+  dialogues.forEach((d) => {
+    if (hasOppositeIntent(d)) dialogueConflict++;
+  });
+  if (dialogueConflict > 0) {
+    score += dialogueConflict * 2.5;
+    reasonParts.push('对话中存在相反意图表达');
+  }
+
+  if (charsInPara.length >= 2) {
+    score += 1;
+
+    let goalConflict = 0;
+    for (let i = 0; i < charsInPara.length; i++) {
+      for (let j = i + 1; j < charsInPara.length; j++) {
+        const goals1 = CHARACTER_GOALS[charsInPara[i]] || [];
+        const goals2 = CHARACTER_GOALS[charsInPara[j]] || [];
+        const has1 = goals1.some((g) => para.includes(g));
+        const has2 = goals2.some((g) => para.includes(g));
+        if (has1 && has2) {
+          goalConflict++;
+        }
+      }
+    }
+    if (goalConflict > 0) {
+      score += goalConflict * 2;
+      reasonParts.push('角色目标关键词呈现对立关系');
+    }
+  }
+
+  if (reasonParts.length === 0) {
+    reasonParts.push('检测到潜在情节冲突');
+  }
+
+  return { score, reason: reasonParts.join('；') };
+}
+
+app.post('/api/analysis/conflict', (req, res) => {
+  const { content, characters } = req.body as { content: string; characters?: Character[] };
   const conflicts: ConflictItem[] = [];
 
   if (!content) return res.json({ conflicts });
 
+  const charList = characters && characters.length > 0 ? characters.map((c) => c.name) : DEFAULT_CHARACTERS;
+
   const paragraphs = content.split(/\n\n+/g);
   let globalPos = 0;
 
-  paragraphs.forEach((para) => {
-    const hasOpposition = /(但是|然而|可是|不过|却|偏偏|竟然|居然|不想|不愿|拒绝|反对|挡|躲|追|打|刺|砸|叫|挣扎)/.test(para);
-    const mentionsMultipleChars = (para.match(/[\u4e00-\u9fa5]{2,3}(?=[，。！？、：；\s])/g) || []).filter((w, i, arr) => {
-      const chars = ['林川', '苏雨', '陈默'];
-      return chars.includes(w) && arr.indexOf(w) === i;
-    });
+  const scoredConflicts: { conflict: ConflictItem; score: number }[] = [];
 
-    if (hasOpposition && mentionsMultipleChars.length >= 2) {
-      const start = globalPos + para.indexOf(mentionsMultipleChars[0]);
-      const end = globalPos + para.length;
-      const reasons = [
-        '两位角色在此段落中呈现明显的目标对立关系',
-        '对话中存在潜在的利益冲突与情感张力',
-        '情节暗示双方将在后续剧情中走向对立',
-      ];
-      conflicts.push({
-        start: Math.max(0, start - 5),
-        end,
-        characters: [mentionsMultipleChars[0], mentionsMultipleChars[1]] as [string, string],
-        reason: reasons[Math.floor(Math.random() * reasons.length)],
-      });
+  paragraphs.forEach((para) => {
+    const charsInPara = findCharactersInText(para, charList);
+
+    if (charsInPara.length >= 2) {
+      const { score, reason } = calcConflictScore(para, charsInPara);
+
+      if (score >= 2) {
+        const firstCharIdx = para.indexOf(charsInPara[0]);
+        const start = globalPos + Math.max(0, firstCharIdx - 5);
+        const end = globalPos + para.length;
+
+        scoredConflicts.push({
+          conflict: {
+            start,
+            end,
+            characters: [charsInPara[0], charsInPara[1]] as [string, string],
+            reason,
+          },
+          score,
+        });
+      }
     }
     globalPos += para.length + 2;
   });
 
-  res.json({ conflicts: conflicts.slice(0, 3) });
+  scoredConflicts.sort((a, b) => b.score - a.score);
+  res.json({ conflicts: scoredConflicts.slice(0, 3).map((s) => s.conflict) });
 });
 
-app.post('/api/analyze/characters', (req, res) => {
+app.post('/api/analysis/characters', (req, res) => {
   const { content, characters } = req.body as { content: string; characters: Character[] };
 
   if (!characters || characters.length === 0) {
@@ -317,12 +497,12 @@ app.post('/api/analyze/characters', (req, res) => {
   });
 
   const linkStrength: Record<string, number> = {};
-  const paragraphs = content.split(/\n\n+/g);
+  const sentences = content.split(/[。！？!?\n]+/g).filter((s) => s.trim().length > 0);
 
-  paragraphs.forEach((para) => {
+  sentences.forEach((sentence) => {
     const present: string[] = [];
     characters.forEach((c) => {
-      if (para.includes(c.name)) present.push(c.id);
+      if (sentence.includes(c.name)) present.push(c.id);
     });
     for (let i = 0; i < present.length; i++) {
       for (let j = i + 1; j < present.length; j++) {

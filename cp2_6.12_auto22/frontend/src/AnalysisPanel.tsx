@@ -173,13 +173,13 @@ const AnalysisPanel: React.FC = () => {
     const runAnalysis = async () => {
       try {
         const [conflictRes, sentimentRes, charRes] = await Promise.all([
-          axios.post('/api/analyze/conflict', {
+          axios.post('/api/analysis/conflict', {
             projectId: project.id,
             chapterId: currentChapterId,
             content: currentChapter.content,
           }, { signal: controller.signal }),
-          axios.post('/api/analyze/sentiment', { content: currentChapter.content }, { signal: controller.signal }),
-          axios.post('/api/analyze/characters', {
+          axios.post('/api/analysis/sentiment', { content: currentChapter.content }, { signal: controller.signal }),
+          axios.post('/api/analysis/characters', {
             projectId: project.id,
             content: project.chapters.map((c) => c.content).join('\n\n'),
             characters: project.characters,
@@ -210,13 +210,13 @@ const AnalysisPanel: React.FC = () => {
     const interval = setInterval(async () => {
       try {
         const [conflictRes, sentimentRes, charRes] = await Promise.all([
-          axios.post('/api/analyze/conflict', {
+          axios.post('/api/analysis/conflict', {
             projectId: project.id,
             chapterId: currentChapterId,
             content: currentChapter?.content || '',
           }),
-          axios.post('/api/analyze/sentiment', { content: currentChapter?.content || '' }),
-          axios.post('/api/analyze/characters', {
+          axios.post('/api/analysis/sentiment', { content: currentChapter?.content || '' }),
+          axios.post('/api/analysis/characters', {
             projectId: project.id,
             content: project.chapters.map((c) => c.content).join('\n\n'),
             characters: project.characters,

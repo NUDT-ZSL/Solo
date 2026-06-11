@@ -385,6 +385,7 @@ textarea:focus {
   min-height: 100%;
   box-shadow: var(--shadow-lg), inset 0 0 60px rgba(0, 0, 0, 0.2);
   position: relative;
+  overflow: hidden;
 }
 
 .editor-paper::before {
@@ -420,14 +421,6 @@ textarea:focus {
   z-index: 1;
 }
 
-.editor-textarea.user-a {
-  caret-color: var(--accent-blue);
-}
-
-.editor-textarea.user-b {
-  caret-color: var(--accent-orange);
-}
-
 .editor-overlay {
   position: absolute;
   top: 48px;
@@ -440,8 +433,12 @@ textarea:focus {
 .remote-cursor {
   position: absolute;
   width: 2px;
-  height: 22px;
+  height: 32px;
   animation: pulse 1.5s infinite;
+  pointer-events: none;
+  z-index: 10;
+  margin-left: 56px;
+  margin-top: 48px;
 }
 
 .remote-cursor-label {
@@ -454,6 +451,7 @@ textarea:focus {
   white-space: nowrap;
   color: #fff;
   font-weight: 500;
+  line-height: 1.4;
 }
 
 .highlight-range {

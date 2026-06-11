@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, User, Chapter, Annotation, Character, ConflictItem, SentenceSentiment, CharacterGraphData } from './types';
+import type { Project, User, Chapter, Annotation, Character, ConflictItem, SentenceSentiment, CharacterGraphData, RemoteCursor } from './types';
 
 interface Store {
   userId: string;
@@ -8,6 +8,7 @@ interface Store {
   project: Project | null;
   currentChapterId: string | null;
   onlineUsers: User[];
+  remoteCursors: RemoteCursor[];
   conflicts: ConflictItem[];
   sentiments: SentenceSentiment[];
   characterGraph: CharacterGraphData;
@@ -20,6 +21,8 @@ interface Store {
   setCurrentChapterId: (id: string) => void;
   addOnlineUser: (user: User) => void;
   removeOnlineUser: (userId: string) => void;
+  updateRemoteCursor: (cursor: RemoteCursor) => void;
+  removeRemoteCursor: (userId: string) => void;
   updateChapterContent: (chapterId: string, content: string) => void;
   reorderChapters: (fromId: string, toId: string) => void;
   toggleChapterExpand: (chapterId: string) => void;
@@ -42,6 +45,7 @@ export const useStore = create<Store>((set, get) => ({
   project: null,
   currentChapterId: null,
   onlineUsers: [],
+  remoteCursors: [],
   conflicts: [],
   sentiments: [],
   characterGraph: defaultGraph,
@@ -68,6 +72,22 @@ export const useStore = create<Store>((set, get) => ({
 
   removeOnlineUser: (userId) =>
     set({ onlineUsers: get().onlineUsers.filter((u) => u.id !== userId) }),
+
+  updateRemoteCursor: (cursor) => {
+    const existing = get().remoteCursors.find((c) => c.userId === cursor.userId);
+    if (existing) {
+      set({
+        remoteCursors: get().remoteCursors.map((c) =>
+          c.userId === cursor.userId ? cursor : c
+        ),
+      });
+    } else {
+      set({ remoteCursors: [...get().remoteCursors, cursor] });
+    }
+  },
+
+  removeRemoteCursor: (userId) =>
+    set({ remoteCursors: get().remoteCursors.filter((c) => c.userId !== userId) }),
 
   updateChapterContent: (chapterId, content) => {
     const project = get().project;

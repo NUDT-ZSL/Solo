@@ -19,12 +19,18 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
 }
 
 const NODE_COLORS = ['#4da6ff', '#e94560', '#ff9933', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
+const NODE_MIN_RADIUS = 8;
+const NODE_MAX_RADIUS = 28;
+const LINK_MIN_WIDTH = 1;
+const LINK_MAX_WIDTH = 5;
+const DRAG_CLICK_DISTANCE = 5;
 
 const CharacterGraph: React.FC<Props> = ({ data }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [popup, setPopup] = useState<{ node: SimNode; x: number; y: number } | null>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
+  const prevPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -50,11 +56,14 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
     const maxFreq = Math.max(...data.nodes.map(n => n.frequency), 1);
     const maxStrength = Math.max(...data.links.map(l => l.strength), 1);
 
-    const nodes: SimNode[] = data.nodes.map((n, i) => ({
-      ...n,
-      x: width / 2 + Math.cos(i / Math.PI) * 50,
-      y: height / 2 + Math.sin(i / Math.PI) * 50,
-    }));
+    const nodes: SimNode[] = data.nodes.map((n, i) => {
+      const prev = prevPositionsRef.current.get(n.id);
+      return {
+        ...n,
+        x: prev?.x ?? width / 2 + Math.cos(i / Math.PI) * 50,
+        y: prev?.y ?? height / 2 + Math.sin(i / Math.PI) * 50,
+      };
+    });
 
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
@@ -92,7 +101,7 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
       .enter()
       .append('line')
       .attr('class', 'graph-link')
-      .attr('stroke-width', d => Math.max(1, (d.strength / maxStrength) * 4))
+      .attr('stroke-width', d => LINK_MIN_WIDTH + (d.strength / maxStrength) * (LINK_MAX_WIDTH - LINK_MIN_WIDTH))
       .attr('stroke-opacity', d => 0.2 + (d.strength / maxStrength) * 0.5);
 
     const nodeSel = nodeGroup.selectAll('g')
@@ -100,17 +109,21 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
       .enter()
       .append('g')
       .attr('class', 'graph-node')
+      .style('cursor', 'grab')
       .style('color', (d, i) => NODE_COLORS[i % NODE_COLORS.length]);
 
+    const getRadius = (d: SimNode) => NODE_MIN_RADIUS + (d.frequency / maxFreq) * (NODE_MAX_RADIUS - NODE_MIN_RADIUS);
+
     nodeSel.append('circle')
-      .attr('r', d => 8 + (d.frequency / maxFreq) * 18)
+      .attr('r', getRadius)
       .attr('fill', (d, i) => `url(#grad-${d.id})`)
       .attr('stroke', (d, i) => NODE_COLORS[i % NODE_COLORS.length])
       .attr('stroke-width', 1.5)
       .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))');
 
     nodeSel.append('text')
-      .attr('dy', d => -(10 + (d.frequency / maxFreq) * 18))
+      .attr('dy', d => -getRadius(d) - 4)
+      .attr('text-anchor', 'middle')
       .text(d => d.name)
       .style('font-family', 'var(--font-display)')
       .style('font-size', 11);
@@ -122,8 +135,8 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
         .strength(d => 0.3 + (d.strength / maxStrength) * 0.4))
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(d => 20 + (d.frequency / maxFreq) * 18))
-      .alphaDecay(0.03);
+      .force('collision', d3.forceCollide<SimNode>().radius(d => NODE_MIN_RADIUS + 6 + (d.frequency / maxFreq) * (NODE_MAX_RADIUS - NODE_MIN_RADIUS)))
+      .alphaDecay(0.028);
 
     simulationRef.current = simulation;
 
@@ -137,14 +150,27 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
       nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let hasDragged = false;
+
     const drag = d3.drag<SVGGElement, SimNode>()
       .on('start', (event, d) => {
+        dragStartX = event.x;
+        dragStartY = event.y;
+        hasDragged = false;
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
         d.fy = d.y;
         d3.select(event.sourceEvent.target.closest('.graph-node')).classed('dragging', true);
+        nodeSel.style('cursor', 'grabbing');
       })
       .on('drag', (event, d) => {
+        const dx = Math.abs(event.x - dragStartX);
+        const dy = Math.abs(event.y - dragStartY);
+        if (dx > DRAG_CLICK_DISTANCE || dy > DRAG_CLICK_DISTANCE) {
+          hasDragged = true;
+        }
         d.fx = event.x;
         d.fy = event.y;
       })
@@ -153,11 +179,13 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
         d.fx = null;
         d.fy = null;
         d3.select(event.sourceEvent.target.closest('.graph-node')).classed('dragging', false);
+        nodeSel.style('cursor', 'grab');
       });
 
     nodeSel.call(drag);
 
     nodeSel.on('click', (event, d) => {
+      if (hasDragged) return;
       event.stopPropagation();
       const rect = container.getBoundingClientRect();
       setPopup({
@@ -169,7 +197,10 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
 
     svg.on('click', () => setPopup(null));
 
+    simulation.alpha(1).restart();
+
     return () => {
+      prevPositionsRef.current = new Map(nodes.map(n => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]));
       simulation.stop();
     };
   }, [data]);
