@@ -1,27 +1,30 @@
 import { SceneManager } from './scene';
 import { UIController, TerrainConfig } from './ui';
-import { generateTerrain } from '../core/terrain';
+import { generateTerrain, MAX_TOTAL_VERTICES } from '../core/terrain';
 import {
   generateVegetation,
-  createTreeAssets,
-  buildInstancedTrees
+  createMergedTreeAsset,
+  buildMergedInstancedTrees
 } from '../core/vegetation';
 
 class TerrainApp {
   private sceneManager: SceneManager;
   private uiController: UIController;
-  private treeAssets: ReturnType<typeof createTreeAssets>;
+  private treeAssets: ReturnType<typeof createMergedTreeAsset>;
 
   private frameCount: number = 0;
   private lastFpsTime: number = performance.now();
   private currentFps: number = 60;
-  private currentVertexCount: number = 0;
+  private currentTerrainVertices: number = 0;
+  private currentTreeVertices: number = 0;
   private currentTreeCount: number = 0;
+
+  private readonly FPS_SAMPLE_INTERVAL = 500;
 
   constructor() {
     this.sceneManager = new SceneManager('canvas-container');
     this.uiController = new UIController();
-    this.treeAssets = createTreeAssets();
+    this.treeAssets = createMergedTreeAsset();
 
     this.uiController.onUpdate(this.handleTerrainUpdate.bind(this));
     this.initialGenerate();
@@ -32,12 +35,14 @@ class TerrainApp {
     const config = this.uiController.getConfig();
     this.uiController.showLoading();
     requestAnimationFrame(() => {
-      this.generateTerrainAndVegetation(config);
+      requestAnimationFrame(() => {
+        this.generateTerrainAndVegetation(config);
+      });
     });
   }
 
   private async handleTerrainUpdate(config: TerrainConfig): Promise<void> {
-    await this.sleep(50);
+    await this.sleep(60);
     this.generateTerrainAndVegetation(config);
   }
 
@@ -50,28 +55,33 @@ class TerrainApp {
       seed: config.seed
     });
 
-    this.currentVertexCount = terrainResult.vertexCount;
+    this.currentTerrainVertices = terrainResult.vertexCount;
+
+    const vertexBudget = Math.max(5000, MAX_TOTAL_VERTICES - this.currentTerrainVertices);
 
     const vegetationResult = generateVegetation({
       heightMap: terrainResult.heightMap,
+      normalizedHeightMap: terrainResult.normalizedHeightMap,
       density: config.treeDensity,
-      seed: config.seed
+      seed: config.seed,
+      vertexBudget
     });
 
     this.currentTreeCount = vegetationResult.treeCount;
+    this.currentTreeVertices = vegetationResult.totalTreeVertices;
 
     this.sceneManager.clearTerrain();
     this.sceneManager.addTerrain(terrainResult.geometry);
 
-    const { trunkMesh, canopyMesh } = buildInstancedTrees(
+    const treesMesh = buildMergedInstancedTrees(
       vegetationResult.transforms,
       this.treeAssets
     );
-    this.sceneManager.addTrees(trunkMesh, canopyMesh);
+    this.sceneManager.addTrees(treesMesh);
 
     const elapsed = performance.now() - startTime;
-    const minDelay = 800;
-    const hideDelay = Math.max(0, minDelay - elapsed);
+    const minDisplayTime = 900;
+    const hideDelay = Math.max(0, minDisplayTime - elapsed);
 
     setTimeout(() => {
       this.uiController.hideLoading();
@@ -88,16 +98,19 @@ class TerrainApp {
 
       this.frameCount++;
       const now = performance.now();
-      if (now - this.lastFpsTime >= 500) {
-        this.currentFps = Math.round(
+      if (now - this.lastFpsTime >= this.FPS_SAMPLE_INTERVAL) {
+        const rawFps = Math.round(
           (this.frameCount * 1000) / (now - this.lastFpsTime)
         );
+        this.currentFps = Math.max(1, Math.min(240, rawFps));
         this.frameCount = 0;
         this.lastFpsTime = now;
+
         this.uiController.updateStats({
           fps: this.currentFps,
-          vertexCount: this.currentVertexCount,
-          treeCount: this.currentTreeCount
+          vertexCount: this.currentTerrainVertices,
+          treeCount: this.currentTreeCount,
+          totalVertices: this.currentTerrainVertices + this.currentTreeVertices
         });
       }
 
@@ -109,5 +122,9 @@ class TerrainApp {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  new TerrainApp();
+  try {
+    new TerrainApp();
+  } catch (e) {
+    console.error('TerrainApp initialization failed:', e);
+  }
 });

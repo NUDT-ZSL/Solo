@@ -217,24 +217,43 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .slider:disabled {
+      opacity: 0.45;
+      cursor: progress !important;
+      filter: grayscale(30%);
+    }
+
+    .slider:disabled::-webkit-slider-thumb {
+      background: #888;
+      cursor: progress !important;
+      box-shadow: none;
+    }
+
+    .slider:disabled::-moz-range-thumb {
+      background: #888;
+      cursor: progress !important;
+    }
+
     .loading-overlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(26, 26, 46, 0.5);
-      backdrop-filter: blur(4px);
+      background: rgba(26, 26, 46, 0.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       z-index: 99;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.35s ease;
     }
 
     .loading-overlay.active {
+      display: flex;
       opacity: 1;
       pointer-events: auto;
     }
@@ -292,7 +311,7 @@
         <span class="stat-value" id="fps-value">60</span>
       </div>
       <div class="stat-item">
-        <span class="stat-label">地形顶点</span>
+        <span class="stat-label">总顶点数</span>
         <span class="stat-value" id="vertex-value">0</span>
       </div>
       <div class="stat-item">

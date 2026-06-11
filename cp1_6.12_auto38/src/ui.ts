@@ -11,6 +11,7 @@ export interface UIStats {
   fps: number;
   vertexCount: number;
   treeCount: number;
+  totalVertices: number;
 }
 
 export class UIController {
@@ -32,6 +33,8 @@ export class UIController {
   private updateCallback: TerrainUpdateCallback | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private isGenerating: boolean = false;
+  private fpsHistory: number[] = [];
+  private readonly FPS_HISTORY_SIZE = 10;
 
   constructor() {
     this.freqSlider = document.getElementById('freq-slider') as HTMLInputElement;
@@ -61,18 +64,21 @@ export class UIController {
 
   private bindEvents(): void {
     this.freqSlider.addEventListener('input', () => {
+      if (this.isGenerating) return;
       this.config.noiseFrequency = parseFloat(this.freqSlider.value);
       this.updateValueDisplays();
       this.scheduleUpdate();
     });
 
     this.flatSlider.addEventListener('input', () => {
+      if (this.isGenerating) return;
       this.config.flatness = parseFloat(this.flatSlider.value);
       this.updateValueDisplays();
       this.scheduleUpdate();
     });
 
     this.densitySlider.addEventListener('input', () => {
+      if (this.isGenerating) return;
       this.config.treeDensity = parseInt(this.densitySlider.value);
       this.updateValueDisplays();
       this.scheduleUpdate();
@@ -97,13 +103,17 @@ export class UIController {
     }
     this.debounceTimer = setTimeout(() => {
       this.triggerUpdate();
-    }, 150);
+    }, 200);
   }
 
   private triggerUpdate(): void {
     if (this.updateCallback && !this.isGenerating) {
       this.showLoading();
-      this.updateCallback({ ...this.config });
+      requestAnimationFrame(() => {
+        if (this.updateCallback) {
+          this.updateCallback({ ...this.config });
+        }
+      });
     }
   }
 
@@ -117,23 +127,61 @@ export class UIController {
 
   public showLoading(): void {
     this.isGenerating = true;
-    this.loadingOverlay.classList.add('active');
+
+    this.loadingOverlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+      this.loadingOverlay.classList.add('active');
+    });
+
+    this.freqSlider.disabled = true;
+    this.flatSlider.disabled = true;
+    this.densitySlider.disabled = true;
     this.seedBtn.disabled = true;
+
     this.seedBtnText.style.display = 'none';
     this.seedSpinner.style.display = 'block';
+
+    this.seedBtn.style.cursor = 'progress';
+    this.freqSlider.style.cursor = 'progress';
+    this.flatSlider.style.cursor = 'progress';
+    this.densitySlider.style.cursor = 'progress';
   }
 
   public hideLoading(): void {
     this.isGenerating = false;
+
     this.loadingOverlay.classList.remove('active');
+    setTimeout(() => {
+      if (!this.isGenerating) {
+        this.loadingOverlay.style.display = 'none';
+      }
+    }, 300);
+
+    this.freqSlider.disabled = false;
+    this.flatSlider.disabled = false;
+    this.densitySlider.disabled = false;
     this.seedBtn.disabled = false;
+
     this.seedBtnText.style.display = 'inline';
     this.seedSpinner.style.display = 'none';
+
+    this.seedBtn.style.cursor = 'pointer';
+    this.freqSlider.style.cursor = 'pointer';
+    this.flatSlider.style.cursor = 'pointer';
+    this.densitySlider.style.cursor = 'pointer';
   }
 
   public updateStats(stats: UIStats): void {
-    this.fpsValue.textContent = stats.fps.toString();
-    this.vertexValue.textContent = stats.vertexCount.toLocaleString();
+    this.fpsHistory.push(stats.fps);
+    if (this.fpsHistory.length > this.FPS_HISTORY_SIZE) {
+      this.fpsHistory.shift();
+    }
+    const smoothedFps = Math.round(
+      this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length
+    );
+
+    this.fpsValue.textContent = smoothedFps.toString();
+    this.vertexValue.textContent = stats.totalVertices.toLocaleString();
     this.treeValue.textContent = stats.treeCount.toString();
   }
 }

@@ -1,20 +1,26 @@
 import * as THREE from 'three';
-import { TERRAIN_SIZE, TERRAIN_RESOLUTION } from './terrain';
+import { TERRAIN_SIZE, TERRAIN_RESOLUTION, MAX_TOTAL_VERTICES } from './terrain';
 
 export interface TreeTransform {
-  matrix: THREE.Matrix4;
-  canopyScale: number;
+  position: THREE.Vector3;
+  rotationY: number;
+  baseScale: number;
+  canopyRadius: number;
 }
 
 export interface VegetationResult {
   transforms: TreeTransform[];
   treeCount: number;
+  perTreeVertices: number;
+  totalTreeVertices: number;
 }
 
 export interface VegetationParams {
   heightMap: number[][];
+  normalizedHeightMap: number[][];
   density: number;
   seed: number;
+  vertexBudget?: number;
 }
 
 function seededRandom(seed: number): () => number {
@@ -25,18 +31,25 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-function getHeightAt(heightMap: number[][], x: number, z: number): number {
-  const halfSize = TERRAIN_SIZE / 2;
-  const fx = ((x + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
-  const fz = ((z + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
 
-  const x0 = Math.floor(fx);
-  const z0 = Math.floor(fz);
+export function getHeightAt(heightMap: number[][], worldX: number, worldZ: number): number {
+  const halfSize = TERRAIN_SIZE / 2;
+  const fx = ((worldX + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
+  const fz = ((worldZ + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
+
+  const fxClamped = clamp(fx, 0, TERRAIN_RESOLUTION - 1);
+  const fzClamped = clamp(fz, 0, TERRAIN_RESOLUTION - 1);
+
+  const x0 = Math.floor(fxClamped);
+  const z0 = Math.floor(fzClamped);
   const x1 = Math.min(x0 + 1, TERRAIN_RESOLUTION - 1);
   const z1 = Math.min(z0 + 1, TERRAIN_RESOLUTION - 1);
 
-  const tx = fx - x0;
-  const tz = fz - z0;
+  const tx = fxClamped - x0;
+  const tz = fzClamped - z0;
 
   const h00 = heightMap[z0][x0];
   const h10 = heightMap[z0][x1];
@@ -49,165 +62,260 @@ function getHeightAt(heightMap: number[][], x: number, z: number): number {
   return h0 * (1 - tz) + h1 * tz;
 }
 
-function calculateSlope(heightMap: number[][], x: number, z: number): number {
+export function calculateSlope(
+  heightMap: number[][],
+  worldX: number,
+  worldZ: number
+): number {
   const halfSize = TERRAIN_SIZE / 2;
-  const step = TERRAIN_SIZE / (TERRAIN_RESOLUTION - 1);
+  const cellSize = TERRAIN_SIZE / (TERRAIN_RESOLUTION - 1);
 
-  const fx = ((x + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
-  const fz = ((z + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
+  const fx = ((worldX + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
+  const fz = ((worldZ + halfSize) / TERRAIN_SIZE) * (TERRAIN_RESOLUTION - 1);
 
-  const ix = Math.max(1, Math.min(Math.round(fx), TERRAIN_RESOLUTION - 2));
-  const iz = Math.max(1, Math.min(Math.round(fz), TERRAIN_RESOLUTION - 2));
+  const ix = Math.round(clamp(fx, 1, TERRAIN_RESOLUTION - 2));
+  const iz = Math.round(clamp(fz, 1, TERRAIN_RESOLUTION - 2));
 
-  const hL = heightMap[iz][ix - 1];
-  const hR = heightMap[iz][ix + 1];
-  const hD = heightMap[iz - 1][ix];
-  const hU = heightMap[iz + 1][ix];
+  const hLeft = heightMap[iz][ix - 1];
+  const hRight = heightMap[iz][ix + 1];
+  const hDown = heightMap[iz - 1][ix];
+  const hUp = heightMap[iz + 1][ix];
 
-  const dx = (hR - hL) / (2 * step);
-  const dz = (hU - hD) / (2 * step);
+  const dhdx = (hRight - hLeft) / (2 * cellSize);
+  const dhdz = (hUp - hDown) / (2 * cellSize);
 
-  const slopeRad = Math.atan(Math.sqrt(dx * dx + dz * dz));
-  return (slopeRad * 180) / Math.PI;
+  const gradientMagnitude = Math.sqrt(dhdx * dhdx + dhdz * dhdz);
+  const slopeRadians = Math.atan(gradientMagnitude);
+  return (slopeRadians * 180) / Math.PI;
 }
 
 export function generateVegetation(params: VegetationParams): VegetationResult {
-  const { heightMap, density, seed } = params;
+  const { heightMap, normalizedHeightMap, density, seed, vertexBudget } = params;
   const rand = seededRandom(seed * 17 + 7919);
 
   const transforms: TreeTransform[] = [];
-  const maxTrees = 500;
-  const targetCount = Math.floor((density / 20) * maxTrees);
+  const maxTreesByDensity = Math.floor((density / 20) * 500);
+
+  const trunkVerts = 14;
+  const canopyVerts = 42;
+  const perTreeVertices = trunkVerts + canopyVerts;
+
+  const availableBudget = vertexBudget ?? MAX_TOTAL_VERTICES - 16384;
+  const maxTreesByBudget = Math.floor(availableBudget / perTreeVertices);
+  const targetCount = Math.min(maxTreesByDensity, maxTreesByBudget, 500);
 
   const halfSize = TERRAIN_SIZE / 2;
-  const margin = 1;
-  const maxAttempts = targetCount * 25;
+  const margin = 0.8;
+  const maxAttempts = targetCount * 30;
 
   let attempts = 0;
   let placed = 0;
 
+  const MIN_HEIGHT = 0.2;
+  const MAX_HEIGHT = 0.8;
+  const MAX_SLOPE = 30;
+  const MIN_CANOPY = 0.1;
+  const MAX_CANOPY = 0.3;
+
   while (placed < targetCount && attempts < maxAttempts) {
     attempts++;
 
-    const x = (rand() - 0.5) * (TERRAIN_SIZE - margin * 2);
-    const z = (rand() - 0.5) * (TERRAIN_SIZE - margin * 2);
+    const worldX = (rand() - 0.5) * (TERRAIN_SIZE - margin * 2);
+    const worldZ = (rand() - 0.5) * (TERRAIN_SIZE - margin * 2);
 
-    const height = getHeightAt(heightMap, x, z);
-    const normalizedHeight = height / 4;
-
-    if (normalizedHeight < 0.2 || normalizedHeight > 0.8) {
+    const normalizedHeight = getHeightAt(normalizedHeightMap, worldX, worldZ);
+    if (normalizedHeight < MIN_HEIGHT || normalizedHeight > MAX_HEIGHT) {
       continue;
     }
 
-    const slope = calculateSlope(heightMap, x, z);
-    if (slope > 30) {
+    const slope = calculateSlope(heightMap, worldX, worldZ);
+    if (slope > MAX_SLOPE) {
       continue;
     }
 
-    const rotation = rand() * Math.PI * 2;
-    const baseScale = 0.8 + rand() * 0.6;
-    const canopyScale = 0.1 + rand() * 0.2;
+    const actualHeight = getHeightAt(heightMap, worldX, worldZ);
+    const rotationY = rand() * Math.PI * 2;
+    const baseScale = 0.7 + rand() * 0.5;
+    const canopyRadius = MIN_CANOPY + rand() * (MAX_CANOPY - MIN_CANOPY);
+    const clampedCanopy = clamp(canopyRadius, MIN_CANOPY, MAX_CANOPY);
 
-    const matrix = new THREE.Matrix4();
-
-    const translateMatrix = new THREE.Matrix4().makeTranslation(x, height, z);
-    const rotateMatrix = new THREE.Matrix4().makeRotationY(rotation);
-    const scaleMatrix = new THREE.Matrix4().makeScale(baseScale, baseScale, baseScale);
-
-    matrix.multiplyMatrices(translateMatrix, rotateMatrix);
-    matrix.multiplyMatrices(matrix, scaleMatrix);
-
-    transforms.push({ matrix, canopyScale });
+    transforms.push({
+      position: new THREE.Vector3(worldX, actualHeight, worldZ),
+      rotationY,
+      baseScale,
+      canopyRadius: clampedCanopy
+    });
     placed++;
   }
 
   return {
     transforms,
-    treeCount: transforms.length
+    treeCount: transforms.length,
+    perTreeVertices,
+    totalTreeVertices: transforms.length * perTreeVertices
   };
 }
 
-export interface TreeGeometries {
-  trunkGeometry: THREE.CylinderGeometry;
-  canopyGeometry: THREE.IcosahedronGeometry;
+export interface TreeAsset {
+  geometry: THREE.BufferGeometry;
+  materials: THREE.MeshStandardMaterial[];
 }
 
-export interface TreeMaterials {
-  trunkMaterial: THREE.MeshStandardMaterial;
-  canopyMaterial: THREE.MeshStandardMaterial;
-}
+export function createMergedTreeAsset(): TreeAsset {
+  const trunkGeo = new THREE.CylinderGeometry(0.05, 0.08, 0.6, 6, 1);
+  trunkGeo.translate(0, 0.3, 0);
 
-export function createTreeAssets(): { geometries: TreeGeometries; materials: TreeMaterials } {
-  const trunkGeometry = new THREE.CylinderGeometry(0.05, 0.08, 0.6, 6, 1);
-  trunkGeometry.translate(0, 0.3, 0);
+  const canopyGeo = new THREE.IcosahedronGeometry(1, 0);
+  canopyGeo.translate(0, 1.0, 0);
 
-  const canopyGeometry = new THREE.IcosahedronGeometry(1, 1);
-  canopyGeometry.translate(0, 1.0, 0);
+  const merged = mergeGeometriesWithGroups([
+    { geometry: trunkGeo, materialIndex: 0 },
+    { geometry: canopyGeo, materialIndex: 1 }
+  ]);
 
   const trunkMaterial = new THREE.MeshStandardMaterial({
     color: 0x6b4423,
-    roughness: 0.9,
+    roughness: 0.92,
     metalness: 0.0,
     flatShading: true
   });
 
   const canopyMaterial = new THREE.MeshStandardMaterial({
     color: 0x228b22,
-    roughness: 0.85,
+    roughness: 0.88,
     metalness: 0.0,
     flatShading: true
   });
 
+  patchMaterialsForCanopyScale([trunkMaterial, canopyMaterial]);
+
   return {
-    geometries: { trunkGeometry, canopyGeometry },
-    materials: { trunkMaterial, canopyMaterial }
+    geometry: merged,
+    materials: [trunkMaterial, canopyMaterial]
   };
 }
 
-export function buildInstancedTrees(
+function patchMaterialsForCanopyScale(materials: THREE.MeshStandardMaterial[]): void {
+  materials.forEach((material) => {
+    material.userData.canopyScalePatch = true;
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+attribute float aCanopyMask;
+attribute float aCanopyScale;`
+        )
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+if (aCanopyMask > 0.5) {
+  vec3 canopyCenter = vec3(0.0, 1.0, 0.0);
+  vec3 offset = transformed - canopyCenter;
+  transformed = canopyCenter + offset * aCanopyScale;
+}`
+        );
+    };
+  });
+}
+
+interface GeometryGroup {
+  geometry: THREE.BufferGeometry;
+  materialIndex: number;
+}
+
+function mergeGeometriesWithGroups(groups: GeometryGroup[]): THREE.BufferGeometry {
+  const merged = new THREE.BufferGeometry();
+  const allPositions: number[] = [];
+  const allNormals: number[] = [];
+  const allIndices: number[] = [];
+  const allCanopyMask: number[] = [];
+  const allCanopyScale: number[] = [];
+
+  let indexOffset = 0;
+  let vertexOffset = 0;
+
+  for (const g of groups) {
+    const geo = g.geometry;
+    const isCanopy = g.materialIndex === 1;
+    const nonIndexed = geo.index ? geo.toNonIndexed() : geo;
+    const posAttr = nonIndexed.getAttribute('position') as THREE.BufferAttribute;
+    const normAttr = nonIndexed.getAttribute('normal') as THREE.BufferAttribute;
+
+    for (let i = 0; i < posAttr.count; i++) {
+      allPositions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+      allNormals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
+      allIndices.push(vertexOffset + i);
+      allCanopyMask.push(isCanopy ? 1.0 : 0.0);
+      allCanopyScale.push(1.0);
+    }
+
+    merged.addGroup(indexOffset, posAttr.count, g.materialIndex);
+    indexOffset += posAttr.count;
+    vertexOffset += posAttr.count;
+  }
+
+  merged.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
+  merged.setAttribute('normal', new THREE.Float32BufferAttribute(allNormals, 3));
+  merged.setAttribute('aCanopyMask', new THREE.Float32BufferAttribute(allCanopyMask, 1));
+  merged.setAttribute('aCanopyScale', new THREE.Float32BufferAttribute(allCanopyScale, 1));
+  merged.setIndex(allIndices);
+
+  return merged;
+}
+
+export function buildMergedInstancedTrees(
   transforms: TreeTransform[],
-  assets: { geometries: TreeGeometries; materials: TreeMaterials }
-): { trunkMesh: THREE.InstancedMesh; canopyMesh: THREE.InstancedMesh } {
-  const count = transforms.length;
+  asset: TreeAsset
+): THREE.InstancedMesh {
+  const count = Math.max(transforms.length, 1);
 
-  const trunkMesh = new THREE.InstancedMesh(
-    assets.geometries.trunkGeometry,
-    assets.materials.trunkMaterial,
-    Math.max(count, 1)
-  );
-
-  const canopyMesh = new THREE.InstancedMesh(
-    assets.geometries.canopyGeometry,
-    assets.materials.canopyMaterial,
-    Math.max(count, 1)
+  const instancedMesh = new THREE.InstancedMesh(
+    asset.geometry,
+    asset.materials,
+    count
   );
 
   const tmpMatrix = new THREE.Matrix4();
-  const canopyScaleMatrix = new THREE.Matrix4();
+  const tmpPos = new THREE.Vector3();
+  const tmpQuat = new THREE.Quaternion();
+  const tmpScale = new THREE.Vector3();
+  const tmpEuler = new THREE.Euler();
 
-  for (let i = 0; i < count; i++) {
+  const perInstanceCanopyScale = new Float32Array(count);
+
+  for (let i = 0; i < transforms.length; i++) {
     const t = transforms[i];
-    trunkMesh.setMatrixAt(i, t.matrix);
 
-    canopyScaleMatrix.makeScale(t.canopyScale, t.canopyScale * 1.2, t.canopyScale);
-    tmpMatrix.copy(t.matrix).multiply(canopyScaleMatrix);
-    canopyMesh.setMatrixAt(i, tmpMatrix);
+    tmpPos.copy(t.position);
+    tmpEuler.set(0, t.rotationY, 0);
+    tmpQuat.setFromEuler(tmpEuler);
+    tmpScale.setScalar(t.baseScale);
+
+    tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
+
+    instancedMesh.setMatrixAt(i, tmpMatrix);
+    perInstanceCanopyScale[i] = t.canopyRadius;
   }
 
-  if (count === 0) {
-    trunkMesh.setMatrixAt(0, new THREE.Matrix4().makeScale(0, 0, 0));
-    canopyMesh.setMatrixAt(0, new THREE.Matrix4().makeScale(0, 0, 0));
+  if (transforms.length === 0) {
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    instancedMesh.setMatrixAt(0, zero);
+    perInstanceCanopyScale[0] = 0;
   }
 
-  trunkMesh.instanceMatrix.needsUpdate = true;
-  canopyMesh.instanceMatrix.needsUpdate = true;
-  trunkMesh.count = Math.max(count, 1);
-  canopyMesh.count = Math.max(count, 1);
+  instancedMesh.instanceMatrix.needsUpdate = true;
 
-  trunkMesh.castShadow = true;
-  trunkMesh.receiveShadow = true;
-  canopyMesh.castShadow = true;
-  canopyMesh.receiveShadow = true;
+  const geometry = instancedMesh.geometry as THREE.BufferGeometry;
+  const baseCanopyScale = geometry.getAttribute('aCanopyScale') as THREE.BufferAttribute;
+  const instanceCanopyScaleAttr = new THREE.InstancedBufferAttribute(perInstanceCanopyScale, 1);
+  geometry.setAttribute('aCanopyScale', instanceCanopyScaleAttr);
+  geometry.getAttribute('aCanopyScale').needsUpdate = true;
 
-  return { trunkMesh, canopyMesh };
+  instancedMesh.count = count;
+  instancedMesh.castShadow = true;
+  instancedMesh.receiveShadow = true;
+  instancedMesh.frustumCulled = true;
+
+  return instancedMesh;
 }
