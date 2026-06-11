@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>节奏训练师 — Rhythm Trainer</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-from: #1a0a2e;
+      --bg-to: #2d1b69;
+      --glass-bg: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --accent: #00f0ff;
+      --accent2: #0077ff;
+      --green: #00ff88;
+      --yellow: #ffcc00;
+      --red: #ff3366;
+      --text: #e0dff0;
+      --text-dim: #8886a8;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, var(--bg-from), var(--bg-to));
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      width: 100%; height: 100%;
+    }
+
+    /* ── 左侧控制面板 ── */
+    .control-panel {
+      width: 30%;
+      min-width: 260px;
+      padding: 28px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-right: 1px solid var(--glass-border);
+      overflow-y: auto;
+      z-index: 10;
+    }
+
+    .panel-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+    }
+
+    /* BPM 滑块 */
+    .bpm-display {
+      font-size: 42px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1;
+      color: var(--accent);
+      text-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 10px var(--accent);
+      cursor: pointer;
+      transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+      box-shadow: 0 0 20px var(--accent);
+    }
+
+    /* 下拉框 */
+    select {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out;
+    }
+
+    select:hover, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(0,240,255,0.25);
+    }
+
+    select option {
+      background: #2d1b69;
+      color: var(--text);
+    }
+
+    /* 按钮 */
+    .btn {
+      width: 100%;
+      padding: 14px 0;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+    }
+
+    .btn:hover {
+      transform: scale(1.04);
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
+    }
+
+    .btn-start:hover {
+      box-shadow: 0 4px 30px rgba(0, 240, 255, 0.5);
+    }
+
+    .btn-stop {
+      background: linear-gradient(135deg, var(--red), #cc0044);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(255, 51, 102, 0.3);
+    }
+
+    .btn-stop:hover {
+      box-shadow: 0 4px 30px rgba(255, 51, 102, 0.5);
+    }
+
+    /* 统计信息 */
+    .stats {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: auto;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .stat-value.accuracy { color: var(--green); }
+    .stat-value.combo { color: var(--yellow); }
+
+    /* ── 右侧主区域 ── */
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #beatCanvas {
+      display: block;
+    }
+
+    /* 判定文字 */
+    .judgment-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 36px;
+      font-weight: 900;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+      text-shadow: 0 0 20px currentColor;
+      z-index: 5;
+    }
+
+    .judgment-text.show { opacity: 1; }
+
+    .judgment-text.perfect { color: var(--green); }
+    .judgment-text.good { color: var(--yellow); }
+    .judgment-text.miss { color: var(--red); }
+
+    /* 倒计时 / 提示 */
+    .overlay-hint {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      color: var(--text-dim);
+      pointer-events: none;
+      z-index: 4;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* 右上角浮动统计 */
+    .float-stats {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      display: flex;
+      gap: 20px;
+      z-index: 10;
+    }
+
+    .float-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .float-stat .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+    }
+
+    .float-stat .value {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .float-stat .value.acc { color: var(--green); text-shadow: 0 0 10px rgba(0,255,136,0.4); }
+    .float-stat .value.combo { color: var(--yellow); text-shadow: 0 0 10px rgba(255,204,0,0.4); }
+
+    /* 历史图区域 */
+    .history-section {
+      width: 100%;
+      padding: 0 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .history-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    #historyCanvas {
+      border-radius: 10px;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--glass-border);
+    }
+
+    /* ── 响应式 ── */
+    @media (max-width: 767px) {
+      #app {
+        flex-direction: column;
+      }
+
+      .control-panel {
+        width: 100%;
+        min-width: unset;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 14px 16px;
+        gap: 12px;
+        border-right: none;
+        border-bottom: 1px solid var(--glass-border);
+      }
+
+      .panel-title { font-size: 16px; width: 100%; }
+      .control-group { flex: 1 1 45%; min-width: 140px; }
+      .bpm-display { font-size: 28px; }
+      .stats { flex-direction: row; width: 100%; margin-top: 0; }
+      .stat-row { flex-direction: column; gap: 2px; }
+
+      .main-area {
+        flex: 1;
+        min-height: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 左侧控制面板 -->
+    <aside class="control-panel">
+      <div class="panel-title">🎵 节奏训练师</div>
+
+      <div class="control-group">
+        <span class="control-label">BPM 速度</span>
+        <div class="bpm-display" id="bpmValue">120</div>
+        <input type="range" id="bpmSlider" min="60" max="180" value="120" step="1" />
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">节奏模式</span>
+        <select id="patternSelect">
+          <option value="standard">标准 4/4</option>
+          <option value="swing">摇摆 Swing</option>
+          <option value="syncopation">切分 Syncopation</option>
+          <option value="dotted">附点 Dotted</option>
+          <option value="triplet">三连音 Triplet</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">训练时长</span>
+        <select id="durationSelect">
+          <option value="15">15 秒</option>
+          <option value="30" selected>30 秒</option>
+          <option value="60">60 秒</option>
+        </select>
+      </div>
+
+      <button class="btn btn-start" id="btnStart">▶ 开始训练</button>
+
+      <div class="stats">
+        <div class="stat-row">
+          <span class="stat-label">准确率</span>
+          <span class="stat-value accuracy" id="statAccuracy">0%</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">连击</span>
+          <span class="stat-value combo" id="statCombo">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">总击打</span>
+          <span class="stat-value" id="statTotal">0</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧主区域 -->
+    <main class="main-area" id="mainArea">
+      <div class="float-stats">
+        <div class="float-stat">
+          <span class="label">准确率</span>
+          <span class="value acc" id="floatAccuracy">0%</span>
+        </div>
+        <div class="float-stat">
+          <span class="label">连击</span>
+          <span class="value combo" id="floatCombo">0</span>
+        </div>
+      </div>
+
+      <div class="judgment-text" id="judgmentText"></div>
+      <div class="overlay-hint" id="overlayHint">按下「开始训练」<br/>然后跟随节拍点击空格键或屏幕</div>
+
+      <canvas id="beatCanvas"></canvas>
+
+      <div class="history-section">
+        <div class="history-title">历史准确率趋势</div>
+        <canvas id="historyCanvas" width="480" height="160"></canvas>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
