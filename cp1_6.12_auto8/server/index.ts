@@ -15,8 +15,18 @@ const io = new SocketIOServer(server, {
 
 const PORT = process.env.PORT || 4000;
 
+app.use(express.json());
+
 const distPath = path.join(__dirname, '..', 'dist');
-app.use(express.static(distPath));
+const clientPath = path.join(__dirname, '..', 'client');
+
+let staticPath = distPath;
+if (require('fs').existsSync(distPath)) {
+  staticPath = distPath;
+} else if (require('fs').existsSync(clientPath)) {
+  staticPath = clientPath;
+}
+app.use(express.static(staticPath));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -177,8 +187,12 @@ io.on('connection', (socket: Socket) => {
 });
 
 app.get('*', (req, res) => {
-  const indexPath = path.join(distPath, 'index.html');
-  res.sendFile(indexPath);
+  const indexPath = path.join(staticPath, 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      res.status(404).send('Not found');
+    }
+  });
 });
 
 server.listen(PORT, () => {
