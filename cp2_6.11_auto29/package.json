@@ -1,37 +1,18 @@
 {
-  "name": "time-tree-hole",
-  "private": true,
+  "name": "bluefin-horizon",
   "version": "1.0.0",
-  "type": "module",
+  "description": "蓝鳍视界 - 交互式海底生态观测工具",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:client": "vite",
-    "dev:server": "tsx watch server/server.ts",
+    "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "uuid": "^9.0.1",
-    "canvas-confetti": "^1.9.2",
-    "zustand": "^4.5.0"
+    "three": "^0.160.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.55",
-    "@types/react-dom": "^18.2.19",
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
-    "@types/uuid": "^9.0.8",
-    "@types/react-router-dom": "^5.3.3",
-    "@types/canvas-confetti": "^1.6.4",
-    "@vitejs/plugin-react": "^4.2.1",
-    "typescript": "^5.3.3",
-    "vite": "^5.1.3",
-    "concurrently": "^8.2.2",
-    "tsx": "^4.7.1"
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
   }
 }
