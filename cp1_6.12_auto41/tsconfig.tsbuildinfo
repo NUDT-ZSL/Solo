@@ -1,0 +1,1 @@
+{"root":["./src/animationpreview.tsx","./src/app.tsx","./src/fileuploader.tsx","./src/lyricsparser.ts","./src/styleeditor.tsx","./src/timelineeditor.tsx","./src/videoexporter.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/store/uselyricsstore.ts","./src/types/index.ts","./src/utils/animation.ts","./src/utils/time.ts"],"version":"5.8.3"}
