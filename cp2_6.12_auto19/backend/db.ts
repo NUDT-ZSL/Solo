@@ -1,18 +1,36 @@
-import Database from 'better-sqlite3'
+import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const dbPath = path.join(__dirname, 'outfit.db')
-const db = new Database(dbPath)
 
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+let db: SqlJsDatabase
 
-const initDb = () => {
-  db.exec(`
+function saveDb() {
+  try {
+    const data = db.export()
+    const buffer = Buffer.from(data)
+    fs.writeFileSync(dbPath, buffer)
+  } catch (e) {
+    console.error('Failed to save database:', e)
+  }
+}
+
+export async function initDatabase(): Promise<void> {
+  const SQL = await initSqlJs()
+
+  if (fs.existsSync(dbPath)) {
+    const fileBuffer = fs.readFileSync(dbPath)
+    db = new SQL.Database(fileBuffer)
+  } else {
+    db = new SQL.Database()
+  }
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS outfits (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -28,7 +46,9 @@ const initDb = () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       likes INTEGER DEFAULT 0
     );
+  `)
 
+  db.run(`
     CREATE TABLE IF NOT EXISTS likes (
       id TEXT PRIMARY KEY,
       outfit_id TEXT NOT NULL,
@@ -36,15 +56,16 @@ const initDb = () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (outfit_id) REFERENCES outfits(id) ON DELETE CASCADE
     );
-
-    CREATE INDEX IF NOT EXISTS idx_outfits_created_at ON outfits(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_likes_outfit_id ON likes(outfit_id);
-    CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_outfit_user ON likes(outfit_id, user_id);
   `)
-}
 
-initDb()
+  db.run(`CREATE INDEX IF NOT EXISTS idx_outfits_created_at ON outfits(created_at DESC);`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_likes_outfit_id ON likes(outfit_id);`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);`)
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_outfit_user ON likes(outfit_id, user_id);`)
+
+  saveDb()
+  console.log('Database initialized successfully')
+}
 
 export interface OutfitRecord {
   id: string
@@ -69,6 +90,27 @@ export interface LikeRecord {
   created_at: string
 }
 
+function queryAll<T>(sql: string, params: any[] = []): T[] {
+  const stmt = db.prepare(sql)
+  stmt.bind(params)
+  const results: T[] = []
+  while (stmt.step()) {
+    results.push(stmt.getAsObject() as T)
+  }
+  stmt.free()
+  return results
+}
+
+function queryOne<T>(sql: string, params: any[] = []): T | undefined {
+  const results = queryAll<T>(sql, params)
+  return results[0]
+}
+
+function run(sql: string, params: any[] = []): void {
+  db.run(sql, params)
+  saveDb()
+}
+
 export const insertOutfit = (
   id: string,
   name: string,
@@ -82,48 +124,35 @@ export const insertOutfit = (
   accessoryColor: string | null,
   thumbnail: string | null
 ): OutfitRecord => {
-  const stmt = db.prepare(`
-    INSERT INTO outfits (
+  run(
+    `INSERT INTO outfits (
       id, name, top_style, top_color, bottom_style, bottom_color,
       shoes_style, shoes_color, accessory_style, accessory_color, thumbnail
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  stmt.run(
-    id,
-    name,
-    topStyle,
-    topColor,
-    bottomStyle,
-    bottomColor,
-    shoesStyle,
-    shoesColor,
-    accessoryStyle,
-    accessoryColor,
-    thumbnail
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, topStyle, topColor, bottomStyle, bottomColor, shoesStyle, shoesColor, accessoryStyle, accessoryColor, thumbnail]
   )
   return getOutfitById(id)!
 }
 
 export const getOutfitById = (id: string): OutfitRecord | undefined => {
-  const stmt = db.prepare('SELECT * FROM outfits WHERE id = ?')
-  return stmt.get(id) as OutfitRecord | undefined
+  return queryOne<OutfitRecord>('SELECT * FROM outfits WHERE id = ?', [id])
 }
 
 export const getOutfits = (limit: number = 20): OutfitRecord[] => {
-  const stmt = db.prepare('SELECT * FROM outfits ORDER BY created_at DESC LIMIT ?')
-  return stmt.all(limit) as OutfitRecord[]
+  return queryAll<OutfitRecord>('SELECT * FROM outfits ORDER BY created_at DESC LIMIT ?', [limit])
 }
 
 export const getOutfitCount = (): number => {
-  const stmt = db.prepare('SELECT COUNT(*) as count FROM outfits')
-  const result = stmt.get() as { count: number }
-  return result.count
+  const result = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM outfits')
+  return result?.count || 0
 }
 
 export const deleteOutfit = (id: string): boolean => {
-  const stmt = db.prepare('DELETE FROM outfits WHERE id = ?')
-  const result = stmt.run(id)
-  return result.changes > 0
+  const before = getOutfitById(id)
+  if (!before) return false
+  run('DELETE FROM likes WHERE outfit_id = ?', [id])
+  run('DELETE FROM outfits WHERE id = ?', [id])
+  return true
 }
 
 export const toggleLike = (
@@ -131,41 +160,35 @@ export const toggleLike = (
   outfitId: string,
   userId: string
 ): { likes: number; isLiked: boolean } => {
-  const existingLike = db
-    .prepare('SELECT * FROM likes WHERE outfit_id = ? AND user_id = ?')
-    .get(outfitId, userId) as LikeRecord | undefined
+  const existingLike = queryOne<LikeRecord>(
+    'SELECT * FROM likes WHERE outfit_id = ? AND user_id = ?',
+    [outfitId, userId]
+  )
 
   if (existingLike) {
-    db.prepare('DELETE FROM likes WHERE id = ?').run(existingLike.id)
-    db.prepare('UPDATE outfits SET likes = likes - 1 WHERE id = ?').run(outfitId)
+    run('DELETE FROM likes WHERE id = ?', [(existingLike as any).id || existingLike.id])
+    run('UPDATE outfits SET likes = MAX(0, likes - 1) WHERE id = ?', [outfitId])
     const outfit = getOutfitById(outfitId)!
     return { likes: outfit.likes, isLiked: false }
   } else {
-    db.prepare('INSERT INTO likes (id, outfit_id, user_id) VALUES (?, ?, ?)').run(
-      likeId,
-      outfitId,
-      userId
-    )
-    db.prepare('UPDATE outfits SET likes = likes + 1 WHERE id = ?').run(outfitId)
+    run('INSERT INTO likes (id, outfit_id, user_id) VALUES (?, ?, ?)', [likeId, outfitId, userId])
+    run('UPDATE outfits SET likes = likes + 1 WHERE id = ?', [outfitId])
     const outfit = getOutfitById(outfitId)!
     return { likes: outfit.likes, isLiked: true }
   }
 }
 
 export const getLikedOutfits = (userId: string): OutfitRecord[] => {
-  const stmt = db.prepare(`
-    SELECT o.* FROM outfits o
-    INNER JOIN likes l ON o.id = l.outfit_id
-    WHERE l.user_id = ?
-    ORDER BY l.created_at DESC
-  `)
-  return stmt.all(userId) as OutfitRecord[]
+  return queryAll<OutfitRecord>(
+    `SELECT o.* FROM outfits o
+     INNER JOIN likes l ON o.id = l.outfit_id
+     WHERE l.user_id = ?
+     ORDER BY l.created_at DESC`,
+    [userId]
+  )
 }
 
 export const getLikeCount = (outfitId: string): number => {
-  const stmt = db.prepare('SELECT COUNT(*) as count FROM likes WHERE outfit_id = ?')
-  const result = stmt.get(outfitId) as { count: number }
-  return result.count
+  const result = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM likes WHERE outfit_id = ?', [outfitId])
+  return result?.count || 0
 }
-
-export default db

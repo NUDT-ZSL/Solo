@@ -44,47 +44,65 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
 }
 
-.ripple {
+.ripple-btn {
   position: relative;
   overflow: hidden;
 }
 
-.ripple::after {
-  content: '';
+.ripple-effect {
   position: absolute;
-  top: 50%;
-  left: 50%;
   width: 0;
   height: 0;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(57, 255, 20, 0.25);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  animation: ripple-expand 0.6s ease-out forwards;
 }
 
-.ripple:active::after {
-  width: 200px;
-  height: 200px;
-  opacity: 0;
-  transition: width 0.6s ease, height 0.6s ease, opacity 0.6s ease;
+@keyframes ripple-expand {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 1;
+  }
+  100% {
+    width: 200px;
+    height: 200px;
+    opacity: 0;
+  }
 }
 
 @keyframes breathingGlow {
   0%, 100% {
     box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.4),
-                0 0 10px 2px rgba(57, 255, 20, 0.2),
-                inset 0 0 5px rgba(57, 255, 20, 0.1);
+                0 0 8px 2px rgba(57, 255, 20, 0.2),
+                inset 0 0 4px rgba(57, 255, 20, 0.1);
   }
   50% {
     box-shadow: 0 0 0 3px rgba(57, 255, 20, 0.6),
                 0 0 20px 6px rgba(57, 255, 20, 0.35),
-                inset 0 0 10px rgba(57, 255, 20, 0.2);
+                inset 0 0 8px rgba(57, 255, 20, 0.2);
   }
 }
 
 .selected-card {
   animation: breathingGlow 2s ease-in-out infinite;
   border-color: var(--accent-neon) !important;
+}
+
+.clothing-card {
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+  will-change: transform, box-shadow;
+}
+
+.clothing-card:hover {
+  transform: translateY(-8px) scale(1.05);
+  box-shadow: var(--shadow-hover);
+}
+
+.color-transition {
+  transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease;
 }
 
 @keyframes fadeIn {
@@ -187,24 +205,53 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(0, 0, 0, 0.25);
 }
 
-.tab-content {
-  overflow: hidden;
-}
-
-.tab-pane {
-  opacity: 0;
-  transform: translateX(15px);
-  transition: opacity var(--transition-fast) ease, transform var(--transition-fast) ease;
+.tab-slide {
   position: absolute;
   width: 100%;
+  height: 100%;
   pointer-events: none;
+  transition: transform 0.35s ease, opacity 0.35s ease;
 }
 
-.tab-pane.active {
+.tab-slide-hidden {
+  opacity: 0;
+  transform: translateX(0);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.tab-slide-active {
   opacity: 1;
   transform: translateX(0);
   position: relative;
   pointer-events: auto;
+  visibility: visible;
+  animation: tabSlideIn 0.35s ease forwards;
+}
+
+.tab-slide-exit-left {
+  opacity: 0;
+  transform: translateX(-30px);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.tab-slide-exit-right {
+  opacity: 0;
+  transform: translateX(30px);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+@keyframes tabSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .outfit-card {
@@ -237,12 +284,6 @@ h1, h2, h3, h4, h5, h6 {
 
 .clothing-fade-out {
   animation: fadeOut var(--transition-fast) ease forwards;
-}
-
-.color-transition {
-  transition: color var(--transition-slow) ease,
-              background-color var(--transition-slow) ease,
-              border-color var(--transition-slow) ease;
 }
 
 .masonry-grid {

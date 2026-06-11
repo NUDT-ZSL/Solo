@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Outfit, SelectedClothing } from '@/types'
 import { useOutfitStore, getUserId } from '@/store/useOutfitStore'
 import {
@@ -12,6 +12,24 @@ import {
 } from '@/api/outfitApi'
 import { Share2, Heart, Save, Trash2, Check, Copy, X } from 'lucide-react'
 
+function useRipple() {
+  const ref = useRef<HTMLElement>(null)
+  const createRipple = useCallback((e: React.MouseEvent) => {
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const ripple = document.createElement('span')
+    ripple.className = 'ripple-effect'
+    ripple.style.left = `${x}px`
+    ripple.style.top = `${y}px`
+    el.appendChild(ripple)
+    setTimeout(() => ripple.remove(), 600)
+  }, [])
+  return { ref, createRipple }
+}
+
 interface OutfitCardProps {
   outfit: Outfit
   onLoad: (outfit: Outfit) => void
@@ -24,6 +42,9 @@ interface OutfitCardProps {
 
 function OutfitCard({ outfit, onLoad, onShare, onLike, isLiked, showDelete, onDelete }: OutfitCardProps) {
   const [copied, setCopied] = useState(false)
+  const cardRipple = useRipple()
+  const likeRipple = useRipple()
+  const shareRipple = useRipple()
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -37,6 +58,7 @@ function OutfitCard({ outfit, onLoad, onShare, onLike, isLiked, showDelete, onDe
 
   const handleShareClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
+    shareRipple.createRipple(e)
     const link = generateShareLink(outfit.id)
     const success = await copyToClipboard(link)
     if (success) {
@@ -48,6 +70,7 @@ function OutfitCard({ outfit, onLoad, onShare, onLike, isLiked, showDelete, onDe
 
   const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    likeRipple.createRipple(e)
     onLike(outfit)
   }
 
@@ -58,9 +81,19 @@ function OutfitCard({ outfit, onLoad, onShare, onLike, isLiked, showDelete, onDe
     }
   }
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    cardRipple.createRipple(e)
+    onLoad(outfit)
+  }
+
   return (
-    <div className="outfit-card bg-white rounded-xl overflow-hidden cursor-pointer group" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-      <div className="relative" onClick={() => onLoad(outfit)}>
+    <div
+      ref={cardRipple.ref as React.RefObject<HTMLDivElement>}
+      className="outfit-card ripple-btn bg-white rounded-xl overflow-hidden cursor-pointer group"
+      style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+      onClick={handleCardClick}
+    >
+      <div className="relative">
         {outfit.thumbnail ? (
           <img
             src={outfit.thumbnail}
@@ -86,7 +119,8 @@ function OutfitCard({ outfit, onLoad, onShare, onLike, isLiked, showDelete, onDe
         <p className="text-xs text-gray-400 mb-3">{formatDate(outfit.createdAt)}</p>
         <div className="flex items-center justify-between">
           <button
-            className={`ripple flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            ref={likeRipple.ref as React.RefObject<HTMLButtonElement>}
+            className={`ripple-btn flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
               isLiked
                 ? 'bg-red-50 text-red-500'
                 : 'bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-500'
@@ -97,7 +131,8 @@ function OutfitCard({ outfit, onLoad, onShare, onLike, isLiked, showDelete, onDe
             <span>{outfit.likes}</span>
           </button>
           <button
-            className={`ripple flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            ref={shareRipple.ref as React.RefObject<HTMLButtonElement>}
+            className={`ripple-btn flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
               copied
                 ? 'bg-green-50 text-green-600'
                 : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
@@ -125,6 +160,7 @@ interface SaveModalProps {
 
 function SaveModal({ isOpen, onClose, onSave, top, bottom, shoes, accessory }: SaveModalProps) {
   const [name, setName] = useState('')
+  const saveBtnRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -135,6 +171,22 @@ function SaveModal({ isOpen, onClose, onSave, top, bottom, shoes, accessory }: S
   const canSave = top && bottom && shoes
 
   if (!isOpen) return null
+
+  const handleSaveClick = (e: React.MouseEvent) => {
+    const btn = saveBtnRef.current
+    if (btn) {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const ripple = document.createElement('span')
+      ripple.className = 'ripple-effect'
+      ripple.style.left = `${x}px`
+      ripple.style.top = `${y}px`
+      btn.appendChild(ripple)
+      setTimeout(() => ripple.remove(), 600)
+    }
+    if (canSave) onSave(name)
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
@@ -173,12 +225,13 @@ function SaveModal({ isOpen, onClose, onSave, top, bottom, shoes, accessory }: S
             取消
           </button>
           <button
-            className={`ripple flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+            ref={saveBtnRef}
+            className={`ripple-btn flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
               canSave
                 ? 'bg-[#39ff14] text-white hover:bg-[#2de00f]'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
-            onClick={() => canSave && onSave(name)}
+            onClick={handleSaveClick}
             disabled={!canSave}
           >
             保存
@@ -238,14 +291,18 @@ export default function OutfitPanel({ showSaveButton = true, mode = 'my-outfits'
           selection.accessory
         )
 
-        const result = await saveOutfit({
+        const outfitData = {
           name,
-          top: selection.top,
-          bottom: selection.bottom,
-          shoes: selection.shoes,
-          accessory: selection.accessory,
+          top: { styleId: selection.top.styleId, color: selection.top.color },
+          bottom: { styleId: selection.bottom.styleId, color: selection.bottom.color },
+          shoes: { styleId: selection.shoes.styleId, color: selection.shoes.color },
+          accessory: selection.accessory
+            ? { styleId: selection.accessory.styleId, color: selection.accessory.color }
+            : null,
           thumbnail
-        })
+        }
+
+        const result = await saveOutfit(outfitData)
 
         if (result.success && result.data) {
           addOutfit(result.data)
@@ -324,7 +381,7 @@ export default function OutfitPanel({ showSaveButton = true, mode = 'my-outfits'
           </div>
           {showSaveButton && mode === 'my-outfits' && (
             <button
-              className={`ripple flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+              className={`ripple-btn flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
                 selection.top && selection.bottom && selection.shoes
                   ? 'bg-[#39ff14] text-white hover:bg-[#2de00f]'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'

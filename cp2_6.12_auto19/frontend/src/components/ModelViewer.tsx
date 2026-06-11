@@ -5,50 +5,41 @@ import * as THREE from 'three'
 import { OutfitSelection, SelectedClothing } from '@/types'
 import { getStyleById } from '@/data/wardrobe'
 
-interface MannequinProps {
-  outfit: OutfitSelection
-  animatingItems: Set<string>
-}
+const COLOR_LERP_SPEED = 2.0
+const FADE_IN_SPEED = 3.0
+const FADE_OUT_SPEED = 5.0
 
 function MannequinBody() {
-  const bodyMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#f5e6d3',
-        roughness: 0.8,
-        metalness: 0.1
-      }),
-    []
-  )
+  const bodyMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#f5e6d3', roughness: 0.85, metalness: 0.05 }), [])
 
   return (
     <group>
-      <mesh position={[0, 1.2, 0]} material={bodyMaterial} castShadow>
-        <cylinderGeometry args={[0.3, 0.35, 1.2, 32]} />
+      <mesh position={[0, 1.15, 0]} material={bodyMat} castShadow>
+        <cylinderGeometry args={[0.28, 0.33, 1.1, 24]} />
       </mesh>
-      <mesh position={[0, 0.2, 0]} material={bodyMaterial} castShadow>
-        <cylinderGeometry args={[0.35, 0.32, 0.8, 32]} />
+      <mesh position={[0, 0.15, 0]} material={bodyMat} castShadow>
+        <cylinderGeometry args={[0.32, 0.3, 0.7, 24]} />
       </mesh>
-      <mesh position={[0, -0.9, 0]} material={bodyMaterial} castShadow>
-        <cylinderGeometry args={[0.18, 0.15, 0.8, 32]} />
+      <mesh position={[0.18, -0.85, 0]} material={bodyMat} castShadow>
+        <cylinderGeometry args={[0.16, 0.12, 0.85, 16]} />
       </mesh>
-      <mesh position={[-0.35, -0.9, 0]} material={bodyMaterial} castShadow>
-        <cylinderGeometry args={[0.18, 0.15, 0.8, 32]} />
+      <mesh position={[-0.18, -0.85, 0]} material={bodyMat} castShadow>
+        <cylinderGeometry args={[0.16, 0.12, 0.85, 16]} />
       </mesh>
-      <mesh position={[0.55, 0.8, 0]} rotation={[0, 0, -0.3]} material={bodyMaterial} castShadow>
-        <cylinderGeometry args={[0.12, 0.1, 0.9, 32]} />
+      <mesh position={[0.42, 0.7, 0]} rotation={[0, 0, -0.2]} material={bodyMat} castShadow>
+        <cylinderGeometry args={[0.08, 0.07, 0.7, 12]} />
       </mesh>
-      <mesh position={[-0.55, 0.8, 0]} rotation={[0, 0, 0.3]} material={bodyMaterial} castShadow>
-        <cylinderGeometry args={[0.12, 0.1, 0.9, 32]} />
+      <mesh position={[-0.42, 0.7, 0]} rotation={[0, 0, 0.2]} material={bodyMat} castShadow>
+        <cylinderGeometry args={[0.08, 0.07, 0.7, 12]} />
       </mesh>
-      <mesh position={[0, 2.2, 0]} material={bodyMaterial} castShadow>
-        <sphereGeometry args={[0.28, 32, 32]} />
+      <mesh position={[0, 1.95, 0]} material={bodyMat} castShadow>
+        <sphereGeometry args={[0.22, 24, 24]} />
       </mesh>
-      <mesh position={[0, -1.4, 0.05]} material={bodyMaterial} castShadow>
-        <boxGeometry args={[0.18, 0.2, 0.3]} />
+      <mesh position={[0.1, -1.4, 0.03]} material={bodyMat} castShadow>
+        <boxGeometry args={[0.14, 0.08, 0.22]} />
       </mesh>
-      <mesh position={[-0.35, -1.4, 0.05]} material={bodyMaterial} castShadow>
-        <boxGeometry args={[0.18, 0.2, 0.3]} />
+      <mesh position={[-0.1, -1.4, 0.03]} material={bodyMat} castShadow>
+        <boxGeometry args={[0.14, 0.08, 0.22]} />
       </mesh>
     </group>
   )
@@ -57,92 +48,67 @@ function MannequinBody() {
 interface ClothingMeshProps {
   selected: SelectedClothing | null
   category: string
-  isAnimating: boolean
-  onAnimationComplete: () => void
 }
 
-function ClothingMesh({ selected, category, isAnimating, onAnimationComplete }: ClothingMeshProps) {
-  const meshRef = useRef<THREE.Mesh>(null)
-  const [opacity, setOpacity] = useState(selected ? 1 : 0)
-  const [currentColor, setCurrentColor] = useState(selected?.color || '#ffffff')
-  const [prevSelected, setPrevSelected] = useState<SelectedClothing | null>(null)
-  const [fadeDirection, setFadeDirection] = useState<'in' | 'out' | null>(null)
+function ClothingMesh({ selected, category }: ClothingMeshProps) {
+  const groupRef = useRef<THREE.Group>(null!)
+  const matRef = useRef<THREE.MeshStandardMaterial>(null!)
+  const targetOpacity = useRef(selected ? 1 : 0)
+  const targetColor = useRef(new THREE.Color(selected?.color || '#ffffff'))
+  const currentOpacity = useRef(selected ? 1 : 0)
+  const prevSelectedRef = useRef<SelectedClothing | null>(selected)
+  const [visible, setVisible] = useState(!!selected)
 
   const style = selected ? getStyleById(selected.styleId) : null
 
   useEffect(() => {
-    if (selected && !prevSelected) {
-      setFadeDirection('in')
-      setOpacity(0)
-      setCurrentColor(selected.color)
+    const prev = prevSelectedRef.current
+    if (selected && !prev) {
+      setVisible(true)
+      currentOpacity.current = 0
+      targetOpacity.current = 1
+      targetColor.current.set(selected.color)
+    } else if (!selected && prev) {
+      targetOpacity.current = 0
+    } else if (selected && prev && selected.styleId !== prev.styleId) {
+      targetOpacity.current = 0
       const timer = setTimeout(() => {
-        setOpacity(1)
-        setFadeDirection(null)
-        onAnimationComplete()
-      }, 50)
+        targetColor.current.set(selected.color)
+        targetOpacity.current = 1
+        setVisible(true)
+      }, 250)
       return () => clearTimeout(timer)
-    } else if (!selected && prevSelected) {
-      setFadeDirection('out')
-      setOpacity(1)
-      const timer = setTimeout(() => {
-        setOpacity(0)
-        setFadeDirection(null)
-        onAnimationComplete()
-      }, 200)
-      return () => clearTimeout(timer)
-    } else if (selected && prevSelected && selected.styleId !== prevSelected.styleId) {
-      setFadeDirection('out')
-      setOpacity(1)
-      const timer1 = setTimeout(() => {
-        setOpacity(0)
-        setCurrentColor(selected.color)
-        setFadeDirection('in')
-        const timer2 = setTimeout(() => {
-          setOpacity(1)
-          setFadeDirection(null)
-          onAnimationComplete()
-        }, 50)
-        return () => clearTimeout(timer2)
-      }, 200)
-      return () => clearTimeout(timer1)
-    } else if (selected && prevSelected && selected.color !== prevSelected.color) {
-      setCurrentColor(selected.color)
-      onAnimationComplete()
+    } else if (selected && prev && selected.color !== prev.color) {
+      targetColor.current.set(selected.color)
     }
-    setPrevSelected(selected)
-  }, [selected, prevSelected, onAnimationComplete])
+    prevSelectedRef.current = selected
+  }, [selected])
 
   useFrame((_, delta) => {
-    if (meshRef.current && fadeDirection) {
-      const material = meshRef.current.material as THREE.MeshStandardMaterial
-      if (fadeDirection === 'in') {
-        material.opacity = Math.min(1, material.opacity + delta * 3)
-      } else if (fadeDirection === 'out') {
-        material.opacity = Math.max(0, material.opacity - delta * 5)
-      }
+    if (!matRef.current) return
+
+    const diff = targetOpacity.current - currentOpacity.current
+    if (Math.abs(diff) > 0.001) {
+      const speed = diff > 0 ? FADE_IN_SPEED : FADE_OUT_SPEED
+      currentOpacity.current += diff * Math.min(speed * delta, 1)
+    } else {
+      currentOpacity.current = targetOpacity.current
     }
+
+    matRef.current.opacity = currentOpacity.current
+    matRef.current.visible = currentOpacity.current > 0.01
+
+    if (currentOpacity.current <= 0.01 && targetOpacity.current <= 0) {
+      setVisible(false)
+    }
+
+    matRef.current.color.lerp(targetColor.current, Math.min(COLOR_LERP_SPEED * delta, 1))
   })
 
-  const material = useMemo(() => {
-    const mat = new THREE.MeshStandardMaterial({
-      color: currentColor,
-      roughness: 0.6,
-      metalness: 0.1,
-      transparent: true,
-      opacity: opacity
-    })
-    return mat
-  }, [currentColor, opacity])
-
-  useEffect(() => {
-    material.color.set(currentColor)
-  }, [currentColor, material])
-
-  if (!style || !selected) {
-    return <group ref={meshRef as any} />
-  }
+  const accentMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, metalness: 0.05 }), [])
 
   const renderShape = () => {
+    if (!style) return null
     const y = style.yPosition
     const s = style.scale
 
@@ -150,241 +116,310 @@ function ClothingMesh({ selected, category, isAnimating, onAnimationComplete }: 
       case 'tshirt':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.02]} material={material} castShadow>
-              <boxGeometry args={[0.9, 0.75, 0.08]} />
+            <mesh position={[0, 0, 0.03]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.32, 0.36, 0.65, 24]} />
             </mesh>
-            <mesh position={[0.45, -0.2, 0.02]} rotation={[0, 0, -0.15]} material={material} castShadow>
-              <boxGeometry args={[0.25, 0.6, 0.06]} />
+            <mesh position={[0, 0.33, 0.04]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.12, 0.03, 8, 24, Math.PI]} />
             </mesh>
-            <mesh position={[-0.45, -0.2, 0.02]} rotation={[0, 0, 0.15]} material={material} castShadow>
-              <boxGeometry args={[0.25, 0.6, 0.06]} />
+            <mesh position={[0.38, 0.05, 0.02]} rotation={[0, 0, -0.3]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.08, 0.07, 0.45, 12]} />
+            </mesh>
+            <mesh position={[-0.38, 0.05, 0.02]} rotation={[0, 0, 0.3]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.08, 0.07, 0.45, 12]} />
             </mesh>
           </group>
         )
       case 'shirt':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.03]} material={material} castShadow>
-              <boxGeometry args={[0.85, 0.8, 0.06]} />
+            <mesh position={[0, 0, 0.04]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.3, 0.35, 0.7, 24]} />
             </mesh>
-            <mesh position={[0.42, -0.25, 0.03]} rotation={[0, 0, -0.12]} material={material} castShadow>
-              <boxGeometry args={[0.22, 0.7, 0.05]} />
+            <mesh position={[0.4, 0, 0.03]} rotation={[0, 0, -0.25]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.07, 0.065, 0.55, 12]} />
             </mesh>
-            <mesh position={[-0.42, -0.25, 0.03]} rotation={[0, 0, 0.12]} material={material} castShadow>
-              <boxGeometry args={[0.22, 0.7, 0.05]} />
+            <mesh position={[-0.4, 0, 0.03]} rotation={[0, 0, 0.25]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.07, 0.065, 0.55, 12]} />
             </mesh>
-            <mesh position={[0, 0.4, 0.05]} material={material} castShadow>
-              <boxGeometry args={[0.25, 0.15, 0.04]} />
+            <mesh position={[0.06, 0.35, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.04, 0.4, 0.02]} />
+            </mesh>
+            <mesh position={[-0.06, 0.35, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.04, 0.4, 0.02]} />
+            </mesh>
+            <mesh position={[0, 0.38, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.2, 0.08, 0.03]} />
             </mesh>
           </group>
         )
       case 'sweater':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.04]} material={material} castShadow>
-              <boxGeometry args={[0.95, 0.85, 0.1]} />
+            <mesh position={[0, 0, 0.05]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.35, 0.38, 0.72, 24]} />
             </mesh>
-            <mesh position={[0.48, -0.25, 0.04]} rotation={[0, 0, -0.12]} material={material} castShadow>
-              <cylinderGeometry args={[0.12, 0.1, 0.75, 16]} />
+            <mesh position={[0.42, -0.02, 0.04]} rotation={[0, 0, -0.25]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.09, 0.08, 0.6, 12]} />
             </mesh>
-            <mesh position={[-0.48, -0.25, 0.04]} rotation={[0, 0, 0.12]} material={material} castShadow>
-              <cylinderGeometry args={[0.12, 0.1, 0.75, 16]} />
+            <mesh position={[-0.42, -0.02, 0.04]} rotation={[0, 0, 0.25]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.09, 0.08, 0.6, 12]} />
             </mesh>
-            <mesh position={[0, 0.42, 0.06]} material={material} castShadow>
-              <torusGeometry args={[0.15, 0.08, 8, 16, Math.PI]} />
+            <mesh position={[0, 0.36, 0.07]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.14, 0.04, 8, 24, Math.PI]} />
+            </mesh>
+            <mesh position={[0.42, -0.32, 0.04]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.07, 0.015, 8, 16]} />
+            </mesh>
+            <mesh position={[-0.42, -0.32, 0.04]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.07, 0.015, 8, 16]} />
             </mesh>
           </group>
         )
       case 'jacket':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, -0.05, 0.05]} material={material} castShadow>
-              <boxGeometry args={[1, 0.95, 0.12]} />
+            <mesh position={[0.06, -0.02, 0.06]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.33, 0.37, 0.75, 24, 1, false, 0, Math.PI * 1.7]} />
             </mesh>
-            <mesh position={[0.52, -0.3, 0.05]} rotation={[0, 0, -0.1]} material={material} castShadow>
-              <boxGeometry args={[0.25, 0.8, 0.08]} />
+            <mesh position={[-0.06, -0.02, 0.06]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.33, 0.37, 0.75, 24, 1, false, Math.PI * 0.3, Math.PI * 1.7]} />
             </mesh>
-            <mesh position={[-0.52, -0.3, 0.05]} rotation={[0, 0, 0.1]} material={material} castShadow>
-              <boxGeometry args={[0.25, 0.8, 0.08]} />
+            <mesh position={[0.44, -0.05, 0.04]} rotation={[0, 0, -0.2]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.085, 0.075, 0.6, 12]} />
             </mesh>
-            <mesh position={[0.12, -0.1, 0.11]} material={material} castShadow>
-              <boxGeometry args={[0.06, 0.6, 0.02]} />
+            <mesh position={[-0.44, -0.05, 0.04]} rotation={[0, 0, 0.2]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.085, 0.075, 0.6, 12]} />
             </mesh>
-            <mesh position={[-0.12, -0.1, 0.11]} material={material} castShadow>
-              <boxGeometry args={[0.06, 0.6, 0.02]} />
+            <mesh position={[0.06, 0.3, 0.12]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.04, 0.5, 0.02]} />
+            </mesh>
+            <mesh position={[-0.06, 0.3, 0.12]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.04, 0.5, 0.02]} />
+            </mesh>
+            <mesh position={[0, 0.38, 0.09]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.28, 0.12, 0.04]} />
             </mesh>
           </group>
         )
       case 'coat':
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, -0.2, 0.06]} material={material} castShadow>
-              <boxGeometry args={[1.05, 1.5, 0.14]} />
+          <group position={[0, y - 0.3, 0]} scale={s}>
+            <mesh position={[0, 0, 0.07]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.34, 0.42, 1.6, 24]} />
             </mesh>
-            <mesh position={[0.55, -0.5, 0.06]} rotation={[0, 0, -0.08]} material={material} castShadow>
-              <boxGeometry args={[0.28, 1.0, 0.1]} />
+            <mesh position={[0.46, -0.1, 0.05]} rotation={[0, 0, -0.15]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.09, 0.08, 0.8, 12]} />
             </mesh>
-            <mesh position={[-0.55, -0.5, 0.06]} rotation={[0, 0, 0.08]} material={material} castShadow>
-              <boxGeometry args={[0.28, 1.0, 0.1]} />
+            <mesh position={[-0.46, -0.1, 0.05]} rotation={[0, 0, 0.15]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.09, 0.08, 0.8, 12]} />
             </mesh>
-            <mesh position={[0, 0.5, 0.08]} material={material} castShadow>
-              <boxGeometry args={[1.1, 0.2, 0.08]} />
+            <mesh position={[0.08, 0.6, 0.14]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.04, 0.9, 0.02]} />
+            </mesh>
+            <mesh position={[-0.08, 0.6, 0.14]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.04, 0.9, 0.02]} />
+            </mesh>
+            <mesh position={[0, 0.8, 0.1]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.35, 0.15, 0.06]} />
+            </mesh>
+            <mesh position={[0, -0.7, 0.09]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.3, 0.02, 8, 24, Math.PI]} />
             </mesh>
           </group>
         )
       case 'pants':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.12, -0.3, 0.02]} material={material} castShadow>
-              <boxGeometry args={[0.28, 0.8, 0.08]} />
+            <mesh position={[0, 0.12, 0.03]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.3, 0.32, 0.2, 24]} />
             </mesh>
-            <mesh position={[-0.12, -0.3, 0.02]} material={material} castShadow>
-              <boxGeometry args={[0.28, 0.8, 0.08]} />
+            <mesh position={[0.12, -0.35, 0.02]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.13, 0.1, 0.8, 16]} />
             </mesh>
-            <mesh position={[0, 0.15, 0.02]} material={material} castShadow>
-              <boxGeometry args={[0.6, 0.2, 0.08]} />
+            <mesh position={[-0.12, -0.35, 0.02]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.13, 0.1, 0.8, 16]} />
             </mesh>
           </group>
         )
       case 'skirt':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, -0.1, 0.02]} material={material} castShadow>
-              <cylinderGeometry args={[0.2, 0.35, 0.5, 32]} />
+            <mesh position={[0, 0, 0.03]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.2, 0.38, 0.55, 32]} />
+            </mesh>
+            <mesh position={[0, 0.28, 0.04]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.2, 0.02, 8, 24]} />
             </mesh>
           </group>
         )
       case 'shorts':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.12, -0.1, 0.02]} material={material} castShadow>
-              <boxGeometry args={[0.25, 0.4, 0.08]} />
+            <mesh position={[0, 0.12, 0.03]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.3, 0.32, 0.2, 24]} />
             </mesh>
-            <mesh position={[-0.12, -0.1, 0.02]} material={material} castShadow>
-              <boxGeometry args={[0.25, 0.4, 0.08]} />
+            <mesh position={[0.12, -0.05, 0.02]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.13, 0.11, 0.35, 16]} />
             </mesh>
-            <mesh position={[0, 0.12, 0.02]} material={material} castShadow>
-              <boxGeometry args={[0.55, 0.15, 0.08]} />
+            <mesh position={[-0.12, -0.05, 0.02]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.13, 0.11, 0.35, 16]} />
             </mesh>
           </group>
         )
       case 'sneakers':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.18, 0, 0.08]} material={material} castShadow>
-              <boxGeometry args={[0.2, 0.12, 0.32]} />
+            <mesh position={[0.12, 0.02, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.16, 0.1, 0.28]} />
             </mesh>
-            <mesh position={[-0.18, 0, 0.08]} material={material} castShadow>
-              <boxGeometry args={[0.2, 0.12, 0.32]} />
+            <mesh position={[-0.12, 0.02, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.16, 0.1, 0.28]} />
             </mesh>
-            <mesh position={[0.18, -0.08, 0.08]} material={new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 })} castShadow>
-              <boxGeometry args={[0.22, 0.06, 0.34]} />
+            <mesh position={[0.12, -0.05, 0.06]} material={accentMat} castShadow>
+              <boxGeometry args={[0.18, 0.04, 0.3]} />
             </mesh>
-            <mesh position={[-0.18, -0.08, 0.08]} material={new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 })} castShadow>
-              <boxGeometry args={[0.22, 0.06, 0.34]} />
+            <mesh position={[-0.12, -0.05, 0.06]} material={accentMat} castShadow>
+              <boxGeometry args={[0.18, 0.04, 0.3]} />
+            </mesh>
+            <mesh position={[0.12, 0.05, 0.18]} material={matRef.current} castShadow>
+              <sphereGeometry args={[0.06, 12, 12]} />
+            </mesh>
+            <mesh position={[-0.12, 0.05, 0.18]} material={matRef.current} castShadow>
+              <sphereGeometry args={[0.06, 12, 12]} />
             </mesh>
           </group>
         )
       case 'boots':
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.18, 0.1, 0.08]} material={material} castShadow>
-              <boxGeometry args={[0.18, 0.35, 0.28]} />
+          <group position={[0, y + 0.05, 0]} scale={s}>
+            <mesh position={[0.12, 0.12, 0.06]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.08, 0.09, 0.4, 12]} />
             </mesh>
-            <mesh position={[-0.18, 0.1, 0.08]} material={material} castShadow>
-              <boxGeometry args={[0.18, 0.35, 0.28]} />
+            <mesh position={[-0.12, 0.12, 0.06]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.08, 0.09, 0.4, 12]} />
             </mesh>
-            <mesh position={[0.18, -0.12, 0.08]} material={new THREE.MeshStandardMaterial({ color: '#2d2d2d', roughness: 0.7 })} castShadow>
-              <boxGeometry args={[0.2, 0.08, 0.3]} />
+            <mesh position={[0.12, -0.1, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.16, 0.06, 0.28]} />
             </mesh>
-            <mesh position={[-0.18, -0.12, 0.08]} material={new THREE.MeshStandardMaterial({ color: '#2d2d2d', roughness: 0.7 })} castShadow>
-              <boxGeometry args={[0.2, 0.08, 0.3]} />
+            <mesh position={[-0.12, -0.1, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.16, 0.06, 0.28]} />
+            </mesh>
+            <mesh position={[0.12, -0.14, 0.14]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.17, 0.04, 0.06]} />
+            </mesh>
+            <mesh position={[-0.12, -0.14, 0.14]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.17, 0.04, 0.06]} />
             </mesh>
           </group>
         )
       case 'heels':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.18, 0.02, 0.1]} material={material} castShadow>
-              <boxGeometry args={[0.15, 0.08, 0.25]} />
+            <mesh position={[0.12, 0, 0.08]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.12, 0.06, 0.22]} />
             </mesh>
-            <mesh position={[-0.18, 0.02, 0.1]} material={material} castShadow>
-              <boxGeometry args={[0.15, 0.08, 0.25]} />
+            <mesh position={[-0.12, 0, 0.08]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.12, 0.06, 0.22]} />
             </mesh>
-            <mesh position={[0.18, -0.06, 0.18]} material={material} castShadow>
-              <boxGeometry args={[0.08, 0.18, 0.06]} />
+            <mesh position={[0.12, 0.02, 0.16]} rotation={[-0.2, 0, 0]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.11, 0.04, 0.1]} />
             </mesh>
-            <mesh position={[-0.18, -0.06, 0.18]} material={material} castShadow>
-              <boxGeometry args={[0.08, 0.18, 0.06]} />
+            <mesh position={[-0.12, 0.02, 0.16]} rotation={[-0.2, 0, 0]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.11, 0.04, 0.1]} />
+            </mesh>
+            <mesh position={[0.12, -0.08, 0.14]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.015, 0.015, 0.1, 8]} />
+            </mesh>
+            <mesh position={[-0.12, -0.08, 0.14]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.015, 0.015, 0.1, 8]} />
             </mesh>
           </group>
         )
       case 'loafers':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.18, -0.02, 0.08]} material={material} castShadow>
-              <boxGeometry args={[0.18, 0.08, 0.3]} />
+            <mesh position={[0.12, -0.02, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.14, 0.07, 0.26]} />
             </mesh>
-            <mesh position={[-0.18, -0.02, 0.08]} material={material} castShadow>
-              <boxGeometry args={[0.18, 0.08, 0.3]} />
+            <mesh position={[-0.12, -0.02, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.14, 0.07, 0.26]} />
             </mesh>
-            <mesh position={[0.18, 0.02, 0.15]} material={material} castShadow>
-              <boxGeometry args={[0.14, 0.04, 0.12]} />
+            <mesh position={[0.12, 0.01, 0.14]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.1, 0.03, 0.1]} />
             </mesh>
-            <mesh position={[-0.18, 0.02, 0.15]} material={material} castShadow>
-              <boxGeometry args={[0.14, 0.04, 0.12]} />
+            <mesh position={[-0.12, 0.01, 0.14]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.1, 0.03, 0.1]} />
+            </mesh>
+            <mesh position={[0.12, -0.06, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.15, 0.03, 0.28]} />
+            </mesh>
+            <mesh position={[-0.12, -0.06, 0.06]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.15, 0.03, 0.28]} />
             </mesh>
           </group>
         )
       case 'hat':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0]} material={material} castShadow>
-              <cylinderGeometry args={[0.25, 0.25, 0.15, 32]} />
+            <mesh position={[0, 0, 0]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.22, 0.22, 0.18, 24]} />
             </mesh>
-            <mesh position={[0, -0.05, 0]} material={material} castShadow>
-              <cylinderGeometry args={[0.35, 0.35, 0.03, 32]} />
+            <mesh position={[0, -0.06, 0]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.35, 0.36, 0.04, 24]} />
+            </mesh>
+            <mesh position={[0, 0.09, 0]} material={matRef.current} castShadow>
+              <sphereGeometry args={[0.22, 24, 12, 0, Math.PI * 2, 0, Math.PI / 3]} />
             </mesh>
           </group>
         )
       case 'bag':
         return (
-          <group position={[0.55, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.1]} material={material} castShadow>
-              <boxGeometry args={[0.3, 0.25, 0.12]} />
+          <group position={[0.5, y, 0]} scale={s}>
+            <mesh position={[0, 0, 0.08]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.26, 0.2, 0.1]} />
             </mesh>
-            <mesh position={[0, 0.18, 0.1]} material={material} castShadow>
-              <torusGeometry args={[0.1, 0.03, 8, 16, Math.PI]} />
+            <mesh position={[0, 0.15, 0.08]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.08, 0.015, 8, 16, Math.PI]} />
+            </mesh>
+            <mesh position={[0, 0.1, 0.13]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.08, 0.02, 0.02]} />
             </mesh>
           </group>
         )
       case 'necklace':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.22]} material={material} castShadow>
-              <torusGeometry args={[0.18, 0.015, 8, 32, Math.PI]} />
+            <mesh position={[0, 0, 0.2]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.16, 0.01, 8, 48, Math.PI]} />
             </mesh>
-            <mesh position={[0, -0.15, 0.25]} material={material} castShadow>
-              <sphereGeometry args={[0.04, 16, 16]} />
+            <mesh position={[0, -0.14, 0.22]} material={matRef.current} castShadow>
+              <octahedronGeometry args={[0.03, 0]} />
+            </mesh>
+            <mesh position={[0, -0.1, 0.21]} material={matRef.current} castShadow>
+              <cylinderGeometry args={[0.003, 0.003, 0.06, 6]} />
             </mesh>
           </group>
         )
       case 'bracelet':
         return (
-          <group position={[0.65, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0]} rotation={[0, 0, 0.3]} material={material} castShadow>
-              <torusGeometry args={[0.07, 0.015, 8, 32]} />
+          <group position={[0.5, y, 0]} scale={s}>
+            <mesh position={[0, 0, 0]} rotation={[0.3, 0, 0]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.06, 0.012, 8, 32]} />
             </mesh>
           </group>
         )
       case 'scarf':
         return (
           <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.15]} material={material} castShadow>
-              <boxGeometry args={[0.45, 0.3, 0.04]} />
+            <mesh position={[0, 0, 0.14]} material={matRef.current} castShadow>
+              <torusGeometry args={[0.17, 0.04, 8, 24, Math.PI * 1.6]} />
             </mesh>
-            <mesh position={[0.15, -0.2, 0.12]} rotation={[0, 0, 0.2]} material={material} castShadow>
-              <boxGeometry args={[0.12, 0.35, 0.03]} />
+            <mesh position={[0.12, -0.15, 0.1]} rotation={[0.2, 0, 0.3]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.1, 0.3, 0.025]} />
+            </mesh>
+            <mesh position={[-0.1, -0.12, 0.08]} rotation={[0.15, 0, -0.2]} material={matRef.current} castShadow>
+              <boxGeometry args={[0.1, 0.25, 0.025]} />
             </mesh>
           </group>
         )
@@ -393,21 +428,23 @@ function ClothingMesh({ selected, category, isAnimating, onAnimationComplete }: 
     }
   }
 
-  return <group ref={meshRef as any}>{renderShape()}</group>
+  return (
+    <group ref={groupRef} visible={visible || currentOpacity.current > 0.01}>
+      <meshStandardMaterial
+        ref={matRef}
+        color={selected?.color || '#ffffff'}
+        roughness={0.55}
+        metalness={0.08}
+        transparent
+        opacity={currentOpacity.current}
+        side={THREE.DoubleSide}
+      />
+      {renderShape()}
+    </group>
+  )
 }
 
-function Scene({ outfit, animatingItems }: MannequinProps) {
-  const [animating, setAnimating] = useState<Set<string>>(new Set())
-
-  const handleAnimationComplete = (category: string) => {
-    setAnimating((prev) => {
-      const next = new Set(prev)
-      next.delete(category)
-      return next
-    })
-    animatingItems.delete(category)
-  }
-
+function Scene({ outfit }: { outfit: OutfitSelection }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 0.5, 5]} fov={45} />
@@ -435,30 +472,10 @@ function Scene({ outfit, animatingItems }: MannequinProps) {
       <Environment preset="city" />
       <group>
         <MannequinBody />
-        <ClothingMesh
-          selected={outfit.top}
-          category="top"
-          isAnimating={animating.has('top')}
-          onAnimationComplete={() => handleAnimationComplete('top')}
-        />
-        <ClothingMesh
-          selected={outfit.bottom}
-          category="bottom"
-          isAnimating={animating.has('bottom')}
-          onAnimationComplete={() => handleAnimationComplete('bottom')}
-        />
-        <ClothingMesh
-          selected={outfit.shoes}
-          category="shoes"
-          isAnimating={animating.has('shoes')}
-          onAnimationComplete={() => handleAnimationComplete('shoes')}
-        />
-        <ClothingMesh
-          selected={outfit.accessory}
-          category="accessory"
-          isAnimating={animating.has('accessory')}
-          onAnimationComplete={() => handleAnimationComplete('accessory')}
-        />
+        <ClothingMesh selected={outfit.top} category="top" />
+        <ClothingMesh selected={outfit.bottom} category="bottom" />
+        <ClothingMesh selected={outfit.shoes} category="shoes" />
+        <ClothingMesh selected={outfit.accessory} category="accessory" />
       </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.55, 0]} receiveShadow>
         <circleGeometry args={[2.5, 64]} />
@@ -473,30 +490,6 @@ interface ModelViewerProps {
 }
 
 export default function ModelViewer({ outfit }: ModelViewerProps) {
-  const animatingItems = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    let lastTime = performance.now()
-    let frameCount = 0
-
-    const checkFps = () => {
-      frameCount++
-      const now = performance.now()
-      if (now - lastTime >= 1000) {
-        const fps = frameCount * 1000 / (now - lastTime)
-        if (fps < 28) {
-          console.warn(`Low FPS detected: ${fps.toFixed(1)}`)
-        }
-        frameCount = 0
-        lastTime = now
-      }
-      requestAnimationFrame(checkFps)
-    }
-
-    const id = requestAnimationFrame(checkFps)
-    return () => cancelAnimationFrame(id)
-  }, [])
-
   return (
     <div className="model-container w-full h-full rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(180deg, #f5f0e8 0%, #ebe5da 100%)' }}>
       <Canvas
@@ -504,7 +497,7 @@ export default function ModelViewer({ outfit }: ModelViewerProps) {
         dpr={[1, 2]}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
       >
-        <Scene outfit={outfit} animatingItems={animatingItems.current} />
+        <Scene outfit={outfit} />
       </Canvas>
     </div>
   )

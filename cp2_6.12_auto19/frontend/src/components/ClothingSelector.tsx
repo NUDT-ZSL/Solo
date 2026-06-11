@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Category, ClothingStyle, SelectedClothing } from '@/types'
 import { wardrobe, categoryNames, getStyleById } from '@/data/wardrobe'
 import { useOutfitStore } from '@/store/useOutfitStore'
@@ -11,6 +11,44 @@ const categoryIcons: Record<Category, typeof Shirt> = {
   accessory: Sparkles
 }
 
+const categoryOrder: Category[] = ['top', 'bottom', 'shoes', 'accessory']
+
+function RippleButton({
+  children,
+  className = '',
+  onClick,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode }) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const btn = btnRef.current
+    if (btn) {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const ripple = document.createElement('span')
+      ripple.className = 'ripple-effect'
+      ripple.style.left = `${x}px`
+      ripple.style.top = `${y}px`
+      btn.appendChild(ripple)
+      setTimeout(() => ripple.remove(), 600)
+    }
+    onClick?.(e)
+  }
+
+  return (
+    <button
+      ref={btnRef}
+      className={`ripple-btn ${className}`}
+      onClick={handleClick}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+}
+
 interface ClothingCardProps {
   style: ClothingStyle
   isSelected: boolean
@@ -21,7 +59,6 @@ interface ClothingCardProps {
 
 function ClothingCard({ style, isSelected, selectedColor, onSelect, onDeselect }: ClothingCardProps) {
   const [hoveredColor, setHoveredColor] = useState<string | null>(null)
-
   const displayColor = hoveredColor || selectedColor || style.colors[0]
 
   const handleClick = () => {
@@ -39,18 +76,18 @@ function ClothingCard({ style, isSelected, selectedColor, onSelect, onDeselect }
 
   return (
     <div
-      className={`ripple relative p-3 rounded-lg border-2 cursor-pointer transition-all duration-300 bg-white ${
-        isSelected ? 'selected-card border-[#39ff14]' : 'border-transparent hover:border-gray-200'
+      className={`clothing-card ripple-btn relative p-3 rounded-lg border-2 cursor-pointer bg-white ${
+        isSelected ? 'selected-card' : 'border-transparent hover:border-gray-200'
       }`}
       style={{ boxShadow: isSelected ? undefined : '0 2px 8px rgba(0,0,0,0.06)' }}
       onClick={handleClick}
     >
       <div
-        className="w-full aspect-[3/4] rounded-md mb-3 flex items-center justify-center transition-colors duration-500"
+        className="w-full aspect-[3/4] rounded-md mb-3 flex items-center justify-center color-transition overflow-hidden"
         style={{ backgroundColor: displayColor + '20' }}
       >
         <div
-          className="w-16 h-20 rounded-md transition-colors duration-500"
+          className="w-16 h-20 rounded-md color-transition"
           style={{ backgroundColor: displayColor }}
         />
       </div>
@@ -81,6 +118,8 @@ function ClothingCard({ style, isSelected, selectedColor, onSelect, onDeselect }
 
 export default function ClothingSelector() {
   const [activeCategory, setActiveCategory] = useState<Category>('top')
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right')
+  const [isSliding, setIsSliding] = useState(false)
   const { selection, setClothing } = useOutfitStore()
 
   const handleSelect = useCallback(
@@ -97,7 +136,15 @@ export default function ClothingSelector() {
     [setClothing]
   )
 
-  const categories: Category[] = ['top', 'bottom', 'shoes', 'accessory']
+  const handleTabChange = useCallback((category: Category) => {
+    if (category === activeCategory) return
+    const currentIndex = categoryOrder.indexOf(activeCategory)
+    const newIndex = categoryOrder.indexOf(category)
+    setSlideDirection(newIndex > currentIndex ? 'left' : 'right')
+    setIsSliding(true)
+    setActiveCategory(category)
+    setTimeout(() => setIsSliding(false), 350)
+  }, [activeCategory])
 
   return (
     <div className="h-full flex flex-col bg-white rounded-2xl overflow-hidden" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
@@ -106,21 +153,18 @@ export default function ClothingSelector() {
         <p className="text-sm text-gray-500">选择服装搭配您的造型</p>
       </div>
 
-      <div className="flex border-b border-gray-100">
-        {categories.map((category, idx) => {
+      <div className="flex border-b border-gray-100 relative">
+        {categoryOrder.map((category) => {
           const Icon = categoryIcons[category]
           const isActive = activeCategory === category
           const hasSelection = selection[category] !== null
           return (
-            <button
+            <RippleButton
               key={category}
-              className={`flex-1 py-3 px-2 text-sm font-medium transition-all duration-300 relative ${
+              className={`flex-1 py-3 px-2 text-sm font-medium transition-all duration-300 relative bg-transparent border-none outline-none ${
                 isActive ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'
               }`}
-              onClick={() => setActiveCategory(category)}
-              style={{
-                animationDelay: `${idx * 50}ms`
-              }}
+              onClick={() => handleTabChange(category)}
             >
               <div className="flex flex-col items-center gap-1">
                 <Icon size={18} />
@@ -130,23 +174,32 @@ export default function ClothingSelector() {
                 )}
               </div>
               {isActive && (
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#39ff14] rounded-full" />
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#39ff14] rounded-full transition-all duration-300" />
               )}
-            </button>
+            </RippleButton>
           )
         })}
       </div>
 
       <div className="flex-1 overflow-hidden relative">
-        {categories.map((category) => {
+        {categoryOrder.map((category) => {
           const items = wardrobe[category]
           const selected = selection[category]
           const selectedStyle = selected ? getStyleById(selected.styleId) : null
+          const isActive = activeCategory === category
 
           return (
             <div
               key={category}
-              className={`tab-pane h-full ${activeCategory === category ? 'active' : ''}`}
+              className={`tab-slide h-full ${
+                isActive
+                  ? 'tab-slide-active'
+                  : isSliding
+                    ? slideDirection === 'left'
+                      ? 'tab-slide-exit-left'
+                      : 'tab-slide-exit-right'
+                    : 'tab-slide-hidden'
+              }`}
             >
               <div className="p-4 h-full overflow-y-auto scrollbar-custom">
                 <div className="grid grid-cols-2 gap-3">

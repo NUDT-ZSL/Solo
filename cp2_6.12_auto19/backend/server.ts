@@ -2,16 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import bodyParser from 'body-parser'
 import { v4 as uuidv4 } from 'uuid'
-import {
-  insertOutfit,
-  getOutfitById,
-  getOutfits,
-  getOutfitCount,
-  deleteOutfit,
-  toggleLike,
-  getLikedOutfits,
-  getLikeCount
-} from './db'
+import { initDatabase, insertOutfit, getOutfitById, getOutfits, getOutfitCount, deleteOutfit, toggleLike, getLikedOutfits, getLikeCount } from './db'
 
 const app = express()
 const PORT = 3001
@@ -46,7 +37,7 @@ app.post('/api/outfits', (req, res) => {
   try {
     const body = req.body as SaveOutfitRequestBody
 
-    if (!body.name || !body.top_style || !body.top_color || !body.bottom_style || 
+    if (!body.name || !body.top_style || !body.top_color || !body.bottom_style ||
         !body.bottom_color || !body.shoes_style || !body.shoes_color) {
       return res.status(400).json({
         success: false,
@@ -238,23 +229,32 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
-app.listen(PORT, () => {
-  console.log(`
+async function startServer() {
+  await initDatabase()
+
+  app.listen(PORT, () => {
+    console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
 ║   Virtual Stylist Server                                 ║
 ║                                                          ║
-║   🚀 服务器运行在: http://localhost:${PORT}                ║
+║   Server running at: http://localhost:${PORT}              ║
 ║                                                          ║
-║   📦 API 端点:                                           ║
-║      POST   /api/outfits       - 保存搭配方案            ║
-║      GET    /api/outfits       - 获取搭配列表            ║
-║      GET    /api/outfits/:id   - 获取搭配详情            ║
-║      POST   /api/outfits/:id/like - 收藏/取消收藏        ║
-║      GET    /api/likes/:userId  - 获取用户收藏列表       ║
+║   API Endpoints:                                         ║
+║      POST   /api/outfits         - Save outfit           ║
+║      GET    /api/outfits         - List outfits           ║
+║      GET    /api/outfits/:id     - Get outfit detail      ║
+║      POST   /api/outfits/:id/like - Toggle like           ║
+║      GET    /api/likes/:userId   - Get user favorites     ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
-  `)
+    `)
+  })
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start server:', err)
+  process.exit(1)
 })
 
 export default app
