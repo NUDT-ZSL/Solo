@@ -1,0 +1,19 @@
+{
+  "name": "emotion-star-map",
+  "version": "1.0.0",
+  "description": "情绪星图 - 将文字转化为可探索的3D星空",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "@types/three": "^0.160.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
