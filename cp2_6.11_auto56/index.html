@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>潮汐棋盘</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>分子链爆</title>
   <style>
     * {
       margin: 0;
@@ -15,264 +15,201 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #0A0A2E;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
 
-    body {
-      background: linear-gradient(180deg, #0B2D4E 0%, #E8D5B7 100%);
-    }
-
-    #app {
-      width: 100%;
-      height: 100%;
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, #1A1A4A 0%, #0A0A2E 100%);
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 24px;
-      padding: 24px;
+      z-index: 100;
+      animation: fadeOut 0.5s ease forwards 1.5s;
     }
 
-    .game-container {
-      display: flex;
-      align-items: flex-start;
-      gap: 24px;
+    .loader {
+      width: 80px;
+      height: 80px;
       position: relative;
     }
 
-    .game-container::after {
-      content: '';
+    .loader-ring {
       position: absolute;
-      left: calc(100% + 24px + 240px / 2);
-      top: 0;
-      width: 0.5px;
-      height: 100%;
-      background: linear-gradient(180deg, transparent 0%, #3A7CA5 20%, #3A7CA5 80%, transparent 100%);
-      opacity: 0.4;
-      box-shadow: 0 0 8px #3A7CA5;
-      pointer-events: none;
+      inset: 0;
+      border: 3px solid transparent;
+      border-top-color: #E0FFFF;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .loader-ring:nth-child(2) {
+      inset: 10px;
+      border-top-color: #FF8C00;
+      animation-duration: 0.8s;
+      animation-direction: reverse;
+    }
+
+    .loader-ring:nth-child(3) {
+      inset: 20px;
+      border-top-color: #FF4500;
+      animation-duration: 0.6s;
+    }
+
+    .loader-text {
+      margin-top: 24px;
+      color: #E0FFFF;
+      font-size: 18px;
+      letter-spacing: 4px;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
     }
 
     #game-canvas {
       display: block;
-      border-radius: 8px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
     }
 
-    .info-panel {
-      width: 240px;
-      background: rgba(0, 0, 0, 0.31);
+    #energy-counter {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 24px;
+      background: rgba(51, 51, 51, 0.8);
       backdrop-filter: blur(10px);
       border-radius: 12px;
-      padding: 20px;
-      color: #fff;
+      color: #FFF;
+      font-size: 20px;
+      font-weight: 600;
+      font-family: 'Consolas', 'Monaco', monospace;
       display: flex;
-      flex-direction: column;
-      gap: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .panel-buttons {
-      display: flex;
+      align-items: center;
       gap: 10px;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 10;
     }
 
-    .btn {
-      flex: 1;
-      padding: 10px 16px;
-      border: none;
-      border-radius: 6px;
-      background: #3A7CA5;
-      color: #fff;
-      font-size: 14px;
+    #energy-counter.flashing {
+      animation: flash 0.5s ease-in-out infinite;
+    }
+
+    @keyframes flash {
+      0%, 100% {
+        background: linear-gradient(135deg, rgba(255, 215, 0, 0.9), rgba(255, 69, 0, 0.9));
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+      }
+      50% {
+        background: linear-gradient(135deg, rgba(255, 69, 0, 0.9), rgba(255, 215, 0, 0.9));
+        box-shadow: 0 0 50px rgba(255, 69, 0, 0.8);
+      }
+    }
+
+    .energy-icon {
+      font-size: 24px;
+    }
+
+    .energy-value {
+      min-width: 50px;
+      text-align: right;
+    }
+
+    #reset-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 12px 28px;
+      background: rgba(51, 51, 51, 0.9);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: #FFF;
+      font-size: 16px;
       font-weight: 500;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
+      z-index: 10;
       font-family: inherit;
     }
 
-    .btn:hover {
-      background: #5B9CBD;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(58, 124, 165, 0.4);
+    #reset-btn:hover {
+      background: #FF4500;
+      border-color: #FF4500;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(255, 69, 0, 0.4);
     }
 
-    .btn:active {
-      transform: scale(0.95);
+    #reset-btn:active {
+      transform: translateY(0);
     }
 
-    .info-section {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    #flash-overlay {
+      position: fixed;
+      inset: 0;
+      background: #FFF;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 50;
     }
 
-    .info-title {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      opacity: 0.6;
-      margin-bottom: 4px;
+    #flash-overlay.active {
+      animation: flashWhite 0.6s ease-out forwards;
     }
 
-    .round-display {
-      font-size: 28px;
-      font-weight: 700;
-      color: #E8D5B7;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
-
-    .player-info {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .player-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.05);
-      transition: all 0.3s ease;
-    }
-
-    .player-row.active {
-      background: rgba(255, 255, 255, 0.1);
-      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.2);
-    }
-
-    .player-indicator {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .player-indicator.p1 {
-      background: radial-gradient(circle, #4FC3F7 0%, #1E88E5 100%);
-      box-shadow: 0 0 8px #4FC3F7;
-    }
-
-    .player-indicator.p2 {
-      background: radial-gradient(circle, #FFD54F 0%, #F9A825 100%);
-      box-shadow: 0 0 8px #FFD54F;
-    }
-
-    .player-details {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .player-name {
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .player-stats {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      opacity: 0.8;
-    }
-
-    .stat-value {
-      font-weight: 700;
-      font-size: 16px;
-    }
-
-    .game-status {
-      padding: 12px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.05);
-      text-align: center;
-      font-size: 14px;
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .game-status.winner {
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-
-    @media (max-width: 768px) {
-      #app {
-        flex-direction: column;
-        padding: 16px;
-        gap: 16px;
-        overflow-y: auto;
-      }
-
-      .game-container {
-        flex-direction: column;
-        align-items: center;
-        gap: 16px;
-      }
-
-      .game-container::after {
-        display: none;
-      }
-
-      .info-panel {
-        width: 100%;
-        max-width: 360px;
-      }
+    @keyframes flashWhite {
+      0% { opacity: 0.3; }
+      100% { opacity: 0; }
     }
   </style>
 </head>
 <body>
-  <div id="app">
-    <div class="game-container">
-      <canvas id="game-canvas"></canvas>
-      <div class="info-panel">
-        <div class="panel-buttons">
-          <button class="btn" id="start-btn">开始游戏</button>
-          <button class="btn" id="reset-btn">重置</button>
-        </div>
-        <div class="info-section">
-          <div class="info-title">当前回合</div>
-          <div class="round-display" id="round-display">1</div>
-        </div>
-        <div class="info-section">
-          <div class="info-title">玩家信息</div>
-          <div class="player-info">
-            <div class="player-row active" id="player1-row">
-              <div class="player-indicator p1"></div>
-              <div class="player-details">
-                <div class="player-name">蓝色浪花</div>
-                <div class="player-stats">
-                  <span>得分: <span class="stat-value" id="p1-score">0</span></span>
-                  <span>剩余: <span class="stat-value" id="p1-remaining">18</span></span>
-                </div>
-              </div>
-            </div>
-            <div class="player-row" id="player2-row">
-              <div class="player-indicator p2"></div>
-              <div class="player-details">
-                <div class="player-name">金色漩涡</div>
-                <div class="player-stats">
-                  <span>得分: <span class="stat-value" id="p2-score">0</span></span>
-                  <span>剩余: <span class="stat-value" id="p2-remaining">18</span></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="game-status" id="game-status">点击「开始游戏」开始对战</div>
-      </div>
+  <div id="loading-screen">
+    <div class="loader">
+      <div class="loader-ring"></div>
+      <div class="loader-ring"></div>
+      <div class="loader-ring"></div>
     </div>
+    <div class="loader-text">LOADING</div>
   </div>
+
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="energy-counter">
+      <span class="energy-icon">⚡</span>
+      <span>能量</span>
+      <span class="energy-value" id="energy-value">0</span>
+    </div>
+    <button id="reset-btn">重置</button>
+    <div id="flash-overlay"></div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

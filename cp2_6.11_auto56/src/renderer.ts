@@ -1,614 +1,259 @@
-import {
-  Game,
-  GameState,
-  Cell,
-  TerrainHeight,
-  Player,
-  PieceAnimation,
-  RippleEffect
-} from './game';
-
-interface TerrainColors {
-  low: string;
-  medium: string;
-  high: string;
-}
-
-interface PlayerColors {
-  inner: string;
-  outer: string;
-}
-
-const TERRAIN_COLORS: TerrainColors = {
-  low: '#A4D1E1',
-  medium: '#C9A96E',
-  high: '#8B5E3C'
-};
-
-const PLAYER_COLORS: Record<Player, PlayerColors> = {
-  [Player.NONE]: { inner: '#000000', outer: '#000000' },
-  [Player.PLAYER1]: { inner: '#4FC3F7', outer: '#1E88E5' },
-  [Player.PLAYER2]: { inner: '#FFD54F', outer: '#F9A825' }
-};
-
-const BOARD_BORDER_COLOR = '#3A7CA5';
-const BOARD_BORDER_WIDTH = 1.5;
-const PIECE_DIAMETER = 28;
-const PIECE_GLOW_BLUR = 6;
-
-const MIN_CELL_SIZE = 50;
-const MAX_CELL_SIZE = 80;
+import { Atom, Fragment, Bond } from './atom';
+import { Ray, Shockwave, EnergySymbol, ReactionState } from './reaction';
 
 export class Renderer {
-  private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private game: Game;
-  private cellSize: number = 80;
-  private boardPixelSize: number = 0;
-  private currentLayout: 'horizontal' | 'vertical' = 'horizontal';
-  private offscreenCanvas: OffscreenCanvas;
-  private offscreenCtx: OffscreenCanvasRenderingContext2D;
-  private hoveredCell: { x: number; y: number } | null = null;
-  private maskCanvasCache: HTMLCanvasElement | null = null;
+  private width: number;
+  private height: number;
   private frameCount: number = 0;
+  private fps: number = 60;
   private lastFpsUpdate: number = 0;
+  private bgGradient: CanvasGradient | null = null;
 
-  constructor(canvas: HTMLCanvasElement, game: Game) {
-    this.canvas = canvas;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('Failed to get canvas context');
+  constructor(ctx: CanvasRenderingContext2D, width: number, height: number) {
     this.ctx = ctx;
-    this.game = game;
-
-    this.offscreenCanvas = new OffscreenCanvas(1, 1);
-    const offCtx = this.offscreenCanvas.getContext('2d', { alpha: false });
-    if (!offCtx) throw new Error('Failed to get offscreen context');
-    this.offscreenCtx = offCtx;
-
-    this.updateCellSize();
-    this.resize();
-    window.addEventListener('resize', this.handleResize.bind(this));
+    this.width = width;
+    this.height = height;
+    this.createGradient();
   }
 
-  private handleResize(): void {
-    this.updateCellSize();
-    this.resize();
+  private createGradient(): void {
+    this.bgGradient = this.ctx.createRadialGradient(
+      this.width / 2,
+      this.height / 2,
+      0,
+      this.width / 2,
+      this.height / 2,
+      Math.max(this.width, this.height) * 0.7
+    );
+    this.bgGradient.addColorStop(0, '#1A1A4A');
+    this.bgGradient.addColorStop(1, '#0A0A2E');
   }
 
-  private calculateResponsiveCellSize(): { cellSize: number; layout: 'horizontal' | 'vertical' } {
-    const screenWidth = window.innerWidth;
-    const infoPanelWidth = 240;
-    const gap = 24;
-    const boardSize = this.game.getBoardSize();
+  resize(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
+    this.createGradient();
+  }
 
-    if (screenWidth >= 768) {
-      const availableWidth = screenWidth - infoPanelWidth - gap * 3 - 48;
-      const cellSizeByWidth = Math.floor(availableWidth / boardSize);
-
-      const availableHeight = window.innerHeight - 48;
-      const cellSizeByHeight = Math.floor(availableHeight / boardSize);
-
-      let cellSize = Math.min(cellSizeByWidth, cellSizeByHeight, MAX_CELL_SIZE);
-      cellSize = Math.max(cellSize, MIN_CELL_SIZE);
-
-      cellSize = Math.round(cellSize / 5) * 5;
-
-      return { cellSize, layout: 'horizontal' };
+  private clear(): void {
+    if (this.bgGradient) {
+      this.ctx.fillStyle = this.bgGradient;
     } else {
-      const availableWidth = Math.min(screenWidth - 32, 360);
-      const cellSize = Math.floor(availableWidth / boardSize);
-      const clampedSize = Math.max(Math.min(cellSize, 60), MIN_CELL_SIZE);
-      return { cellSize: clampedSize, layout: 'vertical' };
+      this.ctx.fillStyle = '#0A0A2E';
+    }
+    this.ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        }
+      : { r: 255, g: 255, b: 255 };
+  }
+
+  private drawBonds(bonds: Bond[], atoms: Atom[], reactionProgress: number): void {
+    const atomMap = new Map<number, Atom>();
+    for (const atom of atoms) {
+      atomMap.set(atom.id, atom);
+    }
+
+    for (const bond of bonds) {
+      const from = atomMap.get(bond.from);
+      const to = atomMap.get(bond.to);
+      if (!from || !to) continue;
+      if (from.state === 'split' || to.state === 'split') continue;
+
+      const baseAlpha = 0.2 + (1 - bond.distance / 120) * 0.3;
+      const alpha = baseAlpha * (1 - reactionProgress * 0.5);
+
+      if (reactionProgress > 0.01) {
+        const t = Math.min(1, reactionProgress * 3);
+        const white = { r: 255, g: 255, b: 255 };
+        const orange = this.hexToRgb('#FF8C00');
+        const r = Math.round(white.r + (orange.r - white.r) * t);
+        const g = Math.round(white.g + (orange.g - white.g) * t);
+        const b = Math.round(white.b + (orange.b - white.b) * t);
+        this.ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha + t * 0.3})`;
+      } else {
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+      }
+
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(from.x, from.y);
+      this.ctx.lineTo(to.x, to.y);
+      this.ctx.stroke();
     }
   }
 
-  private updateCellSize(): void {
-    const { cellSize, layout } = this.calculateResponsiveCellSize();
-    this.cellSize = cellSize;
-    this.currentLayout = layout;
-    this.updateInfoPanelLayout();
-  }
+  private drawAtoms(atoms: Atom[]): void {
+    for (const atom of atoms) {
+      if (atom.state === 'split') continue;
 
-  private updateInfoPanelLayout(): void {
-    const container = document.querySelector('.game-container') as HTMLElement;
-    if (!container) return;
+      const radius = atom.radius * atom.splitScale;
+      if (radius <= 0) continue;
 
-    if (this.currentLayout === 'horizontal') {
-      container.style.flexDirection = 'row';
-      container.style.alignItems = 'flex-start';
-    } else {
-      container.style.flexDirection = 'column';
-      container.style.alignItems = 'center';
-    }
-  }
+      const gradient = this.ctx.createRadialGradient(
+        atom.x - radius * 0.3,
+        atom.y - radius * 0.3,
+        0,
+        atom.x,
+        atom.y,
+        radius
+      );
 
-  private resize(): void {
-    const boardSize = this.game.getBoardSize();
-    this.boardPixelSize = boardSize * this.cellSize;
+      const rgb = this.hexToRgb(atom.color);
+      gradient.addColorStop(0, `rgba(${Math.min(255, rgb.r + 50)}, ${Math.min(255, rgb.g + 50)}, ${Math.min(255, rgb.b + 50)}, 1)`);
+      gradient.addColorStop(0.7, atom.color);
+      gradient.addColorStop(1, `rgba(${rgb.r * 0.5}, ${rgb.g * 0.5}, ${rgb.b * 0.5}, 0.8)`);
 
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = this.boardPixelSize * dpr;
-    this.canvas.height = this.boardPixelSize * dpr;
-    this.canvas.style.width = `${this.boardPixelSize}px`;
-    this.canvas.style.height = `${this.boardPixelSize}px`;
-    this.ctx.scale(dpr, dpr);
+      this.ctx.beginPath();
+      this.ctx.arc(atom.x, atom.y, radius, 0, Math.PI * 2);
+      this.ctx.fillStyle = gradient;
+      this.ctx.fill();
 
-    this.offscreenCanvas.width = this.boardPixelSize;
-    this.offscreenCanvas.height = this.boardPixelSize;
+      this.ctx.beginPath();
+      this.ctx.arc(atom.x, atom.y, radius, 0, Math.PI * 2);
+      this.ctx.strokeStyle = `rgba(255, 255, 255, 0.3)`;
+      this.ctx.lineWidth = 1;
+      this.ctx.stroke();
 
-    this.prerenderBoard();
-  }
-
-  private prerenderBoard(): void {
-    const ctx = this.offscreenCtx;
-    const boardSize = this.game.getBoardSize();
-
-    ctx.clearRect(0, 0, this.boardPixelSize, this.boardPixelSize);
-
-    for (let y = 0; y < boardSize; y++) {
-      for (let x = 0; x < boardSize; x++) {
-        const px = x * this.cellSize;
-        const py = y * this.cellSize;
-
-        ctx.fillStyle = TERRAIN_COLORS.medium;
-        ctx.fillRect(px, py, this.cellSize, this.cellSize);
-
-        ctx.strokeStyle = BOARD_BORDER_COLOR;
-        ctx.lineWidth = BOARD_BORDER_WIDTH;
-        ctx.shadowColor = BOARD_BORDER_COLOR;
-        ctx.shadowBlur = 4;
-        ctx.strokeRect(
-          px + BOARD_BORDER_WIDTH / 2,
-          py + BOARD_BORDER_WIDTH / 2,
-          this.cellSize - BOARD_BORDER_WIDTH,
-          this.cellSize - BOARD_BORDER_WIDTH
-        );
-        ctx.shadowBlur = 0;
+      if (atom.state === 'splitting') {
+        this.ctx.beginPath();
+        this.ctx.arc(atom.x, atom.y, radius + 5, 0, Math.PI * 2);
+        this.ctx.strokeStyle = `rgba(255, 200, 100, ${0.5 * (1 - atom.splitProgress)})`;
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
       }
     }
   }
 
-  setHoveredCell(cell: { x: number; y: number } | null): void {
-    this.hoveredCell = cell;
-  }
+  private drawRays(rays: Ray[]): void {
+    for (const ray of rays) {
+      if (ray.trail.length > 1) {
+        for (let i = 1; i < ray.trail.length; i++) {
+          const prev = ray.trail[i - 1];
+          const curr = ray.trail[i];
+          const alpha = curr.alpha * 0.6;
 
-  screenToBoard(clientX: number, clientY: number): { x: number; y: number } | null {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = Math.floor((clientX - rect.left) / this.cellSize);
-    const y = Math.floor((clientY - rect.top) / this.cellSize);
-
-    const boardSize = this.game.getBoardSize();
-    if (x < 0 || x >= boardSize || y < 0 || y >= boardSize) return null;
-    return { x, y };
-  }
-
-  render(): void {
-    const state = this.game.getState();
-    this.frameCount++;
-
-    this.ctx.clearRect(0, 0, this.boardPixelSize, this.boardPixelSize);
-    this.ctx.drawImage(this.offscreenCanvas, 0, 0);
-
-    this.renderTerrain(state.board);
-    this.renderGridLines(state.board);
-    this.renderHoverEffect(state);
-    this.renderRipples(state.ripples);
-    this.renderPieces(state);
-    this.renderAnimations(state.animations);
-  }
-
-  private renderTerrain(board: Cell[][]): void {
-    const ctx = this.ctx;
-
-    for (let y = 0; y < board.length; y++) {
-      for (let x = 0; x < board[y].length; x++) {
-        const cell = board[y][x];
-        const px = x * this.cellSize;
-        const py = y * this.cellSize;
-
-        if (cell.terrainAnimDelay === 0 && cell.terrainAnimProgress < 1) {
-          this.renderDissolveTerrain(cell, px, py);
-        } else {
-          const color = this.getTerrainColor(cell.terrain);
-          ctx.fillStyle = color;
-          ctx.fillRect(px + 1, py + 1, this.cellSize - 2, this.cellSize - 2);
+          this.ctx.beginPath();
+          this.ctx.moveTo(prev.x, prev.y);
+          this.ctx.lineTo(curr.x, curr.y);
+          this.ctx.strokeStyle = `rgba(224, 255, 255, ${alpha})`;
+          this.ctx.lineWidth = 2;
+          this.ctx.lineCap = 'round';
+          this.ctx.stroke();
         }
       }
+
+      this.ctx.beginPath();
+      this.ctx.moveTo(ray.startX, ray.startY);
+      this.ctx.lineTo(ray.currentX, ray.currentY);
+      this.ctx.strokeStyle = '#E0FFFF';
+      this.ctx.lineWidth = 2;
+      this.ctx.lineCap = 'round';
+      this.ctx.shadowColor = '#E0FFFF';
+      this.ctx.shadowBlur = 10;
+      this.ctx.stroke();
+      this.ctx.shadowBlur = 0;
     }
   }
 
-  private renderGridLines(board: Cell[][]): void {
-    const ctx = this.ctx;
+  private drawFragments(fragments: Fragment[]): void {
+    for (const f of fragments) {
+      const alpha = f.alpha;
+      if (alpha <= 0) continue;
 
-    ctx.strokeStyle = BOARD_BORDER_COLOR;
-    ctx.lineWidth = BOARD_BORDER_WIDTH;
-    ctx.shadowColor = BOARD_BORDER_COLOR;
-    ctx.shadowBlur = 4;
+      const rgb = this.hexToRgb(f.color);
 
-    for (let y = 0; y <= board.length; y++) {
-      ctx.beginPath();
-      ctx.moveTo(0, y * this.cellSize);
-      ctx.lineTo(this.boardPixelSize, y * this.cellSize);
-      ctx.stroke();
-    }
-    for (let x = 0; x <= board[0].length; x++) {
-      ctx.beginPath();
-      ctx.moveTo(x * this.cellSize, 0);
-      ctx.lineTo(x * this.cellSize, this.boardPixelSize);
-      ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-  }
-
-  private getMaskCanvas(size: number): HTMLCanvasElement {
-    if (!this.maskCanvasCache ||
-        this.maskCanvasCache.width !== size ||
-        this.maskCanvasCache.height !== size) {
-      this.maskCanvasCache = document.createElement('canvas');
-      this.maskCanvasCache.width = size;
-      this.maskCanvasCache.height = size;
-    }
-    return this.maskCanvasCache;
-  }
-
-  private renderDissolveTerrain(cell: Cell, px: number, py: number): void {
-    const ctx = this.ctx;
-    const progress = cell.terrainAnimProgress;
-
-    const fromColor = this.getTerrainColor(cell.prevTerrain);
-    const toColor = this.getTerrainColor(cell.terrain);
-
-    const size = this.cellSize - 2;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(px + 1, py + 1, size, size);
-    ctx.clip();
-
-    ctx.fillStyle = fromColor;
-    ctx.fillRect(px + 1, py + 1, size, size);
-
-    const maskCanvas = this.getMaskCanvas(size);
-    const maskCtx = maskCanvas.getContext('2d');
-    if (!maskCtx) {
-      ctx.restore();
-      return;
-    }
-
-    maskCtx.clearRect(0, 0, size, size);
-
-    const gradient = maskCtx.createLinearGradient(0, 0, size, size);
-    const threshold = progress * 1.2 - 0.1;
-    gradient.addColorStop(Math.max(0, threshold - 0.3), 'rgba(0, 0, 0, 0)');
-    gradient.addColorStop(Math.max(0, threshold - 0.1), 'rgba(0, 0, 0, 0.5)');
-    gradient.addColorStop(Math.min(1, threshold + 0.1), 'rgba(0, 0, 0, 1)');
-    gradient.addColorStop(Math.min(1, threshold + 0.3), 'rgba(0, 0, 0, 1)');
-
-    maskCtx.fillStyle = gradient;
-    maskCtx.fillRect(0, 0, size, size);
-
-    const seed = cell.x * 100 + cell.y;
-    for (let i = 0; i < 40; i++) {
-      const pseudoRandom = ((seed * 9301 + i * 49297) % 233280) / 233280;
-      const pseudoRandom2 = ((seed * 7919 + i * 6271) % 233280) / 233280;
-      const rx = pseudoRandom * size;
-      const ry = pseudoRandom2 * size;
-      const rSize = 3 + pseudoRandom * 8;
-      const noiseProgress = (progress * 1.5) - (ry / size) * 0.5;
-      if (noiseProgress > pseudoRandom2) {
-        maskCtx.fillStyle = `rgba(0, 0, 0, ${0.3 + pseudoRandom * 0.7})`;
-        maskCtx.beginPath();
-        maskCtx.arc(rx, ry, rSize, 0, Math.PI * 2);
-        maskCtx.fill();
-      }
-    }
-
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(maskCanvas, px + 1, py + 1);
-    ctx.globalCompositeOperation = 'source-in';
-    ctx.fillStyle = toColor;
-    ctx.fillRect(px + 1, py + 1, size, size);
-
-    ctx.restore();
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-  }
-
-  private getTerrainColor(terrain: TerrainHeight): string {
-    switch (terrain) {
-      case TerrainHeight.LOW: return TERRAIN_COLORS.low;
-      case TerrainHeight.MEDIUM: return TERRAIN_COLORS.medium;
-      case TerrainHeight.HIGH: return TERRAIN_COLORS.high;
-    }
-  }
-
-  private renderHoverEffect(state: GameState): void {
-    if (!this.hoveredCell) return;
-
-    const cell = this.game.getCellAt(this.hoveredCell.x, this.hoveredCell.y);
-    if (!cell || cell.piece !== Player.NONE) return;
-    if (!state.isStarted || state.isGameOver || state.isAnimating) return;
-
-    const ctx = this.ctx;
-    const px = this.hoveredCell.x * this.cellSize;
-    const py = this.hoveredCell.y * this.cellSize;
-    const colors = PLAYER_COLORS[state.currentPlayer];
-
-    ctx.save();
-    ctx.globalAlpha = 0.3;
-
-    const gradient = ctx.createRadialGradient(
-      px + this.cellSize / 2, py + this.cellSize / 2, 0,
-      px + this.cellSize / 2, py + this.cellSize / 2, PIECE_DIAMETER / 2
-    );
-    gradient.addColorStop(0, colors.inner);
-    gradient.addColorStop(1, colors.outer);
-
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(
-      px + this.cellSize / 2,
-      py + this.cellSize / 2,
-      PIECE_DIAMETER / 2,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  private renderRipples(ripples: RippleEffect[]): void {
-    const ctx = this.ctx;
-
-    for (const ripple of ripples) {
-      const cx = (ripple.x + 0.5) * this.cellSize;
-      const cy = (ripple.y + 0.5) * this.cellSize;
-      const progress = ripple.progress;
-      const maxRadius = ripple.maxRadius * this.cellSize * 1.5;
-      const currentRadius = progress * maxRadius;
-
-      const alpha = (1 - progress) * 0.25;
-
-      ctx.save();
-      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      if (progress < 0.7) {
-        const innerAlpha = (1 - progress / 0.7) * 0.15;
-        ctx.fillStyle = `rgba(255, 255, 255, ${innerAlpha})`;
-        ctx.beginPath();
-        ctx.arc(cx, cy, currentRadius * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.restore();
-    }
-  }
-
-  private renderPieces(state: GameState): void {
-    const ctx = this.ctx;
-    const animatingCells = new Set<string>();
-
-    for (const anim of state.animations) {
-      if (anim.type === 'drop' || anim.type === 'knockback' || anim.type === 'eliminate') {
-        animatingCells.add(`${anim.x},${anim.y}`);
-      }
-    }
-
-    for (let y = 0; y < state.board.length; y++) {
-      for (let x = 0; x < state.board[y].length; x++) {
-        const cell = state.board[y][x];
-        if (cell.piece === Player.NONE) continue;
-        if (animatingCells.has(`${x},${y}`)) continue;
-
-        this.drawPiece(ctx, x, y, cell.piece, 1);
-      }
-    }
-  }
-
-  private renderAnimations(animations: PieceAnimation[]): void {
-    const ctx = this.ctx;
-
-    for (const anim of animations) {
-      if (anim.type === 'drop') {
-        this.renderDropAnimation(ctx, anim);
-      } else if (anim.type === 'knockback') {
-        this.renderKnockbackAnimation(ctx, anim);
-      } else if (anim.type === 'eliminate') {
-        this.renderEliminateAnimation(ctx, anim);
-      }
-    }
-  }
-
-  private renderDropAnimation(ctx: CanvasRenderingContext2D, anim: PieceAnimation): void {
-    const progress = anim.progress;
-    const easeProgress = 1 - Math.pow(1 - progress, 3);
-
-    const currentY = anim.startY + (anim.endY - anim.startY) * easeProgress;
-    const alpha = Math.min(1, progress * 2);
-
-    const scale = 0.8 + easeProgress * 0.2;
-
-    const cell = this.game.getCellAt(anim.endX, anim.endY);
-    if (cell && cell.piece === anim.player) {
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(
-        (anim.endX + 0.5) * this.cellSize,
-        (currentY + 0.5) * this.cellSize
+      const gradient = this.ctx.createRadialGradient(
+        f.x, f.y, 0,
+        f.x, f.y, f.radius * 2
       );
-      ctx.scale(scale, scale);
-      this.drawPieceAtPixel(ctx, 0, 0, anim.player, alpha);
-      ctx.restore();
+      gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`);
+      gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+
+      this.ctx.beginPath();
+      this.ctx.arc(f.x, f.y, f.radius * 2, 0, Math.PI * 2);
+      this.ctx.fillStyle = gradient;
+      this.ctx.fill();
+
+      this.ctx.beginPath();
+      this.ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+      this.ctx.fillStyle = `rgba(${Math.min(255, rgb.r + 80)}, ${Math.min(255, rgb.g + 80)}, ${Math.min(255, rgb.b + 80)}, ${alpha})`;
+      this.ctx.fill();
     }
   }
 
-  private renderKnockbackAnimation(ctx: CanvasRenderingContext2D, anim: PieceAnimation): void {
-    const progress = anim.progress;
-    const easeProgress = 1 - Math.pow(1 - progress, 2);
+  private drawShockwaves(shockwaves: Shockwave[]): void {
+    for (const sw of shockwaves) {
+      if (sw.alpha <= 0) continue;
 
-    const currentX = anim.startX + (anim.endX - anim.startX) * easeProgress;
-    const currentY = anim.startY + (anim.endY - anim.startY) * easeProgress;
+      this.ctx.beginPath();
+      this.ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+      this.ctx.strokeStyle = `rgba(255, 255, 255, ${sw.alpha})`;
+      this.ctx.lineWidth = 3;
+      this.ctx.stroke();
 
-    const targetCell = this.game.getCellAt(anim.endX, anim.endY);
-    const isEliminated = !targetCell || targetCell.piece !== anim.player;
-
-    const alpha = isEliminated && progress > 0.7
-      ? 1 - (progress - 0.7) / 0.3
-      : 1;
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
-    this.drawPieceAtPixel(
-      ctx,
-      (currentX + 0.5) * this.cellSize,
-      (currentY + 0.5) * this.cellSize,
-      anim.player,
-      1
-    );
-
-    ctx.restore();
-  }
-
-  private renderEliminateAnimation(ctx: CanvasRenderingContext2D, anim: PieceAnimation): void {
-    const progress = anim.progress;
-    const easeProgress = progress;
-
-    const currentX = anim.startX + (anim.endX - anim.startX) * easeProgress;
-    const currentY = anim.startY + (anim.endY - anim.startY) * easeProgress;
-
-    const alpha = 1 - progress;
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
-    const scale = 1 + progress * 0.3;
-    const rotation = progress * Math.PI * 0.5;
-
-    ctx.translate(
-      (currentX + 0.5) * this.cellSize,
-      (currentY + 0.5) * this.cellSize
-    );
-    ctx.rotate(rotation);
-    ctx.scale(scale, scale);
-
-    const colors = PLAYER_COLORS[anim.player];
-    ctx.strokeStyle = colors.inner;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = alpha * 0.5;
-
-    for (let i = 0; i < 4; i++) {
-      const angle = (i / 4) * Math.PI * 2 + rotation;
-      const dist = progress * this.cellSize * 0.8;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(angle) * dist * 0.5, Math.sin(angle) * dist * 0.5);
-      ctx.lineTo(Math.cos(angle) * dist, Math.sin(angle) * dist);
-      ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.arc(sw.x, sw.y, sw.radius * 0.9, 0, Math.PI * 2);
+      this.ctx.strokeStyle = `rgba(255, 200, 150, ${sw.alpha * 0.5})`;
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
     }
+  }
 
-    ctx.globalAlpha = alpha;
-    this.drawPieceAtPixel(ctx, 0, 0, anim.player, 1);
+  private drawEnergySymbols(symbols: EnergySymbol[]): void {
+    this.ctx.font = '28px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
 
-    if (progress > 0.3) {
-      ctx.globalAlpha = (1 - progress) * 1.5;
-      const particleCount = 8;
-      for (let i = 0; i < particleCount; i++) {
-        const angle = (i / particleCount) * Math.PI * 2;
-        const dist = (progress - 0.3) * this.cellSize * 2;
-        const px = Math.cos(angle) * dist;
-        const py = Math.sin(angle) * dist;
+    for (const es of symbols) {
+      if (es.alpha <= 0) continue;
 
-        ctx.fillStyle = colors.inner;
-        ctx.beginPath();
-        ctx.arc(px, py, 4 * (1 - progress), 0, Math.PI * 2);
-        ctx.fill();
-      }
+      this.ctx.save();
+      this.ctx.translate(es.x, es.y);
+      this.ctx.rotate(es.rotation);
+      this.ctx.scale(es.scale, es.scale);
+      this.ctx.globalAlpha = es.alpha;
 
-      const flashAlpha = (1 - progress) * 0.5;
-      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
-      ctx.beginPath();
-      ctx.arc(0, 0, PIECE_DIAMETER * (0.5 + progress), 0, Math.PI * 2);
-      ctx.fill();
+      this.ctx.shadowColor = '#FFD700';
+      this.ctx.shadowBlur = 15;
+      this.ctx.fillText(es.symbol, 0, 0);
+      this.ctx.shadowBlur = 0;
+
+      this.ctx.restore();
     }
-
-    ctx.restore();
+    this.ctx.globalAlpha = 1;
   }
 
-  private drawPiece(
-    ctx: CanvasRenderingContext2D,
-    cellX: number,
-    cellY: number,
-    player: Player,
-    alpha: number
-  ): void {
-    const px = (cellX + 0.5) * this.cellSize;
-    const py = (cellY + 0.5) * this.cellSize;
-    this.drawPieceAtPixel(ctx, px, py, player, alpha);
-  }
-
-  private drawPieceAtPixel(
-    ctx: CanvasRenderingContext2D,
-    px: number,
-    py: number,
-    player: Player,
-    alpha: number
-  ): void {
-    if (player === Player.NONE) return;
-
-    const colors = PLAYER_COLORS[player];
-    const radius = PIECE_DIAMETER / 2;
-    const scale = Math.min(1, this.cellSize / 80);
-    const scaledRadius = radius * scale;
-
-    ctx.save();
-
-    ctx.shadowColor = colors.inner;
-    ctx.shadowBlur = PIECE_GLOW_BLUR * scale;
-
-    const gradient = ctx.createRadialGradient(px, py, 0, px, py, scaledRadius);
-    gradient.addColorStop(0, colors.inner);
-    gradient.addColorStop(0.7, colors.outer);
-    gradient.addColorStop(1, colors.outer);
-
-    ctx.fillStyle = gradient;
-    ctx.globalAlpha = alpha;
-    ctx.beginPath();
-    ctx.arc(px, py, scaledRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = alpha * 0.6;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.arc(
-      px - scaledRadius * 0.3,
-      py - scaledRadius * 0.3,
-      scaledRadius * 0.25,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  getCellSize(): number {
-    return this.cellSize;
-  }
-
-  getLayout(): 'horizontal' | 'vertical' {
-    return this.currentLayout;
-  }
-
-  updateFpsDisplay(currentTime: number): void {
-    if (currentTime - this.lastFpsUpdate >= 1000) {
-      this.lastFpsUpdate = currentTime;
+  private updateFPS(_dt: number, time: number): void {
+    this.frameCount++;
+    if (time - this.lastFpsUpdate >= 1) {
+      this.fps = Math.round(this.frameCount / (time - this.lastFpsUpdate));
       this.frameCount = 0;
+      this.lastFpsUpdate = time;
     }
+  }
+
+  render(state: ReactionState, dt: number, time: number): void {
+    this.updateFPS(dt, time);
+    this.clear();
+
+    this.drawBonds(state.bonds, state.atoms, state.reactionProgress);
+    this.drawAtoms(state.atoms);
+    this.drawRays(state.rays);
+    this.drawFragments(state.fragments);
+    this.drawShockwaves(state.shockwaves);
+    this.drawEnergySymbols(state.energySymbols);
+  }
+
+  getFPS(): number {
+    return this.fps;
   }
 }

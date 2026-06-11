@@ -1,7 +1,7 @@
 {
-  "name": "tidal-chessboard",
+  "name": "molecular-chain-explosion",
+  "private": true,
   "version": "1.0.0",
-  "description": "潮汐棋盘 - 动态地形策略对战游戏",
   "type": "module",
   "scripts": {
     "dev": "vite",
