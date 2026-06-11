@@ -5,10 +5,12 @@ export interface FaceMeshInfo {
   mesh: THREE.Mesh;
   edges: THREE.LineSegments;
   group: THREE.Group;
+  pivotGroup: THREE.Group;
   baseColor: THREE.Color;
   centroid: THREE.Vector3;
-  pivotPoint: THREE.Vector3;
-  foldAxis: THREE.Vector3;
+  planeNormal: THREE.Vector3;
+  localPivot: THREE.Vector3;
+  localAxis: THREE.Vector3;
   foldAngle: number;
   foldOrder: number;
   uvBounds: { minX: number; minY: number; maxX: number; maxY: number };
@@ -16,6 +18,7 @@ export interface FaceMeshInfo {
   waveFreq: number;
   waveAmp: number;
   wavePhase: number;
+  privateTime: number;
   foldProgress: number;
   index: number;
 }
@@ -39,7 +42,6 @@ export class OrigamiModel {
   private unfoldStartTime: number = 0;
   private unfolding: boolean = false;
   private unfoldDuration: number = 2000;
-  private waveStartTime: number = 0;
   private waveEnabled: boolean = false;
   private autoRotate: boolean = false;
   private autoRotateSpeed: number = (Math.PI * 2) / 12000;
@@ -73,6 +75,7 @@ export class OrigamiModel {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this._initialCameraPosition = camera.position.clone();
+    void this._initialCameraPosition;
     this.setupEventListeners();
   }
 
@@ -217,6 +220,7 @@ export class OrigamiModel {
     const foldedSet = new Set<number>();
 
     const tempInfos: Map<number, FaceMeshInfo> = new Map();
+    const _worldTriPoints: Map<number, THREE.Vector3[]> = new Map();
 
     for (let i = 0; i < triangles.length; i++) {
       const tri = triangles[i];
@@ -227,6 +231,7 @@ export class OrigamiModel {
         const y = -(p.y - offsetY) * normalizedScale;
         return new THREE.Vector3(x, y, 0);
       });
+      _worldTriPoints.set(i, points);
       for (let j = 0; j < 3; j++) {
         vertices[j * 3] = points[j].x;
         vertices[j * 3 + 1] = points[j].y;
@@ -262,10 +267,12 @@ export class OrigamiModel {
       });
       const edges = new THREE.LineSegments(edgeGeo, edgeMat);
 
+      const pivotGroup = new THREE.Group();
       const faceGroup = new THREE.Group();
       faceGroup.add(mesh);
       faceGroup.add(edges);
-      this.group.add(faceGroup);
+      pivotGroup.add(faceGroup);
+      this.group.add(pivotGroup);
 
       const centroidVec = new THREE.Vector3(
         (points[0].x + points[1].x + points[2].x) / 3,
@@ -273,14 +280,20 @@ export class OrigamiModel {
         0
       );
 
+      const ab = new THREE.Vector3().subVectors(points[1], points[0]);
+      const ac = new THREE.Vector3().subVectors(points[2], points[0]);
+      const normal = new THREE.Vector3().crossVectors(ab, ac).normalize();
+
       const faceInfo: FaceMeshInfo = {
         mesh,
         edges,
         group: faceGroup,
+        pivotGroup,
         baseColor: color.clone(),
         centroid: centroidVec,
-        pivotPoint: new THREE.Vector3(),
-        foldAxis: new THREE.Vector3(0, 0, 1),
+        planeNormal: normal,
+        localPivot: new THREE.Vector3(),
+        localAxis: new THREE.Vector3(0, 0, 1),
         foldAngle: 0,
         foldOrder: 0,
         uvBounds: tri.uvBounds,
@@ -288,6 +301,7 @@ export class OrigamiModel {
         waveFreq: 0.3 + Math.random() * 0.5,
         waveAmp: 2 + Math.random() * 2,
         wavePhase: Math.random() * Math.PI * 2,
+        privateTime: Math.random() * 2000,
         foldProgress: 0,
         index: i
       };
@@ -296,6 +310,8 @@ export class OrigamiModel {
       tempInfos.set(i, faceInfo);
       this.faceMeshInfos.push(faceInfo);
     }
+
+    const _parentPivotMap = new Map<number, THREE.Group | null>();
 
     for (let orderIdx = 0; orderIdx < order.length; orderIdx++) {
       const triIdx = order[orderIdx];
@@ -306,63 +322,92 @@ export class OrigamiModel {
 
       if (orderIdx === 0) {
         info.foldAngle = 0;
-        info.pivotPoint.copy(info.centroid);
-        info.foldAxis.set(1, 0, 0);
+        info.localPivot.set(0, 0, 0);
+        info.localAxis.set(1, 0, 0);
+        _parentPivotMap.set(triIdx, null);
         foldedSet.add(triIdx);
         continue;
       }
 
       const foldEdge = this.findFoldEdge(tri, triIdx, foldedSet);
+      let p1: THREE.Vector3, p2: THREE.Vector3;
+      let parentIdx: number | null = null;
       if (foldEdge) {
-        const p1 = new THREE.Vector3(
+        parentIdx = foldEdge.neighborIndex;
+        p1 = new THREE.Vector3(
           (foldEdge.edge[0].x - offsetX) * normalizedScale,
           -(foldEdge.edge[0].y - offsetY) * normalizedScale,
           0
         );
-        const p2 = new THREE.Vector3(
+        p2 = new THREE.Vector3(
           (foldEdge.edge[1].x - offsetX) * normalizedScale,
           -(foldEdge.edge[1].y - offsetY) * normalizedScale,
           0
         );
-        const pivot = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-        const axis = new THREE.Vector3().subVectors(p2, p1).normalize();
-        const angle = foldAngles[Math.floor(Math.random() * foldAngles.length)];
-        const dir = Math.random() > 0.5 ? 1 : -1;
-        info.pivotPoint.copy(pivot);
-        info.foldAxis.copy(axis);
-        info.foldAngle = angle * dir;
       } else {
         const pts = [tri.a, tri.b, tri.c];
         const edgeIdx = Math.floor(Math.random() * 3);
-        const p1 = new THREE.Vector3(
+        p1 = new THREE.Vector3(
           (pts[edgeIdx].x - offsetX) * normalizedScale,
           -(pts[edgeIdx].y - offsetY) * normalizedScale,
           0
         );
-        const p2 = new THREE.Vector3(
+        p2 = new THREE.Vector3(
           (pts[(edgeIdx + 1) % 3].x - offsetX) * normalizedScale,
           -(pts[(edgeIdx + 1) % 3].y - offsetY) * normalizedScale,
           0
         );
-        const pivot = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-        const axis = new THREE.Vector3().subVectors(p2, p1).normalize();
-        info.pivotPoint.copy(pivot);
-        info.foldAxis.copy(axis);
-        info.foldAngle = foldAngles[Math.floor(Math.random() * foldAngles.length)] * (Math.random() > 0.5 ? 0.6 : -0.6);
       }
+
+      const pivotWorld = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+      const axisWorld = new THREE.Vector3().subVectors(p2, p1).normalize();
+      if (axisWorld.lengthSq() < 1e-6) {
+        axisWorld.set(1, 0, 0);
+      }
+
+      if (parentIdx !== null && tempInfos.has(parentIdx)) {
+        const parentInfo = tempInfos.get(parentIdx)!;
+        const parentPivotGroup = parentInfo.pivotGroup;
+        this.group.remove(info.pivotGroup);
+        parentPivotGroup.add(info.pivotGroup);
+        _parentPivotMap.set(triIdx, parentPivotGroup);
+        const localPivot = info.pivotGroup.parent!.worldToLocal(pivotWorld.clone());
+        const localAxis = info.pivotGroup.parent!.worldToLocal(axisWorld.clone().add(pivotWorld)).sub(localPivot).normalize();
+        info.localPivot.copy(localPivot);
+        info.localAxis.copy(localAxis.lengthSq() > 1e-6 ? localAxis : new THREE.Vector3(1, 0, 0));
+      } else {
+        const localPivot = this.group.worldToLocal(pivotWorld.clone());
+        const localAxis = this.group.worldToLocal(axisWorld.clone().add(pivotWorld)).sub(localPivot).normalize();
+        info.localPivot.copy(localPivot);
+        info.localAxis.copy(localAxis.lengthSq() > 1e-6 ? localAxis : new THREE.Vector3(1, 0, 0));
+        _parentPivotMap.set(triIdx, null);
+      }
+
+      const angleChoice = foldAngles[Math.floor(Math.random() * foldAngles.length)];
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      const centroid = info.centroid.clone();
+      const pivotToCentroid = new THREE.Vector3().subVectors(centroid, pivotWorld);
+      const crossCheck = new THREE.Vector3().crossVectors(axisWorld, pivotToCentroid);
+      const normalSign = crossCheck.dot(new THREE.Vector3(0, 0, 1));
+      const finalDir = normalSign >= 0 ? -dir : dir;
+      info.foldAngle = angleChoice * finalDir;
+
       foldedSet.add(triIdx);
+    }
+
+    for (const info of this.faceMeshInfos) {
+      info.pivotGroup.position.copy(info.localPivot);
     }
 
     const centerPoint = new THREE.Vector3();
     for (const info of this.faceMeshInfos) {
       centerPoint.add(info.centroid);
     }
-    centerPoint.divideScalar(this.faceMeshInfos.length);
+    centerPoint.divideScalar(Math.max(1, this.faceMeshInfos.length));
     this.group.position.sub(centerPoint);
 
     this.unfolding = true;
     this.unfoldStartTime = performance.now();
-    this.waveStartTime = performance.now() + this.unfoldDuration + 400;
     this.faceMeshInfos.sort((a, b) => a.index - b.index);
   }
 
@@ -390,21 +435,23 @@ export class OrigamiModel {
     const currentAngle = info.foldAngle * eased;
     info.group.position.set(0, 0, 0);
     info.group.rotation.set(0, 0, 0);
-    info.group.updateMatrix();
-    const quaternion = new THREE.Quaternion().setFromAxisAngle(info.foldAxis, currentAngle);
-    info.group.position.sub(info.pivotPoint);
+    info.group.position.sub(info.localPivot);
+    const quaternion = new THREE.Quaternion().setFromAxisAngle(info.localAxis, currentAngle);
     info.group.position.applyQuaternion(quaternion);
-    info.group.position.add(info.pivotPoint);
+    info.group.position.add(info.localPivot);
     info.group.setRotationFromQuaternion(quaternion);
   }
 
-  private applyWaveTransform(info: FaceMeshInfo, timeMs: number) {
-    const t = timeMs / 1000;
-    const offset = Math.sin(t * info.waveFreq * Math.PI * 2 + info.wavePhase) * info.waveAmp;
-    const normal = new THREE.Vector3(0, 0, 1);
-    normal.applyAxisAngle(info.foldAxis, info.foldAngle * info.foldProgress);
-    normal.normalize();
-    info.group.position.add(normal.multiplyScalar(offset * 0.35));
+  private applyWaveTransform(info: FaceMeshInfo, deltaTimeMs: number) {
+    info.privateTime += deltaTimeMs;
+    const tSec = info.privateTime / 1000;
+    const offset = Math.sin(tSec * info.waveFreq * Math.PI * 2 + info.wavePhase) * info.waveAmp;
+    const progress = info.foldProgress;
+    const rotQuat = new THREE.Quaternion().setFromAxisAngle(info.localAxis, info.foldAngle * progress);
+    const normalLocal = new THREE.Vector3(0, 0, 1);
+    normalLocal.applyQuaternion(rotQuat).normalize();
+    const waveVec = normalLocal.multiplyScalar(offset * 0.35);
+    info.group.position.add(waveVec);
   }
 
   public update(deltaTime: number, now: number) {
@@ -432,7 +479,7 @@ export class OrigamiModel {
     camDir.applyQuaternion(camQuat);
     this.camera.position.copy(camDir.multiplyScalar(this.currentCameraDistance));
     this.camera.lookAt(0, 0, 0);
-    this.updateAnimations(now);
+    this.updateAnimations(now, deltaTime);
   }
 
   private updateReset(now: number) {
@@ -480,12 +527,11 @@ export class OrigamiModel {
       }
       if (elapsed >= dur) {
         this.resetting = false;
-        this.waveStartTime = now;
       }
     }
   }
 
-  private updateAnimations(now: number) {
+  private updateAnimations(now: number, deltaTime: number) {
     if (this.unfolding && !this.resetting) {
       const elapsed = now - this.unfoldStartTime;
       const maxOrder = Math.max(1, this.faceMeshInfos.length);
@@ -501,7 +547,6 @@ export class OrigamiModel {
       if (elapsed >= this.unfoldDuration + 400) {
         this.unfolding = false;
         this.waveEnabled = true;
-        this.waveStartTime = now;
       }
     } else if (!this.resetting) {
       for (const info of this.faceMeshInfos) {
@@ -509,9 +554,8 @@ export class OrigamiModel {
       }
     }
     if (this.waveEnabled && !this.resetting) {
-      const waveTime = now - this.waveStartTime;
       for (const info of this.faceMeshInfos) {
-        this.applyWaveTransform(info, waveTime);
+        this.applyWaveTransform(info, deltaTime);
       }
     }
   }
@@ -528,7 +572,10 @@ export class OrigamiModel {
     for (const info of this.faceMeshInfos) {
       info.group.remove(info.mesh);
       info.group.remove(info.edges);
-      this.group.remove(info.group);
+      info.pivotGroup.remove(info.group);
+      if (info.pivotGroup.parent) {
+        info.pivotGroup.parent.remove(info.pivotGroup);
+      }
       info.mesh.geometry.dispose();
       (info.mesh.material as THREE.Material).dispose();
       info.edges.geometry.dispose();

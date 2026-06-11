@@ -354,75 +354,214 @@ function buildTriangleData(
   return triangles;
 }
 
-function mergeSmallTriangles(triangles: Triangle[], maxCount: number): Triangle[] {
-  if (triangles.length <= maxCount) return triangles;
-  let result = [...triangles];
-  const areaOf = (t: Triangle) => t.area;
-  while (result.length > maxCount) {
-    let smallestIdx = -1;
-    let smallestArea = Infinity;
-    for (let i = 0; i < result.length; i++) {
-      const a = areaOf(result[i]);
-      if (a < smallestArea && result[i].neighbors.length > 0) {
-        smallestArea = a;
-        smallestIdx = i;
+function crossSign2D(o: Point, a: Point, b: Point): number {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+function pointInTriangle(p: Point, a: Point, b: Point, c: Point, eps: number = 1e-6): boolean {
+  const d1 = crossSign2D(p, a, b);
+  const d2 = crossSign2D(p, b, c);
+  const d3 = crossSign2D(p, c, a);
+  const hasNeg = (d1 < -eps) || (d2 < -eps) || (d3 < -eps);
+  const hasPos = (d1 > eps) || (d2 > eps) || (d3 > eps);
+  return !(hasNeg && hasPos);
+}
+
+function isPolygonSimple(poly: Point[]): boolean {
+  const n = poly.length;
+  if (n < 3) return false;
+  for (let i = 0; i < n; i++) {
+    const a1 = poly[i];
+    const a2 = poly[(i + 1) % n];
+    for (let j = i + 1; j < n; j++) {
+      if (j === i || j === (i + 1) % n || i === (j + 1) % n) continue;
+      const b1 = poly[j];
+      const b2 = poly[(j + 1) % n];
+      if (segmentsIntersect(a1, a2, b1, b2)) return false;
+    }
+  }
+  return true;
+}
+
+function segmentsIntersect(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
+  const d1 = crossSign2D(p4, p3, p1);
+  const d2 = crossSign2D(p4, p3, p2);
+  const d3 = crossSign2D(p2, p1, p3);
+  const d4 = crossSign2D(p2, p1, p4);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  return false;
+}
+
+function isPolygonConvex(poly: Point[]): boolean {
+  const n = poly.length;
+  if (n < 3) return false;
+  let hasPos = false;
+  let hasNeg = false;
+  for (let i = 0; i < n; i++) {
+    const o = poly[i];
+    const a = poly[(i + 1) % n];
+    const b = poly[(i + 2) % n];
+    const cross = crossSign2D(o, a, b);
+    if (cross > 1e-6) hasPos = true;
+    else if (cross < -1e-6) hasNeg = true;
+    if (hasPos && hasNeg) return false;
+  }
+  return true;
+}
+
+function mergeTwoTriangles(t1: Triangle, t2: Triangle): Triangle | null {
+  const verts1 = [t1.a, t1.b, t1.c];
+  const verts2 = [t2.a, t2.b, t2.c];
+  const sharedPts: Point[] = [];
+  const uniqueFromT1: Point[] = [];
+  for (const p1 of verts1) {
+    let found = false;
+    for (const p2 of verts2) {
+      if (pointsAlmostEqual(p1, p2, 1)) { found = true; sharedPts.push(p1); break; }
+    }
+    if (!found) uniqueFromT1.push(p1);
+  }
+  const uniqueFromT2: Point[] = [];
+  for (const p2 of verts2) {
+    let found = false;
+    for (const p1 of verts1) {
+      if (pointsAlmostEqual(p2, p1, 1)) { found = true; break; }
+    }
+    if (!found) uniqueFromT2.push(p2);
+  }
+  if (sharedPts.length !== 2 || uniqueFromT1.length !== 1 || uniqueFromT2.length !== 1) {
+    return null;
+  }
+  const unique1 = uniqueFromT1[0];
+  const unique2 = uniqueFromT2[0];
+  const s0 = sharedPts[0];
+  const s1 = sharedPts[1];
+  let poly: Point[];
+  const cross = crossSign2D(s0, s1, unique1);
+  if (cross > 0) {
+    poly = [unique1, s1, unique2, s0];
+  } else {
+    poly = [unique1, s0, unique2, s1];
+  }
+  if (!isPolygonSimple(poly)) return null;
+  if (!isPolygonConvex(poly)) return null;
+  const diag1A = poly[0], diag1B = poly[2];
+  const diag2A = poly[1], diag2B = poly[3];
+  const areaWithDiag1 = triangleArea(poly[0], poly[1], poly[2]) + triangleArea(poly[0], poly[2], poly[3]);
+  const targetArea = t1.area + t2.area;
+  if (Math.abs(areaWithDiag1 - targetArea) / targetArea > 0.05) return null;
+  let diagChoice: [Point, Point];
+  const tForDiag1 = pointInTriangle(poly[3], poly[0], poly[1], poly[2]);
+  const tForDiag2 = pointInTriangle(poly[1], poly[0], poly[2], poly[3]);
+  if (!tForDiag1) diagChoice = [diag1A, diag1B];
+  else if (!tForDiag2) diagChoice = [diag2A, diag2B];
+  else diagChoice = [diag1A, diag1B];
+  const newTriA: [Point, Point, Point] = [poly[0], poly[1], diagChoice[1]];
+  const newTriB: [Point, Point, Point] = [poly[0], diagChoice[1], poly[3]];
+  const at = triangleArea(newTriA[0], newTriA[1], newTriA[2]);
+  const bt = triangleArea(newTriB[0], newTriB[1], newTriB[2]);
+  const [a, b, c] = at > bt ? newTriA : newTriB;
+  const colorRatioA = t1.area / targetArea;
+  const colorRatioB = t2.area / targetArea;
+  const newColor = {
+    r: Math.min(255, Math.round(t1.avgColor.r * colorRatioA + t2.avgColor.r * colorRatioB)),
+    g: Math.min(255, Math.round(t1.avgColor.g * colorRatioA + t2.avgColor.g * colorRatioB)),
+    b: Math.min(255, Math.round(t1.avgColor.b * colorRatioA + t2.avgColor.b * colorRatioB))
+  };
+  const allX = poly.map(p => p.x);
+  const allY = poly.map(p => p.y);
+  return {
+    a, b, c,
+    centroid: { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 },
+    avgColor: newColor,
+    neighbors: [],
+    sharedEdges: [],
+    uvBounds: {
+      minX: Math.min(...allX),
+      minY: Math.min(...allY),
+      maxX: Math.max(...allX),
+      maxY: Math.max(...allY)
+    },
+    area: at + bt
+  };
+}
+
+function rebuildTopology(tris: Triangle[]): Triangle[] {
+  const n = tris.length;
+  const result: Triangle[] = tris.map(t => ({
+    ...t,
+    neighbors: [],
+    sharedEdges: []
+  }));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const shared = findSharedEdge(result[i], result[j]);
+      if (shared) {
+        result[i].neighbors.push(j);
+        result[j].neighbors.push(i);
+        result[i].sharedEdges.push({ edge: shared, neighborIndex: j });
+        result[j].sharedEdges.push({ edge: [shared[1], shared[0]], neighborIndex: i });
       }
     }
-    if (smallestIdx === -1) break;
-    const smallest = result[smallestIdx];
-    if (smallest.neighbors.length === 0) break;
-    let bestNeighborIdx = -1;
-    let bestArea = Infinity;
-    for (const ni of smallest.neighbors) {
-      const nArea = areaOf(result[ni]);
-      if (nArea < bestArea) {
-        bestArea = nArea;
-        bestNeighborIdx = ni;
-      }
-    }
-    if (bestNeighborIdx === -1) break;
-    result = removeTriangleAndRemap(result, smallestIdx, bestNeighborIdx);
   }
   return result;
 }
 
-function removeTriangleAndRemap(
-  tris: Triangle[],
-  removeIdx: number,
-  _mergeIntoIdx: number
-): Triangle[] {
-  const newTris: Triangle[] = [];
-  const indexMap = new Map<number, number>();
-  for (let i = 0, j = 0; i < tris.length; i++) {
-    if (i === removeIdx) continue;
-    indexMap.set(i, j);
-    newTris.push({
-      ...tris[i],
-      neighbors: [],
-      sharedEdges: []
-    });
-    j++;
-  }
-  for (let i = 0; i < tris.length; i++) {
-    if (i === removeIdx) continue;
-    const newIdx = indexMap.get(i)!;
-    for (const oldNi of tris[i].neighbors) {
-      if (oldNi === removeIdx) continue;
-      const newNi = indexMap.get(oldNi);
-      if (newNi !== undefined && !newTris[newIdx].neighbors.includes(newIdx)) {
-        newTris[newIdx].neighbors.push(newNi);
+function mergeSmallTriangles(triangles: Triangle[], maxCount: number): Triangle[] {
+  if (triangles.length <= maxCount) return triangles;
+  let result = rebuildTopology(triangles);
+  let maxMergeAttempts = (result.length - maxCount) * 4;
+  while (result.length > maxCount && maxMergeAttempts > 0) {
+    maxMergeAttempts--;
+    let smallestIdx = -1;
+    let smallestArea = Infinity;
+    for (let i = 0; i < result.length; i++) {
+      if (result[i].neighbors.length === 0) continue;
+      if (result[i].area < smallestArea) {
+        smallestArea = result[i].area;
+        smallestIdx = i;
       }
     }
-  }
-  for (let i = 0; i < newTris.length; i++) {
-    for (const ni of newTris[i].neighbors) {
-      const shared = findSharedEdge(newTris[i], newTris[ni]);
-      if (shared) {
-        newTris[i].sharedEdges.push({ edge: shared, neighborIndex: ni });
+    if (smallestIdx === -1) break;
+    const neighs = result[smallestIdx].neighbors;
+    neighs.sort((x, y) => result[x].area - result[y].area);
+    let merged = false;
+    for (const neighborIdx of neighs) {
+      const candidate = mergeTwoTriangles(result[smallestIdx], result[neighborIdx]);
+      if (candidate === null) continue;
+      const keepIndices: number[] = [];
+      for (let k = 0; k < result.length; k++) {
+        if (k !== smallestIdx && k !== neighborIdx) keepIndices.push(k);
       }
+      const nextTris: Triangle[] = keepIndices.map(ki => ({ ...result[ki] }));
+      nextTris.push(candidate);
+      const rebuilt = rebuildTopology(nextTris);
+      const validCount = rebuilt.filter(t => t.neighbors.length > 0 || rebuilt.length === 1).length;
+      if (validCount < rebuilt.length - 2) continue;
+      const avgNeighborCount = rebuilt.reduce((s, t) => s + t.neighbors.length, 0) / rebuilt.length;
+      if (avgNeighborCount < 2 && rebuilt.length > 10) continue;
+      result = rebuilt;
+      merged = true;
+      break;
+    }
+    if (!merged) {
+      const neighs2 = result[smallestIdx].neighbors;
+      if (neighs2.length > 0) {
+        const ni = neighs2[0];
+        const iMin = Math.min(smallestIdx, ni);
+        const iMax = Math.max(smallestIdx, ni);
+        const keep: Triangle[] = [];
+        for (let k = 0; k < result.length; k++) {
+          if (k !== iMin && k !== iMax) keep.push({ ...result[k] });
+        }
+        const fallback = rebuildTopology(keep);
+        if (fallback.length >= maxCount * 0.7) result = fallback;
+        else break;
+      } else break;
     }
   }
-  return newTris;
+  return result;
 }
 
 export async function generateFaces(file: File): Promise<FaceData> {
@@ -474,32 +613,75 @@ export async function generateFaces(file: File): Promise<FaceData> {
   };
 }
 
+function createFallbackThumbnail(bounds: { minX: number; minY: number; maxX: number; maxY: number }): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = 220;
+  canvas.height = 100;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createLinearGradient(0, 0, 220, 100);
+  const hueBase = (Math.sin(bounds.minX * 10 + bounds.minY * 20) * 0.5 + 0.5) * 360;
+  grad.addColorStop(0, `hsl(${hueBase}, 75%, 55%)`);
+  grad.addColorStop(1, `hsl(${(hueBase + 60) % 360}, 75%, 40%)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 220, 100);
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.arc(110, 50, 35, 0, Math.PI * 2);
+  ctx.fill();
+  return canvas.toDataURL('image/png');
+}
+
 export function createThumbnail(
   originalFile: File,
   bounds: { minX: number; minY: number; maxX: number; maxY: number }
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
+    let cleanedUp = false;
+    const cleanupAndResolve = (url: string, imgEl?: HTMLImageElement, srcToRevoke?: string) => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      if (srcToRevoke && imgEl) {
+        try { URL.revokeObjectURL(srcToRevoke); } catch { /* ignore */ }
+      }
+      resolve(url);
+    };
+    const fallback = createFallbackThumbnail(bounds);
     const img = new Image();
+    let revoked = false;
+    const srcUrl = URL.createObjectURL(originalFile);
+    img.crossOrigin = 'anonymous';
+    const cancelTimer = setTimeout(() => {
+      if (!revoked) {
+        revoked = true;
+        try { URL.revokeObjectURL(srcUrl); } catch { /* ignore */ }
+      }
+      cleanupAndResolve(fallback);
+    }, 8000);
     img.onload = () => {
+      clearTimeout(cancelTimer);
       const canvas = document.createElement('canvas');
       canvas.width = 220;
       canvas.height = 100;
       const ctx = canvas.getContext('2d')!;
-      const sx = bounds.minX * img.width;
-      const sy = bounds.minY * img.height;
-      const sw = Math.max(1, (bounds.maxX - bounds.minX) * img.width);
-      const sh = Math.max(1, (bounds.maxY - bounds.minY) * img.height);
+      const sx = Math.max(0, bounds.minX * img.width);
+      const sy = Math.max(0, bounds.minY * img.height);
+      const sw = Math.max(1, Math.min(img.width - sx, (bounds.maxX - bounds.minX) * img.width));
+      const sh = Math.max(1, Math.min(img.height - sy, (bounds.maxY - bounds.minY) * img.height));
       try {
         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 220, 100);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        URL.revokeObjectURL(img.src);
-        resolve(dataUrl);
-      } catch (err) {
-        URL.revokeObjectURL(img.src);
-        reject(err);
+        if (!revoked) { revoked = true; try { URL.revokeObjectURL(srcUrl); } catch { /* ignore */ } }
+        cleanupAndResolve(dataUrl);
+      } catch (_err) {
+        if (!revoked) { revoked = true; try { URL.revokeObjectURL(srcUrl); } catch { /* ignore */ } }
+        cleanupAndResolve(fallback);
       }
     };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(originalFile);
+    img.onerror = () => {
+      clearTimeout(cancelTimer);
+      if (!revoked) { revoked = true; try { URL.revokeObjectURL(srcUrl); } catch { /* ignore */ } }
+      cleanupAndResolve(fallback);
+    };
+    img.src = srcUrl;
   });
 }
