@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>云纹织机</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a14;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    #ui-container {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 280px;
+      z-index: 10;
+    }
+
+    .panel {
+      background: rgba(26, 26, 46, 0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 8px;
+      padding: 20px;
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .panel-title {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 0 6px #FFD700;
+      text-align: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #333;
+    }
+
+    .reset-btn {
+      width: 100%;
+      padding: 10px;
+      background: #6C63FF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      margin-bottom: 16px;
+    }
+
+    .reset-btn:hover {
+      background: #8B7FFF;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(108, 99, 255, 0.4);
+    }
+
+    .reset-btn:active {
+      background: #5A52D5;
+      transform: translateY(0);
+    }
+
+    .param-group {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #333;
+    }
+
+    .param-group:last-of-type {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .param-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #ccc;
+    }
+
+    .param-value {
+      font-weight: 600;
+      color: #fff;
+      font-size: 13px;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    .slider-container {
+      position: relative;
+      width: 100%;
+      height: 20px;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(to right, #2D2D44, #4A4A6E);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #6C63FF;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 2px 12px rgba(108, 99, 255, 0.6);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #6C63FF;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .surface-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .surface-btn {
+      flex: 1;
+      padding: 8px 6px;
+      background: #2D2D44;
+      color: #ccc;
+      border: 1px solid #4A4A6E;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .surface-btn:hover {
+      background: #3a3a55;
+      color: #fff;
+    }
+
+    .surface-btn.active {
+      background: #6C63FF;
+      color: #fff;
+      border-color: #6C63FF;
+    }
+
+    .surface-btn.active:hover {
+      background: #8B7FFF;
+    }
+
+    .section-title {
+      font-size: 12px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    .mobile-toggle {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(26, 26, 46, 0.95);
+      backdrop-filter: blur(10px);
+      z-index: 20;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .mobile-title {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 0 6px #FFD700;
+    }
+
+    .mobile-menu-btn {
+      width: 40px;
+      height: 40px;
+      background: #6C63FF;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      transition: all 0.2s ease;
+    }
+
+    .mobile-menu-btn:hover {
+      background: #8B7FFF;
+    }
+
+    @media (max-width: 768px) {
+      #ui-container {
+        position: fixed;
+        top: 70px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        opacity: 0;
+        transform: translateY(-100%);
+        pointer-events: none;
+        transition: all 0.3s ease;
+        z-index: 15;
+      }
+
+      #ui-container.open {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      .mobile-toggle {
+        display: flex;
+      }
+    }
+
+    @media (max-width: 768px) {
+      #canvas-container {
+        top: 60px;
+        height: calc(100% - 60px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="mobile-toggle">
+    <span class="mobile-title">云纹织机</span>
+    <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+  </div>
+
+  <div id="ui-container">
+    <div class="panel">
+      <h1 class="panel-title">云纹织机</h1>
+      <button class="reset-btn" id="reset-btn">重置参数</button>
+
+      <div class="param-group">
+        <div class="section-title">纹理参数</div>
+        <div class="param-label">
+          <span>旋度</span>
+          <span class="param-value" id="curl-value">50</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="curl-slider" min="0" max="100" value="50" step="1" />
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-label">
+          <span>密度</span>
+          <span class="param-value" id="density-value">30</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="density-slider" min="10" max="50" value="30" step="1" />
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-label">
+          <span>色彩偏移</span>
+          <span class="param-value" id="color-shift-value">0°</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="color-shift-slider" min="0" max="360" value="0" step="1" />
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-label">
+          <span>流动速度</span>
+          <span class="param-value" id="flow-speed-value">0.05</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="flow-speed-slider" min="0" max="0.2" value="0.05" step="0.001" />
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="section-title">曲面形态</div>
+        <div class="surface-buttons">
+          <button class="surface-btn active" data-surface="cylinder">圆柱</button>
+          <button class="surface-btn" data-surface="sphere">球体</button>
+          <button class="surface-btn" data-surface="torusKnot">环结</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
