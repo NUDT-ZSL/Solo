@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>词间潮汐 · Tidal Words</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;500;700&family=JetBrains+Mono:wght@300;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0B101E;
+      --bg-black: #000000;
+      --glass-bg: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --glass-blur: blur(12px);
+      --text-primary: rgba(255, 255, 255, 0.92);
+      --text-secondary: rgba(255, 255, 255, 0.55);
+      --text-muted: rgba(255, 255, 255, 0.3);
+      --accent-glow: rgba(100, 180, 255, 0.25);
+      --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-panel: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+      color: var(--text-primary);
+      background: radial-gradient(ellipse at 50% 40%, var(--bg-deep) 0%, var(--bg-black) 75%);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #app {
+      width: 100%;
+      height: 100vh;
+      position: relative;
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, #0B101E, #000);
+      z-index: 9999;
+      transition: opacity 0.8s ease-out;
+    }
+
+    .loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading__text {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+      font-weight: 300;
+      letter-spacing: 0.35em;
+      color: var(--text-secondary);
+      animation: loadingPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes loadingPulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    .title-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 28px 40px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .title-bar__name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1rem, 1.8vw, 1.5rem);
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      color: var(--text-primary);
+    }
+
+    .title-bar__sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+    }
+
+    #canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .panel {
+      position: fixed;
+      top: 50%;
+      right: 40px;
+      transform: translateY(-50%);
+      width: 320px;
+      z-index: 20;
+    }
+
+    .panel__toggle {
+      position: absolute;
+      right: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      margin-right: 12px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-smooth);
+      font-size: 16px;
+    }
+
+    .panel__toggle:hover {
+      color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.25);
+      box-shadow: 0 0 0 0.2px var(--accent-glow), 0 0 20px var(--accent-glow);
+    }
+
+    .panel__body {
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 28px 24px;
+      transition: all var(--transition-panel);
+      transform-origin: right center;
+    }
+
+    .panel.collapsed .panel__body {
+      opacity: 0;
+      transform: translateX(40px) scaleX(0.6);
+      pointer-events: none;
+    }
+
+    .panel__section {
+      margin-bottom: 24px;
+    }
+
+    .panel__section:last-child {
+      margin-bottom: 0;
+    }
+
+    .panel__label {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .panel__textarea {
+      width: 100%;
+      min-height: 100px;
+      max-height: 160px;
+      padding: 14px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1rem, 1.5vw, 1.15rem);
+      font-weight: 300;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      transition: all var(--transition-smooth);
+    }
+
+    .panel__textarea::placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .panel__textarea:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .panel__textarea:focus {
+      border-color: rgba(100, 180, 255, 0.4);
+      box-shadow: 0 0 0 0.2px var(--accent-glow), 0 0 24px rgba(100, 180, 255, 0.08);
+    }
+
+    .panel__counter {
+      display: block;
+      text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .panel__buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      height: 42px;
+      padding: 0 18px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all var(--transition-smooth);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn--primary {
+      background: linear-gradient(135deg, rgba(52, 152, 219, 0.25), rgba(231, 76, 60, 0.2));
+      border-color: rgba(100, 180, 255, 0.25);
+      animation: breath 1.5s ease-in-out infinite;
+    }
+
+    @keyframes breath {
+      0%, 100% { box-shadow: 0 0 0 rgba(100, 180, 255, 0); }
+      50% { box-shadow: 0 0 18px rgba(100, 180, 255, 0.2); }
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: #fff;
+      box-shadow: 0 0 0 0.2px var(--accent-glow), 0 0 16px rgba(100, 180, 255, 0.1);
+    }
+
+    .btn--primary:hover {
+      background: linear-gradient(135deg, rgba(52, 152, 219, 0.35), rgba(231, 76, 60, 0.3));
+    }
+
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      outline: none;
+      transition: all var(--transition-smooth);
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3498DB, #E74C3C);
+      cursor: pointer;
+      transition: all var(--transition-smooth);
+      box-shadow: 0 0 0 rgba(100, 180, 255, 0);
+    }
+
+    .slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 0 0.2px var(--accent-glow), 0 0 12px var(--accent-glow);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3498DB, #E74C3C);
+      cursor: pointer;
+      border: none;
+    }
+
+    .panel__value {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .panel__value span:last-child {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+    }
+
+    .timbre-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .timbre-btn {
+      height: 36px;
+      padding: 0 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: all var(--transition-smooth);
+    }
+
+    .timbre-btn:hover {
+      color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .timbre-btn.active {
+      background: rgba(100, 180, 255, 0.12);
+      border-color: rgba(100, 180, 255, 0.35);
+      color: var(--text-primary);
+    }
+
+    .status-bar {
+      position: fixed;
+      bottom: 24px;
+      left: 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      z-index: 10;
+    }
+
+    .status-bar__dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: all var(--transition-smooth);
+    }
+
+    .status-bar__dot.playing {
+      background: #3498DB;
+      box-shadow: 0 0 8px rgba(52, 152, 219, 0.6);
+      animation: statusPulse 0.8s ease-in-out infinite;
+    }
+
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.7); }
+    }
+
+    @media (max-width: 768px) {
+      .title-bar {
+        padding: 18px 20px;
+      }
+
+      .title-bar__sub {
+        display: none;
+      }
+
+      .panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        transform: none;
+        width: 100%;
+      }
+
+      .panel__toggle {
+        display: none;
+      }
+
+      .panel__body {
+        border-radius: 20px 20px 0 0;
+        padding: 20px;
+      }
+
+      .panel.collapsed .panel__body {
+        transform: translateY(100%) scaleY(0.5);
+        transform-origin: bottom center;
+        opacity: 0;
+      }
+
+      .status-bar {
+        left: 20px;
+        bottom: calc(100% - 60px);
+      }
+
+      .mobile-dock {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border-top: 1px solid var(--glass-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        padding: 0 20px;
+        z-index: 30;
+      }
+
+      .mobile-dock__btn {
+        flex: 1;
+        height: 44px;
+        max-width: 64px;
+        border-radius: 12px;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        transition: all var(--transition-smooth);
+        font-size: 18px;
+      }
+
+      .mobile-dock__btn:hover,
+      .mobile-dock__btn.active {
+        color: var(--text-primary);
+      }
+
+      .mobile-dock__btn span {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.55rem;
+        letter-spacing: 0.08em;
+      }
+    }
+
+    @media (min-width: 769px) {
+      .mobile-dock {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading" id="loading">
+      <div class="loading__text">词 · 间 · 潮 · 汐</div>
+    </div>
+
+    <div class="title-bar">
+      <div class="title-bar__name">词间潮汐 / TIDAL WORDS</div>
+      <div class="title-bar__sub">INTERACTIVE · TEXT · RHYTHM · VISUALIZER</div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="status-bar">
+      <div class="status-bar__dot" id="statusDot"></div>
+      <span id="statusText">待机</span>
+      <span id="fpsCounter">—</span>
+    </div>
+
+    <aside class="panel" id="panel">
+      <button class="panel__toggle" id="panelToggle" aria-label="切换面板">
+        <span id="panelToggleIcon">◀</span>
+      </button>
+      <div class="panel__body">
+        <div class="panel__section">
+          <label class="panel__label" for="textInput">输入文字</label>
+          <textarea
+            class="panel__textarea"
+            id="textInput"
+            maxlength="200"
+            placeholder="在此输入或粘贴一段文字，让字符化为潮汐..."
+          >文字是海，音节如浪，每个字符都是一次呼吸。</textarea>
+          <span class="panel__counter"><span id="charCount">18</span> / 200</span>
+        </div>
+
+        <div class="panel__section">
+          <label class="panel__label">播放控制</label>
+          <div class="panel__buttons">
+            <button class="btn btn--primary" id="playBtn">▶ 开始</button>
+          </div>
+        </div>
+
+        <div class="panel__section">
+          <label class="panel__label">速度</label>
+          <div class="panel__value">
+            <span style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;">律动速度</span>
+            <span id="speedValue">1.0x</span>
+          </div>
+          <input type="range" class="slider" id="speedSlider" min="0.5" max="2.0" step="0.1" value="1.0" />
+        </div>
+
+        <div class="panel__section">
+          <label class="panel__label">粒子大小</label>
+          <div class="panel__value">
+            <span style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;">字符尺寸</span>
+            <span id="sizeValue">14px</span>
+          </div>
+          <input type="range" class="slider" id="sizeSlider" min="8" max="24" step="1" value="14" />
+        </div>
+
+        <div class="panel__section">
+          <label class="panel__label">音色风格</label>
+          <div class="timbre-group" id="timbreGroup">
+            <button class="timbre-btn active" data-style="soft">柔和</button>
+            <button class="timbre-btn" data-style="bright">明亮</button>
+            <button class="timbre-btn" data-style="dark">暗黑</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <nav class="mobile-dock" id="mobileDock">
+      <button class="mobile-dock__btn" data-action="input">
+        ✎<span>文字</span>
+      </button>
+      <button class="mobile-dock__btn" id="mobilePlayBtn">
+        ▶<span>播放</span>
+      </button>
+      <button class="mobile-dock__btn" data-action="toggle">
+        ⚙<span>设置</span>
+      </button>
+    </nav>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
