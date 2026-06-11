@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { generateCardData } from './cardData';
-import { setupCards, CardObject, ORBIT_RADIUS_X, ORBIT_RADIUS_Z, CARD_COUNT } from './cardSetup';
+import { setupCards, CardObject, CARD_COUNT } from './cardSetup';
 
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
