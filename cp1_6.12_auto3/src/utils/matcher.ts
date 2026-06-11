@@ -49,11 +49,15 @@ export function matchResume(resume: ParsedResume, jdText: string): MatchResult {
   const expWeight = 0.3
   const eduWeight = 0.2
 
-  const totalScore = Math.round(
-    skillResult.score * skillWeight +
-    experienceResult.score * expWeight +
-    educationResult.score * eduWeight
-  )
+  const skillScore = isNaN(skillResult.score) ? 50 : Math.max(0, Math.min(100, skillResult.score))
+  const expScore = isNaN(experienceResult.score) ? 70 : Math.max(0, Math.min(100, experienceResult.score))
+  const eduScore = isNaN(educationResult.score) ? 70 : Math.max(0, Math.min(100, educationResult.score))
+
+  const totalScore = Math.max(0, Math.min(100, Math.round(
+    skillScore * skillWeight +
+    expScore * expWeight +
+    eduScore * eduWeight
+  )))
 
   const { matched, unmatched } = highlightSegments(resume.rawText, jdText)
 
@@ -67,9 +71,9 @@ export function matchResume(resume: ParsedResume, jdText: string): MatchResult {
 
   return {
     totalScore,
-    skillScore: skillResult.score,
-    experienceScore: experienceResult.score,
-    educationScore: educationResult.score,
+    skillScore,
+    experienceScore: expScore,
+    educationScore: eduScore,
     matchedSkills: skillResult.matched,
     missingSkills: skillResult.missing,
     matched,
@@ -87,17 +91,26 @@ function extractJDKeywords(jd: string): {
   const requiredSkills = new Set<string>()
   const preferredSkills = new Set<string>()
 
-  const skillPatterns = [
-    /(?:熟练|熟悉|掌握|精通|具备|需要|要求|必须)[:：\s]*([^\n\r，,；;。.、]{2,100})/gi,
-    /(?:技能|技术|能力|栈|stack)[:：\s]*([^\n\r]{2,200})/gi
+  const skillKeywords = [
+    'JavaScript', 'TypeScript', 'Vue', 'React', 'Angular', 'Node.js', 'Python',
+    'Java', 'C++', 'C#', 'Go', 'Rust', 'PHP', 'Ruby', 'Swift', 'Kotlin',
+    'HTML', 'CSS', 'Sass', 'Less', 'Webpack', 'Vite', 'Rollup',
+    'MySQL', 'PostgreSQL', 'MongoDB', 'Redis', 'Oracle', 'SQL Server',
+    'Docker', 'Kubernetes', 'AWS', 'Azure', 'Git', 'Linux',
+    'RESTful', 'GraphQL', 'WebSocket', '微服务', '分布式', '高并发',
+    'Vue.js', 'React.js', 'Next.js', 'Nuxt.js', 'Express', 'Koa', 'NestJS',
+    'Spring', 'Spring Boot', 'Django', 'Flask', 'FastAPI',
+    'Jest', 'Mocha', 'Cypress', 'Selenium', '单元测试',
+    'Figma', 'UI设计', 'UX设计', '敏捷开发', 'Scrum', '微前端',
+    'ECharts', 'Ant Design', '数据可视化'
   ]
 
-  for (const pattern of skillPatterns) {
-    let match: RegExpExecArray | null
-    while ((match = pattern.exec(jd)) !== null) {
-      const segment = match[1]
-      const parts = segment.split(/[，,、;；/\s]+/).filter(s => s.trim().length >= 2 && s.trim().length <= 20)
-      parts.forEach(p => requiredSkills.add(p.trim()))
+  const lowerJd = jd.toLowerCase()
+  for (const skill of skillKeywords) {
+    const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`(^|[\\s,，、;；()（）\\[\\]【】])${escaped}(?=$|[\\s,，、;；()（）\\[\\]【】.。!！?？])`, 'i')
+    if (regex.test(jd)) {
+      requiredSkills.add(skill)
     }
   }
 
@@ -109,8 +122,12 @@ function extractJDKeywords(jd: string): {
     let match: RegExpExecArray | null
     while ((match = pattern.exec(jd)) !== null) {
       const segment = match[1]
-      const parts = segment.split(/[，,、;；/\s]+/).filter(s => s.trim().length >= 2 && s.trim().length <= 20)
-      parts.forEach(p => preferredSkills.add(p.trim()))
+      for (const skill of skillKeywords) {
+        if (segment.toLowerCase().includes(skill.toLowerCase())) {
+          preferredSkills.add(skill)
+          requiredSkills.delete(skill)
+        }
+      }
     }
   }
 
@@ -118,14 +135,18 @@ function extractJDKeywords(jd: string): {
   const yearPatterns = [
     /(\d+)\s*(?:年|yr|year)s?\s*(?:以上|\+|plus|工作|经验|experience)/i,
     /(?:至少|minimum|min|要求)[:：\s]*(\d+)\s*(?:年|yr|year)s?/i,
+    /(?:\d+)\s*[~\-~到]\s*(\d+)\s*(?:年|yr|year)s?/i,
     /(\d+)\+?\s*(?:年|yr|year)s?/i
   ]
 
   for (const pattern of yearPatterns) {
     const m = jd.match(pattern)
     if (m) {
-      requiredYears = parseInt(m[1])
-      if (!isNaN(requiredYears)) break
+      const y = parseInt(m[1])
+      if (!isNaN(y)) {
+        requiredYears = y
+        break
+      }
     }
   }
 
@@ -151,21 +172,26 @@ function calculateSkillScore(
   requiredSkills: string[],
   preferredSkills: string[]
 ): { score: number; matched: SkillScore[]; missing: string[] } {
+  if (!Array.isArray(resumeSkills)) resumeSkills = []
+  if (!Array.isArray(requiredSkills)) requiredSkills = []
+  if (!Array.isArray(preferredSkills)) preferredSkills = []
+
   if (requiredSkills.length === 0 && preferredSkills.length === 0) {
     return { score: 50, matched: [], missing: [] }
   }
 
   const matched: SkillScore[] = []
   const missing: string[] = []
-  const lowerResumeSkills = resumeSkills.map(s => s.toLowerCase())
+  const lowerResumeSkills = resumeSkills.map(s => (s || '').toLowerCase())
 
   let totalWeight = 0
   let earnedWeight = 0
 
   for (const skill of requiredSkills) {
+    if (!skill) continue
     const lower = skill.toLowerCase()
     const isMatched = lowerResumeSkills.some(rs =>
-      rs === lower || rs.includes(lower) || lower.includes(rs)
+      rs && (rs === lower || rs.includes(lower) || lower.includes(rs))
     )
     totalWeight += 2
     if (isMatched) {
@@ -177,9 +203,10 @@ function calculateSkillScore(
   }
 
   for (const skill of preferredSkills) {
+    if (!skill) continue
     const lower = skill.toLowerCase()
     const isMatched = lowerResumeSkills.some(rs =>
-      rs === lower || rs.includes(lower) || lower.includes(rs)
+      rs && (rs === lower || rs.includes(lower) || lower.includes(rs))
     )
     totalWeight += 1
     if (isMatched) {
@@ -188,71 +215,88 @@ function calculateSkillScore(
     }
   }
 
-  const score = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 50
+  const score = totalWeight > 0 ? Math.max(0, Math.min(100, Math.round((earnedWeight / totalWeight) * 100))) : 50
   return { score, matched, missing }
 }
 
 function calculateExperienceScore(current: number, required: number): number {
+  if (isNaN(current)) current = 0
+  if (isNaN(required)) required = 0
+  current = Math.max(0, current)
+  required = Math.max(0, required)
+
   if (required === 0) return 80
   if (current >= required) return Math.min(100, 80 + (current - required) * 5)
-  const ratio = current / required
-  return Math.round(ratio * 70)
+  const ratio = required > 0 ? current / required : 0
+  return Math.max(0, Math.round(ratio * 70))
 }
 
 function calculateEducationScore(current: string, required: string): number {
+  if (!current) current = ''
   if (!required) return 70
   const currentScore = EDUCATION_WEIGHT[current] || 0
   const requiredScore = EDUCATION_WEIGHT[required] || 0
   if (currentScore >= requiredScore) return Math.min(100, currentScore)
-  return Math.round((currentScore / requiredScore) * 70)
+  const ratio = requiredScore > 0 ? currentScore / requiredScore : 0
+  return Math.max(0, Math.round(ratio * 70))
 }
 
 function highlightSegments(resumeText: string, jdText: string): {
   matched: HighlightSegment[]
   unmatched: HighlightSegment[]
 } {
-  const matched: HighlightSegment[] = []
-  const jdWords = jdText.split(/[\s\n\r，,、。.；;()（）\[\]【】!！?？:：""'']+/)
-    .filter(w => w.length >= 2)
+  if (!resumeText || !jdText) {
+    return { matched: [], unmatched: [] }
+  }
 
-  for (const word of jdWords) {
-    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(escaped, 'gi')
-    let m: RegExpExecArray | null
-    while ((m = regex.exec(resumeText)) !== null) {
-      matched.push({
-        text: m[0],
-        start: m.index,
-        end: m.index + m[0].length
-      })
+  const matched: HighlightSegment[] = []
+  const jdWords = jdText.split(/[\s\n\r，,、。.；;()（）\[\]【】!！?？:：""''、/\\-]+/)
+    .filter(w => w.length >= 2 && w.length <= 20)
+
+  const uniqueWords = Array.from(new Set(jdWords))
+
+  for (const word of uniqueWords) {
+    try {
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(`(?<![\\u4e00-\\u9fa5a-zA-Z0-9])${escaped}(?![\\u4e00-\\u9fa5a-zA-Z0-9])`, 'gi')
+      let m: RegExpExecArray | null
+      while ((m = regex.exec(resumeText)) !== null) {
+        matched.push({
+          text: m[0],
+          start: m.index,
+          end: m.index + m[0].length
+        })
+      }
+    } catch (e) {
+      continue
     }
   }
 
-  const merged = mergeSegments(matched)
+  const merged = mergeSegments(matched, resumeText)
   const unmatched = getUnmatchedSegments(resumeText, merged)
 
   return { matched: merged, unmatched }
 }
 
-function mergeSegments(segments: HighlightSegment[]): HighlightSegment[] {
+function mergeSegments(segments: HighlightSegment[], text: string): HighlightSegment[] {
   if (segments.length === 0) return []
   const sorted = [...segments].sort((a, b) => a.start - b.start)
-  const merged: HighlightSegment[] = [sorted[0]]
+  const merged: HighlightSegment[] = [{ ...sorted[0] }]
 
   for (let i = 1; i < sorted.length; i++) {
     const last = merged[merged.length - 1]
     const curr = sorted[i]
-    if (curr.start <= last.end + 5) {
+    if (curr.start <= last.end + 3) {
       last.end = Math.max(last.end, curr.end)
-      last.text = ''
+      last.text = text.slice(last.start, last.end)
     } else {
-      merged.push(curr)
+      merged.push({ ...curr, text: text.slice(curr.start, curr.end) })
     }
   }
 
   return merged.map(s => ({
     ...s,
-    text: ''
+    text: text.slice(s.start, s.end)
   }))
 }
 
@@ -262,13 +306,21 @@ function getUnmatchedSegments(text: string, matched: HighlightSegment[]): Highli
 
   for (const seg of matched) {
     if (seg.start > cursor) {
-      result.push({ text: '', start: cursor, end: seg.start })
+      result.push({
+        text: text.slice(cursor, seg.start),
+        start: cursor,
+        end: seg.start
+      })
     }
     cursor = seg.end
   }
 
   if (cursor < text.length) {
-    result.push({ text: '', start: cursor, end: text.length })
+    result.push({
+      text: text.slice(cursor),
+      start: cursor,
+      end: text.length
+    })
   }
 
   return result

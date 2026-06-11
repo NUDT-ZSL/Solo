@@ -23,7 +23,7 @@
             <div
               class="progress-bar"
               :style="{
-                width: displayScore + '%',
+                width: displayProgress + '%',
                 background: scoreGradient
               }"
             ></div>
@@ -148,13 +148,26 @@
           <span class="title-icon">📝</span>
           简历文本高亮
         </h3>
+        <div class="highlight-legend">
+          <span class="legend-item">
+            <span class="legend-color matched"></span>
+            <span class="legend-text">匹配内容</span>
+          </span>
+          <span class="legend-item">
+            <span class="legend-color unmatched"></span>
+            <span class="legend-text">未匹配内容</span>
+          </span>
+        </div>
         <div class="highlight-text">
           <template v-for="(segment, idx) in highlightSegments" :key="idx">
-            <mark
+            <span
               v-if="segment.type === 'matched'"
               class="highlight matched-hl"
-            >{{ segment.text }}</mark>
-            <span v-else>{{ segment.text }}</span>
+            >{{ segment.text }}</span>
+            <span
+              v-else
+              class="highlight unmatched-hl"
+            >{{ segment.text }}</span>
           </template>
         </div>
       </div>
@@ -225,33 +238,49 @@ const scoreGradient = computed(() => {
 const highlightSegments = computed(() => {
   if (!props.matchResult || !props.parsedResume) return []
   const text = props.parsedResume.rawText
-  const matched = props.matchResult.matched
+  const matched = props.matchResult.matched || []
 
-  if (matched.length === 0) {
-    return [{ type: 'normal', text }]
+  if (!Array.isArray(matched) || matched.length === 0) {
+    return [{ type: 'unmatched', text }]
   }
 
-  const sorted = [...matched].sort((a, b) => a.start - b.start)
+  const validMatched = matched.filter(seg =>
+    seg && typeof seg.start === 'number' && typeof seg.end === 'number' &&
+    seg.start >= 0 && seg.end <= text.length && seg.start < seg.end
+  )
+
+  if (validMatched.length === 0) {
+    return [{ type: 'unmatched', text }]
+  }
+
+  const sorted = [...validMatched].sort((a, b) => a.start - b.start)
   const segments: Array<{ type: string; text: string }> = []
   let cursor = 0
 
   for (const seg of sorted) {
     if (seg.start > cursor) {
-      segments.push({ type: 'normal', text: text.slice(cursor, seg.start) })
+      segments.push({ type: 'unmatched', text: text.slice(cursor, seg.start) })
     }
-    segments.push({ type: 'matched', text: text.slice(seg.start, seg.end) })
-    cursor = seg.end
+    const matchedText = text.slice(seg.start, seg.end)
+    if (matchedText) {
+      segments.push({ type: 'matched', text: matchedText })
+    }
+    cursor = Math.max(cursor, seg.end)
   }
 
   if (cursor < text.length) {
-    segments.push({ type: 'normal', text: text.slice(cursor) })
+    segments.push({ type: 'unmatched', text: text.slice(cursor) })
   }
 
-  return segments
+  return segments.filter(s => s.text)
 })
 
+const displayProgress = ref(0)
+
 watch(targetScore, (newScore) => {
-  animateScore(displayScore.value, newScore)
+  const safeScore = isNaN(newScore) ? 0 : Math.max(0, Math.min(100, newScore))
+  animateScore(displayScore.value, safeScore)
+  animateProgress(displayProgress.value, safeScore)
 }, { immediate: true })
 
 function animateScore(from: number, to: number) {
@@ -259,14 +288,16 @@ function animateScore(from: number, to: number) {
     cancelAnimationFrame(animationFrame)
   }
 
-  const duration = 800
+  const duration = 1000
   const startTime = performance.now()
   const diff = to - from
 
   function update(currentTime: number) {
     const elapsed = currentTime - startTime
     const progress = Math.min(elapsed / duration, 1)
-    const easeProgress = 1 - Math.pow(1 - progress, 3)
+    const easeOutCubic = 1 - Math.pow(1 - progress, 3)
+    const easeOutElastic = progress === 1 ? 1 : (Math.pow(2, -10 * progress) * Math.sin((progress - 0.075) * (2 * Math.PI) / 0.3) + 1)
+    const easeProgress = progress > 0.8 ? easeOutElastic : easeOutCubic
     displayScore.value = Math.round(from + diff * easeProgress)
 
     if (progress < 1) {
@@ -275,6 +306,31 @@ function animateScore(from: number, to: number) {
   }
 
   animationFrame = requestAnimationFrame(update)
+}
+
+let progressAnimationFrame: number | null = null
+
+function animateProgress(from: number, to: number) {
+  if (progressAnimationFrame) {
+    cancelAnimationFrame(progressAnimationFrame)
+  }
+
+  const duration = 1200
+  const startTime = performance.now()
+  const diff = to - from
+
+  function update(currentTime: number) {
+    const elapsed = currentTime - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    const easeProgress = 1 - Math.pow(1 - progress, 4)
+    displayProgress.value = from + diff * easeProgress
+
+    if (progress < 1) {
+      progressAnimationFrame = requestAnimationFrame(update)
+    }
+  }
+
+  progressAnimationFrame = requestAnimationFrame(update)
 }
 
 watch(() => [props.parsedResume, props.matchResult], () => {
@@ -290,73 +346,125 @@ function updateRadarChart() {
     chartInstance = echarts.init(radarChartRef.value)
   }
 
-  const indicators = [
-    { name: '技能匹配', max: 100 },
-    { name: '经验匹配', max: 100 },
-    { name: '学历匹配', max: 100 },
-    { name: '技能覆盖', max: 100 },
-    { name: '关键字匹配', max: 100 }
-  ]
-
   const skillCoverage = props.parsedResume.skills.length > 0
-    ? Math.round((props.matchResult.matchedSkills.length / (props.matchResult.matchedSkills.length + props.matchResult.missingSkills.length || 1)) * 100)
+    ? Math.round((props.matchResult.matchedSkills.length / Math.max(1, props.matchResult.matchedSkills.length + props.matchResult.missingSkills.length)) * 100)
     : 0
 
   const keywordMatch = props.matchResult.matched.length > 0 ? Math.min(100, 50 + props.matchResult.matched.length * 5) : 30
 
-  const values = [
-    props.matchResult.skillScore,
-    props.matchResult.experienceScore,
-    props.matchResult.educationScore,
-    skillCoverage,
-    keywordMatch
+  const skillScore = isNaN(props.matchResult.skillScore) ? 50 : Math.max(0, Math.min(100, props.matchResult.skillScore))
+  const expScore = isNaN(props.matchResult.experienceScore) ? 70 : Math.max(0, Math.min(100, props.matchResult.experienceScore))
+  const eduScore = isNaN(props.matchResult.educationScore) ? 70 : Math.max(0, Math.min(100, props.matchResult.educationScore))
+  const skillCov = isNaN(skillCoverage) ? 50 : Math.max(0, Math.min(100, skillCoverage))
+  const kwMatch = isNaN(keywordMatch) ? 50 : Math.max(0, Math.min(100, keywordMatch))
+
+  const indicators = [
+    { name: `技能匹配\n${skillScore}分`, max: 100 },
+    { name: `经验匹配\n${expScore}分`, max: 100 },
+    { name: `学历匹配\n${eduScore}分`, max: 100 },
+    { name: `技能覆盖\n${skillCov}分`, max: 100 },
+    { name: `关键字\n${kwMatch}分`, max: 100 }
   ]
+
+  const values = [skillScore, expScore, eduScore, skillCov, kwMatch]
 
   const option: echarts.EChartsOption = {
     radar: {
       indicator: indicators,
       shape: 'polygon',
-      splitNumber: 4,
+      splitNumber: 5,
+      radius: '65%',
+      center: ['50%', '55%'],
       axisName: {
-        color: '#475569',
-        fontSize: 11
+        color: '#1e3a8a',
+        fontSize: 11,
+        fontWeight: 500,
+        lineHeight: 16,
+        formatter: function (value: string) {
+          return '{a|' + value.replace('\n', '\\n') + '}'
+        },
+        rich: {
+          a: {
+            color: '#1e3a8a',
+            fontSize: 11,
+            fontWeight: 500,
+            lineHeight: 16,
+            align: 'center'
+          }
+        }
       },
       splitLine: {
         lineStyle: {
-          color: '#dbeafe'
+          color: '#93c5fd',
+          width: 1,
+          type: 'dashed'
         }
       },
       splitArea: {
         show: true,
         areaStyle: {
-          color: ['rgba(219, 234, 254, 0.3)', 'rgba(219, 234, 254, 0.1)']
+          color: [
+            'rgba(219, 234, 254, 0.5)',
+            'rgba(191, 219, 254, 0.3)',
+            'rgba(147, 197, 253, 0.2)',
+            'rgba(96, 165, 250, 0.1)',
+            'rgba(59, 130, 246, 0.05)'
+          ]
         }
       },
       axisLine: {
         lineStyle: {
-          color: '#93c5fd'
+          color: '#3b82f6',
+          width: 1
         }
-      }
+      },
+      axisTick: {
+        show: true,
+        lineStyle: {
+          color: '#3b82f6'
+        }
+      },
+      scale: false,
+      min: 0,
+      max: 100
     },
     series: [{
       type: 'radar',
+      symbol: 'circle',
+      symbolSize: 8,
       data: [{
         value: values,
         name: '匹配度',
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(59, 130, 246, 0.4)' },
-            { offset: 1, color: 'rgba(37, 99, 235, 0.1)' }
+            { offset: 0, color: 'rgba(59, 130, 246, 0.5)' },
+            { offset: 1, color: 'rgba(37, 99, 235, 0.15)' }
           ])
         },
         lineStyle: {
           color: '#3b82f6',
-          width: 2
+          width: 3
         },
         itemStyle: {
           color: '#3b82f6',
-          borderWidth: 2,
-          borderColor: '#fff'
+          borderWidth: 3,
+          borderColor: '#fff',
+          shadowColor: 'rgba(59, 130, 246, 0.5)',
+          shadowBlur: 10
+        },
+        label: {
+          show: true,
+          formatter: function (params: any) {
+            return params.value + ''
+          },
+          color: '#1e3a8a',
+          fontSize: 12,
+          fontWeight: 600,
+          backgroundColor: '#fff',
+          padding: [2, 6],
+          borderRadius: 4,
+          borderWidth: 1,
+          borderColor: '#93c5fd'
         }
       }]
     }]
@@ -380,6 +488,9 @@ onUnmounted(() => {
   if (animationFrame) {
     cancelAnimationFrame(animationFrame)
   }
+  if (progressAnimationFrame) {
+    cancelAnimationFrame(progressAnimationFrame)
+  }
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null
@@ -396,15 +507,47 @@ onUnmounted(() => {
   gap: 20px;
   overflow-y: auto;
   max-height: calc(100vh - 140px);
+  position: relative;
+  overflow-x: hidden;
+}
+
+.result-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(ellipse at 20% 0%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 100%, rgba(16, 185, 129, 0.06) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.result-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  box-shadow: 
+    0 8px 32px rgba(31, 38, 135, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(31, 38, 135, 0.05);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  box-shadow: 
+    0 12px 40px rgba(31, 38, 135, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(31, 38, 135, 0.05);
 }
 
 .empty-state {
@@ -483,16 +626,94 @@ onUnmounted(() => {
 .progress-bar-wrapper {
   width: 100%;
   max-width: 300px;
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
+  height: 10px;
+  background: linear-gradient(90deg, #e2e8f0, #f1f5f9);
+  border-radius: 6px;
   overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.progress-bar-wrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .progress-bar {
   height: 100%;
-  border-radius: 4px;
-  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 6px;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.score-display {
+  display: flex;
+  align-items: baseline;
+  animation: scorePop 0.5s ease-out;
+}
+
+@keyframes scorePop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.score-number {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  transition: color 0.3s ease;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: scorePulse 2s ease-in-out infinite;
+}
+
+@keyframes scorePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
 }
 
 .result-grid {
@@ -697,6 +918,43 @@ onUnmounted(() => {
   padding: 16px;
 }
 
+.highlight-legend {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.legend-color.matched {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 1px solid #f59e0b;
+}
+
+.legend-color.unmatched {
+  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  border: 1px solid #94a3b8;
+}
+
+.legend-text {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
+}
+
 .highlight-text {
   font-size: 13px;
   line-height: 1.8;
@@ -705,15 +963,40 @@ onUnmounted(() => {
   word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
-  padding: 4px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+}
+
+.highlight {
+  display: inline;
+  transition: all 0.2s ease;
 }
 
 .highlight.matched-hl {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
   color: #92400e;
-  padding: 1px 3px;
+  padding: 1px 4px;
   border-radius: 3px;
-  font-weight: 500;
+  font-weight: 600;
+  border-bottom: 2px solid #f59e0b;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.highlight.unmatched-hl {
+  background: rgba(241, 245, 249, 0.5);
+  color: #64748b;
+  padding: 1px 2px;
+  border-radius: 2px;
+  opacity: 0.85;
+  text-decoration: line-through;
+  text-decoration-color: #cbd5e1;
+  text-decoration-thickness: 1px;
+}
+
+.highlight.matched-hl:hover {
+  background: linear-gradient(135deg, #fde68a, #fcd34d);
+  transform: scale(1.02);
 }
 
 .suggestions-section {
