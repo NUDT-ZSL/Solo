@@ -1,0 +1,19 @@
+{
+  "name": "bluefin-horizon",
+  "version": "1.0.0",
+  "description": "蓝鳍视界 - 浏览器交互式海底生态观测工具",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}

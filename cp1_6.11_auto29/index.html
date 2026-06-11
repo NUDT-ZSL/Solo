@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>蓝鳍视界 - 海底生态观测工具</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #051D2D;
+      color: #E0F7FA;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .top-nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(11, 43, 64, 0.7);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+      transition: all 0.3s ease-out;
+    }
+
+    .nav-title {
+      font-size: 24px;
+      color: #E0F7FA;
+      font-weight: 600;
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-title::before {
+      content: '🐋';
+      font-size: 28px;
+    }
+
+    .reset-btn {
+      background: rgba(74, 144, 217, 0.3);
+      color: #E0F7FA;
+      border: 1px solid rgba(74, 144, 217, 0.5);
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease-out;
+    }
+
+    .reset-btn:hover {
+      transform: scale(1.05);
+      border-color: #00BFFF;
+      background: rgba(0, 191, 255, 0.3);
+    }
+
+    .observation-card {
+      position: fixed;
+      left: 24px;
+      bottom: 24px;
+      width: 350px;
+      background: rgba(13, 43, 62, 0.8);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 90;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.3s ease-out;
+      pointer-events: none;
+      border: 1px solid rgba(74, 144, 217, 0.3);
+    }
+
+    .observation-card.active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .observation-card.flash {
+      animation: cardFlash 0.2s ease-out;
+    }
+
+    @keyframes cardFlash {
+      0% { box-shadow: 0 0 0 rgba(0, 191, 255, 0); }
+      50% { box-shadow: 0 0 30px rgba(0, 191, 255, 0.8); }
+      100% { box-shadow: 0 0 0 rgba(0, 191, 255, 0); }
+    }
+
+    .card-header {
+      font-size: 16px;
+      font-weight: 600;
+      color: #A8D5E2;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(74, 144, 217, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-header::before {
+      content: '📡';
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .data-label {
+      color: #6B9EC2;
+    }
+
+    .data-value {
+      color: #E0F7FA;
+      font-weight: 500;
+      font-family: 'Consolas', monospace;
+    }
+
+    .record-btn {
+      margin-top: 16px;
+      width: 100%;
+      background: linear-gradient(135deg, rgba(74, 144, 217, 0.5), rgba(11, 61, 93, 0.5));
+      color: #E0F7FA;
+      border: 1px solid rgba(74, 144, 217, 0.5);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.3s ease-out;
+      font-weight: 500;
+    }
+
+    .record-btn:hover {
+      transform: scale(1.05);
+      border-color: #00BFFF;
+      background: linear-gradient(135deg, rgba(0, 191, 255, 0.5), rgba(74, 144, 217, 0.5));
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 80px;
+      right: 24px;
+      width: 280px;
+      max-height: calc(100vh - 104px);
+      background: rgba(13, 43, 62, 0.8);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 90;
+      overflow-y: auto;
+      transition: all 0.3s ease-out;
+      border: 1px solid rgba(74, 144, 217, 0.3);
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+      background: rgba(5, 29, 45, 0.5);
+      border-radius: 3px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(74, 144, 217, 0.5);
+      border-radius: 3px;
+    }
+
+    .sidebar-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #A8D5E2;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(74, 144, 217, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar-title::before {
+      content: '📋';
+    }
+
+    .log-count {
+      font-size: 12px;
+      color: #6B9EC2;
+      margin-left: auto;
+    }
+
+    .log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .log-item {
+      background: rgba(11, 61, 93, 0.5);
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid rgba(74, 144, 217, 0.2);
+      transition: all 0.3s ease-out;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .log-item:hover {
+      border-color: rgba(255, 107, 107, 0.5);
+      transform: translateX(-4px);
+    }
+
+    .log-time {
+      font-size: 11px;
+      color: #6B9EC2;
+      margin-bottom: 6px;
+      font-family: 'Consolas', monospace;
+    }
+
+    .log-coord {
+      font-size: 13px;
+      color: #E0F7FA;
+      font-family: 'Consolas', monospace;
+      line-height: 1.5;
+    }
+
+    .log-delete {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 20px;
+      height: 20px;
+      background: rgba(255, 107, 107, 0.2);
+      border: 1px solid rgba(255, 107, 107, 0.4);
+      border-radius: 4px;
+      color: #FF6B6B;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: all 0.3s ease-out;
+    }
+
+    .log-item:hover .log-delete {
+      opacity: 1;
+    }
+
+    .log-delete:hover {
+      background: rgba(255, 107, 107, 0.4);
+      transform: scale(1.1);
+    }
+
+    .empty-log {
+      text-align: center;
+      color: #6B9EC2;
+      font-size: 13px;
+      padding: 20px 0;
+      line-height: 1.5;
+    }
+
+    .intro-tip {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(13, 43, 62, 0.9);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 30px 40px;
+      z-index: 200;
+      text-align: center;
+      border: 1px solid rgba(74, 144, 217, 0.4);
+      transition: all 0.3s ease-out;
+      max-width: 500px;
+    }
+
+    .intro-tip.hidden {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.9);
+      pointer-events: none;
+    }
+
+    .intro-title {
+      font-size: 28px;
+      color: #E0F7FA;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .intro-desc {
+      font-size: 14px;
+      color: #A8D5E2;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+
+    .intro-list {
+      text-align: left;
+      font-size: 13px;
+      color: #6B9EC2;
+      line-height: 2;
+      margin-bottom: 24px;
+    }
+
+    .intro-list span {
+      color: #FFD93D;
+      font-weight: 500;
+    }
+
+    .start-btn {
+      background: linear-gradient(135deg, #4A90D9, #0B3D5D);
+      color: #E0F7FA;
+      border: 1px solid rgba(0, 191, 255, 0.5);
+      padding: 12px 40px;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s ease-out;
+      font-weight: 500;
+    }
+
+    .start-btn:hover {
+      transform: scale(1.05);
+      border-color: #00BFFF;
+      box-shadow: 0 0 20px rgba(0, 191, 255, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <nav class="top-nav">
+      <div class="nav-title">蓝鳍视界</div>
+      <button class="reset-btn" id="resetBtn">重置视角</button>
+    </nav>
+
+    <div class="observation-card" id="observationCard">
+      <div class="card-header">观测数据</div>
+      <div class="data-row">
+        <span class="data-label">坐标 X:</span>
+        <span class="data-value" id="coordX">--</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">坐标 Z:</span>
+        <span class="data-value" id="coordZ">--</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">水温:</span>
+        <span class="data-value" id="waterTemp">--</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">盐度:</span>
+        <span class="data-value" id="salinity">--</span>
+      </div>
+      <button class="record-btn" id="recordBtn">记录观测</button>
+    </div>
+
+    <aside class="sidebar">
+      <div class="sidebar-title">
+        观测日志
+        <span class="log-count" id="logCount">0/50</span>
+      </div>
+      <div class="log-list" id="logList">
+        <div class="empty-log">暂无观测记录<br/>双击场景开始探索</div>
+      </div>
+    </aside>
+
+    <div class="intro-tip" id="introTip">
+      <div class="intro-title">🐋 欢迎来到蓝鳍视界</div>
+      <div class="intro-desc">沉浸式海底生态观测系统已就绪</div>
+      <div class="intro-list">
+        🖱️ <span>鼠标拖拽</span> - 旋转视角<br/>
+        🔍 <span>滚轮滚动</span> - 缩放场景<br/>
+        📍 <span>双击场景</span> - 标记观测点<br/>
+        📝 <span>点击记录</span> - 保存观测日志
+      </div>
+      <button class="start-btn" id="startBtn">开始探索</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
