@@ -5,6 +5,7 @@ import { UIController, UIParams } from './uiController';
 
 class HaloEffect {
   public mesh: THREE.Mesh;
+  public innerGlow: THREE.Mesh;
   public active: boolean;
   private startTime: number;
   private duration: number;
@@ -12,18 +13,33 @@ class HaloEffect {
   private targetScale: number;
 
   constructor(position: THREE.Vector3) {
-    const geometry = new THREE.RingGeometry(0.45, 0.5, 32);
-    const material = new THREE.MeshBasicMaterial({
+    const ringGeometry = new THREE.RingGeometry(0.2, 0.5, 64);
+    const ringMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.8,
+      opacity: 1.0,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
 
-    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh = new THREE.Mesh(ringGeometry, ringMaterial);
     this.mesh.position.copy(position);
+
+    const glowGeometry = new THREE.CircleGeometry(0.5, 64);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x88ccff,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    this.innerGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+    this.innerGlow.position.copy(position);
+    this.mesh.add(this.innerGlow);
+
     this.active = true;
     this.startTime = performance.now();
     this.duration = 1000;
@@ -42,8 +58,11 @@ class HaloEffect {
     const currentScale = this.initialScale + (this.targetScale - this.initialScale) * easeProgress;
     this.mesh.scale.setScalar(currentScale);
 
-    const material = this.mesh.material as THREE.MeshBasicMaterial;
-    material.opacity = 0.8 * (1 - progress);
+    const ringMaterial = this.mesh.material as THREE.MeshBasicMaterial;
+    ringMaterial.opacity = 1.0 * (1 - progress);
+
+    const glowMaterial = this.innerGlow.material as THREE.MeshBasicMaterial;
+    glowMaterial.opacity = 0.6 * Math.pow(1 - progress, 2);
 
     if (progress >= 1) {
       this.active = false;
@@ -56,17 +75,22 @@ class HaloEffect {
   dispose(): void {
     (this.mesh.geometry as THREE.BufferGeometry).dispose();
     (this.mesh.material as THREE.Material).dispose();
+    (this.innerGlow.geometry as THREE.BufferGeometry).dispose();
+    (this.innerGlow.material as THREE.Material).dispose();
   }
 }
 
 class Streamline {
   public line: THREE.Line;
+  public highlightLine: THREE.Line;
+  public group: THREE.Group;
   public positions: THREE.Vector3[];
   public baseLineWidth: number;
   public startPoint: THREE.Vector3;
   public midPoint: THREE.Vector3;
   public avgSpeed: number;
   public highlighted: boolean;
+  private highlightProgress: number;
 
   constructor(startPoint: THREE.Vector3, windField: WindField) {
     this.startPoint = startPoint.clone();
@@ -74,6 +98,8 @@ class Streamline {
     this.baseLineWidth = 1;
     this.highlighted = false;
     this.avgSpeed = 0;
+    this.highlightProgress = 0;
+    this.group = new THREE.Group();
 
     const steps = 30;
     const stepSize = 0.5;
@@ -96,12 +122,14 @@ class Streamline {
     const midIndex = Math.floor(steps / 2);
     this.midPoint = this.positions[midIndex].clone();
 
-    const geometry = new THREE.BufferGeometry();
     const positionArray = new Float32Array(this.positions.length * 3);
     const colorArray = new Float32Array(this.positions.length * 3);
+    const highlightColorArray = new Float32Array(this.positions.length * 3);
 
     const startColor = new THREE.Color(0x00CED1);
     const endColor = new THREE.Color(0x8A2BE2);
+    const highlightStartColor = new THREE.Color(0x40FFFF);
+    const highlightEndColor = new THREE.Color(0xC77DFF);
 
     for (let i = 0; i < this.positions.length; i++) {
       const pos = this.positions[i];
@@ -114,21 +142,43 @@ class Streamline {
       colorArray[i * 3] = color.r;
       colorArray[i * 3 + 1] = color.g;
       colorArray[i * 3 + 2] = color.b;
+
+      const highlightColor = new THREE.Color().lerpColors(highlightStartColor, highlightEndColor, t);
+      highlightColorArray[i * 3] = highlightColor.r;
+      highlightColorArray[i * 3 + 1] = highlightColor.g;
+      highlightColorArray[i * 3 + 2] = highlightColor.b;
     }
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+    const baseGeometry = new THREE.BufferGeometry();
+    baseGeometry.setAttribute('position', new THREE.BufferAttribute(positionArray.slice(), 3));
+    baseGeometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
 
-    const material = new THREE.LineBasicMaterial({
+    const baseMaterial = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
       opacity: 0.4,
       blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      linewidth: 1
+      depthWrite: false
     });
 
-    this.line = new THREE.Line(geometry, material);
+    this.line = new THREE.Line(baseGeometry, baseMaterial);
+    this.group.add(this.line);
+
+    const highlightGeometry = new THREE.BufferGeometry();
+    highlightGeometry.setAttribute('position', new THREE.BufferAttribute(positionArray.slice(), 3));
+    highlightGeometry.setAttribute('color', new THREE.BufferAttribute(highlightColorArray, 3));
+
+    const highlightMaterial = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    this.highlightLine = new THREE.Line(highlightGeometry, highlightMaterial);
+    this.highlightLine.renderOrder = 1;
+    this.group.add(this.highlightLine);
   }
 
   update(windField: WindField): void {
@@ -137,9 +187,11 @@ class Streamline {
     let currentPos = this.startPoint.clone();
     let totalSpeed = 0;
     const positions = this.line.geometry.attributes.position as THREE.BufferAttribute;
+    const highlightPositions = this.highlightLine.geometry.attributes.position as THREE.BufferAttribute;
 
     for (let i = 0; i <= steps; i++) {
       positions.setXYZ(i, currentPos.x, currentPos.y, currentPos.z);
+      highlightPositions.setXYZ(i, currentPos.x, currentPos.y, currentPos.z);
 
       if (i < steps) {
         const velocity = windField.getWindVelocity(currentPos);
@@ -157,42 +209,55 @@ class Streamline {
     this.midPoint.set(midX, midY, midZ);
 
     positions.needsUpdate = true;
+    highlightPositions.needsUpdate = true;
+
+    const targetProgress = this.highlighted ? 1.0 : 0.0;
+    this.highlightProgress += (targetProgress - this.highlightProgress) * 0.15;
+
+    const baseMaterial = this.line.material as THREE.LineBasicMaterial;
+    const highlightMaterial = this.highlightLine.material as THREE.LineBasicMaterial;
+
+    baseMaterial.opacity = 0.4 + this.highlightProgress * 0.2;
+    highlightMaterial.opacity = this.highlightProgress * 1.0;
   }
 
   setHighlight(highlighted: boolean): void {
     this.highlighted = highlighted;
-    const material = this.line.material as THREE.LineBasicMaterial;
-    material.opacity = highlighted ? 1.0 : 0.4;
   }
 
   dispose(): void {
     (this.line.geometry as THREE.BufferGeometry).dispose();
     (this.line.material as THREE.Material).dispose();
+    (this.highlightLine.geometry as THREE.BufferGeometry).dispose();
+    (this.highlightLine.material as THREE.Material).dispose();
   }
 }
 
 class WindVisualizationApp {
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer;
-  private container: HTMLElement;
-  private windField: WindField;
-  private particleSystem: ParticleSystem;
-  private uiController: UIController;
-  private streamlines: Streamline[];
-  private halos: HaloEffect[];
-  private clock: THREE.Clock;
-  private raycaster: THREE.Raycaster;
-  private mouse: THREE.Vector2;
-  private cameraDirection: THREE.Vector3;
-  private spherical: THREE.Spherical;
-  private isDragging: boolean;
-  private previousMousePosition: { x: number; y: number };
-  private cameraTarget: THREE.Vector3;
-  private minDistance: number;
-  private maxDistance: number;
-  private speedLabel: HTMLElement;
-  private hoveredStreamline: Streamline | null;
+  private scene!: THREE.Scene;
+  private camera!: THREE.PerspectiveCamera;
+  private renderer!: THREE.WebGLRenderer;
+  private container!: HTMLElement;
+  private windField!: WindField;
+  private particleSystem!: ParticleSystem;
+  private uiController!: UIController;
+  private streamlines!: Streamline[];
+  private halos!: HaloEffect[];
+  private clock!: THREE.Clock;
+  private raycaster!: THREE.Raycaster;
+  private mouse!: THREE.Vector2;
+  private cameraDirection!: THREE.Vector3;
+  private spherical!: THREE.Spherical;
+  private isDragging!: boolean;
+  private previousMousePosition!: { x: number; y: number };
+  private cameraTarget!: THREE.Vector3;
+  private minDistance!: number;
+  private maxDistance!: number;
+  private speedLabel!: HTMLElement;
+  private hoveredStreamline: Streamline | null = null;
+
+  private dragStartPosition: { x: number; y: number } | null = null;
+  private dragMovedDistance: number = 0;
 
   constructor() {
     this.container = document.getElementById('canvas-container')!;
@@ -200,6 +265,8 @@ class WindVisualizationApp {
     this.scene = new THREE.Scene();
     this.clock = new THREE.Clock();
     this.raycaster = new THREE.Raycaster();
+    this.raycaster.params.Points.threshold = 0.6;
+    this.raycaster.params.Line.threshold = 0.8;
     this.mouse = new THREE.Vector2();
     this.cameraDirection = new THREE.Vector3();
     this.spherical = new THREE.Spherical();
@@ -297,7 +364,7 @@ class WindVisualizationApp {
       const finalPoint = basePoint.clone().add(offset);
       const streamline = new Streamline(finalPoint, this.windField);
       this.streamlines.push(streamline);
-      this.scene.add(streamline.line);
+      this.scene.add(streamline.group);
     }
   }
 
@@ -328,6 +395,8 @@ class WindVisualizationApp {
   private onMouseDown(e: MouseEvent): void {
     if (e.button === 0) {
       this.isDragging = true;
+      this.dragStartPosition = { x: e.clientX, y: e.clientY };
+      this.dragMovedDistance = 0;
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
     }
   }
@@ -335,6 +404,7 @@ class WindVisualizationApp {
   private onMouseUp(e: MouseEvent): void {
     if (e.button === 0) {
       this.isDragging = false;
+      this.dragStartPosition = null;
     }
   }
 
@@ -342,15 +412,16 @@ class WindVisualizationApp {
     this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
-    if (this.isDragging) {
-      const deltaX = e.clientX - this.previousMousePosition.x;
-      const deltaY = e.clientY - this.previousMousePosition.y;
+    if (this.isDragging && this.dragStartPosition) {
+      const dx = e.clientX - this.previousMousePosition.x;
+      const dy = e.clientY - this.previousMousePosition.y;
+      this.dragMovedDistance += Math.sqrt(dx * dx + dy * dy);
 
       const rotateSpeed = 0.005;
-      this.spherical.theta -= deltaX * rotateSpeed;
+      this.spherical.theta -= dx * rotateSpeed;
       this.spherical.phi = Math.max(
         0.1,
-        Math.min(Math.PI - 0.1, this.spherical.phi - deltaY * rotateSpeed)
+        Math.min(Math.PI - 0.1, this.spherical.phi - dy * rotateSpeed)
       );
 
       this.updateCameraPosition();
@@ -377,7 +448,7 @@ class WindVisualizationApp {
   }
 
   private onClick(e: MouseEvent): void {
-    if (this.isDragging) return;
+    if (this.dragMovedDistance > 5) return;
 
     this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -388,7 +459,14 @@ class WindVisualizationApp {
     const intersects = this.raycaster.intersectObject(particlePoints);
 
     if (intersects.length > 0) {
-      const hitPoint = intersects[0].point;
+      const hitPoint = intersects[0].point.clone();
+      this.createHalo(hitPoint);
+      this.windField.addPerturbation(hitPoint, 1.5, 3);
+    } else {
+      const dir = new THREE.Vector3();
+      this.camera.getWorldDirection(dir);
+      const dist = 20;
+      const hitPoint = this.camera.position.clone().add(dir.multiplyScalar(dist));
       this.createHalo(hitPoint);
       this.windField.addPerturbation(hitPoint, 1.5, 3);
     }
@@ -399,12 +477,18 @@ class WindVisualizationApp {
     this.mouse.y = -(clientY / window.innerHeight) * 2 + 1;
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    const lineObjects = this.streamlines.map(s => s.line);
+    const lineObjects: THREE.Object3D[] = [];
+    this.streamlines.forEach(s => {
+      lineObjects.push(s.line);
+      lineObjects.push(s.highlightLine);
+    });
     const intersects = this.raycaster.intersectObjects(lineObjects, false);
 
     if (intersects.length > 0) {
-      const hitLine = intersects[0].object as THREE.Line;
-      const streamline = this.streamlines.find(s => s.line === hitLine);
+      const hitObject = intersects[0].object as THREE.Object3D;
+      const streamline = this.streamlines.find(s => 
+        s.line === hitObject || s.highlightLine === hitObject
+      );
 
       if (streamline && streamline !== this.hoveredStreamline) {
         if (this.hoveredStreamline) {

@@ -19,7 +19,7 @@ export interface ParticleSystemParams {
 export class ParticleSystem {
   private particles: Particle[];
   private geometry: THREE.BufferGeometry;
-  private material: THREE.PointsMaterial;
+  private material: THREE.ShaderMaterial;
   private points: THREE.Points;
   private windField: WindField;
   private bounds: number;
@@ -49,20 +49,49 @@ export class ParticleSystem {
 
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+    this.geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1));
 
-    this.material = new THREE.PointsMaterial({
-      size: this.particleSize,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.8,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      sizeAttenuation: true,
-      map: ParticleSystem.createCircleTexture(),
-      alphaTest: 0.01
-    });
+    this.material = ParticleSystem.createShaderMaterial(this.particleSize);
 
     this.points = new THREE.Points(this.geometry, this.material);
+  }
+
+  private static createShaderMaterial(pointSize: number): THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        pointTexture: { value: ParticleSystem.createCircleTexture() },
+        size: { value: pointSize }
+      },
+      vertexShader: `
+        attribute float alpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        uniform float size;
+
+        void main() {
+          vColor = color;
+          vAlpha = alpha;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (300.0 / -mvPosition.z);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D pointTexture;
+        varying vec3 vColor;
+        varying float vAlpha;
+
+        void main() {
+          vec4 texColor = texture2D(pointTexture, gl_PointCoord);
+          if (texColor.a < 0.01) discard;
+          gl_FragColor = vec4(vColor, vAlpha) * texColor;
+        }
+      `,
+      vertexColors: true,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
   }
 
   private static createCircleTexture(): THREE.Texture {
@@ -77,8 +106,9 @@ export class ParticleSystem {
       size / 2, size / 2, size / 2
     );
     gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
-    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.5)');
+    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.95)');
+    gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.8)');
+    gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.5)');
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     
     ctx.fillStyle = gradient;
@@ -152,7 +182,7 @@ export class ParticleSystem {
     }
   }
 
-  private updateParticleBuffers(index: number, particle: Particle, viewFactor: number): void {
+  private updateParticleBuffers(index: number, particle: Particle, viewAlpha: number): void {
     const i3 = index * 3;
     this.positions[i3] = particle.position.x;
     this.positions[i3 + 1] = particle.position.y;
@@ -165,16 +195,18 @@ export class ParticleSystem {
     this.colors[i3 + 2] = color.b;
 
     const lifeRatio = particle.age / particle.maxLifetime;
-    let alpha = viewFactor * 0.8;
+    let alpha = viewAlpha;
     if (lifeRatio < 0.1) {
       alpha *= lifeRatio / 0.1;
     } else if (lifeRatio > 0.85) {
-      alpha *= (1 - lifeRatio) / 0.15;
+      alpha *= Math.max(0, (1 - lifeRatio) / 0.15);
     }
-    this.alphas[index] = alpha;
+    this.alphas[index] = Math.max(0, Math.min(1, alpha));
   }
 
   update(deltaTime: number, cameraDirection: THREE.Vector3): void {
+    const camDir = cameraDirection.clone().normalize();
+
     for (let i = 0; i < this.particleCount; i++) {
       const particle = this.particles[i];
       
@@ -198,19 +230,30 @@ export class ParticleSystem {
         }
       }
 
-      const toParticle = new THREE.Vector3().copy(particle.position).normalize();
-      const viewDot = Math.abs(toParticle.dot(cameraDirection));
-      const viewFactor = 0.3 + viewDot * 0.5;
+      const toParticle = particle.position.clone().normalize();
+      const viewDot = Math.abs(toParticle.dot(camDir));
+      const viewAlpha = 0.3 + viewDot * 0.5;
 
-      this.updateParticleBuffers(i, particle, viewFactor);
+      this.updateParticleBuffers(i, particle, viewAlpha);
     }
 
     (this.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (this.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+    (this.geometry.attributes.alpha as THREE.BufferAttribute).needsUpdate = true;
   }
 
   updateLifetime(lifetime: number): void {
+    const oldLifetime = this.lifetime;
     this.lifetime = lifetime;
+    const ratio = lifetime / oldLifetime;
+
+    for (let i = 0; i < this.particles.length; i++) {
+      const particle = this.particles[i];
+      const newMaxLifetime = particle.maxLifetime * ratio;
+      particle.age = particle.age * ratio;
+      particle.maxLifetime = newMaxLifetime;
+      particle.lifetime = newMaxLifetime;
+    }
   }
 
   reset(): void {
@@ -221,6 +264,7 @@ export class ParticleSystem {
     this.initializeParticles();
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+    this.geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1));
   }
 
   getPoints(): THREE.Points {
@@ -235,7 +279,7 @@ export class ParticleSystem {
     return this.geometry;
   }
 
-  getMaterial(): THREE.PointsMaterial {
+  getMaterial(): THREE.ShaderMaterial {
     return this.material;
   }
 

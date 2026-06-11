@@ -205,23 +205,23 @@ export class WindField {
   }
 
   getSpeedColor(speed: number): THREE.Color {
-    const normalizedSpeed = Math.min(speed / 12, 1);
+    const colorLow = new THREE.Color(0x0A3D62);
+    const colorMid = new THREE.Color(0x0C7B93);
+    const colorHigh = new THREE.Color(0xE67E22);
+
+    const normalizedSpeed = Math.min(Math.max(speed / 10, 0), 1);
     const color = new THREE.Color();
 
     if (normalizedSpeed < 0.5) {
       const t = normalizedSpeed / 0.5;
-      color.setRGB(
-        0.039 + (0.047 - 0.039) * t,
-        0.239 + (0.482 - 0.239) * t,
-        0.384 + (0.576 - 0.384) * t
-      );
+      color.r = colorLow.r + (colorMid.r - colorLow.r) * t;
+      color.g = colorLow.g + (colorMid.g - colorLow.g) * t;
+      color.b = colorLow.b + (colorMid.b - colorLow.b) * t;
     } else {
       const t = (normalizedSpeed - 0.5) / 0.5;
-      color.setRGB(
-        0.047 + (0.902 - 0.047) * t,
-        0.482 + (0.494 - 0.482) * t,
-        0.576 + (0.133 - 0.576) * t
-      );
+      color.r = colorMid.r + (colorHigh.r - colorMid.r) * t;
+      color.g = colorMid.g + (colorHigh.g - colorMid.g) * t;
+      color.b = colorMid.b + (colorHigh.b - colorMid.b) * t;
     }
 
     return color;
