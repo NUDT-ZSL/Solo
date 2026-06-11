@@ -18,10 +18,6 @@ import NoteNode from './components/NoteNode';
 import { socketService, User, CursorMoveData } from './utils/socket';
 import { v4 as uuidv4 } from 'uuid';
 
-const nodeTypes = {
-  noteNode: NoteNode,
-};
-
 interface CursorState {
   [userId: string]: {
     x: number;
@@ -47,8 +43,20 @@ const Whiteboard: React.FC<{
   const hasRoomStateRef = useRef(false);
   const lastClickTimeRef = useRef(0);
 
+  const nodeTypes = useMemo(
+    () => ({
+      noteNode: NoteNode,
+    }),
+    []
+  );
+
   const handlePaneClick = useCallback(
     (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('.react-flow__node') || target.closest('.react-flow__edge')) {
+        return;
+      }
+
       const now = Date.now();
       if (now - lastClickTimeRef.current < 300) {
         const position = screenToFlowPosition({
@@ -64,8 +72,10 @@ const Whiteboard: React.FC<{
         };
 
         setNodes((nds) => [...nds, newNode]);
+        lastClickTimeRef.current = 0;
+      } else {
+        lastClickTimeRef.current = now;
       }
-      lastClickTimeRef.current = now;
     },
     [screenToFlowPosition, setNodes]
   );
@@ -74,8 +84,12 @@ const Whiteboard: React.FC<{
     const handleRoomState = (state: { nodes: Node[]; edges: Edge[] }) => {
       isRemoteUpdateRef.current = true;
       hasRoomStateRef.current = true;
-      setNodes(state.nodes || []);
-      setEdges(state.edges || []);
+      if (state.nodes && state.nodes.length > 0) {
+        setNodes(state.nodes);
+      }
+      if (state.edges && state.edges.length > 0) {
+        setEdges(state.edges);
+      }
       setTimeout(() => {
         isRemoteUpdateRef.current = false;
       }, 50);

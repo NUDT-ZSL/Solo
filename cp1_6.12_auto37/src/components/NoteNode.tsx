@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Handle, Position, NodeProps } from 'reactflow';
+import { Handle, Position, NodeProps, useUpdateNodeInternals } from 'reactflow';
 
 interface NoteData {
   text: string;
@@ -7,6 +7,7 @@ interface NoteData {
 }
 
 const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
+  const updateNodeInternals = useUpdateNodeInternals();
   const [text, setText] = useState(data.text || '');
   const [image, setImage] = useState<string | undefined>(data.image);
   const [isEditing, setIsEditing] = useState(false);
@@ -44,12 +45,14 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
   const handleBlur = () => {
     setIsEditing(false);
     data.text = text;
+    updateNodeInternals(id);
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value.slice(0, 500);
     setText(value);
     data.text = value;
+    updateNodeInternals(id);
   };
 
   const handlePaste = useCallback(
@@ -68,6 +71,7 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
               const result = event.target?.result as string;
               setImage(result);
               data.image = result;
+              updateNodeInternals(id);
             };
             reader.readAsDataURL(file);
           }
@@ -75,7 +79,7 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
         }
       }
     },
-    [isEditing, data]
+    [isEditing, data, id, updateNodeInternals]
   );
 
   useEffect(() => {
@@ -257,6 +261,10 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
           value={text}
           onChange={handleTextChange}
           onBlur={handleBlur}
+          onPaste={(e) => {
+            e.persist();
+            handlePaste(e.nativeEvent);
+          }}
           style={textareaStyle}
           placeholder="输入便签内容..."
           maxLength={500}
