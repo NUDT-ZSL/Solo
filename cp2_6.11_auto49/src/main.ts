@@ -1,315 +1,576 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { AlgaeField } from './algaeField';
-import { AudioManager, AudioFeatures } from './audioManager';
-import { RippleEffect } from './rippleEffect';
+import { createId } from 'cuid';
+import { IngredientSystem, DessertProperties, INGREDIENTS, IngredientType } from './ingredients';
+import { BakingSystem, BakingState } from './baking';
+import { DecorationSystem } from './decorate';
 
-class Application {
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer;
-  private controls: OrbitControls;
-  private algaeField: AlgaeField | null = null;
-  private rippleEffect: RippleEffect | null = null;
-  private audioManager: AudioManager;
-  private clock: THREE.Clock;
-  private frameId: number = 0;
-  private lastFrameTime: number = 0;
-  private readonly TARGET_FPS = 60;
-  private readonly FRAME_DURATION = 1000 / this.TARGET_FPS;
+enum AppState {
+  MIXING = 'mixing',
+  BAKING = 'baking',
+  DECORATING = 'decorating',
+  SHARING = 'sharing'
+}
+
+interface StarParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  alpha: number;
+}
+
+class StardustBakeryApp {
+  private state: AppState = AppState.MIXING;
+  private ingredientSystem: IngredientSystem;
+  private bakingSystem: BakingSystem | null = null;
+  private decorationSystem: DecorationSystem | null = null;
+  
+  private mainRenderer: THREE.WebGLRenderer;
+  private mainScene: THREE.Scene;
+  private mainCamera: THREE.PerspectiveCamera;
+  
+  private previewRenderer: THREE.WebGLRenderer;
+  private previewScene: THREE.Scene;
+  private previewCamera: THREE.PerspectiveCamera;
+  private previewMesh: THREE.Mesh | null = null;
+  private previewMaterial: THREE.MeshStandardMaterial | null = null;
+  
+  private ovenRenderer: THREE.WebGLRenderer;
+  private ovenScene: THREE.Scene;
+  private ovenCamera: THREE.PerspectiveCamera;
+  
+  private decorateRenderer: THREE.WebGLRenderer;
+  private decorateScene: THREE.Scene;
+  private decorateCamera: THREE.PerspectiveCamera;
+  
+  private starCanvas: HTMLCanvasElement;
+  private starCtx: CanvasRenderingContext2D;
+  private starParticles: StarParticle[] = [];
+  private maxStarParticles = 150;
+  
+  private currentProperties: DessertProperties;
+  private animationFrameId: number | null = null;
+  private clock: THREE.Clock = new THREE.Clock();
 
   constructor() {
-    this.scene = new THREE.Scene();
-    this.camera = this.createCamera();
-    this.renderer = this.createRenderer();
-    this.controls = this.createControls();
-    this.audioManager = new AudioManager();
-    this.clock = new THREE.Clock();
+    this.ingredientSystem = new IngredientSystem();
+    
+    this.currentProperties = {
+      sweetness: 0,
+      fluffiness: 0,
+      glowIntensity: 0,
+      ingredients: {
+        [IngredientType.GLOWING_BERRY]: 0,
+        [IngredientType.STARDUST_FLOUR]: 0,
+        [IngredientType.MOONLIGHT_CREAM]: 0,
+        [IngredientType.COMET_FROSTING]: 0
+      },
+      totalIngredients: 0
+    };
 
-    this.setupLighting();
-    this.setupGround();
-    this.setupScene();
-    this.setupWindowResizeHandler();
-    this.setupStartButton();
+    this.mainRenderer = this.createRenderer('main-canvas');
+    this.mainScene = new THREE.Scene();
+    this.mainCamera = this.createCamera();
+
+    this.previewRenderer = this.createRenderer('preview-canvas');
+    this.previewScene = new THREE.Scene();
+    this.previewCamera = this.createCamera();
+
+    this.ovenRenderer = this.createRenderer('oven-canvas');
+    this.ovenScene = new THREE.Scene();
+    this.ovenCamera = this.createCamera();
+
+    this.decorateRenderer = this.createRenderer('decorate-canvas');
+    this.decorateScene = new THREE.Scene();
+    this.decorateCamera = this.createCamera();
+
+    this.starCanvas = document.getElementById('star-particles') as HTMLCanvasElement;
+    this.starCtx = this.starCanvas.getContext('2d')!;
+
+    this.init();
+  }
+
+  private createRenderer(canvasId: string): THREE.WebGLRenderer {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true
+    });
+    
+    renderer.setSize(rect.width, rect.height, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    return renderer;
   }
 
   private createCamera(): THREE.PerspectiveCamera {
     const camera = new THREE.PerspectiveCamera(
-      60,
+      45,
       window.innerWidth / window.innerHeight,
       0.1,
-      2000
+      1000
     );
-    const defaultDistance = 200;
-    const pitchAngle = THREE.MathUtils.degToRad(45);
-    camera.position.set(
-      0,
-      Math.sin(pitchAngle) * defaultDistance,
-      Math.cos(pitchAngle) * defaultDistance
-    );
-    camera.lookAt(0, 50, 0);
+    camera.position.set(0, 1, 5);
+    camera.lookAt(0, 0, 0);
     return camera;
   }
 
-  private createRenderer(): THREE.WebGLRenderer {
-    const canvasContainer = document.getElementById('canvas-container');
-    if (!canvasContainer) {
-      throw new Error('Canvas container not found');
+  private init(): void {
+    this.setupMainScene();
+    this.setupPreviewScene();
+    this.setupIngredientSystem();
+    this.setupStarParticles();
+    this.setupEventListeners();
+    this.startAnimation();
+  }
+
+  private setupMainScene(): void {
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    this.mainScene.add(ambientLight);
+
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainLight.position.set(5, 5, 5);
+    this.mainScene.add(mainLight);
+
+    const rimLight = new THREE.PointLight(0x87ceeb, 0.4, 10);
+    rimLight.position.set(-3, 2, -3);
+    this.mainScene.add(rimLight);
+  }
+
+  private setupPreviewScene(): void {
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    this.previewScene.add(ambientLight);
+
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1);
+    mainLight.position.set(3, 3, 3);
+    this.previewScene.add(mainLight);
+
+    const fillLight = new THREE.PointLight(0xff69b4, 0.3, 10);
+    fillLight.position.set(-2, 1, -2);
+    this.previewScene.add(fillLight);
+
+    this.createPreviewDessert();
+  }
+
+  private createPreviewDessert(): void {
+    const geometry = new THREE.SphereGeometry(0.8, 32, 32);
+    
+    this.previewMaterial = new THREE.MeshStandardMaterial({
+      color: 0xcccccc,
+      metalness: 0.1,
+      roughness: 0.5,
+      emissive: 0xcccccc,
+      emissiveIntensity: 0.1
+    });
+
+    this.previewMesh = new THREE.Mesh(geometry, this.previewMaterial);
+    this.previewScene.add(this.previewMesh);
+  }
+
+  private setupIngredientSystem(): void {
+    const ingredientCanvases = document.querySelectorAll('.ingredient-particle-canvas') as NodeListOf<HTMLCanvasElement>;
+    const bowlCanvas = document.getElementById('bowl-particles') as HTMLCanvasElement;
+    const ratioCanvas = document.getElementById('ratio-canvas') as HTMLCanvasElement;
+
+    this.ingredientSystem.init(
+      ingredientCanvases,
+      bowlCanvas,
+      ratioCanvas,
+      (properties: DessertProperties) => {
+        this.currentProperties = properties;
+        this.updatePreviewDessert();
+        this.updatePropertyBars();
+      }
+    );
+  }
+
+  private setupStarParticles(): void {
+    const rect = this.starCanvas.getBoundingClientRect();
+    this.starCanvas.width = rect.width * window.devicePixelRatio;
+    this.starCanvas.height = rect.height * window.devicePixelRatio;
+    this.starCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    for (let i = 0; i < this.maxStarParticles; i++) {
+      this.spawnStarParticle(true);
+    }
+  }
+
+  private spawnStarParticle(randomY: boolean = false): void {
+    const rect = this.starCanvas.getBoundingClientRect();
+    const colors = ['#FFFFFF', '#E0E0FF', '#C0C0FF', '#A0B0FF', '#8090FF'];
+    
+    this.starParticles.push({
+      x: Math.random() * rect.width,
+      y: randomY ? Math.random() * rect.height : rect.height + 10,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: -0.5 - Math.random() * 0.5,
+      size: 1 + Math.random() * 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      alpha: 0.3 + Math.random() * 0.7
+    });
+  }
+
+  private setupEventListeners(): void {
+    const bakeButton = document.getElementById('bake-button') as HTMLButtonElement;
+    bakeButton.addEventListener('click', () => this.startBaking());
+
+    const resetButton = document.getElementById('reset-button') as HTMLButtonElement;
+    resetButton.addEventListener('click', () => this.reset());
+
+    const backButton = document.getElementById('back-button') as HTMLButtonElement;
+    backButton.addEventListener('click', () => this.backToMixing());
+
+    const shareButton = document.getElementById('share-button') as HTMLButtonElement;
+    shareButton.addEventListener('click', () => this.generateShareCard());
+
+    const copyLinkButton = document.getElementById('copy-link-button') as HTMLButtonElement;
+    copyLinkButton.addEventListener('click', () => this.copyShareLink());
+
+    const downloadButton = document.getElementById('download-button') as HTMLButtonElement;
+    downloadButton.addEventListener('click', () => this.downloadCardImage());
+
+    const restartButton = document.getElementById('restart-button') as HTMLButtonElement;
+    restartButton.addEventListener('click', () => this.reset());
+
+    window.addEventListener('resize', () => this.onResize());
+  }
+
+  private updatePreviewDessert(): void {
+    if (!this.previewMesh || !this.previewMaterial) return;
+
+    const mixedColor = this.ingredientSystem.getMixedColor();
+    this.previewMaterial.color.copy(mixedColor);
+    this.previewMaterial.emissive.copy(mixedColor);
+    this.previewMaterial.emissiveIntensity = 0.1 + (this.currentProperties.glowIntensity / 100) * 0.5;
+
+    const scale = 0.8 + (this.currentProperties.fluffiness / 100) * 0.4;
+    this.previewMesh.scale.setScalar(scale);
+  }
+
+  private updatePropertyBars(): void {
+    const sweetnessValue = document.getElementById('sweetness-value');
+    const sweetnessFill = document.getElementById('sweetness-fill');
+    const fluffinessValue = document.getElementById('fluffiness-value');
+    const fluffinessFill = document.getElementById('fluffiness-fill');
+    const glowValue = document.getElementById('glow-value');
+    const glowFill = document.getElementById('glow-fill');
+
+    if (sweetnessValue) sweetnessValue.textContent = this.currentProperties.sweetness.toString();
+    if (sweetnessFill) sweetnessFill.style.width = `${this.currentProperties.sweetness}%`;
+    
+    if (fluffinessValue) fluffinessValue.textContent = this.currentProperties.fluffiness.toString();
+    if (fluffinessFill) fluffinessFill.style.width = `${this.currentProperties.fluffiness}%`;
+    
+    if (glowValue) glowValue.textContent = this.currentProperties.glowIntensity.toString();
+    if (glowFill) glowFill.style.width = `${this.currentProperties.glowIntensity}%`;
+  }
+
+  private startBaking(): void {
+    if (this.currentProperties.totalIngredients === 0) return;
+
+    this.state = AppState.BAKING;
+
+    const ovenView = document.getElementById('oven-view');
+    if (ovenView) {
+      ovenView.style.display = 'block';
     }
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: 'high-performance'
-    });
-
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x0A1C2E, 1);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    canvasContainer.appendChild(renderer.domElement);
-    return renderer;
-  }
-
-  private createControls(): OrbitControls {
-    const controls = new OrbitControls(this.camera, this.renderer.domElement);
-
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.enablePan = false;
-
-    controls.minDistance = 100;
-    controls.maxDistance = 500;
-
-    const minPolar = THREE.MathUtils.degToRad(15);
-    const maxPolar = THREE.MathUtils.degToRad(75);
-    controls.minPolarAngle = minPolar;
-    controls.maxPolarAngle = maxPolar;
-
-    controls.rotateSpeed = 0.8;
-    controls.zoomSpeed = 0.8;
-
-    controls.target.set(0, 50, 0);
-    controls.update();
-
-    return controls;
-  }
-
-  private setupLighting(): void {
-    const ambientLight = new THREE.AmbientLight(0x4ECDC4, 0.4);
-    this.scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(100, 200, 100);
-    this.scene.add(directionalLight);
-
-    const pointLight1 = new THREE.PointLight(0x4ECDC4, 1, 400, 2);
-    pointLight1.position.set(-100, 100, -100);
-    this.scene.add(pointLight1);
-
-    const pointLight2 = new THREE.PointLight(0xFF6B6B, 0.6, 300, 2);
-    pointLight2.position.set(100, 50, 100);
-    this.scene.add(pointLight2);
-
-    const pointLight3 = new THREE.PointLight(0x6BCB77, 0.8, 350, 2);
-    pointLight3.position.set(0, 150, 0);
-    this.scene.add(pointLight3);
-  }
-
-  private setupGround(): void {
-    const groundGeometry = new THREE.CircleGeometry(350, 64);
-    const groundMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0A1C2E,
-      transparent: true,
-      opacity: 0.8,
-      roughness: 0.9,
-      metalness: 0.1
-    });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.5;
-    this.scene.add(ground);
-
-    const gridHelper = new THREE.GridHelper(500, 50, 0x1A3A2A, 0x0F2A1F);
-    (gridHelper.material as THREE.Material).transparent = true;
-    (gridHelper.material as THREE.Material).opacity = 0.3;
-    this.scene.add(gridHelper);
-  }
-
-  private setupScene(): void {
-    this.rippleEffect = new RippleEffect(this.scene);
-    this.algaeField = new AlgaeField(
-      this.scene,
-      this.camera,
-      this.renderer,
-      this.rippleEffect
+    this.bakingSystem = new BakingSystem(
+      this.ovenScene,
+      this.ovenCamera,
+      this.ovenRenderer
     );
 
-    this.setupFog();
-    this.setupParticles();
+    const initialColor = this.ingredientSystem.getMixedColor();
+    this.bakingSystem.init(this.currentProperties, initialColor);
+
+    this.bakingSystem.startBaking(() => {
+      this.showDecorationPanel();
+    });
   }
 
-  private setupFog(): void {
-    const fogColor = new THREE.Color(0x0A1C2E);
-    this.scene.fog = new THREE.FogExp2(fogColor.getHex(), 0.002);
-  }
+  private showDecorationPanel(): void {
+    if (!this.bakingSystem) return;
 
-  private setupParticles(): void {
-    const particleCount = 500;
-    const positions = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
+    this.state = AppState.DECORATING;
 
-    const color1 = new THREE.Color(0x4ECDC4);
-    const color2 = new THREE.Color(0x6BCB77);
+    const ovenView = document.getElementById('oven-view');
+    const decoratePanel = document.getElementById('decorate-panel');
 
-    for (let i = 0; i < particleCount; i++) {
-      const i3 = i * 3;
-      const radius = Math.random() * 300;
-      const angle = Math.random() * Math.PI * 2;
-      const height = Math.random() * 200;
-
-      positions[i3] = Math.cos(angle) * radius;
-      positions[i3 + 1] = height;
-      positions[i3 + 2] = Math.sin(angle) * radius;
-
-      const colorT = Math.random();
-      const color = color1.clone().lerp(color2, colorT);
-      colors[i3] = color.r;
-      colors[i3 + 1] = color.g;
-      colors[i3 + 2] = color.b;
+    if (ovenView) {
+      ovenView.style.display = 'none';
+    }
+    if (decoratePanel) {
+      decoratePanel.style.display = 'block';
     }
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const dessertMesh = this.bakingSystem.getDessertMesh();
+    if (!dessertMesh) return;
 
-    const material = new THREE.PointsMaterial({
-      size: 1.5,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
+    this.bakingSystem.reset();
+    this.bakingSystem = null;
 
-    const particles = new THREE.Points(geometry, material);
-    particles.name = 'particles';
-    this.scene.add(particles);
+    this.decorationSystem = new DecorationSystem(
+      this.decorateScene,
+      this.decorateCamera,
+      this.decorateRenderer,
+      dessertMesh,
+      this.currentProperties
+    );
+
+    setTimeout(() => {
+      this.onResize();
+    }, 100);
   }
 
-  private setupWindowResizeHandler(): void {
-    window.addEventListener('resize', () => {
-      this.camera.aspect = window.innerWidth / window.innerHeight;
-      this.camera.updateProjectionMatrix();
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+  private async generateShareCard(): Promise<void> {
+    if (!this.decorationSystem) return;
+
+    this.state = AppState.SHARING;
+
+    const cardData = await this.decorationSystem.generateShareCard();
+    
+    const cardModal = document.getElementById('card-modal');
+    const cardScreenshot = document.getElementById('card-screenshot') as HTMLImageElement;
+    const cardDescription = document.getElementById('card-description');
+    const shareLink = document.getElementById('share-link');
+    const cardSweetness = document.getElementById('card-sweetness');
+    const cardFluffiness = document.getElementById('card-fluffiness');
+    const cardGlow = document.getElementById('card-glow');
+
+    if (cardScreenshot) cardScreenshot.src = cardData.imageData;
+    if (cardDescription) cardDescription.textContent = cardData.description;
+    if (shareLink) shareLink.textContent = cardData.shareLink;
+    
+    if (cardSweetness) cardSweetness.textContent = this.decorationSystem.getStarRating(this.currentProperties.sweetness);
+    if (cardFluffiness) cardFluffiness.textContent = this.decorationSystem.getStarRating(this.currentProperties.fluffiness);
+    if (cardGlow) cardGlow.textContent = this.decorationSystem.getStarRating(this.currentProperties.glowIntensity);
+
+    if (cardModal) {
+      cardModal.style.display = 'flex';
+    }
+
+    (window as any).currentCardData = cardData;
   }
 
-  private setupStartButton(): void {
-    const startBtn = document.getElementById('start-btn');
-    if (!startBtn) return;
+  private async copyShareLink(): Promise<void> {
+    const shareLink = document.getElementById('share-link');
+    if (!shareLink || !this.decorationSystem) return;
 
-    startBtn.addEventListener('click', async () => {
-      const success = await this.audioManager.init();
-
-      if (success) {
-        this.audioManager.startSampling((features: AudioFeatures) => {
-          this.algaeField?.updateAudioFeatures(features);
-        });
-
-        startBtn.style.transition = 'opacity 0.5s, transform 0.5s';
-        startBtn.style.opacity = '0';
-        startBtn.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    const link = shareLink.textContent || '';
+    const success = await this.decorationSystem.copyToClipboard(link);
+    
+    if (success) {
+      const copyButton = document.getElementById('copy-link-button');
+      if (copyButton) {
+        const originalText = copyButton.textContent;
+        copyButton.textContent = '已复制!';
         setTimeout(() => {
-          startBtn.remove();
-        }, 500);
-      } else {
-        startBtn.textContent = '麦克风访问被拒绝，仍可体验视觉效果';
-        startBtn.style.background = 'linear-gradient(135deg, #666, #888)';
-        setTimeout(() => {
-          startBtn.style.opacity = '0';
-          setTimeout(() => startBtn.remove(), 500);
+          copyButton.textContent = originalText;
         }, 2000);
       }
+    }
+  }
+
+  private downloadCardImage(): void {
+    if (!this.decorationSystem) return;
+    
+    const cardData = (window as any).currentCardData;
+    if (cardData?.imageData) {
+      const id = createId();
+      this.decorationSystem.downloadImage(cardData.imageData, `stardust-dessert-${id}.png`);
+    }
+  }
+
+  private backToMixing(): void {
+    this.state = AppState.MIXING;
+
+    const decoratePanel = document.getElementById('decorate-panel');
+    if (decoratePanel) {
+      decoratePanel.style.display = 'none';
+    }
+
+    if (this.decorationSystem) {
+      this.decorationSystem.reset();
+      this.decorationSystem = null;
+    }
+
+    this.decorateScene.clear();
+  }
+
+  private reset(): void {
+    this.state = AppState.MIXING;
+
+    const ovenView = document.getElementById('oven-view');
+    const decoratePanel = document.getElementById('decorate-panel');
+    const cardModal = document.getElementById('card-modal');
+
+    if (ovenView) ovenView.style.display = 'none';
+    if (decoratePanel) decoratePanel.style.display = 'none';
+    if (cardModal) cardModal.style.display = 'none';
+
+    if (this.bakingSystem) {
+      this.bakingSystem.reset();
+      this.bakingSystem = null;
+    }
+
+    if (this.decorationSystem) {
+      this.decorationSystem.reset();
+      this.decorationSystem = null;
+    }
+
+    this.ingredientSystem.reset();
+    
+    this.ovenScene.clear();
+    this.decorateScene.clear();
+
+    this.currentProperties = {
+      sweetness: 0,
+      fluffiness: 0,
+      glowIntensity: 0,
+      ingredients: {
+        [IngredientType.GLOWING_BERRY]: 0,
+        [IngredientType.STARDUST_FLOUR]: 0,
+        [IngredientType.MOONLIGHT_CREAM]: 0,
+        [IngredientType.COMET_FROSTING]: 0
+      },
+      totalIngredients: 0
+    };
+
+    this.updatePropertyBars();
+    this.updatePreviewDessert();
+  }
+
+  private startAnimation(): void {
+    const animate = () => {
+      const delta = this.clock.getDelta();
+      
+      this.update(delta);
+      this.render();
+
+      this.animationFrameId = requestAnimationFrame(animate);
+    };
+    animate();
+  }
+
+  private update(delta: number): void {
+    if (this.previewMesh && this.state === AppState.MIXING) {
+      this.previewMesh.rotation.y += delta * 0.5;
+      this.previewMesh.position.y = Math.sin(performance.now() * 0.001) * 0.05;
+    }
+
+    this.updateStarParticles(delta);
+  }
+
+  private updateStarParticles(delta: number): void {
+    const rect = this.starCanvas.getBoundingClientRect();
+    const speed = 20 * delta;
+
+    this.starCtx.clearRect(0, 0, rect.width, rect.height);
+
+    this.starParticles = this.starParticles.filter(p => {
+      p.x += p.vx * speed;
+      p.y += p.vy * speed;
+
+      if (p.y < -10 || p.x < -10 || p.x > rect.width + 10) {
+        return false;
+      }
+
+      const gradient = this.starCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+      gradient.addColorStop(0, p.color + Math.floor(p.alpha * 255).toString(16).padStart(2, '0'));
+      gradient.addColorStop(0.5, p.color + Math.floor(p.alpha * 150).toString(16).padStart(2, '0'));
+      gradient.addColorStop(1, 'transparent');
+
+      this.starCtx.fillStyle = gradient;
+      this.starCtx.beginPath();
+      this.starCtx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+      this.starCtx.fill();
+
+      return true;
     });
+
+    while (this.starParticles.length < this.maxStarParticles) {
+      this.spawnStarParticle(false);
+    }
   }
 
-  start(): void {
-    this.lastFrameTime = performance.now();
-    this.animate();
+  private render(): void {
+    if (this.state === AppState.MIXING) {
+      this.mainRenderer.render(this.mainScene, this.mainCamera);
+      this.previewRenderer.render(this.previewScene, this.previewCamera);
+    }
   }
 
-  private animate = (): void => {
-    this.frameId = requestAnimationFrame(this.animate);
+  private onResize(): void {
+    const updateRendererSize = (renderer: THREE.WebGLRenderer, canvasId: string) => {
+      const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+      const rect = canvas.getBoundingClientRect();
+      renderer.setSize(rect.width, rect.height, false);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    };
 
-    const now = performance.now();
-    const elapsed = now - this.lastFrameTime;
+    updateRendererSize(this.mainRenderer, 'main-canvas');
+    updateRendererSize(this.previewRenderer, 'preview-canvas');
+    updateRendererSize(this.ovenRenderer, 'oven-canvas');
+    updateRendererSize(this.decorateRenderer, 'decorate-canvas');
 
-    if (elapsed < this.FRAME_DURATION - 1) {
-      return;
+    const updateCameraAspect = (camera: THREE.PerspectiveCamera, canvasId: string) => {
+      const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+      const rect = canvas.getBoundingClientRect();
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+    };
+
+    updateCameraAspect(this.mainCamera, 'main-canvas');
+    updateCameraAspect(this.previewCamera, 'preview-canvas');
+    updateCameraAspect(this.ovenCamera, 'oven-canvas');
+    updateCameraAspect(this.decorateCamera, 'decorate-canvas');
+
+    const rect = this.starCanvas.getBoundingClientRect();
+    this.starCanvas.width = rect.width * window.devicePixelRatio;
+    this.starCanvas.height = rect.height * window.devicePixelRatio;
+    this.starCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  }
+
+  public destroy(): void {
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
     }
 
-    const deltaTime = Math.min(this.clock.getDelta() * 1000, 50);
-    this.lastFrameTime = now - (elapsed % this.FRAME_DURATION);
-
-    this.controls.update();
-    this.updateParticles(deltaTime);
-    this.algaeField?.update(deltaTime);
-    this.renderer.render(this.scene, this.camera);
-  };
-
-  private updateParticles(_deltaTime: number): void {
-    const particles = this.scene.getObjectByName('particles') as THREE.Points | undefined;
-    if (!particles) return;
-
-    const positions = particles.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const posArray = positions.array as Float32Array;
-    const time = performance.now() * 0.001;
-
-    for (let i = 0; i < posArray.length; i += 3) {
-      const baseX = posArray[i];
-      const baseZ = posArray[i + 2];
-
-      posArray[i] = baseX + Math.sin(time + baseZ * 0.01) * 0.3;
-      posArray[i + 2] = baseZ + Math.cos(time + baseX * 0.01) * 0.3;
-      posArray[i + 1] += Math.sin(time * 2 + i * 0.1) * 0.02;
-
-      if (posArray[i + 1] > 200) posArray[i + 1] = 0;
-      if (posArray[i + 1] < 0) posArray[i + 1] = 200;
+    this.ingredientSystem.destroy();
+    
+    if (this.bakingSystem) {
+      this.bakingSystem.reset();
+    }
+    
+    if (this.decorationSystem) {
+      this.decorationSystem.reset();
     }
 
-    positions.needsUpdate = true;
-  }
-
-  destroy(): void {
-    cancelAnimationFrame(this.frameId);
-    this.audioManager.destroy();
-    this.algaeField?.destroy();
-    this.rippleEffect?.destroy();
-    this.renderer.dispose();
+    this.mainRenderer.dispose();
+    this.previewRenderer.dispose();
+    this.ovenRenderer.dispose();
+    this.decorateRenderer.dispose();
   }
 }
 
-let app: Application | null = null;
+let app: StardustBakeryApp | null = null;
 
-const init = (): void => {
-  try {
-    app = new Application();
-    app.start();
-  } catch (error) {
-    console.error('初始化失败:', error);
-  }
-};
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+document.addEventListener('DOMContentLoaded', () => {
+  app = new StardustBakeryApp();
+});
 
 window.addEventListener('beforeunload', () => {
-  app?.destroy();
+  if (app) {
+    app.destroy();
+  }
 });

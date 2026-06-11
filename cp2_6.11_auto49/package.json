@@ -1,7 +1,7 @@
 {
-  "name": "sound-algae-ocean",
-  "private": true,
+  "name": "stardust-bakery",
   "version": "1.0.0",
+  "description": "星辰烘焙坊 - 魔法甜点工坊模拟器",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,11 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.160.0"
+    "three": "^0.160.0",
+    "cuid": "^3.0.0"
   },
   "devDependencies": {
     "@types/three": "^0.160.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.8"
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
   }
 }
