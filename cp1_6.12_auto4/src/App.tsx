@@ -194,6 +194,9 @@ const App: React.FC = () => {
         onSelectionChange={handleSelectionChange}
         onCanvasStateChange={handleCanvasStateChange}
         onCommitChange={commitHistory}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onToolChange={setCurrentTool}
       />
 
       {!isMobile && (

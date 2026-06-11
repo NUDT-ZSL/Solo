@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import type { Shape, RectShape, CircleShape } from './types'
 
 interface PropertyPanelProps {
@@ -7,6 +7,34 @@ interface PropertyPanelProps {
   onDeleteShape: (id: string) => void
   isMobile: boolean
   onClose?: () => void
+}
+
+type SharedShapeKeys = 'x' | 'y' | 'rotation' | 'fill' | 'stroke' | 'strokeWidth'
+type RectKeys = 'width' | 'height' | 'rx'
+type CircleKeys = 'radius'
+
+function updateSharedProp(
+  shape: Shape,
+  key: SharedShapeKeys,
+  value: number | string
+): Shape {
+  return { ...shape, [key]: value }
+}
+
+function updateRectProp(
+  shape: RectShape,
+  key: RectKeys,
+  value: number
+): RectShape {
+  return { ...shape, [key]: value }
+}
+
+function updateCircleProp(
+  shape: CircleShape,
+  key: CircleKeys,
+  value: number
+): CircleShape {
+  return { ...shape, [key]: value }
 }
 
 export const PropertyPanel: React.FC<PropertyPanelProps> = ({
@@ -26,9 +54,62 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
     )
   }
 
-  const updateProp = (key: string, value: any) => {
-    onShapeUpdate({ ...(selectedShape as any), [key]: value } as Shape)
-  }
+  const handleColorChange = useCallback(
+    (key: 'fill' | 'stroke', value: string) => {
+      onShapeUpdate(updateSharedProp(selectedShape, key, value))
+    },
+    [selectedShape, onShapeUpdate]
+  )
+
+  const handleNumberChange = useCallback(
+    (key: SharedShapeKeys, value: number) => {
+      onShapeUpdate(updateSharedProp(selectedShape, key, value))
+    },
+    [selectedShape, onShapeUpdate]
+  )
+
+  const handleRectNumberChange = useCallback(
+    (key: RectKeys, value: number) => {
+      if (selectedShape.type === 'rect') {
+        onShapeUpdate(updateRectProp(selectedShape as RectShape, key, value))
+      }
+    },
+    [selectedShape, onShapeUpdate]
+  )
+
+  const handleCircleNumberChange = useCallback(
+    (key: CircleKeys, value: number) => {
+      if (selectedShape.type === 'circle') {
+        onShapeUpdate(updateCircleProp(selectedShape as CircleShape, key, value))
+      }
+    },
+    [selectedShape, onShapeUpdate]
+  )
+
+  const handleColorInputChange = useCallback(
+    (key: 'fill' | 'stroke', e: React.ChangeEvent<HTMLInputElement>) => {
+      handleColorChange(key, e.target.value)
+    },
+    [handleColorChange]
+  )
+
+  const handleNumberInputChange = useCallback(
+    (
+      key: SharedShapeKeys | RectKeys | CircleKeys,
+      e: React.ChangeEvent<HTMLInputElement>,
+      fallback: number = 0
+    ) => {
+      const value = parseFloat(e.target.value) || fallback
+      if (key === 'width' || key === 'height' || key === 'rx') {
+        handleRectNumberChange(key as RectKeys, value)
+      } else if (key === 'radius') {
+        handleCircleNumberChange(key as CircleKeys, value)
+      } else {
+        handleNumberChange(key as SharedShapeKeys, value)
+      }
+    },
+    [handleNumberChange, handleRectNumberChange, handleCircleNumberChange]
+  )
 
   const panelContent = (
     <>
@@ -56,12 +137,12 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
             <input
               type="color"
               value={selectedShape.fill}
-              onChange={(e) => updateProp('fill', e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleColorInputChange('fill', e)}
             />
             <input
               type="text"
               value={selectedShape.fill}
-              onChange={(e) => updateProp('fill', e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleColorInputChange('fill', e)}
               className="text-input glass-input"
             />
           </div>
@@ -74,12 +155,12 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
           <input
             type="color"
             value={selectedShape.stroke}
-            onChange={(e) => updateProp('stroke', e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleColorInputChange('stroke', e)}
           />
           <input
             type="text"
             value={selectedShape.stroke}
-            onChange={(e) => updateProp('stroke', e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleColorInputChange('stroke', e)}
             className="text-input glass-input"
           />
         </div>
@@ -92,19 +173,19 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
           min="0"
           max="50"
           value={selectedShape.strokeWidth}
-          onChange={(e) => updateProp('strokeWidth', parseFloat(e.target.value) || 0)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('strokeWidth', e, 0)}
           className="number-input glass-input"
         />
       </div>
 
       <div className="property-group">
-        <label>旋转角度</label>
+        <label>旋转角度 (°)</label>
         <input
           type="number"
           min="0"
           max="360"
           value={Math.round(selectedShape.rotation)}
-          onChange={(e) => updateProp('rotation', parseFloat(e.target.value) || 0)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('rotation', e, 0)}
           className="number-input glass-input"
         />
       </div>
@@ -117,7 +198,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               type="number"
               min="1"
               value={(selectedShape as RectShape).width}
-              onChange={(e) => updateProp('width', parseFloat(e.target.value) || 1)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('width', e, 1)}
               className="number-input glass-input"
             />
           </div>
@@ -127,7 +208,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               type="number"
               min="1"
               value={(selectedShape as RectShape).height}
-              onChange={(e) => updateProp('height', parseFloat(e.target.value) || 1)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('height', e, 1)}
               className="number-input glass-input"
             />
           </div>
@@ -137,7 +218,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               type="number"
               min="0"
               value={(selectedShape as RectShape).rx}
-              onChange={(e) => updateProp('rx', parseFloat(e.target.value) || 0)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('rx', e, 0)}
               className="number-input glass-input"
             />
           </div>
@@ -151,7 +232,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
             type="number"
             min="1"
             value={(selectedShape as CircleShape).radius}
-            onChange={(e) => updateProp('radius', parseFloat(e.target.value) || 1)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('radius', e, 1)}
             className="number-input glass-input"
           />
         </div>
@@ -162,7 +243,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
         <input
           type="number"
           value={Math.round(selectedShape.x)}
-          onChange={(e) => updateProp('x', parseFloat(e.target.value) || 0)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('x', e, 0)}
           className="number-input glass-input"
         />
       </div>
@@ -172,7 +253,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
         <input
           type="number"
           value={Math.round(selectedShape.y)}
-          onChange={(e) => updateProp('y', parseFloat(e.target.value) || 0)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('y', e, 0)}
           className="number-input glass-input"
         />
       </div>
