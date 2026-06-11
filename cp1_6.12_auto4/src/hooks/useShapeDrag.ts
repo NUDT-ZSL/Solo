@@ -10,8 +10,8 @@ interface UseShapeDragOptions {
 
 interface UseShapeDragResult {
   dragState: React.MutableRefObject<DragState>
-  startDrag: (e: React.MouseEvent<SVGGElement>, shape: Shape) => void
-  updateDrag: (e: React.MouseEvent<SVGSVGElement>) => void
+  startDrag: (e: React.MouseEvent<SVGElement>, shape: Shape) => void
+  updateDrag: (e: React.MouseEvent<SVGElement>) => void
   isDragging: () => boolean
 }
 
@@ -30,7 +30,7 @@ export function useShapeDrag({
   })
 
   const startDrag = useCallback(
-    (e: React.MouseEvent<SVGGElement>, shape: Shape) => {
+    (e: React.MouseEvent<SVGElement>, shape: Shape) => {
       const point = getSvgPoint(e.clientX, e.clientY)
       dragState.current = {
         isDragging: true,
@@ -46,7 +46,7 @@ export function useShapeDrag({
   )
 
   const updateDrag = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    (e: React.MouseEvent<SVGElement>) => {
       if (!dragState.current.isDragging || !selectedId) return
       const point = getSvgPoint(e.clientX, e.clientY)
       const dx = point.x - dragState.current.startX

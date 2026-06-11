@@ -180,14 +180,25 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
       <div className="property-group">
         <label>旋转角度 (°)</label>
-        <input
-          type="number"
-          min="0"
-          max="360"
-          value={Math.round(selectedShape.rotation)}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('rotation', e, 0)}
-          className="number-input glass-input"
-        />
+        <div className="rotation-control">
+          <input
+            type="range"
+            min="0"
+            max="360"
+            step="1"
+            value={Math.round(selectedShape.rotation)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('rotation', e, 0)}
+            className="rotation-slider glass-input"
+          />
+          <input
+            type="number"
+            min="0"
+            max="360"
+            value={Math.round(selectedShape.rotation)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberInputChange('rotation', e, 0)}
+            className="number-input glass-input rotation-number"
+          />
+        </div>
       </div>
 
       {selectedShape.type === 'rect' && (

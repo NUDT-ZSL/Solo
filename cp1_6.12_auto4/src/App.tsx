@@ -17,6 +17,39 @@ interface SavedState {
   timestamp: number
 }
 
+function saveToLocalStorage(state: SavedState): boolean {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    return true
+  } catch (e) {
+    if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+      console.warn('localStorage 存储空间已满，清理旧数据后重试')
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+        return true
+      } catch {
+        console.error('localStorage 写入失败，即使清理后仍无法保存')
+        return false
+      }
+    }
+    console.error('localStorage 写入失败:', e)
+    return false
+  }
+}
+
+function loadFromLocalStorage(): SavedState | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      return JSON.parse(saved) as SavedState
+    }
+  } catch (e) {
+    console.error('localStorage 读取失败:', e)
+  }
+  return null
+}
+
 const App: React.FC = () => {
   const [graphics, setGraphics] = useState<Shape[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -31,56 +64,53 @@ const App: React.FC = () => {
   const historyRef = useRef(new HistoryManager<Shape[]>(20))
   const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const graphicsRef = useRef(graphics)
+  const zoomRef = useRef(zoom)
+  const panXRef = useRef(panX)
+  const panYRef = useRef(panY)
+
+  useEffect(() => { graphicsRef.current = graphics }, [graphics])
+  useEffect(() => { zoomRef.current = zoom }, [zoom])
+  useEffect(() => { panXRef.current = panX }, [panX])
+  useEffect(() => { panYRef.current = panY }, [panY])
+
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const state: SavedState = JSON.parse(saved)
-        if (state.graphics && state.graphics.length > 0) {
-          setGraphics(state.graphics)
-          setZoom(state.zoom || 1)
-          setPanX(state.panX || 0)
-          setPanY(state.panY || 0)
-          setShowRestoreToast(true)
-          setTimeout(() => setShowRestoreToast(false), 3000)
-        }
-      }
-    } catch (e) {
-      console.error('Failed to restore state:', e)
+    const state = loadFromLocalStorage()
+    if (state && state.graphics && state.graphics.length > 0) {
+      setGraphics(state.graphics)
+      setZoom(state.zoom || 1)
+      setPanX(state.panX || 0)
+      setPanY(state.panY || 0)
+      setShowRestoreToast(true)
+      setTimeout(() => setShowRestoreToast(false), 3000)
     }
   }, [])
 
   useEffect(() => {
     saveTimerRef.current = setInterval(() => {
-      try {
-        const state: SavedState = {
-          graphics,
-          zoom,
-          panX,
-          panY,
-          timestamp: Date.now()
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-      } catch (e) {
-        console.error('Failed to autosave:', e)
-      }
+      saveToLocalStorage({
+        graphics: graphicsRef.current,
+        zoom: zoomRef.current,
+        panX: panXRef.current,
+        panY: panYRef.current,
+        timestamp: Date.now()
+      })
     }, 10000)
 
     return () => {
       if (saveTimerRef.current) {
         clearInterval(saveTimerRef.current)
+        saveTimerRef.current = null
       }
     }
-  }, [graphics, zoom, panX, panY])
+  }, [])
 
   const commitHistory = useCallback(() => {
     historyRef.current.push(graphics)
@@ -128,26 +158,6 @@ const App: React.FC = () => {
       setGraphics(next)
     }
   }, [graphics])
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault()
-        handleUndo()
-      } else if ((e.ctrlKey || e.metaKey) && ((e.key === 'y') || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault()
-        handleRedo()
-      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
-        if (e.key === 'v' || e.key === 'V') setCurrentTool('select')
-        else if (e.key === 'r' || e.key === 'R') setCurrentTool('rect')
-        else if (e.key === 'c' || e.key === 'C') setCurrentTool('circle')
-        else if (e.key === 'l' || e.key === 'L') setCurrentTool('line')
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleUndo, handleRedo])
 
   const handleExport = useCallback(() => {
     const svgContent = exportGraphicsToSvg(graphics)

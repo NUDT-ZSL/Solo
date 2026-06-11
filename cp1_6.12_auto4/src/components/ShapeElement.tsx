@@ -6,7 +6,7 @@ interface ShapeElementProps {
   shape: Shape
   currentTool: 'select' | 'rect' | 'circle' | 'line'
   isTemp?: boolean
-  onShapeMouseDown?: (e: React.MouseEvent<SVGGElement>, shape: Shape) => void
+  onShapeMouseDown?: (e: React.MouseEvent<SVGElement>, shape: Shape) => void
   children?: React.ReactNode
 }
 
@@ -77,7 +77,7 @@ export const ShapeElement: React.FC<ShapeElementProps> = ({
   return (
     <g
       key={shape.id}
-      onMouseDown={(e: React.MouseEvent<SVGGElement>) => {
+      onMouseDown={(e: React.MouseEvent<SVGElement>) => {
         if (onShapeMouseDown) {
           onShapeMouseDown(e, shape)
         }

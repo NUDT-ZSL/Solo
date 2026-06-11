@@ -11,8 +11,8 @@ interface UseShapeResizeOptions {
 
 interface UseShapeResizeResult {
   resizeState: React.MutableRefObject<ResizeState>
-  startResize: (e: React.MouseEvent<SVGRectElement | SVGCircleElement>, handle: string) => void
-  updateResize: (e: React.MouseEvent<SVGSVGElement>) => void
+  startResize: (e: React.MouseEvent<SVGElement>, handle: string) => void
+  updateResize: (e: React.MouseEvent<SVGElement>) => void
   isResizing: () => boolean
 }
 
@@ -31,7 +31,7 @@ export function useShapeResize({
   })
 
   const startResize = useCallback(
-    (e: React.MouseEvent<SVGRectElement | SVGCircleElement>, handle: string) => {
+    (e: React.MouseEvent<SVGElement>, handle: string) => {
       e.stopPropagation()
       const selectedShape = graphics.find((s) => s.id === selectedId)
       if (!selectedShape) return
@@ -49,7 +49,7 @@ export function useShapeResize({
   )
 
   const updateResize = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    (e: React.MouseEvent<SVGElement>) => {
       if (!resizeState.current.isResizing || !resizeState.current.originalShape || !selectedId) return
 
       const original = resizeState.current.originalShape

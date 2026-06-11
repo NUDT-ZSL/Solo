@@ -11,8 +11,8 @@ interface UseShapeRotateOptions {
 
 interface UseShapeRotateResult {
   rotateState: React.MutableRefObject<RotateState>
-  startRotate: (e: React.MouseEvent<SVGGElement>) => void
-  updateRotate: (e: React.MouseEvent<SVGSVGElement>) => void
+  startRotate: (e: React.MouseEvent<SVGElement>) => void
+  updateRotate: (e: React.MouseEvent<SVGElement>) => void
   isRotating: () => boolean
 }
 
@@ -30,7 +30,7 @@ export function useShapeRotate({
   })
 
   const startRotate = useCallback(
-    (e: React.MouseEvent<SVGGElement>) => {
+    (e: React.MouseEvent<SVGElement>) => {
       e.stopPropagation()
       const selectedShape = graphics.find((s) => s.id === selectedId)
       if (!selectedShape) return
@@ -50,7 +50,7 @@ export function useShapeRotate({
   )
 
   const updateRotate = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    (e: React.MouseEvent<SVGElement>) => {
       if (!rotateState.current.isRotating || !selectedId) return
       const point = getSvgPoint(e.clientX, e.clientY)
       const angle = Math.atan2(

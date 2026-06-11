@@ -1,11 +1,11 @@
 import React from 'react'
-import type { Shape, RectShape, CircleShape, LineShape } from '../types'
+import type { Shape, LineShape } from '../types'
 import { getShapeBoundingBox } from '../utils/helpers'
 
 interface SelectionHandlesProps {
   shape: Shape
-  onResizeMouseDown: (e: React.MouseEvent<SVGRectElement | SVGCircleElement>, handle: string) => void
-  onRotateMouseDown: (e: React.MouseEvent<SVGGElement>) => void
+  onResizeMouseDown: (e: React.MouseEvent<SVGElement>, handle: string) => void
+  onRotateMouseDown: (e: React.MouseEvent<SVGElement>) => void
 }
 
 export const SelectionHandles: React.FC<SelectionHandlesProps> = ({
@@ -39,7 +39,7 @@ export const SelectionHandles: React.FC<SelectionHandlesProps> = ({
             y={bbox.minY - 8}
             width="12"
             height="12"
-            onMouseDown={(e: React.MouseEvent<SVGRectElement>) => onResizeMouseDown(e, 'tl')}
+            onMouseDown={(e: React.MouseEvent<SVGElement>) => onResizeMouseDown(e, 'tl')}
             style={{ cursor: 'nw-resize' }}
           />
           <rect
@@ -48,7 +48,7 @@ export const SelectionHandles: React.FC<SelectionHandlesProps> = ({
             y={bbox.minY - 8}
             width="12"
             height="12"
-            onMouseDown={(e: React.MouseEvent<SVGRectElement>) => onResizeMouseDown(e, 'tr')}
+            onMouseDown={(e: React.MouseEvent<SVGElement>) => onResizeMouseDown(e, 'tr')}
             style={{ cursor: 'ne-resize' }}
           />
           <rect
@@ -57,7 +57,7 @@ export const SelectionHandles: React.FC<SelectionHandlesProps> = ({
             y={bbox.maxY - 4}
             width="12"
             height="12"
-            onMouseDown={(e: React.MouseEvent<SVGRectElement>) => onResizeMouseDown(e, 'bl')}
+            onMouseDown={(e: React.MouseEvent<SVGElement>) => onResizeMouseDown(e, 'bl')}
             style={{ cursor: 'sw-resize' }}
           />
           <rect
@@ -66,7 +66,7 @@ export const SelectionHandles: React.FC<SelectionHandlesProps> = ({
             y={bbox.maxY - 4}
             width="12"
             height="12"
-            onMouseDown={(e: React.MouseEvent<SVGRectElement>) => onResizeMouseDown(e, 'br')}
+            onMouseDown={(e: React.MouseEvent<SVGElement>) => onResizeMouseDown(e, 'br')}
             style={{ cursor: 'se-resize' }}
           />
         </>
@@ -77,7 +77,7 @@ export const SelectionHandles: React.FC<SelectionHandlesProps> = ({
             cx={shape.x}
             cy={shape.y}
             r="6"
-            onMouseDown={(e: React.MouseEvent<SVGCircleElement>) => onResizeMouseDown(e, 'l')}
+            onMouseDown={(e: React.MouseEvent<SVGElement>) => onResizeMouseDown(e, 'l')}
             style={{ cursor: 'move' }}
           />
           <circle
@@ -85,7 +85,7 @@ export const SelectionHandles: React.FC<SelectionHandlesProps> = ({
             cx={(shape as LineShape).x2}
             cy={(shape as LineShape).y2}
             r="6"
-            onMouseDown={(e: React.MouseEvent<SVGCircleElement>) => onResizeMouseDown(e, 'r')}
+            onMouseDown={(e: React.MouseEvent<SVGElement>) => onResizeMouseDown(e, 'r')}
             style={{ cursor: 'move' }}
           />
         </>

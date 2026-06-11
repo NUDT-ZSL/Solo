@@ -56,49 +56,14 @@ export const Editor: React.FC<EditorProps> = ({
     [zoom, panX, panY]
   )
 
-  const canvasPanZoom = useCanvasPanZoom({
-    zoom,
-    panX,
-    panY,
-    onCanvasStateChange,
-    svgRef
-  })
-
-  const shapeDrag = useShapeDrag({
-    graphics,
-    selectedId,
-    onGraphicsChange,
-    getSvgPoint
-  })
-
-  const shapeResize = useShapeResize({
-    graphics,
-    selectedId,
-    onGraphicsChange,
-    getSvgPoint
-  })
-
-  const shapeRotate = useShapeRotate({
-    graphics,
-    selectedId,
-    onGraphicsChange,
-    getSvgPoint
-  })
-
-  const shapeDraw = useShapeDraw({
-    currentTool,
-    onGraphicsChange,
-    onSelectionChange,
-    onCommitChange,
-    graphics
-  })
+  const panZoom = useCanvasPanZoom({ zoom, panX, panY, onCanvasStateChange, svgRef })
+  const drag = useShapeDrag({ graphics, selectedId, onGraphicsChange, getSvgPoint })
+  const resize = useShapeResize({ graphics, selectedId, onGraphicsChange, getSvgPoint })
+  const rotate = useShapeRotate({ graphics, selectedId, onGraphicsChange, getSvgPoint })
+  const draw = useShapeDraw({ currentTool, onGraphicsChange, onSelectionChange, onCommitChange, graphics })
 
   const isInteracting =
-    shapeDrag.isDragging() ||
-    shapeResize.isResizing() ||
-    shapeRotate.isRotating() ||
-    shapeDraw.isDrawing ||
-    canvasPanZoom.panState.current.isPanning
+    drag.isDragging() || resize.isResizing() || rotate.isRotating() || draw.isDrawing || panZoom.panState.current.isPanning
 
   useEditorKeyboard({
     selectedId,
@@ -109,176 +74,100 @@ export const Editor: React.FC<EditorProps> = ({
     onUndo,
     onRedo,
     onToolChange,
-    onSpaceChange: canvasPanZoom.setSpacePressed,
-    isSpacePressed: canvasPanZoom.spacePressed,
+    onSpaceChange: panZoom.setSpacePressed,
+    isSpacePressed: panZoom.spacePressed,
     isInteracting,
-    onCursorChange: canvasPanZoom.setCursor
+    onCursorChange: panZoom.setCursor
   })
 
-  const handleCanvasMouseDown = useCallback(
+  const handleMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (e.button !== 0) return
-
       const point = getSvgPoint(e.clientX, e.clientY)
-      const isBgClick = (e.target as Element).classList.contains('svg-canvas-bg')
+      const isBg = (e.target as Element).classList.contains('svg-canvas-bg')
 
-      if (canvasPanZoom.spacePressed || isBgClick) {
-        if (canvasPanZoom.spacePressed) {
-          canvasPanZoom.startPanning(e.clientX, e.clientY)
-          return
-        }
-      }
-
-      if (currentTool !== 'select') {
-        shapeDraw.startDrawing(point)
+      if (panZoom.spacePressed) {
+        panZoom.startPanning(e.clientX, e.clientY)
         return
       }
 
-      if (isBgClick && currentTool === 'select') {
+      if (currentTool !== 'select') {
+        draw.startDrawing(point)
+        return
+      }
+
+      if (isBg) {
         onSelectionChange(null)
       }
     },
-    [
-      currentTool,
-      canvasPanZoom.spacePressed,
-      getSvgPoint,
-      canvasPanZoom,
-      shapeDraw,
-      onSelectionChange
-    ]
+    [currentTool, panZoom, getSvgPoint, draw, onSelectionChange]
   )
 
-  const handleCanvasMouseMove = useCallback(
+  const handleMouseMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       const point = getSvgPoint(e.clientX, e.clientY)
       setMousePos(point)
 
-      if (canvasPanZoom.panState.current.isPanning) {
-        canvasPanZoom.updatePanning(e.clientX, e.clientY)
+      if (panZoom.panState.current.isPanning) {
+        panZoom.updatePanning(e.clientX, e.clientY)
         return
       }
-
-      if (shapeDraw.isDrawing) {
-        shapeDraw.updateDrawing(point)
+      if (draw.isDrawing) {
+        draw.updateDrawing(point)
         return
       }
-
-      if (shapeDrag.dragState.current.isDragging) {
-        shapeDrag.updateDrag(e as unknown as React.MouseEvent<SVGGElement>)
+      if (drag.dragState.current.isDragging) {
+        drag.updateDrag(e as React.MouseEvent<SVGElement>)
         return
       }
-
-      if (shapeResize.resizeState.current.isResizing) {
-        shapeResize.updateResize(e)
+      if (resize.resizeState.current.isResizing) {
+        resize.updateResize(e as React.MouseEvent<SVGElement>)
         return
       }
-
-      if (shapeRotate.rotateState.current.isRotating) {
-        shapeRotate.updateRotate(e)
+      if (rotate.rotateState.current.isRotating) {
+        rotate.updateRotate(e as React.MouseEvent<SVGElement>)
         return
       }
     },
-    [
-      getSvgPoint,
-      canvasPanZoom,
-      shapeDraw,
-      shapeDrag,
-      shapeResize,
-      shapeRotate
-    ]
+    [getSvgPoint, panZoom, draw, drag, resize, rotate]
   )
 
-  const handleCanvasMouseUp = useCallback(
+  const handleMouseUp = useCallback(
     (_e: React.MouseEvent<SVGSVGElement>) => {
-      if (canvasPanZoom.panState.current.isPanning) {
-        canvasPanZoom.endPanning()
-        if (!canvasPanZoom.spacePressed) {
-          canvasPanZoom.setCursor('default')
-        } else {
-          canvasPanZoom.setCursor('grab')
-        }
+      if (panZoom.panState.current.isPanning) {
+        panZoom.endPanning()
+        panZoom.setCursor(panZoom.spacePressed ? 'grab' : 'default')
         return
       }
-
-      if (shapeDraw.isDrawing) {
-        shapeDraw.endDrawing()
+      if (draw.isDrawing) {
+        draw.endDrawing()
         return
       }
-
-      if (shapeDrag.isDragging() || shapeResize.isResizing() || shapeRotate.isRotating()) {
-        shapeDrag.dragState.current.isDragging = false
-        shapeResize.resizeState.current.isResizing = false
-        shapeRotate.rotateState.current.isRotating = false
-        canvasPanZoom.setCursor('default')
+      const wasInteracting = drag.isDragging() || resize.isResizing() || rotate.isRotating()
+      if (wasInteracting) {
+        drag.dragState.current.isDragging = false
+        resize.resizeState.current.isResizing = false
+        rotate.rotateState.current.isRotating = false
+        panZoom.setCursor('default')
         onCommitChange()
       }
     },
-    [
-      canvasPanZoom,
-      shapeDraw,
-      shapeDrag,
-      shapeResize,
-      shapeRotate,
-      onCommitChange
-    ]
-  )
-
-  const handleCanvasMouseLeave = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      handleCanvasMouseUp(e)
-    },
-    [handleCanvasMouseUp]
+    [panZoom, draw, drag, resize, rotate, onCommitChange]
   )
 
   const handleShapeMouseDown = useCallback(
-    (e: React.MouseEvent<SVGGElement>, shape: Shape) => {
+    (e: React.MouseEvent<SVGElement>, shape: Shape) => {
       e.stopPropagation()
       if (currentTool !== 'select') return
-
       onSelectionChange(shape.id)
-      shapeDrag.startDrag(e, shape)
-      canvasPanZoom.setCursor('move')
+      drag.startDrag(e, shape)
+      panZoom.setCursor('move')
     },
-    [currentTool, onSelectionChange, shapeDrag, canvasPanZoom]
+    [currentTool, onSelectionChange, drag, panZoom]
   )
 
-  const selectedShape = graphics.find((s) => s.id === selectedId)
-
-  const renderShapeWithSelection = (shape: Shape) => {
-    const isSelected = shape.id === selectedId
-    return (
-      <ShapeElement
-        key={shape.id}
-        shape={shape}
-        currentTool={currentTool}
-        onShapeMouseDown={handleShapeMouseDown}
-      >
-        {isSelected && (
-          <SelectionHandles
-            shape={shape}
-            onResizeMouseDown={shapeResize.startResize}
-            onRotateMouseDown={shapeRotate.startRotate}
-          />
-        )}
-      </ShapeElement>
-    )
-  }
-
-  const renderTempShape = () => {
-    if (!shapeDraw.tempShape) return null
-    return (
-      <ShapeElement
-        shape={shapeDraw.tempShape}
-        currentTool={currentTool}
-        isTemp={true}
-      />
-    )
-  }
-
   const finalCursor =
-    shapeDrag.isDragging() || shapeResize.isResizing() || shapeRotate.isRotating()
-      ? 'move'
-      : canvasPanZoom.cursor
+    drag.isDragging() || resize.isResizing() || rotate.isRotating() ? 'move' : panZoom.cursor
 
   return (
     <div className="editor-container">
@@ -286,11 +175,11 @@ export const Editor: React.FC<EditorProps> = ({
         ref={svgRef}
         className="svg-canvas"
         style={{ cursor: finalCursor }}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onMouseUp={handleCanvasMouseUp}
-        onMouseLeave={handleCanvasMouseLeave}
-        onWheel={canvasPanZoom.handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={panZoom.handleWheel}
       >
         <defs>
           <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -305,23 +194,24 @@ export const Editor: React.FC<EditorProps> = ({
           height="100%"
           fill="url(#grid)"
           style={{
-            cursor: canvasPanZoom.spacePressed
-              ? 'grab'
-              : currentTool === 'select'
-              ? 'default'
-              : 'crosshair'
+            cursor: panZoom.spacePressed ? 'grab' : currentTool === 'select' ? 'default' : 'crosshair'
           }}
         />
         <g transform={`translate(${panX}, ${panY}) scale(${zoom})`}>
-          {graphics.map(renderShapeWithSelection)}
-          {renderTempShape()}
+          {graphics.map((shape) => {
+            const isSelected = shape.id === selectedId
+            return (
+              <ShapeElement key={shape.id} shape={shape} currentTool={currentTool} onShapeMouseDown={handleShapeMouseDown}>
+                {isSelected && (
+                  <SelectionHandles shape={shape} onResizeMouseDown={resize.startResize} onRotateMouseDown={rotate.startRotate} />
+                )}
+              </ShapeElement>
+            )
+          })}
+          {draw.tempShape && <ShapeElement shape={draw.tempShape} currentTool={currentTool} isTemp={true} />}
         </g>
       </svg>
-      <CanvasStatusBar
-        zoom={zoom}
-        mousePos={mousePos}
-        graphicsCount={graphics.length}
-      />
+      <CanvasStatusBar zoom={zoom} mousePos={mousePos} graphicsCount={graphics.length} />
     </div>
   )
 }
