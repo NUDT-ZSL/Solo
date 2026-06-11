@@ -861,7 +861,10 @@ function gameLoop(timestamp: number): void {
   const delta = lastTimestamp ? Math.min(timestamp - lastTimestamp, 100) : 16;
   lastTimestamp = timestamp;
 
-  if (!state.paused && !state.showResult && !state.showLevelSelect) {
+  const gameActive = !state.paused && !state.showResult && !state.showLevelSelect;
+  board.setInteractive(gameActive);
+
+  if (gameActive) {
     state.timeLeft -= delta / 1000;
     if (state.timeLeft <= 0) {
       state.timeLeft = 0;
