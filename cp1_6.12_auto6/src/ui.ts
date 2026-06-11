@@ -233,7 +233,7 @@ export interface RaycasterHandler {
   update: (
     camera: THREE.Camera,
     atoms: THREE.Mesh[],
-    onAtomClick: (atom: THREE.Mesh, atomIndex: number) => void
+    onAtomClick: (atom: THREE.Mesh, atomIndex: number, event: MouseEvent) => void
   ) => void;
   dispose: () => void;
 }
@@ -245,7 +245,7 @@ export function setupRaycaster(
   const mouse = new THREE.Vector2();
   let currentAtoms: THREE.Mesh[] = [];
   let currentCamera: THREE.Camera | null = null;
-  let currentOnClick: ((atom: THREE.Mesh, atomIndex: number) => void) | null = null;
+  let currentOnClick: ((atom: THREE.Mesh, atomIndex: number, event: MouseEvent) => void) | null = null;
 
   function handleClick(event: MouseEvent) {
     if (!currentCamera || !currentOnClick) return;
@@ -261,7 +261,8 @@ export function setupRaycaster(
       const hitObject = intersects[0].object as THREE.Mesh;
       const atomIndex = currentAtoms.indexOf(hitObject);
       if (atomIndex !== -1) {
-        currentOnClick(hitObject, atomIndex);
+        event.stopPropagation();
+        currentOnClick(hitObject, atomIndex, event);
       }
     }
   }
@@ -272,7 +273,7 @@ export function setupRaycaster(
     update: (
       camera: THREE.Camera,
       atoms: THREE.Mesh[],
-      onAtomClick: (atom: THREE.Mesh, atomIndex: number) => void
+      onAtomClick: (atom: THREE.Mesh, atomIndex: number, event: MouseEvent) => void
     ) => {
       currentCamera = camera;
       currentAtoms = atoms;

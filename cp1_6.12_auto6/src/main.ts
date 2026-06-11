@@ -138,7 +138,7 @@ async function loadMolecule(moleculeId: string): Promise<void> {
   raycasterHandler.update(
     camera,
     currentMolecule.userData.atoms,
-    handleAtomClick
+    (atom, idx, _evt) => handleAtomClick(atom, idx)
   );
 
   await fadeInMolecule(currentMolecule, 800);
@@ -154,6 +154,7 @@ function handleAtomClick(atom: THREE.Mesh, atomIndex: number): void {
     scene.remove(selectionRing);
     selectionRing.geometry.dispose();
     (selectionRing.material as THREE.Material).dispose();
+    selectionRing = null;
   }
 
   selectionRing = createSelectionRing(atom);
@@ -161,8 +162,6 @@ function handleAtomClick(atom: THREE.Mesh, atomIndex: number): void {
 
   const atomInfo = getAtomInfo(atomData, atomIndex, moleculeData);
   infoCard.update(atomInfo);
-
-  event?.stopPropagation();
 }
 
 function handleDocumentClick(event: MouseEvent): void {
