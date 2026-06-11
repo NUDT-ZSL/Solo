@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>墨影书道 - 交互式书法创作</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #F5E6CA;
+      --bg-secondary: #E8D8B8;
+      --text-title: #3E2723;
+      --text-body: #5D4037;
+      --text-muted: #8D6E63;
+      --ink-dark: #1A1A1A;
+      --ink-light: #5A5A5A;
+      --ink-cinnabar: #C04040;
+      --ink-blue: #2E6B8A;
+      --undo-start: #1A237E;
+      --undo-end: #1B5E20;
+      --glass-bg: rgba(245, 230, 202, 0.75);
+      --glass-border: rgba(62, 39, 35, 0.12);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.1);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.15);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.2);
+      --radius: 12px;
+      --toolbar-width: 240px;
+    }
+
+    body {
+      font-family: 'Ma Shan Zheng', serif;
+      background-color: var(--bg-primary);
+      background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(232,216,184,0.6) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(232,216,184,0.4) 0%, transparent 40%);
+      min-height: 100vh;
+      color: var(--text-body);
+      overflow-x: hidden;
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 24px;
+      position: relative;
+    }
+
+    .app-title {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 24px;
+      color: var(--text-title);
+      letter-spacing: 8px;
+      position: relative;
+    }
+
+    .app-title::before,
+    .app-title::after {
+      content: '◆';
+      font-size: 10px;
+      margin: 0 12px;
+      opacity: 0.4;
+    }
+
+    .app-subtitle {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      letter-spacing: 4px;
+    }
+
+    .app-layout {
+      display: flex;
+      gap: 16px;
+      padding: 0 24px 0 24px;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    .canvas-area {
+      flex: 1;
+      max-width: 900px;
+      position: relative;
+    }
+
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--glass-border);
+    }
+
+    .canvas-container canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #preview-canvas {
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    #main-canvas {
+      z-index: 1;
+    }
+
+    .toolbar {
+      width: var(--toolbar-width);
+      min-width: var(--toolbar-width);
+      background: var(--glass-bg);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: sticky;
+      top: 16px;
+    }
+
+    .toolbar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toolbar-label {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 14px;
+      color: var(--text-title);
+      letter-spacing: 2px;
+    }
+
+    .brush-slider-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brush-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: linear-gradient(to right, var(--bg-secondary), var(--text-title));
+      border-radius: 3px;
+      outline: none;
+    }
+
+    .brush-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      background: var(--text-title);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .brush-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 8px rgba(62,39,35,0.3);
+    }
+
+    .brush-size-val {
+      font-size: 13px;
+      color: var(--text-body);
+      min-width: 28px;
+      text-align: right;
+      font-family: monospace;
+    }
+
+    .ink-colors {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .ink-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+      position: relative;
+    }
+
+    .ink-btn:hover {
+      transform: scale(1.1);
+      box-shadow: var(--shadow-md);
+    }
+
+    .ink-btn.selected {
+      border-color: var(--text-title);
+      box-shadow: 0 0 0 3px rgba(62,39,35,0.15);
+    }
+
+    .ink-btn::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      background: inherit;
+    }
+
+    .texture-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .tex-btn {
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 14px;
+      color: var(--text-body);
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 2px;
+    }
+
+    .tex-btn:hover {
+      background: rgba(255,255,255,0.5);
+      transform: scale(1.03);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .tex-btn.selected {
+      background: rgba(62,39,35,0.08);
+      border-color: var(--text-title);
+      color: var(--text-title);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      flex: 1;
+      min-width: 45%;
+      padding: 10px 8px;
+      background: rgba(255,255,255,0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 14px;
+      color: var(--text-body);
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .action-btn:hover {
+      background: rgba(255,255,255,0.5);
+      transform: scale(1.05);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .action-btn.disabled {
+      opacity: 0.35;
+      cursor: default;
+      transform: none !important;
+    }
+
+    .action-btn.export-btn {
+      background: rgba(62,39,35,0.08);
+      border-color: var(--text-title);
+      color: var(--text-title);
+    }
+
+    .action-btn.export-btn:hover {
+      background: rgba(62,39,35,0.15);
+    }
+
+    .action-icon {
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .status-bar {
+      height: 48px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-top: 1px solid var(--glass-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      padding: 0 24px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .status-item .label {
+      letter-spacing: 1px;
+    }
+
+    .status-item .value {
+      color: var(--text-body);
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .undo-progress {
+      position: fixed;
+      bottom: 48px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: rgba(0,0,0,0.05);
+      z-index: 10;
+    }
+
+    .undo-progress-bar {
+      height: 100%;
+      background: linear-gradient(to right, var(--undo-start), var(--undo-end));
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .export-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+
+    .export-modal.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .export-modal-content {
+      background: var(--bg-primary);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 560px;
+      width: 90%;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .export-modal-title {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 20px;
+      color: var(--text-title);
+      letter-spacing: 4px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .export-preview {
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      border: 1px solid var(--glass-border);
+    }
+
+    .export-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .export-options {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .export-option {
+      flex: 1;
+    }
+
+    .export-option label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+
+    .export-option select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.5);
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 14px;
+      color: var(--text-body);
+      outline: none;
+    }
+
+    .export-option select:focus {
+      border-color: var(--text-title);
+    }
+
+    .export-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .export-action-btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 16px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      border: 1px solid var(--glass-border);
+      transition: all 0.15s;
+    }
+
+    .export-action-btn.confirm {
+      background: var(--text-title);
+      color: var(--bg-primary);
+      border-color: var(--text-title);
+    }
+
+    .export-action-btn.confirm:hover {
+      opacity: 0.85;
+    }
+
+    .export-action-btn.cancel {
+      background: rgba(255,255,255,0.3);
+      color: var(--text-body);
+    }
+
+    .export-action-btn.cancel:hover {
+      background: rgba(255,255,255,0.5);
+    }
+
+    .export-loader {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+
+    .export-loader.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .loader-spinner {
+      width: 60px;
+      height: 60px;
+      position: relative;
+      animation: spin 1s linear infinite;
+    }
+
+    .loader-spinner::before,
+    .loader-spinner::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .loader-spinner::before {
+      inset: 0;
+      border: 3px solid transparent;
+      border-top-color: var(--bg-primary);
+      border-right-color: var(--bg-primary);
+    }
+
+    .loader-spinner::after {
+      inset: 8px;
+      border: 2px solid transparent;
+      border-bottom-color: rgba(245,230,202,0.5);
+      border-left-color: rgba(245,230,202,0.5);
+    }
+
+    .loader-dots {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      animation: spin-reverse 1s linear infinite;
+    }
+
+    .loader-dot {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: var(--bg-primary);
+      border-radius: 50%;
+    }
+
+    .loader-dot:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
+    .loader-dot:nth-child(2) { top: 50%; right: 0; transform: translateY(-50%); }
+    .loader-dot:nth-child(3) { bottom: 0; left: 50%; transform: translateX(-50%); }
+    .loader-dot:nth-child(4) { top: 50%; left: 0; transform: translateY(-50%); }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spin-reverse {
+      to { transform: rotate(-360deg); }
+    }
+
+    .mobile-drawer-toggle {
+      display: none;
+      position: fixed;
+      bottom: 56px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--glass-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow-md);
+      font-size: 20px;
+      color: var(--text-title);
+      cursor: pointer;
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s;
+    }
+
+    .mobile-drawer-toggle:hover {
+      transform: scale(1.1);
+    }
+
+    .main-content {
+      padding-bottom: 60px;
+    }
+
+    @media (max-width: 768px) {
+      .app-layout {
+        flex-direction: column;
+        padding: 0 12px;
+      }
+
+      .toolbar {
+        position: fixed;
+        bottom: 51px;
+        left: 0;
+        right: 0;
+        width: 100%;
+        min-width: unset;
+        border-radius: var(--radius) var(--radius) 0 0;
+        z-index: 30;
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+
+      .toolbar.drawer-open {
+        transform: translateY(0);
+      }
+
+      .mobile-drawer-toggle {
+        display: flex;
+      }
+
+      .canvas-area {
+        max-width: 100%;
+      }
+
+      .status-bar {
+        gap: 16px;
+        font-size: 11px;
+      }
+
+      .app-header {
+        padding: 12px 16px;
+      }
+
+      .app-title {
+        font-size: 20px;
+        letter-spacing: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="main-content">
+    <header class="app-header">
+      <div style="text-align: center;">
+        <h1 class="app-title">墨影书道</h1>
+        <p class="app-subtitle">交互式书法创作</p>
+      </div>
+    </header>
+
+    <div class="app-layout">
+      <div class="canvas-area">
+        <div class="canvas-container" id="canvas-container">
+          <canvas id="main-canvas"></canvas>
+          <canvas id="preview-canvas"></canvas>
+        </div>
+      </div>
+
+      <aside class="toolbar" id="toolbar">
+        <div class="toolbar-section">
+          <span class="toolbar-label">笔刷大小</span>
+          <div class="brush-slider-wrapper">
+            <input type="range" id="brush-size" class="brush-slider" min="1" max="50" value="10" />
+            <span class="brush-size-val" id="brush-size-val">10</span>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-label">墨色</span>
+          <div class="ink-colors">
+            <button class="ink-btn selected" id="ink-1A1A1A" style="background: #1A1A1A;" title="浓墨"></button>
+            <button class="ink-btn" id="ink-5A5A5A" style="background: #5A5A5A;" title="淡墨"></button>
+            <button class="ink-btn" id="ink-C04040" style="background: #C04040;" title="朱砂"></button>
+            <button class="ink-btn" id="ink-2E6B8A" style="background: #2E6B8A;" title="石青"></button>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-label">宣纸纹理</span>
+          <div class="texture-buttons">
+            <button class="tex-btn selected" id="tex-danxuan">单宣</button>
+            <button class="tex-btn" id="tex-sajin">洒金</button>
+            <button class="tex-btn" id="tex-yunlong">云龙纸</button>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-label">操作</span>
+          <div class="action-buttons">
+            <button class="action-btn disabled" id="btn-undo">
+              <span class="action-icon">↶</span> 撤销
+            </button>
+            <button class="action-btn disabled" id="btn-redo">
+              <span class="action-icon">↷</span> 重做
+            </button>
+            <button class="action-btn" id="btn-clear">
+              <span class="action-icon">⊘</span> 清空
+            </button>
+            <button class="action-btn export-btn" id="btn-export">
+              <span class="action-icon">↓</span> 导出
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="undo-progress">
+    <div class="undo-progress-bar" id="undo-progress-bar"></div>
+  </div>
+
+  <footer class="status-bar">
+    <div class="status-item">
+      <span class="label">笔触</span>
+      <span class="value" id="status-width">0px</span>
+    </div>
+    <div class="status-item">
+      <span class="label">墨色</span>
+      <span class="value" id="status-ink">浓墨</span>
+    </div>
+    <div class="status-item">
+      <span class="label">撤销</span>
+      <span class="value" id="status-undo">0/50</span>
+    </div>
+  </footer>
+
+  <div class="export-modal" id="export-modal">
+    <div class="export-modal-content">
+      <div class="export-modal-title">导出作品</div>
+      <div class="export-preview">
+        <img id="export-preview-img" alt="预览" />
+      </div>
+      <div class="export-options">
+        <div class="export-option">
+          <label>分辨率</label>
+          <select id="export-resolution">
+            <option value="1">1x (1024×768)</option>
+            <option value="2">2x (2048×1536)</option>
+            <option value="4" selected>4x (4096×3072)</option>
+          </select>
+        </div>
+        <div class="export-option">
+          <label>格式</label>
+          <select id="export-format">
+            <option value="png">PNG</option>
+            <option value="svg">SVG</option>
+          </select>
+        </div>
+      </div>
+      <div class="export-actions">
+        <button class="export-action-btn cancel" id="export-cancel">取消</button>
+        <button class="export-action-btn confirm" id="export-confirm">确认导出</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="export-loader" id="export-loader">
+    <div class="loader-spinner">
+      <div class="loader-dots">
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="mobile-drawer-toggle" id="mobile-drawer-toggle" onclick="document.getElementById('toolbar').classList.toggle('drawer-open')">☰</button>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
