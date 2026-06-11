@@ -133,16 +133,53 @@ export function analyzeText(text: string): AnalysisResult {
 
 function splitSentences(text: string): Array<{ text: string; startIndex: number; endIndex: number }> {
   const sentences: Array<{ text: string; startIndex: number; endIndex: number }> = [];
-  const regex = /[^。！？；.!?;]+[。！？；.!?;]?/g;
-  let match;
 
-  while ((match = regex.exec(text)) !== null) {
-    const sentenceText = match[0].trim();
-    if (sentenceText.length > 0) {
+  const punctuation = new Set([
+    '。', '！', '？', '；',
+    '.', '!', '?', ';',
+    '…', '—', '\n', '\r'
+  ]);
+
+  let i = 0;
+  let sentenceStart = 0;
+
+  while (i < text.length) {
+    const char = text[i];
+
+    if (punctuation.has(char)) {
+      let end = i + 1;
+      while (end < text.length && punctuation.has(text[end])) {
+        end++;
+      }
+
+      const rawSentence = text.substring(sentenceStart, end);
+      const trimmed = rawSentence.trim();
+
+      if (trimmed.length > 0) {
+        const leadingSpaces = rawSentence.length - rawSentence.trimStart().length;
+        sentences.push({
+          text: trimmed,
+          startIndex: sentenceStart + leadingSpaces,
+          endIndex: sentenceStart + rawSentence.trimEnd().length
+        });
+      }
+
+      i = end;
+      sentenceStart = end;
+    } else {
+      i++;
+    }
+  }
+
+  if (sentenceStart < text.length) {
+    const rawSentence = text.substring(sentenceStart);
+    const trimmed = rawSentence.trim();
+    if (trimmed.length > 0) {
+      const leadingSpaces = rawSentence.length - rawSentence.trimStart().length;
       sentences.push({
-        text: sentenceText,
-        startIndex: match.index,
-        endIndex: match.index + match[0].length
+        text: trimmed,
+        startIndex: sentenceStart + leadingSpaces,
+        endIndex: sentenceStart + rawSentence.trimEnd().length
       });
     }
   }

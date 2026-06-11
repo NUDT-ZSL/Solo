@@ -38,12 +38,11 @@ interface BrushStroke {
 interface Ripple {
   x: number;
   y: number;
-  radius: number;
+  baseRadius: number;
   maxRadius: number;
   color: string;
-  alpha: number;
-  growing: boolean;
-  speed: number;
+  startTime: number;
+  duration: number;
 }
 
 interface ColorLayer {
@@ -142,6 +141,7 @@ export class InkRenderer {
 
   private triggerNearbyRipples(): void {
     const triggerRadius = 120;
+    const now = performance.now();
 
     for (const dot of this.dots) {
       const dist = Math.hypot(this.mouseX - dot.x, this.mouseY - dot.y);
@@ -151,12 +151,11 @@ export class InkRenderer {
         this.ripples.push({
           x: dot.x,
           y: dot.y,
-          radius: dot.baseRadius,
+          baseRadius: dot.baseRadius,
           maxRadius: dot.baseRadius * 1.5,
           color: dot.color,
-          alpha: 0.4,
-          growing: true,
-          speed: (dot.baseRadius * 2) / 400
+          startTime: now,
+          duration: 800
         });
       }
     }
@@ -177,8 +176,8 @@ export class InkRenderer {
 
       if (dist < stretchRadius) {
         const influence = 1 - dist / stretchRadius;
-        const stretchAmount = Math.min(0.2, influence * 0.2 * (moveDist / 10));
-        stroke.targetStretch = stretchAmount;
+        const stretchAmount = Math.min(0.2, influence * 0.2 * Math.min(1, moveDist / 10));
+        stroke.targetStretch = Math.max(0, Math.min(0.2, stretchAmount));
       }
     }
   }
@@ -293,24 +292,36 @@ export class InkRenderer {
     }
 
     if (totalScore > 0) {
-      let layerIndex = 0;
-      for (const emotion of emotions) {
-        if (overallEmotions[emotion] > 0) {
-          const ratio = overallEmotions[emotion] / totalScore;
-          const layerX = this.width * (0.3 + (layerIndex % 2) * 0.4 + (Math.random() - 0.5) * 0.2);
-          const layerY = this.height * (0.3 + Math.floor(layerIndex / 2) * 0.4 + (Math.random() - 0.5) * 0.2);
-          const layerRadius = Math.max(this.width, this.height) * 0.4 * (0.5 + ratio * 0.5);
+      const sortedEmotions = emotions
+        .filter(e => overallEmotions[e] > 0)
+        .sort((a, b) => overallEmotions[b] - overallEmotions[a]);
 
-          this.colorLayers.push({
-            x: layerX,
-            y: layerY,
-            radius: layerRadius,
-            color: emotionColors[emotion],
-            alpha: ratio * 0.15
-          });
-          layerIndex++;
-        }
-      }
+      const positions = [
+        { x: 0.35, y: 0.35 },
+        { x: 0.65, y: 0.40 },
+        { x: 0.50, y: 0.65 },
+        { x: 0.30, y: 0.60 },
+        { x: 0.70, y: 0.65 }
+      ];
+
+      sortedEmotions.forEach((emotion, idx) => {
+        const ratio = overallEmotions[emotion] / totalScore;
+        const pos = positions[idx % positions.length];
+        const jitterX = (Math.random() - 0.5) * 0.15;
+        const jitterY = (Math.random() - 0.5) * 0.15;
+        const layerX = this.width * (pos.x + jitterX);
+        const layerY = this.height * (pos.y + jitterY);
+        const baseRadius = Math.max(this.width, this.height) * 0.45;
+        const layerRadius = baseRadius * (0.6 + ratio * 0.6);
+
+        this.colorLayers.push({
+          x: layerX,
+          y: layerY,
+          radius: layerRadius,
+          color: emotionColors[emotion],
+          alpha: 0.08 + ratio * 0.20
+        });
+      });
     }
   }
 
@@ -336,11 +347,12 @@ export class InkRenderer {
   };
 
   private update(deltaTime: number): void {
+    const now = performance.now();
     const dt = deltaTime / 16.67;
 
     for (const dot of this.dots) {
-      const driftX = Math.sin((performance.now() + dot.seed) / 2000) * 0.3;
-      const driftY = Math.cos((performance.now() + dot.seed) / 2500) * 0.3;
+      const driftX = Math.sin((now + dot.seed) / 2000) * 0.3;
+      const driftY = Math.cos((now + dot.seed) / 2500) * 0.3;
       dot.x += driftX * dt;
       dot.y += driftY * dt;
 
@@ -365,23 +377,17 @@ export class InkRenderer {
 
     for (let i = this.ripples.length - 1; i >= 0; i--) {
       const ripple = this.ripples[i];
-      if (ripple.growing) {
-        ripple.radius += ripple.speed * dt;
-        if (ripple.radius >= ripple.maxRadius) {
-          ripple.growing = false;
-        }
-      } else {
-        ripple.radius -= ripple.speed * dt * 0.8;
-        ripple.alpha -= 0.015 * dt;
-        if (ripple.radius <= 0 || ripple.alpha <= 0) {
-          this.ripples.splice(i, 1);
-        }
+      const elapsed = now - ripple.startTime;
+      if (elapsed >= ripple.duration) {
+        this.ripples.splice(i, 1);
       }
     }
 
     for (const stroke of this.strokes) {
       stroke.stretchFactor += (stroke.targetStretch - stroke.stretchFactor) * 0.1 * dt;
+      stroke.stretchFactor = Math.max(0, Math.min(0.2, stroke.stretchFactor));
       stroke.targetStretch *= 0.98;
+      stroke.targetStretch = Math.max(0, Math.min(0.2, stroke.targetStretch));
     }
   }
 
@@ -391,37 +397,32 @@ export class InkRenderer {
     ctx.clearRect(0, 0, this.width, this.height);
 
     this.drawPaperBackground();
-    this.drawColorLayers();
-    this.drawStrokes();
-    this.drawRipples();
-    this.drawDots();
+    this.drawInkContent(ctx);
   }
 
-  private drawPaperBackground(): void {
-    const ctx = this.ctx;
-    ctx.fillStyle = '#F9F5EE';
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    if (this.paperTexturePattern) {
-      ctx.globalAlpha = 0.3;
-      ctx.fillStyle = this.paperTexturePattern;
-      ctx.fillRect(0, 0, this.width, this.height);
-      ctx.globalAlpha = 1;
-    }
+  private drawInkContent(ctx: CanvasRenderingContext2D): void {
+    this.drawColorLayersTo(ctx);
+    this.drawStrokesTo(ctx);
+    this.drawRipplesTo(ctx);
+    this.drawDotsTo(ctx);
   }
 
-  private drawColorLayers(): void {
-    const ctx = this.ctx;
-
+  private drawColorLayersTo(ctx: CanvasRenderingContext2D): void {
     for (const layer of this.colorLayers) {
       const gradient = ctx.createRadialGradient(
         layer.x, layer.y, 0,
         layer.x, layer.y, layer.radius
       );
 
-      const rgba = this.hexToRgba(layer.color, layer.alpha);
-      gradient.addColorStop(0, rgba);
-      gradient.addColorStop(1, this.hexToRgba(layer.color, 0));
+      const c1 = this.hexToRgba(layer.color, layer.alpha);
+      const c2 = this.hexToRgba(layer.color, layer.alpha * 0.6);
+      const c3 = this.hexToRgba(layer.color, layer.alpha * 0.25);
+      const c4 = this.hexToRgba(layer.color, 0);
+
+      gradient.addColorStop(0, c1);
+      gradient.addColorStop(0.35, c2);
+      gradient.addColorStop(0.7, c3);
+      gradient.addColorStop(1, c4);
 
       ctx.fillStyle = gradient;
       ctx.beginPath();
@@ -430,11 +431,10 @@ export class InkRenderer {
     }
   }
 
-  private drawStrokes(): void {
-    const ctx = this.ctx;
-
+  private drawStrokesTo(ctx: CanvasRenderingContext2D): void {
     for (const stroke of this.strokes) {
-      const stretch = 1 + stroke.stretchFactor;
+      const clampedStretch = Math.max(0, Math.min(0.2, stroke.stretchFactor));
+      const stretch = 1 + clampedStretch;
 
       const midX = (stroke.startX + stroke.endX) / 2;
       const midY = (stroke.startY + stroke.endY) / 2;
@@ -442,6 +442,7 @@ export class InkRenderer {
       const dx = stroke.endX - stroke.startX;
       const dy = stroke.endY - stroke.startY;
       const len = Math.hypot(dx, dy);
+      if (len < 0.001) continue;
       const nx = dx / len;
       const ny = dy / len;
 
@@ -478,21 +479,49 @@ export class InkRenderer {
       ctx.globalAlpha = stroke.alpha * 0.5;
       ctx.lineWidth = stroke.width * 0.4;
       ctx.beginPath();
-      ctx.moveTo(sX + (Math.random() - 0.5) * 2, sY + (Math.random() - 0.5) * 2);
-      ctx.bezierCurveTo(
-        cp1x + (Math.random() - 0.5) * 3, cp1y + (Math.random() - 0.5) * 3,
-        cp2x + (Math.random() - 0.5) * 3, cp2y + (Math.random() - 0.5) * 3,
-        eX + (Math.random() - 0.5) * 2, eY + (Math.random() - 0.5) * 2
-      );
+      ctx.moveTo(sX, sY);
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, eX, eY);
       ctx.stroke();
 
       ctx.restore();
     }
   }
 
-  private drawDots(): void {
-    const ctx = this.ctx;
+  private drawRipplesTo(ctx: CanvasRenderingContext2D): void {
+    const now = performance.now();
 
+    for (const ripple of this.ripples) {
+      const elapsed = now - ripple.startTime;
+      const t = Math.min(1, elapsed / ripple.duration);
+
+      const radius: number = t < 0.5
+        ? ripple.baseRadius + (ripple.maxRadius - ripple.baseRadius) * (t * 2)
+        : ripple.maxRadius - (ripple.maxRadius - ripple.baseRadius) * ((t - 0.5) * 2);
+
+      const alpha: number = t < 0.5
+        ? 0.4
+        : 0.4 * (1 - (t - 0.5) * 2);
+
+      ctx.save();
+      ctx.strokeStyle = ripple.color;
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.arc(ripple.x, ripple.y, Math.max(0, radius), 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.globalAlpha = Math.max(0, alpha * 0.5);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(ripple.x, ripple.y, Math.max(0, radius * 0.9), 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
+
+  private drawDotsTo(ctx: CanvasRenderingContext2D): void {
     for (const dot of this.dots) {
       const gradient = ctx.createRadialGradient(
         dot.x - dot.currentRadius * 0.2,
@@ -520,10 +549,10 @@ export class InkRenderer {
       ctx.fillStyle = '#3B3228';
       for (let i = 0; i < 8; i++) {
         const angle = (i / 8) * Math.PI * 2 + dot.seed;
-        const dist = dot.currentRadius * (0.7 + Math.random() * 0.5);
+        const dist = dot.currentRadius * (0.7 + ((Math.sin(dot.seed + i) + 1) / 2) * 0.5);
         const sx = dot.x + Math.cos(angle) * dist;
         const sy = dot.y + Math.sin(angle) * dist;
-        const size = dot.currentRadius * 0.05 + Math.random() * 2;
+        const size = dot.currentRadius * 0.05 + ((Math.cos(dot.seed + i * 2) + 1) / 2) * 2;
 
         ctx.beginPath();
         ctx.arc(sx, sy, size, 0, Math.PI * 2);
@@ -533,26 +562,16 @@ export class InkRenderer {
     }
   }
 
-  private drawRipples(): void {
+  private drawPaperBackground(): void {
     const ctx = this.ctx;
+    ctx.fillStyle = '#F9F5EE';
+    ctx.fillRect(0, 0, this.width, this.height);
 
-    for (const ripple of this.ripples) {
-      ctx.save();
-      ctx.strokeStyle = ripple.color;
-      ctx.globalAlpha = ripple.alpha;
-      ctx.lineWidth = 2;
-
-      ctx.beginPath();
-      ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.globalAlpha = ripple.alpha * 0.5;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(ripple.x, ripple.y, ripple.radius * 0.9, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.restore();
+    if (this.paperTexturePattern) {
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = this.paperTexturePattern;
+      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -570,7 +589,8 @@ export class InkRenderer {
     const tempCtx = tempCanvas.getContext('2d');
     if (!tempCtx) return '';
 
-    tempCtx.drawImage(this.canvas, 0, 0);
+    tempCtx.scale(this.dpr, this.dpr);
+    this.drawInkContent(tempCtx);
 
     return tempCanvas.toDataURL('image/png');
   }
