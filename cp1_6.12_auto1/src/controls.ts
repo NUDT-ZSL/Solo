@@ -11,6 +11,12 @@ export interface CameraAnimation {
   endTarget: THREE.Vector3;
 }
 
+export interface RaycastSetup {
+  raycaster: THREE.Raycaster;
+  mouse: THREE.Vector2;
+  intersect: (objects: THREE.Object3D[], recursive?: boolean) => THREE.Intersection[];
+}
+
 export function createOrbitControls(
   camera: THREE.PerspectiveCamera,
   domElement: HTMLElement
@@ -90,23 +96,16 @@ export function updateCameraAnimation(
 export function setupRaycaster(
   camera: THREE.PerspectiveCamera,
   domElement: HTMLElement
-): {
-  raycaster: THREE.Raycaster;
-  mouse: THREE.Vector2;
-  intersect: (
-    objects: THREE.Object3D[],
-    recursive?: boolean
-  ) => THREE.Intersection[];
-} {
+): RaycastSetup {
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
-  const intersect = (objects: THREE.Object3D[], recursive: boolean = true) => {
+  const intersect = (objects: THREE.Object3D[], recursive: boolean = true): THREE.Intersection[] => {
     raycaster.setFromCamera(mouse, camera);
     return raycaster.intersectObjects(objects, recursive);
   };
 
-  const onPointerMove = (event: PointerEvent) => {
+  const onPointerMove = (event: PointerEvent): void => {
     const rect = domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;

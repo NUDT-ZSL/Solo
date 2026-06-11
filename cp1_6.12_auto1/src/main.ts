@@ -8,6 +8,7 @@ import {
   createPlanet,
   createStarField,
   createSun,
+  detectLowEndDevice,
   updatePlanet,
   updateSun
 } from './models/planet';
@@ -19,6 +20,13 @@ import {
   updateCameraAnimation
 } from './controls';
 import { UIManager, createPlanetLabel, updateLabelPosition } from './ui';
+
+interface LabelEntry {
+  div: HTMLDivElement;
+  worldPosition: THREE.Vector3;
+  distance: number;
+  zIndex: number;
+}
 
 class SolarSystemApp {
   private scene: THREE.Scene;
@@ -35,6 +43,7 @@ class SolarSystemApp {
 
   private uiManager: UIManager;
   private cameraAnimation: CameraAnimation | null = null;
+  private isAnimatingCamera: boolean = false;
   private intersectObjects: THREE.Object3D[] = [];
 
   private intersectFn: (objects: THREE.Object3D[], recursive?: boolean) => THREE.Intersection[];
@@ -44,10 +53,16 @@ class SolarSystemApp {
   private hoveredObject: THREE.Object3D | null = null;
   private clickHoldStart: number = 0;
   private isDragging: boolean = false;
+  private isLowEnd: boolean = false;
+
+  private tmpVec: THREE.Vector3 = new THREE.Vector3();
+  private labelEntries: LabelEntry[] = [];
 
   constructor() {
     this.canvasContainer = document.getElementById('canvas-container')!;
     this.labelContainer = document.getElementById('label-container')!;
+
+    this.isLowEnd = detectLowEndDevice();
 
     this.scene = this.createScene();
     this.camera = this.createCamera();
@@ -61,14 +76,26 @@ class SolarSystemApp {
     this.uiManager = new UIManager({
       onTogglePause: () => {},
       onResetView: () => this.resetCameraView(),
-      onToggleLabels: (_visible) => this.updateAllLabelsVisibility(),
+      onToggleLabels: (_visible: boolean) => this.updateAllLabelsVisibility(),
       onCloseInfo: () => {}
     });
 
+    this.applyPerformanceProfile();
     this.initScene();
     this.bindInteractionEvents();
     this.onResize();
     window.addEventListener('resize', () => this.onResize());
+  }
+
+  private applyPerformanceProfile(): void {
+    if (this.isLowEnd) {
+      const panels = document.querySelectorAll<HTMLElement>('#ui-panel, #info-panel');
+      panels.forEach((panel) => {
+        panel.style.backdropFilter = 'none';
+        (panel.style as unknown as Record<string, string>)['webkitBackdropFilter'] = 'none';
+        panel.style.background = 'rgba(15, 25, 50, 0.85)';
+      });
+    }
   }
 
   private createScene(): THREE.Scene {
@@ -95,11 +122,11 @@ class SolarSystemApp {
 
   private createRenderer(): THREE.WebGLRenderer {
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: !this.isLowEnd,
       alpha: false,
       powerPreference: 'high-performance'
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.isLowEnd ? 1 : 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -113,7 +140,7 @@ class SolarSystemApp {
     this.scene.add(this.sun.group);
     this.intersectObjects.push(this.sun.mesh);
 
-    this.planets = PLANET_CONFIGS.map((config) => {
+    this.planets = PLANET_CONFIGS.map((config: typeof PLANET_CONFIGS[number]) => {
       const planet = createPlanet(config);
       this.scene.add(planet.group);
       this.intersectObjects.push(planet.mesh);
@@ -125,10 +152,13 @@ class SolarSystemApp {
 
     this.sunLabel = createPlanetLabel(SUN_CONFIG.nameCN, this.labelContainer);
 
-    const orbitRadii = PLANET_CONFIGS.map((p) => p.orbitRadius);
+    const orbitRadii: number[] = PLANET_CONFIGS.map((p: typeof PLANET_CONFIGS[number]) => p.orbitRadius);
     createAllOrbits(this.scene, orbitRadii);
 
-    this.starField = createStarField(SCENE_CONFIG.starCount, SCENE_CONFIG.starRadius);
+    this.starField = createStarField(
+      this.isLowEnd ? SCENE_CONFIG.starCount / 2 : SCENE_CONFIG.starCount,
+      SCENE_CONFIG.starRadius
+    );
     this.scene.add(this.starField);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.15);
@@ -139,36 +169,38 @@ class SolarSystemApp {
   private bindInteractionEvents(): void {
     const canvas = this.renderer.domElement;
 
-    canvas.addEventListener('pointerdown', (_e) => {
+    canvas.addEventListener('pointerdown', (_e: PointerEvent) => {
       this.isDragging = false;
       this.clickHoldStart = performance.now();
     });
 
-    canvas.addEventListener('pointermove', (e) => {
+    canvas.addEventListener('pointermove', (e: PointerEvent) => {
       if (e.buttons !== 0) {
         this.isDragging = true;
       }
       this.handleHover();
     });
 
-    canvas.addEventListener('pointerup', (_e) => {
+    canvas.addEventListener('pointerup', (_e: PointerEvent) => {
       const holdDuration = performance.now() - this.clickHoldStart;
       if (!this.isDragging && holdDuration < 250) {
         this.handleClick();
       }
     });
 
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('contextmenu', (e: Event) => e.preventDefault());
   }
 
   private handleHover(): void {
+    if (this.isAnimatingCamera) return;
+
     const intersects = this.intersectFn(this.intersectObjects, false);
 
     if (this.hoveredObject) {
       const mesh = this.hoveredObject as THREE.Mesh;
       const mat = mesh.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
       if ('emissive' in mat && !mesh.userData.isSunMesh) {
-        const planet = this.planets.find((p) => p.mesh === mesh);
+        const planet = this.planets.find((p: PlanetObject) => p.mesh === mesh);
         if (planet) {
           mat.emissive.setHex(planet.config.emissive ?? 0x000000);
           mat.emissiveIntensity = planet.config.emissiveIntensity ?? 0;
@@ -192,8 +224,9 @@ class SolarSystemApp {
   }
 
   private handleClick(): void {
-    const intersects = this.intersectFn(this.intersectObjects, false);
+    if (this.isAnimatingCamera) return;
 
+    const intersects = this.intersectFn(this.intersectObjects, false);
     if (intersects.length === 0) return;
 
     const clicked = intersects[0].object;
@@ -204,11 +237,26 @@ class SolarSystemApp {
       return;
     }
 
-    const planet = this.planets.find((p) => p.mesh === clicked);
+    const planet = this.planets.find((p: PlanetObject) => p.mesh === clicked);
     if (planet) {
       this.focusOnPlanet(planet);
       this.uiManager.showPlanetInfo(planet.config);
     }
+  }
+
+  private startCameraAnimation(
+    targetPos: THREE.Vector3,
+    lookAtPos: THREE.Vector3,
+    duration: number
+  ): void {
+    this.isAnimatingCamera = true;
+    this.cameraAnimation = createCameraAnimation(
+      this.controls,
+      this.camera,
+      targetPos,
+      lookAtPos,
+      duration
+    );
   }
 
   private focusOnPlanet(planet: PlanetObject): void {
@@ -226,13 +274,7 @@ class SolarSystemApp {
 
     targetPos.y += planet.config.radius * 2;
 
-    this.cameraAnimation = createCameraAnimation(
-      this.controls,
-      this.camera,
-      targetPos,
-      worldPos,
-      600
-    );
+    this.startCameraAnimation(targetPos, worldPos, 600);
   }
 
   private focusOnSun(): void {
@@ -249,13 +291,7 @@ class SolarSystemApp {
       .add(dirToCamera.multiplyScalar(offset));
     targetPos.y += 8;
 
-    this.cameraAnimation = createCameraAnimation(
-      this.controls,
-      this.camera,
-      targetPos,
-      worldPos,
-      600
-    );
+    this.startCameraAnimation(targetPos, worldPos, 600);
   }
 
   private resetCameraView(): void {
@@ -269,13 +305,7 @@ class SolarSystemApp {
       SCENE_CONFIG.defaultCameraTarget.y,
       SCENE_CONFIG.defaultCameraTarget.z
     );
-    this.cameraAnimation = createCameraAnimation(
-      this.controls,
-      this.camera,
-      targetPos,
-      lookAtPos,
-      800
-    );
+    this.startCameraAnimation(targetPos, lookAtPos, 800);
     this.uiManager.hideInfoPanel();
   }
 
@@ -284,15 +314,35 @@ class SolarSystemApp {
   }
 
   private updateLabels(): void {
-    const tmpVec = new THREE.Vector3();
+    this.labelEntries = [];
 
-    this.sun.group.getWorldPosition(tmpVec);
-    updateLabelPosition(this.sunLabel, tmpVec, this.camera, this.labelContainer);
+    this.sun.group.getWorldPosition(this.tmpVec);
+    const sunDist = this.tmpVec.distanceTo(this.camera.position);
+    this.labelEntries.push({
+      div: this.sunLabel,
+      worldPosition: this.tmpVec.clone(),
+      distance: sunDist,
+      zIndex: 0
+    });
 
-    this.planets.forEach((planet) => {
+    this.planets.forEach((planet: PlanetObject) => {
       if (!planet.labelDiv) return;
-      planet.group.getWorldPosition(tmpVec);
-      updateLabelPosition(planet.labelDiv, tmpVec, this.camera, this.labelContainer);
+      planet.group.getWorldPosition(this.tmpVec);
+      const dist = this.tmpVec.distanceTo(this.camera.position);
+      this.labelEntries.push({
+        div: planet.labelDiv,
+        worldPosition: this.tmpVec.clone(),
+        distance: dist,
+        zIndex: 0
+      });
+    });
+
+    this.labelEntries.sort((a: LabelEntry, b: LabelEntry) => a.distance - b.distance);
+
+    this.labelEntries.forEach((entry: LabelEntry, index: number) => {
+      entry.zIndex = index + 1;
+      updateLabelPosition(entry.div, entry.worldPosition, this.camera, this.labelContainer);
+      entry.div.style.zIndex = String(entry.zIndex);
     });
   }
 
@@ -300,7 +350,7 @@ class SolarSystemApp {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.isLowEnd ? 1 : 2));
   }
 
   private animate = (): void => {
@@ -309,9 +359,9 @@ class SolarSystemApp {
     const delta = Math.min(this.clock.getDelta(), 0.1);
     const isPaused = this.uiManager.getPaused();
 
-    updateSun(this.sun, delta, isPaused);
+    updateSun(this.sun, delta, isPaused, this.camera);
 
-    this.planets.forEach((planet) => {
+    this.planets.forEach((planet: PlanetObject) => {
       updatePlanet(planet, delta, isPaused, 1);
     });
 
@@ -323,6 +373,7 @@ class SolarSystemApp {
       );
       if (!animating && !this.cameraAnimation.active) {
         this.cameraAnimation = null;
+        this.isAnimatingCamera = false;
       }
     }
 
@@ -349,7 +400,7 @@ function bootstrap(): void {
   try {
     const app = new SolarSystemApp();
     app.start();
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Failed to initialize solar system:', err);
     const loading = document.querySelector('.loading');
     if (loading) {

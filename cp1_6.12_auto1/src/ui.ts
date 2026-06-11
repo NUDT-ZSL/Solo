@@ -43,23 +43,23 @@ export class UIManager {
   }
 
   private bindEvents(): void {
-    this.btnToggle.addEventListener('click', () => {
+    this.btnToggle.addEventListener('click', (): void => {
       this.isPaused = !this.isPaused;
       this.updateToggleButton();
       this.handlers.onTogglePause();
     });
 
-    this.btnReset.addEventListener('click', () => {
+    this.btnReset.addEventListener('click', (): void => {
       this.handlers.onResetView();
     });
 
-    this.toggleLabels.addEventListener('click', () => {
+    this.toggleLabels.addEventListener('click', (): void => {
       this.labelsVisible = !this.labelsVisible;
       this.toggleLabels.classList.toggle('on', this.labelsVisible);
       this.handlers.onToggleLabels(this.labelsVisible);
     });
 
-    this.infoClose.addEventListener('click', () => {
+    this.infoClose.addEventListener('click', (): void => {
       this.hideInfoPanel();
       this.handlers.onCloseInfo();
     });
@@ -91,10 +91,10 @@ export class UIManager {
     this.infoPeriod.textContent = `${config.orbitPeriodDays.toLocaleString()} 天`;
     this.infoSize.textContent = `${config.realDiameterKm.toLocaleString()} km`;
 
-    const rotHours = config.rotationPeriodHours;
+    const rotHours: number = config.rotationPeriodHours;
     if (rotHours >= 24) {
-      const days = Math.floor(rotHours / 24);
-      const hours = Math.round(rotHours % 24);
+      const days: number = Math.floor(rotHours / 24);
+      const hours: number = Math.round(rotHours % 24);
       this.infoRotation.textContent = `${days}天${hours}小时`;
     } else {
       this.infoRotation.textContent = `${rotHours.toFixed(1)} 小时`;
@@ -121,7 +121,7 @@ export class UIManager {
     planets: PlanetObject[],
     sunLabel: HTMLDivElement | null
   ): void {
-    planets.forEach((planet) => {
+    planets.forEach((planet: PlanetObject): void => {
       if (planet.labelDiv) {
         planet.labelDiv.style.opacity = this.labelsVisible ? '1' : '0';
       }
@@ -136,7 +136,7 @@ export function createPlanetLabel(
   nameCN: string,
   container: HTMLElement
 ): HTMLDivElement {
-  const div = document.createElement('div');
+  const div: HTMLDivElement = document.createElement('div');
   div.className = 'planet-label';
   div.textContent = nameCN;
   container.appendChild(div);
@@ -149,15 +149,15 @@ export function updateLabelPosition(
   camera: THREE.PerspectiveCamera,
   container: HTMLElement
 ): void {
-  const rect = container.getBoundingClientRect();
-  const vector = worldPosition.clone().project(camera);
+  const rect: DOMRect = container.getBoundingClientRect();
+  const vector: THREE.Vector3 = worldPosition.clone().project(camera);
 
-  const x = (vector.x * 0.5 + 0.5) * rect.width;
-  const y = (-vector.y * 0.5 + 0.5) * rect.height;
+  const x: number = (vector.x * 0.5 + 0.5) * rect.width;
+  const y: number = (-vector.y * 0.5 + 0.5) * rect.height;
 
   label.style.left = `${x}px`;
   label.style.top = `${y - 18}px`;
 
-  const behind = vector.z > 1;
+  const behind: boolean = vector.z > 1;
   label.style.display = behind ? 'none' : 'block';
 }
