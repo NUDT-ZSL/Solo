@@ -10,7 +10,6 @@ const App: React.FC = () => {
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [stats, setStats] = useState<CategoryStats[]>([]);
   const [simulating, setSimulating] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -39,13 +38,10 @@ const App: React.FC = () => {
   };
 
   const handleClear = async () => {
-    if (!confirmClear) {
-      setConfirmClear(true);
-      setTimeout(() => setConfirmClear(false), 3000);
+    if (!window.confirm('确定要清空所有评分数据吗？此操作不可撤销。')) {
       return;
     }
     await fetch('/api/ratings', { method: 'DELETE' });
-    setConfirmClear(false);
     await fetchData();
   };
 
@@ -84,10 +80,10 @@ const App: React.FC = () => {
 
           <div className="toolbar">
             <button
-              className={`toolbar-btn clear-btn ${confirmClear ? 'confirm' : ''}`}
+              className="toolbar-btn clear-btn"
               onClick={handleClear}
             >
-              {confirmClear ? '确认清空？' : '清空所有数据'}
+              清空所有数据
             </button>
             <button
               className="toolbar-btn simulate-btn"

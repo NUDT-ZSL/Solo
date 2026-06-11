@@ -144,7 +144,7 @@ const Heatmap: React.FC<HeatmapProps> = ({ stats, ratings }) => {
       ctx.fillStyle = grad;
       ctx.fill();
 
-      const particleCount = Math.min(stat.count * 3, 30);
+      const particleCount = Math.min(20 + stat.count * 5, 80);
       const existingForCell = particlesRef.current.filter(
         (p) => p.x >= cx && p.x <= cx + cellW && p.y >= cy && p.y <= cy + cellH
       );
@@ -153,7 +153,6 @@ const Heatmap: React.FC<HeatmapProps> = ({ stats, ratings }) => {
         particlesRef.current.push(...newP);
       }
 
-      ctx.globalAlpha = 0.6;
       for (const p of particlesRef.current) {
         if (p.x < cx || p.x > cx + cellW || p.y < cy || p.y > cy + cellH) continue;
         p.x += p.vx;
@@ -166,7 +165,7 @@ const Heatmap: React.FC<HeatmapProps> = ({ stats, ratings }) => {
         }
         const alpha = 1 - p.life / p.maxLife;
         ctx.fillStyle = baseColor;
-        ctx.globalAlpha = alpha * 0.5;
+        ctx.globalAlpha = alpha * 0.7;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -190,18 +189,22 @@ const Heatmap: React.FC<HeatmapProps> = ({ stats, ratings }) => {
       ctx.font = `${isMobile ? 9 : 12}px -apple-system, sans-serif`;
       ctx.fillText(`${stat.count} 条评分`, cx + cellW / 2, cy + cellH / 2 + 22);
 
-      const volHeight = Math.min(30, Math.max(5, stat.volatility * 12));
-      const volX = cx + cellW - 18;
-      const volY = cy + cellH - volHeight - 10;
-      const isHighVol = stat.volatility > 1.2;
+      const volHeight = Math.min(30, Math.max(5, stat.volatility * 15));
+      const volX = cx + cellW - 20;
+      const volY = cy + cellH - volHeight - 12;
+      const isHighVol = stat.volatility > 1.0;
 
       if (isHighVol) {
-        const flash = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+        const flash = Math.abs(Math.sin(Date.now() / 150)) * 0.6 + 0.4;
         ctx.fillStyle = `rgba(255,69,0,${flash})`;
+        ctx.shadowColor = 'rgba(255, 69, 0, 0.8)';
+        ctx.shadowBlur = 10;
       } else {
-        ctx.fillStyle = 'rgba(0,200,255,0.5)';
+        ctx.fillStyle = 'rgba(0, 200, 255, 0.5)';
+        ctx.shadowBlur = 0;
       }
-      ctx.fillRect(volX, volY, 8, volHeight);
+      ctx.fillRect(volX, volY, 10, volHeight);
+      ctx.shadowBlur = 0;
 
       ctx.restore();
     }
