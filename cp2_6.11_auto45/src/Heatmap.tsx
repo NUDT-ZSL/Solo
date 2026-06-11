@@ -1,118 +1,118 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Rating, CategoryStats, CATEGORIES } from './shared/types';
+import { useRef, useEffect } from 'react';
+import type { Rating, CategoryStats } from './shared/types';
+import { CATEGORIES } from './shared/types';
 
 interface Props {
   ratings: Rating[];
   stats: CategoryStats[];
 }
 
-export default function Heatmap({ ratings, stats }: Props) {
+function getScoreColor(score: number): string {
+  const ratio = (score - 1) / 4;
+  const r = Math.round(30 + (255 - 30) * ratio);
+  const g = Math.round(144 + (69 - 144) * ratio);
+  const b = Math.round(255 + (0 - 255) * ratio);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function drawRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, radius: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+export default function Heatmap({ stats }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationTimeRef = useRef(0);
-  const [refreshedKeys, setRefreshedKeys] = useState<Set<string>>(new Set());
-  const refreshStartTimeRef = useRef<number>(0);
+  const statsRef = useRef(stats);
+  const refreshTimeRef = useRef(Date.now());
+  const animIdRef = useRef(0);
 
   useEffect(() => {
-    const allCategories = new Set(CATEGORIES);
-    setRefreshedKeys(allCategories);
-    refreshStartTimeRef.current = Date.now();
-    const timer = setTimeout(() => {
-      setRefreshedKeys(new Set());
-    }, 300);
-    return () => clearTimeout(timer);
+    statsRef.current = stats;
+    refreshTimeRef.current = Date.now();
   }, [stats]);
-
-  function getScoreColor(score: number): string {
-    const ratio = (score - 1) / 4;
-    const r = Math.round(30 + (255 - 30) * ratio);
-    const g = Math.round(144 + (69 - 144) * ratio);
-    const b = Math.round(255 + (0 - 255) * ratio);
-    return `rgb(${r}, ${g}, ${b})`;
-  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
+    let width = 0;
+    let height = 0;
 
-    let animationId: number;
-
-    const drawRoundRect = (
-      x: number,
-      y: number,
-      width: number,
-      height: number,
-      radius: number
-    ) => {
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + width - radius, y);
-      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-      ctx.lineTo(x + width, y + height - radius);
-      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-      ctx.lineTo(x + radius, y + height);
-      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.closePath();
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
     };
 
-    const animate = (time: number) => {
-      animationTimeRef.current = time;
+    resize();
+    window.addEventListener('resize', resize);
 
-      const cellSize = Math.min(120, canvas.width / dpr / 5 - 20);
+    const BOUNCE_DURATION = 300;
+
+    const animate = (time: number) => {
+      const dpr = window.devicePixelRatio || 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const currentStats = statsRef.current;
+      const elapsed = Date.now() - refreshTimeRef.current;
+      const bounceProgress = Math.min(elapsed / BOUNCE_DURATION, 1);
+      const easedBounce = 1 - Math.pow(1 - bounceProgress, 3);
+
+      const cellSize = Math.min(120, width / 5 - 20);
       const gap = 16;
 
-      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-
       CATEGORIES.forEach((category, i) => {
-        const stat = stats.find((s) => s.category === category);
-        const average = stat?.average || 3;
-        const cellColor = getScoreColor(average);
+        const stat = currentStats.find(s => s.category === category);
+        const average = stat?.average || 0;
+        const displayAvg = average || 3;
+        const cellColor = getScoreColor(displayAvg);
 
         const x = i * (cellSize + gap) + gap;
         const y = 40;
 
-        const isRefreshed = refreshedKeys.has(category);
-        let scale: number;
+        const bounceScale = 1.05 - 0.05 * easedBounce;
+        const pulse = 1 + Math.sin(time * 0.003 + i * 1.2) * 0.015;
+        const scale = bounceProgress < 1 ? bounceScale : pulse;
 
-        if (isRefreshed) {
-          const elapsed = Date.now() - refreshStartTimeRef.current;
-          scale = 1.05 - (Math.min(elapsed, 300) / 300) * 0.05;
-        } else {
-          scale = 1 + Math.sin(animationTimeRef.current * 0.003 + i) * 0.015;
-        }
-
-        const scaledWidth = cellSize * scale;
-        const scaledHeight = cellSize * scale;
-        const offsetX = (cellSize - scaledWidth) / 2;
-        const offsetY = (cellSize - scaledHeight) / 2;
+        const scaledW = cellSize * scale;
+        const scaledH = cellSize * scale;
+        const offsetX = (cellSize - scaledW) / 2;
+        const offsetY = (cellSize - scaledH) / 2;
 
         ctx.save();
         ctx.shadowColor = cellColor;
         ctx.shadowBlur = 15;
         ctx.fillStyle = cellColor;
-        drawRoundRect(x + offsetX, y + offsetY, scaledWidth, scaledHeight, 12);
+        drawRoundRect(ctx, x + offsetX, y + offsetY, scaledW, scaledH, 12);
         ctx.fill();
         ctx.restore();
 
-        if (stat) {
+        if (stat && stat.count > 0) {
           const particleCount = Math.min(stat.count * 2, 30);
           for (let p = 0; p < particleCount; p++) {
-            const px = x + offsetX + Math.random() * scaledWidth;
-            const py = y + offsetY + Math.random() * scaledHeight;
-            const size = 1 + Math.random() * 2;
-            const opacity = 0.3 + Math.random() * 0.3;
+            const seed = p * 137.5 + i * 97.3;
+            const px = x + offsetX + ((seed * 0.618) % 1) * scaledW;
+            const py = y + offsetY + ((seed * 0.382) % 1) * scaledH;
+            const size = 1 + (seed % 3);
+            const opacity = 0.3 + ((seed * 0.7) % 0.3);
             ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
             ctx.beginPath();
             ctx.arc(px, py, size, 0, Math.PI * 2);
@@ -120,62 +120,54 @@ export default function Heatmap({ ratings, stats }: Props) {
           }
         }
 
-        ctx.fillStyle = '#333';
-        ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(category, x + cellSize / 2, y - 10);
 
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(average.toFixed(1), x + cellSize / 2, y + cellSize / 2 + 8);
+        if (stat && stat.count > 0) {
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(average.toFixed(1), x + cellSize / 2, y + cellSize / 2 + 7);
+        } else {
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('暂无', x + cellSize / 2, y + cellSize / 2 + 5);
+        }
 
-        if (stat) {
+        if (stat && stat.count > 0) {
           const barHeight = Math.max(5, Math.min(30, stat.volatility * 15));
-          const barX = x + cellSize + 8;
+          const barX = x + cellSize + 6;
           const barY = y + cellSize / 2 - barHeight / 2;
           const barWidth = 6;
 
-          let barColor = '#888';
           if (stat.volatility > 1.5) {
-            const flash = Math.sin(time * 0.01) * 0.5 + 0.5;
-            barColor = `rgba(255, 0, 0, ${0.5 + flash * 0.5})`;
+            const flash = Math.sin(time * 0.008) * 0.5 + 0.5;
+            ctx.fillStyle = `rgba(255, 50, 50, ${0.5 + flash * 0.5})`;
+          } else {
+            ctx.fillStyle = 'rgba(136, 136, 136, 0.6)';
           }
-
-          ctx.fillStyle = barColor;
           ctx.fillRect(barX, barY, barWidth, barHeight);
         }
       });
 
-      animationId = requestAnimationFrame(animate);
+      animIdRef.current = requestAnimationFrame(animate);
     };
 
-    animationId = requestAnimationFrame(animate);
+    animIdRef.current = requestAnimationFrame(animate);
 
-    return () => cancelAnimationFrame(animationId);
-  }, [stats, refreshedKeys]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+    return () => {
+      cancelAnimationFrame(animIdRef.current);
+      window.removeEventListener('resize', resize);
     };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return (
     <div className="heatmap-container">
       <h3>热力图仪表板</h3>
-      <canvas
-        ref={canvasRef}
-        style={{ width: '100%', height: '240px' }}
-      />
+      <canvas ref={canvasRef} style={{ width: '100%', height: '240px' }} />
       <div className="legend">
         <span>图例：</span>
         <span className="legend-item">

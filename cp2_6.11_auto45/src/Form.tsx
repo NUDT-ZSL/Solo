@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Category } from './shared/types';
 
 interface Props {
@@ -21,6 +21,13 @@ export default function Form({ onSubmit }: Props) {
   const [comment, setComment] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -28,8 +35,10 @@ export default function Form({ onSubmit }: Props) {
       const trimmedComment = comment.slice(0, 100);
       await onSubmit({ category, score, comment: trimmedComment });
       setSubmitSuccess(true);
-      setTimeout(() => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => {
         setSubmitSuccess(false);
+        successTimerRef.current = null;
       }, 500);
       setScore(3);
       setComment('');

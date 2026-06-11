@@ -119,7 +119,7 @@ export default function App() {
             ratingsCount={ratings.length}
           />
           <Heatmap ratings={ratings} stats={stats} />
-          <TrendChart stats={stats} />
+          <TrendChart recentRatings={recentRatings} />
         </div>
       </div>
     </div>
