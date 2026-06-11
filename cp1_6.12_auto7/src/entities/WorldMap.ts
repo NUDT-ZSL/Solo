@@ -115,7 +115,7 @@ export class WorldMap {
 
     this.renderGround(ctx, camera, groundColor);
     this.renderGrid(ctx, camera);
-    this.renderTrees(ctx, camera, treeColor, timeState);
+    this.renderTrees(ctx, camera, treeColor, timeState, weatherState);
   }
 
   private renderGround(
@@ -174,8 +174,9 @@ export class WorldMap {
   private renderTrees(
     ctx: CanvasRenderingContext2D,
     camera: CameraState,
-    leafColor: string,
-    timeState: TimeState
+    baseLeafColor: string,
+    timeState: TimeState,
+    weatherState: WeatherState
   ): void {
     const sortedTrees = [...this.trees].sort((a, b) => a.y - b.y);
 
@@ -193,12 +194,29 @@ export class WorldMap {
       ctx.fillStyle = '#5a3d2b';
       ctx.fillRect(x - trunkW / 2, y - trunkH, trunkW, trunkH);
 
-      let displayLeaf = leafColor;
+      let duskInfluence = 0;
+      let nightInfluence = 0;
       if (timeState.phase === TimePhase.DUSK) {
-        displayLeaf = this.mixColor(leafColor, '#3d2040', 0.3);
+        duskInfluence = 0.3 * (timeState.phaseProgress < 0.5 ? timeState.phaseProgress * 2 : (1 - timeState.phaseProgress) * 2);
       }
       if (timeState.phase === TimePhase.NIGHT) {
-        displayLeaf = this.mixColor(leafColor, '#1a0a20', 0.5);
+        nightInfluence = 0.5;
+      }
+      if (timeState.phase === TimePhase.DAWN) {
+        duskInfluence = 0.2 * (1 - timeState.phaseProgress);
+      }
+
+      let displayLeaf = baseLeafColor;
+      displayLeaf = this.mixColor(displayLeaf, '#3d2040', duskInfluence);
+      displayLeaf = this.mixColor(displayLeaf, '#1a0a20', nightInfluence);
+
+      const weatherT = weatherState.transitionProgress;
+      if (weatherState.type === WeatherType.RAINY) {
+        displayLeaf = this.mixColor(displayLeaf, '#1a4a2a', 0.25 * weatherT);
+      } else if (weatherState.type === WeatherType.SNOWY) {
+        displayLeaf = this.mixColor(displayLeaf, '#d0d8e0', 0.35 * weatherT);
+      } else if (weatherState.type === WeatherType.CLOUDY) {
+        displayLeaf = this.mixColor(displayLeaf, '#3a5a3a', 0.1 * weatherT);
       }
 
       ctx.fillStyle = displayLeaf;

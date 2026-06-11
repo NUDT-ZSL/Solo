@@ -132,7 +132,12 @@ export class GameEngine {
     this.weatherSystem.spawnParticles(this.particles, this.camera, window.innerWidth, window.innerHeight);
 
     if (this.player.isMoving()) {
-      this.spawnStepParticles(weatherState.type);
+      this.spawnStepParticles(weatherState);
+    }
+
+    const MAX_PARTICLES = 200;
+    if (this.particles.length > MAX_PARTICLES) {
+      this.particles.splice(0, this.particles.length - MAX_PARTICLES);
     }
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -153,17 +158,15 @@ export class GameEngine {
         this.particles.splice(i, 1);
       }
     }
-
-    if (this.particles.length > 200) {
-      this.particles.splice(0, this.particles.length - 200);
-    }
   }
 
-  private spawnStepParticles(weatherType: WeatherType): void {
+  private spawnStepParticles(weatherState: WeatherState): void {
     if (Math.random() > 0.15) return;
 
     const px = this.player.getX();
     const py = this.player.getY() + 10;
+    const weatherType = weatherState.type;
+    const blendT = weatherState.transitionProgress;
 
     if (weatherType === WeatherType.RAINY) {
       for (let i = 0; i < 3; i++) {

@@ -17,15 +17,19 @@ export class WeatherSystem {
   private weatherElapsed: number;
   private spawnAccumulatorRain: number = 0;
   private spawnAccumulatorSnow: number = 0;
+  private targetParticleRates: ParticleConfig;
+  private previousParticleRates: ParticleConfig;
 
   constructor() {
     this.weatherDuration = this.randomDuration();
     this.weatherElapsed = 0;
+    this.previousParticleRates = { rainRate: 0, snowRate: 0, dustRate: 0 };
+    this.targetParticleRates = this.getRateForWeather(WeatherType.SUNNY);
     this.state = {
       type: WeatherType.SUNNY,
       previousType: WeatherType.SUNNY,
       transitionProgress: 1.0,
-      particleConfig: { rainRate: 0, snowRate: 0, dustRate: 0 },
+      particleConfig: { ...this.targetParticleRates },
       windX: 0,
     };
   }
@@ -62,17 +66,17 @@ export class WeatherSystem {
     this.state.transitionProgress = 0;
     this.weatherDuration = this.randomDuration();
     this.weatherElapsed = 0;
+
+    this.previousParticleRates = { ...this.state.particleConfig };
+    this.targetParticleRates = this.getRateForWeather(nextType);
   }
 
   private updateParticleConfig(): void {
     const t = this.state.transitionProgress;
-    const prev = this.getRateForWeather(this.state.previousType);
-    const curr = this.getRateForWeather(this.state.type);
-
     this.state.particleConfig = {
-      rainRate: prev.rainRate + (curr.rainRate - prev.rainRate) * t,
-      snowRate: prev.snowRate + (curr.snowRate - prev.snowRate) * t,
-      dustRate: prev.dustRate + (curr.dustRate - prev.dustRate) * t,
+      rainRate: this.previousParticleRates.rainRate + (this.targetParticleRates.rainRate - this.previousParticleRates.rainRate) * t,
+      snowRate: this.previousParticleRates.snowRate + (this.targetParticleRates.snowRate - this.previousParticleRates.snowRate) * t,
+      dustRate: this.previousParticleRates.dustRate + (this.targetParticleRates.dustRate - this.previousParticleRates.dustRate) * t,
     };
   }
 
@@ -83,9 +87,9 @@ export class WeatherSystem {
       case WeatherType.CLOUDY:
         return { rainRate: 5, snowRate: 0, dustRate: 0.5 };
       case WeatherType.RAINY:
-        return { rainRate: 40, snowRate: 0, dustRate: 0 };
+        return { rainRate: 30 + Math.random() * 20, snowRate: 0, dustRate: 0 };
       case WeatherType.SNOWY:
-        return { rainRate: 0, snowRate: 25, dustRate: 0 };
+        return { rainRate: 0, snowRate: 20 + Math.random() * 10, dustRate: 0 };
     }
   }
 

@@ -22,6 +22,7 @@ export class HUD {
   private cachedPlayer: { x: number; y: number; speed: number } | null = null;
   private displayedLight: number = 0;
   private displayTargetLight: number = 0;
+  private barDisplayedWidth: number = 0;
 
   public recalculateFontSize(windowWidth: number): void {
     const min = 14;
@@ -53,7 +54,7 @@ export class HUD {
   ): void {
     if (!this.cachedTimeState || !this.cachedWeatherState || !this.cachedPlayer) return;
 
-    this.displayedLight += (this.displayTargetLight - this.displayedLight) * 0.1;
+    this.displayedLight += (this.displayTargetLight - this.displayedLight) * 0.08;
 
     this.renderTopLeft(ctx);
     this.renderBottomRight(ctx);

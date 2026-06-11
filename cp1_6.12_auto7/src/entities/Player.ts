@@ -6,7 +6,7 @@ const PLAYER_RADIUS = 14;
 
 const WEATHER_SPEED_MOD: Record<WeatherType, number> = {
   [WeatherType.SUNNY]: 1.0,
-  [WeatherType.CLOUDY]: 0.95,
+  [WeatherType.CLOUDY]: 1.0,
   [WeatherType.RAINY]: 0.7,
   [WeatherType.SNOWY]: 0.5,
 };
