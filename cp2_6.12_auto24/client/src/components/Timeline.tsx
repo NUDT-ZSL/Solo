@@ -52,7 +52,7 @@ export default function Timeline({ events }: TimelineProps) {
           const config = EVENT_CONFIG[event.type];
           const changes = Object.entries(event.valueChange)
             .filter(([, v]) => v !== undefined)
-            .map(([k, v]) => formatChange(k, v))
+            .map(([k, v]) => formatChange(k, v as number | undefined))
             .join('  ');
 
           return (

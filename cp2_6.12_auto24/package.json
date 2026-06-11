@@ -5,7 +5,10 @@
   "scripts": {
     "dev:client": "cd client && npm run dev",
     "dev:server": "cd server && npm run dev",
-    "dev": "npx concurrently \"npm run dev:client\" \"npm run dev:server\""
+    "dev": "npx concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "build:client": "cd client && tsc --project tsconfig.json && vite build",
+    "build:server": "cd server && tsc --project tsconfig.json",
+    "build": "npm run build:client && npm run build:server"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -21,6 +24,7 @@
     "body-parser": "^1.20.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.0"
+    "concurrently": "^8.2.0",
+    "typescript": "^5.3.0"
   }
 }

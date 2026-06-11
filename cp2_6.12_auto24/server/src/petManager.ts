@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { PetState, PetType, EventEntry } from '../../shared/types.js';
+import { PetState, PetType, EventEntry } from '../../shared/types';
 
 class PetManager {
   private pets: Map<string, PetState> = new Map();

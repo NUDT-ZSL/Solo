@@ -3,8 +3,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { petManager } from './petManager.js';
-import { PetState, PetType } from '../shared/types.js';
+import { petManager } from './petManager';
+import { PetState, PetType } from '../../shared/types';
 
 const app = express();
 app.use(cors());
