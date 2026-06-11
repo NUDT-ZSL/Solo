@@ -5,7 +5,7 @@ import type {
   AnswerResultPayload,
   GameOverPayload,
   ChatMessage,
-  Room,
+  RoomListItem,
 } from '../../../shared/types.js';
 
 interface GameState {
@@ -16,7 +16,7 @@ interface GameState {
   answerResult: AnswerResultPayload | null;
   gameOver: GameOverPayload | null;
   chatMessages: ChatMessage[];
-  rooms: Room[];
+  rooms: RoomListItem[];
   isConnected: boolean;
   selectedAnswer: number | null;
   hasAnswered: boolean;
@@ -30,7 +30,7 @@ interface GameActions {
   setAnswerResult: (r: AnswerResultPayload) => void;
   setGameOver: (g: GameOverPayload) => void;
   addChatMessage: (msg: ChatMessage) => void;
-  setRooms: (rooms: Room[]) => void;
+  setRooms: (rooms: RoomListItem[]) => void;
   setConnected: (connected: boolean) => void;
   setSelectedAnswer: (idx: number | null) => void;
   setHasAnswered: (answered: boolean) => void;

@@ -74,3 +74,11 @@ export interface GameOverPayload {
 export interface ErrorPayload {
   message: string;
 }
+
+export interface RoomListItem {
+  id: string;
+  name: string;
+  players: number;
+  status: string;
+  maxPlayers: number;
+}
