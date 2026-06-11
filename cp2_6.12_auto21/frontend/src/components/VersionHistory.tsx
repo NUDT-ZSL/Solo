@@ -15,7 +15,8 @@ interface VersionHistoryProps {
 
 const ITEM_HEIGHT = 60;
 const BATCH_SIZE = 50;
-const MAX_DISPLAY = 200;
+const MAX_VERSIONS = 200;
+const BUFFER_ITEMS = 10;
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
@@ -28,8 +29,38 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [restoreVersion, setRestoreVersion] = useState<number | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+  const [startIndex, setStartIndex] = useState(0);
+  const [endIndex, setEndIndex] = useState(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
+  const isRecalculatingRef = useRef(false);
+
+  const visibleVersions = allVersions.slice(0, Math.min(displayCount, MAX_VERSIONS));
+  const hasMore = allVersions.length > displayCount && displayCount < MAX_VERSIONS;
+
+  const calculateVisibleRange = useCallback(() => {
+    if (isRecalculatingRef.current) return;
+    isRecalculatingRef.current = true;
+
+    requestAnimationFrame(() => {
+      if (!scrollRef.current || visibleVersions.length === 0) {
+        setStartIndex(0);
+        setEndIndex(0);
+        isRecalculatingRef.current = false;
+        return;
+      }
+      const viewportHeight = scrollRef.current.clientHeight || 400;
+      const scrollTop = scrollRef.current.scrollTop;
+      const visibleCount = Math.ceil(viewportHeight / ITEM_HEIGHT);
+      const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER_ITEMS);
+      const end = Math.min(visibleVersions.length, start + visibleCount + BUFFER_ITEMS * 2);
+      setStartIndex(start);
+      setEndIndex(end);
+      isRecalculatingRef.current = false;
+    });
+  }, [visibleVersions.length]);
 
   useEffect(() => {
     axios.get(`/api/proposals/${proposalId}`).then((res) => {
@@ -43,19 +74,55 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
     });
   }, [proposalId]);
 
-  const versions = allVersions.slice(0, Math.min(displayCount, MAX_DISPLAY));
-  const hasMore = allVersions.length > displayCount && displayCount < MAX_DISPLAY;
+  useEffect(() => {
+    calculateVisibleRange();
+  }, [calculateVisibleRange]);
 
-  const handleScroll = useCallback(() => {
-    if (scrollRef.current) {
-      setScrollTop(scrollRef.current.scrollTop);
+  useEffect(() => {
+    if (!scrollRef.current) return;
+
+    const options: IntersectionObserverInit = {
+      root: scrollRef.current,
+      rootMargin: '0px',
+      threshold: 0,
+    };
+
+    const topObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && scrollRef.current && scrollRef.current.scrollTop > 0) {
+          calculateVisibleRange();
+        }
+      });
+    }, options);
+
+    const bottomObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          calculateVisibleRange();
+        }
+      });
+    }, options);
+
+    if (topSentinelRef.current) {
+      topObserver.observe(topSentinelRef.current);
     }
-  }, []);
+    if (bottomSentinelRef.current) {
+      bottomObserver.observe(bottomSentinelRef.current);
+    }
 
-  const containerHeight = versions.length * ITEM_HEIGHT;
-  const visibleCount = Math.ceil((scrollRef.current?.clientHeight || 400) / ITEM_HEIGHT) + 2;
-  const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 1);
-  const endIndex = Math.min(versions.length, startIndex + visibleCount);
+    return () => {
+      topObserver.disconnect();
+      bottomObserver.disconnect();
+    };
+  }, [visibleVersions.length, calculateVisibleRange]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      calculateVisibleRange();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [calculateVisibleRange]);
 
   const handleSelectVersion = (versionNumber: number) => {
     setSelectedVersion(selectedVersion === versionNumber ? null : versionNumber);
@@ -79,15 +146,18 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
     setRestoreVersion(null);
   };
 
-  const selectedData = selectedVersion !== null
-    ? versions.find((v) => v.version === selectedVersion)
-    : null;
+  const handleLoadMore = () => {
+    setDisplayCount((prev) => Math.min(prev + BATCH_SIZE, MAX_VERSIONS));
+  };
+
+  const paddingTop = startIndex * ITEM_HEIGHT;
+  const paddingBottom = Math.max(0, (visibleVersions.length - endIndex) * ITEM_HEIGHT);
+  const renderedVersions = visibleVersions.slice(startIndex, endIndex);
 
   return (
     <div style={{ background: '#ECF0F1', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div
         ref={scrollRef}
-        onScroll={handleScroll}
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -95,27 +165,28 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
           minHeight: 0,
         }}
       >
-        <div style={{ height: containerHeight, position: 'relative' }}>
-          {versions.slice(startIndex, endIndex).map((v) => {
-            const idx = v.version;
-            const isSelected = selectedVersion === idx;
-            const top = (allVersions.slice(0, displayCount).findIndex((x) => x.version === idx)) * ITEM_HEIGHT;
+        <div style={{ paddingTop, paddingBottom }}>
+          <div ref={topSentinelRef} style={{ height: 1 }} />
+          {renderedVersions.map((v) => {
+            const isSelected = selectedVersion === v.version;
 
             return (
-              <div key={v.version}>
+              <div
+                key={v.version}
+                style={{
+                  position: 'relative',
+                  height: ITEM_HEIGHT,
+                }}
+              >
                 <div
                   onClick={() => handleSelectVersion(v.version)}
                   style={{
-                    position: 'absolute',
-                    top,
-                    left: 0,
-                    right: 0,
                     height: ITEM_HEIGHT,
                     padding: '8px 12px',
                     boxSizing: 'border-box',
                     cursor: 'pointer',
                     background: isSelected ? '#d5dbdb' : '#ECF0F1',
-                    borderBottom: '1px solid #d5dbdb',
+                    borderBottom: '1px solid #BDC3C7',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'center',
@@ -130,35 +201,37 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
                   </div>
                 </div>
 
-                {isSelected && selectedData && (
+                {isSelected && (
                   <div
                     style={{
                       position: 'absolute',
-                      top: top + ITEM_HEIGHT,
+                      top: ITEM_HEIGHT,
                       left: 0,
                       right: 0,
                       background: '#fff',
                       padding: 16,
                       boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                       zIndex: 10,
-                      transform: 'translateX(0)',
                       animation: 'slideIn 0.3s ease',
                     }}
                   >
                     <div
                       style={{
-                        maxHeight: 120,
-                        overflow: 'auto',
+                        maxHeight: 150,
+                        overflowY: 'auto',
                         fontSize: 13,
                         color: '#2C3E50',
                         whiteSpace: 'pre-wrap',
                         lineHeight: 1.6,
                       }}
                     >
-                      {selectedData.content || '(空内容)'}
+                      {v.content || '(空内容)'}
                     </div>
                     <button
-                      onClick={() => handleRestoreClick(v.version)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRestoreClick(v.version);
+                      }}
                       style={{
                         marginTop: 12,
                         padding: '6px 16px',
@@ -177,16 +250,17 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
               </div>
             );
           })}
+          <div ref={bottomSentinelRef} style={{ height: 1 }} />
         </div>
       </div>
 
       {hasMore && (
-        <div style={{ padding: 12, textAlign: 'center', borderTop: '1px solid #d5dbdb' }}>
+        <div style={{ padding: 12, textAlign: 'center', borderTop: '1px solid #BDC3C7', background: '#ECF0F1' }}>
           <button
-            onClick={() => setDisplayCount((prev) => Math.min(prev + BATCH_SIZE, MAX_DISPLAY))}
+            onClick={handleLoadMore}
             style={{
               padding: '8px 24px',
-              border: '1px solid #bdc3c7',
+              border: '1px solid #BDC3C7',
               borderRadius: 6,
               background: '#fff',
               cursor: 'pointer',
@@ -230,7 +304,7 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
                 onClick={handleCancelRestore}
                 style={{
                   padding: '8px 20px',
-                  border: '1px solid #bdc3c7',
+                  border: '1px solid #BDC3C7',
                   borderRadius: 6,
                   background: '#fff',
                   cursor: 'pointer',

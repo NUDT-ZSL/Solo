@@ -145,12 +145,13 @@ io.on("connection", (socket) => {
     }, 50);
   });
 
-  socket.on("cursor-move", (data: { proposalId: string; userId: string; position: number }) => {
+  socket.on("cursor-move", (data: { proposalId: string; userId: string; position: number; cursorPosition: { line: number; column: number } }) => {
     const userInfo = socketUserMap.get(socket.id);
     socket.to(data.proposalId).emit("remote-cursor-move", {
       userId: data.userId,
       username: userInfo?.username || "",
       position: data.position,
+      cursorPosition: data.cursorPosition,
       color: userInfo?.color || "#95A5A6",
     });
   });

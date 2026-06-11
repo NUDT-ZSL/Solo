@@ -1,18 +1,23 @@
 import { io, Socket } from 'socket.io-client';
 
+interface CursorPosition {
+  line: number;
+  column: number;
+}
+
 interface ServerToClientEvents {
   'proposal-updated': () => void;
-  'collaborator-joined': () => void;
-  'collaborator-left': () => void;
+  'collaborator-joined': (collaborator: { userId: string; username: string; color: string }) => void;
+  'collaborator-left': (data: { userId: string }) => void;
   'remote-content-change': (data: { content: string; userId: string }) => void;
-  'remote-cursor-move': (data: { userId: string; username: string; position: number; color: string }) => void;
+  'remote-cursor-move': (data: { userId: string; username: string; position: number; cursorPosition: CursorPosition; color: string }) => void;
 }
 
 interface ClientToServerEvents {
   'join-proposal': (data: { proposalId: string; userId: string; username: string; color: string }) => void;
   'leave-proposal': (data: { proposalId: string; userId: string }) => void;
   'content-change': (data: { proposalId: string; content: string; userId: string }) => void;
-  'cursor-move': (data: { proposalId: string; userId: string; position: number }) => void;
+  'cursor-move': (data: { proposalId: string; userId: string; position: number; cursorPosition: CursorPosition }) => void;
 }
 
 type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -45,19 +50,19 @@ class SocketService {
     this.socket.emit('content-change', { proposalId, content, userId });
   }
 
-  sendCursorMove(proposalId: string, userId: string, position: number): void {
-    this.socket.emit('cursor-move', { proposalId, userId, position });
+  sendCursorMove(proposalId: string, userId: string, position: number, cursorPosition: CursorPosition): void {
+    this.socket.emit('cursor-move', { proposalId, userId, position, cursorPosition });
   }
 
-  on(event: string, callback: (...args: unknown[]) => void): void {
+  on(event: string, callback: (...args: any[]) => void): void {
     this.listeners.set(event, callback);
     this.socket.on(event as keyof ServerToClientEvents, callback as never);
   }
 
-  off(event: string): void {
-    const callback = this.listeners.get(event);
-    if (callback) {
-      this.socket.off(event as keyof ServerToClientEvents, callback as never);
+  off(event: string, callback?: (...args: any[]) => void): void {
+    const storedCallback = this.listeners.get(event);
+    if (storedCallback) {
+      this.socket.off(event as keyof ServerToClientEvents, storedCallback as never);
       this.listeners.delete(event);
     }
   }
