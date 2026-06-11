@@ -272,12 +272,6 @@ export class FishingSystem {
   updateReel(dt: number): boolean {
     if (!this.reel || this.phase !== 'reeling') return false;
     this.reel.progress += (dt / 60) / 1.1;
-    const p = this.reel.progress;
-
-    const coneProgress = Math.min(1, p * 2.5);
-    if (coneProgress < 1) {
-      this.lake.renderConeSplash(this.reel.floatX, this.reel.floatY, coneProgress);
-    }
 
     const gravity = 0.55;
     this.reel.creatureVY += gravity;
@@ -292,6 +286,14 @@ export class FishingSystem {
       return true;
     }
     return false;
+  }
+
+  getConeSplashState(): { x: number; y: number; progress: number } | null {
+    if (!this.reel || this.phase !== 'reeling') return null;
+    const p = this.reel.progress;
+    const coneDuration = 0.4 / 1.1;
+    const coneProgress = Math.min(1, p / coneDuration);
+    return { x: this.reel.floatX, y: this.reel.floatY, progress: coneProgress };
   }
 
   reset(): void {
@@ -310,9 +312,6 @@ export class FishingSystem {
     }
   }
 
-  private lastCastX = 0;
-  private lastCastY = 0;
-
   getCastPreviewPos(): { x: number; y: number } | null {
     if (!this.castArc) return null;
     const a = this.castArc;
@@ -320,8 +319,6 @@ export class FishingSystem {
     const x = a.startX + (a.targetX - a.startX) * t;
     const arcY = -4 * a.peakHeight * t * (1 - t);
     const y = a.startY + (a.targetY - a.startY) * t + arcY;
-    this.lastCastX = x;
-    this.lastCastY = y;
     return { x, y };
   }
 

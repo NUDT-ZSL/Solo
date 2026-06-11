@@ -281,7 +281,7 @@ class GameApp {
     }) as T;
   }
 
-  private throttle<T extends (...a: unknown[]) => void>(fn: T, ms: number): T {
+  private throttle<T extends (...a: never[]) => void>(fn: T, ms: number): T {
     let last = 0;
     return ((...args: Parameters<T>) => {
       const now = performance.now();
@@ -493,9 +493,22 @@ class GameApp {
   private tick(dt: number): void {
     this.ctx.clearRect(0, 0, this.lake.getWidth(), this.lake.getHeight());
     this.lake.render(dt);
+
+    const cone = this.fishing.getConeSplashState();
+    if (cone && cone.progress < 1) {
+      this.lake.renderConeSplash(cone.x, cone.y, cone.progress);
+    }
+
     this.fishing.update(dt);
     this.fishing.render(this.ctx);
+    this.updatePowerBarIfCharging();
     this.updatePhaseVisuals();
+  }
+
+  private updatePowerBarIfCharging(): void {
+    if (this.fishing.isCharging) {
+      this.updatePowerBarPos(this.fishing.mouseX, this.fishing.mouseY);
+    }
   }
 
   private updatePhaseVisuals(): void {
@@ -504,7 +517,7 @@ class GameApp {
       if (ph === 'biting') {
         this.biteHint.classList.add('active');
         this.statusTip.textContent = '⚡ 咬钩了！快速点击收杆！';
-      } else if (this.lastPhase === 'biting' && ph !== 'biting') {
+      } else if (this.lastPhase === 'biting') {
         this.biteHint.classList.remove('active');
       }
       if (ph === 'idle' && (this.prevPhaseForStreak === 'result' || this.prevPhaseForStreak === 'escape')) {
