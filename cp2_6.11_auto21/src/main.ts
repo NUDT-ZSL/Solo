@@ -14,7 +14,6 @@ class ProbeController {
   private isPanelCollapsed: boolean = false;
   private resizeTimeout: number | null = null;
   private debounceTimer: number | null = null;
-  private crosshairAnimFrame: number | null = null;
 
   private elements: {
     uploadOverlay: HTMLElement;
@@ -104,7 +103,10 @@ class ProbeController {
       lInput: document.getElementById('lInput') as HTMLInputElement,
     };
 
-    this.colorProbe = new ColorProbe(this.probeCanvas, (color) => this.handleColorChange(color));
+    this.colorProbe = new ColorProbe(this.probeCanvas, {
+      onColorChange: (color) => this.handleColorChange(color),
+      onCrosshairMove: (x, y, color) => this.handleCrosshairMove(x, y, color),
+    });
     this.gradientGenerator = new GradientGenerator(this.gradientCanvas);
     this.historyManager = new HistoryManager(this.elements.historyList, {
       onAdd: () => this.updateGradientFromHistory(),
@@ -123,23 +125,15 @@ class ProbeController {
     this.colorProbe.startTracking();
     this.gradientGenerator.draw();
     this.historyManager.render();
-    this.startCrosshairInfoUpdate();
     this.hideLoading();
   }
 
   private setupCanvasSize(): void {
     const wrapper = this.elements.canvasWrapper;
     const rect = wrapper.getBoundingClientRect();
-    
-    const dpr = window.devicePixelRatio || 1;
-    this.probeCanvas.width = rect.width * dpr;
-    this.probeCanvas.height = rect.height * dpr;
-    
-    const ctx = this.probeCanvas.getContext('2d')!;
-    ctx.scale(dpr, dpr);
-    
-    this.probeCanvas.style.width = `${rect.width}px`;
-    this.probeCanvas.style.height = `${rect.height}px`;
+    const cssWidth = Math.max(300, rect.width);
+    const cssHeight = Math.max(300, rect.height);
+    this.colorProbe.setCanvasSize(cssWidth, cssHeight);
   }
 
   private bindEvents(): void {
@@ -174,12 +168,14 @@ class ProbeController {
     this.probeCanvas.addEventListener('click', (_e) => {
       if (this.colorProbe.isImageLoaded() && this.currentColor) {
         this.addToHistory(this.currentColor);
+        this.playClickAnimation(this.probeCanvas);
       }
     });
 
     this.elements.gradientModeBtn.addEventListener('click', () => {
       const newType = this.gradientGenerator.toggleType();
       this.elements.gradientModeBtn.textContent = newType === 'linear' ? '线性渐变' : '径向渐变';
+      this.playClickAnimation(this.elements.gradientModeBtn);
     });
 
     this.elements.exportBtn.addEventListener('click', () => {
@@ -261,7 +257,7 @@ class ProbeController {
     }
     this.debounceTimer = window.setTimeout(() => {
       this.adjustColor(channel, value);
-    }, 50);
+    }, 30);
   }
 
   private adjustColor(channel: string, value: number): void {
@@ -317,6 +313,7 @@ class ProbeController {
     this.showLoading();
 
     try {
+      this.setupCanvasSize();
       await this.colorProbe.loadImage(file);
       this.elements.uploadOverlay.classList.add('hidden');
     } catch (error) {
@@ -331,6 +328,34 @@ class ProbeController {
     this.currentColor = color;
     if (color) {
       this.updateCurrentDisplay(color);
+    }
+  }
+
+  private handleCrosshairMove(x: number, y: number, color: ColorData | null): void {
+    if (color && x >= 0 && y >= 0) {
+      this.elements.crosshairInfo.style.display = 'block';
+      this.elements.crosshairHex.textContent = color.hex;
+      this.elements.crosshairRgb.textContent = `${color.rgb.r},${color.rgb.g},${color.rgb.b}`;
+      this.elements.crosshairHsl.textContent = `${color.hsl.h},${color.hsl.s}%,${color.hsl.l}%`;
+
+      const infoEl = this.elements.crosshairInfo;
+      const infoRect = infoEl.getBoundingClientRect();
+      const wrapperRect = this.elements.canvasWrapper.getBoundingClientRect();
+
+      let left = x + 15;
+      let top = y + 15;
+
+      if (left + infoRect.width > wrapperRect.width) {
+        left = x - infoRect.width - 15;
+      }
+      if (top + infoRect.height > wrapperRect.height) {
+        top = y - infoRect.height - 15;
+      }
+
+      infoEl.style.left = `${left}px`;
+      infoEl.style.top = `${top}px`;
+    } else {
+      this.elements.crosshairInfo.style.display = 'none';
     }
   }
 
@@ -372,17 +397,35 @@ class ProbeController {
 
   private exportGradientCSS(): void {
     const css = this.gradientGenerator.generateCSS();
-    navigator.clipboard.writeText(css).then(() => {
-      this.showCopyToast();
-    }).catch(() => {
-      const textarea = document.createElement('textarea');
-      textarea.value = css;
-      document.body.appendChild(textarea);
-      textarea.select();
+    this.copyToClipboard(css);
+  }
+
+  private copyToClipboard(text: string): void {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => this.showCopyToast())
+        .catch(() => this.fallbackCopy(text));
+    } else {
+      this.fallbackCopy(text);
+    }
+  }
+
+  private fallbackCopy(text: string): void {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
       document.execCommand('copy');
-      document.body.removeChild(textarea);
       this.showCopyToast();
-    });
+    } catch (err) {
+      console.error('复制失败:', err);
+      alert('复制失败，请手动复制');
+    }
+    document.body.removeChild(textarea);
   }
 
   private showCopyToast(): void {
@@ -392,10 +435,16 @@ class ProbeController {
     }, 3000);
   }
 
+  private playClickAnimation(el: HTMLElement): void {
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = 'clickPulse 0.2s ease-out';
+  }
+
   private openAdjustPanel(item: HistoryItem): void {
     this.editingItemId = item.id;
     this.elements.adjustPanel.style.display = 'flex';
-    
+
     this.updateRGBSliders(item.color);
     this.updateHSLSliders(item.color);
     this.updateCurrentDisplay(item.color);
@@ -458,6 +507,10 @@ class ProbeController {
 
   private handleResize(): void {
     this.setupCanvasSize();
+    this.colorProbe.resize(
+      this.elements.canvasWrapper.clientWidth,
+      this.elements.canvasWrapper.clientHeight
+    );
     this.gradientGenerator.draw();
   }
 

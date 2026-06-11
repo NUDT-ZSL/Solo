@@ -841,3 +841,24 @@ input[type="number"]::-webkit-outer-spin-button {
     flex-shrink: 0;
   }
 }
+
+@keyframes clickPulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 20px 8px var(--accent-glow);
+  }
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+}
+
+.upload-overlay.drag-over {
+  background: var(--bg-tertiary);
+  border: 2px dashed var(--accent);
+}
+
+.canvas-wrapper {
+  position: relative;
+}

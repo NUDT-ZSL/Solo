@@ -129,21 +129,37 @@ export class ColorProbe {
   private imageWidth: number = 0;
   private imageHeight: number = 0;
 
-  private crosshairX: number = -1;
-  private crosshairY: number = -1;
+  private dpr: number = 1;
+
+  private crosshairCssX: number = -1;
+  private crosshairCssY: number = -1;
   private animationFrameId: number | null = null;
   private lastSampleTime: number = 0;
   private readonly sampleInterval: number = 1000 / 60;
 
   private onColorChange: (color: ColorData | null) => void;
+  private onCrosshairMove?: (x: number, y: number, color: ColorData | null) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
-    onColorChange: (color: ColorData | null) => void
+    callbacks: {
+      onColorChange: (color: ColorData | null) => void;
+      onCrosshairMove?: (x: number, y: number, color: ColorData | null) => void;
+    }
   ) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-    this.onColorChange = onColorChange;
+    this.onColorChange = callbacks.onColorChange;
+    this.onCrosshairMove = callbacks.onCrosshairMove;
+    this.dpr = window.devicePixelRatio || 1;
+  }
+
+  setCanvasSize(cssWidth: number, cssHeight: number): void {
+    this.dpr = window.devicePixelRatio || 1;
+    this.canvas.width = cssWidth * this.dpr;
+    this.canvas.height = cssHeight * this.dpr;
+    this.canvas.style.width = `${cssWidth}px`;
+    this.canvas.style.height = `${cssHeight}px`;
   }
 
   loadImage(file: File): Promise<void> {
@@ -200,16 +216,19 @@ export class ColorProbe {
     this.imageData = this.ctx.getImageData(0, 0, canvasWidth, canvasHeight);
   }
 
-  resize(width: number, height: number): void {
-    this.canvas.width = width;
-    this.canvas.height = height;
-    
-    if (this.imageLoaded && this.imageData) {
+  resize(cssWidth: number, cssHeight: number): void {
+    const oldImageData = this.imageData;
+    const oldCanvasWidth = this.canvas.width;
+    const oldCanvasHeight = this.canvas.height;
+
+    this.setCanvasSize(cssWidth, cssHeight);
+
+    if (this.imageLoaded && oldImageData) {
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d')!;
-      tempCanvas.width = this.imageData.width;
-      tempCanvas.height = this.imageData.height;
-      tempCtx.putImageData(this.imageData, 0, 0);
+      tempCanvas.width = oldCanvasWidth;
+      tempCanvas.height = oldCanvasHeight;
+      tempCtx.putImageData(oldImageData, 0, 0);
 
       const img = new Image();
       img.onload = () => {
@@ -219,40 +238,27 @@ export class ColorProbe {
     }
   }
 
-  sampleColor(clientX: number, clientY: number): ColorData | null {
-    if (!this.imageData || !this.isOnImage(clientX, clientY)) {
+  sampleColor(cssX: number, cssY: number): ColorData | null {
+    if (!this.imageData) return null;
+
+    const pixelX = Math.floor(cssX * this.dpr);
+    const pixelY = Math.floor(cssY * this.dpr);
+
+    if (
+      pixelX < this.imageOffsetX ||
+      pixelX > this.imageOffsetX + this.imageWidth ||
+      pixelY < this.imageOffsetY ||
+      pixelY > this.imageOffsetY + this.imageHeight
+    ) {
       return null;
     }
 
-    const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
-
-    const x = Math.floor((clientX - rect.left) * scaleX);
-    const y = Math.floor((clientY - rect.top) * scaleY);
-
-    const index = (y * this.imageData.width + x) * 4;
+    const index = (pixelY * this.imageData.width + pixelX) * 4;
     const r = this.imageData.data[index];
     const g = this.imageData.data[index + 1];
     const b = this.imageData.data[index + 2];
 
     return createColorData(r, g, b);
-  }
-
-  private isOnImage(clientX: number, clientY: number): boolean {
-    const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
-
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-
-    return (
-      x >= this.imageOffsetX &&
-      x <= this.imageOffsetX + this.imageWidth &&
-      y >= this.imageOffsetY &&
-      y <= this.imageOffsetY + this.imageHeight
-    );
   }
 
   startTracking(): void {
@@ -265,21 +271,23 @@ export class ColorProbe {
     this.canvas.removeEventListener('mousemove', this.handleMouseMove);
     this.canvas.removeEventListener('mouseleave', this.handleMouseLeave);
     this.stopAnimation();
-    this.crosshairX = -1;
-    this.crosshairY = -1;
+    this.crosshairCssX = -1;
+    this.crosshairCssY = -1;
     this.onColorChange(null);
+    this.onCrosshairMove?.(-1, -1, null);
   }
 
   private handleMouseMove = (e: MouseEvent): void => {
     const rect = this.canvas.getBoundingClientRect();
-    this.crosshairX = e.clientX - rect.left;
-    this.crosshairY = e.clientY - rect.top;
+    this.crosshairCssX = e.clientX - rect.left;
+    this.crosshairCssY = e.clientY - rect.top;
   };
 
   private handleMouseLeave = (): void => {
-    this.crosshairX = -1;
-    this.crosshairY = -1;
+    this.crosshairCssX = -1;
+    this.crosshairCssY = -1;
     this.onColorChange(null);
+    this.onCrosshairMove?.(-1, -1, null);
   };
 
   private startAnimation(): void {
@@ -308,48 +316,52 @@ export class ColorProbe {
       this.ctx.putImageData(this.imageData, 0, 0);
     }
 
-    if (this.crosshairX >= 0 && this.crosshairY >= 0 && this.imageLoaded) {
-      const rect = this.canvas.getBoundingClientRect();
-      const clientX = this.crosshairX + rect.left;
-      const clientY = this.crosshairY + rect.top;
-
-      const color = this.sampleColor(clientX, clientY);
+    if (this.crosshairCssX >= 0 && this.crosshairCssY >= 0) {
+      const color = this.sampleColor(this.crosshairCssX, this.crosshairCssY);
       this.onColorChange(color);
+      this.onCrosshairMove?.(this.crosshairCssX, this.crosshairCssY, color);
 
       if (color) {
-        this.drawCrosshair(this.crosshairX, this.crosshairY);
+        this.drawCrosshair(this.crosshairCssX * this.dpr, this.crosshairCssY * this.dpr);
       }
     }
   }
 
   private drawCrosshair(x: number, y: number): void {
     const ctx = this.ctx;
-    const size = 20;
+    const size = 20 * this.dpr;
+    const lineWidth = 1 * this.dpr;
 
     ctx.save();
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([]);
+    ctx.lineWidth = lineWidth;
 
     ctx.beginPath();
     ctx.moveTo(x - size, y);
-    ctx.lineTo(x - 4, y);
-    ctx.moveTo(x + 4, y);
+    ctx.lineTo(x - 4 * this.dpr, y);
+    ctx.moveTo(x + 4 * this.dpr, y);
     ctx.lineTo(x + size, y);
     ctx.moveTo(x, y - size);
-    ctx.lineTo(x, y - 4);
-    ctx.moveTo(x, y + 4);
+    ctx.lineTo(x, y - 4 * this.dpr);
+    ctx.moveTo(x, y + 4 * this.dpr);
     ctx.lineTo(x, y + size);
     ctx.stroke();
 
-    const pulse = (Math.sin(Date.now() / 250) + 1) / 2;
-    const radius = 3 + pulse * 2;
+    const periodMs = 500;
+    const phase = (Date.now() % periodMs) / periodMs;
+    const pulse = (Math.sin(phase * Math.PI * 2) + 1) / 2;
+
+    const minRadius = 3 * this.dpr;
+    const maxRadius = 5 * this.dpr;
+    const radius = minRadius + pulse * (maxRadius - minRadius);
+
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(0, 210, 255, ${0.5 + pulse * 0.5})`;
+    const alpha = 0.5 + pulse * 0.5;
+    ctx.fillStyle = `rgba(0, 210, 255, ${alpha})`;
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = lineWidth;
     ctx.stroke();
 
     ctx.restore();
@@ -363,7 +375,7 @@ export class ColorProbe {
     return this.canvas;
   }
 
-  getCrosshairPosition(): { x: number; y: number } {
-    return { x: this.crosshairX, y: this.crosshairY };
+  getDpr(): number {
+    return this.dpr;
   }
 }
