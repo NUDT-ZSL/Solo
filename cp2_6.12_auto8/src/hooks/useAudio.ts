@@ -2,6 +2,39 @@ import { useRef, useEffect, useCallback } from 'react'
 import { usePlayerStore } from '@/store/playerStore'
 
 const FADE_DURATION = 0.3
+const FADE_CURVE = 'linear' as const
+
+type FadeType = 'in' | 'out'
+
+function applyFade(
+  gainNode: GainNode,
+  ctx: AudioContext,
+  type: FadeType,
+  targetVolume: number,
+  duration: number
+): Promise<void> {
+  return new Promise((resolve) => {
+    const currentTime = ctx.currentTime
+    gainNode.gain.cancelScheduledValues(currentTime)
+    gainNode.gain.setValueAtTime(gainNode.gain.value, currentTime)
+
+    if (type === 'in') {
+      if (FADE_CURVE === 'linear') {
+        gainNode.gain.linearRampToValueAtTime(targetVolume, currentTime + duration)
+      } else {
+        gainNode.gain.exponentialRampToValueAtTime(Math.max(targetVolume, 0.0001), currentTime + duration)
+      }
+    } else {
+      if (FADE_CURVE === 'linear') {
+        gainNode.gain.linearRampToValueAtTime(0, currentTime + duration)
+      } else {
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, currentTime + duration)
+      }
+    }
+
+    setTimeout(resolve, duration * 1000 + 50)
+  })
+}
 
 export function useAudio() {
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -95,34 +128,23 @@ export function useAudio() {
     rafIdRef.current = requestAnimationFrame(tick)
   }, [store, createOscillators])
 
-  const fadeIn = useCallback(() => {
+  const fadeIn = useCallback(async () => {
     const gainNode = gainNodeRef.current
     const ctx = audioContextRef.current
     if (!gainNode || !ctx) return
     const vol = store.getState().volume
-    gainNode.gain.cancelScheduledValues(ctx.currentTime)
-    gainNode.gain.setValueAtTime(0, ctx.currentTime)
-    gainNode.gain.linearRampToValueAtTime(vol, ctx.currentTime + FADE_DURATION)
     store.getState().setIsFading(true)
-    setTimeout(() => {
-      store.getState().setIsFading(false)
-    }, FADE_DURATION * 1000)
+    await applyFade(gainNode, ctx, 'in', vol, FADE_DURATION)
+    store.getState().setIsFading(false)
   }, [store])
 
-  const fadeOut = useCallback((): Promise<void> => {
+  const fadeOut = useCallback(async (): Promise<void> => {
     const gainNode = gainNodeRef.current
     const ctx = audioContextRef.current
     if (!gainNode || !ctx) return Promise.resolve()
     store.getState().setIsFading(true)
-    gainNode.gain.cancelScheduledValues(ctx.currentTime)
-    gainNode.gain.setValueAtTime(gainNode.gain.value, ctx.currentTime)
-    gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + FADE_DURATION)
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        store.getState().setIsFading(false)
-        resolve()
-      }, FADE_DURATION * 1000)
-    })
+    await applyFade(gainNode, ctx, 'out', 0, FADE_DURATION)
+    store.getState().setIsFading(false)
   }, [store])
 
   const play = useCallback(() => {

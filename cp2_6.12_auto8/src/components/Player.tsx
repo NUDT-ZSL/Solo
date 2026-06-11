@@ -19,7 +19,7 @@ interface PlayerProps {
   prev: () => void
   seek: (time: number) => void
   setVolume: (vol: number) => void
-  getFrequencyData: () => Uint8Array
+  getFrequencyData?: () => Uint8Array
   isMobileExpanded: boolean
   setIsMobileExpanded: (v: boolean) => void
 }
@@ -36,7 +36,7 @@ export default function Player({
   prev,
   seek,
   setVolume,
-  getFrequencyData,
+  getFrequencyData: _getFrequencyData,
   isMobileExpanded,
   setIsMobileExpanded,
 }: PlayerProps) {
