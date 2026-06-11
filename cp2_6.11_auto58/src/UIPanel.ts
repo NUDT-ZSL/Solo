@@ -19,6 +19,7 @@ export class UIPanel {
   private callbacks: UIPanelCallbacks;
   private defaultStationColor: string = '#ffffff';
   private defaultStationSize: number = 1;
+  private defaultStationDensity: number = 1;
 
   constructor(
     container: HTMLElement,
@@ -242,11 +243,18 @@ export class UIPanel {
         border: 2px solid #fff;
         cursor: pointer;
         box-shadow: 0 0 10px rgba(100, 200, 255, 0.6);
-        transition: transform 0.15s ease;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
       }
 
       .ui-slider::-webkit-slider-thumb:hover {
         transform: scale(1.2);
+        box-shadow: 0 0 15px rgba(100, 200, 255, 0.8);
+      }
+
+      .ui-slider::-webkit-slider-thumb:active {
+        transform: scale(0.95);
+        background: #4db8ff;
+        box-shadow: 0 0 20px rgba(100, 200, 255, 1);
       }
 
       .ui-slider::-moz-range-thumb {
@@ -257,6 +265,18 @@ export class UIPanel {
         border: 2px solid #fff;
         cursor: pointer;
         box-shadow: 0 0 10px rgba(100, 200, 255, 0.6);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      }
+
+      .ui-slider::-moz-range-thumb:hover {
+        transform: scale(1.2);
+        box-shadow: 0 0 15px rgba(100, 200, 255, 0.8);
+      }
+
+      .ui-slider::-moz-range-thumb:active {
+        transform: scale(0.95);
+        background: #4db8ff;
+        box-shadow: 0 0 20px rgba(100, 200, 255, 1);
       }
 
       .color-picker-row {
@@ -280,6 +300,12 @@ export class UIPanel {
       .ui-color:hover {
         transform: scale(1.1);
         border-color: rgba(100, 200, 255, 0.6);
+      }
+
+      .ui-color:active {
+        transform: scale(0.95);
+        border-color: rgba(100, 200, 255, 0.9);
+        background: rgba(100, 200, 255, 0.1);
       }
 
       .ui-color::-webkit-color-swatch-wrapper {
@@ -309,6 +335,12 @@ export class UIPanel {
 
       .preset-color:hover {
         transform: scale(1.2);
+        box-shadow: 0 0 14px currentColor;
+      }
+
+      .preset-color:active {
+        transform: scale(0.9);
+        box-shadow: 0 0 18px currentColor;
       }
 
       .preset-color.active {
@@ -327,6 +359,11 @@ export class UIPanel {
       .list-item:hover {
         background: rgba(100, 200, 255, 0.05);
         border-color: rgba(100, 200, 255, 0.15);
+      }
+
+      .list-item:active {
+        background: rgba(100, 200, 255, 0.1);
+        border-color: rgba(100, 200, 255, 0.25);
       }
 
       .list-item-header {
@@ -398,6 +435,7 @@ export class UIPanel {
 
       .delete-btn:active {
         transform: scale(0.9);
+        background: rgba(255, 100, 100, 0.35);
       }
 
       .station-info {
@@ -528,6 +566,16 @@ export class UIPanel {
               <input type="range" class="ui-slider" id="station-size-slider" min="0.5" max="2.5" step="0.1" value="${this.defaultStationSize}" />
             </div>
           </div>
+          <div class="control-row">
+            <div class="control-label">
+              <span>站点密度</span>
+              <span class="control-value" id="station-density-value">${this.defaultStationDensity.toFixed(1)}</span>
+            </div>
+            <div class="slider-container">
+              <div class="slider-track" id="station-density-track" style="width:${((this.defaultStationDensity - 0.5) / 1.5) * 100}%"></div>
+              <input type="range" class="ui-slider" id="station-density-slider" min="0.5" max="2.0" step="0.1" value="${this.defaultStationDensity}" />
+            </div>
+          </div>
         </div>
 
         <div class="section">
@@ -640,6 +688,18 @@ export class UIPanel {
       stationSizeTrack.style.width = pct + '%';
     });
 
+    const stationDensitySlider = this.panel.querySelector('#station-density-slider') as HTMLInputElement;
+    const stationDensityValue = this.panel.querySelector('#station-density-value')!;
+    const stationDensityTrack = this.panel.querySelector('#station-density-track') as HTMLElement;
+    stationDensitySlider.addEventListener('input', (e) => {
+      const val = parseFloat((e.target as HTMLInputElement).value);
+      this.defaultStationDensity = val;
+      stationDensityValue.textContent = val.toFixed(1);
+      const pct = ((val - 0.5) / 1.5) * 100;
+      stationDensityTrack.style.width = pct + '%';
+      this.stationManager.updateAllStationsDensity(val);
+    });
+
     const speedSlider = this.panel.querySelector('#speed-slider') as HTMLInputElement;
     const speedValue = this.panel.querySelector('#speed-value')!;
     const speedTrack = this.panel.querySelector('#speed-track') as HTMLElement;
@@ -682,6 +742,10 @@ export class UIPanel {
 
   public getDefaultStationSize(): number {
     return this.defaultStationSize;
+  }
+
+  public getDefaultStationDensity(): number {
+    return this.defaultStationDensity;
   }
 
   public togglePanel(show: boolean): void {
@@ -733,7 +797,7 @@ export class UIPanel {
           <button class="delete-btn" data-action="delete" title="删除站点">×</button>
         </div>
         <div class="station-info">
-          位置: (${station.position.x.toFixed(1)}, ${station.position.z.toFixed(1)}) | 大小: ${station.size.toFixed(1)}
+          位置: (${station.position.x.toFixed(1)}, ${station.position.z.toFixed(1)}) | 大小: ${station.size.toFixed(1)} | 密度: ${station.density.toFixed(1)}
         </div>
       </div>
     `).join('');

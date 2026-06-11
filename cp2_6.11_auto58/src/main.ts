@@ -32,6 +32,7 @@ class MetroPlannerApp {
   private isDraggingStation: boolean = false;
   private draggedStation: Station | null = null;
   private dragStartPos: THREE.Vector2 = new THREE.Vector2();
+  private stationWasDragged: boolean = false;
   private isCreatingLine: boolean = false;
   private lineStartStation: Station | null = null;
   private tempLineMesh: THREE.Line | null = null;
@@ -240,12 +241,20 @@ class MetroPlannerApp {
     this.updateMouse(e);
 
     if (e.button === 2) {
+      this.isDraggingStation = false;
+      this.draggedStation = null;
+      this.isCreatingLine = false;
+      this.lineStartStation = null;
+      this.stationWasDragged = false;
+      this.controls.enabled = true;
+
       const station = this.intersectStations();
       if (station) {
         for (const line of this.lineManager.getAllLines()) {
           this.lineManager.removeStationFromLine(line.id, station.id);
         }
         this.stationManager.removeStation(station.id);
+        this.trainSimulator.createTrainsForAllLines();
         this.uiPanel.refreshAll();
         return;
       }
@@ -257,6 +266,7 @@ class MetroPlannerApp {
         this.isDraggingStation = true;
         this.draggedStation = station;
         this.dragStartPos.set(e.clientX, e.clientY);
+        this.stationWasDragged = false;
         this.controls.enabled = false;
         this.isCreatingLine = true;
         this.lineStartStation = station;
@@ -267,10 +277,12 @@ class MetroPlannerApp {
       if (point) {
         const color = this.uiPanel.getDefaultStationColor();
         const size = this.uiPanel.getDefaultStationSize();
+        const density = this.uiPanel.getDefaultStationDensity();
         const newStation = this.stationManager.addStation(
           new THREE.Vector3(point.x, size / 2, point.z),
           color,
-          size
+          size,
+          density
         );
         this.uiPanel.refreshAll();
       }
@@ -295,8 +307,9 @@ class MetroPlannerApp {
       const dy = e.clientY - this.dragStartPos.y;
       const movedEnough = Math.sqrt(dx * dx + dy * dy) > 3;
 
-      if (movedEnough) {
+      if (movedEnough && !this.stationWasDragged) {
         this.isCreatingLine = false;
+        this.stationWasDragged = true;
         this.removeTempLine();
       }
 
@@ -304,7 +317,7 @@ class MetroPlannerApp {
         const point = this.intersectGround();
         if (point) {
           const size = this.draggedStation.size;
-          this.stationManager.moveStation(
+          this.stationManager.moveStationSilent(
             this.draggedStation.id,
             new THREE.Vector3(point.x, size / 2, point.z)
           );
@@ -365,12 +378,19 @@ class MetroPlannerApp {
       }
 
       this.removeTempLine();
+
+      if (this.stationWasDragged && this.draggedStation) {
+        this.lineManager.rebuildAllLines();
+        this.trainSimulator.createTrainsForAllLines();
+        this.uiPanel.refreshAll();
+      }
     }
 
     this.isDraggingStation = false;
     this.draggedStation = null;
     this.isCreatingLine = false;
     this.lineStartStation = null;
+    this.stationWasDragged = false;
     this.controls.enabled = true;
   }
 

@@ -7,6 +7,7 @@ export interface StationData {
   position: { x: number; y: number; z: number };
   color: string;
   size: number;
+  density: number;
 }
 
 export class Station {
@@ -19,14 +20,16 @@ export class Station {
   public position: THREE.Vector3;
   public color: string;
   public size: number;
+  public density: number;
   public isDragging: boolean = false;
 
-  constructor(position: THREE.Vector3, color: string = '#ffffff', size: number = 1, name?: string) {
+  constructor(position: THREE.Vector3, color: string = '#ffffff', size: number = 1, density: number = 1, name?: string) {
     this.id = uuidv4();
     this.name = name || `站点 ${Math.floor(Math.random() * 1000)}`;
     this.position = position.clone();
     this.color = color;
     this.size = size;
+    this.density = density;
     this.group = new THREE.Group();
     this.cube = this.createCube();
     this.halo = this.createHalo();
@@ -41,7 +44,7 @@ export class Station {
     const material = new THREE.MeshStandardMaterial({
       color: this.color,
       emissive: this.color,
-      emissiveIntensity: 0.5,
+      emissiveIntensity: 0.5 * this.density,
       metalness: 0.8,
       roughness: 0.2
     });
@@ -56,7 +59,8 @@ export class Station {
     const haloMaterial = new THREE.ShaderMaterial({
       uniforms: {
         color: { value: new THREE.Color(this.color) },
-        size: { value: this.size }
+        size: { value: this.size },
+        density: { value: this.density }
       },
       vertexShader: `
         varying vec3 vNormal;
@@ -70,13 +74,14 @@ export class Station {
       fragmentShader: `
         uniform vec3 color;
         uniform float size;
+        uniform float density;
         varying vec3 vNormal;
         varying vec3 vPosition;
         void main() {
           float intensity = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
           float dist = length(vPosition) / (size * 1.5);
           float alpha = intensity * (1.0 - dist);
-          gl_FragColor = vec4(color, alpha * 0.6);
+          gl_FragColor = vec4(color, alpha * 0.6 * density);
         }
       `,
       side: THREE.BackSide,
@@ -93,7 +98,7 @@ export class Station {
     const material = new THREE.MeshBasicMaterial({
       color: this.color,
       transparent: true,
-      opacity: 0.2,
+      opacity: 0.2 * this.density,
       side: THREE.DoubleSide
     });
     const projection = new THREE.Mesh(geometry, material);
@@ -118,6 +123,16 @@ export class Station {
     this.halo.scale.set(size, size, size);
     this.projection.scale.set(size, size, size);
     this.projection.position.y = -size / 2 + 0.01;
+    const haloMat = this.halo.material as THREE.ShaderMaterial;
+    haloMat.uniforms.size.value = size;
+  }
+
+  public updateDensity(density: number): void {
+    this.density = density;
+    (this.cube.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5 * density;
+    const haloMat = this.halo.material as THREE.ShaderMaterial;
+    haloMat.uniforms.density.value = density;
+    (this.projection.material as THREE.MeshBasicMaterial).opacity = 0.2 * density;
   }
 
   public updatePosition(pos: THREE.Vector3): void {
@@ -139,7 +154,8 @@ export class Station {
       name: this.name,
       position: { x: this.position.x, y: this.position.y, z: this.position.z },
       color: this.color,
-      size: this.size
+      size: this.size,
+      density: this.density
     };
   }
 
@@ -164,8 +180,8 @@ export class StationManager {
     this.scene = scene;
   }
 
-  public addStation(position: THREE.Vector3, color: string = '#ffffff', size: number = 1, name?: string, existingId?: string): Station {
-    const station = new Station(position, color, size, name);
+  public addStation(position: THREE.Vector3, color: string = '#ffffff', size: number = 1, density: number = 1, name?: string, existingId?: string): Station {
+    const station = new Station(position, color, size, density, name);
     if (existingId) {
       station.id = existingId;
     }
@@ -201,6 +217,13 @@ export class StationManager {
     return true;
   }
 
+  public moveStationSilent(id: string, position: THREE.Vector3): boolean {
+    const station = this.stations.get(id);
+    if (!station) return false;
+    station.updatePosition(position);
+    return true;
+  }
+
   public updateStationColor(id: string, color: string): boolean {
     const station = this.stations.get(id);
     if (!station) return false;
@@ -213,6 +236,19 @@ export class StationManager {
     if (!station) return false;
     station.updateSize(size);
     return true;
+  }
+
+  public updateStationDensity(id: string, density: number): boolean {
+    const station = this.stations.get(id);
+    if (!station) return false;
+    station.updateDensity(density);
+    return true;
+  }
+
+  public updateAllStationsDensity(density: number): void {
+    for (const station of this.stations.values()) {
+      station.updateDensity(density);
+    }
   }
 
   public updateStationName(id: string, name: string): boolean {
@@ -252,6 +288,7 @@ export class StationManager {
         new THREE.Vector3(s.position.x, s.position.y, s.position.z),
         s.color,
         s.size,
+        s.density || 1,
         s.name,
         s.id
       );

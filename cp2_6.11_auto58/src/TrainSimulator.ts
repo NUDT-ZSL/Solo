@@ -150,15 +150,12 @@ class Train {
     if (!this.isPulsing) return;
     this.pulseTimer += delta;
     const pulseDuration = 2.0;
-    const t = this.pulseTimer / pulseDuration;
+    const t = Math.min(this.pulseTimer / pulseDuration, 1.0);
 
     if (t >= 1) {
       this.isPulsing = false;
       this.pulseLight.intensity = 0;
-      const r = this.stationSize * 0.3;
       this.sphere.scale.set(1, 1, 1);
-      this.sphere.geometry.dispose();
-      this.sphere.geometry = new THREE.SphereGeometry(r, 32, 32);
       return;
     }
 
@@ -271,11 +268,63 @@ export class TrainSimulator {
       const lineLength = line.getTotalLength();
       if (lineLength === 0) continue;
 
-      const effectiveSpeed = train.baseSpeed * this.globalSpeed * delta;
+      const stationCount = line.stationIds.length;
+      const detectThreshold = 0.025;
+
+      let nearestStationIdx = -1;
+      let nearestStationDist = Infinity;
+      let nearestStationProgress = 0;
+
+      for (let i = 0; i < stationCount; i++) {
+        const sp = stationCount === 1 ? 0 : i / (stationCount - 1);
+        let d = Math.abs(train.progress - sp);
+        if (d > 0.5) d = 1 - d;
+        if (d < nearestStationDist) {
+          nearestStationDist = d;
+          nearestStationIdx = i;
+          nearestStationProgress = sp;
+        }
+      }
+
+      let speedFactor = 1.0;
+      const slowdownZone = 0.05;
+      if (nearestStationDist < slowdownZone && nearestStationIdx !== train.currentStationIndex) {
+        speedFactor = 0.3 + 0.7 * (nearestStationDist / slowdownZone);
+      }
+
+      const effectiveSpeed = train.baseSpeed * this.globalSpeed * speedFactor * delta;
+      const prevProgress = train.progress;
       train.progress += effectiveSpeed;
 
+      let wrappedAround = false;
       if (train.progress >= 1) {
-        train.progress = 0;
+        train.progress -= 1;
+        wrappedAround = true;
+      }
+
+      for (let i = 0; i < stationCount; i++) {
+        const sp = stationCount === 1 ? 0 : i / (stationCount - 1);
+        let crossed = false;
+        if (wrappedAround) {
+          crossed = (prevProgress < sp && sp <= 1) || (0 <= sp && sp <= train.progress);
+        } else {
+          crossed = prevProgress < sp && sp <= train.progress;
+        }
+        const distNow = Math.abs(train.progress - sp);
+        const distWrapped = 1 - distNow;
+        const minDist = Math.min(distNow, distWrapped);
+
+        if ((crossed || minDist < detectThreshold) && train.currentStationIndex !== i) {
+          train.currentStationIndex = i;
+          train.progress = sp;
+          train.isStopped = true;
+          train.stopTimer = 2.0;
+          train.startPulse();
+          break;
+        }
+      }
+
+      if (wrappedAround && train.currentStationIndex === stationCount - 1) {
         train.currentStationIndex = -1;
       }
 
@@ -283,24 +332,6 @@ export class TrainSimulator {
       if (pos) {
         train.group.position.copy(pos);
         train.updateTrail(pos);
-      }
-
-      const stationCount = line.stationIds.length;
-      for (let i = 0; i < stationCount; i++) {
-        let stationProgress: number;
-        if (stationCount === 1) {
-          stationProgress = 0;
-        } else {
-          stationProgress = i / (stationCount - 1);
-        }
-        const dist = Math.abs(train.progress - stationProgress);
-        if (dist < 0.01 && train.currentStationIndex !== i) {
-          train.currentStationIndex = i;
-          train.isStopped = true;
-          train.stopTimer = 2.0;
-          train.startPulse();
-          break;
-        }
       }
     }
   }
