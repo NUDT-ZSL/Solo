@@ -8,6 +8,26 @@ export interface NoteColorConfig {
   bgTint: string;
 }
 
+export interface PlacedNote {
+  color: NoteColor;
+  x: number;
+  y: number;
+  id: number;
+}
+
+export interface NotePulseState extends PlacedNote {
+  pulseTime: number;
+}
+
+export type NotePlayedCallback = (color: NoteColor, index: number) => void;
+export type PlayCompleteCallback = () => void;
+
+export interface DragPreview {
+  color: NoteColor;
+  x: number;
+  y: number;
+}
+
 export const NOTE_COLORS: Record<NoteColor, NoteColorConfig> = {
   red: {
     hex: '#FF3366',

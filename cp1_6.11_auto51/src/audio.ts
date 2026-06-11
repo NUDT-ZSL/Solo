@@ -1,13 +1,11 @@
-import { NoteColor, NOTE_COLORS, BASE_NOTE_DURATION } from './config';
-
-export type NotePlayedCallback = (color: NoteColor, index: number) => void;
-
-export interface PlacedNote {
-  color: NoteColor;
-  x: number;
-  y: number;
-  id: number;
-}
+import {
+  NoteColor,
+  NOTE_COLORS,
+  BASE_NOTE_DURATION,
+  PlacedNote,
+  NotePlayedCallback,
+  PlayCompleteCallback,
+} from './config';
 
 export class AudioEngine {
   private audioContext: AudioContext | null = null;
@@ -17,14 +15,16 @@ export class AudioEngine {
   private notes: PlacedNote[] = [];
   private speed: number = 1;
   private notePlayedCallback: NotePlayedCallback | null = null;
-  private playCompleteCallback: (() => void) | null = null;
+  private playCompleteCallback: PlayCompleteCallback | null = null;
   private currentNoteIndex: number = -1;
 
   constructor() {}
 
   public init(): void {
     if (this.audioContext) return;
-    this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    this.audioContext = new (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext)();
     this.masterGain = this.audioContext.createGain();
     this.masterGain.gain.value = 0.3;
     this.masterGain.connect(this.audioContext.destination);
@@ -32,17 +32,29 @@ export class AudioEngine {
 
   public setNotes(notes: PlacedNote[]): void {
     this.notes = notes;
+    if (this.isPlaying) {
+      this.stopPlayback();
+      this.startPlayback();
+    }
   }
 
   public setSpeed(speed: number): void {
     this.speed = speed;
+    if (this.isPlaying) {
+      this.stopPlayback();
+      this.startPlayback();
+    }
+  }
+
+  public getSpeed(): number {
+    return this.speed;
   }
 
   public onNotePlayed(callback: NotePlayedCallback): void {
     this.notePlayedCallback = callback;
   }
 
-  public onPlayComplete(callback: () => void): void {
+  public onPlayComplete(callback: PlayCompleteCallback): void {
     this.playCompleteCallback = callback;
   }
 

@@ -1,6 +1,12 @@
 import { AudioEngine } from './audio';
 import { DrawEngine } from './draw';
-import { NoteColor, NOTE_COLORS, FPS_TARGET } from './config';
+import {
+  NoteColor,
+  NOTE_COLORS,
+  FPS_TARGET,
+  PlacedNote,
+  DragPreview,
+} from './config';
 
 class GameApp {
   private canvas: HTMLCanvasElement;
@@ -12,8 +18,8 @@ class GameApp {
   private speedSlider: HTMLInputElement;
   private speedValue: HTMLElement;
   private loading: HTMLElement;
+  private noteToolButtons: HTMLElement[];
 
-  private lastTime: number = 0;
   private animFrameId: number | null = null;
   private isDragging: boolean = false;
   private dragColor: NoteColor | null = null;
@@ -26,6 +32,9 @@ class GameApp {
     this.speedSlider = document.getElementById('speedSlider') as HTMLInputElement;
     this.speedValue = document.getElementById('speedValue') as HTMLElement;
     this.loading = document.getElementById('loading') as HTMLElement;
+    this.noteToolButtons = Array.from(
+      document.querySelectorAll<HTMLElement>('.note-btn')
+    );
 
     this.audioEngine = new AudioEngine();
     this.drawEngine = new DrawEngine(this.canvas);
@@ -48,78 +57,96 @@ class GameApp {
   }
 
   private setupEventListeners(): void {
-    const noteBtns = document.querySelectorAll('.note-btn');
-    noteBtns.forEach((btn) => {
-      (btn as HTMLElement).addEventListener('dragstart', (e: DragEvent) => {
-        const color = (btn as HTMLElement).dataset.color as NoteColor;
-        this.dragColor = color;
-        this.isDragging = true;
-        if (e.dataTransfer) {
-          e.dataTransfer.effectAllowed = 'copy';
-          e.dataTransfer.setData('text/plain', color);
-        }
-      });
-
-      (btn as HTMLElement).addEventListener('dragend', () => {
-        this.isDragging = false;
-        this.dragColor = null;
-        this.drawEngine.setDragPreview(null);
-      });
+    this.noteToolButtons.forEach((btn) => {
+      btn.addEventListener('dragstart', this.handleToolDragStart);
+      btn.addEventListener('dragend', this.handleToolDragEnd);
     });
 
-    this.canvas.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'copy';
-      }
-      if (this.dragColor) {
-        const pos = this.getCanvasPos(e);
-        this.drawEngine.setDragPreview({
-          color: this.dragColor,
-          x: pos.x,
-          y: pos.y,
-        });
-      }
-    });
+    this.canvas.addEventListener('dragover', this.handleCanvasDragOver);
+    this.canvas.addEventListener('drop', this.handleCanvasDrop);
+    this.canvas.addEventListener('dragleave', this.handleCanvasDragLeave);
 
-    this.canvas.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const color = (e.dataTransfer?.getData('text/plain') || this.dragColor) as NoteColor;
-      if (color && NOTE_COLORS[color]) {
-        const pos = this.getCanvasPos(e);
-        this.drawEngine.addNote(color, pos.x, pos.y);
-        this.syncNotesToAudio();
-      }
-      this.isDragging = false;
-      this.dragColor = null;
-      this.drawEngine.setDragPreview(null);
-    });
+    this.playBtn.addEventListener('click', this.handlePlayToggle);
+    this.undoBtn.addEventListener('click', this.handleUndo);
+    this.clearBtn.addEventListener('click', this.handleClear);
+    this.speedSlider.addEventListener('input', this.handleSpeedChange);
 
-    this.canvas.addEventListener('dragleave', () => {
-      this.drawEngine.setDragPreview(null);
-    });
-
-    this.playBtn.addEventListener('click', () => {
-      this.togglePlayback();
-    });
-
-    this.undoBtn.addEventListener('click', () => {
-      this.undoLastNote();
-    });
-
-    this.clearBtn.addEventListener('click', () => {
-      this.clearAll();
-    });
-
-    this.speedSlider.addEventListener('input', () => {
-      const speed = parseFloat(this.speedSlider.value);
-      this.updateSpeed(speed);
-    });
-
-    window.addEventListener('resize', () => {
-      this.drawEngine.resize();
-    });
+    window.addEventListener('resize', this.handleResize);
   }
+
+  private handleToolDragStart = (e: DragEvent): void => {
+    const color = (e.currentTarget as HTMLElement).dataset.color as NoteColor;
+    if (!color || !NOTE_COLORS[color]) return;
+    this.dragColor = color;
+    this.isDragging = true;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', color);
+    }
+  };
+
+  private handleToolDragEnd = (): void => {
+    this.isDragging = false;
+    this.dragColor = null;
+    this.drawEngine.setDragPreview(null);
+  };
+
+  private handleCanvasDragOver = (e: DragEvent): void => {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+    if (this.dragColor) {
+      const pos = this.getCanvasPosFromDrag(e);
+      const preview: DragPreview = {
+        color: this.dragColor,
+        x: pos.x,
+        y: pos.y,
+      };
+      this.drawEngine.setDragPreview(preview);
+    }
+  };
+
+  private handleCanvasDrop = (e: DragEvent): void => {
+    e.preventDefault();
+    const color =
+      (e.dataTransfer?.getData('text/plain') as NoteColor) || this.dragColor;
+
+    if (color && NOTE_COLORS[color]) {
+      const pos = this.getCanvasPosFromDrag(e);
+      this.drawEngine.addNote(color, pos.x, pos.y);
+      this.syncNotesToAudio();
+    }
+
+    this.isDragging = false;
+    this.dragColor = null;
+    this.drawEngine.setDragPreview(null);
+  };
+
+  private handleCanvasDragLeave = (): void => {
+    this.drawEngine.setDragPreview(null);
+  };
+
+  private handlePlayToggle = (): void => {
+    this.togglePlayback();
+  };
+
+  private handleUndo = (): void => {
+    this.undoLastNote();
+  };
+
+  private handleClear = (): void => {
+    this.clearAll();
+  };
+
+  private handleSpeedChange = (): void => {
+    const speed = parseFloat(this.speedSlider.value);
+    this.updateSpeed(speed);
+  };
+
+  private handleResize = (): void => {
+    this.drawEngine.resize();
+  };
 
   private setupAudioCallbacks(): void {
     this.audioEngine.onNotePlayed((_color: NoteColor, index: number) => {
@@ -129,26 +156,17 @@ class GameApp {
     this.audioEngine.onPlayComplete(() => {});
   }
 
-  private getCanvasPos(e: MouseEvent | DragEvent): { x: number; y: number } {
+  private getCanvasPosFromDrag(e: DragEvent): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
-    const clientX = 'clientX' in e ? e.clientX : 0;
-    const clientY = 'clientY' in e ? e.clientY : 0;
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
     };
   }
 
   private syncNotesToAudio(): void {
-    const drawNotes = this.drawEngine.getNotes();
-    this.audioEngine.setNotes(
-      drawNotes.map((n) => ({
-        color: n.color,
-        x: n.x,
-        y: n.y,
-        id: n.id,
-      }))
-    );
+    const drawNotes: PlacedNote[] = this.drawEngine.getNotes();
+    this.audioEngine.setNotes(drawNotes);
   }
 
   private togglePlayback(): void {
@@ -162,12 +180,17 @@ class GameApp {
   }
 
   private undoLastNote(): void {
-    if (this.audioEngine.getIsPlaying()) {
+    const wasPlaying = this.audioEngine.getIsPlaying();
+    if (wasPlaying) {
       this.audioEngine.stopPlayback();
       this.playBtn.textContent = '播放';
     }
     this.drawEngine.removeLastNote();
-    this.syncNotesToAudio();
+
+    const halfDuration = 150;
+    window.setTimeout(() => {
+      this.syncNotesToAudio();
+    }, halfDuration);
   }
 
   private clearAll(): void {
@@ -183,11 +206,6 @@ class GameApp {
     this.speedValue.textContent = speed.toFixed(1) + 'x';
     this.audioEngine.setSpeed(speed);
     this.drawEngine.setSpeed(speed);
-
-    if (this.audioEngine.getIsPlaying()) {
-      this.audioEngine.stopPlayback();
-      this.audioEngine.startPlayback();
-    }
   }
 
   private startGameLoop(): void {
@@ -198,7 +216,7 @@ class GameApp {
     const loop = (now: number) => {
       this.animFrameId = requestAnimationFrame(loop);
 
-      const frameTime = now - lastFrameTime;
+      const frameTime = Math.min(now - lastFrameTime, 100);
       lastFrameTime = now;
 
       accumulator += frameTime;
@@ -219,6 +237,22 @@ class GameApp {
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
     }
+
+    this.noteToolButtons.forEach((btn) => {
+      btn.removeEventListener('dragstart', this.handleToolDragStart);
+      btn.removeEventListener('dragend', this.handleToolDragEnd);
+    });
+
+    this.canvas.removeEventListener('dragover', this.handleCanvasDragOver);
+    this.canvas.removeEventListener('drop', this.handleCanvasDrop);
+    this.canvas.removeEventListener('dragleave', this.handleCanvasDragLeave);
+
+    this.playBtn.removeEventListener('click', this.handlePlayToggle);
+    this.undoBtn.removeEventListener('click', this.handleUndo);
+    this.clearBtn.removeEventListener('click', this.handleClear);
+    this.speedSlider.removeEventListener('input', this.handleSpeedChange);
+    window.removeEventListener('resize', this.handleResize);
+
     this.audioEngine.destroy();
   }
 }
