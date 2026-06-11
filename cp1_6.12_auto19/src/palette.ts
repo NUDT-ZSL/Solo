@@ -38,9 +38,15 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
   return { h: hue * 360, s: sat * 100, l: lum * 100 };
 }
 
+function normalizeHue(h: number): number {
+  const mod = ((h % 360) + 360) % 360;
+  return mod;
+}
+
 function hslToHex(h: number, s: number, l: number): string {
-  s /= 100;
-  l /= 100;
+  h = normalizeHue(h);
+  s = Math.max(0, Math.min(100, s)) / 100;
+  l = Math.max(0, Math.min(100, l)) / 100;
   const k = (n: number) => (n + h / 30) % 12;
   const a = s * Math.min(l, 1 - l);
   const f = (n: number) => {
@@ -177,28 +183,30 @@ export class PaletteManager {
     const hsl1 = hexToHsl(state.color1);
     const hsl2 = hexToHsl(state.color2);
 
-    const rotate = (h: number, deg: number): number => (h + deg + 360) % 360;
+    const rotateHue = (h: number, deg: number): number => normalizeHue(h + deg);
+    const rotateAngle = (a: number, deg: number): number => normalizeHue(a + deg);
 
     const clampL = (l: number): number => Math.max(15, Math.min(85, l));
+    const clampS = (s: number): number => Math.max(20, Math.min(95, s));
 
     const complementary: GradientState = {
-      color1: hslToHex(rotate(hsl1.h, 180), Math.min(90, hsl1.s + 10), clampL(hsl1.l - 5)),
-      color2: hslToHex(rotate(hsl2.h, 180), Math.min(90, hsl2.s + 10), clampL(hsl2.l + 8)),
-      angle: (state.angle + 45) % 360,
+      color1: hslToHex(rotateHue(hsl1.h, 180), clampS(hsl1.s + 10), clampL(hsl1.l - 5)),
+      color2: hslToHex(rotateHue(hsl2.h, 180), clampS(hsl2.s + 10), clampL(hsl2.l + 8)),
+      angle: rotateAngle(state.angle, 45),
       type: state.type
     };
 
     const analogous: GradientState = {
-      color1: hslToHex(rotate(hsl1.h, 30), Math.max(40, hsl1.s - 5), clampL(hsl1.l + 10)),
-      color2: hslToHex(rotate(hsl2.h, -30), Math.max(40, hsl2.s - 5), clampL(hsl2.l - 8)),
+      color1: hslToHex(rotateHue(hsl1.h, 30), clampS(hsl1.s - 5), clampL(hsl1.l + 10)),
+      color2: hslToHex(rotateHue(hsl2.h, -30), clampS(hsl2.s - 5), clampL(hsl2.l - 8)),
       angle: state.angle,
       type: state.type
     };
 
     const triadic: GradientState = {
-      color1: hslToHex(rotate(hsl1.h, 120), hsl1.s, clampL(hsl1.l + 5)),
-      color2: hslToHex(rotate(hsl2.h, -120), hsl2.s, clampL(hsl2.l - 3)),
-      angle: (state.angle + 90) % 360,
+      color1: hslToHex(rotateHue(hsl1.h, 120), clampS(hsl1.s), clampL(hsl1.l + 5)),
+      color2: hslToHex(rotateHue(hsl2.h, -120), clampS(hsl2.s), clampL(hsl2.l - 3)),
+      angle: rotateAngle(state.angle, 90),
       type: state.type === 'linear' ? 'radial' : 'linear'
     };
 

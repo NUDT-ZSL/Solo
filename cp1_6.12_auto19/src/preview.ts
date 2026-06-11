@@ -190,28 +190,66 @@ export class PreviewManager {
     });
   }
 
-  private async copyCSS(): Promise<void> {
+  private copyCSS(): void {
     const css = GradientEditor.toBackgroundCSS(this.currentState);
     const toast = this.container.querySelector('#copy-toast') as HTMLElement | null;
 
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(css);
-      } else {
+    const fallbackCopy = (): void => {
+      try {
         const ta = document.createElement('textarea');
         ta.value = css;
+        ta.setAttribute('readonly', '');
         ta.style.position = 'fixed';
         ta.style.left = '-9999px';
         ta.style.top = '-9999px';
+        ta.style.opacity = '0';
+        ta.style.pointerEvents = 'none';
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand('copy');
+        ta.setSelectionRange(0, ta.value.length);
+        let ok = false;
+        try {
+          ok = document.execCommand('copy');
+        } catch {
+          ok = false;
+        }
         document.body.removeChild(ta);
+        if (ok) this.showToast(toast);
+      } catch {
+        this.showToast(toast);
       }
-      this.showToast(toast);
-    } catch {
-      this.showToast(toast);
-    }
+    };
+
+    requestAnimationFrame(() => {
+      if (navigator.clipboard && window.isSecureContext) {
+        let done = false;
+        const timeoutId = window.setTimeout(() => {
+          if (!done) {
+            done = true;
+            fallbackCopy();
+          }
+        }, 300);
+
+        navigator.clipboard
+          .writeText(css)
+          .then(() => {
+            if (!done) {
+              done = true;
+              window.clearTimeout(timeoutId);
+              this.showToast(toast);
+            }
+          })
+          .catch(() => {
+            if (!done) {
+              done = true;
+              window.clearTimeout(timeoutId);
+              fallbackCopy();
+            }
+          });
+      } else {
+        fallbackCopy();
+      }
+    });
   }
 
   private showToast(toast: HTMLElement | null): void {

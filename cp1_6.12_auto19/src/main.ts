@@ -17,6 +17,8 @@ class App {
 
   constructor() {
     const editorEl = document.getElementById('editor-content');
+    const panelEl = document.getElementById('editor-panel');
+    const toggleEl = document.getElementById('mobile-toggle');
     const previewEl = document.getElementById('preview-root');
     const overlayEl = document.getElementById('fullscreen-overlay');
 
@@ -33,13 +35,15 @@ class App {
       }
     };
 
-    this.editor = new GradientEditor(editorEl, this.state.current);
+    this.editor = new GradientEditor(
+      { container: editorEl, panel: panelEl, toggle: toggleEl },
+      this.state.current
+    );
     this.palette = new PaletteManager(document.createElement('div'));
     this.preview = new PreviewManager(previewEl, (this.palette as unknown as { container: HTMLElement }).container, this.state.current);
 
     this.setupBindings();
     this.setupFullscreen();
-    this.setupMobileToggle();
     this.startClock();
     this.setupCleanup();
   }
@@ -97,15 +101,6 @@ class App {
       if (e.target === overlay) {
         this.closeFullscreen();
       }
-    });
-  }
-
-  private setupMobileToggle(): void {
-    const panel = document.getElementById('editor-panel') as HTMLElement;
-    const toggle = document.getElementById('mobile-toggle') as HTMLElement;
-
-    toggle.addEventListener('click', () => {
-      panel.classList.toggle('open');
     });
   }
 

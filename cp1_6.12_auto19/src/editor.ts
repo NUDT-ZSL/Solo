@@ -9,14 +9,28 @@ export interface GradientState {
 
 type Listener = (state: GradientState) => void;
 
+export interface EditorMountOptions {
+  container: HTMLElement;
+  panel?: HTMLElement | null;
+  toggle?: HTMLElement | null;
+}
+
 export class GradientEditor {
   private container: HTMLElement;
+  private panel: HTMLElement | null = null;
+  private toggle: HTMLElement | null = null;
   private state: GradientState;
   private listeners: Set<Listener> = new Set();
   private activeColorField: 'color1' | 'color2' | null = null;
 
-  constructor(container: HTMLElement, initialState?: Partial<GradientState>) {
-    this.container = container;
+  constructor(mount: HTMLElement | EditorMountOptions, initialState?: Partial<GradientState>) {
+    if (mount instanceof HTMLElement) {
+      this.container = mount;
+    } else {
+      this.container = mount.container;
+      this.panel = mount.panel ?? null;
+      this.toggle = mount.toggle ?? null;
+    }
     this.state = {
       color1: initialState?.color1 ?? '#6366f1',
       color2: initialState?.color2 ?? '#00d4ff',
@@ -25,6 +39,7 @@ export class GradientEditor {
     };
     this.render();
     this.bindEvents();
+    this.bindMobileToggle();
   }
 
   private render(): void {
@@ -130,6 +145,48 @@ export class GradientEditor {
         const type = el.getAttribute('data-type') as GradientType;
         this.updateState({ type });
       });
+    });
+  }
+
+  private bindMobileToggle(): void {
+    if (!this.toggle || !this.panel) return;
+
+    this.toggle.setAttribute('role', 'button');
+    this.toggle.setAttribute('aria-expanded', 'false');
+    this.toggle.setAttribute('aria-label', '展开/折叠编辑面板');
+
+    const closePanel = (): void => {
+      this.panel?.classList.remove('open');
+      this.toggle?.setAttribute('aria-expanded', 'false');
+    };
+
+    this.toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!this.panel) return;
+      const isOpen = this.panel.classList.toggle('open');
+      this.toggle?.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePanel();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!this.panel) return;
+      const target = e.target as Node;
+      if (this.panel.contains(target) || (this.toggle && this.toggle.contains(target))) return;
+      if (window.innerWidth <= 768) closePanel();
+    });
+
+    this.container.addEventListener('click', () => {
+      if (window.innerWidth <= 768) {
+        const timer = window.setTimeout(() => closePanel(), 300);
+        const cleanup = () => {
+          window.clearTimeout(timer);
+          document.removeEventListener('click', cleanup, true);
+        };
+        document.addEventListener('click', cleanup, true);
+      }
     });
   }
 
