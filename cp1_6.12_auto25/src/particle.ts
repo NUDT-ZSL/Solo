@@ -1,11 +1,18 @@
+export interface RGB {
+  r: number;
+  g: number;
+  b: number;
+}
+
 export interface ParticleOptions {
   x: number;
   y: number;
   size: number;
-  color: string;
+  color: RGB;
   speed: number;
   width: number;
   height: number;
+  fadeIn?: boolean;
 }
 
 export class Particle {
@@ -14,21 +21,32 @@ export class Particle {
   public vx: number;
   public vy: number;
   public size: number;
-  public color: string;
-  public targetColor: string;
+  public baseSize: number;
+  public color: RGB;
+  public targetColor: RGB;
   public colorTransition: number;
   public baseSpeed: number;
   public width: number;
   public height: number;
-  public trail: { x: number; y: number }[];
-  public maxTrailLength: number;
+  public alpha: number;
+  public targetAlpha: number;
+
+  public restX: number;
+  public restY: number;
+  public restUpdateTimer: number;
+
+  public gridX: number = 0;
+  public gridY: number = 0;
+
+  private static colorCache: Map<string, string> = new Map();
 
   constructor(options: ParticleOptions) {
     this.x = options.x;
     this.y = options.y;
     this.size = options.size;
-    this.color = options.color;
-    this.targetColor = options.color;
+    this.baseSize = options.size;
+    this.color = { ...options.color };
+    this.targetColor = { ...options.color };
     this.colorTransition = 1;
     this.baseSpeed = options.speed;
     this.width = options.width;
@@ -38,12 +56,16 @@ export class Particle {
     this.vx = Math.cos(angle) * this.baseSpeed;
     this.vy = Math.sin(angle) * this.baseSpeed;
 
-    this.trail = [];
-    this.maxTrailLength = Math.floor(8 + this.size * 2);
+    this.alpha = options.fadeIn ? 0 : 1;
+    this.targetAlpha = 1;
+
+    this.restX = this.x;
+    this.restY = this.y;
+    this.restUpdateTimer = Math.random() * 120;
   }
 
-  public setTargetColor(color: string): void {
-    this.targetColor = color;
+  public setTargetColor(color: RGB): void {
+    this.targetColor = { ...color };
     this.colorTransition = 0;
   }
 
@@ -52,6 +74,8 @@ export class Particle {
     const yRatio = height / this.height;
     this.x *= xRatio;
     this.y *= yRatio;
+    this.restX *= xRatio;
+    this.restY *= yRatio;
     this.width = width;
     this.height = height;
   }
@@ -60,46 +84,104 @@ export class Particle {
     deltaTime: number,
     mouseX: number | null,
     mouseY: number | null,
+    mouseVelX: number,
+    mouseVelY: number,
     mouseActive: boolean,
-    forceStrength: number
+    forceStrength: number,
+    gridCellSize: number
   ): void {
+    this.gridX = Math.floor(this.x / gridCellSize);
+    this.gridY = Math.floor(this.y / gridCellSize);
+
     if (this.colorTransition < 1) {
       this.colorTransition = Math.min(1, this.colorTransition + deltaTime * 2);
-      this.color = this.interpolateColor(this.color, this.targetColor, this.colorTransition);
+      const t = this.colorTransition;
+      this.color.r = this.color.r + (this.targetColor.r - this.color.r) * t;
+      this.color.g = this.color.g + (this.targetColor.g - this.color.g) * t;
+      this.color.b = this.color.b + (this.targetColor.b - this.color.b) * t;
     }
 
-    this.trail.push({ x: this.x, y: this.y });
-    if (this.trail.length > this.maxTrailLength) {
-      this.trail.shift();
+    if (this.alpha < this.targetAlpha) {
+      this.alpha = Math.min(this.targetAlpha, this.alpha + deltaTime * 2);
+    } else if (this.alpha > this.targetAlpha) {
+      this.alpha = Math.max(this.targetAlpha, this.alpha - deltaTime * 2);
     }
 
     if (mouseActive && mouseX !== null && mouseY !== null) {
       const dx = this.x - mouseX;
       const dy = this.y - mouseY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const influenceRadius = 120;
+      const distSq = dx * dx + dy * dy;
+      const innerRadius = 40;
+      const outerRadius = 150;
+      const outerRadiusSq = outerRadius * outerRadius;
 
-      if (dist < influenceRadius && dist > 0) {
-        const force = (1 - dist / influenceRadius) * 8 * forceStrength;
-        this.vx += (dx / dist) * force;
-        this.vy += (dy / dist) * force;
+      if (distSq < outerRadiusSq && distSq > 0.01) {
+        const dist = Math.sqrt(distSq);
+        let forceFactor: number;
+
+        if (dist < innerRadius) {
+          forceFactor = 1;
+        } else {
+          forceFactor = 1 - (dist - innerRadius) / (outerRadius - innerRadius);
+          forceFactor = forceFactor * forceFactor;
+        }
+
+        const repelForce = 12 * forceStrength * forceFactor;
+        const nx = dx / dist;
+        const ny = dy / dist;
+
+        this.vx += nx * repelForce * deltaTime * 60;
+        this.vy += ny * repelForce * deltaTime * 60;
+
+        if (mouseVelX !== 0 || mouseVelY !== 0) {
+          const mouseSpeed = Math.sqrt(mouseVelX * mouseVelX + mouseVelY * mouseVelY);
+          if (mouseSpeed > 0.5) {
+            const tangentFactor = 0.3 * forceStrength * forceFactor;
+            const tx = -ny;
+            const ty = nx;
+            const dir = (mouseVelX * tx + mouseVelY * ty) > 0 ? 1 : -1;
+            this.vx += tx * dir * tangentFactor * mouseSpeed * deltaTime * 60;
+            this.vy += ty * dir * tangentFactor * mouseSpeed * deltaTime * 60;
+          }
+        }
       }
     }
 
-    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    const maxSpeed = this.baseSpeed * 4;
-    if (speed > maxSpeed) {
-      this.vx = (this.vx / speed) * maxSpeed;
-      this.vy = (this.vy / speed) * maxSpeed;
+    this.restUpdateTimer -= deltaTime * 60;
+    if (this.restUpdateTimer <= 0) {
+      this.restX = this.x + (Math.random() - 0.5) * 40;
+      this.restY = this.y + (Math.random() - 0.5) * 40;
+      this.restX = Math.max(0, Math.min(this.width, this.restX));
+      this.restY = Math.max(0, Math.min(this.height, this.restY));
+      this.restUpdateTimer = 90 + Math.random() * 60;
     }
 
-    this.vx *= 0.98;
-    this.vy *= 0.98;
+    const springK = 0.003 * forceStrength;
+    const restDx = this.restX - this.x;
+    const restDy = this.restY - this.y;
+    this.vx += restDx * springK * deltaTime * 60;
+    this.vy += restDy * springK * deltaTime * 60;
 
-    const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (currentSpeed < this.baseSpeed * 0.5) {
-      const boost = (this.baseSpeed * 0.5 - currentSpeed) * 0.1;
-      if (currentSpeed > 0) {
+    const speedSq = this.vx * this.vx + this.vy * this.vy;
+    const maxSpeed = this.baseSpeed * 5;
+    const maxSpeedSq = maxSpeed * maxSpeed;
+    if (speedSq > maxSpeedSq) {
+      const speed = Math.sqrt(speedSq);
+      const ratio = maxSpeed / speed;
+      this.vx *= ratio;
+      this.vy *= ratio;
+    }
+
+    this.vx *= 0.97;
+    this.vy *= 0.97;
+
+    const currentSpeedSq = this.vx * this.vx + this.vy * this.vy;
+    const minSpeed = this.baseSpeed * 0.3;
+    const minSpeedSq = minSpeed * minSpeed;
+    if (currentSpeedSq < minSpeedSq) {
+      const currentSpeed = Math.sqrt(currentSpeedSq);
+      if (currentSpeed > 0.001) {
+        const boost = (minSpeed - currentSpeed) * 0.05;
         this.vx += (this.vx / currentSpeed) * boost;
         this.vy += (this.vy / currentSpeed) * boost;
       } else {
@@ -112,20 +194,20 @@ export class Particle {
     this.x += this.vx * deltaTime * 60;
     this.y += this.vy * deltaTime * 60;
 
-    if (this.x < 0) {
-      this.x = 0;
-      this.vx = Math.abs(this.vx);
-    } else if (this.x > this.width) {
-      this.x = this.width;
-      this.vx = -Math.abs(this.vx);
+    if (this.x < this.size) {
+      this.x = this.size;
+      this.vx = Math.abs(this.vx) * 0.8;
+    } else if (this.x > this.width - this.size) {
+      this.x = this.width - this.size;
+      this.vx = -Math.abs(this.vx) * 0.8;
     }
 
-    if (this.y < 0) {
-      this.y = 0;
-      this.vy = Math.abs(this.vy);
-    } else if (this.y > this.height) {
-      this.y = this.height;
-      this.vy = -Math.abs(this.vy);
+    if (this.y < this.size) {
+      this.y = this.size;
+      this.vy = Math.abs(this.vy) * 0.8;
+    } else if (this.y > this.height - this.size) {
+      this.y = this.height - this.size;
+      this.vy = -Math.abs(this.vy) * 0.8;
     }
   }
 
@@ -134,108 +216,98 @@ export class Particle {
     forceStrength: number,
     deltaTime: number
   ): void {
-    if (forceStrength <= 0) return;
+    if (forceStrength <= 0 || neighbors.length === 0) return;
 
-    const minDist = 30;
-    const maxDist = 80;
+    const minDist = 25;
+    const maxDist = 70;
+    const minDistSq = minDist * minDist;
+    const maxDistSq = maxDist * maxDist;
 
-    for (const neighbor of neighbors) {
+    const repelStrength = 0.2 * forceStrength;
+    const attractStrength = 0.06 * forceStrength;
+    const dt = deltaTime * 60;
+
+    for (let i = 0; i < neighbors.length; i++) {
+      const neighbor = neighbors[i];
       if (neighbor === this) continue;
 
       const dx = neighbor.x - this.x;
       const dy = neighbor.y - this.y;
       const distSq = dx * dx + dy * dy;
 
-      if (distSq > maxDist * maxDist) continue;
+      if (distSq > maxDistSq || distSq < 0.01) continue;
 
       const dist = Math.sqrt(distSq);
-      if (dist < 1) continue;
+      const nx = dx / dist;
+      const ny = dy / dist;
 
       let force: number;
-      if (dist < minDist) {
-        force = -(1 - dist / minDist) * 0.15 * forceStrength;
+      if (distSq < minDistSq) {
+        force = -(1 - dist / minDist) * repelStrength;
       } else {
-        force = (1 - (dist - minDist) / (maxDist - minDist)) * 0.08 * forceStrength;
+        const t = (dist - minDist) / (maxDist - minDist);
+        force = (1 - t) * attractStrength;
       }
 
-      this.vx += (dx / dist) * force * deltaTime * 60;
-      this.vy += (dy / dist) * force * deltaTime * 60;
+      this.vx += nx * force * dt;
+      this.vy += ny * force * dt;
     }
   }
 
   public render(ctx: CanvasRenderingContext2D): void {
-    if (this.trail.length > 1) {
-      for (let i = 1; i < this.trail.length; i++) {
-        const alpha = (i / this.trail.length) * 0.4;
-        const trailSize = this.size * (i / this.trail.length) * 0.6;
-        ctx.beginPath();
-        ctx.arc(this.trail[i].x, this.trail[i].y, trailSize, 0, Math.PI * 2);
-        ctx.fillStyle = this.colorWithAlpha(this.color, alpha);
-        ctx.fill();
-      }
-    }
+    if (this.alpha <= 0.01) return;
 
-    ctx.save();
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = this.color;
+    const size = this.size;
+    const glowSize = size * 2.8;
+    const glowAlpha = this.alpha * 0.22;
+
+    ctx.fillStyle = this.getColorString(this.color, glowAlpha);
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
+    ctx.arc(this.x, this.y, glowSize, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
+
+    ctx.fillStyle = this.getColorString(this.color, this.alpha);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  private colorWithAlpha(color: string, alpha: number): string {
-    if (color.startsWith('#')) {
-      const r = parseInt(color.slice(1, 3), 16);
-      const g = parseInt(color.slice(3, 5), 16);
-      const b = parseInt(color.slice(5, 7), 16);
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    if (color.startsWith('rgb(')) {
-      const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (match) {
-        return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${alpha})`;
+  private getColorString(rgb: RGB, alpha: number): string {
+    const key = `${rgb.r | 0},${rgb.g | 0},${rgb.b | 0},${alpha.toFixed(2)}`;
+    let cached = Particle.colorCache.get(key);
+    if (!cached) {
+      cached = `rgba(${rgb.r | 0}, ${rgb.g | 0}, ${rgb.b | 0}, ${alpha})`;
+      if (Particle.colorCache.size > 1000) {
+        Particle.colorCache.clear();
       }
+      Particle.colorCache.set(key, cached);
     }
-    if (color.startsWith('rgba(')) {
-      const match = color.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*[\d.]+\)/);
-      if (match) {
-        return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${alpha})`;
-      }
-    }
-    return color;
+    return cached;
   }
 
-  private interpolateColor(from: string, to: string, t: number): string {
-    const fromRGB = this.parseColor(from);
-    const toRGB = this.parseColor(to);
-
-    if (!fromRGB || !toRGB) return to;
-
-    const r = Math.round(fromRGB.r + (toRGB.r - fromRGB.r) * t);
-    const g = Math.round(fromRGB.g + (toRGB.g - fromRGB.g) * t);
-    const b = Math.round(fromRGB.b + (toRGB.b - fromRGB.b) * t);
-
-    return `rgb(${r}, ${g}, ${b})`;
+  public static parseHexColor(hex: string): RGB {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return { r, g, b };
   }
+}
 
-  private parseColor(color: string): { r: number; g: number; b: number } | null {
-    if (color.startsWith('#')) {
-      return {
-        r: parseInt(color.slice(1, 3), 16),
-        g: parseInt(color.slice(3, 5), 16),
-        b: parseInt(color.slice(5, 7), 16)
-      };
-    }
-    const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-    if (match) {
-      return {
-        r: parseInt(match[1]),
-        g: parseInt(match[2]),
-        b: parseInt(match[3])
-      };
-    }
-    return null;
-  }
+export function createGlowTexture(size: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = size * 2;
+  canvas.height = size * 2;
+  const ctx = canvas.getContext('2d')!;
+
+  const gradient = ctx.createRadialGradient(size, size, 0, size, size, size);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.6)');
+  gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.2)');
+  gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.05)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size * 2, size * 2);
+
+  return canvas;
 }

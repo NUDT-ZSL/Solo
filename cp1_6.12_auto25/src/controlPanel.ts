@@ -17,6 +17,7 @@ export class ControlPanel {
   private currentParticleCount: number;
   private currentForceStrength: number;
   private currentMouseInteraction: boolean;
+  private fpsDisplay: HTMLSpanElement | null = null;
 
   constructor(
     parent: HTMLElement,
@@ -39,22 +40,56 @@ export class ControlPanel {
     this.container.appendChild(this.toggleButton);
   }
 
+  public updateFPS(fps: number): void {
+    if (this.fpsDisplay) {
+      this.fpsDisplay.textContent = `${fps.toFixed(0)} FPS`;
+      if (fps >= 55) {
+        this.fpsDisplay.style.color = '#06d6a0';
+      } else if (fps >= 30) {
+        this.fpsDisplay.style.color = '#ffd166';
+      } else {
+        this.fpsDisplay.style.color = '#ef476f';
+      }
+    }
+  }
+
   public destroy(): void {
     this.panel.remove();
     this.toggleButton.remove();
   }
 
+  private supportsBackdropFilter(): boolean {
+    if (typeof CSS === 'undefined' || !CSS.supports) return false;
+    return (
+      CSS.supports('backdrop-filter', 'blur(10px)') ||
+      CSS.supports('-webkit-backdrop-filter', 'blur(10px)')
+    );
+  }
+
+  private getPanelBackgroundStyle(): string {
+    if (this.supportsBackdropFilter()) {
+      return `
+        background: rgba(20, 20, 30, 0.7);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      `;
+    } else {
+      return `
+        background: rgba(20, 20, 30, 0.92);
+      `;
+    }
+  }
+
   private createPanel(): HTMLDivElement {
     const panel = document.createElement('div');
+    const bgStyle = this.getPanelBackgroundStyle();
     panel.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
       width: 280px;
       padding: 20px;
-      background: rgba(20, 20, 30, 0.7);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      ${bgStyle}
       border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -74,9 +109,19 @@ export class ControlPanel {
       color: #ffffff;
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
     `;
-    title.innerHTML = '<span style="width: 8px; height: 8px; border-radius: 50%; background: #9b5de5; box-shadow: 0 0 8px #9b5de5;"></span>粒子控制台';
+
+    const titleLeft = document.createElement('span');
+    titleLeft.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+    titleLeft.innerHTML = '<span style="width: 8px; height: 8px; border-radius: 50%; background: #9b5de5; box-shadow: 0 0 8px #9b5de5;"></span>粒子控制台';
+
+    this.fpsDisplay = document.createElement('span');
+    this.fpsDisplay.style.cssText = 'font-size: 12px; font-weight: 500; color: #06d6a0;';
+    this.fpsDisplay.textContent = '-- FPS';
+
+    title.appendChild(titleLeft);
+    title.appendChild(this.fpsDisplay);
     panel.appendChild(title);
 
     panel.appendChild(this.createParticleCountSlider());
@@ -90,6 +135,7 @@ export class ControlPanel {
   private createToggleButton(): HTMLButtonElement {
     const btn = document.createElement('button');
     btn.textContent = '⚙';
+    const bgStyle = this.getPanelBackgroundStyle();
     btn.style.cssText = `
       position: fixed;
       top: 20px;
@@ -97,9 +143,7 @@ export class ControlPanel {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: rgba(20, 20, 30, 0.7);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      ${bgStyle}
       border: 1px solid rgba(255, 255, 255, 0.1);
       color: #e0e0e0;
       font-size: 18px;
@@ -344,33 +388,37 @@ export class ControlPanel {
       cursor: pointer;
     `;
 
-    const style = document.createElement('style');
-    style.textContent = `
-      input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #9b5de5;
-        cursor: pointer;
-        box-shadow: 0 0 8px rgba(155, 93, 229, 0.6);
-        transition: transform 0.2s ease;
-      }
-      input[type="range"]::-webkit-slider-thumb:hover {
-        transform: scale(1.2);
-      }
-      input[type="range"]::-moz-range-thumb {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #9b5de5;
-        cursor: pointer;
-        border: none;
-        box-shadow: 0 0 8px rgba(155, 93, 229, 0.6);
-      }
-    `;
-    document.head.appendChild(style);
+    const styleId = 'particle-slider-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: #9b5de5;
+          cursor: pointer;
+          box-shadow: 0 0 8px rgba(155, 93, 229, 0.6);
+          transition: transform 0.2s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.2);
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: #9b5de5;
+          cursor: pointer;
+          border: none;
+          box-shadow: 0 0 8px rgba(155, 93, 229, 0.6);
+        }
+      `;
+      document.head.appendChild(style);
+    }
   }
 
   private toggle(): void {

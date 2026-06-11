@@ -35,7 +35,7 @@ function init(): void {
     }
   };
 
-  new ControlPanel(
+  const controlPanel = new ControlPanel(
     document.body,
     callbacks,
     DEFAULT_CONFIG.theme,
@@ -43,6 +43,10 @@ function init(): void {
     DEFAULT_CONFIG.forceStrength,
     DEFAULT_CONFIG.mouseInteraction
   );
+
+  const fpsUpdateInterval = window.setInterval(() => {
+    controlPanel.updateFPS(particleSystem.getFPS());
+  }, 500);
 
   let resizeTimeoutId: number | null = null;
   const handleResize = (): void => {
@@ -64,7 +68,6 @@ function init(): void {
   };
 
   const handleTouchMove = (e: TouchEvent): void => {
-    e.preventDefault();
     if (e.touches.length > 0) {
       const touch = e.touches[0];
       particleSystem.handleTouchMove(touch.clientX, touch.clientY);
@@ -77,14 +80,16 @@ function init(): void {
 
   window.addEventListener('mousemove', handleMouseMove);
   document.addEventListener('mouseleave', handleMouseLeave);
-  window.addEventListener('touchmove', handleTouchMove, { passive: false });
+  window.addEventListener('touchmove', handleTouchMove, { passive: true });
   window.addEventListener('touchend', handleTouchEnd);
   window.addEventListener('touchcancel', handleTouchEnd);
 
   particleSystem.start();
 
   window.addEventListener('beforeunload', () => {
+    clearInterval(fpsUpdateInterval);
     particleSystem.stop();
+    controlPanel.destroy();
     window.removeEventListener('resize', handleResize);
     window.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseleave', handleMouseLeave);
