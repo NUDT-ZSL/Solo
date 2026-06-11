@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 
+const ANALYSIS_LAYER = 0;
+
+const analysisLayerObj = new THREE.Layers();
+analysisLayerObj.set(ANALYSIS_LAYER);
+
 export class ShadowAnalyzer {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
@@ -11,6 +16,7 @@ export class ShadowAnalyzer {
   private lastAnalysisTime: number = 0;
   private cachedCoverage: number = 0;
   private textureSize: number = 512;
+  private needsUpdate: boolean = true;
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -35,6 +41,7 @@ export class ShadowAnalyzer {
     );
     this.orthoCamera.position.set(0, 100, 0);
     this.orthoCamera.lookAt(0, 0, 0);
+    this.orthoCamera.layers.set(ANALYSIS_LAYER);
 
     this.renderTarget = new THREE.WebGLRenderTarget(
       this.textureSize,
@@ -52,28 +59,48 @@ export class ShadowAnalyzer {
     );
   }
 
+  public markDirty(): void {
+    this.needsUpdate = true;
+  }
+
   public update(currentTime: number): number {
-    if (currentTime - this.lastAnalysisTime >= this.analysisInterval) {
-      this.lastAnalysisTime = currentTime;
-      this.cachedCoverage = this.calculateCoverage();
+    if (!this.needsUpdate && currentTime - this.lastAnalysisTime < this.analysisInterval) {
+      return this.cachedCoverage;
     }
+
+    this.lastAnalysisTime = currentTime;
+    this.needsUpdate = false;
+    this.cachedCoverage = this.calculateCoverage();
     return this.cachedCoverage;
   }
 
   private calculateCoverage(): number {
     const originalClearAlpha = this.renderer.getClearAlpha();
     const originalAutoClear = this.renderer.autoClear;
+    const originalCameraLayers = this.orthoCamera.layers.mask;
 
     this.renderer.setRenderTarget(this.renderTarget);
     this.renderer.autoClear = true;
     this.renderer.setClearColor(0xffffff, 1);
     this.renderer.clear();
 
-    const originalVisibility: Map<THREE.Object3D, boolean> = new Map();
+    const hiddenLayers: Map<THREE.Object3D, number> = new Map();
     this.scene.traverse((obj) => {
-      if (obj !== this.groundPlane && obj.type !== 'DirectionalLight') {
-        originalVisibility.set(obj, obj.visible);
-        obj.visible = false;
+      if (obj === this.groundPlane) {
+        return;
+      }
+
+      if (obj.type === 'GridHelper' || obj.type === 'LineSegments') {
+        hiddenLayers.set(obj, obj.layers.mask);
+        obj.layers.set(2);
+      } else if (obj.type === 'DirectionalLight' || obj.type === 'AmbientLight' || obj.type === 'DirectionalLightHelper') {
+        return;
+      } else if (obj !== this.scene) {
+        const wasOnAnalysisLayer = obj.layers.test(analysisLayerObj);
+        if (!wasOnAnalysisLayer) {
+          hiddenLayers.set(obj, obj.layers.mask);
+          obj.layers.set(2);
+        }
       }
     });
 
@@ -90,13 +117,14 @@ export class ShadowAnalyzer {
       this.pixelBuffer
     );
 
-    originalVisibility.forEach((visible, obj) => {
-      obj.visible = visible;
+    hiddenLayers.forEach((mask, obj) => {
+      obj.layers.mask = mask;
     });
 
     this.renderer.setRenderTarget(null);
     this.renderer.setClearColor(0x1e2a38, originalClearAlpha);
     this.renderer.autoClear = originalAutoClear;
+    this.orthoCamera.layers.mask = originalCameraLayers;
 
     return this.analyzePixels();
   }

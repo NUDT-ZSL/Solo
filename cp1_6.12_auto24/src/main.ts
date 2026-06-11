@@ -19,6 +19,8 @@ class Application {
   private clock: THREE.Clock;
   private defaultCameraPosition: THREE.Vector3;
   private defaultCameraTarget: THREE.Vector3;
+  private lastShadowAnalysisTime: number = 0;
+  private shadowAnalysisInterval: number = 1000;
 
   constructor() {
     this.clock = new THREE.Clock();
@@ -55,6 +57,7 @@ class Application {
       onRotationChange: (x, y, z) => this.handleRotationChange(x, y, z),
       onResetCamera: () => this.resetCamera(),
       onExportImage: () => this.exportImage(),
+      onLocationChange: (lat, lng, tz) => this.handleLocationChange(lat, lng, tz),
     });
 
     this.setupEventListeners();
@@ -96,6 +99,7 @@ class Application {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     container.appendChild(renderer.domElement);
 
@@ -139,15 +143,23 @@ class Application {
   private handleDateChange(dayOfYear: number): void {
     const currentHour = this.sunSimulator.getCurrentHour();
     this.sunSimulator.updateSunPosition(dayOfYear, currentHour);
+    this.shadowAnalyzer.markDirty();
   }
 
   private handleTimeChange(hour: number): void {
     const currentDay = this.sunSimulator.getCurrentDayOfYear();
     this.sunSimulator.updateSunPosition(currentDay, hour);
+    this.shadowAnalyzer.markDirty();
   }
 
   private handleRotationChange(x: number, y: number, z: number): void {
     this.buildingModel.setRotation(x, y, z);
+    this.shadowAnalyzer.markDirty();
+  }
+
+  private handleLocationChange(latitude: number, longitude: number, timezone: number): void {
+    this.sunSimulator.setLocation({ latitude, longitude, timezone });
+    this.shadowAnalyzer.markDirty();
   }
 
   private resetCamera(): void {
@@ -174,9 +186,14 @@ class Application {
   }
 
   private exportImage(): void {
+    const originalColorSpace = this.renderer.outputColorSpace;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.render(this.scene, this.camera);
+
     const dataURL = this.renderer.domElement.toDataURL('image/png');
-    
+
+    this.renderer.outputColorSpace = originalColorSpace;
+
     const link = document.createElement('a');
     const date = new Date();
     const timestamp = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}_${date.getHours().toString().padStart(2, '0')}${date.getMinutes().toString().padStart(2, '0')}`;
@@ -209,14 +226,17 @@ class Application {
     requestAnimationFrame(() => this.animate());
 
     const deltaTime = this.clock.getDelta();
-    const currentTime = this.clock.getElapsedTime() * 1000;
+    const currentTime = performance.now();
 
     this.controls.update();
     this.buildingModel.update(deltaTime);
     this.sunSimulator.update(deltaTime);
 
-    const coverage = this.shadowAnalyzer.update(currentTime);
-    this.uiPanel.updateCoverage(coverage);
+    if (currentTime - this.lastShadowAnalysisTime >= this.shadowAnalysisInterval) {
+      this.lastShadowAnalysisTime = currentTime;
+      const coverage = this.shadowAnalyzer.update(currentTime);
+      this.uiPanel.updateCoverage(coverage);
+    }
 
     this.renderer.render(this.scene, this.camera);
   }

@@ -4,6 +4,7 @@ export interface UIPanelCallbacks {
   onRotationChange: (x: number, y: number, z: number) => void;
   onResetCamera: () => void;
   onExportImage: () => void;
+  onLocationChange: (latitude: number, longitude: number, timezone: number) => void;
 }
 
 export class UIPanel {
@@ -13,11 +14,17 @@ export class UIPanel {
   private rotXSlider: HTMLInputElement;
   private rotYSlider: HTMLInputElement;
   private rotZSlider: HTMLInputElement;
+  private latSlider: HTMLInputElement;
+  private lngSlider: HTMLInputElement;
+  private tzSlider: HTMLInputElement;
   private dateValueDisplay: HTMLDivElement;
   private timeValueDisplay: HTMLDivElement;
   private rotXValue: HTMLSpanElement;
   private rotYValue: HTMLSpanElement;
   private rotZValue: HTMLSpanElement;
+  private latValue: HTMLSpanElement;
+  private lngValue: HTMLSpanElement;
+  private tzValue: HTMLSpanElement;
   private coverageDisplay: HTMLDivElement;
   private coverageProgress: HTMLDivElement;
   private coverageValue: HTMLSpanElement;
@@ -36,11 +43,17 @@ export class UIPanel {
     this.rotXSlider = this.createSlider();
     this.rotYSlider = this.createSlider();
     this.rotZSlider = this.createSlider();
+    this.latSlider = this.createSlider();
+    this.lngSlider = this.createSlider();
+    this.tzSlider = this.createSlider();
     this.dateValueDisplay = document.createElement('div');
     this.timeValueDisplay = document.createElement('div');
     this.rotXValue = document.createElement('span');
     this.rotYValue = document.createElement('span');
     this.rotZValue = document.createElement('span');
+    this.latValue = document.createElement('span');
+    this.lngValue = document.createElement('span');
+    this.tzValue = document.createElement('span');
     this.coverageDisplay = document.createElement('div');
     this.coverageProgress = document.createElement('div');
     this.coverageValue = document.createElement('span');
@@ -118,6 +131,30 @@ export class UIPanel {
     rotSection.appendChild(rotYContainer);
     rotSection.appendChild(rotZContainer);
 
+    const locationSection = this.createSection('地理位置', '🌍');
+    locationSection.className += ' rotation-section';
+
+    const latContainer = this.createRotationSlider(
+      this.latSlider, this.latValue, '纬度', -90, 90, 0.1
+    );
+    const lngContainer = this.createRotationSlider(
+      this.lngSlider, this.lngValue, '经度', -180, 180, 0.1
+    );
+    const tzContainer = this.createRotationSlider(
+      this.tzSlider, this.tzValue, '时区', -12, 12, 1
+    );
+
+    this.latSlider.value = '39.9';
+    this.lngSlider.value = '116.4';
+    this.tzSlider.value = '8';
+    this.latValue.textContent = '39.9°';
+    this.lngValue.textContent = '116.4°';
+    this.tzValue.textContent = 'UTC+8';
+
+    locationSection.appendChild(latContainer);
+    locationSection.appendChild(lngContainer);
+    locationSection.appendChild(tzContainer);
+
     const coverageSection = this.createSection('阴影分析', '📊');
     
     const coverageLabel = document.createElement('div');
@@ -161,6 +198,7 @@ export class UIPanel {
 
     this.container.appendChild(title);
     this.container.appendChild(sunSection);
+    this.container.appendChild(locationSection);
     this.container.appendChild(rotSection);
     this.container.appendChild(coverageSection);
     this.container.appendChild(buttonSection);
@@ -242,6 +280,21 @@ export class UIPanel {
     this.rotXSlider.addEventListener('input', updateRotation);
     this.rotYSlider.addEventListener('input', updateRotation);
     this.rotZSlider.addEventListener('input', updateRotation);
+
+    const updateLocation = () => {
+      const lat = parseFloat(this.latSlider.value);
+      const lng = parseFloat(this.lngSlider.value);
+      const tz = parseInt(this.tzSlider.value);
+      this.latValue.textContent = `${lat.toFixed(1)}°`;
+      this.lngValue.textContent = `${lng.toFixed(1)}°`;
+      const tzSign = tz >= 0 ? '+' : '';
+      this.tzValue.textContent = `UTC${tzSign}${tz}`;
+      this.callbacks.onLocationChange(lat, lng, tz);
+    };
+
+    this.latSlider.addEventListener('input', updateLocation);
+    this.lngSlider.addEventListener('input', updateLocation);
+    this.tzSlider.addEventListener('input', updateLocation);
   }
 
   private updateDateDisplay(dayOfYear: number): void {

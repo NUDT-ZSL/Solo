@@ -5,6 +5,18 @@ export interface SunPosition {
   altitude: number;
 }
 
+export interface GeoLocation {
+  latitude: number;
+  longitude: number;
+  timezone: number;
+}
+
+const DEFAULT_LOCATION: GeoLocation = {
+  latitude: 39.9,
+  longitude: 116.4,
+  timezone: 8,
+};
+
 export class SunSimulator {
   public light: THREE.DirectionalLight;
   public helper: THREE.DirectionalLightHelper;
@@ -14,7 +26,7 @@ export class SunSimulator {
   private targetIntensity: number = 1;
   private currentIntensity: number = 1;
 
-  private latitude: number = 39.9;
+  private location: GeoLocation;
   private currentDayOfYear: number = 172;
   private currentHour: number = 12;
 
@@ -22,7 +34,9 @@ export class SunSimulator {
   private readonly maxIntensity: number = 1.5;
   private readonly minIntensity: number = 0.1;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, location?: GeoLocation) {
+    this.location = { ...DEFAULT_LOCATION, ...location };
+
     this.light = new THREE.DirectionalLight(0xffffff, this.currentIntensity);
     this.light.castShadow = true;
     this.light.shadow.mapSize.width = 2048;
@@ -46,9 +60,11 @@ export class SunSimulator {
   }
 
   public calculateSunPosition(dayOfYear: number, hour: number): SunPosition {
+    const solarNoonUtc = 12 - this.location.longitude / 15;
+    const localSolarTime = hour + (solarNoonUtc - 12) / 1 + (this.location.timezone - this.location.longitude / 15);
+    const hourAngle = this.calculateHourAngle(localSolarTime);
     const declination = this.calculateDeclination(dayOfYear);
-    const hourAngle = this.calculateHourAngle(hour);
-    const latitudeRad = THREE.MathUtils.degToRad(this.latitude);
+    const latitudeRad = THREE.MathUtils.degToRad(this.location.latitude);
 
     const sinAltitude =
       Math.sin(latitudeRad) * Math.sin(declination) +
@@ -56,19 +72,19 @@ export class SunSimulator {
 
     const altitude = Math.asin(Math.max(-1, Math.min(1, sinAltitude)));
 
+    const cosAzDenom = Math.cos(altitude);
+    if (Math.abs(cosAzDenom) < 1e-10) {
+      return { azimuth: 0, altitude: Math.max(0, altitude) };
+    }
+
     const cosAzimuth =
       (Math.sin(declination) * Math.cos(latitudeRad) -
         Math.cos(declination) * Math.sin(latitudeRad) * Math.cos(hourAngle)) /
-      Math.cos(altitude);
+      cosAzDenom;
 
-    const sinAzimuthNumerator = -Math.cos(declination) * Math.sin(hourAngle);
-    const sinAzimuthDenominator = Math.cos(altitude);
+    const sinAzimuth = -Math.cos(declination) * Math.sin(hourAngle) / cosAzDenom;
 
-    let azimuth = Math.atan2(
-      sinAzimuthNumerator / sinAzimuthDenominator,
-      Math.max(-1, Math.min(1, cosAzimuth))
-    );
-
+    let azimuth = Math.atan2(sinAzimuth, Math.max(-1, Math.min(1, cosAzimuth)));
     azimuth = azimuth + Math.PI;
 
     return {
@@ -83,8 +99,8 @@ export class SunSimulator {
     );
   }
 
-  private calculateHourAngle(hour: number): number {
-    return THREE.MathUtils.degToRad(15 * (hour - 12));
+  private calculateHourAngle(solarTime: number): number {
+    return THREE.MathUtils.degToRad(15 * (solarTime - 12));
   }
 
   private calculateIntensity(altitude: number): number {
@@ -151,13 +167,25 @@ export class SunSimulator {
     return this.currentPosition.clone();
   }
 
-  public setLatitude(latitude: number): void {
-    this.latitude = latitude;
+  public setLocation(location: Partial<GeoLocation>): void {
+    this.location = { ...this.location, ...location };
     this.updateSunPosition(this.currentDayOfYear, this.currentHour, true);
   }
 
+  public getLocation(): GeoLocation {
+    return { ...this.location };
+  }
+
   public getLatitude(): number {
-    return this.latitude;
+    return this.location.latitude;
+  }
+
+  public getLongitude(): number {
+    return this.location.longitude;
+  }
+
+  public getTimezone(): number {
+    return this.location.timezone;
   }
 
   public dispose(): void {
