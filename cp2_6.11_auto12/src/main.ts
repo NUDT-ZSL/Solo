@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ReliefScene } from './reliefScene';
 import { UIControls, DEFAULT_PARAMS } from './uiControls';
-import { loadPreset, parseUploadedJSON, PRESETS } from './starData';
+import { loadPreset, parseUploadedJSON } from './starData';
 
 class App {
   private reliefScene: ReliefScene;
@@ -11,9 +11,10 @@ class App {
   private mouseNDC = new THREE.Vector2(-999, -999);
   private currentPreset = 'orion';
   private hoveredIndex: number | null = null;
-  private tooltipTarget = { x: 0, y: 0 };
-  private tooltipCurrent = { x: 0, y: 0 };
   private animationId = 0;
+
+  private scratchVec3 = new THREE.Vector3();
+  private projScreen = { x: 0, y: 0 };
 
   constructor() {
     const canvasWrap = document.getElementById('canvas-wrap')!;
@@ -61,8 +62,6 @@ class App {
       const rect = this.canvasWrap.getBoundingClientRect();
       this.mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      this.tooltipTarget.x = e.clientX;
-      this.tooltipTarget.y = e.clientY;
     });
 
     this.canvasWrap.addEventListener('mouseleave', () => {
@@ -74,26 +73,23 @@ class App {
       const rect = this.canvasWrap.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
       );
       const hit = this.reliefScene.raycast(ndc);
       if (hit) {
         const worldPos = this.reliefScene.getStarWorldPosition(hit.index);
-        const camPos = this.canvasWrap.querySelector('canvas')!;
         this.smoothZoomTo(worldPos);
       }
     });
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        this.smoothZoomReset();
-      }
+      if (e.key === 'Escape') this.smoothZoomReset();
     });
   }
 
   private smoothZoomTo(target: THREE.Vector3) {
-    const startTarget = new THREE.Vector3();
-    const startPos = this.reliefScene['camera'].position.clone();
+    const startTarget = this.reliefScene.controls.target.clone();
+    const startPos = this.reliefScene.camera.position.clone();
     const endTarget = target.clone();
     const direction = new THREE.Vector3().subVectors(endTarget, startPos).normalize();
     const endPos = endTarget.clone().sub(direction.multiplyScalar(6));
@@ -102,43 +98,34 @@ class App {
     const duration = 800;
     const startTime = performance.now();
 
-    const animateZoom = () => {
+    const tick = () => {
       const elapsed = performance.now() - startTime;
       const t = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3);
-
-      this.reliefScene['controls'].target.lerpVectors(startTarget, endTarget, eased);
-      this.reliefScene['camera'].position.lerpVectors(startPos, endPos, eased);
-
-      if (t < 1) {
-        requestAnimationFrame(animateZoom);
-      }
+      this.reliefScene.controls.target.lerpVectors(startTarget, endTarget, eased);
+      this.reliefScene.camera.position.lerpVectors(startPos, endPos, eased);
+      if (t < 1) requestAnimationFrame(tick);
     };
-    animateZoom();
+    tick();
   }
 
   private smoothZoomReset() {
     const defaultPos = new THREE.Vector3(0, 14, 22);
     const defaultTarget = new THREE.Vector3(0, 0, 0);
-    const startPos = this.reliefScene['camera'].position.clone();
-    const startTarget = this.reliefScene['controls'].target.clone();
-
+    const startPos = this.reliefScene.camera.position.clone();
+    const startTarget = this.reliefScene.controls.target.clone();
     const duration = 800;
     const startTime = performance.now();
 
-    const animateZoom = () => {
+    const tick = () => {
       const elapsed = performance.now() - startTime;
       const t = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3);
-
-      this.reliefScene['controls'].target.lerpVectors(startTarget, defaultTarget, eased);
-      this.reliefScene['camera'].position.lerpVectors(startPos, defaultPos, eased);
-
-      if (t < 1) {
-        requestAnimationFrame(animateZoom);
-      }
+      this.reliefScene.controls.target.lerpVectors(startTarget, defaultTarget, eased);
+      this.reliefScene.camera.position.lerpVectors(startPos, defaultPos, eased);
+      if (t < 1) requestAnimationFrame(tick);
     };
-    animateZoom();
+    tick();
   }
 
   private onParamChange(params: Record<string, unknown>) {
@@ -155,8 +142,8 @@ class App {
     try {
       const stars = parseUploadedJSON(data);
       this.reliefScene.loadStars(stars);
-    } catch (err) {
-      console.error('Failed to parse star data:', err);
+    } catch (err: any) {
+      alert(`星图数据错误：${err?.message || err}`);
     }
   }
 
@@ -179,20 +166,29 @@ class App {
 
   private updateHover() {
     const hit = this.reliefScene.raycast(this.mouseNDC);
+
     if (hit) {
       if (this.hoveredIndex !== hit.index) {
         this.reliefScene.highlightStar(hit.index);
         this.hoveredIndex = hit.index;
       }
+      const starWorld = this.reliefScene.getStarWorldPosition(hit.index);
+      this.projectWorldToScreen(starWorld);
       const starData = this.reliefScene.getStarData(hit.index);
       if (starData) {
-        this.uiControls.showTooltip(starData, this.tooltipCurrent.x, this.tooltipCurrent.y);
+        this.uiControls.showTooltipAt(starData, this.projScreen.x, this.projScreen.y);
       }
-    } else {
-      if (this.hoveredIndex !== null) {
-        this.clearHover();
-      }
+    } else if (this.hoveredIndex !== null) {
+      this.clearHover();
     }
+  }
+
+  private projectWorldToScreen(world: THREE.Vector3) {
+    this.scratchVec3.copy(world);
+    this.scratchVec3.project(this.reliefScene.camera);
+    const rect = this.canvasWrap.getBoundingClientRect();
+    this.projScreen.x = ((this.scratchVec3.x + 1) / 2) * rect.width + rect.left;
+    this.projScreen.y = ((-this.scratchVec3.y + 1) / 2) * rect.height + rect.top;
   }
 
   private clearHover() {
@@ -201,25 +197,11 @@ class App {
     this.uiControls.hideTooltip();
   }
 
-  private updateTooltipPosition() {
-    const lerpFactor = 1 - Math.pow(0.001, this.clock.getDelta() || 0.016);
-    this.tooltipCurrent.x += (this.tooltipTarget.x - this.tooltipCurrent.x) * lerpFactor;
-    this.tooltipCurrent.y += (this.tooltipTarget.y - this.tooltipCurrent.y) * lerpFactor;
-
-    if (this.hoveredIndex !== null) {
-      const starData = this.reliefScene.getStarData(this.hoveredIndex);
-      if (starData) {
-        this.uiControls.showTooltip(starData, this.tooltipCurrent.x, this.tooltipCurrent.y);
-      }
-    }
-  }
-
   private animate() {
     this.animationId = requestAnimationFrame(() => this.animate());
     const delta = this.clock.getDelta();
     this.reliefScene.update(delta);
     this.updateHover();
-    this.updateTooltipPosition();
   }
 }
 

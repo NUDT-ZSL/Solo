@@ -40,6 +40,11 @@ const SLIDERS: SliderDef[] = [
   { key: 'backgroundStarDensity', label: '背景星点密度', min: 0, max: 200, step: 1 },
 ];
 
+const PANEL_WIDTH = 280;
+const TOGGLE_WIDTH = 28;
+const SLIDE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const SLIDE_DURATION = '0.4s';
+
 export class UIControls {
   private panel: HTMLDivElement;
   private toggleBtn: HTMLDivElement;
@@ -52,6 +57,13 @@ export class UIControls {
   private expanded = false;
   private valueDisplays = new Map<keyof ReliefParams, HTMLSpanElement>();
 
+  private tooltipTargetPos = { x: -9999, y: -9999 };
+  private tooltipCurrentPos = { x: -9999, y: -9999 };
+  private tooltipVisible = false;
+  private rafId = 0;
+  private lastFrameTime = 0;
+  private readonly FOLLOW_LAG_MS = 100;
+
   constructor(
     onParamChange: (params: Partial<ReliefParams>) => void,
     onPresetChange: (presetName: string) => void,
@@ -63,23 +75,52 @@ export class UIControls {
     this.onFileUpload = onFileUpload;
     this.onSavePreset = onSavePreset;
     this.params = { ...DEFAULT_PARAMS };
-    this.tooltip = document.getElementById('tooltip') as HTMLDivElement;
 
-    this.toggleBtn = document.createElement('div');
-    this.panel = document.createElement('div');
-    this.buildPanel();
-    this.buildToggle();
+    this.tooltip = this.buildTooltip();
+    this.toggleBtn = this.buildToggleButton();
+    this.panel = this.buildPanel();
+    this.updatePanelPosition();
+    this.startTooltipAnimation();
   }
 
-  private buildToggle() {
-    Object.assign(this.toggleBtn.style, {
+  private buildTooltip(): HTMLDivElement {
+    const t = document.createElement('div');
+    Object.assign(t.style, {
+      position: 'fixed',
+      pointerEvents: 'none',
+      background: 'rgba(26, 0, 51, 0.9)',
+      border: '1px solid rgba(136, 34, 170, 0.8)',
+      borderRadius: '8px',
+      padding: '8px 12px',
+      color: '#ffffff',
+      fontSize: '13px',
+      fontWeight: 'normal',
+      lineHeight: '1.5',
+      zIndex: '9999',
+      opacity: '0',
+      transform: 'translate(0, 0)',
+      transition: 'opacity 0.15s ease-out',
+      whiteSpace: 'nowrap',
+      fontFamily: "'Segoe UI', 'PingFang SC', sans-serif",
+      boxShadow: '0 2px 12px rgba(0,0,0,0.6), 0 0 0 0.5px rgba(255,255,255,0.08) inset',
+      userSelect: 'none',
+    });
+    document.body.appendChild(t);
+    return t;
+  }
+
+  private buildToggleButton(): HTMLDivElement {
+    const btn = document.createElement('div');
+    Object.assign(btn.style, {
       position: 'fixed',
       right: '0',
       top: '50%',
       transform: 'translateY(-50%)',
-      width: '28px',
+      width: `${TOGGLE_WIDTH}px`,
       height: '64px',
-      background: 'rgba(10,0,30,0.6)',
+      background: 'rgba(10, 0, 30, 0.6)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
       border: '1px solid #8822AA',
       borderRight: 'none',
       borderRadius: '8px 0 0 8px',
@@ -87,192 +128,351 @@ export class UIControls {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: '50',
-      transition: 'right 0.4s cubic-bezier(0.22,1,0.36,1)',
+      zIndex: '51',
+      transition: `right ${SLIDE_DURATION} ${SLIDE_EASING}`,
+      boxShadow: '0 0 16px rgba(102, 34, 170, 0.4)',
+    });
+
+    const label = document.createElement('div');
+    Object.assign(label.style, {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '4px',
+      color: '#CC88FF',
     });
 
     const arrow = document.createElement('span');
     arrow.textContent = '◂';
-    arrow.style.cssText = 'color: #CC88FF; font-size: 14px; transition: transform 0.3s ease;';
-    this.toggleBtn.appendChild(arrow);
-
-    this.toggleBtn.addEventListener('click', () => {
-      this.expanded = !this.expanded;
-      if (this.expanded) {
-        this.panel.style.right = '0';
-        this.toggleBtn.style.right = '280px';
-        arrow.style.transform = 'rotate(180deg)';
-      } else {
-        this.panel.style.right = '-280px';
-        this.toggleBtn.style.right = '0';
-        arrow.style.transform = 'rotate(0deg)';
-      }
+    Object.assign(arrow.style, {
+      fontSize: '14px',
+      transition: `transform ${SLIDE_DURATION} ${SLIDE_EASING}`,
+      display: 'inline-block',
+      color: '#E0B0FF',
     });
+    label.appendChild(arrow);
 
-    document.body.appendChild(this.toggleBtn);
+    const tinyLabel = document.createElement('span');
+    tinyLabel.textContent = '设';
+    Object.assign(tinyLabel.style, {
+      fontSize: '10px',
+      letterSpacing: '1px',
+      writingMode: 'vertical-rl',
+      textOrientation: 'upright',
+      marginTop: '2px',
+    });
+    label.appendChild(tinyLabel);
+
+    btn.appendChild(label);
+
+    btn.addEventListener('click', () => this.toggleExpanded(arrow));
+    document.body.appendChild(btn);
+    return btn;
   }
 
-  private buildPanel() {
-    Object.assign(this.panel.style, {
+  private buildPanel(): HTMLDivElement {
+    const p = document.createElement('div');
+    Object.assign(p.style, {
       position: 'fixed',
-      right: '-280px',
       top: '0',
-      width: '280px',
+      right: `-${PANEL_WIDTH}px`,
+      width: `${PANEL_WIDTH}px`,
       height: '100%',
-      background: 'rgba(10,0,30,0.6)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
+      background: 'rgba(10, 0, 30, 0.6)',
+      backdropFilter: 'blur(20px) saturate(1.2)',
+      WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
       borderLeft: '1px solid #8822AA',
-      zIndex: '40',
-      transition: 'right 0.4s cubic-bezier(0.22,1,0.36,1)',
+      boxShadow: '-8px 0 40px rgba(74, 0, 102, 0.3)',
+      zIndex: '50',
+      transition: `right ${SLIDE_DURATION} ${SLIDE_EASING}`,
       overflowY: 'auto',
-      padding: '20px 16px',
+      overflowX: 'hidden',
+      padding: '24px 18px 24px 18px',
       color: '#E0D0FF',
-      fontSize: '13px',
+      fontFamily: "'Segoe UI', 'PingFang SC', sans-serif",
+      boxSizing: 'border-box',
     });
 
     const title = document.createElement('h2');
     title.textContent = '星尘拓印';
-    title.style.cssText = 'font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #FF88CC; letter-spacing: 2px; text-align: center;';
-    this.panel.appendChild(title);
+    Object.assign(title.style, {
+      fontSize: '17px',
+      fontWeight: '600',
+      margin: '0 0 20px 0',
+      padding: '0 0 12px 0',
+      color: '#FF88CC',
+      letterSpacing: '3px',
+      textAlign: 'center',
+      borderBottom: '1px solid rgba(136,34,170,0.4)',
+      background: 'linear-gradient(135deg, #FF88CC, #8855FF)',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+    });
+    p.appendChild(title);
 
-    const presetLabel = document.createElement('div');
-    presetLabel.textContent = '天区模板';
-    presetLabel.style.cssText = 'margin-bottom: 6px; font-size: 12px; color: #AA88CC;';
-    this.panel.appendChild(presetLabel);
+    this.appendPresetSelectors(p);
+    this.appendFileUpload(p);
 
-    const presetSelect = document.createElement('select');
-    presetSelect.style.cssText = `
-      width: 100%; padding: 6px 8px; margin-bottom: 14px;
-      background: rgba(30,0,60,0.7); border: 1px solid #8822AA;
-      border-radius: 6px; color: #E0D0FF; font-size: 13px;
-      outline: none; cursor: pointer;
-    `;
+    const divider = document.createElement('div');
+    Object.assign(divider.style, {
+      height: '1px',
+      background: 'linear-gradient(90deg, transparent, #8822AA, transparent)',
+      margin: '18px 0',
+    });
+    p.appendChild(divider);
+
+    for (const def of SLIDERS) {
+      if (def.isToggle) this.buildToggleControl(p, def);
+      else this.buildSliderControl(p, def);
+    }
+
+    const divider2 = document.createElement('div');
+    Object.assign(divider2.style, {
+      height: '1px',
+      background: 'linear-gradient(90deg, transparent, #8822AA, transparent)',
+      margin: '18px 0',
+    });
+    p.appendChild(divider2);
+
+    this.appendPresetButtons(p);
+    document.body.appendChild(p);
+    return p;
+  }
+
+  private appendPresetSelectors(p: HTMLDivElement) {
+    const label = document.createElement('div');
+    label.textContent = '天区模板';
+    Object.assign(label.style, {
+      marginBottom: '8px',
+      fontSize: '12px',
+      color: '#AA88CC',
+      letterSpacing: '1px',
+      textTransform: 'uppercase',
+    });
+    p.appendChild(label);
+
+    const sel = document.createElement('select');
+    Object.assign(sel.style, {
+      width: '100%',
+      padding: '8px 10px',
+      marginBottom: '16px',
+      background: 'rgba(30, 0, 60, 0.7)',
+      backdropFilter: 'blur(8px)',
+      border: '1px solid #8822AA',
+      borderRadius: '8px',
+      color: '#E0D0FF',
+      fontSize: '13px',
+      outline: 'none',
+      cursor: 'pointer',
+      transition: 'border-color 0.2s ease',
+    });
+    sel.addEventListener('focus', () => sel.style.borderColor = '#FF66AA');
+    sel.addEventListener('blur', () => sel.style.borderColor = '#8822AA');
+
     for (const [key, val] of Object.entries(PRESETS)) {
       const opt = document.createElement('option');
       opt.value = key;
       opt.textContent = val.label;
-      presetSelect.appendChild(opt);
+      sel.appendChild(opt);
     }
-    presetSelect.addEventListener('change', () => {
-      this.onPresetChange(presetSelect.value);
-    });
-    this.panel.appendChild(presetSelect);
+    sel.addEventListener('change', () => this.onPresetChange(sel.value));
+    p.appendChild(sel);
+  }
 
-    const uploadLabel = document.createElement('label');
-    uploadLabel.textContent = '上传星图 JSON';
-    uploadLabel.style.cssText = `
-      display: block; padding: 6px 10px; margin-bottom: 14px;
-      background: rgba(30,0,60,0.7); border: 1px solid #6622AA;
-      border-radius: 6px; text-align: center; cursor: pointer;
-      color: #AA88CC; font-size: 12px; transition: border-color 0.2s;
-    `;
-    uploadLabel.addEventListener('mouseenter', () => { uploadLabel.style.borderColor = '#FF66AA'; });
-    uploadLabel.addEventListener('mouseleave', () => { uploadLabel.style.borderColor = '#6622AA'; });
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.json';
-    fileInput.style.display = 'none';
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
+  private appendFileUpload(p: HTMLDivElement) {
+    const label = document.createElement('label');
+    label.textContent = '✦ 上传星图 JSON';
+    Object.assign(label.style, {
+      display: 'block',
+      padding: '9px 12px',
+      marginBottom: '4px',
+      background: 'rgba(30, 0, 60, 0.55)',
+      backdropFilter: 'blur(8px)',
+      border: '1px solid #6622AA',
+      borderRadius: '8px',
+      textAlign: 'center',
+      cursor: 'pointer',
+      color: '#CC88FF',
+      fontSize: '12px',
+      letterSpacing: '1px',
+      transition: 'all 0.2s ease',
+      fontWeight: '500',
+    });
+    label.addEventListener('mouseenter', () => {
+      label.style.borderColor = '#FF66AA';
+      label.style.color = '#FFAADD';
+    });
+    label.addEventListener('mouseleave', () => {
+      label.style.borderColor = '#6622AA';
+      label.style.color = '#CC88FF';
+    });
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    Object.assign(input.style, { display: 'none' });
+    input.addEventListener('change', () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
         try {
-          const data = JSON.parse(reader.result as string);
+          const data = JSON.parse(r.result as string);
           this.onFileUpload(data);
-        } catch { /* ignore parse errors */ }
+        } catch (e) {
+          alert('JSON 解析失败，请检查格式');
+        }
       };
-      reader.readAsText(file);
+      r.readAsText(f);
     });
-    uploadLabel.appendChild(fileInput);
-    this.panel.appendChild(uploadLabel);
+    label.appendChild(input);
+    p.appendChild(label);
+  }
 
-    const divider = document.createElement('div');
-    divider.style.cssText = 'height: 1px; background: linear-gradient(90deg, transparent, #8822AA, transparent); margin: 12px 0;';
-    this.panel.appendChild(divider);
-
-    for (const def of SLIDERS) {
-      if (def.isToggle) {
-        this.buildToggleControl(def);
-      } else {
-        this.buildSliderControl(def);
-      }
-    }
-
-    const divider2 = document.createElement('div');
-    divider2.style.cssText = 'height: 1px; background: linear-gradient(90deg, transparent, #8822AA, transparent); margin: 12px 0;';
-    this.panel.appendChild(divider2);
-
+  private appendPresetButtons(p: HTMLDivElement) {
     const saveBtn = document.createElement('button');
-    saveBtn.textContent = '保存预设';
-    saveBtn.style.cssText = `
-      width: 100%; padding: 8px; margin-top: 8px;
-      background: linear-gradient(135deg, #6622AA, #FF66AA);
-      border: none; border-radius: 6px; color: #fff;
-      font-size: 13px; cursor: pointer; letter-spacing: 1px;
-      transition: opacity 0.2s;
-    `;
-    saveBtn.addEventListener('mouseenter', () => { saveBtn.style.opacity = '0.85'; });
-    saveBtn.addEventListener('mouseleave', () => { saveBtn.style.opacity = '1'; });
+    saveBtn.textContent = '✦ 保存当前预设';
+    Object.assign(saveBtn.style, {
+      width: '100%',
+      padding: '10px',
+      marginTop: '4px',
+      background: 'linear-gradient(135deg, #6622AA 0%, #AA3388 50%, #FF66AA 100%)',
+      border: 'none',
+      borderRadius: '8px',
+      color: '#fff',
+      fontSize: '13px',
+      cursor: 'pointer',
+      letterSpacing: '1.5px',
+      transition: 'transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease',
+      fontWeight: '600',
+      boxShadow: '0 2px 16px rgba(170, 51, 136, 0.35)',
+    });
+    saveBtn.addEventListener('mouseenter', () => {
+      saveBtn.style.transform = 'translateY(-1px)';
+      saveBtn.style.boxShadow = '0 4px 24px rgba(255, 102, 170, 0.5)';
+    });
+    saveBtn.addEventListener('mouseleave', () => {
+      saveBtn.style.transform = 'translateY(0)';
+      saveBtn.style.boxShadow = '0 2px 16px rgba(170, 51, 136, 0.35)';
+    });
+    saveBtn.addEventListener('mousedown', () => saveBtn.style.transform = 'translateY(0)');
     saveBtn.addEventListener('click', () => this.onSavePreset());
-    this.panel.appendChild(saveBtn);
+    p.appendChild(saveBtn);
 
     const loadBtn = document.createElement('button');
-    loadBtn.textContent = '加载预设';
-    loadBtn.style.cssText = `
-      width: 100%; padding: 8px; margin-top: 8px;
-      background: rgba(30,0,60,0.7); border: 1px solid #6622AA;
-      border-radius: 6px; color: #E0D0FF; font-size: 13px;
-      cursor: pointer; letter-spacing: 1px; transition: border-color 0.2s;
-    `;
-    loadBtn.addEventListener('mouseenter', () => { loadBtn.style.borderColor = '#FF66AA'; });
-    loadBtn.addEventListener('mouseleave', () => { loadBtn.style.borderColor = '#6622AA'; });
+    loadBtn.textContent = '载入预设文件';
+    Object.assign(loadBtn.style, {
+      width: '100%',
+      padding: '9px',
+      marginTop: '10px',
+      background: 'rgba(30, 0, 60, 0.55)',
+      backdropFilter: 'blur(8px)',
+      border: '1px solid #6622AA',
+      borderRadius: '8px',
+      color: '#E0D0FF',
+      fontSize: '12px',
+      cursor: 'pointer',
+      letterSpacing: '1.5px',
+      transition: 'all 0.2s ease',
+      fontWeight: '500',
+    });
+    loadBtn.addEventListener('mouseenter', () => {
+      loadBtn.style.borderColor = '#FF66AA';
+      loadBtn.style.color = '#FFAADD';
+    });
+    loadBtn.addEventListener('mouseleave', () => {
+      loadBtn.style.borderColor = '#6622AA';
+      loadBtn.style.color = '#E0D0FF';
+    });
+
     const loadInput = document.createElement('input');
     loadInput.type = 'file';
     loadInput.accept = '.json';
-    loadInput.style.display = 'none';
+    Object.assign(loadInput.style, { display: 'none' });
     loadInput.addEventListener('change', () => {
-      const file = loadInput.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
+      const f = loadInput.files?.[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
         try {
-          const data = JSON.parse(reader.result as string);
-          if (data.params) {
-            this.setParams(data.params);
-            this.onParamChange(data.params);
+          const data = JSON.parse(r.result as string);
+          if (data && typeof data === 'object' && (data as any).params) {
+            this.setParams((data as any).params);
+            this.onParamChange((data as any).params);
+          } else {
+            alert('预设文件格式不正确');
           }
-        } catch { /* ignore */ }
+        } catch {
+          alert('预设文件解析失败');
+        }
       };
-      reader.readAsText(file);
+      r.readAsText(f);
     });
     loadBtn.appendChild(loadInput);
     loadBtn.addEventListener('click', () => loadInput.click());
-    this.panel.appendChild(loadBtn);
-
-    document.body.appendChild(this.panel);
+    p.appendChild(loadBtn);
   }
 
-  private buildSliderControl(def: SliderDef) {
+  private buildSliderControl(p: HTMLDivElement, def: SliderDef) {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'margin-bottom: 14px;';
+    wrap.style.marginBottom = '18px';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 4px;';
+    Object.assign(header.style, {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: '7px',
+    });
 
     const label = document.createElement('span');
     label.textContent = def.label;
-    label.style.cssText = 'color: #CC88FF; font-size: 12px;';
+    Object.assign(label.style, {
+      color: '#CC88FF',
+      fontSize: '12px',
+      letterSpacing: '0.5px',
+    });
 
     const valSpan = document.createElement('span');
-    valSpan.textContent = String(this.params[def.key]);
-    valSpan.style.cssText = 'color: #FF88CC; font-size: 12px; font-variant-numeric: tabular-nums;';
+    valSpan.textContent = this.formatValue(def.key, this.params[def.key] as any);
+    Object.assign(valSpan.style, {
+      color: '#FF88CC',
+      fontSize: '12px',
+      fontVariantNumeric: 'tabular-nums',
+      fontWeight: '600',
+      minWidth: '40px',
+      textAlign: 'right',
+      transition: 'color 0.15s ease',
+    });
     this.valueDisplays.set(def.key, valSpan);
 
     header.appendChild(label);
     header.appendChild(valSpan);
     wrap.appendChild(header);
+
+    const trackWrap = document.createElement('div');
+    Object.assign(trackWrap.style, {
+      position: 'relative',
+      height: '6px',
+      borderRadius: '3px',
+      background: 'rgba(30, 0, 60, 0.7)',
+      border: '1px solid rgba(102, 34, 170, 0.5)',
+      overflow: 'hidden',
+    });
+
+    const fill = document.createElement('div');
+    const percent = ((Number(this.params[def.key]) - def.min) / (def.max - def.min)) * 100;
+    Object.assign(fill.style, {
+      position: 'absolute',
+      left: '0', top: '0',
+      height: '100%',
+      width: `${percent}%`,
+      background: 'linear-gradient(90deg, #6622AA, #AA3388, #FF66AA)',
+      borderRadius: '3px 0 0 3px',
+      transition: `width ${SLIDE_DURATION} ${SLIDE_EASING}`,
+    });
+    trackWrap.appendChild(fill);
 
     const slider = document.createElement('input');
     slider.type = 'range';
@@ -280,99 +480,225 @@ export class UIControls {
     slider.max = String(def.max);
     slider.step = String(def.step);
     slider.value = String(this.params[def.key]);
-    slider.style.cssText = `
-      width: 100%; height: 4px; -webkit-appearance: none; appearance: none;
-      background: linear-gradient(90deg, #6622AA, #FF66AA);
-      border-radius: 2px; outline: none; cursor: pointer;
-    `;
+    Object.assign(slider.style, {
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      opacity: '0',
+      cursor: 'pointer',
+      margin: '0',
+    });
 
-    const thumbStyle = `
-      -webkit-appearance: none; appearance: none;
-      width: 14px; height: 14px; border-radius: 50%;
-      background: #fff; cursor: pointer;
-      box-shadow: 0 0 6px rgba(255,136,204,0.5), 0 0 12px rgba(102,34,170,0.3);
-    `;
-    const styleEl = document.createElement('style');
-    const uid = `slider-${def.key}`;
+    const uid = `slider-${def.key}-${Date.now()}`;
     slider.id = uid;
-    styleEl.textContent = `
-      #${uid}::-webkit-slider-thumb { ${thumbStyle} }
-      #${uid}::-moz-range-thumb { ${thumbStyle} border: none; }
-    `;
-    document.head.appendChild(styleEl);
+
+    const customThumb = document.createElement('div');
+    Object.assign(customThumb.style, {
+      position: 'absolute',
+      top: '50%',
+      left: `calc(${percent}% - 7px)`,
+      width: '14px',
+      height: '14px',
+      borderRadius: '50%',
+      background: '#FFFFFF',
+      transform: 'translateY(-50%)',
+      transition: `left ${SLIDE_DURATION} ${SLIDE_EASING}, box-shadow 0.15s ease, width 0.15s ease, height 0.15s ease`,
+      boxShadow: '0 0 4px rgba(255,136,204,0.6), 0 0 10px rgba(102,34,170,0.4), 0 1px 3px rgba(0,0,0,0.4)',
+      pointerEvents: 'none',
+    });
+    trackWrap.appendChild(customThumb);
+    trackWrap.appendChild(slider);
 
     slider.addEventListener('input', () => {
       const v = parseFloat(slider.value);
       (this.params as any)[def.key] = v;
-      valSpan.textContent = v.toFixed(def.step < 1 ? 2 : 0);
-      this.onParamChange({ [def.key]: v });
+      valSpan.textContent = this.formatValue(def.key, v);
+      const pct = ((v - def.min) / (def.max - def.min)) * 100;
+      fill.style.width = `${pct}%`;
+      customThumb.style.left = `calc(${pct}% - 7px)`;
+      this.onParamChange({ [def.key]: v } as Partial<ReliefParams>);
     });
 
-    wrap.appendChild(slider);
-    this.panel.appendChild(wrap);
+    slider.addEventListener('mouseenter', () => {
+      customThumb.style.width = '16px';
+      customThumb.style.height = '16px';
+      customThumb.style.boxShadow = '0 0 8px rgba(255,136,204,0.8), 0 0 18px rgba(102,34,170,0.5), 0 1px 3px rgba(0,0,0,0.4)';
+      valSpan.style.color = '#FFAADD';
+    });
+    slider.addEventListener('mouseleave', () => {
+      customThumb.style.width = '14px';
+      customThumb.style.height = '14px';
+      customThumb.style.boxShadow = '0 0 4px rgba(255,136,204,0.6), 0 0 10px rgba(102,34,170,0.4), 0 1px 3px rgba(0,0,0,0.4)';
+      valSpan.style.color = '#FF88CC';
+    });
+
+    wrap.appendChild(trackWrap);
+    p.appendChild(wrap);
   }
 
-  private buildToggleControl(def: SliderDef) {
+  private buildToggleControl(p: HTMLDivElement, def: SliderDef) {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;';
+    Object.assign(wrap.style, {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '18px',
+      padding: '6px 2px',
+    });
 
     const label = document.createElement('span');
     label.textContent = def.label;
-    label.style.cssText = 'color: #CC88FF; font-size: 12px;';
+    Object.assign(label.style, {
+      color: '#CC88FF',
+      fontSize: '12px',
+      letterSpacing: '0.5px',
+    });
 
-    const toggle = document.createElement('div');
-    const isOn = this.params[def.key] as unknown as boolean;
-    toggle.style.cssText = `
-      width: 40px; height: 20px; border-radius: 10px; cursor: pointer;
-      background: ${isOn ? '#6622AA' : '#331155'}; position: relative;
-      transition: background 0.3s;
-      border: 1px solid #8822AA;
-    `;
-
-    const knob = document.createElement('div');
-    knob.style.cssText = `
-      width: 16px; height: 16px; border-radius: 50%; background: #fff;
-      position: absolute; top: 1px; left: ${isOn ? '21px' : '1px'};
-      transition: left 0.3s cubic-bezier(0.22,1,0.36,1);
-      box-shadow: 0 0 4px rgba(255,136,204,0.4);
-    `;
-    toggle.appendChild(knob);
+    const rightSide = document.createElement('div');
+    Object.assign(rightSide.style, {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+    });
 
     const valSpan = document.createElement('span');
+    const isOn = this.params[def.key] as unknown as boolean;
     valSpan.textContent = isOn ? '开' : '关';
-    valSpan.style.cssText = 'color: #FF88CC; font-size: 12px;';
+    Object.assign(valSpan.style, {
+      color: isOn ? '#88FFAA' : '#AA88CC',
+      fontSize: '12px',
+      fontWeight: '600',
+      minWidth: '18px',
+      textAlign: 'center',
+      transition: `color ${SLIDE_DURATION} ${SLIDE_EASING}`,
+    });
     this.valueDisplays.set(def.key, valSpan);
+
+    const toggle = document.createElement('div');
+    Object.assign(toggle.style, {
+      width: '44px',
+      height: '22px',
+      borderRadius: '11px',
+      cursor: 'pointer',
+      background: isOn
+        ? 'linear-gradient(135deg, #6622AA, #AA3388)'
+        : 'rgba(30, 0, 60, 0.8)',
+      position: 'relative',
+      transition: `background ${SLIDE_DURATION} ${SLIDE_EASING}`,
+      border: `1px solid ${isOn ? '#FF66AA' : '#6622AA'}`,
+      boxSizing: 'border-box',
+      boxShadow: isOn ? '0 0 12px rgba(170,51,136,0.5)' : 'none',
+    });
+
+    const knob = document.createElement('div');
+    Object.assign(knob.style, {
+      width: '18px',
+      height: '18px',
+      borderRadius: '50%',
+      background: '#fff',
+      position: 'absolute',
+      top: '1px',
+      left: isOn ? '23px' : '1px',
+      transition: `left ${SLIDE_DURATION} ${SLIDE_EASING}, box-shadow 0.2s ease`,
+      boxShadow: isOn
+        ? '0 0 6px rgba(255,136,204,0.6), 0 0 10px rgba(102,34,170,0.5)'
+        : '0 0 3px rgba(136,34,170,0.4)',
+    });
+    toggle.appendChild(knob);
 
     toggle.addEventListener('click', () => {
       const newVal = !(this.params[def.key] as unknown as boolean);
       (this.params as any)[def.key] = newVal;
-      toggle.style.background = newVal ? '#6622AA' : '#331155';
-      knob.style.left = newVal ? '21px' : '1px';
+      toggle.style.background = newVal
+        ? 'linear-gradient(135deg, #6622AA, #AA3388)'
+        : 'rgba(30, 0, 60, 0.8)';
+      toggle.style.borderColor = newVal ? '#FF66AA' : '#6622AA';
+      toggle.style.boxShadow = newVal ? '0 0 12px rgba(170,51,136,0.5)' : 'none';
+      knob.style.left = newVal ? '23px' : '1px';
+      knob.style.boxShadow = newVal
+        ? '0 0 6px rgba(255,136,204,0.6), 0 0 10px rgba(102,34,170,0.5)'
+        : '0 0 3px rgba(136,34,170,0.4)';
       valSpan.textContent = newVal ? '开' : '关';
+      valSpan.style.color = newVal ? '#88FFAA' : '#AA88CC';
       this.onParamChange({ [def.key]: newVal } as any);
     });
 
+    rightSide.appendChild(valSpan);
+    rightSide.appendChild(toggle);
     wrap.appendChild(label);
-    wrap.appendChild(valSpan);
-    wrap.appendChild(toggle);
-    this.panel.appendChild(wrap);
+    wrap.appendChild(rightSide);
+    p.appendChild(wrap);
   }
 
-  showTooltip(star: StarData, screenX: number, screenY: number) {
+  private formatValue(key: keyof ReliefParams, value: number | boolean): string {
+    if (typeof value === 'boolean') return value ? '开' : '关';
+    const def = SLIDERS.find(s => s.key === key);
+    if (!def) return String(value);
+    return def.step < 1 ? value.toFixed(2) : value.toFixed(0);
+  }
+
+  private toggleExpanded(arrowEl: HTMLSpanElement) {
+    this.expanded = !this.expanded;
+    this.updatePanelPosition();
+    arrowEl.style.transform = this.expanded ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+
+  private updatePanelPosition() {
+    if (this.expanded) {
+      this.panel.style.right = '0px';
+      this.toggleBtn.style.right = `${PANEL_WIDTH}px`;
+    } else {
+      this.panel.style.right = `-${PANEL_WIDTH}px`;
+      this.toggleBtn.style.right = '0px';
+    }
+  }
+
+  showTooltipAt(star: StarData, screenX: number, screenY: number) {
     this.tooltip.innerHTML = `
-      <div style="font-weight:600;color:#FF88CC;margin-bottom:2px;">${star.name}</div>
-      <div>距离: ${star.distance} ly</div>
-      <div>视星等: ${star.magnitude.toFixed(2)}</div>
-      <div>绝对星等: ${star.absoluteMagnitude.toFixed(2)}</div>
-      <div>光谱: ${star.spectralType}</div>
+      <div style="font-weight:600;color:#FF88CC;margin-bottom:4px;font-size:13px;letter-spacing:0.5px;">${this.escapeHtml(star.name)}</div>
+      <div style="font-size:13px;margin-top:2px;"><span style="color:#AA88CC">距离：</span>${star.distance} <span style="color:#888">ly</span></div>
+      <div style="font-size:13px;margin-top:2px;"><span style="color:#AA88CC">视星等：</span>${star.magnitude.toFixed(2)}</div>
+      <div style="font-size:13px;margin-top:2px;"><span style="color:#AA88CC">绝对星等：</span>${star.absoluteMagnitude.toFixed(2)}</div>
+      <div style="font-size:13px;margin-top:2px;"><span style="color:#AA88CC">光谱类型：</span><span style="color:#FFAADD;font-weight:500;">${this.escapeHtml(star.spectralType)}</span></div>
     `;
-    this.tooltip.style.left = `${screenX + 16}px`;
-    this.tooltip.style.top = `${screenY - 10}px`;
-    this.tooltip.classList.add('visible');
+    this.tooltipTargetPos.x = screenX + 16;
+    this.tooltipTargetPos.y = screenY - 10;
+    this.tooltipVisible = true;
+    this.tooltip.style.opacity = '1';
   }
 
   hideTooltip() {
-    this.tooltip.classList.remove('visible');
+    this.tooltipVisible = false;
+    this.tooltip.style.opacity = '0';
+  }
+
+  private escapeHtml(str: string): string {
+    const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return str.replace(/[&<>"']/g, c => map[c] || c);
+  }
+
+  private startTooltipAnimation() {
+    const tick = (t: number) => {
+      if (this.lastFrameTime === 0) this.lastFrameTime = t;
+      const dt = Math.min(t - this.lastFrameTime, 50);
+      this.lastFrameTime = t;
+
+      if (this.tooltipVisible) {
+        const decay = 1 - Math.exp(-dt / this.FOLLOW_LAG_MS);
+        this.tooltipCurrentPos.x += (this.tooltipTargetPos.x - this.tooltipCurrentPos.x) * decay;
+        this.tooltipCurrentPos.y += (this.tooltipTargetPos.y - this.tooltipCurrentPos.y) * decay;
+
+        const maxX = window.innerWidth - 260;
+        const maxY = window.innerHeight - 180;
+        const fx = Math.max(8, Math.min(maxX, this.tooltipCurrentPos.x));
+        const fy = Math.max(8, Math.min(maxY, this.tooltipCurrentPos.y));
+
+        this.tooltip.style.transform = `translate(${fx}px, ${fy}px)`;
+      }
+      this.rafId = requestAnimationFrame(tick);
+    };
+    this.rafId = requestAnimationFrame(tick);
   }
 
   getParams(): ReliefParams {
@@ -384,19 +710,15 @@ export class UIControls {
     for (const [key, val] of Object.entries(params)) {
       const disp = this.valueDisplays.get(key as keyof ReliefParams);
       if (disp) {
-        if (typeof val === 'boolean') {
-          disp.textContent = val ? '开' : '关';
-        } else {
-          disp.textContent = (val as number).toFixed(
-            SLIDERS.find(s => s.key === key)?.step < 1 ? 2 : 0
-          );
-        }
+        disp.textContent = this.formatValue(key as keyof ReliefParams, val as any);
       }
     }
   }
 
   dispose() {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
     this.panel.remove();
     this.toggleBtn.remove();
+    this.tooltip.remove();
   }
 }
