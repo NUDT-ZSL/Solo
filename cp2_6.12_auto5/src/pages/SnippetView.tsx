@@ -59,6 +59,8 @@ export default function SnippetView() {
     } catch (err: any) {
       if (err.response?.status === 429) {
         setOutput("Rate limit exceeded: maximum 5 runs per minute", "error");
+      } else if (err.response?.data?.error) {
+        setOutput(err.response.data.error, "error");
       } else {
         setOutput("Network error. Is the server running?", "error");
       }
@@ -147,8 +149,6 @@ export default function SnippetView() {
             outputType={outputType}
             isRunning={isRunning}
             onRun={handleRun}
-            onSave={() => {}}
-            onShare={() => {}}
           />
         </div>
       </div>

@@ -50,7 +50,12 @@ export default function Home() {
       setSnippetId(res.data.id);
       setOutput("Snippet saved! Click Share to copy the link.", "success");
     } catch (err: any) {
-      setOutput("Failed to save snippet.", "error");
+      const serverError = err.response?.data?.error;
+      if (serverError) {
+        setOutput(`Failed to save snippet: ${serverError}`, "error");
+      } else {
+        setOutput("Failed to save snippet. Network error or server unavailable.", "error");
+      }
     }
   }, [title, description, code, language, setOutput]);
 

@@ -6,8 +6,8 @@ interface OutputPanelProps {
   outputType: "success" | "error" | "timeout" | "idle";
   isRunning: boolean;
   onRun: () => void;
-  onSave: () => void;
-  onShare: () => void;
+  onSave?: () => void;
+  onShare?: () => void;
   snippetId?: string;
 }
 
@@ -36,18 +36,20 @@ export default function OutputPanel({ output, outputType, isRunning, onRun, onSa
             {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
             {isRunning ? "Running..." : "Run"}
           </button>
-          <button
-            onClick={onSave}
-            className={cn(
-              "btn-scale flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium",
-              "dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600",
-              "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            )}
-          >
-            <Save className="w-3.5 h-3.5" />
-            Save
-          </button>
-          {snippetId && (
+          {onSave && (
+            <button
+              onClick={onSave}
+              className={cn(
+                "btn-scale flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium",
+                "dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600",
+                "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              )}
+            >
+              <Save className="w-3.5 h-3.5" />
+              Save
+            </button>
+          )}
+          {onShare && snippetId && (
             <button
               onClick={onShare}
               className={cn(
