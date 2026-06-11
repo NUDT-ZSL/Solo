@@ -297,7 +297,8 @@ export class CanvasRenderer {
     const scaleX = EXPORT_CSS_W / srcW;
     const scaleY = EXPORT_CSS_H / srcH;
 
-    ectx.setTransform(EXPORT_DPR * scaleX, 0, 0, EXPORT_DPR * scaleY, 0, 0);
+    ectx.setTransform(EXPORT_DPR, 0, 0, EXPORT_DPR, 0, 0);
+    ectx.scale(scaleX, scaleY);
 
     const bgGrad = ectx.createLinearGradient(0, 0, 0, srcH);
     bgGrad.addColorStop(0, '#0D1117');
@@ -306,7 +307,7 @@ export class CanvasRenderer {
     ectx.fillRect(0, 0, srcW, srcH);
 
     ectx.strokeStyle = GRID_COLOR + '80';
-    ectx.lineWidth = 0.5 / Math.max(scaleX, scaleY);
+    ectx.lineWidth = 0.5;
     for (let x = GRID_SPACING; x < srcW; x += GRID_SPACING) {
       ectx.beginPath();
       ectx.moveTo(x, 0);
@@ -322,9 +323,9 @@ export class CanvasRenderer {
 
     ectx.save();
     ectx.shadowColor = TIMELINE_LINE_COLOR;
-    ectx.shadowBlur = 6 / Math.max(scaleX, scaleY);
+    ectx.shadowBlur = 6;
     ectx.strokeStyle = TIMELINE_LINE_COLOR;
-    ectx.lineWidth = TIMELINE_HEIGHT / Math.max(scaleX, scaleY);
+    ectx.lineWidth = TIMELINE_HEIGHT;
     ectx.beginPath();
     ectx.moveTo(0, TIMELINE_Y);
     ectx.lineTo(srcW, TIMELINE_Y);

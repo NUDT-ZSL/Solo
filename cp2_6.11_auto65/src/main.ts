@@ -231,8 +231,10 @@ function updatePlaybackStep(nowMs: number) {
       break;
     }
 
+    const currentDayTs = startOfDay(playback.currentDate).getTime();
     for (const ev of timeline.getEvents()) {
-      if (isSameDay(ev.date, playback.currentDate)) {
+      if (isSameDay(ev.date, playback.currentDate) && ev.lastFlashDate !== currentDayTs) {
+        ev.lastFlashDate = currentDayTs;
         ev.flashProgress = 1;
         playback.boostEventId = ev.id;
         playback.boostRemaining = 3;
@@ -269,9 +271,10 @@ function refreshSliderRange() {
   } else {
     const ratioA = a / 100;
     const ratioB = b / 100;
+    const pad = total > 0 ? total * 0.001 : 86400000;
     filterRange = {
-      minDate: new Date(range.min.getTime() + total * ratioA),
-      maxDate: new Date(range.min.getTime() + total * ratioB),
+      minDate: new Date(range.min.getTime() + total * ratioA - pad * 0.5),
+      maxDate: new Date(range.min.getTime() + total * ratioB + pad * 0.5),
     };
     timeline.setFilterRange(filterRange);
   }

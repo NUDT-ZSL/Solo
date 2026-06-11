@@ -10,6 +10,7 @@ export interface TimelineEvent {
   bounceProgress: number;
   bounceCount: number;
   flashProgress: number;
+  lastFlashDate: number;
   visibility: number;
   cardScale: number;
 }
@@ -21,6 +22,7 @@ export interface Particle {
   y: number;
   startX: number;
   targetStartX: number;
+  currentStartX: number;
   transitionProgress: number;
   age: number;
   maxAge: number;

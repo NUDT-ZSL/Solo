@@ -37,16 +37,16 @@ export class ParticleSystem {
       }
 
       const t = easeInOutCubic(p.transitionProgress);
-      const effectiveStartX = lerp(p.startX, p.targetStartX, t);
+      p.currentStartX = lerp(p.startX, p.targetStartX, t);
 
       if (p.age < p.fallDuration) {
         const fallT = easeInQuad(p.age / p.fallDuration);
         p.y = lerp(CANVAS_TIMELINE_BOTTOM, CANVAS_CENTER_Y, fallT);
-        p.x = effectiveStartX;
+        p.x = p.currentStartX;
       } else {
         const tWave = p.age - p.fallDuration;
         p.y = CANVAS_CENTER_Y + Math.sin(p.wavePhase + p.waveFrequency * tWave) * p.waveAmplitude;
-        p.x = effectiveStartX + p.driftSpeed * tWave;
+        p.x = p.currentStartX + p.driftSpeed * tWave;
       }
 
       const lifeRatio = p.age / p.maxAge;
@@ -109,6 +109,7 @@ export class ParticleSystem {
       opacity: 1,
       color: event.color,
       fadeProgress: event.visibility < 0.9 ? 0.8 : 0,
+      currentStartX: event.targetPosition + cardWidth / 2,
     };
 
     this.pool.push(particle);
@@ -118,10 +119,7 @@ export class ParticleSystem {
     for (const p of this.pool) {
       if (p.eventId !== eventId) continue;
 
-      const t = easeInOutCubic(p.transitionProgress);
-      const effectiveStartX = lerp(p.startX, p.targetStartX, t);
-
-      p.startX = effectiveStartX;
+      p.startX = p.currentStartX;
       p.targetStartX = newTargetX + newCardWidth / 2;
       p.transitionProgress = 0;
     }

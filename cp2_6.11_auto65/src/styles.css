@@ -103,9 +103,36 @@ canvas#timeline-canvas {
 .dual-slider input[type=range]::-moz-range-track {
   height: 4px;
   border-radius: 4px;
-  background: transparent;
+  background-color: transparent;
   border: none;
   box-shadow: none;
+}
+
+.dual-slider input[type=range]::-ms-track {
+  height: 4px;
+  border-radius: 4px;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  color: transparent;
+}
+
+.dual-slider input[type=range]::-ms-fill-lower,
+.dual-slider input[type=range]::-ms-fill-upper {
+  background-color: transparent;
+  border: none;
+}
+
+.dual-slider input[type=range]::-ms-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #58A6FF;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 8px rgba(88, 166, 255, 0.4);
+  transition: all 0.2s var(--easing);
+  margin-top: 0;
 }
 
 .dual-slider input[type=range]::-webkit-slider-thumb {

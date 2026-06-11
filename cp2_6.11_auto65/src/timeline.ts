@@ -57,6 +57,7 @@ export class TimelineManager {
       bounceProgress: 0,
       bounceCount: 0,
       flashProgress: 0,
+      lastFlashDate: -1,
       visibility: 0,
       cardScale: 0,
       isDragging: false,
