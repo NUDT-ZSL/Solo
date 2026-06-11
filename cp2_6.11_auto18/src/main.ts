@@ -21,7 +21,7 @@ class App {
   private fpsValue: HTMLSpanElement;
 
   private frameCount: number = 0;
-  private lastFpsUpdate: number = 0;
+  private lastFpsUpdate: number = performance.now();
   private isTransforming: boolean = false;
 
   constructor() {
@@ -69,8 +69,9 @@ class App {
     this.controls.maxDistance = 40;
     this.controls.enablePan = false;
 
+    this.camera.updateProjectionMatrix();
     const startPos = this.calculateStartPosition();
-    this.starSystem = new StarSystem(this.scene, startPos);
+    this.starSystem = new StarSystem(this.scene, startPos, this.camera);
 
     this.setupLights();
     this.bindEvents();
