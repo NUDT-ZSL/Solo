@@ -135,11 +135,42 @@ export class OrigamiModel {
     }
   }
 
-  private facesOnSide(creaseIdx: number, side: 0 | 1): Set<number> {
-    const cr = this.creases[creaseIdx];
-    const startFace = cr.faceIndices[side];
-    const otherFace = cr.faceIndices[1 - side];
-    const exclKey = this.ek(cr.vertexIndices[0], cr.vertexIndices[1]);
+  private creasesInGroup(groupId: number): number[] {
+    const result: number[] = [];
+    for (let i = 0; i < this.creases.length; i++) {
+      if (this.creases[i].groupId === groupId) result.push(i);
+    }
+    return result;
+  }
+
+  private groupAxis(groupId: number): [number, number] | null {
+    const group = this.creasesInGroup(groupId);
+    if (group.length === 0) return null;
+    let v0 = this.creases[group[0]].vertexIndices[0];
+    let v1 = this.creases[group[0]].vertexIndices[1];
+    for (let i = 1; i < group.length; i++) {
+      const cr = this.creases[group[i]];
+      const a = cr.vertexIndices[0];
+      const b = cr.vertexIndices[1];
+      if (a === v0 || a === v1) {
+        if (a === v0) v0 = v1;
+        v1 = b;
+      } else if (b === v0 || b === v1) {
+        if (b === v0) v0 = v1;
+        v1 = a;
+      }
+    }
+    return [v0, v1];
+  }
+
+  private facesOnSideOfGroup(groupId: number, startCreaseIdx: number, side: 0 | 1): Set<number> {
+    const group = this.creasesInGroup(groupId);
+    const exclKeys = new Set<string>();
+    for (const ci of group) {
+      const cr = this.creases[ci];
+      exclKeys.add(this.ek(cr.vertexIndices[0], cr.vertexIndices[1]));
+    }
+    const startFace = this.creases[startCreaseIdx].faceIndices[side];
 
     const result = new Set<number>();
     const queue: number[] = [startFace];
@@ -148,11 +179,11 @@ export class OrigamiModel {
     while (queue.length > 0) {
       const cur = queue.shift()!;
       for (const adj of this.faces[cur].adjacentFaces) {
-        if (result.has(adj) || adj === otherFace) continue;
+        if (result.has(adj)) continue;
         const f = this.faces[adj];
         let sharesCr = false;
         for (let ei = 0; ei < 3; ei++) {
-          if (this.ek(f.indices[ei], f.indices[(ei + 1) % 3]) === exclKey) {
+          if (exclKeys.has(this.ek(f.indices[ei], f.indices[(ei + 1) % 3]))) {
             sharesCr = true; break;
           }
         }
@@ -483,81 +514,80 @@ export class OrigamiModel {
 
 export function createCraneModel(): OrigamiModel {
   const m = new OrigamiModel('crane');
-  const S = 2.4;
-  const h = S / 2;
+  const S = 2.0;
+  const half = S / 2;
 
-  const tl = m.addV(-S / 2, 0, -S / 2);
-  const tr = m.addV(S / 2, 0, -S / 2);
-  const br = m.addV(S / 2, 0, S / 2);
-  const bl = m.addV(-S / 2, 0, S / 2);
+  const fl = m.addV(-half, 0, -half);
+  const fr = m.addV(half, 0, -half);
+  const br = m.addV(half, 0, half);
+  const bl = m.addV(-half, 0, half);
   const c = m.addV(0, 0, 0);
 
-  const fTL = m.addF(tl, bl, c);
-  const fTR = m.addF(tr, c, br);
-  const fBL = m.addF(bl, br, c);
-  const fBR = m.addF(tl, c, tr);
+  const fm = m.addV(0, 0, -half);
+  const rm = m.addV(half, 0, 0);
+  const bm = m.addV(0, 0, half);
+  const lm = m.addV(-half, 0, 0);
 
-  const diag1 = m.addCr(tl, br, fTL, fTR, 'mountain', 1);
-  const diag2 = m.addCr(tr, bl, fTL, fBL, 'valley', 2);
+  const fFL = m.addF(fl, fm, c);
+  const fFR = m.addF(fm, fr, c);
+  const fRF = m.addF(fr, rm, c);
+  const fRB = m.addF(rm, br, c);
+  const fBR = m.addF(br, bm, c);
+  const fBL = m.addF(bm, bl, c);
+  const fLB = m.addF(bl, lm, c);
+  const fLF = m.addF(lm, fl, c);
 
-  const wLx = -S * 0.75, wLy = h * 0.85;
-  const wRx = S * 0.75, wRy = h * 0.85;
-  const nY = h * 1.3, nZ = -S * 0.65;
-  const tY = h * 0.5, tZ = S * 0.65;
-  const bY = h * 1.1, bZ = -S * 0.95;
+  const cr_midF = m.addCr(fm, c, fFL, fFR, 'mountain', 1);
+  const cr_midR = m.addCr(rm, c, fRF, fRB, 'valley', 2);
+  const cr_midB = m.addCr(bm, c, fBR, fBL, 'mountain', 3);
+  const cr_midL = m.addCr(lm, c, fLB, fLF, 'valley', 4);
 
-  const wL = m.addV(wLx, wLy, 0);
-  const wR = m.addV(wRx, wRy, 0);
-  const neckTip = m.addV(0, nY, nZ);
-  const tailTip = m.addV(0, tY, tZ);
-  const beak = m.addV(0, bY, bZ);
+  const cr_diagFL = m.addCr(fl, c, fFL, fLF, 'valley', 10);
+  const cr_diagFR = m.addCr(fr, c, fFR, fRF, 'mountain', 11);
+  const cr_diagBR = m.addCr(br, c, fRB, fBR, 'valley', 12);
+  const cr_diagBL = m.addCr(bl, c, fBL, fLB, 'mountain', 13);
 
-  const midL = m.addV(-S / 4, 0, 0);
-  const midR = m.addV(S / 4, 0, 0);
-  const midT = m.addV(0, 0, -S / 4);
-  const midB = m.addV(0, 0, S / 4);
+  const wl = m.addV(-half * 0.5, 0, half * 0.25);
+  const wr = m.addV(half * 0.5, 0, half * 0.25);
+  const nt = m.addV(0, 0, -half * 0.7);
+  const tt = m.addV(0, 0, half * 0.6);
 
-  const wL1 = m.addF(midL, wL, midT);
-  const wL2 = m.addF(midL, midB, wL);
-  const wR1 = m.addF(midR, midT, wR);
-  const wR2 = m.addF(midR, wR, midB);
+  const f_w1 = m.addF(lm, wl, c);
+  const f_w2 = m.addF(wl, bm, c);
+  const f_wr1 = m.addF(rm, c, wr);
+  const f_wr2 = m.addF(wr, bm, c);
+  const f_n1 = m.addF(fm, fl, nt);
+  const f_n2 = m.addF(fm, nt, fr);
+  const f_t1 = m.addF(bm, tt, bl);
+  const f_t2 = m.addF(bm, br, tt);
 
-  const n1 = m.addF(midT, neckTip, wL);
-  const n2 = m.addF(midT, wR, neckTip);
-  const t1 = m.addF(midB, wL, tailTip);
-  const t2 = m.addF(midB, tailTip, wR);
+  m.addCr(lm, wl, f_w1, fLB, 'valley', 20);
+  m.addCr(wl, bm, f_w2, fBL, 'mountain', 21);
+  m.addCr(rm, wr, f_wr1, fRF, 'mountain', 22);
+  m.addCr(wr, bm, f_wr2, fBR, 'valley', 23);
+  m.addCr(fm, nt, f_n1, fFL, 'valley', 24);
+  m.addCr(fm, nt, f_n2, fFR, 'mountain', 25);
+  m.addCr(bm, tt, f_t1, fBL, 'mountain', 26);
+  m.addCr(bm, tt, f_t2, fBR, 'valley', 27);
 
-  const h1 = m.addF(neckTip, beak, wL);
-  const h2 = m.addF(neckTip, wR, beak);
-
-  const wingCr = m.addCr(midL, wL, wL1, wL2, 'valley', 10);
-  m.addCr(midR, wR, wR1, wR2, 'valley', 10);
-
-  const neckCr = m.addCr(midT, neckTip, n1, n2, 'mountain', 11);
-  const tailCr = m.addCr(midB, tailTip, t1, t2, 'valley', 12);
-  const beakCr = m.addCr(neckTip, beak, h1, h2, 'mountain', 13);
-
-  m.addCr(midL, midT, wL1, fTL, 'mountain', 20);
-  m.addCr(midL, midB, wL2, fBL, 'mountain', 20);
-  m.addCr(midR, midT, wR1, fBR, 'valley', 21);
-  m.addCr(midR, midB, wR2, fTR, 'valley', 21);
-
-  m.addCr(wL, neckTip, wL1, n1, 'mountain', 22);
-  m.addCr(wL, tailTip, wL2, t1, 'valley', 23);
-  m.addCr(wR, neckTip, wR1, n2, 'mountain', 22);
-  m.addCr(wR, tailTip, wR2, t2, 'valley', 23);
-
-  m.addCr(wL, beak, n1, h1, 'valley', 24);
-  m.addCr(wR, beak, n2, h2, 'valley', 24);
+  m.addCr(wl, c, f_w1, f_w2, 'mountain', 30);
+  m.addCr(wr, c, f_wr1, f_wr2, 'valley', 31);
+  m.addCr(fl, nt, f_n1, fLF, 'mountain', 32);
+  m.addCr(fr, nt, f_n2, fRF, 'valley', 33);
+  m.addCr(bl, tt, f_t1, fLB, 'valley', 34);
+  m.addCr(br, tt, f_t2, fRB, 'mountain', 35);
 
   m.finalize();
 
-  m.setCreaseAngle(diag1, 55);
-  m.setCreaseAngle(diag2, 55);
-  m.setCreaseAngle(wingCr, 50);
-  m.setCreaseAngle(neckCr, 45);
-  m.setCreaseAngle(tailCr, 30);
-  m.setCreaseAngle(beakCr, 20);
+  m.creases[cr_midL].angle = 70;
+  m.creases[cr_midR].angle = 70;
+  m.creases[cr_midF].angle = 55;
+  m.creases[cr_midB].angle = 35;
+  m.creases[cr_diagFL].angle = 25;
+  m.creases[cr_diagFR].angle = 25;
+  m.creases[cr_diagBR].angle = 20;
+  m.creases[cr_diagBL].angle = 20;
+  m.rebuildFromAngles();
 
   m.history = [];
   m.saveState();
