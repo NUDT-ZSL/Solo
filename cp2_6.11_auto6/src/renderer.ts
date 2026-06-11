@@ -175,27 +175,7 @@ export class CanvasRenderer {
     }
     
     const allPoints = this.trailHistory.map(h => h.points[0]);
-    
-    if (allPoints.length >= 4) {
-      this.smoothedTrail = catmullRomSmooth(allPoints, 0.5);
-    } else {
-      const interpolated: Point[] = [];
-      for (let i = 0; i < allPoints.length - 1; i++) {
-        const p0 = allPoints[i];
-        const p1 = allPoints[i + 1];
-        interpolated.push(p0);
-        for (let s = 1; s < 5; s++) {
-          const t = s / 5;
-          interpolated.push({
-            x: p0.x + (p1.x - p0.x) * t,
-            y: p0.y + (p1.y - p0.y) * t,
-            timestamp: p0.timestamp + (p1.timestamp - p0.timestamp) * t
-          });
-        }
-      }
-      interpolated.push(allPoints[allPoints.length - 1]);
-      this.smoothedTrail = interpolated;
-    }
+    this.smoothedTrail = catmullRomSmooth(allPoints, 0.5, 8, 40);
   }
 
   drawTrail(currentTime: number): void {
@@ -267,7 +247,6 @@ export class CanvasRenderer {
     if (points.length < 2) return;
     
     const startTime = points[0].timestamp;
-    const totalDuration = pathMemory.getTotalDuration();
     const effectivePlaybackTime = playbackTime * playbackSpeed * 2 + startTime;
     
     let endIndex = 0;
@@ -611,8 +590,6 @@ export class CanvasRenderer {
       } else {
         const prevAngle = ((i - 1) * Math.PI) / spikes - Math.PI / 2;
         const prevRadius = (i - 1) % 2 === 0 ? outerRadius : innerRadius;
-        const prevX = x + Math.cos(prevAngle) * prevRadius;
-        const prevY = y + Math.sin(prevAngle) * prevRadius;
         
         const midAngle = (prevAngle + angle) / 2;
         const midRadius = (prevRadius + radius) / 2 * 0.95;
@@ -733,5 +710,13 @@ export class CanvasRenderer {
   resetTrail(): void {
     this.trailHistory = [];
     this.smoothedTrail = [];
+  }
+
+  getRandom(): number {
+    return getNextRandom(this.randomCache);
+  }
+
+  getRandomRange(min: number, max: number): number {
+    return min + getNextRandom(this.randomCache) * (max - min);
   }
 }

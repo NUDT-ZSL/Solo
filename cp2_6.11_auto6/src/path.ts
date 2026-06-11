@@ -38,12 +38,26 @@ export interface PathMemoryData {
 }
 
 const VERSION = '1.0';
-const COORDINATE_PRECISION = 3;
+const MIN_COORDINATE_PRECISION = 2;
+const MAX_COORDINATE_PRECISION = 3;
 const TIMESTAMP_PRECISION = 0;
+const TARGET_FILE_SIZE = 450 * 1024;
 
 function roundToPrecision(value: number, precision: number): number {
   const factor = Math.pow(10, precision);
   return Math.round(value * factor) / factor;
+}
+
+function getOptimalPrecision(pointCount: number): number {
+  const estimatedSizePerPoint = 45;
+  const estimatedSize = pointCount * estimatedSizePerPoint;
+  
+  if (estimatedSize > TARGET_FILE_SIZE && pointCount > 300) {
+    return MIN_COORDINATE_PRECISION;
+  } else if (pointCount > 200) {
+    return MIN_COORDINATE_PRECISION;
+  }
+  return MAX_COORDINATE_PRECISION;
 }
 
 export class PathMemory {
@@ -70,8 +84,9 @@ export class PathMemory {
   }
 
   addPoint(x: number, y: number, timestamp: number): void {
-    const normalizedX = roundToPrecision(Math.max(0, Math.min(1, x)), COORDINATE_PRECISION);
-    const normalizedY = roundToPrecision(Math.max(0, Math.min(1, y)), COORDINATE_PRECISION);
+    const precision = getOptimalPrecision(this.points.length);
+    const normalizedX = roundToPrecision(Math.max(0, Math.min(1, x)), precision);
+    const normalizedY = roundToPrecision(Math.max(0, Math.min(1, y)), precision);
     const roundedTime = roundToPrecision(timestamp, TIMESTAMP_PRECISION);
     
     const lastPoint = this.points[this.points.length - 1];
@@ -227,14 +242,15 @@ export class PathMemory {
   }
 
   serialize(): string {
+    const precision = getOptimalPrecision(this.points.length);
     const data: PathMemoryData = {
       version: VERSION,
       name: this.name,
       author: this.author,
       createdAt: this.createdAt,
       points: this.points.map(p => ({
-        x: roundToPrecision(p.x, COORDINATE_PRECISION),
-        y: roundToPrecision(p.y, COORDINATE_PRECISION),
+        x: roundToPrecision(p.x, precision),
+        y: roundToPrecision(p.y, precision),
         timestamp: roundToPrecision(p.timestamp, TIMESTAMP_PRECISION)
       })),
       segments: this.segments,
@@ -323,8 +339,10 @@ export function interpolatePathPoints(points: Point[], samplesPerSegment: number
   return result;
 }
 
-export function catmullRomSmooth(points: Point[], alpha: number = 0.5): Point[] {
-  if (points.length < 4) return [...points];
+export function catmullRomSmooth(points: Point[], alpha: number = 0.5, minSteps: number = 8, maxSteps: number = 30): Point[] {
+  if (points.length < 4) {
+    return catmullRomSmoothAdaptive(points, alpha, minSteps, maxSteps);
+  }
   
   const result: Point[] = [points[0]];
   
@@ -334,7 +352,50 @@ export function catmullRomSmooth(points: Point[], alpha: number = 0.5): Point[] 
     const p2 = points[i + 1];
     const p3 = points[Math.min(points.length - 1, i + 2)];
     
-    const steps = 10;
+    const distance = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+    const steps = Math.min(maxSteps, Math.max(minSteps, Math.ceil(distance * 500)));
+    
+    for (let step = 1; step <= steps; step++) {
+      const t = step / steps;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      
+      const v0x = (p2.x - p0.x) * alpha;
+      const v0y = (p2.y - p0.y) * alpha;
+      const v1x = (p3.x - p1.x) * alpha;
+      const v1y = (p3.y - p1.y) * alpha;
+      
+      const x = (2 * p1.x - 2 * p2.x + v0x + v1x) * t3 +
+                (-3 * p1.x + 3 * p2.x - 2 * v0x - v1x) * t2 +
+                v0x * t + p1.x;
+      
+      const y = (2 * p1.y - 2 * p2.y + v0y + v1y) * t3 +
+                (-3 * p1.y + 3 * p2.y - 2 * v0y - v1y) * t2 +
+                v0y * t + p1.y;
+      
+      const timestamp = p1.timestamp + (p2.timestamp - p1.timestamp) * t;
+      
+      result.push({ x, y, timestamp });
+    }
+  }
+  
+  return result;
+}
+
+function catmullRomSmoothAdaptive(points: Point[], alpha: number = 0.5, minSteps: number = 8, maxSteps: number = 30): Point[] {
+  if (points.length < 2) return [...points];
+  
+  const result: Point[] = [points[0]];
+  
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    
+    const distance = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+    const steps = Math.min(maxSteps, Math.max(minSteps, Math.ceil(distance * 500)));
+    
     for (let step = 1; step <= steps; step++) {
       const t = step / steps;
       const t2 = t * t;

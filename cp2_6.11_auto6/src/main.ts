@@ -339,8 +339,8 @@ class App {
         const emitCount = Math.max(1, Math.floor(density / 30));
         
         for (let i = 0; i < emitCount; i++) {
-          const offsetX = (Math.random() - 0.5) * 0.02;
-          const offsetY = (Math.random() - 0.5) * 0.02;
+          const offsetX = this.renderer.getRandomRange(-0.01, 0.01);
+          const offsetY = this.renderer.getRandomRange(-0.01, 0.01);
           this.renderer.emitParticles(
             point.x + offsetX,
             point.y + offsetY,
@@ -361,7 +361,6 @@ class App {
         this.lastFrameTime = currentTime;
       }
       
-      const deltaTime = currentTime - this.lastFrameTime;
       this.lastFrameTime = currentTime;
       
       this.renderer.clear();
