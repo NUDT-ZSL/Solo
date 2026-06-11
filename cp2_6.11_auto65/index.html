@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>时间涟漪 | Time Ripples</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div class="loading-screen" id="loading">
+    <div class="ripple-loader">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div class="loading-text">时间涟漪</div>
+  </div>
+
+  <div id="app">
+    <header>
+      <h1 style="background:linear-gradient(90deg,#58A6FF,#F78166,#D14C8B);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:28px;letter-spacing:2px;margin-bottom:8px">时间涟漪</h1>
+      <p class="subtitle" style="color:#8B949E;font-size:14px;margin-bottom:24px">Time Ripples — 可视化你的时间线</p>
+    </header>
+
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <canvas id="timeline-canvas"></canvas>
+      <button class="add-event-btn" id="addEventBtn" title="添加事件">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <div class="dual-slider" id="dualSlider">
+      <div class="dual-slider-track"></div>
+      <input type="range" id="minRange" min="0" max="100" value="0">
+      <input type="range" id="maxRange" min="0" max="100" value="100">
+    </div>
+    <div class="buttons-row">
+      <button class="btn" id="playBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5,3 19,12 5,21" style="fill:currentColor;stroke:none"/>
+        </svg>
+        播放
+      </button>
+      <button class="btn" id="resetBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+        重置
+      </button>
+      <button class="btn btn-primary" id="exportBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        导出
+      </button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="eventModal">
+    <div class="modal">
+      <h3>添加事件</h3>
+      <div class="form-group">
+        <label for="eventName">事件名称</label>
+        <input type="text" id="eventName" placeholder="请输入事件名称">
+      </div>
+      <div class="form-group">
+        <label for="eventDate">日期</label>
+        <input type="date" id="eventDate">
+      </div>
+      <div class="form-group">
+        <label>颜色</label>
+        <div class="color-picker-wrapper">
+          <input type="color" id="eventColor" value="#58A6FF">
+          <div class="color-preview"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="cancelEventBtn">取消</button>
+        <button class="btn btn-primary" id="submitEventBtn">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal">
+      <h3>导出分享</h3>
+      <div class="preview-container">
+        <img id="previewImg" alt="预览">
+      </div>
+      <div class="share-link-row">
+        <input type="text" id="shareLink" readonly>
+        <button class="btn" id="copyLinkBtn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          复制
+        </button>
+        <div class="copy-toast" id="copyToast">已复制</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="closeExportBtn">关闭</button>
+        <button class="btn btn-primary" id="downloadBtn">下载PNG</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
