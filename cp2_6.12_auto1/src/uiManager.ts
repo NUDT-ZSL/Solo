@@ -38,6 +38,14 @@ export class UIManager {
     this.redFlashAlpha = Math.max(this.redFlashAlpha, alpha);
   }
 
+  triggerDamageFeedback(damage: number): void {
+    const t = Math.max(0, Math.min(1, (damage - 5) / (30 - 5)));
+    const shakeIntensity = 3 + t * (20 - 3);
+    const redFlashAlpha = 0.1 + t * (0.6 - 0.1);
+    this.triggerShake(shakeIntensity);
+    this.triggerRedFlash(redFlashAlpha);
+  }
+
   applyScreenShake(ctx: CanvasRenderingContext2D): void {
     if (this.shakeIntensity > 0) {
       const offsetX = (Math.random() - 0.5) * this.shakeIntensity * 2;

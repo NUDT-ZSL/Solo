@@ -93,8 +93,11 @@ class Game {
   }
 
   private setupCanvas(): void {
-    this.canvas.width = this.width;
-    this.canvas.height = this.height;
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = this.width * dpr;
+    this.canvas.height = this.height * dpr;
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.scale(dpr, dpr);
     this.ctx.imageSmoothingEnabled = false;
   }
 
@@ -122,8 +125,10 @@ class Game {
 
   private handleMouseMove(e: MouseEvent): void {
     const rect = this.canvas.getBoundingClientRect();
-    this.mouseX = e.clientX - rect.left;
-    this.mouseY = e.clientY - rect.top;
+    const scaleX = this.width / rect.width;
+    const scaleY = this.height / rect.height;
+    this.mouseX = (e.clientX - rect.left) * scaleX;
+    this.mouseY = (e.clientY - rect.top) * scaleY;
   }
 
   private handleMouseDown(e: MouseEvent): void {
@@ -147,8 +152,10 @@ class Game {
     e.preventDefault();
     if (e.touches.length > 0) {
       const rect = this.canvas.getBoundingClientRect();
-      this.mouseX = e.touches[0].clientX - rect.left;
-      this.mouseY = e.touches[0].clientY - rect.top;
+      const scaleX = this.width / rect.width;
+      const scaleY = this.height / rect.height;
+      this.mouseX = (e.touches[0].clientX - rect.left) * scaleX;
+      this.mouseY = (e.touches[0].clientY - rect.top) * scaleY;
     }
   }
 
@@ -164,8 +171,10 @@ class Game {
     }
     if (e.touches.length > 0) {
       const rect = this.canvas.getBoundingClientRect();
-      this.mouseX = e.touches[0].clientX - rect.left;
-      this.mouseY = e.touches[0].clientY - rect.top;
+      const scaleX = this.width / rect.width;
+      const scaleY = this.height / rect.height;
+      this.mouseX = (e.touches[0].clientX - rect.left) * scaleX;
+      this.mouseY = (e.touches[0].clientY - rect.top) * scaleY;
     }
     this.isMouseDown = true;
   }
@@ -351,8 +360,7 @@ class Game {
 
       if (checkCollision(enemy.getBounds(), this.planet.getBounds())) {
         this.planet.takeDamage(enemy.damage);
-        this.uiManager.triggerShake(enemy.type === EnemyType.BOSS ? 15 : 8);
-        this.uiManager.triggerRedFlash(enemy.type === EnemyType.BOSS ? 0.5 : 0.3);
+        this.uiManager.triggerDamageFeedback(enemy.damage);
         const colors = ['#ff4500', '#ff6600', '#888888'];
         this.particleSystem.emitExplosion(enemy.x, enemy.y, 20, colors, quality);
         this.enemies.splice(i, 1);
@@ -381,8 +389,7 @@ class Game {
 
       if (checkCollision(bullet.getBounds(), this.planet.getBounds())) {
         this.planet.takeDamage(bullet.damage);
-        this.uiManager.triggerShake(5);
-        this.uiManager.triggerRedFlash(0.2);
+        this.uiManager.triggerDamageFeedback(bullet.damage);
         this.particleSystem.emitHit(bullet.x, bullet.y, quality);
         this.enemyBullets.splice(i, 1);
 
@@ -410,8 +417,7 @@ class Game {
 
   private gameOver(): void {
     this.gameState = GameState.GAME_OVER;
-    this.uiManager.triggerShake(20);
-    this.uiManager.triggerRedFlash(0.6);
+    this.uiManager.triggerDamageFeedback(30);
     const colors = ['#ff4500', '#ff6600', '#ff8800', '#ffff00', '#ffffff'];
     this.particleSystem.emitExplosion(this.planet.x, this.planet.y, 80, colors, 1);
   }

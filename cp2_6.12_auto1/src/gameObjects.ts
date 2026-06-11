@@ -252,6 +252,7 @@ export class Enemy implements GameObject {
   shield: number;
   maxShield: number;
   shieldRegenRate: number;
+  shieldFlashTime: number;
   pixels: { x: number; y: number; color: string }[];
   hitFlashTime: number;
 
@@ -263,6 +264,7 @@ export class Enemy implements GameObject {
     this.rotationSpeed = (Math.random() - 0.5) * 2;
     this.lastFireTime = 0;
     this.hitFlashTime = 0;
+    this.shieldFlashTime = 0;
     this.pixels = [];
 
     const angle = Math.atan2(targetY - y, targetX - x);
@@ -383,6 +385,7 @@ export class Enemy implements GameObject {
     this.y += this.vy * deltaTime;
     this.rotation += this.rotationSpeed * deltaTime;
     if (this.hitFlashTime > 0) this.hitFlashTime -= deltaTime;
+    if (this.shieldFlashTime > 0) this.shieldFlashTime -= deltaTime;
 
     if (this.shieldRegenRate > 0 && this.shield < this.maxShield) {
       this.shield = Math.min(this.maxShield, this.shield + this.shieldRegenRate * deltaTime);
@@ -412,21 +415,226 @@ export class Enemy implements GameObject {
     return null;
   }
 
+  private drawPixelatedPolygon(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    radius: number,
+    sides: number,
+    rotation: number,
+    pixelSize: number,
+    fillColor: string,
+    strokeColor: string,
+    alpha: number
+  ): void {
+    const points: { x: number; y: number }[] = [];
+    for (let i = 0; i < sides; i++) {
+      const angle = rotation + (i * Math.PI * 2) / sides;
+      points.push({
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius
+      });
+    }
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const minX = Math.min(...points.map(p => p.x));
+    const maxX = Math.max(...points.map(p => p.x));
+    const minY = Math.min(...points.map(p => p.y));
+    const maxY = Math.max(...points.map(p => p.y));
+
+    for (let py = Math.floor(minY / pixelSize) * pixelSize; py <= maxY; py += pixelSize) {
+      for (let px = Math.floor(minX / pixelSize) * pixelSize; px <= maxX; px += pixelSize) {
+        if (this.isPointInPolygon(px + pixelSize / 2, py + pixelSize / 2, points)) {
+          ctx.fillStyle = fillColor;
+          ctx.fillRect(Math.floor(px), Math.floor(py), pixelSize, pixelSize);
+        }
+      }
+    }
+
+    ctx.fillStyle = strokeColor;
+    for (let i = 0; i < points.length; i++) {
+      const p1 = points[i];
+      const p2 = points[(i + 1) % points.length];
+      this.drawPixelatedLine(ctx, p1.x, p1.y, p2.x, p2.y, pixelSize);
+    }
+
+    ctx.restore();
+  }
+
+  private isPointInPolygon(px: number, py: number, points: { x: number; y: number }[]): boolean {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const xi = points[i].x, yi = points[i].y;
+      const xj = points[j].x, yj = points[j].y;
+      const intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  private drawPixelatedLine(
+    ctx: CanvasRenderingContext2D,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    pixelSize: number
+  ): void {
+    const dx = Math.abs(x2 - x1);
+    const dy = Math.abs(y2 - y1);
+    const sx = x1 < x2 ? pixelSize : -pixelSize;
+    const sy = y1 < y2 ? pixelSize : -pixelSize;
+    let err = dx - dy;
+    let x = Math.floor(x1 / pixelSize) * pixelSize;
+    let y = Math.floor(y1 / pixelSize) * pixelSize;
+    const endX = Math.floor(x2 / pixelSize) * pixelSize;
+    const endY = Math.floor(y2 / pixelSize) * pixelSize;
+
+    while (true) {
+      ctx.fillRect(x, y, pixelSize, pixelSize);
+      if (x === endX && y === endY) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx) { err += dx; y += sy; }
+    }
+  }
+
+  private drawShieldCracks(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    radius: number,
+    sides: number,
+    rotation: number,
+    pixelSize: number,
+    crackIntensity: number
+  ): void {
+    const crackCount = Math.floor(3 + crackIntensity * 12);
+    ctx.save();
+    ctx.fillStyle = `rgba(255, 100, 100, ${0.4 + crackIntensity * 0.4})`;
+
+    for (let i = 0; i < crackCount; i++) {
+      const startAngle = rotation + (i * Math.PI * 2) / crackCount + Math.random() * 0.3;
+      const startRadius = radius * (0.5 + Math.random() * 0.4);
+      const startX = cx + Math.cos(startAngle) * startRadius;
+      const startY = cy + Math.sin(startAngle) * startRadius;
+
+      let currentX = startX;
+      let currentY = startY;
+      let currentAngle = startAngle + (Math.random() - 0.5) * 1.5;
+      const segments = Math.floor(2 + crackIntensity * 5);
+
+      for (let s = 0; s < segments; s++) {
+        const segLen = (radius - startRadius) / segments + Math.random() * 5;
+        const nextX = currentX + Math.cos(currentAngle) * segLen;
+        const nextY = currentY + Math.sin(currentAngle) * segLen;
+        this.drawPixelatedLine(ctx, currentX, currentY, nextX, nextY, pixelSize);
+        currentX = nextX;
+        currentY = nextY;
+        currentAngle += (Math.random() - 0.5) * 1.2;
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawShieldBrokenRemains(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    radius: number,
+    sides: number,
+    rotation: number,
+    pixelSize: number
+  ): void {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = 'rgba(150, 200, 255, 0.5)';
+
+    const fragmentCount = 6;
+    for (let i = 0; i < fragmentCount; i++) {
+      const angle = rotation + (i * Math.PI * 2) / fragmentCount;
+      const fragRadius = radius * (0.7 + Math.random() * 0.2);
+      const fragCx = cx + Math.cos(angle) * fragRadius * 0.5;
+      const fragCy = cy + Math.sin(angle) * fragRadius * 0.5;
+      const fragSize = 3 + Math.random() * 5;
+
+      for (let py = -fragSize; py <= fragSize; py += pixelSize) {
+        for (let px = -fragSize; px <= fragSize; px += pixelSize) {
+          if (Math.random() > 0.5 && Math.sqrt(px * px + py * py) <= fragSize) {
+            ctx.fillRect(
+              Math.floor(fragCx + px),
+              Math.floor(fragCy + py),
+              pixelSize,
+              pixelSize
+            );
+          }
+        }
+      }
+    }
+    ctx.restore();
+  }
+
   render(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     const cx = Math.floor(this.x);
     const cy = Math.floor(this.y);
 
-    if (this.shield > 0) {
-      const shieldAlpha = 0.3 + 0.2 * Math.sin(Date.now() * 0.005);
-      ctx.strokeStyle = `rgba(100, 200, 255, ${shieldAlpha})`;
-      ctx.lineWidth = 3;
-      ctx.shadowColor = '#64c8ff';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(cx, cy, this.radius + 8, 0, Math.PI * 2);
-      ctx.stroke();
+    if (this.type === EnemyType.BOSS) {
+      const shieldRadius = this.radius + 14;
+      const pixelSize = 4;
+      const shieldRatio = this.maxShield > 0 ? this.shield / this.maxShield : 0;
+      const isFlashing = this.shieldFlashTime > 0;
+
+      if (this.shield > 0) {
+        const baseAlpha = 0.35 + 0.15 * Math.sin(Date.now() * 0.006);
+        const flashAlpha = isFlashing ? 1.0 : baseAlpha;
+
+        const fillColor = isFlashing
+          ? 'rgba(255, 255, 255, 0.7)'
+          : `rgba(80, 160, 255, ${0.25})`;
+        const strokeColor = isFlashing
+          ? '#ffffff'
+          : '#64c8ff';
+
+        ctx.shadowColor = isFlashing ? '#ffffff' : '#64c8ff';
+        ctx.shadowBlur = isFlashing ? 25 : 12;
+
+        this.drawPixelatedPolygon(
+          ctx, cx, cy, shieldRadius, 8, this.rotation * 0.3,
+          pixelSize, fillColor, strokeColor, flashAlpha
+        );
+
+        this.drawPixelatedPolygon(
+          ctx, cx, cy, shieldRadius - 6, 6, -this.rotation * 0.2,
+          pixelSize, 'rgba(100, 180, 255, 0.15)', '#88ddff', baseAlpha * 0.7
+        );
+
+        if (shieldRatio < 0.5) {
+          const crackIntensity = (0.5 - shieldRatio) * 2;
+          this.drawShieldCracks(
+            ctx, cx, cy, shieldRadius, 8, this.rotation * 0.3,
+            pixelSize, crackIntensity
+          );
+        }
+      } else if (this.maxShield > 0) {
+        this.drawShieldBrokenRemains(
+          ctx, cx, cy, shieldRadius, 8, this.rotation * 0.3, pixelSize
+        );
+      }
+    } else {
+      if (this.shield > 0) {
+        const shieldAlpha = 0.3 + 0.2 * Math.sin(Date.now() * 0.005);
+        ctx.strokeStyle = `rgba(100, 200, 255, ${shieldAlpha})`;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#64c8ff';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(cx, cy, this.radius + 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     ctx.translate(cx, cy);
@@ -455,6 +663,7 @@ export class Enemy implements GameObject {
       const shieldDamage = Math.min(this.shield, damage);
       this.shield -= shieldDamage;
       damage -= shieldDamage;
+      this.shieldFlashTime = 0.15;
     }
     this.hp = Math.max(0, this.hp - damage);
     return damage;

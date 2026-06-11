@@ -61,24 +61,39 @@ export class Particle {
   }
 
   render(ctx: CanvasRenderingContext2D, quality: number): void {
-    const alpha = this.life / this.maxLife;
-    const size = this.size * (this.type === ParticleType.TRAIL ? alpha : (0.5 + 0.5 * alpha));
+    const t = this.life / this.maxLife;
+    const alpha = t;
+
+    let sizeCurve: number;
+    if (this.type === ParticleType.TRAIL) {
+      sizeCurve = t * t * (3 - 2 * t);
+    } else {
+      sizeCurve = 0.5 + 0.5 * (1 - Math.pow(1 - t, 2));
+    }
+
+    let size = this.size * sizeCurve;
+    if (quality === 1) {
+      size *= 0.7;
+    }
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = alpha;
     ctx.fillStyle = this.color;
 
-    if (quality >= 1) {
+    if (quality >= 2) {
       ctx.shadowColor = this.color;
       ctx.shadowBlur = this.type === ParticleType.TRAIL ? 4 : 6;
+    } else if (quality === 1 && this.type !== ParticleType.TRAIL) {
+      ctx.shadowColor = this.color;
+      ctx.shadowBlur = 3;
     }
 
     const px = Math.floor(this.x);
     const py = Math.floor(this.y);
-    const s = Math.max(1, Math.floor(size));
+    const s = quality === 0 ? 1 : Math.max(1, Math.floor(size));
 
-    if (this.type === ParticleType.FRAGMENT && quality >= 1) {
+    if (this.type === ParticleType.FRAGMENT && quality >= 2) {
       ctx.translate(px, py);
       ctx.rotate(this.rotation);
       ctx.fillRect(-s, -s / 2, s * 2, s);
@@ -124,7 +139,7 @@ export class ParticleSystem {
   }
 
   emitTrail(x: number, y: number, color: string, quality: number): void {
-    const emitRate = quality >= 1 ? 1 : 0.5;
+    const emitRate = quality >= 2 ? 1 : (quality === 1 ? 0.75 : 0.5);
     this.trailEmitCounter += emitRate;
 
     while (this.trailEmitCounter >= 1) {
@@ -148,7 +163,7 @@ export class ParticleSystem {
   }
 
   emitExplosion(x: number, y: number, count: number, colors: string[], quality: number): void {
-    const actualCount = Math.floor(count * (quality >= 1 ? 1 : 0.6));
+    const actualCount = Math.floor(count * (quality >= 2 ? 1 : (quality === 1 ? 0.8 : 0.6)));
 
     for (let i = 0; i < actualCount; i++) {
       const p = this.getParticle();
@@ -210,7 +225,7 @@ export class ParticleSystem {
   }
 
   emitHit(x: number, y: number, quality: number): void {
-    const count = Math.floor(8 * (quality >= 1 ? 1 : 0.5));
+    const count = Math.floor(8 * (quality >= 2 ? 1 : (quality === 1 ? 0.75 : 0.5)));
     for (let i = 0; i < count; i++) {
       const p = this.getParticle();
       if (p) {
@@ -242,7 +257,14 @@ export class ParticleSystem {
 
   render(ctx: CanvasRenderingContext2D): void {
     const quality = this.getQuality();
-    const drawStep = quality >= 1 ? 1 : 2;
+    let drawStep: number;
+    if (quality >= 2) {
+      drawStep = 1;
+    } else if (quality === 1) {
+      drawStep = 1;
+    } else {
+      drawStep = this.particles.length > 250 ? 3 : 2;
+    }
 
     for (let i = 0; i < this.particles.length; i += drawStep) {
       this.particles[i].render(ctx, quality);
@@ -250,10 +272,14 @@ export class ParticleSystem {
   }
 
   getQuality(): number {
-    if (this.particles.length > 200) {
+    const count = this.particles.length;
+    if (count < 100) {
+      return 2;
+    } else if (count <= 200) {
+      return 1;
+    } else {
       return 0;
     }
-    return 1;
   }
 
   getParticleCount(): number {
@@ -265,6 +291,10 @@ export class ParticleSystem {
       this.pool.push(p);
     }
     this.particles = [];
+  }
+
+  getPoolAvailable(): number {
+    return this.pool.length;
   }
 }
 
