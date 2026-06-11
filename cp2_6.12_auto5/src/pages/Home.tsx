@@ -9,6 +9,37 @@ import MetaPanel from "@/components/MetaPanel";
 import { useStore } from "@/store/useStore";
 import { cn } from "@/lib/utils";
 
+function extractErrorMessage(err: any): string {
+  if (!err) return "Unknown error";
+  if (err.response?.data) {
+    if (typeof err.response.data === "string") {
+      return err.response.data;
+    }
+    if (err.response.data.error) {
+      if (typeof err.response.data.error === "string") {
+        return err.response.data.error;
+      }
+      if (err.response.data.error?.message) {
+        return err.response.data.error.message;
+      }
+      return JSON.stringify(err.response.data.error).slice(0, 500);
+    }
+    if (err.response.data.message) {
+      return err.response.data.message;
+    }
+  }
+  if (err.response?.statusText) {
+    return `${err.response.status} ${err.response.statusText}`;
+  }
+  if (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT") {
+    return "Request timed out. Please try again.";
+  }
+  if (err.message) {
+    return err.message;
+  }
+  return "Unknown error occurred";
+}
+
 export default function Home() {
   const {
     code, language, theme, title, description, output, outputType,
@@ -29,12 +60,14 @@ export default function Home() {
         setOutput(output || "(no output)", "success");
       }
     } catch (err: any) {
-      if (err.response?.status === 429) {
+      setIsRunning(false);
+      if (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT") {
+        setOutput("Request timed out. Please check your connection and try again.", "timeout");
+      } else if (err.response?.status === 429) {
         setOutput("Rate limit exceeded: maximum 5 runs per minute", "error");
-      } else if (err.response?.data?.error) {
-        setOutput(err.response.data.error, "error");
       } else {
-        setOutput("Network error. Is the server running?", "error");
+        const message = extractErrorMessage(err);
+        setOutput(`Error: ${message}`, "error");
       }
     }
   }, [code, language, setIsRunning, setOutput]);
@@ -50,12 +83,8 @@ export default function Home() {
       setSnippetId(res.data.id);
       setOutput("Snippet saved! Click Share to copy the link.", "success");
     } catch (err: any) {
-      const serverError = err.response?.data?.error;
-      if (serverError) {
-        setOutput(`Failed to save snippet: ${serverError}`, "error");
-      } else {
-        setOutput("Failed to save snippet. Network error or server unavailable.", "error");
-      }
+      const message = extractErrorMessage(err);
+      setOutput(`Failed to save snippet: ${message}`, "error");
     }
   }, [title, description, code, language, setOutput]);
 
@@ -123,6 +152,7 @@ export default function Home() {
               onSave={handleSave}
               onShare={handleShare}
               snippetId={snippetId}
+              readOnly={false}
             />
           </div>
         </div>

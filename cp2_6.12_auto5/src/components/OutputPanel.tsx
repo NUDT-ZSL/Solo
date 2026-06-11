@@ -1,4 +1,4 @@
-import { Play, Save, Share2, Loader2 } from "lucide-react";
+import { Play, Save, Share2, Loader2, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface OutputPanelProps {
@@ -9,9 +9,19 @@ interface OutputPanelProps {
   onSave?: () => void;
   onShare?: () => void;
   snippetId?: string;
+  readOnly?: boolean;
 }
 
-export default function OutputPanel({ output, outputType, isRunning, onRun, onSave, onShare, snippetId }: OutputPanelProps) {
+export default function OutputPanel({
+  output,
+  outputType,
+  isRunning,
+  onRun,
+  onSave,
+  onShare,
+  snippetId,
+  readOnly = false,
+}: OutputPanelProps) {
   const outputColor = {
     success: "text-success",
     error: "text-error",
@@ -22,21 +32,35 @@ export default function OutputPanel({ output, outputType, isRunning, onRun, onSa
   return (
     <div className={cn("flex flex-col h-full rounded-lg overflow-hidden shadow-lg", "dark:bg-dark-output bg-light-output")}>
       <div className={cn("flex items-center justify-between px-4 py-2 border-b", "dark:border-gray-700 border-gray-200")}>
-        <span className={cn("text-sm font-medium", "dark:text-gray-300 text-gray-600")}>Output</span>
+        <div className="flex items-center gap-2">
+          <span className={cn("text-sm font-medium", "dark:text-gray-300 text-gray-600")}>Output</span>
+          {readOnly && (
+            <span className={cn(
+              "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium",
+              "dark:bg-gray-700 dark:text-gray-400",
+              "bg-gray-100 text-gray-500"
+            )}>
+              <Eye className="w-3 h-3" />
+              View
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onRun}
             disabled={isRunning}
             className={cn(
               "btn-scale flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium",
-              "bg-success text-white hover:bg-green-600",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+              readOnly
+                ? "dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                : "bg-success text-white hover:bg-green-600"
             )}
           >
             {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
             {isRunning ? "Running..." : "Run"}
           </button>
-          {onSave && (
+          {onSave && !readOnly && (
             <button
               onClick={onSave}
               className={cn(
@@ -49,7 +73,7 @@ export default function OutputPanel({ output, outputType, isRunning, onRun, onSa
               Save
             </button>
           )}
-          {onShare && snippetId && (
+          {onShare && snippetId && !readOnly && (
             <button
               onClick={onShare}
               className={cn(

@@ -20,6 +20,37 @@ interface SnippetData {
   createdAt: string;
 }
 
+function extractErrorMessage(err: any): string {
+  if (!err) return "Unknown error";
+  if (err.response?.data) {
+    if (typeof err.response.data === "string") {
+      return err.response.data;
+    }
+    if (err.response.data.error) {
+      if (typeof err.response.data.error === "string") {
+        return err.response.data.error;
+      }
+      if (err.response.data.error?.message) {
+        return err.response.data.error.message;
+      }
+      return JSON.stringify(err.response.data.error).slice(0, 500);
+    }
+    if (err.response.data.message) {
+      return err.response.data.message;
+    }
+  }
+  if (err.response?.statusText) {
+    return `${err.response.status} ${err.response.statusText}`;
+  }
+  if (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT") {
+    return "Request timed out. Please try again.";
+  }
+  if (err.message) {
+    return err.message;
+  }
+  return "Unknown error occurred";
+}
+
 export default function SnippetView() {
   const { id } = useParams<{ id: string }>();
   const [snippet, setSnippet] = useState<SnippetData | null>(null);
@@ -34,8 +65,8 @@ export default function SnippetView() {
         setSnippet(res.data);
         setLoading(false);
       })
-      .catch(() => {
-        setError("Snippet not found");
+      .catch((err) => {
+        setError(extractErrorMessage(err));
         setLoading(false);
       });
   }, [id]);
@@ -57,12 +88,14 @@ export default function SnippetView() {
         setOutput(output || "(no output)", "success");
       }
     } catch (err: any) {
-      if (err.response?.status === 429) {
+      setIsRunning(false);
+      if (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT") {
+        setOutput("Request timed out. Please check your connection and try again.", "timeout");
+      } else if (err.response?.status === 429) {
         setOutput("Rate limit exceeded: maximum 5 runs per minute", "error");
-      } else if (err.response?.data?.error) {
-        setOutput(err.response.data.error, "error");
       } else {
-        setOutput("Network error. Is the server running?", "error");
+        const message = extractErrorMessage(err);
+        setOutput(`Error: ${message}`, "error");
       }
     }
   }, [snippet, setIsRunning, setOutput]);
@@ -149,6 +182,7 @@ export default function SnippetView() {
             outputType={outputType}
             isRunning={isRunning}
             onRun={handleRun}
+            readOnly
           />
         </div>
       </div>
