@@ -22,9 +22,10 @@ export class Stats {
   private totalScore: number = 0;
   private highScore: number = 0;
   private panelMinimized: boolean = false;
-  private chartAnimations: { progress: number; delay: number }[] = [];
-  private animationTime: number = 0;
+  private chartAnimations: { progress: number; started: boolean }[] = [];
+  private animStartTime: number = -1;
   private needsAnimationReset: boolean = false;
+  private globalTime: number = 0;
 
   constructor() {
     this.load();
@@ -33,19 +34,19 @@ export class Stats {
 
   static evaluateCombo(values: [number, number, number]): ComboInfo {
     const sorted = [...values].sort((a, b) => a - b) as [number, number, number];
-    
+
     if (sorted[0] === sorted[1] && sorted[1] === sorted[2]) {
       return { type: 'triple', name: '豹 子', score: 1000 };
     }
-    
+
     if (sorted[0] + 1 === sorted[1] && sorted[1] + 1 === sorted[2]) {
       return { type: 'straight', name: '顺 子', score: 500 };
     }
-    
+
     if (sorted[0] === sorted[1] || sorted[1] === sorted[2]) {
       return { type: 'pair', name: '对 子', score: 200 };
     }
-    
+
     return { type: 'none', name: '散 牌', score: 50 };
   }
 
@@ -150,20 +151,27 @@ export class Stats {
   }
 
   update(deltaTime: number): void {
-    this.animationTime += deltaTime;
+    this.globalTime += deltaTime;
 
     if (this.needsAnimationReset) {
       this.needsAnimationReset = false;
+      this.animStartTime = this.globalTime;
       const history = this.getRecentHistory(DISPLAY_HISTORY);
-      this.chartAnimations = history.map((_, i) => ({
+      this.chartAnimations = history.map(() => ({
         progress: 0,
-        delay: i * 0.05,
+        started: false,
       }));
     }
 
-    this.chartAnimations.forEach(anim => {
-      if (this.animationTime >= anim.delay) {
-        anim.progress = Math.min(1, anim.progress + deltaTime * 3);
+    const elapsed = this.globalTime - this.animStartTime;
+
+    this.chartAnimations.forEach((anim, i) => {
+      const staggerDelay = i * 0.05;
+      if (elapsed >= staggerDelay) {
+        anim.started = true;
+      }
+      if (anim.started && anim.progress < 1) {
+        anim.progress = Math.min(1, anim.progress + deltaTime * 4);
       }
     });
   }
@@ -199,21 +207,12 @@ export class Stats {
       ctx.stroke();
     }
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.font = '10px Orbitron, sans-serif';
-    ctx.textAlign = 'right';
-    for (let i = 0; i <= 4; i++) {
-      const value = Math.round(maxScore - (maxScore / 4) * i);
-      const lineY = chartTop + (chartHeight / 4) * i;
-      ctx.fillText(value.toString(), x - 5, lineY + 3);
-    }
-
     history.forEach((item, i) => {
       if (i >= DISPLAY_HISTORY) return;
-      
-      const anim = this.chartAnimations[i] || { progress: 1, delay: 0 };
-      const progress = this.easeOutBack(anim.progress);
-      
+
+      const anim = this.chartAnimations[i] || { progress: 1, started: true };
+      const progress = anim.started ? this.easeOutBack(anim.progress) : 0;
+
       const barX = x + barGap + i * (barWidth + barGap);
       const barHeight = (item.score / maxScore) * chartHeight * progress;
       const barY = chartBottom - barHeight;

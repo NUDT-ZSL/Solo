@@ -9,7 +9,7 @@ export interface Particle {
   size: number;
   life: number;
   maxLife: number;
-  trail: { x: number; y: number; alpha: number }[];
+  trail: { x: number; y: number; age: number }[];
   targetX: number;
   targetY: number;
 }
@@ -19,6 +19,7 @@ export type DicePhase = 'idle' | 'rotating' | 'exploding' | 'aggregating' | 'set
 const TRAIL_DURATION = 0.3;
 const PARTICLE_COUNT = 85;
 const ROLL_DURATION = 1.8;
+const MAX_TRAIL_POINTS = 19;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -49,11 +50,11 @@ export class Dice {
   phase: DicePhase = 'idle';
   currentValue: number = 1;
   targetValue: number = 1;
-  
+
   rotationX: number = 0;
   rotationY: number = 0;
   rotationZ: number = 0;
-  
+
   particles: Particle[] = [];
   private particlePool: Particle[] = [];
   private rollProgress: number = 0;
@@ -66,7 +67,6 @@ export class Dice {
   private baseY: number;
   private floatOffset: number = 0;
   private floatTime: number = 0;
-  private currentDeltaTime: number = 0;
 
   constructor(x: number, y: number, size: number, color: string) {
     this.x = x;
@@ -109,26 +109,26 @@ export class Dice {
     const ctx = this.offscreenCtx;
     const s = this.size * 2;
     ctx.clearRect(0, 0, s, s);
-    
-    const gradient = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+
+    const gradient = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
     gradient.addColorStop(0, this.lightenColor(this.color, 40));
     gradient.addColorStop(0.7, this.color);
     gradient.addColorStop(1, this.darkenColor(this.color, 30));
-    
+
     ctx.save();
     ctx.shadowColor = this.color;
     ctx.shadowBlur = 25;
-    
+
     ctx.fillStyle = gradient;
     this.roundRect(ctx, 10, 10, s - 20, s - 20, 15);
     ctx.fill();
-    
+
     ctx.strokeStyle = this.lightenColor(this.color, 60);
     ctx.lineWidth = 2;
     ctx.shadowBlur = 15;
     this.roundRect(ctx, 10, 10, s - 20, s - 20, 15);
     ctx.stroke();
-    
+
     ctx.restore();
   }
 
@@ -180,20 +180,20 @@ export class Dice {
   private explodeParticles(): void {
     const dots = DOTS_PATTERNS[this.targetValue] || DOTS_PATTERNS[1];
     const particlePerDot = Math.floor(PARTICLE_COUNT / dots.length);
-    
+
     this.particles = [];
-    
-    dots.forEach((dot, dotIndex) => {
+
+    dots.forEach((dot) => {
       const targetX = this.x + (dot[0] - 0.5) * this.size * 0.8;
       const targetY = this.y + (dot[1] - 0.5) * this.size * 0.8;
-      
+
       for (let i = 0; i < particlePerDot; i++) {
         const p = this.particlePool[this.particles.length];
         if (!p) break;
-        
+
         const angle = Math.random() * Math.PI * 2;
         const speed = 150 + Math.random() * 200;
-        
+
         p.x = this.x;
         p.y = this.y;
         p.vx = Math.cos(angle) * speed;
@@ -207,20 +207,20 @@ export class Dice {
         p.trail = [];
         p.targetX = targetX + (Math.random() - 0.5) * 8;
         p.targetY = targetY + (Math.random() - 0.5) * 8;
-        
+
         this.particles.push(p);
       }
     });
-    
+
     const remaining = PARTICLE_COUNT - this.particles.length;
     for (let i = 0; i < remaining; i++) {
       const p = this.particlePool[this.particles.length];
       if (!p) break;
-      
+
       const angle = Math.random() * Math.PI * 2;
       const speed = 150 + Math.random() * 200;
       const dot = dots[Math.floor(Math.random() * dots.length)];
-      
+
       p.x = this.x;
       p.y = this.y;
       p.vx = Math.cos(angle) * speed;
@@ -234,21 +234,21 @@ export class Dice {
       p.trail = [];
       p.targetX = this.x + (dot[0] - 0.5) * this.size * 0.8 + (Math.random() - 0.5) * 8;
       p.targetY = this.y + (dot[1] - 0.5) * this.size * 0.8 + (Math.random() - 0.5) * 8;
-      
+
       this.particles.push(p);
     }
   }
 
   update(deltaTime: number): void {
-    this.currentDeltaTime = deltaTime;
     this.floatTime += deltaTime;
     this.floatOffset = Math.sin(this.floatTime * 2) * 3;
-    
+
     if (this.shockwaveAlpha > 0) {
-      this.shockwaveRadius += 400 * deltaTime;
-      this.shockwaveAlpha -= deltaTime * 1.8;
+      this.shockwaveRadius += 350 * deltaTime;
+      this.shockwaveAlpha -= deltaTime * 1.5;
+      if (this.shockwaveAlpha < 0) this.shockwaveAlpha = 0;
     }
-    
+
     if (this.phase === 'idle' || this.phase === 'settled') {
       return;
     }
@@ -292,19 +292,17 @@ export class Dice {
   private updateParticles(deltaTime: number, progress: number): void {
     const explodeEnd = 0.6;
     const aggregateStart = 0.6;
-    
+
     this.particles.forEach(p => {
       p.life += deltaTime;
-      
-      p.trail.push({ x: p.x, y: p.y, alpha: 1 });
-      const maxTrailPoints = Math.ceil(TRAIL_DURATION / 0.016);
-      if (p.trail.length > maxTrailPoints) {
+
+      p.trail.push({ x: p.x, y: p.y, age: 0 });
+      for (let i = p.trail.length - 1; i >= 0; i--) {
+        p.trail[i].age += deltaTime;
+      }
+      while (p.trail.length > 0 && p.trail[0].age > TRAIL_DURATION) {
         p.trail.shift();
       }
-      
-      p.trail.forEach((t, i) => {
-        t.alpha = i / p.trail.length;
-      });
 
       if (progress < explodeEnd) {
         p.vx += p.ax * deltaTime;
@@ -316,13 +314,13 @@ export class Dice {
       } else if (progress >= aggregateStart) {
         const aggregateProgress = (progress - aggregateStart) / (1 - aggregateStart);
         const easeProgress = this.easeOutCubic(aggregateProgress);
-        
+
         const startX = p.x;
         const startY = p.y;
-        
+
         p.x = startX + (p.targetX - startX) * easeProgress;
         p.y = startY + (p.targetY - startY) * easeProgress;
-        
+
         p.vx *= 0.9;
         p.vy *= 0.9;
         p.size = 2 + (3 - 2) * (1 - aggregateProgress);
@@ -352,10 +350,9 @@ export class Dice {
 
     if (this.phase === 'idle' || this.phase === 'settled') {
       this.renderDiceFace(ctx, drawY);
-      this.renderSettledParticles(ctx);
     } else {
-      this.renderParticles(ctx);
-      
+      this.renderParticles(ctx, rgb);
+
       if (this.phase === 'rotating' || this.phase === 'exploding') {
         this.renderRotatingDice(ctx, drawY);
       }
@@ -364,7 +361,7 @@ export class Dice {
 
   private renderDiceFace(ctx: CanvasRenderingContext2D, drawY: number): void {
     const s = this.size;
-    
+
     ctx.save();
     ctx.shadowColor = this.color;
     ctx.shadowBlur = 30;
@@ -379,74 +376,75 @@ export class Dice {
 
     const dots = DOTS_PATTERNS[this.currentValue] || DOTS_PATTERNS[1];
     const dotRadius = s * 0.12;
-    
+
     ctx.save();
     ctx.fillStyle = '#FFFFFF';
     ctx.shadowColor = '#FFFFFF';
     ctx.shadowBlur = 8;
-    
+
     dots.forEach(([px, py]) => {
       const dotX = this.x + (px - 0.5) * s * 0.8;
       const dotY = drawY + (py - 0.5) * s * 0.8;
-      
+
       ctx.beginPath();
       ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
       ctx.fill();
     });
-    
+
     ctx.restore();
   }
 
   private renderRotatingDice(ctx: CanvasRenderingContext2D, drawY: number): void {
     const s = this.size;
     const alpha = 0.3 + 0.3 * Math.sin(this.rollProgress * 20);
-    
+
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(this.x, drawY);
-    
+
     const scaleX = Math.cos(this.rotationX * 0.01) * 0.5 + 0.5;
     const scaleY = Math.cos(this.rotationY * 0.01) * 0.5 + 0.5;
-    
+
     ctx.scale(scaleX, scaleY);
-    
+
     ctx.shadowColor = this.color;
     ctx.shadowBlur = 20;
     ctx.drawImage(this.offscreenCanvas, -s, -s, s * 2, s * 2);
-    
+
     ctx.restore();
   }
 
-  private renderParticles(ctx: CanvasRenderingContext2D): void {
-    const rgb = hexToRgb(this.color);
-    
+  private renderParticles(ctx: CanvasRenderingContext2D, rgb: { r: number; g: number; b: number }): void {
+    const colorStr = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+
     this.particles.forEach(p => {
       if (p.trail.length > 1) {
+        const len = p.trail.length;
         ctx.save();
         ctx.lineCap = 'round';
-        ctx.lineWidth = p.size * 0.8;
-        
-        for (let i = 1; i < p.trail.length; i++) {
+        ctx.lineJoin = 'round';
+
+        for (let i = 1; i < len; i++) {
           const prev = p.trail[i - 1];
           const curr = p.trail[i];
-          
+          const trailAlpha = 1 - (curr.age / TRAIL_DURATION);
+
+          if (trailAlpha <= 0) continue;
+
           ctx.beginPath();
           ctx.moveTo(prev.x, prev.y);
           ctx.lineTo(curr.x, curr.y);
-          
-          const gradient = ctx.createLinearGradient(prev.x, prev.y, curr.x, curr.y);
-          gradient.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${prev.alpha * 0.5})`);
-          gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${curr.alpha * 0.8})`);
-          
-          ctx.strokeStyle = gradient;
+          ctx.strokeStyle = colorStr;
+          ctx.lineWidth = p.size * trailAlpha;
+          ctx.globalAlpha = trailAlpha * 0.7;
           ctx.stroke();
         }
-        
+
         ctx.restore();
       }
-      
+
       ctx.save();
-      ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`;
+      ctx.fillStyle = colorStr;
       ctx.shadowColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`;
       ctx.shadowBlur = 15;
       ctx.globalAlpha = Math.min(1, p.life * 3);
@@ -455,27 +453,6 @@ export class Dice {
       ctx.fill();
       ctx.restore();
     });
-  }
-
-  private renderSettledParticles(ctx: CanvasRenderingContext2D): void {
-    const dots = DOTS_PATTERNS[this.currentValue] || DOTS_PATTERNS[1];
-    const dotRadius = this.size * 0.12;
-    
-    ctx.save();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.shadowColor = '#FFFFFF';
-    ctx.shadowBlur = 8;
-    
-    dots.forEach(([px, py]) => {
-      const dotX = this.x + (px - 0.5) * this.size * 0.8;
-      const dotY = this.y + this.floatOffset + (py - 0.5) * this.size * 0.8;
-      
-      ctx.beginPath();
-      ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    
-    ctx.restore();
   }
 
   getValue(): number {
