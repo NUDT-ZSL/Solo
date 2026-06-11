@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 城市天际线生成器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Source Sans 3', sans-serif;
+      background: #0a0e1a;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #control-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 300px;
+      height: 100vh;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-left: 1px solid rgba(255, 255, 255, 0.2);
+      z-index: 100;
+      overflow-y: auto;
+      overflow-x: hidden;
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.3) transparent;
+    }
+
+    #control-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    #control-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #control-panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 2px;
+    }
+
+    #control-panel.collapsed {
+      transform: translateX(100%);
+    }
+
+    .panel-toggle {
+      position: fixed;
+      top: 50%;
+      right: 300px;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 64px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 101;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s;
+    }
+
+    .panel-toggle:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .panel-toggle.collapsed-btn {
+      right: 0;
+    }
+
+    .panel-section {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .panel-section:last-child {
+      border-bottom: none;
+    }
+
+    .section-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 14px;
+    }
+
+    .control-row {
+      margin-bottom: 12px;
+    }
+
+    .control-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .control-label span {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.65);
+      font-weight: 400;
+    }
+
+    .control-value {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.9);
+      min-width: 40px;
+      text-align: right;
+      transition: transform 0.15s;
+    }
+
+    .control-value.rolling {
+      animation: valueRoll 0.3s ease-out;
+    }
+
+    @keyframes valueRoll {
+      0% { transform: translateY(8px); opacity: 0.5; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #1a237e, #7b1fa2);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 6px rgba(123, 31, 162, 0.6), 0 2px 4px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 6px rgba(123, 31, 162, 0.6), 0 2px 4px rgba(0,0,0,0.3);
+      cursor: pointer;
+      border: none;
+    }
+
+    .preset-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .preset-btn {
+      flex: 1;
+      padding: 8px 0;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.8);
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .preset-btn.active {
+      background: rgba(123, 31, 162, 0.4);
+      border-color: rgba(123, 31, 162, 0.7);
+      color: #fff;
+    }
+
+    #building-info {
+      position: fixed;
+      display: none;
+      min-width: 180px;
+      padding: 14px 18px;
+      background: rgba(10, 14, 26, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      z-index: 200;
+      pointer-events: none;
+      animation: infoAppear 0.25s ease-out;
+    }
+
+    @keyframes infoAppear {
+      0% { transform: scale(0.9); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    #building-info .info-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: #ffd700;
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+
+    #building-info .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    #building-info .info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    #building-info .info-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    #building-info .info-val {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    #vignette-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 50;
+      opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+      transition: opacity 0.3s;
+    }
+
+    #pulse-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 60;
+    }
+
+    .pulse-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid #ffd700;
+      animation: pulseExpand 0.8s ease-out forwards;
+    }
+
+    @keyframes pulseExpand {
+      0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(3);
+        opacity: 0;
+      }
+    }
+
+    #mobile-toggle {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        top: auto;
+        bottom: 0;
+        right: 0;
+        width: 100%;
+        height: auto;
+        max-height: 60vh;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 16px 16px 0 0;
+        transform: translateY(calc(100% - 48px));
+      }
+
+      #control-panel.expanded {
+        transform: translateY(0);
+      }
+
+      #control-panel.collapsed {
+        transform: translateY(calc(100% - 48px));
+      }
+
+      .panel-toggle {
+        display: none;
+      }
+
+      #mobile-toggle {
+        display: flex;
+        width: 100%;
+        height: 48px;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.6);
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 13px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+
+      #mobile-toggle::before {
+        content: '';
+        width: 36px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        margin-right: 10px;
+      }
+
+      #mobile-toggle::after {
+        content: '';
+        width: 36px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        margin-left: 10px;
+      }
+    }
+
+    .fps-counter {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.4);
+      z-index: 90;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="vignette-overlay"></div>
+  <div id="pulse-container"></div>
+
+  <div id="control-panel">
+    <div id="mobile-toggle">参数面板</div>
+
+    <div class="panel-section">
+      <div class="section-title">城市参数</div>
+      <div class="control-row">
+        <div class="control-label">
+          <span>建筑密度</span>
+          <span class="control-value" id="val-density">25</span>
+        </div>
+        <input type="range" id="ctrl-density" min="10" max="50" value="25" step="1" />
+      </div>
+      <div class="control-row">
+        <div class="control-label">
+          <span>最大高度</span>
+          <span class="control-value" id="val-height">50</span>
+        </div>
+        <input type="range" id="ctrl-height" min="10" max="80" value="50" step="1" />
+      </div>
+      <div class="control-row">
+        <div class="control-label">
+          <span>随机种子</span>
+          <span class="control-value" id="val-seed">42</span>
+        </div>
+        <input type="range" id="ctrl-seed" min="1" max="999" value="42" step="1" />
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">光照控制</div>
+      <div class="control-row">
+        <div class="control-label">
+          <span>水平角度</span>
+          <span class="control-value" id="val-azimuth">45°</span>
+        </div>
+        <input type="range" id="ctrl-azimuth" min="0" max="360" value="45" step="1" />
+      </div>
+      <div class="control-row">
+        <div class="control-label">
+          <span>仰角</span>
+          <span class="control-value" id="val-elevation">45°</span>
+        </div>
+        <input type="range" id="ctrl-elevation" min="0" max="90" value="45" step="1" />
+      </div>
+      <div class="control-row">
+        <div class="control-label">
+          <span>环境光强度</span>
+          <span class="control-value" id="val-ambient">0.6</span>
+        </div>
+        <input type="range" id="ctrl-ambient" min="0.2" max="1.0" value="0.6" step="0.01" />
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">视角预设</div>
+      <div class="preset-buttons">
+        <button class="preset-btn" data-preset="birdseye">鸟瞰</button>
+        <button class="preset-btn active" data-preset="street">街景</button>
+        <button class="preset-btn" data-preset="free">自由</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="panel-toggle" id="panel-toggle-btn">◀</button>
+
+  <div id="building-info">
+    <div class="info-title" id="info-title">建筑 #001</div>
+    <div class="info-row">
+      <span class="info-label">高度</span>
+      <span class="info-val" id="info-height">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">楼层</span>
+      <span class="info-val" id="info-floors">—</span>
+    </div>
+  </div>
+
+  <div class="fps-counter" id="fps-counter">FPS: --</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
