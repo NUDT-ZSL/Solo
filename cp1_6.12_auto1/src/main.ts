@@ -25,40 +25,42 @@ interface LabelEntry {
   div: HTMLDivElement;
   worldPosition: THREE.Vector3;
   distance: number;
-  zIndex: number;
 }
 
 class SolarSystemApp {
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer;
-  private controls: OrbitControls;
-  private labelContainer: HTMLElement;
-  private canvasContainer: HTMLElement;
+  private readonly scene: THREE.Scene;
+  private readonly camera: THREE.PerspectiveCamera;
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly controls: OrbitControls;
+  private readonly labelContainer: HTMLElement;
+  private readonly canvasContainer: HTMLElement;
 
   private sun!: SunObject;
-  private planets: PlanetObject[] = [];
+  private readonly planets: PlanetObject[] = [];
   private starField!: THREE.Points;
   private sunLabel!: HTMLDivElement;
 
-  private uiManager: UIManager;
+  private readonly uiManager: UIManager;
   private cameraAnimation: CameraAnimation | null = null;
   private isAnimatingCamera: boolean = false;
-  private intersectObjects: THREE.Object3D[] = [];
+  private readonly intersectObjects: THREE.Object3D[] = [];
 
-  private intersectFn: (objects: THREE.Object3D[], recursive?: boolean) => THREE.Intersection[];
+  private readonly intersectFn: (
+    objects: THREE.Object3D[],
+    recursive?: boolean
+  ) => THREE.Intersection[];
 
-  private clock: THREE.Clock;
+  private readonly clock: THREE.Clock;
   private frameId: number = 0;
   private hoveredObject: THREE.Object3D | null = null;
   private clickHoldStart: number = 0;
   private isDragging: boolean = false;
-  private isLowEnd: boolean = false;
+  private readonly isLowEnd: boolean;
 
-  private tmpVec: THREE.Vector3 = new THREE.Vector3();
-  private labelEntries: LabelEntry[] = [];
+  private readonly tmpVec: THREE.Vector3 = new THREE.Vector3();
+  private readonly labelEntries: LabelEntry[] = [];
 
-  constructor() {
+  public constructor() {
     this.canvasContainer = document.getElementById('canvas-container')!;
     this.labelContainer = document.getElementById('label-container')!;
 
@@ -74,28 +76,30 @@ class SolarSystemApp {
     this.intersectFn = raycastData.intersect;
 
     this.uiManager = new UIManager({
-      onTogglePause: () => {},
-      onResetView: () => this.resetCameraView(),
-      onToggleLabels: (_visible: boolean) => this.updateAllLabelsVisibility(),
-      onCloseInfo: () => {}
+      onTogglePause: (): void => {},
+      onResetView: (): void => this.resetCameraView(),
+      onToggleLabels: (_visible: boolean): void => this.updateAllLabelsVisibility(),
+      onCloseInfo: (): void => {}
     });
 
     this.applyPerformanceProfile();
     this.initScene();
     this.bindInteractionEvents();
     this.onResize();
-    window.addEventListener('resize', () => this.onResize());
+    window.addEventListener('resize', (): void => this.onResize());
   }
 
   private applyPerformanceProfile(): void {
-    if (this.isLowEnd) {
-      const panels = document.querySelectorAll<HTMLElement>('#ui-panel, #info-panel');
-      panels.forEach((panel) => {
-        panel.style.backdropFilter = 'none';
-        (panel.style as unknown as Record<string, string>)['webkitBackdropFilter'] = 'none';
-        panel.style.background = 'rgba(15, 25, 50, 0.85)';
-      });
-    }
+    if (!this.isLowEnd) return;
+
+    const panels = document.querySelectorAll<HTMLElement>('#ui-panel, #info-panel');
+    panels.forEach((panel: HTMLElement): void => {
+      panel.style.backdropFilter = 'none';
+      (panel.style as unknown as Record<string, string>)['-webkit-backdrop-filter'] = 'none';
+      panel.style.background = 'rgba(15, 25, 50, 0.88)';
+    });
+
+    document.body.classList.add('low-end-mode');
   }
 
   private createScene(): THREE.Scene {
@@ -126,7 +130,9 @@ class SolarSystemApp {
       alpha: false,
       powerPreference: 'high-performance'
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.isLowEnd ? 1 : 2));
+    renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, this.isLowEnd ? 1 : 2)
+    );
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -140,25 +146,26 @@ class SolarSystemApp {
     this.scene.add(this.sun.group);
     this.intersectObjects.push(this.sun.mesh);
 
-    this.planets = PLANET_CONFIGS.map((config: typeof PLANET_CONFIGS[number]) => {
+    for (let i = 0; i < PLANET_CONFIGS.length; i++) {
+      const config = PLANET_CONFIGS[i];
       const planet = createPlanet(config);
       this.scene.add(planet.group);
       this.intersectObjects.push(planet.mesh);
-
       planet.labelDiv = createPlanetLabel(config.nameCN, this.labelContainer);
-
-      return planet;
-    });
+      this.planets.push(planet);
+    }
 
     this.sunLabel = createPlanetLabel(SUN_CONFIG.nameCN, this.labelContainer);
 
-    const orbitRadii: number[] = PLANET_CONFIGS.map((p: typeof PLANET_CONFIGS[number]) => p.orbitRadius);
+    const orbitRadii: number[] = PLANET_CONFIGS.map(
+      (p: typeof PLANET_CONFIGS[number]): number => p.orbitRadius
+    );
     createAllOrbits(this.scene, orbitRadii);
 
-    this.starField = createStarField(
-      this.isLowEnd ? SCENE_CONFIG.starCount / 2 : SCENE_CONFIG.starCount,
-      SCENE_CONFIG.starRadius
-    );
+    const starCount = this.isLowEnd
+      ? Math.floor(SCENE_CONFIG.starCount / 2)
+      : SCENE_CONFIG.starCount;
+    this.starField = createStarField(starCount, SCENE_CONFIG.starRadius);
     this.scene.add(this.starField);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.15);
@@ -169,26 +176,28 @@ class SolarSystemApp {
   private bindInteractionEvents(): void {
     const canvas = this.renderer.domElement;
 
-    canvas.addEventListener('pointerdown', (_e: PointerEvent) => {
+    canvas.addEventListener('pointerdown', (_e: PointerEvent): void => {
       this.isDragging = false;
       this.clickHoldStart = performance.now();
     });
 
-    canvas.addEventListener('pointermove', (e: PointerEvent) => {
+    canvas.addEventListener('pointermove', (e: PointerEvent): void => {
       if (e.buttons !== 0) {
         this.isDragging = true;
       }
       this.handleHover();
     });
 
-    canvas.addEventListener('pointerup', (_e: PointerEvent) => {
+    canvas.addEventListener('pointerup', (_e: PointerEvent): void => {
       const holdDuration = performance.now() - this.clickHoldStart;
       if (!this.isDragging && holdDuration < 250) {
         this.handleClick();
       }
     });
 
-    canvas.addEventListener('contextmenu', (e: Event) => e.preventDefault());
+    canvas.addEventListener('contextmenu', (e: Event): void => {
+      e.preventDefault();
+    });
   }
 
   private handleHover(): void {
@@ -200,7 +209,9 @@ class SolarSystemApp {
       const mesh = this.hoveredObject as THREE.Mesh;
       const mat = mesh.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
       if ('emissive' in mat && !mesh.userData.isSunMesh) {
-        const planet = this.planets.find((p: PlanetObject) => p.mesh === mesh);
+        const planet = this.planets.find(
+          (p: PlanetObject): boolean => p.mesh === mesh
+        );
         if (planet) {
           mat.emissive.setHex(planet.config.emissive ?? 0x000000);
           mat.emissiveIntensity = planet.config.emissiveIntensity ?? 0;
@@ -212,7 +223,9 @@ class SolarSystemApp {
     if (intersects.length > 0) {
       const obj = intersects[0].object;
       this.hoveredObject = obj;
-      const mat = (obj as THREE.Mesh).material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
+      const mat = (obj as THREE.Mesh).material as
+        | THREE.MeshStandardMaterial
+        | THREE.MeshBasicMaterial;
       if ('emissive' in mat && !(obj as THREE.Mesh).userData.isSunMesh) {
         mat.emissive.setHex(0x88aaff);
         mat.emissiveIntensity = 0.25;
@@ -237,7 +250,9 @@ class SolarSystemApp {
       return;
     }
 
-    const planet = this.planets.find((p: PlanetObject) => p.mesh === clicked);
+    const planet = this.planets.find(
+      (p: PlanetObject): boolean => p.mesh === clicked
+    );
     if (planet) {
       this.focusOnPlanet(planet);
       this.uiManager.showPlanetInfo(planet.config);
@@ -249,7 +264,12 @@ class SolarSystemApp {
     lookAtPos: THREE.Vector3,
     duration: number
   ): void {
+    if (this.isAnimatingCamera) return;
+
     this.isAnimatingCamera = true;
+    this.controls.enabled = false;
+    this.renderer.domElement.style.cursor = 'default';
+
     this.cameraAnimation = createCameraAnimation(
       this.controls,
       this.camera,
@@ -257,6 +277,12 @@ class SolarSystemApp {
       lookAtPos,
       duration
     );
+  }
+
+  private onAnimationComplete(): void {
+    this.isAnimatingCamera = false;
+    this.cameraAnimation = null;
+    this.controls.enabled = true;
   }
 
   private focusOnPlanet(planet: PlanetObject): void {
@@ -314,46 +340,54 @@ class SolarSystemApp {
   }
 
   private updateLabels(): void {
-    this.labelEntries = [];
+    this.labelEntries.length = 0;
 
     this.sun.group.getWorldPosition(this.tmpVec);
     const sunDist = this.tmpVec.distanceTo(this.camera.position);
     this.labelEntries.push({
       div: this.sunLabel,
       worldPosition: this.tmpVec.clone(),
-      distance: sunDist,
-      zIndex: 0
+      distance: sunDist
     });
 
-    this.planets.forEach((planet: PlanetObject) => {
-      if (!planet.labelDiv) return;
+    for (let i = 0; i < this.planets.length; i++) {
+      const planet = this.planets[i];
+      if (!planet.labelDiv) continue;
       planet.group.getWorldPosition(this.tmpVec);
       const dist = this.tmpVec.distanceTo(this.camera.position);
       this.labelEntries.push({
         div: planet.labelDiv,
         worldPosition: this.tmpVec.clone(),
-        distance: dist,
-        zIndex: 0
+        distance: dist
       });
-    });
+    }
 
-    this.labelEntries.sort((a: LabelEntry, b: LabelEntry) => a.distance - b.distance);
+    this.labelEntries.sort(
+      (a: LabelEntry, b: LabelEntry): number => a.distance - b.distance
+    );
 
-    this.labelEntries.forEach((entry: LabelEntry, index: number) => {
-      entry.zIndex = index + 1;
-      updateLabelPosition(entry.div, entry.worldPosition, this.camera, this.labelContainer);
-      entry.div.style.zIndex = String(entry.zIndex);
-    });
+    for (let i = 0; i < this.labelEntries.length; i++) {
+      const entry = this.labelEntries[i];
+      updateLabelPosition(
+        entry.div,
+        entry.worldPosition,
+        this.camera,
+        this.labelContainer
+      );
+      entry.div.style.zIndex = String(i + 1);
+    }
   }
 
   private onResize(): void {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.isLowEnd ? 1 : 2));
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, this.isLowEnd ? 1 : 2)
+    );
   }
 
-  private animate = (): void => {
+  private readonly animate = (): void => {
     this.frameId = requestAnimationFrame(this.animate);
 
     const delta = Math.min(this.clock.getDelta(), 0.1);
@@ -361,9 +395,9 @@ class SolarSystemApp {
 
     updateSun(this.sun, delta, isPaused, this.camera);
 
-    this.planets.forEach((planet: PlanetObject) => {
-      updatePlanet(planet, delta, isPaused, 1);
-    });
+    for (let i = 0; i < this.planets.length; i++) {
+      updatePlanet(this.planets[i], delta, isPaused, 1);
+    }
 
     if (this.cameraAnimation) {
       const animating = updateCameraAnimation(
@@ -372,8 +406,7 @@ class SolarSystemApp {
         this.camera
       );
       if (!animating && !this.cameraAnimation.active) {
-        this.cameraAnimation = null;
-        this.isAnimatingCamera = false;
+        this.onAnimationComplete();
       }
     }
 
