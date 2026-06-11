@@ -43,7 +43,7 @@ function createNoiseTexture(): void {
     imageData.data[i] = v;
     imageData.data[i + 1] = v;
     imageData.data[i + 2] = v;
-    imageData.data[i + 3] = 12;
+    imageData.data[i + 3] = 10;
   }
   nctx.putImageData(imageData, 0, 0);
   noisePattern = ctx.createPattern(noiseCanvas, 'repeat');
@@ -86,21 +86,39 @@ function renderBackground(): void {
   bgCtx.fillRect(0, 0, width, height);
 }
 
-function resize(): void {
-  width = window.innerWidth;
-  height = window.innerHeight;
-  canvas.width = width;
-  canvas.height = height;
-  orchestrator.setCanvasSize(width, height);
-  generateBackgroundStars();
-  renderBackground();
-
+function updatePanelResponsive(): void {
   const panel = document.getElementById('panel')!;
-  if (width > height && width < 1024) {
+  const isMobile = width < 481;
+  const isLandscapeMobile = width > height && width < 1024;
+  const isTabletPortrait = width >= 481 && width <= 1024 && height >= width;
+
+  if (isLandscapeMobile) {
     panel.classList.add('landscape-mobile');
   } else {
     panel.classList.remove('landscape-mobile');
   }
+
+  if (isTabletPortrait) {
+    panel.classList.add('tablet-portrait');
+  } else {
+    panel.classList.remove('tablet-portrait');
+  }
+}
+
+function resize(): void {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  orchestrator.setCanvasSize(width, height);
+  generateBackgroundStars();
+  renderBackground();
+  createNoiseTexture();
+  updatePanelResponsive();
 }
 
 let lastTime = 0;
@@ -109,10 +127,15 @@ function animate(time: number): void {
   const dt = Math.min((time - lastTime) / 1000, 0.05);
   lastTime = time;
 
-  ctx.drawImage(bgCanvas, 0, 0);
+  if (bgCanvas && bgCanvas.width > 0 && bgCanvas.height > 0) {
+    ctx.drawImage(bgCanvas, 0, 0);
+  } else {
+    ctx.fillStyle = '#0A0E1A';
+    ctx.fillRect(0, 0, width, height);
+  }
 
   if (noisePattern) {
-    ctx.globalAlpha = 0.15;
+    ctx.globalAlpha = 0.12;
     ctx.fillStyle = noisePattern;
     ctx.fillRect(0, 0, width, height);
     ctx.globalAlpha = 1;
@@ -130,7 +153,7 @@ function animate(time: number): void {
     if (star.radius > 1.2 && brightness > 0.85) {
       ctx.beginPath();
       ctx.arc(star.x, star.y, star.radius * 3, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(200,215,240,${(brightness * 0.1).toFixed(3)})`;
+      ctx.fillStyle = `rgba(200,215,240,${(brightness * 0.12).toFixed(3)})`;
       ctx.fill();
     }
   }
@@ -150,11 +173,12 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointerup', (e) => {
   const duration = performance.now() - pointerDownTime;
   const velocity = Math.min(1, Math.max(0.1, duration / 800));
+  const rect = canvas.getBoundingClientRect();
   const note: NoteInput = {
     pitch: 1 + Math.floor(Math.random() * 7),
     velocity,
-    x: e.clientX,
-    y: e.clientY,
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
   };
   orchestrator.addStar(note);
 });
@@ -195,69 +219,6 @@ resetBtn.addEventListener('click', () => {
   orchestrator.reset();
 });
 
-createNoiseTexture();
-resize();
 window.addEventListener('resize', resize);
-
-let autoSpawnTimer = 0;
-function autoSpawn(dt: number) {
-  autoSpawnTimer += dt;
-  if (autoSpawnTimer > 0.4) {
-    autoSpawnTimer = 0;
-    const note: NoteInput = {
-      pitch: 1 + Math.floor(Math.random() * 7),
-      velocity: 0.3 + Math.random() * 0.7,
-      x: width * 0.15 + Math.random() * width * 0.7,
-      y: height * 0.15 + Math.random() * height * 0.7,
-    };
-    orchestrator.addStar(note);
-  }
-}
-
-const origAnimate = animate;
-function animateWithAuto(time: number) {
-  const dt = Math.min((time - lastTime) / 1000, 0.05);
-  lastTime = time;
-  autoSpawn(dt);
-  ctx.drawImage(bgCanvas, 0, 0);
-
-  if (noisePattern) {
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = noisePattern;
-    ctx.fillRect(0, 0, width, height);
-    ctx.globalAlpha = 1;
-  }
-
-  const timeSec = time / 1000;
-  for (const star of bgStars) {
-    const brightness =
-      0.65 + 0.35 * Math.sin((timeSec / star.period) * Math.PI * 2 + star.phase);
-    ctx.beginPath();
-    ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(200,215,240,${brightness.toFixed(3)})`;
-    ctx.fill();
-
-    if (star.radius > 1.2 && brightness > 0.85) {
-      ctx.beginPath();
-      ctx.arc(star.x, star.y, star.radius * 3, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(200,215,240,${(brightness * 0.1).toFixed(3)})`;
-      ctx.fill();
-    }
-  }
-
-  orchestrator.update(dt);
-  orchestrator.draw(ctx);
-
-  ctx.fillStyle = '#ff0000';
-  ctx.beginPath();
-  ctx.arc(width / 2, height / 2, 20, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = '#00ff00';
-  ctx.font = '16px sans-serif';
-  ctx.fillText(`Stars: ${orchestrator.stars.length}`, 20, 30);
-
-  requestAnimationFrame(animateWithAuto);
-}
-
-requestAnimationFrame(animateWithAuto);
+resize();
+requestAnimationFrame(animate);
