@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Clock, Plus, X } from 'lucide-react';
+import { Heart, MessageCircle, Clock } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useState, useEffect } from 'react';
 
@@ -21,7 +21,9 @@ function getVotedPolls(): Set<string> {
   try {
     const raw = localStorage.getItem('votedPolls');
     if (raw) return new Set(JSON.parse(raw));
-  } catch {}
+  } catch {
+    // ignore parse errors
+  }
   return new Set();
 }
 
@@ -31,30 +33,76 @@ function markVoted(pollId: string) {
   localStorage.setItem('votedPolls', JSON.stringify([...set]));
 }
 
+function formatCountdown(remaining: number): string {
+  if (remaining <= 0) return '已结束';
+
+  const days = Math.floor(remaining / 86400000);
+  const hours = Math.floor((remaining % 86400000) / 3600000);
+  const minutes = Math.floor((remaining % 3600000) / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+
+  if (days > 0) {
+    return `${days}天 ${hours}时`;
+  } else if (hours > 0) {
+    return `${hours}时 ${minutes}分`;
+  } else if (minutes > 0) {
+    return `${minutes}分 ${seconds}秒`;
+  } else {
+    return `${seconds}秒`;
+  }
+}
+
 export default function PollCard({ poll, detailed = false }: PollCardProps) {
-  const { userId, favorites, toggleFavorite, vote } = useStore();
+  const { favorites, toggleFavorite, vote, isLoggedIn, setShowLoginModal, socket } =
+    useStore();
   const [votedPolls, setVotedPolls] = useState<Set<string>>(getVotedPolls());
+  const [countdown, setCountdown] = useState<string>('');
+  const [remaining, setRemaining] = useState<number>(0);
 
   const totalVotes = poll.votes.reduce((a, b) => a + b, 0);
-  const isCreator = poll.createdBy === userId;
   const hasVoted = votedPolls.has(poll.id);
   const isFavorite = favorites.includes(poll.id);
 
+  useEffect(() => {
+    const updateCountdown = () => {
+      const endTime = poll.createdAt + poll.duration * 86400000;
+      const rem = Math.max(0, endTime - Date.now());
+      setRemaining(rem);
+      setCountdown(formatCountdown(rem));
+
+      if (rem <= 0 && !poll.closed && socket) {
+        socket.emit('pollClosed', { pollId: poll.id });
+      }
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [poll.createdAt, poll.duration, poll.closed, poll.id, socket]);
+
   const handleVote = (optionIndex: number) => {
-    if (poll.closed || hasVoted) return;
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
+    if (poll.closed || hasVoted || remaining <= 0) return;
     vote(poll.id, optionIndex);
     markVoted(poll.id);
+    localStorage.setItem(`votedOption_${poll.id}`, String(optionIndex));
     setVotedPolls(new Set([...votedPolls, poll.id]));
   };
 
   const handleFavorite = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
     toggleFavorite(poll.id);
   };
 
-  const endDate = new Date(poll.createdAt + poll.duration * 86400000);
-  const isExpired = Date.now() > endDate.getTime();
+  const isExpired = remaining <= 0;
 
   return (
     <div
@@ -76,13 +124,13 @@ export default function PollCard({ poll, detailed = false }: PollCardProps) {
         />
       </button>
 
-      {poll.closed && (
+      {(poll.closed || isExpired) && (
         <span className="absolute top-4 left-4 bg-red-100 text-red-600 text-xs font-semibold px-2.5 py-1 rounded-full">
-          已关闭
+          {poll.closed ? '已关闭' : '已结束'}
         </span>
       )}
 
-      <div className={poll.closed ? 'mt-8' : ''}>
+      <div className={(poll.closed || isExpired) ? 'mt-8' : ''}>
         <h3
           className={`font-bold text-gray-900 pr-8 ${
             detailed ? 'text-xl mb-2' : 'text-lg mb-1'
@@ -109,13 +157,13 @@ export default function PollCard({ poll, detailed = false }: PollCardProps) {
             <button
               key={index}
               onClick={() => handleVote(index)}
-              disabled={poll.closed || hasVoted}
+              disabled={poll.closed || hasVoted || isExpired}
               className={`w-full text-left relative rounded-lg overflow-hidden transition-all duration-200 ${
                 isVotedOption
                   ? 'ring-2 ring-blue-400 shadow-sm'
                   : 'hover:ring-1 hover:ring-blue-200'
               } ${
-                poll.closed || hasVoted
+                poll.closed || hasVoted || isExpired
                   ? 'cursor-default'
                   : 'cursor-pointer btn-interactive'
               }`}
@@ -148,7 +196,7 @@ export default function PollCard({ poll, detailed = false }: PollCardProps) {
         <span className="flex items-center gap-1.5">
           <Clock className="w-4 h-4" />
           {!isExpired && !poll.closed
-            ? `剩余 ${Math.max(0, Math.ceil((endDate.getTime() - Date.now()) / 86400000))} 天`
+            ? `剩余 ${countdown}`
             : '已结束'}
         </span>
       </div>

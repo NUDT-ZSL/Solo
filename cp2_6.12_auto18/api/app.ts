@@ -44,6 +44,8 @@ app.post('/api/polls', (req: Request, res: Response) => {
   };
 
   polls.set(newPoll.id, newPoll);
+  const io = app.get('io');
+  if (io) io.emit('pollCreated', newPoll);
   res.status(201).json(newPoll);
 });
 
@@ -55,13 +57,22 @@ app.post('/api/polls/:id/close', (req: Request, res: Response) => {
     return;
   }
   poll.closed = true;
+  const io = app.get('io');
+  if (io) io.emit('pollClosed', { pollId: poll.id });
   res.json(poll);
 });
 
 app.get('/api/polls/:id/comments', (req: Request, res: Response) => {
   const comments: Map<string, any[]> = app.get('comments');
   const pollComments = comments.get(req.params.id) || [];
-  res.json(pollComments);
+  const offset = parseInt(req.query.offset as string, 10) || 0;
+  const limit = parseInt(req.query.limit as string, 10) || 20;
+  const paginatedComments = pollComments.slice(offset, offset + limit);
+  res.json({
+    comments: paginatedComments,
+    hasMore: offset + limit < pollComments.length,
+    total: pollComments.length,
+  });
 });
 
 app.get('/api/favorites/:userId', (req: Request, res: Response) => {

@@ -2,6 +2,15 @@ import { useStore } from '@/store/useStore';
 import { Send } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
+interface Comment {
+  id: string;
+  pollId: string;
+  userId: string;
+  nickname: string;
+  content: string;
+  createdAt: number;
+}
+
 interface CommentBoxProps {
   pollId: string;
 }
@@ -19,17 +28,150 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 export default function CommentBox({ pollId }: CommentBoxProps) {
-  const { comments, nickname, sendComment, setNickname } = useStore();
+  const {
+    comments: storeComments,
+    nickname,
+    sendComment,
+    setNickname,
+    isLoggedIn,
+    setShowLoginModal,
+    fetchCommentsPage,
+  } = useStore();
+
   const [content, setContent] = useState('');
   const [localNickname, setLocalNickname] = useState(nickname);
-  const commentsEndRef = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [allComments, setAllComments] = useState<Comment[]>([]);
+  const [newCommentIds, setNewCommentIds] = useState<Set<string>>(new Set());
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rafPending = useRef(false);
+  const pendingComments = useRef<Comment[]>([]);
+  const isInitialLoad = useRef(true);
+
+  const PAGE_LIMIT = 20;
+
+  const flushWithRAF = () => {
+    if (rafPending.current) return;
+    rafPending.current = true;
+    requestAnimationFrame(() => {
+      if (pendingComments.current.length > 0) {
+        const toAdd = pendingComments.current;
+        pendingComments.current = [];
+        setAllComments((prev) => [...prev, ...toAdd]);
+        setNewCommentIds((prev) => {
+          const next = new Set(prev);
+          toAdd.forEach((c) => next.add(c.id));
+          return next;
+        });
+        setTimeout(() => {
+          setNewCommentIds((prev) => {
+            const next = new Set(prev);
+            toAdd.forEach((c) => next.delete(c.id));
+            return next;
+          });
+        }, 1000);
+      }
+      rafPending.current = false;
+    });
+  };
 
   useEffect(() => {
-    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [comments]);
+    let mounted = true;
+    isInitialLoad.current = true;
+
+    const loadInitial = async () => {
+      try {
+        setLoadingMore(true);
+        const result = await fetchCommentsPage(pollId, 0, PAGE_LIMIT);
+        if (!mounted) return;
+        setAllComments(result.comments);
+        setHasMore(result.hasMore);
+        setPage(1);
+      } catch (e) {
+        console.error('Failed to fetch comments', e);
+      } finally {
+        if (mounted) {
+          setLoadingMore(false);
+          isInitialLoad.current = false;
+        }
+      }
+    };
+
+    loadInitial();
+
+    return () => {
+      mounted = false;
+    };
+  }, [pollId, fetchCommentsPage]);
+
+  useEffect(() => {
+    const pollStoreComments = storeComments.filter((c) => c.pollId === pollId);
+    if (pollStoreComments.length === 0) return;
+
+    const existingIds = new Set(allComments.map((c) => c.id));
+    const newFromStore = pollStoreComments.filter((c) => !existingIds.has(c.id));
+
+    if (newFromStore.length > 0) {
+      pendingComments.current = [...pendingComments.current, ...newFromStore];
+      flushWithRAF();
+    }
+  }, [storeComments, pollId, allComments]);
+
+  const loadOlderComments = async () => {
+    if (loadingMore || !hasMore) return;
+
+    const container = containerRef.current;
+    const prevScrollHeight = container?.scrollHeight || 0;
+    const prevScrollTop = container?.scrollTop || 0;
+
+    try {
+      setLoadingMore(true);
+      const offset = page * PAGE_LIMIT;
+      const result = await fetchCommentsPage(pollId, offset, PAGE_LIMIT);
+
+      setAllComments((prev) => [...result.comments, ...prev]);
+      setHasMore(result.hasMore);
+      setPage((p) => p + 1);
+
+      requestAnimationFrame(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight;
+          container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+        }
+      });
+    } catch (e) {
+      console.error('Failed to load more comments', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleScroll = () => {
+    const container = containerRef.current;
+    if (!container || loadingMore || !hasMore || isInitialLoad.current) return;
+
+    if (container.scrollTop < 50) {
+      loadOlderComments();
+    }
+  };
+
+  useEffect(() => {
+    if (allComments.length === 0) return;
+    const container = containerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
     const trimmedContent = content.trim();
     const trimmedNickname = localNickname.trim();
     if (!trimmedContent || !trimmedNickname) return;
@@ -39,34 +181,52 @@ export default function CommentBox({ pollId }: CommentBoxProps) {
     setContent('');
   };
 
-  const pollComments = comments.filter((c) => c.pollId === pollId);
+  const newCommentList = Array.from(newCommentIds);
 
   return (
     <div className="bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6">
       <h3 className="font-bold text-gray-900 text-lg mb-4">评论区</h3>
 
-      <div className="max-h-96 overflow-y-auto space-y-3 mb-4">
-        {pollComments.length === 0 ? (
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="max-h-96 overflow-y-auto space-y-3 mb-4 scroll-smooth"
+      >
+        {loadingMore && hasMore && (
+          <div className="text-center text-gray-400 py-2 text-sm">
+            加载中...
+          </div>
+        )}
+
+        {allComments.length === 0 && !loadingMore ? (
           <div className="text-center text-gray-400 py-6">暂无评论，快来抢沙发吧！</div>
         ) : (
-          pollComments.map((comment, index) => (
-            <div
-              key={comment.id || index}
-              className="comment-bubble bg-[#f0f0f0] rounded-xl px-4 py-3 slide-in-up"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-sm text-gray-800">
-                  {comment.nickname}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {formatRelativeTime(comment.createdAt)}
-                </span>
+          allComments.map((comment, index) => {
+            const isNew = newCommentIds.has(comment.id);
+            const newIndex = newCommentList.indexOf(comment.id);
+            const delay = isNew && newIndex >= 0 ? `${Math.min(newIndex, 5) * 50}ms` : '0ms';
+
+            return (
+              <div
+                key={comment.id || index}
+                className={`comment-bubble bg-[#f0f0f0] rounded-xl px-4 py-3 ${
+                  isNew ? 'slide-in-up' : ''
+                }`}
+                style={isNew ? { animationDelay: delay } : undefined}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-sm text-gray-800">
+                    {comment.nickname}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {formatRelativeTime(comment.createdAt)}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700">{comment.content}</p>
               </div>
-              <p className="text-sm text-gray-700">{comment.content}</p>
-            </div>
-          ))
+            );
+          })
         )}
-        <div ref={commentsEndRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">

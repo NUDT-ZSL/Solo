@@ -7,7 +7,7 @@ interface CreatePollFormProps {
 }
 
 export default function CreatePollForm({ onClose }: CreatePollFormProps) {
-  const { createPoll } = useStore();
+  const { createPoll, isLoggedIn, setShowLoginModal } = useStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [options, setOptions] = useState(['', '']);
@@ -34,6 +34,10 @@ export default function CreatePollForm({ onClose }: CreatePollFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
     const trimmedTitle = title.trim();
     const trimmedOptions = options.map((o) => o.trim()).filter(Boolean);
     if (!trimmedTitle || trimmedOptions.length < 2) return;

@@ -44,9 +44,13 @@ polls.set(samplePoll2Id, {
   closed: false,
 });
 
+app.set('io', io);
 app.set('polls', polls);
 app.set('comments', comments);
 app.set('favorites', favorites);
+
+const pendingVotes = new Map<string, Map<number, number>>();
+const voteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -54,8 +58,28 @@ io.on('connection', (socket) => {
   socket.on('vote', (data: { pollId: string; optionIndex: number; userId: string }) => {
     const poll = polls.get(data.pollId);
     if (!poll || poll.closed) return;
-    poll.votes[data.optionIndex]++;
-    io.emit('pollUpdated', poll);
+
+    if (!pendingVotes.has(data.pollId)) {
+      pendingVotes.set(data.pollId, new Map());
+    }
+    const pollPendingVotes = pendingVotes.get(data.pollId)!;
+    pollPendingVotes.set(data.optionIndex, (pollPendingVotes.get(data.optionIndex) || 0) + 1);
+
+    if (!voteTimers.has(data.pollId)) {
+      const timer = setTimeout(() => {
+        const currentPoll = polls.get(data.pollId);
+        const accumulatedVotes = pendingVotes.get(data.pollId);
+        if (currentPoll && accumulatedVotes) {
+          accumulatedVotes.forEach((count, optionIdx) => {
+            currentPoll.votes[optionIdx] += count;
+          });
+          io.emit('pollUpdated', currentPoll);
+        }
+        pendingVotes.delete(data.pollId);
+        voteTimers.delete(data.pollId);
+      }, 100);
+      voteTimers.set(data.pollId, timer);
+    }
   });
 
   socket.on('comment', (data: { pollId: string; userId: string; nickname: string; content: string }) => {
@@ -76,6 +100,20 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
   });
 });
+
+function checkExpiredPolls() {
+  const now = Date.now();
+  for (const [pollId, poll] of polls.entries()) {
+    if (!poll.closed && now > poll.createdAt + poll.duration * 86400000) {
+      poll.closed = true;
+      io.emit('pollClosed', { pollId: poll.id });
+      io.emit('pollUpdated', poll);
+    }
+  }
+}
+
+checkExpiredPolls();
+setInterval(checkExpiredPolls, 60000);
 
 httpServer.listen(PORT, () => {
   console.log(`Server + Socket.io running on port ${PORT}`);

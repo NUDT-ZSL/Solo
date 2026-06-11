@@ -32,6 +32,9 @@ interface AppState {
   favorites: string[];
   socket: Socket | null;
   pulsePollId: string | null;
+  isLoggedIn: boolean;
+  token: string;
+  showLoginModal: boolean;
 
   setNickname: (nickname: string) => void;
   initSocket: () => void;
@@ -41,9 +44,13 @@ interface AppState {
   vote: (pollId: string, optionIndex: number) => void;
   closePoll: (pollId: string) => Promise<void>;
   fetchComments: (pollId: string) => Promise<void>;
+  fetchCommentsPage: (pollId: string, offset: number, limit: number) => Promise<{ comments: Comment[]; hasMore: boolean; total: number }>;
   sendComment: (pollId: string, content: string) => void;
   fetchFavorites: () => Promise<void>;
   toggleFavorite: (pollId: string) => Promise<void>;
+  login: (username: string) => void;
+  logout: () => void;
+  setShowLoginModal: (show: boolean) => void;
 }
 
 const getUserId = (): string => {
@@ -59,6 +66,14 @@ const getStoredNickname = (): string => {
   return localStorage.getItem('nickname') || '';
 };
 
+const getStoredToken = (): string => {
+  return localStorage.getItem('token') || '';
+};
+
+const getStoredIsLoggedIn = (): boolean => {
+  return !!localStorage.getItem('token');
+};
+
 export const useStore = create<AppState>((set, get) => ({
   polls: [],
   currentPoll: null,
@@ -68,10 +83,29 @@ export const useStore = create<AppState>((set, get) => ({
   favorites: [],
   socket: null,
   pulsePollId: null,
+  isLoggedIn: getStoredIsLoggedIn(),
+  token: getStoredToken(),
+  showLoginModal: false,
 
   setNickname: (nickname: string) => {
     localStorage.setItem('nickname', nickname);
     set({ nickname });
+  },
+
+  setShowLoginModal: (show: boolean) => {
+    set({ showLoginModal: show });
+  },
+
+  login: (username: string) => {
+    const token = btoa(username + ':' + Date.now() + ':' + Math.random().toString(36).slice(2, 10));
+    localStorage.setItem('token', token);
+    localStorage.setItem('nickname', username);
+    set({ isLoggedIn: true, token, nickname: username });
+  },
+
+  logout: () => {
+    localStorage.removeItem('token');
+    set({ isLoggedIn: false, token: '' });
   },
 
   initSocket: () => {
@@ -79,6 +113,12 @@ export const useStore = create<AppState>((set, get) => ({
     if (existing) return;
 
     const socket = io();
+
+    socket.on('pollCreated', (newPoll: Poll) => {
+      set((state) => ({
+        polls: [newPoll, ...state.polls],
+      }));
+    });
 
     socket.on('pollUpdated', (updatedPoll: Poll) => {
       set((state) => ({
@@ -135,8 +175,10 @@ export const useStore = create<AppState>((set, get) => ({
   createPoll: async (data) => {
     try {
       const { userId, nickname } = get();
-      await axios.post('/api/polls', { ...data, createdBy: userId, nickname });
-      await get().fetchPolls();
+      const res = await axios.post<Poll>('/api/polls', { ...data, createdBy: userId, nickname });
+      set((state) => ({
+        polls: [res.data, ...state.polls],
+      }));
     } catch {
       console.error('Failed to create poll');
     }
@@ -151,7 +193,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   closePoll: async (pollId: string) => {
     try {
-      await axios.patch(`/api/polls/${pollId}/close`);
+      await axios.post(`/api/polls/${pollId}/close`);
     } catch {
       console.error('Failed to close poll');
     }
@@ -166,6 +208,13 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchCommentsPage: async (pollId: string, offset: number, limit: number) => {
+    const res = await axios.get<{ comments: Comment[]; hasMore: boolean; total: number }>(
+      `/api/polls/${pollId}/comments?offset=${offset}&limit=${limit}`
+    );
+    return res.data;
+  },
+
   sendComment: (pollId: string, content: string) => {
     const { socket, userId, nickname } = get();
     if (socket) {
@@ -176,8 +225,8 @@ export const useStore = create<AppState>((set, get) => ({
   fetchFavorites: async () => {
     try {
       const { userId } = get();
-      const res = await axios.get<string[]>(`/api/favorites/${userId}`);
-      set({ favorites: res.data });
+      const res = await axios.get<Poll[]>(`/api/favorites/${userId}`);
+      set({ favorites: res.data.map((p) => p.id) });
     } catch {
       console.error('Failed to fetch favorites');
     }
@@ -186,12 +235,14 @@ export const useStore = create<AppState>((set, get) => ({
   toggleFavorite: async (pollId: string) => {
     try {
       const { userId, favorites } = get();
-      await axios.post('/api/favorites', { userId, pollId });
-      set({
-        favorites: favorites.includes(pollId)
-          ? favorites.filter((id) => id !== pollId)
-          : [...favorites, pollId],
-      });
+      const isFavorited = favorites.includes(pollId);
+      if (isFavorited) {
+        await axios.delete('/api/favorites', { data: { userId, pollId } });
+        set({ favorites: favorites.filter((id) => id !== pollId) });
+      } else {
+        await axios.post('/api/favorites', { userId, pollId });
+        set({ favorites: [...favorites, pollId] });
+      }
     } catch {
       console.error('Failed to toggle favorite');
     }

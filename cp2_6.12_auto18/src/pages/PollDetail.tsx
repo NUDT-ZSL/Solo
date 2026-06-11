@@ -8,7 +8,7 @@ import CommentBox from '@/components/CommentBox';
 
 export default function PollDetail() {
   const { id } = useParams<{ id: string }>();
-  const { currentPoll, fetchPoll, fetchComments, closePoll, userId, pulsePollId } =
+  const { currentPoll, fetchPoll, fetchComments, closePoll, userId, pulsePollId, isLoggedIn, setShowLoginModal } =
     useStore();
   const [countdown, setCountdown] = useState('');
 
@@ -17,6 +17,7 @@ export default function PollDetail() {
       fetchPoll(id);
       fetchComments(id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -87,7 +88,13 @@ export default function PollDetail() {
 
       {isCreator && !currentPoll.closed && (
         <button
-          onClick={() => closePoll(id)}
+          onClick={() => {
+            if (!isLoggedIn) {
+              setShowLoginModal(true);
+              return;
+            }
+            if (id) closePoll(id);
+          }}
           className="btn-interactive mb-6 w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition-colors"
         >
           关闭投票
