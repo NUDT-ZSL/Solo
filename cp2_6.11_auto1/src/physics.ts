@@ -329,64 +329,64 @@ function updateStarOrbits(state: GameState, dt: number): void {
 }
 
 export function updatePhysics(state: GameState, dt: number): void {
-  if (!state.ball.active) return;
+  if (state.ball.active) {
+    const ball = state.ball;
 
-  const ball = state.ball;
-
-  for (const planet of state.planets) {
-    applyGravity(ball, planet, dt);
-  }
-  applyGravity(ball, state.blackHole, dt);
-
-  ball.pos.x += ball.vel.x * dt;
-  ball.pos.y += ball.vel.y * dt;
-
-  ball.vel.x *= FRICTION;
-  ball.vel.y *= FRICTION;
-
-  for (const planet of state.planets) {
-    checkPlanetCollision(ball, planet, state);
-  }
-
-  checkBlackHoleCollision(ball, state.blackHole, state);
-
-  for (const orbit of state.starOrbits) {
-    checkStarOrbitBoost(ball, orbit, state);
-  }
-
-  if (ball.pos.x - ball.radius < 0) {
-    ball.pos.x = ball.radius;
-    ball.vel.x = Math.abs(ball.vel.x);
-  }
-  if (ball.pos.x + ball.radius > 800) {
-    ball.pos.x = 800 - ball.radius;
-    ball.vel.x = -Math.abs(ball.vel.x);
-  }
-  if (ball.pos.y - ball.radius < 0) {
-    ball.pos.y = ball.radius;
-    ball.vel.y = Math.abs(ball.vel.y);
-  }
-  if (ball.pos.y + ball.radius > 600) {
-    ball.pos.y = 600 - ball.radius;
-    ball.vel.y = -Math.abs(ball.vel.y);
-  }
-
-  const speed = vecLen(ball.vel);
-  if (speed < MIN_SPEED) {
-    ball.active = false;
-    ball.vel = { x: 0, y: 0 };
-    ball.pos = { ...state.launchPos };
-    state.launchesLeft--;
-    if (state.launchesLeft <= 0) {
-      state.gameOver = true;
+    for (const planet of state.planets) {
+      applyGravity(ball, planet, dt);
     }
-  }
+    applyGravity(ball, state.blackHole, dt);
 
-  if (ball.goldenTimer > 0) {
-    ball.goldenTimer -= dt;
-  }
-  if (ball.particleBurstTimer > 0) {
-    ball.particleBurstTimer -= dt;
+    ball.pos.x += ball.vel.x * dt;
+    ball.pos.y += ball.vel.y * dt;
+
+    ball.vel.x *= FRICTION;
+    ball.vel.y *= FRICTION;
+
+    for (const planet of state.planets) {
+      checkPlanetCollision(ball, planet, state);
+    }
+
+    checkBlackHoleCollision(ball, state.blackHole, state);
+
+    for (const orbit of state.starOrbits) {
+      checkStarOrbitBoost(ball, orbit, state);
+    }
+
+    if (ball.pos.x - ball.radius < 0) {
+      ball.pos.x = ball.radius;
+      ball.vel.x = Math.abs(ball.vel.x);
+    }
+    if (ball.pos.x + ball.radius > 800) {
+      ball.pos.x = 800 - ball.radius;
+      ball.vel.x = -Math.abs(ball.vel.x);
+    }
+    if (ball.pos.y - ball.radius < 0) {
+      ball.pos.y = ball.radius;
+      ball.vel.y = Math.abs(ball.vel.y);
+    }
+    if (ball.pos.y + ball.radius > 600) {
+      ball.pos.y = 600 - ball.radius;
+      ball.vel.y = -Math.abs(ball.vel.y);
+    }
+
+    const speed = vecLen(ball.vel);
+    if (speed < MIN_SPEED) {
+      ball.active = false;
+      ball.vel = { x: 0, y: 0 };
+      ball.pos = { ...state.launchPos };
+      state.launchesLeft--;
+      if (state.launchesLeft <= 0) {
+        state.gameOver = true;
+      }
+    }
+
+    if (ball.goldenTimer > 0) {
+      ball.goldenTimer -= dt;
+    }
+    if (ball.particleBurstTimer > 0) {
+      ball.particleBurstTimer -= dt;
+    }
   }
 
   for (const planet of state.planets) {

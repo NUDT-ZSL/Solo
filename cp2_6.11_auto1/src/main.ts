@@ -16,11 +16,17 @@ initInput(canvas, state);
   resetGame(state);
 };
 
+(window as any).__gameState = state;
+
 let lastTime = performance.now();
+let frameCount = 0;
+
+(window as any).__updatePhysics = updatePhysics;
 
 function gameLoop(now: number): void {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
+  frameCount++;
 
   updatePhysics(state, dt);
   render(ctx, state);
@@ -29,3 +35,7 @@ function gameLoop(now: number): void {
 }
 
 requestAnimationFrame(gameLoop);
+
+setInterval(() => {
+  (window as any).__frameCount = frameCount;
+}, 1000);
