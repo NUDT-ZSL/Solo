@@ -9,11 +9,13 @@ export const MATERIAL_COLORS: Record<MaterialType, number> = {
   leaf: 0x228b22
 };
 
+export type CollisionSource = 'manual' | 'auto';
+
 export interface CollisionEvent {
   x: number;
   z: number;
   material: MaterialType;
-  intensity: number;
+  source: CollisionSource;
 }
 
 interface SplashParticle {
@@ -25,17 +27,24 @@ interface SplashParticle {
   endColor: THREE.Color;
   trailPositions: THREE.Vector3[];
   trail: THREE.Points;
+  createdAt: number;
 }
 
 interface Ripple {
   mesh: THREE.Mesh;
   life: number;
   maxLife: number;
+  createdAt: number;
+  startRadius: number;
+  endRadius: number;
 }
 
 const MAX_SPLASH = 800;
 const MAX_RIPPLES = 60;
 const TRAIL_LENGTH = 5;
+const RIPPLE_DURATION = 1.5;
+const RIPPLE_START_RADIUS = 0.1;
+const RIPPLE_END_RADIUS = 0.8;
 
 export class ParticleSystem {
   private scene: THREE.Scene;
@@ -43,6 +52,7 @@ export class ParticleSystem {
   private ripples: Ripple[] = [];
   private sharedSplashGeo: THREE.SphereGeometry;
   private sharedRippleGeo: THREE.RingGeometry;
+  private currentMaterial: MaterialType = 'water';
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -50,10 +60,16 @@ export class ParticleSystem {
     this.sharedRippleGeo = new THREE.RingGeometry(0.08, 0.1, 32);
   }
 
+  setMaterial(material: MaterialType): void {
+    this.currentMaterial = material;
+  }
+
   handleCollision(event: CollisionEvent): void {
-    const colorHex = MATERIAL_COLORS[event.material];
-    const count = event.intensity >= 1 ? 30 : 15;
-    const speedMul = event.intensity >= 1 ? 1 : 0.6;
+    const effectiveMaterial = event.material || this.currentMaterial;
+    const colorHex = MATERIAL_COLORS[effectiveMaterial];
+    const isManual = event.source === 'manual';
+    const count = isManual ? 30 : 15;
+    const speedMul = isManual ? 1.0 : 0.6;
 
     this.createSplashParticles(event.x, event.z, colorHex, count, speedMul);
     this.createRipple(event.x, event.z, colorHex);
@@ -68,6 +84,7 @@ export class ParticleSystem {
   ): void {
     const startColor = new THREE.Color(colorHex);
     const endColor = new THREE.Color(colorHex).multiplyScalar(0.3);
+    const now = performance.now();
 
     for (let i = 0; i < count; i++) {
       if (this.splashParticles.length >= MAX_SPLASH) {
@@ -117,7 +134,8 @@ export class ParticleSystem {
         startColor,
         endColor,
         trailPositions,
-        trail
+        trail,
+        createdAt: now
       });
     }
   }
@@ -126,6 +144,7 @@ export class ParticleSystem {
     if (this.ripples.length >= MAX_RIPPLES) {
       this.removeOldestRipple();
     }
+    const now = performance.now();
 
     const mat = new THREE.MeshBasicMaterial({
       color: colorHex,
@@ -136,32 +155,50 @@ export class ParticleSystem {
     const mesh = new THREE.Mesh(this.sharedRippleGeo, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(x, 0.005, z);
+    mesh.scale.setScalar(RIPPLE_START_RADIUS / 0.1);
     this.scene.add(mesh);
 
     this.ripples.push({
       mesh,
       life: 0,
-      maxLife: 1.5
+      maxLife: RIPPLE_DURATION,
+      createdAt: now,
+      startRadius: RIPPLE_START_RADIUS,
+      endRadius: RIPPLE_END_RADIUS
     });
   }
 
   private removeOldestSplash(): void {
-    const p = this.splashParticles.shift();
-    if (p) {
-      this.scene.remove(p.mesh);
-      this.scene.remove(p.trail);
-      (p.mesh.material as THREE.Material).dispose();
-      (p.trail.material as THREE.Material).dispose();
-      p.trail.geometry.dispose();
+    if (this.splashParticles.length === 0) return;
+    let oldestIdx = 0;
+    let oldestTime = this.splashParticles[0].createdAt;
+    for (let i = 1; i < this.splashParticles.length; i++) {
+      if (this.splashParticles[i].createdAt < oldestTime) {
+        oldestTime = this.splashParticles[i].createdAt;
+        oldestIdx = i;
+      }
     }
+    const p = this.splashParticles.splice(oldestIdx, 1)[0];
+    this.scene.remove(p.mesh);
+    this.scene.remove(p.trail);
+    (p.mesh.material as THREE.Material).dispose();
+    (p.trail.material as THREE.Material).dispose();
+    p.trail.geometry.dispose();
   }
 
   private removeOldestRipple(): void {
-    const r = this.ripples.shift();
-    if (r) {
-      this.scene.remove(r.mesh);
-      (r.mesh.material as THREE.Material).dispose();
+    if (this.ripples.length === 0) return;
+    let oldestIdx = 0;
+    let oldestTime = this.ripples[0].createdAt;
+    for (let i = 1; i < this.ripples.length; i++) {
+      if (this.ripples[i].createdAt < oldestTime) {
+        oldestTime = this.ripples[i].createdAt;
+        oldestIdx = i;
+      }
     }
+    const r = this.ripples.splice(oldestIdx, 1)[0];
+    this.scene.remove(r.mesh);
+    (r.mesh.material as THREE.Material).dispose();
   }
 
   update(dt: number): void {
@@ -215,8 +252,9 @@ export class ParticleSystem {
       }
 
       const t = r.life / r.maxLife;
-      const scale = 0.1 + t * 0.7;
-      r.mesh.scale.set(scale / 0.1, scale / 0.1, 1);
+      const currentRadius = r.startRadius + (r.endRadius - r.startRadius) * t;
+      const scaleFactor = currentRadius / 0.1;
+      r.mesh.scale.set(scaleFactor, scaleFactor, 1);
 
       const mat = r.mesh.material as THREE.MeshBasicMaterial;
       mat.opacity = 0.7 * (1 - t);

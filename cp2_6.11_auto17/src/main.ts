@@ -26,7 +26,8 @@ class RainStoriesApp {
   private adaptiveRateMultiplier: number = 1.0;
   private baseRate: number = 300;
   private currentMaterial: MaterialType = 'water';
-  private currentSpeed: number = 1.0;
+  private sharedSpeedRef: { value: number } = { value: 1.0 };
+  private textureLoader: THREE.TextureLoader;
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -36,6 +37,7 @@ class RainStoriesApp {
     this.mouse = new THREE.Vector2();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.groundMaterials = {} as Record<MaterialType, THREE.MeshStandardMaterial>;
+    this.textureLoader = new THREE.TextureLoader();
 
     this.camera = new THREE.PerspectiveCamera(
       50,
@@ -96,17 +98,12 @@ class RainStoriesApp {
   private createGround(): void {
     const geo = new THREE.PlaneGeometry(4, 4);
 
-    (['water', 'metal', 'glass', 'leaf'] as MaterialType[]).forEach((type) => {
-      const tex = this.createMaterialTexture(type);
-      const mat = new THREE.MeshStandardMaterial({
-        map: tex,
-        roughness: type === 'metal' ? 0.3 : type === 'glass' ? 0.1 : 0.7,
-        metalness: type === 'metal' ? 0.9 : type === 'glass' ? 0.1 : 0.0,
-        transparent: type === 'glass',
-        opacity: type === 'glass' ? 0.85 : 1.0
-      });
-      this.groundMaterials[type] = mat;
+    const types: MaterialType[] = ['water', 'metal', 'glass', 'leaf'];
+    types.forEach((type) => {
+      this.groundMaterials[type] = this.createFallbackMaterial(type);
     });
+
+    this.loadAllTextures(types);
 
     this.groundMesh = new THREE.Mesh(geo, this.groundMaterials.water);
     this.groundMesh.rotation.x = -Math.PI / 2;
@@ -114,16 +111,55 @@ class RainStoriesApp {
     this.scene.add(this.groundMesh);
   }
 
-  private createMaterialTexture(type: MaterialType): THREE.CanvasTexture {
+  private createFallbackMaterial(type: MaterialType): THREE.MeshStandardMaterial {
+    const color = MATERIAL_COLORS[type];
+    const fallbackTex = this.createProgrammaticTexture(type);
+    const params: THREE.MeshStandardMaterialParameters = {
+      map: fallbackTex,
+      color: color,
+      roughness: type === 'metal' ? 0.3 : type === 'glass' ? 0.1 : 0.7,
+      metalness: type === 'metal' ? 0.9 : type === 'glass' ? 0.1 : 0.0
+    };
+    if (type === 'glass') {
+      params.transparent = true;
+      params.opacity = 0.85;
+    }
+    return new THREE.MeshStandardMaterial(params);
+  }
+
+  private loadAllTextures(types: MaterialType[]): void {
+    types.forEach((type) => {
+      const assetPath = `/assets/${type}.jpg`;
+      this.textureLoader.load(
+        assetPath,
+        (texture) => {
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.RepeatWrapping;
+          texture.needsUpdate = true;
+          const mat = this.groundMaterials[type];
+          if (mat) {
+            mat.map = texture;
+            mat.color.set(0xffffff);
+            mat.needsUpdate = true;
+          }
+        },
+        undefined,
+        () => {
+          // Texture load failed - fallback already set, do nothing
+          console.log(`[Texture] Fallback used for ${type}`);
+        }
+      );
+    });
+  }
+
+  private createProgrammaticTexture(type: MaterialType): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 512;
     const ctx = canvas.getContext('2d')!;
 
-    const color = '#' + MATERIAL_COLORS[type].toString(16).padStart(6, '0');
-
     switch (type) {
-      case 'water':
+      case 'water': {
         const waterGrad = ctx.createLinearGradient(0, 0, 512, 512);
         waterGrad.addColorStop(0, '#2e6fa8');
         waterGrad.addColorStop(0.5, '#4A90D9');
@@ -142,8 +178,8 @@ class RainStoriesApp {
           ctx.stroke();
         }
         break;
-
-      case 'metal':
+      }
+      case 'metal': {
         const metalGrad = ctx.createLinearGradient(0, 0, 512, 512);
         metalGrad.addColorStop(0, '#8a8a8a');
         metalGrad.addColorStop(0.3, '#e0e0e0');
@@ -163,8 +199,8 @@ class RainStoriesApp {
           ctx.stroke();
         }
         break;
-
-      case 'glass':
+      }
+      case 'glass': {
         const glassGrad = ctx.createLinearGradient(0, 0, 0, 512);
         glassGrad.addColorStop(0, 'rgba(200, 240, 255, 0.6)');
         glassGrad.addColorStop(0.5, 'rgba(176, 224, 230, 0.8)');
@@ -184,8 +220,8 @@ class RainStoriesApp {
           ctx.fillRect(Math.random() * 400 + 50, Math.random() * 400 + 50, Math.random() * 40 + 20, 2);
         }
         break;
-
-      case 'leaf':
+      }
+      case 'leaf': {
         const leafGrad = ctx.createLinearGradient(0, 0, 512, 512);
         leafGrad.addColorStop(0, '#1a6b1a');
         leafGrad.addColorStop(0.5, '#228B22');
@@ -212,6 +248,7 @@ class RainStoriesApp {
           ctx.stroke();
         }
         break;
+      }
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -227,7 +264,8 @@ class RainStoriesApp {
       this.scene,
       (event: CollisionEvent) => {
         this.particleSystem.handleCollision(event);
-      }
+      },
+      this.sharedSpeedRef
     );
 
     this.uiController = new UIController({
@@ -241,11 +279,12 @@ class RainStoriesApp {
   private changeMaterial(mat: MaterialType): void {
     this.currentMaterial = mat;
     this.raindropSystem.setMaterial(mat);
+    this.particleSystem.setMaterial(mat);
     this.groundMesh.material = this.groundMaterials[mat];
   }
 
   private changeSpeed(speed: number): void {
-    this.currentSpeed = speed;
+    this.sharedSpeedRef.value = speed;
     this.raindropSystem.setSpeed(speed);
   }
 
@@ -259,12 +298,13 @@ class RainStoriesApp {
     this.particleSystem.clearAll();
     this.uiController.resetUI();
     this.currentMaterial = 'water';
-    this.currentSpeed = 1.0;
+    this.sharedSpeedRef.value = 1.0;
     this.baseRate = 300;
     this.adaptiveRateMultiplier = 1.0;
     this.raindropSystem.setMaterial('water');
     this.raindropSystem.setSpeed(1.0);
     this.raindropSystem.setRate(300);
+    this.particleSystem.setMaterial('water');
     this.groundMesh.material = this.groundMaterials.water;
   }
 
