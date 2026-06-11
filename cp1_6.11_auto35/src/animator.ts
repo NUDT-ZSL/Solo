@@ -14,12 +14,23 @@ export const moodColors: MoodColors = {
 
 export type MoodType = keyof MoodColors;
 
+export interface GlowState {
+  startTime: number;
+  duration: number;
+}
+
+export interface RippleRing {
+  ringNumber: number;
+  delay: number;
+}
+
 export interface RippleState {
   centerX: number;
   centerY: number;
   startTime: number;
   duration: number;
-  maxRadius: number;
+  rings: RippleRing[];
+  glowStates: Map<string, GlowState>;
 }
 
 export interface PixelAnimationData {
@@ -27,6 +38,12 @@ export interface PixelAnimationData {
   offsetY: number;
   alpha: number;
   brightness: number;
+  glowIntensity: number;
+}
+
+export interface PixelColorInfo {
+  baseColor: string;
+  isOdd: boolean;
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -93,12 +110,19 @@ export class Animator {
   }
 
   triggerRipple(centerX: number, centerY: number): void {
+    const now = performance.now();
+    const rings: RippleRing[] = [
+      { ringNumber: 1, delay: 0 },
+      { ringNumber: 2, delay: 100 },
+    ];
+
     this.ripple = {
       centerX,
       centerY,
-      startTime: performance.now(),
-      duration: 500,
-      maxRadius: 16,
+      startTime: now,
+      duration: 800,
+      rings,
+      glowStates: new Map(),
     };
   }
 
@@ -139,58 +163,125 @@ export class Animator {
     }
   }
 
-  getDistanceFromRippleCenter(pixelX: number, pixelY: number): number {
-    if (!this.ripple) return Infinity;
-
-    const dx = pixelX - this.ripple.centerX;
-    const dy = pixelY - this.ripple.centerY;
-    return Math.sqrt(dx * dx + dy * dy);
+  getPixelBaseColor(charCode: number, baseMoodColor: string): string {
+    const isOdd = charCode % 2 === 1;
+    if (isOdd) {
+      return mixWithWhite(baseMoodColor, 0.3);
+    } else {
+      return mixWithBlack(baseMoodColor, 0.1);
+    }
   }
 
-  getRippleProgress(distance: number, time: number): number {
+  getChebyshevDistance(x1: number, y1: number, x2: number, y2: number): number {
+    return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
+  }
+
+  getPixelRing(pixelX: number, pixelY: number, centerX: number, centerY: number): number {
+    const distance = this.getChebyshevDistance(pixelX, pixelY, centerX, centerY);
+    
+    if (distance === 0) return 1;
+    if (distance <= 2) return 1;
+    if (distance <= 4) return 2;
+    return 0;
+  }
+
+  getRingPixelCount(ringNumber: number): number {
+    if (ringNumber === 1) return 8;
+    if (ringNumber === 2) return 16;
+    return 0;
+  }
+
+  getRippleProgressForRing(
+    pixelX: number,
+    pixelY: number,
+    time: number
+  ): { scale: number; offsetY: number } {
+    if (!this.ripple) return { scale: 1.0, offsetY: 0 };
+
+    const ring = this.getPixelRing(
+      pixelX,
+      pixelY,
+      this.ripple.centerX,
+      this.ripple.centerY
+    );
+
+    if (ring === 0) return { scale: 1.0, offsetY: 0 };
+
+    const ringInfo = this.ripple.rings.find((r) => r.ringNumber === ring);
+    if (!ringInfo) return { scale: 1.0, offsetY: 0 };
+
+    const elapsed = time - this.ripple.startTime - ringInfo.delay;
+    if (elapsed < 0) return { scale: 1.0, offsetY: 0 };
+
+    const animationDuration = 300;
+    if (elapsed > animationDuration) return { scale: 1.0, offsetY: 0 };
+
+    const phase = elapsed / animationDuration;
+    const t = Math.sin(phase * Math.PI);
+
+    return {
+      scale: 1.0 + 0.3 * t,
+      offsetY: -2 * t,
+    };
+  }
+
+  updateGlowState(pixelX: number, pixelY: number, time: number): void {
+    if (!this.ripple) return;
+
+    const pixelKey = `${pixelX},${pixelY}`;
+    const ring = this.getPixelRing(
+      pixelX,
+      pixelY,
+      this.ripple.centerX,
+      this.ripple.centerY
+    );
+
+    if (ring === 0) return;
+
+    const ringInfo = this.ripple.rings.find((r) => r.ringNumber === ring);
+    if (!ringInfo) return;
+
+    const elapsed = time - this.ripple.startTime - ringInfo.delay;
+    if (elapsed >= 0 && elapsed < 100 && !this.ripple.glowStates.has(pixelKey)) {
+      this.ripple.glowStates.set(pixelKey, {
+        startTime: time,
+        duration: 500,
+      });
+    }
+  }
+
+  getGlowIntensity(pixelX: number, pixelY: number, time: number): number {
     if (!this.ripple) return 0;
 
-    const elapsed = time - this.ripple.startTime;
+    const pixelKey = `${pixelX},${pixelY}`;
+    const glowState = this.ripple.glowStates.get(pixelKey);
+
+    if (!glowState) return 0;
+
+    const elapsed = time - glowState.startTime;
     if (elapsed < 0) return 0;
-    if (elapsed > this.ripple.duration) return 0;
+    if (elapsed > glowState.duration) return 0;
 
-    const waveSpeed = this.ripple.maxRadius / (this.ripple.duration * 0.6);
-    const wavePosition = elapsed * waveSpeed;
-    const waveWidth = 4;
-
-    const distFromWave = Math.abs(distance - wavePosition);
-    if (distFromWave > waveWidth) return 0;
-
-    const intensity = 1 - distFromWave / waveWidth;
-    const fadeStart = this.ripple.duration * 0.7;
-    const fadeOut = elapsed > fadeStart ? 1 - (elapsed - fadeStart) / (this.ripple.duration - fadeStart) : 1;
-
-    return intensity * fadeOut;
+    const fadeOut = 1 - elapsed / glowState.duration;
+    return 0.2 * fadeOut;
   }
 
   getPixelAnimation(pixelX: number, pixelY: number, time: number): PixelAnimationData {
     const breathingAlpha = this.getBreathingAlpha(time);
 
-    let scale = 1.0;
-    let offsetY = 0;
-    let brightness = 1.0;
+    const { scale, offsetY } = this.getRippleProgressForRing(pixelX, pixelY, time);
 
-    if (this.ripple) {
-      const distance = this.getDistanceFromRippleCenter(pixelX, pixelY);
-      const progress = this.getRippleProgress(distance, time);
+    this.updateGlowState(pixelX, pixelY, time);
+    const glowIntensity = this.getGlowIntensity(pixelX, pixelY, time);
 
-      if (progress > 0) {
-        scale = 1.0 + 0.3 * progress;
-        offsetY = -2 * progress;
-        brightness = 1.0 + 0.2 * progress;
-      }
-    }
+    const brightness = 1.0 + glowIntensity;
 
     return {
       scale,
       offsetY,
       alpha: breathingAlpha,
       brightness,
+      glowIntensity,
     };
   }
 
@@ -201,5 +292,15 @@ export class Animator {
   applyBrightness(color: string, brightness: number): string {
     if (brightness === 1.0) return color;
     return brighten(color, brightness - 1.0);
+  }
+
+  mixColors(color1: string, color2: string, ratio: number): string {
+    const c1 = hexToRgb(color1);
+    const c2 = hexToRgb(color2);
+    return rgbToHex(
+      c1.r + (c2.r - c1.r) * ratio,
+      c1.g + (c2.g - c1.g) * ratio,
+      c1.b + (c2.b - c1.b) * ratio
+    );
   }
 }

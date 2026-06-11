@@ -225,27 +225,46 @@ class PixelIconApp {
     if (!this.pixelGrid || this.pixelSize <= 0) return;
 
     const step = this.pixelSize + 1;
+    const gapSize = 1;
+    const drawPixelSize = this.pixelSize;
 
     for (const pixel of this.pixelGrid.pixels) {
       if (!pixel.filled) continue;
 
       const anim = this.animator.getPixelAnimation(pixel.x, pixel.y, time);
-      const baseColor = this.animator.getPixelColor(pixel.charCode, time);
+      const gradientColor = this.animator.getGradientColor(time);
+
+      let baseColor: string;
+      if (pixel.colorData.isOddAscii) {
+        baseColor = this.animator.mixColors(gradientColor, '#FFFFFF', 0.3);
+      } else {
+        baseColor = this.animator.mixColors(gradientColor, '#000000', 0.1);
+      }
+
       const finalColor = this.animator.applyBrightness(baseColor, anim.brightness);
 
       const centerX = this.offsetX + pixel.x * step + this.pixelSize / 2;
       const centerY = this.offsetY + pixel.y * step + this.pixelSize / 2 + anim.offsetY;
 
-      const size = this.pixelSize * anim.scale;
-      const drawX = centerX - size / 2;
-      const drawY = centerY - size / 2;
+      const scaledSize = drawPixelSize * anim.scale;
+      const actualDrawSize = scaledSize - gapSize;
+      const drawX = centerX - actualDrawSize / 2;
+      const drawY = centerY - actualDrawSize / 2;
+
+      if (anim.glowIntensity > 0) {
+        ctx.shadowColor = finalColor;
+        ctx.shadowBlur = 8 * anim.glowIntensity * 5;
+      } else {
+        ctx.shadowBlur = 0;
+      }
 
       ctx.globalAlpha = anim.alpha;
       ctx.fillStyle = finalColor;
-      ctx.fillRect(drawX, drawY, size, size);
+      ctx.fillRect(drawX, drawY, actualDrawSize, actualDrawSize);
     }
 
     ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
   }
 }
 

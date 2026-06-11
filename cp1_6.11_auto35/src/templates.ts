@@ -385,10 +385,30 @@ export function getCharTemplate(char: string): PixelTemplate {
   return squareTemplate;
 }
 
+export interface PixelColorData {
+  isOddAscii: boolean;
+  mixRatio: number;
+}
+
 export interface PixelGrid {
   width: number;
   height: number;
-  pixels: { x: number; y: number; filled: boolean; charIndex: number; charCode: number }[];
+  pixels: {
+    x: number;
+    y: number;
+    filled: boolean;
+    charIndex: number;
+    charCode: number;
+    colorData: PixelColorData;
+  }[];
+}
+
+export function getPixelColorData(charCode: number): PixelColorData {
+  const isOdd = charCode % 2 === 1;
+  return {
+    isOddAscii: isOdd,
+    mixRatio: isOdd ? 0.7 : 0.9,
+  };
 }
 
 export function wordToPixelGrid(word: string): PixelGrid {
@@ -402,6 +422,7 @@ export function wordToPixelGrid(word: string): PixelGrid {
     const char = chars[charIdx];
     const template = getCharTemplate(char);
     const charCode = char.charCodeAt(0);
+    const colorData = getPixelColorData(charCode);
     const offsetX = charIdx * 9;
 
     for (let row = 0; row < 8; row++) {
@@ -414,6 +435,7 @@ export function wordToPixelGrid(word: string): PixelGrid {
           filled: template[row][col],
           charIndex: charIdx,
           charCode,
+          colorData,
         });
       }
     }
