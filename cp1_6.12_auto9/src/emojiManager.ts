@@ -5,6 +5,7 @@ export interface Emoji {
   char: string;
   x: number;
   y: number;
+  baseSize: number;
   size: number;
   baseSpeed: number;
   speed: number;
@@ -12,15 +13,24 @@ export interface Emoji {
   rotationSpeed: number;
   opacity: number;
   hue: number;
-  trail: { x: number; y: number; rotation: number; alpha: number }[];
-  trailLength: number;
   offsetX: number;
   offsetY: number;
   targetOffsetX: number;
   targetOffsetY: number;
+  offsetTransitionStart: number;
+  offsetTransitionDuration: number;
+  startOffsetX: number;
+  startOffsetY: number;
   wobbleSpeed: number;
   wobbleAmount: number;
   wobblePhase: number;
+  velocityX: number;
+  velocityY: number;
+  prevX: number;
+  prevY: number;
+  cacheCanvas: HTMLCanvasElement | null;
+  cacheCtx: CanvasRenderingContext2D | null;
+  cacheHue: number;
 }
 
 const EMOJI_LIST = [
@@ -31,6 +41,11 @@ const EMOJI_LIST = [
   '❤️', '💜', '💙', '💚', '💛', '🧡', '🖤', '🤍', '💯', '🚀'
 ];
 
+const REFERENCE_WIDTH = 1920;
+const REFERENCE_HEIGHT = 1080;
+const TRAIL_LENGTH = 30;
+const TRAIL_SEGMENTS = 6;
+
 export class EmojiManager {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -39,12 +54,24 @@ export class EmojiManager {
   private theme: ThemeType = 'rainbow';
   private trailEnabled: boolean = true;
   private nextId: number = 0;
-  private maxTrailLength: number = 8;
   private time: number = 0;
+  private scaleFactor: number = 1;
+  private dpr: number = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
+    this.updateScaleFactor();
+  }
+
+  updateScaleFactor(): void {
+    const cssHeight = this.canvas.clientHeight || window.innerHeight;
+    this.scaleFactor = Math.max(0.6, cssHeight / REFERENCE_HEIGHT);
+    this.dpr = window.devicePixelRatio || 1;
+  }
+
+  getScaleFactor(): number {
+    return this.scaleFactor;
   }
 
   setCount(count: number): void {
@@ -60,6 +87,7 @@ export class EmojiManager {
     this.theme = theme;
     this.emojis.forEach(emoji => {
       emoji.hue = this.getHueForTheme(emoji);
+      emoji.cacheHue = -1;
     });
   }
 
@@ -80,44 +108,96 @@ export class EmojiManager {
   }
 
   resize(): void {
+    const oldScale = this.scaleFactor;
+    this.updateScaleFactor();
+    const scaleRatio = this.scaleFactor / oldScale;
+    
     this.emojis.forEach(emoji => {
-      if (emoji.x > this.canvas.width) {
-        emoji.x = Math.random() * this.canvas.width;
+      emoji.size = emoji.baseSize * this.scaleFactor;
+      emoji.speed = emoji.baseSpeed * this.scaleFactor;
+      emoji.wobbleAmount = 10 * this.scaleFactor + Math.random() * 20 * this.scaleFactor;
+      
+      if (emoji.x > this.canvas.clientWidth) {
+        emoji.x = Math.random() * this.canvas.clientWidth;
       }
-      if (emoji.y > this.canvas.height) {
-        emoji.y = Math.random() * this.canvas.height;
+      if (emoji.y > this.canvas.clientHeight) {
+        emoji.y = Math.random() * this.canvas.clientHeight;
       }
     });
   }
 
+  private createEmojiCache(emoji: Emoji): void {
+    if (!emoji.cacheCanvas) {
+      emoji.cacheCanvas = document.createElement('canvas');
+      emoji.cacheCtx = emoji.cacheCanvas.getContext('2d')!;
+    }
+    
+    const cacheSize = emoji.size * 3 * this.dpr;
+    emoji.cacheCanvas.width = cacheSize;
+    emoji.cacheCanvas.height = cacheSize;
+    
+    const ctx = emoji.cacheCtx!;
+    ctx.clearRect(0, 0, cacheSize, cacheSize);
+    
+    ctx.save();
+    ctx.scale(this.dpr, this.dpr);
+    ctx.translate(emoji.size * 1.5, emoji.size * 1.5);
+    
+    ctx.font = `${emoji.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    ctx.shadowColor = `hsl(${emoji.hue}, 100%, 60%)`;
+    ctx.shadowBlur = 20 * this.scaleFactor;
+    
+    ctx.fillText(emoji.char, 0, 0);
+    ctx.restore();
+    
+    emoji.cacheHue = Math.floor(emoji.hue);
+  }
+
   private createEmoji(startY?: number): Emoji {
-    const size = 24 + Math.random() * 24;
+    const baseSize = 24 + Math.random() * 24;
+    const size = baseSize * this.scaleFactor;
     const fallDuration = 0.5 + Math.random() * 1.5;
-    const baseSpeed = this.canvas.height / (fallDuration * 60);
+    const baseSpeed = REFERENCE_HEIGHT / (fallDuration * 60);
+    const speed = baseSpeed * this.scaleFactor;
     
     const emoji: Emoji = {
       id: this.nextId++,
       char: EMOJI_LIST[Math.floor(Math.random() * EMOJI_LIST.length)],
-      x: Math.random() * this.canvas.width,
+      x: Math.random() * (this.canvas.clientWidth || window.innerWidth),
       y: startY !== undefined ? startY : -size - Math.random() * 100,
+      baseSize,
       size,
       baseSpeed,
-      speed: baseSpeed,
+      speed,
       rotation: (Math.random() - 0.5) * 0.5,
       rotationSpeed: (Math.random() - 0.5) * 0.02,
       opacity: 0.7 + Math.random() * 0.3,
       hue: 0,
-      trail: [],
-      trailLength: this.maxTrailLength,
       offsetX: 0,
       offsetY: 0,
       targetOffsetX: 0,
       targetOffsetY: 0,
+      offsetTransitionStart: 0,
+      offsetTransitionDuration: 300,
+      startOffsetX: 0,
+      startOffsetY: 0,
       wobbleSpeed: 0.5 + Math.random() * 1.5,
-      wobbleAmount: 10 + Math.random() * 20,
-      wobblePhase: Math.random() * Math.PI * 2
+      wobbleAmount: 10 * this.scaleFactor + Math.random() * 20 * this.scaleFactor,
+      wobblePhase: Math.random() * Math.PI * 2,
+      velocityX: 0,
+      velocityY: 0,
+      prevX: 0,
+      prevY: 0,
+      cacheCanvas: null,
+      cacheCtx: null,
+      cacheHue: -1
     };
     
+    emoji.prevX = emoji.x;
+    emoji.prevY = emoji.y;
     emoji.hue = this.getHueForTheme(emoji);
     return emoji;
   }
@@ -139,70 +219,131 @@ export class EmojiManager {
 
   private adjustEmojiCount(): void {
     while (this.emojis.length < this.emojiCount) {
-      const emoji = this.createEmoji(Math.random() * this.canvas.height);
+      const emoji = this.createEmoji(Math.random() * (this.canvas.clientHeight || window.innerHeight));
       this.emojis.push(emoji);
     }
     while (this.emojis.length > this.emojiCount) {
-      this.emojis.pop();
+      const removed = this.emojis.pop();
+      if (removed?.cacheCanvas) {
+        removed.cacheCanvas.width = 0;
+        removed.cacheCanvas.height = 0;
+      }
     }
   }
 
   init(): void {
+    this.emojis.forEach(e => {
+      if (e.cacheCanvas) {
+        e.cacheCanvas.width = 0;
+        e.cacheCanvas.height = 0;
+      }
+    });
     this.emojis = [];
     this.nextId = 0;
+    this.updateScaleFactor();
     for (let i = 0; i < this.emojiCount; i++) {
-      const emoji = this.createEmoji(Math.random() * this.canvas.height);
+      const emoji = this.createEmoji(Math.random() * (this.canvas.clientHeight || window.innerHeight));
       this.emojis.push(emoji);
     }
   }
 
-  update(deltaTime: number): void {
+  update(deltaTime: number, currentTime: number): void {
     this.time += deltaTime;
+    const canvasHeight = this.canvas.clientHeight || window.innerHeight;
+    const canvasWidth = this.canvas.clientWidth || window.innerWidth;
     
     for (let i = this.emojis.length - 1; i >= 0; i--) {
       const emoji = this.emojis[i];
       
-      emoji.offsetX += (emoji.targetOffsetX - emoji.offsetX) * 0.12;
-      emoji.offsetY += (emoji.targetOffsetY - emoji.offsetY) * 0.12;
+      emoji.prevX = emoji.x;
+      emoji.prevY = emoji.y;
+      
+      if (emoji.cacheHue !== Math.floor(emoji.hue)) {
+        this.createEmojiCache(emoji);
+      }
+      
+      if (emoji.offsetTransitionStart > 0) {
+        const elapsed = currentTime - emoji.offsetTransitionStart;
+        if (elapsed < emoji.offsetTransitionDuration) {
+          const t = elapsed / emoji.offsetTransitionDuration;
+          const easeOut = 1 - Math.pow(1 - t, 3);
+          emoji.offsetX = emoji.startOffsetX + (emoji.targetOffsetX - emoji.startOffsetX) * easeOut;
+          emoji.offsetY = emoji.startOffsetY + (emoji.targetOffsetY - emoji.startOffsetY) * easeOut;
+        } else {
+          emoji.offsetX = emoji.targetOffsetX;
+          emoji.offsetY = emoji.targetOffsetY;
+          emoji.offsetTransitionStart = 0;
+        }
+      }
       
       const wobble = Math.sin(this.time * emoji.wobbleSpeed + emoji.wobblePhase) * emoji.wobbleAmount * 0.1;
       
-      if (this.trailEnabled) {
-        emoji.trail.unshift({
-          x: emoji.x,
-          y: emoji.y,
-          rotation: emoji.rotation,
-          alpha: 1
-        });
-        
-        if (emoji.trail.length > emoji.trailLength) {
-          emoji.trail.pop();
-        }
-        
-        emoji.trail.forEach((point, index) => {
-          point.alpha = 1 - (index / emoji.trailLength);
-        });
-      }
+      const moveX = wobble + emoji.offsetX;
+      const moveY = emoji.speed + emoji.offsetY;
       
-      emoji.y += emoji.speed + emoji.offsetY;
-      emoji.x += wobble + emoji.offsetX;
+      emoji.velocityX = moveX;
+      emoji.velocityY = moveY;
+      
+      emoji.y += moveY;
+      emoji.x += moveX;
       emoji.rotation += emoji.rotationSpeed;
       
       if (this.theme === 'rainbow') {
         emoji.hue = (emoji.hue + 0.5) % 360;
       }
       
-      if (emoji.y > this.canvas.height + emoji.size) {
+      if (emoji.y > canvasHeight + emoji.size) {
+        if (emoji.cacheCanvas) {
+          emoji.cacheCanvas.width = 0;
+          emoji.cacheCanvas.height = 0;
+        }
         this.emojis.splice(i, 1);
         const newEmoji = this.createEmoji(-emoji.size - Math.random() * 50);
         this.emojis.push(newEmoji);
       }
       
       if (emoji.x < -emoji.size) {
-        emoji.x = this.canvas.width + emoji.size;
-      } else if (emoji.x > this.canvas.width + emoji.size) {
+        emoji.x = canvasWidth + emoji.size;
+        emoji.prevX = emoji.x;
+      } else if (emoji.x > canvasWidth + emoji.size) {
         emoji.x = -emoji.size;
+        emoji.prevX = emoji.x;
       }
+    }
+  }
+
+  private renderTrail(ctx: CanvasRenderingContext2D, emoji: Emoji): void {
+    if (!emoji.cacheCanvas) return;
+    
+    const scaledTrailLength = TRAIL_LENGTH * this.scaleFactor;
+    const angle = Math.atan2(emoji.velocityY, emoji.velocityX);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    
+    for (let i = TRAIL_SEGMENTS; i >= 1; i--) {
+      const t = i / (TRAIL_SEGMENTS + 1);
+      const distance = t * scaledTrailLength;
+      const alpha = (1 - t) * 0.45 * emoji.opacity;
+      const scale = 1 - t * 0.4;
+      
+      const trailX = emoji.x - cos * distance;
+      const trailY = emoji.y - sin * distance;
+      
+      const drawSize = emoji.size * scale * 3;
+      const offset = drawSize / 2;
+      
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(trailX, trailY);
+      ctx.rotate(emoji.rotation);
+      ctx.drawImage(
+        emoji.cacheCanvas,
+        -offset,
+        -offset,
+        drawSize,
+        drawSize
+      );
+      ctx.restore();
     }
   }
 
@@ -210,45 +351,28 @@ export class EmojiManager {
     const ctx = this.ctx;
     
     for (const emoji of this.emojis) {
-      const drawX = emoji.x;
-      const drawY = emoji.y;
-      
-      if (this.trailEnabled && emoji.trail.length > 1) {
-        for (let i = emoji.trail.length - 1; i >= 0; i--) {
-          const point = emoji.trail[i];
-          const alpha = point.alpha * 0.3 * emoji.opacity;
-          const scale = 1 - (i / emoji.trailLength) * 0.3;
-          
-          ctx.save();
-          ctx.globalAlpha = alpha;
-          ctx.translate(point.x, point.y);
-          ctx.rotate(point.rotation);
-          ctx.scale(scale, scale);
-          ctx.font = `${emoji.size}px serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          
-          ctx.shadowColor = `hsla(${emoji.hue}, 100%, 60%, ${alpha})`;
-          ctx.shadowBlur = 8;
-          
-          ctx.fillText(emoji.char, 0, 0);
-          ctx.restore();
-        }
+      if (!emoji.cacheCanvas || emoji.cacheHue !== Math.floor(emoji.hue)) {
+        this.createEmojiCache(emoji);
       }
+      
+      if (this.trailEnabled) {
+        this.renderTrail(ctx, emoji);
+      }
+      
+      const drawSize = emoji.size * 3;
+      const offset = drawSize / 2;
       
       ctx.save();
       ctx.globalAlpha = emoji.opacity;
-      ctx.translate(drawX, drawY);
+      ctx.translate(emoji.x, emoji.y);
       ctx.rotate(emoji.rotation);
-      
-      ctx.font = `${emoji.size}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
-      ctx.shadowColor = `hsl(${emoji.hue}, 100%, 60%)`;
-      ctx.shadowBlur = 15;
-      
-      ctx.fillText(emoji.char, 0, 0);
+      ctx.drawImage(
+        emoji.cacheCanvas!,
+        -offset,
+        -offset,
+        drawSize,
+        drawSize
+      );
       ctx.restore();
     }
   }

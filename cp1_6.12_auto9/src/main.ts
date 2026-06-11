@@ -1,6 +1,17 @@
 import { EmojiManager, ThemeType } from './emojiManager';
 import { InteractionHandler } from './interactionHandler';
 
+interface Ripple {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  alpha: number;
+  startTime: number;
+  duration: number;
+  color: string;
+}
+
 class App {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -11,6 +22,7 @@ class App {
   private fps: number = 0;
   private frameCount: number = 0;
   private fpsTime: number = 0;
+  private ripples: Ripple[] = [];
 
   constructor() {
     this.canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -33,6 +45,7 @@ class App {
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = window.innerWidth * dpr;
     this.canvas.height = window.innerHeight * dpr;
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
     
     this.canvas.style.width = `${window.innerWidth}px`;
@@ -40,16 +53,9 @@ class App {
   }
 
   private handleResize(): void {
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = window.innerWidth * dpr;
-    this.canvas.height = window.innerHeight * dpr;
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.scale(dpr, dpr);
-    
-    this.canvas.style.width = `${window.innerWidth}px`;
-    this.canvas.style.height = `${window.innerHeight}px`;
-    
+    this.resizeCanvas();
     this.emojiManager.resize();
+    this.interactionHandler.updateScaleFactor(this.emojiManager.getScaleFactor());
   }
 
   private setupControls(): void {
@@ -63,7 +69,7 @@ class App {
         target.classList.add('active');
         
         this.emojiManager.setTheme(theme);
-        this.createRipple(target, e as MouseEvent);
+        this.createButtonRipple(target, e as MouseEvent);
       });
     });
     
@@ -82,23 +88,28 @@ class App {
     });
   }
 
-  private createRipple(button: HTMLElement, event: MouseEvent): void {
+  private createButtonRipple(button: HTMLElement, event: MouseEvent): void {
     const rect = button.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
+    
+    const existingRipples = button.querySelectorAll('.ripple');
+    existingRipples.forEach(r => r.remove());
     
     const ripple = document.createElement('span');
     ripple.className = 'ripple';
     ripple.style.left = `${x}px`;
     ripple.style.top = `${y}px`;
-    ripple.style.width = ripple.style.height = `${Math.max(rect.width, rect.height)}px`;
-    ripple.style.marginLeft = ripple.style.marginTop = `-${Math.max(rect.width, rect.height) / 2}px`;
+    
+    const maxDim = Math.max(rect.width, rect.height) * 2;
+    ripple.style.width = ripple.style.height = `${maxDim}px`;
+    ripple.style.marginLeft = ripple.style.marginTop = `-${maxDim / 2}px`;
     
     button.appendChild(ripple);
     
     setTimeout(() => {
       ripple.remove();
-    }, 600);
+    }, 650);
   }
 
   private animate(): void {
@@ -113,15 +124,32 @@ class App {
       this.fpsTime = currentTime;
     }
     
-    this.update(deltaTime);
+    this.update(deltaTime, currentTime);
     this.render();
     
     this.animationId = requestAnimationFrame(() => this.animate());
   }
 
-  private update(deltaTime: number): void {
+  private update(deltaTime: number, currentTime: number): void {
     this.interactionHandler.update();
-    this.emojiManager.update(deltaTime);
+    this.emojiManager.update(deltaTime, currentTime);
+    this.updateRipples(currentTime);
+  }
+
+  private updateRipples(currentTime: number): void {
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const ripple = this.ripples[i];
+      const elapsed = currentTime - ripple.startTime;
+      
+      if (elapsed >= ripple.duration) {
+        this.ripples.splice(i, 1);
+        continue;
+      }
+      
+      const t = elapsed / ripple.duration;
+      ripple.radius = t * ripple.maxRadius;
+      ripple.alpha = 1 - t;
+    }
   }
 
   private render(): void {
@@ -134,6 +162,8 @@ class App {
     this.renderBackground(width, height);
     
     this.emojiManager.render();
+    
+    this.renderRipples(ctx);
   }
 
   private renderBackground(width: number, height: number): void {
@@ -162,6 +192,19 @@ class App {
     }
     
     ctx.restore();
+  }
+
+  private renderRipples(ctx: CanvasRenderingContext2D): void {
+    for (const ripple of this.ripples) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = ripple.color;
+      ctx.globalAlpha = ripple.alpha * 0.6;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   destroy(): void {

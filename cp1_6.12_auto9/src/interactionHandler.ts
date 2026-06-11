@@ -1,20 +1,39 @@
 import { EmojiManager, Emoji } from './emojiManager';
 
+const REFERENCE_HOVER_RADIUS = 80;
+const REFERENCE_SECONDARY_RADIUS = 60;
+const REFERENCE_REPEL_FORCE = 25;
+const TRANSITION_DURATION = 300;
+
 export class InteractionHandler {
   private canvas: HTMLCanvasElement;
   private emojiManager: EmojiManager;
   private mouseX: number = -1000;
   private mouseY: number = -1000;
   private isMouseOnCanvas: boolean = false;
-  private hoverRadius: number = 80;
-  private secondaryRadius: number = 60;
-  private repelForce: number = 25;
-  private transitionDuration: number = 300;
+  private hoverRadius: number = REFERENCE_HOVER_RADIUS;
+  private secondaryRadius: number = REFERENCE_SECONDARY_RADIUS;
+  private repelForce: number = REFERENCE_REPEL_FORCE;
+  private transitionDuration: number = TRANSITION_DURATION;
+  private scaleFactor: number = 1;
 
   constructor(canvas: HTMLCanvasElement, emojiManager: EmojiManager) {
     this.canvas = canvas;
     this.emojiManager = emojiManager;
+    this.scaleFactor = emojiManager.getScaleFactor();
+    this.updateScaledValues();
     this.bindEvents();
+  }
+
+  updateScaleFactor(scaleFactor: number): void {
+    this.scaleFactor = scaleFactor;
+    this.updateScaledValues();
+  }
+
+  private updateScaledValues(): void {
+    this.hoverRadius = REFERENCE_HOVER_RADIUS * this.scaleFactor;
+    this.secondaryRadius = REFERENCE_SECONDARY_RADIUS * this.scaleFactor;
+    this.repelForce = REFERENCE_REPEL_FORCE * this.scaleFactor;
   }
 
   private bindEvents(): void {
@@ -70,21 +89,42 @@ export class InteractionHandler {
     this.resetAllOffsets();
   }
 
+  private setTargetOffset(emoji: Emoji, targetX: number, targetY: number): void {
+    if (emoji.targetOffsetX === targetX && emoji.targetOffsetY === targetY) {
+      return;
+    }
+    
+    emoji.startOffsetX = emoji.offsetX;
+    emoji.startOffsetY = emoji.offsetY;
+    emoji.targetOffsetX = targetX;
+    emoji.targetOffsetY = targetY;
+    emoji.offsetTransitionDuration = this.transitionDuration;
+    emoji.offsetTransitionStart = performance.now();
+  }
+
   private resetAllOffsets(): void {
     const emojis = this.emojiManager.getEmojis();
+    const currentTime = performance.now();
+    
     for (const emoji of emojis) {
-      emoji.targetOffsetX = 0;
-      emoji.targetOffsetY = 0;
+      if (emoji.targetOffsetX !== 0 || emoji.targetOffsetY !== 0) {
+        emoji.startOffsetX = emoji.offsetX;
+        emoji.startOffsetY = emoji.offsetY;
+        emoji.targetOffsetX = 0;
+        emoji.targetOffsetY = 0;
+        emoji.offsetTransitionDuration = this.transitionDuration;
+        emoji.offsetTransitionStart = currentTime;
+      }
     }
   }
 
   update(): void {
+    const emojis = this.emojiManager.getEmojis();
+    const totalRadius = this.hoverRadius + this.secondaryRadius;
+    
     if (!this.isMouseOnCanvas) {
       return;
     }
-
-    const emojis = this.emojiManager.getEmojis();
-    const totalRadius = this.hoverRadius + this.secondaryRadius;
     
     for (const emoji of emojis) {
       const dx = emoji.x - this.mouseX;
@@ -103,11 +143,14 @@ export class InteractionHandler {
           force = this.repelForce * 0.5 * (1 - t);
         }
         
-        emoji.targetOffsetX = Math.cos(angle) * force;
-        emoji.targetOffsetY = Math.sin(angle) * force;
+        const targetX = Math.cos(angle) * force;
+        const targetY = Math.sin(angle) * force;
+        
+        this.setTargetOffset(emoji, targetX, targetY);
       } else {
-        emoji.targetOffsetX = 0;
-        emoji.targetOffsetY = 0;
+        if (emoji.targetOffsetX !== 0 || emoji.targetOffsetY !== 0) {
+          this.setTargetOffset(emoji, 0, 0);
+        }
       }
     }
   }
