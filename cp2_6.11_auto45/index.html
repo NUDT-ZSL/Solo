@@ -1,108 +1,33 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>像素帧工坊 - Pixel Frame Workshop</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    body {
-      background: linear-gradient(135deg, #1A1A1A 0%, #0D1B2A 100%);
-      background-attachment: fixed;
-      color: #ffffff;
-      position: relative;
-    }
-
-    body::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-image:
-        radial-gradient(circle at 20% 30%, rgba(78, 205, 196, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 80% 70%, rgba(212, 175, 55, 0.06) 0%, transparent 40%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    #app {
-      width: 100%;
-      height: 100%;
-      position: relative;
-      z-index: 1;
-    }
-
-    .pfw-tool-btn:active,
-    .pfw-color-swatch:active,
-    .pfw-play-btn:active,
-    .pfw-export-btn:active,
-    .pfw-export-gif-btn:active,
-    .pfw-frame-item:active {
-      transform: scale(0.95) !important;
-      transition: transform 150ms cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-    }
-
-    button {
-      font-family: inherit;
-    }
-
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 3px;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 3px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    select {
-      outline: none;
-    }
-
-    select:focus {
-      border-color: #4ECDC4 !important;
-    }
-
-    .pfw-frames-list .pfw-frame-item:hover,
-    .pfw-timeline-frames .pfw-tl-frame-item:hover {
-      background: rgba(78, 205, 196, 0.1) !important;
-      border-color: #4ECDC4 !important;
-    }
-
-    .pfw-canvas-wrapper {
-      position: relative;
-    }
-  </style>
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>评价热流</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        background-color: #0a0a0a;
+        color: #ffffff;
+      }
+    </style>
+    <script type="module">
+      if (import.meta.hot?.on) {
+        import.meta.hot.on('vite:error', (error) => {
+          if (error.err) {
+            console.error(
+              [error.err.message, error.err.frame].filter(Boolean).join('\n'),
+            )
+          }
+        })
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
