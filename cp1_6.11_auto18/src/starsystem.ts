@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { StarPointData, StarConnectionData } from './transformer';
 
-type AnimPhase = 'idle' | 'preparing' | 'flying' | 'pulsing' | 'connecting' | 'rotating';
+type AnimPhase = 'idle' | 'preparing' | 'flying_out' | 'pulsing' | 'connecting' | 'rotating';
 
 const MAX_STARS = 200;
 const TRAIL_LENGTH = 12;
+const TRAIL_DURATION_SEC = 0.2;
 const GLOW_POOL_SIZE = 50;
-const GLOW_DURATION = 300;
-const CONNECT_FADE_DURATION = 500;
+const GLOW_DURATION_MS = 300;
+const CONNECT_FADE_DURATION_MS = 500;
+const PIXEL_RATIO = Math.min(window.devicePixelRatio, 2);
 
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
@@ -34,34 +36,39 @@ export class StarSystem {
   private phase: AnimPhase = 'idle';
   private phaseStartTime = 0;
   private connectStartTime = 0;
+  private maxDelay = 0;
+  private maxDuration = 0;
+  private flightStartTime = 0;
 
   private stars: StarPointData[] = [];
   private connections: StarConnectionData[] = [];
   private starReached: boolean[] = [];
 
   private starsMesh: THREE.InstancedMesh | null = null;
-  private starColors: Float32Array | null = null;
+  private starsMaterial: THREE.ShaderMaterial | null = null;
   private dummyObj = new THREE.Object3D();
   private tmpColor = new THREE.Color();
-  private tmpVecA = new THREE.Vector3();
-  private tmpVecB = new THREE.Vector3();
-  private tmpVecC = new THREE.Vector3();
-  private tmpVecCtrl = new THREE.Vector3();
+  private tmpVec = new THREE.Vector3();
 
   private trailPoints: THREE.Points | null = null;
   private trailPositions: Float32Array | null = null;
   private trailColors: Float32Array | null = null;
-  private trailSizes: Float32Array | null = null;
-  private trailHead: number[] = [];
+  private trailLastUpdate: number[] = [];
 
   private glowMesh: THREE.InstancedMesh | null = null;
-  private glowPool: { active: boolean; startTime: number; position: THREE.Vector3; color: THREE.Color }[] = [];
+  private glowPool: {
+    active: boolean;
+    startTime: number;
+    position: THREE.Vector3;
+    color: THREE.Color;
+  }[] = [];
 
   private lineSegments: THREE.LineSegments | null = null;
-  private linePositions: Float32Array | null = null;
-  private lineColors: Float32Array | null = null;
+  private lineMaterial: THREE.ShaderMaterial | null = null;
 
   private rotationSpeed = 1.5;
+  private timeUniform = { value: 0 };
+  private animTimeUniform = { value: 0 };
 
   constructor(scene: THREE.Scene, callbacks: StarSystemCallbacks = {}) {
     this.scene = scene;
@@ -79,27 +86,78 @@ export class StarSystem {
   }
 
   private initStarsMesh(): void {
-    const geometry = new THREE.SphereGeometry(0.45, 24, 24);
-    const material = new THREE.ShaderMaterial({
+    const geometry = new THREE.SphereGeometry(0.45, 20, 20);
+    this.starsMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uTime: { value: 0 },
+        uTime: this.timeUniform,
+        uAnimTime: this.animTimeUniform,
       },
       vertexShader: `
-        varying vec3 vNormal;
-        varying vec3 vWorldPos;
-        varying float vBrightness;
+        uniform float uTime;
+        uniform float uAnimTime;
+
+        attribute vec3 aStartPos;
+        attribute vec3 aControlPos;
+        attribute vec3 aTargetPos;
         attribute vec3 aColor;
         attribute float aBrightness;
+        attribute float aDelay;
+        attribute float aDuration;
+
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
         varying vec3 vColor;
+        varying float vBrightness;
+        varying float vAlpha;
+
+        vec3 bezier(vec3 p0, vec3 p1, vec3 p2, float t) {
+          float u = 1.0 - t;
+          return u * u * p0 + 2.0 * u * t * p1 + t * t * p2;
+        }
+
+        float easeOutCubic(float t) {
+          return 1.0 - pow(1.0 - t, 3.0);
+        }
+
+        float easeOutQuad(float t) {
+          return 1.0 - (1.0 - t) * (1.0 - t);
+        }
+
         void main() {
-          vec4 worldPos = instanceMatrix * vec4(position, 1.0);
+          float elapsed = max(0.0, uAnimTime - aDelay);
+          float rawT = min(1.0, elapsed / aDuration);
+          float t = easeOutCubic(rawT);
+
+          vec3 pos;
+          if (uAnimTime < aDelay) {
+            pos = aStartPos;
+            vAlpha = 0.0;
+          } else if (rawT < 1.0) {
+            pos = bezier(aStartPos, aControlPos, aTargetPos, t);
+            vAlpha = easeOutQuad(min(1.0, elapsed / 180.0));
+          } else {
+            pos = aTargetPos;
+            vAlpha = 1.0;
+          }
+
+          vec4 worldPos = instanceMatrix * vec4(pos, 1.0);
           vWorldPos = worldPos.xyz;
+
           mat3 normalMat = mat3(instanceMatrix);
           vNormal = normalize(normalMatrix * normalMat * normal);
           vColor = aColor;
           vBrightness = aBrightness;
-          vec4 mvPosition = viewMatrix * worldPos;
-          gl_Position = projectionMatrix * mvPosition;
+
+          float baseScale = aBrightness * 0.5 + 0.4;
+          float appearScale = easeOutQuad(min(1.0, elapsed / 180.0));
+          float scale = baseScale * appearScale;
+
+          vec3 scaledPos = position * scale;
+          vec4 finalWorld = instanceMatrix * vec4(pos + scaledPos, 1.0);
+          vWorldPos = finalWorld.xyz;
+
+          vec4 mv = viewMatrix * finalWorld;
+          gl_Position = projectionMatrix * mv;
         }
       `,
       fragmentShader: `
@@ -108,6 +166,8 @@ export class StarSystem {
         varying vec3 vWorldPos;
         varying vec3 vColor;
         varying float vBrightness;
+        varying float vAlpha;
+
         void main() {
           vec3 viewDir = normalize(cameraPosition - vWorldPos);
           float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 2.0);
@@ -115,7 +175,7 @@ export class StarSystem {
           vec3 color = vColor * vBrightness * pulse;
           vec3 glow = vColor * fresnel * 1.6 * vBrightness;
           vec3 final = color + glow;
-          float alpha = 0.85 + fresnel * 0.15;
+          float alpha = (0.85 + fresnel * 0.15) * vAlpha;
           gl_FragColor = vec4(final, alpha);
         }
       `,
@@ -124,18 +184,32 @@ export class StarSystem {
       blending: THREE.AdditiveBlending,
     });
 
-    this.starsMesh = new THREE.InstancedMesh(geometry, material, MAX_STARS);
+    this.starsMesh = new THREE.InstancedMesh(geometry, this.starsMaterial, MAX_STARS);
     this.starsMesh.count = 0;
     this.starsMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-    this.starColors = new Float32Array(MAX_STARS * 3);
-    const brightnessArr = new Float32Array(MAX_STARS);
-    const colorAttr = new THREE.InstancedBufferAttribute(this.starColors, 3);
-    colorAttr.setUsage(THREE.DynamicDrawUsage);
-    this.starsMesh.geometry.setAttribute('aColor', colorAttr);
-    const brightAttr = new THREE.InstancedBufferAttribute(brightnessArr, 1);
-    brightAttr.setUsage(THREE.DynamicDrawUsage);
-    this.starsMesh.geometry.setAttribute('aBrightness', brightAttr);
+    const initF32 = (n: number, size: number) => {
+      const arr = new Float32Array(n * size);
+      const attr = new THREE.InstancedBufferAttribute(arr, size);
+      attr.setUsage(THREE.DynamicDrawUsage);
+      return { arr, attr };
+    };
+
+    const start = initF32(MAX_STARS, 3);
+    const control = initF32(MAX_STARS, 3);
+    const target = initF32(MAX_STARS, 3);
+    const color = initF32(MAX_STARS, 3);
+    const brightness = initF32(MAX_STARS, 1);
+    const delay = initF32(MAX_STARS, 1);
+    const duration = initF32(MAX_STARS, 1);
+
+    this.starsMesh.geometry.setAttribute('aStartPos', start.attr);
+    this.starsMesh.geometry.setAttribute('aControlPos', control.attr);
+    this.starsMesh.geometry.setAttribute('aTargetPos', target.attr);
+    this.starsMesh.geometry.setAttribute('aColor', color.attr);
+    this.starsMesh.geometry.setAttribute('aBrightness', brightness.attr);
+    this.starsMesh.geometry.setAttribute('aDelay', delay.attr);
+    this.starsMesh.geometry.setAttribute('aDuration', duration.attr);
 
     this.group.add(this.starsMesh);
   }
@@ -144,21 +218,26 @@ export class StarSystem {
     const totalVerts = MAX_STARS * TRAIL_LENGTH;
     const positions = new Float32Array(totalVerts * 3);
     const colors = new Float32Array(totalVerts * 3);
-    const sizes = new Float32Array(totalVerts);
     const ages = new Float32Array(totalVerts);
+    const sizes = new Float32Array(totalVerts);
+
+    for (let i = 0; i < totalVerts; i++) {
+      ages[i] = 1;
+      sizes[i] = 0;
+    }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('aAge', new THREE.BufferAttribute(ages, 1).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1).setUsage(THREE.DynamicDrawUsage));
 
     const material = new THREE.ShaderMaterial({
-      uniforms: { uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) } },
+      uniforms: { uPixelRatio: { value: PIXEL_RATIO } },
       vertexShader: `
         attribute vec3 aColor;
-        attribute float aSize;
         attribute float aAge;
+        attribute float aSize;
         varying vec3 vColor;
         varying float vAge;
         uniform float uPixelRatio;
@@ -166,7 +245,7 @@ export class StarSystem {
           vColor = aColor;
           vAge = aAge;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = aSize * uPixelRatio * (300.0 / -mv.z);
+          gl_PointSize = aSize * uPixelRatio * (280.0 / -mv.z);
           gl_Position = projectionMatrix * mv;
         }
       `,
@@ -177,8 +256,9 @@ export class StarSystem {
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          float alpha = (1.0 - d * 2.0) * (1.0 - vAge);
-          gl_FragColor = vec4(vColor * (0.6 + 0.4 * (1.0 - vAge)), alpha * 0.75);
+          float core = smoothstep(0.5, 0.0, d);
+          float alpha = core * (1.0 - vAge);
+          gl_FragColor = vec4(vColor * (0.5 + 0.5 * (1.0 - vAge)), alpha * 0.8);
         }
       `,
       transparent: true,
@@ -189,19 +269,13 @@ export class StarSystem {
     this.trailPoints = new THREE.Points(geometry, material);
     this.trailPositions = positions;
     this.trailColors = colors;
-    this.trailSizes = sizes;
-    this.trailHead = new Array(MAX_STARS).fill(-1);
-
-    const ageAttr = this.trailPoints.geometry.getAttribute('aAge') as THREE.BufferAttribute;
-    for (let i = 0; i < totalVerts; i++) ageAttr.setX(i, 1);
-    ageAttr.needsUpdate = true;
+    this.trailLastUpdate = new Array(MAX_STARS).fill(0);
 
     this.group.add(this.trailPoints);
   }
 
   private initGlows(): void {
-    const size = 1;
-    const geometry = new THREE.PlaneGeometry(size, size);
+    const geometry = new THREE.PlaneGeometry(1, 1);
     const material = new THREE.ShaderMaterial({
       uniforms: {},
       vertexShader: `
@@ -211,16 +285,19 @@ export class StarSystem {
         varying vec3 vColor;
         varying float vAlpha;
         varying vec2 vUv;
+
         void main() {
           vColor = aColor;
           vAlpha = aAlpha;
           vUv = uv;
+
           vec4 worldCenter = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
           vec3 camRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
           vec3 camUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
           vec3 worldPos = worldCenter.xyz
             + camRight * position.x * aScale
             + camUp * position.y * aScale;
+
           vec4 mv = viewMatrix * vec4(worldPos, 1.0);
           gl_Position = projectionMatrix * mv;
         }
@@ -229,6 +306,7 @@ export class StarSystem {
         varying vec3 vColor;
         varying float vAlpha;
         varying vec2 vUv;
+
         void main() {
           vec2 c = vUv - vec2(0.5);
           float d = length(c);
@@ -247,15 +325,16 @@ export class StarSystem {
     this.glowMesh.count = 0;
     this.glowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-    const glowColorAttr = new THREE.InstancedBufferAttribute(new Float32Array(GLOW_POOL_SIZE * 3), 3);
-    glowColorAttr.setUsage(THREE.DynamicDrawUsage);
-    this.glowMesh.geometry.setAttribute('aColor', glowColorAttr);
-    const glowAlphaAttr = new THREE.InstancedBufferAttribute(new Float32Array(GLOW_POOL_SIZE), 1);
-    glowAlphaAttr.setUsage(THREE.DynamicDrawUsage);
-    this.glowMesh.geometry.setAttribute('aAlpha', glowAlphaAttr);
-    const glowScaleAttr = new THREE.InstancedBufferAttribute(new Float32Array(GLOW_POOL_SIZE), 1);
-    glowScaleAttr.setUsage(THREE.DynamicDrawUsage);
-    this.glowMesh.geometry.setAttribute('aScale', glowScaleAttr);
+    const initIAttr = (n: number, size: number) => {
+      const arr = new Float32Array(n * size);
+      const attr = new THREE.InstancedBufferAttribute(arr, size);
+      attr.setUsage(THREE.DynamicDrawUsage);
+      return attr;
+    };
+
+    this.glowMesh.geometry.setAttribute('aColor', initIAttr(GLOW_POOL_SIZE, 3));
+    this.glowMesh.geometry.setAttribute('aAlpha', initIAttr(GLOW_POOL_SIZE, 1));
+    this.glowMesh.geometry.setAttribute('aScale', initIAttr(GLOW_POOL_SIZE, 1));
 
     for (let i = 0; i < GLOW_POOL_SIZE; i++) {
       this.glowPool.push({
@@ -279,7 +358,7 @@ export class StarSystem {
     geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setDrawRange(0, 0);
 
-    const material = new THREE.ShaderMaterial({
+    this.lineMaterial = new THREE.ShaderMaterial({
       uniforms: { uGlobalAlpha: { value: 0 } },
       vertexShader: `
         attribute vec3 aColor;
@@ -293,7 +372,7 @@ export class StarSystem {
         uniform float uGlobalAlpha;
         varying vec3 vColor;
         void main() {
-          gl_FragColor = vec4(vColor * 0.8, uGlobalAlpha * 0.45);
+          gl_FragColor = vec4(vColor * 0.85, uGlobalAlpha * 0.45);
         }
       `,
       transparent: true,
@@ -301,46 +380,72 @@ export class StarSystem {
       blending: THREE.AdditiveBlending,
     });
 
-    this.lineSegments = new THREE.LineSegments(geometry, material);
-    this.linePositions = positions;
-    this.lineColors = colors;
+    this.lineSegments = new THREE.LineSegments(geometry, this.lineMaterial);
     this.group.add(this.lineSegments);
   }
 
-  setStars(data: StarPointData[], connections: StarConnectionData[]): void {
+  setStars(
+    data: StarPointData[],
+    connections: StarConnectionData[],
+    maxDelay: number,
+    maxDuration: number
+  ): void {
     this.clear();
     this.stars = data;
     this.connections = connections;
     this.starReached = new Array(data.length).fill(false);
+    this.maxDelay = maxDelay;
+    this.maxDuration = maxDuration;
 
-    if (!this.starsMesh || !this.starColors) return;
+    if (!this.starsMesh) return;
 
-    const colorAttr = this.starsMesh.geometry.getAttribute('aColor') as THREE.InstancedBufferAttribute;
-    const brightAttr = this.starsMesh.geometry.getAttribute('aBrightness') as THREE.InstancedBufferAttribute;
+    const getAttr = (name: string) =>
+      this.starsMesh!.geometry.getAttribute(name) as THREE.InstancedBufferAttribute;
+
+    const startAttr = getAttr('aStartPos');
+    const controlAttr = getAttr('aControlPos');
+    const targetAttr = getAttr('aTargetPos');
+    const colorAttr = getAttr('aColor');
+    const brightAttr = getAttr('aBrightness');
+    const delayAttr = getAttr('aDelay');
+    const durationAttr = getAttr('aDuration');
 
     for (let i = 0; i < data.length; i++) {
       const s = data[i];
-      this.dummyObj.position.copy(s.startPosition);
-      this.dummyObj.scale.setScalar(s.brightness * 0.5 + 0.4);
-      this.dummyObj.updateMatrix();
-      this.starsMesh.setMatrixAt(i, this.dummyObj.matrix);
+
+      startAttr.setXYZ(i, s.startPosition.x, s.startPosition.y, s.startPosition.z);
+      controlAttr.setXYZ(i, s.controlPosition.x, s.controlPosition.y, s.controlPosition.z);
+      targetAttr.setXYZ(i, s.targetPosition.x, s.targetPosition.y, s.targetPosition.z);
 
       const rgb = hexToRgb(s.color);
       colorAttr.setXYZ(i, rgb.r, rgb.g, rgb.b);
       brightAttr.setX(i, s.brightness);
+      delayAttr.setX(i, s.delay);
+      durationAttr.setX(i, s.duration);
+
+      this.dummyObj.position.copy(s.targetPosition);
+      this.dummyObj.updateMatrix();
+      this.starsMesh.setMatrixAt(i, this.dummyObj.matrix);
     }
+
     this.starsMesh.count = data.length;
     this.starsMesh.instanceMatrix.needsUpdate = true;
+    startAttr.needsUpdate = true;
+    controlAttr.needsUpdate = true;
+    targetAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
     brightAttr.needsUpdate = true;
+    delayAttr.needsUpdate = true;
+    durationAttr.needsUpdate = true;
 
     for (let i = 0; i < data.length; i++) {
-      this.trailHead[i] = -1;
+      this.trailLastUpdate[i] = -9999;
     }
     this.hideTrails();
 
     this.phase = 'preparing';
     this.phaseStartTime = performance.now();
+    this.animTimeUniform.value = 0;
   }
 
   private hideTrails(): void {
@@ -362,57 +467,49 @@ export class StarSystem {
 
     if (this.starsMesh) this.starsMesh.count = 0;
     if (this.lineSegments) this.lineSegments.geometry.setDrawRange(0, 0);
-    if (this.lineSegments) {
-      const mat = this.lineSegments.material as THREE.ShaderMaterial;
-      mat.uniforms.uGlobalAlpha.value = 0;
-    }
+    if (this.lineMaterial) this.lineMaterial.uniforms.uGlobalAlpha.value = 0;
     this.hideTrails();
 
     for (const g of this.glowPool) g.active = false;
     if (this.glowMesh) this.glowMesh.count = 0;
+
+    this.animTimeUniform.value = 0;
   }
 
   start(): void {
     if (this.phase === 'idle' || this.stars.length === 0) return;
-    this.phase = 'flying';
-    this.phaseStartTime = performance.now();
-  }
-
-  private bezierPoint(t: number, p0: THREE.Vector3, pc: THREE.Vector3, p2: THREE.Vector3, out: THREE.Vector3): void {
-    const u = 1 - t;
-    out.x = u * u * p0.x + 2 * u * t * pc.x + t * t * p2.x;
-    out.y = u * u * p0.y + 2 * u * t * pc.y + t * t * p2.y;
-    out.z = u * u * p0.z + 2 * u * t * pc.z + t * t * p2.z;
+    this.phase = 'flying_out';
+    this.flightStartTime = performance.now();
+    this.phaseStartTime = this.flightStartTime;
+    this.animTimeUniform.value = 0;
   }
 
   private spawnGlow(position: THREE.Vector3, colorHex: string): void {
-    const pool = this.glowPool;
-    for (let i = 0; i < pool.length; i++) {
-      if (!pool[i].active) {
-        pool[i].active = true;
-        pool[i].startTime = performance.now();
-        pool[i].position.copy(position);
-        pool[i].color.set(colorHex);
+    for (let i = 0; i < this.glowPool.length; i++) {
+      if (!this.glowPool[i].active) {
+        this.glowPool[i].active = true;
+        this.glowPool[i].startTime = performance.now();
+        this.glowPool[i].position.copy(position);
+        this.glowPool[i].color.set(colorHex);
         return;
       }
     }
   }
 
-  private updateTrail(starIdx: number, pos: THREE.Vector3, colorHex: string, nowMs: number, dtSec: number): void {
-    if (!this.trailPoints || !this.trailPositions || !this.trailColors || !this.trailSizes) return;
+  private updateTrail(starIdx: number, pos: THREE.Vector3, colorHex: string, now: number): void {
+    if (!this.trailPoints || !this.trailPositions || !this.trailColors) return;
 
-    this.trailHead[starIdx] = (this.trailHead[starIdx] + 1) % TRAIL_LENGTH;
-    const slotIdx = starIdx * TRAIL_LENGTH + this.trailHead[starIdx];
+    const slot = (Math.floor(now / (TRAIL_DURATION_SEC * 1000 / TRAIL_LENGTH)) + starIdx) % TRAIL_LENGTH;
+    const absIdx = starIdx * TRAIL_LENGTH + slot;
 
-    this.trailPositions[slotIdx * 3 + 0] = pos.x;
-    this.trailPositions[slotIdx * 3 + 1] = pos.y;
-    this.trailPositions[slotIdx * 3 + 2] = pos.z;
+    this.trailPositions[absIdx * 3 + 0] = pos.x;
+    this.trailPositions[absIdx * 3 + 1] = pos.y;
+    this.trailPositions[absIdx * 3 + 2] = pos.z;
 
     const rgb = hexToRgb(colorHex);
-    this.trailColors[slotIdx * 3 + 0] = rgb.r;
-    this.trailColors[slotIdx * 3 + 1] = rgb.g;
-    this.trailColors[slotIdx * 3 + 2] = rgb.b;
-    this.trailSizes[slotIdx] = 4.5;
+    this.trailColors[absIdx * 3 + 0] = rgb.r;
+    this.trailColors[absIdx * 3 + 1] = rgb.g;
+    this.trailColors[absIdx * 3 + 2] = rgb.b;
 
     const ageAttr = this.trailPoints.geometry.getAttribute('aAge') as THREE.BufferAttribute;
     const sizeAttr = this.trailPoints.geometry.getAttribute('aSize') as THREE.BufferAttribute;
@@ -420,66 +517,61 @@ export class StarSystem {
     const posAttr = this.trailPoints.geometry.getAttribute('position') as THREE.BufferAttribute;
 
     for (let k = 0; k < TRAIL_LENGTH; k++) {
-      const absIdx = starIdx * TRAIL_LENGTH + k;
-      const relAge = (k - this.trailHead[starIdx] + TRAIL_LENGTH) % TRAIL_LENGTH;
-      const ageNorm = relAge / (TRAIL_LENGTH - 1);
-      ageAttr.setX(absIdx, ageNorm);
-      sizeAttr.setX(absIdx, 4.5 * (1 - ageNorm * 0.8));
-      if (this.trailHead[starIdx] === -1) ageAttr.setX(absIdx, 1);
+      const idx = starIdx * TRAIL_LENGTH + k;
+      const relAge = (k - slot + TRAIL_LENGTH) % TRAIL_LENGTH / (TRAIL_LENGTH - 1);
+      ageAttr.setX(idx, relAge);
+      sizeAttr.setX(idx, 5.5 * (1 - relAge * 0.85));
     }
 
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
     sizeAttr.needsUpdate = true;
     ageAttr.needsUpdate = true;
+
+    this.trailLastUpdate[starIdx] = now;
   }
 
-  private updateStars(now: number): void {
-    if (!this.starsMesh || !this.stars.length) return;
+  private computeStarPosition(star: StarPointData, animTimeMs: number): THREE.Vector3 | null {
+    const elapsed = animTimeMs - star.delay;
+    if (elapsed < 0) return null;
+
+    const rawT = Math.min(1, elapsed / star.duration);
+    const t = easeOutCubic(rawT);
+
+    const p0 = star.startPosition;
+    const p1 = star.controlPosition;
+    const p2 = star.targetPosition;
+    const u = 1 - t;
+
+    this.tmpVec.set(
+      u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x,
+      u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y,
+      u * u * p0.z + 2 * u * t * p1.z + t * t * p2.z
+    );
+
+    return rawT >= 1 ? star.targetPosition : this.tmpVec;
+  }
+
+  private updateStars(now: number, animTimeMs: number): void {
+    if (!this.stars.length) return;
 
     const count = this.stars.length;
     let reachedCount = 0;
 
     for (let i = 0; i < count; i++) {
       const s = this.stars[i];
-      const elapsed = now - this.phaseStartTime - s.delay;
+      const elapsed = animTimeMs - s.delay;
 
-      if (elapsed < 0) {
-        this.dummyObj.position.copy(s.startPosition);
-        this.dummyObj.scale.setScalar(0);
-        this.dummyObj.updateMatrix();
-        this.starsMesh.setMatrixAt(i, this.dummyObj.matrix);
-        continue;
+      if (elapsed < 0) continue;
+
+      const rawT = Math.min(1, elapsed / s.duration);
+      const pos = this.computeStarPosition(s, animTimeMs);
+
+      if (pos && rawT < 1) {
+        this.updateTrail(i, pos, s.color, now);
       }
 
-      let t = Math.min(1, elapsed / s.duration);
-      const eased = easeOutCubic(t);
-
-      const mid = this.tmpVecA.copy(s.startPosition).add(s.targetPosition).multiplyScalar(0.5);
-      const ctrl = this.tmpVecCtrl.set(
-        mid.x + (s.targetPosition.x - s.startPosition.x) * 0.15 + Math.sin(i * 1.3) * 5,
-        mid.y + 10 + Math.cos(i * 2.1) * 4,
-        mid.z + (s.targetPosition.z - s.startPosition.z) * 0.1 + Math.sin(i * 0.9) * 4
-      );
-
-      const pos = this.tmpVecB;
-      this.bezierPoint(eased, s.startPosition, ctrl, s.targetPosition, pos);
-
-      this.dummyObj.position.copy(pos);
-      const appearScale = easeOutQuad(Math.min(1, elapsed / 180));
-      const scale = (s.brightness * 0.5 + 0.4) * appearScale;
-      this.dummyObj.scale.setScalar(scale);
-      this.dummyObj.updateMatrix();
-      this.starsMesh.setMatrixAt(i, this.dummyObj.matrix);
-
-      if (elapsed < s.duration) {
-        this.updateTrail(i, pos, s.color, now, 0.016);
-      } else {
-        this.tmpVecC.copy(s.targetPosition);
-        this.starReached[i] = true;
-      }
-
-      if (t >= 1 && !this.starReached[i]) {
+      if (rawT >= 1 && !this.starReached[i]) {
         this.starReached[i] = true;
         this.spawnGlow(s.targetPosition, s.color);
       }
@@ -487,21 +579,21 @@ export class StarSystem {
       if (this.starReached[i]) reachedCount++;
     }
 
-    this.starsMesh.instanceMatrix.needsUpdate = true;
-
-    const mat = this.starsMesh.material as THREE.ShaderMaterial;
-    mat.uniforms.uTime.value = now / 1000;
+    if (this.starsMesh && this.starsMaterial) {
+      this.starsMaterial.uniforms.uTime.value = now / 1000;
+      this.starsMaterial.uniforms.uAnimTime.value = animTimeMs;
+    }
 
     if (this.callbacks.onProgress) {
       this.callbacks.onProgress(reachedCount, count);
     }
 
     const firstReached = this.starReached.some(r => r);
-    if (this.phase === 'flying' && firstReached) {
+    const pct = reachedCount / count;
+
+    if (this.phase === 'flying_out' && firstReached) {
       this.phase = 'pulsing';
     }
-
-    const pct = reachedCount / count;
     if (this.phase === 'pulsing' && pct >= 0.9) {
       this.phase = 'connecting';
       this.connectStartTime = now;
@@ -514,7 +606,7 @@ export class StarSystem {
   }
 
   private buildLineGeometry(): void {
-    if (!this.lineSegments || !this.linePositions || !this.lineColors) return;
+    if (!this.lineSegments || !this.trailPositions || !this.trailColors) return;
 
     const posAttr = this.lineSegments.geometry.getAttribute('position') as THREE.BufferAttribute;
     const colorAttr = this.lineSegments.geometry.getAttribute('aColor') as THREE.BufferAttribute;
@@ -530,22 +622,18 @@ export class StarSystem {
       const vertA = segIdx * 2 * 3;
       const vertB = (segIdx * 2 + 1) * 3;
 
-      this.linePositions[vertA + 0] = a.targetPosition.x;
-      this.linePositions[vertA + 1] = a.targetPosition.y;
-      this.linePositions[vertA + 2] = a.targetPosition.z;
-      this.linePositions[vertB + 0] = b.targetPosition.x;
-      this.linePositions[vertB + 1] = b.targetPosition.y;
-      this.linePositions[vertB + 2] = b.targetPosition.z;
+      posAttr.setX(segIdx * 2, a.targetPosition.x);
+      posAttr.setY(segIdx * 2, a.targetPosition.y);
+      posAttr.setZ(segIdx * 2, a.targetPosition.z);
+      posAttr.setX(segIdx * 2 + 1, b.targetPosition.x);
+      posAttr.setY(segIdx * 2 + 1, b.targetPosition.y);
+      posAttr.setZ(segIdx * 2 + 1, b.targetPosition.z);
 
       const ca = hexToRgb(a.color);
       const cb = hexToRgb(b.color);
-      const distBoost = 0.3 + conn.distance * 0.9;
-      this.lineColors[vertA + 0] = ca.r * distBoost;
-      this.lineColors[vertA + 1] = ca.g * distBoost;
-      this.lineColors[vertA + 2] = ca.b * distBoost;
-      this.lineColors[vertB + 0] = cb.r * distBoost;
-      this.lineColors[vertB + 1] = cb.g * distBoost;
-      this.lineColors[vertB + 2] = cb.b * distBoost;
+      const boost = 0.3 + conn.distance * 0.95;
+      colorAttr.setXYZ(segIdx * 2, ca.r * boost, ca.g * boost, ca.b * boost);
+      colorAttr.setXYZ(segIdx * 2 + 1, cb.r * boost, cb.g * boost, cb.b * boost);
 
       segIdx++;
       if (segIdx >= MAX_STARS * 3) break;
@@ -569,7 +657,7 @@ export class StarSystem {
       if (!g.active) continue;
 
       const elapsed = now - g.startTime;
-      const t = Math.min(1, elapsed / GLOW_DURATION);
+      const t = Math.min(1, elapsed / GLOW_DURATION_MS);
 
       if (t >= 1) {
         g.active = false;
@@ -577,14 +665,13 @@ export class StarSystem {
       }
 
       this.dummyObj.position.copy(g.position);
-      this.dummyObj.rotation.z = 0;
       const scale = easeOutQuad(t) * 1.8 + 0.2;
       this.dummyObj.scale.setScalar(scale);
       this.dummyObj.updateMatrix();
       this.glowMesh.setMatrixAt(activeCount, this.dummyObj.matrix);
 
       colorAttr.setXYZ(activeCount, g.color.r, g.color.g, g.color.b);
-      const alpha = (1 - t) * 0.9;
+      const alpha = (1 - t) * 0.95;
       alphaAttr.setX(activeCount, alpha);
       scaleAttr.setX(activeCount, scale);
 
@@ -601,29 +688,31 @@ export class StarSystem {
   }
 
   private updateConnections(now: number): void {
-    if (!this.lineSegments) return;
-    const mat = this.lineSegments.material as THREE.ShaderMaterial;
+    if (!this.lineMaterial) return;
     if (this.phase === 'connecting' || this.phase === 'rotating') {
-      const t = Math.min(1, (now - this.connectStartTime) / CONNECT_FADE_DURATION);
-      mat.uniforms.uGlobalAlpha.value = easeOutQuad(t);
+      const t = Math.min(1, (now - this.connectStartTime) / CONNECT_FADE_DURATION_MS);
+      this.lineMaterial.uniforms.uGlobalAlpha.value = easeOutQuad(t);
     } else {
-      mat.uniforms.uGlobalAlpha.value = 0;
+      this.lineMaterial.uniforms.uGlobalAlpha.value = 0;
     }
   }
 
-  private updateRotation(now: number, dt: number): void {
+  private updateRotation(dt: number): void {
     if (this.phase !== 'rotating' && this.phase !== 'connecting') return;
     const radPerSec = (this.rotationSpeed * Math.PI) / 180;
     this.group.rotation.y += radPerSec * dt;
   }
 
   update(now: number, dt: number): void {
-    if (this.phase === 'flying' || this.phase === 'pulsing' || this.phase === 'connecting' || this.phase === 'rotating') {
-      this.updateStars(now);
+    let animTimeMs = 0;
+    if (this.phase === 'flying_out' || this.phase === 'pulsing' ||
+        this.phase === 'connecting' || this.phase === 'rotating') {
+      animTimeMs = now - this.flightStartTime;
+      this.updateStars(now, animTimeMs);
     }
     this.updateGlows(now);
     this.updateConnections(now);
-    this.updateRotation(now, dt);
+    this.updateRotation(dt);
   }
 
   getGroup(): THREE.Group {

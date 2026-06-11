@@ -232,7 +232,12 @@ function onTransformClick(): void {
   setTimeout(() => {
     const startPos = getTextInputStartPosition();
     currentTransform = TextTransformer.transform(text, startPos);
-    starSystem.setStars(currentTransform.stars, currentTransform.connections);
+    starSystem.setStars(
+      currentTransform.stars,
+      currentTransform.connections,
+      currentTransform.maxDelay,
+      currentTransform.maxDuration
+    );
     starSystem.setRotationSpeed(parseFloat(speedSliderEl.value));
     starSystem.start();
 

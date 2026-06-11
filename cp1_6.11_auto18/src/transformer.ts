@@ -11,6 +11,7 @@ export interface StarPointData {
   color: string;
   brightness: number;
   startPosition: THREE.Vector3;
+  controlPosition: THREE.Vector3;
   targetPosition: THREE.Vector3;
   clusterId: number;
   delay: number;
@@ -27,6 +28,8 @@ export interface TransformResult {
   stars: StarPointData[];
   connections: StarConnectionData[];
   clusterCount: number;
+  maxDelay: number;
+  maxDuration: number;
 }
 
 const SENTIMENT_DICT: Record<string, number> = {
@@ -124,45 +127,81 @@ function tokenize(text: string): string[] {
   return tokens;
 }
 
+function getRawSentiment(token: string): number {
+  if (SENTIMENT_DICT[token] !== undefined) return SENTIMENT_DICT[token];
+  for (const [word, w] of Object.entries(SENTIMENT_DICT)) {
+    if (token.includes(word) && token.length <= 4) return w * 0.7;
+  }
+  return 0;
+}
+
+function findNearestSentiment(tokens: string[], index: number, maxDist: number): { score: number; distance: number } | null {
+  for (let d = 1; d <= maxDist; d++) {
+    if (index - d >= 0) {
+      const s = getRawSentiment(tokens[index - d]);
+      if (s !== 0) return { score: s, distance: d };
+    }
+    if (index + d < tokens.length) {
+      const s = getRawSentiment(tokens[index + d]);
+      if (s !== 0) return { score: s, distance: d };
+    }
+  }
+  return null;
+}
+
 function analyzeTokenSentiment(tokens: string[], index: number): number {
   const token = tokens[index];
-  let score = SENTIMENT_DICT[token] ?? 0;
+  let baseScore = getRawSentiment(token);
 
-  if (score === 0) {
-    for (const [word, w] of Object.entries(SENTIMENT_DICT)) {
-      if (token.includes(word) && token.length <= 4) {
-        score = w * 0.7;
+  if (baseScore === 0) {
+    const nearest = findNearestSentiment(tokens, index, 3);
+    if (nearest) {
+      const decay = Math.max(0.4, 1 - nearest.distance * 0.2);
+      baseScore = nearest.score * decay * 0.6;
+    }
+  }
+
+  if (baseScore !== 0) {
+    const negWindowStart = Math.max(0, index - 2);
+    let negated = false;
+    for (let j = negWindowStart; j < index; j++) {
+      if (NEGATION_WORDS.has(tokens[j])) {
+        negated = true;
         break;
+      }
+    }
+    if (negated) baseScore *= -1;
+
+    if (index > 0) {
+      const prev = tokens[index - 1];
+      if (DEGREE_WORDS[prev] !== undefined) {
+        baseScore *= DEGREE_WORDS[prev];
       }
     }
   }
 
-  const negWindowStart = Math.max(0, index - 2);
-  let negated = false;
-  for (let j = negWindowStart; j < index; j++) {
-    if (NEGATION_WORDS.has(tokens[j])) {
-      negated = true;
-      break;
-    }
-  }
-  if (negated) score *= -1;
-
-  if (index > 0) {
-    const prev = tokens[index - 1];
-    if (DEGREE_WORDS[prev] !== undefined) {
-      score *= DEGREE_WORDS[prev];
+  if (baseScore !== 0 && index > 0) {
+    const prevScore = getRawSentiment(tokens[index - 1]);
+    if (prevScore * baseScore < 0) {
+      const context = findNearestSentiment(tokens, index, 5);
+      if (context) {
+        const contextSign = Math.sign(context.score);
+        const curSign = Math.sign(baseScore);
+        if (contextSign !== curSign && context.distance < 3) {
+          baseScore = baseScore * 0.35 + context.score * (1 - context.distance * 0.15) * 0.65;
+        }
+      }
     }
   }
 
-  if (index + 1 < tokens.length && score !== 0) {
-    const next = tokens[index + 1];
-    const nextScore = SENTIMENT_DICT[next] ?? 0;
-    if (nextScore * score < 0 && Math.abs(nextScore) > Math.abs(score)) {
-      score = nextScore * 0.6 + score * 0.4;
+  if (baseScore !== 0 && index + 1 < tokens.length) {
+    const nextScore = getRawSentiment(tokens[index + 1]);
+    if (nextScore * baseScore < 0 && Math.abs(nextScore) > Math.abs(baseScore)) {
+      baseScore = nextScore * 0.6 + baseScore * 0.4;
     }
   }
 
-  return Math.max(-2, Math.min(2, score));
+  return Math.max(-2, Math.min(2, baseScore));
 }
 
 function scoreToSentiment(score: number): SentimentType {
@@ -236,8 +275,8 @@ function forceDirectedLayout(
 
   const area = radius * radius * Math.PI * 4;
   const k = Math.sqrt(area / Math.max(N, 1)) * 0.6;
-  const iterations = 40;
-  const tempStart = radius * 0.8;
+  const iterations = 50;
+  const tempStart = radius * 0.85;
   const disp = Array.from({ length: N }, () => new THREE.Vector3());
 
   for (let iter = 0; iter < iterations; iter++) {
@@ -271,7 +310,7 @@ function forceDirectedLayout(
         const dz = positions[j].z - positions[i].z;
         let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (dist < 0.01) dist = 0.01;
-        const attract = (dist * dist / k) * Math.min(affinity * 2.5, 3);
+        const attract = (dist * dist / k) * Math.min(affinity * 3, 3.5);
         const fx = (dx / dist) * attract;
         const fy = (dy / dist) * attract;
         const fz = (dz / dist) * attract;
@@ -311,7 +350,7 @@ export class TextTransformer {
   static transform(text: string, startPosition: THREE.Vector3): TransformResult {
     const rawTokens = tokenize(text);
     if (rawTokens.length === 0) {
-      return { stars: [], connections: [], clusterCount: 0 };
+      return { stars: [], connections: [], clusterCount: 0, maxDelay: 0, maxDuration: 0 };
     }
 
     const freqMap = new Map<string, number>();
@@ -319,6 +358,7 @@ export class TextTransformer {
 
     const uniqueTokens = Array.from(freqMap.keys()).slice(0, 200);
     const sentimentScores = new Map<string, number>();
+
     for (let i = 0; i < rawTokens.length; i++) {
       const t = rawTokens[i];
       if (!uniqueTokens.includes(t)) continue;
@@ -342,13 +382,16 @@ export class TextTransformer {
       if (words.length === 0) continue;
       const coMat = buildCooccurrenceMatrix(rawTokens, words);
       const center = CLUSTER_CENTERS[sent];
-      const radius = 8 + Math.min(words.length / 15, 3);
+      const radius = 8 + Math.min(words.length / 12, 3.5);
       const positions = forceDirectedLayout(words, coMat, center, radius);
       words.forEach((w, i) => positionsMap.set(w, positions[i]));
     }
 
     const stars: StarPointData[] = [];
+    let maxDelay = 0;
+    let maxDuration = 0;
     let id = 0;
+
     for (const t of uniqueTokens) {
       const rawFreq = freqMap.get(t)!;
       const frequency = rawFreq / maxFreq;
@@ -357,16 +400,27 @@ export class TextTransformer {
       const targetPos = positionsMap.get(t)!;
 
       const baseDelay = 80;
-      const orderDelay = Math.min(id * 12, 500);
-      const jitterDelay = Math.abs((Math.sin(id * 12.9898) * 43758.5453) % 1) * 220;
+      const orderDelay = Math.min(id * 11, 480);
+      const jitterDelay = Math.abs((Math.sin(id * 12.9898) * 43758.5453) % 1) * 200;
       const delay = baseDelay + orderDelay + jitterDelay;
-      const duration = 2000 + Math.abs(Math.sin(id * 1.7)) * 600 + frequency * 250;
+      const duration = 2000 + Math.abs(Math.sin(id * 1.7)) * 550 + frequency * 250;
 
       const startJitter = new THREE.Vector3(
         (Math.sin(id * 3.3) * 6),
         (Math.cos(id * 2.1) * 4),
         (Math.sin(id * 1.9) * 3)
       );
+      const start = startPosition.clone().add(startJitter);
+
+      const mid = start.clone().add(targetPos).multiplyScalar(0.5);
+      const control = new THREE.Vector3(
+        mid.x + (targetPos.x - start.x) * 0.15 + Math.sin(id * 1.3) * 5,
+        mid.y + 10 + Math.cos(id * 2.1) * 4,
+        mid.z + (targetPos.z - start.z) * 0.1 + Math.sin(id * 0.9) * 4
+      );
+
+      maxDelay = Math.max(maxDelay, delay);
+      maxDuration = Math.max(maxDuration, duration);
 
       stars.push({
         id: id++,
@@ -376,7 +430,8 @@ export class TextTransformer {
         sentiment,
         color: SENTIMENT_COLORS[sentiment],
         brightness: 0.35 + Math.min(frequency * 1.2 + Math.abs(score) * 0.2, 1.2),
-        startPosition: startPosition.clone().add(startJitter),
+        startPosition: start,
+        controlPosition: control,
         targetPosition: targetPos,
         clusterId: SENTIMENT_CLUSTER_ID[sentiment],
         delay,
@@ -384,13 +439,18 @@ export class TextTransformer {
       });
     }
 
-    const connections = this.buildConnections(stars, freqMap, rawTokens);
-    return { stars, connections, clusterCount: 3 };
+    const connections = this.buildConnections(stars, rawTokens);
+    return {
+      stars,
+      connections,
+      clusterCount: 3,
+      maxDelay,
+      maxDuration,
+    };
   }
 
   private static buildConnections(
     stars: StarPointData[],
-    freqMap: Map<string, number>,
     rawTokens: string[]
   ): StarConnectionData[] {
     const connections: StarConnectionData[] = [];
@@ -430,12 +490,12 @@ export class TextTransformer {
           const cooc = pairCount.get(key) || 0;
           scored.push({ id: b.id, dist: d, cooc });
         }
-        scored.sort((x, y) => (y.cooc * 6 - y.dist * 0.5) - (x.cooc * 6 - x.dist * 0.5));
+        scored.sort((x, y) => (y.cooc * 7 - y.dist * 0.45) - (x.cooc * 7 - x.dist * 0.45));
         for (const c of scored.slice(0, MAX_PER_STAR)) {
           const small = Math.min(a.id, c.id);
           const large = Math.max(a.id, c.id);
           if (connections.some(conn => conn.fromId === small && conn.toId === large)) continue;
-          const weight = Math.max(0, 1 - c.dist / MAX_DIST) * 0.5 + Math.min(c.cooc / 4, 1) * 0.5;
+          const weight = Math.max(0, 1 - c.dist / MAX_DIST) * 0.45 + Math.min(c.cooc / 4, 1) * 0.55;
           connections.push({ fromId: small, toId: large, distance: Math.max(0.1, Math.min(1, weight)) });
         }
       }
