@@ -32,10 +32,12 @@ export function initControls(app: AppController): void {
     app.updateConfig({ speed: val });
   });
 
-  const canvasContainer = document.getElementById('canvas-container');
-  canvasContainer?.addEventListener('click', (e) => {
+  const handleClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.id === 'control-panel' || target.closest('#control-panel')) return;
+    if (target.closest('#control-panel')) return;
+    if (target.closest('#loading-screen')) return;
     app.triggerBurst();
-  });
+  };
+
+  document.body.addEventListener('click', handleClick);
 }

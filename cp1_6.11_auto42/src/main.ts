@@ -198,6 +198,15 @@ class App implements AppController {
 
     this.renderer.render(this.scene, this.camera);
   }
+
+  dispose(): void {
+    cancelAnimationFrame(this.animationId);
+    this.particleSystem.dispose();
+    this.renderer.dispose();
+  }
 }
 
-new App();
+const _app = new App();
+window.addEventListener('beforeunload', () => {
+  _app.dispose();
+});

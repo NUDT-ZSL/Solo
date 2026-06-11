@@ -34,7 +34,6 @@ const DEBRIS_DURATION = 2.0;
 const SPAWN_RADIUS = 40;
 const SPAWN_HEIGHT_MIN = 20;
 const SPAWN_HEIGHT_MAX = 35;
-const SCENE_HALF_SIZE = 30;
 
 const COL_WHITE = new THREE.Color(0xffffff);
 const COL_ORANGE = new THREE.Color(0xff8c00);
@@ -49,12 +48,13 @@ export class ParticleSystem {
 
   private meteorPool: Meteor[] = [];
   private debrisPool: Debris[] = [];
+  private freeMeteorIndices: number[] = [];
+  private freeDebrisIndices: number[] = [];
 
   private spawnAccumulator = 0;
   private burstMultiplier = 1;
   private burstTimer = 0;
 
-  private meteorGroup: THREE.Group;
   private debrisPoints: THREE.Points;
   private debrisGeometry: THREE.BufferGeometry;
   private debrisPositions: Float32Array;
@@ -69,27 +69,59 @@ export class ParticleSystem {
   constructor(scene: THREE.Scene) {
     this.scene = scene;
 
+    const trailVertexShader = `
+      varying vec3 vColor;
+      varying float vAlpha;
+      attribute float alpha;
+      void main() {
+        vColor = color;
+        vAlpha = alpha;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `;
+
+    const trailFragmentShader = `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        gl_FragColor = vec4(vColor, vAlpha);
+      }
+    `;
+
     for (let i = 0; i < MAX_METEORS; i++) {
+      const trailVecs: THREE.Vector3[] = [];
+      for (let k = 0; k < TRAIL_MAX_POINTS; k++) {
+        trailVecs.push(new THREE.Vector3());
+      }
       this.meteorPool.push({
         active: false,
         position: new THREE.Vector3(),
         velocity: new THREE.Vector3(),
         life: 0,
         maxLife: METEOR_TRAIL_DURATION,
-        trailPositions: [],
+        trailPositions: trailVecs,
         trailLength: 0,
       });
+      this.freeMeteorIndices.push(i);
+
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(TRAIL_MAX_POINTS * 3);
       const col = new Float32Array(TRAIL_MAX_POINTS * 3);
+      const alp = new Float32Array(TRAIL_MAX_POINTS);
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('alpha', new THREE.BufferAttribute(alp, 1));
       geo.setDrawRange(0, 0);
-      const mat = new THREE.LineBasicMaterial({
-        vertexColors: true,
-        blending: THREE.AdditiveBlending,
+
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {},
+        vertexShader: trailVertexShader,
+        fragmentShader: trailFragmentShader,
         transparent: true,
+        blending: THREE.AdditiveBlending,
         depthWrite: false,
+        vertexColors: true,
       });
       const line = new THREE.Line(geo, mat);
       line.frustumCulled = false;
@@ -99,39 +131,43 @@ export class ParticleSystem {
       this.trailGeometries.push(geo);
     }
 
-    this.meteorGroup = new THREE.Group();
-    scene.add(this.meteorGroup);
-
     this.debrisPositions = new Float32Array(MAX_DEBRIS * 3);
-    this.debrisColors = new Float32Array(MAX_DEBRIS * 3);
+    this.debrisColors = new Float32Array(MAX_DEBRIS * 4);
     this.debrisSizes = new Float32Array(MAX_DEBRIS);
 
     this.debrisGeometry = new THREE.BufferGeometry();
     this.debrisGeometry.setAttribute('position', new THREE.BufferAttribute(this.debrisPositions, 3));
-    this.debrisGeometry.setAttribute('color', new THREE.BufferAttribute(this.debrisColors, 3));
+    this.debrisGeometry.setAttribute('color', new THREE.BufferAttribute(this.debrisColors, 4));
     this.debrisGeometry.setAttribute('size', new THREE.BufferAttribute(this.debrisSizes, 1));
+
+    const debrisVertexShader = `
+      attribute float size;
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        vColor = color.rgb;
+        vAlpha = color.a;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (220.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `;
+    const debrisFragmentShader = `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        float dist = length(gl_PointCoord - vec2(0.5));
+        if (dist > 0.5) discard;
+        float radialAlpha = 1.0 - smoothstep(0.0, 0.5, dist);
+        float finalAlpha = vAlpha * radialAlpha;
+        gl_FragColor = vec4(vColor, finalAlpha);
+      }
+    `;
 
     const debrisMaterial = new THREE.ShaderMaterial({
       uniforms: {},
-      vertexShader: `
-        attribute float size;
-        varying vec3 vColor;
-        void main() {
-          vColor = color;
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * (200.0 / -mvPosition.z);
-          gl_Position = projectionMatrix * mvPosition;
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vColor;
-        void main() {
-          float dist = length(gl_PointCoord - vec2(0.5));
-          if (dist > 0.5) discard;
-          float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
-          gl_FragColor = vec4(vColor, alpha);
-        }
-      `,
+      vertexShader: debrisVertexShader,
+      fragmentShader: debrisFragmentShader,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -152,6 +188,7 @@ export class ParticleSystem {
         flickerSpeed: 0,
         flickerOffset: 0,
       });
+      this.freeDebrisIndices.push(i);
     }
   }
 
@@ -191,11 +228,27 @@ export class ParticleSystem {
     }
   }
 
-  private spawnMeteor(): void {
-    const meteor = this.meteorPool.find((m) => !m.active);
-    if (!meteor) return;
+  private acquireMeteorIndex(): number {
+    return this.freeMeteorIndices.length > 0 ? (this.freeMeteorIndices.pop() as number) : -1;
+  }
 
-    const idx = this.meteorPool.indexOf(meteor);
+  private releaseMeteorIndex(idx: number): void {
+    this.freeMeteorIndices.push(idx);
+  }
+
+  private acquireDebrisIndex(): number {
+    return this.freeDebrisIndices.length > 0 ? (this.freeDebrisIndices.pop() as number) : -1;
+  }
+
+  private releaseDebrisIndex(idx: number): void {
+    this.freeDebrisIndices.push(idx);
+  }
+
+  private spawnMeteor(): void {
+    const idx = this.acquireMeteorIndex();
+    if (idx < 0) return;
+    const meteor = this.meteorPool[idx]!;
+
     const angle = (this.config.direction * Math.PI) / 180;
     const spreadAngle = angle + (Math.random() - 0.5) * 0.4;
 
@@ -212,7 +265,7 @@ export class ParticleSystem {
     );
     meteor.life = 0;
     meteor.maxLife = METEOR_TRAIL_DURATION;
-    meteor.trailPositions = [meteor.position.clone()];
+    meteor.trailPositions[0]!.copy(meteor.position);
     meteor.trailLength = 1;
 
     this.trailLines[idx]!.visible = true;
@@ -222,28 +275,30 @@ export class ParticleSystem {
     for (let i = 0; i < MAX_METEORS; i++) {
       const meteor = this.meteorPool[i]!;
       if (!meteor.active) {
-        this.trailLines[i]!.visible = false;
+        if (this.trailLines[i]!.visible) {
+          this.trailLines[i]!.visible = false;
+        }
         continue;
       }
 
       meteor.life += delta;
       if (meteor.life >= meteor.maxLife) {
         this.spawnDebrisFromMeteor(meteor);
-        this.deactivateMeteor(meteor, i);
+        this.deactivateMeteor(i);
         continue;
       }
 
       meteor.position.addScaledVector(meteor.velocity, delta);
 
-      if (meteor.trailPositions.length < TRAIL_MAX_POINTS) {
-        meteor.trailPositions.push(meteor.position.clone());
+      if (meteor.trailLength < TRAIL_MAX_POINTS) {
+        meteor.trailPositions[meteor.trailLength]!.copy(meteor.position);
+        meteor.trailLength++;
       } else {
-        for (let j = 0; j < meteor.trailPositions.length - 1; j++) {
+        for (let j = 0; j < TRAIL_MAX_POINTS - 1; j++) {
           meteor.trailPositions[j]!.copy(meteor.trailPositions[j + 1]!);
         }
-        meteor.trailPositions[meteor.trailPositions.length - 1]!.copy(meteor.position);
+        meteor.trailPositions[TRAIL_MAX_POINTS - 1]!.copy(meteor.position);
       }
-      meteor.trailLength = meteor.trailPositions.length;
 
       this.updateTrailGeometry(meteor, i);
     }
@@ -253,9 +308,12 @@ export class ParticleSystem {
     const geo = this.trailGeometries[idx]!;
     const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
     const colAttr = geo.getAttribute('color') as THREE.BufferAttribute;
+    const alpAttr = geo.getAttribute('alpha') as THREE.BufferAttribute;
 
     const count = meteor.trailLength;
     const fadeProgress = Math.min(meteor.life / meteor.maxLife, 1.0);
+    const lifeFade = 1.0 - fadeProgress;
+    const lifeFadeSq = lifeFade * lifeFade;
 
     for (let j = 0; j < count; j++) {
       const t = count > 1 ? j / (count - 1) : 0;
@@ -269,34 +327,44 @@ export class ParticleSystem {
       } else {
         color = COL_ORANGE.clone().lerp(COL_DARK_RED, (t - 0.5) * 2);
       }
-      color.multiplyScalar(1.0 - fadeProgress * 0.7);
+      const intensity = 0.6 + 0.4 * lifeFade;
+      color.multiplyScalar(intensity);
       colAttr.setXYZ(j, color.r, color.g, color.b);
+
+      const spatialFade = 1.0 - t * 0.7;
+      const alpha = Math.max(0.0, Math.min(1.0, lifeFadeSq * spatialFade));
+      alpAttr.setX(j, alpha);
     }
 
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
+    alpAttr.needsUpdate = true;
     geo.setDrawRange(0, count);
   }
 
-  private deactivateMeteor(meteor: Meteor, idx: number): void {
+  private deactivateMeteor(idx: number): void {
+    const meteor = this.meteorPool[idx]!;
     meteor.active = false;
-    meteor.trailPositions = [];
     meteor.trailLength = 0;
     this.trailLines[idx]!.visible = false;
     this.trailGeometries[idx]!.setDrawRange(0, 0);
+    this.releaseMeteorIndex(idx);
   }
 
   private spawnDebrisFromMeteor(meteor: Meteor): void {
     const count = 10 + Math.floor(Math.random() * 21);
-    const origin = meteor.position.clone();
+    const ox = meteor.position.x;
+    const oy = meteor.position.y;
+    const oz = meteor.position.z;
     const baseSpeed = 2 + Math.random() * 4;
 
     for (let i = 0; i < count; i++) {
-      const debris = this.debrisPool.find((d) => !d.active);
-      if (!debris) break;
+      const idx = this.acquireDebrisIndex();
+      if (idx < 0) break;
+      const debris = this.debrisPool[idx]!;
 
       debris.active = true;
-      debris.position.copy(origin);
+      debris.position.set(ox, oy, oz);
       debris.velocity.set(
         (Math.random() - 0.5) * baseSpeed * 2,
         (Math.random() - 0.5) * baseSpeed * 2,
@@ -304,7 +372,7 @@ export class ParticleSystem {
       );
       debris.life = 0;
       debris.maxLife = DEBRIS_DURATION;
-      debris.flickerSpeed = 8 + Math.random() * 15;
+      debris.flickerSpeed = 10 + Math.random() * 20;
       debris.flickerOffset = Math.random() * Math.PI * 2;
     }
   }
@@ -317,11 +385,12 @@ export class ParticleSystem {
       debris.life += delta;
       if (debris.life >= debris.maxLife) {
         debris.active = false;
+        this.releaseDebrisIndex(i);
         continue;
       }
 
       debris.position.addScaledVector(debris.velocity, delta);
-      debris.velocity.multiplyScalar(0.98);
+      debris.velocity.multiplyScalar(0.985);
     }
   }
 
@@ -332,33 +401,31 @@ export class ParticleSystem {
       const debris = this.debrisPool[i]!;
       if (!debris.active) continue;
 
-      const idx = visibleCount * 3;
+      const pIdx = visibleCount * 3;
+      const cIdx = visibleCount * 4;
       const lifeRatio = debris.life / debris.maxLife;
-      const flicker = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(debris.life * debris.flickerSpeed + debris.flickerOffset));
-      const fadeOut = 1.0 - lifeRatio;
-      const alpha = flicker * fadeOut;
 
-      this.debrisPositions[idx] = debris.position.x;
-      this.debrisPositions[idx + 1] = debris.position.y;
-      this.debrisPositions[idx + 2] = debris.position.z;
+      const flickerPhase = debris.life * debris.flickerSpeed + debris.flickerOffset;
+      const sinVal = Math.sin(flickerPhase);
+      const flicker = 0.2 + 0.8 * (0.5 + 0.5 * sinVal);
+      const flickerClamped = Math.max(0.2, Math.min(1.0, flicker));
 
-      const r = 1.0 * alpha;
-      const g = (0.55 * (1.0 - lifeRatio)) * alpha;
-      const b = (0.1 * (1.0 - lifeRatio)) * alpha;
-      this.debrisColors[idx] = r;
-      this.debrisColors[idx + 1] = g;
-      this.debrisColors[idx + 2] = b;
+      const fadeOut = 1.0 - lifeRatio * lifeRatio;
+      const alpha = flickerClamped * fadeOut;
 
-      this.debrisSizes[visibleCount] = (0.3 + 0.7 * fadeOut) * 3.0;
+      this.debrisPositions[pIdx] = debris.position.x;
+      this.debrisPositions[pIdx + 1] = debris.position.y;
+      this.debrisPositions[pIdx + 2] = debris.position.z;
+
+      const colorTint = 1.0 - lifeRatio * 0.4;
+      this.debrisColors[cIdx] = 1.0 * colorTint;
+      this.debrisColors[cIdx + 1] = (0.55 * colorTint) * (1.0 - lifeRatio * 0.3);
+      this.debrisColors[cIdx + 2] = (0.1 * colorTint) * (1.0 - lifeRatio * 0.6);
+      this.debrisColors[cIdx + 3] = alpha;
+
+      this.debrisSizes[visibleCount] = (0.4 + 0.6 * fadeOut) * 3.5;
 
       visibleCount++;
-    }
-
-    for (let i = visibleCount; i < MAX_DEBRIS; i++) {
-      this.debrisPositions[i * 3] = 0;
-      this.debrisPositions[i * 3 + 1] = 0;
-      this.debrisPositions[i * 3 + 2] = 0;
-      this.debrisSizes[i] = 0;
     }
 
     const posAttr = this.debrisGeometry.getAttribute('position') as THREE.BufferAttribute;
@@ -376,8 +443,10 @@ export class ParticleSystem {
     for (let i = 0; i < MAX_METEORS; i++) {
       this.trailGeometries[i]?.dispose();
       (this.trailLines[i]?.material as THREE.Material)?.dispose();
+      if (this.trailLines[i]) this.scene.remove(this.trailLines[i]!);
     }
     this.debrisGeometry.dispose();
     (this.debrisPoints.material as THREE.Material)?.dispose();
+    this.scene.remove(this.debrisPoints);
   }
 }
