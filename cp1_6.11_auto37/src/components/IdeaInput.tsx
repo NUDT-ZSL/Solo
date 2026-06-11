@@ -128,7 +128,9 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [buttonPressed, setButtonPressed] = useState<IdeaType | null>(null);
   const [showSubmittedAnim, setShowSubmittedAnim] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const submitAnimTimerRef = useRef<number | null>(null);
+  const errorTimerRef = useRef<number | null>(null);
 
   // ========================================================
   //  姓名自动补齐 - 模糊匹配候选列表
@@ -160,6 +162,15 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  /** 显示错误提示, 3秒后自动消失 */
+  const showError = useCallback((msg: string) => {
+    setErrorMessage(msg);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = window.setTimeout(() => {
+      setErrorMessage(null);
+    }, 3000);
+  }, []);
+
   // ========================================================
   //  组件卸载清理 (定时器/录音/rAF/音频上下文)
   // ========================================================
@@ -168,6 +179,7 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       if (submitAnimTimerRef.current) clearTimeout(submitAnimTimerRef.current);
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach((t) => t.stop());
         audioStreamRef.current = null;
@@ -180,29 +192,33 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
 
   // ========================================================
   //  键盘事件: ↑↓选择 / Enter确认 / Esc取消 自动补齐
+  //  加强边界判断: 列表为空时忽略所有键盘操作
   // ========================================================
   const handleMemberNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const hasSuggestions = suggestions.length > 0;
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (suggestions.length > 0) {
-        setShowSuggestions(true);
-        setSelectedSuggestionIndex((p) =>
-          p < suggestions.length - 1 ? p + 1 : 0
-        );
-      }
+      if (!hasSuggestions) return;
+      setShowSuggestions(true);
+      setSelectedSuggestionIndex((p) => {
+        if (p < 0 || p >= suggestions.length - 1) return 0;
+        return p + 1;
+      });
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (suggestions.length > 0) {
-        setShowSuggestions(true);
-        setSelectedSuggestionIndex((p) =>
-          p > 0 ? p - 1 : suggestions.length - 1
-        );
-      }
+      if (!hasSuggestions) return;
+      setShowSuggestions(true);
+      setSelectedSuggestionIndex((p) => {
+        if (p <= 0) return suggestions.length - 1;
+        return p - 1;
+      });
     } else if (e.key === 'Enter') {
       if (
+        hasSuggestions &&
         showSuggestions &&
         selectedSuggestionIndex >= 0 &&
-        suggestions[selectedSuggestionIndex]
+        selectedSuggestionIndex < suggestions.length
       ) {
         e.preventDefault();
         selectSuggestion(suggestions[selectedSuggestionIndex]);
@@ -312,10 +328,10 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
       startWaveformLoop();
     } catch (err) {
       console.error('启动录音失败:', err);
-      alert('无法访问麦克风，请检查浏览器权限设置');
+      showError('无法访问麦克风，请检查浏览器权限设置');
       cleanupRecordingState();
     }
-  }, [isRecording, startWaveformLoop]);
+  }, [isRecording, startWaveformLoop, showError]);
 
   // ========================================================
   //  停止录音 (pointerup / 达到最长 / 手动停止)
@@ -347,9 +363,18 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
           const b64 = reader.result as string;
           if (b64 && b64.startsWith('data:')) {
             setRecordedBase64(b64);
+          } else {
+            showError('语音处理失败，请重试');
           }
         };
-        reader.readAsDataURL(blob);
+        reader.onerror = () => {
+          showError('语音读取失败，请重试');
+        };
+        try {
+          reader.readAsDataURL(blob);
+        } catch {
+          showError('语音编码失败，请重试');
+        }
       } else {
         // 空录音 -> 还原
         setWaveformData(new Array(WAVEFORM_BARS).fill(0.1));
@@ -381,7 +406,7 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
     setTimeout(() => {
       setWaveformData(new Array(WAVEFORM_BARS).fill(0.1));
     }, 200);
-  }, []);
+  }, [showError]);
 
   /** 紧急清理 (出错或组件卸载) */
   const cleanupRecordingState = () => {
@@ -424,14 +449,15 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
 
   // ========================================================
   //  提交: 构建 Idea 对象 -> props.onSubmit -> 清空输入 + 飘出成功动画
+  //  完整错误处理: 校验失败 / 录音处理 / 后端上传 均有错误提示
   // ========================================================
   const handleSubmit = async () => {
     if (!memberName.trim()) {
-      alert('请输入你的姓名');
+      showError('请输入你的姓名');
       return;
     }
     if (!content.trim()) {
-      alert('请输入发言内容');
+      showError('请输入发言内容');
       return;
     }
     if (isRecording) {
@@ -440,6 +466,7 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
       await new Promise((r) => setTimeout(r, 300));
     }
     setIsSubmitting(true);
+    setErrorMessage(null);
     try {
       await onSubmit(
         memberName.trim(),
@@ -458,6 +485,10 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
       submitAnimTimerRef.current = window.setTimeout(() => {
         setShowSubmittedAnim(false);
       }, 800);
+    } catch (err) {
+      console.error('提交失败:', err);
+      const msg = err instanceof Error ? err.message : '提交失败，请重试';
+      showError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -482,6 +513,14 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
           <h2 className="input-title">📝 分享我的站会动态</h2>
           {showSubmittedAnim && <span className="submitted-flash">✓ 已提交</span>}
         </div>
+
+        {/* ===== 错误提示条 ===== */}
+        {errorMessage && (
+          <div className="error-message-bar">
+            <span className="error-icon">⚠️</span>
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
         <div className="input-form">
           {/* ===== 第一行: 姓名 + 类型 ===== */}
@@ -719,6 +758,23 @@ export default function IdeaInput({ onSubmit, members }: IdeaInputProps) {
           0%   { opacity: 0; transform: translateY(10px); }
           20%  { opacity: 1; transform: translateY(0); }
           100% { opacity: 0; transform: translateY(-20px); }
+        }
+
+        /* 错误提示条 */
+        .error-message-bar {
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 14px; margin-bottom: 16px;
+          background: rgba(244, 67, 54, 0.15);
+          border: 1px solid rgba(244, 67, 54, 0.3);
+          border-radius: 8px;
+          color: #EF9A9A;
+          font-size: 13px; font-weight: 500;
+          animation: slideIn 200ms ease-out;
+        }
+        .error-icon { font-size: 14px; }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
 
         .input-form { display: flex; flex-direction: column; gap: 16px; }

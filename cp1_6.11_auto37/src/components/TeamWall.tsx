@@ -406,6 +406,7 @@ export default function TeamWall({
   }
 
   const useVirtual = filteredIdeas.length > VIRTUAL_THRESHOLD;
+  const visibleIdeas = filteredIdeas.slice(visibleRange.start, visibleRange.end);
 
   // ========================================================
   //  渲染: 主视图
@@ -439,7 +440,7 @@ export default function TeamWall({
           共 {filteredIdeas.length} 条动态
           {useVirtual && (
             <span className="virtual-hint">
-              {' '}· 已启用虚拟滚动 (渲染{visibleRange.end - visibleRange.start}/{filteredIdeas.length})
+              {' '}· 虚拟滚动 (渲染{visibleRange.end - visibleRange.start}/{filteredIdeas.length})
             </span>
           )}
         </div>
@@ -459,39 +460,35 @@ export default function TeamWall({
             <p className="empty-desc">快在上方输入框分享你的第一条进展吧！</p>
           </div>
         ) : (
-          // ===== 瀑布流外层: 总高度由 position 撑开 =====
+          // ===== 瀑布流外层: 纯绝对定位布局, 总高度由 totalHeight 撑开 =====
           <div
             ref={masonryRef}
-            className={`team-wall-masonry fade-stage-${fadeStage} ${useVirtual ? 'masonry-virtual' : 'masonry-grid'}`}
-            style={{
-              height: useVirtual ? totalHeight : 'auto',
-            }}
+            className={`team-wall-masonry fade-stage-${fadeStage}`}
+            style={{ height: totalHeight }}
           >
-            {/* 切片只渲染视口内的卡片 (虚拟滚动核心) */}
-            {filteredIdeas
-              .slice(visibleRange.start, visibleRange.end)
-              .map((idea, i) => {
-                const idx = visibleRange.start + i;
-                const layout = layouts[idx];
-                const avatarColor = hashNameToColor(idea.memberName);
-                const initial = getInitial(idea.memberName);
-                const isPlaying = playingVoiceId === idea.id;
+            {/* 虚拟滚动: 只渲染视口内+缓冲的卡片 */}
+            {visibleIdeas.map((idea, i) => {
+              const idx = visibleRange.start + i;
+              const layout = layouts[idx];
+              const avatarColor = hashNameToColor(idea.memberName);
+              const initial = getInitial(idea.memberName);
+              const isPlaying = playingVoiceId === idea.id;
 
-                return (
-                  <div
-                    key={idea.id}
-                    ref={(el) => measureCard(idea.id, el)}
-                    className={`idea-card idea-card-${idea.type}`}
-                    style={{
-                      position: useVirtual ? 'absolute' : 'relative',
-                      left: useVirtual ? layout?.left : undefined,
-                      top: useVirtual ? layout?.top : undefined,
-                      width: useVirtual ? layout?.width : undefined,
-                      height: useVirtual ? layout?.height : undefined,
-                      marginBottom: useVirtual ? 0 : GAP,
-                      overflow: 'hidden',
-                    }}
-                  >
+              if (!layout) return null;
+
+              return (
+                <div
+                  key={idea.id}
+                  ref={(el) => measureCard(idea.id, el)}
+                  className={`idea-card idea-card-${idea.type}`}
+                  style={{
+                    position: 'absolute',
+                    left: layout.left,
+                    top: layout.top,
+                    width: layout.width,
+                    overflow: 'hidden',
+                  }}
+                >
                     {/* 卡片头部: 头像 + 姓名/时间 + 类型徽章 */}
                     <div className="card-header">
                       <div
@@ -685,29 +682,14 @@ export default function TeamWall({
           background: rgba(255, 255, 255, 0.3);
         }
 
-        /* 普通模式 (≤30条): Grid 瀑布流 */
-        .team-wall-masonry.masonry-grid {
-          display: grid;
-          gap: ${GAP}px;
-          position: relative;
-        }
-        @media (max-width: 767px) {
-          .team-wall-masonry.masonry-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (min-width: 768px) and (max-width: 1199px) {
-          .team-wall-masonry.masonry-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-        @media (min-width: 1200px) {
-          .team-wall-masonry.masonry-grid { grid-template-columns: repeat(4, 1fr); }
-        }
-
-        /* 虚拟滚动模式 (>30条): 绝对定位瀑布流 */
-        .team-wall-masonry.masonry-virtual {
+        /* 瀑布流容器: 纯绝对定位布局 */
+        .team-wall-masonry {
           position: relative;
           display: block;
         }
 
-        /* ===== 过滤过渡: 300ms ease-in-out ===== */
+        /* ===== 过滤过渡: 300ms ease-in-out opacity ===== */
+        /* 整体容器做淡入淡出, 内部子元素自然同步过渡 */
         .team-wall-masonry.fade-stage-out {
           opacity: 0;
           transition: opacity 300ms ease-in-out;
@@ -715,6 +697,12 @@ export default function TeamWall({
         .team-wall-masonry.fade-stage-in {
           opacity: 1;
           transition: opacity 300ms ease-in-out;
+        }
+
+        /* 卡片内部子元素也继承过渡, 确保整体协调 */
+        .fade-stage-out .idea-card,
+        .fade-stage-in .idea-card {
+          transition: opacity 300ms ease-in-out, transform 200ms ease-in-out;
         }
 
         /* ===== Idea 卡片 (瀑布流单元) ===== */
