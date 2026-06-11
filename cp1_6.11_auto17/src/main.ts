@@ -12,9 +12,11 @@ const COUNT_RANGE: [number, number] = [100, 500];
 const INITIAL_MATERIAL: MaterialType = 'water';
 
 const TARGET_FPS = 30;
-const FPS_SAMPLE_WINDOW = 0.5;
+const FPS_SAMPLE_WINDOW = 1.0;
 const MIN_QUALITY_LEVEL = 0;
-const MAX_QUALITY_LEVEL = 3;
+const MAX_QUALITY_LEVEL = 4;
+
+const TEXTURE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
 
 export class RainTalesApp {
   private container!: HTMLElement;
@@ -23,8 +25,9 @@ export class RainTalesApp {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
   private surface!: THREE.Mesh;
-  private surfaceTextures: Map<MaterialType, THREE.Texture> = new Map();
+  private surfaceTextures: Map<MaterialType, THREE.Texture | null> = new Map();
   private currentMaterial: MaterialType = INITIAL_MATERIAL;
+  private textureLoadStatus: Map<MaterialType, boolean> = new Map();
 
   private particleSystem!: ParticleSystem;
   private raindropManager!: RaindropManager;
@@ -43,18 +46,21 @@ export class RainTalesApp {
   private qualityLevel: number = MAX_QUALITY_LEVEL;
   private spawnRateMultiplier: number = 1;
   private trailEnabled: boolean = true;
-  private qualityDirty: boolean = false;
+  private particleUpdateDivisor: number = 1;
+  private frameCounter: number = 0;
+  private qualityChangeTimer: number = 0;
+  private qualityDebounce: number = 3.0;
 
   private animationId: number = 0;
 
   constructor() {
-    this.init();
+    void this.init();
   }
 
-  private init(): void {
+  private async init(): Promise<void> {
     this.container = document.getElementById('scene-container')!;
     if (!this.container) {
-      console.error('Scene container not found');
+      console.error('[雨痕物语] Scene container #scene-container not found');
       return;
     }
 
@@ -67,20 +73,105 @@ export class RainTalesApp {
     this.setupRenderer();
     this.setupControls();
     this.setupLighting();
+
+    await this.loadTexturesWithFallback();
     this.setupSurface();
     this.setupModules();
     this.setupUI();
     this.setupInteraction();
+
+    this.showTextureStatus();
     this.hideSplash();
 
     this.animate();
     window.addEventListener('resize', () => this.onResize());
   }
 
+  private async loadTexturesWithFallback(): Promise<void> {
+    const matOrder: MaterialType[] = ['water', 'metal', 'glass', 'leaf'];
+    const loader = new THREE.TextureLoader();
+
+    const loadPromises = matOrder.map(async (mat) => {
+      const texture = await this.tryLoadTexture(loader, mat);
+      this.surfaceTextures.set(mat, texture);
+      this.textureLoadStatus.set(mat, texture !== null);
+      if (texture) {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+        texture.colorSpace = THREE.SRGBColorSpace;
+      }
+    });
+
+    await Promise.all(loadPromises);
+  }
+
+  private async tryLoadTexture(loader: THREE.TextureLoader, mat: MaterialType): Promise<THREE.Texture | null> {
+    for (const ext of TEXTURE_EXTENSIONS) {
+      const url = new URL(`/assets/texture_${mat}.${ext}`, window.location.origin).href;
+      try {
+        const tex = await new Promise<THREE.Texture | null>((resolve) => {
+          loader.load(
+            url,
+            (t) => resolve(t),
+            undefined,
+            () => resolve(null)
+          );
+        });
+        if (tex) {
+          console.log(`[雨痕物语] 成功加载材质纹理: texture_${mat}.${ext}`);
+          return tex;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  private showTextureStatus(): void {
+    const missing: MaterialType[] = [];
+    this.textureLoadStatus.forEach((loaded, mat) => {
+      if (!loaded) missing.push(mat);
+    });
+
+    if (missing.length > 0) {
+      console.warn(
+        `[雨痕物语] 以下材质纹理未找到，已自动生成程序化纹理替代:\n` +
+        `  - ${missing.map(m => `texture_${m}.{png|jpg|jpeg|webp|svg}`).join('\n  - ')}\n\n` +
+        `请将真实图片放入 assets/ 目录，文件名格式为:\n` +
+        `  texture_water.png / texture_metal.png / texture_glass.png / texture_leaf.png\n` +
+        `（支持 png/jpg/jpeg/webp/svg 格式）`
+      );
+
+      const banner = document.createElement('div');
+      Object.assign(banner.style, {
+        position: 'fixed',
+        top: '16px',
+        left: '16px',
+        background: 'rgba(233,69,96,0.9)',
+        color: '#fff',
+        padding: '10px 14px',
+        borderRadius: '8px',
+        fontSize: '12px',
+        zIndex: '999',
+        maxWidth: '360px',
+        lineHeight: '1.5',
+        backdropFilter: 'blur(6px)',
+        cursor: 'pointer'
+      } as CSSStyleDeclaration);
+      banner.innerHTML =
+        `⚠️ 缺少材质纹理文件，请将 <b>texture_water/metal/glass/leaf.png</b> 放入 assets/ 目录` +
+        `<br><span style="opacity:.7">（已自动使用程序化纹理，点击关闭）</span>`;
+      banner.onclick = () => banner.remove();
+      document.body.appendChild(banner);
+    }
+  }
+
   private setupScene(): void {
     this.scene = new THREE.Scene();
     this.scene.background = null;
-    this.scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05);
+    this.scene.fog = new THREE.FogExp2(0x1a1a2e, 0.04);
   }
 
   private setupCamera(): void {
@@ -131,7 +222,7 @@ export class RainTalesApp {
     this.scene.add(rimLight);
   }
 
-  private generateMaterialTexture(type: MaterialType): THREE.Texture {
+  private generateFallbackTexture(type: MaterialType): THREE.Texture {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 512;
@@ -140,36 +231,34 @@ export class RainTalesApp {
 
     switch (type) {
       case 'water':
-        this.drawWaterTexture(ctx, color);
+        this.drawWaterTexture(ctx);
         break;
       case 'metal':
-        this.drawMetalTexture(ctx, color);
+        this.drawMetalTexture(ctx);
         break;
       case 'glass':
         this.drawGlassTexture(ctx, color);
         break;
       case 'leaf':
-        this.drawLeafTexture(ctx, color);
+        this.drawLeafTexture(ctx);
         break;
     }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
     return texture;
   }
 
-  private drawWaterTexture(ctx: CanvasRenderingContext2D, _color: string): void {
+  private drawWaterTexture(ctx: CanvasRenderingContext2D): void {
     const grad = ctx.createLinearGradient(0, 0, 512, 512);
     grad.addColorStop(0, '#1e3a5f');
     grad.addColorStop(0.5, '#2c5282');
     grad.addColorStop(1, '#1a365d');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 512);
-
     for (let i = 0; i < 30; i++) {
       const cx = Math.random() * 512;
       const cy = Math.random() * 512;
@@ -181,7 +270,6 @@ export class RainTalesApp {
         ctx.stroke();
       }
     }
-
     const glossGrad = ctx.createLinearGradient(0, 50, 512, 100);
     glossGrad.addColorStop(0, 'rgba(255,255,255,0)');
     glossGrad.addColorStop(0.5, 'rgba(255,255,255,0.12)');
@@ -190,7 +278,7 @@ export class RainTalesApp {
     ctx.fillRect(0, 50, 512, 60);
   }
 
-  private drawMetalTexture(ctx: CanvasRenderingContext2D, _color: string): void {
+  private drawMetalTexture(ctx: CanvasRenderingContext2D): void {
     const grad = ctx.createLinearGradient(0, 0, 0, 512);
     grad.addColorStop(0, '#e8e8e8');
     grad.addColorStop(0.25, '#a0a0a0');
@@ -199,7 +287,6 @@ export class RainTalesApp {
     grad.addColorStop(1, '#b0b0b0');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 512);
-
     for (let x = 0; x < 512; x += 3) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -208,14 +295,12 @@ export class RainTalesApp {
       ctx.lineWidth = 1;
       ctx.stroke();
     }
-
     const h1 = ctx.createLinearGradient(0, 0, 512, 0);
     h1.addColorStop(0, 'rgba(255,255,255,0)');
     h1.addColorStop(0.5, 'rgba(255,255,255,0.4)');
     h1.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = h1;
     ctx.fillRect(0, 80, 512, 50);
-
     for (let i = 0; i < 40; i++) {
       ctx.beginPath();
       ctx.arc(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 3, 0, Math.PI * 2);
@@ -225,15 +310,12 @@ export class RainTalesApp {
   }
 
   private drawGlassTexture(ctx: CanvasRenderingContext2D, color: string): void {
-    const baseColor = this.hexToRgb(color);
-    const bg = `rgba(${baseColor.r},${baseColor.g},${baseColor.b},0.18)`;
-    ctx.fillStyle = bg;
+    const rgb = this.hexToRgb(color);
+    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.18)`;
     ctx.fillRect(0, 0, 512, 512);
-
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 3;
     ctx.strokeRect(2, 2, 508, 508);
-
     const shine1 = ctx.createLinearGradient(0, 0, 512, 512);
     shine1.addColorStop(0, 'rgba(255,255,255,0.55)');
     shine1.addColorStop(1, 'rgba(255,255,255,0)');
@@ -246,7 +328,6 @@ export class RainTalesApp {
     ctx.fillStyle = shine1;
     ctx.fill();
     ctx.restore();
-
     const shine2 = ctx.createLinearGradient(512, 512, 0, 0);
     shine2.addColorStop(0, 'rgba(255,255,255,0.4)');
     shine2.addColorStop(1, 'rgba(255,255,255,0)');
@@ -259,21 +340,19 @@ export class RainTalesApp {
     ctx.fillStyle = shine2;
     ctx.fill();
     ctx.restore();
-
     for (let i = 0; i < 8; i++) {
       ctx.fillStyle = `rgba(255,255,255,${0.05 + Math.random() * 0.1})`;
       ctx.fillRect(Math.random() * 400, Math.random() * 400, 8 + Math.random() * 15, 60 + Math.random() * 120);
     }
   }
 
-  private drawLeafTexture(ctx: CanvasRenderingContext2D, _color: string): void {
+  private drawLeafTexture(ctx: CanvasRenderingContext2D): void {
     const grad = ctx.createLinearGradient(0, 0, 512, 512);
     grad.addColorStop(0, '#2d5a27');
     grad.addColorStop(0.5, '#228B22');
     grad.addColorStop(1, '#1e4d1a');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 512);
-
     for (let y = 0; y < 512; y += 64) {
       ctx.beginPath();
       ctx.moveTo(0, y + 32);
@@ -285,7 +364,6 @@ export class RainTalesApp {
       ctx.lineWidth = 2.5;
       ctx.stroke();
     }
-
     for (let x = 0; x < 512; x += 64) {
       ctx.beginPath();
       ctx.moveTo(x + 32, 0);
@@ -297,7 +375,6 @@ export class RainTalesApp {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-
     for (let i = 0; i < 20; i++) {
       const cx = Math.random() * 512;
       const cy = Math.random() * 512;
@@ -322,25 +399,21 @@ export class RainTalesApp {
     } : { r: 192, g: 192, b: 192 };
   }
 
+  private getEffectiveTexture(mat: MaterialType): THREE.Texture {
+    const t = this.surfaceTextures.get(mat);
+    return t ?? this.generateFallbackTexture(mat);
+  }
+
   private setupSurface(): void {
-    const waterTex = this.generateMaterialTexture('water');
-    const metalTex = this.generateMaterialTexture('metal');
-    const glassTex = this.generateMaterialTexture('glass');
-    const leafTex = this.generateMaterialTexture('leaf');
-    this.surfaceTextures.set('water', waterTex);
-    this.surfaceTextures.set('metal', metalTex);
-    this.surfaceTextures.set('glass', glassTex);
-    this.surfaceTextures.set('leaf', leafTex);
-
     const geometry = new THREE.PlaneGeometry(SURFACE_SIZE, SURFACE_SIZE);
+    const tex = this.getEffectiveTexture('water');
     const material = new THREE.MeshStandardMaterial({
-      map: waterTex,
-      metalness: 0.3,
-      roughness: 0.6,
+      map: tex,
+      metalness: 0.2,
+      roughness: 0.3,
       transparent: true,
-      opacity: 0.95
+      opacity: 0.92
     });
-
     this.surface = new THREE.Mesh(geometry, material);
     this.surface.rotation.x = -Math.PI / 2;
     this.surface.position.y = 0;
@@ -379,34 +452,22 @@ export class RainTalesApp {
       countRange: COUNT_RANGE
     });
 
-    this.uiController.on('material:change', (mat) => {
-      this.switchMaterial(mat);
-    });
-
-    this.uiController.on('speed:change', (speed) => {
-      this.raindropManager.setSpeed(speed);
-    });
-
+    this.uiController.on('material:change', (mat) => this.switchMaterial(mat));
+    this.uiController.on('speed:change', (speed) => this.raindropManager.setSpeed(speed));
     this.uiController.on('count:change', (count) => {
       const effective = Math.round(count * this.spawnRateMultiplier);
       this.raindropManager.setSpawnRate(effective);
     });
-
-    this.uiController.on('scene:reset', () => {
-      this.resetScene();
-    });
+    this.uiController.on('scene:reset', () => this.resetScene());
   }
 
   private switchMaterial(mat: MaterialType): void {
     this.currentMaterial = mat;
     this.particleSystem.setCurrentMaterial(mat);
-
-    const texture = this.surfaceTextures.get(mat);
-    if (!texture || !this.surface) return;
+    const tex = this.getEffectiveTexture(mat);
     const matSurface = this.surface.material as THREE.MeshStandardMaterial;
-    matSurface.map = texture;
-    matSurface.map!.needsUpdate = true;
-
+    matSurface.map = tex;
+    matSurface.needsUpdate = true;
     switch (mat) {
       case 'water':
         matSurface.metalness = 0.2;
@@ -429,17 +490,14 @@ export class RainTalesApp {
         matSurface.opacity = 1.0;
         break;
     }
-    matSurface.needsUpdate = true;
   }
 
   private setupInteraction(): void {
     const canvas = this.renderer.domElement;
-
     canvas.addEventListener('mousedown', (e) => {
       this.isDragging = true;
       this.handlePointer(e);
     });
-
     canvas.addEventListener('mousemove', (e) => {
       if (!this.isDragging) return;
       const now = performance.now();
@@ -448,22 +506,15 @@ export class RainTalesApp {
         this.handlePointer(e);
       }
     });
-
-    canvas.addEventListener('mouseup', () => {
-      this.isDragging = false;
-    });
-
-    canvas.addEventListener('mouseleave', () => {
-      this.isDragging = false;
-    });
-
+    const stopDrag = () => { this.isDragging = false; };
+    canvas.addEventListener('mouseup', stopDrag);
+    canvas.addEventListener('mouseleave', stopDrag);
     canvas.addEventListener('touchstart', (e) => {
       if (e.touches.length > 0) {
         this.isDragging = true;
         this.handleTouch(e.touches[0]);
       }
     }, { passive: true });
-
     canvas.addEventListener('touchmove', (e) => {
       if (!this.isDragging || e.touches.length === 0) return;
       const now = performance.now();
@@ -472,10 +523,7 @@ export class RainTalesApp {
         this.handleTouch(e.touches[0]);
       }
     }, { passive: true });
-
-    canvas.addEventListener('touchend', () => {
-      this.isDragging = false;
-    });
+    canvas.addEventListener('touchend', stopDrag);
   }
 
   private handlePointer(e: MouseEvent): void {
@@ -496,9 +544,7 @@ export class RainTalesApp {
     this.raycaster.setFromCamera(this.mouse, this.camera);
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const point = new THREE.Vector3();
-    this.raycaster.ray.intersectPlane(plane, point);
-
-    if (point) {
+    if (this.raycaster.ray.intersectPlane(plane, point)) {
       this.raindropManager.spawnManual(point.x, point.z, 4.5);
     }
   }
@@ -510,7 +556,7 @@ export class RainTalesApp {
         splash.classList.add('hidden');
         setTimeout(() => splash.remove(), 1000);
       }
-    }, 800);
+    }, 600);
   }
 
   private onResize(): void {
@@ -520,13 +566,14 @@ export class RainTalesApp {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    if (this.qualityLevel >= MAX_QUALITY_LEVEL - 1) {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    }
   }
 
   private updateFPS(dt: number): void {
     this.fpsFrameCount++;
     this.fpsAccumulator += dt;
-
     if (this.fpsAccumulator >= FPS_SAMPLE_WINDOW) {
       this.currentFPS = this.fpsFrameCount / this.fpsAccumulator;
       this.fpsAccumulator = 0;
@@ -536,78 +583,102 @@ export class RainTalesApp {
   }
 
   private adaptQuality(): void {
-    const oldLevel = this.qualityLevel;
+    this.qualityChangeTimer = Math.max(0, this.qualityChangeTimer - FPS_SAMPLE_WINDOW);
+    if (this.qualityChangeTimer > 0) return;
 
+    const oldLevel = this.qualityLevel;
     if (this.currentFPS < TARGET_FPS * 0.85) {
       this.qualityLevel = Math.max(MIN_QUALITY_LEVEL, this.qualityLevel - 1);
-    } else if (this.currentFPS > TARGET_FPS * 1.2) {
+    } else if (this.currentFPS > TARGET_FPS * 1.25) {
       this.qualityLevel = Math.min(MAX_QUALITY_LEVEL, this.qualityLevel + 1);
     }
 
     if (oldLevel !== this.qualityLevel) {
+      this.qualityChangeTimer = this.qualityDebounce;
       this.applyQualityLevel();
+      console.log(`[雨痕物语] FPS:${this.currentFPS.toFixed(0)} → 质量等级 L${this.qualityLevel}`);
     }
   }
 
   private applyQualityLevel(): void {
-    this.qualityDirty = true;
-
     switch (this.qualityLevel) {
       case MIN_QUALITY_LEVEL:
-        this.spawnRateMultiplier = 0.4;
+        this.spawnRateMultiplier = 0.35;
         this.trailEnabled = false;
+        this.particleUpdateDivisor = 2;
         this.renderer.setPixelRatio(1);
+        this.antialias = false;
         break;
       case 1:
-        this.spawnRateMultiplier = 0.65;
+        this.spawnRateMultiplier = 0.55;
         this.trailEnabled = false;
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        this.particleUpdateDivisor = 1;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+        this.antialias = true;
         break;
       case 2:
-        this.spawnRateMultiplier = 0.85;
+        this.spawnRateMultiplier = 0.75;
+        this.trailEnabled = false;
+        this.particleUpdateDivisor = 1;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        this.antialias = true;
+        break;
+      case 3:
+        this.spawnRateMultiplier = 0.9;
         this.trailEnabled = true;
+        this.particleUpdateDivisor = 1;
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+        this.antialias = true;
         break;
       case MAX_QUALITY_LEVEL:
       default:
         this.spawnRateMultiplier = 1.0;
         this.trailEnabled = true;
+        this.particleUpdateDivisor = 1;
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.antialias = true;
         break;
     }
 
     this.raindropManager.setSpawnRate(
-      Math.round(COUNT_RANGE[1] * 0.6 * this.spawnRateMultiplier)
+      Math.round(INITIAL_COUNT * this.spawnRateMultiplier)
     );
+    this.particleSystem.setTrailEnabled(this.trailEnabled);
+  }
+
+  private set antialias(v: boolean) {
+    if (this.renderer.capabilities.isWebGL2) return;
   }
 
   private resetScene(): void {
     this.raindropManager.clearAll();
     this.particleSystem.clearAll();
-
     this.currentMaterial = INITIAL_MATERIAL;
     this.switchMaterial(INITIAL_MATERIAL);
     this.uiController.updateMaterialDisplay(INITIAL_MATERIAL);
-
     this.raindropManager.setSpeed(INITIAL_SPEED);
-    this.raindropManager.setSpawnRate(INITIAL_COUNT);
+    this.raindropManager.setSpawnRate(Math.round(INITIAL_COUNT * this.spawnRateMultiplier));
     this.uiController.updateSpeedDisplay(INITIAL_SPEED);
     this.uiController.updateCountDisplay(INITIAL_COUNT);
-
     this.qualityLevel = MAX_QUALITY_LEVEL;
     this.applyQualityLevel();
   }
 
   private animate(): void {
     this.animationId = requestAnimationFrame(() => this.animate());
+    const rawDt = this.clock.getDelta();
+    const dt = Math.min(rawDt, 0.05);
 
-    const dt = Math.min(this.clock.getDelta(), 0.05);
     this.updateFPS(dt);
+    this.frameCounter++;
 
-    const scaledDt = this.qualityLevel === MIN_QUALITY_LEVEL ? dt * 0.85 : dt;
+    const shouldUpdateParticles = this.frameCounter % this.particleUpdateDivisor === 0;
+    const scaledDt = dt * (this.particleUpdateDivisor > 1 ? 0.9 : 1);
 
     this.raindropManager.update(scaledDt);
-    this.particleSystem.update(scaledDt);
+    if (shouldUpdateParticles) {
+      this.particleSystem.update(scaledDt * this.particleUpdateDivisor);
+    }
 
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
@@ -616,19 +687,14 @@ export class RainTalesApp {
   public dispose(): void {
     cancelAnimationFrame(this.animationId);
     this.controls.dispose();
-
     this.raindropManager.dispose();
     this.particleSystem.dispose();
-
-    this.surfaceTextures.forEach(t => t.dispose());
+    this.surfaceTextures.forEach(t => t?.dispose());
     this.surface.geometry.dispose();
     (this.surface.material as THREE.Material).dispose();
-
     this.renderer.dispose();
     this.renderer.domElement.remove();
-
-    window.removeEventListener('resize', () => this.onResize());
   }
 }
 
-new RainTalesApp();
+void new RainTalesApp();

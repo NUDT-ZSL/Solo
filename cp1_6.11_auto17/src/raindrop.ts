@@ -12,6 +12,7 @@ interface Raindrop {
   velocity: THREE.Vector3;
   active: boolean;
   isManual: boolean;
+  geometry: THREE.SphereGeometry;
 }
 
 export interface RaindropManagerParams {
@@ -27,7 +28,6 @@ export class RaindropManager {
   private scene: THREE.Scene;
   private particleSystem: ParticleSystem;
   private bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
-  private dropGeometry: THREE.SphereGeometry;
   private dropMaterial: THREE.MeshBasicMaterial;
 
   private pool: Raindrop[] = [];
@@ -51,7 +51,6 @@ export class RaindropManager {
     this.spawnRate = params.initialCount;
     this.getMaterial = params.getCurrentMaterial;
 
-    this.dropGeometry = new THREE.SphereGeometry(1, 8, 8);
     this.dropMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -62,6 +61,16 @@ export class RaindropManager {
     this.prewarmPool();
   }
 
+  private createEllipsoidGeometry(scale: number = 1): THREE.SphereGeometry {
+    const geo = new THREE.SphereGeometry(1, 10, 8);
+    geo.scale(
+      DROP_RADIUS_XZ * scale,
+      (DROP_LENGTH * 0.5) * scale,
+      DROP_RADIUS_XZ * scale
+    );
+    return geo;
+  }
+
   private prewarmPool(): void {
     for (let i = 0; i < RAINDROP_MAX; i++) {
       this.pool.push(this.createInactiveDrop());
@@ -69,13 +78,14 @@ export class RaindropManager {
   }
 
   private createInactiveDrop(): Raindrop {
-    const mesh = new THREE.Mesh(this.dropGeometry, this.dropMaterial.clone());
-    mesh.scale.set(DROP_RADIUS_XZ, DROP_LENGTH * 0.5, DROP_RADIUS_XZ);
+    const geometry = this.createEllipsoidGeometry();
+    const mesh = new THREE.Mesh(geometry, this.dropMaterial.clone());
     mesh.visible = false;
     this.scene.add(mesh);
 
     return {
       mesh,
+      geometry,
       velocity: new THREE.Vector3(0, -this.currentSpeed, 0),
       active: false,
       isManual: false
@@ -104,6 +114,10 @@ export class RaindropManager {
     const clampedX = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, x));
     const clampedZ = Math.max(this.bounds.minZ, Math.min(this.bounds.maxZ, z));
 
+    drop.geometry.dispose();
+    drop.geometry = this.createEllipsoidGeometry(1.2);
+    drop.mesh.geometry = drop.geometry;
+
     drop.mesh.position.set(
       clampedX,
       startY ?? (this.spawnMinY + Math.random() * (this.spawnMaxY - this.spawnMinY)),
@@ -114,8 +128,10 @@ export class RaindropManager {
     drop.isManual = true;
 
     const mat = drop.mesh.material as THREE.MeshBasicMaterial;
+    mat.color.setHex(0xffffff);
     mat.opacity = 0.8;
-    drop.mesh.scale.set(DROP_RADIUS_XZ * 1.2, DROP_LENGTH * 0.5 * 1.2, DROP_RADIUS_XZ * 1.2);
+    mat.transparent = true;
+    mat.depthWrite = false;
     drop.mesh.visible = true;
 
     this.activeDrops.push(drop);
@@ -158,14 +174,20 @@ export class RaindropManager {
     const z = this.bounds.minZ + Math.random() * (this.bounds.maxZ - this.bounds.minZ);
     const y = this.spawnMinY + Math.random() * (this.spawnMaxY - this.spawnMinY);
 
+    drop.geometry.dispose();
+    drop.geometry = this.createEllipsoidGeometry(1);
+    drop.mesh.geometry = drop.geometry;
+
     drop.mesh.position.set(x, y, z);
     drop.velocity.set(0, -this.currentSpeed, 0);
     drop.active = true;
     drop.isManual = false;
 
     const mat = drop.mesh.material as THREE.MeshBasicMaterial;
+    mat.color.setHex(0xffffff);
     mat.opacity = 0.6;
-    drop.mesh.scale.set(DROP_RADIUS_XZ, DROP_LENGTH * 0.5, DROP_RADIUS_XZ);
+    mat.transparent = true;
+    mat.depthWrite = false;
     drop.mesh.visible = true;
 
     this.activeDrops.push(drop);
@@ -183,17 +205,14 @@ export class RaindropManager {
 
       drop.mesh.position.addScaledVector(drop.velocity, dt);
 
-      const verticalAlign = new THREE.Vector3(0, -1, 0);
       if (drop.velocity.lengthSq() > 0.0001) {
         const dir = drop.velocity.clone().normalize();
-        const quat = new THREE.Quaternion().setFromUnitVectors(
-          new THREE.Vector3(0, 1, 0),
-          dir
-        );
+        const up = new THREE.Vector3(0, 1, 0);
+        const quat = new THREE.Quaternion().setFromUnitVectors(up, dir);
         drop.mesh.quaternion.copy(quat);
       }
 
-      if (drop.mesh.position.y <= SURFACE_Y + DROP_LENGTH * 0.4) {
+      if (drop.mesh.position.y <= SURFACE_Y + DROP_LENGTH * 0.5) {
         this.handleCollision(drop);
         this.releaseDrop(drop);
         this.pool.push(drop);
@@ -258,11 +277,11 @@ export class RaindropManager {
 
     for (const drop of this.pool) {
       this.scene.remove(drop.mesh);
+      drop.geometry.dispose();
       (drop.mesh.material as THREE.Material).dispose();
     }
     this.pool.length = 0;
 
-    this.dropGeometry.dispose();
     this.dropMaterial.dispose();
   }
 }

@@ -4,6 +4,7 @@ import { MATERIALS } from './ui';
 
 export const SPLASH_MAX = 800;
 export const RIPPLE_MAX = 60;
+const TRAIL_MAX_POINTS = 5;
 
 export interface CollisionEvent {
   x: number;
@@ -42,11 +43,32 @@ export class ParticleSystem {
   private activeRipples: RippleRing[] = [];
   private splashGeometry: THREE.SphereGeometry;
   private currentMaterial: MaterialType = 'water';
+  private trailEnabled: boolean = true;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.splashGeometry = new THREE.SphereGeometry(0.02, 6, 6);
     this.prewarmPools();
+  }
+
+  public setTrailEnabled(enabled: boolean): void {
+    if (this.trailEnabled === enabled) return;
+    this.trailEnabled = enabled;
+    if (!enabled) {
+      for (const s of this.activeSplashes) {
+        if (s.trail) {
+          this.scene.remove(s.trail);
+          s.trail.geometry.dispose();
+          (s.trail.material as THREE.Material).dispose();
+          s.trail = null;
+        }
+        s.trailPositions = [];
+      }
+    }
+  }
+
+  public getTrailEnabled(): boolean {
+    return this.trailEnabled;
   }
 
   private prewarmPools(): void {
@@ -62,7 +84,8 @@ export class ParticleSystem {
     const material = new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,
-      color: 0xffffff
+      color: 0xffffff,
+      depthWrite: false
     });
     const mesh = new THREE.Mesh(this.splashGeometry, material);
     mesh.visible = false;
@@ -162,6 +185,8 @@ export class ParticleSystem {
     const mat = splash.mesh.material as THREE.MeshBasicMaterial;
     mat.opacity = 0.9;
     mat.color.copy(splash.startColor);
+    mat.transparent = true;
+    mat.depthWrite = false;
     splash.mesh.visible = true;
 
     splash.trailPositions = [];
@@ -212,6 +237,8 @@ export class ParticleSystem {
     const mat = ripple.mesh.material as THREE.MeshBasicMaterial;
     mat.color.set(MATERIALS[materialType].color);
     mat.opacity = 0.7;
+    mat.transparent = true;
+    mat.depthWrite = false;
     ripple.mesh.visible = true;
 
     this.updateRippleGeometry(ripple, ripple.startRadius);
@@ -274,37 +301,39 @@ export class ParticleSystem {
       const col = new THREE.Color().copy(s.startColor).lerp(s.endColor, t);
       mat.color.copy(col);
 
-      s.trailPositions.push(s.mesh.position.clone());
-      if (s.trailPositions.length > 5) {
-        s.trailPositions.shift();
-      }
-
-      if (s.trailPositions.length >= 2) {
-        if (s.trail) {
-          this.scene.remove(s.trail);
-          s.trail.geometry.dispose();
-          (s.trail.material as THREE.Material).dispose();
+      if (this.trailEnabled) {
+        s.trailPositions.push(s.mesh.position.clone());
+        if (s.trailPositions.length > TRAIL_MAX_POINTS) {
+          s.trailPositions.shift();
         }
 
-        const positions = new Float32Array(s.trailPositions.length * 3);
-        s.trailPositions.forEach((p, idx) => {
-          positions[idx * 3] = p.x;
-          positions[idx * 3 + 1] = p.y;
-          positions[idx * 3 + 2] = p.z;
-        });
+        if (s.trailPositions.length >= 2) {
+          if (s.trail) {
+            this.scene.remove(s.trail);
+            s.trail.geometry.dispose();
+            (s.trail.material as THREE.Material).dispose();
+          }
 
-        const trailGeom = new THREE.BufferGeometry();
-        trailGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+          const positions = new Float32Array(s.trailPositions.length * 3);
+          s.trailPositions.forEach((p, idx) => {
+            positions[idx * 3] = p.x;
+            positions[idx * 3 + 1] = p.y;
+            positions[idx * 3 + 2] = p.z;
+          });
 
-        const trailMat = new THREE.LineBasicMaterial({
-          color: mat.color.clone(),
-          transparent: true,
-          opacity: mat.opacity * 0.5,
-          depthWrite: false
-        });
+          const trailGeom = new THREE.BufferGeometry();
+          trailGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-        s.trail = new THREE.Line(trailGeom, trailMat);
-        this.scene.add(s.trail);
+          const trailMat = new THREE.LineBasicMaterial({
+            color: mat.color.clone(),
+            transparent: true,
+            opacity: mat.opacity * 0.5,
+            depthWrite: false
+          });
+
+          s.trail = new THREE.Line(trailGeom, trailMat);
+          this.scene.add(s.trail);
+        }
       }
     }
   }
