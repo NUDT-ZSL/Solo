@@ -122,8 +122,58 @@ export class UIControls {
       
       ${this.createSliderGroup('count', '粒子数量', 50000, 10000, 100000, 1000, '50,000')}
       ${this.createSliderGroup('rotation', '旋转速度', 1.0, 0, 5, 0.1, '1.0x')}
-      ${this.createSliderGroup('sizeMin', '最小尺寸', 0.1, 0.05, 1, 0.05, '0.10')}
-      ${this.createSliderGroup('sizeMax', '最大尺寸', 0.5, 0.1, 2, 0.05, '0.50')}
+      
+      <div style="margin-bottom: 20px; padding: 14px; background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 10px;">
+        <div style="font-size: 12px; color: rgba(167, 139, 250, 0.95); margin-bottom: 12px; font-weight: 600;">粒子大小范围</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 11px; color: rgba(255, 255, 255, 0.7);">最小</span>
+          <span data-value="sizeMin" style="font-size: 11px; font-weight: 600; color: #a78bfa; font-variant-numeric: tabular-nums;">0.10</span>
+        </div>
+        <input type="range" data-slider="sizeMin" min="0.05" max="1" step="0.05" value="0.1" style="
+          width: 100%;
+          height: 4px;
+          -webkit-appearance: none;
+          appearance: none;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
+          outline: none;
+          cursor: pointer;
+          margin-bottom: 10px;
+        ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 11px; color: rgba(255, 255, 255, 0.7);">最大</span>
+          <span data-value="sizeMax" style="font-size: 11px; font-weight: 600; color: #a78bfa; font-variant-numeric: tabular-nums;">0.50</span>
+        </div>
+        <input type="range" data-slider="sizeMax" min="0.1" max="2" step="0.05" value="0.5" style="
+          width: 100%;
+          height: 4px;
+          -webkit-appearance: none;
+          appearance: none;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
+          outline: none;
+          cursor: pointer;
+        ">
+        <style>
+          input[data-slider="sizeMin"]::-webkit-slider-thumb,
+          input[data-slider="sizeMax"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+          }
+          input[data-slider="sizeMin"]::-webkit-slider-thumb:hover,
+          input[data-slider="sizeMax"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 2px 12px rgba(139, 92, 246, 0.8);
+          }
+        </style>
+      </div>
       
       <div style="margin-top: 28px;">
         <div style="font-size: 12px; color: rgba(167, 139, 250, 0.9); margin-bottom: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">颜色主题</div>
@@ -445,14 +495,18 @@ export class UIControls {
         this.fpsValue.style.color = '#ef4444';
       }
 
+      const currentVisibleRatio = this.particleSystem.getVisibleRatio();
       if (this.currentFps < 30) {
-        this.particleSystem.setVisibleRatio(0.8);
-      } else if (this.currentFps >= 55) {
-        this.particleSystem.setVisibleRatio(1.0);
+        const newRatio = Math.max(0.5, currentVisibleRatio - 0.1);
+        this.particleSystem.setVisibleRatio(newRatio);
+      } else if (this.currentFps >= 55 && currentVisibleRatio < 1.0) {
+        const newRatio = Math.min(1.0, currentVisibleRatio + 0.05);
+        this.particleSystem.setVisibleRatio(newRatio);
       }
     }
 
-    this.particleCountValue.textContent = this.particleSystem.getParticleCount().toLocaleString();
+    const actualCount = Math.floor(this.particleSystem.getParticleCount() * this.particleSystem.getVisibleRatio());
+    this.particleCountValue.textContent = `${actualCount.toLocaleString()} / ${this.particleSystem.getParticleCount().toLocaleString()}`;
     this.renderTimeValue.textContent = `${renderTime.toFixed(1)}ms`;
   }
 

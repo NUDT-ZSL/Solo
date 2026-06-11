@@ -248,6 +248,10 @@ export class ParticleSystem {
     this.targetVisibleRatio = Math.max(0.3, Math.min(1, ratio));
   }
 
+  public getVisibleRatio(): number {
+    return this.targetVisibleRatio;
+  }
+
   public burst(worldPosition: THREE.Vector3): void {
     const theme = colorThemes[this.currentThemeIndex];
     for (let i = 0; i < 100; i++) {
@@ -317,6 +321,7 @@ export class ParticleSystem {
   public update(deltaTime: number, elapsedTime: number): void {
     this.breathingPhase += deltaTime * 0.5;
     const breathing = Math.sin(this.breathingPhase) * 0.15 + 1;
+    const brightnessBreathing = Math.sin(this.breathingPhase * 1.2) * 0.1 + 0.9;
 
     if (this.themeTransitionProgress < 1) {
       this.themeTransitionProgress = Math.min(
@@ -327,6 +332,8 @@ export class ParticleSystem {
 
     this.visibleRatio = smoothDamp(this.visibleRatio, this.targetVisibleRatio, 0.3, deltaTime);
     this.geometry.setDrawRange(0, Math.floor(this.particleCount * this.visibleRatio));
+
+    this.material.opacity = 0.9 * brightnessBreathing;
 
     const currentTheme = colorThemes[this.currentThemeIndex];
     const targetTheme = colorThemes[this.targetThemeIndex];
@@ -373,9 +380,9 @@ export class ParticleSystem {
       const colorCurrent = getGradientColor(t, currentTheme);
       const colorTarget = getGradientColor(t, targetTheme);
       const lerpT = this.themeTransitionProgress;
-      this.colors[idx] = colorCurrent.r + (colorTarget.r - colorCurrent.r) * lerpT;
-      this.colors[idx + 1] = colorCurrent.g + (colorTarget.g - colorCurrent.g) * lerpT;
-      this.colors[idx + 2] = colorCurrent.b + (colorTarget.b - colorCurrent.b) * lerpT;
+      this.colors[idx] = (colorCurrent.r + (colorTarget.r - colorCurrent.r) * lerpT) * brightnessBreathing;
+      this.colors[idx + 1] = (colorCurrent.g + (colorTarget.g - colorCurrent.g) * lerpT) * brightnessBreathing;
+      this.colors[idx + 2] = (colorCurrent.b + (colorTarget.b - colorCurrent.b) * lerpT) * brightnessBreathing;
     }
 
     if (this.themeTransitionProgress >= 1) {
