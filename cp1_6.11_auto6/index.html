@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>尘音寻迹 - 交互式迷路途经回放</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top-nav">
+      <div class="logo" style="animation: fadeIn 0.5s ease-out;">
+        <span class="logo-icon">✦</span>
+        <span class="logo-text">尘音寻迹</span>
+      </div>
+      <div class="mode-switch">
+        <button id="mode-draw" class="mode-btn active">绘制</button>
+        <button id="mode-playback" class="mode-btn">回放</button>
+      </div>
+      <button id="mobile-toolbar-toggle" class="mobile-toolbar-toggle" aria-label="工具栏">
+        <span>☰</span>
+      </button>
+    </header>
+
+    <main class="main-content">
+      <aside id="left-panel" class="side-panel left-panel">
+        <div class="panel-section">
+          <h3 class="panel-title">参数调节</h3>
+          
+          <div class="slider-group">
+            <label class="slider-label">
+              <span>粒子密度</span>
+              <span id="particle-density-value" class="slider-value">80</span>
+            </label>
+            <input 
+              type="range" 
+              id="particle-density" 
+              min="30" 
+              max="150" 
+              value="80" 
+              step="1"
+              class="custom-slider"
+            >
+          </div>
+
+          <div class="slider-group">
+            <label class="slider-label">
+              <span>回放速度</span>
+              <span id="playback-speed-value" class="slider-value">1.0x</span>
+            </label>
+            <input 
+              type="range" 
+              id="playback-speed" 
+              min="0.5" 
+              max="3" 
+              value="1" 
+              step="0.1"
+              class="custom-slider"
+            >
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <button id="save-btn" class="primary-btn gradient-btn">
+            <span class="btn-icon">⬇</span>
+            <span>保存路径</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="canvas-wrapper">
+        <canvas id="canvas"></canvas>
+        <div class="canvas-hint" id="canvas-hint">
+          按住鼠标拖拽绘制路径
+        </div>
+      </div>
+
+      <aside id="right-panel" class="side-panel right-panel">
+        <div class="panel-section">
+          <h3 class="panel-title">氛围设置</h3>
+          
+          <button id="add-atmosphere-btn" class="secondary-btn disabled">
+            <span class="btn-icon">＋</span>
+            <span>添加氛围</span>
+          </button>
+
+          <div id="atmosphere-picker" class="atmosphere-picker hidden">
+            <div class="atmosphere-card" data-type="forest">
+              <div class="atmosphere-preview" style="background: linear-gradient(135deg, #6BCB77, #4CAF50);">
+                <span class="atmosphere-icon">♪</span>
+              </div>
+              <span class="atmosphere-name">森林</span>
+            </div>
+            <div class="atmosphere-card" data-type="ocean">
+              <div class="atmosphere-preview" style="background: linear-gradient(135deg, #4A90D9, #357ABD);">
+                <span class="atmosphere-icon">〰</span>
+              </div>
+              <span class="atmosphere-name">海洋</span>
+            </div>
+            <div class="atmosphere-card" data-type="dusk">
+              <div class="atmosphere-preview" style="background: linear-gradient(135deg, #FF8C42, #FF6B35);">
+                <span class="atmosphere-icon">✦</span>
+              </div>
+              <span class="atmosphere-name">暮色</span>
+            </div>
+            <div class="atmosphere-card" data-type="volcano">
+              <div class="atmosphere-preview" style="background: linear-gradient(135deg, #FF6B6B, #EE5253);">
+                <span class="atmosphere-icon">🔥</span>
+              </div>
+              <span class="atmosphere-name">火山</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="bottom-bar">
+      <div class="path-info">
+        <label class="path-label">路径：</label>
+        <input 
+          type="text" 
+          id="path-name" 
+          class="path-name-input" 
+          placeholder="输入路径名称"
+          maxlength="30"
+          value="未命名路径"
+        >
+      </div>
+      <div class="author-info">
+        <label class="author-label">作者：</label>
+        <input 
+          type="text" 
+          id="author-input" 
+          class="author-input" 
+          placeholder="输入作者名"
+          maxlength="20"
+        >
+      </div>
+      <div class="load-section">
+        <button id="load-btn" class="secondary-btn">
+          <span class="btn-icon">⬆</span>
+          <span>加载路径</span>
+        </button>
+        <input type="file" id="load-input" accept=".json" style="display: none;">
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
