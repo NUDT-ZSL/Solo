@@ -16,12 +16,12 @@ export interface UndoPayload {
   strokeId: string;
 }
 
-type ClientMessage =
+export type ClientMessage =
   | { type: 'DRAW'; payload: DrawPayload }
   | { type: 'UNDO'; payload: UndoPayload }
   | { type: 'CLEAR_CANVAS'; payload: { userId: string } };
 
-type ServerMessage =
+export type ServerMessage =
   | { type: 'WELCOME'; payload: { userId: string; isAdmin: boolean; strokes: DrawPayload[] } }
   | { type: 'USER_JOINED'; payload: { userId: string; onlineCount: number } }
   | { type: 'USER_LEFT'; payload: { userId: string; onlineCount: number } }
@@ -32,7 +32,11 @@ type ServerMessage =
 
 type MessageCallback = (message: ServerMessage) => void;
 
-const WS_URL = window.location.origin.replace(/^http/, 'ws') + '/ws';
+const getWsUrl = (): string => {
+  const host = window.location.hostname;
+  return `ws://${host}:3001/ws`;
+};
+
 const MAX_MESSAGE_BYTES = 10 * 1024;
 
 class NetworkManager {
@@ -44,7 +48,7 @@ class NetworkManager {
   connect(): Promise<{ userId: string; isAdmin: boolean; strokes: DrawPayload[] }> {
     return new Promise((resolve, reject) => {
       try {
-        this.ws = new WebSocket(WS_URL);
+        this.ws = new WebSocket(getWsUrl());
       } catch (err) {
         reject(err);
         return;

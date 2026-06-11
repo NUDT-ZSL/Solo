@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { network, type DrawPayload, type Point } from '@/utils/network';
+import { network, type DrawPayload, type Point, type ClientMessage } from '@/utils/network';
 import { v4 as uuidv4 } from 'uuid';
 
 const MAX_POINTS_PER_STROKE = 1000;
+const MAX_MESSAGE_BYTES = 10 * 1024;
 const GRID_SIZE = 50;
 
 export interface CanvasHandle {
@@ -43,6 +44,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const pendingPointsRef = useRef<Point[]>([]);
   const rafIdRef = useRef<number | null>(null);
   const indicatorRef = useRef<HTMLDivElement | null>(null);
+  const countTextRef = useRef<HTMLSpanElement | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getCoordinates = useCallback((e: MouseEvent | TouchEvent): Point | null => {
@@ -194,13 +196,17 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const toSend = pending.slice();
     pendingPointsRef.current = [];
 
-    if (active.points.length >= MAX_POINTS_PER_STROKE) return;
+    if (active.points.length >= MAX_POINTS_PER_STROKE) {
+      isDrawingRef.current = false;
+      activeStrokeRef.current = null;
+      return;
+    }
 
     const spaceLeft = MAX_POINTS_PER_STROKE - active.points.length;
     const chunk = toSend.slice(0, spaceLeft);
     active.points.push(...chunk);
 
-    network.send({
+    const payload: ClientMessage = {
       type: 'DRAW',
       payload: {
         strokeId: active.strokeId,
@@ -209,10 +215,41 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         size: active.size,
         points: chunk,
       },
-    });
+    };
 
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(payload);
+    } catch (e) {
+      console.warn('Serialization failed', e);
+      return;
+    }
+
+    const byteLength = typeof Buffer !== 'undefined'
+      ? Buffer.byteLength(serialized, 'utf8')
+      : new TextEncoder().encode(serialized).length;
+
+    if (byteLength > MAX_MESSAGE_BYTES) {
+      console.warn('Draw message exceeds 10KB, chunk dropped');
+      return;
+    }
+
+    network.send(payload);
     fullRedraw();
-  }, [userId, fullRedraw]);
+
+    if (active.points.length >= MAX_POINTS_PER_STROKE) {
+      const completed: DrawPayload = {
+        strokeId: active.strokeId,
+        userId,
+        color: active.color,
+        size: active.size,
+        points: active.points,
+      };
+      onStrokeEnd(completed);
+      isDrawingRef.current = false;
+      activeStrokeRef.current = null;
+    }
+  }, [userId, fullRedraw, onStrokeEnd]);
 
   const queuePoints = useCallback(
     (point: Point) => {
@@ -275,11 +312,18 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const active = activeStrokeRef.current;
     if (active && pendingPointsRef.current.length > 0) {
       const spaceLeft = MAX_POINTS_PER_STROKE - active.points.length;
+      if (spaceLeft <= 0) {
+        isDrawingRef.current = false;
+        activeStrokeRef.current = null;
+        pendingPointsRef.current = [];
+        fullRedraw();
+        return;
+      }
       const chunk = pendingPointsRef.current.slice(0, spaceLeft);
       active.points.push(...chunk);
 
       if (chunk.length > 0) {
-        network.send({
+        const payload: ClientMessage = {
           type: 'DRAW',
           payload: {
             strokeId: active.strokeId,
@@ -288,7 +332,14 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             size: active.size,
             points: chunk,
           },
-        });
+        };
+        const serialized = JSON.stringify(payload);
+        const byteLength = typeof Buffer !== 'undefined'
+          ? Buffer.byteLength(serialized, 'utf8')
+          : new TextEncoder().encode(serialized).length;
+        if (byteLength <= MAX_MESSAGE_BYTES) {
+          network.send(payload);
+        }
       }
     }
 
@@ -334,12 +385,15 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       clearTimeout(fadeTimerRef.current);
     }
     const el = indicatorRef.current;
-    if (el) {
+    const textEl = countTextRef.current;
+    if (el && textEl) {
       el.classList.add('fading');
+      textEl.classList.add('fading-text');
       fadeTimerRef.current = setTimeout(() => {
         el.classList.remove('fading');
+        textEl.classList.remove('fading-text');
         fadeTimerRef.current = null;
-      }, 250);
+      }, 400);
     }
   }, [onlineCount]);
 
@@ -387,9 +441,10 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       <canvas ref={canvasRef} className="canvas-element" />
       <div ref={indicatorRef} className="online-indicator">
         <span className="online-dot" />
-        <span>
-          {onlineCount} 人在线
+        <span ref={countTextRef} className="online-count-text">
+          {onlineCount}
         </span>
+        <span> 人在线</span>
       </div>
       {isClearing && (
         <div className="clear-overlay">

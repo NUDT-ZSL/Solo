@@ -1,7 +1,10 @@
-import express, { Express, Request, Response } from 'express';
-import { createServer, Server as HTTPServer } from 'http';
+import express from 'express';
+import { createServer } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
+
+import type { Express, Request, Response } from 'express';
+import type { Server as HTTPServer } from 'http';
 
 const PORT = 3001;
 const MAX_STROKE_POINTS = 1000;
