@@ -74,7 +74,7 @@ export class Ecosystem {
       const x = Math.floor(Math.random() * GRID_SIZE)
       const y = Math.floor(Math.random() * GRID_SIZE)
       if (!this.grid[y][x].grass && !this.grid[y][x].forbidden) {
-        this.grid[y][x].grass = { type: CreatureType.Grass, regrowTimer: 0 }
+        this.grid[y][x].grass = { type: CreatureType.Grass, remainingTurns: 0 }
         grassPlaced++
       }
     }
@@ -148,12 +148,12 @@ export class Ecosystem {
       
       const cell = this.grid[task.y][task.x]
       if (cell.grass) {
-        cell.grass.regrowTimer = task.remainingTurns
+        cell.grass.remainingTurns = task.remainingTurns
       }
 
       if (task.remainingTurns <= 0) {
         if (cell.grass) {
-          cell.grass.regrowTimer = 0
+          cell.grass.remainingTurns = 0
         }
         toRemove.push(key)
       }
@@ -179,7 +179,7 @@ export class Ecosystem {
     
     const cell = this.grid[y][x]
     if (cell.grass) {
-      cell.grass.regrowTimer = task.remainingTurns
+      cell.grass.remainingTurns = task.remainingTurns
     }
   }
 
@@ -191,7 +191,7 @@ export class Ecosystem {
 
       const cell = this.grid[rabbit.y][rabbit.x]
       
-      if (cell.grass && cell.grass.regrowTimer === 0) {
+      if (cell.grass && cell.grass.remainingTurns === 0) {
         rabbit.energy += RABBIT_ENERGY_FROM_GRASS
         this.addToRegrowQueue(rabbit.x, rabbit.y)
       }
@@ -306,7 +306,7 @@ export class Ecosystem {
       if (animal.type === CreatureType.Rabbit) {
         const grassNeighbor = validMoves.find(pos => {
           const cell = this.grid[pos.y][pos.x]
-          return cell.grass && cell.grass.regrowTimer === 0 && !cell.animal
+          return cell.grass && cell.grass.remainingTurns === 0 && !cell.animal
         })
         if (grassNeighbor) {
           target = grassNeighbor
@@ -382,6 +382,11 @@ export class Ecosystem {
     }
   }
 
+  private isCellPassable(x: number, y: number): boolean {
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false
+    return !this.grid[y][x].forbidden
+  }
+
   private getNeighbors(x: number, y: number): Position[] {
     const neighbors: Position[] = []
     const directions = [
@@ -394,10 +399,8 @@ export class Ecosystem {
     for (const dir of directions) {
       const nx = x + dir.dx
       const ny = y + dir.dy
-      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-        if (!this.grid[ny][nx].forbidden) {
-          neighbors.push({ x: nx, y: ny })
-        }
+      if (this.isCellPassable(nx, ny)) {
+        neighbors.push({ x: nx, y: ny })
       }
     }
 
@@ -406,8 +409,7 @@ export class Ecosystem {
 
   private getEmptyNeighbors(x: number, y: number): Position[] {
     return this.getNeighbors(x, y).filter(pos => 
-      !this.grid[pos.y][pos.x].animal && 
-      !this.grid[pos.y][pos.x].forbidden
+      !this.grid[pos.y][pos.x].animal
     )
   }
 
@@ -421,10 +423,8 @@ export class Ecosystem {
     for (const dir of directions) {
       const nx = x + dir.dx
       const ny = y + dir.dy
-      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-        if (!this.grid[ny][nx].forbidden) {
-          moves.push({ x: nx, y: ny })
-        }
+      if (this.isCellPassable(nx, ny)) {
+        moves.push({ x: nx, y: ny })
       }
     }
 
@@ -459,7 +459,7 @@ export class Ecosystem {
         if (this.grid[y][x].forbidden) continue
         totalCells++
         const grass = this.grid[y][x].grass
-        if (grass && grass.regrowTimer === 0) {
+        if (grass && grass.remainingTurns === 0) {
           grassCount++
         }
       }

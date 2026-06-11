@@ -173,10 +173,10 @@ export class UIManager {
       content += `<br/><span style="color: #ef476f;">🚫 禁区 - 生物无法进入</span>`
     } else {
       if (cell.grass) {
-        if (cell.grass.regrowTimer === 0) {
+        if (cell.grass.remainingTurns === 0) {
           content += `<br/><span style="color: #5bb98c;">🌿 草 (可食用)</span>`
         } else {
-          content += `<br/><span style="color: #7a9e8c;">🌱 草 (恢复中: ${cell.grass.regrowTimer}回合)</span>`
+          content += `<br/><span style="color: #7a9e8c;">🌱 草 (恢复中: ${cell.grass.remainingTurns}回合)</span>`
         }
       }
       
@@ -281,32 +281,35 @@ export class UIManager {
 
   private calculateOptimalMaxValue(series: Array<{ key: SeriesType; values: number[] }>): number {
     let absoluteMax = 0
+    let hasValidData = false
+
     for (const s of series) {
+      if (s.values.length === 0) continue
       const seriesMax = Math.max(...s.values)
-      absoluteMax = Math.max(absoluteMax, seriesMax)
+      if (isFinite(seriesMax) && seriesMax > 0) {
+        absoluteMax = Math.max(absoluteMax, seriesMax)
+        hasValidData = true
+      }
     }
 
-    if (absoluteMax <= 0) return 10
+    if (!hasValidData || absoluteMax <= 0) return 10
 
     const targetMax = absoluteMax * 1.15
 
+    const niceNumbers = [1, 2, 2.5, 5, 10]
     const magnitude = Math.pow(10, Math.floor(Math.log10(targetMax)))
     const normalized = targetMax / magnitude
 
-    let niceMax: number
-    if (normalized <= 1) {
-      niceMax = 1
-    } else if (normalized <= 2) {
-      niceMax = 2
-    } else if (normalized <= 2.5) {
-      niceMax = 2.5
-    } else if (normalized <= 5) {
-      niceMax = 5
-    } else {
-      niceMax = 10
+    let niceMax = niceNumbers[niceNumbers.length - 1]
+    for (const n of niceNumbers) {
+      if (n >= normalized) {
+        niceMax = n
+        break
+      }
     }
 
-    return Math.max(1, niceMax * magnitude)
+    const result = niceMax * magnitude
+    return Math.max(1, Math.ceil(result))
   }
 
   private drawGrid(

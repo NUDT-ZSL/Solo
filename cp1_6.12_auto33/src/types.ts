@@ -15,7 +15,7 @@ export interface Position {
 
 export interface Grass {
   type: CreatureType.Grass
-  regrowTimer: number
+  remainingTurns: number
 }
 
 export interface Animal {

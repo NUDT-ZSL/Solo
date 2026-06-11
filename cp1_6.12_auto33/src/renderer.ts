@@ -78,7 +78,8 @@ export class Renderer {
 
     const now = performance.now()
     const elapsed = now - this.state.lastStepTime
-    this.state.animationProgress = Math.min(1, elapsed / ANIMATION_DURATION)
+    const rawProgress = elapsed / ANIMATION_DURATION
+    this.state.animationProgress = Math.max(0, Math.min(1, rawProgress))
 
     if (this.state.animationProgress >= 1) {
       this.state.isAnimating = false
@@ -237,28 +238,33 @@ export class Renderer {
       ctx.fillStyle = 'rgba(80, 30, 30, 0.4)'
       ctx.fillRect(px, py, this.cellSize, this.cellSize)
 
-      ctx.strokeStyle = 'rgba(200, 80, 80, 0.9)'
-      ctx.lineWidth = 3
-      const margin = this.cellSize * 0.25
-      
+      const centerX = px + this.cellSize / 2
+      const centerY = py + this.cellSize / 2
+      const xSize = this.cellSize * 0.35
+      const lineWidth = Math.max(2, this.cellSize * 0.12)
+
+      ctx.strokeStyle = 'rgba(220, 70, 70, 0.95)'
+      ctx.lineWidth = lineWidth
+      ctx.lineCap = 'round'
+
       ctx.beginPath()
-      ctx.moveTo(px + margin, py + margin)
-      ctx.lineTo(px + this.cellSize - margin, py + this.cellSize - margin)
+      ctx.moveTo(centerX - xSize, centerY - xSize)
+      ctx.lineTo(centerX + xSize, centerY + xSize)
       ctx.stroke()
 
       ctx.beginPath()
-      ctx.moveTo(px + this.cellSize - margin, py + margin)
-      ctx.lineTo(px + margin, py + this.cellSize - margin)
+      ctx.moveTo(centerX + xSize, centerY - xSize)
+      ctx.lineTo(centerX - xSize, centerY + xSize)
       ctx.stroke()
 
-      ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)'
-      ctx.lineWidth = 1
-      ctx.strokeRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4)
+      ctx.strokeStyle = 'rgba(255, 100, 100, 0.6)'
+      ctx.lineWidth = 2
+      ctx.strokeRect(px + 1, py + 1, this.cellSize - 2, this.cellSize - 2)
       return
     }
 
     if (cell.grass) {
-      if (cell.grass.regrowTimer === 0) {
+      if (cell.grass.remainingTurns === 0) {
         const centerX = px + this.cellSize / 2
         const centerY = py + this.cellSize / 2
         const radius = this.cellSize * 0.3
@@ -294,7 +300,7 @@ export class Renderer {
         ctx.font = `bold ${this.cellSize * 0.35}px Consolas, monospace`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText(cell.grass.regrowTimer.toString(), centerX, centerY)
+        ctx.fillText(cell.grass.remainingTurns.toString(), centerX, centerY)
       }
     }
   }
@@ -443,8 +449,13 @@ export class Renderer {
     ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4)
   }
 
+  private clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value))
+  }
+
   private easeOutQuad(t: number): number {
-    return t * (2 - t)
+    const clamped = this.clamp(t, 0, 1)
+    return 1 - (1 - clamped) * (1 - clamped)
   }
 
   public getCellSize(): number {
