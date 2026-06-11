@@ -259,7 +259,7 @@ onUnmounted(() => {
 .flow-dash {
   animation: dashFlow 1s linear infinite;
   opacity: 0.9;
-  filter: drop-shadow(0 0 4px rgba(255, 107, 53, 0.5);
+  filter: drop-shadow(0 0 4px rgba(255, 107, 53, 0.5));
 }
 
 @keyframes dashFlow {

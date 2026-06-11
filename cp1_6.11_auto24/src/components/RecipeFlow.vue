@@ -56,6 +56,15 @@
           <div v-if="errorMessage" class="error-message">
             ⚠️ {{ errorMessage }}
           </div>
+
+          <div v-if="parseWarnings.length > 0" class="warnings-wrap">
+            <p class="warnings-title">💡 解析提示（{{ parseWarnings.length }}）：</p>
+            <ul class="warnings-list">
+              <li v-for="(w, idx) in parseWarnings" :key="idx" class="warning-item">
+                {{ w }}
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div v-if="sampleRecipes.length > 0" class="samples-wrap">
@@ -170,7 +179,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import type { RecipeStep } from '../types'
 import StepCard from './StepCard.vue'
 import ConnectorLine from './ConnectorLine.vue'
-import { v4 as uuidv4 } from 'uuid'
+import { parseRecipeText } from '../utils/recipeParser'
 
 const rawText = ref('')
 const recipeTitle = ref('')
@@ -178,6 +187,7 @@ const steps = ref<RecipeStep[]>([])
 const activeStepIndex = ref(-1)
 const isParsing = ref(false)
 const errorMessage = ref('')
+const parseWarnings = ref<string[]>([])
 const flowContainerRef = ref<HTMLElement | null>(null)
 
 const sampleRecipes = ref([
@@ -235,90 +245,28 @@ const formatTotalTime = computed(() => {
   return `${mins}分${remain}秒`
 })
 
-const parseStepRegex = /^步骤?\s*(\d+)\s*[:：.\-、]\s*(.*)$/i
-const durationRegex = /(\d+(?:\.\d+)?)\s*(分钟|分|min|秒|s|sec)/i
-const ingredientRegex = /加入\s*([^，,。；;]+?)(?=\s*[,，。；;]|$)/g
-
-function parseRecipeTextLocally(text: string): RecipeStep[] {
-  const lines = text.split(/\r?\n/).filter(line => line.trim())
-  const result: RecipeStep[] = []
-  let stepNumber = 0
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    const match = trimmed.match(parseStepRegex)
-
-    let currentStepNumber: number
-    let actionText: string
-
-    if (match) {
-      currentStepNumber = parseInt(match[1], 10)
-      actionText = match[2].trim()
-      stepNumber = currentStepNumber
-    } else {
-      if (!trimmed) continue
-      stepNumber++
-      currentStepNumber = stepNumber
-      actionText = trimmed
-    }
-
-    const durationMatch = actionText.match(durationRegex)
-    let duration = 0
-    if (durationMatch) {
-      const value = parseFloat(durationMatch[1])
-      const unit = durationMatch[2].toLowerCase()
-      if (unit === '秒' || unit === 's' || unit === 'sec') {
-        duration = Math.round(value)
-      } else {
-        duration = Math.round(value * 60)
-      }
-    }
-
-    const ingredients: string[] = []
-    let ingredientMatch: RegExpExecArray | null
-    ingredientRegex.lastIndex = 0
-    while ((ingredientMatch = ingredientRegex.exec(actionText)) !== null) {
-      const ingStr = ingredientMatch[1].trim()
-      const parts = ingStr.split(/[和与、,\s]+/).filter(p => p.trim())
-      ingredients.push(...parts)
-    }
-
-    const cleanAction = actionText.replace(durationRegex, '').replace(/[。；;]\s*$/, '').trim()
-
-    result.push({
-      id: uuidv4(),
-      stepNumber: currentStepNumber,
-      action: cleanAction || actionText,
-      duration,
-      ingredients,
-      detail: actionText,
-      imageUrl: '',
-      status: 'pending'
-    })
-  }
-
-  return result
-}
-
 async function handleParse() {
   if (!rawText.value.trim()) {
     errorMessage.value = '请先输入菜谱内容'
+    parseWarnings.value = []
     return
   }
 
   isParsing.value = true
   errorMessage.value = ''
+  parseWarnings.value = []
 
   try {
-    const parsed = parseRecipeTextLocally(rawText.value)
+    const result = parseRecipeText(rawText.value)
+    parseWarnings.value = result.warnings
 
-    if (parsed.length === 0) {
-      errorMessage.value = '未能解析出有效步骤，请检查格式（步骤1: ...）'
+    if (result.steps.length === 0) {
+      errorMessage.value = '未能解析出有效步骤，请检查格式（步骤1: / Step 1 / 一、 / 1. 等）'
       isParsing.value = false
       return
     }
 
-    steps.value = parsed
+    steps.value = result.steps
     activeStepIndex.value = 0
 
     await nextTick()
@@ -334,6 +282,7 @@ function handleReset() {
   steps.value = []
   activeStepIndex.value = -1
   errorMessage.value = ''
+  parseWarnings.value = []
 }
 
 function handleAutoStart() {
@@ -392,6 +341,7 @@ function loadSample(sample: { name: string; title: string; text: string }) {
   recipeTitle.value = sample.title
   rawText.value = sample.text
   errorMessage.value = ''
+  parseWarnings.value = []
 }
 
 onMounted(() => {
