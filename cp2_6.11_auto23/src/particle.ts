@@ -7,6 +7,26 @@ export interface ParticleState {
   phase: 'flowing' | 'locked' | 'victory' | 'fading';
 }
 
+export const PHYSICS_CONFIG = {
+  CENTRAL_FORCE: 0.08,
+  REPEL_RADIUS: 25,
+  REPEL_FORCE: 1.2,
+  MAG_RADIUS: 50,
+  MAX_PULL_SPEED: 80,
+  DAMPING: 0.985,
+  MAX_SPEED: 200,
+  VICTORY_MAX_SPEED: 260,
+  VICTORY_DAMPING: 0.98,
+  VICTORY_FADE_RATE: 0.5,
+  EDGE_MARGIN: 50,
+  LOD_SKIP_FRAMES: 4,
+  LOD_RADIUS_SCALE: 0.6,
+  HOURGLASS_BOUNDARY_TOLERANCE: 2,
+  BREATH_MIN_GLOW: 0.2,
+  BREATH_MAX_GLOW: 0.5,
+  GLOW_RADIUS_MULTIPLIER: 3,
+} as const;
+
 export class Particle {
   x: number;
   y: number;
@@ -65,6 +85,7 @@ export class Particle {
   }
 
   isInHourglass(cx: number, cy: number, side: number, gap: number): boolean {
+    const tol = PHYSICS_CONFIG.HOURGLASS_BOUNDARY_TOLERANCE;
     const halfSide = side / 2;
     const halfGap = gap / 2;
     const localX = this.x - cx;
@@ -75,20 +96,20 @@ export class Particle {
     const topRightX = halfSide;
 
     const topInTriangle =
-      localY <= topY &&
-      localY >= topY - halfSide &&
-      localX >= topLeftX * (1 + (localY - topY) / halfSide) &&
-      localX <= topRightX * (1 + (localY - topY) / halfSide);
+      localY <= topY + tol &&
+      localY >= topY - halfSide - tol &&
+      localX >= topLeftX * (1 + (localY - topY) / halfSide) - tol &&
+      localX <= topRightX * (1 + (localY - topY) / halfSide) + tol;
 
     const bottomY = halfGap;
     const bottomLeftX = -halfSide;
     const bottomRightX = halfSide;
 
     const bottomInTriangle =
-      localY >= bottomY &&
-      localY <= bottomY + halfSide &&
-      localX >= bottomLeftX * (1 - (localY - bottomY) / halfSide) &&
-      localX <= bottomRightX * (1 - (localY - bottomY) / halfSide);
+      localY >= bottomY - tol &&
+      localY <= bottomY + halfSide + tol &&
+      localX >= bottomLeftX * (1 - (localY - bottomY) / halfSide) - tol &&
+      localX <= bottomRightX * (1 - (localY - bottomY) / halfSide) + tol;
 
     return topInTriangle || bottomInTriangle;
   }
@@ -114,9 +135,18 @@ export class Particle {
     if (state.phase === 'victory') {
       this.x += this.victoryVx * deltaTime;
       this.y += this.victoryVy * deltaTime;
-      this.victoryVx *= 0.98;
-      this.victoryVy *= 0.98;
-      this.opacity = Math.max(0, this.opacity - deltaTime / 2);
+      this.victoryVx *= PHYSICS_CONFIG.VICTORY_DAMPING;
+      this.victoryVy *= PHYSICS_CONFIG.VICTORY_DAMPING;
+
+      const vSpeedSq = this.victoryVx * this.victoryVx + this.victoryVy * this.victoryVy;
+      const maxVs = PHYSICS_CONFIG.VICTORY_MAX_SPEED;
+      if (vSpeedSq > maxVs * maxVs) {
+        const vSpeed = Math.sqrt(vSpeedSq);
+        this.victoryVx = (this.victoryVx / vSpeed) * maxVs;
+        this.victoryVy = (this.victoryVy / vSpeed) * maxVs;
+      }
+
+      this.opacity = Math.max(0, this.opacity - deltaTime * PHYSICS_CONFIG.VICTORY_FADE_RATE);
       this.color = this.victoryColor;
       return;
     }
@@ -134,13 +164,13 @@ export class Particle {
     const centerDy = cy - this.y;
     const centerDist = Math.sqrt(centerDx * centerDx + centerDy * centerDy);
     if (centerDist > 0.001) {
-      const centerForce = 0.08;
+      const centerForce = PHYSICS_CONFIG.CENTRAL_FORCE;
       this.vx += (centerDx / centerDist) * centerForce * dt;
       this.vy += (centerDy / centerDist) * centerForce * dt;
     }
 
-    const repelRadius = 25;
-    const repelForce = 1.2;
+    const repelRadius = PHYSICS_CONFIG.REPEL_RADIUS;
+    const repelForce = PHYSICS_CONFIG.REPEL_FORCE;
 
     const gx = Math.floor(this.x / gridCellSize);
     const gy = Math.floor(this.y / gridCellSize);
@@ -176,21 +206,20 @@ export class Particle {
       const mdx = mx - this.x;
       const mdy = my - this.y;
       const mDist = Math.sqrt(mdx * mdx + mdy * mdy);
-      const magRadius = 50;
+      const magRadius = PHYSICS_CONFIG.MAG_RADIUS;
 
       if (mDist < magRadius && mDist > 0.001) {
         const strength = 1 - mDist / magRadius;
-        const pull = strength * strength * 80;
+        const pull = strength * strength * PHYSICS_CONFIG.MAX_PULL_SPEED;
         this.vx += (mdx / mDist) * pull * dt;
         this.vy += (mdy / mDist) * pull * dt;
       }
     }
 
-    const damping = 0.985;
-    this.vx *= damping;
-    this.vy *= damping;
+    this.vx *= PHYSICS_CONFIG.DAMPING;
+    this.vy *= PHYSICS_CONFIG.DAMPING;
 
-    const maxSpeed = 200;
+    const maxSpeed = PHYSICS_CONFIG.MAX_SPEED;
     const speedSq = this.vx * this.vx + this.vy * this.vy;
     if (speedSq > maxSpeed * maxSpeed) {
       const speed = Math.sqrt(speedSq);
@@ -223,8 +252,11 @@ export class Particle {
     }
 
     const speed = 80 + Math.random() * 180;
-    this.victoryVx = Math.cos(angle) * speed;
-    this.victoryVy = Math.sin(angle) * speed;
+    const maxSpeed = PHYSICS_CONFIG.VICTORY_MAX_SPEED;
+    const clampedSpeed = Math.min(speed, maxSpeed);
+
+    this.victoryVx = Math.cos(angle) * clampedSpeed;
+    this.victoryVy = Math.sin(angle) * clampedSpeed;
     this.opacity = 1;
     this.color = this.victoryColor;
   }
@@ -239,21 +271,29 @@ export class Particle {
   ) {
     if (this.opacity <= 0.01) return;
 
-    const edgeMargin = 50;
+    const edgeMargin = PHYSICS_CONFIG.EDGE_MARGIN;
     const nearEdge =
       this.x < edgeMargin ||
       this.x > canvasWidth - edgeMargin ||
       this.y < edgeMargin ||
       this.y > canvasHeight - edgeMargin;
 
-    if (nearEdge && frameCount % 4 !== 0 && state.phase === 'flowing') {
+    if (nearEdge && frameCount % PHYSICS_CONFIG.LOD_SKIP_FRAMES !== 0 && state.phase === 'flowing') {
       return;
     }
 
     ctx.globalAlpha = this.opacity;
 
-    if (state.phase === 'flowing') {
-      const glowRadius = this.radius * 3 * (0.2 + breathIntensity * 0.3);
+    const useLOD = nearEdge && state.phase === 'flowing';
+    const renderRadius = useLOD ? this.radius * PHYSICS_CONFIG.LOD_RADIUS_SCALE : this.radius;
+
+    if (state.phase === 'flowing' && !useLOD) {
+      const glowMin = PHYSICS_CONFIG.BREATH_MIN_GLOW;
+      const glowMax = PHYSICS_CONFIG.BREATH_MAX_GLOW;
+      const glowMult = PHYSICS_CONFIG.GLOW_RADIUS_MULTIPLIER;
+      const glowIntensity = glowMin + breathIntensity * (glowMax - glowMin);
+      const glowRadius = renderRadius * glowMult * (glowMin + glowIntensity * (glowMax - glowMin));
+
       const gradient = ctx.createRadialGradient(
         this.x, this.y, 0,
         this.x, this.y, glowRadius
@@ -268,7 +308,7 @@ export class Particle {
 
     ctx.fillStyle = this.color;
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, renderRadius, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.globalAlpha = 1;

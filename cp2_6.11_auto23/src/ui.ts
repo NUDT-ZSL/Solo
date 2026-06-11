@@ -9,12 +9,31 @@ export interface UIState {
   mouseDown: boolean;
 }
 
+export const UI_CONFIG = {
+  RING_DIAMETER: 80,
+  RING_PADDING: 25,
+  RING_LINE_WIDTH: 6,
+  PULSE_INTERVAL: 0.3,
+  PULSE_MIN_ALPHA: 0.5,
+  PULSE_MAX_ALPHA: 1.0,
+  PROGRESS_BAR_WIDTH: 200,
+  PROGRESS_BAR_HEIGHT: 6,
+  HOURGLASS_SIDE: 120,
+  HOURGLASS_GAP: 40,
+  HOURLASS_LINE_WIDTH: 1.5,
+  HOURLASS_DASH: [6, 6] as [number, number],
+  MAGNETIC_RADIUS: 50,
+  MAGNETIC_ARC_COUNT: 5,
+  RESTART_BUTTON_WIDTH: 140,
+  RESTART_BUTTON_HEIGHT: 44,
+  RESTART_BUTTON_OFFSET_Y: 60,
+} as const;
+
 export class UIManager {
   private ctx: CanvasRenderingContext2D;
   private canvasWidth: number;
   private canvasHeight: number;
   private pulseTimer: number;
-  private pulseVisible: boolean;
   private pulseInterval: number;
 
   constructor(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
@@ -22,8 +41,7 @@ export class UIManager {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     this.pulseTimer = 0;
-    this.pulseVisible = true;
-    this.pulseInterval = 0.3;
+    this.pulseInterval = UI_CONFIG.PULSE_INTERVAL;
   }
 
   resize(canvasWidth: number, canvasHeight: number) {
@@ -34,13 +52,24 @@ export class UIManager {
   update(deltaTime: number, state: UIState) {
     if (state.gameState === 'playing' && state.timeLeft <= 10) {
       this.pulseTimer += deltaTime;
-      if (this.pulseTimer >= this.pulseInterval) {
+      if (this.pulseTimer >= this.pulseInterval * 2) {
         this.pulseTimer = 0;
-        this.pulseVisible = !this.pulseVisible;
       }
     } else {
-      this.pulseVisible = true;
+      this.pulseTimer = 0;
     }
+  }
+
+  private getPulseAlpha(state: UIState): number {
+    if (state.gameState !== 'playing' || state.timeLeft > 10) {
+      return 1;
+    }
+
+    const t = this.pulseTimer / this.pulseInterval;
+    const alpha = UI_CONFIG.PULSE_MIN_ALPHA +
+      (UI_CONFIG.PULSE_MAX_ALPHA - UI_CONFIG.PULSE_MIN_ALPHA) *
+      (0.5 + 0.5 * Math.sin(t * Math.PI));
+    return alpha;
   }
 
   render(state: UIState) {
@@ -52,12 +81,12 @@ export class UIManager {
   }
 
   private drawProgressRing(state: UIState) {
-    const ringDiameter = 80;
+    const ringDiameter = UI_CONFIG.RING_DIAMETER;
     const radius = ringDiameter / 2;
-    const padding = 25;
+    const padding = UI_CONFIG.RING_PADDING;
+    const lineWidth = UI_CONFIG.RING_LINE_WIDTH;
     const cx = this.canvasWidth - radius - padding;
     const cy = radius + padding;
-    const lineWidth = 6;
 
     this.ctx.save();
 
@@ -72,9 +101,7 @@ export class UIManager {
     const colorB = Math.floor(green.b + (red.b - green.b) * t);
     const ringColor = `rgb(${colorR},${colorG},${colorB})`;
 
-    const alpha = state.timeLeft <= 10 && state.gameState === 'playing'
-      ? this.pulseVisible ? 1 : 0.5
-      : 1;
+    const alpha = this.getPulseAlpha(state);
 
     this.ctx.globalAlpha = alpha;
 
@@ -122,9 +149,9 @@ export class UIManager {
   }
 
   private drawProgressBar(state: UIState) {
-    const barWidth = 200;
-    const barHeight = 6;
-    const padding = 25;
+    const barWidth = UI_CONFIG.PROGRESS_BAR_WIDTH;
+    const barHeight = UI_CONFIG.PROGRESS_BAR_HEIGHT;
+    const padding = UI_CONFIG.RING_PADDING;
     const x = padding;
     const y = this.canvasHeight - padding - barHeight - 30;
 
@@ -184,10 +211,9 @@ export class UIManager {
   private drawBestTime(state: UIState) {
     if (state.bestTime !== null) {
       this.ctx.save();
-      const barWidth = 200;
-      const padding = 25;
+      const barWidth = UI_CONFIG.PROGRESS_BAR_WIDTH;
+      const padding = UI_CONFIG.RING_PADDING;
       const y = this.canvasHeight - padding;
-      const x = this.canvasWidth - barWidth - padding;
       this.ctx.fillStyle = '#AAAAAA';
       this.ctx.font = `0.85rem 'Segoe UI', sans-serif`;
       this.ctx.textAlign = 'right';
@@ -200,13 +226,13 @@ export class UIManager {
   drawHourglassOutline() {
     const cx = this.canvasWidth / 2;
     const cy = this.canvasHeight / 2;
-    const side = 120;
-    const gap = 40;
+    const side = UI_CONFIG.HOURGLASS_SIDE;
+    const gap = UI_CONFIG.HOURGLASS_GAP;
 
     this.ctx.save();
     this.ctx.strokeStyle = 'rgba(0,229,255,0.3)';
-    this.ctx.lineWidth = 1.5;
-    this.ctx.setLineDash([6, 6]);
+    this.ctx.lineWidth = UI_CONFIG.HOURLASS_LINE_WIDTH;
+    this.ctx.setLineDash(UI_CONFIG.HOURLASS_DASH);
 
     this.drawTriangle(cx, cy - gap / 2 - side / 2, side, 'down');
     this.drawTriangle(cx, cy + gap / 2 + side / 2, side, 'up');
@@ -246,9 +272,9 @@ export class UIManager {
 
   getRestartButtonBounds() {
     const cx = this.canvasWidth / 2;
-    const cy = this.canvasHeight / 2 + 60;
-    const width = 140;
-    const height = 44;
+    const cy = this.canvasHeight / 2 + UI_CONFIG.RESTART_BUTTON_OFFSET_Y;
+    const width = UI_CONFIG.RESTART_BUTTON_WIDTH;
+    const height = UI_CONFIG.RESTART_BUTTON_HEIGHT;
     return {
       x: cx - width / 2,
       y: cy - height / 2,
@@ -286,7 +312,7 @@ export class UIManager {
   drawMagneticField(mouseX: number, mouseY: number, strength: number) {
     if (strength <= 0) return;
     this.ctx.save();
-    const radius = 50;
+    const radius = UI_CONFIG.MAGNETIC_RADIUS;
     const innerColor = `rgba(0,229,255,${0.15 * strength})`;
     const outerColor = `rgba(0,229,255,0)`;
 
@@ -303,8 +329,8 @@ export class UIManager {
 
     this.ctx.strokeStyle = `rgba(0,229,255,${0.6 * strength})`;
     this.ctx.lineWidth = 1.5;
-    for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2 + (performance.now() / 1000) * 2;
+    for (let i = 0; i < UI_CONFIG.MAGNETIC_ARC_COUNT; i++) {
+      const angle = (i / UI_CONFIG.MAGNETIC_ARC_COUNT) * Math.PI * 2 + (performance.now() / 1000) * 2;
       const r = radius * 0.6;
       this.ctx.beginPath();
       this.ctx.arc(
@@ -316,6 +342,51 @@ export class UIManager {
       );
       this.ctx.stroke();
     }
+
+    this.ctx.restore();
+  }
+
+  drawPerformanceMonitor(fps: number, particleCount: number) {
+    this.ctx.save();
+
+    const padding = 25;
+    const barHeight = UI_CONFIG.PROGRESS_BAR_HEIGHT;
+    const y = this.canvasHeight - padding - barHeight - 30;
+
+    this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    this.ctx.font = `0.75rem 'Segoe UI', monospace`;
+    this.ctx.textAlign = 'right';
+    this.ctx.textBaseline = 'bottom';
+
+    const fpsText = `FPS: ${fps.toFixed(0)}`;
+    const particlesText = `粒子: ${particleCount}`;
+
+    const fpsMetrics = this.ctx.measureText(fpsText);
+    const particlesMetrics = this.ctx.measureText(particlesText);
+    const maxWidth = Math.max(fpsMetrics.width, particlesMetrics.width);
+    const bgX = this.canvasWidth - padding - maxWidth - 12;
+    const bgY = y - 12 - 32;
+    const bgW = maxWidth + 24;
+    const bgH = 44;
+
+    this.ctx.fillStyle = 'rgba(10,10,15,0.8)';
+    this.ctx.beginPath();
+    this.roundRect(this.ctx, bgX, bgY, bgW, bgH, 6);
+    this.ctx.fill();
+
+    this.ctx.strokeStyle = 'rgba(0,229,255,0.3)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.roundRect(this.ctx, bgX, bgY, bgW, bgH, 6);
+    this.ctx.stroke();
+
+    const fpsColor = fps >= 55 ? '#00FF88' : fps >= 30 ? '#FFD700' : '#FF3366';
+    this.ctx.fillStyle = fpsColor;
+    this.ctx.textBaseline = 'top';
+    this.ctx.fillText(fpsText, bgX + bgW - 12, bgY + 8);
+
+    this.ctx.fillStyle = '#AAAAAA';
+    this.ctx.fillText(particlesText, bgX + bgW - 12, bgY + 24);
 
     this.ctx.restore();
   }

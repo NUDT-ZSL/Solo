@@ -1,7 +1,20 @@
-import { Particle, SpatialHashGrid, ParticleState } from './particle';
-import { UIManager, UIState } from './ui';
+import { Particle, SpatialHashGrid, ParticleState, PHYSICS_CONFIG } from './particle';
+import { UIManager, UIState, UI_CONFIG } from './ui';
 
 type GameState = 'playing' | 'won' | 'lost';
+
+const GAME_CONFIG = {
+  TOTAL_TIME: 60,
+  MIN_PARTICLES: 500,
+  MAX_PARTICLES: 800,
+  WIN_THRESHOLD: 0.85,
+  GRID_CELL_SIZE: 25,
+  VICTORY_LOCK_DELAY: 300,
+  VICTORY_ANIM_DURATION: 2,
+  BREATH_PERIOD: 1.5,
+  SHOW_PERFORMANCE_MONITOR: true,
+  FPS_SMOOTHING: 0.9,
+} as const;
 
 class Game {
   private canvas: HTMLCanvasElement;
@@ -22,8 +35,8 @@ class Game {
   private mouseActive: boolean = false;
   private mouseInside: boolean = false;
 
-  private totalTime: number = 60;
-  private timeLeft: number = 60;
+  private totalTime: number = GAME_CONFIG.TOTAL_TIME;
+  private timeLeft: number = GAME_CONFIG.TOTAL_TIME;
   private elapsed: number = 0;
   private victoryTime: number | null = null;
 
@@ -40,14 +53,17 @@ class Game {
 
   private timeUpAlpha: number = 0;
   private victoryAnimTimer: number = 0;
-  private victoryAnimDuration: number = 2;
+  private victoryAnimDuration: number = GAME_CONFIG.VICTORY_ANIM_DURATION;
 
   private buttonHover: boolean = false;
 
-  private hourglassSide: number = 120;
-  private hourglassGap: number = 40;
+  private hourglassSide: number = UI_CONFIG.HOURGLASS_SIDE;
+  private hourglassGap: number = UI_CONFIG.HOURGLASS_GAP;
 
-  private winThreshold: number = 0.85;
+  private winThreshold: number = GAME_CONFIG.WIN_THRESHOLD;
+
+  private fps: number = 60;
+  private fpsSmoothing: number = GAME_CONFIG.FPS_SMOOTHING;
 
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -66,8 +82,9 @@ class Game {
     this.setupCanvas();
 
     this.ui = new UIManager(this.ctx, this.canvasSize, this.canvasSize);
-    this.particleCount = 500 + Math.floor(Math.random() * 301);
-    this.grid = new SpatialHashGrid(25);
+    this.particleCount = GAME_CONFIG.MIN_PARTICLES +
+      Math.floor(Math.random() * (GAME_CONFIG.MAX_PARTICLES - GAME_CONFIG.MIN_PARTICLES + 1));
+    this.grid = new SpatialHashGrid(GAME_CONFIG.GRID_CELL_SIZE);
 
     this.loadBestTime();
     this.initParticles();
@@ -261,7 +278,16 @@ class Game {
     }
   }
 
+  private updateFPS(deltaTime: number) {
+    if (deltaTime > 0) {
+      const instantFps = 1 / deltaTime;
+      this.fps = this.fpsSmoothing * this.fps + (1 - this.fpsSmoothing) * instantFps;
+    }
+  }
+
   private update(deltaTime: number) {
+    this.updateFPS(deltaTime);
+
     if (this.gameState === 'playing') {
       this.timeLeft -= deltaTime;
       this.elapsed += deltaTime;
@@ -273,8 +299,11 @@ class Game {
     }
 
     this.breathTimer += deltaTime;
-    if (this.breathTimer > 1.5) this.breathTimer -= 1.5;
-    this.breathIntensity = 0.5 + 0.5 * Math.sin((this.breathTimer / 1.5) * Math.PI * 2);
+    if (this.breathTimer > GAME_CONFIG.BREATH_PERIOD) {
+      this.breathTimer -= GAME_CONFIG.BREATH_PERIOD;
+    }
+    this.breathIntensity = 0.5 + 0.5 *
+      Math.sin((this.breathTimer / GAME_CONFIG.BREATH_PERIOD) * Math.PI * 2);
 
     if (this.particleState.phase === 'victory') {
       this.victoryAnimTimer += deltaTime;
@@ -366,7 +395,7 @@ class Game {
       for (const p of this.particles) {
         p.triggerVictoryBurst(this.canvasSize, this.canvasSize);
       }
-    }, 300);
+    }, GAME_CONFIG.VICTORY_LOCK_DELAY);
 
     if (this.bestTime === null || this.victoryTime < this.bestTime) {
       this.bestTime = this.victoryTime;
@@ -384,7 +413,8 @@ class Game {
   }
 
   private restart() {
-    this.particleCount = 500 + Math.floor(Math.random() * 301);
+    this.particleCount = GAME_CONFIG.MIN_PARTICLES +
+      Math.floor(Math.random() * (GAME_CONFIG.MAX_PARTICLES - GAME_CONFIG.MIN_PARTICLES + 1));
     this.initParticles();
 
     this.particleState = { phase: 'flowing' };
@@ -396,7 +426,7 @@ class Game {
     this.victoryAnimTimer = 0;
     this.mouseActive = false;
     this.buttonHover = false;
-    this.breathTimer = Math.random() * 1.5;
+    this.breathTimer = Math.random() * GAME_CONFIG.BREATH_PERIOD;
   }
 
   private render() {
@@ -434,6 +464,10 @@ class Game {
     };
 
     this.ui.render(uiState);
+
+    if (GAME_CONFIG.SHOW_PERFORMANCE_MONITOR) {
+      this.ui.drawPerformanceMonitor(this.fps, this.particles.length);
+    }
 
     if (this.gameState === 'lost') {
       this.ui.drawTimeUpText(this.timeUpAlpha);
