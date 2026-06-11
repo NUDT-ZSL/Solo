@@ -20,7 +20,7 @@ import type { Vec3, Camera, Light, GeometryType, GeometryPart } from './types.js
 const DEG_TO_RAD = Math.PI / 180;
 
 // ------------------------------------------------------------
-// 高亮动画参数：金橙(#FFA726) -> 暖红(#FF5252)，周期1.5秒
+// 高亮动画参数：金橙(#FFA726) -> 暖红(#FF5252)，渐变缓动闪烁，周期1.5秒
 // ------------------------------------------------------------
 const HIGHLIGHT_COLOR_START = { r: 0xff, g: 0xa7, b: 0x26 };
 const HIGHLIGHT_COLOR_END = { r: 0xff, g: 0x52, b: 0x52 };
@@ -29,7 +29,7 @@ const HIGHLIGHT_PERIOD_SEC = 1.5;
 interface RenderFace {
   points: { x: number; y: number }[];
   avgZ: number;
-  fillStyle: string;
+  fillStyle: string | CanvasGradient;
   strokeStyle: string;
   strokeWidth: number;
   alpha: number;
@@ -291,7 +291,7 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------
-  // 高亮描边：金橙(#FFA726) -> 暖红(#FF5252) 渐变缓动闪烁 1.5s
+  // 高亮描边：金橙(#FFA726) -> 暖红(#FF5252) 渐变缓动闪烁，周期1.5秒
   // ------------------------------------------------------------
 
   private drawHighlightOutline(ex: Exhibit, camera: Camera, w: number, h: number): void {
@@ -401,7 +401,6 @@ export class Renderer {
     const scale = this.computeScreenScale(haloPos.z, camera, h) * ex.boundingRadius * 3.2;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const t = gallery => 0.7 + 0.3 * Math.sin(this.highlightTime * 1.2 + ex.position.x);
     const pulse = 0.6 + 0.4 * Math.sin(this.highlightTime * 1.6 + ex.id.charCodeAt(8));
     const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, scale);
     grad.addColorStop(0, `rgba(124, 77, 255, ${0.35 * pulse})`);
@@ -495,7 +494,7 @@ export class Renderer {
   private materialFillStyle(
     baseColor: string, material: string,
     points: { x: number; y: number }[], isReflection: boolean
-  ): string {
+  ): string | CanvasGradient {
     if (material === 'glass') {
       // 磨砂玻璃：线性渐变+低透明度
       const xs = points.map(p => p.x);

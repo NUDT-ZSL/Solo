@@ -215,9 +215,14 @@ function renderLoop(t: number): void {
   }
 
   const camResult = interaction.update(deltaTime, camera);
-  camera = buildCameraFromSpherical(camResult);
+
+  if (interaction.isCameraActive || gallery.sceneDirty) {
+    camera = buildCameraFromSpherical(camResult);
+  }
+
   gallery.update(deltaTime);
   renderer.render(gallery, camera, lights, deltaTime);
+  gallery.clearSceneDirty();
 
   if (infoPanelNeedsUpdate) {
     infoPanelNeedsUpdate = false;

@@ -27,6 +27,9 @@ export class Exhibit {
   public rotationSpeed: number;
   public selected: boolean;
   public boundingRadius: number;
+  public dirty: boolean = true;
+
+  private _onChange: (() => void) | null = null;
 
   constructor(data: Partial<ExhibitData> = {}) {
     this.id = data.id ?? Exhibit.generateId();
@@ -40,6 +43,19 @@ export class Exhibit {
     this.rotationSpeed = data.rotationSpeed ?? 1.0;
     this.selected = data.selected ?? false;
     this.boundingRadius = this.calculateBoundingRadius();
+  }
+
+  public setOnChange(cb: (() => void) | null): void {
+    this._onChange = cb;
+  }
+
+  private markDirty(): void {
+    this.dirty = true;
+    if (this._onChange) this._onChange();
+  }
+
+  public clearDirty(): void {
+    this.dirty = false;
   }
 
   private static generateId(): string {
@@ -62,6 +78,7 @@ export class Exhibit {
     this.position.y = y;
     this.position.z = z;
     this.boundingRadius = this.calculateBoundingRadius();
+    this.markDirty();
   }
 
   /**
@@ -75,6 +92,7 @@ export class Exhibit {
     this.position.y += dy;
     this.position.z += dz;
     this.boundingRadius = this.calculateBoundingRadius();
+    this.markDirty();
   }
 
   /**
@@ -91,6 +109,7 @@ export class Exhibit {
     this.position.x += dx;
     this.position.z += dz;
     this.boundingRadius = this.calculateBoundingRadius();
+    this.markDirty();
   }
 
   // ------------------------------------------------------------
@@ -101,20 +120,24 @@ export class Exhibit {
     this.rotation.x = rx;
     this.rotation.y = ry;
     this.rotation.z = rz;
+    this.markDirty();
   }
 
   public rotate(drx: number, dry: number, drz: number): void {
     this.rotation.x += drx;
     this.rotation.y += dry;
     this.rotation.z += drz;
+    this.markDirty();
   }
 
   public toggleRotation(enabled?: boolean): void {
     this.isRotating = enabled ?? !this.isRotating;
+    this.markDirty();
   }
 
   public setRotationSpeed(speed: number): void {
     this.rotationSpeed = Math.max(0.5, Math.min(3.0, speed));
+    this.markDirty();
   }
 
   // ------------------------------------------------------------

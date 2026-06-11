@@ -26,10 +26,24 @@ export class Gallery {
   private platformSlots: Vec3[] = [];
   private selectedExhibitId: string | null = null;
   private lightAnimationTime: number = 0;
+  public sceneDirty: boolean = true;
 
   constructor() {
     this.generatePlatformSlots();
     this.setupDefaultExhibits();
+  }
+
+  private onExhibitChange = (): void => {
+    this.sceneDirty = true;
+  };
+
+  public clearSceneDirty(): void {
+    this.sceneDirty = false;
+    for (const ex of this.exhibits) ex.clearDirty();
+  }
+
+  private registerExhibitCallbacks(ex: Exhibit): void {
+    ex.setOnChange(this.onExhibitChange);
   }
 
   // ------------------------------------------------------------
@@ -67,6 +81,7 @@ export class Gallery {
         isRotating: i === 0,
         rotationSpeed: 1.0
       });
+      this.registerExhibitCallbacks(exhibit);
       this.exhibits.push(exhibit);
     }
   }
@@ -238,6 +253,7 @@ export class Gallery {
       isRotating: false,
       rotationSpeed: 1.0
     });
+    this.registerExhibitCallbacks(exhibit);
     this.exhibits.push(exhibit);
     return exhibit.id;
   }
@@ -275,6 +291,7 @@ export class Gallery {
       isRotating: false,
       rotationSpeed: 1.0
     });
+    this.registerExhibitCallbacks(exhibit);
     this.exhibits.push(exhibit);
     return exhibit.id;
   }
@@ -426,6 +443,9 @@ export class Gallery {
   // ------------------------------------------------------------
   // 布局保存/加载（JSON序列化）
   // 数据流向：interaction.ts 保存/加载按钮 -> main.ts -> gallery.serialize/load
+  // 序列化包含：展品位置(position)、旋转角度(rotation)、几何体类型(parts.type)、
+  //             颜色(parts.color)、材质(parts.material)、缩放(scale)、
+  //             自转状态(isRotating)、转速(rotationSpeed)
   // ------------------------------------------------------------
 
   public serializeLayout(cameraYaw: number, cameraPitch: number, cameraFov: number, cameraDistance: number): LayoutData {
@@ -440,8 +460,17 @@ export class Gallery {
   public loadLayout(data: LayoutData): { yaw: number; pitch: number; fov: number; distance: number } {
     this.exhibits = [];
     this.selectedExhibitId = null;
+    this.sceneDirty = true;
     for (const exData of data.exhibits) {
-      this.exhibits.push(Exhibit.fromJSON(exData));
+      if (!exData.rotation) {
+        exData.rotation = { x: 0, y: 0, z: 0 };
+      }
+      if (!exData.parts) {
+        exData.parts = [];
+      }
+      const ex = Exhibit.fromJSON(exData);
+      this.registerExhibitCallbacks(ex);
+      this.exhibits.push(ex);
     }
     return {
       yaw: data.camera.yaw,

@@ -55,6 +55,7 @@ export class InteractionManager {
   private cameraTarget: { yaw: number; pitch: number; fov: number; distance: number };
   private cameraProgress: number = 1;
   private currentCamera: { yaw: number; pitch: number; fov: number; distance: number };
+  public isTransitioning: boolean = false;
 
   // 鼠标拖拽状态
   private isDragging: boolean = false;
@@ -92,17 +93,23 @@ export class InteractionManager {
   // ------------------------------------------------------------
 
   public update(deltaTime: number, camera: Camera): { yaw: number; pitch: number; fov: number; distance: number } {
-    // 连续按键移动（WASD / QE）
     this.applyHeldKeys(deltaTime);
 
-    // 相机缓动过渡
     if (this.cameraProgress < 1) {
       this.cameraProgress = Math.min(1, this.cameraProgress + deltaTime / CAMERA_TRANSITION_SEC);
       const prev = this.cameraStart ?? this.currentCamera;
       const result = Renderer.interpolateCamera(prev, this.cameraTarget, this.cameraProgress);
-      this.currentCamera = result;
-      return result;
+
+      if (this.cameraProgress >= 1) {
+        this.currentCamera = { ...this.cameraTarget };
+        this.isTransitioning = false;
+      } else {
+        this.currentCamera = result;
+      }
+      return this.currentCamera;
     }
+
+    this.isTransitioning = false;
     return this.currentCamera;
   }
 
@@ -119,20 +126,33 @@ export class InteractionManager {
       distance
     };
     this.cameraProgress = 0;
+    this.isTransitioning = true;
   }
 
   public adjustCameraTargetByDelta(dyaw: number, dpitch: number, dfov: number = 0): void {
     const cur = this.cameraProgress < 1 ? this.cameraTarget : this.currentCamera;
-    this.setCameraTarget(
-      cur.yaw + dyaw,
-      cur.pitch + dpitch,
-      Math.max(MIN_FOV, Math.min(MAX_FOV, cur.fov + dfov)),
-      cur.distance
-    );
+    const newTarget = {
+      yaw: cur.yaw + dyaw,
+      pitch: Math.max(MIN_PITCH, Math.min(MAX_PITCH, cur.pitch + dpitch)),
+      fov: Math.max(MIN_FOV, Math.min(MAX_FOV, cur.fov + dfov)),
+      distance: cur.distance
+    };
+    if (this.isDragging) {
+      this.currentCamera = { ...newTarget };
+      this.cameraTarget = { ...newTarget };
+      this.cameraProgress = 1;
+      this.isTransitioning = false;
+    } else {
+      this.setCameraTarget(newTarget.yaw, newTarget.pitch, newTarget.fov, newTarget.distance);
+    }
   }
 
   public getCurrentCameraYaw(): number {
     return this.currentCamera.yaw;
+  }
+
+  public get isCameraActive(): boolean {
+    return this.isTransitioning || this.isDragging;
   }
 
   // ------------------------------------------------------------
@@ -255,6 +275,14 @@ export class InteractionManager {
   // ------------------------------------------------------------
 
   private attachTemplateDragEvents(): void {
+    // 文档级别 dragover 必须 preventDefault，否则 drop 事件无法触发
+    document.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && e.dataTransfer.types.includes('application/x-template-id')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    });
+
     // 绑定模板卡片的 dragstart
     document.addEventListener('dragstart', (e) => {
       const target = e.target as HTMLElement;
