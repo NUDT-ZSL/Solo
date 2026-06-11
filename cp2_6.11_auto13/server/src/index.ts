@@ -84,12 +84,6 @@ app.delete('/api/capsules/:id', (req, res) => {
     return res.status(404).json({ error: '胶囊不存在' });
   }
 
-  const capsule = capsules[index];
-  const now = new Date();
-  if (new Date(capsule.unlockDate) <= now) {
-    return res.status(403).json({ error: '已解锁的胶囊不可删除' });
-  }
-
   capsules.splice(index, 1);
   res.json({ message: '胶囊已删除' });
 });
