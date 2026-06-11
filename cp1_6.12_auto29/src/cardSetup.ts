@@ -3,6 +3,7 @@ import { CardData } from './cardData';
 
 export interface CardObject {
   group: THREE.Group;
+  cardPivot: THREE.Group;
   frontMesh: THREE.Mesh;
   backMesh: THREE.Mesh;
   edgeMesh: THREE.LineSegments;
@@ -150,11 +151,14 @@ export function setupCards(cardDataList: CardData[]): CardObject[] {
     const z = Math.sin(angle) * ORBIT_RADIUS_Z;
 
     const group = new THREE.Group();
+    const cardPivot = new THREE.Group();
 
     const frontTexture = createFrontTexture(data);
     const backTexture = createBackTexture(data);
 
-    const cardGeometry = new THREE.BoxGeometry(CARD_WIDTH, CARD_HEIGHT, CARD_THICKNESS);
+    const frontGeometry = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT);
+    const backGeometry = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT);
+    const sideGeometry = new THREE.BoxGeometry(CARD_WIDTH, CARD_HEIGHT, CARD_THICKNESS);
 
     const frontMaterial = new THREE.MeshStandardMaterial({
       map: frontTexture,
@@ -162,7 +166,7 @@ export function setupCards(cardDataList: CardData[]): CardObject[] {
       roughness: 0.5,
       emissive: new THREE.Color(data.theme.glow),
       emissiveIntensity: 0,
-      side: THREE.FrontSide
+      side: THREE.DoubleSide
     });
 
     const backMaterial = new THREE.MeshStandardMaterial({
@@ -171,10 +175,25 @@ export function setupCards(cardDataList: CardData[]): CardObject[] {
       roughness: 0.5,
       emissive: new THREE.Color(data.theme.glow),
       emissiveIntensity: 0,
-      side: THREE.BackSide
+      side: THREE.DoubleSide
     });
 
-    const edgeGeometry = new THREE.EdgesGeometry(cardGeometry);
+    const sideMaterial = new THREE.MeshStandardMaterial({
+      color: data.theme.front,
+      metalness: 0.3,
+      roughness: 0.5
+    });
+
+    const sideMesh = new THREE.Mesh(sideGeometry, sideMaterial);
+
+    const frontMesh = new THREE.Mesh(frontGeometry, frontMaterial);
+    frontMesh.position.z = CARD_THICKNESS / 2 + 0.001;
+
+    const backMesh = new THREE.Mesh(backGeometry, backMaterial);
+    backMesh.position.z = -CARD_THICKNESS / 2 - 0.001;
+    backMesh.rotation.y = Math.PI;
+
+    const edgeGeometry = new THREE.EdgesGeometry(sideGeometry);
     const edgeMaterial = new THREE.LineBasicMaterial({
       color: data.theme.glow,
       transparent: true,
@@ -182,9 +201,9 @@ export function setupCards(cardDataList: CardData[]): CardObject[] {
     });
 
     const glowGeometry = new THREE.BoxGeometry(
-      CARD_WIDTH + 0.1,
-      CARD_HEIGHT + 0.1,
-      CARD_THICKNESS + 0.05
+      CARD_WIDTH + 0.15,
+      CARD_HEIGHT + 0.15,
+      CARD_THICKNESS + 0.1
     );
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: data.theme.glow,
@@ -193,22 +212,16 @@ export function setupCards(cardDataList: CardData[]): CardObject[] {
       side: THREE.BackSide
     });
 
-    const materials = [
-      new THREE.MeshStandardMaterial({ color: data.theme.front, metalness: 0.3, roughness: 0.5 }),
-      new THREE.MeshStandardMaterial({ color: data.theme.front, metalness: 0.3, roughness: 0.5 }),
-      new THREE.MeshStandardMaterial({ color: data.theme.front, metalness: 0.3, roughness: 0.5 }),
-      new THREE.MeshStandardMaterial({ color: data.theme.front, metalness: 0.3, roughness: 0.5 }),
-      frontMaterial,
-      backMaterial
-    ];
-
-    const cardMesh = new THREE.Mesh(cardGeometry, materials);
     const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
     const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial);
 
-    group.add(cardMesh);
-    group.add(glowMesh);
-    group.add(edgeMesh);
+    cardPivot.add(sideMesh);
+    cardPivot.add(frontMesh);
+    cardPivot.add(backMesh);
+    cardPivot.add(glowMesh);
+    cardPivot.add(edgeMesh);
+
+    group.add(cardPivot);
 
     group.position.set(x, 0, z);
     group.lookAt(0, 0, 0);
@@ -216,8 +229,9 @@ export function setupCards(cardDataList: CardData[]): CardObject[] {
 
     const cardObj: CardObject = {
       group,
-      frontMesh: cardMesh,
-      backMesh: cardMesh,
+      cardPivot,
+      frontMesh,
+      backMesh,
       edgeMesh,
       glowMesh,
       originalPosition: group.position.clone(),

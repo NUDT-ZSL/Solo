@@ -152,8 +152,10 @@ function onMouseWheel(event: WheelEvent): void {
 function getCardFromMesh(mesh: THREE.Object3D): CardObject | undefined {
   return cards.find(card => {
     if (card.frontMesh === mesh) return true;
+    if (card.backMesh === mesh) return true;
     if (card.glowMesh === mesh) return true;
     if (card.edgeMesh === mesh) return true;
+    if (card.cardPivot === mesh) return true;
     if (card.group === mesh) return true;
     return false;
   });
@@ -228,11 +230,13 @@ function toggleCardFlip(card: CardObject): void {
     selectedCard = card;
     cards.forEach(c => {
       if (c !== card) {
-        const materials = c.frontMesh.material as THREE.MeshStandardMaterial[];
-        materials.forEach(m => {
-          m.transparent = true;
-          m.opacity = 0.3;
-        });
+        (c.frontMesh.material as THREE.MeshStandardMaterial).transparent = true;
+        (c.frontMesh.material as THREE.MeshStandardMaterial).opacity = 0.3;
+        (c.backMesh.material as THREE.MeshStandardMaterial).transparent = true;
+        (c.backMesh.material as THREE.MeshStandardMaterial).opacity = 0.3;
+        const sideMesh = c.cardPivot.children[0] as THREE.Mesh;
+        (sideMesh.material as THREE.MeshStandardMaterial).transparent = true;
+        (sideMesh.material as THREE.MeshStandardMaterial).opacity = 0.3;
         (c.glowMesh.material as THREE.MeshBasicMaterial).opacity = 0;
       }
     });
@@ -242,11 +246,13 @@ function toggleCardFlip(card: CardObject): void {
   } else {
     selectedCard = null;
     cards.forEach(c => {
-      const materials = c.frontMesh.material as THREE.MeshStandardMaterial[];
-      materials.forEach(m => {
-        m.transparent = false;
-        m.opacity = 1;
-      });
+      (c.frontMesh.material as THREE.MeshStandardMaterial).transparent = false;
+      (c.frontMesh.material as THREE.MeshStandardMaterial).opacity = 1;
+      (c.backMesh.material as THREE.MeshStandardMaterial).transparent = false;
+      (c.backMesh.material as THREE.MeshStandardMaterial).opacity = 1;
+      const sideMesh = c.cardPivot.children[0] as THREE.Mesh;
+      (sideMesh.material as THREE.MeshStandardMaterial).transparent = false;
+      (sideMesh.material as THREE.MeshStandardMaterial).opacity = 1;
     });
     isCameraAnimating = false;
     targetCameraAngle = cameraAngle;
@@ -349,7 +355,7 @@ function updateCards(deltaTime: number): void {
     card.group.scale.setScalar(hoverScale);
 
     card.currentFlip += (card.targetFlip - card.currentFlip) * flipSpeed * deltaTime;
-    card.frontMesh.rotation.y = card.currentFlip;
+    card.cardPivot.rotation.y = card.currentFlip;
 
     const glowIntensity = card.hoverProgress * 0.5 + (card.isFlipped ? 0.3 : 0);
     const glowMaterial = card.glowMesh.material as THREE.MeshBasicMaterial;
@@ -358,13 +364,9 @@ function updateCards(deltaTime: number): void {
     const edgeMaterial = card.edgeMesh.material as THREE.LineBasicMaterial;
     edgeMaterial.opacity = card.hoverProgress * 0.9;
 
-    const materials = card.frontMesh.material as THREE.MeshStandardMaterial[];
     const emissiveIntensity = card.hoverProgress * 0.3 + (card.isFlipped ? 0.2 : 0);
-    materials.forEach((m, i) => {
-      if (i === 4 || i === 5) {
-        m.emissiveIntensity = emissiveIntensity;
-      }
-    });
+    (card.frontMesh.material as THREE.MeshStandardMaterial).emissiveIntensity = emissiveIntensity;
+    (card.backMesh.material as THREE.MeshStandardMaterial).emissiveIntensity = emissiveIntensity;
   });
 }
 
