@@ -10,23 +10,24 @@ export interface CameraPreset {
 export const CAMERA_PRESETS: Record<string, CameraPreset> = {
   birdseye: {
     name: '鸟瞰',
-    position: new THREE.Vector3(0, 120, 10),
+    position: new THREE.Vector3(0, 150, 0.01),
     target: new THREE.Vector3(0, 0, 0),
   },
   street: {
     name: '街景',
-    position: new THREE.Vector3(60, 15, 60),
+    position: new THREE.Vector3(70, 18, 70),
     target: new THREE.Vector3(0, 10, 0),
   },
   free: {
     name: '自由',
-    position: new THREE.Vector3(80, 50, 80),
+    position: new THREE.Vector3(90, 55, 90),
     target: new THREE.Vector3(0, 10, 0),
   },
 };
 
-type BuildingClickCallback = (building: BuildingData, screenX: number, screenY: number) => void;
-type BuildingHoverCallback = (building: BuildingData | null) => void;
+type BuildingClickCallback = (building: BuildingData, screenX: number, screenY: number, worldPos: THREE.Vector3) => void;
+type BuildingHoverCallback = (building: BuildingData | null, screenX?: number, screenY?: number) => void;
+type PresetChangeCallback = (t: number) => void;
 
 export class InteractionControls {
   private camera: THREE.PerspectiveCamera;
@@ -34,27 +35,31 @@ export class InteractionControls {
   private cityGenerator: CityGenerator;
 
   private isDragging = false;
-  private isRightDrag = false;
+  private dragStartPos = { x: 0, y: 0 };
   private previousMouse = { x: 0, y: 0 };
   private spherical = { theta: 0, phi: 0, radius: 100 };
   private target = new THREE.Vector3(0, 10, 0);
 
   private raycaster = new THREE.Raycaster();
-  private mouse = new THREE.Vector2();
+  private mouseNDC = new THREE.Vector2();
 
   private clickCallbacks: BuildingClickCallback[] = [];
   private hoverCallbacks: BuildingHoverCallback[] = [];
+  private presetAnimationCallbacks: PresetChangeCallback[] = [];
 
   private animating = false;
-  private animStartPos = new THREE.Vector3();
-  private animStartTarget = new THREE.Vector3();
-  private animEndPos = new THREE.Vector3();
-  private animEndTarget = new THREE.Vector3();
+  private bezierP0 = new THREE.Vector3();
+  private bezierP1 = new THREE.Vector3();
+  private bezierP2 = new THREE.Vector3();
+  private bezierP3 = new THREE.Vector3();
+  private bezierTargetStart = new THREE.Vector3();
+  private bezierTargetEnd = new THREE.Vector3();
   private animStartTime = 0;
   private animDuration = 1.5;
 
   private hoveredBuilding: BuildingData | null = null;
   private selectedBuilding: BuildingData | null = null;
+  private highlightMesh: THREE.Mesh | null = null;
   private highlightEdges: THREE.LineSegments | null = null;
   private highlightStartTime = 0;
 
@@ -77,9 +82,11 @@ export class InteractionControls {
     this.domElement.addEventListener('mousedown', this.onMouseDown);
     this.domElement.addEventListener('mousemove', this.onMouseMove);
     this.domElement.addEventListener('mouseup', this.onMouseUp);
+    this.domElement.addEventListener('mouseleave', this.onMouseUp);
     this.domElement.addEventListener('wheel', this.onWheel, { passive: false });
     this.domElement.addEventListener('contextmenu', this.onContextMenu);
     this.domElement.addEventListener('click', this.onClick);
+
     this.domElement.addEventListener('touchstart', this.onTouchStart, { passive: false });
     this.domElement.addEventListener('touchmove', this.onTouchMove, { passive: false });
     this.domElement.addEventListener('touchend', this.onTouchEnd);
@@ -89,8 +96,7 @@ export class InteractionControls {
     if (!this.enabled || this.animating) return;
     if (e.button === 0) {
       this.isDragging = true;
-    } else if (e.button === 2) {
-      this.isRightDrag = true;
+      this.dragStartPos = { x: e.clientX, y: e.clientY };
     }
     this.previousMouse = { x: e.clientX, y: e.clientY };
   };
@@ -104,35 +110,26 @@ export class InteractionControls {
       this.spherical.theta -= dx * 0.005;
       this.spherical.phi = THREE.MathUtils.clamp(
         this.spherical.phi - dy * 0.005,
-        0.1,
-        Math.PI / 2 - 0.05
+        0.08,
+        Math.PI / 2 - 0.03
       );
       this.previousMouse = { x: e.clientX, y: e.clientY };
       this.updateCameraFromSpherical();
     }
 
-    if (this.isRightDrag && !this.animating) {
-      const dx = e.clientX - this.previousMouse.x;
-      const dy = e.clientY - this.previousMouse.y;
-      this.target.x -= dx * 0.1;
-      this.target.y += dy * 0.1;
-      this.previousMouse = { x: e.clientX, y: e.clientY };
-      this.updateCameraFromSpherical();
-    }
-
-    this.updateHover(e);
+    this.updateHover(e.clientX, e.clientY);
   };
 
   private onMouseUp = (): void => {
     this.isDragging = false;
-    this.isRightDrag = false;
   };
 
   private onWheel = (e: WheelEvent): void => {
     if (!this.enabled || this.animating) return;
     e.preventDefault();
+    const factor = Math.sign(e.deltaY);
     this.spherical.radius = THREE.MathUtils.clamp(
-      this.spherical.radius + e.deltaY * 0.05,
+      this.spherical.radius * (1 + factor * 0.06),
       15,
       250
     );
@@ -145,24 +142,15 @@ export class InteractionControls {
 
   private onClick = (e: MouseEvent): void => {
     if (!this.enabled || this.animating) return;
-    if (this.isDragging) return;
+    const dx = Math.abs(e.clientX - this.dragStartPos.x);
+    const dy = Math.abs(e.clientY - this.dragStartPos.y);
+    if (dx > 4 || dy > 4) return;
 
-    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    const buildings = this.cityGenerator.getAllBuildings();
-    const meshes = buildings.map(b => b.mesh);
-    const intersects = this.raycaster.intersectObjects(meshes);
-
-    if (intersects.length > 0) {
-      const hitMesh = intersects[0].object as THREE.Mesh;
-      const buildingId = hitMesh.userData.buildingId as number;
-      const building = this.cityGenerator.getBuildingById(buildingId);
-      if (building) {
-        this.selectBuilding(building);
-        this.clickCallbacks.forEach(cb => cb(building, e.clientX, e.clientY));
-      }
+    const result = this.pickBuilding(e.clientX, e.clientY);
+    if (result) {
+      const { building, worldPos } = result;
+      this.selectBuilding(building);
+      this.clickCallbacks.forEach(cb => cb(building, e.clientX, e.clientY, worldPos));
     } else {
       this.deselectBuilding();
     }
@@ -174,6 +162,7 @@ export class InteractionControls {
     if (e.touches.length === 1) {
       this.isDragging = true;
       this.previousMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      this.dragStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
   };
 
@@ -186,8 +175,8 @@ export class InteractionControls {
       this.spherical.theta -= dx * 0.005;
       this.spherical.phi = THREE.MathUtils.clamp(
         this.spherical.phi - dy * 0.005,
-        0.1,
-        Math.PI / 2 - 0.05
+        0.08,
+        Math.PI / 2 - 0.03
       );
       this.previousMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       this.updateCameraFromSpherical();
@@ -196,120 +185,131 @@ export class InteractionControls {
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
-      if ((this as any)._lastPinchDist) {
-        const delta = (this as any)._lastPinchDist - dist;
-        this.spherical.radius = THREE.MathUtils.clamp(
-          this.spherical.radius + delta * 0.1,
-          15,
-          250
-        );
+      const last = (this as any)._lastPinchDist;
+      if (last && last > 0) {
+        const ratio = last / dist;
+        this.spherical.radius = THREE.MathUtils.clamp(this.spherical.radius * ratio, 15, 250);
         this.updateCameraFromSpherical();
       }
       (this as any)._lastPinchDist = dist;
     }
   };
 
-  private onTouchEnd = (): void => {
+  private onTouchEnd = (e: TouchEvent): void => {
+    if (this.isDragging) {
+      const t = e.changedTouches[0];
+      const dx = Math.abs(t.clientX - this.dragStartPos.x);
+      const dy = Math.abs(t.clientY - this.dragStartPos.y);
+      if (dx < 5 && dy < 5) {
+        const result = this.pickBuilding(t.clientX, t.clientY);
+        if (result) {
+          this.selectBuilding(result.building);
+          this.clickCallbacks.forEach(cb => cb(result.building, t.clientX, t.clientY, result.worldPos));
+        }
+      }
+    }
     this.isDragging = false;
     (this as any)._lastPinchDist = 0;
   };
 
-  private updateHover(e: MouseEvent): void {
-    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  private pickBuilding(screenX: number, screenY: number): { building: BuildingData; worldPos: THREE.Vector3 } | null {
+    this.mouseNDC.x = (screenX / window.innerWidth) * 2 - 1;
+    this.mouseNDC.y = -(screenY / window.innerHeight) * 2 + 1;
 
-    this.raycaster.setFromCamera(this.mouse, this.camera);
+    this.raycaster.setFromCamera(this.mouseNDC, this.camera);
+
     const buildings = this.cityGenerator.getAllBuildings();
-    const meshes = buildings.map(b => b.mesh);
-    const intersects = this.raycaster.intersectObjects(meshes);
+    const proxyMeshes = buildings.map(b => b.mesh);
 
+    const intersects = this.raycaster.intersectObjects(proxyMeshes, false);
     if (intersects.length > 0) {
-      const hitMesh = intersects[0].object as THREE.Mesh;
-      const buildingId = hitMesh.userData.buildingId as number;
-      const building = this.cityGenerator.getBuildingById(buildingId);
-
-      if (this.hoveredBuilding !== building) {
-        if (this.hoveredBuilding) {
-          this.resetBuildingEmissive(this.hoveredBuilding);
-        }
-        this.hoveredBuilding = building;
-        if (building && building !== this.selectedBuilding) {
-          const mat = building.mesh.material as THREE.MeshStandardMaterial;
-          mat.emissive = new THREE.Color(0x222244);
-          mat.emissiveIntensity = 0.3;
-        }
-        this.hoverCallbacks.forEach(cb => cb(building));
+      const hit = intersects[0];
+      const mesh = hit.object as THREE.Mesh;
+      const data = mesh.userData.buildingData as BuildingData | undefined;
+      if (data) {
+        return { building: data, worldPos: hit.point.clone() };
       }
-      this.domElement.style.cursor = 'pointer';
-    } else {
-      if (this.hoveredBuilding) {
-        this.resetBuildingEmissive(this.hoveredBuilding);
-        this.hoveredBuilding = null;
-        this.hoverCallbacks.forEach(cb => cb(null));
-      }
-      this.domElement.style.cursor = 'grab';
     }
+    return null;
   }
 
-  private resetBuildingEmissive(building: BuildingData): void {
-    if (building === this.selectedBuilding) return;
-    const mat = building.mesh.material as THREE.MeshStandardMaterial;
-    mat.emissive = new THREE.Color(0x000000);
-    mat.emissiveIntensity = 0;
+  private updateHover(screenX: number, screenY: number): void {
+    const result = this.pickBuilding(screenX, screenY);
+    const building = result ? result.building : null;
+
+    if (building !== this.hoveredBuilding) {
+      this.hoveredBuilding = building;
+      this.hoverCallbacks.forEach(cb => cb(building, screenX, screenY));
+    }
+    this.domElement.style.cursor = building ? 'pointer' : 'grab';
   }
 
   private selectBuilding(building: BuildingData): void {
-    if (this.selectedBuilding) {
-      this.deselectBuilding();
-    }
+    this.deselectBuilding();
     this.selectedBuilding = building;
     this.highlightStartTime = performance.now();
 
-    const mat = building.mesh.material as THREE.MeshStandardMaterial;
-    mat.emissive = new THREE.Color(0xffd700);
-    mat.emissiveIntensity = 0.5;
+    const { position, size } = building;
+    const highlightGeo = new THREE.BoxGeometry(
+      size.x * 1.04,
+      size.y * 1.02,
+      size.z * 1.04
+    );
+    const highlightMat = new THREE.MeshBasicMaterial({
+      color: 0xffd700,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+    this.highlightMesh = new THREE.Mesh(highlightGeo, highlightMat);
+    this.highlightMesh.position.copy(position);
+    this.highlightMesh.renderOrder = 998;
+    building.mesh.parent?.add(this.highlightMesh);
 
-    const edgeGeo = new THREE.EdgesGeometry(building.mesh.geometry);
-    const edgeMat = new THREE.LineBasicMaterial({
+    const edgesGeo = new THREE.EdgesGeometry(highlightGeo);
+    const edgesMat = new THREE.LineBasicMaterial({
       color: 0xffd700,
       transparent: true,
       opacity: 1,
     });
-    this.highlightEdges = new THREE.LineSegments(edgeGeo, edgeMat);
-    this.highlightEdges.position.copy(building.mesh.position);
-    this.highlightEdges.name = 'highlight-edges';
+    this.highlightEdges = new THREE.LineSegments(edgesGeo, edgesMat);
+    this.highlightEdges.position.copy(position);
+    this.highlightEdges.renderOrder = 999;
     building.mesh.parent?.add(this.highlightEdges);
   }
 
   deselectBuilding(): void {
-    if (this.selectedBuilding) {
-      const mat = this.selectedBuilding.mesh.material as THREE.MeshStandardMaterial;
-      mat.emissive = new THREE.Color(0x000000);
-      mat.emissiveIntensity = 0;
-
-      if (this.highlightEdges) {
-        this.highlightEdges.parent?.remove(this.highlightEdges);
-        this.highlightEdges.geometry.dispose();
-        (this.highlightEdges.material as THREE.Material).dispose();
-        this.highlightEdges = null;
-      }
-
-      this.selectedBuilding = null;
+    if (this.highlightMesh) {
+      this.highlightMesh.parent?.remove(this.highlightMesh);
+      this.highlightMesh.geometry.dispose();
+      (this.highlightMesh.material as THREE.Material).dispose();
+      this.highlightMesh = null;
     }
+    if (this.highlightEdges) {
+      this.highlightEdges.parent?.remove(this.highlightEdges);
+      this.highlightEdges.geometry.dispose();
+      (this.highlightEdges.material as THREE.Material).dispose();
+      this.highlightEdges = null;
+    }
+    this.selectedBuilding = null;
   }
 
   updateHighlight(now: number): void {
     if (!this.selectedBuilding || !this.highlightEdges) return;
 
     const elapsed = (now - this.highlightStartTime) / 1000;
-    const blink = Math.sin(elapsed * Math.PI * 2 * (1 / 0.5));
-    const opacity = 0.3 + Math.abs(blink) * 0.7;
+    const blinkFreq = 1 / 0.5;
+    const blink = (Math.sin(elapsed * Math.PI * 2 * blinkFreq) + 1) / 2;
+    const edgeOpacity = 0.25 + blink * 0.75;
 
     const edgeMat = this.highlightEdges.material as THREE.LineBasicMaterial;
-    edgeMat.opacity = opacity;
+    edgeMat.opacity = edgeOpacity;
 
-    const mat = this.selectedBuilding.mesh.material as THREE.MeshStandardMaterial;
-    mat.emissiveIntensity = 0.2 + Math.abs(blink) * 0.5;
+    if (this.highlightMesh) {
+      const hm = this.highlightMesh.material as THREE.MeshBasicMaterial;
+      hm.opacity = 0.03 + blink * 0.15;
+    }
   }
 
   updateCameraFromSpherical(): void {
@@ -327,10 +327,24 @@ export class InteractionControls {
   }
 
   setPreset(preset: CameraPreset, duration = 1.5): void {
-    this.animStartPos.copy(this.camera.position);
-    this.animStartTarget.copy(this.target);
-    this.animEndPos.copy(preset.position);
-    this.animEndTarget.copy(preset.target);
+    this.bezierP0.copy(this.camera.position);
+    this.bezierP3.copy(preset.position);
+
+    const startLen = this.bezierP0.length();
+    const endLen = this.bezierP3.length();
+    const arcHeight = Math.max(startLen, endLen) * 0.55 + 25;
+
+    const dirStart = this.bezierP0.clone().sub(this.target).normalize();
+    const dirEnd = this.bezierP3.clone().sub(new THREE.Vector3(0, preset.target.y, 0)).normalize();
+    const midDir = dirStart.clone().add(dirEnd).normalize();
+    const midDist = (this.spherical.radius + preset.position.distanceTo(preset.target)) * 0.55;
+
+    this.bezierP1.copy(this.target).add(dirStart.multiplyScalar(midDist)).add(new THREE.Vector3(0, arcHeight * 0.5, 0));
+    this.bezierP2.copy(new THREE.Vector3(0, preset.target.y, 0)).add(midDir.multiplyScalar(midDist)).add(new THREE.Vector3(0, arcHeight, 0));
+
+    this.bezierTargetStart.copy(this.target);
+    this.bezierTargetEnd.copy(preset.target);
+
     this.animStartTime = performance.now();
     this.animDuration = duration * 1000;
     this.animating = true;
@@ -341,52 +355,44 @@ export class InteractionControls {
 
     const elapsed = now - this.animStartTime;
     let t = Math.min(1, elapsed / this.animDuration);
-    t = this.easeInOutCubic(t);
+    const eased = this.easeInOutCubic(t);
 
-    const midY = Math.max(this.animStartPos.y, this.animEndPos.y) + 30;
-    const p1 = new THREE.Vector3(
-      this.animStartPos.x * 0.6 + this.animEndPos.x * 0.4,
-      midY,
-      this.animStartPos.z * 0.6 + this.animEndPos.z * 0.4
+    const pos = this.cubicBezierPoint(
+      this.bezierP0, this.bezierP1, this.bezierP2, this.bezierP3, eased
     );
-    const p2 = new THREE.Vector3(
-      this.animStartPos.x * 0.4 + this.animEndPos.x * 0.6,
-      midY,
-      this.animStartPos.z * 0.4 + this.animEndPos.z * 0.6
-    );
-
-    const pos = this.cubicBezier(
-      this.animStartPos, p1, p2, this.animEndPos, t
-    );
-    const tgt = new THREE.Vector3().lerpVectors(this.animStartTarget, this.animEndTarget, t);
+    const tgt = new THREE.Vector3().lerpVectors(this.bezierTargetStart, this.bezierTargetEnd, eased);
 
     this.camera.position.copy(pos);
     this.target.copy(tgt);
     this.camera.lookAt(this.target);
 
+    this.presetAnimationCallbacks.forEach(cb => cb(t));
+
     const offset = this.camera.position.clone().sub(this.target);
     this.spherical.radius = offset.length();
     this.spherical.theta = Math.atan2(offset.x, offset.z);
-    this.spherical.phi = Math.acos(THREE.MathUtils.clamp(offset.y / this.spherical.radius, -1, 1));
+    const rawPhi = Math.acos(THREE.MathUtils.clamp(offset.y / this.spherical.radius, -1, 1));
+    this.spherical.phi = THREE.MathUtils.clamp(rawPhi, 0.08, Math.PI / 2 - 0.03);
 
     if (t >= 1) {
       this.animating = false;
+      this.presetAnimationCallbacks.forEach(cb => cb(1));
     }
 
     return this.animating;
   }
 
-  private cubicBezier(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, t: number): THREE.Vector3 {
+  private cubicBezierPoint(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, t: number): THREE.Vector3 {
     const mt = 1 - t;
-    const mt2 = mt * mt;
-    const mt3 = mt2 * mt;
-    const t2 = t * t;
-    const t3 = t2 * t;
+    const mtt = mt * mt;
+    const mttt = mtt * mt;
+    const tt = t * t;
+    const ttt = tt * t;
 
     return new THREE.Vector3(
-      mt3 * p0.x + 3 * mt2 * t * p1.x + 3 * mt * t2 * p2.x + t3 * p3.x,
-      mt3 * p0.y + 3 * mt2 * t * p1.y + 3 * mt * t2 * p2.y + t3 * p3.y,
-      mt3 * p0.z + 3 * mt2 * t * p1.z + 3 * mt * t2 * p2.z + t3 * p3.z
+      mttt * p0.x + 3 * mtt * t * p1.x + 3 * mt * tt * p2.x + ttt * p3.x,
+      mttt * p0.y + 3 * mtt * t * p1.y + 3 * mt * tt * p2.y + ttt * p3.y,
+      mttt * p0.z + 3 * mtt * t * p1.z + 3 * mt * tt * p2.z + ttt * p3.z
     );
   }
 
@@ -402,26 +408,20 @@ export class InteractionControls {
     this.hoverCallbacks.push(callback);
   }
 
-  enable(): void {
-    this.enabled = true;
+  onPresetAnimation(callback: PresetChangeCallback): void {
+    this.presetAnimationCallbacks.push(callback);
   }
 
-  disable(): void {
-    this.enabled = false;
-  }
-
-  isAnimating(): boolean {
-    return this.animating;
-  }
-
-  getSelectedBuilding(): BuildingData | null {
-    return this.selectedBuilding;
-  }
+  enable(): void { this.enabled = true; }
+  disable(): void { this.enabled = false; }
+  isAnimating(): boolean { return this.animating; }
+  getSelectedBuilding(): BuildingData | null { return this.selectedBuilding; }
 
   dispose(): void {
     this.domElement.removeEventListener('mousedown', this.onMouseDown);
     this.domElement.removeEventListener('mousemove', this.onMouseMove);
     this.domElement.removeEventListener('mouseup', this.onMouseUp);
+    this.domElement.removeEventListener('mouseleave', this.onMouseUp);
     this.domElement.removeEventListener('wheel', this.onWheel);
     this.domElement.removeEventListener('contextmenu', this.onContextMenu);
     this.domElement.removeEventListener('click', this.onClick);

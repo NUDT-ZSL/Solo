@@ -40,16 +40,21 @@
       right: 0;
       width: 300px;
       height: 100vh;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-left: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(15, 20, 40, 0.42);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+      border-left: 1px solid rgba(255, 255, 255, 0.22);
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
       z-index: 100;
       overflow-y: auto;
       overflow-x: hidden;
       transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       scrollbar-width: thin;
       scrollbar-color: rgba(255,255,255,0.3) transparent;
+    }
+    @supports not ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
+      #control-panel { background: rgba(20, 26, 48, 0.88); }
     }
 
     #control-panel::-webkit-scrollbar {
@@ -76,19 +81,22 @@
       transform: translateY(-50%);
       width: 32px;
       height: 64px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(15, 20, 40, 0.42);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.22);
       border-right: none;
       border-radius: 8px 0 0 8px;
-      color: rgba(255, 255, 255, 0.8);
+      color: rgba(255, 255, 255, 0.82);
       font-size: 14px;
       cursor: pointer;
       z-index: 101;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s;
+      transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s, color 0.2s;
+      box-shadow: -4px 0 12px rgba(0, 0, 0, 0.25);
     }
 
     .panel-toggle:hover {
@@ -164,35 +172,68 @@
       width: 100%;
       height: 6px;
       border-radius: 3px;
-      background: linear-gradient(90deg, #1a237e, #7b1fa2);
+      background: linear-gradient(90deg,
+          hsl(231, 76%, 36%) 0%,
+          hsl(256, 63%, 48%) 50%,
+          hsl(282, 68%, 50%) 100%);
       outline: none;
       cursor: pointer;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3),
+                  0 0 0 1px rgba(255, 255, 255, 0.05);
     }
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 0 6px rgba(123, 31, 162, 0.6), 0 2px 4px rgba(0,0,0,0.3);
+      background: linear-gradient(145deg, #ffffff, #e0e0ff);
+      border: 2px solid #b48fff;
+      box-shadow: 0 0 10px rgba(180, 143, 255, 0.55),
+                  0 0 20px rgba(123, 31, 162, 0.35),
+                  0 2px 6px rgba(0, 0, 0, 0.35);
       cursor: pointer;
-      transition: transform 0.15s;
+      transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s;
     }
 
     input[type="range"]::-webkit-slider-thumb:hover {
       transform: scale(1.2);
+      box-shadow: 0 0 14px rgba(255, 215, 0, 0.6),
+                  0 0 28px rgba(255, 215, 0, 0.3),
+                  0 2px 8px rgba(0, 0, 0, 0.4);
+      border-color: #ffd700;
     }
 
     input[type="range"]::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 0 6px rgba(123, 31, 162, 0.6), 0 2px 4px rgba(0,0,0,0.3);
+      background: linear-gradient(145deg, #ffffff, #e0e0ff);
+      border: 2px solid #b48fff;
+      box-shadow: 0 0 10px rgba(180, 143, 255, 0.55),
+                  0 0 20px rgba(123, 31, 162, 0.35),
+                  0 2px 6px rgba(0, 0, 0, 0.35);
       cursor: pointer;
-      border: none;
+      transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 14px rgba(255, 215, 0, 0.6),
+                  0 0 28px rgba(255, 215, 0, 0.3),
+                  0 2px 8px rgba(0, 0, 0, 0.4);
+      border-color: #ffd700;
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg,
+          hsl(231, 76%, 36%) 0%,
+          hsl(256, 63%, 48%) 50%,
+          hsl(282, 68%, 50%) 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
     }
 
     .preset-buttons {
