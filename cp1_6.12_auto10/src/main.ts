@@ -60,10 +60,16 @@ class RhythmTrainer {
   private scorer: Scorer;
   private renderer: Renderer;
 
-  private judgmentHideTimer: number = 0;
-  private bannerHideTimer: number = 0;
-  private perfBadgeHideTimer: number = 0;
   private lastPattern: PatternType = 'standard';
+
+  private rafAnimId: number = 0;
+  private animQueue: Array<{
+    kind: 'banner' | 'judgment' | 'perfBadge';
+    start: number;
+    duration: number;
+    target: HTMLElement;
+    onEnd?: () => void;
+  }> = [];
 
   private pendingResizeObserver?: ResizeObserver;
   private lastPerfSnap: RendererPerformanceSnapshot | null = null;

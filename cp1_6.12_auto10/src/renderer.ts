@@ -219,11 +219,23 @@ export class Renderer {
     const drawTime = performance.now() - t0;
     const frameTime = drawTime;
     if (this.callbacks.onPerformance) {
-      this.callbacks.onPerformance({
-        frameTimeMs: frameTime,
-        drawTimeMs: drawTime,
-        chartDrawTimeMs: this.lastChartDrawMs,
-      });
+      try {
+        this.callbacks.onPerformance({
+          frameTimeMs: frameTime,
+          drawTimeMs: drawTime,
+          chartDrawTimeMs: this.lastChartDrawMs,
+        });
+      } catch (e) {
+        console.warn('[Renderer] onPerformance callback error:', e);
+      }
+    }
+
+    if (drawTime > 16 && typeof console !== 'undefined') {
+      console.debug(
+        '[Renderer:perf] frame=%.1fms chart=%.1fms (over 16ms budget)',
+        drawTime,
+        this.lastChartDrawMs
+      );
     }
     this.animFrameId = requestAnimationFrame(this.frameLoop);
   };
@@ -370,11 +382,12 @@ export class Renderer {
 
   drawHistoryChart(records: RoundRecord[], force: boolean = false): number {
     const t0 = performance.now();
+    const trimmed = records.length > 10 ? records.slice(-10) : records;
     const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
     const cssW = this.historyCanvas.clientWidth || 480;
     const cssH = this.historyCanvas.clientHeight || 160;
 
-    const sig = `${cssW}x${cssH}-${records.length}-${records
+    const sig = `${cssW}x${cssH}-${trimmed.length}-${trimmed
       .map((r) => `${r.roundIndex}:${r.accuracy}`)
       .join(',')}`;
 
@@ -411,7 +424,7 @@ export class Renderer {
     }
     ctx.restore();
 
-    if (records.length === 0) {
+    if (trimmed.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.font = '12px system-ui, sans-serif';
       ctx.textAlign = 'center';
@@ -421,8 +434,8 @@ export class Renderer {
     }
 
     const points: { x: number; y: number; r: RoundRecord }[] = [];
-    const n = records.length;
-    const slotCount = Math.max(10, n);
+    const n = trimmed.length;
+    const slotCount = 10;
     const step = chartW / (slotCount - 1);
     const startOffset = (slotCount - n) * step;
 
@@ -431,9 +444,9 @@ export class Renderer {
         n === 1
           ? pad.left + chartW / 2
           : pad.left + startOffset + step * i;
-      const clampedAcc = Math.max(0, Math.min(100, records[i].accuracy));
+      const clampedAcc = Math.max(0, Math.min(100, trimmed[i].accuracy));
       const y = pad.top + chartH * (1 - clampedAcc / 100);
-      points.push({ x, y, r: records[i] });
+      points.push({ x, y, r: trimmed[i] });
     }
 
     ctx.save();
@@ -444,9 +457,8 @@ export class Renderer {
     ctx.lineTo(points[points.length - 1].x, pad.top + chartH);
     ctx.closePath();
     const fillGrad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-    fillGrad.addColorStop(0, 'rgba(0, 240, 255, 0.36)');
-    fillGrad.addColorStop(0.5, 'rgba(0, 180, 255, 0.15)');
-    fillGrad.addColorStop(1, 'rgba(0, 119, 255, 0.02)');
+    fillGrad.addColorStop(0, 'rgba(0, 240, 255, 0.42)');
+    fillGrad.addColorStop(1, 'rgba(0, 119, 255, 0.04)');
     ctx.fillStyle = fillGrad;
     ctx.fill();
     ctx.restore();

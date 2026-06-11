@@ -83,6 +83,11 @@ export const PATTERNS: Record<PatternType, PatternSubdivision[]> = {
 
 export class Metronome {
   private audioCtx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
+  private masterLevel: number = 1.0;
+  private pendingFade: { from: number; to: number; startAt: number; endAt: number } | null = null;
+  private lastFadeScheduleTime: number = 0;
+  private destroyed: boolean = false;
   private bpm: number = 120;
   private pattern: PatternType = 'standard';
   private running: boolean = false;
@@ -104,6 +109,9 @@ export class Metronome {
   private scheduleIntervalMs: number = 20;
 
   private perfLatencies: number[] = [];
+  private patternFadeDurationSec: number = 0.22;
+  private startFadeDurationSec: number = 0.08;
+  private stopFadeDurationSec: number = 0.06;
 
   constructor() {
     this.recalcPatternDims();
@@ -116,14 +124,57 @@ export class Metronome {
   }
 
   private ensureAudioCtx(): AudioContext {
+    if (this.destroyed) {
+      throw new Error('Metronome has been destroyed');
+    }
     if (!this.audioCtx) {
-      this.audioCtx = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const Ctor: typeof AudioContext =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      try {
+        this.audioCtx = new Ctor();
+      } catch (err) {
+        console.error('[Metronome] Failed to create AudioContext:', err);
+        throw err;
+      }
+      try {
+        this.masterGain = this.audioCtx.createGain();
+        this.masterGain.gain.value = 0.0001;
+        this.masterGain.connect(this.audioCtx.destination);
+      } catch (err) {
+        console.error('[Metronome] Failed to create master gain:', err);
+        throw err;
+      }
     }
     if (this.audioCtx.state === 'suspended') {
-      void this.audioCtx.resume();
+      try {
+        void this.audioCtx.resume();
+      } catch (err) {
+        console.warn('[Metronome] AudioContext resume failed:', err);
+      }
     }
     return this.audioCtx;
+  }
+
+  private scheduleFade(targetLevel: number, startAt: number, durationSec: number): void {
+    const ctx = this.audioCtx;
+    if (!ctx || !this.masterGain) return;
+    const now = ctx.currentTime;
+    const t0 = Math.max(startAt, now + 0.001);
+    const t1 = t0 + Math.max(0.005, durationSec);
+
+    try {
+      const g = this.masterGain.gain;
+      g.cancelScheduledValues(t0);
+      const fromLevel = Math.max(0.0001, g.value);
+      g.setValueAtTime(fromLevel, t0);
+      g.exponentialRampToValueAtTime(Math.max(0.0001, targetLevel), t1);
+      this.masterLevel = Math.max(0.0001, targetLevel);
+      this.pendingFade = { from: fromLevel, to: this.masterLevel, startAt: t0, endAt: t1 };
+      this.lastFadeScheduleTime = now;
+    } catch (err) {
+      console.warn('[Metronome] scheduleFade failed:', err);
+    }
   }
 
   setCallbacks(cbs: MetronomeCallbacks): void {
@@ -143,9 +194,18 @@ export class Metronome {
     if (this.pattern === pattern) return;
     this.pattern = pattern;
     this.recalcPatternDims();
+
     if (this.running && this.audioCtx) {
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+      const fadeOutStart = now + 0.005;
+      const fadeInStart = fadeOutStart + this.patternFadeDurationSec;
+
+      this.scheduleFade(0.001, fadeOutStart, this.patternFadeDurationSec);
+      this.scheduleFade(1.0, fadeInStart, this.patternFadeDurationSec);
+
       this.nextMeasureStartTime = Math.max(
-        this.audioCtx.currentTime + 0.02,
+        fadeInStart + 0.02,
         this.nextMeasureStartTime
       );
     }
@@ -165,6 +225,7 @@ export class Metronome {
 
   start(): void {
     if (this.running) return;
+    if (this.destroyed) return;
     const ctx = this.ensureAudioCtx();
     this.running = true;
     this.absoluteIndex = 0;
@@ -174,12 +235,22 @@ export class Metronome {
     this.pendingFires = [];
     this.perfLatencies = [];
 
-    this.scheduleLoop();
+    this.scheduleFade(1.0, ctx.currentTime + 0.005, this.startFadeDurationSec);
+
+    try {
+      this.scheduleLoop();
+    } catch (err) {
+      console.error('[Metronome] scheduleLoop failed at start:', err);
+    }
     this.checkFiresLoop();
   }
 
   stop(): void {
+    if (!this.running) return;
     this.running = false;
+    if (this.audioCtx && this.masterGain) {
+      this.scheduleFade(0.0001, this.audioCtx.currentTime + 0.002, this.stopFadeDurationSec);
+    }
     if (this.schedulerTimer) {
       clearTimeout(this.schedulerTimer);
       this.schedulerTimer = 0;
@@ -193,6 +264,38 @@ export class Metronome {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  async destroy(): Promise<void> {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.running = false;
+    if (this.schedulerTimer) {
+      clearTimeout(this.schedulerTimer);
+      this.schedulerTimer = 0;
+    }
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = 0;
+    }
+    if (this.masterGain) {
+      try {
+        this.masterGain.disconnect();
+      } catch (e) { /* ignore */ }
+      this.masterGain = null;
+    }
+    if (this.audioCtx) {
+      try {
+        if (this.audioCtx.state !== 'closed') {
+          await this.audioCtx.close();
+        }
+      } catch (e) {
+        console.warn('[Metronome] close AudioContext failed:', e);
+      }
+      this.audioCtx = null;
+    }
+    this.pendingFires = [];
+    this.callbacks = null;
   }
 
   getElapsedSec(): number {
@@ -311,6 +414,7 @@ export class Metronome {
 
   private synthClick(ctx: AudioContext, time: number, accent: boolean): void {
     try {
+      if (!this.masterGain) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -318,16 +422,17 @@ export class Metronome {
       osc.frequency.setValueAtTime(accent ? 1000 : 800, time);
 
       const peak = accent ? 0.45 : 0.28;
-      gain.gain.setValueAtTime(0.0001, time - 0.002);
+      const safeStart = Math.max(time - 0.002, ctx.currentTime);
+      gain.gain.setValueAtTime(0.0001, safeStart);
       gain.gain.exponentialRampToValueAtTime(peak, time);
       gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.055);
 
-      osc.connect(gain).connect(ctx.destination);
+      osc.connect(gain).connect(this.masterGain);
 
-      osc.start(time - 0.002);
+      osc.start(safeStart);
       osc.stop(time + 0.06);
     } catch (e) {
-      /* ignore */
+      console.warn('[Metronome] synthClick failed:', e);
     }
   }
 
@@ -361,10 +466,23 @@ export class Metronome {
   private reportPerformance(): void {
     const m = this.getMetricsSnapshot();
     if (this.callbacks?.onPerformanceMetrics && m.totalBeats > 0) {
-      this.callbacks.onPerformanceMetrics(m);
+      try {
+        this.callbacks.onPerformanceMetrics(m);
+      } catch (e) {
+        console.warn('[Metronome] onPerformanceMetrics callback error:', e);
+      }
     }
-    if (typeof (window as unknown as { __rhythmDebug?: unknown }).__rhythmDebug !== 'undefined') {
+    try {
       (window as unknown as { __rhythmMetrics?: PerformanceMetrics }).__rhythmMetrics = m;
+    } catch (e) { /* ignore */ }
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug(
+        '[Metronome:perf] beats=%d avg=%dms max=%dms >16ms count=%d',
+        m.totalBeats,
+        m.avgSchedulingLatency.toFixed(1),
+        m.maxSchedulingLatency.toFixed(1),
+        m.exceeds16msCount
+      );
     }
   }
 }
