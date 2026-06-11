@@ -13,6 +13,15 @@ interface CharWave {
   sampleCount: number;
 }
 
+interface MappingTestResult {
+  char: string;
+  code: number;
+  frequency: number;
+  amplitude: number;
+  cyclesPerChar: number;
+  sampleCount: number;
+}
+
 const COLOR_PALETTE = ['#FF69B4', '#00CED1', '#FFA500', '#9370DB'];
 const FREQ_MIN = 200;
 const FREQ_MAX = 800;
@@ -28,7 +37,7 @@ const DOT_RADIUS = 5;
 const BG_CIRCLE_RADIUS = 15;
 const MIN_CYCLES_PER_CHAR = 2;
 const MAX_CYCLES_PER_CHAR = 6;
-const SAMPLES_PER_CYCLE = 16;
+const SAMPLES_PER_CYCLE = 24;
 
 let canvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
@@ -137,14 +146,16 @@ function handleInput(): void {
   const overLimit = count > 100;
   charCountEl.classList.toggle('over-limit', overLimit);
 
-  generateBtn.disabled = count < 10 || count > 100;
+  const canGenerate = count >= 10 && count <= 100;
+  generateBtn.disabled = !canGenerate;
 
   if (overLimit) {
     tipMessageEl.textContent = '字符数超过100，请减少输入内容';
   } else if (count < 10 && totalInputLen > 0) {
     const needMore = 10 - count;
-    const skippedHint = totalInputLen > count
-      ? `（已忽略${totalInputLen - count}个不支持的字符，符号、空格将被跳过）`
+    const skippedCount = totalInputLen - count;
+    const skippedHint = skippedCount > 0
+      ? `（已忽略${skippedCount}个不支持的字符，符号、空格将被跳过）`
       : '（符号、空格将被自动跳过）';
     tipMessageEl.textContent = `还需至少输入${needMore}个有效字符${skippedHint}`;
   } else if (totalInputLen > 0 && count < totalInputLen) {
@@ -172,8 +183,7 @@ function getValidChars(text: string): string[] {
 
 function isValidChar(ch: string): boolean {
   if (ch === ' ' || ch === '\t' || ch === '\n') return false;
-  if (/^[a-zA-Z\u4e00-\u9fff\u3400-\u4dbf]$/.test(ch)) return true;
-  return false;
+  return /^[a-zA-Z\u4e00-\u9fff\u3400-\u4dbf]$/.test(ch);
 }
 
 function mapCodeToFreq(code: number): number {
@@ -186,9 +196,29 @@ function mapCodeToAmp(code: number): number {
   return AMP_MIN + (hash / 1000) * (AMP_MAX - AMP_MIN);
 }
 
+function validateMappingAlgorithm(testChars: string[]): MappingTestResult[] {
+  return testChars.map(ch => {
+    const code = ch.charCodeAt(0);
+    const freq = mapCodeToFreq(code);
+    const amp = mapCodeToAmp(code);
+    const freqNorm = (freq - FREQ_MIN) / (FREQ_MAX - FREQ_MIN);
+    const cycles = MIN_CYCLES_PER_CHAR + freqNorm * (MAX_CYCLES_PER_CHAR - MIN_CYCLES_PER_CHAR);
+    const samples = Math.ceil(cycles * SAMPLES_PER_CYCLE);
+
+    return {
+      char: ch,
+      code,
+      frequency: Math.round(freq * 100) / 100,
+      amplitude: Math.round(amp * 100) / 100,
+      cyclesPerChar: Math.round(cycles * 100) / 100,
+      sampleCount: samples
+    };
+  });
+}
+
 function generateWaves(): void {
   const perfStart = performance.now();
-  performance.mark('generate-start');
+  performance.mark('wavegen:start');
 
   const text = lyricInput.value;
   const validChars = getValidChars(text);
@@ -198,6 +228,17 @@ function generateWaves(): void {
   }
 
   stopPlay();
+
+  if (validChars.length >= 3) {
+    const testSamples = validChars.slice(0, Math.min(5, validChars.length));
+    const testResults = validateMappingAlgorithm(testSamples);
+    // eslint-disable-next-line no-console
+    console.log(
+      `%c[WaveGen] Mapping algorithm validation (${testSamples.length} sample chars):`,
+      'font-weight:bold;color:#4169E1',
+      testResults
+    );
+  }
   
   waves = validChars.map((ch, index) => {
     const code = ch.charCodeAt(0);
@@ -221,38 +262,54 @@ function generateWaves(): void {
     };
   });
 
-  performance.mark('mapping-done');
+  performance.mark('wavegen:mapping-done');
 
   calculateWavePositions();
   computePhasesAndSamples();
 
-  performance.mark('layout-done');
+  performance.mark('wavegen:layout-done');
 
   draw();
   playBtn.disabled = false;
 
-  performance.mark('all-done');
+  performance.mark('wavegen:all-done');
 
   try {
-    performance.measure('total-generate', 'generate-start', 'all-done');
-    performance.measure('char-mapping', 'generate-start', 'mapping-done');
-    performance.measure('layout-sample', 'mapping-done', 'layout-done');
-    performance.measure('draw-call', 'layout-done', 'all-done');
+    performance.measure('wavegen:total', 'wavegen:start', 'wavegen:all-done');
+    performance.measure('wavegen:mapping', 'wavegen:start', 'wavegen:mapping-done');
+    performance.measure('wavegen:layout', 'wavegen:mapping-done', 'wavegen:layout-done');
+    performance.measure('wavegen:draw', 'wavegen:layout-done', 'wavegen:all-done');
+
     const measures = performance.getEntriesByType('measure');
-    const totalMs = measures.find(m => m.name === 'total-generate')?.duration ?? 0;
+    const findMeasure = (name: string) => 
+      measures.find(m => m.name === name)?.duration ?? 0;
+
+    const totalMs = findMeasure('wavegen:total');
+    const mappingMs = findMeasure('wavegen:mapping');
+    const layoutMs = findMeasure('wavegen:layout');
+    const drawMs = findMeasure('wavegen:draw');
+
     // eslint-disable-next-line no-console
     console.log(
-      `[WaveGen] ${waves.length} chars | total: ${totalMs.toFixed(2)}ms | ` +
-      `mapping: ${(measures.find(m => m.name === 'char-mapping')?.duration ?? 0).toFixed(2)}ms | ` +
-      `layout: ${(measures.find(m => m.name === 'layout-sample')?.duration ?? 0).toFixed(2)}ms | ` +
-      `draw: ${(measures.find(m => m.name === 'draw-call')?.duration ?? 0).toFixed(2)}ms`
+      `%c[WaveGen] ${waves.length} chars | ` +
+      `total: ${totalMs.toFixed(2)}ms | ` +
+      `mapping: ${mappingMs.toFixed(2)}ms | ` +
+      `layout: ${layoutMs.toFixed(2)}ms | ` +
+      `draw: ${drawMs.toFixed(2)}ms` +
+      (totalMs > 300 ? ' ⚠️ OVER 300ms!' : ' ✅ OK (<300ms)'),
+      totalMs > 300 ? 'color:#FF4500;font-weight:bold' : 'color:#32CD32;font-weight:bold'
     );
+
     performance.clearMarks();
     performance.clearMeasures();
   } catch {
     const perfEnd = performance.now();
+    const totalMs = perfEnd - perfStart;
     // eslint-disable-next-line no-console
-    console.log(`[WaveGen] ${waves.length} chars | total: ${(perfEnd - perfStart).toFixed(2)}ms`);
+    console.log(
+      `%c[WaveGen] ${waves.length} chars | total: ${totalMs.toFixed(2)}ms`,
+      'color:#4169E1;font-weight:bold'
+    );
   }
 }
 
@@ -284,9 +341,30 @@ function computePhasesAndSamples(): void {
     accumulatedPhase = wave.phaseEnd;
 
     const samplesByCycles = Math.ceil(cycles * SAMPLES_PER_CYCLE);
-    const samplesByWidth = Math.max(30, Math.floor(segWidth));
+    const samplesByWidth = Math.max(40, Math.floor(segWidth * 2));
     wave.sampleCount = Math.max(samplesByCycles, samplesByWidth);
   });
+
+  // 验证边界连续性
+  if (waves.length > 1) {
+    let allContinuous = true;
+    for (let i = 1; i < Math.min(5, waves.length); i++) {
+      const prev = waves[i - 1];
+      const curr = waves[i];
+      const prevEndY = Math.sin(prev.phaseEnd);
+      const currStartY = Math.sin(curr.phaseStart);
+      const diff = Math.abs(prevEndY - currStartY);
+      if (diff > 0.001) {
+        allContinuous = false;
+        // eslint-disable-next-line no-console
+        console.warn(`[WaveGen] Phase discontinuity at boundary ${i}: diff=${diff}`);
+      }
+    }
+    if (allContinuous && waves.length >= 2) {
+      // eslint-disable-next-line no-console
+      console.log('%c[WaveGen] Phase continuity check: ✅ OK', 'color:#32CD32');
+    }
+  }
 }
 
 function drawEmptyState(): void {
@@ -307,6 +385,7 @@ function draw(): void {
   const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
   const centerY = canvasHeight / 2;
   const now = performance.now();
+  const maxVisibleAmp = AMP_MAX * ampMultiplier;
 
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
@@ -321,7 +400,7 @@ function draw(): void {
 
     if (wave.backgroundVisible) {
       const bgX = (wave.xStart + wave.xEnd) / 2;
-      const bgY = centerY + (AMP_MAX * ampMultiplier) + BG_CIRCLE_RADIUS + 10;
+      const bgY = centerY + maxVisibleAmp + BG_CIRCLE_RADIUS + 10;
       ctx.beginPath();
       ctx.arc(bgX, bgY, BG_CIRCLE_RADIUS, 0, Math.PI * 2);
       ctx.fillStyle = wave.color + '4D';
@@ -345,18 +424,20 @@ function draw(): void {
 
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
     if (isHovered) {
-      const strokeGrad = ctx.createLinearGradient(
-        xOffset, centerY - (AMP_MAX * ampMultiplier * 1.8),
-        xOffset, centerY + (AMP_MAX * ampMultiplier * 1.8)
-      );
-      strokeGrad.addColorStop(0, '#FFFFFF');
-      strokeGrad.addColorStop(0.5, '#FFFFFF');
-      strokeGrad.addColorStop(1, '#FFFFFF');
+      const gradTop = centerY - maxVisibleAmp * 1.2;
+      const gradBottom = centerY + maxVisibleAmp * 1.2;
+      const strokeGrad = ctx.createLinearGradient(0, gradTop, 0, gradBottom);
+      strokeGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.85)');
+      strokeGrad.addColorStop(0.3, 'rgba(255, 255, 255, 1)');
+      strokeGrad.addColorStop(0.5, 'rgba(255, 255, 255, 1)');
+      strokeGrad.addColorStop(0.7, 'rgba(255, 255, 255, 1)');
+      strokeGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.85)');
       ctx.strokeStyle = strokeGrad;
       ctx.shadowColor = '#FFFFFF';
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 16;
     } else {
       ctx.strokeStyle = wave.color;
       ctx.shadowBlur = 0;
@@ -365,24 +446,25 @@ function draw(): void {
     ctx.stroke();
     ctx.shadowBlur = 0;
     ctx.lineJoin = 'miter';
+    ctx.lineCap = 'butt';
 
     if (index < waves.length - 1) {
       ctx.beginPath();
-      ctx.moveTo(wave.xEnd, centerY - AMP_MAX * ampMultiplier * 1.6);
-      ctx.lineTo(wave.xEnd, centerY + AMP_MAX * ampMultiplier * 1.6);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.moveTo(wave.xEnd, centerY - maxVisibleAmp * 1.6);
+      ctx.lineTo(wave.xEnd, centerY + maxVisibleAmp * 1.6);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
       ctx.lineWidth = 1;
       ctx.stroke();
     }
   }
 
   if (isMouseOnCanvas && hoverCharIndex >= 0) {
-    const lineGrad = ctx.createLinearGradient(mouseX, 0, mouseX, canvasHeight);
-    lineGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-    lineGrad.addColorStop(0.15, 'rgba(255, 255, 255, 0.7)');
-    lineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)');
-    lineGrad.addColorStop(0.85, 'rgba(255, 255, 255, 0.7)');
-    lineGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    const lineGrad = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+    lineGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0)');
+    lineGrad.addColorStop(0.1, 'rgba(255, 255, 255, 0.5)');
+    lineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+    lineGrad.addColorStop(0.9, 'rgba(255, 255, 255, 0.5)');
+    lineGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
 
     ctx.beginPath();
     ctx.setLineDash([6, 4]);
@@ -570,6 +652,8 @@ function handleMouseLeave(): void {
 }
 
 function getCharIndexAtX(x: number): number {
+  if (waves.length === 0) return -1;
+  
   let lo = 0;
   let hi = waves.length - 1;
   while (lo <= hi) {
@@ -579,9 +663,14 @@ function getCharIndexAtX(x: number): number {
     else if (x >= w.xEnd) lo = mid + 1;
     else return mid;
   }
-  if (waves.length > 0 && x >= waves[waves.length - 1].xEnd) {
+  
+  if (x >= waves[waves.length - 1].xEnd) {
     return waves.length - 1;
   }
+  if (x < waves[0].xStart) {
+    return 0;
+  }
+  
   return -1;
 }
 
