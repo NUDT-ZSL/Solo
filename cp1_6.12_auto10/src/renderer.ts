@@ -1,5 +1,22 @@
 import type { Judgment } from './scorer';
 import type { RoundRecord } from './scorer';
+import type { PatternType } from './metronome';
+
+export interface RendererOptions {
+  indicatorDiameter?: number;
+  particleCount?: number;
+  transitionMs?: number;
+}
+
+export interface RendererPerformanceSnapshot {
+  frameTimeMs: number;
+  drawTimeMs: number;
+  chartDrawTimeMs: number;
+}
+
+export interface RendererCallbacks {
+  onPerformance?: (snapshot: RendererPerformanceSnapshot) => void;
+}
 
 interface Particle {
   angle: number;
@@ -13,7 +30,14 @@ interface Particle {
 
 interface FeedbackFlash {
   judgment: Judgment;
-  time: number;
+  startTime: number;
+  duration: number;
+}
+
+interface PatternTransition {
+  from: PatternType;
+  to: PatternType;
+  startTime: number;
   duration: number;
 }
 
@@ -22,199 +46,304 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private historyCanvas: HTMLCanvasElement;
   private historyCtx: CanvasRenderingContext2D;
+
   private width: number = 0;
   private height: number = 0;
   private centerX: number = 0;
   private centerY: number = 0;
   private indicatorRadius: number = 160;
+  private indicatorTargetDiameter: number;
+
   private beatPulse: number = 0;
   private particles: Particle[] = [];
   private feedbackFlashes: FeedbackFlash[] = [];
-  private beatActive: boolean = false;
-  private lastTime: number = 0;
+  private patternTransition: PatternTransition | null = null;
+
+  private lastFrameTime: number = 0;
   private animFrameId: number = 0;
   private isPlaying: boolean = false;
 
-  constructor(beatCanvas: HTMLCanvasElement, historyCanvas: HTMLCanvasElement) {
+  private callbacks: RendererCallbacks = {};
+  private transitionMs: number;
+  private particleCount: number;
+
+  private currentPattern: PatternType = 'standard';
+
+  private chartRenderCacheMs: number = -Infinity;
+  private lastChartRecordsSig: string = '';
+  private lastChartDrawMs: number = 0;
+
+  constructor(
+    beatCanvas: HTMLCanvasElement,
+    historyCanvas: HTMLCanvasElement,
+    options: RendererOptions = {}
+  ) {
     this.canvas = beatCanvas;
     this.ctx = beatCanvas.getContext('2d')!;
     this.historyCanvas = historyCanvas;
     this.historyCtx = historyCanvas.getContext('2d')!;
+    this.indicatorTargetDiameter = options.indicatorDiameter ?? 320;
+    this.particleCount = options.particleCount ?? 12;
+    this.transitionMs = options.transitionMs ?? 300;
     this.initParticles();
     this.resize();
   }
 
+  setCallbacks(cbs: RendererCallbacks): void {
+    this.callbacks = { ...this.callbacks, ...cbs };
+  }
+
   private initParticles(): void {
     this.particles = [];
-    for (let i = 0; i < 12; i++) {
-      const angle = (Math.PI * 2 * i) / 12;
+    for (let i = 0; i < this.particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / this.particleCount;
       this.particles.push({
         angle,
         radius: 180,
         baseRadius: 180,
-        speed: 0.003 + Math.random() * 0.004,
-        size: 4 + Math.random() * 3,
-        opacity: 0.4 + Math.random() * 0.4,
-        hue: 180 + Math.random() * 60,
+        speed: 0.0025 + Math.random() * 0.0035,
+        size: 3.5 + Math.random() * 3,
+        opacity: 0.35 + Math.random() * 0.45,
+        hue: 170 + Math.random() * 60,
       });
     }
   }
 
   resize(): void {
-    const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.parentElement!.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height - 200;
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const parent = this.canvas.parentElement!;
+    const css = parent.getBoundingClientRect();
+    const historyH = 180;
+    const reservedBottom = historyH + 40;
+    const w = css.width;
+    const h = Math.max(320, css.height - reservedBottom);
 
-    this.canvas.width = w * dpr;
-    this.canvas.height = Math.max(h, 300) * dpr;
+    this.canvas.width = Math.floor(w * dpr);
+    this.canvas.height = Math.floor(h * dpr);
     this.canvas.style.width = w + 'px';
-    this.canvas.style.height = Math.max(h, 300) + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
 
     this.width = w;
-    this.height = Math.max(h, 300);
+    this.height = h;
     this.centerX = w / 2;
-    this.centerY = this.height / 2;
+    this.centerY = h / 2;
 
     const minDim = Math.min(this.width, this.height);
-    this.indicatorRadius = Math.min(160, minDim * 0.28);
+    const targetR = this.indicatorTargetDiameter / 2;
+    this.indicatorRadius = Math.min(targetR, minDim * 0.32);
 
     for (const p of this.particles) {
-      p.baseRadius = this.indicatorRadius + 20 + Math.random() * 20;
+      p.baseRadius = this.indicatorRadius + 18 + Math.random() * 22;
       p.radius = p.baseRadius;
     }
   }
 
   setPlaying(playing: boolean): void {
+    const wasPlaying = this.isPlaying;
     this.isPlaying = playing;
-    if (playing && !this.animFrameId) {
-      this.lastTime = performance.now();
-      this.loop(this.lastTime);
+    if (playing && !wasPlaying) {
+      this.lastFrameTime = performance.now();
+      this.frameLoop(this.lastFrameTime);
+    } else if (!playing && this.animFrameId) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = 0;
+      this.drawIdle();
     }
   }
 
   triggerBeat(isDownbeat: boolean): void {
-    this.beatPulse = 1.0;
-    this.beatActive = true;
+    this.beatPulse = Math.max(this.beatPulse, isDownbeat ? 1.0 : 0.75);
   }
 
   triggerFeedback(judgment: Judgment): void {
     this.feedbackFlashes.push({
       judgment,
-      time: performance.now(),
-      duration: 400,
+      startTime: performance.now(),
+      duration: 420,
     });
   }
 
-  private loop(now: number): void {
-    const dt = (now - this.lastTime) / 1000;
-    this.lastTime = now;
+  setCurrentPattern(pattern: PatternType, animate: boolean = true): void {
+    if (animate && pattern !== this.currentPattern) {
+      this.patternTransition = {
+        from: this.currentPattern,
+        to: pattern,
+        startTime: performance.now(),
+        duration: this.transitionMs,
+      };
+    }
+    this.currentPattern = pattern;
+  }
+
+  private patternHueFor(p: PatternType): number {
+    switch (p) {
+      case 'standard':
+        return 190;
+      case 'swing':
+        return 320;
+      case 'syncopation':
+        return 40;
+      case 'dotted':
+        return 110;
+      case 'triplet':
+        return 280;
+    }
+  }
+
+  private getEffectiveHue(now: number): number {
+    if (!this.patternTransition) return this.patternHueFor(this.currentPattern);
+    const t = Math.min(
+      1,
+      (now - this.patternTransition.startTime) / this.patternTransition.duration
+    );
+    const e = 0.5 - 0.5 * Math.cos(Math.PI * t);
+    const h1 = this.patternHueFor(this.patternTransition.from);
+    const h2 = this.patternHueFor(this.patternTransition.to);
+    return h1 + (h2 - h1) * e;
+  }
+
+  private frameLoop = (now: number): void => {
+    if (!this.isPlaying) {
+      this.animFrameId = 0;
+      return;
+    }
+    const t0 = performance.now();
+    const dt = Math.min(0.05, (now - this.lastFrameTime) / 1000);
+    this.lastFrameTime = now;
 
     this.update(dt, now);
     this.draw(now);
 
-    this.animFrameId = requestAnimationFrame((t) => this.loop(t));
-  }
+    const drawTime = performance.now() - t0;
+    const frameTime = drawTime;
+    if (this.callbacks.onPerformance) {
+      this.callbacks.onPerformance({
+        frameTimeMs: frameTime,
+        drawTimeMs: drawTime,
+        chartDrawTimeMs: this.lastChartDrawMs,
+      });
+    }
+    this.animFrameId = requestAnimationFrame(this.frameLoop);
+  };
 
   private update(dt: number, now: number): void {
     if (this.beatPulse > 0) {
-      this.beatPulse = Math.max(0, this.beatPulse - dt * 4);
+      this.beatPulse = Math.max(0, this.beatPulse - dt * 3.8);
     }
 
     for (const p of this.particles) {
       p.angle += p.speed;
-      p.radius = p.baseRadius + Math.sin(now * 0.002 + p.angle * 3) * 8;
+      const wobble = Math.sin(now * 0.0018 + p.angle * 3) * 8;
+      p.radius = p.baseRadius + wobble + this.beatPulse * 6;
     }
 
     this.feedbackFlashes = this.feedbackFlashes.filter(
-      (f) => now - f.time < f.duration
+      (f) => now - f.startTime < f.duration
     );
+
+    if (
+      this.patternTransition &&
+      now - this.patternTransition.startTime >= this.patternTransition.duration
+    ) {
+      this.patternTransition = null;
+    }
   }
 
   private draw(now: number): void {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
-
     this.drawParticles(ctx, now);
     this.drawIndicator(ctx, now);
     this.drawFeedbackFlash(ctx, now);
   }
 
+  private drawIdle(): void {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.width, this.height);
+    this.drawParticles(ctx, performance.now());
+    this.drawIndicator(ctx, performance.now());
+  }
+
   private drawParticles(ctx: CanvasRenderingContext2D, now: number): void {
+    const hue = this.getEffectiveHue(now);
     for (const p of this.particles) {
       const x = this.centerX + Math.cos(p.angle) * p.radius;
       const y = this.centerY + Math.sin(p.angle) * p.radius;
-
-      const beatScale = 1 + this.beatPulse * 0.3;
+      const beatScale = 1 + this.beatPulse * 0.35;
       const sz = p.size * beatScale;
-
       ctx.save();
-      ctx.globalAlpha = p.opacity * (0.6 + this.beatPulse * 0.4);
+      ctx.globalAlpha = p.opacity * (0.55 + this.beatPulse * 0.45);
       ctx.beginPath();
       ctx.arc(x, y, sz, 0, Math.PI * 2);
-      ctx.fillStyle = `hsl(${p.hue}, 100%, 70%)`;
-      ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
-      ctx.shadowBlur = 12 + this.beatPulse * 10;
+      ctx.fillStyle = `hsl(${hue + (p.hue - 190) * 0.25}, 100%, 70%)`;
+      ctx.shadowColor = `hsla(${hue}, 100%, 60%, 0.9)`;
+      ctx.shadowBlur = 10 + this.beatPulse * 12;
       ctx.fill();
       ctx.restore();
     }
   }
 
   private drawIndicator(ctx: CanvasRenderingContext2D, now: number): void {
-    const pulseScale = 1 + this.beatPulse * 0.12;
+    const hue = this.getEffectiveHue(now);
+    const pulseScale = 1 + this.beatPulse * 0.14;
     const r = this.indicatorRadius * pulseScale;
 
     ctx.save();
-
     ctx.beginPath();
     ctx.arc(this.centerX, this.centerY, r, 0, Math.PI * 2);
 
-    const glowIntensity = 8 + this.beatPulse * 25;
-    ctx.shadowColor = 'rgba(0, 240, 255, 0.6)';
-    ctx.shadowBlur = glowIntensity;
+    const glow = 6 + this.beatPulse * 28;
+    ctx.shadowColor = `hsla(${hue}, 100%, 60%, 0.7)`;
+    ctx.shadowBlur = glow;
 
     const grad = ctx.createRadialGradient(
-      this.centerX, this.centerY, 0,
-      this.centerX, this.centerY, r
+      this.centerX,
+      this.centerY,
+      0,
+      this.centerX,
+      this.centerY,
+      r
     );
 
     if (this.isPlaying) {
-      const brightness = 15 + this.beatPulse * 25;
-      grad.addColorStop(0, `rgba(0, 240, 255, ${0.05 + this.beatPulse * 0.15})`);
-      grad.addColorStop(0.6, `rgba(20, ${brightness}, 60, 0.3)`);
-      grad.addColorStop(1, `rgba(0, 240, 255, ${0.02 + this.beatPulse * 0.08})`);
+      const bright = 20 + this.beatPulse * 30;
+      grad.addColorStop(0, `hsla(${hue}, 100%, 65%, ${0.06 + this.beatPulse * 0.16})`);
+      grad.addColorStop(
+        0.55,
+        `hsla(${hue + 20}, 80%, ${bright}%, 0.22)`
+      );
+      grad.addColorStop(1, `hsla(${hue}, 100%, 65%, ${0.03 + this.beatPulse * 0.08})`);
     } else {
-      grad.addColorStop(0, 'rgba(255, 255, 255, 0.03)');
-      grad.addColorStop(1, 'rgba(255, 255, 255, 0.01)');
+      grad.addColorStop(0, 'rgba(255,255,255,0.04)');
+      grad.addColorStop(1, 'rgba(255,255,255,0.015)');
     }
-
     ctx.fillStyle = grad;
     ctx.fill();
 
-    ctx.strokeStyle = `rgba(0, 240, 255, ${0.3 + this.beatPulse * 0.7})`;
+    ctx.strokeStyle = `hsla(${hue}, 100%, 70%, ${0.3 + this.beatPulse * 0.6})`;
     ctx.lineWidth = 2 + this.beatPulse * 2;
     ctx.stroke();
-
     ctx.restore();
 
     ctx.save();
+    const innerR = 5 + this.beatPulse * 7;
     ctx.beginPath();
-    ctx.arc(this.centerX, this.centerY, 6 + this.beatPulse * 6, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(0, 240, 255, ${0.5 + this.beatPulse * 0.5})`;
-    ctx.shadowColor = 'rgba(0, 240, 255, 0.8)';
-    ctx.shadowBlur = 20 + this.beatPulse * 30;
+    ctx.arc(this.centerX, this.centerY, innerR, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${hue}, 100%, 70%, ${0.55 + this.beatPulse * 0.45})`;
+    ctx.shadowColor = `hsla(${hue}, 100%, 65%, 0.85)`;
+    ctx.shadowBlur = 18 + this.beatPulse * 32;
     ctx.fill();
     ctx.restore();
   }
 
   private drawFeedbackFlash(ctx: CanvasRenderingContext2D, now: number): void {
     for (const flash of this.feedbackFlashes) {
-      const elapsed = now - flash.time;
-      const progress = elapsed / flash.duration;
+      const progress = (now - flash.startTime) / flash.duration;
+      if (progress < 0 || progress > 1) continue;
       const alpha = 1 - progress;
-
-      let color: string;
+      let color = '';
       switch (flash.judgment) {
         case 'Perfect':
           color = `rgba(0, 255, 136, ${alpha})`;
@@ -226,83 +355,97 @@ export class Renderer {
           color = `rgba(255, 51, 102, ${alpha})`;
           break;
       }
-
-      const flashR = this.indicatorRadius * (0.8 + progress * 0.5);
+      const ringR = this.indicatorRadius * (0.75 + progress * 0.65);
       ctx.save();
       ctx.beginPath();
-      ctx.arc(this.centerX, this.centerY, flashR, 0, Math.PI * 2);
+      ctx.arc(this.centerX, this.centerY, ringR, 0, Math.PI * 2);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3 * (1 - progress);
+      ctx.lineWidth = 3 * (1 - progress * 0.5);
       ctx.shadowColor = color;
-      ctx.shadowBlur = 20 * alpha;
+      ctx.shadowBlur = 18 * alpha;
       ctx.stroke();
       ctx.restore();
     }
   }
 
-  drawHistoryChart(records: RoundRecord[]): void {
+  drawHistoryChart(records: RoundRecord[], force: boolean = false): number {
+    const t0 = performance.now();
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const cssW = this.historyCanvas.clientWidth || 480;
+    const cssH = this.historyCanvas.clientHeight || 160;
+
+    const sig = `${cssW}x${cssH}-${records.length}-${records
+      .map((r) => `${r.roundIndex}:${r.accuracy}`)
+      .join(',')}`;
+
+    if (!force && sig === this.lastChartRecordsSig) {
+      return this.lastChartDrawMs;
+    }
+    this.lastChartRecordsSig = sig;
+
+    this.historyCanvas.width = Math.floor(cssW * dpr);
+    this.historyCanvas.height = Math.floor(cssH * dpr);
+    this.historyCtx.setTransform(1, 0, 0, 1, 0, 0);
+    this.historyCtx.scale(dpr, dpr);
+
     const ctx = this.historyCtx;
-    const dpr = window.devicePixelRatio || 1;
-    const displayW = this.historyCanvas.clientWidth;
-    const displayH = this.historyCanvas.clientHeight;
+    ctx.clearRect(0, 0, cssW, cssH);
 
-    this.historyCanvas.width = displayW * dpr;
-    this.historyCanvas.height = displayH * dpr;
-    ctx.scale(dpr, dpr);
-
-    ctx.clearRect(0, 0, displayW, displayH);
-
-    const pad = { top: 20, right: 20, bottom: 28, left: 40 };
-    const chartW = displayW - pad.left - pad.right;
-    const chartH = displayH - pad.top - pad.bottom;
+    const pad = { top: 16, right: 14, bottom: 26, left: 36 };
+    const chartW = cssW - pad.left - pad.right;
+    const chartH = cssH - pad.top - pad.bottom;
 
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
     ctx.lineWidth = 1;
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.38)';
+    ctx.textAlign = 'right';
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (chartH / 4) * i;
       ctx.beginPath();
       ctx.moveTo(pad.left, y);
       ctx.lineTo(pad.left + chartW, y);
       ctx.stroke();
-
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText((100 - i * 25) + '%', pad.left - 6, y + 4);
+      ctx.fillText(100 - i * 25 + '%', pad.left - 5, y + 3);
     }
     ctx.restore();
 
     if (records.length === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.font = '12px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('暂无训练记录', displayW / 2, displayH / 2);
-      return;
+      ctx.fillText('暂无训练记录，完成一轮后将显示准确率趋势', cssW / 2, cssH / 2 + 4);
+      this.lastChartDrawMs = performance.now() - t0;
+      return this.lastChartDrawMs;
     }
 
-    const points: { x: number; y: number }[] = [];
+    const points: { x: number; y: number; r: RoundRecord }[] = [];
     const n = records.length;
-    const maxSlots = 10;
-    const step = chartW / Math.max(n - 1, 1);
+    const slotCount = Math.max(10, n);
+    const step = chartW / (slotCount - 1);
+    const startOffset = (slotCount - n) * step;
 
     for (let i = 0; i < n; i++) {
-      const x = pad.left + (n === 1 ? chartW / 2 : step * i);
-      const y = pad.top + chartH * (1 - records[i].accuracy / 100);
-      points.push({ x, y });
+      const x =
+        n === 1
+          ? pad.left + chartW / 2
+          : pad.left + startOffset + step * i;
+      const clampedAcc = Math.max(0, Math.min(100, records[i].accuracy));
+      const y = pad.top + chartH * (1 - clampedAcc / 100);
+      points.push({ x, y, r: records[i] });
     }
 
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(points[0].x, pad.top + chartH);
-    for (const p of points) {
-      ctx.lineTo(p.x, p.y);
-    }
+    const p0 = points[0];
+    ctx.moveTo(p0.x, pad.top + chartH);
+    for (const p of points) ctx.lineTo(p.x, p.y);
     ctx.lineTo(points[points.length - 1].x, pad.top + chartH);
     ctx.closePath();
-
     const fillGrad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-    fillGrad.addColorStop(0, 'rgba(0, 240, 255, 0.3)');
+    fillGrad.addColorStop(0, 'rgba(0, 240, 255, 0.36)');
+    fillGrad.addColorStop(0.5, 'rgba(0, 180, 255, 0.15)');
     fillGrad.addColorStop(1, 'rgba(0, 119, 255, 0.02)');
     ctx.fillStyle = fillGrad;
     ctx.fill();
@@ -317,7 +460,6 @@ export class Renderer {
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-
     for (let i = 0; i < points.length; i++) {
       if (i === 0) ctx.moveTo(points[i].x, points[i].y);
       else ctx.lineTo(points[i].x, points[i].y);
@@ -330,27 +472,38 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
       ctx.fillStyle = '#00f0ff';
-      ctx.shadowColor = '#00f0ff';
+      ctx.shadowColor = 'rgba(0, 240, 255, 0.85)';
       ctx.shadowBlur = 8;
       ctx.fill();
       ctx.restore();
 
       ctx.save();
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
+      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
       ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(p.r.accuracy) + '%', p.x, p.y - 9);
       ctx.restore();
     }
 
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.font = '10px system-ui, sans-serif';
     ctx.textAlign = 'center';
     for (let i = 0; i < points.length; i++) {
-      ctx.fillText('R' + records[i].roundIndex, points[i].x, pad.top + chartH + 16);
+      ctx.fillText('R' + points[i].r.roundIndex, points[i].x, pad.top + chartH + 14);
     }
     ctx.restore();
+
+    this.chartRenderCacheMs = performance.now();
+    this.lastChartDrawMs = this.chartRenderCacheMs - t0;
+    return this.lastChartDrawMs;
   }
 
   destroy(): void {
