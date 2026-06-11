@@ -621,6 +621,12 @@ body {
     font-size: 0.75rem;
   }
 
+  .level-selector {
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
   .timer-value {
     font-size: 1.125rem;
   }
@@ -631,6 +637,8 @@ body {
 
   .game-content {
     flex-direction: column;
+    gap: 12px;
+    min-height: 0;
   }
 
   .game-board {
@@ -641,12 +649,16 @@ body {
   }
 
   .color-grid {
-    gap: 6px;
+    gap: 4px;
     max-width: 100%;
+    width: 100%;
   }
 
   .color-grid-cell {
     border-radius: 6px;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: 1;
   }
 
   .hint-color-preview {
@@ -666,19 +678,31 @@ body {
   }
 
   .palette-panel {
-    min-height: 300px;
+    min-height: 250px;
+    max-height: 40vh;
     padding: 12px;
     gap: 12px;
+    overflow: hidden;
   }
 
   .palette-grid {
     gap: 6px;
     grid-template-columns: repeat(6, 1fr);
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .palette-item {
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: 1;
   }
 
   .btn {
-    padding: 10px 16px;
-    font-size: 0.875rem;
+    padding: 10px 12px;
+    font-size: 0.8125rem;
+    min-width: 0;
   }
 
   .header-left,
@@ -688,7 +712,10 @@ body {
   }
 
   .result-modal {
-    padding: 24px;
+    padding: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+    width: 95%;
   }
 
   .result-content h2 {

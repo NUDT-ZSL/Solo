@@ -53,6 +53,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
   const level = LEVELS[currentLevel];
 
   const initializeGame = useCallback((levelConfig: LevelConfig) => {
+    setElapsedTime(0);
     const target = colorEngine.generateTargetPattern(levelConfig);
     setTargetPattern(target);
 
@@ -159,7 +160,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
   };
 
   const handleCellDrop = useCallback(
-    (row: number, col: number, color: RGB, paletteItemId: string) => {
+    (row: number, col: number, color: RGB, paletteItemId: string, altPaletteId?: string) => {
+      const actualId = paletteItemId || altPaletteId;
+      if (!actualId) return;
       setGrid((prevGrid) => {
         const newGrid = prevGrid.map((r) => r.map((c) => ({ ...c })));
         const oldColor = newGrid[row][col].color;
@@ -192,7 +195,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
         return newGrid;
       });
 
-      setPalette((prev) => paletteGenerator.markAsUsed(prev, paletteItemId));
+      setPalette((prev) => paletteGenerator.markAsUsed(prev, actualId));
       setIsDragging(false);
       setDragColor(null);
     },
@@ -319,6 +322,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
   }, [grid, targetPattern, hintsRemaining]);
 
   const handleRestart = useCallback(() => {
+    setElapsedTime(0);
     initializeGame(level);
   }, [level, initializeGame]);
 
@@ -330,6 +334,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
 
   const handleSelectLevel = useCallback((levelIndex: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
+    setElapsedTime(0);
+    setFinalTime(0);
     setCurrentLevel(levelIndex);
   }, []);
 
