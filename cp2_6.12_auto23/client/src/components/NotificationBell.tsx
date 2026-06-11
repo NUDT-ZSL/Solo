@@ -20,8 +20,8 @@ export default function NotificationBell() {
 
   const loadTodos = async () => {
     try {
-      const res = await getTodos();
-      if (res.code === 0) {
+      const res: any = await getTodos(user.userId);
+      if (res.code === 0 || res.success) {
         setTodos(res.data || []);
       }
     } catch (error) {
@@ -106,7 +106,7 @@ export default function NotificationBell() {
                       </div>
                       <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
                         <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">
-                          {flowTypeMap[todo.type]}
+                          {flowTypeMap[todo.type as FlowType]}
                         </span>
                         <span>{todo.applicantName}</span>
                         <span>·</span>

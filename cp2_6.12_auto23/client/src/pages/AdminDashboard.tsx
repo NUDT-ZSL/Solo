@@ -450,6 +450,7 @@ function FlowPathDiagram({ nodes }: { nodes: FlowInstance['nodes'] }) {
             const isApproved = node.status === 'approved';
             const isRejected = node.status === 'rejected';
             const isSkipped = node.status === 'skipped';
+            const isPending = node.status === 'pending';
             const processed = isApproved || isRejected;
 
             let fill = '#ffffff';

@@ -1,18 +1,19 @@
 import { create } from 'zustand';
 import type { User, TodoItem } from '../types';
+import { getTodos } from '../api';
 
 interface AppState {
   user: User;
   todoCount: number;
-  todos: TodoItem[];
+  todos: any[];
   setTodoCount: (count: number) => void;
-  setTodos: (todos: TodoItem[]) => void;
+  setTodos: (todos: any[]) => void;
   refreshTodos: () => Promise<void>;
 }
 
 const mockUser: User = {
-  userId: 'user-001',
-  userName: '张三',
+  userId: 'u002',
+  userName: '李主管',
   avatar: '',
   role: 'manager',
 };
@@ -25,13 +26,11 @@ export const useStore = create<AppState>((set, get) => ({
   setTodos: (todos) => set({ todos, todoCount: todos.length }),
   refreshTodos: async () => {
     try {
-      const response = await fetch('/api/todos');
-      if (response.ok) {
-        const result = await response.json();
-        if (result.code === 0) {
-          const todos = result.data || [];
-          set({ todos, todoCount: todos.length });
-        }
+      const userId = get().user.userId;
+      const result: any = await getTodos(userId);
+      if (result.code === 0 || result.success) {
+        const todos = result.data || [];
+        set({ todos, todoCount: todos.length });
       }
     } catch (error) {
       console.error('刷新待办失败:', error);

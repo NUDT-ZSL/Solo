@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Receipt, Briefcase, ChevronRight, Loader2 } from 'lucide-react';
+import { Calendar, Receipt, Briefcase, ChevronRight, Loader2, Inbox } from 'lucide-react';
 import { cn, formatDateTime, FLOW_TYPE_LABELS, FLOW_STATUS_LABELS } from '../lib/utils';
 import { getTodos, getMyFlows } from '../api';
 import { useStore } from '../store/useStore';
 import type { FlowType, FlowStatus, FlowInstance } from '../types';
 
 type TabType = 'todo' | 'done' | 'mine';
+
+interface ApprovalListProps {
+  defaultTab?: TabType;
+}
 
 const typeIcons: Record<FlowType, typeof Calendar> = {
   leave: Calendar,
@@ -31,6 +35,22 @@ const typeColors: Record<FlowType, string> = {
   expense: 'bg-purple-50 text-purple-700',
   business: 'bg-orange-50 text-orange-700',
 };
+
+function normalizeFlow(data: any): FlowInstance {
+  return {
+    id: data.id,
+    type: data.type,
+    title: data.title,
+    applicantId: data.applicantId || data.creatorId,
+    applicantName: data.applicantName || data.creatorName,
+    status: data.status,
+    formData: data.formData,
+    nodes: data.nodes || [],
+    currentNodeIndex: data.currentNodeIndex ?? 0,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
 
 interface FlowCardProps {
   flow: FlowInstance;
@@ -74,7 +94,7 @@ function FlowCard({ flow, onClick }: FlowCardProps) {
             </span>
           </div>
           <div className="flex items-center gap-4 text-sm text-gray-500">
-            <span>申请人：{flow.applicantName || (flow as any).creatorName}</span>
+            <span>申请人：{flow.applicantName}</span>
             <span>提交时间：{formatDateTime(flow.createdAt)}</span>
           </div>
         </div>
@@ -121,10 +141,10 @@ function TabButton({ active, label, count, onClick }: TabButtonProps) {
   );
 }
 
-export default function ApprovalList() {
+export default function ApprovalList({ defaultTab = 'todo' }: ApprovalListProps) {
   const navigate = useNavigate();
-  const { user } = useStore();
-  const [activeTab, setActiveTab] = useState<TabType>('todo');
+  const { user, setTodoCount } = useStore();
+  const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
   const [flows, setFlows] = useState<FlowInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [counts, setCounts] = useState({ todo: 0, done: 0, mine: 0 });
@@ -133,28 +153,34 @@ export default function ApprovalList() {
     setLoading(true);
     try {
       if (tab === 'todo') {
-        const res: any = await getTodos();
-        const data = res.data || [];
-        setFlows(data);
-        setCounts((prev) => ({ ...prev, todo: data.length }));
+        const res: any = await getTodos(user.userId);
+        const rawList = res.data || [];
+        const list = rawList.map(normalizeFlow);
+        setFlows(list);
+        setCounts((prev) => ({ ...prev, todo: list.length }));
+        setTodoCount(list.length);
       } else if (tab === 'mine') {
-        const res: any = await getMyFlows();
-        const data = res.data || [];
-        setFlows(data);
-        setCounts((prev) => ({ ...prev, mine: data.length }));
-        const doneCount = data.filter((f: FlowInstance) => f.status !== 'pending').length;
+        const res: any = await getMyFlows(user.userId);
+        const rawList = res.data || [];
+        const list = rawList.map(normalizeFlow);
+        setFlows(list);
+        setCounts((prev) => ({ ...prev, mine: list.length }));
+        const doneCount = list.filter((f: FlowInstance) => f.status !== 'pending').length;
         setCounts((prev) => ({ ...prev, done: doneCount }));
       } else {
-        const res: any = await getMyFlows();
-        const data = (res.data || []).filter((f: FlowInstance) => f.status !== 'pending');
-        setFlows(data);
+        const res: any = await getMyFlows(user.userId);
+        const rawList = res.data || [];
+        const list = rawList
+          .map(normalizeFlow)
+          .filter((f: FlowInstance) => f.status !== 'pending');
+        setFlows(list);
       }
     } catch (error) {
       console.error('加载列表失败:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user.userId, setTodoCount]);
 
   useEffect(() => {
     loadFlows(activeTab);
@@ -200,7 +226,7 @@ export default function ApprovalList() {
           ) : flows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Receipt className="w-8 h-8 text-gray-400" />
+                <Inbox className="w-8 h-8 text-gray-400" />
               </div>
               <p className="text-gray-500 font-medium">暂无数据</p>
               <p className="text-sm text-gray-400 mt-1">

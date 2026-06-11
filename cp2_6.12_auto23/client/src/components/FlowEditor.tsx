@@ -68,8 +68,6 @@ export default function FlowEditor() {
   const navigate = useNavigate();
   const { user } = useStore();
   const [selectedType, setSelectedType] = useState<FlowType | null>(null);
-  const [prevType, setPrevType] = useState<FlowType | null>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [leaveForm, setLeaveForm] = useState<LeaveForm>({
@@ -96,16 +94,7 @@ export default function FlowEditor() {
     budget: 0,
   });
 
-  useEffect(() => {
-    if (selectedType && prevType !== selectedType) {
-      setIsAnimating(true);
-      const timer = setTimeout(() => setIsAnimating(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedType, prevType]);
-
   const handleTypeSelect = (type: FlowType) => {
-    setPrevType(selectedType);
     setSelectedType(type);
   };
 
@@ -157,7 +146,12 @@ export default function FlowEditor() {
           break;
       }
 
-      const response: any = await createFlow(selectedType, formData);
+      const response: any = await createFlow({
+        type: selectedType,
+        formData,
+        creatorId: user.userId,
+        creatorName: user.userName,
+      });
       if (response.success || response.code === 0) {
         navigate('/my-flows');
       }
@@ -202,181 +196,187 @@ export default function FlowEditor() {
         </div>
       </div>
 
-      <div className="relative overflow-hidden">
-        {selectedType && (
-          <div
-            className={cn(
-              'bg-white rounded-xl border border-gray-200 p-6 shadow-sm',
-              isAnimating && 'animate-collapse'
-            )}
-            style={{
-              maxHeight: isAnimating ? 0 : 1000,
-              opacity: isAnimating ? 0 : 1,
-              transition: 'max-height 0.3s ease-out, opacity 0.3s ease-out',
-              overflow: 'hidden',
-            }}
-          >
-            {selectedType === 'leave' && (
-              <div className="space-y-5">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-blue-500" />
-                  请假信息
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormInput label="开始日期">
-                    <input
-                      type="date"
-                      className={inputBase}
-                      value={leaveForm.startDate}
-                      onChange={(e) =>
-                        setLeaveForm((prev) => ({ ...prev, startDate: e.target.value }))
-                      }
-                      onBlur={calculateLeaveDays}
-                    />
-                  </FormInput>
-                  <FormInput label="结束日期">
-                    <input
-                      type="date"
-                      className={inputBase}
-                      value={leaveForm.endDate}
-                      onChange={(e) =>
-                        setLeaveForm((prev) => ({ ...prev, endDate: e.target.value }))
-                      }
-                      onBlur={calculateLeaveDays}
-                    />
-                  </FormInput>
-                </div>
-                <FormInput label="请假天数">
-                  <input
-                    type="number"
-                    min={1}
-                    className={inputBase}
-                    value={leaveForm.days || ''}
-                    onChange={(e) =>
-                      setLeaveForm((prev) => ({ ...prev, days: Number(e.target.value) }))
-                    }
-                    placeholder="请输入天数"
-                  />
-                </FormInput>
-                <FormInput label="请假原因">
-                  <textarea
-                    rows={4}
-                    className={cn(inputBase, 'resize-none')}
-                    value={leaveForm.reason}
-                    onChange={(e) =>
-                      setLeaveForm((prev) => ({ ...prev, reason: e.target.value }))
-                    }
-                    placeholder="请详细说明请假原因..."
-                  />
-                </FormInput>
-              </div>
-            )}
-
-            {selectedType === 'expense' && (
-              <div className="space-y-5">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Receipt className="w-5 h-5 text-blue-500" />
-                  报销信息
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormInput label="报销金额（元）">
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className={inputBase}
-                      value={expenseForm.amount || ''}
-                      onChange={(e) =>
-                        setExpenseForm((prev) => ({ ...prev, amount: Number(e.target.value) }))
-                      }
-                      placeholder="请输入金额"
-                    />
-                  </FormInput>
-                  <FormInput label="费用分类">
-                    <select
-                      className={inputBase}
-                      value={expenseForm.category}
-                      onChange={(e) =>
-                        setExpenseForm((prev) => ({ ...prev, category: e.target.value }))
-                      }
-                    >
-                      <option value="差旅费">差旅费</option>
-                      <option value="办公费">办公费</option>
-                      <option value="餐饮费">餐饮费</option>
-                      <option value="其他">其他</option>
-                    </select>
-                  </FormInput>
-                </div>
-                <FormInput label="票据描述">
-                  <textarea
-                    rows={4}
-                    className={cn(inputBase, 'resize-none')}
-                    value={expenseForm.description}
-                    onChange={(e) =>
-                      setExpenseForm((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    placeholder="请说明费用明细及票据情况..."
-                  />
-                </FormInput>
-              </div>
-            )}
-
-            {selectedType === 'business' && (
-              <div className="space-y-5">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 text-blue-500" />
-                  出差信息
-                </h3>
-                <FormInput label="出差地点">
-                  <input
-                    type="text"
-                    className={inputBase}
-                    value={businessForm.destination}
-                    onChange={(e) =>
-                      setBusinessForm((prev) => ({ ...prev, destination: e.target.value }))
-                    }
-                    placeholder="请输入出差地点"
-                  />
-                </FormInput>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormInput label="开始日期">
-                    <input
-                      type="date"
-                      className={inputBase}
-                      value={businessForm.startDate}
-                      onChange={(e) =>
-                        setBusinessForm((prev) => ({ ...prev, startDate: e.target.value }))
-                      }
-                    />
-                  </FormInput>
-                  <FormInput label="结束日期">
-                    <input
-                      type="date"
-                      className={inputBase}
-                      value={businessForm.endDate}
-                      onChange={(e) =>
-                        setBusinessForm((prev) => ({ ...prev, endDate: e.target.value }))
-                      }
-                    />
-                  </FormInput>
-                </div>
-                <FormInput label="预算金额（元）">
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className={inputBase}
-                    value={businessForm.budget || ''}
-                    onChange={(e) =>
-                      setBusinessForm((prev) => ({ ...prev, budget: Number(e.target.value) }))
-                    }
-                    placeholder="请输入预算金额"
-                  />
-                </FormInput>
-              </div>
-            )}
+      <div className="overflow-hidden">
+        <div
+          className={cn(
+            'transition-all duration-350 ease-out overflow-hidden bg-white rounded-xl border border-gray-200 p-6 shadow-sm',
+            selectedType === 'leave'
+              ? 'max-h-[2000px] opacity-100'
+              : 'max-h-0 opacity-0 py-0 px-0 !border-0 !shadow-none'
+          )}
+        >
+          <div className="space-y-5">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-500" />
+              请假信息
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput label="开始日期">
+                <input
+                  type="date"
+                  className={inputBase}
+                  value={leaveForm.startDate}
+                  onChange={(e) =>
+                    setLeaveForm((prev) => ({ ...prev, startDate: e.target.value }))
+                  }
+                  onBlur={calculateLeaveDays}
+                />
+              </FormInput>
+              <FormInput label="结束日期">
+                <input
+                  type="date"
+                  className={inputBase}
+                  value={leaveForm.endDate}
+                  onChange={(e) =>
+                    setLeaveForm((prev) => ({ ...prev, endDate: e.target.value }))
+                  }
+                  onBlur={calculateLeaveDays}
+                />
+              </FormInput>
+            </div>
+            <FormInput label="请假天数">
+              <input
+                type="number"
+                min={1}
+                className={inputBase}
+                value={leaveForm.days || ''}
+                onChange={(e) =>
+                  setLeaveForm((prev) => ({ ...prev, days: Number(e.target.value) }))
+                }
+                placeholder="请输入天数"
+              />
+            </FormInput>
+            <FormInput label="请假原因">
+              <textarea
+                rows={4}
+                className={cn(inputBase, 'resize-none')}
+                value={leaveForm.reason}
+                onChange={(e) =>
+                  setLeaveForm((prev) => ({ ...prev, reason: e.target.value }))
+                }
+                placeholder="请详细说明请假原因..."
+              />
+            </FormInput>
           </div>
-        )}
+        </div>
+
+        <div
+          className={cn(
+            'transition-all duration-350 ease-out overflow-hidden bg-white rounded-xl border border-gray-200 p-6 shadow-sm',
+            selectedType === 'expense'
+              ? 'max-h-[2000px] opacity-100'
+              : 'max-h-0 opacity-0 py-0 px-0 !border-0 !shadow-none'
+          )}
+        >
+          <div className="space-y-5">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-blue-500" />
+              报销信息
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput label="报销金额（元）">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className={inputBase}
+                  value={expenseForm.amount || ''}
+                  onChange={(e) =>
+                    setExpenseForm((prev) => ({ ...prev, amount: Number(e.target.value) }))
+                  }
+                  placeholder="请输入金额"
+                />
+              </FormInput>
+              <FormInput label="费用分类">
+                <select
+                  className={inputBase}
+                  value={expenseForm.category}
+                  onChange={(e) =>
+                    setExpenseForm((prev) => ({ ...prev, category: e.target.value }))
+                  }
+                >
+                  <option value="差旅费">差旅费</option>
+                  <option value="办公费">办公费</option>
+                  <option value="餐饮费">餐饮费</option>
+                  <option value="其他">其他</option>
+                </select>
+              </FormInput>
+            </div>
+            <FormInput label="票据描述">
+              <textarea
+                rows={4}
+                className={cn(inputBase, 'resize-none')}
+                value={expenseForm.description}
+                onChange={(e) =>
+                  setExpenseForm((prev) => ({ ...prev, description: e.target.value }))
+                }
+                placeholder="请说明费用明细及票据情况..."
+              />
+            </FormInput>
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            'transition-all duration-350 ease-out overflow-hidden bg-white rounded-xl border border-gray-200 p-6 shadow-sm',
+            selectedType === 'business'
+              ? 'max-h-[2000px] opacity-100'
+              : 'max-h-0 opacity-0 py-0 px-0 !border-0 !shadow-none'
+          )}
+        >
+          <div className="space-y-5">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-blue-500" />
+              出差信息
+            </h3>
+            <FormInput label="出差地点">
+              <input
+                type="text"
+                className={inputBase}
+                value={businessForm.destination}
+                onChange={(e) =>
+                  setBusinessForm((prev) => ({ ...prev, destination: e.target.value }))
+                }
+                placeholder="请输入出差地点"
+              />
+            </FormInput>
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput label="开始日期">
+                <input
+                  type="date"
+                  className={inputBase}
+                  value={businessForm.startDate}
+                  onChange={(e) =>
+                    setBusinessForm((prev) => ({ ...prev, startDate: e.target.value }))
+                  }
+                />
+              </FormInput>
+              <FormInput label="结束日期">
+                <input
+                  type="date"
+                  className={inputBase}
+                  value={businessForm.endDate}
+                  onChange={(e) =>
+                    setBusinessForm((prev) => ({ ...prev, endDate: e.target.value }))
+                  }
+                />
+              </FormInput>
+            </div>
+            <FormInput label="预算金额（元）">
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className={inputBase}
+                value={businessForm.budget || ''}
+                onChange={(e) =>
+                  setBusinessForm((prev) => ({ ...prev, budget: Number(e.target.value) }))
+                }
+                placeholder="请输入预算金额"
+              />
+            </FormInput>
+          </div>
+        </div>
       </div>
 
       {selectedType && (
@@ -384,7 +384,6 @@ export default function FlowEditor() {
           <button
             type="button"
             onClick={() => {
-              setPrevType(selectedType);
               setSelectedType(null);
             }}
             className="px-5 py-2.5 rounded-lg text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
