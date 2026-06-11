@@ -5,6 +5,8 @@ import type { Card, Comment } from './api';
 const GROUPS = ['全部', '产品', '技术', '设计'];
 const CARD_HEIGHT = 220;
 const CARD_GAP = 20;
+const BREAKPOINT_TABLET = 768;
+const BREAKPOINT_MOBILE = 480;
 
 const css = `
 @keyframes heartbeat {
@@ -18,17 +20,45 @@ const css = `
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.5); }
-  to { opacity: 1; transform: scale(1); }
+@keyframes diffuseIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.7), 0 4px 12px rgba(0,0,0,0.3);
+  }
+  30% {
+    opacity: 0.5;
+    box-shadow: 0 0 25px 8px rgba(124, 58, 237, 0.4), 0 4px 12px rgba(0,0,0,0.3);
+  }
+  60% {
+    opacity: 0.8;
+    box-shadow: 0 0 40px 15px rgba(124, 58, 237, 0.15), 0 4px 12px rgba(0,0,0,0.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0), 0 4px 12px rgba(0,0,0,0.3);
+  }
 }
 @keyframes slideInFromBottom {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes fadeInStagger {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes modalIn {
   from { opacity: 0; transform: scale(0.9) translateY(20px); }
@@ -41,13 +71,14 @@ const css = `
 .heartbeat-anim {
   animation: heartbeat 0.5s ease-in-out;
 }
-.card-enter {
-  animation: scaleIn 0.4s ease-out forwards;
+.diffuse-enter {
+  animation: diffuseIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 .comment-enter {
-  animation: slideInFromBottom 0.3s ease-out forwards;
+  animation: slideInFromBottom 0.35s ease-out forwards;
 }
 .filter-fade-in {
+  opacity: 0;
   animation: fadeInStagger 0.3s ease-out forwards;
 }
 .modal-enter {
@@ -56,13 +87,29 @@ const css = `
 .detail-enter {
   animation: detailIn 0.35s ease-out forwards;
 }
+.virtual-scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+.virtual-scroll-container::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+  border-radius: 4px;
+}
+.virtual-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.4);
+  border-radius: 4px;
+}
+.virtual-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 58, 237, 0.6);
+}
 `;
 
-function VirtualCardGrid({ cards, onCardClick, onLike, likedSet }: {
+function VirtualCardGrid({ cards, onCardClick, onLike, likedSet, newCardId, filterKey }: {
   cards: Card[];
   onCardClick: (id: string) => void;
   onLike: (id: string, e: React.MouseEvent) => void;
   likedSet: Set<string>;
+  newCardId: string | null;
+  filterKey: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -74,9 +121,13 @@ function VirtualCardGrid({ cards, onCardClick, onLike, likedSet }: {
       if (!containerRef.current) return;
       setContainerHeight(window.innerHeight - 180);
       const w = containerRef.current.clientWidth;
-      if (w < 640) setColumns(1);
-      else if (w < 960) setColumns(2);
-      else setColumns(3);
+      if (w <= BREAKPOINT_MOBILE) {
+        setColumns(1);
+      } else if (w <= BREAKPOINT_TABLET) {
+        setColumns(2);
+      } else {
+        setColumns(3);
+      }
     };
     updateSize();
     window.addEventListener('resize', updateSize);
@@ -99,26 +150,31 @@ function VirtualCardGrid({ cards, onCardClick, onLike, likedSet }: {
 
   const rowHeight = CARD_HEIGHT + CARD_GAP;
   const totalHeight = rows.length * rowHeight;
-  const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - 1);
-  const visibleRows = Math.ceil(containerHeight / rowHeight) + 3;
+  const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - 2);
+  const visibleRows = Math.ceil(containerHeight / rowHeight) + 4;
   const endRow = Math.min(rows.length, startRow + visibleRows);
 
   return (
     <div
       ref={containerRef}
       onScroll={handleScroll}
+      className="virtual-scroll-container"
       style={{
         height: containerHeight,
         overflowY: 'auto',
+        overflowX: 'hidden',
         position: 'relative',
       }}
     >
-      <div style={{ height: totalHeight, position: 'relative' }}>
+      <div
+        key={filterKey}
+        style={{ height: totalHeight, position: 'relative' }}
+      >
         {rows.slice(startRow, endRow).map((row, ri) => {
           const actualRowIdx = startRow + ri;
           return (
             <div
-              key={actualRowIdx}
+              key={`row-${actualRowIdx}-${filterKey}`}
               style={{
                 position: 'absolute',
                 top: actualRowIdx * rowHeight,
@@ -132,13 +188,13 @@ function VirtualCardGrid({ cards, onCardClick, onLike, likedSet }: {
             >
               {row.map((card, ci) => {
                 const globalIdx = actualRowIdx * columns + ci;
+                const isNew = card.id === newCardId;
                 return (
                   <div
-                    key={card.id}
-                    className="filter-fade-in"
+                    key={`card-${card.id}-${filterKey}`}
+                    className={isNew ? 'diffuse-enter' : 'filter-fade-in'}
                     style={{
-                      animationDelay: `${globalIdx * 100}ms`,
-                      animationFillMode: 'both',
+                      animationDelay: isNew ? '0ms' : `${globalIdx * 100}ms`,
                     }}
                   >
                     <CardItem
@@ -166,11 +222,13 @@ function CardItem({ card, onClick, onLike, isLiked }: {
 }) {
   const [heartAnim, setHeartAnim] = useState(false);
 
-  const handleLike = (e: React.MouseEvent) => {
+  const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setHeartAnim(true);
+    if (!heartAnim) {
+      setHeartAnim(true);
+      setTimeout(() => setHeartAnim(false), 500);
+    }
     onLike(e);
-    setTimeout(() => setHeartAnim(false), 500);
   };
 
   return (
@@ -188,6 +246,7 @@ function CardItem({ card, onClick, onLike, isLiked }: {
         boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
         transition: 'transform 300ms ease-out, box-shadow 300ms ease-out',
         overflow: 'hidden',
+        width: '100%',
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.05)';
@@ -234,8 +293,7 @@ function CardItem({ card, onClick, onLike, isLiked }: {
       }}>{card.content}</p>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <button
-          onClick={handleLike}
-          className={heartAnim ? 'heartbeat-anim' : ''}
+          onClick={handleLikeClick}
           style={{
             background: 'none',
             border: 'none',
@@ -247,12 +305,23 @@ function CardItem({ card, onClick, onLike, isLiked }: {
             fontSize: '14px',
             padding: '4px 8px',
             borderRadius: '6px',
-            transition: 'background-color 200ms linear',
+            transition: 'background-color 200ms linear, color 200ms linear',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? '#ef4444' : 'none'} stroke={isLiked ? '#ef4444' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            className={heartAnim ? 'heartbeat-anim' : ''}
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill={isLiked ? '#ef4444' : 'none'}
+            stroke={isLiked ? '#ef4444' : 'currentColor'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ display: 'block' }}
+          >
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
           <span>{card.likes}</span>
@@ -274,13 +343,20 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const commentListRef = useRef<HTMLDivElement>(null);
+  const [newCommentIds, setNewCommentIds] = useState<Set<string>>(new Set());
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
+    setHasLoaded(false);
+    setNewCommentIds(new Set());
     fetchComments(card.id).then((data) => {
       setComments(data);
       setLoading(false);
-    }).catch(() => setLoading(false));
+      setHasLoaded(true);
+    }).catch(() => {
+      setLoading(false);
+      setHasLoaded(true);
+    });
   }, [card.id]);
 
   const handleSubmit = async () => {
@@ -292,7 +368,19 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
         content: newComment.trim(),
       });
       setComments((prev) => [comment, ...prev]);
+      setNewCommentIds((prev) => {
+        const next = new Set(prev);
+        next.add(comment.id);
+        return next;
+      });
       setNewComment('');
+      setTimeout(() => {
+        setNewCommentIds((prev) => {
+          const next = new Set(prev);
+          next.delete(comment.id);
+          return next;
+        });
+      }, 500);
     } catch (err) {
       console.error(err);
     }
@@ -370,8 +458,8 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
         评论 ({comments.length})
       </h3>
 
-      <div ref={commentListRef} style={{ marginBottom: '24px' }}>
-        {loading ? (
+      <div style={{ marginBottom: '24px' }}>
+        {loading || !hasLoaded ? (
           <div style={{ color: '#777', textAlign: 'center', padding: '20px' }}>加载评论中...</div>
         ) : comments.length === 0 ? (
           <div style={{ color: '#777', textAlign: 'center', padding: '20px' }}>暂无评论，来发表第一条评论吧</div>
@@ -379,7 +467,7 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
           comments.map((comment, idx) => (
             <div
               key={comment.id}
-              className={idx === 0 && !loading ? 'comment-enter' : ''}
+              className={newCommentIds.has(comment.id) ? 'comment-enter' : ''}
               style={{
                 display: 'flex',
                 gap: '12px',
@@ -388,7 +476,7 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
                 position: 'relative',
               }}
             >
-              {comments.length > 1 && idx > 0 && (
+              {idx > 0 && (
                 <div style={{
                   position: 'absolute',
                   left: '18px',
@@ -445,6 +533,7 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
               color: '#e0e0e0',
               fontSize: '14px',
               outline: 'none',
+              transition: 'border-color 200ms linear',
             }}
           />
         </div>
@@ -463,6 +552,7 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
               color: '#e0e0e0',
               fontSize: '14px',
               outline: 'none',
+              transition: 'border-color 200ms linear',
             }}
           />
           <button
@@ -477,7 +567,7 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
               fontSize: '14px',
               cursor: submitting || !newComment.trim() || !username.trim() ? 'not-allowed' : 'pointer',
               opacity: submitting || !newComment.trim() || !username.trim() ? 0.5 : 1,
-              transition: 'background-color 200ms linear',
+              transition: 'background-color 200ms linear, opacity 200ms linear',
               whiteSpace: 'nowrap',
             }}
             onMouseEnter={(e) => { if (!submitting && newComment.trim() && username.trim()) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#6d28d9'; }}
@@ -549,6 +639,7 @@ function AddCardModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (d
               color: '#e0e0e0',
               fontSize: '15px',
               outline: 'none',
+              transition: 'border-color 200ms linear',
             }}
           />
         </label>
@@ -572,6 +663,7 @@ function AddCardModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (d
               resize: 'vertical',
               fontFamily: 'inherit',
               lineHeight: 1.6,
+              transition: 'border-color 200ms linear',
             }}
           />
         </label>
@@ -592,6 +684,7 @@ function AddCardModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (d
               outline: 'none',
               appearance: 'none',
               cursor: 'pointer',
+              transition: 'border-color 200ms linear',
             }}
           >
             <option value="产品">产品</option>
@@ -630,7 +723,7 @@ function AddCardModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (d
               fontSize: '14px',
               cursor: submitting || !title.trim() || !content.trim() ? 'not-allowed' : 'pointer',
               opacity: submitting || !title.trim() || !content.trim() ? 0.5 : 1,
-              transition: 'background-color 200ms linear',
+              transition: 'background-color 200ms linear, opacity 200ms linear',
             }}
             onMouseEnter={(e) => { if (!submitting && title.trim() && content.trim()) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#6d28d9'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#7c3aed'; }}
@@ -652,6 +745,7 @@ export default function App() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const [newCardId, setNewCardId] = useState<string | null>(null);
+  const [filterKey, setFilterKey] = useState(0);
 
   const loadCards = useCallback(async () => {
     try {
@@ -666,6 +760,10 @@ export default function App() {
   useEffect(() => {
     loadCards();
   }, [loadCards]);
+
+  useEffect(() => {
+    setFilterKey((k) => k + 1);
+  }, [filterGroup, sortBy]);
 
   const filteredCards = useMemo(() => {
     let result = filterGroup === '全部' ? [...cards] : cards.filter((c) => c.group === filterGroup);
@@ -702,17 +800,25 @@ export default function App() {
       setCards((prev) => [card, ...prev]);
       setNewCardId(card.id);
       setShowModal(false);
-      setTimeout(() => setNewCardId(null), 500);
+      setTimeout(() => setNewCardId(null), 600);
     } catch (err) {
       console.error(err);
     }
   }, []);
 
+  const handleFilterGroupChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilterGroup(e.target.value);
+  };
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSortBy(e.target.value as 'time' | 'likes');
+  };
+
   if (selectedCard) {
     return (
       <>
         <style>{css}</style>
-        <div style={{ minHeight: '100vh', background: '#1e1e2e', paddingTop: '32px' }}>
+        <div style={{ minHeight: '100vh', background: '#1e1e2e', paddingTop: '32px', paddingBottom: '40px' }}>
           <CardDetail card={selectedCard} onBack={() => setSelectedCardId(null)} />
         </div>
       </>
@@ -732,13 +838,13 @@ export default function App() {
           flexWrap: 'wrap',
           gap: '16px',
         }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f0f0f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f0f0f0', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
             <span style={{ fontSize: '28px' }}>💡</span> 灵感看板
           </h1>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select
               value={filterGroup}
-              onChange={(e) => setFilterGroup(e.target.value)}
+              onChange={handleFilterGroupChange}
               style={{
                 background: '#2a2a3e',
                 border: '1px solid rgba(255,255,255,0.1)',
@@ -749,6 +855,7 @@ export default function App() {
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
+                transition: 'border-color 200ms linear',
               }}
             >
               {GROUPS.map((g) => (
@@ -757,7 +864,7 @@ export default function App() {
             </select>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'time' | 'likes')}
+              onChange={handleSortChange}
               style={{
                 background: '#2a2a3e',
                 border: '1px solid rgba(255,255,255,0.1)',
@@ -768,6 +875,7 @@ export default function App() {
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
+                transition: 'border-color 200ms linear',
               }}
             >
               <option value="time">按时间排序</option>
@@ -812,6 +920,8 @@ export default function App() {
               onCardClick={(id) => setSelectedCardId(id)}
               onLike={handleLike}
               likedSet={likedSet}
+              newCardId={newCardId}
+              filterKey={filterKey}
             />
           )}
         </main>
