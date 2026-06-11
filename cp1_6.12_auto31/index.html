@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="数字文物博物馆 - 沉浸式在线文物浏览平台" />
+  <title>数字文物博物馆 | Digital Artifact Museum</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Noto+Serif+SC:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <nav id="top-nav" class="nav-bar">
+    <div class="nav-brand">
+      <span class="brand-logo">◈</span>
+      <span class="brand-name">韵·典藏馆</span>
+      <span class="brand-sub">Digital Artifact Museum</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#" class="nav-link active">珍品陈列</a></li>
+      <li><a href="#" class="nav-link">虚拟展览</a></li>
+      <li><a href="#" class="nav-link">学术研究</a></li>
+      <li><a href="#" class="nav-link">关于我们</a></li>
+    </ul>
+  </nav>
+
+  <main id="app">
+    <section id="scene-container" class="scene-container"></section>
+
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="loading-inner">
+        <div class="loading-spinner"></div>
+        <div class="loading-title">正在载入文物</div>
+        <div class="loading-artifact-name" id="loading-artifact-name">初始化中...</div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="loading-percent" id="loading-percent">0%</div>
+      </div>
+    </div>
+
+    <div id="artifact-switcher" class="artifact-switcher">
+      <div class="switcher-title">珍品典藏</div>
+      <div id="artifact-list" class="artifact-list"></div>
+      <div class="interaction-hint">
+        <span class="hint-icon">⟳</span> 拖拽旋转 · 滚轮缩放
+      </div>
+    </div>
+
+    <aside id="info-panel" class="info-panel panel-collapsed">
+      <div class="panel-header" id="panel-header">
+        <div class="panel-title-row">
+          <span class="panel-icon" id="panel-icon">▣</span>
+          <div class="panel-title-group">
+            <h2 class="panel-artifact-name" id="panel-artifact-name">--</h2>
+            <div class="panel-artifact-dynasty" id="panel-artifact-dynasty">--</div>
+          </div>
+        </div>
+        <button class="panel-toggle-btn" id="panel-toggle-btn" aria-label="展开/收起面板">
+          <svg class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-content" id="panel-content">
+        <div class="info-row">
+          <span class="info-label">出土地点</span>
+          <span class="info-value" id="panel-artifact-location">--</span>
+        </div>
+        <div class="info-divider"></div>
+        <div class="info-section">
+          <div class="info-section-title">历史背景</div>
+          <p class="info-description" id="panel-artifact-description">
+            文物信息加载中...
+          </p>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
