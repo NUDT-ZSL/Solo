@@ -122,6 +122,7 @@ export class GameMap {
   private generateSmoothPath(): { x: number; y: number }[] {
     const points: { x: number; y: number }[] = [];
     const tileHalf = TILE_SIZE / 2;
+    let totalPointCount = 0;
 
     for (let i = 0; i < this.pathPoints.length - 1; i++) {
       const start = this.pathPoints[i];
@@ -136,6 +137,7 @@ export class GameMap {
         Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2)
       );
       const stepCount = Math.max(1, Math.ceil(segmentLength / PATH_INTERPOLATION_STEP));
+      totalPointCount += stepCount;
 
       for (let t = 0; t < stepCount; t++) {
         const progress = t / stepCount;
@@ -151,6 +153,7 @@ export class GameMap {
       x: lastPoint.x * TILE_SIZE + tileHalf,
       y: lastPoint.y * TILE_SIZE + tileHalf
     });
+    totalPointCount += 1;
 
     return points;
   }

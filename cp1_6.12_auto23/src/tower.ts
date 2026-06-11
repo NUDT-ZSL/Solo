@@ -1,18 +1,19 @@
 import { Enemy } from './enemy';
 import { TILE_SIZE } from './gameMap';
 
-export const BUILD_ANIMATION_DURATION = 0.33;
-export const BUILD_ANIMATION_OVERSHOOT = 1.15;
+export const BUILD_ANIMATION_DURATION = 0.5;
+export const BUILD_ANIMATION_MAX_SCALE = 1.2;
+export const BUILD_ANIMATION_MIN_SCALE = 0;
 export const SHOOT_ANIMATION_DURATION = 0.2;
 export const SHOOT_SCALE_FACTOR = 1.15;
 export const PROJECTILE_TRAIL_LENGTH = 8;
 
 export const DEATH_PARTICLE_COUNT = 24;
-export const DEATH_PARTICLE_MIN_SPEED = 1;
-export const DEATH_PARTICLE_MAX_SPEED = 5;
+export const DEATH_PARTICLE_MIN_SPEED = 80;
+export const DEATH_PARTICLE_MAX_SPEED = 300;
 export const DEATH_PARTICLE_MIN_LIFE = 0.6;
 export const DEATH_PARTICLE_MAX_LIFE = 1.0;
-export const DEATH_PARTICLE_GRAVITY = 20;
+export const DEATH_PARTICLE_GRAVITY = 450;
 export const DEATH_PARTICLE_DRAG = 0.98;
 export const DEATH_PARTICLE_COLORS = [
   '#ff6b6b', '#ff8787', '#ffa8a8', '#ffc9c9', '#ffd43b'
@@ -300,8 +301,11 @@ export class Tower {
     if (this.buildProgress >= 1) {
       return 1;
     }
-    return easeOutBack(this.buildProgress) * BUILD_ANIMATION_OVERSHOOT
-      - (BUILD_ANIMATION_OVERSHOOT - 1) * easeOutCubic(this.buildProgress);
+    const rawScale = easeOutBack(this.buildProgress);
+    return Math.max(
+      BUILD_ANIMATION_MIN_SCALE,
+      Math.min(BUILD_ANIMATION_MAX_SCALE, rawScale)
+    );
   }
 
   private getBuildAlpha(): number {

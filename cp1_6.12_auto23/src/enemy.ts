@@ -24,8 +24,8 @@ export const SLOW_RING_COLOR = 'rgba(100, 200, 255, 0.7)';
 
 export const ENEMY_BASE_HEALTH = 80;
 export const ENEMY_HEALTH_PER_WAVE = 25;
-export const ENEMY_BASE_SPEED = 1.2;
-export const ENEMY_SPEED_PER_WAVE = 0.08;
+export const ENEMY_BASE_SPEED = 72;
+export const ENEMY_SPEED_PER_WAVE = 4.8;
 export const ENEMY_KILL_REWARD = 10;
 
 export interface Particle {
@@ -95,7 +95,7 @@ export class Enemy {
     const currentSpeed = this.speed * this.slowFactor;
     const smoothPath = gameMap.getSmoothPath();
 
-    let distanceToMove = currentSpeed;
+    let distanceToMove = currentSpeed * deltaTime;
     while (distanceToMove > 0 && this.pathIndex < smoothPath.length - 1) {
       const target = smoothPath[this.pathIndex + 1];
       const dx = target.x - this.x;

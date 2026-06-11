@@ -2,7 +2,7 @@ import { GameMap, GRID_SIZE, TILE_SIZE, TileType } from './gameMap';
 import { Enemy, Particle } from './enemy';
 import {
   Tower, TowerType, TOWER_CONFIGS, Projectile, updateProjectiles, renderProjectiles,
-  easeInOutQuad, DEATH_PARTICLE_COUNT,
+  DEATH_PARTICLE_COUNT,
   DEATH_PARTICLE_GRAVITY, DEATH_PARTICLE_DRAG
 } from './tower';
 
@@ -150,6 +150,13 @@ class Game {
   private _spatialGrid: SpatialGrid | null;
   private _spatialGridDirty: boolean;
 
+  private _perfFrameCount: number;
+  private _perfFpsTimer: number;
+  private _perfCurrentFps: number;
+  private _perfSpatialChecks: number;
+  private _perfFullScanChecks: number;
+  private _perfLogTimer: number;
+
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
@@ -192,6 +199,13 @@ class Game {
 
     this._spatialGrid = null;
     this._spatialGridDirty = true;
+
+    this._perfFrameCount = 0;
+    this._perfFpsTimer = 0;
+    this._perfCurrentFps = 0;
+    this._perfSpatialChecks = 0;
+    this._perfFullScanChecks = 0;
+    this._perfLogTimer = 0;
 
     this.preallocatePools();
     this.resizeCanvas();
@@ -536,6 +550,28 @@ class Game {
     deltaTime = Math.min(deltaTime, 0.05);
     this.lastTime = now;
 
+    this._perfFrameCount++;
+    this._perfFpsTimer += deltaTime;
+    this._perfLogTimer += deltaTime;
+    if (this._perfFpsTimer >= 1) {
+      this._perfCurrentFps = this._perfFrameCount;
+      this._perfFrameCount = 0;
+      this._perfFpsTimer = 0;
+    }
+    if (this._perfLogTimer >= 2 && this.enemies.length > 10) {
+      const total = this._perfSpatialChecks + this._perfFullScanChecks;
+      const saved = total > 0 ? Math.round((1 - this._perfSpatialChecks / Math.max(1, this._perfFullScanChecks)) * 100) : 0;
+      console.log(
+        `[性能] FPS:${this._perfCurrentFps.toFixed(0)} | ` +
+        `敌人:${this.enemies.length} | 塔:${this.towers.length} | ` +
+        `空间分区遍历:${this._perfSpatialChecks} | 全量遍历:${this._perfFullScanChecks} | ` +
+        `节省:${saved}%`
+      );
+      this._perfSpatialChecks = 0;
+      this._perfFullScanChecks = 0;
+      this._perfLogTimer = 0;
+    }
+
     if (!this.gameOver && !this.gameWon) {
       this.update(deltaTime);
     }
@@ -636,10 +672,10 @@ class Game {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= deltaTime;
-      p.x += p.vx;
-      p.y += p.vy;
+      p.x += p.vx * deltaTime;
+      p.y += p.vy * deltaTime;
       p.vy += DEATH_PARTICLE_GRAVITY * deltaTime;
-      p.vx *= DEATH_PARTICLE_DRAG;
+      p.vx *= Math.pow(DEATH_PARTICLE_DRAG, deltaTime * 60);
 
       if (p.life <= 0) {
         this.particles.splice(i, 1);
@@ -668,8 +704,11 @@ class Game {
         grid, this.enemies,
         tower.getCenterX(), tower.getCenterY(), tower.getRange()
       );
+      this._perfSpatialChecks += candidates.length;
+      this._perfFullScanChecks += this.enemies.length;
       tower.update(deltaTime, candidates, this.projectiles);
     } else {
+      this._perfFullScanChecks += this.enemies.length;
       tower.update(deltaTime, this.enemies, this.projectiles);
     }
   }
@@ -1091,8 +1130,8 @@ class Game {
       alpha = progress / WAVE_TRANSITION_FADE_IN_PORTION;
     }
 
-    const pulseProgress = easeInOutQuad(progress);
-    const pulse = 1 + Math.sin(pulseProgress * Math.PI) * (WAVE_TRANSITION_PULSE_SCALE - 1);
+    const pulseBase = 1.0;
+    const pulse = pulseBase + Math.sin(progress * Math.PI * 2) * (WAVE_TRANSITION_PULSE_SCALE - pulseBase) * 0.5;
 
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha)) * 0.9;
@@ -1228,6 +1267,13 @@ class Game {
 
     this._spatialGrid = null;
     this._spatialGridDirty = true;
+
+    this._perfFrameCount = 0;
+    this._perfFpsTimer = 0;
+    this._perfCurrentFps = 0;
+    this._perfSpatialChecks = 0;
+    this._perfFullScanChecks = 0;
+    this._perfLogTimer = 0;
 
     this.setupEventListeners();
     this.preallocatePools();
