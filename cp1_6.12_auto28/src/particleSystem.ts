@@ -215,7 +215,9 @@ export class ParticleSystem {
 
       this.sizesAttr[i] = this.baseSize * (0.55 + bright * 0.7);
 
-      this.paths[i] = this.generateBezierPath(new THREE.Vector3(pos.x, pos.y, pos.z));
+      const bp = this.generateBezierPath(new THREE.Vector3(pos.x, pos.y, pos.z));
+      bp.t = Math.random() * 0.95;
+      this.paths[i] = bp;
     }
   }
 
@@ -307,7 +309,9 @@ export class ParticleSystem {
       this.colors[i3 + 2] = Math.min(1, c.b * boost);
 
       this.sizesAttr[i] = this.baseSize * (0.55 + bright * 0.7);
-      this.paths[i] = this.generateBezierPath(new THREE.Vector3(pos.x, pos.y, pos.z));
+      const bp = this.generateBezierPath(new THREE.Vector3(pos.x, pos.y, pos.z));
+      bp.t = Math.random() * 0.95;
+      this.paths[i] = bp;
     }
 
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));

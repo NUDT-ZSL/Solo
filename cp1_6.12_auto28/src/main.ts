@@ -98,4 +98,12 @@ class StarForge {
   }
 }
 
-new StarForge();
+function bootstrap(): void {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => new StarForge(), { once: true });
+  } else {
+    new StarForge();
+  }
+}
+
+bootstrap();

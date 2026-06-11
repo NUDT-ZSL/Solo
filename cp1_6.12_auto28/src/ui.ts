@@ -8,7 +8,7 @@ export interface UIConfig {
 }
 
 export class UI {
-  private panel: HTMLElement;
+  private panel!: HTMLElement;
   private particleSystem: ParticleSystem;
   private controls: Controls;
   private onConfigChange?: (config: UIConfig) => void;
@@ -16,9 +16,27 @@ export class UI {
   constructor(particleSystem: ParticleSystem, controls: Controls) {
     this.particleSystem = particleSystem;
     this.controls = controls;
-    this.injectSliderStyles();
-    this.panel = this.createPanel();
-    document.body.appendChild(this.panel);
+
+    const mount = (): void => {
+      this.injectSliderStyles();
+      this.panel = this.createPanel();
+      this.bindPanelEvents();
+      (document.body || document.documentElement).appendChild(this.panel);
+    };
+
+    const safeMount = (): void => {
+      if (typeof this.bindPanelEvents === 'function') {
+        mount();
+      } else {
+        queueMicrotask(safeMount);
+      }
+    };
+
+    if (document.body) {
+      safeMount();
+    } else {
+      document.addEventListener('DOMContentLoaded', () => safeMount(), { once: true });
+    }
   }
 
   setOnConfigChange(callback: (config: UIConfig) => void): void {
@@ -30,19 +48,31 @@ export class UI {
     const style = document.createElement('style');
     style.id = 'starforge-slider-styles';
     style.textContent = `
-      #control-panel .sf-slider {
+      #control-panel .sf-slider,
+      #control-panel input[type="range"].sf-slider {
         -webkit-appearance: none;
+        -moz-appearance: none;
         appearance: none;
         width: 100%;
         height: 6px;
         border-radius: 999px;
         background: linear-gradient(90deg, #6a4ec4 0%, #b295ff 45%, #e6d8ff 100%);
-        outline: none;
+        outline: none !important;
+        border: none !important;
         cursor: pointer;
         box-shadow: inset 0 0 6px rgba(40, 20, 80, 0.6),
                     0 0 8px rgba(140, 100, 220, 0.18);
         position: relative;
+        padding: 0;
+        margin: 0;
+      }
+      #control-panel .sf-slider::-webkit-slider-runnable-track {
+        -webkit-appearance: none;
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6a4ec4 0%, #b295ff 45%, #e6d8ff 100%);
         border: 1px solid rgba(200, 180, 255, 0.08);
+        box-shadow: inset 0 0 6px rgba(40, 20, 80, 0.6);
       }
       #control-panel .sf-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
@@ -57,7 +87,7 @@ export class UI {
                     0 0 10px rgba(180, 140, 255, 0.45);
         cursor: pointer;
         transition: transform 0.14s ease, box-shadow 0.14s ease;
-        margin-top: 0;
+        margin-top: -6px;
       }
       #control-panel .sf-slider::-webkit-slider-thumb:hover {
         transform: scale(1.15);
@@ -65,7 +95,18 @@ export class UI {
                     0 2px 8px rgba(0, 0, 0, 0.4),
                     0 0 14px rgba(200, 160, 255, 0.65);
       }
+      #control-panel .sf-slider::-moz-range-track {
+        -moz-appearance: none;
+        appearance: none;
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6a4ec4 0%, #b295ff 45%, #e6d8ff 100%);
+        border: 1px solid rgba(200, 180, 255, 0.08);
+        box-shadow: inset 0 0 6px rgba(40, 20, 80, 0.6);
+      }
       #control-panel .sf-slider::-moz-range-thumb {
+        -moz-appearance: none;
+        appearance: none;
         width: 18px;
         height: 18px;
         border-radius: 50%;
@@ -77,15 +118,59 @@ export class UI {
         cursor: pointer;
         transition: transform 0.14s ease, box-shadow 0.14s ease;
       }
-      #control-panel .sf-slider::-moz-range-track {
+      #control-panel .sf-slider::-moz-range-thumb:hover {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 4px rgba(160, 120, 240, 0.2),
+                    0 2px 8px rgba(0, 0, 0, 0.4),
+                    0 0 14px rgba(200, 160, 255, 0.65);
+      }
+      #control-panel .sf-slider::-moz-focus-outer {
+        border: 0;
+      }
+      #control-panel .sf-slider::-ms-track {
+        width: 100%;
         height: 6px;
+        cursor: pointer;
+        background: transparent;
+        border-color: transparent;
+        color: transparent;
+        border-width: 6px 0;
+      }
+      #control-panel .sf-slider::-ms-fill-lower {
+        background: linear-gradient(90deg, #6a4ec4 0%, #b295ff 60%);
         border-radius: 999px;
-        background: linear-gradient(90deg, #6a4ec4 0%, #b295ff 45%, #e6d8ff 100%);
         border: 1px solid rgba(200, 180, 255, 0.08);
         box-shadow: inset 0 0 6px rgba(40, 20, 80, 0.6);
       }
-      #control-panel .sf-slider:focus {
-        outline: none;
+      #control-panel .sf-slider::-ms-fill-upper {
+        background: linear-gradient(90deg, #b295ff 0%, #e6d8ff 100%);
+        border-radius: 999px;
+        border: 1px solid rgba(200, 180, 255, 0.08);
+        box-shadow: inset 0 0 6px rgba(40, 20, 80, 0.6);
+      }
+      #control-panel .sf-slider::-ms-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #f0e6ff, #c7aaff 45%, #8763d9 85%);
+        border: 2px solid rgba(220, 200, 255, 0.65);
+        box-shadow: 0 0 0 3px rgba(140, 100, 220, 0.12),
+                    0 2px 6px rgba(0, 0, 0, 0.35),
+                    0 0 10px rgba(180, 140, 255, 0.45);
+        cursor: pointer;
+        margin-top: 0;
+      }
+      #control-panel .sf-slider::-ms-thumb:hover {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 4px rgba(160, 120, 240, 0.2),
+                    0 2px 8px rgba(0, 0, 0, 0.4),
+                    0 0 14px rgba(200, 160, 255, 0.65);
+      }
+      #control-panel .sf-slider:focus,
+      #control-panel .sf-slider::-webkit-slider-runnable-track:focus,
+      #control-panel .sf-slider::-moz-range-track:focus,
+      #control-panel .sf-slider::-ms-track:focus {
+        outline: none !important;
       }
       #control-panel .sf-btn {
         transition: all 0.22s cubic-bezier(.2,.8,.2,1);
@@ -175,23 +260,35 @@ export class UI {
     });
     panel.appendChild(separator);
 
-    panel.appendChild(this.createButton('重置视角', () => {
-      try {
-        this.controls.resetView();
-      } catch (e) {
-        console.error('resetView error', e);
-      }
-    }));
-
-    panel.appendChild(this.createButton('导出 JSON', () => {
-      try {
-        this.exportConfig();
-      } catch (e) {
-        console.error('export error', e);
-      }
-    }));
+    panel.appendChild(this.createButton('重置视角', 'reset-view'));
+    panel.appendChild(this.createButton('导出 JSON', 'export-json'));
 
     return panel;
+  }
+
+  private bindPanelEvents(): void {
+    if (!this.panel) return;
+
+    this.panel.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const btn = target.closest<HTMLButtonElement>('button[data-action]');
+      if (!btn || !this.panel.contains(btn)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const action = btn.getAttribute('data-action');
+      try {
+        if (action === 'reset-view') {
+          this.controls.resetView();
+        } else if (action === 'export-json') {
+          this.exportConfig();
+        }
+      } catch (err) {
+        console.error('[StarForge UI] action failed:', action, err);
+      }
+    });
   }
 
   private createSlider(
@@ -265,10 +362,12 @@ export class UI {
     return wrap;
   }
 
-  private createButton(text: string, onClick: () => void): HTMLElement {
+  private createButton(text: string, action: string): HTMLElement {
     const btn = document.createElement('button');
     btn.className = 'sf-btn';
     btn.textContent = text;
+    btn.setAttribute('data-action', action);
+    btn.type = 'button';
 
     Object.assign(btn.style, {
       width: '100%',
@@ -298,11 +397,6 @@ export class UI {
       btn.style.borderColor = 'rgba(200,190,240,0.22)';
       btn.style.color = '#d2cced';
       btn.style.boxShadow = 'inset 0 0 10px rgba(100,70,180,0.1), 0 2px 10px rgba(0,0,0,0.25)';
-    });
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      onClick();
     });
 
     return btn;

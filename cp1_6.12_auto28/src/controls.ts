@@ -119,28 +119,22 @@ export class Controls {
     const intersects = this.raycaster.intersectObject(this.particleSystem.points, false);
 
     let bestIdx = -1;
-    let bestScreenPx = Infinity;
+    const MAX_WORLD_DIST = 20;
     const tmpPos = new THREE.Vector3();
-    const rayOrigin = this.raycaster.ray.origin.clone();
+    const camPos = this.camera.position;
 
     for (let i = 0; i < intersects.length; i++) {
       const hit = intersects[i];
       if (hit.index === undefined) continue;
       this.particleSystem.getPositionAt(hit.index, tmpPos);
 
-      const worldDistFromRay = this.raycaster.ray.distanceSqToPoint(tmpPos);
-      if (worldDistFromRay > 400) continue;
+      const particleWorldDist = tmpPos.distanceTo(camPos);
+      const rayDist = hit.distance;
+      const diff = Math.abs(particleWorldDist - rayDist);
+      if (diff > MAX_WORLD_DIST) continue;
 
-      tmpPos.project(this.camera);
-      const sx = (tmpPos.x * 0.5 + 0.5) * rect.width;
-      const sy = (-tmpPos.y * 0.5 + 0.5) * rect.height;
-      const dx = sx - (event.clientX - rect.left);
-      const dy = sy - (event.clientY - rect.top);
-      const pxDist2 = dx * dx + dy * dy;
-      if (pxDist2 < bestScreenPx && pxDist2 < 900) {
-        bestScreenPx = pxDist2;
-        bestIdx = hit.index;
-      }
+      bestIdx = hit.index;
+      break;
     }
 
     this.particleSystem.setHoveredIndex(bestIdx);
