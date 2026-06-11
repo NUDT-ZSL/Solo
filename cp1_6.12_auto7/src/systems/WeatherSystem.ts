@@ -19,12 +19,17 @@ export class WeatherSystem {
   private spawnAccumulatorSnow: number = 0;
   private targetParticleRates: ParticleConfig;
   private previousParticleRates: ParticleConfig;
+  private previousWeatherDarkness: number;
+  private targetWeatherDarkness: number;
+  private particleLogTimer: number = 0;
 
   constructor() {
     this.weatherDuration = this.randomDuration();
     this.weatherElapsed = 0;
     this.previousParticleRates = { rainRate: 0, snowRate: 0, dustRate: 0 };
     this.targetParticleRates = this.getRateForWeather(WeatherType.SUNNY);
+    this.previousWeatherDarkness = this.getDarknessForWeather(WeatherType.SUNNY);
+    this.targetWeatherDarkness = this.getDarknessForWeather(WeatherType.SUNNY);
     this.state = {
       type: WeatherType.SUNNY,
       previousType: WeatherType.SUNNY,
@@ -69,6 +74,22 @@ export class WeatherSystem {
 
     this.previousParticleRates = { ...this.state.particleConfig };
     this.targetParticleRates = this.getRateForWeather(nextType);
+    this.previousWeatherDarkness = this.getDarknessForWeather(this.state.previousType);
+    this.targetWeatherDarkness = this.getDarknessForWeather(nextType);
+  }
+
+  private getDarknessForWeather(type: WeatherType): number {
+    switch (type) {
+      case WeatherType.SUNNY: return 1.0;
+      case WeatherType.CLOUDY: return 0.75;
+      case WeatherType.RAINY: return 0.55;
+      case WeatherType.SNOWY: return 0.65;
+    }
+  }
+
+  public getInterpolatedDarkness(): number {
+    const t = this.state.transitionProgress;
+    return this.previousWeatherDarkness + (this.targetWeatherDarkness - this.previousWeatherDarkness) * t;
   }
 
   private updateParticleConfig(): void {
@@ -87,27 +108,49 @@ export class WeatherSystem {
       case WeatherType.CLOUDY:
         return { rainRate: 5, snowRate: 0, dustRate: 0.5 };
       case WeatherType.RAINY:
-        return { rainRate: 30 + Math.random() * 20, snowRate: 0, dustRate: 0 };
+        return { rainRate: 40, snowRate: 0, dustRate: 0 };
       case WeatherType.SNOWY:
-        return { rainRate: 0, snowRate: 20 + Math.random() * 10, dustRate: 0 };
+        return { rainRate: 0, snowRate: 25, dustRate: 0 };
     }
   }
 
+  private getWindForWeather(type: WeatherType): number {
+    switch (type) {
+      case WeatherType.SUNNY: return 0;
+      case WeatherType.CLOUDY: return 20;
+      case WeatherType.RAINY: return 60;
+      case WeatherType.SNOWY: return 40;
+    }
+  }
+
+  public checkParticleLimit(particles: Particle[], max: number): number {
+    let removed = 0;
+    while (particles.length > max) {
+      particles.shift();
+      removed++;
+    }
+    if (removed > 0) {
+      console.log(`[WeatherSystem] Removed ${removed} oldest particles to maintain limit ${max}, current: ${particles.length}`);
+    }
+    return removed;
+  }
+
   private updateWind(deltaTime: number): void {
-    const targetWind =
-      this.state.type === WeatherType.RAINY ? 60 :
-      this.state.type === WeatherType.SNOWY ? 40 :
-      this.state.type === WeatherType.CLOUDY ? 20 : 0;
-
+    const targetWind = this.getWindForWeather(this.state.type);
+    const prevTarget = this.getWindForWeather(this.state.previousType);
     const t = this.state.transitionProgress;
-    const prevTarget =
-      this.state.previousType === WeatherType.RAINY ? 60 :
-      this.state.previousType === WeatherType.SNOWY ? 40 :
-      this.state.previousType === WeatherType.CLOUDY ? 20 : 0;
-
     const blendedTarget = prevTarget + (targetWind - prevTarget) * t;
     this.state.windX += (blendedTarget - this.state.windX) * Math.min(1, deltaTime * 2);
     this.state.windX += (Math.random() - 0.5) * 10 * deltaTime;
+  }
+
+  public updateWithParticleCheck(deltaTime: number, particles: Particle[]): void {
+    this.update(deltaTime);
+    this.particleLogTimer += deltaTime;
+    if (this.particleLogTimer >= 5) {
+      this.particleLogTimer = 0;
+      console.log(`[WeatherSystem] Particle count: ${particles.length}, Weather: ${this.state.type}, Transition: ${(this.state.transitionProgress * 100).toFixed(0)}%`);
+    }
   }
 
   public getState(): WeatherState {

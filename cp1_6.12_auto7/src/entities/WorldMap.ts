@@ -33,8 +33,13 @@ const TREE_LEAF_COLORS: Record<TimePhase, string> = {
 const TREE_WEATHER_MOD: Record<WeatherType, { r: number; g: number; b: number }> = {
   [WeatherType.SUNNY]: { r: 0, g: 0, b: 0 },
   [WeatherType.CLOUDY]: { r: -10, g: -5, b: 0 },
-  [WeatherType.RAINY]: { r: -20, g: -10, b: 10 },
-  [WeatherType.SNOWY]: { r: 80, g: 80, b: 100 },
+  [WeatherType.RAINY]: { r: -30, g: -5, b: 0 },
+  [WeatherType.SNOWY]: { r: 100, g: 100, b: 110 },
+};
+
+const EXTREME_WEATHER_MOD = {
+  [WeatherType.RAINY]: { r: -10, g: 0, b: +15 },
+  [WeatherType.SNOWY]: { r: +30, g: +30, b: +40 },
 };
 
 export class WorldMap {
@@ -194,29 +199,32 @@ export class WorldMap {
       ctx.fillStyle = '#5a3d2b';
       ctx.fillRect(x - trunkW / 2, y - trunkH, trunkW, trunkH);
 
-      let duskInfluence = 0;
-      let nightInfluence = 0;
-      if (timeState.phase === TimePhase.DUSK) {
-        duskInfluence = 0.3 * (timeState.phaseProgress < 0.5 ? timeState.phaseProgress * 2 : (1 - timeState.phaseProgress) * 2);
-      }
-      if (timeState.phase === TimePhase.NIGHT) {
-        nightInfluence = 0.5;
-      }
-      if (timeState.phase === TimePhase.DAWN) {
-        duskInfluence = 0.2 * (1 - timeState.phaseProgress);
-      }
+      const phaseWeights = this.calculatePhaseWeights(timeState);
+      const weatherWeights = this.calculateWeatherWeights(weatherState);
 
       let displayLeaf = baseLeafColor;
-      displayLeaf = this.mixColor(displayLeaf, '#3d2040', duskInfluence);
-      displayLeaf = this.mixColor(displayLeaf, '#1a0a20', nightInfluence);
 
-      const weatherT = weatherState.transitionProgress;
-      if (weatherState.type === WeatherType.RAINY) {
-        displayLeaf = this.mixColor(displayLeaf, '#1a4a2a', 0.25 * weatherT);
-      } else if (weatherState.type === WeatherType.SNOWY) {
-        displayLeaf = this.mixColor(displayLeaf, '#d0d8e0', 0.35 * weatherT);
-      } else if (weatherState.type === WeatherType.CLOUDY) {
-        displayLeaf = this.mixColor(displayLeaf, '#3a5a3a', 0.1 * weatherT);
+      displayLeaf = this.applyPhaseInfluence(displayLeaf, timeState, phaseWeights);
+      displayLeaf = this.applyWeatherInfluence(displayLeaf, weatherState, weatherWeights);
+
+      if (timeState.phase === TimePhase.NIGHT && weatherState.type === WeatherType.SNOWY) {
+        const nightSnowDim = Math.max(0.6, 1 - weatherWeights.snowy * 0.3);
+        const rgb = this.hexToRgb(displayLeaf);
+        displayLeaf = `rgb(${Math.floor(rgb.r * nightSnowDim)}, ${Math.floor(rgb.g * nightSnowDim)}, ${Math.floor(rgb.b * nightSnowDim)})`;
+      }
+
+      if (weatherState.type === WeatherType.SNOWY && weatherWeights.snowy > 0.7) {
+        const extremeMod = EXTREME_WEATHER_MOD[WeatherType.SNOWY];
+        const intensity = (weatherWeights.snowy - 0.7) / 0.3;
+        const rgb = this.hexToRgb(displayLeaf);
+        displayLeaf = `rgb(${Math.max(0, Math.min(255, rgb.r + extremeMod.r * intensity))}, ${Math.max(0, Math.min(255, rgb.g + extremeMod.g * intensity))}, ${Math.max(0, Math.min(255, rgb.b + extremeMod.b * intensity))})`;
+      }
+
+      if (weatherState.type === WeatherType.RAINY && weatherWeights.rainy > 0.7) {
+        const extremeMod = EXTREME_WEATHER_MOD[WeatherType.RAINY];
+        const intensity = (weatherWeights.rainy - 0.7) / 0.3;
+        const rgb = this.hexToRgb(displayLeaf);
+        displayLeaf = `rgb(${Math.max(0, Math.min(255, rgb.r + extremeMod.r * intensity))}, ${Math.max(0, Math.min(255, rgb.g + extremeMod.g * intensity))}, ${Math.max(0, Math.min(255, rgb.b + extremeMod.b * intensity))})`;
       }
 
       ctx.fillStyle = displayLeaf;
@@ -232,6 +240,81 @@ export class WorldMap {
       ctx.arc(x + crownR * 0.4, y - trunkH - crownR * 0.1, crownR * 0.55, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  private calculatePhaseWeights(timeState: TimeState): Record<TimePhase, number> {
+    const timeOrder = [TimePhase.DAWN, TimePhase.NOON, TimePhase.DUSK, TimePhase.NIGHT];
+    const currentIdx = timeOrder.indexOf(timeState.phase);
+    const prevIdx = (currentIdx - 1 + 4) % 4;
+    const nextIdx = (currentIdx + 1) % 4;
+
+    const weights: Record<TimePhase, number> = {
+      [TimePhase.DAWN]: 0,
+      [TimePhase.NOON]: 0,
+      [TimePhase.DUSK]: 0,
+      [TimePhase.NIGHT]: 0,
+    };
+
+    const p = timeState.phaseProgress;
+    weights[timeOrder[currentIdx]] = 0.8 + 0.2 * (1 - Math.abs(p - 0.5) * 2);
+    if (p < 0.3) {
+      weights[timeOrder[prevIdx]] = (0.3 - p) / 0.3 * 0.2;
+    }
+    if (p > 0.7) {
+      weights[timeOrder[nextIdx]] = (p - 0.7) / 0.3 * 0.2;
+    }
+
+    return weights;
+  }
+
+  private calculateWeatherWeights(weatherState: WeatherState): Record<string, number> {
+    const t = weatherState.transitionProgress;
+    return {
+      sunny: (weatherState.previousType === WeatherType.SUNNY ? (1 - t) : 0) + (weatherState.type === WeatherType.SUNNY ? t : 0),
+      cloudy: (weatherState.previousType === WeatherType.CLOUDY ? (1 - t) : 0) + (weatherState.type === WeatherType.CLOUDY ? t : 0),
+      rainy: (weatherState.previousType === WeatherType.RAINY ? (1 - t) : 0) + (weatherState.type === WeatherType.RAINY ? t : 0),
+      snowy: (weatherState.previousType === WeatherType.SNOWY ? (1 - t) : 0) + (weatherState.type === WeatherType.SNOWY ? t : 0),
+    };
+  }
+
+  private applyPhaseInfluence(
+    color: string,
+    timeState: TimeState,
+    weights: Record<TimePhase, number>
+  ): string {
+    let result = color;
+
+    if (weights[TimePhase.DUSK] > 0) {
+      result = this.mixColor(result, '#3d2040', weights[TimePhase.DUSK] * 0.35);
+    }
+    if (weights[TimePhase.NIGHT] > 0) {
+      result = this.mixColor(result, '#0a0a1a', weights[TimePhase.NIGHT] * 0.55);
+    }
+    if (weights[TimePhase.DAWN] > 0) {
+      result = this.mixColor(result, '#5a3a2a', weights[TimePhase.DAWN] * 0.25);
+    }
+
+    return result;
+  }
+
+  private applyWeatherInfluence(
+    color: string,
+    weatherState: WeatherState,
+    weights: Record<string, number>
+  ): string {
+    let result = color;
+
+    if (weights.rainy > 0) {
+      result = this.mixColor(result, '#1a4a2a', weights.rainy * 0.35);
+    }
+    if (weights.snowy > 0) {
+      result = this.mixColor(result, '#d5dbe0', weights.snowy * 0.5);
+    }
+    if (weights.cloudy > 0) {
+      result = this.mixColor(result, '#3a5a40', weights.cloudy * 0.15);
+    }
+
+    return result;
   }
 
   private getInterpolatedGroundColor(

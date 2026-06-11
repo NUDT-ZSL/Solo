@@ -27,6 +27,11 @@ export class GameEngine {
   private lastTime: number = 0;
   private animationId: number = 0;
   private isRunning: boolean = false;
+  private skyColorCache: {
+    top: { r: number; g: number; b: number };
+    bottom: { r: number; g: number; b: number };
+  } | null = null;
+  private lastSkyWeatherType: WeatherType | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -100,7 +105,7 @@ export class GameEngine {
 
   private update(deltaTime: number): void {
     this.clockSystem.update(deltaTime);
-    this.weatherSystem.update(deltaTime);
+    this.weatherSystem.updateWithParticleCheck(deltaTime, this.particles);
 
     const timeState = this.clockSystem.getTimeState();
     const weatherState = this.weatherSystem.getState();
@@ -136,12 +141,16 @@ export class GameEngine {
     }
 
     const MAX_PARTICLES = 200;
-    if (this.particles.length > MAX_PARTICLES) {
-      this.particles.splice(0, this.particles.length - MAX_PARTICLES);
+    const removedByLimit = this.weatherSystem.checkParticleLimit(this.particles, MAX_PARTICLES);
+    if (removedByLimit > 0) {
+      console.warn(`[GameEngine] Force removed ${removedByLimit} particles due to overflow limit ${MAX_PARTICLES}`);
     }
 
+    let removedExpired = 0;
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
+      if (!p) continue;
+
       p.x += p.vx * deltaTime;
       p.y += p.vy * deltaTime;
       p.life -= deltaTime;
@@ -156,7 +165,12 @@ export class GameEngine {
 
       if (p.life <= 0) {
         this.particles.splice(i, 1);
+        removedExpired++;
       }
+    }
+
+    if (removedExpired > 0 && Math.random() < 0.02) {
+      console.log(`[GameEngine] Removed ${removedExpired} expired particles, remaining: ${this.particles.length}`);
     }
   }
 
@@ -221,7 +235,7 @@ export class GameEngine {
     timeState: TimeState,
     weatherState: WeatherState
   ): void {
-    const sky = this.getSkyColor(timeState, weatherState);
+    const sky = this.getInterpolatedSkyColor(timeState, weatherState);
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
     gradient.addColorStop(0, sky.top);
     gradient.addColorStop(1, sky.bottom);
@@ -229,32 +243,121 @@ export class GameEngine {
     ctx.fillRect(0, 0, width, height);
   }
 
-  private getSkyColor(
+  private getSkyColorForPhaseAndWeather(
+    phase: TimePhase,
+    weather: WeatherType
+  ): { top: string; bottom: string } {
+    const phaseSkies: Record<TimePhase, Record<WeatherType, { top: string; bottom: string }>> = {
+      [TimePhase.DAWN]: {
+        [WeatherType.SUNNY]: { top: '#4a6fa5', bottom: '#e8a87c' },
+        [WeatherType.CLOUDY]: { top: '#6b7a90', bottom: '#c8a89a' },
+        [WeatherType.RAINY]: { top: '#4a5568', bottom: '#8b7355' },
+        [WeatherType.SNOWY]: { top: '#8b95a5', bottom: '#d0d5e0' },
+      },
+      [TimePhase.NOON]: {
+        [WeatherType.SUNNY]: { top: '#4a90d9', bottom: '#a8d8ea' },
+        [WeatherType.CLOUDY]: { top: '#6b88a8', bottom: '#b0c4d4' },
+        [WeatherType.RAINY]: { top: '#4a5a6e', bottom: '#7a8a9a' },
+        [WeatherType.SNOWY]: { top: '#95a0b5', bottom: '#d8dde8' },
+      },
+      [TimePhase.DUSK]: {
+        [WeatherType.SUNNY]: { top: '#5c4a7a', bottom: '#e07a5f' },
+        [WeatherType.CLOUDY]: { top: '#5a556a', bottom: '#b07a65' },
+        [WeatherType.RAINY]: { top: '#3d3a4a', bottom: '#6a5550' },
+        [WeatherType.SNOWY]: { top: '#7a7585', bottom: '#c0b5c5' },
+      },
+      [TimePhase.NIGHT]: {
+        [WeatherType.SUNNY]: { top: '#0a1628', bottom: '#1a2a4a' },
+        [WeatherType.CLOUDY]: { top: '#151a28', bottom: '#252d3a' },
+        [WeatherType.RAINY]: { top: '#0d1220', bottom: '#1d2230' },
+        [WeatherType.SNOWY]: { top: '#1a2030', bottom: '#2a3040' },
+      },
+    };
+    return phaseSkies[phase][weather];
+  }
+
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    if (hex.startsWith('rgb')) {
+      const match = hex.match(/\d+/g);
+      if (match) {
+        return { r: +match[0], g: +match[1], b: +match[2] };
+      }
+    }
+    const h = hex.replace('#', '');
+    return {
+      r: parseInt(h.substring(0, 2), 16),
+      g: parseInt(h.substring(2, 4), 16),
+      b: parseInt(h.substring(4, 6), 16),
+    };
+  }
+
+  private lerpColor(
+    c1: { r: number; g: number; b: number },
+    c2: { r: number; g: number; b: number },
+    t: number
+  ): { r: number; g: number; b: number } {
+    return {
+      r: Math.round(c1.r + (c2.r - c1.r) * t),
+      g: Math.round(c1.g + (c2.g - c1.g) * t),
+      b: Math.round(c1.b + (c2.b - c1.b) * t),
+    };
+  }
+
+  private rgbToString(c: { r: number; g: number; b: number }): string {
+    return `rgb(${c.r}, ${c.g}, ${c.b})`;
+  }
+
+  private getInterpolatedSkyColor(
     timeState: TimeState,
     weatherState: WeatherState
   ): { top: string; bottom: string } {
-    const skies: Record<TimePhase, { top: string; bottom: string }> = {
-      [TimePhase.DAWN]: { top: '#4a6fa5', bottom: '#e8a87c' },
-      [TimePhase.NOON]: { top: '#4a90d9', bottom: '#a8d8ea' },
-      [TimePhase.DUSK]: { top: '#5c4a7a', bottom: '#e07a5f' },
-      [TimePhase.NIGHT]: { top: '#0a1628', bottom: '#1a2a4a' },
+    const timeOrder = [TimePhase.DAWN, TimePhase.NOON, TimePhase.DUSK, TimePhase.NIGHT];
+    const currentIdx = timeOrder.indexOf(timeState.phase);
+    const nextIdx = (currentIdx + 1) % timeOrder.length;
+
+    const prevWeather = weatherState.previousType;
+    const currWeather = weatherState.type;
+    const weatherT = weatherState.transitionProgress;
+
+    const lerpSkyBetweenWeathers = (phase: TimePhase, t: number) => {
+      const prevColor = this.getSkyColorForPhaseAndWeather(phase, prevWeather);
+      const currColor = this.getSkyColorForPhaseAndWeather(phase, currWeather);
+      const prevTop = this.hexToRgb(prevColor.top);
+      const prevBottom = this.hexToRgb(prevColor.bottom);
+      const currTop = this.hexToRgb(currColor.top);
+      const currBottom = this.hexToRgb(currColor.bottom);
+      return {
+        top: this.lerpColor(prevTop, currTop, t),
+        bottom: this.lerpColor(prevBottom, currBottom, t),
+      };
     };
 
-    const base = skies[timeState.phase];
-    const t = timeState.lightIntensity;
+    const currentPhaseSky = lerpSkyBetweenWeathers(timeOrder[currentIdx], weatherT);
+    const nextPhaseSky = lerpSkyBetweenWeathers(timeOrder[nextIdx], weatherT);
 
-    const weatherFactor = this.getWeatherDarkness(weatherState);
+    const phaseT = timeState.phaseProgress;
+    const finalTop = this.lerpColor(currentPhaseSky.top, nextPhaseSky.top, phaseT * 0.5);
+    const finalBottom = this.lerpColor(currentPhaseSky.bottom, nextPhaseSky.bottom, phaseT * 0.5);
 
-    const darken = (hex: string, factor: number): string => {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgb(${Math.floor(r * factor)}, ${Math.floor(g * factor)}, ${Math.floor(b * factor)})`;
-    };
+    if (weatherT < 1.0) {
+      const blendSpeed = 0.08;
+      if (!this.skyColorCache || this.lastSkyWeatherType !== weatherState.type) {
+        this.skyColorCache = { top: finalTop, bottom: finalBottom };
+        this.lastSkyWeatherType = weatherState.type;
+      } else {
+        this.skyColorCache.top = this.lerpColor(this.skyColorCache.top, finalTop, blendSpeed);
+        this.skyColorCache.bottom = this.lerpColor(this.skyColorCache.bottom, finalBottom, blendSpeed);
+      }
+      return {
+        top: this.rgbToString(this.skyColorCache.top),
+        bottom: this.rgbToString(this.skyColorCache.bottom),
+      };
+    }
 
+    this.skyColorCache = { top: finalTop, bottom: finalBottom };
     return {
-      top: darken(base.top, weatherFactor),
-      bottom: darken(base.bottom, weatherFactor),
+      top: this.rgbToString(finalTop),
+      bottom: this.rgbToString(finalBottom),
     };
   }
 
@@ -292,8 +395,8 @@ export class GameEngine {
       overlayColor = `rgba(0, 0, 0, ${darkness * 0.3})`;
     }
 
-    if (weatherState.type === WeatherType.RAINY || weatherState.type === WeatherType.CLOUDY) {
-      const wf = this.getWeatherDarkness(weatherState);
+    const wf = this.weatherSystem.getInterpolatedDarkness();
+    if (wf < 1.0) {
       const extraDark = (1 - wf) * 0.25;
       ctx.fillStyle = `rgba(20, 25, 40, ${extraDark})`;
       ctx.fillRect(0, 0, width, height);

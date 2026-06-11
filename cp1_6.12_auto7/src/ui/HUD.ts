@@ -22,7 +22,9 @@ export class HUD {
   private cachedPlayer: { x: number; y: number; speed: number } | null = null;
   private displayedLight: number = 0;
   private displayTargetLight: number = 0;
-  private barDisplayedWidth: number = 0;
+  private barDisplayedProgress: number = 0;
+  private barTargetProgress: number = 0;
+  private barSmoothSpeed: number = 0.12;
 
   public recalculateFontSize(windowWidth: number): void {
     const min = 14;
@@ -45,6 +47,7 @@ export class HUD {
       speed: player.getSpeedMultiplier(),
     };
     this.displayTargetLight = timeState.lightIntensity;
+    this.barTargetProgress = timeState.lightIntensity;
   }
 
   public render(
@@ -55,6 +58,13 @@ export class HUD {
     if (!this.cachedTimeState || !this.cachedWeatherState || !this.cachedPlayer) return;
 
     this.displayedLight += (this.displayTargetLight - this.displayedLight) * 0.08;
+    this.barDisplayedProgress += (this.barTargetProgress - this.barDisplayedProgress) * this.barSmoothSpeed;
+
+    const barDiff = Math.abs(this.barDisplayedProgress - this.barTargetProgress);
+    if (barDiff > 0.01) {
+      const adaptiveSpeed = Math.min(0.25, this.barSmoothSpeed + barDiff * 0.3);
+      this.barDisplayedProgress += (this.barTargetProgress - this.barDisplayedProgress) * adaptiveSpeed;
+    }
 
     this.renderTopLeft(ctx);
     this.renderBottomRight(ctx);
@@ -94,7 +104,8 @@ export class HUD {
     fontSize: number
   ): void {
     const height = Math.max(10, Math.floor(fontSize * 0.7));
-    const label = `光照: ${Math.round(this.displayedLight * 100)}%`;
+    const displayPercent = Math.round(this.displayedLight * 100);
+    const label = `光照: ${displayPercent}%`;
 
     ctx.font = `bold ${fontSize}px sans-serif`;
     this.drawOutlinedText(ctx, label, x, y);
@@ -103,12 +114,24 @@ export class HUD {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(x, barY, width, height);
 
-    const progress = this.displayedLight;
+    const progress = this.barDisplayedProgress;
+    const displayWidth = width * progress;
+
     const r = Math.floor(255 * (1 - progress));
     const g = Math.floor(200 * progress + 50);
     const b = Math.floor(100);
     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.fillRect(x, barY, width * progress, height);
+    ctx.fillRect(x, barY, displayWidth, height);
+
+    const nextR = Math.floor(255 * (1 - this.barTargetProgress));
+    const nextG = Math.floor(200 * this.barTargetProgress + 50);
+    const nextB = Math.floor(100);
+    const blendT = Math.min(1, Math.abs(progress - this.barTargetProgress) * 5);
+    const finalR = Math.floor(r + (nextR - r) * blendT);
+    const finalG = Math.floor(g + (nextG - g) * blendT);
+    const finalB = Math.floor(b + (nextB - b) * blendT);
+    ctx.fillStyle = `rgb(${finalR}, ${finalG}, ${finalB})`;
+    ctx.fillRect(x, barY, displayWidth, height);
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.lineWidth = 1;
