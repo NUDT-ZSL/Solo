@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>涡光棱镜 - Vortex Prism</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, #2D1B4E 0%, #0A0A1A 70%, #050510 100%);
+      color: #ffffff;
+      user-select: none;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at center, #2D1B4E 0%, #0A0A1A 70%, #050510 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: opacity 0.8s ease;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 32px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      color: #4D96FF;
+      margin-bottom: 30px;
+      text-shadow: 0 0 20px rgba(77, 150, 255, 0.5);
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 2px solid rgba(77, 150, 255, 0.2);
+      border-top-color: #4D96FF;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #control-panel {
+      position: fixed;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 220px;
+      padding: 20px;
+      background: rgba(20, 20, 40, 0.7);
+      border: 1px solid rgba(77, 150, 255, 0.4);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                  0 8px 32px rgba(0, 0, 0, 0.3);
+      z-index: 50;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #4D96FF;
+      margin-bottom: 20px;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+
+    .control-group {
+      margin-bottom: 20px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 8px;
+    }
+
+    .control-value {
+      font-size: 12px;
+      color: #4D96FF;
+      font-weight: 500;
+      padding: 2px 8px;
+      background: rgba(77, 150, 255, 0.15);
+      border-radius: 4px;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #2A2A3A;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4D96FF, #6BC8FF);
+      box-shadow: 0 0 10px rgba(77, 150, 255, 0.6);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 15px rgba(77, 150, 255, 0.8);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      background: #ffffff;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4D96FF, #6BC8FF);
+      box-shadow: 0 0 10px rgba(77, 150, 255, 0.6);
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 15px rgba(77, 150, 255, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb:active {
+      background: #ffffff;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+    }
+
+    #reset-button {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(20, 20, 40, 0.6);
+      border: 1px solid rgba(77, 150, 255, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    #reset-button:hover {
+      background: rgba(77, 150, 255, 0.2);
+      border-color: rgba(77, 150, 255, 0.8);
+      transform: scale(1.05);
+    }
+
+    #reset-button:active {
+      transform: scale(0.95);
+    }
+
+    #reset-button svg {
+      width: 20px;
+      height: 20px;
+      fill: #4D96FF;
+      transition: transform 0.5s ease;
+    }
+
+    #reset-button:hover svg {
+      fill: #ffffff;
+    }
+
+    #reset-button.rotating svg {
+      transform: rotate(360deg);
+    }
+
+    #tooltip {
+      position: fixed;
+      padding: 8px 12px;
+      background: rgba(20, 20, 40, 0.9);
+      border: 1px solid rgba(77, 150, 255, 0.5);
+      border-radius: 6px;
+      font-size: 11px;
+      color: #ffffff;
+      pointer-events: none;
+      z-index: 60;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      white-space: nowrap;
+      line-height: 1.6;
+    }
+
+    #tooltip.visible {
+      opacity: 1;
+    }
+
+    #tooltip .tooltip-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #tooltip .tooltip-label {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    #tooltip .tooltip-value {
+      color: #4D96FF;
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        width: calc(100% - 40px);
+        left: 20px;
+        top: 20px;
+        transform: none;
+        padding: 16px;
+      }
+
+      .panel-title {
+        margin-bottom: 16px;
+        font-size: 13px;
+      }
+
+      .control-group {
+        margin-bottom: 16px;
+      }
+
+      body {
+        font-size: 12.8px;
+      }
+
+      #reset-button {
+        width: 38.4px;
+        height: 38.4px;
+        right: 16px;
+        bottom: 16px;
+      }
+
+      #reset-button svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-screen">
+    <div class="loading-title">涡光棱镜</div>
+    <div class="loading-spinner"></div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="control-panel">
+    <div class="panel-title">参数控制</div>
+    
+    <div class="control-group">
+      <div class="control-label">
+        <span>旋转速度</span>
+        <span class="control-value" id="speed-value">1.0</span>
+      </div>
+      <input type="range" id="speed-slider" min="0.5" max="5" step="0.1" value="1">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>对称轴数量</span>
+        <span class="control-value" id="axes-value">3</span>
+      </div>
+      <input type="range" id="axes-slider" min="2" max="6" step="1" value="3">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>颜色偏移量</span>
+        <span class="control-value" id="color-value">0.0</span>
+      </div>
+      <input type="range" id="color-slider" min="0" max="6.28" step="0.1" value="0">
+    </div>
+  </div>
+
+  <button id="reset-button" title="重置视角">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+    </svg>
+  </button>
+
+  <div id="tooltip">
+    <div class="tooltip-row">
+      <span class="tooltip-label">旋转角度:</span>
+      <span class="tooltip-value" id="tooltip-angle">-</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">颜色:</span>
+      <span class="tooltip-value" id="tooltip-color">-</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">对称组:</span>
+      <span class="tooltip-value" id="tooltip-group">-</span>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
