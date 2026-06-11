@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { PlantGenerator, PlantPartInfo } from './PlantGenerator'
+import { PlantGenerator, PlantPartInfo, EasingType } from './PlantGenerator'
 import { UIHandler, UIParams } from './UIHandler'
 
 class App {
@@ -58,7 +58,12 @@ class App {
     this.setupBackgroundAndLighting()
     this.setupGround()
 
-    this.plantGenerator = new PlantGenerator()
+    const easingType: EasingType = 'easeInOutQuad'
+    this.plantGenerator = new PlantGenerator({
+      easingType,
+      maxVertices: 10000,
+      growthDuration: 30
+    })
     this.scene.add(this.plantGenerator.group)
 
     this.uiHandler = new UIHandler({
@@ -69,8 +74,8 @@ class App {
     this.setupEventListeners(container)
     this.animate()
 
-    // Log vertex count for verification
-    console.log(`Plant vertex count: ${this.plantGenerator.getVertexCount()}`)
+    // Log vertex count and configuration for verification
+    console.log(`✅ Plant initialized - Easing: ${this.plantGenerator.getEasingType()}, Vertices: ${this.plantGenerator.getVertexCount()}`)
   }
 
   private setupBackgroundAndLighting(): void {
