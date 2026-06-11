@@ -120,20 +120,51 @@ function Toolbar({
   }, []);
 
   useEffect(() => {
+    if (!menuOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouch = document.body.style.touchAction as string;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouch;
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (paletteRef.current && !paletteRef.current.contains(e.target as Node)) {
         setShowPalette(false);
       }
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (menuOpen && menuRef.current && !menuRef.current.contains(e.target as Node)) {
         const target = e.target as HTMLElement;
         if (!target.closest('.hamburger-btn')) {
           setMenuOpen(false);
         }
       }
     };
+    const onTouchOutside = (e: TouchEvent) => {
+      if (!menuOpen) return;
+      const t = e.target as HTMLElement;
+      if (menuRef.current && !menuRef.current.contains(t) && !t.closest('.hamburger-btn')) {
+        setMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMenuOpen(false);
+        setShowPalette(false);
+      }
+    };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+    document.addEventListener('touchstart', onTouchOutside, { passive: true });
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('touchstart', onTouchOutside);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -19,6 +19,33 @@ interface ClientData {
   ws: WebSocket;
 }
 
+import http from 'http';
+
+function verifyPortOwnership(port: number, path: string, expectedSubstring: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { hostname: '127.0.0.1', port, path, timeout: 600 },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            const ok = data.includes(expectedSubstring);
+            resolve(ok);
+          } catch {
+            resolve(false);
+          }
+        });
+      }
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
 function listenWithAutoPort(appServer: ReturnType<typeof createServer>, startPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
     let current = startPort;
@@ -27,18 +54,31 @@ function listenWithAutoPort(appServer: ReturnType<typeof createServer>, startPor
         reject(new Error('No available port found in range'));
         return;
       }
+      const tryNext = () => {
+        appServer.removeAllListeners('error');
+        appServer.removeAllListeners('listening');
+        current++;
+        tryListen();
+      };
       const onError = (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE') {
-          appServer.removeListener('error', onError);
-          current++;
-          tryListen();
+          tryNext();
         } else {
           reject(err);
         }
       };
-      const onListening = () => {
-        appServer.removeListener('error', onError);
-        resolve((appServer.address() as { port: number }).port);
+      const onListening = async () => {
+        const ok = await verifyPortOwnership(current, '/api/health', 'realtime-whiteboard');
+        if (ok) {
+          appServer.removeListener('error', onError);
+          resolve(current);
+        } else {
+          try {
+            appServer.close(() => tryNext());
+          } catch {
+            tryNext();
+          }
+        }
       };
       appServer.once('error', onError);
       appServer.once('listening', onListening);
@@ -81,20 +121,20 @@ function broadcastUsers() {
 }
 
 async function startServer() {
-  const PORT = await findAvailablePort(START_PORT);
-
   const app = express();
   const server = createServer(app);
   const wss = new WebSocketServer({ server });
 
+  const actualPort = await listenWithAutoPort(server, START_PORT);
+
   app.get('/api/port', (_req, res) => {
-    res.json({ port: PORT });
+    res.json({ port: actualPort });
   });
 
   app.get('/api/health', (_req, res) => {
     res.json({
       status: 'ok',
-      port: PORT,
+      port: actualPort,
       users: clients.size,
       history: history.length,
     });
@@ -145,27 +185,35 @@ async function startServer() {
 
         if (data.type === 'draw') {
           const client = clients.get(clientId);
-          if (client) {
-            data.action.color = client.color;
-          }
-          data.action.userId = clientId;
-          history.push(data.action);
+          const actionWithMeta: DrawAction = {
+            ...data.action,
+            userId: clientId,
+            color: client ? client.color : data.action.color,
+            userName: client ? client.name : data.action.userName,
+          };
+          history.push(actionWithMeta);
           if (history.length > MAX_HISTORY) {
             history = history.slice(-MAX_HISTORY);
           }
-          broadcast({ type: 'draw', action: data.action }, clientId);
+          broadcast({ type: 'draw', action: actionWithMeta }, clientId);
         } else if (data.type === 'undo') {
           const idx = history.findIndex((a) => a.id === data.actionId);
           if (idx >= 0) {
             history.splice(idx, 1);
           }
-          broadcast({ type: 'undo', actionId: data.actionId, userId: data.userId }, clientId);
+          broadcast({ type: 'undo', actionId: data.actionId, userId: clientId }, clientId);
         } else if (data.type === 'redo') {
-          history.push(data.action);
+          const client = clients.get(clientId);
+          const actionWithMeta: DrawAction = {
+            ...data.action,
+            userId: clientId,
+            color: client ? client.color : data.action.color,
+          };
+          history.push(actionWithMeta);
           if (history.length > MAX_HISTORY) {
             history = history.slice(-MAX_HISTORY);
           }
-          broadcast({ type: 'redo', action: data.action, userId: data.userId }, clientId);
+          broadcast({ type: 'redo', action: actionWithMeta, userId: clientId }, clientId);
         }
       } catch (e) {
         console.error('Parse message error:', (e as Error).message);
@@ -180,20 +228,18 @@ async function startServer() {
     });
   });
 
-  server.listen(PORT, '0.0.0.0', () => {
-    const pad = (n: number) => n.toString().padEnd(4, ' ');
-    console.log(`
+  const pad = (n: number) => n.toString().padEnd(4, ' ');
+  console.log(`
 ╔════════════════════════════════════════════╗
 ║     🎨 实时协作白板服务已启动                ║
 ║                                              ║
-║   HTTP / WebSocket: http://localhost:${pad(PORT)}     ║
+║   HTTP / WebSocket: http://localhost:${pad(actualPort)}     ║
 ║   健康检查:        /api/health                 ║
 ║   端口查询:        /api/port                   ║
 ║                                              ║
 ║   前端地址:        http://localhost:5173       ║
 ╚════════════════════════════════════════════╝
-    `);
-  });
+  `);
 }
 
 startServer().catch((err) => {

@@ -63,10 +63,13 @@ function userIdToColor(uid: string): string {
 }
 
 function resolveActionColor(action: DrawAction, users: ConnectedUser[], localUserId: string): string {
-  if (action.userId === localUserId && action.color) return action.color;
-  const matched = users.find((u) => u.id === action.userId);
-  if (matched) return matched.color;
-  return action.color || userIdToColor(action.userId);
+  if (action.userId) {
+    if (action.userId === localUserId && action.color) return action.color;
+    const matched = users.find((u) => u.id === action.userId);
+    if (matched && matched.color) return matched.color;
+    return action.color || userIdToColor(action.userId);
+  }
+  return action.color || '#3b82f6';
 }
 
 const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
@@ -155,45 +158,69 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
       points: Point[],
       strokeColor: string,
       width: number,
-      baseOpacity: number = 1
+      baseOpacity: number = 1,
+      tailFadeRatio: number = 0
     ) => {
       if (points.length <= 0) return;
+      const fadeLen = Math.min(points.length, Math.max(3, Math.floor(points.length * tailFadeRatio)));
       if (points.length < 2) {
-        ctx.fillStyle = hexToRgba(strokeColor, baseOpacity * 0.85);
+        const alpha = baseOpacity * 0.85 * (tailFadeRatio > 0 && fadeLen >= 1 ? 0.25 : 1);
+        ctx.fillStyle = hexToRgba(strokeColor, alpha);
         ctx.beginPath();
         ctx.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2);
         ctx.fill();
         return;
       }
 
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = hexToRgba(strokeColor, baseOpacity * 0.9);
-      ctx.lineWidth = width;
-      ctx.shadowColor = hexToRgba(strokeColor, baseOpacity * 0.25);
-      ctx.shadowBlur = width * 0.45;
+      const drawSegment = (pts: Point[], opacity: number) => {
+        if (pts.length < 2) return;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = hexToRgba(strokeColor, opacity * 0.9);
+        ctx.lineWidth = width;
+        ctx.shadowColor = hexToRgba(strokeColor, opacity * 0.25);
+        ctx.shadowBlur = width * 0.45;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const xc = (pts[i].x + pts[i + 1].x) / 2;
+          const yc = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+        }
+        const last = pts[pts.length - 1];
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+      };
 
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length - 1; i++) {
-        const xc = (points[i].x + points[i + 1].x) / 2;
-        const yc = (points[i].y + points[i + 1].y) / 2;
-        ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+      if (fadeLen >= 3 && points.length - fadeLen >= 1) {
+        drawSegment(points.slice(0, points.length - fadeLen + 1), baseOpacity);
+        const layers = 5;
+        for (let l = 0; l < layers; l++) {
+          const a = (layers - l) / layers;
+          const op = baseOpacity * 0.9 * a;
+          const start = Math.max(0, points.length - fadeLen - 1);
+          const end = points.length - Math.floor((l / layers) * fadeLen);
+          const seg = points.slice(start, Math.max(start + 2, end));
+          if (seg.length >= 2) {
+            drawSegment(seg, op);
+          }
+        }
+      } else {
+        drawSegment(points, baseOpacity);
       }
-      const last = points[points.length - 1];
-      ctx.lineTo(last.x, last.y);
-      ctx.stroke();
 
-      if (width >= 3) {
+      if (width >= 3 && points.length >= 4) {
         ctx.shadowBlur = 0;
         const step = Math.max(1, Math.floor(points.length / 80));
-        for (let i = step; i < points.length; i += step) {
+        const limit = tailFadeRatio > 0 ? Math.max(4, points.length - fadeLen) : points.length;
+        for (let i = step; i < limit; i += step) {
           const p0 = points[i - step];
           const p1 = points[i];
           const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
           const speedFactor = Math.min(1, 30 / Math.max(dist, 1));
+          const proximity = tailFadeRatio > 0 ? Math.max(0, 1 - (i / points.length)) : 1;
           const inkR = width * (0.15 + speedFactor * 0.2);
-          const inkAlpha = baseOpacity * 0.07 * speedFactor;
+          const inkAlpha = baseOpacity * 0.07 * speedFactor * proximity;
           const midX = (p0.x + p1.x) / 2;
           const midY = (p0.y + p1.y) / 2;
           const grd = ctx.createRadialGradient(midX, midY, 0, midX, midY, inkR);
@@ -278,6 +305,8 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
     []
   );
 
+  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
   const renderAll = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -315,6 +344,7 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
 
       let opacity = action.opacity;
       let visiblePointRatio = 1;
+      let tailFade = 0;
 
       if (isAnimating) {
         if (!animProgressRef.current.has(action.id)) {
@@ -322,16 +352,19 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
         }
         const startedAt = animProgressRef.current.get(action.id)!;
         const elapsed = now - startedAt;
-        const totalDuration = 480;
+        const totalDuration = 550;
         const t = Math.min(1, elapsed / totalDuration);
-        const eased = 1 - Math.pow(1 - t, 3);
 
         if (isUndoing) {
-          opacity = Math.max(0, 1 - eased);
+          const eased = easeOutCubic(t);
+          opacity = Math.max(0, 1 - eased * 0.92);
           visiblePointRatio = Math.max(0, 1 - eased);
+          tailFade = Math.min(0.45, eased);
         } else {
+          const eased = easeOutCubic(t);
           opacity = Math.min(1, eased);
           visiblePointRatio = Math.min(1, eased);
+          tailFade = 0;
         }
         if (t >= 1) {
           animProgressRef.current.delete(action.id);
@@ -347,9 +380,17 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
       const resolvedColor = resolveActionColor(action, currentUsers, userId);
 
       if (action.tool === 'brush' && action.points) {
-        const count = Math.max(1, Math.floor(action.points.length * visiblePointRatio));
-        const visible = action.points.slice(0, count);
-        drawBrushStroke(ctx, visible, resolvedColor, action.lineWidth, opacity);
+        if (visiblePointRatio <= 0) continue;
+        const total = action.points.length;
+        const count = isRedoing
+          ? Math.max(2, Math.floor(total * visiblePointRatio))
+          : Math.max(0, Math.floor(total * visiblePointRatio));
+        if (count <= 0) continue;
+        const visible = isRedoing
+          ? action.points.slice(0, count)
+          : action.points.slice(0, count);
+        const actualTailFade = isUndoing ? tailFade : (isRedoing ? 0.2 : 0);
+        drawBrushStroke(ctx, visible, resolvedColor, action.lineWidth, opacity, actualTailFade);
       } else if ((action.tool === 'rectangle' || action.tool === 'circle' || action.tool === 'eraser') && action.shape) {
         drawShape(ctx, action.shape, resolvedColor, action.lineWidth, action.tool, opacity);
       } else if (action.tool === 'text' && action.text && action.textPosition) {
@@ -360,7 +401,7 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
     const ds = drawingRef.current;
     if (ds.isDrawing) {
       if ((ds.currentTool === 'brush' || ds.currentTool === 'eraser') && ds.points.length > 0) {
-        drawBrushStroke(ctx, ds.points, ds.currentColor, ds.currentLineWidth, 0.9);
+        drawBrushStroke(ctx, ds.points, ds.currentColor, ds.currentLineWidth, 0.9, 0);
       } else if (
         (ds.currentTool === 'rectangle' || ds.currentTool === 'circle') &&
         ds.shape

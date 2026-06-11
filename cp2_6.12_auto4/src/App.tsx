@@ -153,6 +153,8 @@ export default function App() {
     [sendAction]
   );
 
+  const ANIM_DURATION = 600;
+
   const handleRemoteUndo = useCallback((actionId: string) => {
     setUndoingIds((prev) => {
       const next = new Set(prev);
@@ -166,7 +168,7 @@ export default function App() {
         next.delete(actionId);
         return next;
       });
-    }, 500);
+    }, ANIM_DURATION);
   }, []);
 
   const handleRemoteRedo = useCallback((action: DrawAction) => {
@@ -185,7 +187,7 @@ export default function App() {
         next.delete(action.id);
         return next;
       });
-    }, 500);
+    }, ANIM_DURATION);
   }, []);
 
   const handleUndo = useCallback(() => {
@@ -215,7 +217,7 @@ export default function App() {
           next.delete(last.id);
           return next;
         });
-      }, 500);
+      }, ANIM_DURATION);
 
       return prev;
     });
@@ -249,7 +251,7 @@ export default function App() {
           next.delete(last.id);
           return next;
         });
-      }, 500);
+      }, ANIM_DURATION);
 
       return stack.slice(0, -1);
     });
