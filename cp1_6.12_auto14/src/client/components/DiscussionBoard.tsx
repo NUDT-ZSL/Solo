@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 interface User {
   id: string;
@@ -48,6 +50,15 @@ interface DiscussionBoardProps {
   onRequireLogin: () => void;
 }
 
+const quillModules = {
+  toolbar: [
+    ['bold', 'italic'],
+    [{ list: 'bullet' }]
+  ]
+};
+
+const quillFormats = ['bold', 'italic', 'list'];
+
 function DiscussionBoard({
   clubId,
   topicId,
@@ -62,6 +73,8 @@ function DiscussionBoard({
   const [currentTopic, setCurrentTopic] = useState<Topic | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [newTopicContent, setNewTopicContent] = useState('');
+  const [replyContent, setReplyContent] = useState('');
   const [showNewTopicModal, setShowNewTopicModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showAIQuestions, setShowAIQuestions] = useState(false);
@@ -71,8 +84,6 @@ function DiscussionBoard({
   const [isHost, setIsHost] = useState(false);
   const [isTopicCreator, setIsTopicCreator] = useState(false);
   const repliesEndRef = useRef<HTMLDivElement>(null);
-  const replyEditorRef = useRef<HTMLDivElement>(null);
-  const topicEditorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchClubDetail();
@@ -220,10 +231,8 @@ function DiscussionBoard({
       return;
     }
     
-    const contentHtml = topicEditorRef.current?.innerHTML || '';
-    const contentText = topicEditorRef.current?.innerText || '';
-    
-    if (!newTopicTitle.trim() || !contentText.trim()) {
+    const textContent = newTopicContent.replace(/<[^>]*>/g, '').trim();
+    if (!newTopicTitle.trim() || !textContent) {
       return;
     }
 
@@ -233,18 +242,17 @@ function DiscussionBoard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTopicTitle,
-          content: contentHtml,
+          content: newTopicContent,
           userId: user.id
         })
       });
+      if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
       if (data.topic) {
         setTopics([data.topic, ...topics]);
         setShowNewTopicModal(false);
         setNewTopicTitle('');
-        if (topicEditorRef.current) {
-          topicEditorRef.current.innerHTML = '';
-        }
+        setNewTopicContent('');
         if (onSelectTopic) {
           onSelectTopic(data.topic.id);
         }
@@ -258,25 +266,23 @@ function DiscussionBoard({
     e.preventDefault();
     if (!user || !topicId) return;
     
-    const html = replyEditorRef.current?.innerHTML || '';
-    const text = replyEditorRef.current?.innerText || '';
-    if (!text.trim()) return;
+    const textContent = replyContent.replace(/<[^>]*>/g, '').trim();
+    if (!textContent) return;
 
     try {
       const res = await fetch(`/api/topics/${topicId}/replies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: html,
+          content: replyContent,
           userId: user.id
         })
       });
+      if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
       if (data.reply) {
         setReplies([...replies, data.reply]);
-        if (replyEditorRef.current) {
-          replyEditorRef.current.innerHTML = '';
-        }
+        setReplyContent('');
       }
     } catch (error) {
       console.error('发送回复失败:', error);
@@ -297,6 +303,7 @@ function DiscussionBoard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
       });
+      if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
       if (data.questions) {
         setAiQuestions(data.questions);
@@ -306,25 +313,6 @@ function DiscussionBoard({
       setAiQuestions(['生成问题失败，请稍后再试。']);
     } finally {
       setAiLoading(false);
-    }
-  };
-
-  const insertFormat = (format: 'bold' | 'italic' | 'list', editorRef: React.RefObject<HTMLDivElement>) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    
-    editor.focus();
-
-    switch (format) {
-      case 'bold':
-        document.execCommand('bold', false);
-        break;
-      case 'italic':
-        document.execCommand('italic', false);
-        break;
-      case 'list':
-        document.execCommand('insertUnorderedList', false);
-        break;
     }
   };
 
@@ -432,7 +420,7 @@ function DiscussionBoard({
                 {(isHost || isTopicCreator) && (
                   <div className="topic-actions">
                     <button
-                      className="btn btn-primary btn-small"
+                      className="btn btn-primary btn-small ai-suggest-btn"
                       onClick={handleGenerateAIQuestions}
                       disabled={aiLoading}
                     >
@@ -464,7 +452,7 @@ function DiscussionBoard({
                         <div className="reply-avatar">
                           {reply.authorName.charAt(0)}
                         </div>
-                        <div className="reply-content">
+                        <div className="reply-bubble">
                           <div className="reply-header">
                             <span className="reply-author">{reply.authorName}</span>
                             <span className="reply-time">{formatTime(reply.createdAt)}</span>
@@ -482,41 +470,23 @@ function DiscussionBoard({
 
                 {isMember && user && (
                   <form className="reply-form" onSubmit={handleSubmitReply}>
-                    <div className="reply-toolbar">
-                      <button
-                        type="button"
-                        className="toolbar-btn"
-                        onClick={() => insertFormat('bold', replyEditorRef)}
-                        title="粗体"
-                      >
-                        <strong>B</strong>
-                      </button>
-                      <button
-                        type="button"
-                        className="toolbar-btn"
-                        onClick={() => insertFormat('italic', replyEditorRef)}
-                        title="斜体"
-                      >
-                        <em>I</em>
-                      </button>
-                      <button
-                        type="button"
-                        className="toolbar-btn"
-                        onClick={() => insertFormat('list', replyEditorRef)}
-                        title="列表"
-                      >
-                        • 列表
-                      </button>
+                    <div className="reply-quill-wrapper">
+                      <ReactQuill
+                        theme="snow"
+                        value={replyContent}
+                        onChange={setReplyContent}
+                        modules={quillModules}
+                        formats={quillFormats}
+                        placeholder="写下你的想法..."
+                      />
                     </div>
-                    <div
-                      ref={replyEditorRef}
-                      className="rich-editor"
-                      contentEditable
-                      placeholder="写下你的想法..."
-                    />
                     <div className="reply-form-actions">
-                      <span className="format-hint">选中文字后点击工具栏按钮设置格式</span>
-                      <button type="submit" className="btn btn-primary">
+                      <span className="format-hint">支持粗体、斜体、无序列表</span>
+                      <button 
+                        type="submit" 
+                        className="btn btn-primary"
+                        disabled={!replyContent.replace(/<[^>]*>/g, '').trim()}
+                      >
                         发送
                       </button>
                     </div>
@@ -555,44 +525,26 @@ function DiscussionBoard({
               </div>
               <div className="form-group">
                 <label>话题内容</label>
-                <div className="topic-editor-toolbar">
-                  <button
-                    type="button"
-                    className="toolbar-btn"
-                    onClick={() => insertFormat('bold', topicEditorRef)}
-                    title="粗体"
-                  >
-                    <strong>B</strong>
-                  </button>
-                  <button
-                    type="button"
-                    className="toolbar-btn"
-                    onClick={() => insertFormat('italic', topicEditorRef)}
-                    title="斜体"
-                  >
-                    <em>I</em>
-                  </button>
-                  <button
-                    type="button"
-                    className="toolbar-btn"
-                    onClick={() => insertFormat('list', topicEditorRef)}
-                    title="列表"
-                  >
-                    • 列表
-                  </button>
+                <div className="topic-quill-wrapper">
+                  <ReactQuill
+                    theme="snow"
+                    value={newTopicContent}
+                    onChange={setNewTopicContent}
+                    modules={quillModules}
+                    formats={quillFormats}
+                    placeholder="详细描述你想讨论的内容..."
+                  />
                 </div>
-                <div
-                  ref={topicEditorRef}
-                  className="rich-editor topic-editor"
-                  contentEditable
-                  placeholder="详细描述你想讨论的内容..."
-                />
               </div>
               <div className="form-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowNewTopicModal(false)}>
                   取消
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={!newTopicTitle.trim() || !newTopicContent.replace(/<[^>]*>/g, '').trim()}
+                >
                   发布
                 </button>
               </div>
