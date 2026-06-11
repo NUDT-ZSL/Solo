@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D植物生长模拟器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0a1a2a;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .panel {
+      position: absolute;
+      background: rgba(15, 35, 30, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      border-radius: 12px;
+      padding: 20px;
+      color: #e8f5e9;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
+    }
+    #control-panel {
+      top: 24px;
+      left: 24px;
+      width: 280px;
+    }
+    #info-panel {
+      top: 24px;
+      right: 24px;
+      width: 300px;
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #d4af37;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+      letter-spacing: 0.5px;
+    }
+    .control-group {
+      margin-bottom: 18px;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #a5d6a7;
+      font-weight: 500;
+    }
+    .control-value {
+      color: #d4af37;
+      font-variant-numeric: tabular-nums;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: linear-gradient(90deg, rgba(46, 125, 50, 0.3), rgba(212, 175, 55, 0.3));
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #d4af37;
+      border: 2px solid #1b5e20;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      transition: transform 0.2s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #d4af37;
+      border: 2px solid #1b5e20;
+      cursor: pointer;
+    }
+    .btn {
+      width: 100%;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e8f5e9;
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      transition: background-color 200ms ease, transform 200ms ease;
+      margin-top: 6px;
+    }
+    .btn:hover {
+      background: rgba(76, 175, 80, 0.35);
+      transform: translateY(-1px);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .info-item {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+    }
+    .info-item:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      color: #81c784;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 4px;
+    }
+    .info-value {
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .color-box {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    .empty-info {
+      color: rgba(255, 255, 255, 0.5);
+      font-style: italic;
+      text-align: center;
+      padding: 24px 12px;
+      font-size: 13px;
+    }
+    .fab {
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(15, 35, 30, 0.9);
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      color: #d4af37;
+      font-size: 22px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      transition: background-color 200ms ease, transform 200ms ease;
+    }
+    .fab:hover {
+      background: rgba(76, 175, 80, 0.4);
+      transform: scale(1.08);
+    }
+    #fab-left {
+      top: 20px;
+      left: 20px;
+    }
+    #fab-right {
+      top: 20px;
+      right: 20px;
+    }
+    @media (max-width: 900px) {
+      #control-panel, #info-panel {
+        transform: translateX(-120%);
+        opacity: 0;
+        pointer-events: none;
+      }
+      #info-panel {
+        transform: translateX(120%);
+      }
+      #control-panel.open, #info-panel.open {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .fab {
+        display: flex;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <button class="fab" id="fab-left" title="控制面板">⚙</button>
+    <button class="fab" id="fab-right" title="信息面板">ℹ</button>
+
+    <div class="panel" id="control-panel">
+      <div class="panel-title">🌿 生长控制</div>
+      <div class="control-group">
+        <div class="control-label">
+          <span>生长速度</span>
+          <span class="control-value" id="speed-value">1.0x</span>
+        </div>
+        <input type="range" id="speed-slider" min="0.5" max="3" step="0.1" value="1" />
+      </div>
+      <div class="control-group">
+        <div class="control-label">
+          <span>分支密度</span>
+          <span class="control-value" id="density-value">3级</span>
+        </div>
+        <input type="range" id="density-slider" min="1" max="5" step="1" value="3" />
+      </div>
+      <div class="control-group">
+        <div class="control-label">
+          <span>花苞大小</span>
+          <span class="control-value" id="bloom-value">1.0</span>
+        </div>
+        <input type="range" id="bloom-slider" min="0.5" max="2" step="0.1" value="1" />
+      </div>
+      <button class="btn" id="replay-btn">🔄 重新播放生长动画</button>
+    </div>
+
+    <div class="panel" id="info-panel">
+      <div class="panel-title">🌼 部位信息</div>
+      <div id="info-content">
+        <div class="empty-info">点击植物的任意部位查看详细信息</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
