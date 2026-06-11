@@ -25,7 +25,7 @@ export class Particle {
     this.x = x;
     this.y = y;
     const angle = Math.random() * Math.PI * 2;
-    const speed = 0.3 + Math.random() * 0.7;
+    const speed = 2 + Math.random() * 3;
     this.vx = Math.cos(angle) * speed;
     this.vy = Math.sin(angle) * speed;
     this.radius = 1 + Math.random() * 2;
@@ -43,7 +43,8 @@ export class Particle {
   }
 
   public getGlowIntensity(time: number): number {
-    return 0.2 + 0.3 * (0.5 + 0.5 * Math.sin(time * 0.004 + this.glowPhase));
+    const period = 1500;
+    return 0.2 + 0.3 * (0.5 + 0.5 * Math.sin((2 * Math.PI * time) / period + this.glowPhase));
   }
 
   public applyForce(fx: number, fy: number, dt: number): void {
@@ -97,17 +98,17 @@ export class Particle {
     }
   }
 
-  public isNearEdge(canvasSize: number, margin: number = 50): boolean {
+  public isFarFromEdge(canvasSize: number, margin: number = 50): boolean {
     return (
-      this.x < margin ||
-      this.x > canvasSize - margin ||
-      this.y < margin ||
-      this.y > canvasSize - margin
+      this.x > margin &&
+      this.x < canvasSize - margin &&
+      this.y > margin &&
+      this.y < canvasSize - margin
     );
   }
 
   public shouldRenderThisFrame(frameCount: number, canvasSize: number): boolean {
-    if (!this.isNearEdge(canvasSize)) return true;
+    if (!this.isFarFromEdge(canvasSize)) return true;
     return frameCount % 4 === this.cachedCanvas;
   }
 
@@ -137,8 +138,9 @@ export class Particle {
 
     if (!this.isVictoryParticle) {
       const glow = this.getGlowIntensity(time);
-      ctx.shadowColor = '#AAAAAA';
-      ctx.shadowBlur = 8 * glow;
+      ctx.shadowColor = `rgba(170, 170, 170, ${glow})`;
+      ctx.shadowBlur = 12 * glow;
+      ctx.globalAlpha = alpha * (0.6 + 0.4 * glow);
     } else {
       ctx.shadowColor = '#FFD700';
       ctx.shadowBlur = 12;

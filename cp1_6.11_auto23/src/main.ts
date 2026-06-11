@@ -93,28 +93,28 @@ function isInHourglass(x: number, y: number, cx: number, cy: number): boolean {
   const triangleHeight = (Math.sqrt(3) / 2) * HOURGLASS_SIDE;
   const gap = HOURGLASS_GAP;
 
-  const topY1 = cy - gap / 2 - triangleHeight;
-  const topY2 = cy - gap / 2;
-  const bottomY1 = cy + gap / 2;
-  const bottomY2 = cy + gap / 2 + triangleHeight;
+  const topBaseY = cy - gap / 2 - triangleHeight;
+  const topApexY = cy - gap / 2;
+  const bottomApexY = cy + gap / 2;
+  const bottomBaseY = cy + gap / 2 + triangleHeight;
 
-  if (y < topY1 || y > bottomY2) return false;
+  if (y < topBaseY || y > bottomBaseY) return false;
 
-  if (y >= topY1 && y <= topY2) {
+  if (y >= topBaseY && y <= topApexY) {
     return isPointInTriangle(
       x, y,
-      cx, topY1,
-      cx - HOURGLASS_SIDE / 2, topY2,
-      cx + HOURGLASS_SIDE / 2, topY2
+      cx - HOURGLASS_SIDE / 2, topBaseY,
+      cx + HOURGLASS_SIDE / 2, topBaseY,
+      cx, topApexY
     );
   }
 
-  if (y >= bottomY1 && y <= bottomY2) {
+  if (y >= bottomApexY && y <= bottomBaseY) {
     return isPointInTriangle(
       x, y,
-      cx - HOURGLASS_SIDE / 2, bottomY1,
-      cx + HOURGLASS_SIDE / 2, bottomY1,
-      cx, bottomY2
+      cx, bottomApexY,
+      cx - HOURGLASS_SIDE / 2, bottomBaseY,
+      cx + HOURGLASS_SIDE / 2, bottomBaseY
     );
   }
 

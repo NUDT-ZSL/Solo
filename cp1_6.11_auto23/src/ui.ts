@@ -243,22 +243,27 @@ export class UIManager {
     const triangleHeight = (Math.sqrt(3) / 2) * triangleSide;
     const gap = 40;
 
+    const topBaseY = cy - gap / 2 - triangleHeight;
+    const topApexY = cy - gap / 2;
+    const bottomApexY = cy + gap / 2;
+    const bottomBaseY = cy + gap / 2 + triangleHeight;
+
     ctx.save();
     ctx.strokeStyle = 'rgba(0, 229, 255, 0.3)';
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
 
     ctx.beginPath();
-    ctx.moveTo(cx - triangleSide / 2, cy - gap / 2);
-    ctx.lineTo(cx + triangleSide / 2, cy - gap / 2);
-    ctx.lineTo(cx, cy - gap / 2 - triangleHeight);
+    ctx.moveTo(cx - triangleSide / 2, topBaseY);
+    ctx.lineTo(cx + triangleSide / 2, topBaseY);
+    ctx.lineTo(cx, topApexY);
     ctx.closePath();
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(cx - triangleSide / 2, cy + gap / 2);
-    ctx.lineTo(cx + triangleSide / 2, cy + gap / 2);
-    ctx.lineTo(cx, cy + gap / 2 + triangleHeight);
+    ctx.moveTo(cx, bottomApexY);
+    ctx.lineTo(cx - triangleSide / 2, bottomBaseY);
+    ctx.lineTo(cx + triangleSide / 2, bottomBaseY);
     ctx.closePath();
     ctx.stroke();
 
