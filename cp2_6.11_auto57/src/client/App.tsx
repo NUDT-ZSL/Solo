@@ -1157,9 +1157,10 @@ const App: React.FC = () => {
             <div style={{ marginBottom: 8, fontWeight: 700, opacity: 0.9 }}>
               🎮 操作指南
             </div>
-            <div>• 点击空格 → 添加/移除障碍物</div>
+            <div>• 单击空格 → 添加/移除障碍物</div>
+            <div>• 双击任意格子 → 放置提示</div>
             <div>• 长按拖拽自己的图标 → 移动</div>
-            <div>• 点击任意玩家图标 → 放置提示</div>
+            <div>• 拖动历史滑块 → 回放操作</div>
           </div>
         </div>
       )}

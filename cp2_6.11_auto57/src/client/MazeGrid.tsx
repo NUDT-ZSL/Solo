@@ -137,6 +137,13 @@ const MazeGrid: React.FC<MazeGridProps> = ({
     if (isReplaying) return;
     if (draggedPlayerId) return;
 
+    if (hintInputCell) {
+      if (hintInputCell.x === x && hintInputCell.y === y) {
+        return;
+      }
+      setHintInputCell(null);
+    }
+
     const playerAtCell = players.find(
       (p) => p.position.x === x && p.position.y === y
     );
@@ -147,14 +154,14 @@ const MazeGrid: React.FC<MazeGridProps> = ({
       return;
     }
 
-    if (hintInputCell) {
-      if (hintInputCell.x === x && hintInputCell.y === y) {
-        return;
-      }
-      setHintInputCell(null);
-    }
-
     editMaze('toggle_obstacle', { x, y });
+  };
+
+  const handleCellDoubleClick = (x: number, y: number) => {
+    if (isReplaying) return;
+    if (draggedPlayerId) return;
+    setHintInputCell({ x, y });
+    setHintText('');
   };
 
   const handleHintSubmit = (e: React.FormEvent) => {
@@ -182,19 +189,22 @@ const MazeGrid: React.FC<MazeGridProps> = ({
       <div
         key={`${x}-${y}`}
         onClick={() => handleCellClick(x, y)}
+        onDoubleClick={() => handleCellDoubleClick(x, y)}
         style={{
           width: cellSize,
           height: cellSize,
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
           position: 'relative',
           cursor: isReplaying
             ? 'default'
             : player && player.id === currentPlayerId
             ? 'grab'
             : 'pointer',
-          backgroundColor: isObstacle ? '#4E342E' : 'rgba(255,255,255,0.01)',
+          background: isObstacle
+            ? 'linear-gradient(145deg, #5D4037 0%, #4E342E 50%, #3E2723 100%)'
+            : 'rgba(255,255,255,0.01)',
           boxShadow: isObstacle
-            ? 'inset 3px 3px 0px rgba(141, 110, 99, 0.5), inset -2px -2px 6px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0,0,0,0.3)'
+            ? 'inset 4px 4px 0px rgba(189, 156, 143, 0.6), inset -3px -3px 8px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.2)'
             : 'none',
           transition: 'background-color 0.1s ease',
         }}
@@ -253,8 +263,8 @@ const MazeGrid: React.FC<MazeGridProps> = ({
               transform: 'translateX(-50%)',
               padding: '7px 12px',
               backgroundColor: 'rgba(15, 15, 30, 0.82)',
-              backdropFilter: 'blur(6px)',
-              WebkitBackdropFilter: 'blur(6px)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
               borderRadius: '10px',
               fontSize: 11,
               whiteSpace: 'nowrap',
@@ -309,7 +319,7 @@ const MazeGrid: React.FC<MazeGridProps> = ({
                 borderRadius: '10px',
                 border: '1px solid rgba(255, 255, 255, 0.25)',
                 backgroundColor: 'rgba(15, 15, 30, 0.9)',
-                backdropFilter: 'blur(6px)',
+                backdropFilter: 'blur(8px)',
                 color: 'white',
                 fontSize: 13,
                 width: 160,
@@ -380,24 +390,32 @@ const MazeGrid: React.FC<MazeGridProps> = ({
         @keyframes player-pulse {
           0%, 100% {
             box-shadow: 
-              0 0 0 0 currentColor,
-              0 0 8px currentColor,
-              0 0 16px rgba(255,255,255,0.2);
+              0 0 0 0 rgba(255,255,255,0.8),
+              0 0 10px currentColor,
+              0 0 20px currentColor,
+              0 0 30px rgba(255,255,255,0.3);
           }
           50% {
             box-shadow: 
-              0 0 0 8px transparent,
-              0 0 20px currentColor,
-              0 0 40px currentColor,
-              0 0 24px rgba(255,255,255,0.3);
+              0 0 0 12px rgba(255,255,255,0),
+              0 0 18px currentColor,
+              0 0 36px currentColor,
+              0 0 54px currentColor,
+              0 0 20px rgba(255,255,255,0.5);
           }
         }
         @keyframes player-pulse-soft {
           0%, 100% {
-            box-shadow: 0 0 6px currentColor, 0 0 12px rgba(255,255,255,0.15);
+            box-shadow: 
+              0 0 0 0 rgba(255,255,255,0.5),
+              0 0 8px currentColor,
+              0 0 16px currentColor;
           }
           50% {
-            box-shadow: 0 0 14px currentColor, 0 0 24px currentColor;
+            box-shadow: 
+              0 0 0 8px rgba(255,255,255,0),
+              0 0 14px currentColor,
+              0 0 28px currentColor;
           }
         }
         @keyframes blink {
