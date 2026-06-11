@@ -1,272 +1,235 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>浮游礁石</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>动态几何徽章生成器</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
     html, body {
       width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: linear-gradient(180deg, #0A1C3A 0%, #0F3A2A 100%);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    }
-    
-    #canvas-container {
-      width: 100%;
-      height: 100%;
-      position: relative;
-    }
-    
-    #canvas-container canvas {
-      display: block;
-      cursor: grab;
-    }
-    
-    #canvas-container canvas:active {
-      cursor: grabbing;
-    }
-    
-    #stats-panel {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-radius: 8px;
-      padding: 12px 16px;
-      color: #E0E8F0;
-      font-size: 12px;
+      min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      z-index: 100;
-      min-width: 140px;
+      background: radial-gradient(ellipse at center, #1E1E2E 0%, #0D0D1A 100%);
+      color: white;
+      overflow-x: hidden;
     }
-    
-    #stats-panel .stat-item {
+
+    .container {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
-      margin-bottom: 6px;
+      padding-top: 40px;
+      padding-bottom: 40px;
+      min-height: 100vh;
     }
-    
-    #stats-panel .stat-item:last-child {
-      margin-bottom: 0;
-    }
-    
-    #stats-panel .stat-label {
-      opacity: 0.7;
-    }
-    
-    #stats-panel .stat-value {
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
-    
-    #control-panel {
+
+    .loading {
       position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-radius: 12px;
-      padding: 20px;
-      z-index: 100;
-      width: 280px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .control-group {
-      margin-bottom: 16px;
-    }
-    
-    .control-group:last-child {
-      margin-bottom: 0;
-    }
-    
-    .control-label {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #E0E8F0;
-      font-size: 13px;
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-    
-    .control-value {
-      font-variant-numeric: tabular-nums;
-      font-weight: 600;
-      color: #FFD93D;
-    }
-    
-    .slider-container {
-      position: relative;
-      width: 100%;
-      height: 6px;
-    }
-    
-    .slider-track {
-      position: absolute;
-      top: 50%;
+      top: 0;
       left: 0;
       width: 100%;
-      height: 6px;
-      transform: translateY(-50%);
-      border-radius: 3px;
-      cursor: pointer;
+      height: 100%;
+      background: #0D0D1A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
     }
-    
-    .slider-track.temp {
-      background: linear-gradient(90deg, #4A90D9, #9B59B6, #FF6B6B, #FFD93D);
+
+    .loading.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
-    
-    .slider-track.salinity {
-      background: linear-gradient(90deg, #0F3A2A, #1A5F4A, #2E8B6B, #52BE80);
-    }
-    
-    .slider-track.light {
-      background: linear-gradient(90deg, #1a1a2e, #16213e, #0f3460, #FFD93D);
-    }
-    
-    .slider-thumb {
-      position: absolute;
-      top: 50%;
-      width: 16px;
-      height: 16px;
-      background: #ffffff;
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #FF6B6B;
       border-radius: 50%;
-      transform: translate(-50%, -50%);
-      cursor: grab;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      transition: transform 0.15s ease, width 0.15s ease, height 0.15s ease;
-      z-index: 10;
+      animation: spin 1s linear infinite;
     }
-    
-    .slider-thumb:hover {
-      width: 20px;
-      height: 20px;
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
-    
-    .slider-thumb:active {
-      cursor: grabbing;
+
+    .input-wrapper {
+      width: 300px;
+      margin-bottom: 20px;
     }
-    
-    @media (max-width: 768px) {
-      #control-panel {
-        bottom: 16px;
-        left: 50%;
-        right: auto;
-        transform: translateX(-50%);
-        width: calc(100% - 32px);
-        max-width: 400px;
-        padding: 14px;
+
+    #textInput {
+      width: 100%;
+      height: 44px;
+      padding: 0 16px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-size: 16px;
+      outline: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      opacity: 0.7;
+    }
+
+    #textInput::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    #textInput:hover,
+    #textInput:focus {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+
+    .style-buttons {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 30px;
+    }
+
+    .style-btn {
+      width: 90px;
+      height: 36px;
+      border: none;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      transition: all 0.2s ease;
+      opacity: 0.7;
+    }
+
+    .style-btn:hover {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+
+    .style-btn.active-minimal {
+      background: #FFFFFF;
+      color: #1E1E2E;
+      opacity: 1;
+    }
+
+    .style-btn.active-cyber {
+      background: #FF00FF;
+      color: white;
+      opacity: 1;
+      box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+    }
+
+    .style-btn.active-nature {
+      background: #228B22;
+      color: white;
+      opacity: 1;
+    }
+
+    .badge-container {
+      width: 400px;
+      height: 400px;
+      background: #000000;
+      border-radius: 16px;
+      box-shadow: 0 0 40px rgba(138, 43, 226, 0.3), 0 0 80px rgba(138, 43, 226, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 30px;
+    }
+
+    #badgeCanvas {
+      display: block;
+    }
+
+    .export-btn {
+      width: 120px;
+      height: 40px;
+      border: none;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      opacity: 0.7;
+    }
+
+    .export-btn:hover {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+
+    .export-btn:active {
+      animation: buttonPress 0.2s ease;
+    }
+
+    @keyframes buttonPress {
+      0% { transform: scale(1); }
+      50% { transform: scale(0.95); }
+      100% { transform: scale(1); }
+    }
+
+    @media (max-width: 600px) {
+      .input-wrapper {
+        width: 85%;
       }
-      
-      .control-group {
-        margin-bottom: 12px;
-      }
-      
-      #stats-panel {
-        top: 8px;
-        right: 8px;
-        padding: 4px 8px;
-        font-size: 9px;
-        min-width: auto;
+
+      .style-btn {
         width: auto;
-        line-height: 1.2;
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        background: rgba(255, 255, 255, 0.08);
-        border-radius: 6px;
+        padding: 0 16px;
+        flex: 1;
       }
-      
-      #stats-panel .stat-label {
-        display: none;
+
+      .style-buttons {
+        width: 85%;
       }
-      
-      #stats-panel .stat-item {
-        display: inline-block;
-        margin-right: 4px;
-        margin-bottom: 0;
-      }
-      
-      #stats-panel .stat-item:last-child {
-        margin-right: 0;
-      }
-      
-      #stats-panel .stat-value {
-        font-size: 9px;
-        font-weight: 500;
+
+      .badge-container {
+        width: 90vw;
+        height: 90vw;
       }
     }
   </style>
 </head>
 <body>
-  <div id="canvas-container"></div>
-  
-  <div id="stats-panel">
-    <div class="stat-item">
-      <span class="stat-label">温度</span>
-      <span class="stat-value" id="stat-temp">22.0</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">盐度</span>
-      <span class="stat-value" id="stat-salinity">32.0</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">光照</span>
-      <span class="stat-value" id="stat-light">0.5</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">珊瑚节点</span>
-      <span class="stat-value" id="stat-coral">0</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">粒子数</span>
-      <span class="stat-value" id="stat-particles">0</span>
-    </div>
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
   </div>
-  
-  <div id="control-panel">
-    <div class="control-group">
-      <div class="control-label">
-        <span>水温</span>
-        <span class="control-value" id="value-temp">22.0°C</span>
-      </div>
-      <div class="slider-container" data-type="temp">
-        <div class="slider-track temp"></div>
-        <div class="slider-thumb" id="thumb-temp"></div>
-      </div>
+
+  <div class="container">
+    <div class="input-wrapper">
+      <input
+        type="text"
+        id="textInput"
+        placeholder="输入英文单词或短语（最多20字符）"
+        maxlength="20"
+        autocomplete="off"
+      />
     </div>
-    <div class="control-group">
-      <div class="control-label">
-        <span>盐度</span>
-        <span class="control-value" id="value-salinity">32.0 ppt</span>
-      </div>
-      <div class="slider-container" data-type="salinity">
-        <div class="slider-track salinity"></div>
-        <div class="slider-thumb" id="thumb-salinity"></div>
-      </div>
+
+    <div class="style-buttons">
+      <button class="style-btn active-minimal" data-style="minimal">极简</button>
+      <button class="style-btn" data-style="cyber">赛博</button>
+      <button class="style-btn" data-style="nature">自然</button>
     </div>
-    <div class="control-group">
-      <div class="control-label">
-        <span>光照</span>
-        <span class="control-value" id="value-light">0.5</span>
-      </div>
-      <div class="slider-container" data-type="light">
-        <div class="slider-track light"></div>
-        <div class="slider-thumb" id="thumb-light"></div>
-      </div>
+
+    <div class="badge-container">
+      <canvas id="badgeCanvas" width="400" height="400"></canvas>
     </div>
+
+    <button class="export-btn" id="exportBtn">导出 PNG</button>
   </div>
 
   <script type="module" src="/src/main.ts"></script>

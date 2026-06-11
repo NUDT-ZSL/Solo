@@ -1,18 +1,15 @@
 {
-  "name": "floating-reef",
+  "name": "dynamic-geometric-badge-generator",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build"
-  },
-  "dependencies": {
-    "three": "^0.160.0"
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/three": "^0.160.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.10"
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
   }
 }
