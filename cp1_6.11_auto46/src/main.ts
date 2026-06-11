@@ -8,6 +8,9 @@ interface CharWave {
   xEnd: number;
   pulseStart: number | null;
   backgroundVisible: boolean;
+  phaseStart: number;
+  phaseEnd: number;
+  sampleCount: number;
 }
 
 const COLOR_PALETTE = ['#FF69B4', '#00CED1', '#FFA500', '#9370DB'];
@@ -23,6 +26,9 @@ const GOLD_COLOR = '#FFD700';
 const GLOW_SIZE = 14;
 const DOT_RADIUS = 5;
 const BG_CIRCLE_RADIUS = 15;
+const MIN_CYCLES_PER_CHAR = 2;
+const MAX_CYCLES_PER_CHAR = 6;
+const SAMPLES_PER_CYCLE = 16;
 
 let canvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
@@ -111,10 +117,11 @@ function resizeCanvas(): void {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = rect.width * dpr;
   canvas.height = rect.height * dpr;
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   
   if (waves.length > 0) {
     calculateWavePositions();
+    computePhasesAndSamples();
     draw();
   }
 }
@@ -123,16 +130,25 @@ function handleInput(): void {
   const text = lyricInput.value;
   const validChars = getValidChars(text);
   const count = validChars.length;
-  
+  const totalInputLen = text.length;
+
   charCountEl.textContent = `${count} / 100`;
-  charCountEl.classList.toggle('over-limit', count > 100);
-  
+
+  const overLimit = count > 100;
+  charCountEl.classList.toggle('over-limit', overLimit);
+
   generateBtn.disabled = count < 10 || count > 100;
-  
-  if (count > 100) {
+
+  if (overLimit) {
     tipMessageEl.textContent = '字符数超过100，请减少输入内容';
-  } else if (text.length > 0 && count < text.length) {
-    tipMessageEl.textContent = '部分字符（符号、空格）将被忽略';
+  } else if (count < 10 && totalInputLen > 0) {
+    const needMore = 10 - count;
+    const skippedHint = totalInputLen > count
+      ? `（已忽略${totalInputLen - count}个不支持的字符，符号、空格将被跳过）`
+      : '（符号、空格将被自动跳过）';
+    tipMessageEl.textContent = `还需至少输入${needMore}个有效字符${skippedHint}`;
+  } else if (totalInputLen > 0 && count < totalInputLen) {
+    tipMessageEl.textContent = `已忽略${totalInputLen - count}个不支持的字符（符号、空格将被跳过）`;
   } else {
     tipMessageEl.textContent = '';
   }
@@ -155,16 +171,25 @@ function getValidChars(text: string): string[] {
 }
 
 function isValidChar(ch: string): boolean {
-  const code = ch.charCodeAt(0);
   if (ch === ' ' || ch === '\t' || ch === '\n') return false;
-  if ((code >= 0x4e00 && code <= 0x9fff) || (code >= 0x3400 && code <= 0x4dbf)) return true;
-  if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) return true;
-  if (code >= 0x4e00) return true;
-  if (/[a-zA-Z\u4e00-\u9fff]/.test(ch)) return true;
+  if (/^[a-zA-Z\u4e00-\u9fff\u3400-\u4dbf]$/.test(ch)) return true;
   return false;
 }
 
+function mapCodeToFreq(code: number): number {
+  const hash = ((code * 2654435761) >>> 0) % 1000;
+  return FREQ_MIN + (hash / 1000) * (FREQ_MAX - FREQ_MIN);
+}
+
+function mapCodeToAmp(code: number): number {
+  const hash = ((code * 1103515245 + 12345) >>> 0) % 1000;
+  return AMP_MIN + (hash / 1000) * (AMP_MAX - AMP_MIN);
+}
+
 function generateWaves(): void {
+  const perfStart = performance.now();
+  performance.mark('generate-start');
+
   const text = lyricInput.value;
   const validChars = getValidChars(text);
   
@@ -189,13 +214,46 @@ function generateWaves(): void {
       xStart: 0,
       xEnd: 0,
       pulseStart: null,
-      backgroundVisible: false
+      backgroundVisible: false,
+      phaseStart: 0,
+      phaseEnd: 0,
+      sampleCount: 0
     };
   });
 
+  performance.mark('mapping-done');
+
   calculateWavePositions();
+  computePhasesAndSamples();
+
+  performance.mark('layout-done');
+
   draw();
   playBtn.disabled = false;
+
+  performance.mark('all-done');
+
+  try {
+    performance.measure('total-generate', 'generate-start', 'all-done');
+    performance.measure('char-mapping', 'generate-start', 'mapping-done');
+    performance.measure('layout-sample', 'mapping-done', 'layout-done');
+    performance.measure('draw-call', 'layout-done', 'all-done');
+    const measures = performance.getEntriesByType('measure');
+    const totalMs = measures.find(m => m.name === 'total-generate')?.duration ?? 0;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[WaveGen] ${waves.length} chars | total: ${totalMs.toFixed(2)}ms | ` +
+      `mapping: ${(measures.find(m => m.name === 'char-mapping')?.duration ?? 0).toFixed(2)}ms | ` +
+      `layout: ${(measures.find(m => m.name === 'layout-sample')?.duration ?? 0).toFixed(2)}ms | ` +
+      `draw: ${(measures.find(m => m.name === 'draw-call')?.duration ?? 0).toFixed(2)}ms`
+    );
+    performance.clearMarks();
+    performance.clearMeasures();
+  } catch {
+    const perfEnd = performance.now();
+    // eslint-disable-next-line no-console
+    console.log(`[WaveGen] ${waves.length} chars | total: ${(perfEnd - perfStart).toFixed(2)}ms`);
+  }
 }
 
 function calculateWavePositions(): void {
@@ -210,14 +268,25 @@ function calculateWavePositions(): void {
   });
 }
 
-function mapCodeToFreq(code: number): number {
-  const hash = ((code * 2654435761) >>> 0) % 1000;
-  return FREQ_MIN + (hash / 1000) * (FREQ_MAX - FREQ_MIN);
-}
+function computePhasesAndSamples(): void {
+  if (waves.length === 0) return;
 
-function mapCodeToAmp(code: number): number {
-  const hash = ((code * 1103515245 + 12345) >>> 0) % 1000;
-  return AMP_MIN + (hash / 1000) * (AMP_MAX - AMP_MIN);
+  const freqRange = FREQ_MAX - FREQ_MIN;
+  let accumulatedPhase = 0;
+
+  waves.forEach((wave) => {
+    const freqNorm = (wave.frequency - FREQ_MIN) / freqRange;
+    const cycles = MIN_CYCLES_PER_CHAR + freqNorm * (MAX_CYCLES_PER_CHAR - MIN_CYCLES_PER_CHAR);
+    const segWidth = Math.max(1, wave.xEnd - wave.xStart - 1);
+
+    wave.phaseStart = accumulatedPhase;
+    wave.phaseEnd = accumulatedPhase + cycles * Math.PI * 2;
+    accumulatedPhase = wave.phaseEnd;
+
+    const samplesByCycles = Math.ceil(cycles * SAMPLES_PER_CYCLE);
+    const samplesByWidth = Math.max(30, Math.floor(segWidth));
+    wave.sampleCount = Math.max(samplesByCycles, samplesByWidth);
+  });
 }
 
 function drawEmptyState(): void {
@@ -241,17 +310,18 @@ function draw(): void {
 
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-  waves.forEach((wave, index) => {
+  for (let index = 0; index < waves.length; index++) {
+    const wave = waves[index];
     const pulseScale = getPulseScale(wave, now);
     const isHovered = index === hoverCharIndex;
-    const charWidth = wave.xEnd - wave.xStart;
-    const waveWidth = charWidth - 2;
+    const segWidth = Math.max(1, wave.xEnd - wave.xStart - 1);
+    const xOffset = wave.xStart + 0.5;
     const baseAmp = wave.amplitude * ampMultiplier * pulseScale;
+    const phaseSpan = wave.phaseEnd - wave.phaseStart;
 
     if (wave.backgroundVisible) {
       const bgX = (wave.xStart + wave.xEnd) / 2;
-      const bgY = centerY + AMP_MAX * ampMultiplier + BG_CIRCLE_RADIUS + 10;
-      
+      const bgY = centerY + (AMP_MAX * ampMultiplier) + BG_CIRCLE_RADIUS + 10;
       ctx.beginPath();
       ctx.arc(bgX, bgY, BG_CIRCLE_RADIUS, 0, Math.PI * 2);
       ctx.fillStyle = wave.color + '4D';
@@ -259,14 +329,13 @@ function draw(): void {
     }
 
     ctx.beginPath();
-    
-    const samples = Math.max(30, Math.floor(waveWidth / 2));
+
+    const samples = wave.sampleCount;
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
-      const x = wave.xStart + 1 + t * waveWidth;
-      const phase = t * wave.frequency * 0.1;
-      const y = centerY + Math.sin(phase * Math.PI * 2) * baseAmp;
-      
+      const x = xOffset + t * segWidth;
+      const phase = wave.phaseStart + t * phaseSpan;
+      const y = centerY + Math.sin(phase) * baseAmp;
       if (i === 0) {
         ctx.moveTo(x, y);
       } else {
@@ -275,34 +344,51 @@ function draw(): void {
     }
 
     ctx.lineWidth = 2;
-    ctx.strokeStyle = isHovered ? '#FFFFFF' : wave.color;
-    
+    ctx.lineJoin = 'round';
+
     if (isHovered) {
+      const strokeGrad = ctx.createLinearGradient(
+        xOffset, centerY - (AMP_MAX * ampMultiplier * 1.8),
+        xOffset, centerY + (AMP_MAX * ampMultiplier * 1.8)
+      );
+      strokeGrad.addColorStop(0, '#FFFFFF');
+      strokeGrad.addColorStop(0.5, '#FFFFFF');
+      strokeGrad.addColorStop(1, '#FFFFFF');
+      ctx.strokeStyle = strokeGrad;
       ctx.shadowColor = '#FFFFFF';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 14;
     } else {
+      ctx.strokeStyle = wave.color;
       ctx.shadowBlur = 0;
     }
-    
+
     ctx.stroke();
     ctx.shadowBlur = 0;
+    ctx.lineJoin = 'miter';
 
     if (index < waves.length - 1) {
       ctx.beginPath();
-      ctx.moveTo(wave.xEnd, centerY - AMP_MAX * ampMultiplier * 1.5);
-      ctx.lineTo(wave.xEnd, centerY + AMP_MAX * ampMultiplier * 1.5);
+      ctx.moveTo(wave.xEnd, centerY - AMP_MAX * ampMultiplier * 1.6);
+      ctx.lineTo(wave.xEnd, centerY + AMP_MAX * ampMultiplier * 1.6);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
       ctx.lineWidth = 1;
       ctx.stroke();
     }
-  });
+  }
 
   if (isMouseOnCanvas && hoverCharIndex >= 0) {
+    const lineGrad = ctx.createLinearGradient(mouseX, 0, mouseX, canvasHeight);
+    lineGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    lineGrad.addColorStop(0.15, 'rgba(255, 255, 255, 0.7)');
+    lineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)');
+    lineGrad.addColorStop(0.85, 'rgba(255, 255, 255, 0.7)');
+    lineGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
     ctx.beginPath();
-    ctx.setLineDash([5, 5]);
+    ctx.setLineDash([6, 4]);
     ctx.moveTo(mouseX, 0);
     ctx.lineTo(mouseX, canvasHeight);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.strokeStyle = lineGrad;
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.setLineDash([]);
@@ -409,13 +495,10 @@ function animate(): void {
     const startX = waves[0].xStart;
     const endX = waves[waves.length - 1].xEnd;
     currentPlayX = startX + progress * (endX - startX);
-    
-    const currentCharIndex = Math.min(
-      Math.floor(progress * totalChars),
-      totalChars - 1
-    );
-    
-    if (currentCharIndex !== lastPlayedCharIndex && currentCharIndex >= 0) {
+
+    const currentCharIndex = getCharIndexAtX(currentPlayX);
+
+    if (currentCharIndex >= 0 && currentCharIndex !== lastPlayedCharIndex) {
       triggerCharPulse(currentCharIndex);
       playTone(waves[currentCharIndex].frequency);
       lastPlayedCharIndex = currentCharIndex;
@@ -487,12 +570,23 @@ function handleMouseLeave(): void {
 }
 
 function getCharIndexAtX(x: number): number {
-  for (let i = 0; i < waves.length; i++) {
-    if (x >= waves[i].xStart && x < waves[i].xEnd) {
-      return i;
-    }
+  let lo = 0;
+  let hi = waves.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const w = waves[mid];
+    if (x < w.xStart) hi = mid - 1;
+    else if (x >= w.xEnd) lo = mid + 1;
+    else return mid;
+  }
+  if (waves.length > 0 && x >= waves[waves.length - 1].xEnd) {
+    return waves.length - 1;
   }
   return -1;
+}
+
+function unicodeToHex(code: number): string {
+  return 'U+' + code.toString(16).toUpperCase().padStart(4, '0');
 }
 
 function updateInfoCard(): void {
@@ -505,7 +599,7 @@ function updateInfoCard(): void {
   
   infoChar.textContent = wave.char;
   infoDetail.innerHTML = `
-    Unicode: ${wave.unicode}<br>
+    Unicode: ${unicodeToHex(wave.unicode)}<br>
     音高: ${Math.round(wave.frequency)} Hz
   `;
   
