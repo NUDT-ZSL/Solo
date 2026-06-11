@@ -1,21 +1,21 @@
-import { ColorData } from './probe';
+import {
+  ColorData,
+  HistoryItem,
+  HistoryUpdateCallback,
+  HistorySelectCallback,
+  HistoryDeleteCallback,
+  IColorHistory
+} from './types';
 
-export interface HistoryItem {
-  id: string;
-  color: ColorData;
-  locked: boolean;
-  timestamp: number;
-}
+export { HistoryItem, HistoryUpdateCallback, HistorySelectCallback, HistoryDeleteCallback } from './types';
 
-export type HistoryUpdateCallback = (items: HistoryItem[]) => void;
-
-export class ColorHistory {
+export class ColorHistory implements IColorHistory {
   private items: HistoryItem[] = [];
   private maxItems: number = 20;
   private container: HTMLElement | null = null;
   private onUpdate: HistoryUpdateCallback | null = null;
-  private onSelect: ((item: HistoryItem) => void) | null = null;
-  private onDelete: ((id: string) => void) | null = null;
+  private onSelect: HistorySelectCallback | null = null;
+  private onDelete: HistoryDeleteCallback | null = null;
 
   constructor(maxItems: number = 20) {
     this.maxItems = maxItems;
@@ -29,35 +29,46 @@ export class ColorHistory {
     this.onUpdate = callback;
   }
 
-  setOnSelect(callback: (item: HistoryItem) => void): void {
+  setOnSelect(callback: HistorySelectCallback): void {
     this.onSelect = callback;
   }
 
-  setOnDelete(callback: (id: string) => void): void {
+  setOnDelete(callback: HistoryDeleteCallback): void {
     this.onDelete = callback;
   }
 
   addColor(color: ColorData): HistoryItem {
     const item: HistoryItem = {
       id: this.generateId(),
-      color: { ...color },
+      color: {
+        r: color.r,
+        g: color.g,
+        b: color.b,
+        hex: color.hex,
+        hsl: { h: color.hsl.h, s: color.hsl.s, l: color.hsl.l }
+      },
       locked: false,
       timestamp: Date.now()
     };
 
     this.items.unshift(item);
-
-    if (this.items.length > this.maxItems) {
-      const unlockedItems = this.items.filter(i => !i.locked);
-      if (unlockedItems.length > 0) {
-        const oldestUnlocked = unlockedItems[unlockedItems.length - 1];
-        this.items = this.items.filter(i => i.id !== oldestUnlocked.id);
-      }
-    }
-
+    this.trimOverflow();
     this.render();
     this.notifyUpdate();
     return item;
+  }
+
+  private trimOverflow(): void {
+    if (this.items.length <= this.maxItems) return;
+
+    const unlockedItems = this.items.filter(i => !i.locked);
+    const numToRemove = this.items.length - this.maxItems;
+
+    for (let i = 0; i < numToRemove; i++) {
+      const oldestUnlocked = unlockedItems.pop();
+      if (!oldestUnlocked) break;
+      this.items = this.items.filter(it => it.id !== oldestUnlocked.id);
+    }
   }
 
   removeColor(id: string): boolean {
@@ -74,7 +85,13 @@ export class ColorHistory {
     const item = this.items.find(i => i.id === id);
     if (!item) return false;
 
-    item.color = { ...color };
+    item.color = {
+      r: color.r,
+      g: color.g,
+      b: color.b,
+      hex: color.hex,
+      hsl: { h: color.hsl.h, s: color.hsl.s, l: color.hsl.l }
+    };
     this.render();
     this.notifyUpdate();
     return true;
@@ -97,11 +114,19 @@ export class ColorHistory {
   }
 
   getItems(): HistoryItem[] {
-    return [...this.items];
+    return this.items.map(it => ({
+      ...it,
+      color: { ...it.color, hsl: { ...it.color.hsl } }
+    }));
   }
 
   getItem(id: string): HistoryItem | undefined {
-    return this.items.find(i => i.id === id);
+    const item = this.items.find(i => i.id === id);
+    if (!item) return undefined;
+    return {
+      ...item,
+      color: { ...item.color, hsl: { ...item.color.hsl } }
+    };
   }
 
   getMaxItems(): number {
@@ -112,6 +137,8 @@ export class ColorHistory {
     if (!this.container) return;
 
     this.container.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
 
     this.items.forEach(item => {
       const swatch = document.createElement('div');
@@ -127,7 +154,7 @@ export class ColorHistory {
       if (item.locked) {
         const lockIcon = document.createElement('div');
         lockIcon.className = 'swatch-lock';
-        lockIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        lockIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
           <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>`;
@@ -136,16 +163,16 @@ export class ColorHistory {
 
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'swatch-delete';
-      deleteBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      deleteBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="18" y1="6" x2="6" y2="18"></line>
         <line x1="6" y1="6" x2="18" y2="18"></line>
       </svg>`;
-      deleteBtn.title = '删除';
+      deleteBtn.title = item.locked ? '已锁定，无法删除' : '删除';
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (this.onDelete) {
           this.onDelete(item.id);
-        } else {
+        } else if (!item.locked) {
           this.removeColor(item.id);
         }
       });
@@ -153,21 +180,31 @@ export class ColorHistory {
 
       swatch.addEventListener('click', () => {
         if (this.onSelect) {
-          this.onSelect(item);
+          const clone: HistoryItem = {
+            ...item,
+            color: { ...item.color, hsl: { ...item.color.hsl } }
+          };
+          this.onSelect(clone);
         }
       });
 
-      this.container!.appendChild(swatch);
+      fragment.appendChild(swatch);
     });
+
+    this.container.appendChild(fragment);
   }
 
   private notifyUpdate(): void {
     if (this.onUpdate) {
-      this.onUpdate([...this.items]);
+      const clone = this.items.map(it => ({
+        ...it,
+        color: { ...it.color, hsl: { ...it.color.hsl } }
+      }));
+      this.onUpdate(clone);
     }
   }
 
   private generateId(): string {
-    return `color_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `color_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   }
 }
