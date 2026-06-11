@@ -8,6 +8,17 @@ export interface PitchData {
 
 export type PitchCallback = (data: PitchData) => void;
 
+export interface LatencyStats {
+  bufferLatencyMs: number;
+  interpolationLatencyMs: number;
+  totalEstimatedLatencyMs: number;
+  workletProcessingCount: number;
+  lastWorkletTimestamp: number;
+  audioContextSampleRate: number;
+  audioContextLatency: number;
+  audioContextOutputLatency: number;
+}
+
 interface InterpolationState {
   lastValidPitch: number | null;
   lastValidTime: number;
@@ -34,6 +45,9 @@ export class PitchTracker {
   private targetFrameInterval: number = 1000 / 60;
   private rmsHistory: number[] = [];
   private maxRmsHistory: number = 3;
+  private workletMessageCount: number = 0;
+  private lastWorkletMessageTime: number = 0;
+  private processStartPerformanceTime: number = 0;
 
   constructor() {}
 
@@ -89,6 +103,8 @@ export class PitchTracker {
 
       this.callback = callback;
       this.isRunning = true;
+      this.processStartPerformanceTime = performance.now();
+      this.workletMessageCount = 0;
 
       this.interpolationState = {
         lastValidPitch: null,
@@ -163,6 +179,9 @@ export class PitchTracker {
   private handleWorkletMessage(message: { type: string; data: Float32Array; time: number }): void {
     if (message.type !== 'audio') return;
     if (!this.detectPitch || !this.callback) return;
+
+    this.workletMessageCount++;
+    this.lastWorkletMessageTime = performance.now();
 
     const inputData = message.data;
 
@@ -310,6 +329,31 @@ export class PitchTracker {
     const sr = this.getSampleRate();
     const bufferLatency = (this.bufferSize / sr) * 1000;
     return bufferLatency;
+  }
+
+  getLatencyStats(): LatencyStats {
+    const sr = this.getSampleRate();
+    const bufferLatencyMs = (this.bufferSize / sr) * 1000;
+    const interpolationLatencyMs = this.targetFrameInterval;
+    const ctxLatency = (this.audioContext as AudioContext & { baseLatency?: number })?.baseLatency ?? 0;
+    const ctxOutputLatency = (this.audioContext as AudioContext & { outputLatency?: number })?.outputLatency ?? 0;
+    const audioCtxTotal = (ctxLatency + ctxOutputLatency) * 1000;
+
+    return {
+      bufferLatencyMs,
+      interpolationLatencyMs,
+      totalEstimatedLatencyMs: bufferLatencyMs + interpolationLatencyMs + audioCtxTotal,
+      workletProcessingCount: this.workletMessageCount,
+      lastWorkletTimestamp: this.lastWorkletMessageTime,
+      audioContextSampleRate: sr,
+      audioContextLatency: ctxLatency,
+      audioContextOutputLatency: ctxOutputLatency
+    };
+  }
+
+  getUptimeMs(): number {
+    if (this.processStartPerformanceTime === 0) return 0;
+    return performance.now() - this.processStartPerformanceTime;
   }
 
   destroy(): void {

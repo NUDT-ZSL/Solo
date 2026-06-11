@@ -61,6 +61,81 @@ function App() {
 
   const selectedScale = SCALES[selectedScaleIdx];
 
+  const responsiveSizes = useMemo(() => {
+    const w = viewportSize.w;
+    const h = viewportSize.h;
+
+    if (w >= 768) {
+      return {
+        bpmFontSize: '24px',
+        sectionPadding: '0 20px',
+        sectionGap: '16px',
+        metronomePadding: '16px 20px',
+        metronomeMargin: '0 16px',
+        buttonPadding: '14px 20px',
+        buttonFontSize: '14px',
+        scaleButtonPadding: '10px 12px',
+        scaleButtonFontSize: '12px',
+        recButtonPadding: '12px 16px',
+        recButtonFontSize: '13px',
+        titleFontSize: '20px',
+        panelPadding: undefined,
+        headerPaddingTop: '16px',
+        headerPaddingX: '0 20px',
+        timeSigButtonPadding: '8px 12px',
+        timeSigButtonFontSize: '13px',
+        canvasHeight: undefined,
+        panelMaxHeight: undefined
+      };
+    }
+
+    if (w >= 480) {
+      return {
+        bpmFontSize: '20px',
+        sectionPadding: '0 8px',
+        sectionGap: '12px',
+        metronomePadding: '12px',
+        metronomeMargin: '0 6px',
+        buttonPadding: '12px 16px',
+        buttonFontSize: '13px',
+        scaleButtonPadding: '8px 10px',
+        scaleButtonFontSize: '11px',
+        recButtonPadding: '10px 14px',
+        recButtonFontSize: '12px',
+        titleFontSize: '17px',
+        panelPadding: '12px',
+        headerPaddingTop: '4px',
+        headerPaddingX: '0 4px',
+        timeSigButtonPadding: '7px 10px',
+        timeSigButtonFontSize: '12px',
+        canvasHeight: h > 0 ? `${Math.min(h * 0.5, 360)}px` : '280px',
+        panelMaxHeight: h > 0 ? `${h * 0.5}px` : '300px'
+      };
+    }
+
+    return {
+      bpmFontSize: '18px',
+      sectionPadding: '0 4px',
+      sectionGap: '10px',
+      metronomePadding: '10px',
+      metronomeMargin: '0 4px',
+      buttonPadding: '10px 12px',
+      buttonFontSize: '12px',
+      scaleButtonPadding: '7px 8px',
+      scaleButtonFontSize: '10px',
+      recButtonPadding: '9px 12px',
+      recButtonFontSize: '11px',
+      titleFontSize: '15px',
+      panelPadding: '10px',
+      headerPaddingTop: '2px',
+      headerPaddingX: '0 2px',
+      timeSigButtonPadding: '6px 8px',
+      timeSigButtonFontSize: '11px',
+      canvasHeight: h > 0 ? `${Math.min(h * 0.45, 300)}px` : '240px',
+      panelMaxHeight: h > 0 ? `${h * 0.55}px` : '320px'
+    };
+  }, [viewportSize.w, viewportSize.h]);
+
   useEffect(() => {
     const handleResize = () => {
       const w = window.innerWidth;
@@ -135,6 +210,11 @@ function App() {
       pitchTrackerRef.current = tracker;
       await tracker.start(handlePitchData);
       setIsRunning(true);
+
+      if (typeof (import.meta as unknown as { env?: { DEV?: boolean } }).env !== 'undefined' &&
+          (import.meta as unknown as { env: { DEV?: boolean } }).env.DEV) {
+        (window as unknown as { __PITCH_TRACKER__: unknown }).__PITCH_TRACKER__ = tracker;
+      }
     } catch (e) {
       setError('无法访问麦克风，请检查权限设置');
       console.error(e);
@@ -146,6 +226,12 @@ function App() {
       pitchTrackerRef.current.stop();
       pitchTrackerRef.current = null;
     }
+
+    if (typeof (import.meta as unknown as { env?: { DEV?: boolean } }).env !== 'undefined' &&
+        (import.meta as unknown as { env: { DEV?: boolean } }).env.DEV) {
+      delete (window as unknown as { __PITCH_TRACKER__?: unknown }).__PITCH_TRACKER__;
+    }
+
     livePitchBufferRef.current = [];
     setIsRunning(false);
     stopRecording();
@@ -386,8 +472,8 @@ function App() {
     if (isMobile) {
       return {
         flex: '0 0 auto',
-        height: viewportSize.h > 0 ? `${Math.min(viewportSize.h * 0.55, 400)}px` : '300px',
-        padding: '8px 8px 0 8px',
+        height: responsiveSizes.canvasHeight || (viewportSize.h > 0 ? `${Math.min(viewportSize.h * 0.55, 400)}px` : '300px'),
+        padding: viewportSize.w < 480 ? '4px 4px 0 4px' : '8px 8px 0 8px',
         minHeight: 0
       };
     }
@@ -396,15 +482,15 @@ function App() {
       minHeight: 0,
       maxHeight: '100%'
     };
-  }, [isMobile, viewportSize.h]);
+  }, [isMobile, viewportSize.h, viewportSize.w, responsiveSizes.canvasHeight]);
 
   const panelStyle = useMemo(() => {
     if (isMobile) {
       return {
         flex: '1 1 auto',
-        maxHeight: viewportSize.h > 0 ? `${viewportSize.h * 0.45}px` : '300px',
-        margin: '8px',
-        padding: '12px',
+        maxHeight: responsiveSizes.panelMaxHeight || (viewportSize.h > 0 ? `${viewportSize.h * 0.45}px` : '300px'),
+        margin: viewportSize.w < 480 ? '4px' : '8px',
+        padding: responsiveSizes.panelPadding || '12px',
         overflowY: 'auto' as const
       };
     }
@@ -413,7 +499,7 @@ function App() {
       maxWidth: '380px',
       minWidth: '300px'
     };
-  }, [isMobile, viewportSize.h]);
+  }, [isMobile, viewportSize.h, responsiveSizes.panelMaxHeight, responsiveSizes.panelPadding, viewportSize.w]);
 
   return (
     <div
@@ -450,7 +536,7 @@ function App() {
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: isMobile ? '12px' : '16px',
+          gap: responsiveSizes.sectionGap,
           ...panelStyle
         }}
       >
@@ -458,11 +544,11 @@ function App() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: isMobile ? '0 4px' : '0 20px',
-          paddingTop: isMobile ? '4px' : '16px'
+          padding: responsiveSizes.headerPaddingX,
+          paddingTop: responsiveSizes.headerPaddingTop
         }}>
           <h1 style={{
-            fontSize: isMobile ? '17px' : '20px',
+            fontSize: responsiveSizes.titleFontSize,
             fontWeight: 700,
             background: 'linear-gradient(135deg, #e94560, #16c79a)',
             WebkitBackgroundClip: 'text',
@@ -486,30 +572,30 @@ function App() {
 
         {error && (
           <div style={{
-            margin: isMobile ? '0 4px' : '0 20px',
-            padding: '10px 14px',
+            margin: responsiveSizes.sectionPadding,
+            padding: viewportSize.w < 480 ? '8px 10px' : '10px 14px',
             borderRadius: '10px',
             background: 'rgba(233, 69, 96, 0.15)',
             color: '#e94560',
-            fontSize: '13px',
+            fontSize: viewportSize.w < 480 ? '12px' : '13px',
             border: '1px solid rgba(233, 69, 96, 0.3)'
           }}>
             {error}
           </div>
         )}
 
-        <section style={{ padding: isMobile ? '0 4px' : '0 20px' }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
+        <section style={{ padding: responsiveSizes.sectionPadding }}>
+          <div style={{ display: 'flex', gap: viewportSize.w < 480 ? '6px' : '10px' }}>
             <button
               onClick={(e) => { addRipple(e); isRunning ? stopDetection() : startDetection(); }}
               style={{
                 flex: 1,
                 position: 'relative',
                 overflow: 'hidden',
-                padding: isMobile ? '12px 16px' : '14px 20px',
-                borderRadius: '12px',
+                padding: responsiveSizes.buttonPadding,
+                borderRadius: viewportSize.w < 480 ? '10px' : '12px',
                 border: 'none',
-                fontSize: isMobile ? '13px' : '14px',
+                fontSize: responsiveSizes.buttonFontSize,
                 fontWeight: 600,
                 cursor: 'pointer',
                 color: '#fff',
@@ -547,15 +633,15 @@ function App() {
         </section>
 
         <section style={{
-          padding: isMobile ? '0 4px' : '0 20px',
+          padding: responsiveSizes.sectionPadding,
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px'
+          gap: viewportSize.w < 480 ? '6px' : '8px'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>🎵 目标音阶</span>
+            <span style={{ fontSize: viewportSize.w < 480 ? '12px' : '13px', fontWeight: 600, opacity: 0.8 }}>🎵 目标音阶</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: viewportSize.w < 360 ? '1fr' : '1fr 1fr', gap: viewportSize.w < 480 ? '4px' : '6px' }}>
             {SCALES.map((scale, idx) => (
               <button
                 key={scale.name}
@@ -563,8 +649,8 @@ function App() {
                 style={{
                   position: 'relative',
                   overflow: 'hidden',
-                  padding: isMobile ? '8px 10px' : '10px 12px',
-                  borderRadius: '10px',
+                  padding: responsiveSizes.scaleButtonPadding,
+                  borderRadius: viewportSize.w < 480 ? '8px' : '10px',
                   border: selectedScaleIdx === idx
                     ? '2px solid #e94560'
                     : '1px solid rgba(255,255,255,0.1)',
@@ -572,7 +658,7 @@ function App() {
                     ? 'rgba(233, 69, 96, 0.15)'
                     : 'rgba(255,255,255,0.03)',
                   color: selectedScaleIdx === idx ? '#e94560' : 'rgba(255,255,255,0.7)',
-                  fontSize: isMobile ? '11px' : '12px',
+                  fontSize: responsiveSizes.scaleButtonFontSize,
                   fontWeight: 500,
                   cursor: 'pointer',
                   transition: 'all 0.15s',
@@ -586,25 +672,25 @@ function App() {
         </section>
 
         <section style={{
-          padding: isMobile ? '12px' : '16px 20px',
-          margin: isMobile ? '0 4px' : '0 16px',
+          padding: responsiveSizes.metronomePadding,
+          margin: responsiveSizes.metronomeMargin,
           borderRadius: '12px',
           background: 'rgba(0,0,0,0.2)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px'
+          gap: viewportSize.w < 480 ? '8px' : '12px'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>🥁 节拍器</span>
+            <span style={{ fontSize: viewportSize.w < 480 ? '12px' : '13px', fontWeight: 600, opacity: 0.8 }}>🥁 节拍器</span>
             <button
               onClick={(e) => { addRipple(e); toggleMetronome(); }}
               style={{
                 position: 'relative',
                 overflow: 'hidden',
-                padding: '6px 14px',
+                padding: viewportSize.w < 480 ? '5px 10px' : '6px 14px',
                 borderRadius: '8px',
                 border: 'none',
-                fontSize: '12px',
+                fontSize: viewportSize.w < 480 ? '11px' : '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
                 color: '#fff',
@@ -623,15 +709,15 @@ function App() {
           </div>
 
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
-              <span style={{ fontSize: '11px', opacity: 0.6 }}>速度 BPM</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: viewportSize.w < 480 ? '4px' : '8px' }}>
+              <span style={{ fontSize: viewportSize.w < 480 ? '10px' : '11px', opacity: 0.6 }}>速度 BPM</span>
               <span style={{
-                fontSize: '24px',
+                fontSize: responsiveSizes.bpmFontSize,
                 fontWeight: 700,
                 color: bpmTextColor,
                 transition: 'color 0.1s',
                 fontFamily: 'monospace',
-                minWidth: '60px',
+                minWidth: viewportSize.w < 480 ? '45px' : '60px',
                 textAlign: 'right'
               }}>
                 {bpm}
@@ -709,7 +795,7 @@ function App() {
                   onClick={(e) => { addRipple(e); setTimeSignature(sig); }}
                   style={{
                     flex: 1,
-                    padding: '8px 12px',
+                    padding: responsiveSizes.timeSigButtonPadding,
                     borderRadius: '8px',
                     border: timeSignature === sig
                       ? '2px solid #16c79a'
@@ -718,7 +804,7 @@ function App() {
                       ? 'rgba(22, 199, 154, 0.15)'
                       : 'rgba(255,255,255,0.02)',
                     color: timeSignature === sig ? '#16c79a' : 'rgba(255,255,255,0.6)',
-                    fontSize: isMobile ? '12px' : '13px',
+                    fontSize: responsiveSizes.timeSigButtonFontSize,
                     fontWeight: 600,
                     cursor: 'pointer',
                     fontFamily: 'monospace',
@@ -734,16 +820,16 @@ function App() {
         </section>
 
         <section style={{
-          padding: isMobile ? '0 4px' : '0 20px',
+          padding: responsiveSizes.sectionPadding,
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px'
+          gap: viewportSize.w < 480 ? '6px' : '8px'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>🎙 录音练习</span>
+            <span style={{ fontSize: viewportSize.w < 480 ? '12px' : '13px', fontWeight: 600, opacity: 0.8 }}>🎙 录音练习</span>
             {isRecording && (
               <span style={{
-                fontSize: '12px',
+                fontSize: viewportSize.w < 480 ? '11px' : '12px',
                 fontWeight: 600,
                 color: '#e94560',
                 fontFamily: 'monospace'
@@ -753,7 +839,7 @@ function App() {
             )}
             {!isRecording && recordedData.length > 0 && !isPlayingBack && (
               <span style={{
-                fontSize: '11px',
+                fontSize: viewportSize.w < 480 ? '10px' : '11px',
                 opacity: 0.6,
                 fontFamily: 'monospace'
               }}>
@@ -761,7 +847,7 @@ function App() {
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: viewportSize.w < 480 ? '6px' : '8px' }}>
             <button
               onClick={(e) => { addRipple(e); isRecording ? stopRecording() : startRecording(); }}
               disabled={!isRunning || isPlayingBack}
@@ -769,10 +855,10 @@ function App() {
                 flex: 1,
                 position: 'relative',
                 overflow: 'hidden',
-                padding: isMobile ? '11px 14px' : '12px 16px',
-                borderRadius: '10px',
+                padding: responsiveSizes.recButtonPadding,
+                borderRadius: viewportSize.w < 480 ? '8px' : '10px',
                 border: 'none',
-                fontSize: isMobile ? '12px' : '13px',
+                fontSize: responsiveSizes.recButtonFontSize,
                 fontWeight: 600,
                 cursor: (!isRunning || isPlayingBack) ? 'not-allowed' : 'pointer',
                 color: '#fff',
@@ -794,10 +880,10 @@ function App() {
                 flex: 1,
                 position: 'relative',
                 overflow: 'hidden',
-                padding: isMobile ? '11px 14px' : '12px 16px',
-                borderRadius: '10px',
+                padding: responsiveSizes.recButtonPadding,
+                borderRadius: viewportSize.w < 480 ? '8px' : '10px',
                 border: 'none',
-                fontSize: isMobile ? '12px' : '13px',
+                fontSize: responsiveSizes.recButtonFontSize,
                 fontWeight: 600,
                 cursor: recordedData.length === 0 ? 'not-allowed' : 'pointer',
                 color: '#fff',

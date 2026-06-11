@@ -472,7 +472,11 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
 
       frontCtx.save();
       frontCtx.clearRect(0, 0, W, H);
-      frontCtx.drawImage(backCanvas, 0, 0, W, H, 0, 0, W, H);
+      frontCtx.drawImage(
+        backCanvas,
+        0, 0, backCanvas.width, backCanvas.height,
+        0, 0, W, H
+      );
       frontCtx.restore();
     };
 

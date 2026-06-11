@@ -297,6 +297,177 @@ Visualizer
 
 ---
 
+### 3.3 核心接口定义
+
+#### 3.3.1 PitchTracker 模块接口
+
+**文件**: `src/PitchTracker.ts`
+
+**导出数据结构**：
+
+```typescript
+// 音高检测结果帧
+export interface PitchData {
+  time: number;        // 相对开始时间(秒)，AudioWorklet时间戳校正后
+  pitch: number;       // 检测频率(Hz)，有效范围 80-2000
+  confidence: number;  // 置信度 0-1，基于RMS能量
+}
+
+// 音高数据回调函数类型
+export type PitchCallback = (data: PitchData) => void;
+
+// 延迟统计信息
+export interface LatencyStats {
+  bufferLatencyMs: number;            // 缓冲区理论延迟 (bufferSize/sampleRate*1000)
+  interpolationLatencyMs: number;     // 帧间插值目标间隔 (1000/60 ≈ 16.7ms)
+  totalEstimatedLatencyMs: number;    // 总估计延迟 = buffer + interpolation + AudioContext
+  workletProcessingCount: number;     // 已处理的AudioWorklet消息帧数
+  lastWorkletTimestamp: number;       // 最后一帧Worklet消息到达的performance.now()
+  audioContextSampleRate: number;     // 当前AudioContext采样率
+  audioContextLatency: number;        // AudioContext.baseLatency (秒)
+  audioContextOutputLatency: number;  // AudioContext.outputLatency (秒)
+}
+```
+
+**公共类**: `PitchTracker`
+
+| 方法 | 签名 | 描述 |
+|------|------|------|
+| `constructor()` | `new PitchTracker()` | 创建实例，不立即分配资源 |
+| `start()` | `async start(callback: PitchCallback): Promise<void>` | 请求麦克风、创建AudioContext和AudioWorklet，开始检测 |
+| `stop()` | `stop(): void` | 停止检测，释放麦克风、关闭AudioContext、清理资源 |
+| `getSampleRate()` | `getSampleRate(): number` | 获取当前采样率，默认48000 |
+| `getBufferSize()` | `getBufferSize(): number` | 获取缓冲区大小，固定512 |
+| `getLatencyMs()` | `getLatencyMs(): number` | 获取缓冲区理论延迟(ms) |
+| `getLatencyStats()` | `getLatencyStats(): LatencyStats` | 获取完整延迟统计，用于性能测试 |
+| `getUptimeMs()` | `getUptimeMs(): number` | 获取运行时长(ms)，从start()开始计时 |
+| `destroy()` | `destroy(): void` | 别名stop()，标准销毁接口 |
+
+**事件/回调**:
+
+| 回调 | 参数 | 触发频率 |
+|------|------|----------|
+| `PitchCallback` | `PitchData` | 约60fps，检测到有效音高时触发 |
+
+---
+
+#### 3.3.2 Metronome 模块接口
+
+**文件**: `src/Metronome.ts`
+
+**导出数据结构**：
+
+```typescript
+// 拍点事件
+export interface BeatEvent {
+  time: number;        // 相对开始时间(秒)
+  beatNumber: number;  // 当前小节内的拍号 (0 = 重拍)
+  totalBeats: number;  // 每小节拍数 (2,3,4)
+  isDownbeat: boolean; // 是否重拍 (beatNumber === 0)
+}
+
+// 拍点回调函数类型
+export type BeatCallback = (event: BeatEvent) => void;
+
+// 拍号类型
+export type TimeSignature = '2/4' | '3/4' | '4/4';
+```
+
+**公共类**: `Metronome`
+
+| 方法 | 签名 | 描述 |
+|------|------|------|
+| `constructor(audioContext?)` | `new Metronome(audioContext?: AudioContext)` | 创建实例，可复用外部AudioContext |
+| `start()` | `start(callback: BeatCallback): void` | 启动节拍器，开始调度click音和拍点事件 |
+| `stop()` | `stop(): void` | 停止节拍器，清除scheduler定时器 |
+| `setBPM()` | `setBPM(bpm: number): void` | 设置BPM，范围40-200，自动钳制 |
+| `getBPM()` | `getBPM(): number` | 获取当前BPM |
+| `setTimeSignature()` | `setTimeSignature(sig: TimeSignature): void` | 设置拍号 |
+| `getTimeSignature()` | `getTimeSignature(): TimeSignature` | 获取当前拍号 |
+| `isActive()` | `isActive(): boolean` | 是否正在运行 |
+| `destroy()` | `destroy(): void` | 别名stop() |
+
+**事件/回调**:
+
+| 回调 | 参数 | 触发频率 |
+|------|------|----------|
+| `BeatCallback` | `BeatEvent` | 每拍触发一次，BPM=120时每秒2次 |
+
+**内部调度参数**：
+
+| 参数 | 值 | 说明 |
+|------|----|----|
+| `lookahead` | 25ms | setTimeout调度间隔 |
+| `scheduleAheadTime` | 0.1s | 预调度时间窗口 |
+| 重拍频率 | 1200Hz | Oscillator频率 |
+| 非重拍频率 | 800Hz | Oscillator频率 |
+| 音长 | 50ms | exponentialRamp衰减 |
+
+---
+
+#### 3.3.3 Visualizer 组件接口
+
+**文件**: `src/Visualizer.tsx`
+
+**Props类型**:
+
+```typescript
+export interface VisualizerProps {
+  pitchData: PitchData[];          // 实时音高数据（最多10秒窗口）
+  scaleName: string;               // 当前音阶名称，用于配色
+  scaleNotes: number[];            // 音阶半音索引数组 [0,2,4,5,7,9,11]
+  activeBeats: BeatEvent[];        // 近期拍点事件（用于底部指示灯）
+  isRecording: boolean;            // 是否正在录音（显示REC红点）
+  recordedData: PitchData[];       // 已录制数据（用于ghost半透明轨迹）
+  isPlayingBack: boolean;          // 是否正在回放（切换渲染模式）
+  playbackAudioStartOffset?: number; // 回放音频启动延迟补偿(秒)
+}
+```
+
+**Ref Handle类型** (通过 `useImperativeHandle` 暴露):
+
+```typescript
+export interface VisualizerHandle {
+  // 添加实时拍点（来自Metronome），用于画竖线和底部指示灯
+  addBeat: (event: BeatEvent) => void;
+
+  // 开始回放，传入录制数据和音频启动时间偏移
+  startPlayback: (data: PitchData[], audioStartTime?: number) => void;
+
+  // 停止回放，清理回放状态
+  stopPlayback: () => void;
+
+  // 同步回放时间，每100ms调用一次，对齐Audio.currentTime
+  syncPlaybackTime: (currentPlaybackTime: number) => void;
+}
+```
+
+**渲染参数**（内部常量）：
+
+| 常量 | 值 | 说明 |
+|------|----|----|
+| `MIN_FREQ` | 130.81 Hz | C3，Y轴下限 |
+| `MAX_FREQ` | 1046.50 Hz | C6，Y轴上限 |
+| `WINDOW_SECONDS` | 2 | 横向显示时长 |
+| `MAX_DISPLAY_POINTS` | 1000 | 降采样阈值，超过则按stride抽取 |
+| `GHOST_TRAIL_ALPHA` | 0.35 | 录制回放半透明轨迹透明度 |
+| `TARGET_FPS` | 30 | 渲染帧率下限 |
+
+---
+
+#### 3.3.4 模块耦合度验证矩阵
+
+| 调用方 → 被调用方 | PitchTracker | Metronome | Visualizer |
+|-------------------|--------------|-----------|------------|
+| **App.tsx** | ✅ 强耦合<br>new + start/stop<br>callback接收PitchData | ✅ 强耦合<br>new + start/stop<br>setBPM/setTimeSignature<br>callback接收BeatEvent | ✅ 强耦合<br>props传递数据<br>ref调用addBeat/startPlayback/syncPlaybackTime |
+| **PitchTracker** | — | ❌ 无耦合 | ❌ 无耦合 |
+| **Metronome** | ❌ 无耦合 | — | ❌ 无耦合 |
+| **Visualizer** | ❌ 仅import类型<br>PitchData (type-only) | ❌ 仅import类型<br>BeatEvent (type-only) | — |
+
+**结论**：PitchTracker和Metronome完全独立（零互相依赖），Visualizer仅对两者有类型依赖（import type），所有运行时交互均通过App.tsx中转，符合单向数据流设计，耦合度低。
+
+---
+
 ## 4. 完整数据流向图
 
 ### 4.1 实时检测数据流

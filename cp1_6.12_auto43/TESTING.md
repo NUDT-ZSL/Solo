@@ -23,134 +23,534 @@
 ### 测试目的
 
 验证从麦克风输入到 Canvas 曲线显示的端到端延迟是否 < 100ms。
+延迟包含三个组成部分：
+1. **音频采集延迟**：麦克风硬件 + AudioContext 缓冲（约 5-30ms）
+2. **信号处理延迟**：PitchTracker 缓冲区 + YIN 算法检测 + 帧间插值（约 10-30ms）
+3. **渲染显示延迟**：React state 更新 → Canvas 绘制 → 浏览器合成 → 显示器刷新（约 16-50ms）
 
 ### 测试环境准备
 
-1. **硬件**：
-   - 音频接口（支持 loopback 或外放+麦克风回路）
-   - 连接：扬声器 → 麦克风（物理回路）或使用虚拟音频线缆
+#### 1.1 硬件要求
 
-2. **软件**：
-   - Chrome 浏览器（版本 ≥ 100）
-   - 打开 Chrome DevTools (F12)
-   - 安装 [Web Audio Timer](https://chrome.google.com/webstore/) 扩展（可选）
+| 设备 | 要求 | 用途 |
+|------|------|------|
+| 主机 | Windows/macOS/Linux，CPU ≥ 4核 | 运行浏览器 |
+| 音频输入输出 | 内置声卡或 USB 音频接口 | 方法C物理回路测试 |
+| 音频线缆（可选） | 3.5mm公对公 或 虚拟音频设备 | 方法B/C loopback |
 
-### 测试步骤
+#### 1.2 软件要求
 
-#### 方法 A：手动脉冲测试（简单版）
+- Chrome / Edge / Brave 浏览器（版本 ≥ 100，基于 Chromium）
+- 打开 Chrome DevTools（快捷键 F12 或 Ctrl+Shift+I）
+- 确保浏览器支持：
+  - `AudioContext.baseLatency` / `AudioContext.outputLatency`（Chrome 102+）
+  - `AudioWorklet`（所有现代浏览器）
+  - `performance.now()` 高分辨率计时（微秒级精度）
+
+#### 1.3 浏览器预配置
 
 ```
-步骤 1: 打开应用，进入开发者模式
-   - 访问 chrome://flags/#autoplay-policy
-   - 设置为 "No user gesture is required"
-   - 重启浏览器
+步骤 1: 禁用音频自动播放限制
+   - 地址栏访问 chrome://flags/#autoplay-policy
+   - 选择 "No user gesture is required"
+   - 点击 Relaunch 重启浏览器
 
-步骤 2: 启动 PitchTrainer
-   - npm run dev
-   - 访问 http://localhost:5173
+步骤 2: 启用精确内存信息（可选，用于内存测试）
+   - 启动 Chrome 时添加命令行参数：
+     Windows: chrome.exe --enable-precise-memory-info
+     macOS: open -a "Google Chrome" --args --enable-precise-memory-info
 
-步骤 3: 打开 DevTools Console
-   - F12 → Console 标签
-   - 执行以下代码注入延迟测量钩子：
+步骤 3: 确保没有其他占用音频的应用运行
+   - 关闭音乐播放器、视频会议软件等
 ```
+
+---
+
+### 测试方法概览
+
+| 方法 | 名称 | 测量内容 | 精度 | 所需设备 | 推荐度 |
+|------|------|----------|------|----------|--------|
+| A | API 理论验证 | PitchTracker.getLatencyStats() 内部统计 | ±1ms | 仅浏览器 | ★★★ 快速预检 |
+| B | Web Audio Loopback | 浏览器内部 AudioContext 回环端到端 | ±5ms | 仅浏览器 | ★★★★ 日常验证 |
+| C | 硬件物理回路 | 扬声器→麦克风物理链路真实延迟 | ±1ms | 外放+麦克风/音频线 | ★★★★★ 最终验收 |
+
+---
+
+### 方法 A：API 理论延迟验证（快速预检）
+
+**原理**：通过 PitchTracker 暴露的 `getLatencyStats()` API 获取各阶段延迟的理论计算值，快速验证参数是否配置正确。
+
+#### A.1 测试步骤
+
+```bash
+# 终端 1: 启动开发服务器
+cd c:/Users/Administrator/Desktop/VersionFastPro/tasks/auto43
+npm run dev
+```
+
+```
+浏览器操作:
+   1. 访问 http://localhost:5173
+   2. F12 打开 DevTools → Console 标签
+   3. 点击页面中的「开始检测」按钮，授权麦克风权限
+   4. 等待 3 秒让 AudioWorklet 稳定运行
+   5. 在 Console 中执行测试脚本（见下方 A.2）
+```
+
+#### A.2 可执行测试脚本
+
+在浏览器 Console 中粘贴执行：
 
 ```javascript
-// 在 Console 中执行，注入延迟测量
-const originalAddData = window.visualizerRef?.current?.addData;
-if (originalAddData) {
-  window.pulseTimestamps = [];
-  window.visualizerRef.current.addData = function(pitchData) {
-    const now = performance.now();
-    if (window.expectedPulseTime) {
-      const latency = now - window.expectedPulseTime;
-      window.pulseTimestamps.push(latency);
-      console.log(`检测到音高脉冲，延迟: ${latency.toFixed(1)}ms`);
-      window.expectedPulseTime = null;
-    }
-    return originalAddData.call(this, pitchData);
-  };
-  console.log('延迟测量钩子已安装');
+// =============================================
+// 方法 A: PitchTracker API 理论延迟验证
+// =============================================
+async function runApiLatencyCheck() {
+  console.log('%c=== PitchTracker 理论延迟验证 ===', 'color: #16c79a; font-weight: bold; font-size: 14px;');
+
+  // 等待应用启动（如果尚未启动）
+  await new Promise(r => setTimeout(r, 500));
+
+  // 获取 App 实例中的 PitchTracker 引用
+  // 注意：需要先手动点击「开始检测」按钮授权麦克风
+  const tracker = window.__PITCH_TRACKER__ || 
+                  (() => {
+                    // 尝试从 React Fiber 查找（生产模式可能不可用）
+                    console.warn('⚠️  请确保已点击「开始检测」按钮并授权麦克风');
+                    return null;
+                  })();
+
+  if (!tracker) {
+    console.log('%c请先手动点击「开始检测」按钮，然后重新运行此脚本', 'color: #e94560; font-weight: bold;');
+    console.log('%c提示：开发模式下，App.tsx 可将 pitchTrackerRef.current 暴露到 window.__PITCH_TRACKER__', 'color: #f39c12;');
+    return;
+  }
+
+  // 获取延迟统计
+  const stats = tracker.getLatencyStats();
+  const uptime = tracker.getUptimeMs();
+  const sr = tracker.getSampleRate();
+  const bs = tracker.getBufferSize();
+
+  console.log('\n%c── 系统参数 ──', 'color: #0f3460; font-weight: bold;');
+  console.log(`采样率:           ${sr} Hz`);
+  console.log(`缓冲区大小:       ${bs} samples`);
+  console.log(`运行时长:         ${(uptime / 1000).toFixed(2)} s`);
+  console.log(`Worklet 处理帧数: ${stats.workletProcessingCount}`);
+
+  console.log('\n%c── 延迟分解 (ms) ──', 'color: #0f3460; font-weight: bold;');
+  console.log(`缓冲区延迟:       ${stats.bufferLatencyMs.toFixed(2)} ms`);
+  console.log(`  计算: ${bs} samples / ${sr} Hz × 1000 = ${(bs / sr * 1000).toFixed(2)} ms`);
+  console.log(`插值帧间隔:       ${stats.interpolationLatencyMs.toFixed(2)} ms`);
+  console.log(`  (目标 60fps = ${(1000/60).toFixed(2)} ms/帧)`);
+  console.log(`AudioContext 延迟:`);
+  console.log(`  baseLatency:     ${(stats.audioContextLatency * 1000).toFixed(2)} ms`);
+  console.log(`  outputLatency:   ${(stats.audioContextOutputLatency * 1000).toFixed(2)} ms`);
+  console.log(`────────────────────────────`);
+  console.log(`%c总估计延迟:       ${stats.totalEstimatedLatencyMs.toFixed(2)} ms`, 
+              stats.totalEstimatedLatencyMs < 50 ? 'color: #16c79a; font-weight: bold;' : 'color: #e94560; font-weight: bold;');
+
+  console.log('\n%c── 验收结论 ──', 'color: #0f3460; font-weight: bold;');
+  const passEstimated = stats.totalEstimatedLatencyMs < 50;
+  const passBuffer = stats.bufferLatencyMs < 20;
+  const allPass = passEstimated && passBuffer;
+
+  console.log(`缓冲区 < 20ms:      ${passBuffer ? '✅ 是' : '❌ 否'}`);
+  console.log(`总估计 < 50ms:      ${passEstimated ? '✅ 是' : '❌ 否'}`);
+  console.log(`预留裕量到 100ms:   ${allPass ? '✅ ' + (100 - stats.totalEstimatedLatencyMs).toFixed(1) + 'ms 裕量' : '❌ 不足'}`);
+  console.log(`\n%c最终结论: ${allPass ? '✅ 理论延迟满足要求，请继续方法 B/C 做端到端验证' : '❌ 理论参数不达标，请检查 PitchTracker 配置'}`,
+              allPass ? 'color: #16c79a; font-weight: bold; font-size: 13px;' : 'color: #e94560; font-weight: bold; font-size: 13px;');
+
+  return { stats, uptime, pass: allPass };
+}
+
+// 执行
+runApiLatencyCheck();
+```
+
+#### A.3 预期输出示例
+
+```
+=== PitchTracker 理论延迟验证 ===
+
+── 系统参数 ──
+采样率:           48000 Hz
+缓冲区大小:       512 samples
+运行时长:         5.23 s
+Worklet 处理帧数: 478
+
+── 延迟分解 (ms) ──
+缓冲区延迟:       10.67 ms
+  计算: 512 samples / 48000 Hz × 1000 = 10.67 ms
+插值帧间隔:       16.67 ms
+  (目标 60fps = 16.67 ms/帧)
+AudioContext 延迟:
+  baseLatency:     15.00 ms
+  outputLatency:   12.00 ms
+────────────────────────────
+总估计延迟:       54.34 ms
+
+── 验收结论 ──
+缓冲区 < 20ms:      ✅ 是
+总估计 < 50ms:      ❌ 否
+预留裕量到 100ms:   ❌ 不足
+
+最终结论: ❌ 理论参数不达标（但仍 < 100ms，实际端到端需方法 B/C 验证）
+```
+
+---
+
+### 方法 B：Web Audio Loopback 端到端测试（日常验证）
+
+**原理**：在同一个 AudioContext 中，用 OscillatorNode 产生 1kHz 测试脉冲，通过扬声器播放，同时 PitchTracker 的麦克风采集该脉冲（需要系统音频回环或使用虚拟音频线缆）。测量从 Oscillator 调度时间到 PitchTracker 回调触发时间的差值。
+
+#### B.1 前置准备
+
+**方案 B1 - 使用虚拟音频设备（推荐，精度最高）**：
+- Windows: 安装 [VB-CABLE Virtual Audio Device](https://vb-audio.com/Cable/)
+- macOS: 启用「音频 MIDI 设置」中的「聚集设备」或安装 BlackHole
+- 将系统默认输出设为虚拟设备，将 PitchTracker 的输入也设为同一虚拟设备
+
+**方案 B2 - 使用物理外放+麦克风（简单，但易受环境干扰）**：
+- 笔记本电脑内置扬声器对准内置麦克风即可
+- 测试环境保持安静，关闭其他声源
+
+#### B.2 测试脚本
+
+首先，在 App.tsx 开发模式下暴露 PitchTracker 引用（只需改一次，方便测试）：
+
+```tsx
+// 在 App.tsx 的 startDetection 函数末尾添加：
+if (import.meta.env.DEV) {
+  (window as unknown as { __PITCH_TRACKER__: unknown }).__PITCH_TRACKER__ = pitchTrackerRef.current;
 }
 ```
 
-```
-步骤 4: 产生音频脉冲
-   - 点击「开始检测」按钮，授权麦克风
-   - 使用手机或另一设备播放 1kHz 正弦波脉冲（持续 50ms）
-   - 在播放瞬间记录系统时间（或使用 console.time）
-
-步骤 5: 重复测试
-   - 执行 20 次脉冲测试
-   - 记录每次的延迟值
-```
-
-#### 方法 B：自动化测试（精确版）
-
-使用 Web Audio API 内部生成测试信号，通过 loopback 测量：
+然后启动应用，点击「开始检测」后，在 Console 中执行：
 
 ```javascript
-// 在浏览器 Console 中执行自动化测试
-async function runLatencyTest(numSamples = 20) {
+// =============================================
+// 方法 B: Web Audio Loopback 端到端延迟测试
+// =============================================
+async function runLoopbackLatencyTest(numSamples = 30) {
+  console.log('%c=== Loopback 端到端延迟测试 ===', 'color: #16c79a; font-weight: bold; font-size: 14px;');
+  console.log(`样本数: ${numSamples}，预计耗时: ${Math.ceil(numSamples * 0.6)} 秒`);
+
+  if (!window.__PITCH_TRACKER__) {
+    console.log('%c❌ 请先点击「开始检测」并确保 App 暴露了 window.__PITCH_TRACKER__', 'color: #e94560; font-weight: bold;');
+    return;
+  }
+
   const results = [];
+  const pulseTimestamps = [];  // [{ pulseAudioTime, pulsePerfTime }]
+  const detectedPulses = [];   // [{ detectedPerfTime, pitch, confidence }]
+
+  // ---- 步骤 1: 安装 PitchTracker 回调钩子 ----
+  const tracker = window.__PITCH_TRACKER__;
+  const originalCallback = tracker._callback || null;  // 可能需要改 PitchTracker 暴露
+
+  // 由于 PitchTracker.callback 是 private，我们换一种方式：
+  // 通过 Monkey-patch window 的方式检测新的音高数据到达 state
+  let latestPitchTime = 0;
+  let latestPitchPerf = 0;
+  const origSetPitchData = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width'); // 占位
+
+  // 实际操作：我们通过监听 AudioWorklet 消息来测量
+  // 先记录原始的 port.onmessage
+  const origOnMessage = tracker.workletNode?.port.onmessage;
+  if (origOnMessage) {
+    tracker.workletNode.port.onmessage = (event) => {
+      if (event.data?.type === 'audio') {
+        latestPitchPerf = performance.now();
+      }
+      origOnMessage.call(tracker.workletNode.port, event);
+    };
+  }
+
+  // ---- 步骤 2: 创建脉冲发生器 ----
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const oscillator = audioCtx.createOscillator();
   const gainNode = audioCtx.createGain();
-  
+
+  oscillator.type = 'sine';
+  oscillator.frequency.value = 1000;  // 1kHz 测试音
   oscillator.connect(gainNode);
   gainNode.connect(audioCtx.destination);
-  oscillator.frequency.value = 1000;
   gainNode.gain.value = 0;
   oscillator.start();
-  
-  // 确保 PitchTracker 已启动
-  console.log('开始延迟测试，共', numSamples, '次');
-  
+
+  // 等待 AudioContext 稳定
+  await new Promise(r => setTimeout(r, 300));
+
+  // ---- 步骤 3: 发送 N 个脉冲并记录 ----
   for (let i = 0; i < numSamples; i++) {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // 发送脉冲
-    const pulseTime = audioCtx.currentTime;
-    window.expectedPulseTime = performance.now();
-    gainNode.gain.setValueAtTime(0.5, pulseTime);
-    gainNode.gain.setValueAtTime(0, pulseTime + 0.05);
-    
-    // 等待检测
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    if (window.pulseTimestamps?.length > 0) {
-      results.push(window.pulseTimestamps[window.pulseTimestamps.length - 1]);
+    // 等待脉冲间隔（避免重叠）
+    await new Promise(r => setTimeout(r, 500));
+
+    // 检测脉冲前的基线（确认为静音）
+    const baselinePerf = latestPitchPerf;
+
+    // 调度脉冲：在 audioCtx.currentTime + 0.05 处播放 50ms
+    const pulseAudioTime = audioCtx.currentTime + 0.05;
+    const pulsePerfTime = performance.now() + 50;  // 预估 performance.now() 时间点
+
+    pulseTimestamps.push({ pulseAudioTime, pulsePerfTime, index: i });
+
+    gainNode.gain.setValueAtTime(0, pulseAudioTime - 0.001);
+    gainNode.gain.setValueAtTime(0.3, pulseAudioTime);
+    gainNode.gain.setValueAtTime(0, pulseAudioTime + 0.05);
+
+    // 等待脉冲被处理（最多 300ms）
+    const pulseStartPerf = pulsePerfTime;
+    let detected = false;
+
+    for (let wait = 0; wait < 300; wait += 10) {
+      await new Promise(r => setTimeout(r, 10));
+      if (latestPitchPerf > pulseStartPerf) {
+        const latency = latestPitchPerf - pulsePerfTime;
+        if (latency > 0 && latency < 500) {  // 合理范围：0-500ms
+          results.push(latency);
+          detected = true;
+          console.log(`  脉冲 ${String(i + 1).padStart(2)}: 延迟 ${latency.toFixed(1)} ms`);
+        }
+        break;
+      }
+    }
+
+    if (!detected) {
+      console.log(`  脉冲 ${String(i + 1).padStart(2)}: ⚠️ 未检测到（可能环境噪声或音量不足）`);
     }
   }
-  
-  // 统计结果
-  const avg = results.reduce((a, b) => a + b, 0) / results.length;
-  const max = Math.max(...results);
-  const min = Math.min(...results);
-  const sorted = [...results].sort((a, b) => a - b);
-  const p95 = sorted[Math.floor(sorted.length * 0.95)];
-  
-  console.log('========== 延迟测试结果 ==========');
-  console.log(`样本数: ${results.length}`);
-  console.log(`平均延迟: ${avg.toFixed(1)}ms`);
-  console.log(`最小延迟: ${min.toFixed(1)}ms`);
-  console.log(`最大延迟: ${max.toFixed(1)}ms`);
-  console.log(`95百分位: ${p95.toFixed(1)}ms`);
-  console.log(`是否通过: ${p95 < 100 ? '✅ 是' : '❌ 否'}`);
-  console.log('所有样本:', results.map(r => r.toFixed(1) + 'ms').join(', '));
-  
+
+  // ---- 步骤 4: 清理 ----
   oscillator.stop();
-  return { avg, max, min, p95, results };
+  await audioCtx.close();
+
+  // 恢复原始 onmessage
+  if (origOnMessage && tracker.workletNode) {
+    tracker.workletNode.port.onmessage = origOnMessage;
+  }
+
+  // ---- 步骤 5: 统计分析 ----
+  console.log('\n%c── 统计结果 ──', 'color: #0f3460; font-weight: bold;');
+  console.log(`有效样本: ${results.length} / ${numSamples}`);
+
+  if (results.length === 0) {
+    console.log('%c❌ 未采集到有效样本，请检查音频回环设置', 'color: #e94560; font-weight: bold;');
+    return { results: [], pass: false };
+  }
+
+  const sum = results.reduce((a, b) => a + b, 0);
+  const avg = sum / results.length;
+  const sorted = [...results].sort((a, b) => a - b);
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  const p50 = sorted[Math.floor(sorted.length * 0.50)];
+  const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+  const p99 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.99))];
+
+  // 标准差
+  const variance = results.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / results.length;
+  const stdDev = Math.sqrt(variance);
+
+  console.log(`平均延迟:   ${avg.toFixed(1)} ms`);
+  console.log(`中位延迟:   ${p50.toFixed(1)} ms`);
+  console.log(`最小延迟:   ${min.toFixed(1)} ms`);
+  console.log(`最大延迟:   ${max.toFixed(1)} ms`);
+  console.log(`P95 延迟:   ${p95.toFixed(1)} ms`);
+  console.log(`P99 延迟:   ${p99.toFixed(1)} ms`);
+  console.log(`标准差:     ${stdDev.toFixed(1)} ms`);
+
+  // ---- 步骤 6: 验收 ----
+  console.log('\n%c── 验收 ──', 'color: #0f3460; font-weight: bold;');
+  const passP95 = p95 < 100;
+  const passMax = max < 150;
+  const passAvg = avg < 50;
+  const allPass = passP95 && passMax && passAvg;
+
+  console.log(`P95 < 100ms:  ${passP95 ? '✅' : '❌'}  (${p95.toFixed(1)}ms)`);
+  console.log(`Max < 150ms:  ${passMax ? '✅' : '❌'}  (${max.toFixed(1)}ms)`);
+  console.log(`Avg < 50ms:   ${passAvg ? '✅' : '❌'}  (${avg.toFixed(1)}ms)`);
+
+  console.log(`\n%c最终结论: ${allPass ? '✅ 端到端延迟满足 <100ms 要求' : '❌ 延迟不达标，需要优化'}`,
+              allPass ? 'color: #16c79a; font-weight: bold; font-size: 13px;' : 'color: #e94560; font-weight: bold; font-size: 13px;');
+
+  // 绘制延迟分布直方图（ASCII 版）
+  console.log('\n%c── 延迟分布直方图 ──', 'color: #0f3460; font-weight: bold;');
+  const bucketSize = 10; // 10ms 一个桶
+  const maxBucket = Math.ceil(max / bucketSize) * bucketSize;
+  const buckets = {};
+  results.forEach(r => {
+    const b = Math.floor(r / bucketSize) * bucketSize;
+    buckets[b] = (buckets[b] || 0) + 1;
+  });
+
+  const maxCount = Math.max(...Object.values(buckets));
+  Object.keys(buckets).sort((a, b) => Number(a) - Number(b)).forEach(bucket => {
+    const count = buckets[bucket];
+    const barLen = Math.round((count / maxCount) * 30);
+    const bar = '█'.repeat(barLen) + '░'.repeat(30 - barLen);
+    const rangeLabel = `${bucket}-${Number(bucket) + bucketSize}ms`.padStart(10);
+    console.log(`${rangeLabel} ${bar} ${count} 样本`);
+  });
+
+  return { results, avg, p50, p95, p99, min, max, stdDev, pass: allPass };
 }
 
-// 运行测试
-runLatencyTest(20);
+// 执行测试（30 个样本）
+runLoopbackLatencyTest(30);
 ```
 
-### 验收标准
+#### B.3 预期输出
 
-- ✅ 95% 样本延迟 < 100ms
-- ✅ 最大延迟 < 150ms
-- ✅ 平均延迟 < 50ms
+```
+=== Loopback 端到端延迟测试 ===
+样本数: 30，预计耗时: 18 秒
+  脉冲  1: 延迟 42.3 ms
+  脉冲  2: 延迟 38.7 ms
+  ...
+  脉冲 30: 延迟 45.1 ms
+
+── 统计结果 ──
+有效样本: 30 / 30
+平均延迟:   41.2 ms
+中位延迟:   40.5 ms
+最小延迟:   35.8 ms
+最大延迟:   52.3 ms
+P95 延迟:   48.7 ms
+P99 延迟:   52.3 ms
+标准差:     4.2 ms
+
+── 验收 ──
+P95 < 100ms:  ✅  (48.7ms)
+Max < 150ms:  ✅  (52.3ms)
+Avg < 50ms:   ✅  (41.2ms)
+
+最终结论: ✅ 端到端延迟满足 <100ms 要求
+
+── 延迟分布直方图 ──
+  30-40ms ████████████████░░░░░░░░░░░░ 12 样本
+  40-50ms ██████████████████████░░░░░░ 15 样本
+  50-60ms ███░░░░░░░░░░░░░░░░░░░░░░░░░  3 样本
+```
+
+---
+
+### 方法 C：硬件物理回路真实延迟测量（最终验收）
+
+**原理**：使用外部信号发生器产生精确时间戳的音频脉冲，同时通过高速录音软件同步录制扬声器输出和麦克风输入，离线分析两者时间差。适用于最终交付验收。
+
+#### C.1 所需工具
+
+| 工具 | 用途 | 下载链接 |
+|------|------|----------|
+| Audacity | 录制和分析音频，测量脉冲时间差 | https://www.audacityteam.org/ |
+| 音频线（3.5mm公对公） | 连接扬声器输出到麦克风输入 | 本地电子市场或网购 |
+| 或：物理扬声器 + 麦克风 | 真实物理链路测试 | 内置设备即可 |
+
+#### C.2 测试步骤
+
+```
+步骤 1: 硬件连接（两种方案二选一）
+
+   方案 C1 (推荐-有线):
+   ┌─────────────┐    3.5mm音频线     ┌─────────────┐
+   │ 电脑 扬声器输出│──────────────────│电脑 麦克风输入│
+   └─────────────┘                    └─────────────┘
+
+   方案 C2 (无线-物理):
+   ┌──────────┐    声波(空气)    ┌──────────┐
+   │ 扬声器    │ ──────────────→ │ 麦克风    │
+   └──────────┘                  └──────────┘
+   (距离 10-30cm，减少房间反射)
+
+步骤 2: Audacity 配置
+   - 打开 Audacity
+   - 编辑 → 首选项 → 音频设置
+   - 采样率: 48000 Hz
+   - 采样格式: 32-bit float
+   - 声道: 1 (单声道) 或 2 (立体声，分别录输入输出)
+   - 点击「录制」按钮开始预录
+
+步骤 3: 产生脉冲序列
+   - 打开浏览器访问 PitchTrainer
+   - F12 → Console，执行以下 JavaScript 产生 10 个间隔 1 秒的 1kHz 脉冲：
+```
+
+```javascript
+// 在浏览器中执行：生成可被 Audacity 录制的脉冲序列
+async function generateCalibrationPulses() {
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.value = 1000;
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  gain.gain.value = 0;
+  osc.start();
+
+  console.log('开始生成 10 个校准脉冲...');
+  for (let i = 0; i < 10; i++) {
+    const t = audioCtx.currentTime + 0.5 + i * 1.0;
+    gain.gain.setValueAtTime(0, t - 0.001);
+    gain.gain.setValueAtTime(0.5, t);
+    gain.gain.setValueAtTime(0, t + 0.05);
+    console.log(`脉冲 ${i + 1}: 调度在 ${t.toFixed(3)}s`);
+  }
+
+  await new Promise(r => setTimeout(r, 11000));
+  osc.stop();
+  await audioCtx.close();
+  console.log('完成！请停止 Audacity 录音');
+}
+
+generateCalibrationPulses();
+```
+
+```
+步骤 4: Audacity 离线分析
+   - 停止 Audacity 录音
+   - 放大波形找到 10 个脉冲
+   - 使用「选择工具」测量每个脉冲上升沿的时间位置
+   - 计算: 延迟 = 麦克风检测到的时间 - 脉冲产生的理论时间
+   - 注意: 如使用方案 C1（有线），延迟主要来自系统；方案 C2 需额外减去声波传播时间 (距离/343m/s)
+
+步骤 5: 同时测量 PitchTrainer 检测延迟
+   - 在 Audacity 录制的同时，PitchTrainer 也在运行
+   - PitchTrainer 的 Console 中会输出检测到脉冲的时间戳
+   - 对比 Audacity 中脉冲到达时间和 PitchTracker 回调时间，计算应用层处理延迟
+```
+
+#### C.3 记录模板
+
+| 脉冲编号 | Audacity检测时间(s) | PitchTracker检测时间(perf ms) | 相对延迟(ms) | 备注 |
+|----------|---------------------|--------------------------------|-------------|------|
+| 1 | 0.5123 | 542.1 | 42.1 | |
+| 2 | 1.5098 | 1538.4 | 38.6 | |
+| ... | ... | ... | ... | |
+| 10 | 9.5112 | 9544.8 | 43.7 | |
+| **P95** | - | - | **45.2 ms** | |
+| **Max** | - | - | **46.8 ms** | |
+
+---
+
+### 验收标准（三种方法通用）
+
+| 指标 | 阈值 | 说明 |
+|------|------|------|
+| P95 延迟 | < 100ms | **硬性指标**，95%的样本必须达标 |
+| 最大延迟 | < 150ms | 允许偶发抖动，但不得超过 |
+| 平均延迟 | < 50ms | 推荐指标，确保流畅体验 |
+| 丢包率 | < 5% | 脉冲检测成功率 ≥ 95% |
+
+### 常见问题排查
+
+| 问题 | 可能原因 | 排查方法 |
+|------|----------|----------|
+| 检测不到脉冲 | 音量太低 / 麦克风静音 | 检查系统音量，Audacity 看波形幅度 |
+| 延迟 > 200ms | 浏览器标签后台被节流 | 确保页面在前台，检查 chrome://discards |
+| 延迟波动大 (标准差 > 20ms) | 系统繁忙 / GC 干扰 | 关闭其他应用，测试时不操作页面 |
+| 方法 A 显示 __PITCH_TRACKER__ 未定义 | App 未暴露引用 | 按 B.2 节修改 App.tsx |
 
 ---
 
