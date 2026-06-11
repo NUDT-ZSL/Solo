@@ -16,6 +16,7 @@ export class UI {
   constructor(particleSystem: ParticleSystem, controls: Controls) {
     this.particleSystem = particleSystem;
     this.controls = controls;
+    this.injectSliderStyles();
     this.panel = this.createPanel();
     document.body.appendChild(this.panel);
   }
@@ -24,77 +25,171 @@ export class UI {
     this.onConfigChange = callback;
   }
 
+  private injectSliderStyles(): void {
+    if (document.getElementById('starforge-slider-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'starforge-slider-styles';
+    style.textContent = `
+      #control-panel .sf-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6a4ec4 0%, #b295ff 45%, #e6d8ff 100%);
+        outline: none;
+        cursor: pointer;
+        box-shadow: inset 0 0 6px rgba(40, 20, 80, 0.6),
+                    0 0 8px rgba(140, 100, 220, 0.18);
+        position: relative;
+        border: 1px solid rgba(200, 180, 255, 0.08);
+      }
+      #control-panel .sf-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #f0e6ff, #c7aaff 45%, #8763d9 85%);
+        border: 2px solid rgba(220, 200, 255, 0.65);
+        box-shadow: 0 0 0 3px rgba(140, 100, 220, 0.12),
+                    0 2px 6px rgba(0, 0, 0, 0.35),
+                    0 0 10px rgba(180, 140, 255, 0.45);
+        cursor: pointer;
+        transition: transform 0.14s ease, box-shadow 0.14s ease;
+        margin-top: 0;
+      }
+      #control-panel .sf-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 4px rgba(160, 120, 240, 0.2),
+                    0 2px 8px rgba(0, 0, 0, 0.4),
+                    0 0 14px rgba(200, 160, 255, 0.65);
+      }
+      #control-panel .sf-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #f0e6ff, #c7aaff 45%, #8763d9 85%);
+        border: 2px solid rgba(220, 200, 255, 0.65);
+        box-shadow: 0 0 0 3px rgba(140, 100, 220, 0.12),
+                    0 2px 6px rgba(0, 0, 0, 0.35),
+                    0 0 10px rgba(180, 140, 255, 0.45);
+        cursor: pointer;
+        transition: transform 0.14s ease, box-shadow 0.14s ease;
+      }
+      #control-panel .sf-slider::-moz-range-track {
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6a4ec4 0%, #b295ff 45%, #e6d8ff 100%);
+        border: 1px solid rgba(200, 180, 255, 0.08);
+        box-shadow: inset 0 0 6px rgba(40, 20, 80, 0.6);
+      }
+      #control-panel .sf-slider:focus {
+        outline: none;
+      }
+      #control-panel .sf-btn {
+        transition: all 0.22s cubic-bezier(.2,.8,.2,1);
+      }
+      #control-panel .sf-btn:hover {
+        transform: translateY(-1px);
+      }
+      #control-panel .sf-btn:active {
+        transform: translateY(0);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   private createPanel(): HTMLElement {
     const panel = document.createElement('div');
     panel.id = 'control-panel';
-    panel.innerHTML = '';
 
     Object.assign(panel.style, {
       position: 'absolute',
-      top: '20px',
-      right: '20px',
-      width: '260px',
-      padding: '20px',
-      background: 'linear-gradient(135deg, rgba(12,12,35,0.88), rgba(20,15,40,0.82))',
-      borderRadius: '12px',
-      border: '1px solid rgba(180,180,220,0.25)',
-      boxShadow: '0 4px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(80,60,120,0.08)',
-      backdropFilter: 'blur(12px)',
+      top: '22px',
+      right: '22px',
+      width: '272px',
+      padding: '22px 20px 18px',
+      background: 'linear-gradient(155deg, rgba(16,14,44,0.92) 0%, rgba(26,20,58,0.86) 50%, rgba(18,14,40,0.9) 100%)',
+      borderRadius: '14px',
+      border: '1px solid rgba(200, 200, 240, 0.28)',
+      boxShadow: '0 8px 40px rgba(0,0,0,0.55), inset 0 0 28px rgba(90,60,160,0.08), 0 0 0 1px rgba(255,255,255,0.02)',
+      backdropFilter: 'blur(14px)',
+      WebkitBackdropFilter: 'blur(14px)',
       zIndex: '50',
       color: '#c8c8e0',
-      fontFamily: "'Segoe UI', 'Consolas', monospace",
+      fontFamily: "'Segoe UI', 'Segoe UI Symbol', 'Consolas', monospace",
       fontSize: '13px',
       userSelect: 'none',
     });
 
     const title = document.createElement('div');
     Object.assign(title.style, {
-      fontSize: '16px',
-      fontWeight: '600',
-      color: '#e0e0f0',
+      fontSize: '17px',
+      fontWeight: '700',
+      color: '#ece6ff',
       marginBottom: '18px',
       textAlign: 'center',
-      letterSpacing: '2px',
+      letterSpacing: '3px',
       textTransform: 'uppercase',
+      textShadow: '0 0 14px rgba(160,120,230,0.55)',
     });
-    title.textContent = '⭐ StarForge';
+    title.innerHTML = '&#10022; StarForge';
     panel.appendChild(title);
 
-    const countSlider = this.createSlider('粒子数量', 500, 10000, 5000, 100, (val) => {
-      this.particleSystem.setParticleCount(val);
-      this.notifyChange();
-    });
-    panel.appendChild(countSlider.container);
+    const countSlider = this.createSlider(
+      '粒子总数', 500, 10000, 5000, 100,
+      (val) => {
+        this.particleSystem.setParticleCount(val);
+        this.notify();
+      },
+      (v) => String(v),
+    );
+    panel.appendChild(countSlider);
 
-    const sizeSlider = this.createSlider('粒子大小 (px)', 2, 8, 4, 0.5, (val) => {
-      this.particleSystem.setBaseSize(val);
-      this.notifyChange();
-    });
-    panel.appendChild(sizeSlider.container);
+    const sizeSlider = this.createSlider(
+      '粒子大小 (px)', 2, 8, 4, 0.5,
+      (val) => {
+        this.particleSystem.setBaseSize(val);
+        this.notify();
+      },
+      (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1)),
+    );
+    panel.appendChild(sizeSlider);
 
-    const speedSlider = this.createSlider('流动速度', 0, 2, 1.0, 0.1, (val) => {
-      this.particleSystem.setSpeedFactor(val);
-      this.notifyChange();
-    });
-    panel.appendChild(speedSlider.container);
+    const speedSlider = this.createSlider(
+      '流动速度', 0, 2, 1.0, 0.1,
+      (val) => {
+        this.particleSystem.setSpeedFactor(val);
+        this.notify();
+      },
+      (v) => v.toFixed(1),
+    );
+    panel.appendChild(speedSlider);
 
     const separator = document.createElement('div');
     Object.assign(separator.style, {
       height: '1px',
-      background: 'linear-gradient(90deg, transparent, rgba(180,180,220,0.2), transparent)',
-      margin: '16px 0',
+      background: 'linear-gradient(90deg, transparent 0%, rgba(190,180,230,0.28) 50%, transparent 100%)',
+      margin: '20px 4px 14px',
     });
     panel.appendChild(separator);
 
-    const resetBtn = this.createButton('重置视角', () => {
-      this.controls.resetView();
-    });
-    panel.appendChild(resetBtn);
+    panel.appendChild(this.createButton('重置视角', () => {
+      try {
+        this.controls.resetView();
+      } catch (e) {
+        console.error('resetView error', e);
+      }
+    }));
 
-    const exportBtn = this.createButton('导出 JSON', () => {
-      this.exportConfig();
-    });
-    panel.appendChild(exportBtn);
+    panel.appendChild(this.createButton('导出 JSON', () => {
+      try {
+        this.exportConfig();
+      } catch (e) {
+        console.error('export error', e);
+      }
+    }));
 
     return panel;
   }
@@ -106,43 +201,47 @@ export class UI {
     defaultValue: number,
     step: number,
     onChange: (val: number) => void,
-  ): { container: HTMLElement; input: HTMLInputElement; valueDisplay: HTMLElement } {
-    const container = document.createElement('div');
-    Object.assign(container.style, {
-      marginBottom: '14px',
-    });
+    format: (v: number) => string,
+  ): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = '15px';
 
-    const labelRow = document.createElement('div');
-    Object.assign(labelRow.style, {
+    const header = document.createElement('div');
+    Object.assign(header.style, {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '6px',
+      marginBottom: '8px',
+      padding: '0 2px',
     });
 
     const labelEl = document.createElement('span');
     labelEl.textContent = label;
-    labelEl.style.color = '#a0a0c0';
+    labelEl.style.color = '#a8a4c8';
+    labelEl.style.letterSpacing = '0.5px';
+    labelEl.style.fontSize = '12.5px';
 
-    const valueDisplay = document.createElement('span');
-    valueDisplay.textContent = String(defaultValue);
-    Object.assign(valueDisplay.style, {
-      color: '#d0b0ff',
-      fontWeight: '600',
+    const valueEl = document.createElement('span');
+    valueEl.textContent = format(defaultValue);
+    Object.assign(valueEl.style, {
+      color: '#d8c2ff',
+      fontWeight: '700',
       fontSize: '13px',
-      minWidth: '40px',
+      minWidth: '48px',
       textAlign: 'right',
+      textShadow: '0 0 8px rgba(180,140,240,0.35)',
+      fontVariantNumeric: 'tabular-nums',
     });
 
-    labelRow.appendChild(labelEl);
-    labelRow.appendChild(valueDisplay);
-    container.appendChild(labelRow);
+    header.appendChild(labelEl);
+    header.appendChild(valueEl);
+    wrap.appendChild(header);
 
-    const sliderWrap = document.createElement('div');
-    Object.assign(sliderWrap.style, {
+    const track = document.createElement('div');
+    Object.assign(track.style, {
       position: 'relative',
       width: '100%',
-      height: '20px',
+      height: '22px',
       display: 'flex',
       alignItems: 'center',
     });
@@ -153,103 +252,63 @@ export class UI {
     input.max = String(max);
     input.step = String(step);
     input.value = String(defaultValue);
-
-    Object.assign(input.style, {
-      width: '100%',
-      height: '4px',
-      appearance: 'none',
-      WebkitAppearance: 'none',
-      background: 'linear-gradient(90deg, rgba(100,70,180,0.4), rgba(160,120,220,0.6))',
-      borderRadius: '2px',
-      outline: 'none',
-      cursor: 'pointer',
-    });
+    input.className = 'sf-slider';
 
     input.addEventListener('input', () => {
       const val = parseFloat(input.value);
-      valueDisplay.textContent = Number.isInteger(val) ? String(val) : val.toFixed(1);
+      valueEl.textContent = format(val);
       onChange(val);
     });
 
-    const style = document.createElement('style');
-    style.textContent = `
-      #control-panel input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: radial-gradient(circle, #d0b0ff 40%, #9070c0 100%);
-        border: 2px solid rgba(200,180,255,0.5);
-        box-shadow: 0 0 6px rgba(160,120,220,0.5);
-        cursor: pointer;
-      }
-      #control-panel input[type="range"]::-moz-range-thumb {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: radial-gradient(circle, #d0b0ff 40%, #9070c0 100%);
-        border: 2px solid rgba(200,180,255,0.5);
-        box-shadow: 0 0 6px rgba(160,120,220,0.5);
-        cursor: pointer;
-      }
-      #control-panel input[type="range"]::-webkit-slider-runnable-track {
-        height: 4px;
-        border-radius: 2px;
-        background: linear-gradient(90deg, rgba(100,70,180,0.4), rgba(160,120,220,0.6));
-      }
-      #control-panel input[type="range"]::-moz-range-track {
-        height: 4px;
-        border-radius: 2px;
-        background: linear-gradient(90deg, rgba(100,70,180,0.4), rgba(160,120,220,0.6));
-      }
-    `;
-    if (!document.querySelector('#starforge-slider-styles')) {
-      style.id = 'starforge-slider-styles';
-      document.head.appendChild(style);
-    }
-
-    sliderWrap.appendChild(input);
-    container.appendChild(sliderWrap);
-
-    return { container, input, valueDisplay };
+    track.appendChild(input);
+    wrap.appendChild(track);
+    return wrap;
   }
 
   private createButton(text: string, onClick: () => void): HTMLElement {
     const btn = document.createElement('button');
+    btn.className = 'sf-btn';
     btn.textContent = text;
 
     Object.assign(btn.style, {
       width: '100%',
-      padding: '8px 0',
+      padding: '9px 0',
       marginTop: '8px',
-      background: 'linear-gradient(135deg, rgba(80,60,140,0.4), rgba(50,40,100,0.3))',
-      border: '1px solid rgba(180,180,220,0.2)',
-      borderRadius: '6px',
-      color: '#c0c0e0',
+      background: 'linear-gradient(135deg, rgba(90,65,165,0.45) 0%, rgba(58,45,125,0.32) 100%)',
+      border: '1px solid rgba(200,190,240,0.22)',
+      borderRadius: '8px',
+      color: '#d2cced',
       fontSize: '13px',
+      fontWeight: '500',
       cursor: 'pointer',
-      transition: 'all 0.2s ease',
       fontFamily: "'Segoe UI', 'Consolas', monospace",
-      letterSpacing: '1px',
+      letterSpacing: '1.5px',
+      boxShadow: 'inset 0 0 10px rgba(100,70,180,0.1), 0 2px 10px rgba(0,0,0,0.25)',
+      backdropFilter: 'blur(4px)',
     });
 
     btn.addEventListener('mouseenter', () => {
-      btn.style.background = 'linear-gradient(135deg, rgba(100,80,160,0.5), rgba(70,55,120,0.4))';
-      btn.style.borderColor = 'rgba(200,180,255,0.4)';
-      btn.style.color = '#e0e0f8';
+      btn.style.background = 'linear-gradient(135deg, rgba(115,85,195,0.58) 0%, rgba(78,60,155,0.42) 100%)';
+      btn.style.borderColor = 'rgba(215,200,255,0.42)';
+      btn.style.color = '#f0eaff';
+      btn.style.boxShadow = 'inset 0 0 14px rgba(120,90,200,0.18), 0 4px 16px rgba(0,0,0,0.32), 0 0 14px rgba(150,110,230,0.25)';
     });
     btn.addEventListener('mouseleave', () => {
-      btn.style.background = 'linear-gradient(135deg, rgba(80,60,140,0.4), rgba(50,40,100,0.3))';
-      btn.style.borderColor = 'rgba(180,180,220,0.2)';
-      btn.style.color = '#c0c0e0';
+      btn.style.background = 'linear-gradient(135deg, rgba(90,65,165,0.45) 0%, rgba(58,45,125,0.32) 100%)';
+      btn.style.borderColor = 'rgba(200,190,240,0.22)';
+      btn.style.color = '#d2cced';
+      btn.style.boxShadow = 'inset 0 0 10px rgba(100,70,180,0.1), 0 2px 10px rgba(0,0,0,0.25)';
     });
-    btn.addEventListener('click', onClick);
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
 
     return btn;
   }
 
-  private notifyChange(): void {
+  private notify(): void {
     if (this.onConfigChange) {
       this.onConfigChange({
         particleCount: this.particleSystem.getCount(),
@@ -267,7 +326,9 @@ export class UI {
     const a = document.createElement('a');
     a.href = url;
     a.download = `starforge-config-${Date.now()}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }

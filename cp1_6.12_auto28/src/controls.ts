@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { ParticleSystem } from './particleSystem';
 
-const DAMPING = 0.08;
-const DAMPING_DURATION = 0.8;
-const HOVER_DISTANCE = 20;
+const DAMPING_LERP = 0.12;
+const HOVER_THRESHOLD_BASE = 8;
 
 export class Controls {
   private camera: THREE.PerspectiveCamera;
@@ -12,21 +11,19 @@ export class Controls {
 
   private isRotating = false;
   private isPanning = false;
-  private previousMouse = new THREE.Vector2();
-  private currentMouse = new THREE.Vector2();
+  private prevScreen = new THREE.Vector2();
+  private curScreen = new THREE.Vector2();
 
   private spherical = new THREE.Spherical();
   private targetSpherical = new THREE.Spherical();
   private panOffset = new THREE.Vector3();
   private targetPanOffset = new THREE.Vector3();
+  private focusPoint = new THREE.Vector3();
 
-  private lookAt = new THREE.Vector3();
   private tooltip: HTMLElement;
-
   private raycaster = new THREE.Raycaster();
-  private raycasterThreshold = 5;
+  private mouseNDC = new THREE.Vector2();
 
-  private dampingTime = 0;
   private lastTime = 0;
 
   constructor(camera: THREE.PerspectiveCamera, domElement: HTMLElement, particleSystem: ParticleSystem) {
@@ -35,138 +32,155 @@ export class Controls {
     this.particleSystem = particleSystem;
     this.tooltip = document.getElementById('tooltip')!;
 
-    const dist = camera.position.length();
-    this.spherical.setFromVector3(camera.position);
+    const offset = new THREE.Vector3().subVectors(camera.position, this.focusPoint);
+    this.spherical.setFromVector3(offset);
     this.targetSpherical.copy(this.spherical);
+    if (this.targetSpherical.radius < 100) this.targetSpherical.radius = 350;
+    this.spherical.copy(this.targetSpherical);
 
-    this.raycaster.params.Points = { threshold: this.raycasterThreshold };
+    this.raycaster.params.Points = { threshold: HOVER_THRESHOLD_BASE };
 
-    this.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
-    this.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
-    this.domElement.addEventListener('mouseup', this.onMouseUp.bind(this));
-    this.domElement.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+    this.domElement.addEventListener('mousedown', this.onMouseDown);
+    window.addEventListener('mousemove', this.onMouseMove);
+    window.addEventListener('mouseup', this.onMouseUp);
+    this.domElement.addEventListener('wheel', this.onWheel, { passive: false });
     this.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  private onMouseDown(event: MouseEvent): void {
-    this.previousMouse.set(event.clientX, event.clientY);
-    this.currentMouse.set(event.clientX, event.clientY);
+  private onMouseDown = (event: MouseEvent): void => {
+    this.prevScreen.set(event.clientX, event.clientY);
+    this.curScreen.set(event.clientX, event.clientY);
+    if (event.button === 0) this.isRotating = true;
+    else if (event.button === 2) this.isPanning = true;
+  };
 
-    if (event.button === 0) {
-      this.isRotating = true;
-    } else if (event.button === 2) {
-      this.isPanning = true;
-    }
-  }
-
-  private onMouseMove(event: MouseEvent): void {
-    this.currentMouse.set(event.clientX, event.clientY);
+  private onMouseMove = (event: MouseEvent): void => {
+    this.curScreen.set(event.clientX, event.clientY);
 
     if (this.isRotating) {
-      const deltaX = (event.clientX - this.previousMouse.x) * 0.005;
-      const deltaY = (event.clientY - this.previousMouse.y) * 0.005;
-
-      this.targetSpherical.theta -= deltaX;
-      this.targetSpherical.phi -= deltaY;
-      this.targetSpherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.targetSpherical.phi));
-
-      this.previousMouse.set(event.clientX, event.clientY);
-      this.dampingTime = DAMPING_DURATION;
+      const dx = (event.clientX - this.prevScreen.x) * 0.005;
+      const dy = (event.clientY - this.prevScreen.y) * 0.005;
+      this.targetSpherical.theta -= dx;
+      this.targetSpherical.phi = Math.max(
+        0.05,
+        Math.min(Math.PI - 0.05, this.targetSpherical.phi - dy),
+      );
+      this.prevScreen.copy(this.curScreen);
     }
 
     if (this.isPanning) {
-      const deltaX = (event.clientX - this.previousMouse.x) * 0.3;
-      const deltaY = (event.clientY - this.previousMouse.y) * 0.3;
-
-      const right = new THREE.Vector3();
-      const up = new THREE.Vector3();
-      this.camera.getWorldDirection(new THREE.Vector3());
-      right.setFromMatrixColumn(this.camera.matrixWorld, 0);
-      up.setFromMatrixColumn(this.camera.matrixWorld, 1);
-
-      this.targetPanOffset.add(right.multiplyScalar(-deltaX));
-      this.targetPanOffset.add(up.multiplyScalar(deltaY));
-
-      this.previousMouse.set(event.clientX, event.clientY);
-      this.dampingTime = DAMPING_DURATION;
+      const dx = (event.clientX - this.prevScreen.x) * 0.35;
+      const dy = (event.clientY - this.prevScreen.y) * 0.35;
+      const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+      this.targetPanOffset.addScaledVector(right, -dx);
+      this.targetPanOffset.addScaledVector(up, dy);
+      this.prevScreen.copy(this.curScreen);
     }
 
     this.updateHover(event);
-  }
+  };
 
-  private onMouseUp(): void {
+  private onMouseUp = (): void => {
     this.isRotating = false;
     this.isPanning = false;
-  }
+  };
 
-  private onWheel(event: WheelEvent): void {
+  private onWheel = (event: WheelEvent): void => {
     event.preventDefault();
-    this.targetSpherical.radius += event.deltaY * 0.1;
-    this.targetSpherical.radius = Math.max(50, Math.min(800, this.targetSpherical.radius));
-    this.dampingTime = DAMPING_DURATION;
-  }
+    this.targetSpherical.radius += event.deltaY * 0.12;
+    this.targetSpherical.radius = Math.max(80, Math.min(900, this.targetSpherical.radius));
+  };
 
   private updateHover(event: MouseEvent): void {
     const rect = this.domElement.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1,
-    );
+    if (
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    ) {
+      this.particleSystem.setHoveredIndex(-1);
+      this.tooltip.style.display = 'none';
+      return;
+    }
 
-    this.raycaster.setFromCamera(mouse, this.camera);
-    const intersects = this.raycaster.intersectObject(this.particleSystem.points);
+    this.mouseNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouseNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-    if (intersects.length > 0) {
-      const idx = intersects[0].index;
-      if (idx !== undefined && idx >= 0) {
-        const pos = this.particleSystem.getPositionAt(idx);
-        const camPos = this.camera.position;
-        const dist = pos.distanceTo(camPos);
-        this.raycaster.params.Points = { threshold: Math.max(2, dist * 0.02) };
+    this.raycaster.setFromCamera(this.mouseNDC, this.camera);
 
-        if (pos.distanceTo(camPos) - this.targetSpherical.radius < HOVER_DISTANCE) {
-          this.particleSystem.setHoveredIndex(idx);
-          const info = this.particleSystem.getParticleInfo(idx);
-          if (info) {
-            this.tooltip.style.display = 'block';
-            this.tooltip.style.left = `${event.clientX + 15}px`;
-            this.tooltip.style.top = `${event.clientY - 10}px`;
-            this.tooltip.innerHTML = `#${info.index}<br/>Pos: (${info.x}, ${info.y}, ${info.z})<br/>Brightness: ${info.brightness}`;
-          }
-          return;
-        }
+    const camDist = this.focusPoint.clone()
+      .add(this.panOffset)
+      .distanceTo(this.camera.position);
+    const adaptiveThreshold = Math.max(4, camDist * 0.035);
+    this.raycaster.params.Points = { threshold: adaptiveThreshold };
+
+    const intersects = this.raycaster.intersectObject(this.particleSystem.points, false);
+
+    let bestIdx = -1;
+    let bestScreenPx = Infinity;
+    const tmpPos = new THREE.Vector3();
+    const rayOrigin = this.raycaster.ray.origin.clone();
+
+    for (let i = 0; i < intersects.length; i++) {
+      const hit = intersects[i];
+      if (hit.index === undefined) continue;
+      this.particleSystem.getPositionAt(hit.index, tmpPos);
+
+      const worldDistFromRay = this.raycaster.ray.distanceSqToPoint(tmpPos);
+      if (worldDistFromRay > 400) continue;
+
+      tmpPos.project(this.camera);
+      const sx = (tmpPos.x * 0.5 + 0.5) * rect.width;
+      const sy = (-tmpPos.y * 0.5 + 0.5) * rect.height;
+      const dx = sx - (event.clientX - rect.left);
+      const dy = sy - (event.clientY - rect.top);
+      const pxDist2 = dx * dx + dy * dy;
+      if (pxDist2 < bestScreenPx && pxDist2 < 900) {
+        bestScreenPx = pxDist2;
+        bestIdx = hit.index;
       }
     }
 
-    this.particleSystem.setHoveredIndex(-1);
-    this.tooltip.style.display = 'none';
+    this.particleSystem.setHoveredIndex(bestIdx);
+
+    if (bestIdx >= 0) {
+      const info = this.particleSystem.getParticleInfo(bestIdx);
+      if (info) {
+        this.tooltip.style.display = 'block';
+        this.tooltip.style.left = `${event.clientX + 16}px`;
+        this.tooltip.style.top = `${event.clientY - 6}px`;
+        this.tooltip.innerHTML =
+          `<b style="color:#d0b0ff">#${info.index}</b><br>` +
+          `Pos: (${info.x}, ${info.y}, ${info.z})<br>` +
+          `Brightness: <b style="color:#ffe9a8">${info.brightness}</b>`;
+      }
+    } else {
+      this.tooltip.style.display = 'none';
+    }
   }
 
   update(time: number): void {
     if (this.lastTime === 0) this.lastTime = time;
-    const delta = Math.min((time - this.lastTime) / 1000, 0.1);
+    const dt = Math.min((time - this.lastTime) / 1000, 0.08);
     this.lastTime = time;
 
-    const lerpFactor = 1 - Math.pow(1 - DAMPING, delta * 60);
+    const k = 1 - Math.pow(1 - DAMPING_LERP, dt * 60);
 
-    this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * lerpFactor;
-    this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * lerpFactor;
-    this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * lerpFactor;
+    this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * k;
+    this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * k;
+    this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * k;
+    this.panOffset.lerp(this.targetPanOffset, k);
 
-    this.panOffset.lerp(this.targetPanOffset, lerpFactor);
-
-    if (this.dampingTime > 0) {
-      this.dampingTime -= delta;
-    }
-
-    const pos = new THREE.Vector3().setFromSpherical(this.spherical).add(this.panOffset);
-    this.camera.position.copy(pos);
-    this.camera.lookAt(this.lookAt.clone().add(this.panOffset));
+    const offset = new THREE.Vector3().setFromSpherical(this.spherical);
+    const focus = this.focusPoint.clone().add(this.panOffset);
+    this.camera.position.copy(offset.add(focus));
+    this.camera.lookAt(focus);
   }
 
   resetView(): void {
-    this.targetSpherical.set(350, Math.PI / 2.5, 0);
+    this.targetSpherical.set(350, Math.PI / 2.4, 0);
     this.targetPanOffset.set(0, 0, 0);
-    this.dampingTime = DAMPING_DURATION;
   }
 }
