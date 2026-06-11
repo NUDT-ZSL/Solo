@@ -61,9 +61,7 @@ function DiscussionBoard({
   const [topics, setTopics] = useState<Topic[]>([]);
   const [currentTopic, setCurrentTopic] = useState<Topic | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
-  const [replyContent, setReplyContent] = useState('');
   const [newTopicTitle, setNewTopicTitle] = useState('');
-  const [newTopicContent, setNewTopicContent] = useState('');
   const [showNewTopicModal, setShowNewTopicModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showAIQuestions, setShowAIQuestions] = useState(false);
@@ -73,7 +71,8 @@ function DiscussionBoard({
   const [isHost, setIsHost] = useState(false);
   const [isTopicCreator, setIsTopicCreator] = useState(false);
   const repliesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const replyEditorRef = useRef<HTMLDivElement>(null);
+  const topicEditorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchClubDetail();
@@ -220,6 +219,13 @@ function DiscussionBoard({
       onRequireLogin();
       return;
     }
+    
+    const contentHtml = topicEditorRef.current?.innerHTML || '';
+    const contentText = topicEditorRef.current?.innerText || '';
+    
+    if (!newTopicTitle.trim() || !contentText.trim()) {
+      return;
+    }
 
     try {
       const res = await fetch(`/api/bookclubs/${clubId}/topics`, {
@@ -227,7 +233,7 @@ function DiscussionBoard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTopicTitle,
-          content: newTopicContent,
+          content: contentHtml,
           userId: user.id
         })
       });
@@ -236,7 +242,9 @@ function DiscussionBoard({
         setTopics([data.topic, ...topics]);
         setShowNewTopicModal(false);
         setNewTopicTitle('');
-        setNewTopicContent('');
+        if (topicEditorRef.current) {
+          topicEditorRef.current.innerHTML = '';
+        }
         if (onSelectTopic) {
           onSelectTopic(data.topic.id);
         }
@@ -249,21 +257,26 @@ function DiscussionBoard({
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !topicId) return;
-    if (!replyContent.trim()) return;
+    
+    const html = replyEditorRef.current?.innerHTML || '';
+    const text = replyEditorRef.current?.innerText || '';
+    if (!text.trim()) return;
 
     try {
       const res = await fetch(`/api/topics/${topicId}/replies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: replyContent,
+          content: html,
           userId: user.id
         })
       });
       const data = await res.json();
       if (data.reply) {
         setReplies([...replies, data.reply]);
-        setReplyContent('');
+        if (replyEditorRef.current) {
+          replyEditorRef.current.innerHTML = '';
+        }
       }
     } catch (error) {
       console.error('发送回复失败:', error);
@@ -296,58 +309,27 @@ function DiscussionBoard({
     }
   };
 
-  const insertFormat = (format: 'bold' | 'italic' | 'list') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = replyContent.substring(start, end);
+  const insertFormat = (format: 'bold' | 'italic' | 'list', editorRef: React.RefObject<HTMLDivElement>) => {
+    const editor = editorRef.current;
+    if (!editor) return;
     
-    let prefix = '';
-    let suffix = '';
-    let newText = '';
+    editor.focus();
 
     switch (format) {
       case 'bold':
-        prefix = '**';
-        suffix = '**';
-        newText = replyContent.substring(0, start) + prefix + (selectedText || '粗体文字') + suffix + replyContent.substring(end);
+        document.execCommand('bold', false);
         break;
       case 'italic':
-        prefix = '*';
-        suffix = '*';
-        newText = replyContent.substring(0, start) + prefix + (selectedText || '斜体文字') + suffix + replyContent.substring(end);
+        document.execCommand('italic', false);
         break;
       case 'list':
-        if (selectedText) {
-          const lines = selectedText.split('\n').map(line => `- ${line}`).join('\n');
-          newText = replyContent.substring(0, start) + lines + replyContent.substring(end);
-        } else {
-          newText = replyContent.substring(0, start) + '- 列表项\n- 列表项' + replyContent.substring(end);
-        }
+        document.execCommand('insertUnorderedList', false);
         break;
     }
-
-    setReplyContent(newText);
-    
-    setTimeout(() => {
-      textarea.focus();
-      const newPos = start + prefix.length + (selectedText ? selectedText.length : (format === 'list' ? 6 : 4));
-      textarea.setSelectionRange(newPos, newPos + (selectedText ? 0 : 0));
-    }, 0);
   };
 
   const formatContent = (content: string) => {
-    let formatted = content
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/^- (.+)$/gm, '<li>$1</li>');
-    
-    formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
-    formatted = formatted.replace(/\n/g, '<br/>');
-    
-    return { __html: formatted };
+    return { __html: content };
   };
 
   const formatTime = (dateStr: string) => {
@@ -504,7 +486,7 @@ function DiscussionBoard({
                       <button
                         type="button"
                         className="toolbar-btn"
-                        onClick={() => insertFormat('bold')}
+                        onClick={() => insertFormat('bold', replyEditorRef)}
                         title="粗体"
                       >
                         <strong>B</strong>
@@ -512,7 +494,7 @@ function DiscussionBoard({
                       <button
                         type="button"
                         className="toolbar-btn"
-                        onClick={() => insertFormat('italic')}
+                        onClick={() => insertFormat('italic', replyEditorRef)}
                         title="斜体"
                       >
                         <em>I</em>
@@ -520,22 +502,21 @@ function DiscussionBoard({
                       <button
                         type="button"
                         className="toolbar-btn"
-                        onClick={() => insertFormat('list')}
+                        onClick={() => insertFormat('list', replyEditorRef)}
                         title="列表"
                       >
                         • 列表
                       </button>
                     </div>
-                    <textarea
-                      ref={textareaRef}
-                      value={replyContent}
-                      onChange={e => setReplyContent(e.target.value)}
+                    <div
+                      ref={replyEditorRef}
+                      className="rich-editor"
+                      contentEditable
                       placeholder="写下你的想法..."
-                      rows={3}
                     />
                     <div className="reply-form-actions">
-                      <span className="format-hint">支持 **粗体**、*斜体*、- 列表</span>
-                      <button type="submit" className="btn btn-primary" disabled={!replyContent.trim()}>
+                      <span className="format-hint">选中文字后点击工具栏按钮设置格式</span>
+                      <button type="submit" className="btn btn-primary">
                         发送
                       </button>
                     </div>
@@ -574,12 +555,37 @@ function DiscussionBoard({
               </div>
               <div className="form-group">
                 <label>话题内容</label>
-                <textarea
-                  value={newTopicContent}
-                  onChange={e => setNewTopicContent(e.target.value)}
+                <div className="topic-editor-toolbar">
+                  <button
+                    type="button"
+                    className="toolbar-btn"
+                    onClick={() => insertFormat('bold', topicEditorRef)}
+                    title="粗体"
+                  >
+                    <strong>B</strong>
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-btn"
+                    onClick={() => insertFormat('italic', topicEditorRef)}
+                    title="斜体"
+                  >
+                    <em>I</em>
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-btn"
+                    onClick={() => insertFormat('list', topicEditorRef)}
+                    title="列表"
+                  >
+                    • 列表
+                  </button>
+                </div>
+                <div
+                  ref={topicEditorRef}
+                  className="rich-editor topic-editor"
+                  contentEditable
                   placeholder="详细描述你想讨论的内容..."
-                  rows={5}
-                  required
                 />
               </div>
               <div className="form-actions">

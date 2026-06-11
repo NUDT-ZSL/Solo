@@ -5,6 +5,8 @@ const openai = new OpenAI({
   baseURL: process.env.OPENAI_BASE_URL
 });
 
+const AI_TIMEOUT_MS = 8000;
+
 export async function generateDiscussionQuestions(
   topicTitle: string,
   topicContent: string,
@@ -29,26 +31,43 @@ ${replySummaries || '（暂无回复）'}
 
 请生成3个启发式讨论问题，每个问题用一行表示，不要编号，不要其他说明文字。问题应该能够激发成员的深度思考和热烈讨论。`;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.8,
-      max_tokens: 300
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
 
-    const content = response.choices[0]?.message?.content || '';
-    const questions = content
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-      .map(line => line.replace(/^\d+[\.\、]\s*/, ''))
-      .slice(0, 3);
+    try {
+      const response = await openai.chat.completions.create(
+        {
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.8,
+          max_tokens: 300
+        },
+        { signal: controller.signal }
+      );
 
-    if (questions.length < 3) {
-      return [...questions, ...generateFallbackQuestions(topicTitle, topicContent)].slice(0, 3);
+      clearTimeout(timeoutId);
+
+      const content = response.choices[0]?.message?.content || '';
+      const questions = content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => line.replace(/^\d+[\.\、]\s*/, ''))
+        .slice(0, 3);
+
+      if (questions.length < 3) {
+        return [...questions, ...generateFallbackQuestions(topicTitle, topicContent)].slice(0, 3);
+      }
+
+      return questions;
+    } catch (apiError: any) {
+      clearTimeout(timeoutId);
+      if (apiError.name === 'AbortError' || apiError.message?.includes('aborted')) {
+        console.warn('AI请求超时，使用备用问题');
+        return generateFallbackQuestions(topicTitle, topicContent);
+      }
+      throw apiError;
     }
-
-    return questions;
   } catch (error) {
     console.error('AI生成问题失败:', error);
     return generateFallbackQuestions(topicTitle, topicContent);
