@@ -1,18 +1,22 @@
-export const PLAYER1_COLOR = '#4FC3F7';
-export const PLAYER2_COLOR = '#FF7043';
-export const GRID_SIZE = 3;
-export class Board {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Board = exports.GRID_SIZE = exports.PLAYER2_COLOR = exports.PLAYER1_COLOR = void 0;
+exports.getPlayerColor = getPlayerColor;
+exports.PLAYER1_COLOR = '#4FC3F7';
+exports.PLAYER2_COLOR = '#FF7043';
+exports.GRID_SIZE = 3;
+class Board {
     constructor() {
         this.state = this.createEmptyState();
     }
     createEmptyState() {
-        return Array.from({ length: GRID_SIZE }, () => Array.from({ length: GRID_SIZE }).fill(null));
+        return Array.from({ length: exports.GRID_SIZE }, () => Array.from({ length: exports.GRID_SIZE }).fill(null));
     }
     getState() {
         return this.state.map(row => [...row]);
     }
     getCell(row, col) {
-        if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) {
+        if (row < 0 || row >= exports.GRID_SIZE || col < 0 || col >= exports.GRID_SIZE) {
             return null;
         }
         return this.state[row][col];
@@ -29,8 +33,8 @@ export class Board {
     }
     getEmptyCells() {
         const cells = [];
-        for (let r = 0; r < GRID_SIZE; r++) {
-            for (let c = 0; c < GRID_SIZE; c++) {
+        for (let r = 0; r < exports.GRID_SIZE; r++) {
+            for (let c = 0; c < exports.GRID_SIZE; c++) {
                 if (this.state[r][c] === null) {
                     cells.push([r, c]);
                 }
@@ -43,8 +47,8 @@ export class Board {
     }
     shuffle() {
         const pieces = [];
-        for (let r = 0; r < GRID_SIZE; r++) {
-            for (let c = 0; c < GRID_SIZE; c++) {
+        for (let r = 0; r < exports.GRID_SIZE; r++) {
+            for (let c = 0; c < exports.GRID_SIZE; c++) {
                 pieces.push(this.state[r][c]);
             }
         }
@@ -53,8 +57,8 @@ export class Board {
             [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
         }
         let idx = 0;
-        for (let r = 0; r < GRID_SIZE; r++) {
-            for (let c = 0; c < GRID_SIZE; c++) {
+        for (let r = 0; r < exports.GRID_SIZE; r++) {
+            for (let c = 0; c < exports.GRID_SIZE; c++) {
                 this.state[r][c] = pieces[idx++];
             }
         }
@@ -92,8 +96,8 @@ export class Board {
     getPieceCounts() {
         let player1 = 0;
         let player2 = 0;
-        for (let r = 0; r < GRID_SIZE; r++) {
-            for (let c = 0; c < GRID_SIZE; c++) {
+        for (let r = 0; r < exports.GRID_SIZE; r++) {
+            for (let c = 0; c < exports.GRID_SIZE; c++) {
                 if (this.state[r][c] === 'player1')
                     player1++;
                 if (this.state[r][c] === 'player2')
@@ -103,6 +107,7 @@ export class Board {
         return { player1, player2 };
     }
 }
-export function getPlayerColor(player) {
-    return player === 'player1' ? PLAYER1_COLOR : PLAYER2_COLOR;
+exports.Board = Board;
+function getPlayerColor(player) {
+    return player === 'player1' ? exports.PLAYER1_COLOR : exports.PLAYER2_COLOR;
 }

@@ -1,4 +1,7 @@
-export class PlayerController {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PlayerController = void 0;
+class PlayerController {
     constructor(board, mode = 'pvp') {
         this.aiDelay = 500;
         this.aiTimer = null;
@@ -67,3 +70,4 @@ export class PlayerController {
         return player === 'player1' ? '玩家1' : '玩家2';
     }
 }
+exports.PlayerController = PlayerController;

@@ -1,5 +1,8 @@
-import { PLAYER1_COLOR, PLAYER2_COLOR } from './board';
-export class EffectSystem {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EffectSystem = void 0;
+const board_1 = require("./board");
+class EffectSystem {
     constructor() {
         this.particles = [];
         this.pieceAnimations = new Map();
@@ -91,7 +94,7 @@ export class EffectSystem {
     }
     spawnBurstParticles(centerX, centerY, count = 40) {
         count = Math.min(count, 50);
-        const colors = [PLAYER1_COLOR, PLAYER2_COLOR];
+        const colors = [board_1.PLAYER1_COLOR, board_1.PLAYER2_COLOR];
         for (let i = 0; i < count; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 2 + Math.random() * 5;
@@ -166,3 +169,4 @@ export class EffectSystem {
         this.boardFadeProgress = 0;
     }
 }
+exports.EffectSystem = EffectSystem;

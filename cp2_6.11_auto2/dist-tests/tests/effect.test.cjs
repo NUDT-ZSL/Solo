@@ -1,4 +1,6 @@
-import { EffectSystem } from '../src/effect';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const effect_1 = require("../src/effect");
 function assert(condition, message) {
     if (!condition) {
         throw new Error(`Assertion failed: ${message}`);
@@ -14,14 +16,14 @@ function assertApprox(actual, expected, epsilon, message) {
 function runEffectTests() {
     console.log('=== EffectSystem Tests ===\n');
     console.log('1. 初始化测试');
-    let effectSys = new EffectSystem();
+    let effectSys = new effect_1.EffectSystem();
     assert(effectSys.getBoardOpacity() === 1, '初始棋盘透明度为1');
     assert(effectSys.isBoardFading() === false, '初始无淡入淡出');
     assert(effectSys.getParticles().length === 0, '初始无粒子');
     assert(effectSys.getPieceScale(0, 0) === 1, '棋子初始缩放为1');
     assert(effectSys.getVictoryGlow().intensity === 0, '初始无胜利光效');
     console.log('\n2. 粒子爆散测试');
-    effectSys = new EffectSystem();
+    effectSys = new effect_1.EffectSystem();
     effectSys.spawnBurstParticles(100, 100, 40);
     const particles = effectSys.getParticles();
     assert(particles.length === 40, '生成40个粒子');
@@ -32,7 +34,7 @@ function runEffectTests() {
     effectSys.spawnBurstParticles(100, 100, 100);
     assert(effectSys.getParticles().length <= 90, '粒子数量限制在50+40=90（每次不超50）');
     console.log('\n3. 粒子更新测试');
-    effectSys = new EffectSystem();
+    effectSys = new effect_1.EffectSystem();
     effectSys.spawnBurstParticles(100, 100, 5);
     const initialParticles = effectSys.getParticles().map(p => ({ x: p.x, y: p.y, life: p.life }));
     effectSys.update(100);
@@ -43,7 +45,7 @@ function runEffectTests() {
     effectSys.update(2000);
     assert(effectSys.getParticles().length === 0, '2秒后所有粒子消失');
     console.log('\n4. 落子动画测试');
-    effectSys = new EffectSystem();
+    effectSys = new effect_1.EffectSystem();
     effectSys.startPieceAnimation(0, 0);
     const initialScale = effectSys.getPieceScale(0, 0);
     assertApprox(initialScale, 0, 0.01, '动画开始时缩放为0');
@@ -55,7 +57,7 @@ function runEffectTests() {
     const finalScale = effectSys.getPieceScale(0, 0);
     assertApprox(finalScale, 1, 0.01, '动画结束后缩放为1');
     console.log('\n5. 棋盘淡入淡出测试');
-    effectSys = new EffectSystem();
+    effectSys = new effect_1.EffectSystem();
     effectSys.startBoardFadeOut();
     assert(effectSys.isBoardFading() === true, '淡出开始');
     effectSys.update(150);
@@ -71,7 +73,7 @@ function runEffectTests() {
     effectSys.update(200);
     assertApprox(effectSys.getBoardOpacity(), 1, 0.01, '淡入完成后透明度为1');
     console.log('\n6. 胜利光效测试');
-    effectSys = new EffectSystem();
+    effectSys = new effect_1.EffectSystem();
     const line = [[0, 0], [0, 1], [0, 2]];
     effectSys.startVictoryGlow(line);
     assert(effectSys.getVictoryGlow().line !== null, '光效线已设置');
@@ -85,7 +87,7 @@ function runEffectTests() {
     effectSys.update(200);
     assert(effectSys.getVictoryGlow().intensity < intensityBefore, '停止光效后强度减少');
     console.log('\n7. 清理测试');
-    effectSys = new EffectSystem();
+    effectSys = new effect_1.EffectSystem();
     effectSys.spawnBurstParticles(100, 100, 10);
     effectSys.startPieceAnimation(0, 0);
     effectSys.startVictoryGlow(line);

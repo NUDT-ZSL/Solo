@@ -133,9 +133,8 @@ class Game {
   }
 
   private handlePostMove(): void {
-    const result = this.checkGameResult();
-    if (result) {
-      this.handleGameResult(result);
+    if (this.board.isFull()) {
+      this.handleGameResult('draw');
       return;
     }
 
