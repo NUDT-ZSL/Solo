@@ -94,7 +94,7 @@ class DataManager {
   private readonly MIN_INTERVAL = 1800;
   private readonly MAX_INTERVAL = 2200;
   private readonly TARGET_JITTER = 200;
-  private readonly API_URL = 'http://localhost:3001/api/devices';
+  private readonly API_URL = 'http://localhost:3002/api/devices';
 
   public readonly data$: Observable<Device[]> = this.dataSubject.asObservable();
   public readonly error$: Observable<Error> = this.errorSubject.asObservable();

@@ -199,7 +199,7 @@ class App {
 
     this.subscriptions.add(
       dataManager.data$.subscribe(devices => {
-        const selected = devices.find(d => (this.deviceRenderer as any).selectedDeviceId === d.id);
+        const selected = devices.find(d => this.deviceRenderer.selectedDeviceId === d.id);
         if (selected) {
           this.hud.updateDeviceData(selected);
         }
