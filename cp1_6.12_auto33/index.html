@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数字生态缸 - Ecosystem Simulation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 50%, #0d1424 100%);
+      color: #e8eaf0;
+      min-width: 960px;
+    }
+
+    #app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #stars-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    #game-container {
+      display: flex;
+      flex: 1;
+      position: relative;
+      z-index: 1;
+      padding: 20px;
+      gap: 20px;
+      min-width: 0;
+    }
+
+    #canvas-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      position: relative;
+    }
+
+    #game-canvas {
+      background: rgba(10, 20, 15, 0.9);
+      border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0, 100, 80, 0.3),
+                  inset 0 0 60px rgba(0, 50, 40, 0.5);
+      cursor: crosshair;
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    #tooltip {
+      position: absolute;
+      background: rgba(20, 25, 35, 0.95);
+      border: 1px solid rgba(100, 150, 200, 0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      white-space: nowrap;
+      backdrop-filter: blur(8px);
+    }
+
+    #tooltip.visible {
+      opacity: 1;
+    }
+
+    #panel {
+      width: 340px;
+      flex-shrink: 0;
+      background: rgba(30, 30, 40, 0.9);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+      border: 1px solid rgba(100, 120, 150, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: transform 0.3s ease;
+    }
+
+    #panel.collapsed {
+      position: absolute;
+      right: 20px;
+      top: 20px;
+      bottom: 20px;
+      transform: translateX(calc(100% + 40px));
+    }
+
+    #panel-toggle {
+      display: none;
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10;
+      background: rgba(30, 30, 40, 0.9);
+      border: 1px solid rgba(100, 120, 150, 0.3);
+      color: #e8eaf0;
+      width: 36px;
+      height: 60px;
+      border-radius: 8px 0 0 8px;
+      cursor: pointer;
+      font-size: 18px;
+      transition: all 0.2s ease;
+    }
+
+    #panel-toggle:hover {
+      background: rgba(60, 70, 90, 0.95);
+      transform: translateY(-50%) scale(1.05);
+    }
+
+    #panel.collapsed + #panel-toggle {
+      display: block;
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #a0d8b3;
+      letter-spacing: 1px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(100, 150, 120, 0.3);
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #c0c8d4;
+    }
+
+    .slider-value {
+      font-weight: 600;
+      color: #8ecae6;
+      font-family: 'Consolas', monospace;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(60, 70, 90, 0.8);
+      outline: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #8ecae6, #a0d8b3);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(142, 202, 230, 0.4);
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #8ecae6, #a0d8b3);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 8px rgba(142, 202, 230, 0.4);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #4a9e7a, #5bb98c);
+      color: white;
+      box-shadow: 0 4px 12px rgba(74, 158, 122, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: scale(1.03);
+      box-shadow: 0 6px 16px rgba(74, 158, 122, 0.4);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.97);
+    }
+
+    .btn-secondary {
+      background: rgba(80, 90, 110, 0.8);
+      color: #e8eaf0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-secondary:hover {
+      transform: scale(1.03);
+      background: rgba(100, 110, 130, 0.9);
+    }
+
+    .btn-secondary:active {
+      transform: scale(0.97);
+    }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding: 12px;
+      background: rgba(40, 45, 55, 0.6);
+      border-radius: 8px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      font-family: 'Consolas', monospace;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #9098a8;
+      margin-top: 2px;
+    }
+
+    .stat-grass { color: #5bb98c; }
+    .stat-rabbit { color: #d0d4dc; }
+    .stat-fox { color: #ff8c42; }
+
+    #chart-container {
+      height: 180px;
+      background: rgba(20, 25, 35, 0.8);
+      border-radius: 8px;
+      padding: 10px;
+      position: relative;
+    }
+
+    #chart-canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .chart-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .legend-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .legend-item.disabled {
+      opacity: 0.4;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .legend-grass { background: #5bb98c; }
+    .legend-rabbit { background: #d0d4dc; }
+    .legend-fox { background: #ff8c42; }
+
+    .turn-indicator {
+      text-align: center;
+      padding: 8px;
+      background: rgba(40, 45, 55, 0.6);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .turn-number {
+      font-weight: 700;
+      color: #ffd166;
+      font-family: 'Consolas', monospace;
+    }
+
+    .hint-text {
+      font-size: 11px;
+      color: #707888;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1200px) {
+      #panel {
+        position: absolute;
+        right: 20px;
+        top: 20px;
+        bottom: 20px;
+        z-index: 50;
+      }
+
+      #panel-toggle {
+        display: block;
+      }
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(40, 45, 55, 0.5);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 120, 150, 0.5);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(120, 140, 170, 0.7);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stars-canvas"></canvas>
+  <div id="app">
+    <div id="game-container">
+      <div id="canvas-wrapper">
+        <canvas id="game-canvas"></canvas>
+        <div id="tooltip"></div>
+      </div>
+      <div id="panel">
+        <div class="panel-section">
+          <div class="panel-title">⚙️ 生态参数</div>
+          
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>初始草覆盖度</span>
+              <span class="slider-value"><span id="grass-density-value">50</span>%</span>
+            </div>
+            <input type="range" id="grass-density" min="30" max="80" value="50" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>初始兔子数量</span>
+              <span class="slider-value"><span id="rabbit-count-value">20</span></span>
+            </div>
+            <input type="range" id="rabbit-count" min="5" max="50" value="20" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>初始狐狸数量</span>
+              <span class="slider-value"><span id="fox-count-value">5</span></span>
+            </div>
+            <input type="range" id="fox-count" min="0" max="20" value="5" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>草恢复速度</span>
+              <span class="slider-value"><span id="grass-regrow-value">3</span> 回合</span>
+            </div>
+            <input type="range" id="grass-regrow" min="1" max="5" value="3" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>兔子繁殖能量门槛</span>
+              <span class="slider-value"><span id="rabbit-breed-value">100</span></span>
+            </div>
+            <input type="range" id="rabbit-breed" min="50" max="150" value="100" />
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" id="restart-btn">🔄 重启模拟</button>
+            <button class="btn btn-secondary" id="pause-btn">⏸️ 暂停</button>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-title">📊 实时数据</div>
+          <div class="turn-indicator">
+            当前回合: <span class="turn-number" id="turn-count">0</span>
+          </div>
+          <div class="stats-bar">
+            <div class="stat-item">
+              <div class="stat-value stat-grass" id="stat-grass">0</div>
+              <div class="stat-label">🌿 草覆盖</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value stat-rabbit" id="stat-rabbit">0</div>
+              <div class="stat-label">🐰 兔子</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value stat-fox" id="stat-fox">0</div>
+              <div class="stat-label">🦊 狐狸</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-title">📈 种群趋势</div>
+          <div id="chart-container">
+            <canvas id="chart-canvas"></canvas>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item" data-series="grass">
+              <span class="legend-color legend-grass"></span>
+              <span>草</span>
+            </div>
+            <div class="legend-item" data-series="rabbit">
+              <span class="legend-color legend-rabbit"></span>
+              <span>兔子</span>
+            </div>
+            <div class="legend-item" data-series="fox">
+              <span class="legend-color legend-fox"></span>
+              <span>狐狸</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hint-text">
+          💡 悬停格子查看详情<br/>
+          点击格子切换禁区
+        </div>
+      </div>
+      <button id="panel-toggle">◀</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
