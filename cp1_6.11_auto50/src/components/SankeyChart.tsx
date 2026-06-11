@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, forwardRef, useImperativeHandle, useCallback } from 'react';
 import * as d3 from 'd3';
-import { sankey, SankeyGraph, SankeyNode as D3SankeyNode, SankeyLink as D3SankeyLink } from 'd3-sankey';
+import { sankey } from 'd3-sankey';
 import type { SankeyData, SankeyNode, SankeyLink, SelectionState, FilterState } from '../types';
 
 interface SankeyChartProps {
@@ -11,25 +11,51 @@ interface SankeyChartProps {
   filteredLinks: number[];
 }
 
-interface ExtendedSankeyNode extends Omit<D3SankeyNode<ExtendedSankeyNode, ExtendedSankeyLink>, 'sourceLinks' | 'targetLinks'> {
+interface ExtendedSankeyNode {
   id: string;
   label: string;
+  x0?: number;
+  x1?: number;
+  y0?: number;
+  y1?: number;
   sourceLinks?: ExtendedSankeyLink[];
   targetLinks?: ExtendedSankeyLink[];
+  value?: number;
+  index?: number;
+  depth?: number;
+  height?: number;
 }
 
-interface ExtendedSankeyLink extends Omit<D3SankeyLink<ExtendedSankeyNode, ExtendedSankeyLink>, 'source' | 'target' | 'index'> {
+interface ExtendedSankeyLink {
   index: number;
   value: number;
   source: string | ExtendedSankeyNode;
   target: string | ExtendedSankeyNode;
+  y0?: number;
+  y1?: number;
+  width?: number;
 }
 
-interface GradientInfo {
-  x1: number;
-  x2: number;
-  colorStart: string;
-  colorEnd: string;
+interface GradientStop {
+  offset: number;
+  color: string;
+  opacity?: number;
+}
+
+interface ParsedGradient {
+  id: string;
+  type: 'linear' | 'radial';
+  stops: GradientStop[];
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  cx?: number;
+  cy?: number;
+  r?: number;
+  fx?: number;
+  fy?: number;
+  gradientUnits?: string;
 }
 
 const NODE_WIDTH = 20;
@@ -72,7 +98,6 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
   const dimensionsRef = useRef({ width: 0, height: 0 });
   const nodesRef = useRef<ExtendedSankeyNode[]>([]);
   const linksRef = useRef<ExtendedSankeyLink[]>([]);
-  const gradientMapRef = useRef<Map<number, GradientInfo>>(new Map());
 
   const rafIdRef = useRef<number | null>(null);
   const pendingUpdatesRef = useRef<Set<string>>(new Set());
@@ -80,13 +105,15 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
   const scheduleRepaint = useCallback((type: string, updateFn: () => void) => {
     pendingUpdatesRef.current.add(type);
 
-    if (rafIdRef.current === null) {
-      rafIdRef.current = requestAnimationFrame(() => {
-        pendingUpdatesRef.current.clear();
-        updateFn();
-        rafIdRef.current = null;
-      });
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
     }
+
+    rafIdRef.current = requestAnimationFrame(() => {
+      pendingUpdatesRef.current.clear();
+      updateFn();
+      rafIdRef.current = null;
+    });
   }, []);
 
   const nodeColorScale = useMemo(() => {
@@ -113,6 +140,7 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
+      const svgGradients = parseSvgGradients(svg);
       const transform = d3.zoomTransform(svg);
 
       ctx.fillStyle = '#1A1A2E';
@@ -123,26 +151,46 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
-      const gradientMap = gradientMapRef.current;
       const links = linksRef.current;
       const nodes = nodesRef.current;
 
       for (const link of links) {
         const source = link.source as ExtendedSankeyNode;
         const target = link.target as ExtendedSankeyNode;
-        const linkWidth = link.width || 1;
+        const linkWidth = link.width ?? 1;
 
-        const sourceX = source.x1 || 0;
-        const targetX = target.x0 || 0;
-        const sourceY = (link.y0 || 0) + linkWidth / 2;
-        const targetY = (link.y1 || 0) - linkWidth / 2;
+        const sourceX = source.x1 ?? 0;
+        const targetX = target.x0 ?? 0;
+        const sourceY = (link.y0 ?? 0) + linkWidth / 2;
+        const targetY = (link.y1 ?? 0) - linkWidth / 2;
 
-        const gradient = ctx.createLinearGradient(sourceX, sourceY, targetX, targetY);
-        const info = gradientMap.get(link.index);
-        if (info) {
-          gradient.addColorStop(0, info.colorStart);
-          gradient.addColorStop(1, info.colorEnd);
+        const gradientId = `gradient-${link.index}`;
+        const svgGrad = svgGradients.get(gradientId);
+
+        let gradient: CanvasGradient;
+        if (svgGrad && svgGrad.type === 'linear') {
+          const gx1 = svgGrad.x1 ?? sourceX;
+          const gy1 = svgGrad.y1 ?? sourceY;
+          const gx2 = svgGrad.x2 ?? targetX;
+          const gy2 = svgGrad.y2 ?? targetY;
+          gradient = ctx.createLinearGradient(gx1, gy1, gx2, gy2);
+
+          for (const stop of svgGrad.stops) {
+            gradient.addColorStop(stop.offset, stop.color);
+          }
+        } else if (svgGrad && svgGrad.type === 'radial') {
+          const cx = svgGrad.cx ?? ((sourceX + targetX) / 2);
+          const cy = svgGrad.cy ?? ((sourceY + targetY) / 2);
+          const r = svgGrad.r ?? (Math.abs(targetX - sourceX) / 2);
+          const fx = svgGrad.fx ?? cx;
+          const fy = svgGrad.fy ?? cy;
+          gradient = ctx.createRadialGradient(fx, fy, 0, cx, cy, r);
+
+          for (const stop of svgGrad.stops) {
+            gradient.addColorStop(stop.offset, stop.color);
+          }
         } else {
+          gradient = ctx.createLinearGradient(sourceX, sourceY, targetX, targetY);
           gradient.addColorStop(0, COLOR_START);
           gradient.addColorStop(1, COLOR_END);
         }
@@ -175,10 +223,10 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
 
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
-        const nx = node.x0 || 0;
-        const ny = node.y0 || 0;
-        const nw = (node.x1 || 0) - nx;
-        const nh = (node.y1 || 0) - ny;
+        const nx = node.x0 ?? 0;
+        const ny = node.y0 ?? 0;
+        const nw = (node.x1 ?? 0) - nx;
+        const nh = (node.y1 ?? 0) - ny;
         const fillColor = getNodeColor(node, i);
 
         ctx.fillStyle = fillColor;
@@ -199,7 +247,7 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
         ctx.fill();
         ctx.stroke();
 
-        const isLeftSide = (node.x0 || 0) < (dimensionsRef.current.width / 2);
+        const isLeftSide = nx < dimensionsRef.current.width / 2;
         ctx.fillStyle = '#E8E8E8';
         ctx.font = '12px "Noto Sans SC", sans-serif';
         ctx.textAlign = isLeftSide ? 'left' : 'right';
@@ -224,6 +272,87 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       link.click();
     }
   }), [getNodeColor]);
+
+  const parseSvgGradients = (svgEl: SVGSVGElement): Map<string, ParsedGradient> => {
+    const result = new Map<string, ParsedGradient>();
+
+    const linearGradients = svgEl.querySelectorAll('linearGradient');
+    linearGradients.forEach((grad) => {
+      const id = grad.id;
+      const stops = parseGradientStops(grad);
+      const gradientUnits = grad.getAttribute('gradientUnits') || 'objectBoundingBox';
+
+      result.set(id, {
+        id,
+        type: 'linear',
+        stops,
+        x1: parseFloatOrNull(grad.getAttribute('x1')) ?? undefined,
+        y1: parseFloatOrNull(grad.getAttribute('y1')) ?? undefined,
+        x2: parseFloatOrNull(grad.getAttribute('x2')) ?? undefined,
+        y2: parseFloatOrNull(grad.getAttribute('y2')) ?? undefined,
+        gradientUnits
+      });
+    });
+
+    const radialGradients = svgEl.querySelectorAll('radialGradient');
+    radialGradients.forEach((grad) => {
+      const id = grad.id;
+      const stops = parseGradientStops(grad);
+      const gradientUnits = grad.getAttribute('gradientUnits') || 'objectBoundingBox';
+
+      result.set(id, {
+        id,
+        type: 'radial',
+        stops,
+        cx: parseFloatOrNull(grad.getAttribute('cx')) ?? undefined,
+        cy: parseFloatOrNull(grad.getAttribute('cy')) ?? undefined,
+        r: parseFloatOrNull(grad.getAttribute('r')) ?? undefined,
+        fx: parseFloatOrNull(grad.getAttribute('fx')) ?? undefined,
+        fy: parseFloatOrNull(grad.getAttribute('fy')) ?? undefined,
+        gradientUnits
+      });
+    });
+
+    return result;
+  };
+
+  const parseGradientStops = (gradEl: SVGLinearGradientElement | SVGRadialGradientElement): GradientStop[] => {
+    const stops: GradientStop[] = [];
+    const stopEls = gradEl.querySelectorAll('stop');
+
+    stopEls.forEach((stopEl) => {
+      const offsetAttr = stopEl.getAttribute('offset') || '0%';
+      const color = stopEl.getAttribute('stop-color') || '#000000';
+      const opacityAttr = stopEl.getAttribute('stop-opacity');
+
+      let offset: number;
+      if (offsetAttr.endsWith('%')) {
+        offset = parseFloat(offsetAttr) / 100;
+      } else {
+        offset = parseFloat(offsetAttr);
+      }
+      offset = Math.max(0, Math.min(1, isNaN(offset) ? 0 : offset));
+
+      const opacity = opacityAttr !== null ? parseFloat(opacityAttr) : undefined;
+
+      stops.push({ offset, color, opacity });
+    });
+
+    stops.sort((a, b) => a.offset - b.offset);
+
+    if (stops.length === 0) {
+      stops.push({ offset: 0, color: '#000000' });
+      stops.push({ offset: 1, color: '#000000' });
+    }
+
+    return stops;
+  };
+
+  const parseFloatOrNull = (val: string | null): number | null => {
+    if (val === null) return null;
+    const num = parseFloat(val);
+    return isNaN(num) ? null : num;
+  };
 
   const getRelatedNodeIds = useCallback((selection: SelectionState): Set<string> => {
     const related = new Set<string>();
@@ -322,22 +451,23 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       const links = linksRef.current;
 
       for (const node of nodes) {
-        g.selectAll<SVGGElement, ExtendedSankeyNode>('.sankey-node')
-          .filter((d) => d.id === node.id)
+        g.selectAll<SVGGElement, unknown>('.sankey-node')
+          .filter((d: unknown) => (d as ExtendedSankeyNode).id === node.id)
           .each(function () {
-            d3.select(this).select('rect')
-              .attr('y', node.y0)
-              .attr('height', (node.y1 || 0) - (node.y0 || 0));
+            d3.select(this as SVGGElement).select('rect')
+              .attr('y', node.y0 ?? 0)
+              .attr('height', (node.y1 ?? 0) - (node.y0 ?? 0));
 
-            d3.select(this).select('text')
+            d3.select(this as SVGGElement).select('text')
               .attr('x', (node.x0 || 0) < width / 2 ? (node.x1 || 0) - (node.x0 || 0) + 8 : -8)
               .attr('y', ((node.y0 || 0) + (node.y1 || 0)) / 2)
               .attr('text-anchor', (node.x0 || 0) < width / 2 ? 'start' : 'end');
           });
       }
 
-      g.selectAll<SVGPathElement, ExtendedSankeyLink>('.sankey-link')
-        .attr('d', (linkD: ExtendedSankeyLink) => {
+      g.selectAll<SVGPathElement, unknown>('.sankey-link')
+        .attr('d', (d: unknown) => {
+          const linkD = d as ExtendedSankeyLink;
           const s = linkD.source as ExtendedSankeyNode;
           const t = linkD.target as ExtendedSankeyNode;
           const sx = s.x1 || 0;
@@ -348,25 +478,21 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
           return `M${sx},${sy}C${mx},${sy} ${mx},${ty} ${tx},${ty}`;
         });
 
-      g.selectAll<SVGTextElement, ExtendedSankeyLink>('.sankey-link-label')
-        .attr('x', (linkD: ExtendedSankeyLink) => {
+      g.selectAll<SVGTextElement, unknown>('.sankey-link-label')
+        .attr('x', (d: unknown) => {
+          const linkD = d as ExtendedSankeyLink;
           const s = linkD.source as ExtendedSankeyNode;
           const t = linkD.target as ExtendedSankeyNode;
           return ((s.x1 || 0) + (t.x0 || 0)) / 2;
         })
-        .attr('y', (linkD: ExtendedSankeyLink) => (linkD.y0 || 0) + (linkD.width || 1) / 2 - 5);
+        .attr('y', (d: unknown) => {
+          const linkD = d as ExtendedSankeyLink;
+          return (linkD.y0 || 0) + (linkD.width || 1) / 2 - 5;
+        });
 
-      g.selectAll<SVGLinearGradientElement, ExtendedSankeyLink>('linearGradient')
-        .attr('x1', (linkD: ExtendedSankeyLink) => (linkD.source as ExtendedSankeyNode).x1)
-        .attr('x2', (linkD: ExtendedSankeyLink) => (linkD.target as ExtendedSankeyNode).x0);
-
-      for (const link of links) {
-        const info = gradientMapRef.current.get(link.index);
-        if (info) {
-          info.x1 = (link.source as ExtendedSankeyNode).x1 || 0;
-          info.x2 = (link.target as ExtendedSankeyNode).x0 || 0;
-        }
-      }
+      g.selectAll<SVGLinearGradientElement, unknown>('linearGradient')
+        .attr('x1', (d: unknown) => ((d as ExtendedSankeyLink).source as ExtendedSankeyNode).x1 ?? 0)
+        .attr('x2', (d: unknown) => ((d as ExtendedSankeyLink).target as ExtendedSankeyNode).x0 ?? 0);
     };
 
     const updateDimensions = () => {
@@ -377,24 +503,25 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       width = clientWidth - margin.left - margin.right;
       height = clientHeight - margin.top - margin.bottom;
 
-      const filteredData: SankeyGraph<ExtendedSankeyNode, ExtendedSankeyLink> = {
-        nodes: data.nodes.map(n => ({ ...n } as ExtendedSankeyNode)),
+      const filteredData = {
+        nodes: data.nodes.map(n => ({ ...n })),
         links: data.links
           .filter((_, i) => !filteredLinks.includes(i))
-          .map((l, i) => ({ ...l, index: i } as ExtendedSankeyLink))
+          .map((l, i) => ({ ...l, index: i }))
       };
 
-      const sankeyGenerator = sankey<ExtendedSankeyNode, ExtendedSankeyLink>()
+      const sankeyGenerator = (sankey as any)()
         .nodeWidth(NODE_WIDTH)
         .nodePadding(15)
         .extent([[margin.left, margin.top], [width + margin.left, height + margin.top]]);
 
-      const { nodes, links } = sankeyGenerator(filteredData);
+      const { nodes, links } = sankeyGenerator(filteredData) as {
+        nodes: ExtendedSankeyNode[];
+        links: ExtendedSankeyLink[];
+      };
 
       nodesRef.current = nodes;
       linksRef.current = links;
-
-      gradientMapRef.current.clear();
 
       svg.attr('width', clientWidth)
         .attr('height', clientHeight)
@@ -404,14 +531,14 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       defs.enter().append('defs');
 
       const gradients = g.select('defs')
-        .selectAll<SVGLinearGradientElement, ExtendedSankeyLink>('linearGradient')
-        .data(links, (d: ExtendedSankeyLink) => `gradient-${d.index}`);
+        .selectAll<SVGLinearGradientElement, unknown>('linearGradient')
+        .data(links, (d: unknown) => `gradient-${(d as ExtendedSankeyLink).index}`);
 
       gradients.exit().remove();
 
       const gradientsEnter = gradients.enter()
         .append('linearGradient')
-        .attr('id', (d: ExtendedSankeyLink) => `gradient-${d.index}`)
+        .attr('id', (d: unknown) => `gradient-${(d as ExtendedSankeyLink).index}`)
         .attr('gradientUnits', 'userSpaceOnUse');
 
       gradientsEnter.append('stop')
@@ -423,41 +550,33 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       const allGradients = gradientsEnter.merge(gradients);
 
       allGradients
-        .attr('x1', (d: ExtendedSankeyLink) => (d.source as ExtendedSankeyNode).x1)
-        .attr('x2', (d: ExtendedSankeyLink) => (d.target as ExtendedSankeyNode).x0)
+        .attr('x1', (d: unknown) => ((d as ExtendedSankeyLink).source as ExtendedSankeyNode).x1 ?? 0)
+        .attr('x2', (d: unknown) => ((d as ExtendedSankeyLink).target as ExtendedSankeyNode).x0 ?? 0)
         .attr('y1', 0)
         .attr('y2', 0);
 
       allGradients.select('stop:first-child')
-        .attr('stop-color', (d: ExtendedSankeyLink) => {
-          const sourceIndex = nodes.indexOf(d.source as ExtendedSankeyNode);
-          const color = getNodeColor(d.source as ExtendedSankeyNode, sourceIndex);
-          gradientMapRef.current.set(d.index, {
-            x1: (d.source as ExtendedSankeyNode).x1 || 0,
-            x2: (d.target as ExtendedSankeyNode).x0 || 0,
-            colorStart: color,
-            colorEnd: ''
-          });
-          return color;
+        .attr('stop-color', (d: unknown) => {
+          const link = d as ExtendedSankeyLink;
+          const sourceNode = link.source as ExtendedSankeyNode;
+          const sourceIndex = nodes.findIndex(n => n.id === sourceNode.id);
+          return getNodeColor(sourceNode, sourceIndex);
         });
 
       allGradients.select('stop:last-child')
-        .attr('stop-color', (d: ExtendedSankeyLink) => {
-          const targetIndex = nodes.indexOf(d.target as ExtendedSankeyNode);
-          const color = getNodeColor(d.target as ExtendedSankeyNode, targetIndex);
-          const info = gradientMapRef.current.get(d.index);
-          if (info) {
-            info.colorEnd = color;
-          }
-          return color;
+        .attr('stop-color', (d: unknown) => {
+          const link = d as ExtendedSankeyLink;
+          const targetNode = link.target as ExtendedSankeyNode;
+          const targetIndex = nodes.findIndex(n => n.id === targetNode.id);
+          return getNodeColor(targetNode, targetIndex);
         });
 
       const linkGroup = g.selectAll('.link-group').data([null]);
       linkGroup.enter().append('g').attr('class', 'link-group');
 
       const linkGroups = g.select('.link-group')
-        .selectAll<SVGGElement, ExtendedSankeyLink>('g.link-wrapper')
-        .data(links, (d: ExtendedSankeyLink) => `link-${d.index}`);
+        .selectAll<SVGGElement, unknown>('g.link-wrapper')
+        .data(links, (d: unknown) => `link-${(d as ExtendedSankeyLink).index}`);
 
       linkGroups.exit().remove();
 
@@ -478,66 +597,78 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
       const allLinkGroups = linkGroupsEnter.merge(linkGroups);
 
       allLinkGroups.select('path')
-        .attr('d', (d: ExtendedSankeyLink) => {
-          const s = d.source as ExtendedSankeyNode;
-          const t = d.target as ExtendedSankeyNode;
+        .attr('d', (d: unknown) => {
+          const link = d as ExtendedSankeyLink;
+          const s = link.source as ExtendedSankeyNode;
+          const t = link.target as ExtendedSankeyNode;
           const sx = s.x1 || 0;
           const tx = t.x0 || 0;
-          const sy = (d.y0 || 0) + (d.width || 1) / 2;
-          const ty = (d.y1 || 0) - (d.width || 1) / 2;
+          const sy = (link.y0 || 0) + (link.width || 1) / 2;
+          const ty = (link.y1 || 0) - (link.width || 1) / 2;
           const mx = (sx + tx) / 2;
           return `M${sx},${sy}C${mx},${sy} ${mx},${ty} ${tx},${ty}`;
         })
-        .attr('stroke-width', (d: ExtendedSankeyLink) => Math.max(1, d.width || 1))
-        .on('click', (event: Event, d: ExtendedSankeyLink) => {
+        .attr('stroke-width', (d: unknown) => Math.max(1, (d as ExtendedSankeyLink).width || 1))
+        .on('click', (event: Event, d: unknown) => {
           event.stopPropagation();
-          const originalLink = data.links[d.index];
-          onSelectionChange({ type: 'link', data: { ...originalLink, index: d.index } });
+          const link = d as ExtendedSankeyLink;
+          const originalLink = data.links[link.index];
+          onSelectionChange({ type: 'link', data: { ...originalLink, index: link.index } });
         })
-        .on('dblclick', (event: Event, d: ExtendedSankeyLink) => {
+        .on('dblclick', (event: Event, d: unknown) => {
           event.stopPropagation();
+          const link = d as ExtendedSankeyLink;
           onFilterChange({
-            filteredLinks: [...filteredLinks, d.index],
+            filteredLinks: [...filteredLinks, link.index],
             filteredNodeIds: []
           });
           onSelectionChange({ type: null, data: null });
         })
-        .on('mouseenter', function (event: MouseEvent, d: ExtendedSankeyLink) {
-          d3.select(this)
+        .on('mouseenter', function (event: MouseEvent, d: unknown) {
+          const link = d as ExtendedSankeyLink;
+          d3.select(this as SVGPathElement)
             .interrupt()
-            .attr('stroke-width', Math.max(1, (d.width || 1) * 1.2))
+            .attr('stroke-width', Math.max(1, (link.width || 1) * 1.2))
             .attr('stroke-opacity', 0.9);
 
-          const wrapper = d3.select(this.parentNode as SVGGElement);
-          wrapper.select('.sankey-link-label')
-            .attr('class', 'sankey-link-label visible')
-            .text(d.value.toLocaleString());
+          const parent = (this as SVGPathElement).parentNode;
+          if (parent) {
+            const wrapper = d3.select(parent as SVGGElement);
+            wrapper.select('.sankey-link-label')
+              .attr('class', 'sankey-link-label visible')
+              .text(link.value.toLocaleString());
+          }
         })
-        .on('mouseleave', function (event: MouseEvent, d: ExtendedSankeyLink) {
-          d3.select(this)
+        .on('mouseleave', function (event: MouseEvent, d: unknown) {
+          const link = d as ExtendedSankeyLink;
+          d3.select(this as SVGPathElement)
             .interrupt()
-            .attr('stroke-width', Math.max(1, d.width || 1))
+            .attr('stroke-width', Math.max(1, link.width || 1))
             .attr('stroke-opacity', 0.6);
 
-          const wrapper = d3.select(this.parentNode as SVGGElement);
-          wrapper.select('.sankey-link-label')
-            .attr('class', 'sankey-link-label');
+          const parent = (this as SVGPathElement).parentNode;
+          if (parent) {
+            const wrapper = d3.select(parent as SVGGElement);
+            wrapper.select('.sankey-link-label')
+              .attr('class', 'sankey-link-label');
+          }
         });
 
       allLinkGroups.select('.sankey-link-label')
-        .attr('x', (d: ExtendedSankeyLink) => {
-          const s = d.source as ExtendedSankeyNode;
-          const t = d.target as ExtendedSankeyNode;
+        .attr('x', (d: unknown) => {
+          const link = d as ExtendedSankeyLink;
+          const s = link.source as ExtendedSankeyNode;
+          const t = link.target as ExtendedSankeyNode;
           return ((s.x1 || 0) + (t.x0 || 0)) / 2;
         })
-        .attr('y', (d: ExtendedSankeyLink) => (d.y0 || 0) + (d.width || 1) / 2 - 5);
+        .attr('y', (d: unknown) => ((d as ExtendedSankeyLink).y0 || 0) + ((d as ExtendedSankeyLink).width || 1) / 2 - 5);
 
       const nodeGroup = g.selectAll('.node-group').data([null]);
       nodeGroup.enter().append('g').attr('class', 'node-group');
 
       const nodeGroups = g.select('.node-group')
-        .selectAll<SVGGElement, ExtendedSankeyNode>('g.sankey-node')
-        .data(nodes, (d: ExtendedSankeyNode) => d.id);
+        .selectAll<SVGGElement, unknown>('g.sankey-node')
+        .data(nodes, (d: unknown) => (d as ExtendedSankeyNode).id);
 
       nodeGroups.exit().remove();
 
@@ -556,40 +687,56 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
 
       const allNodeGroups = nodeGroupsEnter.merge(nodeGroups);
 
-      const drag = d3.drag<SVGGElement, ExtendedSankeyNode>()
-        .on('start', function (event, d) {
+      const drag = d3.drag<SVGGElement, any>()
+        .on('start', function (this: SVGGElement, event: any, d: any) {
           d3.select(this).raise();
-          (event.sourceEvent as Event).stopPropagation();
+          if (event.sourceEvent) {
+            event.sourceEvent.stopPropagation();
+          }
         })
-        .on('drag', function (event, d) {
+        .on('drag', function (this: SVGGElement, event: any, d: any) {
+          const node = d as ExtendedSankeyNode;
           const dy = event.dy;
-          const newY0 = Math.max(0, (d.y0 || 0) + dy);
-          const newY1 = newY0 + ((d.y1 || 0) - (d.y0 || 0));
+          const newY0 = Math.max(0, (node.y0 || 0) + dy);
+          const newY1 = newY0 + ((node.y1 || 0) - (node.y0 || 0));
 
-          d.y0 = newY0;
-          d.y1 = newY1;
+          node.y0 = newY0;
+          node.y1 = newY1;
 
           scheduleRepaint('drag', doRepaint);
         });
 
       allNodeGroups
-        .attr('transform', d => `translate(${d.x0},${d.y0})`)
+        .attr('transform', (d: unknown) => {
+          const node = d as ExtendedSankeyNode;
+          return `translate(${node.x0},${node.y0})`;
+        })
         .call(drag)
-        .on('click', (event: Event, d: ExtendedSankeyNode) => {
+        .on('click', (event: Event, d: unknown) => {
           event.stopPropagation();
-          onSelectionChange({ type: 'node', data: { id: d.id, label: d.label } });
+          const node = d as ExtendedSankeyNode;
+          onSelectionChange({ type: 'node', data: { id: node.id, label: node.label } });
         });
 
       allNodeGroups.select('rect')
-        .attr('width', d => (d.x1 || 0) - (d.x0 || 0))
-        .attr('height', d => (d.y1 || 0) - (d.y0 || 0))
-        .attr('fill', (d, i) => getNodeColor(d, i));
+        .attr('width', (d: unknown) => ((d as ExtendedSankeyNode).x1 || 0) - ((d as ExtendedSankeyNode).x0 || 0))
+        .attr('height', (d: unknown) => ((d as ExtendedSankeyNode).y1 || 0) - ((d as ExtendedSankeyNode).y0 || 0))
+        .attr('fill', (d: unknown, i: number) => getNodeColor(d as ExtendedSankeyNode, i));
 
       allNodeGroups.select('text')
-        .attr('x', d => (d.x0 || 0) < width / 2 ? (d.x1 || 0) - (d.x0 || 0) + 8 : -8)
-        .attr('y', d => ((d.y1 || 0) - (d.y0 || 0)) / 2)
-        .attr('text-anchor', d => (d.x0 || 0) < width / 2 ? 'start' : 'end')
-        .text(d => d.label);
+        .attr('x', (d: unknown) => {
+          const node = d as ExtendedSankeyNode;
+          return (node.x0 || 0) < width / 2 ? (node.x1 || 0) - (node.x0 || 0) + 8 : -8;
+        })
+        .attr('y', (d: unknown) => {
+          const node = d as ExtendedSankeyNode;
+          return ((node.y1 || 0) - (node.y0 || 0)) / 2;
+        })
+        .attr('text-anchor', (d: unknown) => {
+          const node = d as ExtendedSankeyNode;
+          return (node.x0 || 0) < width / 2 ? 'start' : 'end';
+        })
+        .text((d: unknown) => (d as ExtendedSankeyNode).label);
 
       svg.on('click', () => {
         onSelectionChange({ type: null, data: null });
@@ -626,24 +773,28 @@ const SankeyChart = forwardRef<{ exportPNG: () => void }, SankeyChartProps>(func
     const relatedLinkIndices = getRelatedLinkIndices(selection);
     const hasSelection = selection.type !== null;
 
-    g.selectAll<SVGGElement, ExtendedSankeyNode>('.sankey-node')
-      .style('opacity', (d) => {
+    g.selectAll<SVGGElement, unknown>('.sankey-node')
+      .style('opacity', (d: unknown) => {
+        const node = d as ExtendedSankeyNode;
         if (!hasSelection) return 1;
-        return relatedNodeIds.has(d.id) ? 1 : 0.2;
+        return relatedNodeIds.has(node.id) ? 1 : 0.2;
       })
-      .style('pointer-events', (d) => {
+      .style('pointer-events', (d: unknown) => {
+        const node = d as ExtendedSankeyNode;
         if (!hasSelection) return 'auto';
-        return relatedNodeIds.has(d.id) ? 'auto' : 'none';
+        return relatedNodeIds.has(node.id) ? 'auto' : 'none';
       });
 
-    g.selectAll<SVGPathElement, ExtendedSankeyLink>('.sankey-link')
-      .style('opacity', (d) => {
+    g.selectAll<SVGPathElement, unknown>('.sankey-link')
+      .style('opacity', (d: unknown) => {
+        const link = d as ExtendedSankeyLink;
         if (!hasSelection) return 0.6;
-        return relatedLinkIndices.has(d.index) ? 0.9 : 0.1;
+        return relatedLinkIndices.has(link.index) ? 0.9 : 0.1;
       })
-      .style('pointer-events', (d) => {
+      .style('pointer-events', (d: unknown) => {
+        const link = d as ExtendedSankeyLink;
         if (!hasSelection) return 'auto';
-        return relatedLinkIndices.has(d.index) ? 'auto' : 'none';
+        return relatedLinkIndices.has(link.index) ? 'auto' : 'none';
       });
   }, [selection, getRelatedNodeIds, getRelatedLinkIndices]);
 
