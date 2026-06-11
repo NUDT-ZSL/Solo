@@ -31,6 +31,7 @@ export class ParticleSystem {
     const particleColor = this.getParticleColor(color);
 
     for (let i = 0; i < count; i++) {
+      if (this.particles.length >= MAX_PARTICLES) break;
       const angle = Math.random() * Math.PI * 2;
       const speed = 1.5 + Math.random() * 5;
       const life = 0.5 + Math.random() * 0.6;
@@ -59,6 +60,7 @@ export class ParticleSystem {
     const particleColor = this.getParticleColor(color);
 
     for (let i = 0; i < count; i++) {
+      if (this.particles.length >= MAX_PARTICLES) break;
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.6;
       const speed = 0.5 + Math.random() * 2;
       const life = 0.4 + Math.random() * 0.3;

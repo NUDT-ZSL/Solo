@@ -24,10 +24,6 @@ export interface GameState {
   status: 'playing' | 'gameover' | 'win' | 'transitioning';
   score: number;
   displayScore: number;
-  scoreAnimStart: number;
-  scoreAnimTarget: number;
-  scoreAnimElapsed: number;
-  scoreAnimDuration: number;
   bubbleCount: number;
   cleanupMode: boolean;
   shakeTime: number;
@@ -41,6 +37,8 @@ export interface GameState {
 export class Game {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
+  offscreenCanvas: HTMLCanvasElement;
+  offscreenCtx: CanvasRenderingContext2D;
   width: number;
   height: number;
   playAreaLeft: number;
@@ -67,6 +65,12 @@ export class Game {
     this.ctx = canvas.getContext('2d')!;
     this.width = canvas.width;
     this.height = canvas.height;
+
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCanvas.width = this.width;
+    this.offscreenCanvas.height = this.height;
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d')!;
+
     this.playAreaLeft = 40;
     this.playAreaRight = this.width - 40;
     this.playAreaTop = 80;
@@ -100,10 +104,6 @@ export class Game {
       status: 'playing',
       score: 0,
       displayScore: 0,
-      scoreAnimStart: 0,
-      scoreAnimTarget: 0,
-      scoreAnimElapsed: 0,
-      scoreAnimDuration: 600,
       bubbleCount: 0,
       cleanupMode: false,
       shakeTime: 0,
@@ -227,10 +227,6 @@ export class Game {
       status: 'playing',
       score: 0,
       displayScore: 0,
-      scoreAnimStart: 0,
-      scoreAnimTarget: 0,
-      scoreAnimElapsed: 0,
-      scoreAnimDuration: 600,
       bubbleCount: 0,
       cleanupMode: false,
       shakeTime: 0,
@@ -253,13 +249,7 @@ export class Game {
   }
 
   private addScore(amount: number): void {
-    const s = this.state;
-    s.scoreAnimStart = s.displayScore;
-    s.score += amount;
-    s.scoreAnimTarget = s.score;
-    s.scoreAnimElapsed = 0;
-    const diff = s.scoreAnimTarget - s.scoreAnimStart;
-    s.scoreAnimDuration = Math.min(1200, Math.max(300, Math.abs(diff) * 8));
+    this.state.score += amount;
   }
 
   update(deltaTime: number): void {
@@ -300,15 +290,13 @@ export class Game {
       this.state.shakeY = 0;
     }
 
-    if (this.state.scoreAnimElapsed < this.state.scoreAnimDuration) {
-      this.state.scoreAnimElapsed += deltaTime;
-      const t = Math.min(1, this.state.scoreAnimElapsed / this.state.scoreAnimDuration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      this.state.displayScore = this.state.scoreAnimStart +
-        (this.state.scoreAnimTarget - this.state.scoreAnimStart) * eased;
-      if (t >= 1) {
-        this.state.displayScore = this.state.scoreAnimTarget;
-      }
+    const diff = this.state.score - this.state.displayScore;
+    if (Math.abs(diff) > 0.1) {
+      const dt = deltaTime / 1000;
+      const catchupRate = 1 - Math.exp(-dt * 8);
+      this.state.displayScore += diff * catchupRate;
+    } else {
+      this.state.displayScore = this.state.score;
     }
 
     this.checkGameOver();
@@ -557,7 +545,7 @@ export class Game {
   }
 
   private checkGameOver(): void {
-    const dangerY = this.emitter.y - this.emitter.radius - this.bubbleRadius;
+    const dangerY = this.emitter.y - this.bubbleRadius;
     for (let row = 0; row < this.grid.length; row++) {
       for (let col = 0; col < this.getColsInRow(row); col++) {
         const b = this.grid[row][col];
@@ -572,7 +560,6 @@ export class Game {
 
   draw(): void {
     const ctx = this.ctx;
-
     const alpha = this.state.status === 'transitioning'
       ? this.state.transitionProgress < 0.5
         ? 1 - this.state.transitionProgress * 2
@@ -581,21 +568,24 @@ export class Game {
 
     ctx.save();
     ctx.globalAlpha = alpha;
+
     this.drawBackground(ctx);
-    ctx.restore();
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(this.state.shakeX, this.state.shakeY);
-    this.drawPlayArea(ctx);
-    this.drawBubbles(ctx);
-    this.emitter.draw(ctx);
-    this.particles.draw(ctx);
-    ctx.restore();
+    const offCtx = this.offscreenCtx;
+    offCtx.clearRect(0, 0, this.width, this.height);
+    this.drawPlayArea(offCtx);
+    this.drawBubbles(offCtx);
+    this.emitter.draw(offCtx);
+    this.particles.draw(offCtx);
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.drawImage(
+      this.offscreenCanvas,
+      this.state.shakeX,
+      this.state.shakeY
+    );
+
     this.drawHUD(ctx);
+
     ctx.restore();
 
     if (this.state.status === 'gameover' || this.state.status === 'win') {
@@ -652,7 +642,7 @@ export class Game {
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
     ctx.beginPath();
-    const dangerY = this.emitter.y - this.emitter.radius - this.bubbleRadius;
+    const dangerY = this.emitter.y - this.bubbleRadius;
     ctx.moveTo(this.playAreaLeft, dangerY);
     ctx.lineTo(this.playAreaRight, dangerY);
     ctx.stroke();
