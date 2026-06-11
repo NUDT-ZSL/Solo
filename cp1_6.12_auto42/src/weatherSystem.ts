@@ -105,21 +105,32 @@ class ParticlePool {
   }
 
   public setActiveCountImmediately(count: number, width: number, height: number, fromTop: boolean = false): void {
-    let currentActive = 0;
+    count = Math.max(0, Math.min(this.pool.length, count));
 
+    let actualActive = 0;
     for (let i = 0; i < this.pool.length; i++) {
-      if (this.pool[i].active) {
-        currentActive++;
-        if (currentActive > count) {
+      if (this.pool[i].active) actualActive++;
+    }
+
+    if (actualActive > count) {
+      let toDeactivate = actualActive - count;
+      for (let i = this.pool.length - 1; i >= 0 && toDeactivate > 0; i--) {
+        if (this.pool[i].active) {
           this.pool[i].active = false;
-          this.activeCount--;
+          toDeactivate--;
         }
-      } else if (currentActive < count) {
-        this.pool[i].init(width, height, fromTop);
-        currentActive++;
-        this.activeCount++;
+      }
+    } else if (actualActive < count) {
+      let toActivate = count - actualActive;
+      for (let i = 0; i < this.pool.length && toActivate > 0; i++) {
+        if (!this.pool[i].active) {
+          this.pool[i].init(width, height, fromTop);
+          toActivate--;
+        }
       }
     }
+
+    this.activeCount = count;
   }
 
   public getActiveCount(): number {
@@ -140,6 +151,184 @@ class ParticlePool {
 
   public getType(): WeatherType {
     return this.type;
+  }
+
+  public batchDraw(ctx: CanvasRenderingContext2D): void {
+    if (this.activeCount === 0) return;
+
+    switch (this.type) {
+      case 'sunny':
+        this.batchDrawSunny(ctx);
+        break;
+      case 'rainy':
+        this.batchDrawRainy(ctx);
+        break;
+      case 'snowy':
+        this.batchDrawSnowy(ctx);
+        break;
+      case 'thunder':
+        this.batchDrawThunder(ctx);
+        break;
+      default:
+        for (let i = 0; i < this.pool.length; i++) {
+          if (this.pool[i].active) {
+            this.pool[i].draw(ctx);
+          }
+        }
+    }
+  }
+
+  private batchDrawSunny(ctx: CanvasRenderingContext2D): void {
+    const active: any[] = [];
+    for (let i = 0; i < this.pool.length; i++) {
+      if (this.pool[i].active) active.push(this.pool[i]);
+    }
+    if (active.length === 0) return;
+
+    ctx.fillStyle = '#FFD700';
+    for (let i = 0; i < active.length; i++) {
+      const p = active[i];
+      const size = p.size * (1 + Math.sin(p.pulsePhase) * 0.15);
+      ctx.globalAlpha = p.alpha * 0.25;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, size * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#FFB347';
+    for (let i = 0; i < active.length; i++) {
+      const p = active[i];
+      const size = p.size * (1 + Math.sin(p.pulsePhase) * 0.15);
+      ctx.globalAlpha = p.alpha * 0.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, size * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#FFFFD4';
+    for (let i = 0; i < active.length; i++) {
+      const p = active[i];
+      const size = p.size * (1 + Math.sin(p.pulsePhase) * 0.15);
+      ctx.globalAlpha = p.alpha;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, size * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  private batchDrawRainy(ctx: CanvasRenderingContext2D): void {
+    ctx.strokeStyle = '#96C8FF';
+    ctx.lineCap = 'round';
+    for (let i = 0; i < this.pool.length; i++) {
+      const p: any = this.pool[i];
+      if (!p.active) continue;
+      ctx.globalAlpha = p.alpha;
+      ctx.lineWidth = p.size;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.endX, p.endY);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private batchDrawSnowy(ctx: CanvasRenderingContext2D): void {
+    const dots: any[] = [];
+    const stars4: any[] = [];
+    const stars6: any[] = [];
+
+    for (let i = 0; i < this.pool.length; i++) {
+      const p: any = this.pool[i];
+      if (!p.active) continue;
+      if (p.flakeType === 2) dots.push(p);
+      else if (p.flakeType === 1) stars4.push(p);
+      else stars6.push(p);
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    for (let i = 0; i < dots.length; i++) {
+      const p = dots[i];
+      ctx.globalAlpha = p.alpha;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (stars4.length > 0) {
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 0.8;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < stars4.length; i++) {
+        const p = stars4[i];
+        ctx.globalAlpha = p.alpha;
+        ctx.beginPath();
+        for (let j = 0; j < 4; j++) {
+          const angle = (j * Math.PI) / 2 + p.rotation * 0.3;
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + Math.cos(angle) * p.size, p.y + Math.sin(angle) * p.size);
+        }
+        ctx.stroke();
+      }
+    }
+
+    if (stars6.length > 0) {
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 0.6;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < stars6.length; i++) {
+        const p = stars6[i];
+        ctx.globalAlpha = p.alpha;
+        ctx.beginPath();
+        for (let j = 0; j < 6; j++) {
+          const angle = (j * Math.PI) / 3 + p.rotation;
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + Math.cos(angle) * p.size * 0.8, p.y + Math.sin(angle) * p.size * 0.8);
+        }
+        ctx.stroke();
+      }
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  private batchDrawThunder(ctx: CanvasRenderingContext2D): void {
+    const active: any[] = [];
+    for (let i = 0; i < this.pool.length; i++) {
+      const p: any = this.pool[i];
+      if (p.active && p.isFlashing) active.push(p);
+    }
+    if (active.length === 0) return;
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.strokeStyle = '#9F7AEA';
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < active.length; i++) {
+      const p = active[i];
+      ctx.globalAlpha = p.alpha * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.mid1X, p.mid1Y);
+      ctx.lineTo(p.endX, p.endY);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < active.length; i++) {
+      const p = active[i];
+      ctx.globalAlpha = p.alpha;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.mid1X, p.mid1Y);
+      ctx.lineTo(p.endX, p.endY);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
   }
 
   public fadeOutAll(dt: number, fadeSpeed: number): boolean {
@@ -306,6 +495,22 @@ export class WeatherSystem {
 
     this.updateThunderFlash(dt);
     this.updateParticles(dt);
+
+    if (!this.isTransitioning) {
+      this.ensureParticleCount();
+    }
+  }
+
+  private ensureParticleCount(): void {
+    const currentType = this.currentWeather;
+    const pool = this.particlePools.get(currentType);
+    if (pool) {
+      const actualCount = pool.getActiveCount();
+      if (actualCount < Math.round(this.targetParticleCount)) {
+        const fromTop = currentType === 'rainy' || currentType === 'snowy' || currentType === 'thunder';
+        pool.setActiveCountImmediately(Math.round(this.targetParticleCount), this.width, this.height, fromTop);
+      }
+    }
   }
 
   private updateParticleCount(dt: number): void {
@@ -377,7 +582,7 @@ export class WeatherSystem {
   private updateThunderFlash(dt: number): void {
     if (this.getCurrentWeatherType() !== 'thunder') {
       if (this.thunderFlash.flashIntensity > 0) {
-        this.thunderFlash.flashIntensity = Math.max(0, this.thunderFlash.flashIntensity - dt * 3);
+        this.thunderFlash.flashIntensity = Math.max(0, this.thunderFlash.flashIntensity - dt * 4);
         this.updateFlashCSSVariable();
       }
       this.thunderFlash.isFlashing = false;
@@ -393,20 +598,20 @@ export class WeatherSystem {
 
       if (this.thunderFlash.flashTimer >= this.thunderFlash.flashDuration) {
         this.thunderFlash.isFlashing = false;
-        this.thunderFlash.nextFlashDelay = 0.3 + Math.random() * 2;
+        this.thunderFlash.nextFlashDelay = 0.15 + Math.random() * 1.2;
         this.thunderFlash.flashTimer = 0;
         this.thunderFlash.targetIntensity = 0;
       }
     } else {
       this.thunderFlash.flashTimer += dt;
-      this.thunderFlash.flashIntensity = Math.max(0, this.thunderFlash.flashIntensity - dt * 2);
+      this.thunderFlash.flashIntensity = Math.max(0, this.thunderFlash.flashIntensity - dt * 3);
       this.updateFlashCSSVariable();
 
       if (this.thunderFlash.flashTimer >= this.thunderFlash.nextFlashDelay) {
         this.thunderFlash.isFlashing = true;
         this.thunderFlash.flashTimer = 0;
-        this.thunderFlash.flashDuration = 0.04 + Math.random() * 0.12;
-        this.thunderFlash.targetIntensity = 0.6 + Math.random() * 0.4;
+        this.thunderFlash.flashDuration = 0.03 + Math.random() * 0.08;
+        this.thunderFlash.targetIntensity = 0.7 + Math.random() * 0.3;
       }
     }
   }
@@ -414,10 +619,10 @@ export class WeatherSystem {
   private updateFlashCSSVariable(): void {
     const intensity = this.thunderFlash.flashIntensity;
     if (intensity > 0) {
-      const r = Math.floor(200 + intensity * 55);
-      const g = Math.floor(180 + intensity * 75);
+      const r = Math.floor(220 + intensity * 35);
+      const g = Math.floor(200 + intensity * 55);
       const b = Math.floor(255);
-      const a = intensity * 0.25;
+      const a = Math.min(0.6, intensity * 0.5);
       document.documentElement.style.setProperty('--flash-overlay', `rgba(${r}, ${g}, ${b}, ${a})`);
     } else {
       document.documentElement.style.setProperty('--flash-overlay', 'rgba(0, 0, 0, 0)');
@@ -456,12 +661,7 @@ export class WeatherSystem {
     if (!this.isTransitioning) {
       const pool = this.particlePools.get(this.currentWeather);
       if (pool) {
-        const particles = pool.getAllParticles();
-        for (let i = 0; i < particles.length; i++) {
-          if (particles[i].active) {
-            particles[i].draw(this.ctx);
-          }
-        }
+        pool.batchDraw(this.ctx);
       }
     } else {
       const currentPool = this.particlePools.get(this.currentWeather);
@@ -477,23 +677,13 @@ export class WeatherSystem {
 
       if (currentPool && currentAlpha > 0) {
         this.ctx.globalAlpha = currentAlpha;
-        const particles = currentPool.getAllParticles();
-        for (let i = 0; i < particles.length; i++) {
-          if (particles[i].active) {
-            particles[i].draw(this.ctx);
-          }
-        }
+        currentPool.batchDraw(this.ctx);
         this.ctx.globalAlpha = 1;
       }
 
       if (targetPool && targetAlpha > 0) {
         this.ctx.globalAlpha = targetAlpha;
-        const particles = targetPool.getAllParticles();
-        for (let i = 0; i < particles.length; i++) {
-          if (particles[i].active) {
-            particles[i].draw(this.ctx);
-          }
-        }
+        targetPool.batchDraw(this.ctx);
         this.ctx.globalAlpha = 1;
       }
     }

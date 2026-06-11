@@ -35,12 +35,11 @@ class WeatherApp {
   }
 
   private init(): void {
+    this.applyInitialStyles();
     this.bindEvents();
     this.updateUI();
     this.weatherSystem.start();
     this.animateUI();
-
-    this.applyInitialStyles();
   }
 
   private applyInitialStyles(): void {
@@ -65,14 +64,9 @@ class WeatherApp {
       });
     });
 
-    this.densitySlider.addEventListener('input', () => {
-      const value = parseInt(this.densitySlider.value, 10);
-      this.weatherSystem.setParticleCount(value);
-      this.densityValue.textContent = value.toString();
-    });
-
-    this.densitySlider.addEventListener('change', () => {
-      const value = parseInt(this.densitySlider.value, 10);
+    this.densitySlider.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      const value = parseInt(target.value, 10);
       this.weatherSystem.setParticleCount(value);
       this.densityValue.textContent = value.toString();
     });
@@ -100,35 +94,20 @@ class WeatherApp {
 
     this.isWeatherAnimating = true;
     this.currentWeather = weather;
-
     this.updateActiveButton(weather);
 
-    this.fadeOutElement(this.weatherNameEl, () => {
+    this.weatherNameEl.classList.add('fading');
+
+    setTimeout(() => {
       this.weatherNameEl.textContent = weatherConfigs[weather].name;
-      this.fadeInElement(this.weatherNameEl);
-    });
+      this.weatherNameEl.classList.remove('fading');
+    }, 400);
 
     this.weatherSystem.switchWeather(weather);
 
     setTimeout(() => {
       this.isWeatherAnimating = false;
     }, 1000);
-  }
-
-  private fadeOutElement(element: HTMLElement, callback?: () => void): void {
-    element.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-    element.style.opacity = '0';
-    element.style.transform = 'translateY(-8px)';
-
-    if (callback) {
-      setTimeout(callback, 250);
-    }
-  }
-
-  private fadeInElement(element: HTMLElement): void {
-    element.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-    element.style.opacity = '1';
-    element.style.transform = 'translateY(0)';
   }
 
   private updateActiveButton(weather: WeatherType): void {
@@ -152,11 +131,14 @@ class WeatherApp {
 
   private animateUI = (): void => {
     const actualCount = this.weatherSystem.getParticleCount();
-    const targetCount = this.weatherSystem.getPendingParticleCount();
+    const pendingCount = this.weatherSystem.getPendingParticleCount();
     const transitioning = this.weatherSystem.isWeatherTransitioning();
 
-    const displayValue = transitioning ? targetCount : actualCount;
-    const smoothedCount = this.displayedParticleCount + (displayValue - this.displayedParticleCount) * 0.15;
+    const targetDisplay = transitioning
+      ? (pendingCount !== this.weatherSystem.getTargetParticleCount() ? pendingCount : actualCount)
+      : actualCount;
+
+    const smoothedCount = this.displayedParticleCount + (targetDisplay - this.displayedParticleCount) * 0.12;
     this.displayedParticleCount = smoothedCount;
     this.particleCountEl.textContent = Math.round(smoothedCount).toString();
 

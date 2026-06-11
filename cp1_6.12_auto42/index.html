@@ -45,7 +45,8 @@
       background: var(--flash-overlay);
       pointer-events: none;
       z-index: 5;
-      transition: background 0.05s ease;
+      transition: background 0.03s linear;
+      mix-blend-mode: screen;
     }
 
     #canvas-container {
@@ -176,7 +177,9 @@
       font-size: 24px;
       font-weight: 700;
       color: var(--text-color);
-      transition: opacity 0.3s ease;
+      transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-block;
     }
 
     .info-value.weather-name {
@@ -185,6 +188,11 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+    }
+
+    .info-value.fading {
+      opacity: 0;
+      transform: translateY(-10px);
     }
 
     /* 底部天气按钮组 */
