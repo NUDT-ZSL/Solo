@@ -76,6 +76,8 @@ export interface ParticleSystemConfig {
   theme: ThemeName;
   forceStrength: number;
   mouseInteraction: boolean;
+  trailLength: number;
+  trailEnabled: boolean;
 }
 
 interface FPSStats {
@@ -106,7 +108,7 @@ export class ParticleSystem {
   private lastFrameTime: number = 0;
   private animationFrameId: number | null = null;
 
-  private gridCellSize: number = 70;
+  private gridCellSize: number = 60;
   private grid: Particle[][] = [];
   private gridCols: number = 0;
   private gridRows: number = 0;
@@ -121,6 +123,15 @@ export class ParticleSystem {
   };
   private fpsUpdateTimer: number = 0;
   private fpsFrames: number = 0;
+
+  private minDist: number = 20;
+  private maxDist: number = 55;
+  private minDistSq: number = 400;
+  private maxDistSq: number = 3025;
+  private repelStrength: number = 0.15;
+  private attractStrength: number = 0.04;
+
+  private forceUpdateCounter: number = 0;
 
   constructor(canvas: HTMLCanvasElement, config: ParticleSystemConfig) {
     this.canvas = canvas;
@@ -147,6 +158,18 @@ export class ParticleSystem {
     return this.fpsStats.avgFPS;
   }
 
+  public getMinFPS(): number {
+    return this.fpsStats.minFPS;
+  }
+
+  public getMaxFPS(): number {
+    return this.fpsStats.maxFPS;
+  }
+
+  public getParticleCount(): number {
+    return this.particles.length;
+  }
+
   public setParticleCount(count: number): void {
     const target = Math.max(500, Math.min(5000, count));
     if (target === this.config.particleCount) return;
@@ -166,6 +189,8 @@ export class ParticleSystem {
 
   public setForceStrength(strength: number): void {
     this.config.forceStrength = Math.max(0, Math.min(1, strength));
+    this.repelStrength = 0.15 * this.config.forceStrength;
+    this.attractStrength = 0.04 * this.config.forceStrength;
   }
 
   public setMouseInteraction(enabled: boolean): void {
@@ -176,6 +201,20 @@ export class ParticleSystem {
       this.mouseY = null;
       this.mouseVelX = 0;
       this.mouseVelY = 0;
+    }
+  }
+
+  public setTrailLength(length: number): void {
+    this.config.trailLength = Math.max(0, Math.min(20, length));
+    for (const particle of this.particles) {
+      particle.setTrailLength(this.config.trailLength);
+    }
+  }
+
+  public setTrailEnabled(enabled: boolean): void {
+    this.config.trailEnabled = enabled;
+    for (const particle of this.particles) {
+      particle.setTrailEnabled(enabled);
     }
   }
 
@@ -297,7 +336,14 @@ export class ParticleSystem {
     this.mouseVelX *= 0.9;
     this.mouseVelY *= 0.9;
 
-    this.buildGrid();
+    const particleCount = this.particles.length;
+    const forceUpdateInterval = particleCount > 3500 ? 2 : 1;
+    this.forceUpdateCounter++;
+
+    if (this.forceUpdateCounter % forceUpdateInterval === 0) {
+      this.buildGrid();
+      this.applyNeighborForces(deltaTime * forceUpdateInterval);
+    }
 
     const forceStrength = this.config.forceStrength;
     const cellSize = this.gridCellSize;
@@ -307,13 +353,11 @@ export class ParticleSystem {
     const mouseVelX = this.mouseVelX;
     const mouseVelY = this.mouseVelY;
 
-    for (let i = 0; i < this.particles.length; i++) {
-      const particle = this.particles[i];
+    const particles = this.particles;
+    const len = particles.length;
 
-      const neighbors = this.getNeighborsForParticle(particle);
-      particle.applyNeighborForce(neighbors, forceStrength, deltaTime);
-
-      particle.update(
+    for (let i = 0; i < len; i++) {
+      particles[i].update(
         deltaTime,
         mouseX,
         mouseY,
@@ -324,6 +368,8 @@ export class ParticleSystem {
         cellSize
       );
     }
+
+    this.cleanupDeletedParticles();
   }
 
   private buildGrid(): void {
@@ -331,50 +377,107 @@ export class ParticleSystem {
     const cols = this.gridCols;
     const rows = this.gridRows;
     const grid = this.grid;
+    const particles = this.particles;
+    const len = particles.length;
 
     for (let i = 0; i < grid.length; i++) {
       grid[i].length = 0;
     }
 
-    for (let i = 0; i < this.particles.length; i++) {
-      const p = this.particles[i];
+    for (let i = 0; i < len; i++) {
+      const p = particles[i];
       const gx = Math.floor(p.x / cellSize);
       const gy = Math.floor(p.y / cellSize);
 
       if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
+        p.gridX = gx;
+        p.gridY = gy;
         const idx = gy * cols + gx;
         grid[idx].push(p);
       }
     }
   }
 
-  private getNeighborsForParticle(particle: Particle): Particle[] {
-    const cellSize = this.gridCellSize;
+  private applyNeighborForces(deltaTime: number): void {
+    const forceStrength = this.config.forceStrength;
+    if (forceStrength <= 0) return;
+
     const cols = this.gridCols;
     const rows = this.gridRows;
     const grid = this.grid;
+    const particles = this.particles;
+    const len = particles.length;
 
-    const gx = Math.floor(particle.x / cellSize);
-    const gy = Math.floor(particle.y / cellSize);
+    const minDistSq = this.minDistSq;
+    const maxDistSq = this.maxDistSq;
+    const minDist = this.minDist;
+    const maxDist = this.maxDist;
+    const repelStrength = this.repelStrength;
+    const attractStrength = this.attractStrength;
+    const dt = deltaTime * 60;
 
-    const neighbors: Particle[] = [];
+    for (let i = 0; i < len; i++) {
+      const p = particles[i];
+      const gx = p.gridX;
+      const gy = p.gridY;
 
-    const startX = Math.max(0, gx - 1);
-    const endX = Math.min(cols - 1, gx + 1);
-    const startY = Math.max(0, gy - 1);
-    const endY = Math.min(rows - 1, gy + 1);
+      const startX = Math.max(0, gx - 1);
+      const endX = Math.min(cols - 1, gx + 1);
+      const startY = Math.max(0, gy - 1);
+      const endY = Math.min(rows - 1, gy + 1);
 
-    for (let y = startY; y <= endY; y++) {
-      for (let x = startX; x <= endX; x++) {
-        const idx = y * cols + x;
-        const cell = grid[idx];
-        for (let i = 0; i < cell.length; i++) {
-          neighbors.push(cell[i]);
+      for (let cy = startY; cy <= endY; cy++) {
+        for (let cx = startX; cx <= endX; cx++) {
+          const cell = grid[cy * cols + cx];
+          const cellLen = cell.length;
+
+          for (let j = 0; j < cellLen; j++) {
+            const neighbor = cell[j];
+            if (neighbor === p) continue;
+
+            const dx = neighbor.x - p.x;
+            const dy = neighbor.y - p.y;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq > maxDistSq || distSq < 0.01) continue;
+
+            const dist = Math.sqrt(distSq);
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            let force: number;
+            if (distSq < minDistSq) {
+              force = -(1 - dist / minDist) * repelStrength;
+            } else {
+              const t = (dist - minDist) / (maxDist - minDist);
+              force = (1 - t) * (1 - t) * attractStrength;
+            }
+
+            p.vx += nx * force * dt;
+            p.vy += ny * force * dt;
+          }
         }
       }
     }
+  }
 
-    return neighbors;
+  private cleanupDeletedParticles(): void {
+    const target = this.config.particleCount;
+    let writeIdx = 0;
+    const particles = this.particles;
+    const len = particles.length;
+
+    for (let i = 0; i < len; i++) {
+      const p = particles[i];
+      if (!p.markedForDeletion && writeIdx < target) {
+        particles[writeIdx] = p;
+        writeIdx++;
+      }
+    }
+
+    if (writeIdx < len) {
+      particles.length = writeIdx;
+    }
   }
 
   private render(): void {
@@ -382,13 +485,15 @@ export class ParticleSystem {
     const ctx = this.ctx;
 
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(10, 10, 18, 0.12)';
+    ctx.fillStyle = 'rgba(10, 10, 18, 0.15)';
     ctx.fillRect(0, 0, rect.width, rect.height);
 
     ctx.globalCompositeOperation = 'lighter';
 
-    for (let i = 0; i < this.particles.length; i++) {
-      this.particles[i].render(ctx);
+    const particles = this.particles;
+    const len = particles.length;
+    for (let i = 0; i < len; i++) {
+      particles[i].render(ctx);
     }
 
     ctx.globalCompositeOperation = 'source-over';
@@ -417,14 +522,10 @@ export class ParticleSystem {
         this.particles.push(this.createParticle(rect.width, rect.height, rgbColors, true));
       }
     } else if (target < current) {
-      for (let i = target; i < current; i++) {
+      const toRemove = current - target;
+      for (let i = current - toRemove; i < current; i++) {
         this.particles[i].targetAlpha = 0;
       }
-      setTimeout(() => {
-        if (this.particles.length > this.config.particleCount) {
-          this.particles.length = this.config.particleCount;
-        }
-      }, 500);
     }
   }
 
@@ -442,18 +543,18 @@ export class ParticleSystem {
       switch (side) {
         case 0:
           x = Math.random() * width;
-          y = -10;
+          y = -20;
           break;
         case 1:
-          x = width + 10;
+          x = width + 20;
           y = Math.random() * height;
           break;
         case 2:
           x = Math.random() * width;
-          y = height + 10;
+          y = height + 20;
           break;
         default:
-          x = -10;
+          x = -20;
           y = Math.random() * height;
           break;
       }
@@ -470,8 +571,11 @@ export class ParticleSystem {
       speed: 0.3 + Math.random() * 0.7,
       width,
       height,
-      fadeIn
+      fadeIn,
+      trailLength: this.config.trailLength
     };
-    return new Particle(options);
+    const p = new Particle(options);
+    p.setTrailEnabled(this.config.trailEnabled);
+    return p;
   }
 }

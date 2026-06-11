@@ -5,7 +5,9 @@ const DEFAULT_CONFIG: ParticleSystemConfig = {
   particleCount: 2000,
   theme: 'nebulaPurple',
   forceStrength: 0.5,
-  mouseInteraction: true
+  mouseInteraction: true,
+  trailLength: 8,
+  trailEnabled: true
 };
 
 function init(): void {
@@ -32,6 +34,12 @@ function init(): void {
     },
     onMouseInteractionToggle: (enabled: boolean) => {
       particleSystem.setMouseInteraction(enabled);
+    },
+    onTrailLengthChange: (length: number) => {
+      particleSystem.setTrailLength(length);
+    },
+    onTrailToggle: (enabled: boolean) => {
+      particleSystem.setTrailEnabled(enabled);
     }
   };
 
@@ -41,7 +49,9 @@ function init(): void {
     DEFAULT_CONFIG.theme,
     DEFAULT_CONFIG.particleCount,
     DEFAULT_CONFIG.forceStrength,
-    DEFAULT_CONFIG.mouseInteraction
+    DEFAULT_CONFIG.mouseInteraction,
+    DEFAULT_CONFIG.trailLength,
+    DEFAULT_CONFIG.trailEnabled
   );
 
   const fpsUpdateInterval = window.setInterval(() => {
@@ -85,6 +95,8 @@ function init(): void {
   window.addEventListener('touchcancel', handleTouchEnd);
 
   particleSystem.start();
+
+  (window as any).__particleSystem = particleSystem;
 
   window.addEventListener('beforeunload', () => {
     clearInterval(fpsUpdateInterval);

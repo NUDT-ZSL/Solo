@@ -4,6 +4,11 @@ export interface RGB {
   b: number;
 }
 
+export interface TrailPoint {
+  x: number;
+  y: number;
+}
+
 export interface ParticleOptions {
   x: number;
   y: number;
@@ -13,6 +18,7 @@ export interface ParticleOptions {
   width: number;
   height: number;
   fadeIn?: boolean;
+  trailLength?: number;
 }
 
 export class Particle {
@@ -38,6 +44,12 @@ export class Particle {
   public gridX: number = 0;
   public gridY: number = 0;
 
+  public trail: TrailPoint[] = [];
+  public trailLength: number;
+  public trailEnabled: boolean = true;
+
+  public markedForDeletion: boolean = false;
+
   private static colorCache: Map<string, string> = new Map();
 
   constructor(options: ParticleOptions) {
@@ -51,6 +63,7 @@ export class Particle {
     this.baseSpeed = options.speed;
     this.width = options.width;
     this.height = options.height;
+    this.trailLength = options.trailLength || 8;
 
     const angle = Math.random() * Math.PI * 2;
     this.vx = Math.cos(angle) * this.baseSpeed;
@@ -62,11 +75,29 @@ export class Particle {
     this.restX = this.x;
     this.restY = this.y;
     this.restUpdateTimer = Math.random() * 120;
+
+    for (let i = 0; i < this.trailLength; i++) {
+      this.trail.push({ x: this.x, y: this.y });
+    }
   }
 
   public setTargetColor(color: RGB): void {
     this.targetColor = { ...color };
     this.colorTransition = 0;
+  }
+
+  public setTrailLength(length: number): void {
+    this.trailLength = Math.max(0, Math.min(20, length));
+    while (this.trail.length < this.trailLength) {
+      this.trail.unshift({ x: this.x, y: this.y });
+    }
+    while (this.trail.length > this.trailLength) {
+      this.trail.shift();
+    }
+  }
+
+  public setTrailEnabled(enabled: boolean): void {
+    this.trailEnabled = enabled;
   }
 
   public resize(width: number, height: number): void {
@@ -76,6 +107,10 @@ export class Particle {
     this.y *= yRatio;
     this.restX *= xRatio;
     this.restY *= yRatio;
+    for (const point of this.trail) {
+      point.x *= xRatio;
+      point.y *= yRatio;
+    }
     this.width = width;
     this.height = height;
   }
@@ -102,31 +137,35 @@ export class Particle {
     }
 
     if (this.alpha < this.targetAlpha) {
-      this.alpha = Math.min(this.targetAlpha, this.alpha + deltaTime * 2);
+      this.alpha = Math.min(this.targetAlpha, this.alpha + deltaTime * 1.5);
     } else if (this.alpha > this.targetAlpha) {
-      this.alpha = Math.max(this.targetAlpha, this.alpha - deltaTime * 2);
+      this.alpha = Math.max(this.targetAlpha, this.alpha - deltaTime * 1.5);
+      if (this.alpha <= 0.01 && this.targetAlpha === 0) {
+        this.markedForDeletion = true;
+      }
     }
 
     if (mouseActive && mouseX !== null && mouseY !== null) {
       const dx = this.x - mouseX;
       const dy = this.y - mouseY;
       const distSq = dx * dx + dy * dy;
-      const innerRadius = 40;
-      const outerRadius = 150;
+      const innerRadius = 50;
+      const outerRadius = 160;
       const outerRadiusSq = outerRadius * outerRadius;
+      const innerRadiusSq = innerRadius * innerRadius;
 
       if (distSq < outerRadiusSq && distSq > 0.01) {
         const dist = Math.sqrt(distSq);
         let forceFactor: number;
 
-        if (dist < innerRadius) {
+        if (distSq < innerRadiusSq) {
           forceFactor = 1;
         } else {
           forceFactor = 1 - (dist - innerRadius) / (outerRadius - innerRadius);
           forceFactor = forceFactor * forceFactor;
         }
 
-        const repelForce = 12 * forceStrength * forceFactor;
+        const repelForce = 10 * forceStrength * forceFactor;
         const nx = dx / dist;
         const ny = dy / dist;
 
@@ -134,9 +173,10 @@ export class Particle {
         this.vy += ny * repelForce * deltaTime * 60;
 
         if (mouseVelX !== 0 || mouseVelY !== 0) {
-          const mouseSpeed = Math.sqrt(mouseVelX * mouseVelX + mouseVelY * mouseVelY);
-          if (mouseSpeed > 0.5) {
-            const tangentFactor = 0.3 * forceStrength * forceFactor;
+          const mouseSpeedSq = mouseVelX * mouseVelX + mouseVelY * mouseVelY;
+          if (mouseSpeedSq > 0.25) {
+            const mouseSpeed = Math.sqrt(mouseSpeedSq);
+            const tangentFactor = 0.25 * forceStrength * forceFactor;
             const tx = -ny;
             const ty = nx;
             const dir = (mouseVelX * tx + mouseVelY * ty) > 0 ? 1 : -1;
@@ -149,14 +189,14 @@ export class Particle {
 
     this.restUpdateTimer -= deltaTime * 60;
     if (this.restUpdateTimer <= 0) {
-      this.restX = this.x + (Math.random() - 0.5) * 40;
-      this.restY = this.y + (Math.random() - 0.5) * 40;
+      this.restX = this.x + (Math.random() - 0.5) * 60;
+      this.restY = this.y + (Math.random() - 0.5) * 60;
       this.restX = Math.max(0, Math.min(this.width, this.restX));
       this.restY = Math.max(0, Math.min(this.height, this.restY));
-      this.restUpdateTimer = 90 + Math.random() * 60;
+      this.restUpdateTimer = 120 + Math.random() * 60;
     }
 
-    const springK = 0.003 * forceStrength;
+    const springK = 0.002 * forceStrength;
     const restDx = this.restX - this.x;
     const restDy = this.restY - this.y;
     this.vx += restDx * springK * deltaTime * 60;
@@ -172,11 +212,11 @@ export class Particle {
       this.vy *= ratio;
     }
 
-    this.vx *= 0.97;
-    this.vy *= 0.97;
+    this.vx *= 0.98;
+    this.vy *= 0.98;
 
     const currentSpeedSq = this.vx * this.vx + this.vy * this.vy;
-    const minSpeed = this.baseSpeed * 0.3;
+    const minSpeed = this.baseSpeed * 0.25;
     const minSpeedSq = minSpeed * minSpeed;
     if (currentSpeedSq < minSpeedSq) {
       const currentSpeed = Math.sqrt(currentSpeedSq);
@@ -209,6 +249,11 @@ export class Particle {
       this.y = this.height - this.size;
       this.vy = -Math.abs(this.vy) * 0.8;
     }
+
+    if (this.trailEnabled && this.trailLength > 0) {
+      this.trail.shift();
+      this.trail.push({ x: this.x, y: this.y });
+    }
   }
 
   public applyNeighborForce(
@@ -218,13 +263,13 @@ export class Particle {
   ): void {
     if (forceStrength <= 0 || neighbors.length === 0) return;
 
-    const minDist = 25;
-    const maxDist = 70;
+    const minDist = 20;
+    const maxDist = 55;
     const minDistSq = minDist * minDist;
     const maxDistSq = maxDist * maxDist;
 
-    const repelStrength = 0.2 * forceStrength;
-    const attractStrength = 0.06 * forceStrength;
+    const repelStrength = 0.15 * forceStrength;
+    const attractStrength = 0.04 * forceStrength;
     const dt = deltaTime * 60;
 
     for (let i = 0; i < neighbors.length; i++) {
@@ -246,7 +291,7 @@ export class Particle {
         force = -(1 - dist / minDist) * repelStrength;
       } else {
         const t = (dist - minDist) / (maxDist - minDist);
-        force = (1 - t) * attractStrength;
+        force = (1 - t) * (1 - t) * attractStrength;
       }
 
       this.vx += nx * force * dt;
@@ -257,9 +302,13 @@ export class Particle {
   public render(ctx: CanvasRenderingContext2D): void {
     if (this.alpha <= 0.01) return;
 
+    if (this.trailEnabled && this.trailLength > 0 && this.trail.length >= 2) {
+      this.renderTrail(ctx);
+    }
+
     const size = this.size;
-    const glowSize = size * 2.8;
-    const glowAlpha = this.alpha * 0.22;
+    const glowSize = size * 1.4;
+    const glowAlpha = this.alpha * 0.12;
 
     ctx.fillStyle = this.getColorString(this.color, glowAlpha);
     ctx.beginPath();
@@ -269,6 +318,46 @@ export class Particle {
     ctx.fillStyle = this.getColorString(this.color, this.alpha);
     ctx.beginPath();
     ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  public renderTrailOnly(ctx: CanvasRenderingContext2D): void {
+    if (this.alpha <= 0.01 || !this.trailEnabled || this.trailLength <= 0) return;
+    const trailLen = this.trail.length;
+    if (trailLen < 2) return;
+
+    const baseAlpha = this.alpha * 0.35;
+    const baseSize = this.size * 0.6;
+
+    for (let i = 1; i < trailLen; i++) {
+      const t = i / trailLen;
+      const alpha = baseAlpha * t;
+      const size = baseSize * t + 0.5;
+      const point = this.trail[i];
+
+      ctx.fillStyle = this.getColorString(this.color, alpha);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  public renderGlowOnly(ctx: CanvasRenderingContext2D): void {
+    if (this.alpha <= 0.01) return;
+    const size = this.size;
+    const glowSize = size * 1.4;
+    const glowAlpha = this.alpha * 0.12;
+    ctx.fillStyle = this.getColorString(this.color, glowAlpha);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, glowSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  public renderCoreOnly(ctx: CanvasRenderingContext2D): void {
+    if (this.alpha <= 0.01) return;
+    ctx.fillStyle = this.getColorString(this.color, this.alpha);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
     ctx.fill();
   }
 

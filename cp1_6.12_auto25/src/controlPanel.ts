@@ -5,6 +5,8 @@ export interface ControlPanelCallbacks {
   onThemeChange: (theme: ThemeName) => void;
   onForceStrengthChange: (strength: number) => void;
   onMouseInteractionToggle: (enabled: boolean) => void;
+  onTrailLengthChange: (length: number) => void;
+  onTrailToggle: (enabled: boolean) => void;
 }
 
 export class ControlPanel {
@@ -17,6 +19,8 @@ export class ControlPanel {
   private currentParticleCount: number;
   private currentForceStrength: number;
   private currentMouseInteraction: boolean;
+  private currentTrailLength: number;
+  private currentTrailEnabled: boolean;
   private fpsDisplay: HTMLSpanElement | null = null;
 
   constructor(
@@ -25,13 +29,17 @@ export class ControlPanel {
     initialTheme: ThemeName,
     initialParticleCount: number,
     initialForceStrength: number,
-    initialMouseInteraction: boolean
+    initialMouseInteraction: boolean,
+    initialTrailLength: number,
+    initialTrailEnabled: boolean
   ) {
     this.callbacks = callbacks;
     this.currentTheme = initialTheme;
     this.currentParticleCount = initialParticleCount;
     this.currentForceStrength = initialForceStrength;
     this.currentMouseInteraction = initialMouseInteraction;
+    this.currentTrailLength = initialTrailLength;
+    this.currentTrailEnabled = initialTrailEnabled;
 
     this.container = parent;
     this.panel = this.createPanel();
@@ -127,6 +135,8 @@ export class ControlPanel {
     panel.appendChild(this.createParticleCountSlider());
     panel.appendChild(this.createThemeSelector());
     panel.appendChild(this.createForceStrengthSlider());
+    panel.appendChild(this.createTrailLengthSlider());
+    panel.appendChild(this.createTrailToggle());
     panel.appendChild(this.createMouseInteractionToggle());
 
     return panel;
@@ -311,6 +321,107 @@ export class ControlPanel {
 
     wrapper.appendChild(labelRow);
     wrapper.appendChild(slider);
+    return wrapper;
+  }
+
+  private createTrailLengthSlider(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin-bottom: 18px;';
+
+    const labelRow = document.createElement('div');
+    labelRow.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 8px;';
+
+    const label = document.createElement('span');
+    label.textContent = '拖尾长度';
+    label.style.color = '#b0b0b0';
+
+    const value = document.createElement('span');
+    value.textContent = this.currentTrailLength.toString();
+    value.style.color = '#ffffff';
+    value.style.fontWeight = '500';
+
+    labelRow.appendChild(label);
+    labelRow.appendChild(value);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '20';
+    slider.step = '1';
+    slider.value = this.currentTrailLength.toString();
+    this.styleSlider(slider);
+
+    slider.addEventListener('input', () => {
+      const length = parseInt(slider.value, 10);
+      this.currentTrailLength = length;
+      value.textContent = length.toString();
+      this.callbacks.onTrailLengthChange(length);
+    });
+
+    wrapper.appendChild(labelRow);
+    wrapper.appendChild(slider);
+    return wrapper;
+  }
+
+  private createTrailToggle(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;';
+
+    const label = document.createElement('span');
+    label.textContent = '粒子拖尾';
+    label.style.color = '#b0b0b0';
+
+    const toggle = document.createElement('label');
+    toggle.style.cssText = `
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+      cursor: pointer;
+    `;
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = this.currentTrailEnabled;
+    input.style.cssText = 'opacity: 0; width: 0; height: 0;';
+
+    const slider = document.createElement('span');
+    slider.style.cssText = `
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: ${this.currentTrailEnabled ? '#06d6a0' : 'rgba(255,255,255,0.15)'};
+      border-radius: 26px;
+      transition: all 0.3s ease;
+    `;
+
+    const knob = document.createElement('span');
+    knob.style.cssText = `
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: ${this.currentTrailEnabled ? '25px' : '3px'};
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    `;
+    slider.appendChild(knob);
+
+    input.addEventListener('change', () => {
+      const enabled = input.checked;
+      this.currentTrailEnabled = enabled;
+      slider.style.backgroundColor = enabled ? '#06d6a0' : 'rgba(255,255,255,0.15)';
+      knob.style.left = enabled ? '25px' : '3px';
+      this.callbacks.onTrailToggle(enabled);
+    });
+
+    toggle.appendChild(input);
+    toggle.appendChild(slider);
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(toggle);
     return wrapper;
   }
 
