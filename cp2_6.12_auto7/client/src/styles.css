@@ -255,25 +255,28 @@ body {
   will-change: transform, box-shadow;
 }
 
+/* 出现动画只在有 card-appear class时触发，动画结束后由React自动移除 */
 .card.card-appear {
-  animation: cardAppear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: cardAppear 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes cardAppear {
   0% { opacity: 0; transform: scale(0.5); }
-  60% { transform: scale(1.05); }
+  60% { transform: scale(1.06); }
   100% { opacity: 1; transform: scale(1); }
 }
 
+/* FLIP重排过渡 */
 .card.card-flip {
-  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
 }
 
 .card.dragging {
   cursor: grabbing;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.65) inset !important;
   z-index: 1000 !important;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.15s ease !important;
+  transform-origin: center;
 }
 
 .card.color-red { border-left: 5px solid #ef4444; }
@@ -283,8 +286,14 @@ body {
 .card.color-blue { border-left: 5px solid #3b82f6; }
 .card.color-purple { border-left: 5px solid #a855f7; }
 
+/* 🔑 呼吸光晕：优先级更高，加在卡片外层，不与出现动画冲突 */
+/* 只操作 box-shadow 不碰 transform，避免与其他动画冲突 */
 .card.editing-glow {
-  animation: breathingGlow 2s ease-in-out infinite !important;
+  animation: breathingGlow 2.2s ease-in-out infinite !important;
+}
+
+.card.editing-glow.dragging {
+  animation: breathingGlowDragging 2.2s ease-in-out infinite !important;
 }
 
 @keyframes breathingGlow {
@@ -293,14 +302,31 @@ body {
       0 4px 24px rgba(0, 0, 0, 0.1),
       0 0 0 1px rgba(255, 255, 255, 0.5) inset,
       0 0 0 2px var(--editing-color, #667eea),
-      0 0 20px rgba(0, 0, 0, 0);
+      0 0 18px rgba(0, 0, 0, 0);
   }
   50% {
     box-shadow:
       0 4px 24px rgba(0, 0, 0, 0.1),
       0 0 0 1px rgba(255, 255, 255, 0.5) inset,
-      0 0 0 4px var(--editing-color, #667eea),
-      0 0 30px var(--editing-color, #667eea);
+      0 0 0 5px var(--editing-color, #667eea),
+      0 0 36px var(--editing-color, #667eea);
+  }
+}
+
+@keyframes breathingGlowDragging {
+  0%, 100% {
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.28),
+      0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+      0 0 0 2px var(--editing-color, #667eea),
+      0 0 22px rgba(0, 0, 0, 0);
+  }
+  50% {
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.28),
+      0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+      0 0 0 5px var(--editing-color, #667eea),
+      0 0 40px var(--editing-color, #667eea);
   }
 }
 

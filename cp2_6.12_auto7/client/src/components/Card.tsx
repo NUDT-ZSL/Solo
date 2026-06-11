@@ -10,6 +10,7 @@ interface CardProps {
   zIndex: number;
   isNew: boolean;
   flipStyle?: React.CSSProperties;
+  registerDomRef?: (cardId: string, element: HTMLDivElement | null) => void;
   onUpdate: (cardId: string, changes: Partial<CardType>) => void;
   onDelete: (cardId: string) => void;
   onVote: (cardId: string, vote: 'up' | 'down' | null) => void;
@@ -26,6 +27,7 @@ export default function Card({
   zIndex,
   isNew,
   flipStyle,
+  registerDomRef,
   onUpdate,
   onDelete,
   onVote,
@@ -45,6 +47,12 @@ export default function Card({
   const [voteAnimType, setVoteAnimType] = useState<'up' | 'down' | null>(null);
   const [showRipple, setShowRipple] = useState(false);
   const dragStartPos = useRef<{ x: number; y: number; cardX: number; cardY: number } | null>(null);
+
+  // 🔑 关键：挂载/卸载时把真实的DOM元素注册给父组件（用于FLIP）
+  useEffect(() => {
+    registerDomRef?.(card.id, cardRef.current);
+    return () => registerDomRef?.(card.id, null);
+  }, [card.id, registerDomRef]);
 
   useEffect(() => {
     setTitle(card.title);
