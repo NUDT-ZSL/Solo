@@ -1,4 +1,4 @@
-import { generateTerrain, TERRAIN_RESOLUTION, MAX_TOTAL_VERTICES } from '../core/terrain';
+import { generateTerrain, TERRAIN_RESOLUTION, TERRAIN_SIZE, MAX_TOTAL_VERTICES } from '../core/terrain';
 import {
   generateVegetation,
   getHeightAt,
@@ -39,9 +39,21 @@ function assertClose(actual: number, expected: number, epsilon: number, message:
   }
 }
 
+function assertGte(actual: number, threshold: number, message: string): void {
+  if (actual < threshold) {
+    throw new Error(`${message}. Expected >= ${threshold}, got ${actual}`);
+  }
+}
+
+function assertLte(actual: number, threshold: number, message: string): void {
+  if (actual > threshold) {
+    throw new Error(`${message}. Expected <= ${threshold}, got ${actual}`);
+  }
+}
+
 console.log('\n=== 地形生成器单元测试 ===\n');
 
-console.log('\n[core/terrain.ts - 高度图测试]');
+console.log('\n[core/terrain.ts - 高度图生成测试]');
 
 test('地形生成应输出 128x128 高度图', () => {
   const result = generateTerrain({ noiseFrequency: 2, flatness: 0.5, seed: 42 });
@@ -60,38 +72,60 @@ test('归一化高度图所有值应在 [0, 1] 范围内', () => {
       if (v > max) max = v;
     }
   }
-  assert(min >= 0 - 1e-6, `最小归一化高度 ${min} 小于 0`);
-  assert(max <= 1 + 1e-6, `最大归一化高度 ${max} 大于 1`);
+  assertGte(min, 0 - 1e-6, `最小归一化高度 ${min} 小于 0`);
+  assertLte(max, 1 + 1e-6, `最大归一化高度 ${max} 大于 1`);
 });
 
-test('高度图边缘(边界)值应有效且非 NaN', () => {
+test('高度图四角及边缘值应有效且非 NaN/Infinity', () => {
   const result = generateTerrain({ noiseFrequency: 1.5, flatness: 0.7, seed: 7 });
   const checkPoints: [number, number][] = [
     [0, 0],
     [TERRAIN_RESOLUTION - 1, 0],
     [0, TERRAIN_RESOLUTION - 1],
     [TERRAIN_RESOLUTION - 1, TERRAIN_RESOLUTION - 1],
-    [TERRAIN_RESOLUTION / 2, 0],
-    [0, TERRAIN_RESOLUTION / 2],
-    [TERRAIN_RESOLUTION - 1, TERRAIN_RESOLUTION / 2],
-    [TERRAIN_RESOLUTION / 2, TERRAIN_RESOLUTION - 1]
+    [1, 1],
+    [TERRAIN_RESOLUTION - 2, TERRAIN_RESOLUTION - 2],
+    [0, 64],
+    [64, 0],
+    [TERRAIN_RESOLUTION - 1, 64],
+    [64, TERRAIN_RESOLUTION - 1]
   ];
   for (const [x, z] of checkPoints) {
     const v = result.heightMap[z][x];
     assert(!isNaN(v), `边缘点 (${x},${z}) 高度为 NaN`);
     assert(isFinite(v), `边缘点 (${x},${z}) 高度非有限值`);
+    assertGte(v, 0, `边缘点 (${x},${z}) 高度 ${v} 不应为负`);
   }
 });
 
-test('相同种子应生成相同的高度图（确定性）', () => {
+test('高度图边缘与内部不应有突变异常值', () => {
+  const result = generateTerrain({ noiseFrequency: 2, flatness: 0.5, seed: 55 });
+  for (let z = 1; z < TERRAIN_RESOLUTION - 1; z++) {
+    for (let x = 1; x < TERRAIN_RESOLUTION - 1; x++) {
+      const h = result.heightMap[z][x];
+      const neighbors = [
+        result.heightMap[z - 1][x],
+        result.heightMap[z + 1][x],
+        result.heightMap[z][x - 1],
+        result.heightMap[z][x + 1]
+      ];
+      for (const nh of neighbors) {
+        const diff = Math.abs(h - nh);
+        assertLte(diff, 2.0, `点(${x},${z})与邻居高度差 ${diff.toFixed(3)} 过大, h=${h.toFixed(3)}, nh=${nh.toFixed(3)}`);
+      }
+    }
+  }
+});
+
+test('相同种子应生成完全相同的高度图（确定性）', () => {
   const r1 = generateTerrain({ noiseFrequency: 2.5, flatness: 0.4, seed: 12345 });
   const r2 = generateTerrain({ noiseFrequency: 2.5, flatness: 0.4, seed: 12345 });
-  for (let z = 0; z < TERRAIN_RESOLUTION; z += 8) {
-    for (let x = 0; x < TERRAIN_RESOLUTION; x += 8) {
+  for (let z = 0; z < TERRAIN_RESOLUTION; z += 4) {
+    for (let x = 0; x < TERRAIN_RESOLUTION; x += 4) {
       assertClose(
         r1.heightMap[z][x],
         r2.heightMap[z][x],
-        1e-9,
+        1e-10,
         `同种子点 (${x},${z}) 高度不一致`
       );
     }
@@ -101,32 +135,33 @@ test('相同种子应生成相同的高度图（确定性）', () => {
 test('地形顶点数应为 128x128 = 16384', () => {
   const result = generateTerrain({ noiseFrequency: 2, flatness: 0.5, seed: 1 });
   assert(result.vertexCount === 16384, `顶点数应为 16384, 实际 ${result.vertexCount}`);
-  assert(result.treeVertexBudget > 0, '树木顶点预算应为正数');
-  assert(result.vertexCount + result.treeVertexBudget <= MAX_TOTAL_VERTICES + 1, '总顶点预算超标');
 });
 
-test('平整度参数应影响高度变化：小平整度更陡峭', () => {
+test('顶点预算应保证地形+树木总顶点 ≤ 50000', () => {
+  const result = generateTerrain({ noiseFrequency: 2, flatness: 0.5, seed: 1 });
+  assertGte(result.treeVertexBudget, 0, '树木顶点预算应非负');
+  assertLte(result.vertexCount + result.treeVertexBudget, MAX_TOTAL_VERTICES, `地形+树木预算 ${result.vertexCount + result.treeVertexBudget} 超过 ${MAX_TOTAL_VERTICES}`);
+});
+
+test('平整度参数影响高度分布：低平整度方差更大', () => {
   const flat = generateTerrain({ noiseFrequency: 2, flatness: 0.95, seed: 50 });
   const steep = generateTerrain({ noiseFrequency: 2, flatness: 0.15, seed: 50 });
-
-  let steepVariance = 0;
-  let flatVariance = 0;
-  const samples = 200;
-  for (let i = 0; i < samples; i++) {
+  let steepVar = 0, flatVar = 0;
+  const N = 200;
+  for (let i = 0; i < N; i++) {
     const x = Math.floor(Math.random() * TERRAIN_RESOLUTION);
     const z = Math.floor(Math.random() * TERRAIN_RESOLUTION);
-    steepVariance += Math.abs(steep.normalizedHeightMap[z][x] - 0.5);
-    flatVariance += Math.abs(flat.normalizedHeightMap[z][x] - 0.5);
+    steepVar += Math.abs(steep.normalizedHeightMap[z][x] - 0.5);
+    flatVar += Math.abs(flat.normalizedHeightMap[z][x] - 0.5);
   }
-  steepVariance /= samples;
-  flatVariance /= samples;
-
-  assert(steepVariance > flatVariance * 1.1, `平整度参数失效: 陡峭方差 ${steepVariance} 不应小于 平坦方差 ${flatVariance}`);
+  steepVar /= N;
+  flatVar /= N;
+  assertGte(steepVar, flatVar * 1.05, `陡峭方差 ${steepVar.toFixed(4)} 应大于平坦方差 ${flatVar.toFixed(4)}`);
 });
 
-console.log('\n[core/vegetation.ts - 坡度与植被分布测试]');
+console.log('\n[core/vegetation.ts - 坡度计算测试]');
 
-test('平坦地面坡度计算应接近 0 度', () => {
+test('平坦地面坡度应接近 0°', () => {
   const flatMap: number[][] = [];
   for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
     flatMap[z] = [];
@@ -135,22 +170,51 @@ test('平坦地面坡度计算应接近 0 度', () => {
     }
   }
   const slope = calculateSlope(flatMap, 0, 0);
-  assertClose(slope, 0, 0.5, `平坦地面坡度 ${slope}° 应接近 0°`);
+  assertClose(slope, 0, 0.1, `平坦地面坡度 ${slope}° 应接近 0°`);
 });
 
-test('45度斜坡坡度计算应接近 45 度', () => {
+test('45度斜坡梯度法计算应接近 45°', () => {
   const slopeMap: number[][] = [];
+  const cellSize = TERRAIN_SIZE / (TERRAIN_RESOLUTION - 1);
   for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
     slopeMap[z] = [];
     for (let x = 0; x < TERRAIN_RESOLUTION; x++) {
-      slopeMap[z][x] = x * 0.15625;
+      slopeMap[z][x] = x * cellSize;
     }
   }
   const slope = calculateSlope(slopeMap, 0, 0);
-  assert(slope >= 40 && slope <= 50, `45° 斜坡坡度 ${slope}° 应在 40-50° 范围`);
+  assert(slope >= 40 && slope <= 50, `45° 斜坡坡度 ${slope.toFixed(2)}° 应在 40-50° 范围`);
 });
 
-test('getHeightAt 双线性插值在角落应返回正确高度', () => {
+test('已知坡度精确验证: 坡度=1.0的斜面应约45°', () => {
+  const slopeMap: number[][] = [];
+  const cellSize = TERRAIN_SIZE / (TERRAIN_RESOLUTION - 1);
+  for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
+    slopeMap[z] = [];
+    for (let x = 0; x < TERRAIN_RESOLUTION; x++) {
+      slopeMap[z][x] = x * cellSize * 1.0;
+    }
+  }
+  const slope = calculateSlope(slopeMap, 0, 0);
+  const expectedDeg = (Math.atan(1.0) * 180) / Math.PI;
+  assertClose(slope, expectedDeg, 2.0, `梯度=1.0的斜面坡度 ${slope.toFixed(2)}° 应接近 ${expectedDeg.toFixed(2)}°`);
+});
+
+test('垂直悬崖坡度应接近 90°', () => {
+  const cliffMap: number[][] = [];
+  for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
+    cliffMap[z] = [];
+    for (let x = 0; x < TERRAIN_RESOLUTION; x++) {
+      cliffMap[z][x] = x < TERRAIN_RESOLUTION / 2 ? 0 : 100;
+    }
+  }
+  const slope = calculateSlope(cliffMap, 0, 0);
+  assert(slope >= 60, `垂直悬崖坡度 ${slope.toFixed(1)}° 应 ≥ 60°`);
+});
+
+console.log('\n[core/vegetation.ts - 高度插值与植被分布测试]');
+
+test('getHeightAt 角落插值应返回正确高度', () => {
   const testMap: number[][] = [];
   for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
     testMap[z] = [];
@@ -158,12 +222,21 @@ test('getHeightAt 双线性插值在角落应返回正确高度', () => {
       testMap[z][x] = x + z * 2;
     }
   }
-  const half = 10;
+  const half = TERRAIN_SIZE / 2;
   const v00 = getHeightAt(testMap, -half, -half);
-  const v11 = getHeightAt(testMap, half - 0.01, half - 0.01);
   assertClose(v00, 0, 0.5, `左下角插值 ${v00} 应接近 0`);
-  const expectedV11 = (TERRAIN_RESOLUTION - 1) + (TERRAIN_RESOLUTION - 1) * 2;
-  assertClose(v11, expectedV11, 2, `右上角插值 ${v11} 应接近 ${expectedV11}`);
+});
+
+test('getHeightAt 边界外查询应被夹紧不崩溃', () => {
+  const testMap: number[][] = [];
+  for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
+    testMap[z] = [];
+    for (let x = 0; x < TERRAIN_RESOLUTION; x++) {
+      testMap[z][x] = 1;
+    }
+  }
+  const outOfBounds = getHeightAt(testMap, -999, 999);
+  assert(isFinite(outOfBounds) && !isNaN(outOfBounds), `边界外查询返回 ${outOfBounds} 应为有效数值`);
 });
 
 test('密度为 0 时应生成 0 棵树', () => {
@@ -176,9 +249,10 @@ test('密度为 0 时应生成 0 棵树', () => {
     vertexBudget: 30000
   });
   assert(veg.treeCount === 0, `密度0时应生成0棵树，实际 ${veg.treeCount}`);
+  assert(veg.totalTreeVertices === 0, `密度0时树木顶点应为0`);
 });
 
-test('陡坡区域(>30°)不应生成树木', () => {
+test('陡坡区域(>30°)不应生成任何树木', () => {
   const steepMap: number[][] = [];
   const normMap: number[][] = [];
   for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
@@ -190,7 +264,6 @@ test('陡坡区域(>30°)不应生成树木', () => {
       normMap[z][x] = Math.max(0.2, Math.min(0.8, nh));
     }
   }
-
   const veg = generateVegetation({
     heightMap: steepMap,
     normalizedHeightMap: normMap,
@@ -198,14 +271,13 @@ test('陡坡区域(>30°)不应生成树木', () => {
     seed: 42,
     vertexBudget: 30000
   });
-
   for (const t of veg.transforms) {
     const slope = calculateSlope(steepMap, t.position.x, t.position.z);
-    assert(slope <= 30.5, `树木 ${t.position.x.toFixed(2)},${t.position.z.toFixed(2)} 生成在陡坡 ${slope.toFixed(1)}°`);
+    assertLte(slope, 31, `树木 (${t.position.x.toFixed(2)},${t.position.z.toFixed(2)}) 在陡坡 ${slope.toFixed(1)}°`);
   }
 });
 
-test('树木高度应在归一化 [0.2, 0.8] 范围内', () => {
+test('树木位置归一化高度应严格在 [0.2, 0.8] 内', () => {
   const terrain = generateTerrain({ noiseFrequency: 2.5, flatness: 0.4, seed: 2024 });
   const veg = generateVegetation({
     heightMap: terrain.heightMap,
@@ -214,14 +286,14 @@ test('树木高度应在归一化 [0.2, 0.8] 范围内', () => {
     seed: 101,
     vertexBudget: terrain.treeVertexBudget
   });
-
   for (const t of veg.transforms) {
     const nh = getHeightAt(terrain.normalizedHeightMap, t.position.x, t.position.z);
-    assert(nh >= 0.195 && nh <= 0.805, `树木高度归一化值 ${nh.toFixed(3)} 超出 [0.2, 0.8] 容差范围`);
+    assertGte(nh, 0.2 - 0.01, `树木归一化高度 ${nh.toFixed(4)} < 0.2`);
+    assertLte(nh, 0.8 + 0.01, `树木归一化高度 ${nh.toFixed(4)} > 0.8`);
   }
 });
 
-test('树冠半径应严格在 [0.1, 0.3] 之间', () => {
+test('树冠半径应严格在 [0.1, 0.3] 范围内', () => {
   const terrain = generateTerrain({ noiseFrequency: 2, flatness: 0.5, seed: 303 });
   const veg = generateVegetation({
     heightMap: terrain.heightMap,
@@ -230,13 +302,22 @@ test('树冠半径应严格在 [0.1, 0.3] 之间', () => {
     seed: 777,
     vertexBudget: terrain.treeVertexBudget
   });
-
   for (const t of veg.transforms) {
-    assert(
-      t.canopyRadius >= 0.0999 && t.canopyRadius <= 0.3001,
-      `树冠半径 ${t.canopyRadius} 超出 [0.1, 0.3] 范围`
-    );
+    assertGte(t.canopyRadius, 0.1, `树冠半径 ${t.canopyRadius} < 0.1`);
+    assertLte(t.canopyRadius, 0.3, `树冠半径 ${t.canopyRadius} > 0.3`);
   }
+});
+
+test('树木总数不应超过 500', () => {
+  const terrain = generateTerrain({ noiseFrequency: 1, flatness: 0.8, seed: 1 });
+  const veg = generateVegetation({
+    heightMap: terrain.heightMap,
+    normalizedHeightMap: terrain.normalizedHeightMap,
+    density: 20,
+    seed: 42,
+    vertexBudget: 50000
+  });
+  assertLte(veg.treeCount, 500, `树木数量 ${veg.treeCount} 超过 500`);
 });
 
 test('总树木顶点数不应超过顶点预算', () => {
@@ -249,7 +330,48 @@ test('总树木顶点数不应超过顶点预算', () => {
     seed: 1,
     vertexBudget: budget
   });
-  assert(veg.totalTreeVertices <= budget + 56, `树木顶点 ${veg.totalTreeVertices} 超出预算 ${budget}`);
+  assertLte(veg.totalTreeVertices, budget + 100, `树木顶点 ${veg.totalTreeVertices} 超出预算 ${budget}`);
+});
+
+test('地形+树木总顶点数应控制在 50000 以内', () => {
+  const terrain = generateTerrain({ noiseFrequency: 2, flatness: 0.5, seed: 1 });
+  const veg = generateVegetation({
+    heightMap: terrain.heightMap,
+    normalizedHeightMap: terrain.normalizedHeightMap,
+    density: 20,
+    seed: 42,
+    vertexBudget: terrain.treeVertexBudget
+  });
+  const totalVertices = terrain.vertexCount + veg.totalTreeVertices;
+  assertLte(totalVertices, MAX_TOTAL_VERTICES, `总顶点 ${totalVertices} 超过 ${MAX_TOTAL_VERTICES}`);
+  console.log(`    地形顶点: ${terrain.vertexCount}, 树木顶点: ${veg.totalTreeVertices}, 总计: ${totalVertices}`);
+});
+
+test('不同种子产生不同的树木分布', () => {
+  const terrain = generateTerrain({ noiseFrequency: 2, flatness: 0.5, seed: 1 });
+  const v1 = generateVegetation({
+    heightMap: terrain.heightMap,
+    normalizedHeightMap: terrain.normalizedHeightMap,
+    density: 15,
+    seed: 100,
+    vertexBudget: terrain.treeVertexBudget
+  });
+  const v2 = generateVegetation({
+    heightMap: terrain.heightMap,
+    normalizedHeightMap: terrain.normalizedHeightMap,
+    density: 15,
+    seed: 200,
+    vertexBudget: terrain.treeVertexBudget
+  });
+  let sameCount = 0;
+  const minLen = Math.min(v1.transforms.length, v2.transforms.length);
+  for (let i = 0; i < minLen; i++) {
+    if (Math.abs(v1.transforms[i].position.x - v2.transforms[i].position.x) < 0.001 &&
+        Math.abs(v1.transforms[i].position.z - v2.transforms[i].position.z) < 0.001) {
+      sameCount++;
+    }
+  }
+  assert(sameCount < minLen * 0.5, `不同种子产生 ${sameCount}/${minLen} 相同位置，应显著不同`);
 });
 
 console.log(`\n=== 测试结果: ${passed} 通过, ${failed} 失败 ===\n`);

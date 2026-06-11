@@ -42,7 +42,7 @@ export class SceneManager {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.2;
     this.container.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -62,10 +62,10 @@ export class SceneManager {
       RIGHT: THREE.MOUSE.PAN
     };
 
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
     this.scene.add(this.ambientLight);
 
-    this.directionalLight = new THREE.DirectionalLight(0xffffff, 1.1);
+    this.directionalLight = new THREE.DirectionalLight(0xffffff, 1.15);
     this.directionalLight.position.set(12, 16, 9);
     this.directionalLight.castShadow = true;
     this.directionalLight.shadow.mapSize.width = 2048;
@@ -80,7 +80,7 @@ export class SceneManager {
     this.directionalLight.shadow.normalBias = 0.02;
     this.scene.add(this.directionalLight);
 
-    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x2d4a2d, 0.35);
+    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x2d4a2d, 0.4);
     this.scene.add(hemiLight);
 
     this.gridHelper = new THREE.GridHelper(32, 32, 0x2a2a4e, 0x222242);
@@ -90,7 +90,6 @@ export class SceneManager {
     this.scene.add(this.gridHelper);
 
     this.grassTexture = createGrassTexture();
-    this.grassTexture.needsUpdate = true;
 
     window.addEventListener('resize', this.onResize.bind(this));
   }
@@ -124,8 +123,6 @@ export class SceneManager {
       this.scene.remove(this.terrainMesh);
       this.terrainMesh.geometry.dispose();
       const mat = this.terrainMesh.material as THREE.MeshStandardMaterial;
-      if (mat.map) mat.map.dispose();
-      if (mat.bumpMap) mat.bumpMap.dispose();
       mat.dispose();
       this.terrainMesh = null;
     }
@@ -146,56 +143,12 @@ export class SceneManager {
     this.grassTexture.needsUpdate = true;
 
     const material = new THREE.MeshStandardMaterial({
-      vertexColors: true,
       map: this.grassTexture,
-      roughness: 0.92,
+      roughness: 0.88,
       metalness: 0.0,
       bumpMap: this.grassTexture,
-      bumpScale: 0.035,
-      color: new THREE.Color(0xffffff)
+      bumpScale: 0.05
     });
-
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.texMix = { value: 0.5 };
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          '#include <common>',
-          `#include <common>
-varying vec3 vBaseColor;
-varying vec2 vUvCustom;`
-        )
-        .replace(
-          '#include <uv_vertex>',
-          `#include <uv_vertex>
-vUvCustom = uv;`
-        )
-        .replace(
-          '#include <color_vertex>',
-          `#include <color_vertex>
-vBaseColor = color;`
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          '#include <common>',
-          `#include <common>
-uniform float texMix;
-varying vec3 vBaseColor;
-varying vec2 vUvCustom;`
-        )
-        .replace(
-          '#include <color_fragment>',
-          `#include <color_fragment>
-#ifdef USE_MAP
-  vec4 texelColor = texture2D( map, vUvCustom );
-  vec3 mixedColor = mix(vBaseColor, texelColor.rgb, texMix);
-  diffuseColor.rgb *= mixedColor;
-#else
-  diffuseColor.rgb *= vBaseColor;
-#endif`
-        );
-    };
-
-    material.needsUpdate = true;
 
     this.terrainMesh = new THREE.Mesh(geometry, material);
     this.terrainMesh.castShadow = true;

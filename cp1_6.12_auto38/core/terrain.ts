@@ -29,16 +29,6 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
-
-function smootherstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * t * (t * (t * 6 - 15) + 10);
-}
-
 export function generateTerrain(params: TerrainParams): TerrainResult {
   const { noiseFrequency, flatness, seed } = params;
   const rand = seededRandom(seed);
@@ -98,35 +88,14 @@ export function generateTerrain(params: TerrainParams): TerrainResult {
   geometry.rotateX(-Math.PI / 2);
 
   const positions = geometry.attributes.position;
-  const colors = new Float32Array(positions.count * 3);
   const uvs = geometry.attributes.uv;
-
-  const bottomColor = new THREE.Color(0x2d5a27);
-  const midColor = new THREE.Color(0x4a8a3c);
-  const topColor = new THREE.Color(0x7ec850);
-  const tmpColor = new THREE.Color();
 
   for (let z = 0; z < TERRAIN_RESOLUTION; z++) {
     for (let x = 0; x < TERRAIN_RESOLUTION; x++) {
       const idx = z * TERRAIN_RESOLUTION + x;
-      const nh = normalizedHeightMap[z][x];
       const scaledHeight = scaledHeightMap[z][x];
 
       positions.setY(idx, scaledHeight);
-
-      const lowerT = smootherstep(0.0, 0.5, nh);
-      const upperT = smootherstep(0.4, 1.0, nh);
-      tmpColor.copy(bottomColor).lerp(midColor, lowerT);
-      tmpColor.lerp(topColor, upperT);
-
-      const colorBoost = 0.65;
-      tmpColor.r = Math.min(1, tmpColor.r * (1 + colorBoost * 0.1));
-      tmpColor.g = Math.min(1, tmpColor.g * (1 + colorBoost * 0.15));
-      tmpColor.b = Math.min(1, tmpColor.b * (1 + colorBoost * 0.05));
-
-      colors[idx * 3] = tmpColor.r;
-      colors[idx * 3 + 1] = tmpColor.g;
-      colors[idx * 3 + 2] = tmpColor.b;
 
       const u = x / (TERRAIN_RESOLUTION - 1);
       const v = z / (TERRAIN_RESOLUTION - 1);
@@ -134,7 +103,6 @@ export function generateTerrain(params: TerrainParams): TerrainResult {
     }
   }
 
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
 
   const terrainVertexCount = positions.count;
@@ -158,67 +126,75 @@ export function createGrassTexture(): THREE.Texture {
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  const baseGradient = ctx.createLinearGradient(0, 0, 0, size);
-  baseGradient.addColorStop(0, '#3d7a34');
-  baseGradient.addColorStop(0.5, '#4a8f3c');
-  baseGradient.addColorStop(1, '#356a2c');
-  ctx.fillStyle = baseGradient;
+  const gradient = ctx.createLinearGradient(0, size, 0, 0);
+  gradient.addColorStop(0.00, '#2d5a27');
+  gradient.addColorStop(0.15, '#356a2c');
+  gradient.addColorStop(0.30, '#3d7a30');
+  gradient.addColorStop(0.45, '#4a8a3a');
+  gradient.addColorStop(0.60, '#5a9a44');
+  gradient.addColorStop(0.75, '#6bab4e');
+  gradient.addColorStop(0.90, '#7ec258');
+  gradient.addColorStop(1.00, '#92d468');
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
 
-  for (let y = 0; y < size; y += 4) {
-    for (let x = 0; x < size; x += 4) {
-      const n = ((Math.sin(x * 0.1) + Math.cos(y * 0.15)) * 0.5 + 0.5);
-      const shade = Math.floor(30 + n * 30);
-      ctx.fillStyle = `rgba(${40 + shade}, ${90 + shade}, ${40 + shade * 0.5}, 0.35)`;
-      ctx.fillRect(x, y, 4, 4);
+  for (let y = 0; y < size; y += 2) {
+    for (let x = 0; x < size; x += 2) {
+      const n = Math.random();
+      const alpha = 0.15 + n * 0.2;
+      const shade = Math.floor(40 + n * 40);
+      ctx.fillStyle = `rgba(${shade + 10}, ${shade + 50}, ${shade}, ${alpha})`;
+      ctx.fillRect(x, y, 2, 2);
     }
   }
 
-  const grassColors = [
-    'rgba(74, 143, 60, 0.9)',
-    'rgba(94, 160, 74, 0.9)',
-    'rgba(107, 181, 88, 0.9)',
-    'rgba(58, 122, 50, 0.85)',
-    'rgba(45, 106, 37, 0.85)',
-    'rgba(120, 190, 95, 0.7)',
-    'rgba(65, 130, 52, 0.9)'
+  const grassBladeColors = [
+    '#2d5a27',
+    '#3d7a30',
+    '#4a8a3a',
+    '#5a9a44',
+    '#6bab4e',
+    '#7ec258',
+    '#55a844',
+    '#488838',
+    '#72c060'
   ];
 
-  for (let i = 0; i < 4000; i++) {
+  for (let i = 0; i < 5000; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
-    const grassHeight = 2 + Math.random() * 8;
-    const grassWidth = 0.8 + Math.random() * 2.2;
-    const color = grassColors[Math.floor(Math.random() * grassColors.length)];
+    const bladeHeight = 2 + Math.random() * 10;
+    const bladeWidth = 0.5 + Math.random() * 2.0;
+    const color = grassBladeColors[Math.floor(Math.random() * grassBladeColors.length)];
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = grassWidth;
+    ctx.lineWidth = bladeWidth;
     ctx.lineCap = 'round';
 
-    const angle = (Math.random() - 0.5) * 0.7;
+    const angle = (Math.random() - 0.5) * 0.6;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(x + Math.sin(angle) * 2.5, y - grassHeight);
+    ctx.quadraticCurveTo(x + Math.sin(angle) * 2, y - bladeHeight * 0.5, x + Math.sin(angle) * 1.5, y - bladeHeight);
     ctx.stroke();
   }
 
-  for (let i = 0; i < 1200; i++) {
+  for (let i = 0; i < 1500; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
-    const radius = 0.8 + Math.random() * 2.5;
-    const color = grassColors[Math.floor(Math.random() * grassColors.length)];
+    const radius = 0.4 + Math.random() * 1.8;
+    const color = grassBladeColors[Math.floor(Math.random() * grassBladeColors.length)];
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  for (let i = 0; i < 300; i++) {
+  for (let i = 0; i < 250; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
-    ctx.fillStyle = `rgba(255, 255, 200, ${0.1 + Math.random() * 0.15})`;
+    ctx.fillStyle = `rgba(180, 220, 100, ${0.12 + Math.random() * 0.18})`;
     ctx.beginPath();
-    ctx.arc(x, y, 0.5 + Math.random() * 1.5, 0, Math.PI * 2);
+    ctx.arc(x, y, 0.3 + Math.random() * 1.2, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -229,6 +205,7 @@ export function createGrassTexture(): THREE.Texture {
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.anisotropy = 8;
   texture.repeat.set(8, 8);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
 
   return texture;
