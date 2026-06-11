@@ -33,15 +33,25 @@ const App: React.FC = () => {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [toastFading, setToastFading] = useState<Set<string>>(new Set());
   const pendingActionsRef = useRef<Array<() => void>>([]);
 
   const addToast = useCallback((message: string, type: ToastNotification['type'] = 'info') => {
     const id = uuidv4();
-    const toast: ToastNotification = { id, message, type };
+    const toast: ToastNotification = { id, message, type, visible: true };
     setToasts((prev) => [...prev, toast]);
 
     setTimeout(() => {
+      setToastFading((prev) => new Set([...prev, id]));
+    }, 1700);
+
+    setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToastFading((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }, 2000);
   }, []);
 
@@ -444,6 +454,16 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {!isOnline && (
+        <div className="offline-banner fade-in">
+          <span className="offline-banner-icon">📴</span>
+          <span className="offline-banner-text">
+            当前处于离线状态，您的操作将在网络恢复后自动同步
+          </span>
+          <span className="offline-banner-spinner" />
+        </div>
+      )}
+
       <main className="app-main">
         {isLoading ? (
           <div className="loading-state">
@@ -488,7 +508,10 @@ const App: React.FC = () => {
 
       <div className="toast-container">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`toast toast-${toast.type}`}>
+          <div
+            key={toast.id}
+            className={`toast toast-${toast.type} ${toastFading.has(toast.id) ? 'toast-fading' : ''}`}
+          >
             <span className="toast-icon">
               {toast.type === 'success' && '✓'}
               {toast.type === 'error' && '✕'}
@@ -778,6 +801,36 @@ const App: React.FC = () => {
           to { transform: rotate(360deg); }
         }
 
+        .offline-banner {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          padding: 10px 24px;
+          background: linear-gradient(90deg, #fef3e7 0%, #fde8d1 100%);
+          border-bottom: 2px solid #f39c12;
+          color: #d35400;
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        .offline-banner-icon {
+          font-size: 18px;
+        }
+
+        .offline-banner-text {
+          flex: 0 1 auto;
+        }
+
+        .offline-banner-spinner {
+          width: 14px;
+          height: 14px;
+          border: 2px solid rgba(243, 156, 18, 0.3);
+          border-top-color: #f39c12;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
         .toast-container {
           position: fixed;
           top: 80px;
@@ -798,17 +851,57 @@ const App: React.FC = () => {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           font-size: 14px;
           min-width: 280px;
-          animation: slideInRight 0.3s ease;
+          animation: toastSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          border-left: 4px solid var(--accent-color);
         }
 
-        @keyframes slideInRight {
-          from {
+        .toast-success {
+          border-left-color: #27ae60;
+        }
+
+        .toast-error {
+          border-left-color: #e74c3c;
+        }
+
+        .toast-warning {
+          border-left-color: #f39c12;
+        }
+
+        .toast-info {
+          border-left-color: #3498db;
+        }
+
+        .toast-fading {
+          animation: toastSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+        }
+
+        @keyframes toastSlideIn {
+          0% {
             opacity: 0;
-            transform: translateX(100%);
+            transform: translateX(120%) scale(0.95);
           }
-          to {
+          60% {
+            transform: translateX(-8px) scale(1.02);
+          }
+          100% {
             opacity: 1;
-            transform: translateX(0);
+            transform: translateX(0) scale(1);
+          }
+        }
+
+        @keyframes toastSlideOut {
+          0% {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+          40% {
+            opacity: 0.6;
+            transform: translateX(20px) scale(0.98);
+          }
+          100% {
+            opacity: 0;
+            transform: translateX(120%) scale(0.9);
           }
         }
 

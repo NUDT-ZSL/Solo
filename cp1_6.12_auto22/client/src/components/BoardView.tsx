@@ -1,5 +1,22 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { Card, List as ListType, Priority, Member } from '../types';
+import { SortableCard, DraggableCardProps } from './SortableCard';
 
 interface BoardViewProps {
   lists: ListType[];
@@ -11,11 +28,10 @@ interface BoardViewProps {
   onUpdateCard?: (cardId: string, updates: Partial<Card>) => void;
 }
 
-interface DragState {
-  cardId: string;
-  sourceListId: string;
-  startY: number;
-  startOrder: number;
+interface DragItemData {
+  type: 'card';
+  card: Card;
+  listId: string;
 }
 
 const BoardView: React.FC<BoardViewProps> = ({
@@ -33,83 +49,55 @@ const BoardView: React.FC<BoardViewProps> = ({
   const [newCardPriority, setNewCardPriority] = useState<Priority>('medium');
   const [newCardDueDate, setNewCardDueDate] = useState('');
   const [newCardAssignee, setNewCardAssignee] = useState('');
-  const [dragState, setDragState] = useState<DragState | null>(null);
-  const [dragOverListId, setDragOverListId] = useState<string | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number>(-1);
+  const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
-  const dragCardRef = useRef<HTMLDivElement | null>(null);
 
-  const getCardsForList = useCallback((listId: string) => {
-    return cards
-      .filter((c) => c.listId === listId)
-      .sort((a, b) => a.order - b.order);
-  }, [cards]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
 
-  const handleDragStart = (e: React.DragEvent, card: Card) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', card.id);
-    
-    setDragState({
-      cardId: card.id,
-      sourceListId: card.listId,
-      startY: e.clientY,
-      startOrder: card.order,
+  const cardsByListId = useMemo(() => {
+    const map: Record<string, Card[]> = {};
+    lists.forEach((list) => {
+      map[list.id] = cards
+        .filter((c) => c.listId === list.id)
+        .sort((a, b) => a.order - b.order);
     });
+    return map;
+  }, [cards, lists]);
 
-    setTimeout(() => {
-      if (e.currentTarget instanceof HTMLElement) {
-        e.currentTarget.classList.add('dragging');
-      }
-    }, 0);
+  const getMemberName = (email: string | null) => {
+    if (!email) return '未分配';
+    const member = members.find((m) => m.email === email);
+    return member ? member.name : email;
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.classList.remove('dragging');
+  const priorityColor = (priority: Priority) => {
+    switch (priority) {
+      case 'high': return '#e74c3c';
+      case 'medium': return '#f39c12';
+      case 'low': return '#27ae60';
     }
+  };
 
-    if (dragState && dragOverListId && dragOverIndex >= 0) {
-      onMoveCard(dragState.cardId, dragOverListId, dragOverIndex);
+  const priorityLabel = (priority: Priority) => {
+    switch (priority) {
+      case 'high': return '高';
+      case 'medium': return '中';
+      case 'low': return '低';
     }
-
-    setDragState(null);
-    setDragOverListId(null);
-    setDragOverIndex(-1);
   };
 
-  const handleDragOver = (e: React.DragEvent, listId: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-
-    if (!dragState) return;
-
-    const listCards = getCardsForList(listId);
-    const listElement = e.currentTarget as HTMLElement;
-    const cardsContainer = listElement.querySelector('.cards-container');
-    if (!cardsContainer) return;
-
-    const rect = cardsContainer.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const cardHeight = 100;
-
-    let index = Math.floor(y / cardHeight);
-    index = Math.max(0, Math.min(index, listCards.length));
-
-    setDragOverListId(listId);
-    setDragOverIndex(index);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    const relatedTarget = e.relatedTarget as Node;
-    const currentTarget = e.currentTarget as Node;
-    if (currentTarget.contains(relatedTarget)) return;
-    
-    setDragOverListId(null);
-    setDragOverIndex(-1);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
+  const isOverdue = (card: Card) => {
+    if (!card.dueDate || card.completedAt) return false;
+    const due = new Date(card.dueDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return due < today;
   };
 
   const handleAddCard = (listId: string) => {
@@ -132,183 +120,243 @@ const BoardView: React.FC<BoardViewProps> = ({
     setNewCardAssignee('');
   };
 
-  const priorityColor = (priority: Priority) => {
-    switch (priority) {
-      case 'high': return 'var(--priority-high)';
-      case 'medium': return 'var(--priority-medium)';
-      case 'low': return 'var(--priority-low)';
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const cardId = active.id as string;
+    const card = cards.find((c) => c.id === cardId);
+    if (card) {
+      setActiveCard(card);
     }
   };
 
-  const priorityLabel = (priority: Priority) => {
-    switch (priority) {
-      case 'high': return '高';
-      case 'medium': return '中';
-      case 'low': return '低';
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const activeCard = cards.find((c) => c.id === activeId);
+    if (!activeCard) return;
+
+    const overList = lists.find((l) => l.id === overId);
+    const overCard = cards.find((c) => c.id === overId);
+
+    const targetListId = overList ? overList.id : overCard ? overCard.listId : null;
+    if (!targetListId || targetListId === activeCard.listId) return;
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveCard(null);
+
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    if (activeId === overId) return;
+
+    const activeCard = cards.find((c) => c.id === activeId);
+    if (!activeCard) return;
+
+    const activeListCards = cardsByListId[activeCard.listId] || [];
+    const oldIndex = activeListCards.findIndex((c) => c.id === activeId);
+
+    let targetListId: string;
+    let newIndex: number;
+
+    const overList = lists.find((l) => l.id === overId);
+    if (overList) {
+      targetListId = overList.id;
+      newIndex = (cardsByListId[overList.id] || []).length;
+    } else {
+      const overCard = cards.find((c) => c.id === overId);
+      if (!overCard) return;
+      targetListId = overCard.listId;
+      const targetListCards = cardsByListId[targetListId] || [];
+      newIndex = targetListCards.findIndex((c) => c.id === overId);
     }
-  };
 
-  const getMemberName = (email: string | null) => {
-    if (!email) return '未分配';
-    const member = members.find((m) => m.email === email);
-    return member ? member.name : email;
-  };
-
-  const isOverdue = (card: Card) => {
-    if (!card.dueDate || card.completedAt) return false;
-    const due = new Date(card.dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return due < today;
+    if (activeCard.listId === targetListId) {
+      if (oldIndex === newIndex) return;
+      const targetListCards = cardsByListId[targetListId] || [];
+      const newOrder = arrayMove(targetListCards, oldIndex, newIndex);
+      const movedCard = newOrder[newIndex];
+      onMoveCard(movedCard.id, targetListId, newIndex);
+    } else {
+      onMoveCard(activeCard.id, targetListId, newIndex);
+    }
   };
 
   return (
     <div className="board-view">
-      <div className="board-lists">
-        {lists.map((list) => {
-          const listCards = getCardsForList(list.id);
-          return (
-            <div
-              key={list.id}
-              className={`list-column ${dragOverListId === list.id ? 'drag-over' : ''}`}
-              onDragOver={(e) => handleDragOver(e, list.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <div className="list-header">
-                <h3 className="list-title">{list.title}</h3>
-                <span className="list-count">{listCards.length}</span>
-              </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="board-lists">
+          {lists.map((list, listIndex) => {
+            const listCards = cardsByListId[list.id] || [];
+            return (
+              <div
+                key={list.id}
+                className="list-column"
+                style={{ animation: `fadeIn 0.3s ease-in-out ${listIndex * 0.05}s both` }}
+              >
+                <div className="list-header">
+                  <h3 className="list-title">{list.title}</h3>
+                  <span className="list-count">{listCards.length}</span>
+                </div>
 
-              <div className="cards-container">
-                {listCards.map((card, index) => (
+                <SortableContext
+                  items={listCards.map((c) => c.id)}
+                  strategy={verticalListSortingStrategy}
+                >
                   <div
-                    key={card.id}
-                    className={`card ${dragState?.cardId === card.id ? 'dragging-source' : ''} ${
-                      dragOverListId === list.id && dragOverIndex === index ? 'drop-target-before' : ''
-                    } ${dragOverListId === list.id && dragOverIndex === index + 1 ? 'drop-target-after' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, card)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => setSelectedCard(card)}
-                    style={{ animation: `fadeIn 0.3s ease-in-out ${index * 0.05}s both` }}
+                    className="cards-container"
+                    data-list-id={list.id}
                   >
-                    <div className="card-priority-bar" style={{ backgroundColor: priorityColor(card.priority) }} />
-                    <div className="card-content">
-                      <h4 className="card-title">{card.title}</h4>
-                      {card.description && (
-                        <p className="card-description">{card.description}</p>
-                      )}
-                      <div className="card-meta">
-                        <span className="card-priority" style={{ color: priorityColor(card.priority) }}>
-                          {priorityLabel(card.priority)}优先级
-                        </span>
-                        {card.dueDate && (
-                          <span className={`card-due-date ${isOverdue(card) ? 'overdue' : ''}`}>
-                            📅 {card.dueDate}
-                          </span>
-                        )}
-                      </div>
-                      <div className="card-assignee">
-                        <span className="assignee-avatar">
-                          {getMemberName(card.assignee).charAt(0).toUpperCase()}
-                        </span>
-                        <span className="assignee-name">{getMemberName(card.assignee)}</span>
-                      </div>
+                    {listCards.map((card, cardIndex) => (
+                      <SortableCard
+                        key={card.id}
+                        card={card}
+                        index={cardIndex}
+                        priorityColor={priorityColor}
+                        priorityLabel={priorityLabel}
+                        getMemberName={getMemberName}
+                        isOverdue={isOverdue}
+                        onClick={() => setSelectedCard(card)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+
+                {addingToListId === list.id ? (
+                  <div className="add-card-form fade-in">
+                    <input
+                      type="text"
+                      className="add-card-input"
+                      placeholder="输入卡片标题..."
+                      value={newCardTitle}
+                      onChange={(e) => setNewCardTitle(e.target.value)}
+                      autoFocus
+                    />
+                    <textarea
+                      className="add-card-textarea"
+                      placeholder="描述（可选）"
+                      value={newCardDesc}
+                      onChange={(e) => setNewCardDesc(e.target.value)}
+                      rows={2}
+                    />
+                    <div className="add-card-options">
+                      <select
+                        className="add-card-select"
+                        value={newCardPriority}
+                        onChange={(e) => setNewCardPriority(e.target.value as Priority)}
+                      >
+                        <option value="high">高优先级</option>
+                        <option value="medium">中优先级</option>
+                        <option value="low">低优先级</option>
+                      </select>
+                      <input
+                        type="date"
+                        className="add-card-date"
+                        value={newCardDueDate}
+                        onChange={(e) => setNewCardDueDate(e.target.value)}
+                      />
+                      <select
+                        className="add-card-select"
+                        value={newCardAssignee}
+                        onChange={(e) => setNewCardAssignee(e.target.value)}
+                      >
+                        <option value="">选择负责人</option>
+                        {members.map((m) => (
+                          <option key={m.id} value={m.email}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="add-card-actions">
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleAddCard(list.id)}
+                        disabled={!newCardTitle.trim()}
+                      >
+                        添加卡片
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setAddingToListId(null);
+                          setNewCardTitle('');
+                          setNewCardDesc('');
+                          setNewCardPriority('medium');
+                          setNewCardDueDate('');
+                          setNewCardAssignee('');
+                        }}
+                      >
+                        取消
+                      </button>
                     </div>
                   </div>
-                ))}
-
-                {dragOverListId === list.id && dragOverIndex === listCards.length && listCards.length > 0 && (
-                  <div className="drop-indicator" />
-                )}
-
-                {dragOverListId === list.id && listCards.length === 0 && (
-                  <div className="drop-indicator" />
+                ) : (
+                  <button
+                    className="add-card-btn"
+                    onClick={() => setAddingToListId(list.id)}
+                  >
+                    + 添加卡片
+                  </button>
                 )}
               </div>
+            );
+          })}
+        </div>
 
-              {addingToListId === list.id ? (
-                <div className="add-card-form fade-in">
-                  <input
-                    type="text"
-                    className="add-card-input"
-                    placeholder="输入卡片标题..."
-                    value={newCardTitle}
-                    onChange={(e) => setNewCardTitle(e.target.value)}
-                    autoFocus
-                  />
-                  <textarea
-                    className="add-card-textarea"
-                    placeholder="描述（可选）"
-                    value={newCardDesc}
-                    onChange={(e) => setNewCardDesc(e.target.value)}
-                    rows={2}
-                  />
-                  <div className="add-card-options">
-                    <select
-                      className="add-card-select"
-                      value={newCardPriority}
-                      onChange={(e) => setNewCardPriority(e.target.value as Priority)}
+        <DragOverlay>
+          {activeCard ? (
+            <div className="drag-overlay-card">
+              <div
+                className="card-priority-bar"
+                style={{ backgroundColor: priorityColor(activeCard.priority) }}
+              />
+              <div className="card-content">
+                <h4 className="card-title">{activeCard.title}</h4>
+                {activeCard.description && (
+                  <p className="card-description">{activeCard.description}</p>
+                )}
+                <div className="card-meta">
+                  <span
+                    className="card-priority"
+                    style={{ color: priorityColor(activeCard.priority) }}
+                  >
+                    {priorityLabel(activeCard.priority)}优先级
+                  </span>
+                  {activeCard.dueDate && (
+                    <span
+                      className={`card-due-date ${isOverdue(activeCard) ? 'overdue' : ''}`}
                     >
-                      <option value="high">高优先级</option>
-                      <option value="medium">中优先级</option>
-                      <option value="low">低优先级</option>
-                    </select>
-                    <input
-                      type="date"
-                      className="add-card-date"
-                      value={newCardDueDate}
-                      onChange={(e) => setNewCardDueDate(e.target.value)}
-                    />
-                    <select
-                      className="add-card-select"
-                      value={newCardAssignee}
-                      onChange={(e) => setNewCardAssignee(e.target.value)}
-                    >
-                      <option value="">选择负责人</option>
-                      {members.map((m) => (
-                        <option key={m.id} value={m.email}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="add-card-actions">
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => handleAddCard(list.id)}
-                      disabled={!newCardTitle.trim()}
-                    >
-                      添加卡片
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => {
-                        setAddingToListId(null);
-                        setNewCardTitle('');
-                        setNewCardDesc('');
-                        setNewCardPriority('medium');
-                        setNewCardDueDate('');
-                        setNewCardAssignee('');
-                      }}
-                    >
-                      取消
-                    </button>
-                  </div>
+                      📅 {activeCard.dueDate}
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <button
-                  className="add-card-btn"
-                  onClick={() => setAddingToListId(list.id)}
-                >
-                  + 添加卡片
-                </button>
-              )}
+                <div className="card-assignee">
+                  <span className="assignee-avatar">
+                    {getMemberName(activeCard.assignee).charAt(0).toUpperCase()}
+                  </span>
+                  <span className="assignee-name">
+                    {getMemberName(activeCard.assignee)}
+                  </span>
+                </div>
+              </div>
             </div>
-          );
-        })}
-      </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {selectedCard && (
         <div className="card-modal-overlay fade-in" onClick={() => setSelectedCard(null)}>
@@ -373,11 +421,6 @@ const BoardView: React.FC<BoardViewProps> = ({
           transition: var(--transition);
         }
 
-        .list-column.drag-over {
-          background: var(--bg-secondary);
-          border: 2px dashed var(--accent-color);
-        }
-
         .list-header {
           display: flex;
           align-items: center;
@@ -410,46 +453,17 @@ const BoardView: React.FC<BoardViewProps> = ({
           min-height: 100px;
         }
 
-        .card {
+        .drag-overlay-card {
           background: var(--bg-color);
           border-radius: var(--radius);
-          box-shadow: var(--shadow);
-          cursor: grab;
-          transition: all 0.2s ease;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+          transform: scale(1.1);
+          opacity: 0.85;
+          cursor: grabbing;
           position: relative;
           overflow: hidden;
-        }
-
-        .card:hover {
-          box-shadow: var(--shadow-hover);
-          transform: translateY(-2px);
-        }
-
-        .card.dragging {
-          opacity: 0.4;
-          transform: scale(1.1);
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .card.dragging-source {
-          opacity: 0.5;
-        }
-
-        .card.drop-target-before {
-          margin-top: 2px;
-          border-top: 3px solid var(--accent-color);
-        }
-
-        .card.drop-target-after {
-          margin-bottom: 2px;
-          border-bottom: 3px solid var(--accent-color);
-        }
-
-        .drop-indicator {
-          height: 80px;
-          border: 2px dashed var(--accent-color);
-          border-radius: var(--radius);
-          background: rgba(52, 152, 219, 0.1);
+          width: 100%;
+          pointer-events: none;
         }
 
         .card-priority-bar {
@@ -693,7 +707,7 @@ const BoardView: React.FC<BoardViewProps> = ({
         }
 
         .card-modal-section p.overdue {
-          color: var(--priority-high);
+          color: #e74c3c;
           font-weight: 500;
         }
       `}</style>

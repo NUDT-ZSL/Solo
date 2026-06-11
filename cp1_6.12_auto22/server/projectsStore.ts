@@ -1,60 +1,15 @@
 import { v4 as uuidv4 } from 'uuid';
+import type {
+  Priority,
+  Comment,
+  Card,
+  List,
+  Member,
+  Invitation,
+  Project,
+} from '../shared/types';
 
-export type Priority = 'high' | 'medium' | 'low';
-
-export interface Comment {
-  id: string;
-  cardId: string;
-  author: string;
-  content: string;
-  createdAt: string;
-}
-
-export interface Card {
-  id: string;
-  listId: string;
-  title: string;
-  description: string;
-  priority: Priority;
-  dueDate: string | null;
-  assignee: string | null;
-  order: number;
-  createdAt: string;
-  completedAt: string | null;
-}
-
-export interface List {
-  id: string;
-  projectId: string;
-  title: string;
-  order: number;
-}
-
-export interface Member {
-  id: string;
-  projectId: string;
-  email: string;
-  name: string;
-  role: 'owner' | 'member';
-  joinedAt: string;
-}
-
-export interface Invitation {
-  id: string;
-  projectId: string;
-  email: string;
-  token: string;
-  invitedAt: string;
-  accepted: boolean;
-}
-
-export interface Project {
-  id: string;
-  name: string;
-  description: string;
-  createdAt: string;
-  ownerEmail: string;
-}
+export type { Priority, Comment, Card, List, Member, Invitation, Project };
 
 interface StoreData {
   projects: Project[];
