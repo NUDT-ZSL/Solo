@@ -33,8 +33,8 @@ class WebSocketManager {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    this.url = `${protocol}//${host}/ws?room=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(this.playerId)}`;
+    const wsHost = window.location.hostname + ':3001';
+    this.url = `${protocol}//${wsHost}/ws?room=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(this.playerId)}`;
 
     return new Promise((resolve, reject) => {
       this.attemptConnect(resolve, reject);
