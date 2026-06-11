@@ -21,6 +21,7 @@ export class Bubble {
   fallVx: number;
   popping: boolean;
   popProgress: number;
+  isStar: boolean;
 
   constructor(row: number, col: number, color: BubbleColor, radius: number, offsetX: number, offsetY: number) {
     this.row = row;
@@ -32,6 +33,7 @@ export class Bubble {
     this.fallVx = 0;
     this.popping = false;
     this.popProgress = 0;
+    this.isStar = color === 'star';
     this.updatePosition(offsetX, offsetY);
   }
 
@@ -55,7 +57,7 @@ export class Bubble {
 
     ctx.save();
 
-    if (this.color === 'star') {
+    if (this.isStar) {
       this.drawStarBubble(ctx);
     } else {
       this.drawNormalBubble(ctx);
@@ -146,7 +148,7 @@ export class Bubble {
     ctx.save();
     ctx.globalAlpha = Math.max(0, 1 - (this.y - 400) / 500);
 
-    if (this.color === 'star') {
+    if (this.isStar) {
       this.drawStarBubble(ctx);
     } else {
       this.drawNormalBubble(ctx);
@@ -157,7 +159,7 @@ export class Bubble {
   private drawPopping(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.globalAlpha = 1 - this.popProgress;
-    if (this.color === 'star') {
+    if (this.isStar) {
       this.drawStarBubble(ctx);
     } else {
       this.drawNormalBubble(ctx);
@@ -190,7 +192,7 @@ export class Bubble {
 
   matchesColor(other: Bubble | null | undefined): boolean {
     if (!other) return false;
-    if (this.color === 'star' || other.color === 'star') return true;
+    if (this.isStar || other.isStar) return true;
     return this.color === other.color;
   }
 
