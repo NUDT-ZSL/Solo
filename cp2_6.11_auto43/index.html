@@ -276,17 +276,18 @@
 
     @media (max-width: 768px) {
       .app-container {
-        padding: 20px 16px;
+        padding: 16px 12px;
       }
 
       .app-title {
-        font-size: 28px;
-        margin-bottom: 20px;
+        font-size: 26px;
+        margin-bottom: 16px;
       }
 
       .main-content {
         flex-direction: column;
-        gap: 20px;
+        gap: 16px;
+        min-height: auto;
       }
 
       .input-section,
@@ -295,20 +296,98 @@
       }
 
       .input-card {
-        min-height: 400px;
+        padding: 16px;
+        min-height: auto;
+      }
+
+      .input-label {
+        font-size: 14px;
+      }
+
+      .char-count {
+        font-size: 12px;
       }
 
       .diary-input {
-        min-height: 200px;
+        min-height: 180px;
         font-size: 16px;
+        padding: 12px;
+        line-height: 1.7;
+      }
+
+      .keywords-title {
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+
+      .keywords-list {
+        gap: 6px;
+      }
+
+      .keyword-tag {
+        font-size: 12px;
+        padding: 3px 10px;
+      }
+
+      .keyword-dot {
+        width: 6px;
+        height: 6px;
+      }
+
+      .emotion-legend {
+        gap: 10px;
+        margin-top: 12px;
+        padding-top: 12px;
+      }
+
+      .legend-item {
+        font-size: 11px;
+        gap: 4px;
+      }
+
+      .legend-dot {
+        width: 8px;
+        height: 8px;
       }
 
       .canvas-card {
-        min-height: 400px;
+        min-height: 360px;
+      }
+
+      .placeholder-icon {
+        font-size: 36px;
+        margin-bottom: 10px;
+      }
+
+      .placeholder-text {
+        font-size: 16px;
       }
 
       .button-group {
         flex-direction: column;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .btn {
+        padding: 11px 20px;
+        font-size: 14px;
+        min-height: 42px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app-title {
+        font-size: 22px;
+      }
+
+      .diary-input {
+        min-height: 160px;
+        font-size: 15px;
+      }
+
+      .canvas-card {
+        min-height: 300px;
       }
     }
   </style>

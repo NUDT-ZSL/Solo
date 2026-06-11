@@ -12,13 +12,16 @@ export interface SentenceAnalysis {
   keywords: EmotionKeyword[];
   dominantEmotion: EmotionType;
   intensity: number;
-  position: number;
+  charStart: number;
+  charEnd: number;
+  charIndex: number;
 }
 
 export interface AnalysisResult {
   sentences: SentenceAnalysis[];
   overallEmotions: Record<EmotionType, number>;
   dominantEmotion: EmotionType;
+  totalChars: number;
 }
 
 const emotionLexicon: Record<EmotionType, string[]> = {
@@ -49,38 +52,76 @@ export function getEmotionColor(emotion: EmotionType): string {
   return emotionColors[emotion];
 }
 
-export function splitSentences(text: string): string[] {
-  const sentences = text.split(/[。！？!?；;\n\r]+/).filter(s => s.trim().length > 0);
-  return sentences.map(s => s.trim());
+export function splitSentences(text: string): Array<{ text: string; start: number; end: number }> {
+  const result: Array<{ text: string; start: number; end: number }> = [];
+  const punctuationRegex = /[。，,；;！!？?]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = punctuationRegex.exec(text)) !== null) {
+    const start = lastIndex;
+    const end = match.index;
+    const sentenceText = text.slice(start, end).trim();
+    
+    if (sentenceText.length > 0) {
+      result.push({
+        text: sentenceText,
+        start,
+        end
+      });
+    }
+    lastIndex = match.index + 1;
+  }
+
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex).trim();
+    if (remaining.length > 0) {
+      result.push({
+        text: remaining,
+        start: lastIndex,
+        end: text.length
+      });
+    }
+  }
+
+  return result;
 }
 
-function findKeywordsInSentence(sentence: string, textOffset: number): EmotionKeyword[] {
+function findKeywordsInSentence(
+  sentence: string,
+  sentenceCharStart: number
+): EmotionKeyword[] {
   const keywords: EmotionKeyword[] = [];
-  
+  const seenPositions = new Set<number>();
+
   for (const emotion of Object.keys(emotionLexicon) as EmotionType[]) {
     const words = emotionLexicon[emotion];
     const weights = emotionIntensityWeights[emotion];
-    
+
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
-      let startIndex = 0;
-      
-      while (startIndex < sentence.length) {
-        const index = sentence.indexOf(word, startIndex);
-        if (index === -1) break;
-        
-        keywords.push({
-          word,
-          emotion,
-          intensity: weights[i],
-          position: textOffset + index
-        });
-        
-        startIndex = index + word.length;
+      let searchStart = 0;
+
+      while (searchStart < sentence.length) {
+        const indexInSentence = sentence.indexOf(word, searchStart);
+        if (indexInSentence === -1) break;
+
+        const globalPos = sentenceCharStart + indexInSentence;
+        if (!seenPositions.has(globalPos)) {
+          seenPositions.add(globalPos);
+          keywords.push({
+            word,
+            emotion,
+            intensity: weights[i],
+            position: globalPos
+          });
+        }
+
+        searchStart = indexInSentence + word.length;
       }
     }
   }
-  
+
   return keywords.sort((a, b) => a.position - b.position);
 }
 
@@ -92,63 +133,70 @@ function calculateDominantEmotion(keywords: EmotionKeyword[]): EmotionType {
     calm: 0,
     anxious: 0
   };
-  
+
   for (const kw of keywords) {
     emotionScores[kw.emotion] += kw.intensity;
   }
-  
+
   let dominant: EmotionType = 'calm';
   let maxScore = 0;
-  
+
   for (const emotion of Object.keys(emotionScores) as EmotionType[]) {
     if (emotionScores[emotion] > maxScore) {
       maxScore = emotionScores[emotion];
       dominant = emotion;
     }
   }
-  
+
   return dominant;
 }
 
 function calculateIntensity(keywords: EmotionKeyword[], sentenceLength: number): number {
   if (keywords.length === 0) return 1;
-  
+
   const totalIntensity = keywords.reduce((sum, kw) => sum + kw.intensity, 0);
   const keywordFactor = Math.min(keywords.length * 0.5 + 1, 3);
-  const lengthFactor = Math.max(0.5, Math.min(1.5, 50 / sentenceLength));
-  
+  const lengthFactor = Math.max(0.5, Math.min(1.5, 50 / Math.max(sentenceLength, 1)));
+
   let intensity = Math.round((totalIntensity / keywords.length) * keywordFactor * lengthFactor);
   intensity = Math.max(1, Math.min(5, intensity));
-  
+
   return intensity;
 }
 
-export function analyzeSentence(sentence: string, position: number, textOffset: number): SentenceAnalysis {
-  const keywords = findKeywordsInSentence(sentence, textOffset);
+export function analyzeSentence(
+  text: string,
+  charStart: number,
+  charEnd: number,
+  totalChars: number
+): SentenceAnalysis {
+  const keywords = findKeywordsInSentence(text, charStart);
   const dominantEmotion = calculateDominantEmotion(keywords);
-  const intensity = calculateIntensity(keywords, sentence.length);
-  
+  const intensity = calculateIntensity(keywords, text.length);
+  const charIndex = totalChars > 0 ? (charStart + charEnd) / 2 / totalChars : 0.5;
+
   return {
-    text: sentence,
+    text,
     keywords,
     dominantEmotion,
     intensity,
-    position
+    charStart,
+    charEnd,
+    charIndex: Math.max(0, Math.min(1, charIndex))
   };
 }
 
 export function analyzeText(text: string): AnalysisResult {
-  const sentences = splitSentences(text);
+  const totalChars = text.length;
+  const sentenceSegments = splitSentences(text);
   const analyzedSentences: SentenceAnalysis[] = [];
-  
-  let textOffset = 0;
-  for (let i = 0; i < sentences.length; i++) {
-    const sentence = sentences[i];
-    const position = sentences.length > 1 ? i / (sentences.length - 1) : 0.5;
-    analyzedSentences.push(analyzeSentence(sentence, position, textOffset));
-    textOffset += sentence.length + 1;
+
+  for (const seg of sentenceSegments) {
+    analyzedSentences.push(
+      analyzeSentence(seg.text, seg.start, seg.end, totalChars)
+    );
   }
-  
+
   const overallEmotions: Record<EmotionType, number> = {
     happy: 0,
     sad: 0,
@@ -156,27 +204,28 @@ export function analyzeText(text: string): AnalysisResult {
     calm: 0,
     anxious: 0
   };
-  
+
   for (const sentence of analyzedSentences) {
     for (const kw of sentence.keywords) {
       overallEmotions[kw.emotion] += kw.intensity;
     }
   }
-  
+
   let dominantEmotion: EmotionType = 'calm';
   let maxCount = 0;
-  
+
   for (const emotion of Object.keys(overallEmotions) as EmotionType[]) {
     if (overallEmotions[emotion] > maxCount) {
       maxCount = overallEmotions[emotion];
       dominantEmotion = emotion;
     }
   }
-  
+
   return {
     sentences: analyzedSentences,
     overallEmotions,
-    dominantEmotion
+    dominantEmotion,
+    totalChars
   };
 }
 
