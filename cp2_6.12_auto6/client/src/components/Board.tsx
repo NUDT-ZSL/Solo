@@ -1,6 +1,26 @@
-import React, { useState, useCallback, useMemo, useRef, memo } from 'react';
+import React, { useState, useCallback, useMemo, memo } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+  DropAnimation,
+  defaultDropAnimation,
+  MeasuringStrategy,
+  useDroppable,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { Card, CardStatus, ColumnId } from '../types';
-import { CardItem } from './CardItem';
+import { SortableCard } from './SortableCard';
 import { CardModal } from './CardModal';
 
 const COLUMNS: { id: ColumnId; title: string }[] = [
@@ -31,19 +51,104 @@ interface BoardProps {
   }) => void;
 }
 
-const MemoCardItem = memo(CardItem, (prev, next) => {
+const MemoSortableCard = memo(SortableCard);
+
+const dropAnimation: DropAnimation = {
+  ...defaultDropAnimation,
+  dragSourceOpacity: 0.5,
+};
+
+const measuring = {
+  droppable: {
+    strategy: MeasuringStrategy.Always,
+  },
+};
+
+interface CardContainerProps {
+  id: ColumnId;
+  title: string;
+  cards: Card[];
+  onAddCard: (status: CardStatus) => void;
+  onEditCard: (card: Card) => void;
+  onDeleteCard: (id: string) => void;
+}
+
+const CardContainer: React.FC<CardContainerProps> = ({
+  id,
+  title,
+  cards,
+  onAddCard,
+  onEditCard,
+  onDeleteCard,
+}) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id,
+    data: {
+      type: 'column',
+      columnId: id,
+    },
+  });
+
   return (
-    prev.card.id === next.card.id &&
-    prev.card.title === next.card.title &&
-    prev.card.description === next.card.description &&
-    prev.card.priority === next.card.priority &&
-    prev.card.status === next.card.status &&
-    prev.card.order === next.card.order &&
-    prev.card.updatedAt === next.card.updatedAt &&
-    prev.isDragging === next.isDragging &&
-    prev.index === next.index
+    <div
+      className={`board-column ${isOver ? 'column-drag-over' : ''}`}
+      ref={setNodeRef}
+    >
+      <div className="column-header">
+        <h2 className="column-title">{title}</h2>
+        <span className="column-badge">{cards.length}</span>
+        <button
+          className="column-add-btn"
+          onClick={() => onAddCard(id)}
+          title="添加需求"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="column-cards">
+        <SortableContext
+          items={cards.map((c) => c.id)}
+          strategy={verticalListSortingStrategy}
+          id={id}
+        >
+          {cards.map((card, index) => (
+            <MemoSortableCard
+              key={card.id}
+              card={card}
+              onEdit={onEditCard}
+              onDelete={onDeleteCard}
+              index={index}
+            />
+          ))}
+        </SortableContext>
+
+        {cards.length === 0 && (
+          <div
+            className="column-empty"
+            onClick={() => onAddCard(id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                onAddCard(id);
+              }
+            }}
+          >
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>点击添加需求</span>
+          </div>
+        )}
+      </div>
+    </div>
   );
-});
+};
 
 export const Board: React.FC<BoardProps> = ({
   cards,
@@ -55,13 +160,19 @@ export const Board: React.FC<BoardProps> = ({
   onDeleteCard,
   onMoveCard,
 }) => {
-  const [draggingCard, setDraggingCard] = useState<Card | null>(null);
-  const [dragOverColumn, setDragOverColumn] = useState<ColumnId | null>(null);
-  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalInitialStatus, setModalInitialStatus] = useState<CardStatus>('todo');
-  const dragOverCardIdRef = useRef<string | null>(null);
+
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 3,
+    },
+  });
+
+  const sensors = useSensors(pointerSensor);
 
   const cardsByStatus = useMemo(() => {
     const result: Record<CardStatus, Card[]> = {
@@ -69,91 +180,138 @@ export const Board: React.FC<BoardProps> = ({
       'in-progress': [],
       done: [],
     };
-
     for (const card of cards) {
       result[card.status].push(card);
     }
-
     for (const status of Object.keys(result) as CardStatus[]) {
       result[status].sort((a, b) => a.order - b.order);
     }
-
     return result;
   }, [cards]);
 
-  const handleDragStart = useCallback((e: React.DragEvent, card: Card) => {
-    setDraggingCard(card);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', card.id);
-    const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '0.4';
-  }, []);
-
-  const handleDragEnd = useCallback((e: React.DragEvent) => {
-    const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '1';
-    setDraggingCard(null);
-    setDragOverColumn(null);
-    setDragOverCardId(null);
-    dragOverCardIdRef.current = null;
-  }, []);
-
-  const handleColumnDragOver = useCallback((e: React.DragEvent, columnId: ColumnId) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverColumn !== columnId) {
-      setDragOverColumn(columnId);
+  const cardsMap = useMemo(() => {
+    const map = new Map<string, Card>();
+    for (const card of cards) {
+      map.set(card.id, card);
     }
-  }, [dragOverColumn]);
+    return map;
+  }, [cards]);
 
-  const handleColumnDragLeave = useCallback(() => {
-    setDragOverColumn(null);
-  }, []);
-
-  const handleCardDragOver = useCallback((e: React.DragEvent, targetCardId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (draggingCard && draggingCard.id !== targetCardId) {
-      if (dragOverCardIdRef.current !== targetCardId) {
-        dragOverCardIdRef.current = targetCardId;
-        setDragOverCardId(targetCardId);
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const { active } = event;
+      const id = active.id as string;
+      setActiveId(id);
+      const card = cardsMap.get(id);
+      if (card) {
+        setActiveCard(card);
       }
-    }
-  }, [draggingCard]);
+    },
+    [cardsMap]
+  );
 
-  const handleColumnDrop = useCallback(
-    (e: React.DragEvent, columnId: ColumnId) => {
-      e.preventDefault();
-      e.stopPropagation();
+  const handleDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const { active, over } = event;
+      if (!over) return;
 
-      if (!draggingCard) return;
+      const activeId = active.id as string;
+      const overId = over.id as string;
 
-      const columnCards = cardsByStatus[columnId].filter(
-        (c) => c.id !== draggingCard.id
-      );
+      if (activeId === overId) return;
 
-      let newOrder: number;
-      if (dragOverCardId) {
-        const targetIndex = columnCards.findIndex((c) => c.id === dragOverCardId);
-        newOrder = targetIndex >= 0 ? targetIndex : columnCards.length;
+      const activeCardData = cardsMap.get(activeId);
+      if (!activeCardData) return;
+
+      let targetColumn: ColumnId | null = null;
+      if (overId === 'todo' || overId === 'in-progress' || overId === 'done') {
+        targetColumn = overId as ColumnId;
       } else {
-        newOrder = columnCards.length;
+        const overCard = cardsMap.get(overId);
+        if (overCard) {
+          targetColumn = overCard.status;
+        }
       }
+      if (!targetColumn) return;
 
-      if (draggingCard.status !== columnId || draggingCard.order !== newOrder) {
+      if (activeCardData.status === targetColumn) return;
+
+      const overCard = cardsMap.get(overId);
+      if (!overCard) return;
+
+      const overItems = cardsByStatus[targetColumn];
+      const overIndex = overItems.findIndex((c) => c.id === overId);
+      const activeItems = cardsByStatus[activeCardData.status];
+      const activeIndex = activeItems.findIndex((c) => c.id === activeId);
+
+      if (overIndex < 0) return;
+      if (activeIndex < 0) return;
+
+      if (activeCardData.status !== targetColumn) {
         onMoveCard({
-          id: draggingCard.id,
-          newStatus: columnId,
-          newOrder,
+          id: activeId,
+          newStatus: targetColumn,
+          newOrder: overIndex,
         });
       }
-
-      setDraggingCard(null);
-      setDragOverColumn(null);
-      setDragOverCardId(null);
-      dragOverCardIdRef.current = null;
     },
-    [draggingCard, dragOverCardId, cardsByStatus, onMoveCard]
+    [cardsMap, cardsByStatus, onMoveCard]
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveId(null);
+      setActiveCard(null);
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const activeId = active.id as string;
+      const overId = over.id as string;
+      const activeCardData = cardsMap.get(activeId);
+      if (!activeCardData) return;
+
+      let targetColumn: ColumnId | null = null;
+      let targetIndex: number | null = null;
+
+      if (overId === 'todo' || overId === 'in-progress' || overId === 'done') {
+        targetColumn = overId as ColumnId;
+        targetIndex = cardsByStatus[targetColumn].length;
+      } else {
+        const overCard = cardsMap.get(overId);
+        if (overCard) {
+          targetColumn = overCard.status;
+          const columnCards = cardsByStatus[targetColumn];
+          const overIndex = columnCards.findIndex((c) => c.id === overId);
+          targetIndex = overIndex >= 0 ? overIndex : columnCards.length;
+        }
+      }
+
+      if (!targetColumn || targetIndex === null) return;
+
+      const oldColumn = activeCardData.status;
+      const isSameColumn = oldColumn === targetColumn;
+
+      if (isSameColumn) {
+        const oldIndex = cardsByStatus[oldColumn].findIndex((c) => c.id === activeId);
+        if (oldIndex === targetIndex) return;
+        arrayMove(cardsByStatus[oldColumn], oldIndex, targetIndex);
+        onMoveCard({
+          id: activeId,
+          newStatus: targetColumn,
+          newOrder: targetIndex,
+        });
+      } else {
+        onMoveCard({
+          id: activeId,
+          newStatus: targetColumn,
+          newOrder: targetIndex,
+        });
+      }
+    },
+    [cardsMap, cardsByStatus, onMoveCard]
   );
 
   const openAddModal = useCallback((status: CardStatus) => {
@@ -165,6 +323,10 @@ export const Board: React.FC<BoardProps> = ({
   const openEditModal = useCallback((card: Card) => {
     setEditingCard(card);
     setIsModalOpen(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
   }, []);
 
   const handleModalSubmit = useCallback(
@@ -188,93 +350,65 @@ export const Board: React.FC<BoardProps> = ({
           });
         }
       }
+      closeModal();
     },
-    [editingCard, currentUserId, userColor, userName, modalInitialStatus, onAddCard, onUpdateCard]
+    [editingCard, currentUserId, userColor, userName, modalInitialStatus, onAddCard, onUpdateCard, closeModal]
   );
-
-  const closeModal = useCallback(() => {
-    setIsModalOpen(false);
-  }, []);
 
   return (
     <>
-      <div className="board-container">
-        {COLUMNS.map((column) => {
-          const columnCards = cardsByStatus[column.id];
-          const isDragOver = dragOverColumn === column.id;
-
-          return (
-            <div
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => {
+          setActiveId(null);
+          setActiveCard(null);
+        }}
+        measuring={measuring}
+      >
+        <div className="board-container">
+          {COLUMNS.map((column) => (
+            <CardContainer
               key={column.id}
-              className={`board-column ${isDragOver ? 'column-drag-over' : ''}`}
-              onDragOver={(e) => handleColumnDragOver(e, column.id)}
-              onDragLeave={handleColumnDragLeave}
-              onDrop={(e) => handleColumnDrop(e, column.id)}
-            >
-              <div className="column-header">
-                <h2 className="column-title">{column.title}</h2>
-                <span className="column-badge">{columnCards.length}</span>
-                <button
-                  className="column-add-btn"
-                  onClick={() => openAddModal(column.id)}
-                  title="添加需求"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </button>
-              </div>
+              id={column.id}
+              title={column.title}
+              cards={cardsByStatus[column.id]}
+              onAddCard={openAddModal}
+              onEditCard={openEditModal}
+              onDeleteCard={onDeleteCard}
+            />
+          ))}
+        </div>
 
-              <div className="column-cards">
-                {columnCards.map((card, index) => (
-                  <React.Fragment key={card.id}>
-                    {draggingCard && dragOverCardId === card.id && draggingCard.id !== card.id && (
-                      <div className="card-placeholder" aria-hidden="true" />
-                    )}
-                    <div
-                      onDragOver={(e) => handleCardDragOver(e, card.id)}
-                      className="card-wrapper"
-                    >
-                      <MemoCardItem
-                        card={card}
-                        onEdit={openEditModal}
-                        onDelete={onDeleteCard}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                        isDragging={draggingCard?.id === card.id}
-                        index={index}
-                      />
-                    </div>
-                  </React.Fragment>
-                ))}
-                {draggingCard && isDragOver && !dragOverCardId && (
-                  <div className="card-placeholder" aria-hidden="true" />
-                )}
-                {columnCards.length === 0 && !draggingCard && (
-                  <div
-                    className="column-empty"
-                    onClick={() => openAddModal(column.id)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        openAddModal(column.id);
-                      }
-                    }}
-                  >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    <span>点击添加需求</span>
-                  </div>
-                )}
+        <DragOverlay dropAnimation={dropAnimation}>
+          {activeCard ? (
+            <div
+              className="card-item card-drag-overlay"
+              style={{
+                transform: 'rotate(2deg) scale(1.05)',
+                transformOrigin: 'center',
+              }}
+            >
+              <div className="card-header">
+                <span className={`priority-tag priority-${activeCard.priority}`}>
+                  {activeCard.priority === 'high' ? '高' : activeCard.priority === 'medium' ? '中' : '低'}优先级
+                </span>
+                <div
+                  className="creator-badge"
+                  style={{ backgroundColor: activeCard.creatorColor }}
+                />
               </div>
+              <h3 className="card-title">{activeCard.title}</h3>
+              {activeCard.description && (
+                <p className="card-description">{activeCard.description}</p>
+              )}
             </div>
-          );
-        })}
-      </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <CardModal
         isOpen={isModalOpen}
