@@ -42,13 +42,6 @@ const App: React.FC = () => {
           from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
           to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
-        @media (max-width: 767px) {
-          div[aria-label="icon-card"] {
-            flex: 1 1 calc(50% - 8px) !important;
-            min-width: 0 !important;
-            max-width: none !important;
-          }
-        }
       `}</style>
       <header style={styles.header}>
         <div style={styles.headerContent}>

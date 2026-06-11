@@ -67,8 +67,8 @@ const IconDetailPanel: React.FC<IconDetailPanelProps> = ({ icon, onClose, isMobi
       <aside
         style={{
           ...styles.panel,
-          ...(icon ? (isMobile ? styles.panelOpenMobile : styles.panelOpen) : {}),
           ...(isMobile ? styles.panelMobile : {}),
+          ...(icon ? (isMobile ? styles.panelOpenMobile : styles.panelOpen) : {}),
         }}
       >
         {icon ? (

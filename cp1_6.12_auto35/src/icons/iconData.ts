@@ -34,6 +34,12 @@ export const iconCategories: IconCategory[] = [
       { id: 'arrow-circle-down', name: '圆形向下箭头', category: 'arrows', tags: ['arrow', 'circle', 'down', '圆形下'], pathData: 'M12 2a10 10 0 100 20 10 10 0 000-20zm1 10v8l4-4-1.41-1.41L13 17.17V8h-2z', viewBox: '0 0 24 24' },
       { id: 'arrow-turn-right', name: '转弯右箭头', category: 'arrows', tags: ['arrow', 'turn', 'right', '转弯'], pathData: 'M17 17l5-5-5-5v3H6V5H4v12h13v3z', viewBox: '0 0 24 24' },
       { id: 'arrow-turn-left', name: '转弯左箭头', category: 'arrows', tags: ['arrow', 'turn', 'left', '转弯'], pathData: 'M7 7l-5 5 5 5v-3h11v5h2V8H7z', viewBox: '0 0 24 24' },
+      { id: 'arrow-long-up', name: '长向上箭头', category: 'arrows', tags: ['arrow', 'long', 'up', '长上'], pathData: 'M12 2l-5 5h3v13h4V7h3z', viewBox: '0 0 24 24' },
+      { id: 'arrow-long-down', name: '长向下箭头', category: 'arrows', tags: ['arrow', 'long', 'down', '长下'], pathData: 'M12 22l5-5h-3V4h-4v13H7z', viewBox: '0 0 24 24' },
+      { id: 'arrow-bidirectional', name: '双向箭头', category: 'arrows', tags: ['arrow', 'bidirectional', '双向'], pathData: 'M7 12l-5-5v10l5-5zm10 0l5-5v10l-5-5z', viewBox: '0 0 24 24' },
+      { id: 'arrow-swap', name: '交换箭头', category: 'arrows', tags: ['arrow', 'swap', '交换', '切换'], pathData: 'M16 8l4 4-4 4M20 12H8M8 16l-4-4 4-4M4 12h12', viewBox: '0 0 24 24' },
+      { id: 'arrow-expand', name: '展开箭头', category: 'arrows', tags: ['arrow', 'expand', '展开', '放大'], pathData: 'M10 4H4v6M4 4l6 6M14 20h6v-6M20 20l-6-6', viewBox: '0 0 24 24' },
+      { id: 'arrow-collapse', name: '收起箭头', category: 'arrows', tags: ['arrow', 'collapse', '收起', '缩小'], pathData: 'M4 10h6V4M10 10L4 4M20 14h-6v6M14 14l6 6', viewBox: '0 0 24 24' },
     ]
   },
   {
@@ -56,6 +62,10 @@ export const iconCategories: IconCategory[] = [
       { id: 'chat', name: '聊天气泡', category: 'social', tags: ['chat', 'bubble', '聊天气泡'], pathData: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z', viewBox: '0 0 24 24' },
       { id: 'smile', name: '笑脸', category: 'social', tags: ['smile', 'happy', '笑', '开心'], pathData: 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z', viewBox: '0 0 24 24' },
       { id: 'tag', name: '标签', category: 'social', tags: ['tag', 'label', '标签'], pathData: 'M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z', viewBox: '0 0 24 24' },
+      { id: 'home', name: '主页', category: 'social', tags: ['home', 'house', '首页', '家'], pathData: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z', viewBox: '0 0 24 24' },
+      { id: 'search', name: '搜索', category: 'social', tags: ['search', 'find', '查找'], pathData: 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z', viewBox: '0 0 24 24' },
+      { id: 'settings', name: '设置', category: 'social', tags: ['settings', 'config', '设置', '配置'], pathData: 'M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z', viewBox: '0 0 24 24' },
+      { id: 'mail', name: '邮件', category: 'social', tags: ['mail', 'email', '邮件', '邮箱'], pathData: 'M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z', viewBox: '0 0 24 24' },
     ]
   },
   {
@@ -78,6 +88,10 @@ export const iconCategories: IconCategory[] = [
       { id: 'battery', name: '电池', category: 'devices', tags: ['battery', 'charge', '电池', '电量'], pathData: 'M17 4h-3V2h-4v2H7c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-1 14H8V6h8v12z', viewBox: '0 0 24 24' },
       { id: 'wifi', name: 'WiFi', category: 'devices', tags: ['wifi', 'wireless', '网络', '无线'], pathData: 'M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z', viewBox: '0 0 24 24' },
       { id: 'bluetooth', name: '蓝牙', category: 'devices', tags: ['bluetooth', '蓝牙'], pathData: 'M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z', viewBox: '0 0 24 24' },
+      { id: 'usb', name: 'USB', category: 'devices', tags: ['usb', '接口'], pathData: 'M15 7v4h1v2h-3V9h1V7h-3V5h-2v2h1v2H8v2h1v2H7v-2H5v2h2v2h2v-2h1v2h2v-2h1v2h2v-2h1v-2h1V9h1V7h-4zM7 11V9h2v2H7z', viewBox: '0 0 24 24' },
+      { id: 'server', name: '服务器', category: 'devices', tags: ['server', 'database', '服务器', '数据库'], pathData: 'M3 3h18v7H3zM3 14h18v7H3zm5-8h8v2H8zM8 16h8v2H8z', viewBox: '0 0 24 24' },
+      { id: 'hdd', name: '硬盘', category: 'devices', tags: ['hdd', 'hard', '硬盘', '存储'], pathData: 'M3 13h18v6H3zM3 5h18v6H3zm2 2v2h14V7H5zm0 8v2h14v-2H5z', viewBox: '0 0 24 24' },
+      { id: 'gamepad', name: '游戏手柄', category: 'devices', tags: ['game', 'controller', '游戏', '手柄'], pathData: 'M6.5 3C4 3 2 5 2 7.5v9C2 19 4 21 6.5 21h11c2.5 0 4.5-2 4.5-4.5v-9C22 5 20 3 17.5 3h-11zM9 8v3h2V8h2v3h2V8h2v3h3v2h-3v2h3v2h-3v3h-2v-3h-2v3H9v-3H6v-2h3v-2H6V9h3V8z', viewBox: '0 0 24 24' },
     ]
   },
   {
@@ -100,6 +114,15 @@ export const iconCategories: IconCategory[] = [
       { id: 'play', name: '播放', category: 'shapes', tags: ['play', 'start', '播放'], pathData: 'M8 5v14l11-7z', viewBox: '0 0 24 24' },
       { id: 'pause', name: '暂停', category: 'shapes', tags: ['pause', '暂停'], pathData: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z', viewBox: '0 0 24 24' },
       { id: 'stop', name: '停止', category: 'shapes', tags: ['stop', '停止'], pathData: 'M6 6h12v12H6z', viewBox: '0 0 24 24' },
+      { id: 'record', name: '录制', category: 'shapes', tags: ['record', 'circle', '录制', '圆形'], pathData: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 16c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z', viewBox: '0 0 24 24' },
+      { id: 'rewind', name: '快退', category: 'shapes', tags: ['rewind', 'back', '后退', '快退'], pathData: 'M11 18V6l-8.5 6 8.5 6zm1.5-6L21 6v12l-8.5-6z', viewBox: '0 0 24 24' },
+      { id: 'forward', name: '快进', category: 'shapes', tags: ['forward', 'next', '快进', '前进'], pathData: 'M13 6v12l8.5-6L13 6zM4 18l8.5-6L4 6v12z', viewBox: '0 0 24 24' },
+      { id: 'skip-previous', name: '上一首', category: 'shapes', tags: ['skip', 'previous', '上一个', '上一首'], pathData: 'M6 6h2v12H6zm3.5 6l8.5 6V6z', viewBox: '0 0 24 24' },
+      { id: 'skip-next', name: '下一首', category: 'shapes', tags: ['skip', 'next', '下一个', '下一首'], pathData: 'M16 6h2v12h-2zM6 18l8.5-6L6 6z', viewBox: '0 0 24 24' },
+      { id: 'volume-up', name: '音量加', category: 'shapes', tags: ['volume', 'sound', '音量', '声音'], pathData: 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z', viewBox: '0 0 24 24' },
+      { id: 'volume-down', name: '音量减', category: 'shapes', tags: ['volume', 'sound', '音量'], pathData: 'M18.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.17v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z', viewBox: '0 0 24 24' },
+      { id: 'zoom-in', name: '放大', category: 'shapes', tags: ['zoom', 'in', '放大'], pathData: 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zm2.5-4h-2v2H9v-2H7V9h2V7h1v2h2v1z', viewBox: '0 0 24 24' },
+      { id: 'zoom-out', name: '缩小', category: 'shapes', tags: ['zoom', 'out', '缩小'], pathData: 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM7 9h5v1H7z', viewBox: '0 0 24 24' },
     ]
   }
 ];
