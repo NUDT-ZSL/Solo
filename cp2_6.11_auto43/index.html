@@ -1,24 +1,386 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>情绪轨迹图</title>
-    <script type="module">
-      if (import.meta.hot?.on) {
-        import.meta.hot.on('vite:error', (error) => {
-          if (error.err) {
-            console.error(
-              [error.err.message, error.err.frame].filter(Boolean).join('\n'),
-            )
-          }
-        })
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>情绪墨水日记</title>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background-color: #F5F0E8;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .app-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .app-title {
+      font-family: 'Ma Shan Zheng', cursive;
+      font-size: 36px;
+      color: #3B3228;
+      text-align: center;
+      margin-bottom: 30px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.5s ease forwards;
+    }
+
+    .main-content {
+      display: flex;
+      gap: 30px;
+      flex: 1;
+      min-height: 600px;
+    }
+
+    .input-section {
+      width: 40%;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.5s ease 0.1s forwards;
+    }
+
+    .canvas-section {
+      width: 60%;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.5s ease 0.2s forwards;
+    }
+
+    .input-card {
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid #D4C9B8;
+      border-radius: 12px;
+      padding: 24px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 20px rgba(59, 50, 40, 0.08);
+    }
+
+    .input-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .input-label {
+      font-size: 16px;
+      color: #3B3228;
+      font-weight: 500;
+    }
+
+    .char-count {
+      font-size: 14px;
+      color: #8B7B8B;
+    }
+
+    .char-count.warning {
+      color: #DC143C;
+    }
+
+    .diary-input {
+      width: 100%;
+      flex: 1;
+      min-height: 300px;
+      padding: 16px;
+      font-family: 'Ma Shan Zheng', cursive;
+      font-size: 18px;
+      line-height: 1.8;
+      color: #3B3228;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid #D4C9B8;
+      border-radius: 8px;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .diary-input:focus {
+      border-color: #5A4A3A;
+      box-shadow: 0 0 0 3px rgba(90, 74, 58, 0.1);
+    }
+
+    .diary-input::placeholder {
+      color: #B8A898;
+      font-family: 'Ma Shan Zheng', cursive;
+    }
+
+    .keywords-display {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #D4C9B8;
+    }
+
+    .keywords-title {
+      font-size: 14px;
+      color: #5A4A3A;
+      margin-bottom: 12px;
+    }
+
+    .keywords-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 32px;
+    }
+
+    .keyword-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 16px;
+      font-size: 13px;
+      color: #3B3228;
+      border: 1px solid #D4C9B8;
+    }
+
+    .keyword-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .canvas-card {
+      height: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      background-color: #F5F0E8;
+      background-image: 
+        radial-gradient(circle at 20% 30%, rgba(212, 201, 184, 0.3) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(212, 201, 184, 0.2) 0%, transparent 50%),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+      box-shadow: 0 4px 20px rgba(59, 50, 40, 0.08);
+    }
+
+    #inkCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .canvas-placeholder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #B8A898;
+      pointer-events: none;
+    }
+
+    .placeholder-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .placeholder-text {
+      font-family: 'Ma Shan Zheng', cursive;
+      font-size: 20px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 500;
+      color: #F5F0E8;
+      background: #3B3228;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 44px;
+    }
+
+    .btn:hover {
+      background: #5A4A3A;
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #3B3228;
+      border: 1px solid #3B3228;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(59, 50, 40, 0.1);
+      color: #5A4A3A;
+    }
+
+    .emotion-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #D4C9B8;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #5A4A3A;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
       }
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        padding: 20px 16px;
+      }
+
+      .app-title {
+        font-size: 28px;
+        margin-bottom: 20px;
+      }
+
+      .main-content {
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .input-section,
+      .canvas-section {
+        width: 100%;
+      }
+
+      .input-card {
+        min-height: 400px;
+      }
+
+      .diary-input {
+        min-height: 200px;
+        font-size: 16px;
+      }
+
+      .canvas-card {
+        min-height: 400px;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <h1 class="app-title">情绪墨水日记</h1>
+    
+    <div class="main-content">
+      <div class="input-section">
+        <div class="input-card">
+          <div class="input-header">
+            <span class="input-label">写下你的心情</span>
+            <span class="char-count" id="charCount">0 / 500</span>
+          </div>
+          
+          <textarea 
+            class="diary-input" 
+            id="diaryInput" 
+            placeholder="在这里写下你的日记...&#10;&#10;今天是个开心的日子，阳光明媚，心情舒畅。&#10;完成了一个重要的项目，感到很欣慰也很满足。&#10;虽然中间有些小挫折让人焦虑，但最终都顺利解决了。"
+            maxlength="500"
+          ></textarea>
+          
+          <div class="keywords-display">
+            <div class="keywords-title">情绪关键词</div>
+            <div class="keywords-list" id="keywordsList">
+              <span style="color: #B8A898; font-size: 13px;">输入文字后将显示识别到的情绪关键词</span>
+            </div>
+          </div>
+
+          <div class="emotion-legend">
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #FFD700;"></span>
+              <span>高兴</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #00BFFF;"></span>
+              <span>悲伤</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #DC143C;"></span>
+              <span>愤怒</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #98FF98;"></span>
+              <span>平静</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #8B7B8B;"></span>
+              <span>焦虑</span>
+            </div>
+          </div>
+          
+          <div class="button-group">
+            <button class="btn btn-secondary" id="resetBtn">重置</button>
+            <button class="btn" id="exportBtn">导出图片</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="canvas-section">
+        <div class="canvas-card">
+          <canvas id="inkCanvas"></canvas>
+          <div class="canvas-placeholder" id="canvasPlaceholder">
+            <div class="placeholder-icon">✍️</div>
+            <div class="placeholder-text">在左侧输入日记文字<br/>水墨插画将在此生成</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
 </html>
