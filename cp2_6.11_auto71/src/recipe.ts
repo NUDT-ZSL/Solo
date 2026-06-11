@@ -249,10 +249,11 @@ export function getRecipeByName(name: string): Recipe | null {
 
 export function calculateLayout(recipe: Recipe, viewportWidth: number): Recipe {
   const count = recipe.ingredients.length;
-  const totalWidth = count * ICON_SIZE + (count - 1) * ICON_SPACING;
-  const canvasWidth = Math.max(viewportWidth, totalWidth + 100);
-  const startX = (canvasWidth - totalWidth) / 2;
-  const centerY = PADDING_TOP + (CANVAS_HEIGHT - PADDING_TOP * 2) / 2;
+  const gridSize = ICON_SPACING;
+  const totalWidth = count * gridSize;
+  const canvasWidth = Math.max(viewportWidth, totalWidth + gridSize * 2);
+  const startX = gridSize + Math.round((canvasWidth - totalWidth - gridSize * 2) / 2 / gridSize) * gridSize;
+  const centerY = Math.round(CANVAS_HEIGHT / 2 / gridSize) * gridSize;
 
   const orderedIngredients: Ingredient[] = [];
   const processedIds = new Set<string>();
@@ -270,8 +271,8 @@ export function calculateLayout(recipe: Recipe, viewportWidth: number): Recipe {
     .map(i => i.id);
 
   const queue = [...startIds];
-  let xPos = startX;
-  const rowHeight = 100;
+  let colIndex = 0;
+  const rowHeight = gridSize;
   let currentRow = 0;
   const rowCounts = new Map<number, number>();
 
@@ -284,13 +285,14 @@ export function calculateLayout(recipe: Recipe, viewportWidth: number): Recipe {
     if (!ingredient) continue;
 
     const rowCount = rowCounts.get(currentRow) || 0;
-    const yOffset = (currentRow % 2 === 0 ? -1 : 1) * Math.floor(currentRow / 2) * rowHeight;
+    const yOffset = (currentRow % 2 === 0 ? -1 : 1) * Math.ceil(currentRow / 2) * rowHeight;
     const y = centerY + yOffset;
+    const x = startX + colIndex * gridSize;
 
     orderedIngredients.push({
       ...ingredient,
-      x: xPos,
-      y: y
+      x: Math.round(x / gridSize) * gridSize,
+      y: Math.round(y / gridSize) * gridSize
     });
 
     rowCounts.set(currentRow, rowCount + 1);
@@ -302,11 +304,11 @@ export function calculateLayout(recipe: Recipe, viewportWidth: number): Recipe {
       }
     }
 
-    xPos += ICON_SIZE + ICON_SPACING;
+    colIndex++;
     
-    if (xPos > canvasWidth - ICON_SIZE - 50) {
+    if (startX + colIndex * gridSize > canvasWidth - gridSize) {
       currentRow++;
-      xPos = startX + (ICON_SIZE + ICON_SPACING) / 2;
+      colIndex = currentRow % 2 === 0 ? 0 : 1;
     }
   }
 
@@ -314,10 +316,10 @@ export function calculateLayout(recipe: Recipe, viewportWidth: number): Recipe {
     if (!processedIds.has(ing.id)) {
       orderedIngredients.push({
         ...ing,
-        x: xPos,
+        x: Math.round((startX + colIndex * gridSize) / gridSize) * gridSize,
         y: centerY
       });
-      xPos += ICON_SIZE + ICON_SPACING;
+      colIndex++;
     }
   }
 

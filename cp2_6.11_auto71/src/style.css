@@ -88,23 +88,48 @@ body {
   scrollbar-color: var(--border-color) var(--bg-color);
 }
 
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--light-color);
+  border: 2px solid var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-color);
+  border: 2px solid var(--light-color);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color);
+}
+
+.canvas-wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-color) var(--light-color);
+}
+
 .canvas-wrapper::-webkit-scrollbar {
   width: var(--scrollbar-width);
   height: var(--scrollbar-width);
 }
 
 .canvas-wrapper::-webkit-scrollbar-track {
-  background: var(--bg-color);
-  border: 2px solid var(--border-color);
-}
-
-.canvas-wrapper::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: var(--light-color);
   border: 2px solid var(--bg-color);
 }
 
-.canvas-wrapper::-webkit-scrollbar-thumb:hover {
+.canvas-wrapper::-webkit-scrollbar-thumb {
   background: var(--accent-color);
+  border: 2px solid var(--light-color);
+}
+
+.canvas-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color);
 }
 
 #recipeCanvas {

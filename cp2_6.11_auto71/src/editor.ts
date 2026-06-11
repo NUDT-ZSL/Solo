@@ -22,7 +22,7 @@ export class Editor {
   private editingIngredient: Ingredient | null = null;
   private selectedColor: string = '';
   private lastClickTime = 0;
-  private doubleClickDelay = 400;
+  private doubleClickDelay = 500;
   private clickPosition = { x: 0, y: 0 };
 
   constructor(canvas: HTMLCanvasElement, renderer: Renderer, callbacks: EditorCallbacks) {
@@ -74,23 +74,19 @@ export class Editor {
       Math.pow(coords.y - this.clickPosition.y, 2)
     );
 
-    console.log('mousedown:', {
-      timeDiff,
-      posDiff,
-      hasIcon: !!icon,
-      clickPos: this.clickPosition,
-      lastClickTime: this.lastClickTime,
-      doubleClickDelay: this.doubleClickDelay
-    });
-
     if (timeDiff < this.doubleClickDelay &&
-        posDiff < 30 &&
+        posDiff < 20 &&
         icon &&
         this.clickPosition.x !== 0 &&
         this.clickPosition.y !== 0) {
-      console.log('双击检测通过，显示弹窗');
       this.lastClickTime = 0;
       this.clickPosition = { x: 0, y: 0 };
+      this.isDragging = false;
+      this.hasDragged = false;
+      this.renderer.setEditState({
+        draggingId: null,
+        pressedId: null
+      });
       this.showEditPopup(icon, e.clientX, e.clientY);
       return;
     }

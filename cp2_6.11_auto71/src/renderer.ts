@@ -591,12 +591,6 @@ export class Renderer {
         exportCtx.textAlign = 'center';
         exportCtx.textBaseline = 'top';
         const labelY = ingredient.y + halfSize + 16;
-        const textWidth = exportCtx.measureText(ingredient.name).width;
-        exportCtx.fillStyle = 'rgba(245, 222, 179, 0.9)';
-        exportCtx.fillRect(ingredient.x - textWidth / 2 - 2, labelY - 1, textWidth + 4, 12);
-        exportCtx.strokeStyle = BORDER_COLOR;
-        exportCtx.lineWidth = 1;
-        exportCtx.strokeRect(ingredient.x - textWidth / 2 - 2, labelY - 1, textWidth + 4, 12);
         exportCtx.fillStyle = TEXT_COLOR;
         exportCtx.fillText(ingredient.name, ingredient.x, labelY + 1);
       }
@@ -611,12 +605,6 @@ export class Renderer {
 
         const midX = (from.x + to.x) / 2;
         const midY = (from.y + to.y) / 2 - 20;
-        const stepTextWidth = exportCtx.measureText(step.action).width;
-        exportCtx.fillStyle = 'rgba(245, 222, 179, 0.9)';
-        exportCtx.fillRect(midX - stepTextWidth / 2 - 3, midY - 5, stepTextWidth + 6, 12);
-        exportCtx.strokeStyle = BORDER_COLOR;
-        exportCtx.lineWidth = 1;
-        exportCtx.strokeRect(midX - stepTextWidth / 2 - 3, midY - 5, stepTextWidth + 6, 12);
         exportCtx.fillStyle = TEXT_COLOR;
         exportCtx.fillText(step.action, midX, midY + 1);
       }
