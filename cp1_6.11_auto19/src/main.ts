@@ -13,6 +13,7 @@ const PHASE_DURATION = 30000;
 const TRAJECTORY_SWITCH_INTERVAL = 5000;
 const BASE_SPAWN_INTERVAL = 1500;
 const PHASE_SPAWN_MULTIPLIER = [1, 0.8, 0.64];
+const PHASE_SPEED_MULTIPLIER = [1, 1.2, 1.44];
 
 const TRAJECTORY_TYPES: TrajectoryType[] = ['linear', 's_curve', 'spiral'];
 
@@ -193,12 +194,14 @@ class Game {
   private spawnNotes(deltaTime: number): void {
     this.spawnTimeElapsed += deltaTime;
     
-    const speedMultiplier = this.player.getSpeedMultiplier();
-    const spawnInterval = BASE_SPAWN_INTERVAL * PHASE_SPAWN_MULTIPLIER[this.gamePhase - 1] / speedMultiplier;
+    const comboSpeedMultiplier = this.player.getSpeedMultiplier();
+    const phaseSpeedMultiplier = PHASE_SPEED_MULTIPLIER[this.gamePhase - 1];
+    const totalSpeedMultiplier = comboSpeedMultiplier * phaseSpeedMultiplier;
+    const spawnInterval = BASE_SPAWN_INTERVAL * PHASE_SPAWN_MULTIPLIER[this.gamePhase - 1] / totalSpeedMultiplier;
     
     if (this.spawnTimeElapsed >= spawnInterval) {
       this.spawnTimeElapsed = 0;
-      this.noteManager.spawnNote(this.currentTrajectory, speedMultiplier);
+      this.noteManager.spawnNote(this.currentTrajectory, totalSpeedMultiplier);
     }
   }
   
@@ -218,13 +221,9 @@ class Game {
     this.updateTrajectory(deltaTime);
     this.spawnNotes(deltaTime);
     
-    this.noteManager.update(deltaTime);
-    
-    const activeNotes = this.noteManager.getActiveNotes();
-    for (const note of activeNotes) {
-      if (note.progress >= 1) {
-        this.player.miss();
-      }
+    const result = this.noteManager.update(deltaTime);
+    for (let i = 0; i < result.missedCount; i++) {
+      this.player.miss();
     }
     
     this.player.update(deltaTime);

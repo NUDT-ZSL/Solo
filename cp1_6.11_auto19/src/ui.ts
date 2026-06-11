@@ -264,18 +264,38 @@ export class UIRenderer {
     let innerColor = 'rgba(100, 100, 100, 0.3)';
     let glowColor = 'rgba(255, 255, 255, 0.3)';
     let glowBlur = 10;
+    let midColor = 'rgba(150, 150, 150, 0.3)';
+    let centerColor = 'rgba(200, 200, 200, 0.5)';
     
     if (targetFlash) {
-      outerColor = 'rgba(255, 51, 51, 0.8)';
-      innerColor = 'rgba(255, 100, 100, 0.5)';
+      outerColor = 'rgba(255, 51, 51, 0.9)';
+      innerColor = 'rgba(255, 100, 100, 0.6)';
+      midColor = 'rgba(255, 80, 80, 0.7)';
+      centerColor = 'rgba(255, 51, 51, 0.9)';
       glowColor = COLOR_RED;
-      glowBlur = 20;
+      glowBlur = 25;
     } else if (ultimateReady) {
-      const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;
-      outerColor = `rgba(255, 215, 0, ${0.6 * pulse})`;
-      innerColor = `rgba(255, 180, 0, ${0.4 * pulse})`;
+      const pulse = Math.sin(Date.now() * 0.008) * 0.4 + 0.6;
+      const pulse2 = Math.sin(Date.now() * 0.012) * 0.3 + 0.7;
+      outerColor = `rgba(255, 215, 0, ${0.8 * pulse})`;
+      innerColor = `rgba(255, 180, 0, ${0.5 * pulse})`;
+      midColor = `rgba(255, 200, 0, ${0.65 * pulse2})`;
+      centerColor = `rgba(255, 215, 0, ${pulse})`;
       glowColor = COLOR_GOLD;
-      glowBlur = 25 * pulse;
+      glowBlur = 30 * pulse;
+      
+      const gradient = ctx.createRadialGradient(
+        centerX, centerY, 0,
+        centerX, centerY, TARGET_OUTER_RADIUS * 1.5
+      );
+      gradient.addColorStop(0, `rgba(255, 215, 0, ${0.3 * pulse})`);
+      gradient.addColorStop(0.5, `rgba(255, 180, 0, ${0.15 * pulse})`);
+      gradient.addColorStop(1, 'transparent');
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, TARGET_OUTER_RADIUS * 1.5, 0, Math.PI * 2);
+      ctx.fill();
     }
     
     ctx.shadowColor = glowColor;
@@ -292,15 +312,16 @@ export class UIRenderer {
     ctx.arc(centerX, centerY, TARGET_INNER_RADIUS, 0, Math.PI * 2);
     ctx.fill();
     
-    ctx.strokeStyle = outerColor;
+    ctx.strokeStyle = midColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(centerX, centerY, (TARGET_OUTER_RADIUS + TARGET_INNER_RADIUS) / 2, 0, Math.PI * 2);
     ctx.stroke();
     
-    ctx.fillStyle = outerColor;
+    ctx.fillStyle = centerColor;
+    ctx.shadowBlur = glowBlur * 0.5;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();

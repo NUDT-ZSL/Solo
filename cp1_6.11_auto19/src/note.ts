@@ -560,9 +560,22 @@ export class NoteManager {
     }
   }
   
-  update(deltaTime: number): void {
+  update(deltaTime: number): { missedCount: number; hitCount: number } {
+    let missedCount = 0;
+    let hitCount = 0;
+    
     for (const note of this.notes) {
+      const prevState = note.state;
       note.update(deltaTime);
+      
+      if (prevState === 'active' && note.state === 'missed') {
+        missedCount++;
+        this.spawnMissText(this.centerX, this.centerY - 40);
+      }
+      
+      if (prevState === 'active' && note.state === 'hit') {
+        hitCount++;
+      }
     }
     
     for (const particle of this.particles) {
@@ -593,6 +606,8 @@ export class NoteManager {
       }
       return true;
     });
+    
+    return { missedCount, hitCount };
   }
   
   handleClick(
