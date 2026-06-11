@@ -34,6 +34,7 @@ const LyricItem: React.FC<LyricItemProps> = ({
   const resizeStartTime = useRef(0);
   const resizeEndTime = useRef(0);
   const itemRef = useRef<HTMLDivElement>(null);
+  const dragHandleRef = useRef<HTMLDivElement>(null);
 
   const [{ isDragging }, drag] = useDrag<DragItem, unknown, { isDragging: boolean }>({
     type: 'LYRIC_ITEM',
@@ -60,25 +61,24 @@ const LyricItem: React.FC<LyricItemProps> = ({
     resizeStartTime.current = line.startTime;
     resizeEndTime.current = line.endTime;
 
+    const duration = line.endTime - line.startTime;
+    const pixelsPerSecond = Math.max(20, itemRef.current ? itemRef.current.offsetWidth / Math.max(duration, 1) : 50);
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!itemRef.current) return;
-      
-      const rect = itemRef.current.getBoundingClientRect();
+      moveEvent.preventDefault();
       const deltaX = moveEvent.clientX - resizeStartX.current;
-      const timeRange = resizeEndTime.current - resizeStartTime.current;
-      const deltaTime = (deltaX / rect.width) * timeRange;
-      const roundedDelta = roundToStep(deltaTime, 0.1);
+      const deltaTime = roundToStep(deltaX / pixelsPerSecond, 0.1);
 
       if (edge === 'left') {
         const newStartTime = clamp(
-          resizeStartTime.current + roundedDelta,
+          resizeStartTime.current + deltaTime,
           0,
           resizeEndTime.current - 0.2
         );
         onUpdateTime(line.id, newStartTime, resizeEndTime.current);
       } else {
         const newEndTime = clamp(
-          resizeEndTime.current + roundedDelta,
+          resizeEndTime.current + deltaTime,
           resizeStartTime.current + 0.2,
           Number.MAX_SAFE_INTEGER
         );
@@ -90,38 +90,108 @@ const LyricItem: React.FC<LyricItemProps> = ({
       setIsResizing(null);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
 
+    document.body.style.cursor = edge === 'left' || edge === 'right' ? 'ew-resize' : '';
+    document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, [line.id, line.startTime, line.endTime, onUpdateTime]);
 
-  drag(drop(itemRef));
+  drag(dragHandleRef);
+  drop(itemRef);
 
   return (
     <div
       ref={itemRef}
       className={`lyric-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
       onClick={() => onSelect(line.id)}
-      style={{ opacity: isDragging ? 0.5 : 1 }}
+      style={{
+        opacity: isDragging ? 0.5 : 1,
+        paddingLeft: '24px',
+        paddingRight: '24px',
+      }}
     >
-      <div className="lyric-tooltip">
-        {formatTimeLong(line.startTime)} - {formatTimeLong(line.endTime)}
+      <div
+        ref={dragHandleRef}
+        style={{
+          position: 'absolute',
+          left: '8px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          cursor: 'grab',
+          fontSize: '12px',
+          color: 'var(--text-secondary)',
+          userSelect: 'none',
+          lineHeight: 1,
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        title="拖拽调整顺序"
+      >
+        ⋮⋮
       </div>
-      
+
       <div
         className={`resize-handle resize-handle-left ${isResizing === 'left' ? 'active' : ''}`}
         onMouseDown={(e) => handleResizeStart(e, 'left')}
-      />
-      
+        onMouseDownCapture={(e) => e.stopPropagation()}
+        style={{
+          left: 0,
+          width: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'ew-resize',
+          zIndex: 5,
+        }}
+        title="拖拽调整开始时间"
+      >
+        <div style={{
+          width: '3px',
+          height: '20px',
+          backgroundColor: isResizing === 'left' ? 'var(--accent-color)' : 'rgba(233, 69, 96, 0.4)',
+          borderRadius: '2px',
+        }} />
+      </div>
+
       <div
         className={`resize-handle resize-handle-right ${isResizing === 'right' ? 'active' : ''}`}
         onMouseDown={(e) => handleResizeStart(e, 'right')}
-      />
-      
-      <div className="lyric-text">{line.text}</div>
+        onMouseDownCapture={(e) => e.stopPropagation()}
+        style={{
+          right: 0,
+          width: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'ew-resize',
+          zIndex: 5,
+        }}
+        title="拖拽调整结束时间"
+      >
+        <div style={{
+          width: '3px',
+          height: '20px',
+          backgroundColor: isResizing === 'right' ? 'var(--accent-color)' : 'rgba(233, 69, 96, 0.4)',
+          borderRadius: '2px',
+        }} />
+      </div>
+
+      <div className="lyric-tooltip">
+        {formatTimeLong(line.startTime)} → {formatTimeLong(line.endTime)}
+        {' '}| 时长: {(line.endTime - line.startTime).toFixed(1)}s | 步长: 0.1s
+      </div>
+
+      <div className="lyric-text" style={{ paddingLeft: '4px', paddingRight: '4px' }}>
+        {line.text}
+      </div>
       <div className="lyric-time">
         {formatTimeLong(line.startTime)} → {formatTimeLong(line.endTime)}
+        <span style={{ marginLeft: '8px', color: 'var(--accent-color)' }}>
+          {(line.endTime - line.startTime).toFixed(1)}s
+        </span>
       </div>
     </div>
   );

@@ -127,20 +127,49 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoaded }) => {
         style={{ display: 'none' }}
       />
       
-      <div className="upload-icon">📜</div>
-      <p><strong>点击或拖拽上传 LRC 歌词文件</strong></p>
-      <p>支持 .lrc 格式，自动解析时间轴</p>
-      
-      {isUploading && (
-        <div style={{ marginTop: '16px' }}>
-          <div className="progress-bar">
+      {!isUploading ? (
+        <>
+          <div className="upload-icon">📜</div>
+          <p><strong>点击或拖拽上传 LRC 歌词文件</strong></p>
+          <p>支持 .lrc 格式，自动解析时间轴</p>
+        </>
+      ) : (
+        <div style={{ width: '100%', padding: '8px 0' }}>
+          <div
+            style={{
+              fontSize: '36px',
+              fontWeight: 700,
+              color: 'var(--accent-color)',
+              marginBottom: '12px',
+            }}
+          >
+            {uploadProgress}%
+          </div>
+          <div
+            className="progress-bar"
+            style={{
+              height: '10px',
+              borderRadius: '5px',
+              overflow: 'hidden',
+            }}
+          >
             <div
               className="progress-bar-fill"
-              style={{ width: `${uploadProgress}%` }}
+              style={{
+                width: `${uploadProgress}%`,
+                height: '100%',
+                transition: 'width 0.3s ease',
+              }}
             />
           </div>
-          <p style={{ marginTop: '8px', fontSize: '12px' }}>
-            {uploadProgress < 100 ? '正在解析...' : '解析完成！'}
+          <p style={{ marginTop: '12px', fontSize: '14px', fontWeight: 500 }}>
+            {uploadProgress < 30
+              ? '📖 正在读取文件...'
+              : uploadProgress < 70
+              ? '🔍 正在解析歌词时间轴...'
+              : uploadProgress < 100
+              ? '✨ 正在加载歌词数据...'
+              : '✅ 解析完成！即将进入编辑界面...'}
           </p>
         </div>
       )}
