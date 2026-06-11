@@ -1,4 +1,4 @@
-import { RGB, lerpRgb, colorDistance, rgbToLab } from '../../utils/helpers';
+import { RGB, lerpRgb } from '../../utils/helpers';
 
 export type GradientType = 'horizontal' | 'diagonal' | 'radial';
 
@@ -14,6 +14,73 @@ export interface CellDifference {
   row: number;
   col: number;
   difference: number;
+}
+
+interface XYZ {
+  x: number;
+  y: number;
+  z: number;
+}
+
+interface LAB {
+  l: number;
+  a: number;
+  b: number;
+}
+
+function rgbToXyz(rgb: RGB): XYZ {
+  let r = rgb.r / 255;
+  let g = rgb.g / 255;
+  let b = rgb.b / 255;
+
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+  r *= 100;
+  g *= 100;
+  b *= 100;
+
+  return {
+    x: r * 0.4124 + g * 0.3576 + b * 0.1805,
+    y: r * 0.2126 + g * 0.7152 + b * 0.0722,
+    z: r * 0.0193 + g * 0.1192 + b * 0.9505,
+  };
+}
+
+function xyzToLab(xyz: XYZ): LAB {
+  const refX = 95.047;
+  const refY = 100.0;
+  const refZ = 108.883;
+
+  let x = xyz.x / refX;
+  let y = xyz.y / refY;
+  let z = xyz.z / refZ;
+
+  const epsilon = 0.008856;
+  const kappa = 903.3;
+
+  const fx = x > epsilon ? Math.cbrt(x) : (kappa * x + 16) / 116;
+  const fy = y > epsilon ? Math.cbrt(y) : (kappa * y + 16) / 116;
+  const fz = z > epsilon ? Math.cbrt(z) : (kappa * z + 16) / 116;
+
+  return {
+    l: 116 * fy - 16,
+    a: 500 * (fx - fy),
+    b: 200 * (fy - fz),
+  };
+}
+
+function rgbToLab(rgb: RGB): LAB {
+  return xyzToLab(rgbToXyz(rgb));
+}
+
+function cie76Difference(lab1: LAB, lab2: LAB): number {
+  return Math.sqrt(
+    Math.pow(lab1.l - lab2.l, 2) +
+      Math.pow(lab1.a - lab2.a, 2) +
+      Math.pow(lab1.b - lab2.b, 2)
+  );
 }
 
 export const LEVELS: LevelConfig[] = [
@@ -136,7 +203,10 @@ export class ColorEngine {
         const userColor = userGrid[row][col];
         if (userColor) {
           const targetColor = targetGrid[row][col];
-          const diff = colorDistance(userColor, targetColor);
+          // CIE76标准色差，完全相同为0，最大可感知差异约为100
+          const lab1 = rgbToLab(userColor);
+          const lab2 = rgbToLab(targetColor);
+          const diff = cie76Difference(lab1, lab2);
           totalDifference += diff;
           filledCells++;
         }
@@ -163,7 +233,10 @@ export class ColorEngine {
         const userColor = userGrid[row][col];
         const targetColor = targetGrid[row][col];
         if (userColor) {
-          rowDiffs.push(colorDistance(userColor, targetColor));
+          // CIE76标准色差，完全相同为0，最大可感知差异约为100
+          const lab1 = rgbToLab(userColor);
+          const lab2 = rgbToLab(targetColor);
+          rowDiffs.push(cie76Difference(lab1, lab2));
         } else {
           rowDiffs.push(MAX_CIE76_DIFFERENCE);
         }

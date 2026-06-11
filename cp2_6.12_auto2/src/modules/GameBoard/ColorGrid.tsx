@@ -19,6 +19,8 @@ interface ColorGridProps {
   onCellClear: (row: number, col: number) => void;
   highlightedCells: string[];
   hintCells: Map<string, RGB>;
+  onDragEnter?: () => void;
+  onDragLeave?: () => void;
 }
 
 export const ColorGrid: React.FC<ColorGridProps> = ({
@@ -28,13 +30,30 @@ export const ColorGrid: React.FC<ColorGridProps> = ({
   onCellClear,
   highlightedCells,
   hintCells,
+  onDragEnter,
+  onDragLeave: onDragLeaveProp,
 }) => {
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
+  const handleDragEnter = useCallback(
+    (e: React.DragEvent, row: number, col: number) => {
+      e.preventDefault();
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      setDragOverCell(`${row}-${col}`);
+      if (onDragEnter) {
+        onDragEnter();
+      }
+    },
+    [onDragEnter]
+  );
+
   const handleDragOver = useCallback(
     (e: React.DragEvent, row: number, col: number) => {
       e.preventDefault();
+      e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
 
       if (animationFrameRef.current) {
@@ -54,7 +73,10 @@ export const ColorGrid: React.FC<ColorGridProps> = ({
       cancelAnimationFrame(animationFrameRef.current);
     }
     setDragOverCell(null);
-  }, []);
+    if (onDragLeaveProp) {
+      onDragLeaveProp();
+    }
+  }, [onDragLeaveProp]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent, row: number, col: number) => {
@@ -104,7 +126,9 @@ export const ColorGrid: React.FC<ColorGridProps> = ({
               className={getCellClasses(cell, isDragOver)}
               style={{
                 backgroundColor: cell.color ? rgbToString(cell.color) : 'var(--cell-empty-bg)',
+                position: 'relative',
               }}
+              onDragEnter={(e) => handleDragEnter(e, rowIndex, colIndex)}
               onDragOver={(e) => handleDragOver(e, rowIndex, colIndex)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, rowIndex, colIndex)}
@@ -113,9 +137,34 @@ export const ColorGrid: React.FC<ColorGridProps> = ({
               {hintColor && (
                 <div
                   className="hint-color-preview"
-                  style={{ backgroundColor: rgbToString(hintColor) }}
-                  title="目标颜色提示"
-                />
+                  style={{
+                    position: 'absolute',
+                    bottom: '-40px',
+                    right: 0,
+                    zIndex: 10,
+                    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    color: '#fff',
+                    fontSize: '12px',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      backgroundColor: rgbToString(hintColor),
+                      borderRadius: '4px',
+                      border: '1px solid rgba(255, 255, 255, 0.3)',
+                    }}
+                  />
+                  <span>目标色</span>
+                </div>
               )}
             </div>
           );

@@ -37,6 +37,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
   const [highlightedCells, setHighlightedCells] = useState<string[]>([]);
   const [hintCells, setHintCells] = useState<Map<string, RGB>>(new Map());
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [finalTime, setFinalTime] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showResult, setShowResult] = useState(false);
@@ -141,6 +142,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
       clearInterval(timerRef.current);
     }
 
+    const actualFinalTime = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    setFinalTime(actualFinalTime);
     setIsComplete(true);
     const success = percentage >= SUCCESS_THRESHOLD;
     setIsSuccess(success);
@@ -149,7 +152,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
     onComplete({
       level: currentLevel + 1,
       matchPercentage: percentage,
-      elapsedTime,
+      elapsedTime: actualFinalTime,
       isSuccess: success,
       isPerfect: percentage === 100,
     });
@@ -228,11 +231,27 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
 
   const handlePaletteItemDragStart = useCallback(
     (e: React.DragEvent, item: PaletteItem) => {
-      if (item.isUsed) return;
+      if (item.isUsed) {
+        e.preventDefault();
+        return;
+      }
 
-      e.dataTransfer.setData('application/json', JSON.stringify(item.color));
+      e.stopPropagation();
+
+      const colorJson = JSON.stringify(item.color);
+      e.dataTransfer.setData('application/json', colorJson);
       e.dataTransfer.setData('text/palette-id', item.id);
-      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', colorJson);
+      e.dataTransfer.setData('text/color-id', item.id);
+      e.dataTransfer.effectAllowed = 'copyMove';
+
+      try {
+        const dragImage = e.currentTarget as HTMLElement;
+        const rect = dragImage.getBoundingClientRect();
+        e.dataTransfer.setDragImage(dragImage, rect.width / 2, rect.height / 2);
+      } catch {
+        // setDragImage may fail in some browsers, ignore silently
+      }
 
       setPalette((prev) =>
         paletteGenerator.setDragging(prev, item.id, true)
@@ -310,6 +329,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
   }, [currentLevel]);
 
   const handleSelectLevel = useCallback((levelIndex: number) => {
+    if (timerRef.current) clearInterval(timerRef.current);
     setCurrentLevel(levelIndex);
   }, []);
 
@@ -325,7 +345,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
     <div className="game-container">
       <header className="game-header">
         <div className="header-left">
-          <button className="btn btn-secondary" onClick={onBack}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              if (timerRef.current) clearInterval(timerRef.current);
+              onBack();
+            }}
+          >
             ← 返回
           </button>
           <div className="level-selector">
@@ -450,8 +476,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ onComplete, onBack }) => {
                   <span className="stat-value">{matchPercentage}%</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">用时</span>
-                  <span className="stat-value">{formatTime(elapsedTime)}</span>
+                  <span className="stat-label">总用时</span>
+                  <span className="stat-value">{formatTime(finalTime)}</span>
                 </div>
               </div>
 

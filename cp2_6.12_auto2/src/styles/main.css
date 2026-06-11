@@ -596,6 +596,39 @@ body {
 }
 
 @media (max-width: 768px) {
+  .game-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .game-header {
+    padding: 12px;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .game-title {
+    font-size: 1.125rem;
+  }
+
+  .level-name {
+    font-size: 0.75rem;
+  }
+
+  .level-btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .timer-value {
+    font-size: 1.125rem;
+  }
+
+  .progress-bar-container {
+    height: 10px;
+  }
+
   .game-content {
     flex-direction: column;
   }
@@ -603,17 +636,49 @@ body {
   .game-board {
     flex: none;
     width: 100%;
-    min-height: 400px;
+    padding: 12px;
+    min-height: auto;
+  }
+
+  .color-grid {
+    gap: 6px;
+    max-width: 100%;
+  }
+
+  .color-grid-cell {
+    border-radius: 6px;
+  }
+
+  .hint-color-preview {
+    bottom: -34px !important;
+    right: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    top: auto !important;
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+    gap: 4px !important;
+  }
+
+  .hint-color-preview > div:first-child {
+    width: 18px !important;
+    height: 18px !important;
   }
 
   .palette-panel {
     min-height: 300px;
+    padding: 12px;
+    gap: 12px;
   }
 
-  .game-header {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
+  .palette-grid {
+    gap: 6px;
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .btn {
+    padding: 10px 16px;
+    font-size: 0.875rem;
   }
 
   .header-left,
@@ -622,19 +687,35 @@ body {
     justify-content: center;
   }
 
-  .color-grid {
-    max-width: 100%;
+  .result-modal {
+    padding: 24px;
   }
 
-  .palette-grid {
-    grid-template-columns: repeat(6, 1fr);
+  .result-content h2 {
+    font-size: 1.25rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
   }
 
   .home-title {
-    font-size: 2rem;
+    font-size: 1.75rem;
+  }
+
+  .home-subtitle {
+    font-size: 1rem;
   }
 
   .level-cards {
     grid-template-columns: 1fr;
+  }
+
+  .level-card {
+    padding: 20px 16px;
+  }
+
+  .level-card-number {
+    font-size: 1.75rem;
   }
 }
