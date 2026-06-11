@@ -92,16 +92,17 @@ export class TerrainGenerator {
   }
 
   update(frequencyData: Uint8Array, volume: number, time: number): void {
-    const positions = this.geometry.attributes.position;
-    const colors = this.geometry.attributes.color as THREE.BufferAttribute;
-    const count = positions.count;
+    const posAttr = this.geometry.attributes.position as THREE.BufferAttribute;
+    const colorAttr = this.geometry.attributes.color as THREE.BufferAttribute;
+    const count = posAttr.count;
     const themeColors = themes[this.theme];
 
     const freqBins = frequencyData.length;
+    const amplifiedVolume = Math.max(volume * 4, 0.05);
 
     for (let i = 0; i < count; i++) {
-      const x = positions.getX(i);
-      const z = positions.getZ(i);
+      const x = posAttr.getX(i);
+      const z = posAttr.getZ(i);
 
       const distance = Math.sqrt(x * x + z * z);
       const maxDist = this.size / 2;
@@ -113,14 +114,15 @@ export class TerrainGenerator {
       const freqIndex = Math.floor(normalizedAngle * freqBins) % freqBins;
       const freqValue = frequencyData[freqIndex] / 255;
 
-      const breathing = Math.sin(time * 0.5 + distRatio * Math.PI * 2) * 0.2 + 0.8;
+      const breathing = Math.sin(time * 0.5 + distRatio * Math.PI * 2) * 0.3 + 0.7;
+      const wave = Math.sin(time * 0.8 + angle * 3) * 0.15;
 
-      const height = freqValue * this.heightScale * volume * 2 * breathing;
+      const height = freqValue * this.heightScale * amplifiedVolume * 3 + breathing * 0.5 + wave;
 
-      const falloff = 1 - distRatio * 0.5;
+      const falloff = 1 - distRatio * 0.4;
       const finalHeight = height * falloff;
 
-      positions.setY(i, finalHeight);
+      posAttr.setY(i, finalHeight);
 
       const t = distRatio;
       let r: number, g: number, b: number;
@@ -137,12 +139,12 @@ export class TerrainGenerator {
         b = themeColors.midFreq.b + (themeColors.highFreq.b - themeColors.midFreq.b) * localT;
       }
 
-      const brightness = 0.4 + freqValue * 0.6 + volume * 0.3;
-      colors.setXYZ(i, r * brightness, g * brightness, b * brightness);
+      const brightness = 0.35 + freqValue * 0.5 + amplifiedVolume * 0.3 + breathing * 0.1;
+      colorAttr.setXYZ(i, r * brightness, g * brightness, b * brightness);
     }
 
-    positions.needsUpdate = true;
-    colors.needsUpdate = true;
+    posAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
     this.geometry.computeVertexNormals();
 
     this.mesh.rotation.y = time * this.rotationSpeed * 0.2;
@@ -187,6 +189,7 @@ export class TerrainGenerator {
 
   setColorTheme(theme: ColorTheme): void {
     this.theme = theme;
+    this.updateColors();
   }
 
   getMesh(): THREE.Mesh {

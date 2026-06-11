@@ -115,24 +115,31 @@ export class ParticleSystem {
       let targetZ = p.basePosition.z;
 
       if (this.mouseActive) {
-        const dx = this.mouseWorld.x - p.basePosition.x;
-        const dy = this.mouseWorld.y - p.basePosition.y;
-        const dz = this.mouseWorld.z - p.basePosition.z;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const dx = this.mouseWorld.x - positions[idx];
+        const dz = this.mouseWorld.z - positions[idx + 2];
+        const dist2D = Math.sqrt(dx * dx + dz * dz);
+        const vortexRadius = 10;
 
-        if (dist < 8) {
-          const force = (1 - dist / 8) * volume * 3;
+        if (dist2D < vortexRadius && dist2D > 0.01) {
+          const falloff = 1 - dist2D / vortexRadius;
+          const smoothFalloff = falloff * falloff * (3 - 2 * falloff);
 
-          const perpX = -dz;
-          const perpZ = dx;
-          const perpLen = Math.sqrt(perpX * perpX + perpZ * perpZ) || 1;
+          const angle = Math.atan2(dz, dx);
+          const tangentAngle = angle + Math.PI * 0.5;
+          const tangentX = Math.cos(tangentAngle);
+          const tangentZ = Math.sin(tangentAngle);
 
-          targetX += (perpX / perpLen) * force * 2;
-          targetZ += (perpZ / perpLen) * force * 2;
-          targetY += force * 0.5;
+          const vortexStrength = smoothFalloff * 3.5;
+          const pullStrength = smoothFalloff * 1.2;
+          const liftStrength = smoothFalloff * 1.5;
 
-          targetX += dx * 0.1 * force;
-          targetZ += dz * 0.1 * force;
+          const twistAngle = smoothFalloff * 0.6;
+          const twistedTangentX = tangentX * Math.cos(twistAngle) - dx / dist2D * Math.sin(twistAngle);
+          const twistedTangentZ = tangentZ * Math.cos(twistAngle) - dz / dist2D * Math.sin(twistAngle);
+
+          targetX += twistedTangentX * vortexStrength + (dx / dist2D) * pullStrength;
+          targetZ += twistedTangentZ * vortexStrength + (dz / dist2D) * pullStrength;
+          targetY += liftStrength * (1 + volume * 3);
         }
       }
 

@@ -204,27 +204,29 @@ class App {
 
     const gradient = ctx.createLinearGradient(0, 0, width, 0);
     gradient.addColorStop(0, '#ff6b6b');
-    gradient.addColorStop(0.5, '#4ecdc4');
+    gradient.addColorStop(0.33, '#feca57');
+    gradient.addColorStop(0.66, '#4ecdc4');
     gradient.addColorStop(1, '#45b7d1');
 
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = '#4ecdc4';
-
     ctx.beginPath();
-
     for (let i = 0; i < waveformData.length; i++) {
       const v = waveformData[i] / 128.0;
       const y = (v * height) / 2;
-
       if (i === 0) {
         ctx.moveTo(i * sliceWidth, y);
       } else {
         ctx.lineTo(i * sliceWidth, y);
       }
     }
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#4ecdc4';
+    ctx.stroke();
 
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = 'rgba(78, 205, 196, 0.5)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
     ctx.shadowBlur = 0;
