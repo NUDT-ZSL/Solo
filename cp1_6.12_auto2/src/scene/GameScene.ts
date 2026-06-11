@@ -36,6 +36,13 @@ export class GameScene extends Phaser.Scene {
 
   private keys: { [key: string]: Phaser.Input.Keyboard.Key } = {};
   private lastDirection: Direction = 'right';
+  
+  private snakeTextures: Map<string, Phaser.Textures.Texture> = new Map();
+  private snakeGlowTextures: Map<string, Phaser.Textures.Texture> = new Map();
+  private boostTexture: Phaser.Textures.Texture | null = null;
+  private boostGlowTexture: Phaser.Textures.Texture | null = null;
+  private snakeSprites: Map<string, Phaser.GameObjects.Image[]> = new Map();
+  private snakeGlowSprites: Map<string, Phaser.GameObjects.Image[]> = new Map();
 
   private readonly CANVAS_WIDTH: number = 960;
   private readonly CANVAS_HEIGHT: number = 540;
@@ -57,6 +64,7 @@ export class GameScene extends Phaser.Scene {
     this.createGrid();
     this.bindSocketEvents();
     this.setupInput();
+    this.generateSnakeTextures();
 
     this.particlePool = [];
     for (let i = 0; i < 100; i++) {
@@ -294,6 +302,147 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private generateSnakeTextures(): void {
+    const colors = ['#a855f7', '#06b6d4', '#f43f5e', '#84cc16'];
+    const textureSize = 64;
+
+    colors.forEach(color => {
+      const rgb = this.hexToRgb(color);
+      
+      const bodyCanvas = document.createElement('canvas');
+      bodyCanvas.width = textureSize;
+      bodyCanvas.height = textureSize;
+      const bodyCtx = bodyCanvas.getContext('2d')!;
+
+      const center = textureSize / 2;
+      const radius = textureSize / 2 - 4;
+
+      const bodyGrad = bodyCtx.createRadialGradient(
+        center, center, 0,
+        center, center, radius
+      );
+      bodyGrad.addColorStop(0, `rgba(${Math.min(255, rgb.r + 60)}, ${Math.min(255, rgb.g + 60)}, ${Math.min(255, rgb.b + 60)}, 1)`);
+      bodyGrad.addColorStop(0.4, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`);
+      bodyGrad.addColorStop(0.7, `rgba(${Math.max(0, rgb.r - 30)}, ${Math.max(0, rgb.g - 30)}, ${Math.max(0, rgb.b - 30)}, 0.95)`);
+      bodyGrad.addColorStop(1, `rgba(${Math.max(0, rgb.r - 60)}, ${Math.max(0, rgb.g - 60)}, ${Math.max(0, rgb.b - 60)}, 0.85)`);
+
+      bodyCtx.fillStyle = bodyGrad;
+      bodyCtx.beginPath();
+      bodyCtx.roundRect(4, 4, textureSize - 8, textureSize - 8, 12);
+      bodyCtx.fill();
+
+      const innerGlow = bodyCtx.createRadialGradient(
+        center, center, 0,
+        center, center, radius * 0.6
+      );
+      innerGlow.addColorStop(0, `rgba(255, 255, 255, 0.3)`);
+      innerGlow.addColorStop(0.5, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`);
+      innerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      bodyCtx.fillStyle = innerGlow;
+      bodyCtx.beginPath();
+      bodyCtx.roundRect(6, 6, textureSize - 12, textureSize - 12, 10);
+      bodyCtx.fill();
+
+      bodyCtx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`;
+      bodyCtx.lineWidth = 2;
+      bodyCtx.beginPath();
+      bodyCtx.roundRect(4, 4, textureSize - 8, textureSize - 8, 12);
+      bodyCtx.stroke();
+
+      this.textures.addCanvas(`snake_body_${color}`, bodyCanvas);
+      this.snakeTextures.set(color, this.textures.get(`snake_body_${color}`));
+
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = textureSize * 2;
+      glowCanvas.height = textureSize * 2;
+      const glowCtx = glowCanvas.getContext('2d')!;
+      const glowCenter = textureSize;
+
+      for (let i = 5; i >= 1; i--) {
+        const r = (textureSize * 0.25) * i;
+        const a = 0.15 / i;
+        const glowGrad = glowCtx.createRadialGradient(
+          glowCenter, glowCenter, 0,
+          glowCenter, glowCenter, r
+        );
+        glowGrad.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a * 2})`);
+        glowGrad.addColorStop(0.5, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})`);
+        glowGrad.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+        glowCtx.fillStyle = glowGrad;
+        glowCtx.fillRect(0, 0, textureSize * 2, textureSize * 2);
+      }
+
+      this.textures.addCanvas(`snake_glow_${color}`, glowCanvas);
+      this.snakeGlowTextures.set(color, this.textures.get(`snake_glow_${color}`));
+    });
+
+    const boostCanvas = document.createElement('canvas');
+    boostCanvas.width = textureSize;
+    boostCanvas.height = textureSize;
+    const boostCtx = boostCanvas.getContext('2d')!;
+    const boostRgb = this.hexToRgb('#06b6d4');
+    const boostCenter = textureSize / 2;
+    const boostRadius = textureSize / 2 - 2;
+
+    const boostGrad = boostCtx.createRadialGradient(
+      boostCenter, boostCenter, 0,
+      boostCenter, boostCenter, boostRadius
+    );
+    boostGrad.addColorStop(0, `rgba(${Math.min(255, boostRgb.r + 80)}, ${Math.min(255, boostRgb.g + 80)}, ${Math.min(255, boostRgb.b + 80)}, 1)`);
+    boostGrad.addColorStop(0.3, `rgba(${boostRgb.r}, ${boostRgb.g}, ${boostRgb.b}, 1)`);
+    boostGrad.addColorStop(0.7, `rgba(0, 200, 255, 0.95)`);
+    boostGrad.addColorStop(1, `rgba(0, 150, 200, 0.85)`);
+
+    boostCtx.fillStyle = boostGrad;
+    boostCtx.beginPath();
+    boostCtx.roundRect(2, 2, textureSize - 4, textureSize - 4, 14);
+    boostCtx.fill();
+
+    boostCtx.strokeStyle = `rgba(255, 255, 255, 0.8)`;
+    boostCtx.lineWidth = 3;
+    boostCtx.beginPath();
+    boostCtx.roundRect(2, 2, textureSize - 4, textureSize - 4, 14);
+    boostCtx.stroke();
+
+    const electricGrad = boostCtx.createLinearGradient(0, 0, textureSize, textureSize);
+    electricGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    electricGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.4)');
+    electricGrad.addColorStop(0.5, 'rgba(0, 255, 255, 0.6)');
+    electricGrad.addColorStop(0.7, 'rgba(255, 255, 255, 0.4)');
+    electricGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    boostCtx.fillStyle = electricGrad;
+    boostCtx.globalCompositeOperation = 'screen';
+    boostCtx.fillRect(0, 0, textureSize, textureSize);
+    boostCtx.globalCompositeOperation = 'source-over';
+
+    this.textures.addCanvas('boost_body', boostCanvas);
+    this.boostTexture = this.textures.get('boost_body');
+
+    const boostGlowCanvas = document.createElement('canvas');
+    boostGlowCanvas.width = textureSize * 2.5;
+    boostGlowCanvas.height = textureSize * 2.5;
+    const boostGlowCtx = boostGlowCanvas.getContext('2d')!;
+    const boostGlowCenter = textureSize * 1.25;
+
+    for (let i = 6; i >= 1; i--) {
+      const r = (textureSize * 0.35) * i;
+      const a = 0.18 / i;
+      const glowGrad = boostGlowCtx.createRadialGradient(
+        boostGlowCenter, boostGlowCenter, 0,
+        boostGlowCenter, boostGlowCenter, r
+      );
+      glowGrad.addColorStop(0, `rgba(6, 182, 212, ${a * 2.5})`);
+      glowGrad.addColorStop(0.4, `rgba(0, 255, 255, ${a * 1.5})`);
+      glowGrad.addColorStop(0.7, `rgba(6, 182, 212, ${a})`);
+      glowGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+      boostGlowCtx.fillStyle = glowGrad;
+      boostGlowCtx.fillRect(0, 0, textureSize * 2.5, textureSize * 2.5);
+    }
+
+    this.textures.addCanvas('boost_glow', boostGlowCanvas);
+    this.boostGlowTexture = this.textures.get('boost_glow');
+  }
+
   private hexToRgb(hex: string): { r: number; g: number; b: number } {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
@@ -308,76 +457,107 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawSnake(snake: Snake, body: Position[]): void {
-    let graphics = this.snakeGraphics.get(snake.id);
-    let glowGraphics = this.snakeGlowGraphics.get(snake.id);
-    if (!graphics) {
-      graphics = this.add.graphics();
-      this.snakeGraphics.set(snake.id, graphics);
-    }
-    if (!glowGraphics) {
-      glowGraphics = this.add.graphics();
-      this.snakeGlowGraphics.set(snake.id, glowGraphics);
-      this.children!.moveBelow(glowGraphics, graphics);
-    }
-
-    graphics.clear();
-    glowGraphics.clear();
-
-    const rgb = this.hexToRgb(snake.color);
-    const padding = 2;
-    const size = this.cellSize - padding * 2;
+    const size = this.cellSize;
     const centerX = this.cellSize / 2;
     const centerY = this.cellSize / 2;
 
-    for (let i = body.length - 1; i >= 0; i--) {
+    let sprites = this.snakeSprites.get(snake.id);
+    let glowSprites = this.snakeGlowSprites.get(snake.id);
+    let headGraphics = this.snakeGraphics.get(snake.id);
+    
+    if (!sprites) {
+      sprites = [];
+      this.snakeSprites.set(snake.id, sprites);
+    }
+    if (!glowSprites) {
+      glowSprites = [];
+      this.snakeGlowSprites.set(snake.id, glowSprites);
+    }
+    if (!headGraphics) {
+      headGraphics = this.add.graphics();
+      this.snakeGraphics.set(snake.id, headGraphics);
+    }
+    headGraphics.clear();
+
+    const bodyTexture = snake.isBoosted && this.boostTexture 
+      ? this.boostTexture 
+      : this.snakeTextures.get(snake.color);
+    const glowTexture = snake.isBoosted && this.boostGlowTexture
+      ? this.boostGlowTexture
+      : this.snakeGlowTextures.get(snake.color);
+
+    const targetCount = body.length;
+    while (sprites.length < targetCount) {
+      if (bodyTexture) {
+        const img = this.add.image(0, 0, bodyTexture);
+        img.setOrigin(0.5, 0.5);
+        sprites.push(img);
+      }
+    }
+    while (glowSprites.length < targetCount) {
+      if (glowTexture) {
+        const img = this.add.image(0, 0, glowTexture);
+        img.setOrigin(0.5, 0.5);
+        glowSprites.push(img);
+      }
+    }
+    while (sprites.length > targetCount) {
+      const img = sprites.pop();
+      if (img) img.destroy();
+    }
+    while (glowSprites.length > targetCount) {
+      const img = glowSprites.pop();
+      if (img) img.destroy();
+    }
+
+    for (let i = 0; i < body.length; i++) {
       const segment = body[i];
-      const x = this.offsetX + segment.x * this.cellSize + padding;
-      const y = this.offsetY + segment.y * this.cellSize + padding;
-      const segCenterX = x + size / 2;
-      const segCenterY = y + size / 2;
-
+      const x = this.offsetX + segment.x * this.cellSize + centerX;
+      const y = this.offsetY + segment.y * this.cellSize + centerY;
       const progress = i / Math.max(body.length - 1, 1);
-      const glowIntensity = 0.5 + (1 - progress) * 0.5;
-      const bodyAlpha = 0.5 + (1 - progress) * 0.5;
+      const alpha = 0.5 + (1 - progress) * 0.5;
+      const scale = (this.cellSize / 64) * (0.85 + (1 - progress) * 0.15);
 
-      const mixR = Math.min(255, rgb.r + (1 - progress) * 40);
-      const mixG = Math.min(255, rgb.g + (1 - progress) * 40);
-      const mixB = Math.min(255, rgb.b + (1 - progress) * 40);
-      const segColor = this.rgbToPhaserColor(mixR, mixG, mixB);
-      const glowColor = snake.isBoosted ? 0x06b6d4 : segColor;
-      const glowAlphaBase = snake.isBoosted ? glowIntensity * 0.7 : glowIntensity * 0.45;
+      const glowImg = glowSprites[i];
+      if (glowImg) {
+        glowImg.setPosition(x, y);
+        glowImg.setAlpha(alpha * (snake.isBoosted ? 1 : 0.8));
+        glowImg.setScale(scale * (snake.isBoosted ? 1.3 : 1));
+        if (glowTexture) {
+          glowImg.setTexture(glowTexture);
+        }
+        if (this.children) {
+          this.children.moveBelow(glowImg, headGraphics);
+        }
+      }
 
-      for (let layer = 5; layer >= 1; layer--) {
-        const r = (snake.isBoosted ? size * 0.2 : size * 0.15) * layer;
-        const a = glowAlphaBase * (0.18 / layer);
-        glowGraphics.fillStyle(glowColor, a);
-        glowGraphics.fillCircle(segCenterX, segCenterY, r);
+      const img = sprites[i];
+      if (img) {
+        img.setPosition(x, y);
+        img.setAlpha(alpha);
+        img.setScale(scale);
+        if (bodyTexture) {
+          img.setTexture(bodyTexture);
+        }
+        if (snake.isBoosted) {
+          const pulse = 1 + Math.sin(Date.now() / 80 + i) * 0.05;
+          img.setScale(scale * pulse);
+        }
+        if (this.children) {
+          this.children.moveBelow(img, headGraphics);
+        }
       }
 
       if (i === 0) {
+        this.drawSnakeEyes(headGraphics, x - size / 2 + 2, y - size / 2 + 2, size - 4, snake.direction, 0);
+        
         if (snake.isBoosted) {
-          graphics.lineStyle(3, 0x06b6d4, 0.9);
-          graphics.strokeCircle(
-            segCenterX,
-            segCenterY,
-            size * 0.9 + Math.sin(Date.now() / 80) * 2
+          headGraphics.lineStyle(3, 0x06b6d4, 0.9);
+          headGraphics.strokeCircle(
+            x, y,
+            size * 0.55 + Math.sin(Date.now() / 80) * 2
           );
-          graphics.fillStyle(0x06b6d4, 1);
-        } else {
-          graphics.fillStyle(segColor, 1);
         }
-        graphics.fillRoundedRect(x, y, size, size, 5);
-
-        graphics.lineStyle(1, 0xffffff, 0.3);
-        graphics.strokeRoundedRect(x, y, size, size, 5);
-
-        this.drawSnakeEyes(graphics, x, y, size, snake.direction, segColor);
-      } else {
-        graphics.fillStyle(segColor, bodyAlpha);
-        graphics.fillRoundedRect(x, y, size, size, 4);
-
-        graphics.lineStyle(1, segColor, bodyAlpha * 0.5);
-        graphics.strokeRoundedRect(x + 0.5, y + 0.5, size - 1, size - 1, 3);
       }
     }
 
@@ -593,6 +773,16 @@ export class GameScene extends Phaser.Scene {
       glowGraphics.destroy();
       this.snakeGlowGraphics.delete(id);
     }
+    const sprites = this.snakeSprites.get(id);
+    if (sprites) {
+      sprites.forEach(s => s.destroy());
+      this.snakeSprites.delete(id);
+    }
+    const glowSprites = this.snakeGlowSprites.get(id);
+    if (glowSprites) {
+      glowSprites.forEach(s => s.destroy());
+      this.snakeGlowSprites.delete(id);
+    }
   }
 
   private removeFoodGraphics(id: string): void {
@@ -614,6 +804,16 @@ export class GameScene extends Phaser.Scene {
     }
     this.snakeGlowGraphics.clear();
 
+    for (const [, sprites] of this.snakeSprites) {
+      sprites.forEach(s => s.destroy());
+    }
+    this.snakeSprites.clear();
+
+    for (const [, sprites] of this.snakeGlowSprites) {
+      sprites.forEach(s => s.destroy());
+    }
+    this.snakeGlowSprites.clear();
+
     for (const [, graphics] of this.foodGraphics) {
       graphics.destroy();
     }
@@ -631,5 +831,13 @@ export class GameScene extends Phaser.Scene {
 
   getCanvasSize(): { width: number; height: number } {
     return { width: this.CANVAS_WIDTH, height: this.CANVAS_HEIGHT };
+  }
+
+  handleResize(): void {
+    if (this.gridGraphics) {
+      this.gridGraphics.destroy();
+    }
+    this.init();
+    this.createGrid();
   }
 }

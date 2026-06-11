@@ -38,6 +38,17 @@ const game = new Phaser.Game(config);
 game.events.on('ready', () => {
   const roomPanel = new RoomPanel();
   roomPanel.initialize();
+
+  game.scale.on('resize', () => {
+    const scene = game.scene.getScene('GameScene') as GameScene;
+    if (scene && scene.handleResize) {
+      scene.handleResize();
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    game.scale.refresh();
+  });
 });
 
 window.addEventListener('beforeunload', () => {

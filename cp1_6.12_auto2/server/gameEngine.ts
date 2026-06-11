@@ -190,6 +190,44 @@ export class GameEngine {
     this.state.isRunning = false;
   }
 
+  checkWallCollision(head: Position): boolean {
+    return head.x < 0 || head.x >= this.state.gridSize.width || 
+           head.y < 0 || head.y >= this.state.gridSize.height;
+  }
+
+  checkSnakeCollision(snake: Snake, head: Position): { collided: boolean; killerId?: string } {
+    for (const otherSnake of this.state.snakes) {
+      if (!otherSnake.isAlive) continue;
+
+      for (let i = 0; i < otherSnake.body.length; i++) {
+        const segment = otherSnake.body[i];
+        if (head.x === segment.x && head.y === segment.y) {
+          if (snake.id === otherSnake.id && i === 0) continue;
+          
+          if (snake.id !== otherSnake.id) {
+            otherSnake.killCount++;
+            otherSnake.score += 5;
+            return { collided: true, killerId: otherSnake.id };
+          } else {
+            return { collided: true };
+          }
+        }
+      }
+    }
+    return { collided: false };
+  }
+
+  checkFoodCollision(head: Position): Food | null {
+    for (let i = this.state.foods.length - 1; i >= 0; i--) {
+      const food = this.state.foods[i];
+      if (head.x === food.position.x && head.y === food.position.y) {
+        this.state.foods.splice(i, 1);
+        return food;
+      }
+    }
+    return null;
+  }
+
   tick(): { deadSnakes: { snakeId: string; killerId?: string }[]; speedBoosts: string[] } {
     if (!this.state.isRunning) return { deadSnakes: [], speedBoosts: [] };
 
@@ -234,65 +272,37 @@ export class GameEngine {
           break;
       }
 
-      if (head.x < 0 || head.x >= GRID_WIDTH || head.y < 0 || head.y >= GRID_HEIGHT) {
+      if (this.checkWallCollision(head)) {
         snake.isAlive = false;
         snake.deathTime = now;
         deadSnakes.push({ snakeId: snake.id });
         continue;
       }
 
-      let killed = false;
-      for (const otherSnake of this.state.snakes) {
-        if (!otherSnake.isAlive) continue;
-
-        for (let i = 0; i < otherSnake.body.length; i++) {
-          const segment = otherSnake.body[i];
-          if (head.x === segment.x && head.y === segment.y) {
-            if (snake.id === otherSnake.id && i === 0) continue;
-            
-            snake.isAlive = false;
-            snake.deathTime = now;
-            
-            if (snake.id !== otherSnake.id) {
-              otherSnake.killCount++;
-              otherSnake.score += 5;
-              deadSnakes.push({ snakeId: snake.id, killerId: otherSnake.id });
-            } else {
-              deadSnakes.push({ snakeId: snake.id });
-            }
-            killed = true;
-            break;
-          }
-        }
-        if (killed) break;
+      const snakeCollision = this.checkSnakeCollision(snake, head);
+      if (snakeCollision.collided) {
+        snake.isAlive = false;
+        snake.deathTime = now;
+        deadSnakes.push({ snakeId: snake.id, killerId: snakeCollision.killerId });
+        continue;
       }
-
-      if (killed) continue;
 
       snake.body.unshift(head);
 
-      let ateFood = false;
-      for (let i = this.state.foods.length - 1; i >= 0; i--) {
-        const food = this.state.foods[i];
-        if (head.x === food.position.x && head.y === food.position.y) {
-          snake.score += food.type === 'speed' ? 20 : 10;
-          snake.foodEaten++;
-          ateFood = true;
+      const food = this.checkFoodCollision(head);
+      if (food) {
+        snake.score += food.type === 'speed' ? 20 : 10;
+        snake.foodEaten++;
 
-          if (snake.foodEaten % FOODS_FOR_BOOST === 0 && !snake.isBoosted) {
-            snake.isBoosted = true;
-            snake.boostEndTime = now + BOOST_DURATION;
-            snake.speed = Math.floor(snake.baseSpeed / BOOST_MULTIPLIER);
-            speedBoosts.push(snake.id);
-          }
-
-          this.state.foods.splice(i, 1);
-          this.spawnFood();
-          break;
+        if (snake.foodEaten % FOODS_FOR_BOOST === 0 && !snake.isBoosted) {
+          snake.isBoosted = true;
+          snake.boostEndTime = now + BOOST_DURATION;
+          snake.speed = Math.floor(snake.baseSpeed / BOOST_MULTIPLIER);
+          speedBoosts.push(snake.id);
         }
-      }
 
-      if (!ateFood) {
+        this.spawnFood();
+      } else {
         snake.body.pop();
       }
     }
