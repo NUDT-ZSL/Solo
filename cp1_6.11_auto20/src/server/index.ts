@@ -85,7 +85,7 @@ const styleChordProgressions: Record<MusicStyle, ChordProgression> = {
   },
 };
 
-const SAMPLE_RATE = 44100;
+const SAMPLE_RATE = 22050;
 const DURATION_SECONDS = 30;
 
 function writeString(view: DataView, offset: number, str: string) {
@@ -98,7 +98,7 @@ function generateWavBuffer(chords: number[][], bpm: number, baseVolume: number):
   const beatDuration = 60 / bpm;
   const noteDuration = beatDuration * 2;
   const totalSamples = SAMPLE_RATE * DURATION_SECONDS;
-  const numChannels = 2;
+  const numChannels = 1;
   const bitsPerSample = 16;
   const byteRate = SAMPLE_RATE * numChannels * (bitsPerSample / 8);
   const blockAlign = numChannels * (bitsPerSample / 8);
@@ -144,8 +144,7 @@ function generateWavBuffer(chords: number[][], bpm: number, baseVolume: number):
       envelope = 1;
     }
 
-    let sampleL = 0;
-    let sampleR = 0;
+    let sampleMono = 0;
 
     chord.forEach((freq, noteIdx) => {
       const waveform = waveforms[noteIdx % waveforms.length];
@@ -168,18 +167,13 @@ function generateWavBuffer(chords: number[][], bpm: number, baseVolume: number):
       }
 
       const volume = baseVolume * 0.3 * envelope;
-      const pan = noteIdx === 0 ? -0.3 : noteIdx === 1 ? 0 : 0.3;
-
-      sampleL += waveSample * volume * (1 - Math.max(0, pan));
-      sampleR += waveSample * volume * (1 + Math.min(0, pan));
+      sampleMono += waveSample * volume;
     });
 
-    sampleL = Math.max(-1, Math.min(1, sampleL));
-    sampleR = Math.max(-1, Math.min(1, sampleR));
+    sampleMono = Math.max(-1, Math.min(1, sampleMono));
 
-    view.setInt16(offset, Math.round(sampleL * 32767), true);
-    view.setInt16(offset + 2, Math.round(sampleR * 32767), true);
-    offset += 4;
+    view.setInt16(offset, Math.round(sampleMono * 32767), true);
+    offset += 2;
   }
 
   return buffer;

@@ -26,8 +26,6 @@ interface Particle {
   size: number;
   color: string;
   alpha: number;
-  baseX: number;
-  baseY: number;
   phase: number;
   frequency: number;
   amplitude: number;
@@ -75,6 +73,7 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
   const frameCountRef = useRef<number>(0);
   const lastFpsCheckRef = useRef<number>(0);
   const currentFpsRef = useRef<number>(60);
+  const fpsLoggedRef = useRef<boolean>(false);
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -93,8 +92,6 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
       size: 3 + Math.random() * 7,
       color: result.particleColors[colorIndex % result.particleColors.length],
       alpha: 0.3 + Math.random() * 0.6,
-      baseX: x,
-      baseY: y,
       phase: Math.random() * Math.PI * 2,
       frequency: 0.5 + Math.random() * 1.5,
       amplitude: 2 + Math.abs(result.polarity) * 6,
@@ -109,6 +106,7 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
     particlesRef.current = particles;
     activeParticleCountRef.current = count;
     setActiveParticles(count);
+    console.log('[粒子系统] 初始化粒子数量:', count);
   }, [createParticle]);
 
   const initKeywords = useCallback((width: number, height: number) => {
@@ -129,7 +127,7 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
         x: pos.x * width,
         y: pos.y * height,
         color: result.primaryColor,
-        bouncePhase: Math.random() * Math.PI * 2,
+        bouncePhase: 0,
         fadeInStart: i * 300,
         lastBounceBeat: -1,
         vertical: Math.random() > 0.5,
@@ -139,19 +137,21 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
     });
 
     keywordsRef.current = keywords;
-  }, [result.keywords, result.primaryColor]);
+    console.log('[弹跳文字] 初始化关键词:', result.keywords.slice(0, 5), 'BPM:', result.music.bpm, '每拍间隔:', Math.round(60000 / result.music.bpm), 'ms');
+  }, [result.keywords, result.primaryColor, result.music.bpm]);
 
   const adjustParticleCount = useCallback((width: number, height: number) => {
     const fps = currentFpsRef.current;
     let targetCount = activeParticleCountRef.current;
 
     if (fps < LOW_FPS_THRESHOLD) {
-      targetCount = Math.max(MIN_PARTICLES, Math.floor(activeParticleCountRef.current * 0.7));
+      targetCount = MIN_PARTICLES;
     } else if (fps > HIGH_FPS_THRESHOLD) {
-      targetCount = Math.min(MAX_PARTICLES, Math.floor(activeParticleCountRef.current * 1.2));
+      targetCount = MAX_PARTICLES;
     }
 
     if (targetCount !== activeParticleCountRef.current) {
+      console.log(`[FPS自适应] FPS=${fps}, 粒子从 ${activeParticleCountRef.current} 调整为 ${targetCount}`);
       const current = particlesRef.current;
       if (targetCount > current.length) {
         for (let i = current.length; i < targetCount; i++) {
@@ -167,7 +167,7 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
 
   const playBackendAudio = useCallback(() => {
     if (!result.music.audioDataUrl) {
-      console.warn('后端未返回音频数据');
+      console.warn('[后端音频] 后端未返回音频数据，跳过播放');
       return;
     }
 
@@ -177,19 +177,28 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
         audioElementRef.current = null;
       }
 
+      console.log('[后端音频] 正在解码播放后端WAV音频, 数据大小约:', Math.round(result.music.audioDataUrl.length / 1024), 'KB');
       const audio = new Audio(result.music.audioDataUrl);
       audio.loop = true;
       audio.volume = 0.5;
       audioElementRef.current = audio;
 
+      audio.addEventListener('canplaythrough', () => {
+        console.log('[后端音频] WAV音频解码完成，开始播放');
+      }, { once: true });
+
+      audio.addEventListener('error', (e) => {
+        console.error('[后端音频] 播放失败:', e);
+      });
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch((e) => {
-          console.warn('自动播放被阻止，需要用户交互:', e);
+          console.warn('[后端音频] 自动播放被阻止（浏览器策略），需要用户交互:', e);
         });
       }
     } catch (e) {
-      console.error('播放后端音频失败:', e);
+      console.error('[后端音频] 播放异常:', e);
     }
   }, [result.music.audioDataUrl]);
 
@@ -224,6 +233,21 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
       setCurrentFps(fps);
       frameCountRef.current = 0;
       lastFpsCheckRef.current = now;
+
+      if (!fpsLoggedRef.current) {
+        console.log('[FPS检测] 当前帧率:', fps, 'fps, 粒子数:', activeParticleCountRef.current);
+        fpsLoggedRef.current = true;
+      }
+
+      (window as unknown as Record<string, unknown>).__fpsDebug2 = {
+        fps,
+        particleCount: activeParticleCountRef.current,
+        minParticles: MIN_PARTICLES,
+        maxParticles: MAX_PARTICLES,
+        shouldAdjust: fps > HIGH_FPS_THRESHOLD || fps < LOW_FPS_THRESHOLD,
+        targetCount: fps < LOW_FPS_THRESHOLD ? MIN_PARTICLES : fps > HIGH_FPS_THRESHOLD ? MAX_PARTICLES : activeParticleCountRef.current,
+      };
+
       adjustParticleCount(width, height);
     }
 
@@ -266,6 +290,7 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
     const keywords = keywordsRef.current;
     const beatDurationMs = 60000 / result.music.bpm;
     const currentBeat = Math.floor(elapsed / beatDurationMs);
+    const beatPhase = (elapsed % beatDurationMs) / beatDurationMs;
 
     keywords.forEach((kw, idx) => {
       if (elapsed < kw.fadeInStart) return;
@@ -278,10 +303,10 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
         kw.bouncePhase = 0;
       }
 
-      kw.bouncePhase += 0.12;
-      const bounceProgress = Math.min(1, kw.bouncePhase / Math.PI);
-      const bounceHeight = (8 + (idx % 3) * 3) * Math.sin(bounceProgress * Math.PI);
-      const scaleFactor = 1 + 0.35 * Math.sin(bounceProgress * Math.PI);
+      kw.bouncePhase = beatPhase * Math.PI;
+
+      const bounceHeight = (8 + (idx % 3) * 3) * Math.sin(kw.bouncePhase);
+      const scaleFactor = 1 + 0.35 * Math.abs(Math.sin(kw.bouncePhase));
       kw.fontSize = kw.baseFontSize + (36 - kw.baseFontSize) * scaleFactor * 0.5;
 
       const offsetX = kw.vertical ? 0 : bounceHeight;
@@ -334,18 +359,20 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
       };
 
       recorder.onstop = () => {
-        console.log('录制停止，数据块数量:', recordedChunksRef.current.length);
-        if (recordedChunksRef.current.length === 0) {
-          console.error('没有录制到任何数据');
+        const chunks = recordedChunksRef.current;
+        console.log('[视频录制] 停止，数据块数量:', chunks.length);
+
+        if (chunks.length === 0) {
+          console.error('[视频录制] 没有录制到任何数据');
           setIsRecording(false);
           setRecordingProgress(0);
           return;
         }
 
-        const totalSize = recordedChunksRef.current.reduce((sum, b) => sum + b.size, 0);
-        console.log('录制数据总大小:', Math.round(totalSize / 1024), 'KB');
+        const totalSize = chunks.reduce((sum, b) => sum + b.size, 0);
+        console.log('[视频录制] 数据总大小:', Math.round(totalSize / 1024), 'KB');
 
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        const blob = new Blob(chunks, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -353,17 +380,19 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
         setIsRecording(false);
         setRecordingProgress(0);
       };
 
       recorder.onerror = (e) => {
-        console.error('MediaRecorder错误:', e);
+        console.error('[视频录制] MediaRecorder错误:', e);
         setIsRecording(false);
       };
 
       recorder.start(100);
+      console.log('[视频录制] 开始录制，timeslice=100ms');
       setIsRecording(true);
       playBackendAudio();
 
@@ -376,13 +405,13 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
         if (elapsed >= duration) {
           clearInterval(progressInterval);
           if (recorder.state !== 'inactive') {
-            console.log('达到30秒，停止录制');
+            console.log('[视频录制] 达到30秒，停止录制');
             recorder.stop();
           }
         }
       }, 100);
     } catch (e) {
-      console.error('录制失败:', e);
+      console.error('[视频录制] 启动失败:', e);
       setIsRecording(false);
     }
   }, [isRecording, playBackendAudio]);
@@ -392,6 +421,8 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
       startTimeRef.current = Date.now();
       lastFpsCheckRef.current = Date.now();
       frameCountRef.current = 0;
+      fpsLoggedRef.current = false;
+      console.log('[播放预览] 开始播放，调用后端WAV音频');
       playBackendAudio();
       setIsPlaying(true);
     }
@@ -413,6 +444,10 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
       canvas.style.display = 'block';
+
+      console.log('[Canvas DPR] 逻辑尺寸:', Math.round(rect.width), 'x', Math.round(rect.height),
+        '像素尺寸:', Math.round(rect.width * dpr), 'x', Math.round(rect.height * dpr),
+        'DPR:', dpr);
 
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -454,13 +489,12 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
     <div style={styles.container}>
       <div style={styles.infoBar}>
         <div style={styles.infoItem}>
-          <span style={styles.infoLabel}>情感极性：</span>
+          <span style={styles.infoLabel}>情感：</span>
           <span style={{
             ...styles.infoValue,
             color: result.polarity > 0.2 ? '#FFD700' : result.polarity < -0.2 ? '#7B2D8E' : '#E0E0E0'
           }}>
-            {result.polarity > 0.2 ? '积极' : result.polarity < -0.2 ? '消极' : '中性'}
-            ({result.polarity.toFixed(2)})
+            {result.polarity > 0.2 ? '积极' : result.polarity < -0.2 ? '消极' : '中性'}({result.polarity.toFixed(2)})
           </span>
         </div>
         <div style={styles.infoItem}>
@@ -468,19 +502,22 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ result }) => {
           <span style={{ ...styles.infoValue, color: '#7B68EE' }}>{activeParticles}</span>
         </div>
         <div style={styles.infoItem}>
-          <span style={styles.infoLabel}>音乐BPM：</span>
+          <span style={styles.infoLabel}>BPM：</span>
           <span style={styles.infoValue}>{result.music.bpm}</span>
+          <span style={{ ...styles.infoLabel, marginLeft: '4px' }}>
+            (拍间隔{Math.round(60000 / result.music.bpm)}ms)
+          </span>
         </div>
         <div style={styles.infoItem}>
           <span style={styles.infoLabel}>FPS：</span>
           <span style={{ ...styles.infoValue, color: fpsColor, fontWeight: 700 }}>{currentFps}</span>
         </div>
-        {result.music.audioDataUrl && (
-          <div style={styles.infoItem}>
-            <span style={styles.infoLabel}>音频：</span>
-            <span style={{ ...styles.infoValue, color: '#98FB98' }}>后端WAV</span>
-          </div>
-        )}
+        <div style={styles.infoItem}>
+          <span style={styles.infoLabel}>音频：</span>
+          <span style={{ ...styles.infoValue, color: result.music.audioDataUrl ? '#98FB98' : '#FF6B6B' }}>
+            {result.music.audioDataUrl ? '后端WAV ✓' : '无'}
+          </span>
+        </div>
       </div>
 
       <div ref={containerRef} style={styles.canvasContainer}>
@@ -546,7 +583,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   infoBar: {
     display: 'flex',
-    gap: '24px',
+    gap: '20px',
     marginBottom: '20px',
     flexWrap: 'wrap',
     justifyContent: 'center',
@@ -558,15 +595,15 @@ const styles: Record<string, React.CSSProperties> = {
   infoItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
+    gap: '4px',
   },
   infoLabel: {
     color: '#888',
-    fontSize: '13px',
+    fontSize: '12px',
   },
   infoValue: {
     color: '#E0E0E0',
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: 600,
   },
   canvasContainer: {
@@ -610,7 +647,9 @@ const styles: Record<string, React.CSSProperties> = {
   playButton: {
     padding: '14px 36px',
     borderRadius: '30px',
-    border: '2px solid #7B68EE',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: '#7B68EE',
     backgroundColor: 'rgba(123, 104, 238, 0.1)',
     color: '#7B68EE',
     fontSize: '15px',
