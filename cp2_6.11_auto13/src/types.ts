@@ -1,90 +1,46 @@
-export interface Beam {
-  x: number;
-  baseWidth: number;
-  baseHeight: number;
-  width: number;
-  height: number;
-  brightness: number;
-  triggerTime: number;
-  holdDuration: number;
-  fadeDuration: number;
-  soundFrequency: number;
-  hoverSegments: number;
-  color: string;
-  index: number;
+export interface Capsule {
+  id: string;
+  title: string;
+  content: string;
+  images: string[];
+  musicStyle: MusicStyle;
+  unlockDate: string;
+  createdAt: string;
+  isUnlocked: boolean;
 }
 
-export interface Particle {
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  lifeTime: number;
-  maxLife: number;
-  color: string;
-  size: number;
-  startX: number;
-  startY: number;
+export type MusicStyle = 'calm' | 'joyful' | 'nostalgic' | 'energetic' | 'mysterious';
+
+export interface MusicStyleConfig {
+  name: string;
+  gradient: string;
+  particles: string;
 }
 
-export interface Ribbon {
-  points: Array<{ x: number; y: number }>;
-  color: string;
-  lifeTime: number;
-  maxLife: number;
-}
-
-export interface RecordEntry {
-  beamIndex: number;
-  timestamp: number;
-}
-
-export interface Recording {
-  code: string;
-  entries: RecordEntry[];
-  duration: number;
-}
-
-export interface AppState {
-  scaleFactor: number;
-  mode: 'single' | 'chord';
-  isRecording: boolean;
-  isPlaying: boolean;
-  rippleTime: number;
-  scaleTextTime: number;
-}
-
-export interface CursorState {
-  isActive: boolean;
-  x: number;
-  y: number;
-  isDown: boolean;
-}
-
-export const SCALE_FREQUENCIES: number[] = [
-  261.63, 277.18, 293.66, 311.13,
-  329.63, 349.23, 369.99, 392.00,
-  415.30, 440.00, 466.16, 493.88
-];
-
-export const BEAM_COLORS: string[] = [
-  '#4A9EFF', '#5A88FF', '#6A7AFF', '#7A7AFF',
-  '#8A8AFF', '#9A9AFF', '#8ABBFF', '#7AC8FF',
-  '#6AD5FF', '#5AE2FF', '#4AEEFF', '#AADDFF'
-];
-
-export interface BeamManagerLike {
-  beamStartY: number;
-  beamStartX: number;
-  arrayHeight: number;
-  arrayBaseWidth: number;
-  baseBeamHeight: number;
-  beams: Array<{
-    x: number;
-    width: number;
-    soundFrequency: number;
-    color: string;
-    brightness: number;
-  }>;
-  findBeamIndexAt(x: number, y: number): number;
-}
+export const MUSIC_STYLES: Record<MusicStyle, MusicStyleConfig> = {
+  calm: {
+    name: '静谧',
+    gradient: 'linear-gradient(135deg, #4FC3F7 0%, #0288D1 100%)',
+    particles: 'snow',
+  },
+  joyful: {
+    name: '欢快',
+    gradient: 'linear-gradient(135deg, #FFB74D 0%, #FF8F00 100%)',
+    particles: 'bubbles',
+  },
+  nostalgic: {
+    name: '怀旧',
+    gradient: 'linear-gradient(135deg, #A1887F 0%, #5D4037 100%)',
+    particles: 'leaves',
+  },
+  energetic: {
+    name: '激昂',
+    gradient: 'linear-gradient(135deg, #EF5350 0%, #C62828 100%)',
+    particles: 'sparks',
+  },
+  mysterious: {
+    name: '神秘',
+    gradient: 'linear-gradient(135deg, #AB47BC 0%, #6A1B9A 100%)',
+    particles: 'stars',
+  },
+};

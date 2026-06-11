@@ -1,245 +1,29 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>流动光琴</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: linear-gradient(180deg, #0B1A3A 0%, #2A1B4A 100%);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      color: #fff;
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: none;
-    }
-    #app {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-    }
-    #app canvas {
-      display: block;
-      position: absolute;
-      top: 0;
-      left: 0;
-      transition: transform 0.2s ease-out;
-      transform-origin: center center;
-    }
-    .control-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 80px;
-      background: #0D1F3D;
-      box-shadow: 0 -4px 12px #00000066;
-      display: flex;
-      align-items: center;
-      padding: 0 24px;
-      gap: 16px;
-      z-index: 10;
-    }
-    .btn {
-      height: 44px;
-      padding: 0 20px;
-      border: none;
-      border-radius: 10px;
-      background: #444;
-      color: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      outline: none;
-    }
-    .btn:hover {
-      box-shadow: 0 0 0.3px #fff, 0 0 8px rgba(255,255,255,0.2);
-      transform: scale(1.1);
-    }
-    .btn-single.active,
-    .btn-chord.active {
-      background: #4A9EFF;
-    }
-    .btn-record {
-      background: #8B2020;
-      width: 44px;
-      padding: 0;
-      border-radius: 50%;
-      position: relative;
-    }
-    .btn-record.recording {
-      background: #FF2020;
-      animation: pulse 1.2s infinite;
-    }
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(255, 32, 32, 0.7); }
-      70% { box-shadow: 0 0 0 16px rgba(255, 32, 32, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(255, 32, 32, 0); }
-    }
-    .btn-record .icon {
-      width: 16px;
-      height: 16px;
-      border-radius: 4px;
-      background: #fff;
-      transition: all 0.3s ease;
-    }
-    .btn-record.recording .icon {
-      border-radius: 2px;
-    }
-    .playback-panel {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 300px;
-      height: 200px;
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      z-index: 20;
-      padding: 24px;
-    }
-    .playback-panel.show {
-      display: flex;
-    }
-    .playback-panel .title {
-      font-size: 14px;
-      opacity: 0.8;
-    }
-    .playback-panel .code {
-      font-size: 36px;
-      font-weight: 700;
-      letter-spacing: 8px;
-      color: #4A9EFF;
-      text-shadow: 0 0 20px rgba(74, 158, 255, 0.5);
-    }
-    .playback-panel .hint {
-      font-size: 12px;
-      opacity: 0.6;
-    }
-    .code-input {
-      flex: 1;
-      max-width: 200px;
-      height: 44px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.05);
-      color: #fff;
-      font-size: 16px;
-      padding: 0 16px;
-      outline: none;
-      letter-spacing: 4px;
-      text-align: center;
-    }
-    .code-input:focus {
-      border-color: #4A9EFF;
-      box-shadow: 0 0 10px rgba(74, 158, 255, 0.3);
-    }
-    .mode-panel {
-      position: fixed;
-      right: 24px;
-      bottom: 104px;
-      display: flex;
-      gap: 8px;
-      z-index: 10;
-    }
-    .ripple-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 80%;
-      pointer-events: none;
-      overflow: hidden;
-      z-index: 1;
-    }
-    .ripple {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 0;
-      height: 0;
-      border-radius: 50%;
-      border: 2px solid rgba(74, 158, 255, 0.4);
-      transform: translate(-50%, -50%);
-      opacity: 1;
-    }
-    .ripple.animate {
-      animation: rippleExpand 0.8s ease-out forwards;
-    }
-    @keyframes rippleExpand {
-      0% { width: 0; height: 0; opacity: 1; }
-      100% { width: 200vw; height: 200vw; opacity: 0; }
-    }
-    @media (max-width: 768px) {
-      .control-bar {
-        height: 64px;
-        padding: 0 12px;
-        gap: 8px;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>时光信使 - 时间胶囊</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
       }
-      .btn {
-        height: 36px;
-        padding: 0 12px;
-        font-size: 12px;
+      html, body, #root {
+        width: 100%;
+        min-height: 100vh;
+        font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
+        color: #E0E0E0;
       }
-      .btn-record {
-        width: 36px;
-      }
-      .code-input {
-        height: 36px;
-        max-width: 120px;
-        font-size: 14px;
-      }
-      .mode-panel {
-        right: 12px;
-        bottom: 84px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div id="app"></div>
-  <div class="ripple-container" id="rippleContainer"></div>
-  <div class="playback-panel" id="playbackPanel">
-    <div class="title">录制完成！播放码：</div>
-    <div class="code" id="playbackCode">000000</div>
-    <div class="hint">在下方输入框输入播放码并点击播放</div>
-  </div>
-  <div class="control-bar">
-    <button class="btn btn-record" id="recordBtn" title="录制">
-      <span class="icon"></span>
-    </button>
-    <input type="text" class="code-input" id="codeInput" maxlength="6" placeholder="播放码" />
-    <button class="btn btn-play" id="playBtn">播放</button>
-    <div style="flex:1"></div>
-  </div>
-  <div class="mode-panel">
-    <button class="btn btn-single active" id="singleBtn">单音模式</button>
-    <button class="btn btn-chord" id="chordBtn">和弦模式</button>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
