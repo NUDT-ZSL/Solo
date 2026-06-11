@@ -290,6 +290,7 @@ window.addEventListener('DOMContentLoaded', () => {
   try {
     const game = new Game();
     game.start();
+    (window as any).__game = game;
   } catch (err) {
     console.error('游戏启动失败:', err);
   }

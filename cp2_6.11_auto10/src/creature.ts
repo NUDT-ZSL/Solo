@@ -269,6 +269,7 @@ export class Creature {
       if (this.sizeGrowthProgress >= 1) {
         this.baseSize = this.targetSize;
         this.displaySize = this.targetSize;
+        this.size = this.targetSize;
         this.phase = 'idle';
       }
     }
