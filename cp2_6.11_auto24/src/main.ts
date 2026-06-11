@@ -1,5 +1,5 @@
-import { createApp } from 'vue'
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createApp, h } from 'vue'
+import { createRouter, createWebHashHistory, RouterView } from 'vue-router'
 import RecipeFlow from './components/RecipeFlow.vue'
 import type { App } from 'vue'
 
@@ -15,7 +15,9 @@ const router = createRouter({
 })
 
 const app: App = createApp({
-  template: '<router-view />'
+  render() {
+    return h(RouterView)
+  }
 })
 
 app.use(router)

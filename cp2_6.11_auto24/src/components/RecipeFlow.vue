@@ -106,11 +106,22 @@ const wrapperInnerHeight = computed(() => {
   return totalRows.value * cardRowGap.value + 160 + 200
 })
 
+// 安全的渲染数组（避免模板中直接slice导致的边界问题）
+const connectorCount = computed(() => Math.max(0, steps.value.length - 1))
+const connectorIndices = computed(() =>
+  Array.from({ length: connectorCount.value }, (_, i) => i)
+)
+const safeLightDots = computed(() => {
+  const count = connectorCount.value
+  return lightDots.value.slice(0, count)
+})
+
 // === 流动光点动画 ===
 function startDotsAnimation(): void {
   stopDotsAnimation()
   dotsStartTime.value = performance.now()
-  lightDots.value = steps.value.slice(0, -1).map((_, i) => ({ x: 0, connectorIdx: i }))
+  const count = connectorCount.value
+  lightDots.value = Array.from({ length: count }, (_, i) => ({ x: 0, connectorIdx: i }))
   const loop = () => {
     const t = (performance.now() - dotsStartTime.value) / 1000
     for (let i = 0; i < lightDots.value.length; i++) {
