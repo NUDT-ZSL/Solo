@@ -177,7 +177,13 @@ app.post('/api/milestones/:id/celebrate', (req: Request<{ id: string }>, res: Re
   }
 
   const today = getTodayDateString();
-  if (milestone.lastCelebrationDate === today && milestone.celebrationCount >= 5) {
+  const isNewDay = milestone.lastCelebrationDate !== today;
+  
+  if (isNewDay) {
+    milestone.celebrationCount = 0;
+  }
+
+  if (milestone.celebrationCount >= 5) {
     res.status(400).json({ success: false, newProgress: milestone.progress, message: '今日庆祝次数已达上限' });
     return;
   }
@@ -199,7 +205,7 @@ app.post('/api/milestones/:id/celebrate', (req: Request<{ id: string }>, res: Re
   milestone.progress = newProgress;
   milestone.celebrations.push(record);
   milestone.lastCelebrationDate = today;
-  milestone.celebrationCount = milestone.lastCelebrationDate === today ? milestone.celebrationCount + 1 : 1;
+  milestone.celebrationCount += 1;
 
   res.json({ success: true, newProgress });
 });
