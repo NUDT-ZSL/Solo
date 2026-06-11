@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星辰烘焙坊 - Starlight Bakery</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: radial-gradient(ellipse at center, #1A0530 0%, #0B0B2A 100%);
+      color: #fff;
+      user-select: none;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .starfield {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+    }
+
+    .header {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 12px 32px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #FFD700, #FF6EC7, #7B68EE);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 2px;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 4px;
+    }
+
+    .ingredients-panel {
+      position: absolute;
+      left: 24px;
+      top: 120px;
+      bottom: 24px;
+      width: 160px;
+      z-index: 10;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 8px;
+      text-align: center;
+      letter-spacing: 1px;
+    }
+
+    .ingredient-item {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 16px;
+      cursor: grab;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      overflow: hidden;
+    }
+
+    .ingredient-item:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 24px rgba(255, 255, 255, 0.3);
+    }
+
+    .ingredient-item:active {
+      cursor: grabbing;
+    }
+
+    .ingredient-item.dragging {
+      opacity: 0.5;
+    }
+
+    .ingredient-icon {
+      font-size: 36px;
+      margin-bottom: 6px;
+      z-index: 2;
+    }
+
+    .ingredient-name {
+      font-size: 12px;
+      color: #fff;
+      font-weight: 500;
+      z-index: 2;
+    }
+
+    .ingredient-particles {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .mixing-area {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .mixing-bowl-container {
+      position: relative;
+      width: 320px;
+      height: 320px;
+    }
+
+    #mixingCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .bowl-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .bowl-ring svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .bowl-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .bowl-label .label-title {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 4px;
+    }
+
+    .bowl-label .label-hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .preview-panel {
+      position: absolute;
+      right: 24px;
+      top: 120px;
+      width: 280px;
+      z-index: 10;
+      padding: 20px;
+    }
+
+    .preview-canvas-container {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    #previewCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .stats-panel {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .stat-bar {
+      flex: 1;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      margin: 0 10px;
+      overflow: hidden;
+    }
+
+    .stat-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .stat-stars {
+      font-size: 11px;
+      color: #FFD700;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    .bake-btn {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 14px 48px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #6B46C1, #9F7AEA);
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 0 rgba(159, 122, 234, 0);
+      letter-spacing: 2px;
+    }
+
+    .bake-btn:hover {
+      transform: translateX(-50%) scale(1.05);
+      box-shadow: 0 0 24px rgba(159, 122, 234, 0.8);
+    }
+
+    .bake-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: translateX(-50%) scale(1);
+      box-shadow: none;
+    }
+
+    .oven-scene {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 50;
+      display: none;
+      background: radial-gradient(ellipse at center, #1a0a00 0%, #050300 100%);
+    }
+
+    .oven-scene.active {
+      display: block;
+    }
+
+    #ovenCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .oven-ui {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 55;
+      text-align: center;
+    }
+
+    .oven-progress {
+      width: 300px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .oven-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #FF6B35, #FFD700);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    .oven-text {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+      letter-spacing: 1px;
+    }
+
+    .decorate-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 100;
+      display: none;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+    }
+
+    .decorate-overlay.active {
+      display: block;
+    }
+
+    .decorate-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 900px;
+      height: 80%;
+      max-height: 600px;
+      z-index: 105;
+      padding: 24px;
+      display: flex;
+      gap: 24px;
+    }
+
+    .decorate-canvas-area {
+      flex: 1;
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.3);
+      position: relative;
+      cursor: grab;
+    }
+
+    .decorate-canvas-area:active {
+      cursor: grabbing;
+    }
+
+    #decorateCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .decorate-tools {
+      width: 160px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tool-section {
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tool-title {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 10px;
+    }
+
+    .tool-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 6px;
+    }
+
+    .tool-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .tool-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: scale(1.02);
+    }
+
+    .tool-item.active {
+      background: rgba(159, 122, 234, 0.3);
+      box-shadow: 0 0 12px rgba(159, 122, 234, 0.5);
+    }
+
+    .tool-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .tool-name {
+      font-size: 12px;
+      color: #fff;
+    }
+
+    .decorate-actions {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.03);
+      box-shadow: 0 0 16px rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6B46C1, #9F7AEA);
+      border: none;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 20px rgba(159, 122, 234, 0.6);
+    }
+
+    .card-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 200;
+      display: none;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(10px);
+    }
+
+    .card-overlay.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-container {
+      display: flex;
+      align-items: center;
+      gap: 30px;
+    }
+
+    .card-side-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-side-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.1);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    }
+
+    .cake-card {
+      width: 360px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .card-image {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.3);
+      margin-bottom: 16px;
+    }
+
+    .card-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-title {
+      font-size: 22px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #FFD700, #FF6EC7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+
+    .card-stats {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 16px;
+    }
+
+    .card-stat {
+      text-align: center;
+    }
+
+    .card-stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #FFD700;
+      margin-bottom: 4px;
+    }
+
+    .card-stat-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .share-link {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .share-link input {
+      flex: 1;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .share-link button {
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #6B46C1, #9F7AEA);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .share-link button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 12px rgba(159, 122, 234, 0.6);
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 210;
+      transition: all 0.2s ease;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.1);
+    }
+
+    .reset-btn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      z-index: 15;
+      padding: 8px 16px;
+      font-size: 12px;
+    }
+
+    @media (max-width: 1200px) {
+      .ingredients-panel {
+        width: 130px;
+      }
+
+      .preview-panel {
+        width: 220px;
+      }
+
+      .mixing-bowl-container {
+        width: 260px;
+        height: 260px;
+      }
+
+      .bowl-ring {
+        width: 160px;
+        height: 160px;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .card-container {
+        flex-direction: column;
+      }
+
+      .card-side-btn {
+        order: 2;
+      }
+
+      .cake-card {
+        order: 1;
+        width: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas class="starfield" id="starfield"></canvas>
+
+    <header class="header glass">
+      <h1>✨ 星辰烘焙坊 ✨</h1>
+      <p>用星尘调制你的专属魔法甜点</p>
+    </header>
+
+    <button class="btn reset-btn glass" id="resetBtn">重置</button>
+
+    <div class="ingredients-panel glass" id="ingredientsPanel">
+      <div class="panel-title">🌟 星尘菜单</div>
+      <div class="ingredient-item" data-ingredient="berry" draggable="true">
+        <canvas class="ingredient-particles"></canvas>
+        <div class="ingredient-icon">🍓</div>
+        <div class="ingredient-name">发光莓果</div>
+      </div>
+      <div class="ingredient-item" data-ingredient="flour" draggable="true">
+        <canvas class="ingredient-particles"></canvas>
+        <div class="ingredient-icon">✨</div>
+        <div class="ingredient-name">星屑面粉</div>
+      </div>
+      <div class="ingredient-item" data-ingredient="cream" draggable="true">
+        <canvas class="ingredient-particles"></canvas>
+        <div class="ingredient-icon">🌙</div>
+        <div class="ingredient-name">月光奶油</div>
+      </div>
+      <div class="ingredient-item" data-ingredient="sugar" draggable="true">
+        <canvas class="ingredient-particles"></canvas>
+        <div class="ingredient-icon">💫</div>
+        <div class="ingredient-name">彗星糖霜</div>
+      </div>
+    </div>
+
+    <div class="mixing-area">
+      <div class="mixing-bowl-container">
+        <canvas id="mixingCanvas"></canvas>
+        <div class="bowl-ring">
+          <svg viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
+            <circle id="ring-berry" cx="100" cy="100" r="90" fill="none" stroke="#FF6B6B" stroke-width="8"
+              stroke-dasharray="0 565.48" stroke-linecap="round"/>
+            <circle id="ring-flour" cx="100" cy="100" r="90" fill="none" stroke="#FFE66D" stroke-width="8"
+              stroke-dasharray="0 565.48" stroke-linecap="round"/>
+            <circle id="ring-cream" cx="100" cy="100" r="90" fill="none" stroke="#C9B8FF" stroke-width="8"
+              stroke-dasharray="0 565.48" stroke-linecap="round"/>
+            <circle id="ring-sugar" cx="100" cy="100" r="90" fill="none" stroke="#7DD3FC" stroke-width="8"
+              stroke-dasharray="0 565.48" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="bowl-label">
+          <div class="label-title">魔法搅拌盆</div>
+          <div class="label-hint">拖入食材开始混合</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-panel glass">
+      <div class="panel-title">🎂 甜点预览</div>
+      <div class="preview-canvas-container">
+        <canvas id="previewCanvas"></canvas>
+      </div>
+      <div class="stats-panel">
+        <div class="stat-item">
+          <span class="stat-label">甜度</span>
+          <div class="stat-bar">
+            <div class="stat-fill" id="stat-sweetness" style="width: 0%; background: #FF6B6B;"></div>
+          </div>
+          <span class="stat-stars" id="stat-sweetness-stars">☆☆☆</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">蓬松度</span>
+          <div class="stat-bar">
+            <div class="stat-fill" id="stat-fluffiness" style="width: 0%; background: #FFE66D;"></div>
+          </div>
+          <span class="stat-stars" id="stat-fluffiness-stars">☆☆☆</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">发光强度</span>
+          <div class="stat-bar">
+            <div class="stat-fill" id="stat-glow" style="width: 0%; background: #7DD3FC;"></div>
+          </div>
+          <span class="stat-stars" id="stat-glow-stars">☆☆☆</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="bake-btn" id="bakeBtn" disabled>🔥 开始烘焙</button>
+
+    <div class="oven-scene" id="ovenScene">
+      <canvas id="ovenCanvas"></canvas>
+      <div class="oven-ui">
+        <div class="oven-progress">
+          <div class="oven-progress-fill" id="ovenProgress"></div>
+        </div>
+        <div class="oven-text" id="ovenText">预热中...</div>
+      </div>
+    </div>
+
+    <div class="decorate-overlay" id="decorateOverlay">
+      <div class="decorate-panel glass">
+        <div class="decorate-canvas-area" id="decorateCanvasArea">
+          <canvas id="decorateCanvas"></canvas>
+        </div>
+        <div class="decorate-tools">
+          <div class="tool-section">
+            <div class="tool-title">⭐ 星星糖针</div>
+            <div class="tool-item" data-tool="sprinkle-yellow">
+              <div class="tool-color" style="background: #FFD700;"></div>
+              <span class="tool-name">金色</span>
+            </div>
+            <div class="tool-item" data-tool="sprinkle-pink">
+              <div class="tool-color" style="background: #FF6EC7;"></div>
+              <span class="tool-name">粉色</span>
+            </div>
+            <div class="tool-item" data-tool="sprinkle-blue">
+              <div class="tool-color" style="background: #7DD3FC;"></div>
+              <span class="tool-name">蓝色</span>
+            </div>
+          </div>
+          <div class="tool-section">
+            <div class="tool-title">🌈 彩虹酱</div>
+            <div class="tool-item" data-tool="rainbow">
+              <div class="tool-color" style="background: linear-gradient(135deg, #FF6B6B, #FFE66D, #7DD3FC, #C9B8FF);"></div>
+              <span class="tool-name">七彩流光</span>
+            </div>
+          </div>
+          <div class="decorate-actions">
+            <button class="btn" id="clearDecorBtn">清除装饰</button>
+            <button class="btn btn-primary" id="shareBtn">🎁 生成分享卡片</button>
+          </div>
+        </div>
+      </div>
+      <button class="close-btn" id="closeDecorateBtn">✕</button>
+    </div>
+
+    <div class="card-overlay" id="cardOverlay">
+      <button class="close-btn" id="closeCardBtn">✕</button>
+      <div class="card-container">
+        <button class="card-side-btn" id="prevCardBtn">◀</button>
+        <div class="cake-card glass">
+          <div class="card-image">
+            <img id="cardImage" alt="魔法甜点" />
+          </div>
+          <div class="card-title" id="cardTitle">星尘魔法蛋糕</div>
+          <div class="card-stats">
+            <div class="card-stat">
+              <div class="card-stat-value" id="cardSweetness">★★☆</div>
+              <div class="card-stat-label">甜度</div>
+            </div>
+            <div class="card-stat">
+              <div class="card-stat-value" id="cardFluffiness">★★☆</div>
+              <div class="card-stat-label">蓬松度</div>
+            </div>
+            <div class="card-stat">
+              <div class="card-stat-value" id="cardGlow">★★☆</div>
+              <div class="card-stat-label">发光</div>
+            </div>
+          </div>
+          <div class="card-desc" id="cardDesc">一道闪耀着星光的魔法甜点，每一口都是宇宙的滋味。</div>
+          <div class="share-link">
+            <input type="text" id="shareLink" readonly />
+            <button id="copyLinkBtn">复制</button>
+          </div>
+        </div>
+        <button class="card-side-btn" id="nextCardBtn">▶</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
