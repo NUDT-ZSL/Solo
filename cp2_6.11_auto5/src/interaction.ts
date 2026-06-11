@@ -272,46 +272,57 @@ export class InteractionController {
   private updatePhysics(dt: number): void {
     if (dt > 0.1) dt = 0.1;
 
-    this.spherical.theta = this.physics.theta.target;
+    const dampingFactor = Math.exp(-dt / DAMPING_TIME);
 
-    if (!this.isDragging) {
-      this.spherical.theta += this.physics.theta.velocity * dt;
-      this.physics.theta.velocity *= Math.exp(-dt / DAMPING_TIME);
+    if (this.isDragging) {
+      const thetaDiff = this.physics.theta.target - this.spherical.theta;
+      const phiDiff = this.physics.phi.target - this.spherical.phi;
+
+      const springStrength = 25;
+      this.physics.theta.velocity += thetaDiff * springStrength * dt;
+      this.physics.phi.velocity += phiDiff * springStrength * dt;
+
+      this.physics.theta.velocity *= Math.exp(-dt / 0.05);
+      this.physics.phi.velocity *= Math.exp(-dt / 0.05);
     }
 
-    if (!this.isDragging) {
-      this.spherical.phi += this.physics.phi.velocity * dt;
-      this.physics.phi.velocity *= Math.exp(-dt / DAMPING_TIME);
-    } else {
-      this.spherical.phi = this.physics.phi.target;
-    }
+    this.spherical.theta += this.physics.theta.velocity * dt;
+    this.spherical.phi += this.physics.phi.velocity * dt;
+    this.spherical.radius += this.physics.radius.velocity * dt;
+
+    this.physics.theta.velocity *= dampingFactor;
+    this.physics.phi.velocity *= dampingFactor;
+    this.physics.radius.velocity *= dampingFactor;
 
     if (this.spherical.phi > PHI_MAX) {
       const excess = this.spherical.phi - PHI_MAX;
-      const force = -excess * SOFT_BOUNDARY_STRENGTH;
-      this.physics.phi.velocity += force * dt;
+      const springForce = -excess * SOFT_BOUNDARY_STRENGTH;
+      const dampingForce = -this.physics.phi.velocity * 2;
+      this.physics.phi.velocity += (springForce + dampingForce) * dt;
     } else if (this.spherical.phi < PHI_MIN) {
       const excess = PHI_MIN - this.spherical.phi;
-      const force = excess * SOFT_BOUNDARY_STRENGTH;
-      this.physics.phi.velocity += force * dt;
+      const springForce = excess * SOFT_BOUNDARY_STRENGTH;
+      const dampingForce = -this.physics.phi.velocity * 2;
+      this.physics.phi.velocity += (springForce + dampingForce) * dt;
     }
-
-    this.spherical.radius += this.physics.radius.velocity * dt;
-    this.physics.radius.velocity *= Math.exp(-dt / DAMPING_TIME);
 
     if (this.spherical.radius > RADIUS_MAX) {
       const excess = this.spherical.radius - RADIUS_MAX;
-      const force = -excess * SOFT_BOUNDARY_STRENGTH;
-      this.physics.radius.velocity += force * dt;
+      const springForce = -excess * SOFT_BOUNDARY_STRENGTH;
+      const dampingForce = -this.physics.radius.velocity * 2;
+      this.physics.radius.velocity += (springForce + dampingForce) * dt;
     } else if (this.spherical.radius < RADIUS_MIN) {
       const excess = RADIUS_MIN - this.spherical.radius;
-      const force = excess * SOFT_BOUNDARY_STRENGTH;
-      this.physics.radius.velocity += force * dt;
+      const springForce = excess * SOFT_BOUNDARY_STRENGTH;
+      const dampingForce = -this.physics.radius.velocity * 2;
+      this.physics.radius.velocity += (springForce + dampingForce) * dt;
     }
 
-    this.physics.theta.target = this.spherical.theta;
-    this.physics.phi.target = this.spherical.phi;
-    this.physics.radius.target = this.spherical.radius;
+    if (!this.isDragging) {
+      this.physics.theta.target = this.spherical.theta;
+      this.physics.phi.target = this.spherical.phi;
+      this.physics.radius.target = this.spherical.radius;
+    }
   }
 
   private updateReset(): void {
