@@ -7,6 +7,7 @@ export interface WeatherConfig {
   uiBg: string;
   uiBorder: string;
   textColor: string;
+  flashColor: string;
   name: string;
 }
 
@@ -18,6 +19,7 @@ export const weatherConfigs: Record<WeatherType, WeatherConfig> = {
     uiBg: 'rgba(255, 255, 255, 0.2)',
     uiBorder: 'rgba(255, 255, 255, 0.3)',
     textColor: '#333333',
+    flashColor: 'rgba(255, 200, 100, 0)',
     name: '晴天'
   },
   rainy: {
@@ -27,6 +29,7 @@ export const weatherConfigs: Record<WeatherType, WeatherConfig> = {
     uiBg: 'rgba(0, 0, 0, 0.3)',
     uiBorder: 'rgba(255, 255, 255, 0.1)',
     textColor: '#E2E8F0',
+    flashColor: 'rgba(66, 153, 225, 0)',
     name: '雨天'
   },
   snowy: {
@@ -36,6 +39,7 @@ export const weatherConfigs: Record<WeatherType, WeatherConfig> = {
     uiBg: 'rgba(255, 255, 255, 0.4)',
     uiBorder: 'rgba(255, 255, 255, 0.5)',
     textColor: '#2D3748',
+    flashColor: 'rgba(255, 255, 255, 0)',
     name: '雪天'
   },
   thunder: {
@@ -45,56 +49,52 @@ export const weatherConfigs: Record<WeatherType, WeatherConfig> = {
     uiBg: 'rgba(0, 0, 0, 0.4)',
     uiBorder: 'rgba(159, 122, 234, 0.3)',
     textColor: '#E2E8F0',
+    flashColor: 'rgba(200, 180, 255, 0.25)',
     name: '雷暴'
   }
 };
 
 class ParticlePool {
   private pool: Particle[] = [];
-  private activeList: Particle[] = [];
   private type: WeatherType;
   private activeCount: number = 0;
+  private preallocated: boolean = false;
 
-  constructor(type: WeatherType, initialSize: number = 200) {
+  constructor(type: WeatherType, maxSize: number = 2000) {
     this.type = type;
-    this.expandPool(initialSize);
+    this.preallocate(maxSize);
   }
 
-  private expandPool(count: number): void {
+  private preallocate(count: number): void {
     for (let i = 0; i < count; i++) {
       const particle = ParticleFactory.create(this.type);
       particle.active = false;
       this.pool.push(particle);
     }
+    this.preallocated = true;
   }
 
   public acquire(width: number, height: number, fromTop: boolean = false): Particle | null {
-    let particle: Particle | null = null;
-
     for (let i = 0; i < this.pool.length; i++) {
       if (!this.pool[i].active) {
-        particle = this.pool[i];
-        break;
+        this.pool[i].init(width, height, fromTop);
+        this.activeCount++;
+        return this.pool[i];
       }
     }
+    return null;
+  }
 
-    if (!particle) {
-      const expandCount = Math.max(50, Math.floor(this.pool.length * 0.2));
-      this.expandPool(expandCount);
-      for (let i = this.pool.length - expandCount; i < this.pool.length; i++) {
-        if (!this.pool[i].active) {
-          particle = this.pool[i];
-          break;
-        }
+  public acquireBatch(count: number, width: number, height: number, fromTop: boolean = false): number {
+    let acquired = 0;
+    for (let i = 0; i < this.pool.length && acquired < count; i++) {
+      if (!this.pool[i].active) {
+        this.pool[i].init(width, height, fromTop);
+        acquired++;
       }
     }
-
-    if (particle) {
-      particle.init(width, height, fromTop);
-      this.activeCount++;
-    }
-
-    return particle;
+    this.activeCount += acquired;
+    return acquired;
   }
 
   public deactivateAll(): void {
@@ -102,6 +102,24 @@ class ParticlePool {
       this.pool[i].active = false;
     }
     this.activeCount = 0;
+  }
+
+  public setActiveCountImmediately(count: number, width: number, height: number, fromTop: boolean = false): void {
+    let currentActive = 0;
+
+    for (let i = 0; i < this.pool.length; i++) {
+      if (this.pool[i].active) {
+        currentActive++;
+        if (currentActive > count) {
+          this.pool[i].active = false;
+          this.activeCount--;
+        }
+      } else if (currentActive < count) {
+        this.pool[i].init(width, height, fromTop);
+        currentActive++;
+        this.activeCount++;
+      }
+    }
   }
 
   public getActiveCount(): number {
@@ -140,6 +158,18 @@ class ParticlePool {
     }
     return allInactive;
   }
+
+  public fadeInAll(dt: number, fadeSpeed: number): boolean {
+    let allFadedIn = true;
+    for (let i = 0; i < this.pool.length; i++) {
+      const p = this.pool[i];
+      if (p.active && p.alpha < 1) {
+        p.alpha = Math.min(1, p.alpha + fadeSpeed * dt);
+        if (p.alpha < 1) allFadedIn = false;
+      }
+    }
+    return allFadedIn;
+  }
 }
 
 interface ThunderFlashState {
@@ -148,6 +178,7 @@ interface ThunderFlashState {
   flashDuration: number;
   nextFlashDelay: number;
   flashIntensity: number;
+  targetIntensity: number;
 }
 
 export class WeatherSystem {
@@ -180,11 +211,12 @@ export class WeatherSystem {
     flashTimer: 0,
     flashDuration: 0.1,
     nextFlashDelay: 2,
-    flashIntensity: 0
+    flashIntensity: 0,
+    targetIntensity: 0
   };
 
-  private spawnTimer: number = 0;
-  private spawnInterval: number = 0.003;
+  private pendingParticleCount: number = 500;
+  private particleCountTransitionSpeed: number = 2000;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -197,12 +229,14 @@ export class WeatherSystem {
     this.initPools();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+
+    this.pendingParticleCount = this.targetParticleCount;
   }
 
   private initPools(): void {
     const weatherTypes: WeatherType[] = ['sunny', 'rainy', 'snowy', 'thunder'];
     for (const type of weatherTypes) {
-      this.particlePools.set(type, new ParticlePool(type, 300));
+      this.particlePools.set(type, new ParticlePool(type, this.maxParticles));
     }
   }
 
@@ -216,6 +250,7 @@ export class WeatherSystem {
     this.canvas.style.width = `${this.width}px`;
     this.canvas.style.height = `${this.height}px`;
 
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
   }
 
@@ -223,6 +258,13 @@ export class WeatherSystem {
     if (this.isRunning) return;
     this.isRunning = true;
     this.lastTime = performance.now();
+
+    const pool = this.particlePools.get(this.currentWeather);
+    if (pool) {
+      pool.setActiveCountImmediately(this.targetParticleCount, this.width, this.height, false);
+    }
+
+    this.applyWeatherStyles(this.currentWeather);
     this.animate();
   }
 
@@ -256,13 +298,36 @@ export class WeatherSystem {
   };
 
   private update(dt: number): void {
+    this.updateParticleCount(dt);
+
     if (this.isTransitioning) {
       this.updateTransition(dt);
     }
 
     this.updateThunderFlash(dt);
     this.updateParticles(dt);
-    this.spawnParticles(dt);
+  }
+
+  private updateParticleCount(dt: number): void {
+    if (this.isTransitioning) return;
+
+    if (this.pendingParticleCount !== this.targetParticleCount) {
+      const diff = this.pendingParticleCount - this.targetParticleCount;
+      const maxChange = this.particleCountTransitionSpeed * dt;
+
+      if (Math.abs(diff) <= maxChange) {
+        this.targetParticleCount = this.pendingParticleCount;
+      } else {
+        this.targetParticleCount += Math.sign(diff) * maxChange;
+      }
+
+      const currentType = this.getCurrentWeatherType();
+      const pool = this.particlePools.get(currentType);
+      if (pool) {
+        const fromTop = currentType === 'rainy' || currentType === 'snowy' || currentType === 'thunder';
+        pool.setActiveCountImmediately(Math.round(this.targetParticleCount), this.width, this.height, fromTop);
+      }
+    }
   }
 
   private updateTransition(dt: number): void {
@@ -271,15 +336,24 @@ export class WeatherSystem {
     if (this.transitionProgress >= 1) {
       this.transitionProgress = 1;
       this.isTransitioning = false;
+
+      const oldWeather = this.currentWeather;
       this.currentWeather = this.targetWeather;
 
-      const oldPool = this.particlePools.get(this.currentWeather);
+      const oldPool = this.particlePools.get(oldWeather);
       if (oldPool) {
         oldPool.deactivateAll();
       }
+
+      const newPool = this.particlePools.get(this.targetWeather);
+      if (newPool) {
+        const fromTop = this.targetWeather === 'rainy' || this.targetWeather === 'snowy' || this.targetWeather === 'thunder';
+        newPool.setActiveCountImmediately(Math.round(this.targetParticleCount), this.width, this.height, fromTop);
+      }
+      return;
     }
 
-    const fadeSpeed = 4;
+    const fadeSpeed = 5;
     const currentPool = this.particlePools.get(this.currentWeather);
     const targetPool = this.particlePools.get(this.targetWeather);
 
@@ -287,55 +361,71 @@ export class WeatherSystem {
       if (currentPool) {
         currentPool.fadeOutAll(dt, fadeSpeed * 2);
       }
+      if (targetPool) {
+        targetPool.fadeInAll(dt, fadeSpeed * 2);
+      }
     } else {
-      if (targetPool && this.targetParticleCount > 0) {
-        const targetCount = Math.floor(this.targetParticleCount * (this.transitionProgress - 0.5) * 2);
-        const activeCount = targetPool.getActiveCount();
-        if (activeCount < targetCount) {
-          const toSpawn = Math.min(30, targetCount - activeCount);
-          for (let i = 0; i < toSpawn; i++) {
-            targetPool.acquire(this.width, this.height, true);
-          }
-        }
+      if (currentPool) {
+        currentPool.fadeOutAll(dt, fadeSpeed * 3);
+      }
+      if (targetPool) {
+        targetPool.fadeInAll(dt, fadeSpeed);
       }
     }
   }
 
   private updateThunderFlash(dt: number): void {
     if (this.getCurrentWeatherType() !== 'thunder') {
+      if (this.thunderFlash.flashIntensity > 0) {
+        this.thunderFlash.flashIntensity = Math.max(0, this.thunderFlash.flashIntensity - dt * 3);
+        this.updateFlashCSSVariable();
+      }
       this.thunderFlash.isFlashing = false;
-      this.thunderFlash.flashIntensity = 0;
+      this.thunderFlash.targetIntensity = 0;
       return;
     }
 
     if (this.thunderFlash.isFlashing) {
       this.thunderFlash.flashTimer += dt;
-      this.thunderFlash.flashIntensity = Math.max(
-        0,
-        1 - this.thunderFlash.flashTimer / this.thunderFlash.flashDuration
-      );
+      const progress = this.thunderFlash.flashTimer / this.thunderFlash.flashDuration;
+      this.thunderFlash.flashIntensity = this.thunderFlash.targetIntensity * Math.max(0, 1 - progress * progress);
+      this.updateFlashCSSVariable();
 
       if (this.thunderFlash.flashTimer >= this.thunderFlash.flashDuration) {
         this.thunderFlash.isFlashing = false;
-        this.thunderFlash.nextFlashDelay = 0.5 + Math.random() * 3;
+        this.thunderFlash.nextFlashDelay = 0.3 + Math.random() * 2;
         this.thunderFlash.flashTimer = 0;
+        this.thunderFlash.targetIntensity = 0;
       }
     } else {
       this.thunderFlash.flashTimer += dt;
       this.thunderFlash.flashIntensity = Math.max(0, this.thunderFlash.flashIntensity - dt * 2);
+      this.updateFlashCSSVariable();
 
       if (this.thunderFlash.flashTimer >= this.thunderFlash.nextFlashDelay) {
         this.thunderFlash.isFlashing = true;
         this.thunderFlash.flashTimer = 0;
-        this.thunderFlash.flashDuration = 0.05 + Math.random() * 0.15;
+        this.thunderFlash.flashDuration = 0.04 + Math.random() * 0.12;
+        this.thunderFlash.targetIntensity = 0.6 + Math.random() * 0.4;
       }
     }
   }
 
-  private updateParticles(dt: number): void {
-    const currentType = this.getCurrentWeatherType();
-    const currentPool = this.particlePools.get(currentType);
+  private updateFlashCSSVariable(): void {
+    const intensity = this.thunderFlash.flashIntensity;
+    if (intensity > 0) {
+      const r = Math.floor(200 + intensity * 55);
+      const g = Math.floor(180 + intensity * 75);
+      const b = Math.floor(255);
+      const a = intensity * 0.25;
+      document.documentElement.style.setProperty('--flash-overlay', `rgba(${r}, ${g}, ${b}, ${a})`);
+    } else {
+      document.documentElement.style.setProperty('--flash-overlay', 'rgba(0, 0, 0, 0)');
+    }
+  }
 
+  private updateParticles(dt: number): void {
+    const currentPool = this.particlePools.get(this.currentWeather);
     if (currentPool) {
       const particles = currentPool.getAllParticles();
       for (let i = 0; i < particles.length; i++) {
@@ -347,43 +437,15 @@ export class WeatherSystem {
     }
 
     if (this.isTransitioning) {
-      const otherType = this.transitionProgress < 0.5 ? this.targetWeather : this.currentWeather;
-      if (otherType !== currentType) {
-        const otherPool = this.particlePools.get(otherType);
-        if (otherPool) {
-          const particles = otherPool.getAllParticles();
-          for (let i = 0; i < particles.length; i++) {
-            if (particles[i].active) {
-              particles[i].update(dt, this.width, this.height);
-            }
+      const targetPool = this.particlePools.get(this.targetWeather);
+      if (targetPool) {
+        const particles = targetPool.getAllParticles();
+        for (let i = 0; i < particles.length; i++) {
+          if (particles[i].active) {
+            particles[i].update(dt, this.width, this.height);
           }
-          otherPool.updateActiveCount();
         }
-      }
-    }
-  }
-
-  private spawnParticles(dt: number): void {
-    if (this.isTransitioning) return;
-
-    const currentType = this.getCurrentWeatherType();
-    const pool = this.particlePools.get(currentType);
-    if (!pool) return;
-
-    this.spawnTimer += dt;
-    const activeCount = pool.getActiveCount();
-
-    if (activeCount < this.targetParticleCount && this.spawnTimer >= this.spawnInterval) {
-      this.spawnTimer = 0;
-      const diff = this.targetParticleCount - activeCount;
-      const toSpawn = Math.min(
-        Math.max(1, Math.floor(diff * 0.15)),
-        100
-      );
-
-      const fromTop = currentType === 'rainy' || currentType === 'snowy' || currentType === 'thunder';
-      for (let i = 0; i < toSpawn && activeCount + i < this.targetParticleCount; i++) {
-        pool.acquire(this.width, this.height, fromTop);
+        targetPool.updateActiveCount();
       }
     }
   }
@@ -391,42 +453,52 @@ export class WeatherSystem {
   private render(): void {
     this.ctx.clearRect(0, 0, this.width, this.height);
 
-    const currentType = this.getCurrentWeatherType();
-    const pool = this.particlePools.get(currentType);
-
-    if (pool) {
-      const particles = pool.getAllParticles();
-      for (let i = 0; i < particles.length; i++) {
-        if (particles[i].active) {
-          particles[i].draw(this.ctx);
-        }
-      }
-    }
-
-    if (this.isTransitioning) {
-      const otherType = this.transitionProgress < 0.5 ? this.targetWeather : this.currentWeather;
-      if (otherType !== currentType) {
-        const otherPool = this.particlePools.get(otherType);
-        if (otherPool) {
-          const alpha = this.transitionProgress < 0.5
-            ? this.transitionProgress * 2
-            : (1 - this.transitionProgress) * 2;
-          this.ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-          const particles = otherPool.getAllParticles();
-          for (let i = 0; i < particles.length; i++) {
-            if (particles[i].active) {
-              particles[i].draw(this.ctx);
-            }
+    if (!this.isTransitioning) {
+      const pool = this.particlePools.get(this.currentWeather);
+      if (pool) {
+        const particles = pool.getAllParticles();
+        for (let i = 0; i < particles.length; i++) {
+          if (particles[i].active) {
+            particles[i].draw(this.ctx);
           }
-          this.ctx.globalAlpha = 1;
         }
+      }
+    } else {
+      const currentPool = this.particlePools.get(this.currentWeather);
+      const targetPool = this.particlePools.get(this.targetWeather);
+
+      const currentAlpha = this.transitionProgress < 0.5
+        ? 1
+        : Math.max(0, 1 - (this.transitionProgress - 0.5) * 2);
+
+      const targetAlpha = this.transitionProgress < 0.5
+        ? Math.max(0, this.transitionProgress * 2)
+        : 1;
+
+      if (currentPool && currentAlpha > 0) {
+        this.ctx.globalAlpha = currentAlpha;
+        const particles = currentPool.getAllParticles();
+        for (let i = 0; i < particles.length; i++) {
+          if (particles[i].active) {
+            particles[i].draw(this.ctx);
+          }
+        }
+        this.ctx.globalAlpha = 1;
+      }
+
+      if (targetPool && targetAlpha > 0) {
+        this.ctx.globalAlpha = targetAlpha;
+        const particles = targetPool.getAllParticles();
+        for (let i = 0; i < particles.length; i++) {
+          if (particles[i].active) {
+            particles[i].draw(this.ctx);
+          }
+        }
+        this.ctx.globalAlpha = 1;
       }
     }
 
-    if (currentType === 'thunder' && this.thunderFlash.flashIntensity > 0) {
-      this.ctx.fillStyle = `rgba(200, 180, 255, ${this.thunderFlash.flashIntensity * 0.12})`;
-      this.ctx.fillRect(0, 0, this.width, this.height);
-    }
+    this.ctx.globalAlpha = 1;
   }
 
   public switchWeather(weather: WeatherType): void {
@@ -439,6 +511,14 @@ export class WeatherSystem {
     const targetPool = this.particlePools.get(weather);
     if (targetPool) {
       targetPool.deactivateAll();
+      const fromTop = weather === 'rainy' || weather === 'snowy' || weather === 'thunder';
+      targetPool.setActiveCountImmediately(Math.round(this.targetParticleCount), this.width, this.height, fromTop);
+      const particles = targetPool.getAllParticles();
+      for (let i = 0; i < particles.length; i++) {
+        if (particles[i].active) {
+          particles[i].alpha = 0;
+        }
+      }
     }
 
     this.applyWeatherStyles(weather);
@@ -457,17 +537,27 @@ export class WeatherSystem {
   }
 
   public setParticleCount(count: number): void {
-    this.targetParticleCount = Math.max(100, Math.min(this.maxParticles, count));
+    this.pendingParticleCount = Math.max(100, Math.min(this.maxParticles, count));
   }
 
   public getParticleCount(): number {
-    const currentType = this.getCurrentWeatherType();
-    const pool = this.particlePools.get(currentType);
+    if (this.isTransitioning) {
+      const currentPool = this.particlePools.get(this.currentWeather);
+      const targetPool = this.particlePools.get(this.targetWeather);
+      const currentCount = currentPool ? currentPool.getActiveCount() : 0;
+      const targetCount = targetPool ? targetPool.getActiveCount() : 0;
+      return Math.max(currentCount, targetCount);
+    }
+    const pool = this.particlePools.get(this.currentWeather);
     return pool ? pool.getActiveCount() : 0;
   }
 
   public getTargetParticleCount(): number {
-    return this.targetParticleCount;
+    return Math.round(this.targetParticleCount);
+  }
+
+  public getPendingParticleCount(): number {
+    return this.pendingParticleCount;
   }
 
   public getCurrentWeather(): WeatherType {
@@ -476,7 +566,7 @@ export class WeatherSystem {
 
   private getCurrentWeatherType(): WeatherType {
     if (this.isTransitioning) {
-      return this.transitionProgress < 0.5 ? this.currentWeather : this.targetWeather;
+      return this.transitionProgress < 0.3 ? this.currentWeather : this.targetWeather;
     }
     return this.currentWeather;
   }
@@ -491,5 +581,9 @@ export class WeatherSystem {
 
   public getCurrentWeatherName(): string {
     return weatherConfigs[this.getCurrentWeather()].name;
+  }
+
+  public isWeatherTransitioning(): boolean {
+    return this.isTransitioning;
   }
 }

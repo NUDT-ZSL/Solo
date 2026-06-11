@@ -49,7 +49,7 @@ export abstract class BaseParticle implements Particle {
 
     if (fromTop) {
       this.x = Math.random() * width;
-      this.y = -this.size * 2;
+      this.y = -this.size * 2 - Math.random() * height * 0.3;
     } else {
       this.x = Math.random() * width;
       this.y = Math.random() * height;
@@ -65,13 +65,13 @@ export class SunParticle extends BaseParticle {
   private swayAmplitude: number = 0;
 
   protected getDefaultSize(): number {
-    return 1.5 + Math.random() * 4;
+    return 1.5 + Math.random() * 3;
   }
 
   protected getDefaultSpeed(): { vx: number; vy: number } {
     return {
       vx: 0,
-      vy: -(0.3 + Math.random() * 0.7)
+      vy: -(0.2 + Math.random() * 0.6)
     };
   }
 
@@ -82,11 +82,11 @@ export class SunParticle extends BaseParticle {
   public override init(width: number, height: number, fromTop: boolean = false): void {
     super.init(width, height, fromTop);
     this.pulsePhase = Math.random() * Math.PI * 2;
-    this.pulseSpeed = 1 + Math.random() * 2;
+    this.pulseSpeed = 0.8 + Math.random() * 1.5;
     this.swayOffset = Math.random() * Math.PI * 2;
-    this.swaySpeed = 0.5 + Math.random() * 1;
-    this.swayAmplitude = 10 + Math.random() * 25;
-    this.y = height + Math.random() * height * 0.5;
+    this.swaySpeed = 0.4 + Math.random() * 0.8;
+    this.swayAmplitude = 8 + Math.random() * 20;
+    this.y = height * Math.random();
   }
 
   public update(dt: number, width: number, height: number): void {
@@ -125,44 +125,44 @@ export class SunParticle extends BaseParticle {
     const size = this.size * pulseScale;
     const a = this.alpha;
 
-    ctx.globalAlpha = a * 0.3;
+    ctx.globalAlpha = a * 0.25;
     ctx.fillStyle = '#FFD700';
     ctx.beginPath();
     ctx.arc(this.x, this.y, size * 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.globalAlpha = a * 0.6;
+    ctx.globalAlpha = a * 0.5;
     ctx.fillStyle = '#FFB347';
     ctx.beginPath();
-    ctx.arc(this.x, this.y, size * 1.5, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, size * 1.2, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.globalAlpha = a;
     ctx.fillStyle = '#FFFFD4';
     ctx.beginPath();
-    ctx.arc(this.x, this.y, size * 0.5, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, size * 0.4, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.globalAlpha = 1;
   }
 
   public override reset(width: number, height: number): void {
     this.init(width, height, false);
-    this.y = height + this.size * 2;
+    this.y = height + this.size * 2 + Math.random() * 50;
   }
 }
 
 export class RainParticle extends BaseParticle {
   private length: number = 0;
+  private endX: number = 0;
+  private endY: number = 0;
 
   protected getDefaultSize(): number {
-    return 0.8 + Math.random() * 1.5;
+    return 0.6 + Math.random() * 1.2;
   }
 
   protected getDefaultSpeed(): { vx: number; vy: number } {
     return {
-      vx: -0.3 + Math.random() * 0.2,
-      vy: 8 + Math.random() * 5
+      vx: -0.2 + Math.random() * 0.15,
+      vy: 7 + Math.random() * 4
     };
   }
 
@@ -172,8 +172,14 @@ export class RainParticle extends BaseParticle {
 
   public override init(width: number, height: number, fromTop: boolean = false): void {
     super.init(width, height, fromTop);
-    this.length = 8 + Math.random() * 15;
-    this.alpha = 0.25 + Math.random() * 0.4;
+    this.length = 8 + Math.random() * 12;
+    this.alpha = 0.2 + Math.random() * 0.35;
+    this.updateEndpoints();
+  }
+
+  private updateEndpoints(): void {
+    this.endX = this.x + this.vx * 2;
+    this.endY = this.y + this.length;
   }
 
   public update(dt: number, width: number, height: number): void {
@@ -181,6 +187,8 @@ export class RainParticle extends BaseParticle {
 
     this.x += this.vx * 60 * dt;
     this.y += this.vy * 60 * dt;
+    this.endX += this.vx * 60 * dt;
+    this.endY += this.vy * 60 * dt;
 
     if (this.y > height) {
       this.active = false;
@@ -196,9 +204,8 @@ export class RainParticle extends BaseParticle {
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
-    ctx.lineTo(this.x + this.vx * 2, this.y + this.length);
+    ctx.lineTo(this.endX, this.endY);
     ctx.stroke();
-    ctx.globalAlpha = 1;
   }
 
   public override reset(width: number, height: number): void {
@@ -212,15 +219,17 @@ export class SnowParticle extends BaseParticle {
   private swayOffset: number = 0;
   private swaySpeed: number = 0;
   private flakeType: number = 0;
+  private sinRot: number = 0;
+  private cosRot: number = 0;
 
   protected getDefaultSize(): number {
-    return 1.5 + Math.random() * 4;
+    return 1.2 + Math.random() * 3;
   }
 
   protected getDefaultSpeed(): { vx: number; vy: number } {
     return {
       vx: 0,
-      vy: 0.8 + Math.random() * 1.5
+      vy: 0.6 + Math.random() * 1.2
     };
   }
 
@@ -231,18 +240,26 @@ export class SnowParticle extends BaseParticle {
   public override init(width: number, height: number, fromTop: boolean = false): void {
     super.init(width, height, fromTop);
     this.rotation = Math.random() * Math.PI * 2;
-    this.rotationSpeed = (Math.random() - 0.5) * 2;
+    this.rotationSpeed = (Math.random() - 0.5) * 1.5;
     this.swayOffset = Math.random() * Math.PI * 2;
-    this.swaySpeed = 0.4 + Math.random() * 1.2;
+    this.swaySpeed = 0.3 + Math.random() * 0.8;
+
     const rand = Math.random();
-    if (rand < 0.7) {
+    if (rand < 0.85) {
       this.flakeType = 2;
-    } else if (rand < 0.9) {
+    } else if (rand < 0.95) {
       this.flakeType = 1;
     } else {
       this.flakeType = 0;
     }
-    this.alpha = 0.5 + Math.random() * 0.4;
+
+    this.alpha = 0.4 + Math.random() * 0.4;
+    this.updateTrig();
+  }
+
+  private updateTrig(): void {
+    this.sinRot = Math.sin(this.rotation);
+    this.cosRot = Math.cos(this.rotation);
   }
 
   public update(dt: number, width: number, height: number): void {
@@ -250,8 +267,9 @@ export class SnowParticle extends BaseParticle {
 
     this.rotation += this.rotationSpeed * dt;
     this.swayOffset += this.swaySpeed * dt;
+    this.updateTrig();
 
-    this.x += Math.sin(this.swayOffset) * 25 * dt;
+    this.x += Math.sin(this.swayOffset) * 20 * dt;
     this.y += this.vy * 40 * dt;
 
     if (this.y > height + this.size * 2) {
@@ -264,61 +282,35 @@ export class SnowParticle extends BaseParticle {
 
     ctx.globalAlpha = this.alpha;
     ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#FFFFFF';
 
     const s = this.size;
 
     if (this.flakeType === 2) {
       ctx.beginPath();
-      ctx.arc(this.x, this.y, s * 0.6, 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, s * 0.5, 0, Math.PI * 2);
       ctx.fill();
     } else if (this.flakeType === 1) {
-      this.drawSimpleStar(ctx, s);
-    } else {
-      this.drawSimpleFlake(ctx, s);
-    }
-
-    ctx.globalAlpha = 1;
-  }
-
-  private drawSimpleFlake(ctx: CanvasRenderingContext2D, s: number): void {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.rotation);
-
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 1;
-    ctx.lineCap = 'round';
-
-    for (let i = 0; i < 6; i++) {
-      const angle = (i * Math.PI) / 3;
+      ctx.lineWidth = 0.8;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(angle) * s, Math.sin(angle) * s);
+      for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI) / 2 + this.rotation * 0.3;
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x + Math.cos(angle) * s, this.y + Math.sin(angle) * s);
+      }
+      ctx.stroke();
+    } else {
+      ctx.lineWidth = 0.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI) / 3 + this.rotation;
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x + Math.cos(angle) * s * 0.8, this.y + Math.sin(angle) * s * 0.8);
+      }
       ctx.stroke();
     }
-
-    ctx.restore();
-  }
-
-  private drawSimpleStar(ctx: CanvasRenderingContext2D, s: number): void {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.rotation * 0.5);
-
-    ctx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI) / 2;
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(angle) * s, Math.sin(angle) * s);
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-Math.cos(angle) * s * 0.7, -Math.sin(angle) * s * 0.7);
-    }
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 1.2;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    ctx.restore();
   }
 
   public override reset(width: number, height: number): void {
@@ -334,11 +326,9 @@ export class ThunderParticle extends BaseParticle {
   private endY: number = 0;
   private mid1X: number = 0;
   private mid1Y: number = 0;
-  private mid2X: number = 0;
-  private mid2Y: number = 0;
 
   protected getDefaultSize(): number {
-    return 1.5 + Math.random() * 3;
+    return 1.2 + Math.random() * 2;
   }
 
   protected getDefaultSpeed(): { vx: number; vy: number } {
@@ -349,31 +339,27 @@ export class ThunderParticle extends BaseParticle {
   }
 
   protected getDefaultLife(): number {
-    return 0.15 + Math.random() * 0.25;
+    return 0.12 + Math.random() * 0.2;
   }
 
   public override init(width: number, height: number, fromTop: boolean = false): void {
     super.init(width, height, fromTop);
     this.flashTimer = 0;
-    this.flashDuration = 0.04 + Math.random() * 0.1;
+    this.flashDuration = 0.03 + Math.random() * 0.08;
     this.isFlashing = true;
     this.alpha = 0.9;
 
-    const boltLength = 60 + Math.random() * 120;
-    const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+    const boltLength = 50 + Math.random() * 100;
+    const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
 
     this.endX = this.x + Math.cos(angle) * boltLength;
     this.endY = this.y + Math.sin(angle) * boltLength;
 
-    const mid1 = 0.3 + Math.random() * 0.15;
-    const mid2 = 0.65 + Math.random() * 0.15;
-    const offset1 = (Math.random() - 0.5) * 25;
-    const offset2 = (Math.random() - 0.5) * 20;
+    const mid = 0.4 + Math.random() * 0.2;
+    const offset = (Math.random() - 0.5) * 20;
 
-    this.mid1X = this.x + (this.endX - this.x) * mid1 + offset1;
-    this.mid1Y = this.y + (this.endY - this.y) * mid1 + offset1 * 0.5;
-    this.mid2X = this.x + (this.endX - this.x) * mid2 + offset2;
-    this.mid2Y = this.y + (this.endY - this.y) * mid2 + offset2 * 0.5;
+    this.mid1X = this.x + (this.endX - this.x) * mid + offset;
+    this.mid1Y = this.y + (this.endY - this.y) * mid + offset * 0.5;
   }
 
   public update(dt: number, width: number, height: number): void {
@@ -384,7 +370,7 @@ export class ThunderParticle extends BaseParticle {
     if (this.flashTimer > this.flashDuration) {
       this.isFlashing = !this.isFlashing;
       this.flashTimer = 0;
-      this.flashDuration = 0.025 + Math.random() * 0.06;
+      this.flashDuration = 0.02 + Math.random() * 0.05;
     }
 
     this.life -= dt;
@@ -392,7 +378,7 @@ export class ThunderParticle extends BaseParticle {
       this.active = false;
     }
 
-    this.alpha = this.isFlashing ? 0.9 : 0.2;
+    this.alpha = this.isFlashing ? 0.9 : 0.15;
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
@@ -400,29 +386,25 @@ export class ThunderParticle extends BaseParticle {
 
     const a = this.alpha;
 
-    ctx.globalAlpha = a * 0.5;
+    ctx.globalAlpha = a * 0.4;
     ctx.strokeStyle = '#9F7AEA';
-    ctx.lineWidth = this.size * 2;
+    ctx.lineWidth = this.size * 1.8;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
     ctx.lineTo(this.mid1X, this.mid1Y);
-    ctx.lineTo(this.mid2X, this.mid2Y);
     ctx.lineTo(this.endX, this.endY);
     ctx.stroke();
 
     ctx.globalAlpha = a;
-    ctx.strokeStyle = '#FED7E2';
-    ctx.lineWidth = this.size * 0.5;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = this.size * 0.4;
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
     ctx.lineTo(this.mid1X, this.mid1Y);
-    ctx.lineTo(this.mid2X, this.mid2Y);
     ctx.lineTo(this.endX, this.endY);
     ctx.stroke();
-
-    ctx.globalAlpha = 1;
   }
 
   public override reset(width: number, height: number): void {

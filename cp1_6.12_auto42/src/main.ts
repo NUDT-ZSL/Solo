@@ -14,6 +14,7 @@ class WeatherApp {
 
   private currentWeather: WeatherType = 'sunny';
   private isWeatherAnimating: boolean = false;
+  private displayedParticleCount: number = 0;
 
   constructor() {
     this.canvas = document.getElementById('weather-canvas') as HTMLCanvasElement;
@@ -51,19 +52,26 @@ class WeatherApp {
     root.style.setProperty('--ui-bg', config.uiBg);
     root.style.setProperty('--ui-border', config.uiBorder);
     root.style.setProperty('--text-color', config.textColor);
+    root.style.setProperty('--flash-overlay', 'rgba(0, 0, 0, 0)');
   }
 
   private bindEvents(): void {
     this.weatherButtons.forEach(button => {
       button.addEventListener('click', () => {
         const weather = button.dataset.weather as WeatherType;
-        if (weather && weather !== this.currentWeather) {
+        if (weather && weather !== this.currentWeather && !this.isWeatherAnimating) {
           this.switchWeather(weather);
         }
       });
     });
 
     this.densitySlider.addEventListener('input', () => {
+      const value = parseInt(this.densitySlider.value, 10);
+      this.weatherSystem.setParticleCount(value);
+      this.densityValue.textContent = value.toString();
+    });
+
+    this.densitySlider.addEventListener('change', () => {
       const value = parseInt(this.densitySlider.value, 10);
       this.weatherSystem.setParticleCount(value);
       this.densityValue.textContent = value.toString();
@@ -95,20 +103,32 @@ class WeatherApp {
 
     this.updateActiveButton(weather);
 
-    this.weatherNameEl.style.opacity = '0';
-    this.weatherNameEl.style.transform = 'translateY(-10px)';
-
-    setTimeout(() => {
+    this.fadeOutElement(this.weatherNameEl, () => {
       this.weatherNameEl.textContent = weatherConfigs[weather].name;
-      this.weatherNameEl.style.opacity = '1';
-      this.weatherNameEl.style.transform = 'translateY(0)';
-    }, 300);
+      this.fadeInElement(this.weatherNameEl);
+    });
 
     this.weatherSystem.switchWeather(weather);
 
     setTimeout(() => {
       this.isWeatherAnimating = false;
     }, 1000);
+  }
+
+  private fadeOutElement(element: HTMLElement, callback?: () => void): void {
+    element.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    element.style.opacity = '0';
+    element.style.transform = 'translateY(-8px)';
+
+    if (callback) {
+      setTimeout(callback, 250);
+    }
+  }
+
+  private fadeInElement(element: HTMLElement): void {
+    element.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    element.style.opacity = '1';
+    element.style.transform = 'translateY(0)';
   }
 
   private updateActiveButton(weather: WeatherType): void {
@@ -126,13 +146,23 @@ class WeatherApp {
     this.densitySlider.value = particleCount.toString();
     this.densityValue.textContent = particleCount.toString();
     this.weatherNameEl.textContent = weatherConfigs[this.currentWeather].name;
+    this.displayedParticleCount = particleCount;
+    this.particleCountEl.textContent = particleCount.toString();
   }
 
   private animateUI = (): void => {
-    this.particleCountEl.textContent = this.weatherSystem.getParticleCount().toString();
-    this.fpsValueEl.textContent = this.weatherSystem.getFPS().toString();
+    const actualCount = this.weatherSystem.getParticleCount();
+    const targetCount = this.weatherSystem.getPendingParticleCount();
+    const transitioning = this.weatherSystem.isWeatherTransitioning();
+
+    const displayValue = transitioning ? targetCount : actualCount;
+    const smoothedCount = this.displayedParticleCount + (displayValue - this.displayedParticleCount) * 0.15;
+    this.displayedParticleCount = smoothedCount;
+    this.particleCountEl.textContent = Math.round(smoothedCount).toString();
 
     const fps = this.weatherSystem.getFPS();
+    this.fpsValueEl.textContent = fps.toString();
+
     if (fps >= 50) {
       this.fpsValueEl.style.color = 'var(--accent-color)';
     } else if (fps >= 30) {
