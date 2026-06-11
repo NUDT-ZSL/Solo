@@ -75,28 +75,28 @@
               <div class="score-item">
                 <div class="score-item-header">
                   <span class="info-label">技能匹配</span>
-                  <span class="info-value strong">{{ matchResult.skillScore }}分</span>
+                  <span class="info-value strong">{{ Math.round(displaySkillProgress) }}分</span>
                 </div>
                 <div class="mini-progress">
-                  <div class="mini-progress-bar skill" :style="{ width: matchResult.skillScore + '%' }"></div>
+                  <div class="mini-progress-bar skill" :style="{ width: displaySkillProgress + '%' }"></div>
                 </div>
               </div>
               <div class="score-item">
                 <div class="score-item-header">
                   <span class="info-label">经验匹配</span>
-                  <span class="info-value strong">{{ matchResult.experienceScore }}分</span>
+                  <span class="info-value strong">{{ Math.round(displayExpProgress) }}分</span>
                 </div>
                 <div class="mini-progress">
-                  <div class="mini-progress-bar exp" :style="{ width: matchResult.experienceScore + '%' }"></div>
+                  <div class="mini-progress-bar exp" :style="{ width: displayExpProgress + '%' }"></div>
                 </div>
               </div>
               <div class="score-item">
                 <div class="score-item-header">
                   <span class="info-label">学历匹配</span>
-                  <span class="info-value strong">{{ matchResult.educationScore }}分</span>
+                  <span class="info-value strong">{{ Math.round(displayEduProgress) }}分</span>
                 </div>
                 <div class="mini-progress">
-                  <div class="mini-progress-bar edu" :style="{ width: matchResult.educationScore + '%' }"></div>
+                  <div class="mini-progress-bar edu" :style="{ width: displayEduProgress + '%' }"></div>
                 </div>
               </div>
             </div>
@@ -154,8 +154,12 @@
             <span class="legend-text">匹配内容</span>
           </span>
           <span class="legend-item">
+            <span class="legend-color missing"></span>
+            <span class="legend-text">缺失技能（需补充）</span>
+          </span>
+          <span class="legend-item">
             <span class="legend-color unmatched"></span>
-            <span class="legend-text">未匹配内容</span>
+            <span class="legend-text">普通内容</span>
           </span>
         </div>
         <div class="highlight-text">
@@ -163,6 +167,10 @@
             <span
               v-if="segment.type === 'matched'"
               class="highlight matched-hl"
+            >{{ segment.text }}</span>
+            <span
+              v-else-if="segment.type === 'missing'"
+              class="highlight missing-hl"
             >{{ segment.text }}</span>
             <span
               v-else
@@ -235,35 +243,88 @@ const scoreGradient = computed(() => {
   return 'linear-gradient(90deg, #f87171, #dc2626)'
 })
 
-const highlightSegments = computed(() => {
+interface HighlightPiece {
+  type: 'matched' | 'unmatched' | 'missing'
+  text: string
+}
+
+const highlightSegments = computed((): HighlightPiece[] => {
   if (!props.matchResult || !props.parsedResume) return []
   const text = props.parsedResume.rawText
   const matched = props.matchResult.matched || []
+  const missingSkills = props.matchResult.missingSkills || []
 
-  if (!Array.isArray(matched) || matched.length === 0) {
+  interface TextSegment {
+    start: number
+    end: number
+    type: 'matched' | 'missing'
+  }
+
+  const allSegments: TextSegment[] = []
+
+  if (Array.isArray(matched) && matched.length > 0) {
+    for (const seg of matched) {
+      if (seg && typeof seg.start === 'number' && typeof seg.end === 'number' &&
+          seg.start >= 0 && seg.end <= text.length && seg.start < seg.end) {
+        allSegments.push({ start: seg.start, end: seg.end, type: 'matched' })
+      }
+    }
+  }
+
+  if (missingSkills.length > 0) {
+    const lowerText = text.toLowerCase()
+    for (const skill of missingSkills) {
+      if (!skill) continue
+      try {
+        const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const regex = new RegExp(escaped, 'gi')
+        let m: RegExpExecArray | null
+        while ((m = regex.exec(lowerText)) !== null) {
+          allSegments.push({
+            start: m.index,
+            end: m.index + m[0].length,
+            type: 'missing'
+          })
+        }
+      } catch (e) {
+        continue
+      }
+    }
+  }
+
+  if (allSegments.length === 0) {
     return [{ type: 'unmatched', text }]
   }
 
-  const validMatched = matched.filter(seg =>
-    seg && typeof seg.start === 'number' && typeof seg.end === 'number' &&
-    seg.start >= 0 && seg.end <= text.length && seg.start < seg.end
-  )
-
-  if (validMatched.length === 0) {
-    return [{ type: 'unmatched', text }]
-  }
-
-  const sorted = [...validMatched].sort((a, b) => a.start - b.start)
-  const segments: Array<{ type: string; text: string }> = []
-  let cursor = 0
+  const sorted = [...allSegments].sort((a, b) => a.start - b.start)
+  const merged: TextSegment[] = []
 
   for (const seg of sorted) {
+    if (merged.length === 0) {
+      merged.push({ ...seg })
+      continue
+    }
+    const last = merged[merged.length - 1]
+    if (seg.start <= last.end) {
+      last.end = Math.max(last.end, seg.end)
+      if (last.type !== 'matched' && seg.type === 'matched') {
+        last.type = 'matched'
+      }
+    } else {
+      merged.push({ ...seg })
+    }
+  }
+
+  const segments: HighlightPiece[] = []
+  let cursor = 0
+
+  for (const seg of merged) {
     if (seg.start > cursor) {
       segments.push({ type: 'unmatched', text: text.slice(cursor, seg.start) })
     }
-    const matchedText = text.slice(seg.start, seg.end)
-    if (matchedText) {
-      segments.push({ type: 'matched', text: matchedText })
+    const segText = text.slice(seg.start, seg.end)
+    if (segText) {
+      segments.push({ type: seg.type, text: segText })
     }
     cursor = Math.max(cursor, seg.end)
   }
@@ -276,12 +337,52 @@ const highlightSegments = computed(() => {
 })
 
 const displayProgress = ref(0)
+const displaySkillProgress = ref(0)
+const displayExpProgress = ref(0)
+const displayEduProgress = ref(0)
+
+let skillProgressAnim: number | null = null
+let expProgressAnim: number | null = null
+let eduProgressAnim: number | null = null
+
+function animateAnyProgress(from: number, to: number, setter: (v: number) => void, cancelRef: { value: number | null }, duration: number = 800) {
+  if (cancelRef.value) {
+    cancelAnimationFrame(cancelRef.value)
+  }
+  const startTime = performance.now()
+  const diff = to - from
+  function update(currentTime: number) {
+    const elapsed = currentTime - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    const easeProgress = 1 - Math.pow(1 - progress, 4)
+    setter(from + diff * easeProgress)
+    if (progress < 1) {
+      cancelRef.value = requestAnimationFrame(update)
+    }
+  }
+  cancelRef.value = requestAnimationFrame(update)
+}
 
 watch(targetScore, (newScore) => {
   const safeScore = isNaN(newScore) ? 0 : Math.max(0, Math.min(100, newScore))
   animateScore(displayScore.value, safeScore)
   animateProgress(displayProgress.value, safeScore)
 }, { immediate: true })
+
+watch(() => props.matchResult?.skillScore, (newVal) => {
+  const safe = isNaN(newVal) ? 0 : Math.max(0, Math.min(100, newVal ?? 0))
+  animateAnyProgress(displaySkillProgress.value, safe, (v) => displaySkillProgress.value = v, { get value() { return skillProgressAnim }, set value(v) { skillProgressAnim = v } })
+})
+
+watch(() => props.matchResult?.experienceScore, (newVal) => {
+  const safe = isNaN(newVal) ? 0 : Math.max(0, Math.min(100, newVal ?? 0))
+  animateAnyProgress(displayExpProgress.value, safe, (v) => displayExpProgress.value = v, { get value() { return expProgressAnim }, set value(v) { expProgressAnim = v } })
+})
+
+watch(() => props.matchResult?.educationScore, (newVal) => {
+  const safe = isNaN(newVal) ? 0 : Math.max(0, Math.min(100, newVal ?? 0))
+  animateAnyProgress(displayEduProgress.value, safe, (v) => displayEduProgress.value = v, { get value() { return eduProgressAnim }, set value(v) { eduProgressAnim = v } })
+})
 
 function animateScore(from: number, to: number) {
   if (animationFrame) {
@@ -368,17 +469,68 @@ function updateRadarChart() {
 
   const values = [skillScore, expScore, eduScore, skillCov, kwMatch]
 
+  const chartWidth = radarChartRef.value.clientWidth || 300
+  const chartHeight = radarChartRef.value.clientHeight || 240
+  const centerX = chartWidth * 0.5
+  const centerY = chartHeight * 0.55
+  const maxRadius = Math.min(chartWidth * 0.35, chartHeight * 0.38)
+
+  const tickValues = [0, 25, 50, 75, 100]
+  const graphicElements: any[] = []
+
+  const axisAngle = -Math.PI / 2
+  for (const tick of tickValues) {
+    if (tick === 0) {
+      graphicElements.push({
+        type: 'text',
+        left: centerX - 12,
+        top: centerY - 6,
+        style: {
+          text: '0',
+          fill: '#64748b',
+          fontSize: 9,
+          fontWeight: 500
+        }
+      })
+      continue
+    }
+    const ratio = tick / 100
+    const r = maxRadius * ratio
+    const x = centerX + Math.cos(axisAngle) * r
+    const y = centerY + Math.sin(axisAngle) * r
+    graphicElements.push({
+      type: 'circle',
+      shape: { cx: x, cy: y, r: 2 },
+      style: { fill: '#3b82f6', stroke: '#fff', lineWidth: 1 }
+    })
+    graphicElements.push({
+      type: 'text',
+      left: x + 4,
+      top: y - 5,
+      style: {
+        text: String(tick),
+        fill: '#475569',
+        fontSize: 10,
+        fontWeight: 600,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        padding: [1, 4],
+        borderRadius: 3
+      }
+    })
+  }
+
   const option: echarts.EChartsOption = {
+    graphic: graphicElements,
     radar: {
       indicator: indicators,
       shape: 'polygon',
-      splitNumber: 5,
+      splitNumber: 4,
       radius: '65%',
       center: ['50%', '55%'],
       axisName: {
         color: '#1e3a8a',
         fontSize: 11,
-        fontWeight: 500,
+        fontWeight: 600,
         lineHeight: 16,
         formatter: function (value: string) {
           return '{a|' + value.replace('\n', '\\n') + '}'
@@ -387,41 +539,44 @@ function updateRadarChart() {
           a: {
             color: '#1e3a8a',
             fontSize: 11,
-            fontWeight: 500,
+            fontWeight: 600,
             lineHeight: 16,
-            align: 'center'
+            align: 'center',
+            padding: [4, 0, 0, 0]
           }
         }
       },
       splitLine: {
+        show: true,
         lineStyle: {
-          color: '#93c5fd',
-          width: 1,
-          type: 'dashed'
+          color: ['#cbd5e1', '#93c5fd', '#60a5fa', '#3b82f6'],
+          width: [1, 1, 1, 1.5],
+          type: ['dotted', 'dashed', 'dashed', 'solid']
         }
       },
       splitArea: {
         show: true,
         areaStyle: {
           color: [
+            'rgba(239, 246, 255, 0.6)',
             'rgba(219, 234, 254, 0.5)',
-            'rgba(191, 219, 254, 0.3)',
-            'rgba(147, 197, 253, 0.2)',
-            'rgba(96, 165, 250, 0.1)',
-            'rgba(59, 130, 246, 0.05)'
+            'rgba(191, 219, 254, 0.35)',
+            'rgba(147, 197, 253, 0.2)'
           ]
         }
       },
       axisLine: {
         lineStyle: {
           color: '#3b82f6',
-          width: 1
+          width: 1.5
         }
       },
       axisTick: {
         show: true,
+        length: 4,
         lineStyle: {
-          color: '#3b82f6'
+          color: '#3b82f6',
+          width: 1.5
         }
       },
       scale: false,
@@ -437,19 +592,19 @@ function updateRadarChart() {
         name: '匹配度',
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(59, 130, 246, 0.5)' },
-            { offset: 1, color: 'rgba(37, 99, 235, 0.15)' }
+            { offset: 0, color: 'rgba(59, 130, 246, 0.55)' },
+            { offset: 1, color: 'rgba(37, 99, 235, 0.18)' }
           ])
         },
         lineStyle: {
-          color: '#3b82f6',
+          color: '#2563eb',
           width: 3
         },
         itemStyle: {
-          color: '#3b82f6',
+          color: '#2563eb',
           borderWidth: 3,
           borderColor: '#fff',
-          shadowColor: 'rgba(59, 130, 246, 0.5)',
+          shadowColor: 'rgba(37, 99, 235, 0.5)',
           shadowBlur: 10
         },
         label: {
@@ -457,14 +612,15 @@ function updateRadarChart() {
           formatter: function (params: any) {
             return params.value + ''
           },
-          color: '#1e3a8a',
-          fontSize: 12,
-          fontWeight: 600,
-          backgroundColor: '#fff',
+          color: '#1e40af',
+          fontSize: 11,
+          fontWeight: 700,
+          backgroundColor: 'rgba(255,255,255,0.95)',
           padding: [2, 6],
           borderRadius: 4,
-          borderWidth: 1,
-          borderColor: '#93c5fd'
+          borderWidth: 1.5,
+          borderColor: '#60a5fa',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
         }
       }]
     }]
@@ -485,12 +641,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (animationFrame) {
-    cancelAnimationFrame(animationFrame)
-  }
-  if (progressAnimationFrame) {
-    cancelAnimationFrame(progressAnimationFrame)
-  }
+  if (animationFrame) cancelAnimationFrame(animationFrame)
+  if (progressAnimationFrame) cancelAnimationFrame(progressAnimationFrame)
+  if (skillProgressAnim) cancelAnimationFrame(skillProgressAnim)
+  if (expProgressAnim) cancelAnimationFrame(expProgressAnim)
+  if (eduProgressAnim) cancelAnimationFrame(eduProgressAnim)
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null
@@ -902,8 +1057,29 @@ onUnmounted(() => {
 }
 
 .missing-tag {
-  background: #fee2e2;
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
   color: #dc2626;
+  font-weight: 600;
+  border: 1.5px solid #fca5a5;
+  border-bottom: 3px solid #ef4444;
+  position: relative;
+  animation: missingPulse 2s ease-in-out infinite;
+}
+
+@keyframes missingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+  }
+}
+
+.missing-tag::before {
+  content: '✗';
+  margin-right: 3px;
+  font-weight: 700;
+  font-size: 11px;
 }
 
 .empty-tags {
@@ -920,83 +1096,135 @@ onUnmounted(() => {
 
 .highlight-legend {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 12px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 10px;
+  border: 1px solid #e0e7ff;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .legend-color {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .legend-color.matched {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  border: 1px solid #f59e0b;
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border: 2px solid #10b981;
+}
+
+.legend-color.missing {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border: 2px solid #ef4444;
 }
 
 .legend-color.unmatched {
-  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
-  border: 1px solid #94a3b8;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border: 2px solid #94a3b8;
 }
 
 .legend-text {
   font-size: 12px;
-  color: #475569;
+  color: #334155;
   font-weight: 500;
 }
 
 .highlight-text {
   font-size: 13px;
-  line-height: 1.8;
-  color: #475569;
+  line-height: 1.9;
+  color: #334155;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 200px;
+  max-height: 240px;
   overflow-y: auto;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 8px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(248,250,252,0.6));
+  border-radius: 10px;
+  border: 1px solid #e0e7ff;
 }
 
 .highlight {
   display: inline;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .highlight.matched-hl {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  color: #92400e;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: 600;
-  border-bottom: 2px solid #f59e0b;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #065f46;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  border: 1px solid #34d399;
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.2);
+}
+
+.highlight.matched-hl::before {
+  content: '✓';
+  font-size: 10px;
+  margin-right: 2px;
+  color: #059669;
+  font-weight: 700;
+}
+
+.highlight.missing-hl {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  border: 1px solid #f87171;
+  text-decoration: underline wavy #dc2626;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.2);
+  animation: missingHighlight 1.5s ease-in-out infinite;
+}
+
+@keyframes missingHighlight {
+  0%, 100% {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+  }
+  50% {
+    background: linear-gradient(135deg, #fecaca, #fca5a5);
+  }
+}
+
+.highlight.missing-hl::before {
+  content: '✗';
+  font-size: 10px;
+  margin-right: 2px;
+  color: #dc2626;
+  font-weight: 700;
 }
 
 .highlight.unmatched-hl {
-  background: rgba(241, 245, 249, 0.5);
-  color: #64748b;
-  padding: 1px 2px;
+  background: transparent;
+  color: #475569;
+  padding: 1px 1px;
   border-radius: 2px;
-  opacity: 0.85;
-  text-decoration: line-through;
-  text-decoration-color: #cbd5e1;
-  text-decoration-thickness: 1px;
 }
 
 .highlight.matched-hl:hover {
-  background: linear-gradient(135deg, #fde68a, #fcd34d);
-  transform: scale(1.02);
+  background: linear-gradient(135deg, #a7f3d0, #6ee7b7);
+  transform: scale(1.03);
+  z-index: 2;
+}
+
+.highlight.missing-hl:hover {
+  background: linear-gradient(135deg, #fecaca, #fca5a5);
+  transform: scale(1.03);
+  z-index: 2;
 }
 
 .suggestions-section {
