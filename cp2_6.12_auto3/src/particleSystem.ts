@@ -30,6 +30,7 @@ export class ParticleSystem {
   private velocities: Float32Array;
   private originalPositions: Float32Array;
   private baseSizes: Float32Array;
+  private speedFactors: Float32Array;
 
   private currentThemeIndex: number = 0;
   private targetThemeIndex: number = 0;
@@ -102,6 +103,7 @@ export class ParticleSystem {
     this.velocities = new Float32Array(count * 3);
     this.originalPositions = new Float32Array(count * 3);
     this.baseSizes = new Float32Array(count);
+    this.speedFactors = new Float32Array(count);
 
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
@@ -197,6 +199,8 @@ export class ParticleSystem {
       this.velocities[i * 3] = randomRange(-0.02, 0.02);
       this.velocities[i * 3 + 1] = randomRange(-0.01, 0.01);
       this.velocities[i * 3 + 2] = randomRange(-0.02, 0.02);
+
+      this.speedFactors[i] = randomRange(0, 1);
 
       const radius = pos.length();
       const t = Math.min(1, radius / 50);
@@ -321,7 +325,7 @@ export class ParticleSystem {
   public update(deltaTime: number, elapsedTime: number): void {
     this.breathingPhase += deltaTime * 0.5;
     const breathing = Math.sin(this.breathingPhase) * 0.15 + 1;
-    const brightnessBreathing = Math.sin(this.breathingPhase * 1.2) * 0.1 + 0.9;
+    const brightnessBreathing = Math.sin(this.breathingPhase * 1.2) * 0.2 + 0.8;
 
     if (this.themeTransitionProgress < 1) {
       this.themeTransitionProgress = Math.min(
@@ -333,10 +337,9 @@ export class ParticleSystem {
     this.visibleRatio = smoothDamp(this.visibleRatio, this.targetVisibleRatio, 0.3, deltaTime);
     this.geometry.setDrawRange(0, Math.floor(this.particleCount * this.visibleRatio));
 
-    this.material.opacity = 0.9 * brightnessBreathing;
-
     const currentTheme = colorThemes[this.currentThemeIndex];
     const targetTheme = colorThemes[this.targetThemeIndex];
+    const lerpT = this.themeTransitionProgress;
 
     for (let i = 0; i < this.particleCount; i++) {
       const idx = i * 3;
@@ -364,25 +367,31 @@ export class ParticleSystem {
 
       this.sizes[i] = this.baseSizes[i] * breathing;
 
-      const posVec = new THREE.Vector3(
-        this.positions[idx],
-        this.positions[idx + 1],
-        this.positions[idx + 2]
+      const velMag = Math.sqrt(
+        this.velocities[idx] * this.velocities[idx] +
+        this.velocities[idx + 1] * this.velocities[idx + 1] +
+        this.velocities[idx + 2] * this.velocities[idx + 2]
       );
-      const radius = posVec.length();
-      const velMag = new THREE.Vector3(
-        this.velocities[idx],
-        this.velocities[idx + 1],
-        this.velocities[idx + 2]
-      ).length();
-      const t = Math.min(1, (radius / 50 + velMag * 5) / 2);
+      this.speedFactors[i] += (velMag * 50 - this.speedFactors[i]) * deltaTime * 2;
+      this.speedFactors[i] = Math.max(0, Math.min(1, this.speedFactors[i]));
+
+      const posVecX = this.positions[idx];
+      const posVecY = this.positions[idx + 1];
+      const posVecZ = this.positions[idx + 2];
+      const radius = Math.sqrt(posVecX * posVecX + posVecY * posVecY + posVecZ * posVecZ);
+      const posT = Math.min(1, radius / 50);
+      const t = Math.min(1, (posT * 0.6 + this.speedFactors[i] * 0.4));
 
       const colorCurrent = getGradientColor(t, currentTheme);
       const colorTarget = getGradientColor(t, targetTheme);
-      const lerpT = this.themeTransitionProgress;
-      this.colors[idx] = (colorCurrent.r + (colorTarget.r - colorCurrent.r) * lerpT) * brightnessBreathing;
-      this.colors[idx + 1] = (colorCurrent.g + (colorTarget.g - colorCurrent.g) * lerpT) * brightnessBreathing;
-      this.colors[idx + 2] = (colorCurrent.b + (colorTarget.b - colorCurrent.b) * lerpT) * brightnessBreathing;
+
+      const r = colorCurrent.r + (colorTarget.r - colorCurrent.r) * lerpT;
+      const g = colorCurrent.g + (colorTarget.g - colorCurrent.g) * lerpT;
+      const b = colorCurrent.b + (colorTarget.b - colorCurrent.b) * lerpT;
+
+      this.colors[idx] = Math.min(1, r * brightnessBreathing);
+      this.colors[idx + 1] = Math.min(1, g * brightnessBreathing);
+      this.colors[idx + 2] = Math.min(1, b * brightnessBreathing);
     }
 
     if (this.themeTransitionProgress >= 1) {
@@ -402,6 +411,7 @@ export class ParticleSystem {
     const posAttr = this.tempGeometry.attributes.position as THREE.BufferAttribute;
     const colorAttr = this.tempGeometry.attributes.color as THREE.BufferAttribute;
     const sizeAttr = this.tempGeometry.attributes.size as THREE.BufferAttribute;
+    const maxParticles = posAttr.count;
 
     for (let i = this.tempParticles.length - 1; i >= 0; i--) {
       const p = this.tempParticles[i];
@@ -415,20 +425,22 @@ export class ParticleSystem {
       p.velocity.multiplyScalar(0.97);
 
       const lifeRatio = p.life / p.maxLife;
-      if (i < posAttr.count) {
-        posAttr.array[i * 3] = p.position.x;
-        posAttr.array[i * 3 + 1] = p.position.y;
-        posAttr.array[i * 3 + 2] = p.position.z;
+      const safeIndex = Math.min(i, maxParticles - 1);
+      if (safeIndex >= 0) {
+        posAttr.array[safeIndex * 3] = p.position.x;
+        posAttr.array[safeIndex * 3 + 1] = p.position.y;
+        posAttr.array[safeIndex * 3 + 2] = p.position.z;
 
-        colorAttr.array[i * 3] = p.color.r * lifeRatio;
-        colorAttr.array[i * 3 + 1] = p.color.g * lifeRatio;
-        colorAttr.array[i * 3 + 2] = p.color.b * lifeRatio;
+        colorAttr.array[safeIndex * 3] = p.color.r * lifeRatio;
+        colorAttr.array[safeIndex * 3 + 1] = p.color.g * lifeRatio;
+        colorAttr.array[safeIndex * 3 + 2] = p.color.b * lifeRatio;
 
-        sizeAttr.array[i] = p.size * lifeRatio;
+        sizeAttr.array[safeIndex] = p.size * lifeRatio;
       }
     }
 
-    this.tempGeometry.setDrawRange(0, this.tempParticles.length);
+    const drawCount = Math.min(this.tempParticles.length, maxParticles);
+    this.tempGeometry.setDrawRange(0, drawCount);
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
     sizeAttr.needsUpdate = true;

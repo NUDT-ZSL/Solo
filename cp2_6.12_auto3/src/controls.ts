@@ -499,7 +499,7 @@ export class UIControls {
       if (this.currentFps < 30) {
         const newRatio = Math.max(0.5, currentVisibleRatio - 0.1);
         this.particleSystem.setVisibleRatio(newRatio);
-      } else if (this.currentFps >= 55 && currentVisibleRatio < 1.0) {
+      } else if (this.currentFps >= 35 && currentVisibleRatio < 1.0) {
         const newRatio = Math.min(1.0, currentVisibleRatio + 0.05);
         this.particleSystem.setVisibleRatio(newRatio);
       }

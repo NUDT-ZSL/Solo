@@ -177,12 +177,19 @@ export class InteractionManager {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, this.camera);
 
-    const distance = 30;
-    const worldPosition = raycaster.ray.origin.clone().add(
-      raycaster.ray.direction.clone().multiplyScalar(distance)
-    );
+    const planeNormal = new THREE.Vector3(0, 0, -1);
+    const planePoint = new THREE.Vector3(0, 0, 0);
+    const plane = new THREE.Plane(planeNormal, -planePoint.dot(planeNormal));
+    const intersectPoint = new THREE.Vector3();
+    raycaster.ray.intersectPlane(plane, intersectPoint);
 
-    this.particleSystem.burst(worldPosition);
+    if (!intersectPoint) {
+      const direction = new THREE.Vector3();
+      this.camera.getWorldDirection(direction);
+      intersectPoint.copy(raycaster.ray.origin).add(direction.multiplyScalar(50));
+    }
+
+    this.particleSystem.burst(intersectPoint);
   };
 
   private checkHover(clientX: number, clientY: number): void {
