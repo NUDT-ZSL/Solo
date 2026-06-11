@@ -13,7 +13,7 @@ export interface PlantPartInfo {
 
 interface PlantPart {
   mesh: THREE.Mesh
-  outlineMesh?: THREE.Mesh
+  outlineGlowGroup?: THREE.Group
   type: PlantPartType
   name: string
   startProgress: number
@@ -29,8 +29,11 @@ interface PlantPart {
   currentRotation: THREE.Euler
   currentScale: THREE.Vector3
   baseColor: THREE.Color
+  targetBasePosition: THREE.Vector3
+  targetBaseRotation: THREE.Euler
   targetBaseScale: THREE.Vector3
   seed: number
+  partHeight: number
 }
 
 interface LSystemParams {
@@ -40,10 +43,21 @@ interface LSystemParams {
   branchProbability: number
 }
 
+export interface DensityTransitionConfig {
+  stemInfluence: number
+  branchInfluence: number
+  leafInfluence: number
+  flowerInfluence: number
+  cotyledonInfluence: number
+  seedInfluence: number
+}
+
 export interface PlantGeneratorOptions {
   easingType?: EasingType
   maxVertices?: number
   growthDuration?: number
+  densityTransition?: Partial<DensityTransitionConfig>
+  testDensity5Mode?: boolean
 }
 
 const easeInOutQuad = (t: number): number => {
@@ -53,6 +67,8 @@ const easeInOutQuad = (t: number): number => {
 const easeInOutCubic = (t: number): number => {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
 }
+
+const easeOutQuad = (t: number): number => 1 - (1 - t) * (1 - t)
 
 const linear = (t: number): number => t
 
@@ -84,32 +100,46 @@ export class PlantGenerator {
   private baseFlowerGeo: THREE.IcosahedronGeometry
   private baseSeedGeo: THREE.SphereGeometry
   private baseFlowerPetalGeo: THREE.SphereGeometry
-  private outlineMaterial: THREE.MeshBasicMaterial
   private cachedTargetStates: Map<number, {
-    targetPosition: THREE.Vector3
-    targetRotation: THREE.Euler
-    targetScale: THREE.Vector3
+    targetBasePosition: THREE.Vector3
+    targetBaseRotation: THREE.Euler
     targetBaseScale: THREE.Vector3
   }> = new Map()
+  private densityTransition: DensityTransitionConfig = {
+    stemInfluence: 0.3,
+    branchInfluence: 0.85,
+    leafInfluence: 0.85,
+    flowerInfluence: 0.5,
+    cotyledonInfluence: 0.1,
+    seedInfluence: 0.02
+  }
+  private testDensity5Mode: boolean = false
+  private runtimeVertexCounter: number = 0
 
   constructor(options: PlantGeneratorOptions = {}) {
-    if (options.easingType) this.easingType = options.easingType
-    if (options.maxVertices) this.maxVertices = options.maxVertices
-    if (options.growthDuration) this.growthDuration = options.growthDuration
+    this.easingType = options.easingType ?? 'easeInOutQuad'
+    this.maxVertices = options.maxVertices ?? 10000
+    this.growthDuration = options.growthDuration ?? 30
+    this.densityTransition = { ...this.densityTransition, ...(options.densityTransition ?? {}) }
+    this.testDensity5Mode = options.testDensity5Mode ?? false
 
     this.group = new THREE.Group()
 
     this.baseStemGeo = new THREE.CylinderGeometry(0.03, 0.06, 1, 5, 1)
     this.baseLeafGeo = new THREE.SphereGeometry(0.15, 6, 4)
     this.baseLeafGeo.scale(1, 0.1, 1.8)
-    this.baseFlowerGeo = new THREE.IcosahedronGeometry(0.1, 0)
+    this.baseFlowerGeo = new THREE.IcosahedronGeometry(0.05, 0)
     this.baseFlowerPetalGeo = new THREE.SphereGeometry(0.08, 6, 4)
     this.baseFlowerPetalGeo.scale(1, 0.3, 1.5)
     this.baseSeedGeo = new THREE.SphereGeometry(0.12, 8, 6)
 
     this.unifiedMaterial = this.createUnifiedPlantShader()
     this.flowerUnifiedMaterial = this.createUnifiedFlowerShader()
-    this.outlineMaterial = this.createOutlineMaterial()
+
+    if (this.testDensity5Mode) {
+      this.branchDensity = 5
+      this.targetBranchDensity = 5
+    }
 
     this.generatePlant()
   }
@@ -127,6 +157,10 @@ export class PlantGenerator {
     this.easingType = type
   }
 
+  public setDensityTransitionConfig(config: Partial<DensityTransitionConfig>): void {
+    this.densityTransition = { ...this.densityTransition, ...config }
+  }
+
   private createUnifiedPlantShader(): THREE.ShaderMaterial {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -136,7 +170,7 @@ export class PlantGenerator {
         uColorMid: { value: new THREE.Color(0x2e7d32) },
         uColorBase: { value: new THREE.Color(0x5d4037) },
         uHeightRange: { value: 1.5 },
-        uIsFlower: { value: 0 }
+        uPartHeight: { value: 0 }
       },
       vertexShader: `
         varying vec3 vNormal;
@@ -145,14 +179,15 @@ export class PlantGenerator {
         varying vec3 vLocalPos;
         uniform float uTime;
         uniform float uHeightRange;
+        uniform float uPartHeight;
         void main() {
           vNormal = normalize(normalMatrix * normal);
           vLocalPos = position;
           vec3 pos = position;
-          float heightFactor = clamp((pos.y + 0.5) / max(uHeightRange, 0.1), 0.0, 1.0);
+          float heightFactor = clamp((uPartHeight + position.y) / max(uHeightRange, 0.1), 0.0, 1.0);
           vHeight = heightFactor;
-          pos.x += sin(uTime * 0.5 + position.y * 3.0) * 0.004;
-          pos.z += cos(uTime * 0.6 + position.y * 2.5) * 0.004;
+          pos.x += sin(uTime * 0.5 + uPartHeight * 3.0) * 0.004;
+          pos.z += cos(uTime * 0.6 + uPartHeight * 2.5) * 0.004;
           vec4 worldPos = modelMatrix * vec4(pos, 1.0);
           vWorldPos = worldPos.xyz;
           gl_Position = projectionMatrix * viewMatrix * worldPos;
@@ -166,7 +201,6 @@ export class PlantGenerator {
         uniform vec3 uColorTip;
         uniform vec3 uColorMid;
         uniform vec3 uColorBase;
-        uniform float uIsFlower;
         void main() {
           float h = clamp(vHeight, 0.0, 1.0);
           vec3 color;
@@ -189,9 +223,9 @@ export class PlantGenerator {
       uniforms: {
         uTime: { value: 0 },
         uProgress: { value: 0 },
-        uColorInner: { value: new THREE.Color(0xffb6c1) },
+        uColorInner: { value: new THREE.Color(0xff8fa3) },
         uColorOuter: { value: new THREE.Color(0xffffff) },
-        uCenterRadius: { value: 0.05 }
+        uCenterRadius: { value: 0.02 }
       },
       vertexShader: `
         varying vec3 vNormal;
@@ -224,14 +258,45 @@ export class PlantGenerator {
     })
   }
 
-  private createOutlineMaterial(): THREE.MeshBasicMaterial {
-    return new THREE.MeshBasicMaterial({
-      color: 0xffd700,
+  private createGlowLayerMaterial(strength: number = 1.0): THREE.MeshBasicMaterial {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uGlowStrength: { value: strength },
+        uGlowColor: { value: new THREE.Color(0xffd700) },
+        uThickness: { value: 0.02 }
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying vec3 vPosition;
+        uniform float uThickness;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vPosition = position;
+          vec3 pos = position + normal * uThickness;
+          vec4 worldPos = modelMatrix * vec4(pos, 1.0);
+          vWorldPos = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying vec3 vPosition;
+        uniform vec3 uGlowColor;
+        uniform float uGlowStrength;
+        void main() {
+          vec3 viewDir = normalize(cameraPosition - vWorldPos);
+          float rim = 1.0 - max(dot(viewDir, normalize(vNormal)), 0.0);
+          float intensity = pow(rim, 2.5) * uGlowStrength;
+          gl_FragColor = vec4(uGlowColor, intensity * 0.95);
+        }
+      `,
       side: THREE.BackSide,
       transparent: true,
-      opacity: 0.9,
-      depthWrite: false
-    })
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    }) as unknown as THREE.MeshBasicMaterial
   }
 
   private getLSystemParams(density: number): LSystemParams {
@@ -245,20 +310,31 @@ export class PlantGenerator {
 
   private getVertexBudget(density: number): number {
     const baseBudget = 4000
-    const extraPerLevel = 1200
-    return Math.min(baseBudget + (density - 1) * extraPerLevel, this.maxVertices)
+    const extraPerLevel = 1350
+    const computed = baseBudget + (density - 1) * extraPerLevel
+    return Math.min(computed, this.maxVertices)
+  }
+
+  private addToVertexCounter(geo: THREE.BufferGeometry): void {
+    const posAttr = geo.attributes.position
+    this.runtimeVertexCounter += posAttr ? posAttr.count : 0
+  }
+
+  private canAddVertices(estimatedVerts: number, budgetPct: number = 0.98): boolean {
+    const budget = this.getVertexBudget(this.branchDensity)
+    return (this.runtimeVertexCounter + estimatedVerts) < budget * budgetPct
   }
 
   private generatePlant(): void {
     this.clearPlant()
     this.cachedTargetStates.clear()
+    this.runtimeVertexCounter = 0
 
     const params = this.getLSystemParams(this.branchDensity)
-    this.addSeed()
-    this.addCotyledons()
-
-    let verticesSoFar = this.getVertexCount()
     const budget = this.getVertexBudget(this.branchDensity)
+
+    this.addSeed(budget)
+    this.addCotyledons(budget)
 
     const mainStemSegments = Math.min(4 + Math.floor(this.branchDensity * 0.8), 8)
     let currentHeight = 0.15
@@ -271,16 +347,22 @@ export class PlantGenerator {
       const radiusTop = 0.05 - i * 0.006
       const radiusBot = 0.07 - i * 0.005
 
-      if (verticesSoFar > budget * 0.75) break
+      if (!this.canAddVertices(200, 0.8)) break
 
       const stemGeo = new THREE.CylinderGeometry(
         Math.max(0.015, radiusTop),
         Math.max(0.025, radiusBot),
         segLength, 5, 1
       )
-      verticesSoFar += stemGeo.attributes.position.count
-      const mesh = new THREE.Mesh(stemGeo, this.unifiedMaterial.clone())
+      this.addToVertexCounter(stemGeo)
+
+      const mesh = new THREE.Mesh(stemGeo, this.createPartMaterial('stem', currentHeight))
       mesh.position.set(0, currentHeight + segLength / 2, 0)
+
+      const tgtPos = new THREE.Vector3(0, currentHeight + segLength / 2, 0)
+      const curPos = new THREE.Vector3(0, -0.3 + segLength / 2, 0)
+      const tgtScale = new THREE.Vector3(1, 1, 1)
+      const curScale = new THREE.Vector3(0.3, 0.1, 0.3)
 
       const info: PlantPart = {
         mesh,
@@ -292,30 +374,36 @@ export class PlantGenerator {
         parentHeight: currentHeight,
         branchIndex: 0,
         side: 'main',
-        targetPosition: new THREE.Vector3(0, currentHeight + segLength / 2, 0),
+        targetPosition: tgtPos.clone(),
         targetRotation: new THREE.Euler(0, 0, 0),
-        targetScale: new THREE.Vector3(1, 1, 1),
-        targetBaseScale: new THREE.Vector3(1, 1, 1),
-        currentPosition: new THREE.Vector3(0, -0.3 + segLength / 2, 0),
+        targetScale: tgtScale.clone(),
+        targetBasePosition: tgtPos.clone(),
+        targetBaseRotation: new THREE.Euler(0, 0, 0),
+        targetBaseScale: tgtScale.clone(),
+        currentPosition: curPos,
         currentRotation: new THREE.Euler(0, 0, 0),
-        currentScale: new THREE.Vector3(0.3, 0.1, 0.3),
+        currentScale: curScale,
         baseColor: new THREE.Color(0x66bb6a),
-        seed: Math.random() * 100
+        seed: Math.random() * 100,
+        partHeight: currentHeight
       }
       mesh.userData = { partInfo: info }
+      mesh.position.copy(curPos)
+      mesh.scale.copy(curScale)
       this.group.add(mesh)
       this.parts.push(info)
 
-      const addBranchHere = i >= 1 && i < mainStemSegments - 1 &&
+      const shouldBranch = i >= 1 && i < mainStemSegments - 1 &&
         Math.random() < params.branchProbability * (1 + this.branchDensity * 0.08) &&
-        verticesSoFar < budget * 0.85
-      if (addBranchHere) {
+        this.canAddVertices(500, 0.75)
+
+      if (shouldBranch) {
         branchCounter++
         for (let s = 0; s < 2; s++) {
           const side = s === 0 ? 'left' : 'right'
           const horizAngle = (s === 0 ? 1 : -1) * (params.angle + Math.random() * 0.2)
           const twist = (branchCounter % 3) * (Math.PI * 2 / 3)
-          const beforeVerts = verticesSoFar
+          const beforeVerts = this.runtimeVertexCounter
           this.addBranch(
             currentHeight + segLength * 0.8,
             branchCounter,
@@ -324,40 +412,36 @@ export class PlantGenerator {
             twist,
             segStartProgress + 0.05,
             params,
-            budget,
-            verticesSoFar
+            budget
           )
-          verticesSoFar = this.getVertexCount()
-          if (verticesSoFar - beforeVerts > budget * 0.15) break
+          if (this.runtimeVertexCounter - beforeVerts > budget * 0.15) break
         }
       }
 
-      if (i >= 1 && verticesSoFar < budget * 0.9) {
-        const beforeCount = this.parts.length
+      if (i >= 1 && this.canAddVertices(150, 0.88)) {
         this.addLeavesOnStem(
           currentHeight + segLength * 0.5,
           branchCounter,
-          segStartProgress + 0.03
+          segStartProgress + 0.03,
+          budget
         )
-        for (let k = beforeCount; k < this.parts.length; k++) {
-          const p = this.parts[k]
-          if (p.mesh.geometry) verticesSoFar += p.mesh.geometry.attributes.position.count
-        }
       }
 
       currentHeight += segLength
     }
 
-    if (verticesSoFar < budget * 0.9) {
-      this.addFlowers(currentHeight, segEndProgressOfMain(mainStemSegments))
+    if (this.canAddVertices(800, 0.92)) {
+      this.addFlowers(currentHeight, segEndProgressOfMain(mainStemSegments), budget)
     }
 
     this.storeTargetStates()
 
     const totalVerts = this.getVertexCount()
-    console.log(`🌿 Plant generated - Density: ${this.branchDensity}, Vertices: ${totalVerts} / ${this.maxVertices}`)
+    console.log(`🌿 Plant generated - Density: ${this.branchDensity}, Budget: ${budget}, Vertices: ${totalVerts} / ${this.maxVertices}`)
     if (totalVerts > this.maxVertices) {
-      console.warn(`⚠ Vertex count (${totalVerts}) exceeds max (${this.maxVertices})`)
+      console.warn(`⚠ Vertex count EXCEEDS max! (${totalVerts} > ${this.maxVertices})`)
+    } else {
+      console.log(`✅ Vertex count within limits: ${totalVerts} ≤ ${this.maxVertices}`)
     }
   }
 
@@ -366,9 +450,8 @@ export class PlantGenerator {
     for (let i = 0; i < this.parts.length; i++) {
       const p = this.parts[i]
       this.cachedTargetStates.set(i, {
-        targetPosition: p.targetPosition.clone(),
-        targetRotation: p.targetRotation.clone(),
-        targetScale: p.targetScale.clone(),
+        targetBasePosition: p.targetBasePosition.clone(),
+        targetBaseRotation: p.targetBaseRotation.clone(),
         targetBaseScale: p.targetBaseScale.clone()
       })
     }
@@ -377,10 +460,18 @@ export class PlantGenerator {
   private clearPlant(): void {
     for (const part of this.parts) {
       this.group.remove(part.mesh)
-      if (part.outlineMesh) {
-        this.group.remove(part.outlineMesh)
-        part.outlineMesh.geometry.dispose()
-        ;(part.outlineMesh.material as THREE.Material).dispose()
+      if (part.outlineGlowGroup) {
+        this.group.remove(part.outlineGlowGroup)
+        part.outlineGlowGroup.traverse(child => {
+          const mesh = child as THREE.Mesh
+          if (mesh.isMesh) {
+            mesh.geometry.dispose()
+            const m = mesh.material as THREE.Material | THREE.Material[]
+            if (Array.isArray(m)) m.forEach(mm => mm.dispose())
+            else m.dispose()
+          }
+        })
+        part.outlineGlowGroup = undefined
       }
       part.mesh.geometry.dispose()
       if (Array.isArray(part.mesh.material)) {
@@ -391,17 +482,78 @@ export class PlantGenerator {
     }
     this.parts = []
     this.highlightedPart = null
+    this.runtimeVertexCounter = 0
   }
 
-  private addSeed(): void {
-    const mesh = new THREE.Mesh(this.baseSeedGeo, this.unifiedMaterial.clone())
+  private createPartMaterial(type: PlantPartType, height: number): THREE.ShaderMaterial {
+    const mat = this.unifiedMaterial.clone()
+    mat.uniforms.uPartHeight = { value: height }
+    mat.uniforms.uHeightRange = { value: 1.5 }
+    mat.uniforms.uTime = { value: 0 }
+    mat.uniforms.uProgress = { value: 0 }
+    mat.uniforms.uColorTip = { value: new THREE.Color() }
+    mat.uniforms.uColorMid = { value: new THREE.Color() }
+    mat.uniforms.uColorBase = { value: new THREE.Color() }
+
+    switch (type) {
+      case 'seed':
+        mat.uniforms.uColorTip.value.setHex(0x8d6e63)
+        mat.uniforms.uColorMid.value.setHex(0x5d4037)
+        mat.uniforms.uColorBase.value.setHex(0x4e342e)
+        break
+      case 'cotyledon':
+        mat.uniforms.uColorTip.value.setHex(0xc5e1a5)
+        mat.uniforms.uColorMid.value.setHex(0x9ccc65)
+        mat.uniforms.uColorBase.value.setHex(0x7cb342)
+        break
+      case 'stem': {
+        const hFactor = clamp(height / 1.2, 0, 1)
+        const tip = new THREE.Color(0xaed581)
+        const mid = new THREE.Color(0x388e3c)
+        const base = new THREE.Color(0x5d4037)
+        mat.uniforms.uColorTip.value.copy(tip)
+        mat.uniforms.uColorMid.value.lerpColors(base, mid, hFactor)
+        mat.uniforms.uColorBase.value.lerpColors(new THREE.Color(0x4e342e), base, hFactor)
+        break
+      }
+      case 'branch':
+        mat.uniforms.uColorTip.value.setHex(0xaed581)
+        mat.uniforms.uColorMid.value.setHex(0x66bb6a)
+        mat.uniforms.uColorBase.value.setHex(0x4caf50)
+        break
+      case 'leaf':
+        mat.uniforms.uColorTip.value.setHex(0xaed581)
+        mat.uniforms.uColorMid.value.setHex(0x66bb6a)
+        mat.uniforms.uColorBase.value.setHex(0x388e3c)
+        break
+      case 'flower':
+      default:
+        mat.uniforms.uColorTip.value.setHex(0xaed581)
+        mat.uniforms.uColorMid.value.setHex(0x4caf50)
+        mat.uniforms.uColorBase.value.setHex(0x388e3c)
+    }
+    return mat
+  }
+
+  private createFlowerMaterial(): THREE.ShaderMaterial {
+    const mat = this.flowerUnifiedMaterial.clone()
+    mat.uniforms.uTime = { value: 0 }
+    mat.uniforms.uProgress = { value: 0 }
+    mat.uniforms.uColorInner = { value: new THREE.Color(0xff8fa3) }
+    mat.uniforms.uColorOuter = { value: new THREE.Color(0xffffff) }
+    mat.uniforms.uCenterRadius = { value: 0.02 }
+    return mat
+  }
+
+  private addSeed(_budget: number): void {
+    const mesh = new THREE.Mesh(this.baseSeedGeo, this.createPartMaterial('seed', 0))
     mesh.position.set(0, -0.1, 0)
     mesh.scale.set(0.8, 0.6, 0.8)
 
-    const mat = mesh.material as THREE.ShaderMaterial
-    mat.uniforms.uColorTip.value.setHex(0x8d6e63)
-    mat.uniforms.uColorMid.value.setHex(0x5d4037)
-    mat.uniforms.uColorBase.value.setHex(0x4e342e)
+    const targetPos = new THREE.Vector3(0, 0, 0)
+    const targetScale = new THREE.Vector3(0.8, 0.6, 0.8)
+    const curPos = new THREE.Vector3(0, -0.1, 0)
+    const curScale = new THREE.Vector3(0.8, 0.6, 0.8)
 
     const info: PlantPart = {
       mesh,
@@ -413,34 +565,39 @@ export class PlantGenerator {
       parentHeight: 0,
       branchIndex: 0,
       side: 'main',
-      targetPosition: new THREE.Vector3(0, 0, 0),
+      targetPosition: targetPos.clone(),
       targetRotation: new THREE.Euler(0, 0, 0),
-      targetScale: new THREE.Vector3(0.8, 0.6, 0.8),
-      targetBaseScale: new THREE.Vector3(0.8, 0.6, 0.8),
-      currentPosition: mesh.position.clone(),
-      currentRotation: mesh.rotation.clone(),
-      currentScale: mesh.scale.clone(),
+      targetScale: targetScale.clone(),
+      targetBasePosition: targetPos.clone(),
+      targetBaseRotation: new THREE.Euler(0, 0, 0),
+      targetBaseScale: targetScale.clone(),
+      currentPosition: curPos,
+      currentRotation: new THREE.Euler(0, 0, 0),
+      currentScale: curScale,
       baseColor: new THREE.Color(0x5d4037),
-      seed: Math.random() * 100
+      seed: Math.random() * 100,
+      partHeight: 0
     }
     mesh.userData = { partInfo: info }
     this.group.add(mesh)
     this.parts.push(info)
   }
 
-  private addCotyledons(): void {
+  private addCotyledons(_budget: number): void {
     for (let i = 0; i < 2; i++) {
+      if (!this.canAddVertices(200, 0.5)) break
       const side = i === 0 ? 'left' : 'right'
-      const mesh = new THREE.Mesh(this.baseLeafGeo.clone(), this.unifiedMaterial.clone())
+      const mesh = new THREE.Mesh(this.baseLeafGeo.clone(), this.createPartMaterial('cotyledon', 0.1))
       const angle = i === 0 ? Math.PI * 0.3 : -Math.PI * 0.3
-      mesh.position.set(Math.sin(angle) * 0.1, 0.08, 0)
-      mesh.rotation.set(0, i * Math.PI, angle * 0.5)
-      mesh.scale.set(0.5, 0.4, 0.7)
-
-      const mat = mesh.material as THREE.ShaderMaterial
-      mat.uniforms.uColorTip.value.setHex(0xc5e1a5)
-      mat.uniforms.uColorMid.value.setHex(0x9ccc65)
-      mat.uniforms.uColorBase.value.setHex(0x7cb342)
+      const curPos = new THREE.Vector3(Math.sin(angle) * 0.1, 0.08, 0)
+      const tgtPos = new THREE.Vector3(Math.sin(angle) * 0.15, 0.15, 0)
+      const tgtRot = new THREE.Euler(0.2, i * Math.PI, angle * 0.3)
+      const curRot = new THREE.Euler(0, i * Math.PI, angle * 0.5)
+      const tgtScale = new THREE.Vector3(0.7, 0.5, 1)
+      const curScale = new THREE.Vector3(0.5, 0.4, 0.7)
+      mesh.position.copy(curPos)
+      mesh.rotation.copy(curRot)
+      mesh.scale.copy(curScale)
 
       const info: PlantPart = {
         mesh,
@@ -452,15 +609,18 @@ export class PlantGenerator {
         parentHeight: 0,
         branchIndex: 0,
         side: side as 'left' | 'right',
-        targetPosition: new THREE.Vector3(Math.sin(angle) * 0.15, 0.15, 0),
-        targetRotation: new THREE.Euler(0.2, i * Math.PI, angle * 0.3),
-        targetScale: new THREE.Vector3(0.7, 0.5, 1),
-        targetBaseScale: new THREE.Vector3(0.7, 0.5, 1),
-        currentPosition: mesh.position.clone(),
-        currentRotation: mesh.rotation.clone(),
-        currentScale: mesh.scale.clone(),
+        targetPosition: tgtPos,
+        targetRotation: tgtRot,
+        targetScale: tgtScale.clone(),
+        targetBasePosition: tgtPos.clone(),
+        targetBaseRotation: tgtRot.clone(),
+        targetBaseScale: tgtScale.clone(),
+        currentPosition: curPos,
+        currentRotation: curRot,
+        currentScale: curScale,
         baseColor: new THREE.Color(0xaed581),
-        seed: Math.random() * 100
+        seed: Math.random() * 100,
+        partHeight: 0.12
       }
       mesh.userData = { partInfo: info }
       this.group.add(mesh)
@@ -476,18 +636,17 @@ export class PlantGenerator {
     twist: number,
     startProg: number,
     params: LSystemParams,
-    budget: number,
-    _verticesSoFar: number
+    budget: number
   ): void {
     const segments = Math.min(2 + Math.floor(this.branchDensity * 0.4), 4)
     const dir = side === 'left' ? 1 : -1
     let localY = 0
     const branchLength = params.length * 0.4
-    const heightFromBase = attachY - 0.15
+    const heightFromBase = clamp(attachY - 0.15, 0, 2)
     const branchProgress = heightFromBase / Math.max(0.1, 1.5)
 
     for (let i = 0; i < segments; i++) {
-      if (this.getVertexCount() > budget * 0.95) break
+      if (!this.canAddVertices(80, 0.95)) break
 
       const segLen = branchLength / segments
       const segStart = startProg + 0.02 + i * 0.03
@@ -495,17 +654,15 @@ export class PlantGenerator {
 
       const stemGeo = this.baseStemGeo.clone()
       stemGeo.scale(0.4, segLen, 0.4)
-      stemGeo.translate(0, segLen / 2, 0)
+      this.addToVertexCounter(stemGeo)
 
-      const mat = this.unifiedMaterial.clone()
       const colorLerp = clamp(branchProgress + (i / segments) * 0.3, 0, 1)
-      mat.uniforms.uColorTip.value.setHex(0xaed581)
+      const mat = this.createPartMaterial('branch', attachY + localY)
       mat.uniforms.uColorMid.value.lerpColors(
         new THREE.Color(0x4caf50),
         new THREE.Color(0x66bb6a),
         colorLerp
       )
-      mat.uniforms.uColorBase.value.setHex(0x388e3c)
 
       const mesh = new THREE.Mesh(stemGeo, mat)
 
@@ -517,11 +674,20 @@ export class PlantGenerator {
       const tgtY = attachY + localY + totalRise / 2
       const tgtZ = curveZ
 
-      mesh.position.set(0, attachY + segLen / 2, 0)
-
       const rx = -Math.sin(horizAngle * 0.6)
       const rz = dir * Math.sin(horizAngle) * 0.7
       const ry = twist * 0.5
+
+      const tgtPos = new THREE.Vector3(tgtX, tgtY, tgtZ)
+      const tgtRot = new THREE.Euler(rx, ry, rz)
+      const tgtScale = new THREE.Vector3(1, 1, 1)
+      const curPos = new THREE.Vector3(0, attachY + segLen / 2, 0)
+      const curRot = new THREE.Euler(0, 0, 0)
+      const curScale = new THREE.Vector3(0.2, 0.1, 0.2)
+
+      mesh.position.copy(curPos)
+      mesh.rotation.copy(curRot)
+      mesh.scale.copy(curScale)
 
       const info: PlantPart = {
         mesh,
@@ -533,49 +699,55 @@ export class PlantGenerator {
         parentHeight: attachY,
         branchIndex: branchIdx,
         side,
-        targetPosition: new THREE.Vector3(tgtX, tgtY, tgtZ),
-        targetRotation: new THREE.Euler(rx, ry, rz),
-        targetScale: new THREE.Vector3(1, 1, 1),
-        targetBaseScale: new THREE.Vector3(1, 1, 1),
-        currentPosition: new THREE.Vector3(0, attachY + segLen / 2, 0),
-        currentRotation: new THREE.Euler(0, 0, 0),
-        currentScale: new THREE.Vector3(0.2, 0.1, 0.2),
+        targetPosition: tgtPos,
+        targetRotation: tgtRot,
+        targetScale: tgtScale.clone(),
+        targetBasePosition: tgtPos.clone(),
+        targetBaseRotation: tgtRot.clone(),
+        targetBaseScale: tgtScale.clone(),
+        currentPosition: curPos,
+        currentRotation: curRot,
+        currentScale: curScale,
         baseColor: new THREE.Color(0x7cb342),
-        seed: Math.random() * 100
+        seed: Math.random() * 100,
+        partHeight: attachY + localY + segLen / 2
       }
       mesh.userData = { partInfo: info }
       this.group.add(mesh)
       this.parts.push(info)
 
-      if (i >= 0 && Math.random() < 0.45 + this.branchDensity * 0.06 && this.getVertexCount() < budget * 0.92) {
+      if (this.canAddVertices(100, 0.92) && Math.random() < 0.45 + this.branchDensity * 0.06) {
         this.addLeaf(
           tgtX + dir * 0.05,
           tgtY + segLen * 0.3,
           tgtZ,
           side,
           branchIdx,
-          Math.min(segStart + 0.02, 0.95)
+          Math.min(segStart + 0.02, 0.95),
+          budget
         )
       }
 
       localY += totalRise
     }
 
-    if (this.branchDensity >= 3 && Math.random() < 0.4 && this.getVertexCount() < budget * 0.9) {
+    if (this.branchDensity >= 3 && Math.random() < 0.4 && this.canAddVertices(400, 0.9)) {
       this.addFlower(
         dir * Math.sin(horizAngle) * branchLength * 0.5,
         attachY + localY + 0.05,
         Math.cos(twist) * branchLength * 0.2,
         `侧花${branchIdx}-${side === 'left' ? '左' : '右'}`,
         Math.min(startProg + 0.2, 0.9),
-        true
+        true,
+        budget
       )
     }
   }
 
-  private addLeavesOnStem(y: number, branchIdx: number, startProg: number): void {
+  private addLeavesOnStem(y: number, branchIdx: number, startProg: number, budget: number): void {
     const count = Math.min(1 + Math.floor(Math.random() * 2), 2)
     for (let i = 0; i < count; i++) {
+      if (!this.canAddVertices(100, 0.92)) break
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5
       const side = angle < Math.PI ? 'left' : 'right'
       this.addLeaf(
@@ -584,7 +756,8 @@ export class PlantGenerator {
         Math.cos(angle) * 0.08,
         side as 'left' | 'right',
         branchIdx + 100,
-        startProg + i * 0.01
+        startProg + i * 0.01,
+        budget
       )
     }
   }
@@ -593,23 +766,26 @@ export class PlantGenerator {
     x: number, y: number, z: number,
     side: 'left' | 'right',
     branchIdx: number,
-    startProg: number
+    startProg: number,
+    _budget: number
   ): void {
-    const mesh = new THREE.Mesh(this.baseLeafGeo.clone(), this.unifiedMaterial.clone())
+    if (!this.canAddVertices(80, 0.96)) return
+    const mesh = new THREE.Mesh(this.baseLeafGeo.clone(), this.createPartMaterial('leaf', y))
     const size = 0.8 + Math.random() * 0.5
-    mesh.scale.set(size, size * 0.4, size * 1.1)
-
-    const mat = mesh.material as THREE.ShaderMaterial
-    mat.uniforms.uColorTip.value.setHex(0xaed581)
-    mat.uniforms.uColorMid.value.setHex(0x66bb6a)
-    mat.uniforms.uColorBase.value.setHex(0x388e3c)
-
     const dir = side === 'left' ? 1 : -1
     const tgtRot = new THREE.Euler(
       0.3 + Math.random() * 0.3,
       dir * (0.8 + Math.random() * 0.8),
       dir * (0.4 + Math.random() * 0.3)
     )
+    const tgtPos = new THREE.Vector3(x, y, z)
+    const tgtScale = new THREE.Vector3(size, size * 0.4, size * 1.1)
+    const curPos = new THREE.Vector3(x * 0.2, y - 0.1, z * 0.2)
+    const curRot = new THREE.Euler(0, 0, 0)
+    const curScale = new THREE.Vector3(0.1, 0.1, 0.1)
+    mesh.position.copy(curPos)
+    mesh.rotation.copy(curRot)
+    mesh.scale.copy(curScale)
 
     const info: PlantPart = {
       mesh,
@@ -621,27 +797,30 @@ export class PlantGenerator {
       parentHeight: y,
       branchIndex: branchIdx,
       side,
-      targetPosition: new THREE.Vector3(x, y, z),
+      targetPosition: tgtPos,
       targetRotation: tgtRot,
-      targetScale: new THREE.Vector3(size, size * 0.4, size * 1.1),
-      targetBaseScale: new THREE.Vector3(size, size * 0.4, size * 1.1),
-      currentPosition: new THREE.Vector3(x * 0.2, y - 0.1, z * 0.2),
-      currentRotation: new THREE.Euler(0, 0, 0),
-      currentScale: new THREE.Vector3(0.1, 0.1, 0.1),
+      targetScale: tgtScale.clone(),
+      targetBasePosition: tgtPos.clone(),
+      targetBaseRotation: tgtRot.clone(),
+      targetBaseScale: tgtScale.clone(),
+      currentPosition: curPos,
+      currentRotation: curRot,
+      currentScale: curScale,
       baseColor: new THREE.Color(0x81c784),
-      seed: Math.random() * 100
+      seed: Math.random() * 100,
+      partHeight: y
     }
     mesh.userData = { partInfo: info }
-    mesh.position.copy(info.currentPosition)
     this.group.add(mesh)
     this.parts.push(info)
   }
 
-  private addFlowers(topY: number, startProg: number): void {
-    this.addFlower(0, topY + 0.1, 0, '顶花', startProg, false)
+  private addFlowers(topY: number, startProg: number, budget: number): void {
+    this.addFlower(0, topY + 0.1, 0, '顶花', startProg, false, budget)
 
     const count = Math.min(Math.floor(1 + this.branchDensity * 0.4), 3)
     for (let i = 0; i < count; i++) {
+      if (!this.canAddVertices(400, 0.95)) break
       const angle = (i / count) * Math.PI * 2
       const r = 0.15 + this.branchDensity * 0.02
       this.addFlower(
@@ -650,7 +829,8 @@ export class PlantGenerator {
         Math.cos(angle) * r,
         `花${i + 1}`,
         startProg + 0.04 + i * 0.01,
-        true
+        true,
+        budget
       )
     }
   }
@@ -659,13 +839,15 @@ export class PlantGenerator {
     x: number, y: number, z: number,
     name: string,
     startProg: number,
-    isSide: boolean
+    isSide: boolean,
+    _budget: number
   ): void {
+    if (!this.canAddVertices(350, 0.96)) return
     const groupMesh = new THREE.Group()
 
     const petalCount = 5
     for (let i = 0; i < petalCount; i++) {
-      const petal = new THREE.Mesh(this.baseFlowerPetalGeo.clone(), this.flowerUnifiedMaterial.clone())
+      const petal = new THREE.Mesh(this.baseFlowerPetalGeo.clone(), this.createFlowerMaterial())
       const angle = (i / petalCount) * Math.PI * 2
       petal.position.set(
         Math.sin(angle) * 0.06,
@@ -677,17 +859,25 @@ export class PlantGenerator {
     }
 
     const centerGeo = this.baseFlowerGeo.clone()
-    centerGeo.scale(0.5, 0.5, 0.5)
+    centerGeo.scale(1, 1, 1)
     const centerMat = new THREE.MeshBasicMaterial({ color: 0xffd54f })
     const center = new THREE.Mesh(centerGeo, centerMat)
     center.position.y = 0.02
     groupMesh.add(center)
 
     const mesh = groupMesh as unknown as THREE.Mesh
-    mesh.position.set(x * 0.3, y - 0.2, z * 0.3)
-
     const baseSize = 0.9 + Math.random() * 0.3
-    const targetScale = this.bloomSize * baseSize
+    const targetScaleVal = this.bloomSize * baseSize
+
+    const tgtPos = new THREE.Vector3(x, y, z)
+    const tgtRot = new THREE.Euler(isSide ? 0.3 : 0, 0, 0)
+    const tgtScale = new THREE.Vector3(targetScaleVal, targetScaleVal, targetScaleVal)
+    const curPos = new THREE.Vector3(x * 0.3, y - 0.2, z * 0.3)
+    const curRot = new THREE.Euler(0, 0, 0)
+    const curScale = new THREE.Vector3(0.05, 0.05, 0.05)
+    mesh.position.copy(curPos)
+    mesh.rotation.copy(curRot)
+    mesh.scale.copy(curScale)
 
     const info: PlantPart = {
       mesh,
@@ -699,15 +889,18 @@ export class PlantGenerator {
       parentHeight: y,
       branchIndex: 0,
       side: 'main',
-      targetPosition: new THREE.Vector3(x, y, z),
-      targetRotation: new THREE.Euler(isSide ? 0.3 : 0, 0, 0),
-      targetScale: new THREE.Vector3(targetScale, targetScale, targetScale),
-      targetBaseScale: new THREE.Vector3(targetScale, targetScale, targetScale),
-      currentPosition: new THREE.Vector3(x * 0.3, y - 0.2, z * 0.3),
-      currentRotation: new THREE.Euler(0, 0, 0),
-      currentScale: new THREE.Vector3(0.05, 0.05, 0.05),
+      targetPosition: tgtPos,
+      targetRotation: tgtRot,
+      targetScale: tgtScale.clone(),
+      targetBasePosition: tgtPos.clone(),
+      targetBaseRotation: tgtRot.clone(),
+      targetBaseScale: tgtScale.clone(),
+      currentPosition: curPos,
+      currentRotation: curRot,
+      currentScale: curScale,
       baseColor: new THREE.Color(0xff8fa3),
-      seed: Math.random() * 100
+      seed: Math.random() * 100,
+      partHeight: y
     }
     ;(mesh as any).userData = { partInfo: info }
     this.group.add(mesh)
@@ -715,13 +908,13 @@ export class PlantGenerator {
   }
 
   public setGrowthSpeed(speed: number): void {
-    this.targetGrowthSpeed = speed
+    this.targetGrowthSpeed = clamp(speed, 0.5, 3.0)
     this.paramTransitionProgress = 0
   }
 
   public setBranchDensity(density: number): void {
     density = clamp(density, 1, 5)
-    if (density === this.targetBranchDensity) return
+    if (Math.abs(density - this.targetBranchDensity) < 0.001) return
     this.targetBranchDensity = density
     this.paramTransitionProgress = 0
     this.calculateTransitionTargets()
@@ -729,51 +922,68 @@ export class PlantGenerator {
 
   private calculateTransitionTargets(): void {
     const densityDiff = this.targetBranchDensity - this.branchDensity
-    const densityFactor = Math.abs(densityDiff) / 4
+    const normalizedDensityChange = clamp(Math.abs(densityDiff) / 4, 0, 1)
+    const easing = this.getEasing()
 
     for (let i = 0; i < this.parts.length; i++) {
       const part = this.parts[i]
       const cached = this.cachedTargetStates.get(i)
       if (!cached) continue
 
-      const influence = part.type === 'branch' || part.type === 'leaf' ? 0.85 : 0.3
-      const partFactor = densityFactor * influence
-      const invPartFactor = 1 - partFactor
+      let influence = 0.1
+      switch (part.type) {
+        case 'stem': influence = this.densityTransition.stemInfluence; break
+        case 'branch': influence = this.densityTransition.branchInfluence; break
+        case 'leaf': influence = this.densityTransition.leafInfluence; break
+        case 'flower': influence = this.densityTransition.flowerInfluence; break
+        case 'cotyledon': influence = this.densityTransition.cotyledonInfluence; break
+        case 'seed': influence = this.densityTransition.seedInfluence; break
+      }
 
-      const scaleMultiplier = 1 + densityDiff * 0.12 * (part.type === 'flower' ? 0.6 : 1) * invPartFactor
-      const posInfluence = densityDiff * 0.04 * partFactor
+      const partFactor = normalizedDensityChange * influence
+      const invPartFactor = 1 - partFactor * 0.7
 
-      part.targetPosition.x = cached.targetPosition.x + posInfluence * Math.sin(part.seed)
-      part.targetPosition.z = cached.targetPosition.z + posInfluence * Math.cos(part.seed)
-      part.targetPosition.y = cached.targetPosition.y + posInfluence * 0.5
+      const densityRatio = this.targetBranchDensity / Math.max(0.1, this.branchDensity || 3)
+      const sign = densityDiff > 0 ? 1 : -1
 
-      part.targetScale.x = cached.targetBaseScale.x * scaleMultiplier
-      part.targetScale.y = cached.targetBaseScale.y * scaleMultiplier
-      part.targetScale.z = cached.targetBaseScale.z * scaleMultiplier
+      const scaleAdjust = 1 + sign * partFactor * 0.2
+      const posAdjustAmount = partFactor * 0.06
+
+      part.targetPosition.x = cached.targetBasePosition.x + posAdjustAmount * Math.sin(part.seed)
+      part.targetPosition.z = cached.targetBasePosition.z + posAdjustAmount * Math.cos(part.seed)
+      part.targetPosition.y = cached.targetBasePosition.y + posAdjustAmount * 0.5 * (part.type === 'flower' || part.type === 'leaf' ? 1 : 0.3)
+
+      part.targetRotation.x = cached.targetBaseRotation.x + sign * partFactor * 0.1
+      part.targetRotation.z = cached.targetBaseRotation.z + sign * partFactor * 0.08
 
       if (part.type === 'flower') {
-        const bloomFactor = this.targetBloomSize / Math.max(0.1, this.bloomSize)
-        const f = bloomFactor * scaleMultiplier
-        part.targetScale.x *= f
-        part.targetScale.y *= f
-        part.targetScale.z *= f
+        const bloomRatio = this.bloomSize / Math.max(0.1, this.bloomSize)
+        const f = scaleAdjust * bloomRatio * densityRatio
+        part.targetScale.x = cached.targetBaseScale.x * f
+        part.targetScale.y = cached.targetBaseScale.y * f
+        part.targetScale.z = cached.targetBaseScale.z * f
+        void easing
+      } else {
+        part.targetScale.x = cached.targetBaseScale.x * invPartFactor * scaleAdjust
+        part.targetScale.y = cached.targetBaseScale.y * scaleAdjust
+        part.targetScale.z = cached.targetBaseScale.z * invPartFactor * scaleAdjust
       }
     }
   }
 
   public setBloomSize(size: number): void {
     size = clamp(size, 0.5, 2.0)
+    if (Math.abs(size - this.targetBloomSize) < 0.001) return
     this.targetBloomSize = size
     this.paramTransitionProgress = 0
-
-    const bloomFactor = this.targetBloomSize / Math.max(0.1, this.bloomSize)
 
     for (let i = 0; i < this.parts.length; i++) {
       const part = this.parts[i]
       if (part.type === 'flower') {
         const cached = this.cachedTargetStates.get(i)
         if (cached) {
-          const f = bloomFactor
+          const bloomScaleRatio = this.targetBloomSize / Math.max(0.01, this.bloomSize)
+          const f = bloomScaleRatio
           part.targetScale.x = cached.targetBaseScale.x * f
           part.targetScale.y = cached.targetBaseScale.y * f
           part.targetScale.z = cached.targetBaseScale.z * f
@@ -815,11 +1025,11 @@ export class PlantGenerator {
       this.removeHighlight(this.highlightedPart)
     }
 
-    if (!part.outlineMesh) {
-      const outline = this.createOutlineMeshForPart(part)
-      if (outline) {
-        part.outlineMesh = outline
-        this.group.attach(part.outlineMesh)
+    if (!part.outlineGlowGroup) {
+      const glowGroup = this.createGlowOutlineForPart(part)
+      if (glowGroup) {
+        part.outlineGlowGroup = glowGroup
+        this.group.attach(part.outlineGlowGroup)
       }
     }
 
@@ -827,14 +1037,14 @@ export class PlantGenerator {
     this.highlightStartTime = this.time
   }
 
-  private createOutlineMeshForPart(part: PlantPart): THREE.Mesh | null {
+  private createGlowOutlineForPart(part: PlantPart): THREE.Group | null {
     const geos: THREE.BufferGeometry[] = []
     const collectGeos = (obj: THREE.Object3D) => {
       const mesh = obj as THREE.Mesh
       if (mesh.isMesh && mesh.geometry) {
         geos.push(mesh.geometry)
       }
-      if (obj.children) {
+      if (obj.children && obj.children.length > 0) {
         obj.children.forEach(collectGeos)
       }
     }
@@ -843,10 +1053,23 @@ export class PlantGenerator {
     if (geos.length === 0) return null
 
     const mergedGeo = geos.length === 1 ? geos[0].clone() : this.mergeGeometries(geos)
-    const outlineMesh = new THREE.Mesh(mergedGeo, this.outlineMaterial.clone())
-    outlineMesh.matrixAutoUpdate = true
+    const glowGroup = new THREE.Group()
 
-    return outlineMesh
+    const layerConfigs = [
+      { thickness: 0.008, strength: 1.2, scale: 1.02 },
+      { thickness: 0.020, strength: 0.7, scale: 1.06 },
+      { thickness: 0.040, strength: 0.35, scale: 1.14 }
+    ]
+
+    for (const cfg of layerConfigs) {
+      const layerMat = this.createGlowLayerMaterial(cfg.strength)
+      ;(layerMat as any).uniforms.uThickness.value = cfg.thickness
+      const layerMesh = new THREE.Mesh(mergedGeo.clone(), layerMat)
+      layerMesh.scale.setScalar(cfg.scale)
+      glowGroup.add(layerMesh)
+    }
+
+    return glowGroup
   }
 
   private mergeGeometries(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
@@ -866,6 +1089,8 @@ export class PlantGenerator {
         positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i))
         if (normAttr) {
           normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i))
+        } else {
+          normals.push(0, 1, 0)
         }
       }
 
@@ -883,21 +1108,38 @@ export class PlantGenerator {
     }
 
     merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    if (normals.length > 0) {
-      merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-    }
+    merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
     merged.setIndex(indices)
 
     return merged
   }
 
   private removeHighlight(part: PlantPart): void {
-    if (part.outlineMesh) {
-      this.group.remove(part.outlineMesh)
-      part.outlineMesh.geometry.dispose()
-      ;(part.outlineMesh.material as THREE.Material).dispose()
-      part.outlineMesh = undefined
+    if (part.outlineGlowGroup) {
+      this.group.remove(part.outlineGlowGroup)
+      part.outlineGlowGroup.traverse(child => {
+        const mesh = child as THREE.Mesh
+        if (mesh.isMesh) {
+          mesh.geometry.dispose()
+          const m = mesh.material as THREE.Material | THREE.Material[]
+          if (Array.isArray(m)) m.forEach(mm => mm.dispose())
+          else m.dispose()
+        }
+      })
+      part.outlineGlowGroup = undefined
     }
+  }
+
+  private highlightPulseCurve(t: number): number {
+    if (t <= 0) return 0
+    if (t >= 1) return 0
+    const rise = easeOutQuad(t / 0.15)
+    if (t < 0.15) return rise * 0.85
+    const pulsePhase = (t - 0.15) / 0.7
+    const pulse = 0.7 + 0.3 * Math.sin(pulsePhase * Math.PI * 2)
+    if (t < 0.85) return rise * pulse
+    const fall = 1 - easeOutQuad((t - 0.85) / 0.15)
+    return rise * pulse * fall
   }
 
   public update(delta: number): void {
@@ -942,11 +1184,10 @@ export class PlantGenerator {
 
       part.mesh.scale.lerpVectors(part.currentScale, part.targetScale, localT)
 
-      if (part.outlineMesh) {
-        part.outlineMesh.position.copy(part.mesh.position)
-        part.outlineMesh.rotation.copy(part.mesh.rotation)
-        const s = part.mesh.scale.clone().multiplyScalar(1.08)
-        part.outlineMesh.scale.copy(s)
+      if (part.outlineGlowGroup) {
+        part.outlineGlowGroup.position.copy(part.mesh.position)
+        part.outlineGlowGroup.rotation.copy(part.mesh.rotation)
+        part.outlineGlowGroup.scale.copy(part.mesh.scale)
       }
 
       const updateMaterialUniforms = (mat: THREE.Material | THREE.Material[]) => {
@@ -956,7 +1197,9 @@ export class PlantGenerator {
         }
         if ((mat as any).uniforms) {
           ;(mat as any).uniforms.uTime.value = this.time
-          ;(mat as any).uniforms.uProgress.value = localT
+          if ((mat as any).uniforms.uProgress !== undefined) {
+            ;(mat as any).uniforms.uProgress.value = localT
+          }
         }
       }
 
@@ -970,7 +1213,7 @@ export class PlantGenerator {
       }
     }
 
-    if (this.highlightedPart && this.highlightedPart.outlineMesh) {
+    if (this.highlightedPart && this.highlightedPart.outlineGlowGroup) {
       const elapsed = this.time - this.highlightStartTime
       const totalDuration = 1.0
 
@@ -978,14 +1221,13 @@ export class PlantGenerator {
         this.removeHighlight(this.highlightedPart)
         this.highlightedPart = null
       } else {
-        const t = elapsed / totalDuration
-        const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2)
-        const fadeOut = t < 0.85 ? 1 : (1 - t) / 0.15
-        const outlineMat = this.highlightedPart.outlineMesh.material as THREE.MeshBasicMaterial
-        outlineMat.opacity = (0.3 + pulse * 0.6) * fadeOut
-
-        const s = this.highlightedPart.mesh.scale.clone().multiplyScalar(1.05 + pulse * 0.05)
-        this.highlightedPart.outlineMesh.scale.copy(s)
+        const pulseValue = this.highlightPulseCurve(elapsed / totalDuration)
+        this.highlightedPart.outlineGlowGroup.traverse(child => {
+          const mesh = child as THREE.Mesh
+          if (mesh.isMesh && mesh.material && (mesh.material as any).uniforms) {
+            ;(mesh.material as any).uniforms.uGlowStrength.value = 1.2 * pulseValue
+          }
+        })
       }
     }
   }

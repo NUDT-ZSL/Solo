@@ -62,7 +62,8 @@ class App {
     this.plantGenerator = new PlantGenerator({
       easingType,
       maxVertices: 10000,
-      growthDuration: 30
+      growthDuration: 30,
+      testDensity5Mode: false
     })
     this.scene.add(this.plantGenerator.group)
 
