@@ -242,7 +242,25 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-const PORT = process.env.PORT || 3005;
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+const DEFAULT_PORT = 3001;
+
+function findAvailablePort(startPort: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const net = require('net');
+    const server = net.createServer();
+    server.listen(startPort, () => {
+      const port = server.address().port;
+      server.close(() => resolve(port));
+    });
+    server.on('error', () => {
+      findAvailablePort(startPort + 1).then(resolve).catch(reject);
+    });
+  });
+}
+
+(async () => {
+  const port = process.env.PORT ? parseInt(process.env.PORT) : await findAvailablePort(DEFAULT_PORT);
+  server.listen(port, () => {
+    console.log(`Server running on http://localhost:${port}`);
+  });
+})();

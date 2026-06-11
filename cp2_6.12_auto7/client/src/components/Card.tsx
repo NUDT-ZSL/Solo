@@ -8,6 +8,8 @@ interface CardProps {
   selfUserId: string;
   editingUsers: OnlineUser[];
   zIndex: number;
+  isNew: boolean;
+  flipStyle?: React.CSSProperties;
   onUpdate: (cardId: string, changes: Partial<CardType>) => void;
   onDelete: (cardId: string) => void;
   onVote: (cardId: string, vote: 'up' | 'down' | null) => void;
@@ -22,6 +24,8 @@ export default function Card({
   selfUserId,
   editingUsers,
   zIndex,
+  isNew,
+  flipStyle,
   onUpdate,
   onDelete,
   onVote,
@@ -37,7 +41,9 @@ export default function Card({
   const [myVote, setMyVote] = useState<'up' | 'down' | null>(
     card.votes.up.includes(selfUserId) ? 'up' : card.votes.down.includes(selfUserId) ? 'down' : null
   );
-  const [rippleKey, setRippleKey] = useState(0);
+  const [voteAnimKey, setVoteAnimKey] = useState(0);
+  const [voteAnimType, setVoteAnimType] = useState<'up' | 'down' | null>(null);
+  const [showRipple, setShowRipple] = useState(false);
   const dragStartPos = useRef<{ x: number; y: number; cardX: number; cardY: number } | null>(null);
 
   useEffect(() => {
@@ -69,14 +75,20 @@ export default function Card({
 
     const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
       if (!dragStartPos.current || !cardRef.current) return;
+      moveEvent.preventDefault();
       const mx = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
       const my = 'touches' in moveEvent ? moveEvent.touches[0].clientY : moveEvent.clientY;
       const dx = mx - dragStartPos.current.x;
       const dy = my - dragStartPos.current.y;
       const newX = dragStartPos.current.cardX + dx;
       const newY = dragStartPos.current.cardY + dy;
-      cardRef.current.style.transform = `translate(${newX}px, ${newY}px) scale(1.02) rotate(1deg)`;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const shadowIntensity = Math.min(dist / 100, 1);
+      const shadowBlur = 20 + shadowIntensity * 40;
+      const shadowSpread = shadowIntensity * 10;
+      cardRef.current.style.transform = `translate(${newX}px, ${newY}px) scale(1.02)`;
       cardRef.current.style.transition = 'none';
+      cardRef.current.style.boxShadow = `0 ${shadowBlur}px ${shadowBlur * 1.5}px rgba(0,0,0,${0.1 + shadowIntensity * 0.15}), 0 0 0 ${shadowSpread}px rgba(0,0,0,0.02), 0 0 0 1px rgba(255,255,255,0.6) inset`;
     };
 
     const handleUp = (upEvent: MouseEvent | TouchEvent) => {
@@ -85,17 +97,16 @@ export default function Card({
       const uy = 'changedTouches' in upEvent ? upEvent.changedTouches[0].clientY : upEvent.clientY;
       const dx = ux - dragStartPos.current.x;
       const dy = uy - dragStartPos.current.y;
-      let finalX = dragStartPos.current.cardX + dx;
-      let finalY = dragStartPos.current.cardY + dy;
-      const snapped = snapToGrid(finalX, finalY);
-      finalX = snapped.x;
-      finalY = snapped.y;
+      const rawX = dragStartPos.current.cardX + dx;
+      const rawY = dragStartPos.current.cardY + dy;
+      const snapped = snapToGrid(rawX, rawY);
 
-      cardRef.current.style.transition = '';
-      cardRef.current.style.transform = `translate(${finalX}px, ${finalY}px)`;
+      cardRef.current.style.transition = 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease';
+      cardRef.current.style.transform = `translate(${snapped.x}px, ${snapped.y}px)`;
+      cardRef.current.style.boxShadow = '';
 
       setIsDragging(false);
-      onDragEnd(card.id, finalX, finalY);
+      onDragEnd(card.id, snapped.x, snapped.y);
       dragStartPos.current = null;
 
       window.removeEventListener('mousemove', handleMove);
@@ -147,9 +158,12 @@ export default function Card({
   };
 
   const handleVote = (vote: 'up' | 'down') => {
-    setRippleKey((k) => k + 1);
     const newVote = myVote === vote ? null : vote;
     setMyVote(newVote);
+    setVoteAnimKey((k) => k + 1);
+    setVoteAnimType(vote);
+    setShowRipple(true);
+    setTimeout(() => setShowRipple(false), 700);
     onVote(card.id, newVote);
   };
 
@@ -162,14 +176,24 @@ export default function Card({
   const hasEditingUser = editingUsers.length > 0;
   const editingColor = editingUsers[0]?.avatarColor || '#667eea';
 
+  const classNames = [
+    'card',
+    `color-${card.color}`,
+    isDragging ? 'dragging' : '',
+    hasEditingUser ? 'editing-glow' : '',
+    isNew ? 'card-appear' : '',
+    flipStyle ? 'card-flip' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <div
       ref={cardRef}
-      className={`card color-${card.color} ${isDragging ? 'dragging' : ''} ${hasEditingUser ? 'editing-glow' : ''}`}
+      className={classNames}
       style={{
         transform: `translate(${card.x}px, ${card.y}px)`,
         zIndex: isDragging ? 1000 : zIndex,
         ['--editing-color' as any]: editingColor,
+        ...flipStyle,
       }}
       onMouseDown={handleMouseDown}
       onTouchStart={handleMouseDown}
@@ -230,7 +254,8 @@ export default function Card({
       <div className="card-footer">
         <div className="vote-buttons">
           <button
-            className={`vote-btn vote-up ${myVote === 'up' ? 'active' : ''}`}
+            key={`up-${voteAnimKey}`}
+            className={`vote-btn vote-up ${myVote === 'up' ? 'active' : ''} ${voteAnimType === 'up' ? 'bounce-up' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               handleVote('up');
@@ -238,12 +263,16 @@ export default function Card({
             title="赞成"
           >
             ▲
-            {rippleKey > 0 && myVote === 'up' && (
-              <span key={rippleKey} className="vote-ripple" style={{ width: 36, height: 36, left: 0, top: 0 }} />
+            {showRipple && voteAnimType === 'up' && (
+              <span className="vote-ripple" />
+            )}
+            {voteAnimType === 'up' && voteAnimKey > 0 && (
+              <span className="vote-btn-glow" />
             )}
           </button>
           <button
-            className={`vote-btn vote-down ${myVote === 'down' ? 'active' : ''}`}
+            key={`down-${voteAnimKey}`}
+            className={`vote-btn vote-down ${myVote === 'down' ? 'active' : ''} ${voteAnimType === 'down' ? 'bounce-down' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               handleVote('down');
@@ -251,8 +280,11 @@ export default function Card({
             title="反对"
           >
             ▼
-            {rippleKey > 0 && myVote === 'down' && (
-              <span key={'d' + rippleKey} className="vote-ripple" style={{ width: 36, height: 36, left: 0, top: 0 }} />
+            {showRipple && voteAnimType === 'down' && (
+              <span className="vote-ripple" />
+            )}
+            {voteAnimType === 'down' && voteAnimKey > 0 && (
+              <span className="vote-btn-glow" />
             )}
           </button>
         </div>
