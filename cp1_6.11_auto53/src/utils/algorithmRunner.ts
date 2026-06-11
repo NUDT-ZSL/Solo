@@ -36,8 +36,17 @@ const INPUT_SIZES: Record<AlgorithmName, number> = {
   fibonacci: 30,
 };
 
-function bubbleSort(arr: number[]): void {
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
+async function bubbleSortChunked(arr: number[]): Promise<number> {
+  const start = performance.now();
   const n = arr.length;
+  const TIME_SLICE = 8;
+
   for (let i = 0; i < n - 1; i++) {
     for (let j = 0; j < n - i - 1; j++) {
       if (arr[j] > arr[j + 1]) {
@@ -46,7 +55,11 @@ function bubbleSort(arr: number[]): void {
         arr[j + 1] = temp;
       }
     }
+    if (i % 50 === 0 && performance.now() - start > TIME_SLICE) {
+      await yieldToMain();
+    }
   }
+  return performance.now() - start;
 }
 
 function binarySearch(arr: number[], target: number): number {
@@ -61,56 +74,76 @@ function binarySearch(arr: number[], target: number): number {
   return -1;
 }
 
-function fibonacci(n: number): number {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
+async function fibonacciChunked(n: number): Promise<{ result: number; elapsed: number }> {
+  const start = performance.now();
+  const TIME_SLICE = 8;
+  const memo = new Map<number, number>();
+
+  async function fib(k: number): Promise<number> {
+    if (k <= 1) return k;
+    if (memo.has(k)) return memo.get(k)!;
+    if (performance.now() - start > TIME_SLICE) {
+      await yieldToMain();
+    }
+    const a = await fib(k - 1);
+    const b = await fib(k - 2);
+    const res = a + b;
+    memo.set(k, res);
+    return res;
+  }
+
+  const result = await fib(n);
+  return { result, elapsed: performance.now() - start };
 }
 
-function runAlgorithm(algorithm: AlgorithmName): number {
+async function binarySearchChunked(arr: number[], target: number): Promise<number> {
+  const start = performance.now();
+  let iterations = 0;
+  for (let i = 0; i < 10000; i++) {
+    binarySearch(arr, target);
+    iterations++;
+    if (iterations % 1000 === 0) {
+      await yieldToMain();
+    }
+  }
+  return performance.now() - start;
+}
+
+async function runAlgorithm(algorithm: AlgorithmName): Promise<number> {
   const size = INPUT_SIZES[algorithm];
 
   switch (algorithm) {
     case 'bubbleSort': {
       const arr = Array.from({ length: size }, () => Math.random() * size);
-      const start = performance.now();
-      bubbleSort(arr);
-      return performance.now() - start;
+      return await bubbleSortChunked(arr);
     }
     case 'binarySearch': {
       const arr = Array.from({ length: size }, (_, i) => i);
       const target = size - 1;
-      const start = performance.now();
-      for (let i = 0; i < 10000; i++) {
-        binarySearch(arr, target);
-      }
-      return performance.now() - start;
+      return await binarySearchChunked(arr, target);
     }
     case 'fibonacci': {
-      const start = performance.now();
-      fibonacci(size);
-      return performance.now() - start;
+      const { elapsed } = await fibonacciChunked(size);
+      return elapsed;
     }
   }
 }
 
-export function executeAlgorithm(
+export async function executeAlgorithm(
   language: LanguageName,
   algorithm: AlgorithmName
 ): Promise<AlgorithmResult> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const jsTime = runAlgorithm(algorithm);
-      const multiplier = LANGUAGE_MULTIPLIERS[language][algorithm];
-      const simulatedTime = Math.round(jsTime * multiplier * 100) / 100;
-      const jitter = simulatedTime * (0.9 + Math.random() * 0.2);
-      const finalTime = Math.round(jitter * 100) / 100;
-      resolve({
-        language,
-        algorithm,
-        timeMs: finalTime,
-      });
-    }, 16);
-  });
+  await yieldToMain();
+  const jsTime = await runAlgorithm(algorithm);
+  const multiplier = LANGUAGE_MULTIPLIERS[language][algorithm];
+  const simulatedTime = Math.round(jsTime * multiplier * 100) / 100;
+  const jitter = simulatedTime * (0.9 + Math.random() * 0.2);
+  const finalTime = Math.round(jitter * 100) / 100;
+  return {
+    language,
+    algorithm,
+    timeMs: finalTime,
+  };
 }
 
 export const ALGORITHM_LABELS: Record<AlgorithmName, string> = {

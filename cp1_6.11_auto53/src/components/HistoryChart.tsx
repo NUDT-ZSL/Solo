@@ -18,9 +18,18 @@ const PADDING = { top: 20, right: 30, bottom: 30, left: 60 };
 
 const HistoryChart: React.FC<HistoryChartProps> = ({ history, languages }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; label: string } | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<{
+    x: number;
+    y: number;
+    label: string;
+    color: string;
+    runIndex: number;
+    language: LanguageName;
+  } | null>(null);
 
-  const languageDataMap = useRef<Map<string, { x: number; y: number; timeMs: number }[]>>(new Map());
+  const languageDataMap = useRef<
+    Map<LanguageName, { x: number; y: number; timeMs: number; runIndex: number }[]>
+  >(new Map());
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,6 +42,7 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ history, languages }) => {
     canvas.height = CHART_HEIGHT * dpr;
     canvas.style.width = `${CHART_WIDTH}px`;
     canvas.style.height = `${CHART_HEIGHT}px`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
     ctx.clearRect(0, 0, CHART_WIDTH, CHART_HEIGHT);
@@ -75,13 +85,17 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ history, languages }) => {
       ctx.fillStyle = '#45A29E';
       ctx.font = '11px "Segoe UI", sans-serif';
       ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
       ctx.fillText(`#${i + 1}`, x, CHART_HEIGHT - 8);
     }
 
-    const newLanguageDataMap = new Map<string, { x: number; y: number; timeMs: number }[]>();
+    const newLanguageDataMap = new Map<
+      LanguageName,
+      { x: number; y: number; timeMs: number; runIndex: number }[]
+    >();
 
     languages.forEach((lang) => {
-      const points: { x: number; y: number; timeMs: number }[] = [];
+      const points: { x: number; y: number; timeMs: number; runIndex: number }[] = [];
       const color = LANGUAGE_COLORS[lang];
 
       ctx.strokeStyle = color;
@@ -97,7 +111,7 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ history, languages }) => {
         const x = PADDING.left + (chartW / Math.max(history.length - 1, 1)) * runIndex;
         const y = PADDING.top + chartH - ((dataPoint.timeMs - minTime) / (maxTime - minTime)) * chartH;
 
-        points.push({ x, y, timeMs: dataPoint.timeMs });
+        points.push({ x, y, timeMs: dataPoint.timeMs, runIndex });
 
         if (!started) {
           ctx.moveTo(x, y);
@@ -111,20 +125,36 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ history, languages }) => {
       ctx.setLineDash([]);
 
       points.forEach((pt) => {
+        const isHovered =
+          hoveredPoint?.runIndex === pt.runIndex && hoveredPoint?.language === lang;
+        const radius = isHovered ? 7 : 4;
+
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+        ctx.arc(pt.x, pt.y, radius + 4, 0, Math.PI * 2);
+        ctx.fillStyle = `${color}22`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
         ctx.strokeStyle = '#0B0C10';
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        if (isHovered) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 2, 0, Math.PI * 2);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fill();
+        }
       });
 
       newLanguageDataMap.set(lang, points);
     });
 
     languageDataMap.current = newLanguageDataMap;
-  }, [history, languages]);
+  }, [history, languages, hoveredPoint]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -133,17 +163,32 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ history, languages }) => {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    let found: { x: number; y: number; label: string } | null = null;
+    let found: {
+      x: number;
+      y: number;
+      label: string;
+      color: string;
+      runIndex: number;
+      language: LanguageName;
+    } | null = null;
+
+    let closestDist = 20;
 
     for (const [lang, points] of languageDataMap.current.entries()) {
       for (const pt of points) {
         const dist = Math.sqrt((mx - pt.x) ** 2 + (my - pt.y) ** 2);
-        if (dist < 12) {
-          found = { x: pt.x, y: pt.y, label: `${lang}: ${pt.timeMs.toFixed(2)}ms` };
-          break;
+        if (dist < closestDist) {
+          closestDist = dist;
+          found = {
+            x: pt.x,
+            y: pt.y,
+            label: `${lang} · #${pt.runIndex + 1}\n${pt.timeMs.toFixed(2)}ms`,
+            color: LANGUAGE_COLORS[lang],
+            runIndex: pt.runIndex,
+            language: lang,
+          };
         }
       }
-      if (found) break;
     }
 
     setHoveredPoint(found);
@@ -159,22 +204,26 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ history, languages }) => {
         ref={canvasRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        style={{ cursor: 'crosshair' }}
+        style={{ cursor: hoveredPoint ? 'pointer' : 'crosshair' }}
       />
       {hoveredPoint && (
         <div
           style={{
             position: 'absolute',
-            left: hoveredPoint.x + 10,
-            top: hoveredPoint.y - 30,
-            background: 'rgba(11, 12, 16, 0.9)',
-            border: '1px solid #45A29E',
-            borderRadius: 4,
-            padding: '4px 8px',
+            left: Math.min(hoveredPoint.x + 14, CHART_WIDTH - 160),
+            top: Math.max(hoveredPoint.y - 48, 0),
+            background: 'rgba(11, 12, 16, 0.95)',
+            border: `1px solid ${hoveredPoint.color}`,
+            borderRadius: 6,
+            padding: '6px 10px',
             fontSize: 12,
-            color: '#66FCF1',
+            color: hoveredPoint.color,
             pointerEvents: 'none',
-            whiteSpace: 'nowrap',
+            whiteSpace: 'pre-line',
+            fontFamily: 'monospace',
+            boxShadow: `0 0 12px ${hoveredPoint.color}44`,
+            zIndex: 10,
+            lineHeight: 1.4,
           }}
         >
           {hoveredPoint.label}

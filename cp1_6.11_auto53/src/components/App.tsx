@@ -14,6 +14,15 @@ import {
 
 const RANK_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32', 'transparent'];
 
+type ButtonId = 'start' | 'reset' | 'snapshot';
+
+interface Ripple {
+  id: number;
+  x: number;
+  y: number;
+  buttonId: ButtonId;
+}
+
 const App: React.FC = () => {
   const [selectedLanguages, setSelectedLanguages] = useState<LanguageName[]>(['JavaScript', 'Python', 'C++', 'Go']);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState<AlgorithmName>('bubbleSort');
@@ -23,9 +32,10 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<HistoryEntry[][]>([]);
   const [isResetting, setIsResetting] = useState(false);
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
-  const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [ripples, setRipples] = useState<Ripple[]>([]);
   const mainRef = useRef<HTMLDivElement>(null);
   const rippleIdRef = useRef(0);
+  const animFrameRef = useRef<number>(0);
 
   const toggleLanguage = (lang: LanguageName) => {
     setSelectedLanguages((prev) => {
@@ -38,15 +48,37 @@ const App: React.FC = () => {
     });
   };
 
-  const addRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const addRipple = (e: React.MouseEvent<HTMLButtonElement>, buttonId: ButtonId) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const id = rippleIdRef.current++;
-    setRipples((prev) => [...prev, { id, x, y }]);
+    setRipples((prev) => [...prev, { id, x, y, buttonId }]);
     setTimeout(() => {
       setRipples((prev) => prev.filter((r) => r.id !== id));
     }, 600);
+  };
+
+  const renderRipples = (buttonId: ButtonId) => {
+    return ripples
+      .filter((r) => r.buttonId === buttonId)
+      .map((ripple) => (
+        <span
+          key={ripple.id}
+          style={{
+            position: 'absolute',
+            left: ripple.x,
+            top: ripple.y,
+            width: 0,
+            height: 0,
+            borderRadius: '50%',
+            background: buttonId === 'start' ? 'rgba(255,255,255,0.5)' : 'rgba(69, 162, 158, 0.4)',
+            transform: 'translate(-50%, -50%)',
+            animation: 'ripple-anim 0.6s ease-out forwards',
+            pointerEvents: 'none',
+          }}
+        />
+      ));
   };
 
   const startRace = useCallback(async () => {
@@ -66,27 +98,33 @@ const App: React.FC = () => {
 
     const animDuration = 2000 + Math.random() * 1000;
     const startTime = performance.now();
+    let lastSetStateTime = 0;
 
     const animateProgress = () => {
-      const elapsed = performance.now() - startTime;
+      const now = performance.now();
+      const elapsed = now - startTime;
       const globalProgress = Math.min(elapsed / animDuration, 1);
       const easedProgress = 1 - Math.pow(1 - globalProgress, 3);
 
-      setTracks((prev) =>
-        prev.map((track) => ({
-          ...track,
-          progress: track.status === 'completed' ? 100 : easedProgress * 100,
-        }))
-      );
+      if (now - lastSetStateTime > 50) {
+        setTracks((prev) =>
+          prev.map((track) => ({
+            ...track,
+            progress: track.status === 'completed' ? track.progress : easedProgress * 100,
+          }))
+        );
+        lastSetStateTime = now;
+      }
 
       if (globalProgress < 1) {
-        requestAnimationFrame(animateProgress);
+        animFrameRef.current = requestAnimationFrame(animateProgress);
       }
     };
 
-    requestAnimationFrame(animateProgress);
+    animFrameRef.current = requestAnimationFrame(animateProgress);
 
     const settledResults = await Promise.all(resultPromises);
+    cancelAnimationFrame(animFrameRef.current);
 
     const maxTime = Math.max(...settledResults.map((r) => r.timeMs));
 
@@ -120,6 +158,7 @@ const App: React.FC = () => {
 
   const resetRace = useCallback(() => {
     setIsResetting(true);
+    cancelAnimationFrame(animFrameRef.current);
     setTimeout(() => {
       setTracks([]);
       setResults([]);
@@ -128,12 +167,9 @@ const App: React.FC = () => {
   }, []);
 
   const captureSnapshot = useCallback(() => {
-    const mainEl = mainRef.current;
-    if (!mainEl) return;
-
     const canvas = document.createElement('canvas');
-    const width = mainEl.offsetWidth;
-    const height = mainEl.offsetHeight;
+    const width = 900;
+    const height = 700;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -141,48 +177,217 @@ const App: React.FC = () => {
     if (!ctx) return;
 
     ctx.scale(dpr, dpr);
-    ctx.fillStyle = '#0B0C10';
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, '#0B0C10');
+    gradient.addColorStop(1, '#1A1A2E');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
     ctx.fillStyle = '#66FCF1';
-    ctx.font = 'bold 20px "Segoe UI", "PingFang SC", sans-serif';
+    ctx.font = 'bold 28px "Segoe UI", "PingFang SC", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('⚡ 算法赛跑 - 性能快照', width / 2, 30);
+    ctx.fillText('⚡ 算法赛跑 - 性能快照', width / 2, 45);
 
     ctx.fillStyle = '#45A29E';
-    ctx.font = '13px "Segoe UI", sans-serif';
-    ctx.fillText(`算法: ${ALGORITHM_LABELS[selectedAlgorithm]}`, width / 2, 52);
+    ctx.font = '14px "Segoe UI", sans-serif';
+    ctx.fillText(`算法: ${ALGORITHM_LABELS[selectedAlgorithm]} | ${new Date().toLocaleString()}`, width / 2, 72);
 
     const sorted = [...results].sort((a, b) => a.timeMs - b.timeMs);
     const fastest = sorted[0]?.timeMs || 1;
-    const barMaxWidth = width - 300;
-    const barStartX = 130;
+
+    ctx.strokeStyle = '#2A2A4A';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(30, 95, width - 60, 280);
+    ctx.fillStyle = 'rgba(26, 26, 46, 0.5)';
+    ctx.fillRect(30, 95, width - 60, 280);
+
+    ctx.fillStyle = '#45A29E';
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('🏁 赛道进度', 45, 120);
+
+    const barMaxWidth = width - 260;
+    const barStartX = 160;
+    const trackHeight = 45;
 
     sorted.forEach((result, i) => {
-      const y = 80 + i * 50;
+      const y = 145 + i * (trackHeight + 10);
+      const barWidth = (result.timeMs / Math.max(...sorted.map((r) => r.timeMs))) * barMaxWidth;
+
       ctx.fillStyle = LANGUAGE_COLORS[result.language];
       ctx.font = 'bold 14px "Segoe UI", sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(result.language, barStartX - 10, y + 15);
+      ctx.fillText(result.language, barStartX - 10, y + 22);
 
-      const barWidth = (result.timeMs / fastest) * barMaxWidth * 0.8;
-      const gradient = ctx.createLinearGradient(barStartX, 0, barStartX + barWidth, 0);
-      gradient.addColorStop(0, '#1A1A40');
-      gradient.addColorStop(1, '#00FF88');
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = '#1A1A2E';
+      ctx.strokeStyle = '#2A2A4A';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(barStartX, y, barWidth, 30, 4);
+      (ctx as any).roundRect(barStartX, y, barMaxWidth, trackHeight, 4);
       ctx.fill();
+      ctx.stroke();
+
+      const barGradient = ctx.createLinearGradient(barStartX, 0, barStartX + barWidth, 0);
+      barGradient.addColorStop(0, '#1A1A40');
+      barGradient.addColorStop(1, '#00FF88');
+      ctx.fillStyle = barGradient;
+      ctx.beginPath();
+      (ctx as any).roundRect(barStartX, y, barWidth, trackHeight, 4);
+      ctx.fill();
+
+      ctx.fillStyle = '#00FF88';
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${result.timeMs.toFixed(2)}ms`, barStartX + barWidth + 12, y + 22);
+
+      if (i === 0) {
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.fillText('🏆 最快', barStartX + barWidth + 85, y + 22);
+      }
+    });
+
+    ctx.strokeStyle = '#2A2A4A';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(30, 395, (width - 70) / 2, 260);
+    ctx.fillStyle = 'rgba(26, 26, 46, 0.5)';
+    ctx.fillRect(30, 395, (width - 70) / 2, 260);
+
+    ctx.fillStyle = '#45A29E';
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('📊 排名表', 45, 420);
+
+    const tableStartY = 440;
+    const rowHeight = 40;
+
+    ctx.fillStyle = '#45A29E';
+    ctx.font = 'bold 12px "Segoe UI", sans-serif';
+    ctx.fillText('#', 50, tableStartY);
+    ctx.fillText('语言', 90, tableStartY);
+    ctx.textAlign = 'right';
+    ctx.fillText('耗时', (width - 70) / 2 + 10, tableStartY);
+    ctx.fillText('差距', (width - 70) / 2 + 120, tableStartY);
+
+    ctx.strokeStyle = '#2A2A4A';
+    ctx.beginPath();
+    ctx.moveTo(45, tableStartY + 8);
+    ctx.lineTo((width - 70) / 2 + 130, tableStartY + 8);
+    ctx.stroke();
+
+    sorted.forEach((result, i) => {
+      const y = tableStartY + 25 + i * rowHeight;
+      const diffPercent = i === 0 ? 0 : ((result.timeMs - fastest) / fastest) * 100;
+
+      if (i < 3) {
+        ctx.fillStyle = RANK_COLORS[i];
+        ctx.beginPath();
+        ctx.arc(55, y - 6, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0B0C10';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${i + 1}`, 55, y - 2);
+      } else {
+        ctx.fillStyle = '#66FCF1';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${i + 1}`, 55, y - 2);
+      }
+
+      ctx.fillStyle = LANGUAGE_COLORS[result.language];
+      ctx.font = 'bold 13px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(result.language, 90, y);
 
       ctx.fillStyle = '#66FCF1';
       ctx.font = '12px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText(`${result.timeMs.toFixed(2)}ms`, barStartX + barWidth + 10, y + 18);
+      ctx.textAlign = 'right';
+      ctx.fillText(`${result.timeMs.toFixed(2)}ms`, (width - 70) / 2 + 10, y);
+
+      ctx.fillStyle = i === 0 ? '#00FF88' : '#FF6B6B';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText(i === 0 ? '最快' : `+${diffPercent.toFixed(1)}%`, (width - 70) / 2 + 120, y);
     });
+
+    const chartX = (width - 70) / 2 + 50;
+    ctx.strokeStyle = '#2A2A4A';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(chartX, 395, (width - 70) / 2, 260);
+    ctx.fillStyle = 'rgba(26, 26, 46, 0.5)';
+    ctx.fillRect(chartX, 395, (width - 70) / 2, 260);
+
+    ctx.fillStyle = '#45A29E';
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('📈 历史趋势', chartX + 15, 420);
+
+    if (history.length > 0) {
+      const chartW = (width - 70) / 2 - 40;
+      const chartH = 180;
+      const chartLeft = chartX + 20;
+      const chartTop = 440;
+
+      const allTimes = history.flatMap((entry) => entry.map((e) => e.timeMs));
+      const maxTime = Math.max(...allTimes) * 1.1;
+
+      ctx.strokeStyle = '#1A1A2E';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = chartTop + (chartH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, y);
+        ctx.lineTo(chartLeft + chartW, y);
+        ctx.stroke();
+      }
+
+      selectedLanguages.forEach((lang) => {
+        const color = LANGUAGE_COLORS[lang];
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+
+        let started = false;
+        history.forEach((entry, runIndex) => {
+          const point = entry.find((e) => e.language === lang);
+          if (!point) return;
+          const x = chartLeft + (chartW / Math.max(history.length - 1, 1)) * runIndex;
+          const y = chartTop + chartH - (point.timeMs / maxTime) * chartH;
+          if (!started) {
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      const legendX = chartX + 30;
+      const legendY = 640;
+      selectedLanguages.forEach((lang, i) => {
+        ctx.fillStyle = LANGUAGE_COLORS[lang];
+        ctx.beginPath();
+        ctx.arc(legendX + i * 100, legendY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = LANGUAGE_COLORS[lang];
+        ctx.font = '11px "Segoe UI", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(lang, legendX + i * 100 + 10, legendY + 4);
+      });
+    }
+
+    ctx.fillStyle = '#2A2A4A';
+    ctx.font = '11px "Segoe UI", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Generated by 算法赛跑 | algorithm-race', width / 2, height - 15);
 
     const dataUrl = canvas.toDataURL('image/png');
     setSnapshotUrl(dataUrl);
-  }, [results, selectedAlgorithm]);
+  }, [results, selectedAlgorithm, history, selectedLanguages]);
 
   const maxTime = results.length > 0 ? Math.max(...results.map((r) => r.timeMs)) : 0;
   const sortedResults = [...results].sort((a, b) => a.timeMs - b.timeMs);
@@ -302,7 +507,7 @@ const App: React.FC = () => {
         <div style={{ display: 'flex', gap: 10, marginLeft: 'auto', alignItems: 'flex-end' }}>
           <button
             onClick={(e) => {
-              addRipple(e);
+              addRipple(e, 'start');
               startRace();
             }}
             disabled={isRacing || selectedLanguages.length < 2}
@@ -331,22 +536,7 @@ const App: React.FC = () => {
               (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
             }}
           >
-            {ripples.map((ripple) => (
-              <span
-                key={ripple.id}
-                style={{
-                  position: 'absolute',
-                  left: ripple.x,
-                  top: ripple.y,
-                  width: 0,
-                  height: 0,
-                  borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.4)',
-                  transform: 'translate(-50%, -50%)',
-                  animation: 'ripple-anim 0.6s ease-out forwards',
-                }}
-              />
-            ))}
+            {renderRipples('start')}
             {isRacing ? '赛跑中...' : '开始赛跑'}
           </button>
         </div>
@@ -581,7 +771,7 @@ const App: React.FC = () => {
       >
         <button
           onClick={(e) => {
-            addRipple(e);
+            addRipple(e, 'reset');
             resetRace();
           }}
           disabled={isRacing}
@@ -609,27 +799,12 @@ const App: React.FC = () => {
             (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
           }}
         >
-          {ripples.map((ripple) => (
-            <span
-              key={ripple.id}
-              style={{
-                position: 'absolute',
-                left: ripple.x,
-                top: ripple.y,
-                width: 0,
-                height: 0,
-                borderRadius: '50%',
-                background: 'rgba(69, 162, 158, 0.3)',
-                transform: 'translate(-50%, -50%)',
-                animation: 'ripple-anim 0.6s ease-out forwards',
-              }}
-            />
-          ))}
+          {renderRipples('reset')}
           🔄 重置赛道
         </button>
         <button
           onClick={(e) => {
-            addRipple(e);
+            addRipple(e, 'snapshot');
             captureSnapshot();
           }}
           disabled={results.length === 0}
@@ -659,22 +834,7 @@ const App: React.FC = () => {
             (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
           }}
         >
-          {ripples.map((ripple) => (
-            <span
-              key={ripple.id}
-              style={{
-                position: 'absolute',
-                left: ripple.x,
-                top: ripple.y,
-                width: 0,
-                height: 0,
-                borderRadius: '50%',
-                background: 'rgba(69, 162, 158, 0.3)',
-                transform: 'translate(-50%, -50%)',
-                animation: 'ripple-anim 0.6s ease-out forwards',
-              }}
-            />
-          ))}
+          {renderRipples('snapshot')}
           📸 分享快照
         </button>
       </section>
@@ -685,7 +845,7 @@ const App: React.FC = () => {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
+            background: 'rgba(0, 0, 0, 0.85)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -700,30 +860,39 @@ const App: React.FC = () => {
               border: '1px solid #45A29E',
               borderRadius: 12,
               padding: 20,
-              maxWidth: '90vw',
-              maxHeight: '90vh',
+              maxWidth: '92vw',
+              maxHeight: '92vh',
               overflow: 'auto',
+              boxShadow: '0 0 40px rgba(102, 252, 241, 0.2)',
             }}
           >
-            <h3 style={{ color: '#66FCF1', marginBottom: 12, fontSize: 14 }}>
-              右键保存图片即可分享
+            <h3 style={{ color: '#66FCF1', marginBottom: 12, fontSize: 14, letterSpacing: 1 }}>
+              📸 快照已生成 · 右键保存图片即可分享
             </h3>
             <img
               src={snapshotUrl}
               alt="算法赛跑快照"
-              style={{ maxWidth: '100%', borderRadius: 8 }}
+              style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }}
             />
-            <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
               <button
                 onClick={() => setSnapshotUrl(null)}
                 style={{
-                  padding: '8px 20px',
+                  padding: '8px 24px',
                   border: '1px solid #45A29E',
                   borderRadius: 6,
                   background: 'transparent',
                   color: '#66FCF1',
                   cursor: 'pointer',
                   fontSize: 13,
+                  fontWeight: 600,
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(69, 162, 158, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                 }}
               >
                 关闭
@@ -738,11 +907,11 @@ const App: React.FC = () => {
           0% {
             width: 0;
             height: 0;
-            opacity: 0.5;
+            opacity: 0.6;
           }
           100% {
-            width: 200px;
-            height: 200px;
+            width: 300px;
+            height: 300px;
             opacity: 0;
           }
         }

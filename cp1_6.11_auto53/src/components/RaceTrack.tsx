@@ -20,10 +20,20 @@ const TRACK_GAP = 8;
 const RaceTrack: React.FC<RaceTrackProps> = ({ tracks, maxTime }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
+  const tracksRef = useRef<RaceTrackData[]>([]);
+  const displayProgressRef = useRef<Map<LanguageName, number>>(new Map());
+  const targetProgressRef = useRef<Map<LanguageName, number>>(new Map());
   const [fps, setFps] = useState<number>(60);
-  const lastFrameTimeRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
   const fpsAccumRef = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    tracksRef.current = tracks;
+    tracks.forEach((track) => {
+      targetProgressRef.current.set(track.language, track.progress);
+    });
+  }, [tracks]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,17 +41,21 @@ const RaceTrack: React.FC<RaceTrackProps> = ({ tracks, maxTime }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const totalHeight = tracks.length * (TRACK_HEIGHT + TRACK_GAP) + 20;
-    const width = canvas.parentElement?.clientWidth || 800;
+    const resizeCanvas = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const totalHeight = tracks.length * (TRACK_HEIGHT + TRACK_GAP) + 20;
+      const width = canvas.parentElement?.clientWidth || 800;
+      canvas.width = width * dpr;
+      canvas.height = totalHeight * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${totalHeight}px`;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+    };
 
-    canvas.width = width * dpr;
-    canvas.height = totalHeight * dpr;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${totalHeight}px`;
-    ctx.scale(dpr, dpr);
+    resizeCanvas();
 
-    const draw = (timestamp: number) => {
+    const animate = (timestamp: number) => {
       if (lastFrameTimeRef.current > 0) {
         const delta = timestamp - lastFrameTimeRef.current;
         fpsAccumRef.current += delta;
@@ -55,15 +69,27 @@ const RaceTrack: React.FC<RaceTrackProps> = ({ tracks, maxTime }) => {
       }
       lastFrameTimeRef.current = timestamp;
 
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.width / dpr;
+      const totalHeight = canvas.height / dpr;
       ctx.clearRect(0, 0, width, totalHeight);
 
       const barMaxWidth = width - 200;
       const labelWidth = 120;
       const barStartX = labelWidth + 10;
 
-      tracks.forEach((track, index) => {
+      const easing = 0.15;
+      tracksRef.current.forEach((track) => {
+        const current = displayProgressRef.current.get(track.language) ?? 0;
+        const target = targetProgressRef.current.get(track.language) ?? 0;
+        const next = current + (target - current) * easing;
+        displayProgressRef.current.set(track.language, Math.abs(next - target) < 0.01 ? target : next);
+      });
+
+      tracksRef.current.forEach((track, index) => {
         const y = index * (TRACK_HEIGHT + TRACK_GAP) + 10;
         const barHeight = TRACK_HEIGHT - 8;
+        const displayProgress = displayProgressRef.current.get(track.language) ?? 0;
 
         ctx.fillStyle = LANGUAGE_COLORS[track.language];
         ctx.font = 'bold 14px "Segoe UI", "PingFang SC", sans-serif';
@@ -75,18 +101,18 @@ const RaceTrack: React.FC<RaceTrackProps> = ({ tracks, maxTime }) => {
         ctx.strokeStyle = '#2A2A4A';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(barStartX, y, barMaxWidth, barHeight, 6);
+        (ctx as any).roundRect(barStartX, y, barMaxWidth, barHeight, 6);
         ctx.fill();
         ctx.stroke();
 
-        if (track.progress > 0) {
-          const barWidth = Math.max(2, (track.progress / 100) * barMaxWidth);
+        if (displayProgress > 0) {
+          const barWidth = Math.max(2, (displayProgress / 100) * barMaxWidth);
           const gradient = ctx.createLinearGradient(barStartX, 0, barStartX + barWidth, 0);
           gradient.addColorStop(0, '#1A1A40');
           gradient.addColorStop(1, '#00FF88');
 
           ctx.beginPath();
-          ctx.roundRect(barStartX, y, barWidth, barHeight, 6);
+          (ctx as any).roundRect(barStartX, y, barWidth, barHeight, 6);
           ctx.fillStyle = gradient;
           ctx.fill();
 
@@ -94,7 +120,7 @@ const RaceTrack: React.FC<RaceTrackProps> = ({ tracks, maxTime }) => {
           ctx.shadowColor = glowColor;
           ctx.shadowBlur = 12;
           ctx.beginPath();
-          ctx.roundRect(barStartX, y, barWidth, barHeight, 6);
+          (ctx as any).roundRect(barStartX, y, barWidth, barHeight, 6);
           ctx.fill();
           ctx.shadowBlur = 0;
         }
@@ -111,7 +137,7 @@ const RaceTrack: React.FC<RaceTrackProps> = ({ tracks, maxTime }) => {
           ctx.fillText(`耗时: ${track.timeMs.toFixed(2)}ms`, barStartX + barMaxWidth + 10, y + barHeight / 2);
         }
 
-        if (index < tracks.length - 1) {
+        if (index < tracksRef.current.length - 1) {
           const lineY = y + TRACK_HEIGHT + TRACK_GAP / 2;
           const glow = ctx.createLinearGradient(barStartX, 0, barStartX + barMaxWidth, 0);
           glow.addColorStop(0, 'rgba(69, 162, 158, 0)');
@@ -126,15 +152,21 @@ const RaceTrack: React.FC<RaceTrackProps> = ({ tracks, maxTime }) => {
         }
       });
 
-      animFrameRef.current = requestAnimationFrame(draw);
+      animFrameRef.current = requestAnimationFrame(animate);
     };
 
-    animFrameRef.current = requestAnimationFrame(draw);
+    animFrameRef.current = requestAnimationFrame(animate);
+
+    const handleResize = () => {
+      resizeCanvas();
+    };
+    window.addEventListener('resize', handleResize);
 
     return () => {
       cancelAnimationFrame(animFrameRef.current);
+      window.removeEventListener('resize', handleResize);
     };
-  }, [tracks, maxTime]);
+  }, [tracks.length, maxTime]);
 
   return (
     <div style={{ position: 'relative' }}>
