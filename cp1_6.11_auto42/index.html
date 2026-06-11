@@ -86,13 +86,23 @@
       left: 0;
       width: 100%;
       height: 1px;
+      background: rgba(255, 140, 0, 0);
+      box-shadow:
+        0 0 0 rgba(255, 140, 0, 0),
+        0 0 0 rgba(255, 140, 0, 0),
+        0 0 0 rgba(255, 140, 0, 0),
+        0 0 0 rgba(255, 100, 0, 0);
+      z-index: 10;
+      transition: background 0.5s ease-out, box-shadow 0.5s ease-out;
+    }
+
+    #glow-divider.active {
       background: rgba(255, 140, 0, 0.45);
       box-shadow:
         0 0 4px rgba(255, 140, 0, 0.5),
         0 0 12px rgba(255, 140, 0, 0.4),
         0 0 30px rgba(255, 140, 0, 0.2),
         0 0 60px rgba(255, 100, 0, 0.1);
-      z-index: 10;
     }
 
     #control-panel {

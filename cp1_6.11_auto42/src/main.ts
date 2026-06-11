@@ -171,6 +171,10 @@ class App implements AppController {
           loading.style.display = 'none';
         }, 800);
       }
+      const divider = document.getElementById('glow-divider');
+      if (divider) {
+        divider.classList.add('active');
+      }
     }, 500);
   }
 

@@ -38,6 +38,18 @@ const SPAWN_HEIGHT_MAX = 35;
 const COL_WHITE = new THREE.Color(0xffffff);
 const COL_ORANGE = new THREE.Color(0xff8c00);
 const COL_DARK_RED = new THREE.Color(0x8b0000);
+const _tmpColor = new THREE.Color();
+
+function easeOutCubic(t: number): number {
+  return 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t);
+}
+
+function trailFadeAlpha(lifeRatio: number): number {
+  if (lifeRatio < 0.5) return 1.0;
+  if (lifeRatio < 0.75) return 1.0 - (lifeRatio - 0.5) * 2.0;
+  const t = (lifeRatio - 0.75) / 0.25;
+  return 0.5 * (1.0 - easeOutCubic(t));
+}
 
 export class ParticleSystem {
   private config: MeteorConfig = {
@@ -59,6 +71,7 @@ export class ParticleSystem {
   private debrisGeometry: THREE.BufferGeometry;
   private debrisPositions: Float32Array;
   private debrisColors: Float32Array;
+  private debrisAlphas: Float32Array;
   private debrisSizes: Float32Array;
 
   private trailLines: THREE.Line[] = [];
@@ -132,21 +145,24 @@ export class ParticleSystem {
     }
 
     this.debrisPositions = new Float32Array(MAX_DEBRIS * 3);
-    this.debrisColors = new Float32Array(MAX_DEBRIS * 4);
+    this.debrisColors = new Float32Array(MAX_DEBRIS * 3);
+    this.debrisAlphas = new Float32Array(MAX_DEBRIS);
     this.debrisSizes = new Float32Array(MAX_DEBRIS);
 
     this.debrisGeometry = new THREE.BufferGeometry();
     this.debrisGeometry.setAttribute('position', new THREE.BufferAttribute(this.debrisPositions, 3));
-    this.debrisGeometry.setAttribute('color', new THREE.BufferAttribute(this.debrisColors, 4));
+    this.debrisGeometry.setAttribute('color', new THREE.BufferAttribute(this.debrisColors, 3));
+    this.debrisGeometry.setAttribute('flickerAlpha', new THREE.BufferAttribute(this.debrisAlphas, 1));
     this.debrisGeometry.setAttribute('size', new THREE.BufferAttribute(this.debrisSizes, 1));
 
     const debrisVertexShader = `
       attribute float size;
+      attribute float flickerAlpha;
       varying vec3 vColor;
       varying float vAlpha;
       void main() {
-        vColor = color.rgb;
-        vAlpha = color.a;
+        vColor = color;
+        vAlpha = flickerAlpha;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         gl_PointSize = size * (220.0 / -mvPosition.z);
         gl_Position = projectionMatrix * mvPosition;
@@ -199,7 +215,9 @@ export class ParticleSystem {
   }
 
   triggerBurst(): void {
-    this.burstMultiplier = 2;
+    const maxBurstDensity = Math.floor(this.freeMeteorIndices.length / 3.0);
+    const neededDensity = this.config.density * 2;
+    this.burstMultiplier = neededDensity <= maxBurstDensity ? 2 : Math.max(1, maxBurstDensity / this.config.density);
     this.burstTimer = 3.0;
   }
 
@@ -221,10 +239,17 @@ export class ParticleSystem {
   private spawnMeteors(delta: number): void {
     const effectiveDensity = this.config.density * this.burstMultiplier;
     this.spawnAccumulator += effectiveDensity * delta;
+    const maxSpawnable = this.freeMeteorIndices.length;
+    let spawned = 0;
 
-    while (this.spawnAccumulator >= 1) {
+    while (this.spawnAccumulator >= 1 && spawned < maxSpawnable) {
       this.spawnAccumulator -= 1;
       this.spawnMeteor();
+      spawned++;
+    }
+
+    if (this.spawnAccumulator > maxSpawnable) {
+      this.spawnAccumulator = maxSpawnable;
     }
   }
 
@@ -242,6 +267,28 @@ export class ParticleSystem {
 
   private releaseDebrisIndex(idx: number): void {
     this.freeDebrisIndices.push(idx);
+  }
+
+  private resetMeteor(meteor: Meteor): void {
+    meteor.active = false;
+    meteor.position.set(0, 0, 0);
+    meteor.velocity.set(0, 0, 0);
+    meteor.life = 0;
+    meteor.maxLife = METEOR_TRAIL_DURATION;
+    meteor.trailLength = 0;
+    for (let k = 0; k < TRAIL_MAX_POINTS; k++) {
+      meteor.trailPositions[k]!.set(0, 0, 0);
+    }
+  }
+
+  private resetDebris(debris: Debris): void {
+    debris.active = false;
+    debris.position.set(0, 0, 0);
+    debris.velocity.set(0, 0, 0);
+    debris.life = 0;
+    debris.maxLife = DEBRIS_DURATION;
+    debris.flickerSpeed = 0;
+    debris.flickerOffset = 0;
   }
 
   private spawnMeteor(): void {
@@ -266,6 +313,9 @@ export class ParticleSystem {
     meteor.life = 0;
     meteor.maxLife = METEOR_TRAIL_DURATION;
     meteor.trailPositions[0]!.copy(meteor.position);
+    for (let k = 1; k < TRAIL_MAX_POINTS; k++) {
+      meteor.trailPositions[k]!.set(0, 0, 0);
+    }
     meteor.trailLength = 1;
 
     this.trailLines[idx]!.visible = true;
@@ -311,9 +361,8 @@ export class ParticleSystem {
     const alpAttr = geo.getAttribute('alpha') as THREE.BufferAttribute;
 
     const count = meteor.trailLength;
-    const fadeProgress = Math.min(meteor.life / meteor.maxLife, 1.0);
-    const lifeFade = 1.0 - fadeProgress;
-    const lifeFadeSq = lifeFade * lifeFade;
+    const lifeRatio = Math.min(meteor.life / meteor.maxLife, 1.0);
+    const fadeAlpha = trailFadeAlpha(lifeRatio);
 
     for (let j = 0; j < count; j++) {
       const t = count > 1 ? j / (count - 1) : 0;
@@ -321,18 +370,17 @@ export class ParticleSystem {
 
       posAttr.setXYZ(j, p.x, p.y, p.z);
 
-      let color: THREE.Color;
       if (t < 0.5) {
-        color = COL_WHITE.clone().lerp(COL_ORANGE, t * 2);
+        _tmpColor.copy(COL_WHITE).lerp(COL_ORANGE, t * 2);
       } else {
-        color = COL_ORANGE.clone().lerp(COL_DARK_RED, (t - 0.5) * 2);
+        _tmpColor.copy(COL_ORANGE).lerp(COL_DARK_RED, (t - 0.5) * 2);
       }
-      const intensity = 0.6 + 0.4 * lifeFade;
-      color.multiplyScalar(intensity);
-      colAttr.setXYZ(j, color.r, color.g, color.b);
+      const intensity = 0.7 + 0.3 * fadeAlpha;
+      _tmpColor.multiplyScalar(intensity);
+      colAttr.setXYZ(j, _tmpColor.r, _tmpColor.g, _tmpColor.b);
 
-      const spatialFade = 1.0 - t * 0.7;
-      const alpha = Math.max(0.0, Math.min(1.0, lifeFadeSq * spatialFade));
+      const spatialFade = 1.0 - t * 0.6;
+      const alpha = Math.max(0.0, Math.min(1.0, fadeAlpha * spatialFade));
       alpAttr.setX(j, alpha);
     }
 
@@ -344,10 +392,19 @@ export class ParticleSystem {
 
   private deactivateMeteor(idx: number): void {
     const meteor = this.meteorPool[idx]!;
-    meteor.active = false;
-    meteor.trailLength = 0;
+    this.resetMeteor(meteor);
     this.trailLines[idx]!.visible = false;
-    this.trailGeometries[idx]!.setDrawRange(0, 0);
+    const geo = this.trailGeometries[idx]!;
+    geo.setDrawRange(0, 0);
+    const posArr = (geo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+    const colArr = (geo.getAttribute('color') as THREE.BufferAttribute).array as Float32Array;
+    const alpArr = (geo.getAttribute('alpha') as THREE.BufferAttribute).array as Float32Array;
+    posArr.fill(0);
+    colArr.fill(0);
+    alpArr.fill(0);
+    geo.getAttribute('position').needsUpdate = true;
+    geo.getAttribute('color').needsUpdate = true;
+    geo.getAttribute('alpha').needsUpdate = true;
     this.releaseMeteorIndex(idx);
   }
 
@@ -357,8 +414,10 @@ export class ParticleSystem {
     const oy = meteor.position.y;
     const oz = meteor.position.z;
     const baseSpeed = 2 + Math.random() * 4;
+    const available = this.freeDebrisIndices.length;
+    const actualCount = Math.min(count, available);
 
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < actualCount; i++) {
       const idx = this.acquireDebrisIndex();
       if (idx < 0) break;
       const debris = this.debrisPool[idx]!;
@@ -384,7 +443,7 @@ export class ParticleSystem {
 
       debris.life += delta;
       if (debris.life >= debris.maxLife) {
-        debris.active = false;
+        this.resetDebris(debris);
         this.releaseDebrisIndex(i);
         continue;
       }
@@ -402,7 +461,6 @@ export class ParticleSystem {
       if (!debris.active) continue;
 
       const pIdx = visibleCount * 3;
-      const cIdx = visibleCount * 4;
       const lifeRatio = debris.life / debris.maxLife;
 
       const flickerPhase = debris.life * debris.flickerSpeed + debris.flickerOffset;
@@ -418,10 +476,11 @@ export class ParticleSystem {
       this.debrisPositions[pIdx + 2] = debris.position.z;
 
       const colorTint = 1.0 - lifeRatio * 0.4;
-      this.debrisColors[cIdx] = 1.0 * colorTint;
-      this.debrisColors[cIdx + 1] = (0.55 * colorTint) * (1.0 - lifeRatio * 0.3);
-      this.debrisColors[cIdx + 2] = (0.1 * colorTint) * (1.0 - lifeRatio * 0.6);
-      this.debrisColors[cIdx + 3] = alpha;
+      this.debrisColors[pIdx] = 1.0 * colorTint;
+      this.debrisColors[pIdx + 1] = (0.55 * colorTint) * (1.0 - lifeRatio * 0.3);
+      this.debrisColors[pIdx + 2] = (0.1 * colorTint) * (1.0 - lifeRatio * 0.6);
+
+      this.debrisAlphas[visibleCount] = alpha;
 
       this.debrisSizes[visibleCount] = (0.4 + 0.6 * fadeOut) * 3.5;
 
@@ -430,10 +489,12 @@ export class ParticleSystem {
 
     const posAttr = this.debrisGeometry.getAttribute('position') as THREE.BufferAttribute;
     const colAttr = this.debrisGeometry.getAttribute('color') as THREE.BufferAttribute;
+    const alphaAttr = this.debrisGeometry.getAttribute('flickerAlpha') as THREE.BufferAttribute;
     const sizeAttr = this.debrisGeometry.getAttribute('size') as THREE.BufferAttribute;
 
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
+    alphaAttr.needsUpdate = true;
     sizeAttr.needsUpdate = true;
 
     this.debrisGeometry.setDrawRange(0, visibleCount);
