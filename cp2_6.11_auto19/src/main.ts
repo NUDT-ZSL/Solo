@@ -107,14 +107,18 @@ class Game {
 
     if (this.state !== 'playing') return;
 
-    if (this.player.isEnergyFull()) {
-      const dx = x - this.centerX;
-      const dy = y - this.centerY;
-      const distToCenter = Math.sqrt(dx * dx + dy * dy);
-      if (distToCenter <= 60) {
-        this.triggerUltimate(now);
-        return;
-      }
+    const dcx = x - this.centerX;
+    const dcy = y - this.centerY;
+    const distToTarget = Math.sqrt(dcx * dcx + dcy * dcy);
+    const TARGET_RADIUS = 60;
+
+    if (this.player.isEnergyFull() && distToTarget <= TARGET_RADIUS) {
+      this.triggerUltimate(now);
+      return;
+    }
+
+    if (distToTarget <= TARGET_RADIUS && !this.player.isEnergyFull()) {
+      return;
     }
 
     const clickRadius = 44;
@@ -137,9 +141,7 @@ class Game {
     if (hitNote) {
       this.onNoteHit(hitNote, now);
     } else {
-      const dcx = x - this.centerX;
-      const dcy = y - this.centerY;
-      const distCenter = Math.sqrt(dcx * dcx + dcy * dcy);
+      const distCenter = distToTarget;
       if (distCenter <= 80) {
         this.onMiss(x, y, now);
       }

@@ -117,16 +117,17 @@ export class UIRenderer {
       comboScale = 1 + Math.sin(t * Math.PI) * 0.4;
     }
 
-    const comboIsRed = player.comboMissFlash > 0;
+    const comboIsRed = player.isShowingMissFlash();
     const comboAlpha = comboIsRed ? (0.5 + Math.sin(now * 0.05) * 0.5) : 1;
     const comboColor = comboIsRed ? '#FF4444' : '#FFFFFF';
 
+    const displayCombo = player.getDisplayCombo();
     ctx.font = `bold ${Math.floor(42 * comboScale)}px 'Segoe UI', sans-serif`;
     ctx.fillStyle = comboColor;
     ctx.shadowColor = comboIsRed ? '#FF4444' : '#00E5FF';
     ctx.shadowBlur = 4;
     ctx.globalAlpha = comboAlpha;
-    ctx.fillText(`${player.combo}`, 30, 60);
+    ctx.fillText(`${displayCombo}`, 30, 60);
 
     ctx.font = '16px sans-serif';
     ctx.fillStyle = '#AAAAAA';

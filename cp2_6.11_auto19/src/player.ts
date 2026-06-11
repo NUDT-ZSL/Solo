@@ -5,8 +5,10 @@ export class Player {
   energy: number = 0;
   comboAnimTime: number = 0;
   comboMissFlash: number = 0;
+  missComboValue: number = 0;
   private comboAnimStart: number = 0;
   private missFlashStart: number = 0;
+  private isMissFlashing: boolean = false;
 
   constructor() {}
 
@@ -17,6 +19,8 @@ export class Player {
     }
     this.comboAnimStart = now;
     this.comboAnimTime = 300;
+    this.isMissFlashing = false;
+    this.missComboValue = 0;
 
     let points = 100;
     if (this.combo > 0 && this.combo % 5 === 0) {
@@ -28,7 +32,9 @@ export class Player {
   }
 
   miss(now: number) {
-    this.combo = 0;
+    if (this.isMissFlashing) return;
+    this.missComboValue = this.combo;
+    this.isMissFlashing = true;
     this.missFlashStart = now;
     this.comboMissFlash = 300;
   }
@@ -47,8 +53,20 @@ export class Player {
     const base = 1;
     const maxBoost = 1;
     const boostPerCombo = 0.02;
-    const boost = Math.min(maxBoost, this.combo * boostPerCombo);
+    const effectiveCombo = this.isMissFlashing ? this.missComboValue : this.combo;
+    const boost = Math.min(maxBoost, effectiveCombo * boostPerCombo);
     return base + boost;
+  }
+
+  getDisplayCombo(): number {
+    if (this.isMissFlashing) {
+      return this.missComboValue;
+    }
+    return this.combo;
+  }
+
+  isShowingMissFlash(): boolean {
+    return this.isMissFlashing;
   }
 
   update(now: number) {
@@ -57,6 +75,11 @@ export class Player {
     }
     if (this.comboMissFlash > 0) {
       this.comboMissFlash = Math.max(0, this.missFlashStart + 300 - now);
+      if (this.comboMissFlash === 0 && this.isMissFlashing) {
+        this.isMissFlashing = false;
+        this.combo = 0;
+        this.missComboValue = 0;
+      }
     }
   }
 
@@ -67,5 +90,7 @@ export class Player {
     this.energy = 0;
     this.comboAnimTime = 0;
     this.comboMissFlash = 0;
+    this.missComboValue = 0;
+    this.isMissFlashing = false;
   }
 }
