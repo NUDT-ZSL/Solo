@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>太阳系 3D 可视化沙盘</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000011;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: #ffffff;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #label-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .planet-label {
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 500;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.8);
+      padding: 2px 6px;
+      white-space: nowrap;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    #ui-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 100;
+      background: rgba(15, 25, 50, 0.55);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid rgba(100, 150, 255, 0.15);
+      border-radius: 16px;
+      padding: 18px;
+      min-width: 220px;
+      box-shadow: 0 8px 32px rgba(0, 10, 40, 0.4);
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #8ec5ff;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(100, 180, 255, 0.25);
+      background: rgba(40, 70, 130, 0.4);
+      color: #e0efff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      background: rgba(60, 110, 200, 0.55);
+      border-color: rgba(130, 200, 255, 0.6);
+      box-shadow: 0 0 16px rgba(80, 160, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn.active {
+      background: rgba(80, 150, 255, 0.45);
+      border-color: rgba(150, 210, 255, 0.7);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      color: #c0d8ff;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: rgba(60, 90, 140, 0.6);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch.on {
+      background: rgba(80, 160, 255, 0.8);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #ffffff;
+      border-radius: 50%;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .toggle-switch.on::after {
+      transform: translateX(20px);
+    }
+
+    #info-panel {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 100;
+      background: rgba(15, 25, 50, 0.55);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid rgba(100, 150, 255, 0.15);
+      border-radius: 16px;
+      padding: 20px;
+      min-width: 280px;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0, 10, 40, 0.4);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+
+    #info-panel.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #info-panel .planet-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    #info-panel .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(100, 150, 255, 0.1);
+    }
+
+    #info-panel .info-row:last-child {
+      border-bottom: none;
+    }
+
+    #info-panel .info-key {
+      font-size: 12px;
+      color: #8eb4e8;
+      letter-spacing: 0.3px;
+    }
+
+    #info-panel .info-value {
+      font-size: 13px;
+      color: #e0efff;
+      font-weight: 500;
+    }
+
+    #info-panel .close-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 100, 100, 0.2);
+      border: 1px solid rgba(255, 120, 120, 0.3);
+      color: #ff9090;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      line-height: 1;
+      pointer-events: auto;
+      transition: all 0.2s ease;
+    }
+
+    #info-panel .close-btn:hover {
+      background: rgba(255, 80, 80, 0.35);
+      transform: scale(1.05);
+    }
+
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #8ec5ff;
+      font-size: 16px;
+      z-index: 200;
+    }
+
+    @media (max-width: 768px) {
+      #ui-panel {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        min-width: auto;
+        padding: 14px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .panel-title {
+        width: 100%;
+        font-size: 12px;
+        margin-bottom: 0;
+      }
+
+      .btn-group {
+        flex-direction: row;
+        flex: 1;
+        min-width: 100%;
+        gap: 8px;
+      }
+
+      .btn {
+        flex: 1;
+        font-size: 12px;
+        padding: 8px 12px;
+        min-height: 44px;
+      }
+
+      .toggle-row {
+        flex: 1;
+        min-width: 100%;
+      }
+
+      #info-panel {
+        bottom: 12px;
+        left: 12px;
+        right: 12px;
+        min-width: auto;
+        max-width: none;
+        padding: 16px;
+      }
+
+      #info-panel .planet-name {
+        font-size: 18px;
+      }
+
+      .planet-label {
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="label-container"></div>
+
+    <div id="ui-panel">
+      <div class="panel-title">控制面板</div>
+      <div class="btn-group">
+        <button class="btn" id="btn-toggle">
+          <span id="btn-toggle-icon">⏸</span>
+          <span id="btn-toggle-text">暂停</span>
+        </button>
+        <button class="btn" id="btn-reset">
+          <span>🎯</span>
+          <span>重置视角</span>
+        </button>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">显示行星名称</span>
+        <div class="toggle-switch on" id="toggle-labels"></div>
+      </div>
+    </div>
+
+    <div id="info-panel">
+      <button class="close-btn" id="info-close">×</button>
+      <div class="planet-name" id="info-name">—</div>
+      <div class="info-row">
+        <span class="info-key">轨道半径</span>
+        <span class="info-value" id="info-radius">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">公转周期</span>
+        <span class="info-value" id="info-period">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">直径比例</span>
+        <span class="info-value" id="info-size">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">自转周期</span>
+        <span class="info-value" id="info-rotation">—</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
