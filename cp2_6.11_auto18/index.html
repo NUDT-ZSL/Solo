@@ -2,30 +2,422 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>图腾攀岩者</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星焰书简 · Starflame Letters</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
+
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: linear-gradient(to bottom, #0b2d1e, #0a1a30);
+      font-family: 'Noto Serif SC', 'Songti SC', serif;
+      background: #0B0E2A;
+      color: #F0F4FF;
     }
-    canvas {
-      display: block;
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
-      touch-action: none;
+      z-index: 1;
+    }
+
+    #canvas-container canvas {
+      display: block;
+    }
+
+    .ui-layer {
+      position: relative;
+      z-index: 10;
+      pointer-events: none;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ui-layer > * {
+      pointer-events: auto;
+    }
+
+    .input-panel {
+      position: absolute;
+      top: 32px;
+      left: 32px;
+      width: 380px;
+      padding: 28px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 4px;
+      background: linear-gradient(135deg, #FFD700 0%, #FF8C00 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: rgba(240, 244, 255, 0.6);
+      margin-bottom: 24px;
+      letter-spacing: 1px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    textarea {
+      width: 100%;
+      height: 180px;
+      padding: 16px;
+      background: rgba(11, 14, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      color: #F0F4FF;
+      font-size: 15px;
+      line-height: 1.8;
+      resize: none;
+      outline: none;
+      font-family: 'Noto Serif SC', 'Songti SC', serif;
+      letter-spacing: 1px;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    textarea::placeholder {
+      color: rgba(240, 244, 255, 0.4);
+    }
+
+    textarea:focus {
+      border-color: rgba(255, 215, 0, 0.5);
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
+    }
+
+    .char-count {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .char-count .count {
+      color: rgba(240, 244, 255, 0.7);
+    }
+
+    .char-count .count.valid {
+      color: #FFD700;
+    }
+
+    .char-count .count.invalid {
+      color: #FF6B6B;
+    }
+
+    .char-count .hint {
+      color: rgba(240, 244, 255, 0.5);
+      font-size: 12px;
+    }
+
+    .transform-btn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 16px 32px;
+      background: linear-gradient(135deg, #FFD700 0%, #FF8C00 100%);
+      border: none;
+      border-radius: 12px;
+      color: #0B0E2A;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 4px;
+      cursor: pointer;
+      font-family: 'Noto Serif SC', 'Songti SC', serif;
+      transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+      box-shadow: 0 4px 20px rgba(255, 215, 0, 0.3);
+    }
+
+    .transform-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px rgba(255, 215, 0, 0.5);
+    }
+
+    .transform-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .transform-btn.loading {
+      background: linear-gradient(135deg, #FFD700 0%, #FF8C00 100%);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .control-panel {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 16px 28px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .control-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-label {
+      font-size: 13px;
+      color: rgba(240, 244, 255, 0.8);
+      letter-spacing: 1px;
+      white-space: nowrap;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .control-value {
+      font-size: 14px;
+      color: #FFD700;
+      font-weight: 600;
+      min-width: 40px;
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    input[type="range"] {
+      width: 120px;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(135deg, #FFD700 0%, #FF8C00 100%);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(255, 215, 0, 0.5);
+      transition: transform 0.2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(135deg, #FFD700 0%, #FF8C00 100%);
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 10px rgba(255, 215, 0, 0.5);
+    }
+
+    .reset-btn {
+      padding: 8px 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 20px;
+      color: #F0F4FF;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .reset-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 215, 0, 0.5);
+      color: #FFD700;
+    }
+
+    .legend {
+      position: absolute;
+      top: 32px;
+      right: 32px;
+      padding: 16px 20px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .legend-title {
+      font-size: 12px;
+      color: rgba(240, 244, 255, 0.6);
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: rgba(240, 244, 255, 0.8);
+    }
+
+    .legend-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    .legend-dot.positive {
+      background: #FFD700;
+      color: #FFD700;
+    }
+
+    .legend-dot.neutral {
+      background: #C0C0C0;
+      color: #C0C0C0;
+    }
+
+    .legend-dot.negative {
+      background: #4A90D9;
+      color: #4A90D9;
+    }
+
+    .fps-counter {
+      position: absolute;
+      bottom: 32px;
+      right: 32px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      font-size: 12px;
+      color: rgba(240, 244, 255, 0.7);
+      font-family: 'Courier New', monospace;
+    }
+
+    .fps-counter .value {
+      color: #FFD700;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .input-panel {
+        width: calc(100% - 40px);
+        left: 20px;
+        top: 20px;
+        padding: 20px;
+      }
+
+      .title {
+        font-size: 22px;
+      }
+
+      textarea {
+        height: 120px;
+      }
+
+      .control-panel {
+        width: calc(100% - 40px);
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 16px;
+      }
+
+      .legend {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <div id="canvas-container"></div>
+
+  <div class="ui-layer">
+    <div class="input-panel">
+      <h1 class="title">星焰书简</h1>
+      <p class="subtitle">STARFLAME · LETTERS</p>
+      <textarea
+        id="text-input"
+        placeholder="请输入一段散文或诗歌（50-200字）
+让文字化作漫天星斗，
+在宇宙中绽放成永恒的星座..."
+      ></textarea>
+      <div class="char-count">
+        <span class="count" id="char-count">0 / 50-200</span>
+        <span class="hint">拖拽星空可旋转视角</span>
+      </div>
+      <button class="transform-btn" id="transform-btn" disabled>
+        ✦ 转化为星焰 ✦
+      </button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-title">情感色谱</div>
+      <div class="legend-item">
+        <span class="legend-dot positive"></span>
+        <span>积极 · 金橙</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot neutral"></span>
+        <span>中性 · 银白</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot negative"></span>
+        <span>消极 · 幽蓝</span>
+      </div>
+    </div>
+
+    <div class="control-panel">
+      <div class="control-item">
+        <span class="control-label">旋转速度</span>
+        <input type="range" id="speed-slider" min="0.5" max="5" step="0.1" value="1.5" />
+        <span class="control-value" id="speed-value">1.5°</span>
+      </div>
+      <button class="reset-btn" id="reset-btn">重置视图</button>
+    </div>
+
+    <div class="fps-counter">
+      FPS: <span class="value" id="fps-value">60</span>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
