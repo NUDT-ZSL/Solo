@@ -1,3 +1,35 @@
+/**
+ * ============================================================
+ *  server/mockServer.js — Express 模拟设备数据服务
+ * ============================================================
+ *
+ *  【职责】
+ *    1. 生成 30 台虚拟工业设备（CNC/ROBOT/CONV/PLC/MOTOR/SENSOR）
+ *    2. 每 2 秒更新温度 / RPM / 负载率，按权重随机切换状态
+ *    3. 提供 REST 接口供前端 dataManager 轮询
+ *
+ *  【上游调用】
+ *    — node mockServer.js 启动（端口 3001）
+ *
+ *  【下游依赖】
+ *    — express / cors / uuid
+ *
+ *  【API】
+ *    GET /api/devices         → { timestamp, count, devices: Device[] }
+ *    GET /api/devices/:id     → 单个 Device
+ *    GET /api/health          → { status: 'ok' }
+ *
+ *  【数据流向】
+ *    setInterval(2s) 更新内存设备数组
+ *           │
+ *           ▼
+ *    dataManager.fetch('/api/devices') ──► JSON Response
+ *           │
+ *           ▼
+ *    dataManager.data$ ──► deviceRenderer / hudPanel
+ * ============================================================
+ */
+
 const express = require('express');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');

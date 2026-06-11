@@ -1,3 +1,38 @@
+/**
+ * ============================================================
+ *  src/devices/deviceRenderer.ts — 设备 3D 渲染 + 交互
+ * ============================================================
+ *
+ *  【职责】
+ *    1. 订阅 dataManager.data$，为每个 Device 创建立方体 + 光环
+ *    2. 状态切换时：TWEEN 颜色渐变 + 告警闪烁动画
+ *    3. Raycaster 检测悬停 / 单击 / 双击 → 发射 Subject 事件
+ *    4. 搜索匹配：LineLoop 白色虚线立方体轮廓 + 不匹配设备 opacity=0.2
+ *    5. 提供 getDeviceAABBs() 供碰撞检测使用
+ *
+ *  【上游调用】
+ *    — main.ts:  new DeviceRenderer(scene, camera, domElement)
+ *                .setSearchTerm() / .getDeviceAABBs() / .update()
+ *                .onDeviceClick / .onDeviceDoubleClick 订阅
+ *
+ *  【下游依赖】
+ *    — core/dataManager.ts:  data$ / Device / STATUS_COLORS
+ *    — three.js:              Mesh / RingGeometry / LineLoop / Raycaster
+ *    — @tweenjs/tween.js:     TWEEN 颜色渐变 & 闪烁
+ *
+ *  【数据流向】
+ *    dataManager.data$ ──► syncDevices() ──► createDevice / updateDevice
+ *                                                       │
+ *                                        状态变更 ───────► TWEEN 颜色过渡
+ *                                        告警状态 ───────► TWEEN 闪烁动画
+ *
+ *    controlPanel.onSearch ──► setSearchTerm() ──► addHighlight / removeHighlight
+ *
+ *    Raycaster (mousedown/click/dblclick) ──► onDeviceClick / onDeviceDoubleClick
+ *                                            ──► main.ts.focusOnDevice()
+ * ============================================================
+ */
+
 import * as THREE from 'three';
 import TWEEN from '@tweenjs/tween.js';
 import { Subject, Subscription } from 'rxjs';
@@ -16,7 +51,7 @@ export interface DeviceMeshObject {
   cubeMaterial: THREE.MeshStandardMaterial;
   ring: THREE.Mesh;
   ringMaterial: THREE.MeshBasicMaterial;
-  highlightLoop: THREE.LineLoop | null;
+  highlightEdges: THREE.LineSegments | null;
   baseColor: THREE.Color;
   targetColor: THREE.Color;
   currentStatus: DeviceStatus;
@@ -34,7 +69,7 @@ export class DeviceRenderer {
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private hoveredDeviceId: string | null = null;
-  private selectedDeviceId: string | null = null;
+  public selectedDeviceId: string | null = null;
   private searchTerm: string = '';
   private currentMode: 'overview' | 'focus' = 'overview';
   private clock = new THREE.Clock();
@@ -146,7 +181,7 @@ export class DeviceRenderer {
       cubeMaterial,
       ring,
       ringMaterial,
-      highlightLoop: null,
+      highlightEdges: null,
       baseColor: colorObj.clone(),
       targetColor: colorObj.clone(),
       currentStatus: device.status,
@@ -221,7 +256,6 @@ export class DeviceRenderer {
   }
 
   private setupInteraction() {
-    let moveTimer: ReturnType<typeof setTimeout> | null = null;
     let mouseDownPos = { x: 0, y: 0 };
     let isDragging = false;
 
@@ -231,7 +265,7 @@ export class DeviceRenderer {
       isDragging = true;
     });
 
-    this.domElement.addEventListener('mouseup', (e) => {
+    this.domElement.addEventListener('mouseup', () => {
       isDragging = false;
     });
 
@@ -240,15 +274,13 @@ export class DeviceRenderer {
         const dx = Math.abs(e.clientX - mouseDownPos.x);
         const dy = Math.abs(e.clientY - mouseDownPos.y);
         if (dx > 3 || dy > 3) {
-          if (moveTimer) {
-            clearTimeout(moveTimer);
-            moveTimer = null;
-          }
+          isDragging = false;
         }
       }
 
-      this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      const rect = this.domElement.getBoundingClientRect();
+      this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       this.checkHover(e);
     });
 
@@ -359,38 +391,58 @@ export class DeviceRenderer {
     }
   }
 
+  /**
+   * 构建立方体 12 条棱的 LineSegments 虚线轮廓，
+   * 采用 EdgesGeometry + LineDashedMaterial + computeLineDistances()，
+   * 保证虚线样式在 WebGL 中正常显示。
+   */
   private addHighlight(obj: DeviceMeshObject) {
-    if (obj.highlightLoop || obj.isHighlighted) return;
+    if (obj.highlightEdges || obj.isHighlighted) return;
     obj.isHighlighted = true;
 
+    const cubeSize = { w: 2, h: 2.4, d: 2 };
+    const positions = new Float32Array([
+      -cubeSize.w / 2, -cubeSize.h / 2, -cubeSize.d / 2,   cubeSize.w / 2, -cubeSize.h / 2, -cubeSize.d / 2,
+       cubeSize.w / 2, -cubeSize.h / 2, -cubeSize.d / 2,   cubeSize.w / 2, -cubeSize.h / 2,  cubeSize.d / 2,
+       cubeSize.w / 2, -cubeSize.h / 2,  cubeSize.d / 2,  -cubeSize.w / 2, -cubeSize.h / 2,  cubeSize.d / 2,
+      -cubeSize.w / 2, -cubeSize.h / 2,  cubeSize.d / 2,  -cubeSize.w / 2, -cubeSize.h / 2, -cubeSize.d / 2,
+
+      -cubeSize.w / 2,  cubeSize.h / 2, -cubeSize.d / 2,   cubeSize.w / 2,  cubeSize.h / 2, -cubeSize.d / 2,
+       cubeSize.w / 2,  cubeSize.h / 2, -cubeSize.d / 2,   cubeSize.w / 2,  cubeSize.h / 2,  cubeSize.d / 2,
+       cubeSize.w / 2,  cubeSize.h / 2,  cubeSize.d / 2,  -cubeSize.w / 2,  cubeSize.h / 2,  cubeSize.d / 2,
+      -cubeSize.w / 2,  cubeSize.h / 2,  cubeSize.d / 2,  -cubeSize.w / 2,  cubeSize.h / 2, -cubeSize.d / 2,
+
+      -cubeSize.w / 2, -cubeSize.h / 2, -cubeSize.d / 2,  -cubeSize.w / 2,  cubeSize.h / 2, -cubeSize.d / 2,
+       cubeSize.w / 2, -cubeSize.h / 2, -cubeSize.d / 2,   cubeSize.w / 2,  cubeSize.h / 2, -cubeSize.d / 2,
+       cubeSize.w / 2, -cubeSize.h / 2,  cubeSize.d / 2,   cubeSize.w / 2,  cubeSize.h / 2,  cubeSize.d / 2,
+      -cubeSize.w / 2, -cubeSize.h / 2,  cubeSize.d / 2,  -cubeSize.w / 2,  cubeSize.h / 2,  cubeSize.d / 2,
+    ]);
+
     const geo = new THREE.BufferGeometry();
-    const positions: number[] = [];
-    const segs = 32;
-    for (let i = 0; i <= segs; i++) {
-      const a = (i / segs) * Math.PI * 2;
-      positions.push(Math.cos(a) * 1.8, 0, Math.sin(a) * 1.8);
-    }
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
     const mat = new THREE.LineDashedMaterial({
       color: 0xffffff,
-      dashSize: 0.3,
+      dashSize: 0.25,
       gapSize: 0.15,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.95,
+      linewidth: 2
     });
-    const loop = new THREE.LineLoop(geo, mat);
-    loop.position.y = obj.cube.position.y + 1.2;
-    loop.computeLineDistances();
-    obj.group.add(loop);
-    obj.highlightLoop = loop;
+
+    const edges = new THREE.LineSegments(geo, mat);
+    edges.position.y = obj.cube.position.y;
+    edges.computeLineDistances();
+    obj.group.add(edges);
+    obj.highlightEdges = edges;
   }
 
   private removeHighlight(obj: DeviceMeshObject) {
-    if (obj.highlightLoop) {
-      obj.group.remove(obj.highlightLoop);
-      obj.highlightLoop.geometry.dispose();
-      (obj.highlightLoop.material as THREE.Material).dispose();
-      obj.highlightLoop = null;
+    if (obj.highlightEdges) {
+      obj.group.remove(obj.highlightEdges);
+      obj.highlightEdges.geometry.dispose();
+      (obj.highlightEdges.material as THREE.Material).dispose();
+      obj.highlightEdges = null;
     }
     obj.isHighlighted = false;
   }
@@ -410,8 +462,10 @@ export class DeviceRenderer {
       }
       obj.ring.position.y = obj.cube.position.y + 2.2 + Math.sin(time * 1.5 + obj.group.position.z) * 0.08;
 
-      if (obj.highlightLoop) {
-        obj.highlightLoop.rotation.y += delta * 0.5;
+      if (obj.highlightEdges) {
+        obj.highlightEdges.rotation.y += delta * 0.6;
+        const pulse2 = 1 + Math.sin(time * 3) * 0.06;
+        obj.highlightEdges.scale.setScalar(pulse2);
       }
     }
   }
@@ -425,7 +479,7 @@ export class DeviceRenderer {
     const result: { id: string; box: THREE.Box3 }[] = [];
     for (const [id, obj] of this.deviceMap) {
       const box = new THREE.Box3().setFromObject(obj.cube);
-      box.expandByScalar(0.5);
+      box.expandByScalar(0.3);
       result.push({ id, box });
     }
     return result;
@@ -437,9 +491,9 @@ export class DeviceRenderer {
       this.scene.remove(obj.group);
       obj.cubeMaterial.dispose();
       obj.ringMaterial.dispose();
-      if (obj.highlightLoop) {
-        obj.highlightLoop.geometry.dispose();
-        (obj.highlightLoop.material as THREE.Material).dispose();
+      if (obj.highlightEdges) {
+        obj.highlightEdges.geometry.dispose();
+        (obj.highlightEdges.material as THREE.Material).dispose();
       }
     }
     this.deviceMap.clear();

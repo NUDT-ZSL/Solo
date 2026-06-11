@@ -1,3 +1,27 @@
+/**
+ * ============================================================
+ *  src/ui/hudPanel.ts — 左上 HUD + 右侧设备信息卡
+ * ============================================================
+ *
+ *  【职责】
+ *    1. HUD 面板：显示 FPS、设备总数、服务器连接状态（毛玻璃）
+ *    2. 信息卡片：双击设备后滑入，显示设备名 / 状态徽章 / 3 个 Canvas 圆弧仪表盘
+ *
+ *  【上游调用】
+ *    — main.ts:  new HudPanel(container)
+ *               .setFPS() / .setTotalDevices() / .setServerStatus()
+ *               .showInfo(device) / .updateDeviceData(device) / .hideInfo()
+ *
+ *  【下游依赖】
+ *    — core/dataManager.ts: Device / STATUS_LABELS / STATUS_COLORS_STR
+ *
+ *  【数据流向】
+ *    main.ts ──FPS / 总数──► setFPS / setTotalDevices ──► DOM 更新
+ *    deviceRenderer.onDeviceClick ──► main.ts ──► showInfo(device) ──► 卡片滑入
+ *    dataManager.data$ ──► main.ts ──► updateDeviceData(device) ──► targetValue 动画
+ * ============================================================
+ */
+
 import { Subject, Subscription } from 'rxjs';
 import {
   Device,
@@ -16,6 +40,9 @@ interface Gauge {
   label: string;
   colorStart: string;
   colorEnd: string;
+  dpr: number;
+  cssW: number;
+  cssH: number;
 }
 
 export class HudPanel {
@@ -58,6 +85,14 @@ export class HudPanel {
     this.setupGauges();
     this.bindCloseButton();
     this.startGaugeAnimation();
+    window.addEventListener('resize', () => this.handleResize());
+  }
+
+  private handleResize() {
+    this.gauges.forEach(g => {
+      this.applyCanvasDPR(g);
+      this.drawGauge(g);
+    });
   }
 
   private injectStyles() {
@@ -216,6 +251,8 @@ export class HudPanel {
       }
       .gauge-canvas {
         display: block;
+        width: 90px;
+        height: 60px;
       }
       .gauge-label {
         font-size: 11px;
@@ -230,13 +267,67 @@ export class HudPanel {
         margin-top: -2px;
       }
 
+      /* ===== 分辨率断点：1366 x 768 ===== */
       @media (max-width: 1440px) {
-        .info-card { width: 300px; }
+        .hud-left {
+          padding: 10px 14px;
+          min-width: 200px;
+          gap: 10px 18px;
+        }
+        .hud-label { font-size: 11px; }
+        .hud-value { font-size: 13px; }
+
+        .info-card {
+          width: 300px;
+          padding: 16px;
+          top: 12px;
+          right: 12px;
+        }
         .info-name { font-size: 18px; }
+        .gauge-canvas { width: 80px; height: 54px; }
+        .gauge-value-text { font-size: 12px; }
       }
+
+      /* ===== 分辨率断点：1366 x 768 专用 ===== */
+      @media (max-width: 1366px) {
+        .hud-left {
+          padding: 8px 12px;
+          min-width: 180px;
+          gap: 8px 14px;
+          border-radius: 10px;
+        }
+        .hud-label { font-size: 10px; }
+        .hud-value { font-size: 12px; }
+
+        .info-card {
+          width: 260px;
+          padding: 14px;
+        }
+        .info-name { font-size: 16px; }
+        .info-id { font-size: 11px; }
+        .gauges-grid { gap: 6px; margin-top: 12px; }
+        .gauge-canvas { width: 70px; height: 48px; }
+        .gauge-value-text { font-size: 11px; }
+        .gauge-label { font-size: 10px; }
+        .status-badge { font-size: 11px; padding: 4px 10px; }
+      }
+
+      /* ===== 分辨率断点：<768px 移动端 ===== */
       @media (max-width: 768px) {
-        .hud-left { padding: 10px 14px; min-width: 180px; }
-        .info-card { width: calc(100% - 32px); right: 16px; left: 16px; top: auto; bottom: 16px; }
+        .hud-left {
+          padding: 8px 12px;
+          min-width: auto;
+          top: 8px;
+          left: 8px;
+          gap: 6px 12px;
+        }
+        .info-card {
+          width: calc(100% - 32px);
+          right: 16px;
+          left: 16px;
+          top: auto;
+          bottom: 16px;
+        }
       }
     `;
     document.head.appendChild(style);
@@ -280,17 +371,17 @@ export class HudPanel {
       </div>
       <div class="gauges-grid" id="gauges-grid">
         <div class="gauge-item">
-          <canvas class="gauge-canvas" data-gauge="temperature" width="90" height="60"></canvas>
+          <canvas class="gauge-canvas" data-gauge="temperature"></canvas>
           <span class="gauge-value-text" id="gauge-temp-value">--°C</span>
           <span class="gauge-label">温度</span>
         </div>
         <div class="gauge-item">
-          <canvas class="gauge-canvas" data-gauge="rpm" width="90" height="60"></canvas>
+          <canvas class="gauge-canvas" data-gauge="rpm"></canvas>
           <span class="gauge-value-text" id="gauge-rpm-value">--</span>
           <span class="gauge-label">转速 RPM</span>
         </div>
         <div class="gauge-item">
-          <canvas class="gauge-canvas" data-gauge="load" width="90" height="60"></canvas>
+          <canvas class="gauge-canvas" data-gauge="load"></canvas>
           <span class="gauge-value-text" id="gauge-load-value">--%</span>
           <span class="gauge-label">负载率</span>
         </div>
@@ -304,27 +395,37 @@ export class HudPanel {
     const canvasRpm = this.infoCard.querySelector('canvas[data-gauge="rpm"]') as HTMLCanvasElement;
     const canvasLoad = this.infoCard.querySelector('canvas[data-gauge="load"]') as HTMLCanvasElement;
 
-    this.gauges.set('temperature', {
-      canvas: canvasTemp,
-      ctx: canvasTemp.getContext('2d')!,
-      value: 0, targetValue: 0,
-      min: 0, max: 120, unit: '°C', label: '温度',
-      colorStart: '#00ff88', colorEnd: '#ff3344'
-    });
-    this.gauges.set('rpm', {
-      canvas: canvasRpm,
-      ctx: canvasRpm.getContext('2d')!,
-      value: 0, targetValue: 0,
-      min: 0, max: 4000, unit: '', label: 'RPM',
-      colorStart: '#60a5fa', colorEnd: '#a78bfa'
-    });
-    this.gauges.set('load', {
-      canvas: canvasLoad,
-      ctx: canvasLoad.getContext('2d')!,
-      value: 0, targetValue: 0,
-      min: 0, max: 100, unit: '%', label: '负载',
-      colorStart: '#00ff88', colorEnd: '#ff8800'
-    });
+    const makeGauge = (
+      c: HTMLCanvasElement,
+      min: number, max: number, unit: string, label: string,
+      colorStart: string, colorEnd: string
+    ): Gauge => {
+      const g: Gauge = {
+        canvas: c,
+        ctx: c.getContext('2d')!,
+        value: 0, targetValue: 0,
+        min, max, unit, label,
+        colorStart, colorEnd,
+        dpr: window.devicePixelRatio || 1,
+        cssW: 90, cssH: 60
+      };
+      this.applyCanvasDPR(g);
+      return g;
+    };
+
+    this.gauges.set('temperature', makeGauge(canvasTemp, 0, 120, '°C', '温度', '#00ff88', '#ff3344'));
+    this.gauges.set('rpm', makeGauge(canvasRpm, 0, 4000, '', 'RPM', '#60a5fa', '#a78bfa'));
+    this.gauges.set('load', makeGauge(canvasLoad, 0, 100, '%', '负载', '#00ff88', '#ff8800'));
+  }
+
+  private applyCanvasDPR(g: Gauge) {
+    const rect = g.canvas.getBoundingClientRect();
+    g.cssW = rect.width || g.canvas.clientWidth || 90;
+    g.cssH = rect.height || g.canvas.clientHeight || 60;
+    g.dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    g.canvas.width = Math.round(g.cssW * g.dpr);
+    g.canvas.height = Math.round(g.cssH * g.dpr);
+    g.ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
   }
 
   private bindCloseButton() {
@@ -380,6 +481,8 @@ export class HudPanel {
     rpm.targetValue = device.metrics.rpm;
     load.targetValue = device.metrics.load;
 
+    this.gauges.forEach(g => this.applyCanvasDPR(g));
+
     this.infoCard.classList.add('visible');
     this.infoVisible = true;
   }
@@ -422,22 +525,26 @@ export class HudPanel {
     requestAnimationFrame(animate);
   }
 
+  /**
+   * Canvas 圆弧仪表盘：底色圆弧 + 渐变色数值圆弧 + 指针
+   * 全程基于 DPR 缩放后的 CSS 像素绘制，保证在 Retina/HiDPI 屏清晰。
+   */
   private drawGauge(g: Gauge) {
-    const { ctx, canvas } = g;
-    const w = canvas.width, h = canvas.height;
-    const cx = w / 2, cy = h - 6;
+    const { ctx } = g;
+    const w = g.cssW, h = g.cssH;
+    const cx = w / 2, cy = h - 8;
     const r = Math.min(cx, cy) - 4;
 
     ctx.clearRect(0, 0, w, h);
 
-    const startAngle = Math.PI + 0.3;
-    const endAngle = 2 * Math.PI - 0.3;
+    const startAngle = Math.PI + 0.35;
+    const endAngle = 2 * Math.PI - 0.35;
     const t = Math.max(0, Math.min(1, (g.value - g.min) / (g.max - g.min)));
     const valueAngle = startAngle + (endAngle - startAngle) * t;
 
     ctx.beginPath();
     ctx.arc(cx, cy, r, startAngle, endAngle);
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 5;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.lineCap = 'round';
     ctx.stroke();
@@ -448,28 +555,28 @@ export class HudPanel {
 
     ctx.beginPath();
     ctx.arc(cx, cy, r, startAngle, valueAngle);
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 5;
     ctx.strokeStyle = gradient;
     ctx.lineCap = 'round';
     ctx.stroke();
 
     const needleAngle = valueAngle;
-    const nx = cx + Math.cos(needleAngle) * (r - 4);
-    const ny = cy + Math.sin(needleAngle) * (r - 4);
+    const nx = cx + Math.cos(needleAngle) * (r - 5);
+    const ny = cy + Math.sin(needleAngle) * (r - 5);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(nx, ny);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.8;
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineCap = 'round';
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
     ctx.fillStyle = '#e2e8f0';
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
   }

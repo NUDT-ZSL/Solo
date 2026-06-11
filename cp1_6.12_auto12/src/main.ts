@@ -1,3 +1,35 @@
+/**
+ * ============================================================
+ *  src/main.ts — 应用入口 & 主循环
+ * ============================================================
+ *
+ *  【职责】
+ *    1. 调用 sceneSetup.ts 初始化 Three.js 场景 / 相机 / 渲染器
+ *    2. 实例化 DeviceRenderer (3D)、HudPanel (UI)、ControlPanel (UI)
+ *    3. 调用 dataManager.startPolling() 启动数据流
+ *    4. 运行 requestAnimationFrame 循环：TWEEN.update() → 移动 → 渲染
+ *
+ *  【上游调用】
+ *    — index.html <script type="module" src="/src/main.ts">
+ *
+ *  【下游依赖】
+ *    ↳ core/sceneSetup.ts        setupScene() → SceneContext
+ *    ↳ core/dataManager.ts       dataManager.startPolling() / data$
+ *    ↳ devices/deviceRenderer.ts DeviceRenderer 订阅 data$ 创建立方体+光环
+ *    ↳ ui/hudPanel.ts            HudPanel 订阅选中设备显示信息卡
+ *    ↳ ui/controlPanel.ts        ControlPanel 发出模式/搜索/重置事件
+ *
+ *  【数据流向】
+ *    dataManager.data$ ──┬──► deviceRenderer.syncDevices()  3D渲染
+ *                        ├──► hudPanel.setTotalDevices()     HUD计数
+ *                        └──► hudPanel.updateDeviceData()    仪表盘数值
+ *
+ *    controlPanel.onSearch  ──► deviceRenderer.setSearchTerm()  高亮过滤
+ *    controlPanel.onModeChange ─► App.viewMode                 漫游/总览切换
+ *    deviceRenderer.onDeviceDoubleClick ─► App.focusOnDevice()  TWEEN聚焦
+ * ============================================================
+ */
+
 import * as THREE from 'three';
 import TWEEN from '@tweenjs/tween.js';
 import { Subscription } from 'rxjs';
@@ -26,6 +58,7 @@ class App {
   private cameraState: CameraState;
   private readonly defaultCameraPos = new THREE.Vector3(0, 45, 45);
   private readonly defaultCameraTarget = new THREE.Vector3(0, 0, 0);
+  private readonly walkEyeHeight = 4.5;
 
   private keys = new Set<string>();
   private isDragging = false;
@@ -38,6 +71,9 @@ class App {
   private lastTime = performance.now();
   private rafId = 0;
   private isFocusTweening = false;
+
+  private cachedAABBs: { id: string; box: THREE.Box3 }[] = [];
+  private aabbRefreshTimer = 0;
 
   constructor() {
     this.cameraState = {
@@ -127,7 +163,7 @@ class App {
           -Math.cos(this.cameraState.yaw) * Math.cos(this.cameraState.pitch)
         ).normalize();
         const newPos = this.cameraState.position.clone().addScaledVector(forward, -delta * 2);
-        if (!this.checkCollision(newPos)) {
+        if (!this.checkCollisionAtPoint(newPos)) {
           this.cameraState.position.copy(newPos);
           this.cameraState.target.copy(newPos).add(
             new THREE.Vector3(-Math.sin(this.cameraState.yaw), 0, -Math.cos(this.cameraState.yaw)).multiplyScalar(10)
@@ -163,7 +199,7 @@ class App {
 
     this.subscriptions.add(
       dataManager.data$.subscribe(devices => {
-        const selected = devices.find(d => this.deviceRenderer['selectedDeviceId'] === d.id);
+        const selected = devices.find(d => (this.deviceRenderer as any).selectedDeviceId === d.id);
         if (selected) {
           this.hud.updateDeviceData(selected);
         }
@@ -183,7 +219,7 @@ class App {
         if (mode === 'overview') {
           this.resetToOverview();
         } else {
-          this.setupFreeCamera();
+          this.switchToFreeWalk();
         }
       })
     );
@@ -222,65 +258,69 @@ class App {
     this.cameraState.position.copy(newPos);
   }
 
-  private setupFreeCamera() {
-    const dir = this.cameraState.position.clone().sub(this.cameraState.target);
+  private switchToFreeWalk() {
+    const target = this.cameraState.target.clone();
+    const dir = new THREE.Vector3(0, 0, 1);
+    const focusPos = target.clone().add(new THREE.Vector3(0, this.walkEyeHeight, -8));
+    focusPos.y = this.walkEyeHeight;
+
+    this.tweenCameraTo(focusPos, target, 800, () => {
+      this.cameraState.position.copy(focusPos);
+      this.cameraState.target.copy(target);
+      this.computeYawPitchFromDirection();
+    });
+  }
+
+  private computeYawPitchFromDirection() {
+    const dir = this.cameraState.target.clone().sub(this.cameraState.position).normalize();
     this.cameraState.yaw = Math.atan2(-dir.x, -dir.z);
-    this.cameraState.pitch = Math.asin(dir.y / dir.length());
-    this.cameraState.pitch = Math.max(-Math.PI / 2.5, Math.min(-0.1, this.cameraState.pitch));
+    this.cameraState.pitch = Math.asin(Math.max(-0.9, Math.min(0.9, dir.y)));
   }
 
   private resetToOverview() {
-    if (this.isFocusTweening) return;
-
-    const from = {
-      px: this.sceneCtx.camera.position.x,
-      py: this.sceneCtx.camera.position.y,
-      pz: this.sceneCtx.camera.position.z,
-      tx: this.cameraState.target.x,
-      ty: this.cameraState.target.y,
-      tz: this.cameraState.target.z
-    };
-    const to = {
-      px: this.defaultCameraPos.x,
-      py: this.defaultCameraPos.y,
-      pz: this.defaultCameraPos.z,
-      tx: this.defaultCameraTarget.x,
-      ty: this.defaultCameraTarget.y,
-      tz: this.defaultCameraTarget.z
-    };
-
-    this.isFocusTweening = true;
-    new TWEEN.Tween(from)
-      .to(to, 1200)
-      .easing(TWEEN.Easing.Cubic.InOut)
-      .onUpdate(() => {
-        this.sceneCtx.camera.position.set(from.px, from.py, from.pz);
-        this.cameraState.target.set(from.tx, from.ty, from.tz);
-        this.cameraState.position.copy(this.sceneCtx.camera.position);
-        this.sceneCtx.camera.lookAt(this.cameraState.target);
-      })
-      .onComplete(() => {
-        this.isFocusTweening = false;
-        this.sceneCtx.camera.position.copy(this.defaultCameraPos);
-        this.cameraState.position.copy(this.defaultCameraPos);
-        this.cameraState.target.copy(this.defaultCameraTarget);
-        this.sceneCtx.camera.lookAt(this.cameraState.target);
-      })
-      .start();
+    this.tweenCameraTo(this.defaultCameraPos, this.defaultCameraTarget, 1200, () => {
+      this.cameraState.position.copy(this.defaultCameraPos);
+      this.cameraState.target.copy(this.defaultCameraTarget);
+    });
   }
 
+  /**
+   * 热点聚焦：使用 @tweenjs/tween.js 在 1500ms 内平滑将相机飞行到
+   * 设备前方 2 单位处（沿相机→设备方向向量），同时 lookAt 设备中心。
+   */
   private focusOnDevice(device: Device) {
     const devicePos = new THREE.Vector3(
       device.position.x,
-      device.position.y,
+      device.position.y + 1.2,
       device.position.z
     );
 
-    const dir = this.sceneCtx.camera.position.clone().sub(devicePos).normalize();
-    const focusPos = devicePos.clone().addScaledVector(dir, 8);
-    focusPos.y = Math.max(6, focusPos.y);
+    const camToDevice = devicePos.clone().sub(this.sceneCtx.camera.position).normalize();
+    const standoffDist = 2;
+    const focusPos = devicePos.clone().addScaledVector(camToDevice, -standoffDist);
+    focusPos.y = Math.max(this.walkEyeHeight, focusPos.y + 1.5);
 
-    const from = {
+    this.tweenCameraTo(focusPos, devicePos, 1500, () => {
+      if (this.viewMode === 'free') {
+        this.cameraState.position.copy(focusPos);
+        this.cameraState.target.copy(devicePos);
+        this.computeYawPitchFromDirection();
+      }
+    });
+  }
+
+  private tweenCameraTo(
+    toPos: THREE.Vector3,
+    toTarget: THREE.Vector3,
+    durationMs: number,
+    onComplete?: () => void
+  ) {
+    if (this.isFocusTweening) {
+      TWEEN.removeAll();
+    }
+    this.isFocusTweening = true;
+
+    const fromState = {
       px: this.sceneCtx.camera.position.x,
       py: this.sceneCtx.camera.position.y,
       pz: this.sceneCtx.camera.position.z,
@@ -288,36 +328,35 @@ class App {
       ty: this.cameraState.target.y,
       tz: this.cameraState.target.z
     };
-    const to = {
-      px: focusPos.x,
-      py: focusPos.y,
-      pz: focusPos.z,
-      tx: devicePos.x,
-      ty: devicePos.y,
-      tz: devicePos.z
+    const toState = {
+      px: toPos.x,
+      py: toPos.y,
+      pz: toPos.z,
+      tx: toTarget.x,
+      ty: toTarget.y,
+      tz: toTarget.z
     };
 
-    if (this.isFocusTweening) TWEEN.removeAll();
-    this.isFocusTweening = true;
-
-    new TWEEN.Tween(from)
-      .to(to, 1500)
+    new TWEEN.Tween(fromState)
+      .to(toState, durationMs)
       .easing(TWEEN.Easing.Cubic.InOut)
       .onUpdate(() => {
-        this.sceneCtx.camera.position.set(from.px, from.py, from.pz);
-        this.cameraState.target.set(from.tx, from.ty, from.tz);
+        this.sceneCtx.camera.position.set(fromState.px, fromState.py, fromState.pz);
+        this.cameraState.target.set(fromState.tx, fromState.ty, fromState.tz);
         this.cameraState.position.copy(this.sceneCtx.camera.position);
         this.sceneCtx.camera.lookAt(this.cameraState.target);
       })
       .onComplete(() => {
         this.isFocusTweening = false;
-        if (this.viewMode === 'free') {
-          this.setupFreeCamera();
-        }
+        if (onComplete) onComplete();
       })
       .start();
   }
 
+  /**
+   * WASD 漫游：采用逐轴 (per-axis) 碰撞检测 + 滑动，
+   * 避免穿透设备立方体并沿墙面平滑滑行。
+   */
   private updateMovement(delta: number) {
     if (this.viewMode !== 'free' || this.isFocusTweening) return;
 
@@ -334,32 +373,68 @@ class App {
     if (this.keys.has('d')) { moveX += right.x; moveZ += right.z; }
     if (this.keys.has('a')) { moveX -= right.x; moveZ -= right.z; }
 
-    if (moveX === 0 && moveZ === 0) return;
+    if (moveX === 0 && moveZ === 0) {
+      const wantUp = this.keys.has('e') ? 3 : this.keys.has('q') ? -3 : 0;
+      if (wantUp !== 0) {
+        const testY = this.cameraState.position.y + wantUp * delta;
+        const clampedY = Math.max(2, Math.min(30, testY));
+        const testPos = this.cameraState.position.clone();
+        testPos.y = clampedY;
+        if (!this.checkCollisionAtPoint(testPos)) {
+          this.cameraState.position.y = clampedY;
+        }
+      }
+      return;
+    }
 
     const len = Math.hypot(moveX, moveZ);
     moveX = (moveX / len) * this.moveSpeed * delta;
     moveZ = (moveZ / len) * this.moveSpeed * delta;
 
-    const newPos = this.cameraState.position.clone();
-    newPos.x += moveX;
-    newPos.z += moveZ;
-    newPos.y = Math.max(3, newPos.y + (this.keys.has('q') ? -3 : this.keys.has('e') ? 3 : 0) * delta);
+    const aabbs = this.getFreshAABBs();
 
-    if (!this.checkCollision(newPos)) {
-      this.cameraState.position.copy(newPos);
-      this.cameraState.target.set(
-        newPos.x - Math.sin(this.cameraState.yaw) * 10,
-        newPos.y + Math.tan(this.cameraState.pitch) * 10,
-        newPos.z - Math.cos(this.cameraState.yaw) * 10
-      );
+    const tryPos = this.cameraState.position.clone();
+    tryPos.x += moveX;
+    if (!this.checkCollisionInternal(tryPos, aabbs)) {
+      this.cameraState.position.x = tryPos.x;
     }
+
+    tryPos.copy(this.cameraState.position);
+    tryPos.z += moveZ;
+    if (!this.checkCollisionInternal(tryPos, aabbs)) {
+      this.cameraState.position.z = tryPos.z;
+    }
+
+    this.cameraState.target.set(
+      this.cameraState.position.x - Math.sin(this.cameraState.yaw) * 10,
+      this.cameraState.position.y + Math.tan(this.cameraState.pitch) * 10,
+      this.cameraState.position.z - Math.cos(this.cameraState.yaw) * 10
+    );
   }
 
-  private checkCollision(pos: THREE.Vector3): boolean {
-    const aabbs = this.deviceRenderer.getDeviceAABBs();
+  private getFreshAABBs(): { id: string; box: THREE.Box3 }[] {
+    this.aabbRefreshTimer += 1 / 60;
+    if (this.aabbRefreshTimer > 0.25 || this.cachedAABBs.length === 0) {
+      this.cachedAABBs = this.deviceRenderer.getDeviceAABBs();
+      this.aabbRefreshTimer = 0;
+    }
+    return this.cachedAABBs;
+  }
+
+  private checkCollisionAtPoint(pos: THREE.Vector3): boolean {
+    return this.checkCollisionInternal(pos, this.getFreshAABBs());
+  }
+
+  private checkCollisionInternal(
+    pos: THREE.Vector3,
+    aabbs: { id: string; box: THREE.Box3 }[]
+  ): boolean {
+    const halfW = 0.6;
+    const halfH = 1.8;
+    const halfD = 0.6;
     const camBox = new THREE.Box3(
-      new THREE.Vector3(pos.x - 0.5, pos.y - 1.5, pos.z - 0.5),
-      new THREE.Vector3(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5)
+      new THREE.Vector3(pos.x - halfW, pos.y - halfH, pos.z - halfD),
+      new THREE.Vector3(pos.x + halfW, pos.y + halfH * 0.3, pos.z + halfD)
     );
     for (const { box } of aabbs) {
       if (camBox.intersectsBox(box)) return true;
@@ -403,8 +478,8 @@ class App {
     console.log('%c操作提示:', 'color: #00ff88; font-weight: bold;');
     console.log('  - 鼠标左键拖拽: 旋转视角');
     console.log('  - 鼠标滚轮: 缩放 / 前后推进');
-    console.log('  - WASD: 自由漫游模式下移动');
-    console.log('  - 双击设备: 聚焦到该设备');
+    console.log('  - WASD + Q/E: 自由漫游模式下移动');
+    console.log('  - 双击设备: TWEEN 1.5s 平滑聚焦');
     console.log('  - 搜索框: 输入设备ID/名称前缀进行筛选');
   }
 

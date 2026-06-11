@@ -1,3 +1,27 @@
+/**
+ * ============================================================
+ *  src/core/sceneSetup.ts — Three.js 场景初始化
+ * ============================================================
+ *
+ *  【职责】
+ *    1. 创建 PerspectiveCamera + WebGLRenderer（抗锯齿、阴影、ACES色调映射）
+ *    2. 构建地面 Plane + 双 GridHelper（外环灰色 + 内环蓝紫色）
+ *    3. 布置 AmbientLight / HemisphereLight / DirectionalLight / FillLight
+ *    4. 监听 window.resize，自动更新相机 aspect 与渲染器尺寸
+ *
+ *  【上游调用】
+ *    — main.ts:  setupScene(container) → SceneContext
+ *
+ *  【下游依赖】
+ *    — three.js:  Scene / PerspectiveCamera / WebGLRenderer / GridHelper
+ *                / DirectionalLight / HemisphereLight / AmbientLight
+ *
+ *  【数据流向】
+ *    window.resize 事件 ──► camera.aspect + updateProjectionMatrix()
+ *                         ──► renderer.setSize()
+ * ============================================================
+ */
+
 import * as THREE from 'three';
 
 export interface SceneContext {
@@ -8,8 +32,8 @@ export interface SceneContext {
 }
 
 export function setupScene(container: HTMLElement): SceneContext {
-  const width = container.clientWidth;
-  const height = container.clientHeight;
+  const width = container.clientWidth || window.innerWidth;
+  const height = container.clientHeight || window.innerHeight;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d1117);
@@ -35,6 +59,9 @@ export function setupScene(container: HTMLElement): SceneContext {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
+  renderer.domElement.style.display = 'block';
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '100%';
   container.appendChild(renderer.domElement);
 
   const groundGroup = new THREE.Group();
@@ -44,13 +71,30 @@ export function setupScene(container: HTMLElement): SceneContext {
   createGrid(groundGroup);
   setupLights(scene);
 
-  window.addEventListener('resize', () => {
-    const w = container.clientWidth;
-    const h = container.clientHeight;
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-  });
+  /**
+   * 分辨率适配：监听 window.resize 与 container 尺寸变化，
+   * 覆盖 1920×1080 / 1366×768 / 移动端 等多种分辨率，
+   * 保证相机 aspect ratio 与渲染器尺寸始终同步更新。
+   */
+  let resizeRaf = 0;
+  const onResize = () => {
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(() => {
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    });
+  };
+
+  window.addEventListener('resize', onResize);
+
+  if (typeof (ResizeObserver as any) !== 'undefined') {
+    const observer = new ResizeObserver(onResize);
+    observer.observe(container);
+  }
 
   return { scene, camera, renderer, groundGroup };
 }

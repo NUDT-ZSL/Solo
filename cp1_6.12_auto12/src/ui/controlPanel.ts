@@ -1,3 +1,29 @@
+/**
+ * ============================================================
+ *  src/ui/controlPanel.ts — 右下角控制面板
+ * ============================================================
+ *
+ *  【职责】
+ *    1. 模式切换按钮：俯视总览 / 自由漫游（发出 onModeChange 事件）
+ *    2. 设备搜索输入框：前缀匹配（发出 onSearch 事件，debounce 120ms）
+ *    3. 重置视角按钮（发出 onResetView 事件）
+ *    4. 响应式断点：1920×1080 / 1366×768 / <768px
+ *
+ *  【上游调用】
+ *    — main.ts:  new ControlPanel(container)
+ *                .onModeChange / .onSearch / .onResetView 订阅
+ *                .setMode() / .clearSearch()（被 main.ts 调用）
+ *
+ *  【下游依赖】
+ *    — 无外部模块，仅操作 DOM + 发出 RxJS Subject 事件
+ *
+ *  【数据流向】
+ *    用户点击"自由漫游" ──► onModeChange.next('free')  ──► main.ts 切换相机状态
+ *    用户输入搜索关键字  ──► onSearch.next(term)       ──► deviceRenderer.setSearchTerm()
+ *    用户点击"重置视角"  ──► onResetView.next()        ──► main.ts.resetToOverview()
+ * ============================================================
+ */
+
 import { Subject, Subscription } from 'rxjs';
 
 export type ViewMode = 'overview' | 'free';
@@ -81,6 +107,7 @@ export class ControlPanel {
         font-family: 'SF Mono', 'Consolas', monospace;
         outline: none;
         transition: all 0.2s;
+        box-sizing: border-box;
       }
       .cp-search::placeholder {
         color: #475569;
@@ -148,12 +175,48 @@ export class ControlPanel {
         color: #94a3b8;
         margin: 0 2px;
       }
+
+      /* ===== 分辨率断点：1366 x 768 ===== */
+      @media (max-width: 1440px) {
+        .control-panel {
+          padding: 12px;
+          gap: 10px;
+          min-width: 240px;
+          bottom: 12px;
+          right: 12px;
+          border-radius: 12px;
+        }
+        .cp-search { padding: 7px 10px 7px 32px; font-size: 12px; }
+        .cp-btn { padding: 7px 10px; font-size: 11px; }
+        .cp-hint { font-size: 10px; line-height: 1.6; }
+        .cp-hint kbd { font-size: 9px; padding: 1px 4px; }
+      }
+
+      /* ===== 分辨率断点：1366 x 768 专用 ===== */
+      @media (max-width: 1366px) {
+        .control-panel {
+          padding: 10px;
+          gap: 8px;
+          min-width: 220px;
+          bottom: 10px;
+          right: 10px;
+          border-radius: 10px;
+        }
+        .cp-title { font-size: 10px; letter-spacing: 1px; }
+        .cp-search { padding: 6px 10px 6px 30px; font-size: 11px; }
+        .cp-btn { padding: 6px 8px; font-size: 11px; }
+        .cp-hint { font-size: 9px; line-height: 1.55; padding-top: 6px; }
+        .cp-hint kbd { font-size: 9px; padding: 0 3px; }
+      }
+
+      /* ===== 分辨率断点：<768px 移动端 ===== */
       @media (max-width: 768px) {
         .control-panel {
           min-width: auto;
           width: calc(100% - 32px);
           left: 16px;
           right: 16px;
+          bottom: 10px;
         }
       }
     `;
@@ -204,6 +267,7 @@ export class ControlPanel {
 
       <div class="cp-hint">
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动</div>
+        <div><kbd>Q</kbd><kbd>E</kbd> 下降 / 上升</div>
         <div>鼠标左键拖拽 旋转视角</div>
         <div>双击设备 聚焦查看</div>
       </div>
@@ -237,6 +301,7 @@ export class ControlPanel {
       if (e.key === 'Escape') {
         (e.target as HTMLInputElement).value = '';
         this.onSearch.next('');
+        (e.target as HTMLInputElement).blur();
       }
     });
   }
