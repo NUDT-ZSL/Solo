@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>雨痕物语 - Rain Tales</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%);
+      color: #ffffff;
+      user-select: none;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    #scene-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 220px;
+      bottom: 0;
+    }
+
+    #splash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.8s ease-out;
+    }
+
+    #splash.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #splash h1 {
+      font-size: 48px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      color: #ffffff;
+      margin-bottom: 16px;
+      text-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+    }
+
+    #splash p {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+      letter-spacing: 4px;
+    }
+
+    #splash .loader {
+      width: 60px;
+      height: 60px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #e94560;
+      border-radius: 50%;
+      margin-top: 40px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      #scene-container {
+        right: 0;
+        bottom: 80px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="splash">
+      <h1>雨痕物语</h1>
+      <p>RAIN TALES</p>
+      <div class="loader"></div>
+    </div>
+    <div id="scene-container"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
