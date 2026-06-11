@@ -106,6 +106,30 @@ function getRequiredPositiveNumber(obj: Record<string, unknown>, key: string, fa
   return n > 0 ? n : fallback;
 }
 
+function clampToRange(v: number, min: number, max: number, fallback: number): number {
+  if (typeof v !== 'number' || Number.isNaN(v)) return fallback;
+  if (v < min) return min;
+  if (v > max) return max;
+  return v;
+}
+
+function clampDistance(n: number): number {
+  return clampToRange(n, 0.1, 10000, 100);
+}
+
+function clampMagnitude(n: number): number {
+  return clampToRange(n, -10, 20, 5);
+}
+
+function clampRA(n: number): number {
+  if (typeof n !== 'number' || Number.isNaN(n)) return 0;
+  return ((n % 360) + 360) % 360;
+}
+
+function clampDec(n: number): number {
+  return clampToRange(n, -90, 90, 0);
+}
+
 function getRequiredString(obj: Record<string, unknown>, key: string, fallback: string): string {
   const raw = obj[key];
   if (typeof raw === 'string' && raw.trim().length > 0) return raw.trim();
@@ -140,15 +164,15 @@ export function parseUploadedJSON(raw: unknown): StarData[] {
       continue;
     }
     parsed.push({
-      ra: getRequiredNumber(item, 'ra', i * 5),
-      dec: getRequiredNumber(item, 'dec', 0),
-      magnitude: getRequiredNumber(item, 'magnitude', 5),
+      ra: clampRA(getRequiredNumber(item, 'ra', i * 5)),
+      dec: clampDec(getRequiredNumber(item, 'dec', 0)),
+      magnitude: clampMagnitude(getRequiredNumber(item, 'magnitude', 5)),
       spectralType: getRequiredString(item, 'spectralType', 'G2'),
       name: getRequiredString(item, 'name', `Star-${i + 1}`),
-      distance: getRequiredPositiveNumber(item, 'distance', 100),
+      distance: clampDistance(getRequiredPositiveNumber(item, 'distance', 100)),
       absoluteMagnitude: item.absoluteMagnitude !== undefined
-        ? getRequiredNumber(item, 'absoluteMagnitude', 5)
-        : getRequiredNumber(item, 'magnitude', 5),
+        ? clampMagnitude(getRequiredNumber(item, 'absoluteMagnitude', 5))
+        : clampMagnitude(getRequiredNumber(item, 'magnitude', 5)),
     });
   }
 

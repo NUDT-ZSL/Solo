@@ -61,8 +61,7 @@ export class UIControls {
   private tooltipCurrentPos = { x: -9999, y: -9999 };
   private tooltipVisible = false;
   private rafId = 0;
-  private lastFrameTime = 0;
-  private readonly FOLLOW_LAG_MS = 100;
+  private readonly LERP_ALPHA = 0.08;
 
   constructor(
     onParamChange: (params: Partial<ReliefParams>) => void,
@@ -129,7 +128,7 @@ export class UIControls {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: '51',
-      transition: `right ${SLIDE_DURATION} ${SLIDE_EASING}`,
+      transition: `transform ${SLIDE_DURATION} ${SLIDE_EASING}, right ${SLIDE_DURATION} ${SLIDE_EASING}`,
       boxShadow: '0 0 16px rgba(102, 34, 170, 0.4)',
     });
 
@@ -175,7 +174,7 @@ export class UIControls {
     Object.assign(p.style, {
       position: 'fixed',
       top: '0',
-      right: `-${PANEL_WIDTH}px`,
+      right: '0',
       width: `${PANEL_WIDTH}px`,
       height: '100%',
       background: 'rgba(10, 0, 30, 0.6)',
@@ -184,7 +183,8 @@ export class UIControls {
       borderLeft: '1px solid #8822AA',
       boxShadow: '-8px 0 40px rgba(74, 0, 102, 0.3)',
       zIndex: '50',
-      transition: `right ${SLIDE_DURATION} ${SLIDE_EASING}`,
+      transform: 'translateX(100%)',
+      transition: `transform ${SLIDE_DURATION} ${SLIDE_EASING}`,
       overflowY: 'auto',
       overflowX: 'hidden',
       padding: '24px 18px 24px 18px',
@@ -646,11 +646,11 @@ export class UIControls {
 
   private updatePanelPosition() {
     if (this.expanded) {
-      this.panel.style.right = '0px';
-      this.toggleBtn.style.right = `${PANEL_WIDTH}px`;
+      this.panel.style.transform = 'translateX(0%)';
+      this.toggleBtn.style.transform = `translateY(-50%) translateX(-${PANEL_WIDTH}px)`;
     } else {
-      this.panel.style.right = `-${PANEL_WIDTH}px`;
-      this.toggleBtn.style.right = '0px';
+      this.panel.style.transform = 'translateX(100%)';
+      this.toggleBtn.style.transform = 'translateY(-50%)';
     }
   }
 
@@ -679,15 +679,10 @@ export class UIControls {
   }
 
   private startTooltipAnimation() {
-    const tick = (t: number) => {
-      if (this.lastFrameTime === 0) this.lastFrameTime = t;
-      const dt = Math.min(t - this.lastFrameTime, 50);
-      this.lastFrameTime = t;
-
+    const tick = () => {
       if (this.tooltipVisible) {
-        const decay = 1 - Math.exp(-dt / this.FOLLOW_LAG_MS);
-        this.tooltipCurrentPos.x += (this.tooltipTargetPos.x - this.tooltipCurrentPos.x) * decay;
-        this.tooltipCurrentPos.y += (this.tooltipTargetPos.y - this.tooltipCurrentPos.y) * decay;
+        this.tooltipCurrentPos.x += (this.tooltipTargetPos.x - this.tooltipCurrentPos.x) * this.LERP_ALPHA;
+        this.tooltipCurrentPos.y += (this.tooltipTargetPos.y - this.tooltipCurrentPos.y) * this.LERP_ALPHA;
 
         const maxX = window.innerWidth - 260;
         const maxY = window.innerHeight - 180;
