@@ -97,8 +97,9 @@ export class OceanScene {
     const positions = geometry.attributes.position;
     const colors = new Float32Array(positions.count * 3);
 
-    const colorTop = new THREE.Color(0x1E5A8A);
-    const colorBottom = new THREE.Color(0x0A2D4D);
+    const colorNear = new THREE.Color(0x0B3D5D);
+    const colorFar = new THREE.Color(0x051D2D);
+    const halfSize = this.terrainSize / 2;
 
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
@@ -107,8 +108,9 @@ export class OceanScene {
       const height = this.fbm(x, z) * 25 - 8;
       positions.setY(i, height);
 
-      const t = (height + 8) / 25;
-      const color = colorTop.clone().lerp(colorBottom, 1 - t);
+      const distFromCenter = Math.sqrt(x * x + z * z) / halfSize;
+      const t = Math.min(1, Math.max(0, distFromCenter));
+      const color = colorNear.clone().lerp(colorFar, t);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
@@ -120,7 +122,7 @@ export class OceanScene {
     const material = new THREE.MeshPhongMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.7,
       flatShading: false,
       side: THREE.DoubleSide
     });
@@ -227,18 +229,20 @@ export class OceanScene {
     const positions = this.terrain.geometry.attributes.position;
     const colors = this.terrain.geometry.attributes.color as THREE.BufferAttribute;
 
-    const colorTop = new THREE.Color(0x1E5A8A);
-    const colorBottom = new THREE.Color(0x0A2D4D);
+    const colorNear = new THREE.Color(0x0B3D5D);
+    const colorFar = new THREE.Color(0x051D2D);
+    const halfSize = this.terrainSize / 2;
 
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
       const z = positions.getZ(i);
 
-      const height = this.fbm(x + this.noiseOffset, z + this.noiseOffset * 0.7) * 15 - 5;
+      const height = this.fbm(x + this.noiseOffset, z + this.noiseOffset * 0.7) * 25 - 8;
       positions.setY(i, height);
 
-      const t = (height + 8) / 25;
-      const color = colorTop.clone().lerp(colorBottom, 1 - t);
+      const distFromCenter = Math.sqrt(x * x + z * z) / halfSize;
+      const t = Math.min(1, Math.max(0, distFromCenter));
+      const color = colorNear.clone().lerp(colorFar, t);
       colors.setXYZ(i, color.r, color.g, color.b);
     }
 

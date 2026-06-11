@@ -18,14 +18,17 @@ export class Creatures {
   public fishMeshes: THREE.Mesh[] = [];
   public ripples: THREE.Mesh[] = [];
   
-  private coralCount = 110;
+  private coralCount = 80 + Math.floor(Math.random() * 41);
   private fishCount = 60;
   private terrainSize = 400;
   
   private fishPathPoints: THREE.Vector3[] = [];
+  private oldFishPathPoints: THREE.Vector3[] = [];
   private fishPathProgress: number = 0;
   private lastPathSwitch: number = 0;
   private pathSwitchInterval: number = 10;
+  private pathTransitionProgress: number = 1;
+  private pathTransitionDuration: number = 2;
   
   private schoolCenter: THREE.Vector3 = new THREE.Vector3(0, 30, 0);
   private schoolTarget: THREE.Vector3 = new THREE.Vector3(0, 30, 0);
@@ -65,45 +68,28 @@ export class Creatures {
       const baseColor = colorStart.clone().lerp(colorEnd, t);
       
       for (let j = 0; j < ringCount; j++) {
-        const scale = 1 - j * 0.2;
-        const radius = (2 + Math.random() * 2) * scale;
-        const tube = 0.3 + Math.random() * 0.3;
+        const scale = 1 - j * 0.18;
+        const radius = (2.5 + Math.random() * 1.5) * scale;
+        const tube = 0.4 + Math.random() * 0.3;
         
         const ringGeometry = new THREE.TorusGeometry(radius, tube, 8, 16);
         const ringMaterial = new THREE.MeshPhongMaterial({
           color: baseColor,
           transparent: true,
-          opacity: 0.95,
-          shininess: 50,
-          emissive: baseColor,
-          emissiveIntensity: 0.3
+          opacity: 0.9,
+          shininess: 40
         });
         const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-        ring.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
-        ring.rotation.z = (Math.random() - 0.5) * 0.5;
-        ring.position.y = j * 2 + 1;
-        
-        if (Math.random() > 0.5) {
-          const ellipsoidGeometry = new THREE.SphereGeometry(radius * 0.7, 12, 8);
-          ellipsoidGeometry.scale(1, 0.6, 1);
-          const ellipsoidMaterial = new THREE.MeshPhongMaterial({
-            color: baseColor.clone().offsetHSL(0, -0.1, 0.05),
-            transparent: true,
-            opacity: 0.9,
-            emissive: baseColor,
-            emissiveIntensity: 0.2
-          });
-          const ellipsoid = new THREE.Mesh(ellipsoidGeometry, ellipsoidMaterial);
-          ellipsoid.position.y = j * 2 + 1 + radius * 0.3;
-          coral.add(ellipsoid);
-        }
+        ring.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+        ring.rotation.z = (Math.random() - 0.5) * 0.3;
+        ring.position.y = j * 1.8 + tube;
         
         coral.add(ring);
       }
       
       coral.position.set(x, baseY, z);
       coral.rotation.y = Math.random() * Math.PI * 2;
-      coral.scale.setScalar(1.2 + Math.random() * 1.0);
+      coral.scale.setScalar(0.9 + Math.random() * 0.8);
       
       this.corals.push(coral);
       this.scene.add(coral);
@@ -171,20 +157,23 @@ export class Creatures {
   }
 
   private generateFishPath(): void {
-    this.fishPathPoints = [];
+    this.oldFishPathPoints = [...this.fishPathPoints];
+    
+    const newPathPoints: THREE.Vector3[] = [];
     const pointCount = 4;
     
     for (let i = 0; i < pointCount; i++) {
       const angle = (i / pointCount) * Math.PI * 2 + Math.random() * 0.5;
       const radius = 50 + Math.random() * 30;
-      this.fishPathPoints.push(new THREE.Vector3(
+      newPathPoints.push(new THREE.Vector3(
         Math.cos(angle) * radius,
         20 + Math.random() * 40,
         Math.sin(angle) * radius
       ));
     }
     
-    this.fishPathProgress = 0;
+    this.fishPathPoints = newPathPoints;
+    this.pathTransitionProgress = 0;
   }
 
   private getBezierPoint(t: number, points: THREE.Vector3[]): THREE.Vector3 {
