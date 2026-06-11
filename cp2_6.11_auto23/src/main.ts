@@ -1,683 +1,484 @@
-import { Timeline, YearNode, FragmentPopup } from './timeline';
-import {
-  PixelData,
-  Particle,
-  FloatingParticle,
-  CollectedCard,
-  createFloatingParticles,
-  createExplosionParticles,
-  drawPixelIcon
-} from './fragment';
+import { Particle, SpatialHashGrid, ParticleState } from './particle';
+import { UIManager, UIState } from './ui';
 
-if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
-  CanvasRenderingContext2D.prototype.roundRect = function (this: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | number[]) {
-    let radii: number[];
-    if (typeof r === 'number') {
-      radii = [r, r, r, r];
-    } else if (Array.isArray(r)) {
-      radii = r.length === 1 ? [r[0], r[0], r[0], r[0]] : r;
-    } else {
-      radii = [0, 0, 0, 0];
-    }
-    this.beginPath();
-    this.moveTo(x + radii[0], y);
-    this.lineTo(x + w - radii[1], y);
-    this.quadraticCurveTo(x + w, y, x + w, y + radii[1]);
-    this.lineTo(x + w, y + h - radii[2]);
-    this.quadraticCurveTo(x + w, y + h, x + w - radii[2], y + h);
-    this.lineTo(x + radii[3], y + h);
-    this.quadraticCurveTo(x, y + h, x, y + h - radii[3]);
-    this.lineTo(x, y + radii[0]);
-    this.quadraticCurveTo(x, y, x + radii[0], y);
-    this.closePath();
-    return this;
-  };
-}
-
-const FRAME_DURATION = 1000 / 60;
+type GameState = 'playing' | 'won' | 'lost';
 
 class Game {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  viewportW = 0;
-  viewportH = 0;
-  dpr = 1;
-  isVertical = false;
-  uiScale = 1;
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private ui: UIManager;
 
-  timeline: Timeline;
-  particles: Particle[] = [];
-  floatingParticles: FloatingParticle[] = [];
-  collectedCards: CollectedCard[] = [];
+  private canvasSize: number;
+  private dpr: number;
 
-  draggingFragment: PixelData | null = null;
-  dragX = 0;
-  dragY = 0;
-  dragStartX = 0;
-  dragStartY = 0;
-  hasDragged = false;
+  private particles: Particle[] = [];
+  private particleCount: number;
+  private grid: SpatialHashGrid;
 
-  collectZoneX = 0;
-  collectZoneY = 0;
-  collectZoneW = 0;
-  collectZoneH = 0;
-  collectZoneHover = false;
+  private particleState: ParticleState = { phase: 'flowing' };
 
-  hoveredCard: CollectedCard | null = null;
-  hoveredFragment: PixelData | null = null;
+  private mouseX: number = 0;
+  private mouseY: number = 0;
+  private mouseActive: boolean = false;
+  private mouseInside: boolean = false;
 
-  lastFrameTime = 0;
-  accumulator = 0;
-  animationId = 0;
+  private totalTime: number = 60;
+  private timeLeft: number = 60;
+  private elapsed: number = 0;
+  private victoryTime: number | null = null;
 
-  cardWidth = 120;
-  cardHeight = 160;
+  private gameState: GameState = 'playing';
+  private bestTime: number | null = null;
+
+  private breathTimer: number = 0;
+  private breathIntensity: number = 0;
+
+  private frameCount: number = 0;
+  private lastTime: number = 0;
+  private running: boolean = false;
+  private animationId: number = 0;
+
+  private timeUpAlpha: number = 0;
+  private victoryAnimTimer: number = 0;
+  private victoryAnimDuration: number = 2;
+
+  private buttonHover: boolean = false;
+
+  private hourglassSide: number = 120;
+  private hourglassGap: number = 40;
+
+  private winThreshold: number = 0.85;
 
   constructor() {
-    this.canvas = document.getElementById('mainCanvas') as HTMLCanvasElement;
-    this.ctx = this.canvas.getContext('2d')!;
-    this.timeline = new Timeline();
-    this.resize();
-    this.bindEvents();
-    this.loop = this.loop.bind(this);
-  }
+    this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+    if (!this.canvas) {
+      throw new Error('Canvas element not found');
+    }
+    const ctx = this.canvas.getContext('2d', { alpha: false });
+    if (!ctx) {
+      throw new Error('Failed to get canvas context');
+    }
+    this.ctx = ctx;
 
-  getPointerPos(clientX: number, clientY: number): { x: number; y: number } {
-    const rect = this.canvas.getBoundingClientRect();
-    const scaleX = (this.canvas.width / this.dpr) / rect.width;
-    const scaleY = (this.canvas.height / this.dpr) / rect.height;
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
-    };
-  }
-
-  resize(): void {
     this.dpr = window.devicePixelRatio || 1;
-    this.viewportW = window.innerWidth;
-    this.viewportH = window.innerHeight;
+    this.canvasSize = this.calculateCanvasSize();
 
-    this.canvas.width = this.viewportW * this.dpr;
-    this.canvas.height = this.viewportH * this.dpr;
-    this.canvas.style.width = `${this.viewportW}px`;
-    this.canvas.style.height = `${this.viewportH}px`;
+    this.setupCanvas();
 
+    this.ui = new UIManager(this.ctx, this.canvasSize, this.canvasSize);
+    this.particleCount = 500 + Math.floor(Math.random() * 301);
+    this.grid = new SpatialHashGrid(25);
+
+    this.loadBestTime();
+    this.initParticles();
+    this.bindEvents();
+    this.hideLoadingScreen();
+
+    this.running = true;
+    this.lastTime = performance.now();
+    this.gameLoop = this.gameLoop.bind(this);
+    this.animationId = requestAnimationFrame(this.gameLoop);
+  }
+
+  private calculateCanvasSize(): number {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const padding = 40;
+    return Math.max(300, Math.min(w, h) - padding);
+  }
+
+  private setupCanvas() {
+    this.canvas.width = this.canvasSize * this.dpr;
+    this.canvas.height = this.canvasSize * this.dpr;
+    this.canvas.style.width = `${this.canvasSize}px`;
+    this.canvas.style.height = `${this.canvasSize}px`;
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-
-    this.isVertical = this.viewportW < 768;
-
-    if (this.viewportW < 480) {
-      this.uiScale = 0.7;
-    } else if (this.viewportW < 768) {
-      this.uiScale = 0.85;
-    } else {
-      this.uiScale = 1;
-    }
-
-    this.cardWidth = 120 * this.uiScale;
-    this.cardHeight = 160 * this.uiScale;
-
-    if (this.isVertical) {
-      this.collectZoneX = this.viewportW * 0.05;
-      this.collectZoneY = this.viewportH * 0.72;
-      this.collectZoneW = this.viewportW * 0.9;
-      this.collectZoneH = this.viewportH * 0.26;
-    } else {
-      this.collectZoneX = this.viewportW * 0.75;
-      this.collectZoneY = this.viewportH * 0.68;
-      this.collectZoneW = this.viewportW * 0.22;
-      this.collectZoneH = this.viewportH * 0.28;
-    }
-
-    this.timeline.updateLayout(this.viewportW, this.viewportH, this.isVertical, this.uiScale);
-    this.rearrangeCards();
   }
 
-  rearrangeCards(): void {
-    const padding = 10 * this.uiScale;
-    const cols = Math.max(1, Math.floor((this.collectZoneW - padding * 2) / (this.cardWidth + padding)));
-
-    this.collectedCards.forEach((card, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      card.x = this.collectZoneX + padding + col * (this.cardWidth + padding);
-      card.y = this.collectZoneY + padding + row * (this.cardHeight + padding) + 30;
-    });
+  private initParticles() {
+    this.particles = [];
+    for (let i = 0; i < this.particleCount; i++) {
+      this.particles.push(new Particle(this.canvasSize, this.canvasSize));
+    }
   }
 
-  bindEvents(): void {
-    window.addEventListener('resize', () => this.resize());
+  private bindEvents() {
+    window.addEventListener('resize', this.onResize.bind(this));
 
-    this.canvas.addEventListener('mousedown', (e) => {
-      const pos = this.getPointerPos(e.clientX, e.clientY);
-      this.onPointerDown(pos.x, pos.y);
-    });
-    this.canvas.addEventListener('mousemove', (e) => {
-      const pos = this.getPointerPos(e.clientX, e.clientY);
-      this.onPointerMove(pos.x, pos.y);
-    });
-    this.canvas.addEventListener('mouseup', (e) => {
-      const pos = this.getPointerPos(e.clientX, e.clientY);
-      this.onPointerUp(pos.x, pos.y);
-    });
-    this.canvas.addEventListener('mouseleave', () => this.onPointerUp(-1, -1));
+    const getPos = (e: MouseEvent | TouchEvent) => {
+      const rect = this.canvas.getBoundingClientRect();
+      let clientX: number, clientY: number;
+      if (e instanceof TouchEvent) {
+        const touch = e.touches[0] || e.changedTouches[0];
+        clientX = touch.clientX;
+        clientY = touch.clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      return {
+        x: (clientX - rect.left) * (this.canvasSize / rect.width),
+        y: (clientY - rect.top) * (this.canvasSize / rect.height)
+      };
+    };
+
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const pos = getPos(e);
+      this.mouseX = pos.x;
+      this.mouseY = pos.y;
+      if (this.gameState !== 'playing' && this.mouseActive) return;
+      if (this.gameState !== 'playing') {
+        this.updateButtonHover();
+      }
+    };
+
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const pos = getPos(e);
+      this.mouseX = pos.x;
+      this.mouseY = pos.y;
+
+      if (this.gameState !== 'playing') {
+        if (this.isInsideRestartButton(pos.x, pos.y)) {
+          this.restart();
+        }
+        return;
+      }
+
+      this.mouseActive = true;
+      this.mouseInside = true;
+    };
+
+    const onUp = () => {
+      this.mouseActive = false;
+    };
+
+    const onEnter = () => {
+      this.mouseInside = true;
+    };
+
+    const onLeave = () => {
+      this.mouseInside = false;
+      this.mouseActive = false;
+      this.buttonHover = false;
+    };
+
+    this.canvas.addEventListener('mousemove', onMove);
+    this.canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    this.canvas.addEventListener('mouseenter', onEnter);
+    this.canvas.addEventListener('mouseleave', onLeave);
 
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      const t = e.touches[0];
-      const pos = this.getPointerPos(t.clientX, t.clientY);
-      this.onPointerDown(pos.x, pos.y);
+      onDown(e);
     }, { passive: false });
-
     this.canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      const t = e.touches[0];
-      const pos = this.getPointerPos(t.clientX, t.clientY);
-      this.onPointerMove(pos.x, pos.y);
+      onMove(e);
     }, { passive: false });
-
     this.canvas.addEventListener('touchend', (e) => {
       e.preventDefault();
-      this.onPointerUp(-1, -1);
-    }, { passive: false });
-
-    this.canvas.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      this.timeline.scroll(-e.deltaY * 0.3);
-      this.timeline.updateNodePositions(this.viewportW, this.viewportH);
+      onUp();
     }, { passive: false });
   }
 
-  onPointerDown(x: number, y: number): void {
-    this.dragStartX = x;
-    this.dragStartY = y;
-    this.hasDragged = false;
-
-    if (this.timeline.popup && this.timeline.popup.visible) {
-      console.log('[DEBUG] Pointer down at:', x, y);
-      console.log('[DEBUG] Popup at:', this.timeline.popup.x, this.timeline.popup.y);
-      console.log('[DEBUG] uiScale:', this.uiScale);
-      
-      const startX = this.timeline.popup.x + 20 * this.uiScale;
-      const startY = this.timeline.popup.y + 60 * this.uiScale;
-      const gap = 90 * this.uiScale;
-      const fragW = 64 * this.uiScale;
-      const fragH = 80 * this.uiScale;
-      
-      this.timeline.popup.fragments.forEach((f, i) => {
-        console.log(`[DEBUG] Fragment ${i}:`, 
-          startX + i * gap, startY, 
-          'to', startX + i * gap + fragW, startY + fragH,
-          f.title);
-      });
-      
-      const frag = this.getFragmentAt(x, y, this.timeline.popup);
-      console.log('[DEBUG] Hit fragment:', frag ? frag.title : 'null');
-      
-      if (frag) {
-        this.draggingFragment = frag;
-        this.dragX = x;
-        this.dragY = y;
-        return;
-      }
-      if (!this.isPointInPopup(x, y, this.timeline.popup)) {
-        console.log('[DEBUG] Click outside popup, closing');
-        this.timeline.closePopup();
-      }
-      return;
-    }
-
-    const node = this.timeline.handleClick(x, y);
-    if (node && node.year <= this.timeline.currentYear) {
-      const popup = this.timeline.openPopup(node, this.viewportW, this.viewportH);
-      popup.fragments.forEach(f => {
-        const fps = createFloatingParticles(f.id, 0, 0, f.complementaryColor);
-        this.floatingParticles.push(...fps);
-      });
-    }
+  private updateButtonHover() {
+    this.buttonHover = this.isInsideRestartButton(this.mouseX, this.mouseY);
   }
 
-  onPointerMove(x: number, y: number): void {
-    this.dragX = x;
-    this.dragY = y;
-
-    const dx = x - this.dragStartX;
-    const dy = y - this.dragStartY;
-    if (Math.sqrt(dx * dx + dy * dy) > 5) {
-      this.hasDragged = true;
-    }
-
-    this.collectZoneHover = this.isPointInCollectZone(x, y);
-
-    this.hoveredFragment = null;
-    if (this.timeline.popup && !this.draggingFragment) {
-      this.hoveredFragment = this.getFragmentAt(x, y, this.timeline.popup);
-    }
-
-    this.hoveredCard = null;
-    for (const card of this.collectedCards) {
-      card.hover = false;
-      if (x >= card.x && x <= card.x + this.cardWidth && y >= card.y && y <= card.y + this.cardHeight) {
-        this.hoveredCard = card;
-        card.hover = true;
-      }
-    }
+  private isInsideRestartButton(x: number, y: number): boolean {
+    const bounds = this.ui.getRestartButtonBounds();
+    return (
+      x >= bounds.x &&
+      x <= bounds.x + bounds.width &&
+      y >= bounds.y &&
+      y <= bounds.y + bounds.height
+    );
   }
 
-  onPointerUp(x: number, y: number): void {
-    if (this.draggingFragment && this.isPointInCollectZone(x, y)) {
-      this.collectFragment(this.draggingFragment, x, y);
-    }
-    this.draggingFragment = null;
-  }
+  private onResize() {
+    const newSize = this.calculateCanvasSize();
+    if (newSize === this.canvasSize) return;
 
-  isPointInPopup(x: number, y: number, popup: FragmentPopup): boolean {
-    const w = 500 * this.uiScale;
-    const h = 250 * this.uiScale;
-    return x >= popup.x && x <= popup.x + w && y >= popup.y && y <= popup.y + h;
-  }
+    const oldSize = this.canvasSize;
+    this.canvasSize = newSize;
+    this.setupCanvas();
+    this.ui.resize(this.canvasSize, this.canvasSize);
 
-  isPointInCollectZone(x: number, y: number): boolean {
-    return x >= this.collectZoneX && x <= this.collectZoneX + this.collectZoneW &&
-           y >= this.collectZoneY && y <= this.collectZoneY + this.collectZoneH;
-  }
-
-  getFragmentAt(x: number, y: number, popup: FragmentPopup): PixelData | null {
-    const startX = popup.x + 20 * this.uiScale;
-    const startY = popup.y + 60 * this.uiScale;
-    const gap = 90 * this.uiScale;
-    const fragW = 64 * this.uiScale;
-    const fragH = 80 * this.uiScale;
-
-    for (let i = 0; i < popup.fragments.length; i++) {
-      const fx = startX + i * gap;
-      const fy = startY;
-      if (x >= fx && x <= fx + fragW && y >= fy && y <= fy + fragH) {
-        return popup.fragments[i];
-      }
-    }
-    return null;
-  }
-
-  collectFragment(fragment: PixelData, x: number, y: number): void {
-    const colors = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#FF8C42', '#A78BFA', fragment.color];
-    const explosion = createExplosionParticles(x, y, colors);
-    this.particles.push(...explosion);
-
-    this.timeline.addToTimeline(fragment);
-
-    const padding = 10 * this.uiScale;
-    const cols = Math.max(1, Math.floor((this.collectZoneW - padding * 2) / (this.cardWidth + padding)));
-    const idx = this.collectedCards.length;
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-
-    this.collectedCards.push({
-      fragment,
-      x: this.collectZoneX + padding + col * (this.cardWidth + padding),
-      y: this.collectZoneY + padding + row * (this.cardHeight + padding) + 30,
-      scale: 0,
-      targetScale: 1,
-      hover: false
-    });
-
-    this.floatingParticles = this.floatingParticles.filter(p => p.ownerId !== fragment.id);
-  }
-
-  update(deltaTime: number): void {
-    const dt = deltaTime / FRAME_DURATION;
-
-    this.timeline.update(dt);
-
-    this.particles = this.particles.filter(p => {
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vy += 0.05 * dt;
-      p.life += dt;
-      return p.life < p.maxLife;
-    });
-
-    this.updateFloatingParticles(dt);
-
-    for (const card of this.collectedCards) {
-      const target = card.hover ? 1.05 : card.targetScale;
-      card.scale += (target - card.scale) * 0.15 * dt;
-    }
-  }
-
-  updateFloatingParticles(dt: number): void {
-    if (!this.timeline.popup) return;
-
-    const popup = this.timeline.popup;
-    const startX = popup.x + 20 * this.uiScale;
-    const startY = popup.y + 60 * this.uiScale;
-    const gap = 90 * this.uiScale;
-
-    for (let i = 0; i < popup.fragments.length; i++) {
-      const frag = popup.fragments[i];
-      const fx = startX + i * gap + 32 * this.uiScale;
-      const fy = startY + 32 * this.uiScale;
-
-      for (const p of this.floatingParticles) {
-        if (p.ownerId !== frag.id) continue;
-        p.angle += 0.02 * dt;
-        p.x += (Math.cos(p.angle) * 0.8 + (fx - p.x) * 0.02) * dt;
-        p.y += (Math.sin(p.angle * 0.7) * 0.6 + (fy - p.y) * 0.02) * dt;
-        p.x += (Math.random() - 0.5) * 0.5 * dt;
-        p.y += (Math.random() - 0.5) * 0.5 * dt;
-      }
-    }
-  }
-
-  draw(): void {
-    this.ctx.clearRect(0, 0, this.viewportW, this.viewportH);
-
-    this.timeline.draw(this.ctx, this.viewportW, this.viewportH);
-    this.drawCollectZone();
-    this.drawCollectedCards();
-
-    if (this.timeline.popup) {
-      this.drawPopup(this.timeline.popup);
-    }
-
-    this.drawParticles();
-    this.drawFloatingParticles();
-
-    if (this.draggingFragment) {
-      this.drawDraggingFragment();
-    }
-  }
-
-  drawCollectZone(): void {
-    const glowAlpha = this.collectZoneHover || this.draggingFragment ? 0.6 : 0.3;
-    const pulse = Math.sin(performance.now() / 500) * 0.1 + 0.9;
-
-    this.ctx.save();
-
-    this.ctx.shadowColor = `rgba(100, 200, 180, ${glowAlpha * pulse})`;
-    this.ctx.shadowBlur = 20;
-    this.ctx.strokeStyle = `rgba(100, 220, 200, ${glowAlpha})`;
-    this.ctx.lineWidth = 2;
-    this.ctx.fillStyle = 'rgba(200, 230, 220, 0.04)';
-
-    this.ctx.beginPath();
-    this.ctx.roundRect(this.collectZoneX, this.collectZoneY, this.collectZoneW, this.collectZoneH, 16);
-    this.ctx.fill();
-    this.ctx.stroke();
-
-    this.ctx.shadowBlur = 0;
-
-    const fontSize = 16 * this.uiScale;
-    this.ctx.font = `300 ${fontSize}px 'Cormorant Garamond', serif`;
-    this.ctx.fillStyle = 'rgba(200, 230, 220, 0.7)';
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('◆  收集区  ◆', this.collectZoneX + this.collectZoneW / 2, this.collectZoneY + 24 * this.uiScale);
-
-    if (this.collectedCards.length === 0) {
-      const hintSize = 13 * this.uiScale;
-      this.ctx.font = `300 ${hintSize}px 'Cormorant Garamond', serif`;
-      this.ctx.fillStyle = 'rgba(200, 230, 220, 0.4)';
-      this.ctx.fillText('拖拽碎片至此处', this.collectZoneX + this.collectZoneW / 2, this.collectZoneY + this.collectZoneH / 2);
-    }
-
-    this.ctx.restore();
-  }
-
-  drawPopup(popup: FragmentPopup): void {
-    const w = 500 * this.uiScale;
-    const h = 250 * this.uiScale;
-    const s = this.uiScale;
-
-    this.ctx.save();
-
-    this.ctx.fillStyle = 'rgba(20, 35, 50, 0.92)';
-    this.ctx.strokeStyle = 'rgba(100, 220, 200, 0.3)';
-    this.ctx.lineWidth = 1.5;
-    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    this.ctx.shadowBlur = 30;
-    this.ctx.beginPath();
-    this.ctx.roundRect(popup.x, popup.y, w, h, 12 * s);
-    this.ctx.fill();
-    this.ctx.stroke();
-
-    this.ctx.shadowBlur = 0;
-
-    const titleSize = 22 * s;
-    this.ctx.font = `400 ${titleSize}px 'Cormorant Garamond', serif`;
-    const textGrad = this.ctx.createLinearGradient(popup.x, popup.y, popup.x + 100 * s, popup.y);
-    textGrad.addColorStop(0, 'rgba(240, 250, 255, 1)');
-    textGrad.addColorStop(1, 'rgba(255, 230, 120, 1)');
-    this.ctx.fillStyle = textGrad;
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'top';
-    this.ctx.fillText(`${popup.year} 年 · 文化裂隙`, popup.x + 20 * s, popup.y + 18 * s);
-
-    const subSize = 12 * s;
-    this.ctx.font = `300 ${subSize}px 'Cormorant Garamond', serif`;
-    this.ctx.fillStyle = 'rgba(200, 220, 230, 0.5)';
-    this.ctx.fillText('点击并拖拽碎片至收集区', popup.x + 20 * s, popup.y + 42 * s);
-
-    const startX = popup.x + 20 * s;
-    const startY = popup.y + 60 * s;
-    const gap = 90 * s;
-    const fragW = 64 * s;
-    const fragH = 64 * s;
-    const iconPixelSize = 2 * s;
-
-    popup.fragments.forEach((frag, i) => {
-      const fx = startX + i * gap;
-      const fy = startY;
-      const isHover = this.hoveredFragment?.id === frag.id;
-      const scale = isHover ? 1.05 : 1;
-
-      this.ctx.save();
-      this.ctx.translate(fx + fragW / 2, fy + fragH / 2 + 8 * s);
-      this.ctx.scale(scale, scale);
-      this.ctx.translate(-fragW / 2, -(fragH / 2 + 8 * s));
-
-      this.ctx.fillStyle = frag.color;
-      this.ctx.shadowColor = frag.color;
-      this.ctx.shadowBlur = isHover ? 15 : 8;
-      this.ctx.beginPath();
-      this.ctx.roundRect(0, 0, fragW, fragH, 8 * s);
-      this.ctx.fill();
-      this.ctx.shadowBlur = 0;
-
-      const iconX = (fragW - 16 * iconPixelSize) / 2;
-      const iconY = (fragH - 16 * iconPixelSize) / 2;
-      drawPixelIcon(this.ctx, frag.icon, iconX, iconY, iconPixelSize, 'rgba(255,255,255,0.95)');
-
-      const labelSize = 11 * s;
-      this.ctx.font = `300 ${labelSize}px 'Cormorant Garamond', serif`;
-      this.ctx.fillStyle = 'rgba(240, 250, 255, 0.85)';
-      this.ctx.textAlign = 'center';
-      this.ctx.fillText(frag.title.split(' ')[1], fragW / 2, fragH + 12 * s);
-
-      this.ctx.restore();
-    });
-
-    this.ctx.restore();
-  }
-
-  drawCollectedCards(): void {
-    const s = this.uiScale;
-
-    for (const card of this.collectedCards) {
-      const scale = card.scale;
-      if (scale < 0.01) continue;
-
-      const cw = this.cardWidth;
-      const ch = this.cardHeight;
-
-      this.ctx.save();
-      this.ctx.translate(card.x + cw / 2, card.y + ch / 2);
-      this.ctx.scale(scale, scale);
-      this.ctx.translate(-cw / 2, -ch / 2);
-
-      const shadowBlur = card.hover ? 20 : 10;
-      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-      this.ctx.shadowBlur = shadowBlur;
-      this.ctx.fillStyle = 'rgba(25, 40, 55, 0.95)';
-      this.ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.roundRect(0, 0, cw, ch, 12 * s);
-      this.ctx.fill();
-      this.ctx.stroke();
-
-      this.ctx.shadowBlur = 0;
-
-      const imgW = cw - 30 * s;
-      const imgH = ch * 0.4;
-      this.ctx.fillStyle = card.fragment.color;
-      this.ctx.beginPath();
-      this.ctx.roundRect(15 * s, 15 * s, imgW, imgH, 8 * s);
-      this.ctx.fill();
-
-      const iconPixel = 4 * s;
-      const iconX = (cw - 16 * iconPixel) / 2;
-      const iconY = 15 * s + (imgH - 16 * iconPixel) / 2;
-      drawPixelIcon(this.ctx, card.fragment.icon, iconX, iconY, iconPixel, 'rgba(255,255,255,0.95)');
-
-      const yearSize = 14 * s;
-      this.ctx.font = `400 ${yearSize}px 'Cormorant Garamond', serif`;
-      this.ctx.fillStyle = 'rgba(255, 240, 200, 1)';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'top';
-      this.ctx.fillText(`${card.fragment.year}`, cw / 2, ch * 0.58);
-
-      const typeSize = 12 * s;
-      this.ctx.font = `300 ${typeSize}px 'Cormorant Garamond', serif`;
-      this.ctx.fillStyle = 'rgba(200, 220, 230, 0.8)';
-      this.ctx.fillText(card.fragment.title.split(' ')[1], cw / 2, ch * 0.68);
-
-      this.ctx.beginPath();
-      this.ctx.rect(12 * s, ch * 0.82, cw - 24 * s, 1);
-      this.ctx.fillStyle = 'rgba(212, 175, 55, 0.2)';
-      this.ctx.fill();
-
-      // 滚动文字
-      const text = card.fragment.description;
-      const scrollText = `${text}  ·  ${text}  ·  `;
-      const scrollSpeed = 40;
-      const textWidth = scrollText.length * 6 * s;
-      const scrollOffset = (performance.now() / 1000 * scrollSpeed) % (textWidth / 2);
-
-      const descSize = 10 * s;
-      this.ctx.font = `300 ${descSize}px 'Cormorant Garamond', serif`;
-      this.ctx.fillStyle = 'rgba(180, 200, 210, 0.6)';
-
-      this.ctx.save();
-      this.ctx.beginPath();
-      this.ctx.rect(12 * s, ch * 0.85, cw - 24 * s, ch * 0.12);
-      this.ctx.clip();
-
-      // 两端渐隐
-      const grad = this.ctx.createLinearGradient(12 * s, 0, cw - 12 * s, 0);
-      grad.addColorStop(0, 'rgba(180, 200, 210, 0)');
-      grad.addColorStop(0.15, 'rgba(180, 200, 210, 0.6)');
-      grad.addColorStop(0.85, 'rgba(180, 200, 210, 0.6)');
-      grad.addColorStop(1, 'rgba(180, 200, 210, 0)');
-      this.ctx.fillStyle = grad;
-
-      this.ctx.fillText(scrollText, cw / 2 - scrollOffset, ch * 0.86);
-      this.ctx.restore();
-
-      this.ctx.restore();
-    }
-  }
-
-  drawParticles(): void {
+    const scale = this.canvasSize / oldSize;
     for (const p of this.particles) {
-      const alpha = 1 - p.life / p.maxLife;
-      this.ctx.save();
-      this.ctx.globalAlpha = alpha;
-      this.ctx.fillStyle = p.color;
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.restore();
+      p.x *= scale;
+      p.y *= scale;
+      p.vx *= scale;
+      p.vy *= scale;
+      if (p.locked) {
+        p.lockedX *= scale;
+        p.lockedY *= scale;
+      }
     }
   }
 
-  drawFloatingParticles(): void {
-    const now = performance.now();
-    for (const p of this.floatingParticles) {
-      this.ctx.save();
-      this.ctx.globalAlpha = 0.6 + Math.sin(now / 300 + p.angle) * 0.3;
-      this.ctx.fillStyle = p.color;
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.size * this.uiScale, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.restore();
+  private loadBestTime() {
+    try {
+      const stored = localStorage.getItem('magnetic-hourglass-best-time');
+      if (stored) {
+        const val = parseFloat(stored);
+        if (!isNaN(val) && val > 0 && val < this.totalTime) {
+          this.bestTime = val;
+        }
+      }
+    } catch (_e) {
+      this.bestTime = null;
     }
   }
 
-  drawDraggingFragment(): void {
-    if (!this.draggingFragment) return;
-    const f = this.draggingFragment;
-    const s = this.uiScale;
-
-    this.ctx.save();
-    this.ctx.globalAlpha = 0.85;
-    this.ctx.translate(this.dragX, this.dragY);
-
-    const fragW = 64 * s;
-    const fragH = 64 * s;
-    this.ctx.fillStyle = f.color;
-    this.ctx.shadowColor = f.color;
-    this.ctx.shadowBlur = 20;
-    this.ctx.beginPath();
-    this.ctx.roundRect(-fragW / 2, -fragH / 2, fragW, fragH, 8 * s);
-    this.ctx.fill();
-    this.ctx.shadowBlur = 0;
-
-    const iconPixelSize = 2 * s;
-    const iconX = -8 * iconPixelSize;
-    const iconY = -8 * iconPixelSize;
-    drawPixelIcon(this.ctx, f.icon, iconX, iconY, iconPixelSize, 'rgba(255,255,255,0.95)');
-
-    this.ctx.restore();
+  private saveBestTime(time: number) {
+    try {
+      localStorage.setItem('magnetic-hourglass-best-time', time.toFixed(2));
+    } catch (_e) {
+      // ignore storage errors
+    }
   }
 
-  loop(time: number): void {
-    this.animationId = requestAnimationFrame(this.loop);
-
-    if (this.lastFrameTime === 0) {
-      this.lastFrameTime = time;
-    }
-
-    let deltaTime = time - this.lastFrameTime;
-    this.lastFrameTime = time;
-
-    if (deltaTime > 100) {
-      deltaTime = 100;
-    }
-
-    this.accumulator += deltaTime;
-
-    while (this.accumulator >= FRAME_DURATION) {
-      this.update(FRAME_DURATION);
-      this.accumulator -= FRAME_DURATION;
-    }
-
-    this.draw();
+  private hideLoadingScreen() {
+    setTimeout(() => {
+      const loadingScreen = document.getElementById('loadingScreen');
+      if (loadingScreen) {
+        loadingScreen.classList.add('hidden');
+        setTimeout(() => {
+          if (loadingScreen.parentNode) {
+            loadingScreen.parentNode.removeChild(loadingScreen);
+          }
+        }, 800);
+      }
+    }, 400);
   }
 
-  start(): void {
-    this.lastFrameTime = 0;
-    this.animationId = requestAnimationFrame(this.loop);
+  private rebuildGrid() {
+    this.grid.clear();
+    for (let i = 0; i < this.particles.length; i++) {
+      this.grid.insert(this.particles[i]);
+    }
   }
 
-  stop(): void {
-    if (this.animationId) {
-      cancelAnimationFrame(this.animationId);
+  private update(deltaTime: number) {
+    if (this.gameState === 'playing') {
+      this.timeLeft -= deltaTime;
+      this.elapsed += deltaTime;
+
+      if (this.timeLeft <= 0) {
+        this.timeLeft = 0;
+        this.triggerLoss();
+      }
     }
+
+    this.breathTimer += deltaTime;
+    if (this.breathTimer > 1.5) this.breathTimer -= 1.5;
+    this.breathIntensity = 0.5 + 0.5 * Math.sin((this.breathTimer / 1.5) * Math.PI * 2);
+
+    if (this.particleState.phase === 'victory') {
+      this.victoryAnimTimer += deltaTime;
+      if (this.victoryAnimTimer >= this.victoryAnimDuration) {
+        for (const p of this.particles) {
+          p.opacity = 0;
+        }
+      }
+    }
+
+    if (this.particleState.phase === 'fading') {
+      this.timeUpAlpha = Math.min(1, this.timeUpAlpha + deltaTime / 1);
+    }
+
+    if (this.particleState.phase === 'flowing') {
+      this.rebuildGrid();
+    }
+
+    const gridMap = this.grid.getGrid();
+    const cx = this.canvasSize / 2;
+    const cy = this.canvasSize / 2;
+
+    for (let i = 0; i < this.particles.length; i++) {
+      this.particles[i].applyForces(
+        this.particles,
+        gridMap,
+        this.grid.cellSize,
+        cx,
+        cy,
+        this.mouseActive,
+        this.mouseX,
+        this.mouseY,
+        deltaTime,
+        this.particleState
+      );
+    }
+
+    if (this.gameState === 'playing') {
+      this.checkWinCondition();
+    }
+
+    const uiState: UIState = {
+      timeLeft: this.timeLeft,
+      totalTime: this.totalTime,
+      progress: this.calculateHourglassProgress(),
+      gameState: this.gameState,
+      victoryTime: this.victoryTime,
+      bestTime: this.bestTime,
+      hintText: this.gameState === 'playing' ? '拖拽鼠标引导粒子' : '',
+      mouseDown: this.mouseActive
+    };
+
+    this.ui.update(deltaTime, uiState);
+    this.frameCount++;
+  }
+
+  private checkWinCondition() {
+    const progress = this.calculateHourglassProgress();
+    if (progress >= this.winThreshold) {
+      this.triggerVictory();
+    }
+  }
+
+  private calculateHourglassProgress(): number {
+    if (this.particles.length === 0) return 0;
+    let count = 0;
+    const cx = this.canvasSize / 2;
+    const cy = this.canvasSize / 2;
+    for (let i = 0; i < this.particles.length; i++) {
+      if (this.particles[i].isInHourglass(cx, cy, this.hourglassSide, this.hourglassGap)) {
+        count++;
+      }
+    }
+    return count / this.particles.length;
+  }
+
+  private triggerVictory() {
+    this.gameState = 'won';
+    this.victoryTime = parseFloat(this.elapsed.toFixed(1));
+    this.particleState = { phase: 'locked' };
+
+    for (const p of this.particles) {
+      p.lockPosition();
+    }
+
+    setTimeout(() => {
+      this.particleState = { phase: 'victory' };
+      this.victoryAnimTimer = 0;
+      for (const p of this.particles) {
+        p.triggerVictoryBurst(this.canvasSize, this.canvasSize);
+      }
+    }, 300);
+
+    if (this.bestTime === null || this.victoryTime < this.bestTime) {
+      this.bestTime = this.victoryTime;
+      this.saveBestTime(this.victoryTime);
+    }
+  }
+
+  private triggerLoss() {
+    this.gameState = 'lost';
+    this.particleState = { phase: 'fading' };
+    for (const p of this.particles) {
+      p.victoryVx = (Math.random() - 0.5) * 20;
+      p.victoryVy = (Math.random() - 0.5) * 20;
+    }
+  }
+
+  private restart() {
+    this.particleCount = 500 + Math.floor(Math.random() * 301);
+    this.initParticles();
+
+    this.particleState = { phase: 'flowing' };
+    this.gameState = 'playing';
+    this.timeLeft = this.totalTime;
+    this.elapsed = 0;
+    this.victoryTime = null;
+    this.timeUpAlpha = 0;
+    this.victoryAnimTimer = 0;
+    this.mouseActive = false;
+    this.buttonHover = false;
+    this.breathTimer = Math.random() * 1.5;
+  }
+
+  private render() {
+    this.ctx.fillStyle = '#0A0A0F';
+    this.ctx.fillRect(0, 0, this.canvasSize, this.canvasSize);
+
+    this.drawBackgroundVignette();
+
+    this.ui.drawHourglassOutline();
+
+    if (this.mouseActive && this.mouseInside && this.gameState === 'playing') {
+      this.ui.drawMagneticField(this.mouseX, this.mouseY, 1);
+    }
+
+    for (let i = 0; i < this.particles.length; i++) {
+      this.particles[i].render(
+        this.ctx,
+        this.canvasSize,
+        this.canvasSize,
+        this.breathIntensity,
+        this.frameCount,
+        this.particleState
+      );
+    }
+
+    const uiState: UIState = {
+      timeLeft: this.timeLeft,
+      totalTime: this.totalTime,
+      progress: this.calculateHourglassProgress(),
+      gameState: this.gameState,
+      victoryTime: this.victoryTime,
+      bestTime: this.bestTime,
+      hintText: this.gameState === 'playing' ? '拖拽鼠标引导粒子' : '',
+      mouseDown: this.mouseActive
+    };
+
+    this.ui.render(uiState);
+
+    if (this.gameState === 'lost') {
+      this.ui.drawTimeUpText(this.timeUpAlpha);
+    }
+
+    if (this.gameState !== 'playing') {
+      this.ui.drawRestartButton(this.buttonHover, this.gameState);
+    }
+  }
+
+  private drawBackgroundVignette() {
+    const cx = this.canvasSize / 2;
+    const cy = this.canvasSize / 2;
+    const r = this.canvasSize * 0.7;
+    const gradient = this.ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r);
+    gradient.addColorStop(0, 'rgba(18,18,26,0)');
+    gradient.addColorStop(1, 'rgba(10,10,15,0.8)');
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, this.canvasSize, this.canvasSize);
+  }
+
+  private gameLoop(now: number) {
+    if (!this.running) return;
+
+    let delta = (now - this.lastTime) / 1000;
+    this.lastTime = now;
+
+    delta = Math.min(delta, 0.05);
+
+    this.update(delta);
+    this.render();
+
+    this.animationId = requestAnimationFrame(this.gameLoop);
+  }
+
+  public destroy() {
+    this.running = false;
+    cancelAnimationFrame(this.animationId);
   }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  const game = new Game();
-  game.start();
+  try {
+    (window as unknown as { __magneticHourglass?: Game }).__magneticHourglass = new Game();
+  } catch (e) {
+    console.error('Failed to initialize Magnetic Hourglass game:', e);
+  }
 });

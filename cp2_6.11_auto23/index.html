@@ -1,41 +1,124 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>时间裂隙采集器</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>磁暴沙漏</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
+
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      font-family: 'Cormorant Garamond', serif;
+      background: linear-gradient(135deg, #0A0A0F 0%, #12121A 100%);
+      font-family: 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-    body {
-      background: linear-gradient(135deg, #1A233A 0%, #0F1A1A 100%);
-    }
+
     #app {
       width: 100%;
       height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       position: relative;
     }
-    canvas {
+
+    #gameCanvas {
       display: block;
-      position: absolute;
+      box-shadow: 0 0 60px rgba(0, 229, 255, 0.1);
+      border-radius: 8px;
+    }
+
+    #loadingScreen {
+      position: fixed;
       top: 0;
       left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: linear-gradient(135deg, #0A0A0F 0%, #12121A 100%);
+      z-index: 1000;
+      transition: opacity 0.6s ease;
+    }
+
+    #loadingScreen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loader {
+      width: 60px;
+      height: 60px;
+      position: relative;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .loader::before,
+    .loader::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      border: 3px solid transparent;
+    }
+
+    .loader::before {
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-top-color: #00E5FF;
+      animation: spin 1s linear infinite;
+    }
+
+    .loader::after {
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      border-bottom-color: #00FF88;
+      animation: spin 0.8s linear infinite reverse;
+    }
+
+    .loading-text {
+      margin-top: 30px;
+      color: #AAAAAA;
+      font-size: 1rem;
+      letter-spacing: 2px;
+      animation: blink 1.2s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.85; }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
     }
   </style>
 </head>
 <body>
+  <div id="loadingScreen">
+    <div class="loader"></div>
+    <div class="loading-text">磁场初始化中...</div>
+  </div>
   <div id="app">
-    <canvas id="mainCanvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
