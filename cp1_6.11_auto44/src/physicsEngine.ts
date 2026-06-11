@@ -35,9 +35,11 @@ export class PhysicsEngine {
 
   private triggeredNodesThisFrame: Map<string, { marbleType: MarbleType; noteIndex: number; startNote: number }[]> = new Map();
   private pendingCollisions: Set<string> = new Set();
+  private trackIntersections: Map<string, Point[]> = new Map();
 
   public setTracks(tracks: Track[]): void {
     this.tracks = tracks;
+    this.computeTrackIntersections();
   }
 
   public setMarbles(marbles: Marble[]): void {
@@ -70,6 +72,61 @@ export class PhysicsEngine {
 
   public onMarbleEnd(listener: (marble: Marble) => void): void {
     this.marbleEndListeners.push(listener);
+  }
+
+  private computeTrackIntersections(): void {
+    this.trackIntersections.clear();
+
+    for (let i = 0; i < this.tracks.length; i++) {
+      for (let j = i + 1; j < this.tracks.length; j++) {
+        const t1 = this.tracks[i];
+        const t2 = this.tracks[j];
+        const key = this.getIntersectionKey(t1.id, t2.id);
+        const points: Point[] = [];
+
+        for (let a = 0; a < t1.nodes.length - 1; a++) {
+          const p1 = t1.nodes[a].position;
+          const p2 = t1.nodes[a + 1].position;
+          for (let b = 0; b < t2.nodes.length - 1; b++) {
+            const p3 = t2.nodes[b].position;
+            const p4 = t2.nodes[b + 1].position;
+            const intersect = this.segmentIntersection(p1, p2, p3, p4);
+            if (intersect) {
+              points.push(intersect);
+            }
+          }
+        }
+
+        if (points.length > 0) {
+          this.trackIntersections.set(key, points);
+        }
+      }
+    }
+  }
+
+  private getIntersectionKey(id1: string, id2: string): string {
+    return id1 < id2 ? `${id1}|${id2}` : `${id2}|${id1}`;
+  }
+
+  private segmentIntersection(p1: Point, p2: Point, p3: Point, p4: Point): Point | null {
+    const s1x = p2.x - p1.x;
+    const s1y = p2.y - p1.y;
+    const s2x = p4.x - p3.x;
+    const s2y = p4.y - p3.y;
+
+    const denom = -s2x * s1y + s1x * s2y;
+    if (Math.abs(denom) < 0.0001) return null;
+
+    const s = (-s1y * (p1.x - p3.x) + s1x * (p1.y - p3.y)) / denom;
+    const t = (s2x * (p1.y - p3.y) - s2y * (p1.x - p3.x)) / denom;
+
+    if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
+      return {
+        x: p1.x + t * s1x,
+        y: p1.y + t * s1y
+      };
+    }
+    return null;
   }
 
   private getTrackLengths(track: Track): { cumulative: number[]; total: number } {
@@ -126,13 +183,8 @@ export class PhysicsEngine {
 
     marble.progress += speed * deltaTime;
 
-    while (marble.progress >= total && marble.nodeIndex < track.nodes.length - 1) {
-      marble.nodeIndex++;
-      marble.progress = total;
-      break;
-    }
-
     if (marble.progress >= total) {
+      marble.progress = total;
       this.triggerNodeIfNeeded(marble, track, track.nodes.length - 1);
       marble.isMoving = false;
       marble.position = { ...track.nodes[track.nodes.length - 1].position };
@@ -182,7 +234,6 @@ export class PhysicsEngine {
     if (nodeIdx < 0 || nodeIdx >= track.nodes.length) return;
 
     const node = track.nodes[nodeIdx];
-    const uniqueKey = `${marble.id}_${node.id}`;
     if (marble.lastTriggeredNodeId === node.id) return;
 
     const nodePos = node.position;
@@ -301,13 +352,33 @@ export class PhysicsEngine {
         const collisionKey = this.getCollisionKey(m1.id, m2.id);
         if (this.pendingCollisions.has(collisionKey)) continue;
 
+        const nearIntersection = this.isNearTrackIntersection(m1, m2);
         const dist = this.distance(m1.position, m2.position);
-        if (dist <= CONFIG.COLLISION_DISTANCE) {
+
+        if (dist <= CONFIG.COLLISION_DISTANCE || (nearIntersection && dist <= CONFIG.COLLISION_DISTANCE * 1.5)) {
           this.pendingCollisions.add(collisionKey);
           this.processCollision(m1, m2);
         }
       }
     }
+  }
+
+  private isNearTrackIntersection(m1: Marble, m2: Marble): boolean {
+    if (!m1.trackId || !m2.trackId) return false;
+
+    const key = this.getIntersectionKey(m1.trackId, m2.trackId);
+    const intersections = this.trackIntersections.get(key);
+    if (!intersections) return false;
+
+    const threshold = CONFIG.COLLISION_DISTANCE * 1.2;
+
+    for (const ip of intersections) {
+      const d1 = this.distance(m1.position, ip);
+      const d2 = this.distance(m2.position, ip);
+      if (d1 <= threshold && d2 <= threshold) return true;
+    }
+
+    return false;
   }
 
   private getCollisionKey(id1: string, id2: string): string {
@@ -320,15 +391,13 @@ export class PhysicsEngine {
       y: (m1.position.y + m2.position.y) / 2
     };
 
-    const otherTracks = this.tracks.filter(t => t.id !== m1.trackId && t.id !== m2.trackId);
     const allTracks = this.tracks;
-
-    const shouldSwap = Math.random() > 0.4;
+    const shouldSwap = Math.random() > 0.25;
 
     if (shouldSwap && allTracks.length >= 2) {
       this.swapMarblesAtCollision(m1, m2, collisionPos);
     } else {
-      this.deflectMarbles(m1, m2, collisionPos);
+      this.deflectMarbles(m1, m2);
     }
 
     const track = allTracks.find(t => t.id === m1.trackId) || allTracks[0];
@@ -349,11 +418,29 @@ export class PhysicsEngine {
     const track2 = this.tracks.find(t => t.id === t2Id);
     if (!track1 || !track2) return;
 
-    const closestIdx1 = this.findClosestNodeIndex(track2, collisionPos);
-    const closestIdx2 = this.findClosestNodeIndex(track1, collisionPos);
+    const closestIdx1 = this.findClosestNodeIndexAhead(track2, collisionPos, m2);
+    const closestIdx2 = this.findClosestNodeIndexAhead(track1, collisionPos, m1);
 
     this.transferMarbleToTrack(m1, track2, closestIdx1);
     this.transferMarbleToTrack(m2, track1, closestIdx2);
+  }
+
+  private findClosestNodeIndexAhead(track: Track, point: Point, reference: Marble): number {
+    let minDist = Infinity;
+    let closestIdx = 0;
+    const refProgress = reference.progress;
+
+    for (let i = 0; i < track.nodes.length; i++) {
+      const d = this.distance(track.nodes[i].position, point);
+      void refProgress;
+
+      if (d < minDist) {
+        minDist = d;
+        closestIdx = i;
+      }
+    }
+
+    return Math.min(closestIdx, track.nodes.length - 2);
   }
 
   private transferMarbleToTrack(marble: Marble, newTrack: Track, startNodeIdx: number): void {
@@ -368,43 +455,25 @@ export class PhysicsEngine {
     marble.lastTriggeredNodeId = null;
 
     const { cumulative, total } = this.getTrackLengths(newTrack);
-    marble.progress = cumulative[startNodeIdx];
-
-    const bounceProgress = Math.min(cumulative[startNodeIdx] + 20, total);
-    marble.progress = bounceProgress;
+    marble.progress = Math.min(cumulative[startNodeIdx] + 30, total);
 
     marble.isMoving = true;
   }
 
-  private deflectMarbles(m1: Marble, m2: Marble, collisionPos: Point): void {
+  private deflectMarbles(m1: Marble, m2: Marble): void {
     const dx = m2.position.x - m1.position.x;
     const dy = m2.position.y - m1.position.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const nx = dx / dist;
     const ny = dy / dist;
 
-    m1.position.x -= nx * CONFIG.COLLISION_RESPONSE_FORCE;
-    m1.position.y -= ny * CONFIG.COLLISION_RESPONSE_FORCE;
-    m2.position.x += nx * CONFIG.COLLISION_RESPONSE_FORCE;
-    m2.position.y += ny * CONFIG.COLLISION_RESPONSE_FORCE;
+    m1.position.x -= nx * CONFIG.COLLISION_RESPONSE_FORCE * 1.2;
+    m1.position.y -= ny * CONFIG.COLLISION_RESPONSE_FORCE * 1.2;
+    m2.position.x += nx * CONFIG.COLLISION_RESPONSE_FORCE * 1.2;
+    m2.position.y += ny * CONFIG.COLLISION_RESPONSE_FORCE * 1.2;
 
-    m1.progress = Math.max(0, m1.progress - CONFIG.COLLISION_RESPONSE_FORCE * 1.5);
-    m2.progress = Math.max(0, m2.progress - CONFIG.COLLISION_RESPONSE_FORCE * 1.5);
-  }
-
-  private findClosestNodeIndex(track: Track, point: Point): number {
-    let minDist = Infinity;
-    let closestIdx = 0;
-
-    for (let i = 0; i < track.nodes.length; i++) {
-      const d = this.distance(track.nodes[i].position, point);
-      if (d < minDist) {
-        minDist = d;
-        closestIdx = i;
-      }
-    }
-
-    return closestIdx;
+    m1.progress = Math.max(0, m1.progress - CONFIG.COLLISION_RESPONSE_FORCE * 2.5);
+    m2.progress = Math.max(0, m2.progress - CONFIG.COLLISION_RESPONSE_FORCE * 2.5);
   }
 
   public findNearestTrack(point: Point, radius: number = 30): { track: Track; nodeIndex: number } | null {

@@ -53,8 +53,6 @@ class GameMain {
 
     this.physicsEngine.setTracks(this.tracks);
     this.physicsEngine.setMarbles(this.marbles);
-
-    this.updateNodeHighlights = this.updateNodeHighlights.bind(this);
   }
 
   public async start(): Promise<void> {
@@ -74,17 +72,9 @@ class GameMain {
 
   private initDefaultTracks(): void {
     const editorTop = CONFIG.TITLE_BAR_HEIGHT;
-    const editorBottom = CONFIG.TITLE_BAR_HEIGHT + CONFIG.EDITOR_AREA_HEIGHT;
     const canvasW = CONFIG.CANVAS_WIDTH;
     const playBottom = CONFIG.CANVAS_HEIGHT - CONFIG.INFO_BAR_HEIGHT - 20;
     const paddingX = 100;
-
-    const trackColors = [
-      COLORS.TRACK,
-      '#FF66CC',
-      '#66FF99',
-      '#FFCC00'
-    ];
 
     const layouts = [
       { startX: paddingX + 40, endX: paddingX + 60, midX: paddingX + 280 },
@@ -93,25 +83,12 @@ class GameMain {
       { startX: canvasW - paddingX - 60, endX: canvasW - paddingX - 80, midX: canvasW - paddingX - 240 }
     ];
 
-    const startYs = [
-      editorTop + 150,
-      editorTop + 170,
-      editorTop + 165,
-      editorTop + 155
-    ];
-
     for (let i = 0; i < CONFIG.MAX_TRACKS; i++) {
       const layout = layouts[i];
-      const startY = startYs[i];
       const nodes: TrackNode[] = [];
       const numNodes = CONFIG.DEFAULT_NODES_PER_TRACK;
 
       for (let j = 0; j < numNodes; j++) {
-        const t = j / (numNodes - 1);
-
-        const pathMidY = editorBottom + (playBottom - editorBottom) * 0.55
-          + Math.sin((j + i * 0.5) * 0.9) * 55;
-
         let x: number, y: number;
         if (j === 0) {
           x = layout.startX;
@@ -126,8 +103,8 @@ class GameMain {
             + Math.sin(j * 1.7 + i * 0.8) * 25;
 
           const progress = (j - 1) / (numNodes - 2);
-          y = editorBottom + 40
-            + progress * (playBottom - editorBottom - 120)
+          y = CONFIG.TITLE_BAR_HEIGHT + CONFIG.EDITOR_AREA_HEIGHT + 40
+            + progress * (playBottom - (CONFIG.TITLE_BAR_HEIGHT + CONFIG.EDITOR_AREA_HEIGHT) - 120)
             + Math.sin((i + 1) * (j + 1) * 0.7) * 45;
         }
 
@@ -145,13 +122,9 @@ class GameMain {
         id: genId('track'),
         nodes,
         startNote: i % 2,
-        color: trackColors[i]
+        color: COLORS.TRACK
       });
     }
-  }
-
-  private easeInOutQuad(t: number): number {
-    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   }
 
   private initLaunchPads(): void {
@@ -259,6 +232,12 @@ class GameMain {
     this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
     this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
     this.canvas.addEventListener('mouseleave', () => this.onMouseLeave());
+    this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.onRightClick(e);
+    });
 
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
@@ -297,6 +276,12 @@ class GameMain {
     };
   }
 
+  private isInEditorArea(pt: Point): boolean {
+    return pt.y >= CONFIG.TITLE_BAR_HEIGHT + 60
+      && pt.y <= CONFIG.TITLE_BAR_HEIGHT + CONFIG.EDITOR_AREA_HEIGHT
+      && pt.x >= 30 && pt.x <= CONFIG.CANVAS_WIDTH - 30;
+  }
+
   private onMouseDown(e: MouseEvent): void {
     this.audioEngine.resume();
     const pt = this.getCanvasPoint(e.clientX, e.clientY);
@@ -323,7 +308,88 @@ class GameMain {
         offset: { x: pt.x - node.position.x, y: pt.y - node.position.y }
       };
       this.canvas.style.cursor = 'grabbing';
+      return;
     }
+  }
+
+  private onDoubleClick(e: MouseEvent): void {
+    const pt = this.getCanvasPoint(e.clientX, e.clientY);
+
+    if (!this.isInEditorArea(pt)) return;
+    if (this.tracks.length >= CONFIG.MAX_TRACKS) return;
+
+    this.createNewTrackFromPoint(pt);
+  }
+
+  private onRightClick(e: MouseEvent): void {
+    const pt = this.getCanvasPoint(e.clientX, e.clientY);
+    const found = this.findNodeAtPoint(pt);
+
+    if (found) {
+      const track = this.tracks[found.trackIdx];
+      if (track.nodes.length > CONFIG.MIN_NODES_PER_TRACK) {
+        track.nodes.splice(found.nodeIdx, 1);
+        this.physicsEngine.setTracks(this.tracks);
+      }
+      return;
+    }
+
+    const trackHit = this.physicsEngine.findTrackAtPoint(pt);
+    if (trackHit && trackHit.nodeIndex < trackHit.track.nodes.length - 1) {
+      const track = trackHit.track;
+      if (track.nodes.length < CONFIG.MAX_NODES_PER_TRACK) {
+        const idx = trackHit.nodeIndex + 1;
+        const prev = track.nodes[trackHit.nodeIndex].position;
+        const next = track.nodes[Math.min(trackHit.nodeIndex + 1, track.nodes.length - 1)].position;
+        const newNode: TrackNode = {
+          id: genId('node'),
+          position: {
+            x: (prev.x + next.x) / 2 + (Math.random() - 0.5) * 20,
+            y: (prev.y + next.y) / 2 + (Math.random() - 0.5) * 20
+          },
+          noteIndex: idx % C_MAJOR_SCALE.length,
+          highlighted: false,
+          highlightColor: '',
+          highlightTime: 0
+        };
+        track.nodes.splice(idx, 0, newNode);
+        this.physicsEngine.setTracks(this.tracks);
+      }
+    }
+  }
+
+  private createNewTrackFromPoint(startPt: Point): void {
+    const editorTop = CONFIG.TITLE_BAR_HEIGHT + 60;
+    const editorBottom = CONFIG.CANVAS_HEIGHT - CONFIG.INFO_BAR_HEIGHT - 30;
+    const numNodes = CONFIG.DEFAULT_NODES_PER_TRACK;
+    const nodes: TrackNode[] = [];
+
+    for (let i = 0; i < numNodes; i++) {
+      const t = i / (numNodes - 1);
+      nodes.push({
+        id: genId('node'),
+        position: {
+          x: startPt.x + Math.sin(t * Math.PI * 1.2) * 120 + (Math.random() - 0.5) * 40,
+          y: editorTop + (editorBottom - editorTop) * t + (Math.random() - 0.5) * 30
+        },
+        noteIndex: i % C_MAJOR_SCALE.length,
+        highlighted: false,
+        highlightColor: '',
+        highlightTime: 0
+      });
+    }
+
+    const newTrack: Track = {
+      id: genId('track'),
+      nodes,
+      startNote: this.tracks.length % 2,
+      color: COLORS.TRACK
+    };
+
+    this.tracks.push(newTrack);
+    this.physicsEngine.setTracks(this.tracks);
+
+    console.log(`[轨道编辑器] 已创建新轨道，共 ${this.tracks.length} 条`);
   }
 
   private onMouseMove(e: MouseEvent): void {
@@ -343,6 +409,7 @@ class GameMain {
         node.position.y = Math.max(CONFIG.TITLE_BAR_HEIGHT + 10,
           Math.min(CONFIG.CANVAS_HEIGHT - CONFIG.INFO_BAR_HEIGHT - 10,
             pt.y - this.draggingNode.offset.y));
+        this.physicsEngine.setTracks(this.tracks);
       }
       return;
     }
@@ -369,6 +436,8 @@ class GameMain {
 
     if (hoverPad || found) {
       this.canvas.style.cursor = 'grab';
+    } else if (this.isInEditorArea(pt)) {
+      this.canvas.style.cursor = 'crosshair';
     } else {
       this.canvas.style.cursor = 'default';
     }
@@ -378,7 +447,7 @@ class GameMain {
     const pt = this.getCanvasPoint(e.clientX, e.clientY);
 
     if (this.draggingMarble) {
-      const target = this.physicsEngine.findNearestTrack(pt, 60);
+      const target = this.physicsEngine.findNearestTrack(pt, 70);
       if (target && target.nodeIndex === 0) {
         if (this.marbles.filter(m => m.type === this.draggingMarble!.type).length === 0
           && this.marbles.length < CONFIG.MAX_MARBLES) {
@@ -445,7 +514,7 @@ class GameMain {
   }
 
   private bumpActivity(type: MarbleType): void {
-    this.activityLevel = Math.min(1.0, this.activityLevel + 0.12);
+    this.activityLevel = Math.min(1.0, this.activityLevel + 0.15);
     this.dominantMarbleType = type;
   }
 
@@ -512,14 +581,6 @@ class GameMain {
     this.lastTimestamp = timestamp;
 
     if (deltaTime > 0.05) deltaTime = 0.05;
-
-    this.fpsCounter++;
-    this.fpsTimer += deltaTime;
-    if (this.fpsTimer >= 1) {
-      this.fps = Math.round(this.fpsCounter / this.fpsTimer);
-      this.fpsCounter = 0;
-      this.fpsTimer = 0;
-    }
 
     this.activityDecayAccum += deltaTime;
     if (this.activityDecayAccum >= 0.05) {

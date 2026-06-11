@@ -1,6 +1,6 @@
 import {
   COLORS, CONFIG, Track, Marble, Particle, LaunchPad,
-  Point, MarbleType, MARBLE_TYPES, TrackNode
+  Point, MarbleType, TrackNode
 } from './constants';
 
 export interface RenderState {
@@ -48,16 +48,16 @@ export class RenderEngine {
     count?: number
   ): void {
     const particleCount = count ?? (
-      CONFIG.PARTICLE_COUNT_MIN +
-      Math.floor(Math.random() * (CONFIG.PARTICLE_COUNT_MAX - CONFIG.PARTICLE_COUNT_MIN + 1))
+      CONFIG.PARTICLE_COUNT_MIN + 4 +
+      Math.floor(Math.random() * (CONFIG.PARTICLE_COUNT_MAX - CONFIG.PARTICLE_COUNT_MIN + 3))
     );
 
     const colorConfig = COLORS.MARBLE[marbleType];
-    const colors = [colorConfig.start, colorConfig.end, colorConfig.glow];
+    const colors = [colorConfig.start, colorConfig.end, colorConfig.glow, '#FFFFFF'];
 
     for (let i = 0; i < particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
-      const speed = CONFIG.PARTICLE_SPREAD_SPEED * (0.6 + Math.random() * 0.8);
+      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.8;
+      const speed = CONFIG.PARTICLE_SPREAD_SPEED * (0.8 + Math.random() * 1.2);
 
       this.particles.push({
         id: `p_${this.particleIdCounter++}`,
@@ -67,18 +67,18 @@ export class RenderEngine {
           y: Math.sin(angle) * speed
         },
         color: colors[Math.floor(Math.random() * colors.length)],
-        life: CONFIG.PARTICLE_LIFETIME * (0.7 + Math.random() * 0.6),
-        maxLife: CONFIG.PARTICLE_LIFETIME,
-        size: 2 + Math.random() * 3
+        life: CONFIG.PARTICLE_LIFETIME * 1.8 * (0.8 + Math.random() * 0.8),
+        maxLife: CONFIG.PARTICLE_LIFETIME * 1.8,
+        size: 2.5 + Math.random() * 4
       });
     }
   }
 
   public spawnCollisionParticles(position: Point): void {
-    const colors = ['#FFFFFF', '#00D4FF', '#FF3366', '#FFD700'];
-    for (let i = 0; i < 16; i++) {
+    const colors = ['#FFFFFF', '#00D4FF', '#FF3366', '#FFD700', '#66FF99', '#00BFFF'];
+    for (let i = 0; i < 24; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 240 + Math.random() * 180;
+      const speed = 280 + Math.random() * 220;
 
       this.particles.push({
         id: `p_${this.particleIdCounter++}`,
@@ -88,9 +88,9 @@ export class RenderEngine {
           y: Math.sin(angle) * speed
         },
         color: colors[Math.floor(Math.random() * colors.length)],
-        life: 0.18 * (0.7 + Math.random() * 0.6),
-        maxLife: 0.18,
-        size: 2.5 + Math.random() * 3.5
+        life: 0.28 * (0.7 + Math.random() * 0.7),
+        maxLife: 0.28,
+        size: 3 + Math.random() * 4.5
       });
     }
   }
@@ -104,11 +104,11 @@ export class RenderEngine {
         continue;
       }
 
-      const decay = Math.pow(p.life / p.maxLife, 1.5);
+      const decay = Math.pow(p.life / p.maxLife, 1.2);
       p.position.x += p.velocity.x * deltaTime * decay;
       p.position.y += p.velocity.y * deltaTime * decay;
-      p.velocity.x *= 0.96;
-      p.velocity.y *= 0.96;
+      p.velocity.x *= 0.94;
+      p.velocity.y *= 0.94;
     }
   }
 
@@ -118,7 +118,7 @@ export class RenderEngine {
 
     this.renderBackground();
     this.renderLaunchAreaGuide();
-    this.renderTracks(state.tracks, state.draggingNode, state.hoveredNode);
+    this.renderTracks(state.tracks, state.draggingNode);
     this.renderNodes(state.tracks, state.draggingNode, state.hoveredNode);
     this.renderParticlesLayer();
     this.renderLaunchPads(state.launchPads, state.draggingMarble, state.hoveredLaunchPad);
@@ -146,18 +146,18 @@ export class RenderEngine {
     }
 
     if (state.dominantMarbleType) {
-      tintWeights[state.dominantMarbleType] += 2;
+      tintWeights[state.dominantMarbleType] += 3;
     }
 
     const totalWeight = Object.values(tintWeights).reduce((a, b) => a + b, 0);
-    const intensity = Math.min(1, (state.activityLevel * 0.7) + (totalWeight > 0 ? 0.3 : 0));
+    const intensity = Math.min(1, (state.activityLevel * 0.9) + (totalWeight > 0 ? 0.5 : 0));
 
     if (totalWeight > 0) {
-      const contributions = [
-        { type: 'red' as MarbleType, c: [180, 40, 90], c2: [120, 20, 60] },
-        { type: 'blue' as MarbleType, c: [70, 40, 160], c2: [50, 25, 130] },
-        { type: 'green' as MarbleType, c: [30, 130, 100], c2: [20, 90, 80] },
-        { type: 'yellow' as MarbleType, c: [140, 110, 40], c2: [110, 80, 25] }
+      const contributions: { type: MarbleType; c: [number, number, number]; c2: [number, number, number] }[] = [
+        { type: 'red',    c: [220, 50, 110], c2: [140, 20, 70] },
+        { type: 'blue',   c: [90, 60, 200],  c2: [60, 30, 160] },
+        { type: 'green',  c: [40, 170, 120], c2: [20, 110, 90] },
+        { type: 'yellow', c: [180, 140, 50], c2: [140, 100, 30] }
       ];
 
       for (const contrib of contributions) {
@@ -175,7 +175,7 @@ export class RenderEngine {
     this.targetBgColor1 = [targetR, targetG, targetB];
     this.targetBgColor2 = [targetR2, targetG2, targetB2];
 
-    const lerpRate = 1 - Math.pow(0.001, deltaTime);
+    const lerpRate = 1 - Math.pow(0.0005, deltaTime);
     this.bgColor1 = this.lerpColor(this.bgColor1, this.targetBgColor1, lerpRate);
     this.bgColor2 = this.lerpColor(this.bgColor2, this.targetBgColor2, lerpRate);
   }
@@ -197,7 +197,7 @@ export class RenderEngine {
     const w = canvas.width;
     const h = canvas.height;
 
-    const gradient = ctx.createRadialGradient(w / 2, h / 2, 50, w / 2, h / 2, Math.max(w, h) * 0.8);
+    const gradient = ctx.createRadialGradient(w / 2, h / 2, 50, w / 2, h / 2, Math.max(w, h) * 0.85);
     gradient.addColorStop(0, this.rgbToCss(this.bgColor1));
     gradient.addColorStop(1, this.rgbToCss(this.bgColor2));
 
@@ -208,7 +208,7 @@ export class RenderEngine {
   }
 
   private renderGridLines(): void {
-    const { ctx, canvas, time } = this;
+    const { ctx, canvas } = this;
     const w = canvas.width;
     const h = canvas.height;
 
@@ -217,13 +217,13 @@ export class RenderEngine {
     const fade1 = CONFIG.TITLE_BAR_HEIGHT + 10;
     const fade2 = CONFIG.EDITOR_AREA_HEIGHT + CONFIG.TITLE_BAR_HEIGHT;
 
-    const alpha1 = Math.max(0.015, 0.04 - this.time * 0.001 % 0.03);
+    const alpha1 = Math.max(0.015, 0.05 - this.time * 0.001 % 0.04);
 
     for (let x = 0; x <= w; x += gridSize) {
       const gradient = ctx.createLinearGradient(0, fade1, 0, h - CONFIG.INFO_BAR_HEIGHT);
       gradient.addColorStop(0, `rgba(0, 212, 255, 0)`);
       gradient.addColorStop(0.2, `rgba(0, 212, 255, ${alpha1})`);
-      gradient.addColorStop(1, `rgba(0, 212, 255, 0.015)`);
+      gradient.addColorStop(1, `rgba(0, 212, 255, 0.02)`);
       ctx.strokeStyle = gradient;
       ctx.lineWidth = 0.5;
       ctx.beginPath();
@@ -233,7 +233,7 @@ export class RenderEngine {
     }
 
     for (let y = fade2; y <= h - CONFIG.INFO_BAR_HEIGHT; y += gridSize) {
-      ctx.strokeStyle = `rgba(0, 212, 255, ${alpha1 * 0.6})`;
+      ctx.strokeStyle = `rgba(0, 212, 255, ${alpha1 * 0.7})`;
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(20, y);
@@ -241,7 +241,7 @@ export class RenderEngine {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = 'rgba(0, 212, 255, 0.06)';
+    ctx.strokeStyle = 'rgba(0, 212, 255, 0.08)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 6]);
     ctx.beginPath();
@@ -261,35 +261,34 @@ export class RenderEngine {
 
     ctx.save();
     const areaGrad = ctx.createLinearGradient(0, editorTop, 0, editorBottom);
-    areaGrad.addColorStop(0, 'rgba(0, 212, 255, 0.03)');
-    areaGrad.addColorStop(0.5, 'rgba(0, 212, 255, 0.06)');
-    areaGrad.addColorStop(1, 'rgba(0, 212, 255, 0.02)');
+    areaGrad.addColorStop(0, 'rgba(0, 212, 255, 0.04)');
+    areaGrad.addColorStop(0.5, 'rgba(0, 212, 255, 0.08)');
+    areaGrad.addColorStop(1, 'rgba(0, 212, 255, 0.03)');
     ctx.fillStyle = areaGrad;
     ctx.fillRect(20, editorTop + 8, w - 40, CONFIG.EDITOR_AREA_HEIGHT - 8);
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.font = 'bold 11px Orbitron, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('▸ 轨道编辑区 / 弹珠发射区', 32, editorTop + 28);
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.font = '10px Noto Sans SC, sans-serif';
-    ctx.fillText('点击下方节点可拖拽调整位置 · 从发射区拖弹珠到任意轨道起点', 32, editorTop + 46);
+    ctx.fillText('双击编辑区空白处创建新轨道 · 拖拽节点调整位置 · 从发射区拖弹珠到轨道起点', 32, editorTop + 46);
 
     ctx.restore();
   }
 
   private renderTracks(
     tracks: Track[],
-    draggingNode: { trackId: string; nodeIndex: number } | null,
-    _hoveredNode: { trackId: string; nodeIndex: number } | null
+    draggingNode: { trackId: string; nodeIndex: number } | null
   ): void {
     const { ctx } = this;
 
     for (const track of tracks) {
       if (track.nodes.length < 2) continue;
 
-      const isDraggingThis = draggingNode?.trackId === track.id;
+      void draggingNode;
 
       ctx.save();
       ctx.lineCap = 'round';
@@ -297,39 +296,39 @@ export class RenderEngine {
 
       for (let glow = 3; glow >= 1; glow--) {
         ctx.shadowColor = COLORS.TRACK_GLOW;
-        ctx.shadowBlur = glow * 6;
-        ctx.strokeStyle = `rgba(0, 212, 255, ${0.06 * glow})`;
-        ctx.lineWidth = 0.5 + glow * 1.5;
+        ctx.shadowBlur = glow * 7;
+        ctx.strokeStyle = `rgba(0, 212, 255, ${0.08 * glow})`;
+        ctx.lineWidth = 0.5 + glow * 1.6;
 
         this.drawSmoothTrack(track);
       }
 
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 10;
       ctx.shadowColor = COLORS.TRACK_GLOW;
       ctx.strokeStyle = COLORS.TRACK;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.2;
       this.drawSmoothTrack(track);
 
       const firstNode = track.nodes[0];
       const lastNode = track.nodes[track.nodes.length - 1];
 
-      ctx.fillStyle = 'rgba(0, 255, 170, 0.9)';
-      ctx.shadowColor = 'rgba(0, 255, 170, 0.8)';
-      ctx.shadowBlur = 10;
+      ctx.fillStyle = 'rgba(0, 255, 170, 1)';
+      ctx.shadowColor = 'rgba(0, 255, 170, 0.9)';
+      ctx.shadowBlur = 12;
       ctx.beginPath();
-      ctx.arc(firstNode.position.x, firstNode.position.y - CONFIG.NODE_RADIUS - 8, 3.5, 0, Math.PI * 2);
+      ctx.arc(firstNode.position.x, firstNode.position.y - CONFIG.NODE_RADIUS - 8, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(0, 255, 170, 0.5)';
+      ctx.fillStyle = 'rgba(0, 255, 170, 0.6)';
       ctx.font = '9px Orbitron, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('START', firstNode.position.x, firstNode.position.y - CONFIG.NODE_RADIUS - 14);
 
-      ctx.fillStyle = 'rgba(255, 80, 120, 0.9)';
-      ctx.shadowColor = 'rgba(255, 80, 120, 0.8)';
-      ctx.shadowBlur = 10;
+      ctx.fillStyle = 'rgba(255, 80, 120, 1)';
+      ctx.shadowColor = 'rgba(255, 80, 120, 0.9)';
+      ctx.shadowBlur = 12;
       ctx.beginPath();
-      ctx.arc(lastNode.position.x, lastNode.position.y + CONFIG.NODE_RADIUS + 10, 3.5, 0, Math.PI * 2);
+      ctx.arc(lastNode.position.x, lastNode.position.y + CONFIG.NODE_RADIUS + 10, 4, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
@@ -366,77 +365,82 @@ export class RenderEngine {
     draggingNode: { trackId: string; nodeIndex: number } | null,
     hoveredNode: { trackId: string; nodeIndex: number } | null
   ): void {
-    const { ctx, time } = this;
-
     for (const track of tracks) {
       for (let i = 0; i < track.nodes.length; i++) {
         const node = track.nodes[i];
         const isDragging = draggingNode?.trackId === track.id && draggingNode.nodeIndex === i;
         const isHovered = hoveredNode?.trackId === track.id && hoveredNode.nodeIndex === i;
 
-        this.renderSingleNode(node, isDragging, isHovered, time);
+        this.renderSingleNode(node, isDragging, isHovered);
       }
     }
   }
 
-  private renderSingleNode(node: TrackNode, isDragging: boolean, isHovered: boolean, time: number): void {
-    const { ctx } = this;
+  private renderSingleNode(node: TrackNode, isDragging: boolean, isHovered: boolean): void {
+    const { ctx, time } = this;
     const { x, y } = node.position;
     const pulse = Math.sin(time * 2.5 + x * 0.01) * 0.15 + 1;
 
     let scale = 1;
     if (node.highlighted && node.highlightTime > 0) {
       const t = 1 - (node.highlightTime / CONFIG.NODE_HIGHLIGHT_DURATION);
-      scale = 1 + Math.sin(t * Math.PI) * 1.2;
+      scale = 1 + Math.sin(t * Math.PI) * 1.4;
     }
-    if (isDragging) scale = 1.35;
-    else if (isHovered) scale = 1.2;
+    if (isDragging) scale = 1.4;
+    else if (isHovered) scale = 1.25;
 
     const r = CONFIG.NODE_RADIUS * scale;
 
     ctx.save();
     if (isDragging || isHovered) {
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-      ctx.shadowBlur = 16;
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+      ctx.shadowBlur = 20;
     }
     if (node.highlighted && node.highlightColor) {
       ctx.shadowColor = node.highlightColor;
-      ctx.shadowBlur = 28;
+      ctx.shadowBlur = 35;
     }
 
     ctx.strokeStyle = node.highlighted && node.highlightColor
       ? node.highlightColor
       : (isDragging || isHovered ? COLORS.NODE_RING_ACTIVE : COLORS.NODE_RING);
-    ctx.lineWidth = node.highlighted ? 3.5 : (isDragging ? 3 : 2);
+    ctx.lineWidth = node.highlighted ? 4 : (isDragging ? 3 : 2.2);
 
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
 
     if (node.highlighted && node.highlightTime > 0) {
-      const ringR = r * 1.6 * pulse;
-      const alpha = (node.highlightTime / CONFIG.NODE_HIGHLIGHT_DURATION) * 0.5;
-      ctx.strokeStyle = node.highlightColor.replace(')', `, ${alpha})`).replace('rgb', 'rgba').replace('#', '');
+      const ringR = r * 1.8 * pulse;
+      const alpha = (node.highlightTime / CONFIG.NODE_HIGHLIGHT_DURATION) * 0.6;
       const rgba = this.hexToRgba(node.highlightColor, alpha);
       ctx.strokeStyle = rgba;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(x, y, ringR, 0, Math.PI * 2);
       ctx.stroke();
+
+      const ringR2 = r * 2.4 * pulse;
+      const alpha2 = (node.highlightTime / CONFIG.NODE_HIGHLIGHT_DURATION) * 0.25;
+      ctx.strokeStyle = this.hexToRgba(node.highlightColor, alpha2);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(x, y, ringR2, 0, Math.PI * 2);
+      ctx.stroke();
     } else {
       ctx.fillStyle = node.highlighted && node.highlightColor
-        ? this.hexToRgba(node.highlightColor, 0.25)
-        : 'rgba(255, 255, 255, 0.06)';
+        ? this.hexToRgba(node.highlightColor, 0.3)
+        : 'rgba(255, 255, 255, 0.08)';
       ctx.beginPath();
       ctx.arc(x, y, r - 3, 0, Math.PI * 2);
       ctx.fill();
     }
 
     ctx.fillStyle = isHovered || isDragging
-      ? 'rgba(255, 255, 255, 0.95)'
-      : 'rgba(255, 255, 255, 0.6)';
+      ? 'rgba(255, 255, 255, 1)'
+      : 'rgba(255, 255, 255, 0.7)';
     ctx.beginPath();
-    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
@@ -460,12 +464,12 @@ export class RenderEngine {
     for (const p of this.particles) {
       const t = p.life / p.maxLife;
       const alpha = Math.max(0, Math.min(1, t));
-      const size = p.size * (0.5 + t * 0.8);
+      const size = p.size * (0.4 + t * 1.1);
 
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.shadowColor = p.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 14;
       ctx.fillStyle = this.hexToRgba(p.color, alpha);
       ctx.beginPath();
       ctx.arc(p.position.x, p.position.y, size, 0, Math.PI * 2);
@@ -485,34 +489,39 @@ export class RenderEngine {
       const isDragging = draggingMarble?.type === pad.type;
       const isHovered = hoveredType === pad.type && !isDragging;
       const marbleColors = COLORS.MARBLE[pad.type];
-      const pulse = Math.sin(time * 3 + pad.position.x * 0.02) * 0.08 + 1;
+      const pulse = Math.sin(time * 3 + pad.position.x * 0.02) * 0.1 + 1;
 
       ctx.save();
 
       if (!isDragging) {
-        const glowAlpha = isHovered ? 0.35 : 0.18;
+        const glowAlpha = isHovered ? 0.45 : 0.22;
         ctx.shadowColor = marbleColors.glow;
-        ctx.shadowBlur = isHovered ? 30 : 18;
+        ctx.shadowBlur = isHovered ? 40 : 22;
 
-        ctx.fillStyle = this.hexToRgba(marbleColors.start, glowAlpha * 0.3);
+        ctx.fillStyle = this.hexToRgba(marbleColors.start, glowAlpha * 0.35);
         ctx.beginPath();
-        ctx.arc(pad.position.x, pad.position.y, pad.radius * 1.6 * pulse, 0, Math.PI * 2);
+        ctx.arc(pad.position.x, pad.position.y, pad.radius * 1.7 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = this.hexToRgba(marbleColors.start, glowAlpha * 0.15);
+        ctx.beginPath();
+        ctx.arc(pad.position.x, pad.position.y, pad.radius * 2.3 * pulse, 0, Math.PI * 2);
         ctx.fill();
 
         this.drawMarbleBody(
           pad.position.x,
           pad.position.y,
-          pad.radius * (isHovered ? 1.1 : 1),
+          pad.radius * (isHovered ? 1.15 : 1),
           marbleColors.start,
           marbleColors.end,
           marbleColors.glow,
           time
         );
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-        ctx.font = 'bold 9px Orbitron, sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = 'bold 10px Orbitron, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(COLORS.MARBLE[pad.type].name, pad.position.x, pad.position.y + pad.radius + 14);
+        ctx.fillText(COLORS.MARBLE[pad.type].name, pad.position.x, pad.position.y + pad.radius + 16);
       }
 
       ctx.restore();
@@ -540,7 +549,7 @@ export class RenderEngine {
     grad.addColorStop(1, this.darkenColor(colorEnd, 0.5));
 
     ctx.shadowColor = glow;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 24;
 
     ctx.fillStyle = grad;
     ctx.beginPath();
@@ -548,25 +557,25 @@ export class RenderEngine {
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     const highlightAngle = -Math.PI / 4 + Math.sin(time * 2) * 0.1;
     const hx = x + Math.cos(highlightAngle) * r * 0.35;
     const hy = y + Math.sin(highlightAngle) * r * 0.35;
-    const hr = r * 0.25;
+    const hr = r * 0.28;
     const hlGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
-    hlGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+    hlGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
     hlGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = hlGrad;
     ctx.beginPath();
     ctx.arc(hx, hy, hr, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.beginPath();
-    ctx.ellipse(x - r * 0.15, y - r * 0.6, r * 0.08, r * 0.15, highlightAngle, 0, Math.PI * 2);
+    ctx.ellipse(x - r * 0.15, y - r * 0.6, r * 0.09, r * 0.17, highlightAngle, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(x, y, r - 0.5, 0, Math.PI * 2);
@@ -596,15 +605,15 @@ export class RenderEngine {
       ctx.save();
       if (marble.isMoving) {
         const angle = Math.atan2(marble.velocity.y, marble.velocity.x);
-        const trailLength = 36;
+        const trailLength = 48;
 
-        for (let i = 5; i >= 1; i--) {
-          const t = i / 5;
+        for (let i = 6; i >= 1; i--) {
+          const t = i / 6;
           const tx = marble.position.x - Math.cos(angle) * trailLength * t;
           const ty = marble.position.y - Math.sin(angle) * trailLength * t;
-          const tr = marble.radius * (1 - t * 0.7);
-          ctx.globalAlpha = t * 0.35;
-          ctx.fillStyle = this.hexToRgba(colors.start, 0.6 * t);
+          const tr = marble.radius * (1 - t * 0.75);
+          ctx.globalAlpha = t * 0.45;
+          ctx.fillStyle = this.hexToRgba(colors.start, 0.7 * t);
           ctx.beginPath();
           ctx.arc(tx, ty, tr, 0, Math.PI * 2);
           ctx.fill();
@@ -632,10 +641,10 @@ export class RenderEngine {
     const r = CONFIG.MARBLE_RADIUS;
 
     ctx.save();
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = 0.9;
 
     ctx.shadowColor = colors.glow;
-    ctx.shadowBlur = 40;
+    ctx.shadowBlur = 50;
 
     this.drawMarbleBody(
       dragging.position.x,
@@ -650,32 +659,32 @@ export class RenderEngine {
     ctx.restore();
 
     ctx.save();
-    ctx.strokeStyle = this.hexToRgba(colors.start, 0.6);
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = this.hexToRgba(colors.start, 0.7);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
     ctx.beginPath();
-    ctx.arc(dragging.position.x, dragging.position.y, r + 18, 0, Math.PI * 2);
+    ctx.arc(dragging.position.x, dragging.position.y, r + 22, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
   }
 
   private renderVignetteOverlay(): void {
-    const { ctx, canvas, time } = this;
+    const { ctx, canvas } = this;
     const w = canvas.width;
     const h = canvas.height;
 
     ctx.save();
     const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.75);
     vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    vignette.addColorStop(0.7, 'rgba(0, 0, 0, 0.18)');
-    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+    vignette.addColorStop(0.7, 'rgba(0, 0, 0, 0.2)');
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.6)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = `rgba(0, 212, 255, ${0.015 + Math.sin(time * 0.8) * 0.005})`;
+    ctx.fillStyle = `rgba(0, 212, 255, ${0.02 + Math.sin(this.time * 0.8) * 0.006})`;
     for (let i = 0; i < 3; i++) {
-      ctx.fillRect(0, ((time * 180 + i * 240) % h), w, 1);
+      ctx.fillRect(0, ((this.time * 200 + i * 260) % h), w, 1);
     }
 
     ctx.restore();
