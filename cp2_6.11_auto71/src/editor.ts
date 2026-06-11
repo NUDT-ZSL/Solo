@@ -11,15 +11,18 @@ export class Editor {
   private renderer: Renderer;
   private callbacks: EditorCallbacks;
   private isDragging = false;
+  private hasDragged = false;
+  private dragStartPos = { x: 0, y: 0 };
   private dragOffset = { x: 0, y: 0 };
   private lastFrameTime = 0;
   private minFrameInterval = 1000 / 60;
+  private dragThreshold = 5;
   private popupElement: HTMLElement | null = null;
   private overlayElement: HTMLElement | null = null;
   private editingIngredient: Ingredient | null = null;
   private selectedColor: string = '';
   private lastClickTime = 0;
-  private doubleClickDelay = 300;
+  private doubleClickDelay = 400;
   private clickPosition = { x: 0, y: 0 };
 
   constructor(canvas: HTMLCanvasElement, renderer: Renderer, callbacks: EditorCallbacks) {
@@ -65,18 +68,40 @@ export class Editor {
     const icon = this.renderer.getIconAtPosition(coords.x, coords.y);
     const now = performance.now();
 
-    if (now - this.lastClickTime < this.doubleClickDelay &&
-        Math.abs(coords.x - this.clickPosition.x) < 10 &&
-        Math.abs(coords.y - this.clickPosition.y) < 10) {
+    const timeDiff = now - this.lastClickTime;
+    const posDiff = Math.sqrt(
+      Math.pow(coords.x - this.clickPosition.x, 2) +
+      Math.pow(coords.y - this.clickPosition.y, 2)
+    );
+
+    console.log('mousedown:', {
+      timeDiff,
+      posDiff,
+      hasIcon: !!icon,
+      clickPos: this.clickPosition,
+      lastClickTime: this.lastClickTime,
+      doubleClickDelay: this.doubleClickDelay
+    });
+
+    if (timeDiff < this.doubleClickDelay &&
+        posDiff < 30 &&
+        icon &&
+        this.clickPosition.x !== 0 &&
+        this.clickPosition.y !== 0) {
+      console.log('双击检测通过，显示弹窗');
       this.lastClickTime = 0;
+      this.clickPosition = { x: 0, y: 0 };
+      this.showEditPopup(icon, e.clientX, e.clientY);
       return;
     }
 
     this.lastClickTime = now;
-    this.clickPosition = coords;
+    this.clickPosition = { ...coords };
 
     if (icon) {
       this.isDragging = true;
+      this.hasDragged = false;
+      this.dragStartPos = { ...coords };
       this.dragOffset = {
         x: coords.x - icon.x,
         y: coords.y - icon.y
@@ -85,7 +110,6 @@ export class Editor {
         draggingId: icon.id,
         pressedId: icon.id
       });
-      this.canvas.classList.add('dragging');
     }
   }
 
@@ -97,16 +121,29 @@ export class Editor {
     const coords = this.getCanvasCoordinates(e);
 
     if (this.isDragging) {
-      const editState = this.renderer.getEditState();
-      if (editState.draggingId) {
-        const snapped = this.renderer.snapToGrid(
-          coords.x - this.dragOffset.x,
-          coords.y - this.dragOffset.y
+      if (!this.hasDragged) {
+        const moveDistance = Math.sqrt(
+          Math.pow(coords.x - this.dragStartPos.x, 2) +
+          Math.pow(coords.y - this.dragStartPos.y, 2)
         );
-        this.callbacks.onIngredientUpdate(editState.draggingId, {
-          x: Math.max(20, Math.min(this.canvas.width - 20, snapped.x)),
-          y: Math.max(40, Math.min(this.canvas.height - 40, snapped.y))
-        });
+        if (moveDistance > this.dragThreshold) {
+          this.hasDragged = true;
+          this.canvas.classList.add('dragging');
+        }
+      }
+
+      if (this.hasDragged) {
+        const editState = this.renderer.getEditState();
+        if (editState.draggingId) {
+          const snapped = this.renderer.snapToGrid(
+            coords.x - this.dragOffset.x,
+            coords.y - this.dragOffset.y
+          );
+          this.callbacks.onIngredientUpdate(editState.draggingId, {
+            x: Math.max(20, Math.min(this.canvas.width - 20, snapped.x)),
+            y: Math.max(40, Math.min(this.canvas.height - 40, snapped.y))
+          });
+        }
       }
     } else {
       const icon = this.renderer.getIconAtPosition(coords.x, coords.y);
@@ -118,13 +155,30 @@ export class Editor {
 
   private handleMouseUp(): void {
     if (this.isDragging) {
+      if (this.hasDragged) {
+        const editState = this.renderer.getEditState();
+        if (editState.draggingId) {
+          const recipe = this.renderer.getRecipe();
+          if (recipe) {
+            const ingredient = recipe.ingredients.find(i => i.id === editState.draggingId);
+            if (ingredient) {
+              const snapped = this.renderer.snapToGrid(ingredient.x, ingredient.y);
+              this.callbacks.onIngredientUpdate(editState.draggingId, {
+                x: Math.max(20, Math.min(this.canvas.width - 20, snapped.x)),
+                y: Math.max(40, Math.min(this.canvas.height - 40, snapped.y))
+              });
+            }
+          }
+        }
+        this.callbacks.onRecipeChange();
+      }
       this.isDragging = false;
+      this.hasDragged = false;
       this.renderer.setEditState({
         draggingId: null,
         pressedId: null
       });
       this.canvas.classList.remove('dragging');
-      this.callbacks.onRecipeChange();
     }
   }
 

@@ -25,7 +25,7 @@ export class Renderer {
   };
   private animationFrameId: number | null = null;
   private lastFlashTime = 0;
-  private flashDuration = 150;
+  private flashDuration = 100;
   private flashInterval = 2000;
   private isFlashing = false;
   private offscreenCanvas: HTMLCanvasElement;
@@ -122,7 +122,7 @@ export class Renderer {
   }
 
   public snapToGrid(x: number, y: number): { x: number; y: number } {
-    const gridSize = 8;
+    const gridSize = 64;
     return {
       x: Math.round(x / gridSize) * gridSize,
       y: Math.round(y / gridSize) * gridSize
@@ -502,9 +502,6 @@ export class Renderer {
       const tempGridDirty = this.gridDirty;
       this.gridDirty = true;
       
-      this.drawGridBackground();
-      exportCtx.drawImage(this.gridCanvas, 0, 0);
-      
       const ingredientMap = new Map(this.recipe!.ingredients.map(i => [i.id, i]));
       for (const step of this.recipe!.steps) {
         const from = ingredientMap.get(step.from);
@@ -595,13 +592,33 @@ export class Renderer {
         exportCtx.textBaseline = 'top';
         const labelY = ingredient.y + halfSize + 16;
         const textWidth = exportCtx.measureText(ingredient.name).width;
-        exportCtx.fillStyle = BG_COLOR;
+        exportCtx.fillStyle = 'rgba(245, 222, 179, 0.9)';
         exportCtx.fillRect(ingredient.x - textWidth / 2 - 2, labelY - 1, textWidth + 4, 12);
         exportCtx.strokeStyle = BORDER_COLOR;
         exportCtx.lineWidth = 1;
         exportCtx.strokeRect(ingredient.x - textWidth / 2 - 2, labelY - 1, textWidth + 4, 12);
         exportCtx.fillStyle = TEXT_COLOR;
         exportCtx.fillText(ingredient.name, ingredient.x, labelY + 1);
+      }
+
+      exportCtx.font = '6px "Press Start 2P", monospace';
+      exportCtx.textAlign = 'center';
+      exportCtx.textBaseline = 'middle';
+      for (const step of this.recipe!.steps) {
+        const from = ingredientMap.get(step.from);
+        const to = ingredientMap.get(step.to);
+        if (!from || !to) continue;
+
+        const midX = (from.x + to.x) / 2;
+        const midY = (from.y + to.y) / 2 - 20;
+        const stepTextWidth = exportCtx.measureText(step.action).width;
+        exportCtx.fillStyle = 'rgba(245, 222, 179, 0.9)';
+        exportCtx.fillRect(midX - stepTextWidth / 2 - 3, midY - 5, stepTextWidth + 6, 12);
+        exportCtx.strokeStyle = BORDER_COLOR;
+        exportCtx.lineWidth = 1;
+        exportCtx.strokeRect(midX - stepTextWidth / 2 - 3, midY - 5, stepTextWidth + 6, 12);
+        exportCtx.fillStyle = TEXT_COLOR;
+        exportCtx.fillText(step.action, midX, midY + 1);
       }
 
       this.editState = originalEditState;

@@ -12,9 +12,9 @@ import {
 
 class PixelRecipeApp {
   private canvas: HTMLCanvasElement;
-  private renderer: Renderer;
-  private editor: Editor;
-  private currentRecipe: Recipe | null = null;
+  public renderer: Renderer;
+  public editor: Editor;
+  public currentRecipe: Recipe | null = null;
   private allRecipes: Recipe[] = [];
   private searchInput: HTMLInputElement;
   private recipeList: HTMLElement;
@@ -241,6 +241,9 @@ let app: PixelRecipeApp | null = null;
 document.addEventListener('DOMContentLoaded', () => {
   try {
     app = new PixelRecipeApp();
+    (window as any).pixelRecipeApp = app;
+    (window as any).pixelRecipeEditor = (app as any).editor;
+    (window as any).pixelRecipeRenderer = (app as any).renderer;
     console.log('像素食谱应用已启动');
   } catch (error) {
     console.error('应用启动失败:', error);
