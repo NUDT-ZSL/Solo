@@ -7,6 +7,8 @@ export interface Particle {
   offsetY: number;
   fontSize: number;
   colorIndex: number;
+  colorPhase: number;
+  colorSpeed: number;
   opacity: number;
   scale: number;
   weight: number;

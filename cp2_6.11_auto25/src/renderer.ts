@@ -5,6 +5,8 @@ const COLD_END   = { h: 204, s: 70, l: 52 };
 const WARM_START = { h: 6,  s: 72, l: 55 };
 const WARM_END   = { h: 36, s: 90, l: 51 };
 
+const HUE_DRIFT_DEG_PER_SEC = 0.5;
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -17,18 +19,40 @@ function lerpHSL(
   return { h: lerp(a.h, b.h, t), s: lerp(a.s, b.s, t), l: lerp(a.l, b.l, t) };
 }
 
-function shiftHue(h: number, offset: number): number {
-  return ((h + offset) % 360 + 360) % 360;
+function wrapHue(h: number): number {
+  return ((h % 360) + 360) % 360;
 }
 
-function getGradientColor(t: number, hueOffsetDeg: number): string {
-  const clamped = Math.max(0, Math.min(1, t));
-  const cold = lerpHSL(COLD_START, COLD_END, clamped);
-  const warm = lerpHSL(WARM_START, WARM_END, clamped);
-  const h = lerp(cold.h, warm.h, clamped) + hueOffsetDeg;
-  const s = lerp(cold.s, warm.s, clamped);
-  const l = lerp(cold.l, warm.l, clamped);
-  return `hsl(${shiftHue(h, 0).toFixed(1)}, ${s.toFixed(1)}%, ${l.toFixed(1)}%)`;
+function getParticleHue(
+  colorIndex: number,
+  colorPhase: number,
+  timeSec: number,
+  colorSpeed: number,
+  globalHueOffset: number
+): number {
+  const cold = lerpHSL(COLD_START, COLD_END, colorIndex);
+  const warm = lerpHSL(WARM_START, WARM_END, colorIndex);
+  const baseHue = lerp(cold.h, warm.h, colorIndex);
+  const drift = colorPhase + timeSec * colorSpeed * HUE_DRIFT_DEG_PER_SEC * 12 + globalHueOffset;
+  return wrapHue(baseHue + drift * 0.35);
+}
+
+function getParticleColor(
+  colorIndex: number,
+  colorPhase: number,
+  timeSec: number,
+  colorSpeed: number,
+  globalHueOffset: number
+): { h: number; s: number; l: number } {
+  const cold = lerpHSL(COLD_START, COLD_END, colorIndex);
+  const warm = lerpHSL(WARM_START, WARM_END, colorIndex);
+  const baseS = lerp(cold.s, warm.s, colorIndex);
+  const baseL = lerp(cold.l, warm.l, colorIndex);
+  return {
+    h: getParticleHue(colorIndex, colorPhase, timeSec, colorSpeed, globalHueOffset),
+    s: baseS,
+    l: baseL
+  };
 }
 
 export class Renderer {
@@ -40,6 +64,7 @@ export class Renderer {
   private lastAudioData: AudioData | null = null;
   private _width: number = 0;
   private _height: number = 0;
+  private _time: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -84,7 +109,7 @@ export class Renderer {
   get width(): number { return this._width; }
   get height(): number { return this._height; }
 
-  private drawBackground(_time: number): void {
+  private drawBackground(): void {
     const ctx = this.ctx;
     const w = this._width;
     const h = this._height;
@@ -123,33 +148,46 @@ export class Renderer {
     controlParams: ControlParams,
     frameIndex: number
   ): void {
+    this._time = time;
     this.lastAudioData = audioData;
     const particles = this.particles;
-    const p = particles;
     const { speed, particleSize } = controlParams;
 
-    const baseAmplitude = particleSize * 1.3;
-    const bassWaveHeight = particleSize * 4.5 * audioData.bassAmplitude;
-    const midWaveHeight = particleSize * 2.0 * audioData.midAmplitude;
-    const localJitter = particleSize * 1.5 * audioData.highAmplitude;
+    const bassNorm = Math.max(0, Math.min(1, audioData.bassAmplitude));
+    const midNorm = Math.max(0, Math.min(1, audioData.midAmplitude));
+    const highNorm = Math.max(0, Math.min(1, audioData.highAmplitude));
 
-    const sizeScale = particleSize / 14;
+    const bassWeight = 5.5;
+    const midWeight = 2.5;
+    const highWeight = 1.2;
 
-    for (let i = 0; i < p.length; i++) {
-      const pt = p[i];
+    const baseAmplitude = particleSize * 1.2;
+    const bassWaveHeight = particleSize * bassWeight * bassNorm;
+    const midWaveHeight = particleSize * midWeight * midNorm;
+    const localJitter = particleSize * highWeight * highNorm;
+
+    const bpmFactor = audioData.bpm / 90;
+
+    for (let i = 0; i < particles.length; i++) {
+      const pt = particles[i];
 
       const sinWave = Math.sin(pt.phase + time * pt.frequency * speed) * baseAmplitude;
-      const globalWave = (
-        Math.sin(i * 0.18 + time * speed * (audioData.bpm / 90) * 0.8) * bassWaveHeight +
-        Math.sin(i * 0.35 + time * speed * 1.6) * midWaveHeight
-      ) * pt.weight;
-      const detailJitter = (Math.sin(time * 8.5 + pt.phase * 3.1) * 0.5 +
-                           Math.cos(time * 12 + pt.phase * 1.7) * 0.5) * localJitter * pt.weight;
 
-      pt.offsetY = sinWave + globalWave + detailJitter;
-      pt.scale = 1 + audioData.bassAmplitude * 0.12 * pt.weight +
-                    audioData.highAmplitude * 0.06;
-      pt.fontSize = particleSize * sizeScale;
+      const globalBassWave = Math.sin(i * 0.12 + time * speed * bpmFactor * 0.6)
+        * bassWaveHeight * pt.weight;
+      const globalMidWave = Math.sin(i * 0.28 + time * speed * 1.4)
+        * midWaveHeight * pt.weight * 0.7;
+
+      const detailJitter = (
+        Math.sin(time * 9 + pt.phase * 2.7) * 0.5 +
+        Math.cos(time * 13 + pt.phase * 1.9) * 0.3 +
+        Math.sin(time * 17 + pt.phase * 3.4) * 0.2
+      ) * localJitter * pt.weight;
+
+      pt.offsetY = sinWave + globalBassWave + globalMidWave + detailJitter;
+
+      pt.scale = 1 + bassNorm * 0.15 * pt.weight + highNorm * 0.05;
+      pt.fontSize = particleSize;
     }
     void frameIndex;
   }
@@ -159,18 +197,21 @@ export class Renderer {
     const w = this._width;
     const h = this._height;
     const particles = this.particles;
+    const timeSec = this._time;
     const hueOffset = controlParams.hueOffset;
 
     ctx.clearRect(0, 0, w, h);
-    this.drawBackground(0);
-
-    const timeSec = performance.now() / 1000;
+    this.drawBackground();
     this.drawStars(timeSec);
 
     if (particles.length === 0) return;
 
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'center';
+
+    const audioBoost = this.lastAudioData
+      ? this.lastAudioData.bassAmplitude * 0.12 + this.lastAudioData.midAmplitude * 0.08
+      : 0;
 
     for (let i = 0; i < particles.length; i++) {
       const pt = particles[i];
@@ -180,15 +221,20 @@ export class Renderer {
       const y = pt.baseY + pt.offsetY;
       const fontSize = pt.fontSize * pt.scale;
 
-      const baseColor = getGradientColor(pt.colorIndex, hueOffset);
-      const audioBoost = this.lastAudioData
-        ? this.lastAudioData.bassAmplitude * 0.15 + this.lastAudioData.midAmplitude * 0.1
-        : 0;
-      const opacity = Math.min(1, pt.opacity + audioBoost);
+      const color = getParticleColor(
+        pt.colorIndex,
+        pt.colorPhase,
+        timeSec,
+        pt.colorSpeed,
+        hueOffset
+      );
+      const hslStr = `hsl(${color.h.toFixed(1)}, ${color.s.toFixed(1)}%, ${color.l.toFixed(1)}%)`;
+
+      const opacity = Math.min(1, pt.opacity + audioBoost * pt.weight);
 
       ctx.save();
       ctx.globalAlpha = 0.15;
-      ctx.strokeStyle = baseColor;
+      ctx.strokeStyle = hslStr;
       ctx.lineWidth = 0.6;
       ctx.beginPath();
       ctx.moveTo(x, y + fontSize * 0.15);
@@ -199,8 +245,8 @@ export class Renderer {
       ctx.save();
       ctx.font = `600 ${fontSize.toFixed(1)}px 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif`;
       ctx.globalAlpha = opacity * 0.22;
-      ctx.fillStyle = baseColor;
-      ctx.shadowColor = baseColor;
+      ctx.fillStyle = hslStr;
+      ctx.shadowColor = hslStr;
       ctx.shadowBlur = fontSize * 1.8;
       ctx.fillText(pt.char, x, y);
       ctx.restore();
@@ -208,8 +254,8 @@ export class Renderer {
       ctx.save();
       ctx.font = `600 ${fontSize.toFixed(1)}px 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif`;
       ctx.globalAlpha = opacity;
-      ctx.fillStyle = baseColor;
-      ctx.shadowColor = baseColor;
+      ctx.fillStyle = hslStr;
+      ctx.shadowColor = hslStr;
       ctx.shadowBlur = fontSize * 0.4;
       ctx.fillText(pt.char, x, y);
       ctx.restore();
