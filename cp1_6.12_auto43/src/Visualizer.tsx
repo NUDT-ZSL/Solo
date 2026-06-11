@@ -1,11 +1,12 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { PitchData } from './PitchTracker';
 import { BeatEvent } from './Metronome';
 
 export interface VisualizerHandle {
   addBeat: (event: BeatEvent) => void;
-  startPlayback: (data: PitchData[]) => void;
+  startPlayback: (data: PitchData[], audioStartTime?: number) => void;
   stopPlayback: () => void;
+  syncPlaybackTime: (currentPlaybackTime: number) => void;
 }
 
 export interface VisualizerProps {
@@ -16,6 +17,7 @@ export interface VisualizerProps {
   isRecording: boolean;
   recordedData: PitchData[];
   isPlayingBack: boolean;
+  playbackAudioStartOffset?: number;
 }
 
 interface ScaleNoteInfo {
@@ -28,6 +30,8 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 const MIN_FREQ = 130.81;
 const MAX_FREQ = 1046.50;
 const WINDOW_SECONDS = 2;
+const MAX_DISPLAY_POINTS = 1000;
+
 const SCALE_COLORS: Record<string, { highlight: string; line: string }> = {
   'C Major': { highlight: '#e94560', line: 'rgba(233, 69, 96, 0.6)' },
   'A Minor': { highlight: '#16c79a', line: 'rgba(22, 199, 154, 0.6)' },
@@ -35,6 +39,8 @@ const SCALE_COLORS: Record<string, { highlight: string; line: string }> = {
   'D Major': { highlight: '#9b59b6', line: 'rgba(155, 89, 182, 0.6)' },
   'Chromatic': { highlight: '#0f3460', line: 'rgba(15, 52, 96, 0.6)' }
 };
+
+const GHOST_TRAIL_ALPHA = 0.35;
 
 function freqToMidi(freq: number): number {
   return 69 + 12 * Math.log2(freq / 440);
@@ -96,6 +102,47 @@ function getPitchColor(cents: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+function rgbToRgba(rgb: string, alpha: number): string {
+  if (rgb.startsWith('rgba')) return rgb;
+  const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (match) {
+    return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${alpha})`;
+  }
+  return rgb;
+}
+
+function findSegmentData(
+  data: PitchData[],
+  viewStartTime: number,
+  viewEndTime: number
+): PitchData[] {
+  if (data.length === 0) return [];
+
+  let left = 0;
+  let right = data.length - 1;
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (data[mid].time < viewStartTime) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  const startIdx = Math.max(0, left - 1);
+  const result: PitchData[] = [];
+
+  for (let i = startIdx; i < data.length; i++) {
+    if (data[i].time > viewEndTime + 0.1) break;
+    if (data[i].time >= viewStartTime - 0.1) {
+      result.push(data[i]);
+    }
+  }
+
+  return result;
+}
+
 const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -104,21 +151,37 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
   const highlightedNotesRef = useRef<Map<string, number>>(new Map());
   const playbackDataRef = useRef<PitchData[]>([]);
   const playbackStartTimeRef = useRef<number>(0);
+  const playbackAudioOffsetRef = useRef<number>(0);
   const lastFrameTimeRef = useRef<number>(0);
   const frameInterval = 1000 / 30;
+  const propsRef = useRef(props);
+
+  propsRef.current = props;
+
+  const chromaticNotes = useMemo(() => {
+    return getAllScaleNotes([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  }, []);
 
   useImperativeHandle(ref, () => ({
     addBeat: (event: BeatEvent) => {
       localBeatsRef.current.push(event);
       const now = performance.now() / 1000;
-      localBeatsRef.current = localBeatsRef.current.filter(b => now - b.time < WINDOW_SECONDS + 1);
+      localBeatsRef.current = localBeatsRef.current.filter(b => now - b.time < WINDOW_SECONDS + 2);
+      if (localBeatsRef.current.length > 100) {
+        localBeatsRef.current = localBeatsRef.current.slice(-100);
+      }
     },
-    startPlayback: (data: PitchData[]) => {
+    startPlayback: (data: PitchData[], audioStartTime?: number) => {
       playbackDataRef.current = [...data];
       playbackStartTimeRef.current = performance.now() / 1000;
+      playbackAudioOffsetRef.current = audioStartTime ?? 0;
     },
     stopPlayback: () => {
       playbackDataRef.current = [];
+      playbackAudioOffsetRef.current = 0;
+    },
+    syncPlaybackTime: (currentPlaybackTime: number) => {
+      playbackStartTimeRef.current = performance.now() / 1000 - currentPlaybackTime;
     }
   }));
 
@@ -131,15 +194,26 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
       const dpr = window.devicePixelRatio || 1;
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
       backCanvas.width = rect.width * dpr;
       backCanvas.height = rect.height * dpr;
+
       const ctx = canvas.getContext('2d');
       const bctx = backCanvas.getContext('2d');
-      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (bctx) bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (ctx) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+      }
+      if (bctx) {
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        bctx.imageSmoothingEnabled = true;
+        bctx.imageSmoothingQuality = 'high';
+      }
     };
 
     resize();
@@ -162,15 +236,24 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
       const frontCtx = canvas.getContext('2d');
       if (!ctx || !frontCtx) return;
 
-      const W = canvas.getBoundingClientRect().width;
-      const H = canvas.getBoundingClientRect().height;
+      const rect = canvas.getBoundingClientRect();
+      const W = rect.width;
+      const H = rect.height;
       const beatIndicatorHeight = 50;
       const graphHeight = H - beatIndicatorHeight;
 
-      ctx.fillStyle = '#1a1a2e';
+      if (W === 0 || H === 0) return;
+
+      ctx.save();
+      ctx.clearRect(0, 0, W, H);
+
+      const bgGradient = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) / 1.5);
+      bgGradient.addColorStop(0, '#1a1a2e');
+      bgGradient.addColorStop(1, '#12121f');
+      ctx.fillStyle = bgGradient;
       ctx.fillRect(0, 0, W, H);
 
-      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
       ctx.lineWidth = 1;
       for (let i = 0; i <= 10; i++) {
         const y = (graphHeight / 10) * i;
@@ -180,8 +263,14 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
         ctx.stroke();
       }
 
-      const allNotes = getAllScaleNotes(props.scaleNotes);
-      const scaleColor = SCALE_COLORS[props.scaleName] || SCALE_COLORS['C Major'];
+      for (let i = 1; i < WINDOW_SECONDS * 2; i++) {
+        const x = (W / (WINDOW_SECONDS * 2)) * i;
+        ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, graphHeight);
+        ctx.stroke();
+      }
 
       const freqToY = (freq: number): number => {
         const logMin = Math.log2(MIN_FREQ);
@@ -191,24 +280,29 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
       };
 
       const now = performance.now() / 1000;
+      const currentProps = propsRef.current;
+
       highlightedNotesRef.current.forEach((highlightUntil, key) => {
         if (now > highlightUntil) highlightedNotesRef.current.delete(key);
       });
 
-      const chromaticNotes = getAllScaleNotes([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+      const currentScaleNotes = getAllScaleNotes(currentProps.scaleNotes);
+      const currentScaleColor = SCALE_COLORS[currentProps.scaleName] || SCALE_COLORS['C Major'];
+
       chromaticNotes.forEach(info => {
         const y = freqToY(info.freq);
         if (y > 0 && y < graphHeight) {
-          const isInScale = props.scaleNotes.includes(NOTE_NAMES.indexOf(info.name.replace('#', '')));
+          const noteIdx = NOTE_NAMES.indexOf(info.name.replace('#', ''));
+          const isInScale = currentProps.scaleNotes.includes(noteIdx);
           const key = `${info.name}${info.octave}`;
           const isHighlighted = highlightedNotesRef.current.has(key);
 
           if (isInScale) {
-            ctx.strokeStyle = isHighlighted ? scaleColor.highlight : scaleColor.line;
+            ctx.strokeStyle = isHighlighted ? currentScaleColor.highlight : currentScaleColor.line;
             ctx.setLineDash([8, 4]);
             ctx.lineWidth = isHighlighted ? 2 : 1.5;
           } else {
-            ctx.strokeStyle = 'rgba(128,128,128,0.15)';
+            ctx.strokeStyle = 'rgba(128,128,128,0.12)';
             ctx.setLineDash([4, 6]);
             ctx.lineWidth = 1;
           }
@@ -220,7 +314,7 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
           ctx.setLineDash([]);
 
           if (isInScale && (isHighlighted || info.name === 'C')) {
-            ctx.fillStyle = isHighlighted ? scaleColor.highlight : 'rgba(255,255,255,0.4)';
+            ctx.fillStyle = isHighlighted ? currentScaleColor.highlight : 'rgba(255,255,255,0.4)';
             ctx.font = isHighlighted ? 'bold 12px sans-serif' : '10px sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText(`${info.name}${info.octave}`, 8, y - 4);
@@ -230,44 +324,68 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
 
       let currentDisplayData: PitchData[] = [];
       let viewStartTime = 0;
+      let playbackCursorTime = -1;
 
-      if (props.isPlayingBack && playbackDataRef.current.length > 0) {
-        const playbackElapsed = now - playbackStartTimeRef.current;
+      if (currentProps.isPlayingBack && playbackDataRef.current.length > 0) {
+        const playbackElapsed = now - playbackStartTimeRef.current - playbackAudioOffsetRef.current;
+        playbackCursorTime = playbackElapsed;
         viewStartTime = Math.max(0, playbackElapsed - WINDOW_SECONDS / 2);
-        const viewEndTime = viewStartTime + WINDOW_SECONDS;
-        currentDisplayData = playbackDataRef.current.filter(
-          d => d.time >= viewStartTime && d.time <= viewEndTime
-        );
-      } else {
-        const latestTime = props.pitchData.length > 0 ? props.pitchData[props.pitchData.length - 1].time : 0;
-        viewStartTime = Math.max(0, latestTime - WINDOW_SECONDS);
-        currentDisplayData = props.pitchData.filter(
-          d => d.time >= viewStartTime && d.time <= viewStartTime + WINDOW_SECONDS
-        );
-      }
 
-      if (props.recordedData.length > 0 && !props.isPlayingBack) {
-        const ghostData = props.recordedData.filter(
-          d => d.time >= viewStartTime && d.time <= viewStartTime + WINDOW_SECONDS
-        );
-        drawCurve(ctx, ghostData, viewStartTime, W, graphHeight, freqToY, allNotes, true);
-      }
-
-      drawCurve(ctx, currentDisplayData, viewStartTime, W, graphHeight, freqToY, allNotes, false);
-
-      currentDisplayData.forEach(d => {
-        const closest = getClosestScaleNote(d.pitch, allNotes);
-        if (closest && closest.cents < 30) {
-          const key = `${closest.note.name}${closest.note.octave}`;
-          highlightedNotesRef.current.set(key, now + 0.5);
+        const maxPlaybackTime = playbackDataRef.current[playbackDataRef.current.length - 1].time;
+        if (viewStartTime + WINDOW_SECONDS > maxPlaybackTime + 0.5) {
+          viewStartTime = Math.max(0, maxPlaybackTime - WINDOW_SECONDS + 0.5);
         }
-      });
+
+        const viewEndTime = viewStartTime + WINDOW_SECONDS;
+        currentDisplayData = findSegmentData(playbackDataRef.current, viewStartTime, viewEndTime);
+      } else {
+        const liveData = currentProps.pitchData;
+        const latestTime = liveData.length > 0 ? liveData[liveData.length - 1].time : 0;
+        viewStartTime = Math.max(0, latestTime - WINDOW_SECONDS);
+        const viewEndTime = viewStartTime + WINDOW_SECONDS;
+        currentDisplayData = findSegmentData(liveData, viewStartTime, viewEndTime);
+      }
+
+      if (currentDisplayData.length > MAX_DISPLAY_POINTS) {
+        const stride = Math.ceil(currentDisplayData.length / MAX_DISPLAY_POINTS);
+        currentDisplayData = currentDisplayData.filter((_, i) => i % stride === 0);
+      }
+
+      if (currentProps.recordedData.length > 0 && !currentProps.isPlayingBack) {
+        const ghostData = findSegmentData(
+          currentProps.recordedData,
+          viewStartTime,
+          viewStartTime + WINDOW_SECONDS
+        );
+
+        if (ghostData.length > MAX_DISPLAY_POINTS) {
+          const stride = Math.ceil(ghostData.length / MAX_DISPLAY_POINTS);
+          const sampled = ghostData.filter((_, i) => i % stride === 0);
+          drawSmoothCurve(ctx, sampled, viewStartTime, W, freqToY, currentScaleNotes, true);
+        } else {
+          drawSmoothCurve(ctx, ghostData, viewStartTime, W, freqToY, currentScaleNotes, true);
+        }
+      }
+
+      if (currentDisplayData.length > 0) {
+        drawSmoothCurve(ctx, currentDisplayData, viewStartTime, W, freqToY, currentScaleNotes, false);
+
+        currentDisplayData.forEach(d => {
+          const closest = getClosestScaleNote(d.pitch, currentScaleNotes);
+          if (closest && closest.cents < 30) {
+            const key = `${closest.note.name}${closest.note.octave}`;
+            highlightedNotesRef.current.set(key, now + 0.5);
+          }
+        });
+      }
 
       const timeToX = (t: number): number => ((t - viewStartTime) / WINDOW_SECONDS) * W;
 
-      if (!props.isPlayingBack) {
-        const allBeats = [...localBeatsRef.current, ...props.activeBeats];
-        const recentBeats = allBeats.filter(b => b.time >= viewStartTime && b.time <= viewStartTime + WINDOW_SECONDS);
+      if (!currentProps.isPlayingBack) {
+        const allBeats = [...localBeatsRef.current, ...currentProps.activeBeats];
+        const recentBeats = allBeats.filter(
+          b => b.time >= viewStartTime && b.time <= viewStartTime + WINDOW_SECONDS
+        );
 
         recentBeats.forEach(beat => {
           const x = timeToX(beat.time);
@@ -290,8 +408,8 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
       ctx.lineTo(W, H - beatIndicatorHeight);
       ctx.stroke();
 
-      if (!props.isPlayingBack) {
-        const allBeats = [...localBeatsRef.current, ...props.activeBeats];
+      if (!currentProps.isPlayingBack) {
+        const allBeats = [...localBeatsRef.current, ...currentProps.activeBeats];
         const recentBeats = allBeats.filter(b => now - b.time < 0.8);
         recentBeats.forEach(beat => {
           const age = now - beat.time;
@@ -313,7 +431,32 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
         });
       }
 
-      if (props.isRecording) {
+      if (currentProps.isPlayingBack && playbackCursorTime >= 0) {
+        const cursorX = timeToX(playbackCursorTime);
+        if (cursorX >= 0 && cursorX <= W) {
+          const gradient = ctx.createLinearGradient(cursorX, 0, cursorX, graphHeight);
+          gradient.addColorStop(0, 'rgba(233, 69, 96, 0)');
+          gradient.addColorStop(0.5, 'rgba(233, 69, 96, 0.8)');
+          gradient.addColorStop(1, 'rgba(233, 69, 96, 0)');
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(cursorX, 0);
+          ctx.lineTo(cursorX, graphHeight);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(cursorX, beatsY, 8, 0, Math.PI * 2);
+          ctx.fillStyle = '#e94560';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(cursorX, beatsY, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+        }
+      }
+
+      if (currentProps.isRecording) {
         const blink = Math.sin(now * 6) > 0;
         ctx.fillStyle = blink ? '#e94560' : 'rgba(233,69,96,0.5)';
         ctx.beginPath();
@@ -325,15 +468,19 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
         ctx.fillText('REC', W - 45, 34);
       }
 
+      ctx.restore();
+
+      frontCtx.save();
+      frontCtx.clearRect(0, 0, W, H);
       frontCtx.drawImage(backCanvas, 0, 0, W, H, 0, 0, W, H);
+      frontCtx.restore();
     };
 
-    const drawCurve = (
+    const drawSmoothCurve = (
       ctx: CanvasRenderingContext2D,
       data: PitchData[],
       viewStartTime: number,
       W: number,
-      _graphHeight: number,
       freqToY: (f: number) => number,
       allNotes: ScaleNoteInfo[],
       isGhost: boolean
@@ -341,6 +488,39 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
       if (data.length < 2) return;
 
       const timeToX = (t: number): number => ((t - viewStartTime) / WINDOW_SECONDS) * W;
+      const alpha = isGhost ? GHOST_TRAIL_ALPHA : 1;
+
+      ctx.beginPath();
+      let started = false;
+
+      for (let i = 0; i < data.length; i++) {
+        const p = data[i];
+        const x = timeToX(p.time);
+        const y = freqToY(p.pitch);
+
+        if (!started) {
+          ctx.moveTo(x, y);
+          started = true;
+        } else if (i === data.length - 1) {
+          ctx.lineTo(x, y);
+        } else {
+          const pNext = data[i + 1];
+          const xNext = timeToX(pNext.time);
+          const yNext = freqToY(pNext.pitch);
+          const cpx = (x + xNext) / 2;
+          const cpy = (y + yNext) / 2;
+          ctx.quadraticCurveTo(x, y, cpx, cpy);
+        }
+      }
+
+      ctx.lineWidth = isGhost ? 2 : 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = isGhost
+        ? `rgba(255, 255, 255, ${alpha * 0.5})`
+        : 'rgba(255, 255, 255, 0)';
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.stroke();
 
       for (let i = 1; i < data.length; i++) {
         const p0 = data[i - 1];
@@ -354,13 +534,8 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
         const avgPitch = (p0.pitch + p1.pitch) / 2;
         const closest = getClosestScaleNote(avgPitch, allNotes);
         const cents = closest ? closest.cents : 60;
-        let color = getPitchColor(cents);
-        if (isGhost) {
-          color = color.replace('rgb(', 'rgba(').replace(')', ',0.3)');
-          if (!color.includes('rgba')) {
-            color = color + '4D';
-          }
-        }
+        const baseColor = getPitchColor(cents);
+        const color = isGhost ? rgbToRgba(baseColor, GHOST_TRAIL_ALPHA) : baseColor;
 
         const cpx = (x0 + x1) / 2;
         const cpy = (y0 + y1) / 2;
@@ -369,6 +544,7 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
         ctx.strokeStyle = color;
         ctx.lineWidth = isGhost ? 1.5 : 2.5;
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.moveTo(x0, y0);
         ctx.quadraticCurveTo(cpx, cpy, x1, y1);
         ctx.stroke();
@@ -382,15 +558,16 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
         const cents = closest ? closest.cents : 60;
 
         ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = getPitchColor(cents);
-        ctx.globalAlpha = 0.3;
+        ctx.arc(x, y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = rgbToRgba(getPitchColor(cents), 0.2);
         ctx.fill();
-        ctx.globalAlpha = 1;
         ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.fillStyle = getPitchColor(cents);
         ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
 
         if (closest) {
           ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -398,10 +575,21 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
           ctx.textAlign = 'left';
           const centsStr = cents.toFixed(0);
           const label = `${closest.note.name}${closest.note.octave} ${last.pitch.toFixed(0)}Hz ±${centsStr}¢`;
-          const labelX = Math.min(W - 150, x + 12);
-          const labelY = Math.max(16, y - 8);
-          ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(labelX - 4, labelY - 12, ctx.measureText(label).width + 8, 16);
+          const labelX = Math.min(W - 160, x + 14);
+          const labelY = Math.max(20, y - 10);
+
+          const metrics = ctx.measureText(label);
+          const boxW = metrics.width + 12;
+          const boxH = 18;
+
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.beginPath();
+          ctx.roundRect(labelX - 6, labelY - 14, boxW, boxH, 6);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
           ctx.fillStyle = '#fff';
           ctx.fillText(label, labelX, labelY);
         }
@@ -414,8 +602,7 @@ const Visualizer = forwardRef<VisualizerHandle, VisualizerProps>((props, ref) =>
       window.removeEventListener('resize', resize);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [props.pitchData, props.scaleName, props.scaleNotes, props.activeBeats,
-      props.isRecording, props.recordedData, props.isPlayingBack]);
+  }, []);
 
   return (
     <canvas

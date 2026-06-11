@@ -13,11 +13,19 @@ const SCALES: { name: string; notes: number[] }[] = [
 
 const TIME_SIGNATURES: TimeSignature[] = ['2/4', '3/4', '4/4'];
 const MAX_RECORD_SECONDS = 30;
+const MAX_PITCH_HISTORY_SECONDS = 10;
+const PLAYBACK_SYNC_INTERVAL_MS = 100;
 
 interface Ripple {
   id: number;
   x: number;
   y: number;
+}
+
+interface RecordingSync {
+  audioStartTime: number;
+  audioStartPerformanceTime: number;
+  pitchStartPerformanceTime: number;
 }
 
 function App() {
@@ -35,6 +43,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [ripples, setRipples] = useState<Ripple[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
 
   const pitchTrackerRef = useRef<PitchTracker | null>(null);
   const metronomeRef = useRef<Metronome | null>(null);
@@ -46,29 +55,69 @@ function App() {
   const recordedMediaRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordingSyncRef = useRef<RecordingSync | null>(null);
+  const playbackSyncIntervalRef = useRef<number | null>(null);
+  const livePitchBufferRef = useRef<PitchData[]>([]);
 
   const selectedScale = SCALES[selectedScaleIdx];
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      setIsMobile(w < 768);
+      setViewportSize({ w, h });
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const trimData = useCallback((data: PitchData[], maxSeconds: number = 10): PitchData[] => {
+  const trimData = useCallback((data: PitchData[], maxSeconds: number): PitchData[] => {
     if (data.length === 0) return data;
     const latestTime = data[data.length - 1].time;
     const threshold = latestTime - maxSeconds;
-    return data.filter(d => d.time >= threshold);
+    let left = 0;
+    let right = data.length - 1;
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+      if (data[mid].time < threshold) left = mid + 1;
+      else right = mid - 1;
+    }
+    return data.slice(Math.max(0, left - 1));
   }, []);
 
   const handlePitchData = useCallback((data: PitchData) => {
-    setPitchData(prev => {
-      const updated = [...prev, data];
-      return trimData(updated, 10);
-    });
-  }, [trimData]);
+    livePitchBufferRef.current.push(data);
+
+    if (livePitchBufferRef.current.length > 3) {
+      const batch = [...livePitchBufferRef.current];
+      livePitchBufferRef.current = [];
+
+      setPitchData(prev => {
+        const updated = [...prev, ...batch];
+        return trimData(updated, MAX_PITCH_HISTORY_SECONDS);
+      });
+
+      if (isRecording && recordingSyncRef.current) {
+        const sync = recordingSyncRef.current;
+        const performanceNow = performance.now() / 1000;
+        const pitchElapsed = performanceNow - sync.pitchStartPerformanceTime;
+        const adjustedData = batch.map(d => ({
+          ...d,
+          time: pitchElapsed + (d.time - livePitchBufferRef.current.length > 0
+            ? livePitchBufferRef.current[livePitchBufferRef.current.length - 1].time
+            : d.time)
+        }));
+
+        setRecordedData(prev => {
+          const combined = [...prev, ...adjustedData];
+          return combined.slice(-10000);
+        });
+      }
+    }
+  }, [trimData, isRecording]);
 
   const handleBeat = useCallback((beat: BeatEvent) => {
     visualizerRef.current?.addBeat(beat);
@@ -97,6 +146,7 @@ function App() {
       pitchTrackerRef.current.stop();
       pitchTrackerRef.current = null;
     }
+    livePitchBufferRef.current = [];
     setIsRunning(false);
     stopRecording();
     setPitchData([]);
@@ -107,21 +157,44 @@ function App() {
 
     try {
       recordedChunksRef.current = [];
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 48000,
+          channelCount: 1,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
       mediaStreamRef.current = stream;
 
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm',
+        audioBitsPerSecond: 128000
+      });
+
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordedChunksRef.current.push(e.data);
       };
+
       recorder.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
       };
-      recorder.start();
+
+      const nowPerf = performance.now() / 1000;
+      recorder.start(100);
       recordedMediaRef.current = recorder;
 
+      recordingSyncRef.current = {
+        audioStartTime: nowPerf + 0.05,
+        audioStartPerformanceTime: nowPerf + 0.05,
+        pitchStartPerformanceTime: nowPerf
+      };
+
       setIsRecording(true);
-      recordingStartRef.current = performance.now() / 1000;
+      recordingStartRef.current = nowPerf;
       setRecordedData([]);
       setRecordingTime(0);
 
@@ -131,30 +204,6 @@ function App() {
         if (elapsed >= MAX_RECORD_SECONDS) {
           stopRecording();
         }
-      }, 100);
-
-      const captureStart = performance.now() / 1000;
-      const captureInterval = window.setInterval(() => {
-        if (!isRecording) {
-          window.clearInterval(captureInterval);
-          return;
-        }
-        setPitchData(prev => {
-          const segment = prev.filter(d => d.time >= captureStart).map(d => ({
-            ...d,
-            time: d.time - recordingStartRef.current
-          }));
-          if (segment.length > 0) {
-            setRecordedData(rd => {
-              const combined = [...rd, ...segment];
-              const unique = combined.filter((d, i, arr) =>
-                i === 0 || d.time - arr[i - 1].time > 0.005
-              );
-              return unique.slice(-5000);
-            });
-          }
-          return prev;
-        });
       }, 50);
 
     } catch (e) {
@@ -168,43 +217,83 @@ function App() {
       recordingTimerRef.current = null;
     }
     if (recordedMediaRef.current && recordedMediaRef.current.state !== 'inactive') {
-      recordedMediaRef.current.stop();
+      try {
+        recordedMediaRef.current.stop();
+      } catch (e) {
+        console.warn('MediaRecorder stop failed:', e);
+      }
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(t => t.stop());
       mediaStreamRef.current = null;
     }
+    recordingSyncRef.current = null;
+    livePitchBufferRef.current = [];
     setIsRecording(false);
   }, []);
 
   const startPlayback = useCallback(() => {
     if (recordedData.length === 0) return;
 
+    stopPlayback();
+
+    const duration = recordedData[recordedData.length - 1].time;
+    let audioOffset = 0;
+
     if (recordedChunksRef.current.length > 0) {
       const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
       const url = URL.createObjectURL(blob);
       audioPlaybackRef.current = new Audio(url);
+      audioPlaybackRef.current.preload = 'auto';
+
+      audioPlaybackRef.current.oncanplay = () => {
+        if (!audioPlaybackRef.current) return;
+
+        const audioStartPerf = performance.now() / 1000;
+        audioPlaybackRef.current!.play().then(() => {
+          const actualStartTime = performance.now() / 1000;
+          audioOffset = actualStartTime - audioStartPerf + 0.02;
+
+          visualizerRef.current?.startPlayback(recordedData, audioOffset);
+
+          playbackSyncIntervalRef.current = window.setInterval(() => {
+            if (audioPlaybackRef.current && visualizerRef.current) {
+              const currentAudioTime = audioPlaybackRef.current.currentTime;
+              visualizerRef.current.syncPlaybackTime(currentAudioTime);
+            }
+          }, PLAYBACK_SYNC_INTERVAL_MS);
+        }).catch(() => {});
+      };
+
       audioPlaybackRef.current.onended = () => {
         setIsPlayingBack(false);
         visualizerRef.current?.stopPlayback();
+        if (playbackSyncIntervalRef.current) {
+          window.clearInterval(playbackSyncIntervalRef.current);
+          playbackSyncIntervalRef.current = null;
+        }
       };
-      audioPlaybackRef.current.play().catch(() => {});
+
+      audioPlaybackRef.current.load();
+    } else {
+      visualizerRef.current?.startPlayback(recordedData, 0);
     }
 
-    visualizerRef.current?.startPlayback(recordedData);
     setIsPlayingBack(true);
 
-    const duration = recordedData[recordedData.length - 1].time * 1000;
     window.setTimeout(() => {
-      setIsPlayingBack(false);
-      visualizerRef.current?.stopPlayback();
-    }, duration + 500);
+      stopPlayback();
+    }, (duration + 1) * 1000);
   }, [recordedData]);
 
   const stopPlayback = useCallback(() => {
     if (audioPlaybackRef.current) {
       audioPlaybackRef.current.pause();
       audioPlaybackRef.current = null;
+    }
+    if (playbackSyncIntervalRef.current) {
+      window.clearInterval(playbackSyncIntervalRef.current);
+      playbackSyncIntervalRef.current = null;
     }
     visualizerRef.current?.stopPlayback();
     setIsPlayingBack(false);
@@ -252,25 +341,92 @@ function App() {
       pitchTrackerRef.current?.destroy();
       metronomeRef.current?.destroy();
       if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
+      if (playbackSyncIntervalRef.current) window.clearInterval(playbackSyncIntervalRef.current);
       stopPlayback();
     };
   }, [stopPlayback]);
 
-  const getBpmGradient = useMemo(() => {
+  const bpmGradient = useMemo(() => {
     const t = (bpm - 40) / (200 - 40);
-    const hue = 200 - t * 180;
-    return `linear-gradient(to right, hsl(${hue}, 80%, 60%), hsl(${hue + 40}, 80%, 50%))`;
+    const coolHue = 200;
+    const warmHue = 20;
+    const hue = coolHue - t * (coolHue - warmHue);
+    const sat = 75 + t * 10;
+    const light = 55 - t * 5;
+    return `linear-gradient(to right,
+      hsl(${hue - 30}, ${sat}%, ${light + 5}%),
+      hsl(${hue}, ${sat + 5}%, ${light}%),
+      hsl(${hue + 20}, ${sat}%, ${light - 5}%))`;
   }, [bpm]);
 
-  const appLayout = isMobile ? 'flex flex-col h-full w-full' : 'flex flex-row h-full w-full p-4 gap-4';
-  const canvasStyle = isMobile ? 'flex-1 p-2 pb-0' : 'flex-[7]';
-  const panelStyle = isMobile
-    ? 'h-auto p-3 mx-2 mb-2'
-    : 'flex-[3] max-w-[380px]';
+  const bpmTextColor = useMemo(() => {
+    const t = (bpm - 40) / (200 - 40);
+    const coolHue = 200;
+    const warmHue = 20;
+    const hue = coolHue - t * (coolHue - warmHue);
+    return `hsl(${hue}, 85%, 65%)`;
+  }, [bpm]);
+
+  const layoutStyle = useMemo(() => {
+    if (isMobile) {
+      return {
+        flexDirection: 'column' as const,
+        padding: '0',
+        gap: '0'
+      };
+    }
+    return {
+      flexDirection: 'row' as const,
+      padding: '16px',
+      gap: '16px'
+    };
+  }, [isMobile]);
+
+  const canvasContainerStyle = useMemo(() => {
+    if (isMobile) {
+      return {
+        flex: '0 0 auto',
+        height: viewportSize.h > 0 ? `${Math.min(viewportSize.h * 0.55, 400)}px` : '300px',
+        padding: '8px 8px 0 8px',
+        minHeight: 0
+      };
+    }
+    return {
+      flex: '7',
+      minHeight: 0,
+      maxHeight: '100%'
+    };
+  }, [isMobile, viewportSize.h]);
+
+  const panelStyle = useMemo(() => {
+    if (isMobile) {
+      return {
+        flex: '1 1 auto',
+        maxHeight: viewportSize.h > 0 ? `${viewportSize.h * 0.45}px` : '300px',
+        margin: '8px',
+        padding: '12px',
+        overflowY: 'auto' as const
+      };
+    }
+    return {
+      flex: '3',
+      maxWidth: '380px',
+      minWidth: '300px'
+    };
+  }, [isMobile, viewportSize.h]);
 
   return (
-    <div className={appLayout} style={{ background: '#0d0d1a', color: '#fff' }}>
-      <div className={canvasStyle} style={{ display: 'flex', minHeight: 0 }}>
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: '#0d0d1a',
+        color: '#fff',
+        ...layoutStyle
+      }}
+    >
+      <div style={{ display: 'flex', ...canvasContainerStyle }}>
         <Visualizer
           ref={visualizerRef}
           pitchData={pitchData}
@@ -278,39 +434,41 @@ function App() {
           scaleNotes={selectedScale.notes}
           activeBeats={activeBeats}
           isRecording={isRecording}
-          recordedData={isPlayingBack ? recordedData : []}
+          recordedData={recordedData}
           isPlayingBack={isPlayingBack}
         />
       </div>
 
       <div
-        className={panelStyle}
         style={{
           background: 'rgba(15, 52, 96, 0.4)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderRadius: '16px',
+          borderRadius: isMobile ? '12px' : '16px',
           border: '1px solid rgba(255,255,255,0.08)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: '16px'
+          gap: isMobile ? '12px' : '16px',
+          ...panelStyle
         }}
       >
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '16px 20px 0 20px'
+          padding: isMobile ? '0 4px' : '0 20px',
+          paddingTop: isMobile ? '4px' : '16px'
         }}>
           <h1 style={{
-            fontSize: '20px',
+            fontSize: isMobile ? '17px' : '20px',
             fontWeight: 700,
             background: 'linear-gradient(135deg, #e94560, #16c79a)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            letterSpacing: '-0.5px'
+            letterSpacing: '-0.5px',
+            margin: 0
           }}>
             PitchTrainer
           </h1>
@@ -319,7 +477,8 @@ function App() {
             padding: '3px 8px',
             borderRadius: '8px',
             background: isRunning ? 'rgba(22, 199, 154, 0.15)' : 'rgba(128,128,128,0.1)',
-            color: isRunning ? '#16c79a' : 'rgba(255,255,255,0.5)'
+            color: isRunning ? '#16c79a' : 'rgba(255,255,255,0.5)',
+            whiteSpace: 'nowrap'
           }}>
             {isRunning ? '● LIVE' : '○ IDLE'}
           </div>
@@ -327,7 +486,7 @@ function App() {
 
         {error && (
           <div style={{
-            margin: '0 20px',
+            margin: isMobile ? '0 4px' : '0 20px',
             padding: '10px 14px',
             borderRadius: '10px',
             background: 'rgba(233, 69, 96, 0.15)',
@@ -339,7 +498,7 @@ function App() {
           </div>
         )}
 
-        <section style={{ padding: '0 20px' }}>
+        <section style={{ padding: isMobile ? '0 4px' : '0 20px' }}>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={(e) => { addRipple(e); isRunning ? stopDetection() : startDetection(); }}
@@ -347,10 +506,10 @@ function App() {
                 flex: 1,
                 position: 'relative',
                 overflow: 'hidden',
-                padding: '14px 20px',
+                padding: isMobile ? '12px 16px' : '14px 20px',
                 borderRadius: '12px',
                 border: 'none',
-                fontSize: '14px',
+                fontSize: isMobile ? '13px' : '14px',
                 fontWeight: 600,
                 cursor: 'pointer',
                 color: '#fff',
@@ -361,7 +520,9 @@ function App() {
                   ? '0 4px 20px rgba(233, 69, 96, 0.4)'
                   : '0 4px 20px rgba(22, 199, 154, 0.4)',
                 transition: 'transform 0.1s, box-shadow 0.2s',
-                animation: isRunning ? 'pulse 1.5s ease-in-out infinite' : 'none'
+                animation: isRunning ? 'pulse 1.5s ease-in-out infinite' : 'none',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent'
               }}
             >
               {isRunning ? '⏹ 停止检测' : '▶ 开始检测'}
@@ -385,11 +546,16 @@ function App() {
           </div>
         </section>
 
-        <section style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <section style={{
+          padding: isMobile ? '0 4px' : '0 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>🎵 目标音阶</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
             {SCALES.map((scale, idx) => (
               <button
                 key={scale.name}
@@ -397,7 +563,7 @@ function App() {
                 style={{
                   position: 'relative',
                   overflow: 'hidden',
-                  padding: '10px 12px',
+                  padding: isMobile ? '8px 10px' : '10px 12px',
                   borderRadius: '10px',
                   border: selectedScaleIdx === idx
                     ? '2px solid #e94560'
@@ -406,10 +572,11 @@ function App() {
                     ? 'rgba(233, 69, 96, 0.15)'
                     : 'rgba(255,255,255,0.03)',
                   color: selectedScaleIdx === idx ? '#e94560' : 'rgba(255,255,255,0.7)',
-                  fontSize: '12px',
+                  fontSize: isMobile ? '11px' : '12px',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  transition: 'all 0.15s'
+                  transition: 'all 0.15s',
+                  touchAction: 'manipulation'
                 }}
               >
                 {scale.name}
@@ -419,13 +586,13 @@ function App() {
         </section>
 
         <section style={{
-          padding: '16px 20px',
-          margin: '0 16px',
+          padding: isMobile ? '12px' : '16px 20px',
+          margin: isMobile ? '0 4px' : '0 16px',
           borderRadius: '12px',
           background: 'rgba(0,0,0,0.2)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '14px'
+          gap: '12px'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>🥁 节拍器</span>
@@ -447,7 +614,8 @@ function App() {
                 boxShadow: isMetronomeRunning
                   ? '0 2px 12px rgba(233, 69, 96, 0.4)'
                   : 'none',
-                transition: 'all 0.15s'
+                transition: 'all 0.15s',
+                touchAction: 'manipulation'
               }}
             >
               {isMetronomeRunning ? '⏸ 暂停' : '▶ 播放'}
@@ -460,17 +628,19 @@ function App() {
               <span style={{
                 fontSize: '24px',
                 fontWeight: 700,
-                background: getBpmGradient,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
+                color: bpmTextColor,
+                transition: 'color 0.1s',
+                fontFamily: 'monospace',
+                minWidth: '60px',
+                textAlign: 'right'
               }}>
                 {bpm}
               </span>
             </div>
             <div style={{
               position: 'relative',
-              height: '6px',
-              borderRadius: '3px',
+              height: '8px',
+              borderRadius: '4px',
               background: 'rgba(255,255,255,0.08)',
               overflow: 'visible'
             }}>
@@ -480,35 +650,41 @@ function App() {
                 left: 0,
                 height: '100%',
                 width: `${((bpm - 40) / 160) * 100}%`,
-                borderRadius: '3px',
-                background: getBpmGradient
+                borderRadius: '4px',
+                background: bpmGradient,
+                transition: 'width 0.05s linear, background 0.1s',
+                boxShadow: `0 0 10px ${bpmTextColor}50`
               }} />
               <input
                 type="range"
                 min={40}
                 max={200}
+                step={1}
                 value={bpm}
                 onChange={(e) => setBpm(parseInt(e.target.value))}
                 style={{
                   position: 'absolute',
-                  top: '-6px',
+                  top: '-8px',
                   left: 0,
                   width: '100%',
-                  height: '18px',
+                  height: '24px',
                   opacity: 0,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  touchAction: 'none'
                 }}
               />
               <div style={{
                 position: 'absolute',
-                top: '-6px',
-                left: `calc(${((bpm - 40) / 160) * 100}% - 9px)`,
-                width: '18px',
-                height: '18px',
+                top: '-8px',
+                left: `calc(${((bpm - 40) / 160) * 100}% - 10px)`,
+                width: '20px',
+                height: '20px',
                 borderRadius: '50%',
                 background: '#fff',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                pointerEvents: 'none'
+                boxShadow: `0 2px 8px rgba(0,0,0,0.3), 0 0 12px ${bpmTextColor}80`,
+                pointerEvents: 'none',
+                transition: 'left 0.05s linear',
+                border: `2px solid ${bpmTextColor}`
               }} />
             </div>
             <div style={{
@@ -519,7 +695,7 @@ function App() {
               marginTop: '4px'
             }}>
               <span>40 慢</span>
-              <span>120</span>
+              <span style={{ color: bpm >= 110 && bpm <= 130 ? bpmTextColor : 'inherit' }}>120</span>
               <span>200 快</span>
             </div>
           </div>
@@ -542,11 +718,12 @@ function App() {
                       ? 'rgba(22, 199, 154, 0.15)'
                       : 'rgba(255,255,255,0.02)',
                     color: timeSignature === sig ? '#16c79a' : 'rgba(255,255,255,0.6)',
-                    fontSize: '13px',
+                    fontSize: isMobile ? '12px' : '13px',
                     fontWeight: 600,
                     cursor: 'pointer',
                     fontFamily: 'monospace',
-                    transition: 'all 0.15s'
+                    transition: 'all 0.15s',
+                    touchAction: 'manipulation'
                   }}
                 >
                   {sig}
@@ -556,7 +733,12 @@ function App() {
           </div>
         </section>
 
-        <section style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <section style={{
+          padding: isMobile ? '0 4px' : '0 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>🎙 录音练习</span>
             {isRecording && (
@@ -587,10 +769,10 @@ function App() {
                 flex: 1,
                 position: 'relative',
                 overflow: 'hidden',
-                padding: '12px 16px',
+                padding: isMobile ? '11px 14px' : '12px 16px',
                 borderRadius: '10px',
                 border: 'none',
-                fontSize: '13px',
+                fontSize: isMobile ? '12px' : '13px',
                 fontWeight: 600,
                 cursor: (!isRunning || isPlayingBack) ? 'not-allowed' : 'pointer',
                 color: '#fff',
@@ -599,7 +781,8 @@ function App() {
                   ? 'linear-gradient(135deg, #e94560, #a02040)'
                   : 'linear-gradient(135deg, #0f3460, #16213e)',
                 boxShadow: isRecording ? '0 4px 20px rgba(233, 69, 96, 0.4)' : 'none',
-                animation: isRecording ? 'pulse 1.5s ease-in-out infinite' : 'none'
+                animation: isRecording ? 'pulse 1.5s ease-in-out infinite' : 'none',
+                touchAction: 'manipulation'
               }}
             >
               {isRecording ? '⏹ 停止录音' : '● 开始录音'}
@@ -611,10 +794,10 @@ function App() {
                 flex: 1,
                 position: 'relative',
                 overflow: 'hidden',
-                padding: '12px 16px',
+                padding: isMobile ? '11px 14px' : '12px 16px',
                 borderRadius: '10px',
                 border: 'none',
-                fontSize: '13px',
+                fontSize: isMobile ? '12px' : '13px',
                 fontWeight: 600,
                 cursor: recordedData.length === 0 ? 'not-allowed' : 'pointer',
                 color: '#fff',
@@ -622,7 +805,8 @@ function App() {
                 background: isPlayingBack
                   ? 'linear-gradient(135deg, #f39c12, #d68910)'
                   : 'linear-gradient(135deg, #16c79a, #0f9b75)',
-                boxShadow: isPlayingBack ? '0 4px 20px rgba(243, 156, 18, 0.4)' : 'none'
+                boxShadow: isPlayingBack ? '0 4px 20px rgba(243, 156, 18, 0.4)' : 'none',
+                touchAction: 'manipulation'
               }}
             >
               {isPlayingBack ? '⏸ 停止回放' : '▶ 回放'}
@@ -630,42 +814,44 @@ function App() {
           </div>
         </section>
 
-        <section style={{
-          padding: '0 20px 20px 20px',
-          marginTop: 'auto'
-        }}>
-          <div style={{
-            padding: '12px 14px',
-            borderRadius: '10px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.05)'
+        {!isMobile && (
+          <section style={{
+            padding: '0 20px 20px 20px',
+            marginTop: 'auto'
           }}>
             <div style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              opacity: 0.7,
-              marginBottom: '8px'
+              padding: '12px 14px',
+              borderRadius: '10px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.05)'
             }}>
-              🎼 使用提示
+              <div style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                opacity: 0.7,
+                marginBottom: '8px'
+              }}>
+                🎼 使用提示
+              </div>
+              <ul style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: 0,
+                fontSize: '11px',
+                opacity: 0.55,
+                lineHeight: 1.7,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px'
+              }}>
+                <li>• 点击「开始检测」后对着麦克风发声</li>
+                <li>• 绿色=准确 黄色=一般 红色=偏差大</li>
+                <li>• 开启节拍器辅助练习节奏感</li>
+                <li>• 录音30秒可回放检查进步</li>
+              </ul>
             </div>
-            <ul style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              fontSize: '11px',
-              opacity: 0.55,
-              lineHeight: 1.7,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px'
-            }}>
-              <li>• 点击「开始检测」后对着麦克风发声</li>
-              <li>• 绿色=准确 黄色=一般 红色=偏差大</li>
-              <li>• 开启节拍器辅助练习节奏感</li>
-              <li>• 录音30秒可回放检查进步</li>
-            </ul>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
     </div>
   );
