@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { DisplayMemo } from '../types'
@@ -19,10 +20,9 @@ export default function CanvasMarkerLayer({
 }: CanvasMarkerLayerProps) {
   const map = useMap()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const memoPositionsRef = useRef<Array<{ memo: DisplayMemo; x: number; y: number; radius: number }>>([])
-  const [activePopup, setActivePopup] = useState<DisplayMemo | null>(null)
-  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null)
-  const popupRef = useRef<HTMLDivElement | null>(null)
+  const popupContainerRef = useRef<HTMLDivElement | null>(null)
+  const [popupMemo, setPopupMemo] = useState<DisplayMemo | null>(null)
+  const [popupMount, setPopupMount] = useState<HTMLDivElement | null>(null)
 
   const drawMarkers = useCallback(() => {
     const canvas = canvasRef.current
@@ -37,8 +37,6 @@ export default function CanvasMarkerLayer({
 
     ctx.clearRect(0, 0, size.x, size.y)
 
-    const positions: Array<{ memo: DisplayMemo; x: number; y: number; radius: number }> = []
-
     memos.forEach((memo) => {
       if (memo.opacity <= 0) return
 
@@ -47,18 +45,17 @@ export default function CanvasMarkerLayer({
       const radius = isSelected ? 18 : 15
       const color = getColorByDate(memo.timestamp)
 
-      if (point.x < -radius || point.x > size.x + radius || point.y < -radius || point.y > size.y + radius) {
+      if (point.x < -radius * 2 || point.x > size.x + radius * 2 ||
+          point.y < -radius * 2 || point.y > size.y + radius * 2) {
         return
       }
 
-      positions.push({ memo, x: point.x, y: point.y, radius })
-
       ctx.globalAlpha = memo.opacity
 
-      const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius * 2)
-      gradient.addColorStop(0, color + '60')
-      gradient.addColorStop(1, color + '00')
-      ctx.fillStyle = gradient
+      const glowGradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius * 2)
+      glowGradient.addColorStop(0, color + '60')
+      glowGradient.addColorStop(1, color + '00')
+      ctx.fillStyle = glowGradient
       ctx.beginPath()
       ctx.arc(point.x, point.y, radius * 2, 0, Math.PI * 2)
       ctx.fill()
@@ -95,38 +92,15 @@ export default function CanvasMarkerLayer({
 
       ctx.globalAlpha = 1
     })
-
-    memoPositionsRef.current = positions
   }, [memos, selectedMemoId, map, getColorByDate])
 
-  const handleCanvasClick = useCallback(
-    (e: MouseEvent) => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-
-      for (let i = memoPositionsRef.current.length - 1; i >= 0; i--) {
-        const pos = memoPositionsRef.current[i]
-        const dx = x - pos.x
-        const dy = y - pos.y
-        const distance = Math.sqrt(dx * dx + dy * dy)
-
-        if (distance <= pos.radius + 5) {
-          onSelect(pos.memo.id)
-          setPopupPosition({ x: pos.x, y: pos.y - pos.radius - 10 })
-          setActivePopup(pos.memo)
-          return
-        }
-      }
-
-      setActivePopup(null)
-      setPopupPosition(null)
-    },
-    [onSelect]
-  )
+  const updatePopupPosition = useCallback(() => {
+    if (!popupMemo || !map || !popupContainerRef.current) return
+    const point = map.latLngToContainerPoint([popupMemo.lat, popupMemo.lng])
+    const container = popupContainerRef.current
+    container.style.setProperty('--popup-x', `${point.x}px`)
+    container.style.setProperty('--popup-y', `${point.y - 25}px`)
+  }, [popupMemo, map])
 
   useEffect(() => {
     if (!map) return
@@ -141,9 +115,52 @@ export default function CanvasMarkerLayer({
 
     canvasRef.current = canvas
 
+    const popupContainer = document.createElement('div')
+    popupContainer.className = 'canvas-popup-root'
+    popupContainer.style.position = 'absolute'
+    popupContainer.style.top = '0'
+    popupContainer.style.left = '0'
+    popupContainer.style.width = '100%'
+    popupContainer.style.height = '100%'
+    popupContainer.style.pointerEvents = 'none'
+    popupContainer.style.zIndex = '501'
+    popupContainerRef.current = popupContainer
+    setPopupMount(popupContainer)
+
     const pane = map.getPane('overlayPane')
     if (pane) {
       pane.appendChild(canvas)
+      pane.appendChild(popupContainer)
+    }
+
+    const handleCanvasClick = (e: MouseEvent) => {
+      const localCanvas = canvasRef.current
+      if (!localCanvas || !map) return
+
+      const rect = localCanvas.getBoundingClientRect()
+      const topLeft = map.containerPointToLayerPoint([0, 0])
+      const x = e.clientX - rect.left - topLeft.x
+      const y = e.clientY - rect.top - topLeft.y
+
+      for (let i = memos.length - 1; i >= 0; i--) {
+        const memo = memos[i]
+        if (memo.opacity <= 0) continue
+
+        const point = map.latLngToContainerPoint([memo.lat, memo.lng])
+        const radius = memo.id === selectedMemoId ? 18 : 15
+        const hitRadius = radius + 5
+        const dx = x - point.x
+        const dy = y - point.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        if (distance <= hitRadius) {
+          onSelect(memo.id)
+          setPopupMemo(memo)
+          return
+        }
+      }
+
+      setPopupMemo(null)
     }
 
     canvas.addEventListener('click', handleCanvasClick)
@@ -152,15 +169,15 @@ export default function CanvasMarkerLayer({
       if (!canvas || !map) return
       const topLeft = map.containerPointToLayerPoint([0, 0])
       canvas.style.transform = `translate(${topLeft.x}px, ${topLeft.y}px)`
+      if (popupContainerRef.current) {
+        popupContainerRef.current.style.transform = `translate(${topLeft.x}px, ${topLeft.y}px)`
+      }
     }
 
     const onMove = () => {
       updateCanvasPosition()
       drawMarkers()
-      if (activePopup) {
-        const point = map.latLngToContainerPoint([activePopup.lat, activePopup.lng])
-        setPopupPosition({ x: point.x, y: point.y - 20 })
-      }
+      updatePopupPosition()
     }
 
     map.on('move', onMove)
@@ -175,23 +192,33 @@ export default function CanvasMarkerLayer({
       map.off('zoom', onMove)
       map.off('viewreset', onMove)
       canvas.removeEventListener('click', handleCanvasClick)
-      if (pane && canvas.parentNode === pane) {
-        pane.removeChild(canvas)
+      if (pane) {
+        if (canvas.parentNode === pane) pane.removeChild(canvas)
+        if (popupContainer.parentNode === pane) pane.removeChild(popupContainer)
       }
       canvasRef.current = null
+      popupContainerRef.current = null
+      setPopupMount(null)
     }
-  }, [map, drawMarkers, handleCanvasClick, activePopup])
+  }, [map, drawMarkers, updatePopupPosition, onSelect, memos, selectedMemoId])
 
   useEffect(() => {
     drawMarkers()
   }, [drawMarkers])
 
   useEffect(() => {
-    if (activePopup && selectedMemoId === null) {
-      setActivePopup(null)
-      setPopupPosition(null)
+    updatePopupPosition()
+  }, [updatePopupPosition])
+
+  useEffect(() => {
+    if (selectedMemoId == null) {
+      setPopupMemo(null)
+      return
     }
-  }, [selectedMemoId, activePopup])
+    if (popupMemo && popupMemo.id === selectedMemoId) return
+    const memo = memos.find((m) => m.id === selectedMemoId) || null
+    setPopupMemo(memo)
+  }, [selectedMemoId, memos, popupMemo])
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('zh-CN', {
@@ -202,25 +229,41 @@ export default function CanvasMarkerLayer({
     })
   }
 
-  return (
-    <>
-      {activePopup && popupPosition && (
-        <div
-          ref={popupRef}
-          className="canvas-popup"
-          style={{
-            left: popupPosition.x,
-            top: popupPosition.y,
-            transform: 'translate(-50%, -100%)',
-          }}
+  const handleClosePopup = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setPopupMemo(null)
+  }
+
+  const renderPopup = () => {
+    if (!popupMemo || !popupMount) return null
+    const point = map.latLngToContainerPoint([popupMemo.lat, popupMemo.lng])
+    return createPortal(
+      <div
+        className="canvas-popup"
+        style={{
+          left: point.x,
+          top: point.y - 25,
+          transform: 'translate(-50%, -100%)',
+          pointerEvents: 'auto',
+        }}
+      >
+        <button
+          className="canvas-popup-close"
+          onClick={handleClosePopup}
+          title="关闭"
+          type="button"
         >
-          <div className="canvas-popup-arrow" />
-          <div className="canvas-popup-content">
-            <div className="canvas-popup-time">{formatDate(activePopup.timestamp)}</div>
-            <div className="canvas-popup-text">{activePopup.content}</div>
-          </div>
+          ×
+        </button>
+        <div className="canvas-popup-arrow" />
+        <div className="canvas-popup-content">
+          <div className="canvas-popup-time">{formatDate(popupMemo.timestamp)}</div>
+          <div className="canvas-popup-text">{popupMemo.content}</div>
         </div>
-      )}
-    </>
-  )
+      </div>,
+      popupMount
+    )
+  }
+
+  return <>{renderPopup()}</>
 }

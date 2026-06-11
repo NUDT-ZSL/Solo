@@ -1,180 +1,97 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
-import type { Memo } from '../types'
+import type { DisplayMemo } from '../types'
 import './HeatmapLayer.css'
 
 interface HeatmapLayerProps {
-  memos: Memo[]
+  memos: DisplayMemo[]
   radius: number
+}
+
+function isHeatLayerAvailable(): boolean {
+  return typeof L !== 'undefined' && typeof (L as any).heatLayer === 'function'
 }
 
 export default function HeatmapLayer({ memos, radius }: HeatmapLayerProps) {
   const map = useMap()
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [renderError, setRenderError] = useState<string | null>(null)
+  const heatLayerRef = useRef<L.HeatLayer | null>(null)
+  const [pluginLoaded, setPluginLoaded] = useState<boolean>(isHeatLayerAvailable())
+  const [loadAttempts, setLoadAttempts] = useState<number>(0)
 
-  const drawHeatmap = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !map) return
+  useEffect(() => {
+    if (pluginLoaded) return
+
+    let attempts = 0
+    const maxAttempts = 10
+    const checkInterval = setInterval(() => {
+      attempts++
+      if (isHeatLayerAvailable()) {
+        setPluginLoaded(true)
+        clearInterval(checkInterval)
+      } else if (attempts >= maxAttempts) {
+        clearInterval(checkInterval)
+        console.warn('leaflet.heat plugin failed to load after multiple attempts')
+      }
+      setLoadAttempts(attempts)
+    }, 200)
+
+    return () => clearInterval(checkInterval)
+  }, [pluginLoaded])
+
+  useEffect(() => {
+    if (!map || !pluginLoaded) return
+
+    const visibleMemos = memos.filter((m) => m.opacity > 0.5)
+    const heatPoints: L.LatLngTuple[] = visibleMemos.map((m) => [m.lat, m.lng])
+
+    if (heatLayerRef.current) {
+      map.removeLayer(heatLayerRef.current)
+      heatLayerRef.current = null
+    }
+
+    if (heatPoints.length === 0) return
 
     try {
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        setRenderError('Canvas 2D context unavailable')
-        return
-      }
+      const heatLayer = L.heatLayer(heatPoints, {
+        radius: radius,
+        blur: radius * 0.8,
+        minOpacity: 0.3,
+        maxZoom: 15,
+        gradient: {
+          0.0: '#0064B3',
+          0.2: '#32C0FF',
+          0.4: '#64FF96',
+          0.6: '#FFFF64',
+          0.8: '#FF6464',
+          1.0: '#FF0000',
+        },
+      }).addTo(map)
 
-      const size = map.getSize()
-      canvas.width = size.x
-      canvas.height = size.y
-
-      ctx.clearRect(0, 0, size.x, size.y)
-
-      if (memos.length === 0) {
-        setRenderError(null)
-        return
-      }
-
-      const tempCanvas = document.createElement('canvas')
-      tempCanvas.width = size.x
-      tempCanvas.height = size.y
-      const tempCtx = tempCanvas.getContext('2d')
-      if (!tempCtx) {
-        setRenderError('Failed to create temporary canvas')
-        return
-      }
-
-      memos.forEach((memo) => {
-        const point = map.latLngToContainerPoint([memo.lat, memo.lng])
-
-        if (point.x < -radius * 3 || point.x > size.x + radius * 3 ||
-            point.y < -radius * 3 || point.y > size.y + radius * 3) {
-          return
-        }
-
-        const gradient = tempCtx.createRadialGradient(
-          point.x, point.y, 0,
-          point.x, point.y, radius
-        )
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)')
-        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)')
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-
-        tempCtx.fillStyle = gradient
-        tempCtx.beginPath()
-        tempCtx.arc(point.x, point.y, radius, 0, Math.PI * 2)
-        tempCtx.fill()
-      })
-
-      const imageData = tempCtx.getImageData(0, 0, size.x, size.y)
-      const data = imageData.data
-
-      for (let i = 0; i < data.length; i += 4) {
-        const alpha = data[i + 3]
-        if (alpha === 0) continue
-
-        const intensity = alpha / 255
-        let r: number, g: number, b: number
-
-        if (intensity < 0.2) {
-          const t = intensity / 0.2
-          r = Math.floor(0)
-          g = Math.floor(0 + 100 * t)
-          b = Math.floor(139 + 116 * t)
-        } else if (intensity < 0.4) {
-          const t = (intensity - 0.2) / 0.2
-          r = Math.floor(0 + 50 * t)
-          g = Math.floor(100 + 155 * t)
-          b = Math.floor(255 - 55 * t)
-        } else if (intensity < 0.6) {
-          const t = (intensity - 0.4) / 0.2
-          r = Math.floor(50 + 200 * t)
-          g = Math.floor(255 - 55 * t)
-          b = Math.floor(200 - 100 * t)
-        } else if (intensity < 0.8) {
-          const t = (intensity - 0.6) / 0.2
-          r = 255
-          g = Math.floor(200 - 100 * t)
-          b = Math.floor(100 - 100 * t)
-        } else {
-          const t = (intensity - 0.8) / 0.2
-          r = 255
-          g = Math.floor(100 - 80 * t)
-          b = 0
-        }
-
-        data[i] = r
-        data[i + 1] = g
-        data[i + 2] = b
-        data[i + 3] = Math.floor(alpha * 0.85)
-      }
-
-      ctx.putImageData(imageData, 0, 0)
-      setRenderError(null)
-    } catch (err) {
-      console.error('Heatmap rendering error:', err)
-      setRenderError('热力图渲染失败，请尝试减小半径或刷新页面')
+      heatLayerRef.current = heatLayer
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('Failed to create heat layer:', message)
+      setPluginLoaded(false)
     }
-  }, [memos, radius, map])
-
-  useEffect(() => {
-    if (!map) return
-
-    const canvas = document.createElement('canvas')
-    canvas.style.position = 'absolute'
-    canvas.style.top = '0'
-    canvas.style.left = '0'
-    canvas.style.pointerEvents = 'none'
-    canvas.style.zIndex = '450'
-    canvas.className = 'leaflet-zoom-animated'
-
-    canvasRef.current = canvas
-
-    const pane = map.getPane('overlayPane')
-    if (pane) {
-      pane.appendChild(canvas)
-    }
-
-    const updateCanvasPosition = () => {
-      if (!canvas || !map) return
-      const topLeft = map.containerPointToLayerPoint([0, 0])
-      canvas.style.transform = `translate(${topLeft.x}px, ${topLeft.y}px)`
-    }
-
-    const onMove = () => {
-      updateCanvasPosition()
-      drawHeatmap()
-    }
-
-    map.on('move', onMove)
-    map.on('zoom', onMove)
-    map.on('viewreset', onMove)
-
-    updateCanvasPosition()
-    drawHeatmap()
 
     return () => {
-      map.off('move', onMove)
-      map.off('zoom', onMove)
-      map.off('viewreset', onMove)
-      if (pane && canvas.parentNode === pane) {
-        pane.removeChild(canvas)
+      if (heatLayerRef.current && map.hasLayer(heatLayerRef.current)) {
+        map.removeLayer(heatLayerRef.current)
+        heatLayerRef.current = null
       }
-      canvasRef.current = null
     }
-  }, [map, drawHeatmap])
+  }, [map, memos, radius, pluginLoaded])
 
-  useEffect(() => {
-    drawHeatmap()
-  }, [drawHeatmap])
-
-  if (renderError) {
+  if (!pluginLoaded && loadAttempts >= 5) {
     return (
       <div className="heatmap-error-overlay">
         <div className="heatmap-error-content">
           <span className="error-icon">⚠️</span>
-          <span className="error-text">{renderError}</span>
+          <div className="error-text-wrapper">
+            <span className="error-title">热力图插件加载失败</span>
+            <span className="error-hint">请检查网络连接或刷新页面重试</span>
+          </div>
         </div>
       </div>
     )

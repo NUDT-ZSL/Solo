@@ -33,7 +33,25 @@
 }
 
 .error-icon {
-  font-size: 16px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.error-text-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.error-title {
+  font-size: 13px;
+  color: #E74C3C;
+  font-weight: 600;
+}
+
+.error-hint {
+  font-size: 11px;
+  color: rgba(231, 76, 60, 0.7);
 }
 
 .error-text {

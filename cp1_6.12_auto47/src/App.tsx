@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { Memo, DisplayMemo, DateRange } from './types'
+import { toDisplayMemo } from './types'
 import MapView from './components/MapView'
 import MemoPanel from './components/MemoPanel'
 import TimelineSlider from './components/TimelineSlider'
@@ -34,25 +35,29 @@ export default function App() {
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [displayMemos, setDisplayMemos] = useState<DisplayMemo[]>([])
+
   const prevFilteredIdsRef = useRef<Set<number>>(new Set())
   const fadeTimerRef = useRef<number | null>(null)
+  const rafRef = useRef<number | null>(null)
 
-  const filteredMemos = useMemo(() => {
+  const filteredMemos: Memo[] = useMemo(() => {
     if (dateRange === 'all') return memos
 
     const now = Date.now()
     const days = dateRange === '7days' ? 7 : 30
     const threshold = now - days * 24 * 60 * 60 * 1000
 
-    return memos.filter((m) => m.timestamp >= threshold)
+    return memos.filter((m: Memo) => m.timestamp >= threshold)
   }, [memos, dateRange])
 
-  const selectedMemo = useMemo(
-    () => memos.find((m) => m.id === selectedMemoId) || null,
+  const selectedMemo: Memo | null = useMemo(
+    () => memos.find((m: Memo) => m.id === selectedMemoId) || null,
     [memos, selectedMemoId]
   )
 
   useEffect(() => {
+    let isStale = false
+
     const newIds = new Set(filteredMemos.map((m) => m.id))
     const prevIds = prevFilteredIdsRef.current
 
@@ -77,70 +82,74 @@ export default function App() {
     const memoMap = new Map<number, Memo>()
     memos.forEach((m) => memoMap.set(m.id, m))
 
-    const phase1: DisplayMemo[] = []
-
-    staying.forEach((id) => {
-      const m = memoMap.get(id)!
-      phase1.push({ ...m, opacity: 1 })
-    })
-
-    entering.forEach((id) => {
-      const m = memoMap.get(id)!
-      phase1.push({ ...m, opacity: 0 })
-    })
-
-    leaving.forEach((id) => {
-      const m = memoMap.get(id)!
-      phase1.push({ ...m, opacity: 1 })
-    })
-
-    setDisplayMemos(phase1)
-
-    if (fadeTimerRef.current) {
-      clearTimeout(fadeTimerRef.current)
-    }
-
-    requestAnimationFrame(() => {
-      const phase2: DisplayMemo[] = []
+    const buildPhase = (
+      stayingOpacity: number,
+      enteringOpacity: number,
+      leavingOpacity: number,
+      includeLeaving: boolean
+    ): DisplayMemo[] => {
+      const result: DisplayMemo[] = []
 
       staying.forEach((id) => {
-        const m = memoMap.get(id)!
-        phase2.push({ ...m, opacity: 1 })
+        const m = memoMap.get(id)
+        if (m) result.push(toDisplayMemo(m, stayingOpacity))
       })
 
       entering.forEach((id) => {
-        const m = memoMap.get(id)!
-        phase2.push({ ...m, opacity: 1 })
+        const m = memoMap.get(id)
+        if (m) result.push(toDisplayMemo(m, enteringOpacity))
       })
 
-      leaving.forEach((id) => {
-        const m = memoMap.get(id)!
-        phase2.push({ ...m, opacity: 0 })
-      })
+      if (includeLeaving) {
+        leaving.forEach((id) => {
+          const m = memoMap.get(id)
+          if (m) result.push(toDisplayMemo(m, leavingOpacity))
+        })
+      }
 
+      return result
+    }
+
+    const phase1 = buildPhase(1, 0, 1, true)
+    setDisplayMemos(phase1)
+
+    if (fadeTimerRef.current !== null) {
+      clearTimeout(fadeTimerRef.current)
+      fadeTimerRef.current = null
+    }
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+
+    rafRef.current = requestAnimationFrame(() => {
+      if (isStale) return
+
+      const phase2 = buildPhase(1, 1, 0, true)
       setDisplayMemos(phase2)
 
       fadeTimerRef.current = window.setTimeout(() => {
-        const phase3: DisplayMemo[] = []
+        if (isStale) return
 
-        staying.forEach((id) => {
-          const m = memoMap.get(id)!
-          phase3.push({ ...m, opacity: 1 })
-        })
-
-        entering.forEach((id) => {
-          const m = memoMap.get(id)!
-          phase3.push({ ...m, opacity: 1 })
-        })
-
+        const phase3 = buildPhase(1, 1, 1, false)
         setDisplayMemos(phase3)
         prevFilteredIdsRef.current = newIds
+
+        fadeTimerRef.current = null
       }, FADE_DURATION)
+
+      rafRef.current = null
     })
 
     return () => {
-      if (fadeTimerRef.current) {
+      isStale = true
+      if (fadeTimerRef.current !== null) {
         clearTimeout(fadeTimerRef.current)
+        fadeTimerRef.current = null
+      }
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
       }
     }
   }, [filteredMemos, memos])
@@ -150,7 +159,7 @@ export default function App() {
       setIsLoading(true)
       const res = await fetch('/api/memos')
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json() as Memo[]
         setMemos(data)
       }
     } catch (error) {
@@ -163,6 +172,17 @@ export default function App() {
   useEffect(() => {
     fetchMemos()
   }, [fetchMemos])
+
+  useEffect(() => {
+    return () => {
+      if (fadeTimerRef.current !== null) {
+        clearTimeout(fadeTimerRef.current)
+      }
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [])
 
   const handleMemoAdd = useCallback(async (lng: number, lat: number) => {
     const content = window.prompt('请输入备忘内容（最多200字）：')
@@ -184,7 +204,7 @@ export default function App() {
         }),
       })
       if (res.ok) {
-        const newMemo = await res.json()
+        const newMemo = await res.json() as Memo
         setMemos((prev) => [newMemo, ...prev])
       }
     } catch (error) {
@@ -205,8 +225,8 @@ export default function App() {
         body: JSON.stringify({ content: newContent }),
       })
       if (res.ok) {
-        const updatedMemo = await res.json()
-        setMemos((prev) => prev.map((m) => (m.id === memoId ? updatedMemo : m)))
+        const updatedMemo = await res.json() as Memo
+        setMemos((prev) => prev.map((m: Memo) => (m.id === memoId ? updatedMemo : m)))
       }
     } catch (error) {
       console.error('Failed to update memo:', error)
@@ -221,7 +241,7 @@ export default function App() {
         method: 'DELETE',
       })
       if (res.ok) {
-        setMemos((prev) => prev.filter((m) => m.id !== memoId))
+        setMemos((prev) => prev.filter((m: Memo) => m.id !== memoId))
         setSelectedMemoId(null)
       }
     } catch (error) {
