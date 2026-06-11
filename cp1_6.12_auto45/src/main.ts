@@ -206,15 +206,9 @@ class OrigamiApp {
       let newAngle = THREE.MathUtils.clamp(this.creaseStartAngle + deltaAngle, 0, 180);
       const c = this.model.creases[this.selectedCreaseIndex];
       if (this.batchMode && c.groupId > 0) {
-        this.model.setCreaseAngleBatch(c.groupId, newAngle);
+        this.model.setCreaseBatch(c.groupId, newAngle);
       } else {
-        for (let i = 0; i < this.model.creases.length; i++) {
-          const cc = this.model.creases[i];
-          cc.angle = cc.targetAngle;
-        }
-        c.targetAngle = newAngle;
-        c.angle = newAngle;
-        this.model.reconstructFromBase();
+        this.model.setCreaseAngle(this.selectedCreaseIndex, newAngle);
       }
       this.ui.showCreaseInfo(this.selectedCreaseIndex, c.angle, c.groupId);
       this.updateUIStatus();
@@ -289,7 +283,7 @@ class OrigamiApp {
       const hit = hits[0];
       const point = hit.point.clone();
       this.model.group.worldToLocal(point);
-      const closest = this.model.getClosestCrease(point, 0.3);
+      const closest = this.model.closestCrease(point, 0.3);
       if (closest) return closest.index;
     }
     return -1;
@@ -298,8 +292,8 @@ class OrigamiApp {
   raycastFace(): number {
     const mesh = this.model.mesh;
     const hits = this.raycaster.intersectObject(mesh, false);
-    if (hits.length > 0 && hits[0].face) {
-      const faceIdx = Math.floor(hits[0].faceIndex! / 3);
+    if (hits.length > 0 && hits[0].faceIndex !== undefined) {
+      const faceIdx = hits[0].faceIndex;
       if (faceIdx >= 0 && faceIdx < this.model.faces.length) {
         return faceIdx;
       }
@@ -328,7 +322,7 @@ class OrigamiApp {
     this.model.highlightFace(faceIndex);
     const info = this.model.getFaceInfo(faceIndex);
     if (info) {
-      this.ui.showFaceInfo(faceIndex, info.normal, info.adjacentFaces, info.area);
+      this.ui.showFaceInfo(faceIndex, info.normal, info.adjacents, info.area);
       this.showNormalHelper(faceIndex);
     }
   }
@@ -418,7 +412,7 @@ class OrigamiApp {
   }
 
   updateUIStatus(): void {
-    this.ui.updateStatus(this.model.getActiveCreaseCount(), this.model.getUndoCount());
+    this.ui.updateStatus(this.model.activeCreaseCount(), this.model.undoCount());
   }
 
   animate = (): void => {

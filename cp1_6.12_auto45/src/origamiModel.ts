@@ -16,8 +16,7 @@ export interface Crease {
   vertexIndices: [number, number];
   faceIndices: [number, number];
   angle: number;
-  targetAngle: number;
-  type: 'mountain' | 'valley' | 'neutral';
+  type: 'mountain' | 'valley';
   groupId: number;
 }
 
@@ -37,133 +36,127 @@ export class OrigamiModel {
   group: THREE.Group;
   mesh: THREE.Mesh;
   creaseLines: THREE.LineSegments;
-  faceNormalsHelper: THREE.LineSegments | null = null;
   name: string;
   history: OrigamiState[] = [];
   savedState: OrigamiState | null = null;
   isAnimating = false;
-  animationProgress = 0;
   animationStart: OrigamiState | null = null;
   animationEnd: OrigamiState | null = null;
   animationDuration = 1000;
   animationStartTime = 0;
   highlightedFaceIndex: number = -1;
-  private tempVec3 = new THREE.Vector3();
-  private tempQuat = new THREE.Quaternion();
-  private tempAxis = new THREE.Vector3();
+
+  private _tv = new THREE.Vector3();
+  private _tv2 = new THREE.Vector3();
+  private _tq = new THREE.Quaternion();
+  private _ta = new THREE.Vector3();
+  private _tm = new THREE.Matrix4();
+  private _posBuf: Float32Array | null = null;
+  private _colBuf: Float32Array | null = null;
+  private _normBuf: Float32Array | null = null;
 
   constructor(name: string) {
     this.name = name;
     this.group = new THREE.Group();
     this.group.name = name;
-    const geometry = new THREE.BufferGeometry();
-    const material = new THREE.MeshStandardMaterial({
+
+    const geo = new THREE.BufferGeometry();
+    const mat = new THREE.MeshStandardMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      flatShading: false,
-      metalness: 0.0,
-      roughness: 0.85
+      flatShading: true,
+      metalness: 0.02,
+      roughness: 0.9
     });
-    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
-    this.mesh.name = name + '_mesh';
     this.group.add(this.mesh);
 
-    const creaseGeo = new THREE.BufferGeometry();
-    const creaseMat = new THREE.LineBasicMaterial({
+    const cGeo = new THREE.BufferGeometry();
+    const cMat = new THREE.LineBasicMaterial({
       color: 0x00d4ff,
-      linewidth: 2,
       transparent: true,
       opacity: 0.95
     });
-    this.creaseLines = new THREE.LineSegments(creaseGeo, creaseMat);
-    this.creaseLines.name = name + '_creases';
+    this.creaseLines = new THREE.LineSegments(cGeo, cMat);
     this.group.add(this.creaseLines);
   }
 
-  addVertex(x: number, y: number, z: number): number {
+  addV(x: number, y: number, z: number): number {
     const v = new THREE.Vector3(x, y, z);
-    this.vertices.push({
-      position: v.clone(),
-      original: v.clone()
-    });
+    this.vertices.push({ position: v.clone(), original: v.clone() });
     return this.vertices.length - 1;
   }
 
-  addFace(a: number, b: number, c: number): number {
-    const face: Face = {
+  addF(a: number, b: number, c: number): number {
+    this.faces.push({
       indices: [a, b, c],
       normal: new THREE.Vector3(),
       adjacentFaces: [],
       color: new THREE.Color()
-    };
-    this.faces.push(face);
+    });
     return this.faces.length - 1;
   }
 
-  addCrease(v1: number, v2: number, f1: number, f2: number, type: 'mountain' | 'valley' | 'neutral' = 'neutral', groupId: number = 0): number {
+  addCr(v1: number, v2: number, f1: number, f2: number, type: 'mountain' | 'valley', groupId: number): number {
     this.creases.push({
       vertexIndices: [v1, v2],
       faceIndices: [f1, f2],
       angle: 0,
-      targetAngle: 0,
       type,
       groupId
     });
     return this.creases.length - 1;
   }
 
+  private ek(a: number, b: number): string {
+    return Math.min(a, b) + '_' + Math.max(a, b);
+  }
+
   computeAdjacency(): void {
     const edgeMap = new Map<string, number[]>();
     for (let fi = 0; fi < this.faces.length; fi++) {
       const f = this.faces[fi];
-      const edges: [number, number][] = [
-        [Math.min(f.indices[0], f.indices[1]), Math.max(f.indices[0], f.indices[1])],
-        [Math.min(f.indices[1], f.indices[2]), Math.max(f.indices[1], f.indices[2])],
-        [Math.min(f.indices[2], f.indices[0]), Math.max(f.indices[2], f.indices[0])]
-      ];
-      for (const e of edges) {
-        const key = e[0] + '_' + e[1];
+      for (let ei = 0; ei < 3; ei++) {
+        const key = this.ek(f.indices[ei], f.indices[(ei + 1) % 3]);
         if (!edgeMap.has(key)) edgeMap.set(key, []);
         edgeMap.get(key)!.push(fi);
       }
     }
     for (const faces of edgeMap.values()) {
-      if (faces.length === 2) {
-        if (!this.faces[faces[0]].adjacentFaces.includes(faces[1]))
-          this.faces[faces[0]].adjacentFaces.push(faces[1]);
-        if (!this.faces[faces[1]].adjacentFaces.includes(faces[0]))
-          this.faces[faces[1]].adjacentFaces.push(faces[0]);
+      for (let i = 0; i < faces.length; i++) {
+        for (let j = 0; j < faces.length; j++) {
+          if (i !== j && !this.faces[faces[i]].adjacentFaces.includes(faces[j])) {
+            this.faces[faces[i]].adjacentFaces.push(faces[j]);
+          }
+        }
       }
     }
   }
 
-  private getFacesOnSide(creaseIndex: number, side: 0 | 1): Set<number> {
-    const crease = this.creases[creaseIndex];
-    const pivotFace = crease.faceIndices[side];
-    const excludedFace = crease.faceIndices[1 - side];
+  private facesOnSide(creaseIdx: number, side: 0 | 1): Set<number> {
+    const cr = this.creases[creaseIdx];
+    const startFace = cr.faceIndices[side];
+    const otherFace = cr.faceIndices[1 - side];
+    const exclKey = this.ek(cr.vertexIndices[0], cr.vertexIndices[1]);
+
     const result = new Set<number>();
-    const queue = [pivotFace];
-    result.add(pivotFace);
-    const creaseEdgeKey = Math.min(crease.vertexIndices[0], crease.vertexIndices[1]) +
-      '_' + Math.max(crease.vertexIndices[0], crease.vertexIndices[1]);
+    const queue: number[] = [startFace];
+    result.add(startFace);
+
     while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const adj of this.faces[current].adjacentFaces) {
-        if (result.has(adj) || adj === excludedFace) continue;
+      const cur = queue.shift()!;
+      for (const adj of this.faces[cur].adjacentFaces) {
+        if (result.has(adj) || adj === otherFace) continue;
         const f = this.faces[adj];
-        const edges: [number, number][] = [
-          [Math.min(f.indices[0], f.indices[1]), Math.max(f.indices[0], f.indices[1])],
-          [Math.min(f.indices[1], f.indices[2]), Math.max(f.indices[1], f.indices[2])],
-          [Math.min(f.indices[2], f.indices[0]), Math.max(f.indices[2], f.indices[0])]
-        ];
-        let sharesCrease = false;
-        for (const e of edges) {
-          const key = e[0] + '_' + e[1];
-          if (key === creaseEdgeKey) { sharesCrease = true; break; }
+        let sharesCr = false;
+        for (let ei = 0; ei < 3; ei++) {
+          if (this.ek(f.indices[ei], f.indices[(ei + 1) % 3]) === exclKey) {
+            sharesCr = true; break;
+          }
         }
-        if (sharesCrease) continue;
+        if (sharesCr) continue;
         result.add(adj);
         queue.push(adj);
       }
@@ -171,283 +164,280 @@ export class OrigamiModel {
     return result;
   }
 
-  setCreaseAngle(creaseIndex: number, angleDeg: number, animate: boolean = true): void {
-    const angle = THREE.MathUtils.clamp(angleDeg, 0, 180);
-    this.creases[creaseIndex].targetAngle = angle;
-    if (!animate) {
-      this.creases[creaseIndex].angle = angle;
-      this.applyCreaseRotation(creaseIndex);
-    } else {
-      this.creases[creaseIndex].angle = angle;
-      this.applyCreaseRotation(creaseIndex);
-    }
-  }
-
-  setCreaseAngleBatch(groupId: number, angleDeg: number): void {
-    const angle = THREE.MathUtils.clamp(angleDeg, 0, 180);
-    for (const crease of this.creases) {
-      if (crease.groupId === groupId) {
-        crease.targetAngle = angle;
-        crease.angle = angle;
-      }
-    }
-    this.reconstructFromBase();
-  }
-
-  private applyCreaseRotation(creaseIndex: number): void {
-    const crease = this.creases[creaseIndex];
-    const angleRad = (crease.angle - 0) * DEG2RAD;
-    if (Math.abs(angleRad) < EPS) {
-      this.updateGeometry();
-      return;
-    }
-    const v0 = this.vertices[crease.vertexIndices[0]].position;
-    const v1 = this.vertices[crease.vertexIndices[1]].position;
-    this.tempAxis.subVectors(v1, v0).normalize();
-    const facesToRotate = this.getFacesOnSide(creaseIndex, 1);
-    this.tempQuat.setFromAxisAngle(this.tempAxis, angleRad);
-    const affectedVertices = new Set<number>();
-    for (const fi of facesToRotate) {
+  private vertsFromFaces(faceSet: Set<number>): Set<number> {
+    const vs = new Set<number>();
+    for (const fi of faceSet) {
       const f = this.faces[fi];
-      for (let vi = 0; vi < 3; vi++) {
-        const vidx = f.indices[vi];
-        if (vidx !== crease.vertexIndices[0] && vidx !== crease.vertexIndices[1]) {
-          affectedVertices.add(vidx);
+      vs.add(f.indices[0]);
+      vs.add(f.indices[1]);
+      vs.add(f.indices[2]);
+    }
+    return vs;
+  }
+
+  private rotateAroundEdge(
+    vertSet: Set<number>,
+    eV0: number,
+    eV1: number,
+    angleRad: number,
+    flip: boolean = false
+  ): void {
+    if (Math.abs(angleRad) < EPS) return;
+    const v0 = this.vertices[eV0].position;
+    const v1 = this.vertices[eV1].position;
+    this._ta.subVectors(v1, v0);
+    if (this._ta.lengthSq() < EPS) return;
+    this._ta.normalize();
+    if (flip) this._ta.negate();
+    this._tq.setFromAxisAngle(this._ta, angleRad);
+
+    for (const vi of vertSet) {
+      if (vi === eV0 || vi === eV1) continue;
+      const v = this.vertices[vi].position;
+      this._tv.subVectors(v, v0);
+      this._tv.applyQuaternion(this._tq);
+      v.addVectors(v0, this._tv);
+    }
+  }
+
+  setCreaseAngle(idx: number, angleDeg: number): void {
+    const angle = THREE.MathUtils.clamp(angleDeg, 0, 180);
+    const cr = this.creases[idx];
+    const delta = angle - cr.angle;
+    if (Math.abs(delta) < 0.001) return;
+
+    const faceSet = this.facesOnSide(idx, 1);
+    const vertSet = this.vertsFromFaces(faceSet);
+    const flip = cr.type === 'valley';
+    this.rotateAroundEdge(vertSet, cr.vertexIndices[0], cr.vertexIndices[1], delta * DEG2RAD, flip);
+    cr.angle = angle;
+    this.updateGeometry();
+  }
+
+  setCreaseBatch(groupId: number, angleDeg: number): void {
+    const angle = THREE.MathUtils.clamp(angleDeg, 0, 180);
+    let changed = false;
+    for (let i = 0; i < this.creases.length; i++) {
+      if (this.creases[i].groupId === groupId) {
+        if (Math.abs(this.creases[i].angle - angle) > 0.001) {
+          this.creases[i].angle = angle;
+          changed = true;
         }
       }
     }
-    for (const vidx of affectedVertices) {
-      const v = this.vertices[vidx].position;
-      this.tempVec3.subVectors(v, v0);
-      this.tempVec3.applyQuaternion(this.tempQuat);
-      v.addVectors(v0, this.tempVec3);
+    if (changed) this.rebuildFromAngles();
+  }
+
+  resetFlat(): void {
+    for (const v of this.vertices) v.position.copy(v.original);
+    for (const c of this.creases) c.angle = 0;
+  }
+
+  rebuildFromAngles(): void {
+    const angles = this.creases.map(c => c.angle);
+    this.resetFlat();
+    for (let ci = 0; ci < this.creases.length; ci++) {
+      const angle = angles[ci];
+      if (Math.abs(angle) < 0.001) continue;
+      const cr = this.creases[ci];
+      const faceSet = this.facesOnSide(ci, 1);
+      const vertSet = this.vertsFromFaces(faceSet);
+      const flip = cr.type === 'valley';
+      this.rotateAroundEdge(vertSet, cr.vertexIndices[0], cr.vertexIndices[1], angle * DEG2RAD, flip);
+      cr.angle = angle;
     }
     this.updateGeometry();
   }
 
-  reconstructFromBase(): void {
-    for (const v of this.vertices) {
-      v.position.copy(v.original);
-    }
-    for (const crease of this.creases) {
-      crease.angle = crease.targetAngle;
-    }
-    const applied = new Set<number>();
-    let changed = true;
-    let safety = 0;
-    while (changed && safety < 20) {
-      changed = false;
-      safety++;
-      for (let ci = 0; ci < this.creases.length; ci++) {
-        if (applied.has(ci)) continue;
-        const crease = this.creases[ci];
-        const angleRad = crease.angle * DEG2RAD;
-        if (Math.abs(angleRad) < EPS) { applied.add(ci); continue; }
-        const v0 = this.vertices[crease.vertexIndices[0]].position;
-        const v1 = this.vertices[crease.vertexIndices[1]].position;
-        this.tempAxis.subVectors(v1, v0);
-        if (this.tempAxis.lengthSq() < EPS) { applied.add(ci); continue; }
-        this.tempAxis.normalize();
-        const facesToRotate = this.getFacesOnSide(ci, 1);
-        this.tempQuat.setFromAxisAngle(this.tempAxis, angleRad);
-        const affectedVertices = new Set<number>();
-        for (const fi of facesToRotate) {
-          const f = this.faces[fi];
-          for (let vi = 0; vi < 3; vi++) {
-            const vidx = f.indices[vi];
-            if (vidx !== crease.vertexIndices[0] && vidx !== crease.vertexIndices[1]) {
-              affectedVertices.add(vidx);
-            }
-          }
-        }
-        for (const vidx of affectedVertices) {
-          const v = this.vertices[vidx].position;
-          this.tempVec3.subVectors(v, v0);
-          this.tempVec3.applyQuaternion(this.tempQuat);
-          v.addVectors(v0, this.tempVec3);
-        }
-        applied.add(ci);
-        changed = true;
-      }
-    }
-    this.updateGeometry();
-  }
-
-  private assignFaceColors(): void {
+  private colorFaces(): void {
+    const c1 = new THREE.Color(0xf5f0e0);
+    const c2 = new THREE.Color(0xf0e6c8);
     const center = new THREE.Vector3();
     for (const v of this.vertices) center.add(v.original);
     center.divideScalar(this.vertices.length);
-    const pos = new THREE.Vector3();
+    const tmp = new THREE.Vector3();
+
     for (let fi = 0; fi < this.faces.length; fi++) {
       const f = this.faces[fi];
-      pos.set(0, 0, 0);
-      for (let vi = 0; vi < 3; vi++) pos.add(this.vertices[f.indices[vi]].original);
-      pos.divideScalar(3);
-      const d = pos.distanceTo(center);
-      const t = THREE.MathUtils.smoothstep(d, 0, 3);
-      f.color.setRGB(
-        0.96 + 0.02 * t,
-        0.94 + 0.02 * t,
-        0.88 - 0.02 * t
-      );
+      tmp.set(0, 0, 0);
+      for (let vi = 0; vi < 3; vi++) tmp.add(this.vertices[f.indices[vi]].original);
+      tmp.divideScalar(3);
+      const d = tmp.distanceTo(center);
+      const t = THREE.MathUtils.clamp(d / 3, 0, 1);
+      f.color.copy(c1).lerp(c2, t);
     }
   }
 
   updateGeometry(): void {
-    const positions: number[] = [];
-    const colors: number[] = [];
-    const normals: number[] = [];
-    const faceIndicesMap: number[] = [];
-    for (let fi = 0; fi < this.faces.length; fi++) {
+    const n = this.faces.length;
+    const size = n * 9;
+
+    if (!this._posBuf || this._posBuf.length !== size) {
+      this._posBuf = new Float32Array(size);
+      this._colBuf = new Float32Array(size);
+      this._normBuf = new Float32Array(size);
+    }
+
+    const pos = this._posBuf!;
+    const col = this._colBuf!;
+    const nrm = this._normBuf!;
+
+    for (let fi = 0; fi < n; fi++) {
       const f = this.faces[fi];
       const va = this.vertices[f.indices[0]].position;
       const vb = this.vertices[f.indices[1]].position;
       const vc = this.vertices[f.indices[2]].position;
-      const ab = this.tempVec3.subVectors(vb, va);
-      const ac = new THREE.Vector3().subVectors(vc, va);
-      f.normal.crossVectors(ab, ac).normalize();
-      const displayColor = (fi === this.highlightedFaceIndex)
-        ? new THREE.Color(0xffeb99)
-        : f.color;
-      positions.push(va.x, va.y, va.z, vb.x, vb.y, vb.z, vc.x, vc.y, vc.z);
-      colors.push(
-        displayColor.r, displayColor.g, displayColor.b,
-        displayColor.r, displayColor.g, displayColor.b,
-        displayColor.r, displayColor.g, displayColor.b
-      );
-      normals.push(
-        f.normal.x, f.normal.y, f.normal.z,
-        f.normal.x, f.normal.y, f.normal.z,
-        f.normal.x, f.normal.y, f.normal.z
-      );
-      faceIndicesMap.push(fi, fi, fi);
+
+      const i = fi * 9;
+      pos[i] = va.x; pos[i + 1] = va.y; pos[i + 2] = va.z;
+      pos[i + 3] = vb.x; pos[i + 4] = vb.y; pos[i + 5] = vb.z;
+      pos[i + 6] = vc.x; pos[i + 7] = vc.y; pos[i + 8] = vc.z;
+
+      this._tv.subVectors(vb, va);
+      this._tv2.subVectors(vc, va);
+      f.normal.crossVectors(this._tv, this._tv2).normalize();
+
+      nrm[i] = f.normal.x; nrm[i + 1] = f.normal.y; nrm[i + 2] = f.normal.z;
+      nrm[i + 3] = f.normal.x; nrm[i + 4] = f.normal.y; nrm[i + 5] = f.normal.z;
+      nrm[i + 6] = f.normal.x; nrm[i + 7] = f.normal.y; nrm[i + 8] = f.normal.z;
+
+      const dc = fi === this.highlightedFaceIndex ? new THREE.Color(0xffeb99) : f.color;
+      col[i] = dc.r; col[i + 1] = dc.g; col[i + 2] = dc.b;
+      col[i + 3] = dc.r; col[i + 4] = dc.g; col[i + 5] = dc.b;
+      col[i + 6] = dc.r; col[i + 7] = dc.g; col[i + 8] = dc.b;
     }
-    const geo = this.mesh.geometry as THREE.BufferGeometry;
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    geo.setIndex(faceIndicesMap.map((_, i) => i));
-    geo.attributes.position.needsUpdate = true;
-    geo.attributes.color.needsUpdate = true;
-    geo.attributes.normal.needsUpdate = true;
-    geo.computeBoundingBox();
-    geo.computeBoundingSphere();
-    this.updateCreaseLines();
+
+    const g = this.mesh.geometry as THREE.BufferGeometry;
+    if (!g.getAttribute('position')) {
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+      g.setIndex([]);
+    } else {
+      (g.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+      (g.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+      (g.attributes.normal as THREE.BufferAttribute).needsUpdate = true;
+    }
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
+    this.updateCreases();
   }
 
-  private updateCreaseLines(): void {
-    const positions: number[] = [];
-    for (const crease of this.creases) {
-      const v0 = this.vertices[crease.vertexIndices[0]].position;
-      const v1 = this.vertices[crease.vertexIndices[1]].position;
-      positions.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
+  private updateCreases(): void {
+    const n = this.creases.length;
+    const pos = new Float32Array(n * 6);
+    for (let i = 0; i < n; i++) {
+      const c = this.creases[i];
+      const v0 = this.vertices[c.vertexIndices[0]].position;
+      const v1 = this.vertices[c.vertexIndices[1]].position;
+      const o = i * 6;
+      pos[o] = v0.x; pos[o + 1] = v0.y; pos[o + 2] = v0.z;
+      pos[o + 3] = v1.x; pos[o + 4] = v1.y; pos[o + 5] = v1.z;
     }
-    const geo = this.creaseLines.geometry as THREE.BufferGeometry;
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.attributes.position.needsUpdate = true;
-    geo.computeBoundingBox();
-    geo.computeBoundingSphere();
+    const g = this.creaseLines.geometry as THREE.BufferGeometry;
+    if (!g.getAttribute('position')) {
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    } else {
+      (g.attributes.position as THREE.BufferAttribute).array = pos;
+      (g.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    }
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
   }
 
-  highlightFace(faceIndex: number): void {
-    this.highlightedFaceIndex = faceIndex;
+  highlightFace(fi: number): void {
+    this.highlightedFaceIndex = fi;
     this.updateGeometry();
   }
 
-  getFaceInfo(faceIndex: number): { normal: THREE.Vector3; adjacentFaces: number[]; area: number } | null {
-    if (faceIndex < 0 || faceIndex >= this.faces.length) return null;
-    const f = this.faces[faceIndex];
+  getFaceInfo(fi: number): { normal: THREE.Vector3; adjacents: number[]; area: number } | null {
+    if (fi < 0 || fi >= this.faces.length) return null;
+    const f = this.faces[fi];
     const va = this.vertices[f.indices[0]].position;
     const vb = this.vertices[f.indices[1]].position;
     const vc = this.vertices[f.indices[2]].position;
     const ab = new THREE.Vector3().subVectors(vb, va);
     const ac = new THREE.Vector3().subVectors(vc, va);
     const area = 0.5 * ab.cross(ac).length();
-    return {
-      normal: f.normal.clone(),
-      adjacentFaces: [...f.adjacentFaces],
-      area
-    };
+    return { normal: f.normal.clone(), adjacents: [...f.adjacentFaces], area };
   }
 
   saveState(): OrigamiState {
-    const state: OrigamiState = {
+    const s: OrigamiState = {
       creaseAngles: this.creases.map(c => c.angle),
       matrix: this.group.matrix.toArray(),
       timestamp: Date.now()
     };
-    this.savedState = state;
-    return state;
+    this.savedState = s;
+    return s;
   }
 
   pushHistory(): void {
-    const state: OrigamiState = {
+    this.history.push({
       creaseAngles: this.creases.map(c => c.angle),
-      matrix: this.group.matrix.toArray(),
+      matrix: this.group.matrix.clone().toArray(),
       timestamp: Date.now()
-    };
-    this.history.push(state);
+    });
   }
 
   undo(): boolean {
-    if (this.history.length === 0) return false;
+    if (this.history.length === 0 || this.isAnimating) return false;
     const prev = this.history.pop()!;
-    this.startAnimation(prev, 200);
+    this._animateTo(prev, 200);
     return true;
   }
 
   unfold(durationMs: number = 1000): void {
-    const target: OrigamiState = {
+    if (this.isAnimating) return;
+    this._animateTo({
       creaseAngles: new Array(this.creases.length).fill(0),
-      matrix: new THREE.Matrix4().toArray(),
+      matrix: this.group.matrix.clone().toArray(),
       timestamp: Date.now()
-    };
-    this.startAnimation(target, durationMs);
+    }, durationMs);
   }
 
   restore(durationMs: number = 300): void {
-    if (!this.savedState) return;
-    this.startAnimation(this.savedState, durationMs);
+    if (!this.savedState || this.isAnimating) return;
+    this._animateTo(this.savedState, durationMs);
   }
 
-  private startAnimation(target: OrigamiState, durationMs: number): void {
+  private _animateTo(target: OrigamiState, durationMs: number): void {
     this.animationStart = {
       creaseAngles: this.creases.map(c => c.angle),
-      matrix: this.group.matrix.toArray(),
+      matrix: this.group.matrix.clone().toArray(),
       timestamp: Date.now()
     };
     this.animationEnd = target;
     this.animationDuration = durationMs;
     this.animationStartTime = performance.now();
     this.isAnimating = true;
-    this.animationProgress = 0;
   }
 
   updateAnimation(): boolean {
     if (!this.isAnimating || !this.animationStart || !this.animationEnd) return false;
+
     const t = Math.min(1, (performance.now() - this.animationStartTime) / this.animationDuration);
     const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    this.animationProgress = ease;
+
     for (let i = 0; i < this.creases.length; i++) {
-      const start = this.animationStart.creaseAngles[i];
-      const end = this.animationEnd.creaseAngles[i];
-      this.creases[i].angle = start + (end - start) * ease;
-      this.creases[i].targetAngle = this.creases[i].angle;
+      this.creases[i].angle = this.animationStart.creaseAngles[i] +
+        (this.animationEnd.creaseAngles[i] - this.animationStart.creaseAngles[i]) * ease;
     }
-    this.reconstructFromBase();
-    const mat = new THREE.Matrix4();
-    const startMat = new THREE.Matrix4().fromArray(this.animationStart.matrix);
-    const endMat = new THREE.Matrix4().fromArray(this.animationEnd.matrix);
-    const sPos = new THREE.Vector3(), sQuat = new THREE.Quaternion(), sScale = new THREE.Vector3();
-    const ePos = new THREE.Vector3(), eQuat = new THREE.Quaternion(), eScale = new THREE.Vector3();
-    startMat.decompose(sPos, sQuat, sScale);
-    endMat.decompose(ePos, eQuat, eScale);
-    const pos = sPos.lerp(ePos, ease);
-    const quat = sQuat.slerp(eQuat, ease);
-    const scale = sScale.lerp(eScale, ease);
-    mat.compose(pos, quat, scale);
-    this.group.matrix.copy(mat);
+    this.rebuildFromAngles();
+
+    const sM = new THREE.Matrix4().fromArray(this.animationStart.matrix);
+    const eM = new THREE.Matrix4().fromArray(this.animationEnd.matrix);
+    const sP = new THREE.Vector3(), sQ = new THREE.Quaternion(), sS = new THREE.Vector3();
+    const eP = new THREE.Vector3(), eQ = new THREE.Quaternion(), eS = new THREE.Vector3();
+    sM.decompose(sP, sQ, sS);
+    eM.decompose(eP, eQ, eS);
+    const p = sP.clone().lerp(eP, ease);
+    const q = sQ.clone().slerp(eQ, ease);
+    const s = sS.clone().lerp(eS, ease);
+    this._tm.compose(p, q, s);
+    this.group.matrix.copy(this._tm);
     this.group.matrixAutoUpdate = false;
+
     if (t >= 1) {
       this.isAnimating = false;
       this.group.matrixAutoUpdate = true;
@@ -458,338 +448,185 @@ export class OrigamiModel {
 
   finalize(): void {
     this.computeAdjacency();
-    this.assignFaceColors();
-    this.reconstructFromBase();
+    this.colorFaces();
+    this.rebuildFromAngles();
   }
 
-  getActiveCreaseCount(): number {
+  activeCreaseCount(): number {
     return this.creases.filter(c => Math.abs(c.angle) > 0.1).length;
   }
+  undoCount(): number { return this.history.length; }
+  exportJSON(): string { return JSON.stringify(this.saveState(), null, 2); }
 
-  getUndoCount(): number {
-    return this.history.length;
-  }
-
-  exportJSON(): string {
-    const state = this.saveState();
-    return JSON.stringify(state, null, 2);
-  }
-
-  findCreaseByEdge(v1Idx: number, v2Idx: number): number {
-    const key1 = Math.min(v1Idx, v2Idx) + '_' + Math.max(v1Idx, v2Idx);
-    for (let i = 0; i < this.creases.length; i++) {
-      const c = this.creases[i];
-      const key2 = Math.min(c.vertexIndices[0], c.vertexIndices[1]) +
-        '_' + Math.max(c.vertexIndices[0], c.vertexIndices[1]);
-      if (key1 === key2) return i;
-    }
-    return -1;
-  }
-
-  getClosestCrease(point: THREE.Vector3, maxDist: number = 0.15): { index: number; distance: number } | null {
-    let bestIdx = -1;
-    let bestDist = maxDist;
-    const v = new THREE.Vector3();
+  closestCrease(point: THREE.Vector3, maxDist: number = 0.2): { index: number; dist: number } | null {
+    let best = -1, bestD = maxDist;
+    const proj = new THREE.Vector3();
     for (let i = 0; i < this.creases.length; i++) {
       const c = this.creases[i];
       const a = this.vertices[c.vertexIndices[0]].position;
       const b = this.vertices[c.vertexIndices[1]].position;
-      const ab = new THREE.Vector3().subVectors(b, a);
-      const len2 = ab.lengthSq();
-      if (len2 < EPS) continue;
-      const t = THREE.MathUtils.clamp(point.clone().sub(a).dot(ab) / len2, 0, 1);
-      v.copy(a).addScaledVector(ab, t);
-      const d = v.distanceTo(point);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
-      }
+      const ab = this._tv.subVectors(b, a);
+      const l2 = ab.lengthSq();
+      if (l2 < EPS) continue;
+      const t = THREE.MathUtils.clamp(this._tv2.subVectors(point, a).dot(ab) / l2, 0, 1);
+      proj.copy(a).addScaledVector(ab, t);
+      const d = proj.distanceTo(point);
+      if (d < bestD) { bestD = d; best = i; }
     }
-    if (bestIdx < 0) return null;
-    return { index: bestIdx, distance: bestDist };
+    return best < 0 ? null : { index: best, dist: bestD };
   }
+
+  faceCount(): number { return this.faces.length; }
+  creaseCount(): number { return this.creases.length; }
+  vertexCount(): number { return this.vertices.length; }
 }
 
 export function createCraneModel(): OrigamiModel {
-  const model = new OrigamiModel('crane');
-  const S = 2;
-  const h = S * 0.5;
-  const d = 0.01;
+  const m = new OrigamiModel('crane');
+  const S = 2.4;
+  const h = S / 2;
 
-  const tl = model.addVertex(-S, 0, -S);
-  const tr = model.addVertex(S, 0, -S);
-  const br = model.addVertex(S, 0, S);
-  const bl = model.addVertex(-S, 0, S);
-  const c = model.addVertex(0, 0, 0);
+  const tl = m.addV(-S / 2, 0, -S / 2);
+  const tr = m.addV(S / 2, 0, -S / 2);
+  const br = m.addV(S / 2, 0, S / 2);
+  const bl = m.addV(-S / 2, 0, S / 2);
+  const c = m.addV(0, 0, 0);
 
-  const tlT = model.addVertex(-S, d, -S);
-  const trT = model.addVertex(S, d, -S);
-  const brT = model.addVertex(S, d, S);
-  const blT = model.addVertex(-S, d, S);
-  const cT = model.addVertex(0, d, 0);
+  const fTL = m.addF(tl, bl, c);
+  const fTR = m.addF(tr, c, br);
+  const fBL = m.addF(bl, br, c);
+  const fBR = m.addF(tl, c, tr);
 
-  const bodyFrontLeft = model.addFace(tl, c, bl);
-  const bodyFrontRight = model.addFace(tr, br, c);
-  const bodyBackLeft = model.addFace(tlT, blT, cT);
-  const bodyBackRight = model.addFace(trT, cT, brT);
-  model.addFace(tl, tlT, cT);
-  model.faces.pop();
-  const bodyTL1 = model.addFace(tl, tlT, cT);
-  const bodyTL2 = model.addFace(tl, cT, c);
-  const bodyTR1 = model.addFace(tr, c, cT);
-  const bodyTR2 = model.addFace(tr, cT, trT);
-  const bodyBR1 = model.addFace(br, cT, c);
-  const bodyBR2 = model.addFace(br, brT, cT);
-  const bodyBL1 = model.addFace(bl, c, cT);
-  const bodyBL2 = model.addFace(bl, cT, blT);
+  const diag1 = m.addCr(tl, br, fTL, fTR, 'mountain', 1);
+  const diag2 = m.addCr(tr, bl, fTL, fBL, 'valley', 2);
 
-  const S2 = S * 0.7;
-  const wingY = h * 0.6;
-  const w1a = model.addVertex(-S2, d, -S * 0.3);
-  const w1b = model.addVertex(-S2 * 1.3, wingY, 0);
-  const w1c = model.addVertex(-S2, d, S * 0.3);
-  const w2a = model.addVertex(S2, d, -S * 0.3);
-  const w2b = model.addVertex(S2 * 1.3, wingY, 0);
-  const w2c = model.addVertex(S2, d, S * 0.3);
-  const w1back = model.addVertex(-S2, -d, -S * 0.3);
-  const w1backB = model.addVertex(-S2 * 1.3, wingY - d, 0);
-  const w1backC = model.addVertex(-S2, -d, S * 0.3);
-  const w2back = model.addVertex(S2, -d, -S * 0.3);
-  const w2backB = model.addVertex(S2 * 1.3, wingY - d, 0);
-  const w2backC = model.addVertex(S2, -d, S * 0.3);
+  const wLx = -S * 0.75, wLy = h * 0.85;
+  const wRx = S * 0.75, wRy = h * 0.85;
+  const nY = h * 1.3, nZ = -S * 0.65;
+  const tY = h * 0.5, tZ = S * 0.65;
+  const bY = h * 1.1, bZ = -S * 0.95;
 
-  const wingLTop = model.addFace(w1a, w1b, w1c);
-  model.addFace(w1back, w1backC, w1backB);
-  const wingRTop = model.addFace(w2a, w2c, w2b);
-  model.addFace(w2back, w2backB, w2backC);
-  model.addFace(w1a, w1back, w1backB);
-  const wLEdge2 = model.addFace(w1a, w1backB, w1b);
-  model.addFace(w1b, w1backB, w1backC);
-  const wLEdge4 = model.addFace(w1b, w1backC, w1c);
-  model.addFace(w1c, w1backC, w1back);
-  model.addFace(w1c, w1back, w1a);
-  model.addFace(w2a, w2backB, w2back);
-  const wREdge2 = model.addFace(w2a, w2b, w2backB);
-  model.addFace(w2b, w2backC, w2backB);
-  const wREdge4 = model.addFace(w2b, w2c, w2backC);
-  model.addFace(w2c, w2back, w2backC);
-  model.addFace(w2c, w2a, w2back);
+  const wL = m.addV(wLx, wLy, 0);
+  const wR = m.addV(wRx, wRy, 0);
+  const neckTip = m.addV(0, nY, nZ);
+  const tailTip = m.addV(0, tY, tZ);
+  const beak = m.addV(0, bY, bZ);
 
-  const neckBaseZ = -S * 0.9;
-  const neckTipY = h * 1.1;
-  const headLen = S * 0.4;
-  const nb1 = model.addVertex(-S * 0.18, d, neckBaseZ);
-  const nb2 = model.addVertex(S * 0.18, d, neckBaseZ);
-  const nt1 = model.addVertex(-S * 0.08, neckTipY, -S * 1.15);
-  const nt2 = model.addVertex(S * 0.08, neckTipY, -S * 1.15);
-  const beak = model.addVertex(0, neckTipY * 0.9, -S * 1.15 - headLen);
-  const nb1B = model.addVertex(-S * 0.18, -d, neckBaseZ);
-  const nb2B = model.addVertex(S * 0.18, -d, neckBaseZ);
-  const nt1B = model.addVertex(-S * 0.08, neckTipY - d, -S * 1.15);
-  const nt2B = model.addVertex(S * 0.08, neckTipY - d, -S * 1.15);
-  const beakB = model.addVertex(0, neckTipY * 0.9 - d, -S * 1.15 - headLen);
+  const midL = m.addV(-S / 4, 0, 0);
+  const midR = m.addV(S / 4, 0, 0);
+  const midT = m.addV(0, 0, -S / 4);
+  const midB = m.addV(0, 0, S / 4);
 
-  const neckL = model.addFace(nb1, nt1, nt2);
-  const neckL2 = model.addFace(nb1, nt2, nb2);
-  model.addFace(nb1B, nb2B, nt1B);
-  model.addFace(nb2B, nt2B, nt1B);
-  model.addFace(nt1, beak, nt2);
-  model.addFace(nt1B, nt2B, beakB);
-  model.addFace(nb1, nb1B, nt1B);
-  const neckSide2 = model.addFace(nb1, nt1B, nt1);
-  const neckSide3 = model.addFace(nb2, nt2, nt2B);
-  model.addFace(nb2, nt2B, nb2B);
-  model.addFace(nt1, nt1B, beakB);
-  model.addFace(nt1, beakB, beak);
-  model.addFace(nt2, beak, beakB);
-  model.addFace(nt2, beakB, nt2B);
+  const wL1 = m.addF(midL, wL, midT);
+  const wL2 = m.addF(midL, midB, wL);
+  const wR1 = m.addF(midR, midT, wR);
+  const wR2 = m.addF(midR, wR, midB);
 
-  const tailBaseZ = S * 0.9;
-  const tailTipY = h * 0.4;
-  const tb1 = model.addVertex(-S * 0.15, d, tailBaseZ);
-  const tb2 = model.addVertex(S * 0.15, d, tailBaseZ);
-  const tt1 = model.addVertex(-S * 0.05, tailTipY, S * 1.2);
-  const tt2 = model.addVertex(S * 0.05, tailTipY, S * 1.2);
-  const tb1B = model.addVertex(-S * 0.15, -d, tailBaseZ);
-  const tb2B = model.addVertex(S * 0.15, -d, tailBaseZ);
-  const tt1B = model.addVertex(-S * 0.05, tailTipY - d, S * 1.2);
-  const tt2B = model.addVertex(S * 0.05, tailTipY - d, S * 1.2);
+  const n1 = m.addF(midT, neckTip, wL);
+  const n2 = m.addF(midT, wR, neckTip);
+  const t1 = m.addF(midB, wL, tailTip);
+  const t2 = m.addF(midB, tailTip, wR);
 
-  const tailTop = model.addFace(tb1, tt1, tt2);
-  const tailTop2 = model.addFace(tb1, tt2, tb2);
-  model.addFace(tb1B, tb2B, tt1B);
-  model.addFace(tb2B, tt2B, tt1B);
-  model.addFace(tb1, tb1B, tt1B);
-  const tailSide2 = model.addFace(tb1, tt1B, tt1);
-  const tailSide3 = model.addFace(tb2, tt2, tt2B);
-  model.addFace(tb2, tt2B, tb2B);
+  const h1 = m.addF(neckTip, beak, wL);
+  const h2 = m.addF(neckTip, wR, beak);
 
-  const bodyDiag1 = model.addCrease(tl, br, bodyFrontLeft, bodyFrontRight, 'mountain', 1);
-  const bodyDiag2 = model.addCrease(tr, bl, bodyFrontLeft, bodyFrontRight, 'valley', 2);
-  model.addCrease(tl, c, bodyFrontLeft, bodyTL2, 'valley', 3);
-  model.addCrease(bl, c, bodyFrontLeft, bodyBL1, 'valley', 3);
-  model.addCrease(tr, c, bodyFrontRight, bodyTR1, 'mountain', 4);
-  model.addCrease(br, c, bodyFrontRight, bodyBR1, 'mountain', 4);
+  const wingCr = m.addCr(midL, wL, wL1, wL2, 'valley', 10);
+  m.addCr(midR, wR, wR1, wR2, 'valley', 10);
 
-  model.addCrease(cT, tlT, bodyBackLeft, bodyTL1, 'valley', 3);
-  model.addCrease(cT, blT, bodyBackLeft, bodyBL2, 'valley', 3);
-  model.addCrease(cT, trT, bodyBackRight, bodyTR2, 'mountain', 4);
-  model.addCrease(cT, brT, bodyBackRight, bodyBR2, 'mountain', 4);
+  const neckCr = m.addCr(midT, neckTip, n1, n2, 'mountain', 11);
+  const tailCr = m.addCr(midB, tailTip, t1, t2, 'valley', 12);
+  const beakCr = m.addCr(neckTip, beak, h1, h2, 'mountain', 13);
 
-  model.addCrease(w1a, w1c, bodyTL2, wingLTop, 'mountain', 5);
-  model.addCrease(w2a, w2c, bodyTR2, wingRTop, 'mountain', 5);
-  const wingLCrease = model.creases.length;
-  model.addCrease(w1a, w1b, wingLTop, wLEdge2, 'valley', 6);
-  model.addCrease(w1b, w1c, wingLTop, wLEdge4, 'valley', 6);
-  model.addCrease(w2a, w2b, wingRTop, wREdge2, 'valley', 7);
-  model.addCrease(w2b, w2c, wingRTop, wREdge4, 'valley', 7);
+  m.addCr(midL, midT, wL1, fTL, 'mountain', 20);
+  m.addCr(midL, midB, wL2, fBL, 'mountain', 20);
+  m.addCr(midR, midT, wR1, fBR, 'valley', 21);
+  m.addCr(midR, midB, wR2, fTR, 'valley', 21);
 
-  model.addCrease(nb1, nb2, bodyTL2, neckL2, 'mountain', 8);
-  model.addCrease(nt1, nt2, neckL, neckL2, 'valley', 8);
-  const neckFold = model.creases.length;
-  model.addCrease(nb1, nt1, neckL, neckSide2, 'neutral', 9);
-  model.addCrease(nb2, nt2, neckL2, neckSide3, 'neutral', 9);
+  m.addCr(wL, neckTip, wL1, n1, 'mountain', 22);
+  m.addCr(wL, tailTip, wL2, t1, 'valley', 23);
+  m.addCr(wR, neckTip, wR1, n2, 'mountain', 22);
+  m.addCr(wR, tailTip, wR2, t2, 'valley', 23);
 
-  model.addCrease(tb1, tb2, bodyBL2, tailTop2, 'mountain', 10);
-  model.addCrease(tt1, tt2, tailTop, tailTop2, 'valley', 10);
-  model.addCrease(tb1, tt1, tailTop, tailSide2, 'neutral', 11);
-  model.addCrease(tb2, tt2, tailTop2, tailSide3, 'neutral', 11);
+  m.addCr(wL, beak, n1, h1, 'valley', 24);
+  m.addCr(wR, beak, n2, h2, 'valley', 24);
 
-  model.finalize();
+  m.finalize();
 
-  model.setCreaseAngle(bodyDiag1, 70, false);
-  model.setCreaseAngle(bodyDiag2, 70, false);
-  model.reconstructFromBase();
+  m.setCreaseAngle(diag1, 55);
+  m.setCreaseAngle(diag2, 55);
+  m.setCreaseAngle(wingCr, 50);
+  m.setCreaseAngle(neckCr, 45);
+  m.setCreaseAngle(tailCr, 30);
+  m.setCreaseAngle(beakCr, 20);
 
-  model.setCreaseAngle(wingLCrease, 45, false);
-  model.setCreaseAngle(wingLCrease + 1, 45, false);
-  model.setCreaseAngle(wingLCrease + 2, 45, false);
-  model.setCreaseAngle(wingLCrease + 3, 45, false);
-  model.reconstructFromBase();
-
-  model.setCreaseAngle(neckFold, 60, false);
-  model.reconstructFromBase();
-
-  model.setCreaseAngle(neckFold + 4, 35, false);
-  model.reconstructFromBase();
-
-  model.history = [];
-  return model;
+  m.history = [];
+  m.saveState();
+  return m;
 }
 
 export function createLilyModel(): OrigamiModel {
-  const model = new OrigamiModel('lily');
-  const S = 2.2;
-  const d = 0.01;
+  const m = new OrigamiModel('lily');
+  const S = 2.6;
+  const half = S / 2;
+  const nPetals = 6;
+  const pH = S * 0.95;
 
-  const tl = model.addVertex(-S, 0, -S);
-  const tr = model.addVertex(S, 0, -S);
-  const br = model.addVertex(S, 0, S);
-  const bl = model.addVertex(-S, 0, S);
-  const c = model.addVertex(0, 0, 0);
-  const tlT = model.addVertex(-S, d, -S);
-  const trT = model.addVertex(S, d, -S);
-  const brT = model.addVertex(S, d, S);
-  const blT = model.addVertex(-S, d, S);
-  const cT = model.addVertex(0, d, 0);
+  const c = m.addV(0, 0, 0);
+  const basePts: number[] = [];
+  const tipPts: number[] = [];
+  const midPts: number[] = [];
 
-  const sqTL = model.addFace(tl, c, bl);
-  const sqTR = model.addFace(tr, br, c);
-  model.addFace(tlT, blT, cT);
-  model.addFace(trT, cT, brT);
-  model.addFace(tl, tlT, cT);
-  const seam1b = model.addFace(tl, cT, c);
-  const seam2a = model.addFace(tr, c, cT);
-  model.addFace(tr, cT, trT);
-  const seam3a = model.addFace(br, cT, c);
-  model.addFace(br, brT, cT);
-  const seam4a = model.addFace(bl, c, cT);
-  model.addFace(bl, cT, blT);
-
-  const petalCount = 6;
-  const petalBaseR = S * 0.5;
-  const petalTopY = S * 1.2;
-  const petalTipR = S * 1.1;
-  const petalCenters: { baseX: number; baseZ: number; tipX: number; tipY: number; tipZ: number }[] = [];
-  for (let i = 0; i < petalCount; i++) {
-    const angle = (i / petalCount) * Math.PI * 2 - Math.PI / 2;
-    const nx = Math.cos(angle);
-    const nz = Math.sin(angle);
-    petalCenters.push({
-      baseX: nx * petalBaseR,
-      baseZ: nz * petalBaseR,
-      tipX: nx * petalTipR,
-      tipY: petalTopY * (0.85 + 0.15 * Math.sin(i * 1.3)),
-      tipZ: nz * petalTipR
-    });
-  }
-  const petalWidth = 0.55;
-  for (let i = 0; i < petalCount; i++) {
-    const p = petalCenters[i];
-    const angle = (i / petalCount) * Math.PI * 2 - Math.PI / 2;
-    const tx = -Math.sin(angle) * petalWidth;
-    const tz = Math.cos(angle) * petalWidth;
-    const bL = model.addVertex(p.baseX + tx, d, p.baseZ + tz);
-    const bR = model.addVertex(p.baseX - tx, d, p.baseZ - tz);
-    const mL = model.addVertex(p.tipX * 0.5 + tx * 0.8, p.tipY * 0.4, p.tipZ * 0.5 + tz * 0.8);
-    const mR = model.addVertex(p.tipX * 0.5 - tx * 0.8, p.tipY * 0.4, p.tipZ * 0.5 - tz * 0.8);
-    const tip = model.addVertex(p.tipX, p.tipY, p.tipZ);
-    const bLb = model.addVertex(p.baseX + tx, -d, p.baseZ + tz);
-    const bRb = model.addVertex(p.baseX - tx, -d, p.baseZ - tz);
-    const mLb = model.addVertex(p.tipX * 0.5 + tx * 0.8, p.tipY * 0.4 - d, p.tipZ * 0.5 + tz * 0.8);
-    const mRb = model.addVertex(p.tipX * 0.5 - tx * 0.8, p.tipY * 0.4 - d, p.tipZ * 0.5 - tz * 0.8);
-    const tipb = model.addVertex(p.tipX, p.tipY - d, p.tipZ);
-    const top1 = model.addFace(bL, mL, tip);
-    const top2 = model.addFace(bL, tip, mR);
-    const top3 = model.addFace(bL, mR, bR);
-    model.addFace(bLb, tipb, mLb);
-    model.addFace(bLb, mRb, tipb);
-    model.addFace(bLb, bRb, mRb);
-    model.addFace(bL, bLb, mLb);
-    const edge2 = model.addFace(bL, mLb, mL);
-    model.addFace(mL, mLb, tipb);
-    model.addFace(mL, tipb, tip);
-    model.addFace(tip, tipb, mRb);
-    const edge6 = model.addFace(tip, mRb, mR);
-    model.addFace(mR, mRb, bRb);
-    const edge8 = model.addFace(mR, bRb, bR);
-    model.addFace(bR, bRb, bLb);
-    model.addFace(bR, bLb, bL);
-
-    model.addCrease(bL, bR, seam1b, top3, 'valley', 100 + i);
-    model.addCrease(mL, tip, top1, edge2, 'mountain', 200 + i);
-    model.addCrease(mR, tip, top2, edge6, 'mountain', 200 + i);
-    model.addCrease(bL, mL, top1, edge2, 'valley', 210 + i);
-    model.addCrease(bR, mR, top3, edge8, 'valley', 210 + i);
+  for (let i = 0; i < nPetals; i++) {
+    const a = (i / nPetals) * Math.PI * 2 - Math.PI / 2;
+    basePts.push(m.addV(Math.cos(a) * half, 0, Math.sin(a) * half));
+    tipPts.push(m.addV(Math.cos(a) * half * 1.15, pH, Math.sin(a) * half * 1.15));
+    const ma = a + Math.PI / nPetals;
+    const mr = half * 0.5;
+    midPts.push(m.addV(Math.cos(ma) * mr, pH * 0.3, Math.sin(ma) * mr));
   }
 
-  model.addCrease(tl, c, sqTL, seam1b, 'mountain', 1);
-  model.addCrease(bl, c, sqTL, seam4a, 'valley', 1);
-  model.addCrease(tr, c, sqTR, seam2a, 'mountain', 2);
-  model.addCrease(br, c, sqTR, seam3a, 'valley', 2);
-  model.addCrease(tl, br, sqTL, sqTR, 'mountain', 3);
-  model.addCrease(tr, bl, sqTL, sqTR, 'valley', 4);
+  const baseFaces: number[] = [];
+  const petalFacesL: number[] = [];
+  const petalFacesR: number[] = [];
 
-  model.finalize();
+  for (let i = 0; i < nPetals; i++) {
+    const next = (i + 1) % nPetals;
+    const f1 = m.addF(c, basePts[i], midPts[i]);
+    const f2 = m.addF(c, midPts[i], basePts[next]);
+    baseFaces.push(f1, f2);
 
-  model.setCreaseAngle(model.creases.length - 4, 80, false);
-  model.setCreaseAngle(model.creases.length - 3, 80, false);
-  model.setCreaseAngle(model.creases.length - 2, 80, false);
-  model.setCreaseAngle(model.creases.length - 1, 80, false);
-  model.reconstructFromBase();
-
-  const petalCreaseStart = model.creases.length - petalCount * 5 - 4;
-  for (let i = 0; i < petalCount; i++) {
-    model.setCreaseAngle(petalCreaseStart + i * 5, 65, false);
-    model.setCreaseAngle(petalCreaseStart + i * 5 + 1, 30, false);
-    model.setCreaseAngle(petalCreaseStart + i * 5 + 2, 30, false);
-    model.setCreaseAngle(petalCreaseStart + i * 5 + 3, 15, false);
-    model.setCreaseAngle(petalCreaseStart + i * 5 + 4, 15, false);
+    const pL = m.addF(basePts[i], tipPts[i], midPts[(i - 1 + nPetals) % nPetals]);
+    const pR = m.addF(basePts[next], midPts[i], tipPts[i]);
+    petalFacesL.push(pL);
+    petalFacesR.push(pR);
   }
-  model.reconstructFromBase();
 
-  model.history = [];
-  return model;
+  for (let i = 0; i < nPetals; i++) {
+    const next = (i + 1) % nPetals;
+    m.addCr(basePts[i], basePts[next],
+      baseFaces[i * 2], baseFaces[i * 2 + 1], 'valley', 100 + i);
+    m.addCr(c, midPts[i],
+      baseFaces[i * 2], baseFaces[i * 2 + 1], 'mountain', 200 + i);
+    m.addCr(basePts[i], tipPts[i],
+      petalFacesL[i], baseFaces[i * 2], 'mountain', 300 + i);
+    m.addCr(midPts[i], tipPts[i],
+      petalFacesR[i], baseFaces[i * 2 + 1], 'valley', 400 + i);
+  }
+
+  m.finalize();
+
+  for (let i = 0; i < m.creaseCount(); i++) {
+    const cr = m.creases[i];
+    if (cr.groupId >= 100 && cr.groupId < 200) cr.angle = 40;
+    if (cr.groupId >= 200 && cr.groupId < 300) cr.angle = 30;
+    if (cr.groupId >= 300 && cr.groupId < 400) cr.angle = 60;
+    if (cr.groupId >= 400 && cr.groupId < 500) cr.angle = 35;
+  }
+  m.rebuildFromAngles();
+
+  m.history = [];
+  m.saveState();
+  return m;
 }
 
 export function createModelByName(name: string): OrigamiModel {
