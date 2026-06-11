@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 
-const ANALYSIS_LAYER = 0;
+const EXCLUDE_FROM_ANALYSIS = '__excludeFromShadowAnalysis';
 
-const analysisLayerObj = new THREE.Layers();
-analysisLayerObj.set(ANALYSIS_LAYER);
+export function markExcludeFromAnalysis(obj: THREE.Object3D): void {
+  (obj as unknown as Record<string, unknown>)[EXCLUDE_FROM_ANALYSIS] = true;
+}
 
 export class ShadowAnalyzer {
   private renderer: THREE.WebGLRenderer;
@@ -41,7 +42,6 @@ export class ShadowAnalyzer {
     );
     this.orthoCamera.position.set(0, 100, 0);
     this.orthoCamera.lookAt(0, 0, 0);
-    this.orthoCamera.layers.set(ANALYSIS_LAYER);
 
     this.renderTarget = new THREE.WebGLRenderTarget(
       this.textureSize,
@@ -74,33 +74,28 @@ export class ShadowAnalyzer {
     return this.cachedCoverage;
   }
 
+  private isExcluded(obj: THREE.Object3D): boolean {
+    return (obj as unknown as Record<string, unknown>)[EXCLUDE_FROM_ANALYSIS] === true;
+  }
+
   private calculateCoverage(): number {
     const originalClearAlpha = this.renderer.getClearAlpha();
     const originalAutoClear = this.renderer.autoClear;
-    const originalCameraLayers = this.orthoCamera.layers.mask;
 
     this.renderer.setRenderTarget(this.renderTarget);
     this.renderer.autoClear = true;
     this.renderer.setClearColor(0xffffff, 1);
     this.renderer.clear();
 
-    const hiddenLayers: Map<THREE.Object3D, number> = new Map();
+    const hiddenObjects: Map<THREE.Object3D, boolean> = new Map();
     this.scene.traverse((obj) => {
-      if (obj === this.groundPlane) {
+      if (obj === this.groundPlane || obj === this.scene) {
         return;
       }
 
-      if (obj.type === 'GridHelper' || obj.type === 'LineSegments') {
-        hiddenLayers.set(obj, obj.layers.mask);
-        obj.layers.set(2);
-      } else if (obj.type === 'DirectionalLight' || obj.type === 'AmbientLight' || obj.type === 'DirectionalLightHelper') {
-        return;
-      } else if (obj !== this.scene) {
-        const wasOnAnalysisLayer = obj.layers.test(analysisLayerObj);
-        if (!wasOnAnalysisLayer) {
-          hiddenLayers.set(obj, obj.layers.mask);
-          obj.layers.set(2);
-        }
+      if (this.isExcluded(obj)) {
+        hiddenObjects.set(obj, obj.visible);
+        obj.visible = false;
       }
     });
 
@@ -117,14 +112,13 @@ export class ShadowAnalyzer {
       this.pixelBuffer
     );
 
-    hiddenLayers.forEach((mask, obj) => {
-      obj.layers.mask = mask;
+    hiddenObjects.forEach((visible, obj) => {
+      obj.visible = visible;
     });
 
     this.renderer.setRenderTarget(null);
     this.renderer.setClearColor(0x1e2a38, originalClearAlpha);
     this.renderer.autoClear = originalAutoClear;
-    this.orthoCamera.layers.mask = originalCameraLayers;
 
     return this.analyzePixels();
   }

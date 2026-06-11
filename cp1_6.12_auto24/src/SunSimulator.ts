@@ -60,8 +60,9 @@ export class SunSimulator {
   }
 
   public calculateSunPosition(dayOfYear: number, hour: number): SunPosition {
-    const solarNoonUtc = 12 - this.location.longitude / 15;
-    const localSolarTime = hour + (solarNoonUtc - 12) / 1 + (this.location.timezone - this.location.longitude / 15);
+    const eot = this.calculateEquationOfTime(dayOfYear);
+    const longitudeCorrection = (this.location.timezone * 15 - this.location.longitude) / 15;
+    const localSolarTime = hour + longitudeCorrection + eot / 60;
     const hourAngle = this.calculateHourAngle(localSolarTime);
     const declination = this.calculateDeclination(dayOfYear);
     const latitudeRad = THREE.MathUtils.degToRad(this.location.latitude);
@@ -97,6 +98,12 @@ export class SunSimulator {
     return THREE.MathUtils.degToRad(
       23.45 * Math.sin(THREE.MathUtils.degToRad((360 / 365) * (dayOfYear - 81)))
     );
+  }
+
+  private calculateEquationOfTime(dayOfYear: number): number {
+    const B = THREE.MathUtils.degToRad((360 / 365) * (dayOfYear - 81));
+    const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+    return eot;
   }
 
   private calculateHourAngle(solarTime: number): number {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BuildingModel } from './BuildingModel';
 import { SunSimulator } from './SunSimulator';
-import { ShadowAnalyzer } from './ShadowAnalyzer';
+import { ShadowAnalyzer, markExcludeFromAnalysis } from './ShadowAnalyzer';
 import { UIPanel } from './UIPanel';
 
 class Application {
@@ -137,29 +137,35 @@ class Application {
     grid.position.y = 0.01;
     (grid.material as THREE.Material).transparent = true;
     (grid.material as THREE.Material).opacity = 0.15;
+    markExcludeFromAnalysis(grid);
     return grid;
   }
 
   private handleDateChange(dayOfYear: number): void {
     const currentHour = this.sunSimulator.getCurrentHour();
     this.sunSimulator.updateSunPosition(dayOfYear, currentHour);
-    this.shadowAnalyzer.markDirty();
+    this.triggerShadowAnalysis();
   }
 
   private handleTimeChange(hour: number): void {
     const currentDay = this.sunSimulator.getCurrentDayOfYear();
     this.sunSimulator.updateSunPosition(currentDay, hour);
-    this.shadowAnalyzer.markDirty();
+    this.triggerShadowAnalysis();
   }
 
   private handleRotationChange(x: number, y: number, z: number): void {
     this.buildingModel.setRotation(x, y, z);
-    this.shadowAnalyzer.markDirty();
+    this.triggerShadowAnalysis();
   }
 
   private handleLocationChange(latitude: number, longitude: number, timezone: number): void {
     this.sunSimulator.setLocation({ latitude, longitude, timezone });
+    this.triggerShadowAnalysis();
+  }
+
+  private triggerShadowAnalysis(): void {
     this.shadowAnalyzer.markDirty();
+    this.lastShadowAnalysisTime = 0;
   }
 
   private resetCamera(): void {
@@ -186,13 +192,17 @@ class Application {
   }
 
   private exportImage(): void {
-    const originalColorSpace = this.renderer.outputColorSpace;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    const needsColorSpaceSwitch = this.renderer.outputColorSpace !== THREE.SRGBColorSpace;
+    if (needsColorSpaceSwitch) {
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    }
     this.renderer.render(this.scene, this.camera);
 
     const dataURL = this.renderer.domElement.toDataURL('image/png');
 
-    this.renderer.outputColorSpace = originalColorSpace;
+    if (needsColorSpaceSwitch) {
+      this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+    }
 
     const link = document.createElement('a');
     const date = new Date();
