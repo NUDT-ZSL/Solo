@@ -13,7 +13,7 @@ export interface Particle {
   colorEnd: string;
   trail: Point[];
   trailLength: number;
-  mode: 'spiral' | 'lissajous' | 'explode';
+  mode: 'spiral' | 'lissajous' | 'explode' | 'combo';
   angle: number;
   angularSpeed: number;
   radius: number;
@@ -25,6 +25,7 @@ export interface Particle {
   lissajousDelta: number;
   lissajousScale: number;
   phase: number;
+  comboType?: 'fire-wind' | 'thunder-earth' | 'fire-thunder' | 'fire-earth' | 'thunder-wind' | 'wind-earth';
 }
 
 interface ParticleSystemOptions {
@@ -35,9 +36,32 @@ export class ParticleEngine {
   private particles: Particle[] = [];
   private maxParticles: number;
   private particlePool: Particle[] = [];
+  private offscreenCanvas: HTMLCanvasElement | null = null;
+  private offscreenCtx: CanvasRenderingContext2D | null = null;
+  private lastOffscreenUpdate: number = 0;
+  private offscreenUpdateInterval: number = 33;
+  private centerX: number = 0;
+  private centerY: number = 0;
+  private fpsMonitor: { frames: number; lastTime: number; currentFps: number } = { frames: 0, lastTime: 0, currentFps: 60 };
 
   constructor(options: ParticleSystemOptions = {}) {
     this.maxParticles = options.maxParticles || 500;
+  }
+
+  private initOffscreen(width: number, height: number): void {
+    if (!this.offscreenCanvas) {
+      this.offscreenCanvas = document.createElement('canvas');
+      this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: false })!;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    this.offscreenCanvas.width = width * dpr;
+    this.offscreenCanvas.height = height * dpr;
+    this.offscreenCtx!.scale(dpr, dpr);
+  }
+
+  setCenter(x: number, y: number): void {
+    this.centerX = x;
+    this.centerY = y;
   }
 
   private hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -60,6 +84,25 @@ export class ParticleEngine {
     return `rgb(${r}, ${g}, ${b})`;
   }
 
+  private getDistanceToCenter(p: Particle): number {
+    return Math.sqrt((p.x - this.centerX) ** 2 + (p.y - this.centerY) ** 2);
+  }
+
+  private getLODLevel(p: Particle): 'high' | 'medium' | 'low' {
+    const dist = this.getDistanceToCenter(p);
+    const fps = this.fpsMonitor.currentFps;
+
+    if (fps < 30) {
+      if (dist > 200) return 'low';
+      if (dist > 100) return 'medium';
+      return 'medium';
+    }
+
+    if (dist > 250) return 'low';
+    if (dist > 120) return 'medium';
+    return 'high';
+  }
+
   private acquireParticle(): Particle | null {
     if (this.particlePool.length > 0) {
       return this.particlePool.pop()!;
@@ -72,6 +115,7 @@ export class ParticleEngine {
 
   private releaseParticle(p: Particle): void {
     if (this.particlePool.length < this.maxParticles) {
+      p.trail = [];
       this.particlePool.push(p);
     }
   }
@@ -81,10 +125,14 @@ export class ParticleEngine {
     centerX: number,
     centerY: number,
     count: number = 80,
-    isCombo: boolean = false
+    isCombo: boolean = false,
+    comboType?: Particle['comboType']
   ): void {
+    this.centerX = centerX;
+    this.centerY = centerY;
+
     const colors = getElementColor(element);
-    const actualCount = isCombo ? count * 2 : count;
+    const actualCount = isCombo ? Math.min(count * 2, this.maxParticles - this.particles.length) : count;
 
     for (let i = 0; i < actualCount; i++) {
       const p = this.acquireParticle();
@@ -105,26 +153,57 @@ export class ParticleEngine {
       p.colorStart = colors.start;
       p.colorEnd = colors.end;
       p.trail = [];
-      p.trailLength = 15 + Math.floor(Math.random() * 10);
-      p.mode = isCombo ? 'lissajous' : 'spiral';
+      p.trailLength = isCombo ? 20 + Math.floor(Math.random() * 15) : 15 + Math.floor(Math.random() * 10);
       p.angle = angle;
-      p.angularSpeed = (Math.random() - 0.5) * 0.03;
+      p.angularSpeed = (Math.random() - 0.5) * (isCombo ? 0.05 : 0.03);
       p.radius = 0;
-      p.radiusSpeed = 0.5 + Math.random() * 1.5;
-      p.focusX = centerX;
-      p.focusY = centerY;
-      p.lissajousA = 2 + Math.floor(Math.random() * 4);
-      p.lissajousB = 3 + Math.floor(Math.random() * 4);
+      p.radiusSpeed = 0.5 + Math.random() * (isCombo ? 2.0 : 1.5);
+      p.focusX = centerX + (Math.random() - 0.5) * 40;
+      p.focusY = centerY + (Math.random() - 0.5) * 40;
+      p.lissajousA = 2 + Math.floor(Math.random() * 5);
+      p.lissajousB = 3 + Math.floor(Math.random() * 5);
       p.lissajousDelta = Math.random() * Math.PI;
-      p.lissajousScale = 50 + Math.random() * 100;
+      p.lissajousScale = isCombo ? 80 + Math.random() * 120 : 50 + Math.random() * 100;
       p.phase = Math.random() * Math.PI * 2;
+      p.comboType = comboType;
+
+      if (comboType) {
+        p.mode = 'combo';
+      } else if (isCombo) {
+        p.mode = 'lissajous';
+      } else {
+        p.mode = 'spiral';
+      }
 
       this.particles.push(p);
     }
   }
 
+  spawnComboParticles(
+    elements: ElementType[],
+    comboType: Particle['comboType'],
+    centerX: number,
+    centerY: number
+  ): void {
+    this.centerX = centerX;
+    this.centerY = centerY;
+
+    const baseCount = 100;
+    for (const element of elements) {
+      this.spawnElementParticles(element, centerX, centerY, baseCount, true, comboType);
+    }
+  }
+
   update(dt: number): void {
     const toRemove: number[] = [];
+
+    this.fpsMonitor.frames++;
+    const now = performance.now();
+    if (now - this.fpsMonitor.lastTime >= 500) {
+      this.fpsMonitor.currentFps = (this.fpsMonitor.frames * 1000) / (now - this.fpsMonitor.lastTime);
+      this.fpsMonitor.frames = 0;
+      this.fpsMonitor.lastTime = now;
+    }
 
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
@@ -135,9 +214,18 @@ export class ParticleEngine {
         continue;
       }
 
-      p.trail.push({ x: p.x, y: p.y });
-      if (p.trail.length > p.trailLength) {
-        p.trail.shift();
+      const lod = this.getLODLevel(p);
+
+      let trailStep = 1;
+      if (lod === 'medium') trailStep = 2;
+      if (lod === 'low') trailStep = 4;
+
+      if (Math.floor(p.life * 60) % trailStep === 0) {
+        p.trail.push({ x: p.x, y: p.y });
+        const maxTrail = lod === 'high' ? p.trailLength : Math.floor(p.trailLength / 2);
+        if (p.trail.length > maxTrail) {
+          p.trail.shift();
+        }
       }
 
       const lifeRatio = p.life / p.maxLife;
@@ -147,33 +235,7 @@ export class ParticleEngine {
         ? (1 - lifeRatio) * 5
         : 1;
 
-      if (p.mode === 'explode') {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.98;
-        p.vy *= 0.98;
-        p.vy += 0.05;
-      } else if (p.mode === 'spiral') {
-        if (p.radius < 100 + Math.random() * 50) {
-          p.radius += p.radiusSpeed * dt * 60;
-        }
-        p.angle += p.angularSpeed * dt * 60;
-        p.x = p.focusX + Math.cos(p.angle) * p.radius;
-        p.y = p.focusY + Math.sin(p.angle) * p.radius;
-        p.focusX += (p.vx * 0.02) * dt * 60;
-        p.focusY += (p.vy * 0.02) * dt * 60;
-      } else if (p.mode === 'lissajous') {
-        p.phase += p.angularSpeed * dt * 60 * 2;
-        const t = p.phase;
-        const lx = Math.sin(p.lissajousA * t + p.lissajousDelta) * p.lissajousScale;
-        const ly = Math.sin(p.lissajousB * t) * p.lissajousScale * 0.8;
-        p.x = p.focusX + lx;
-        p.y = p.focusY + ly;
-
-        if (p.lissajousScale > 40) {
-          p.lissajousScale -= 0.3 * dt * 60;
-        }
-      }
+      this.updateParticleMotion(p, dt);
     }
 
     for (let i = toRemove.length - 1; i >= 0; i--) {
@@ -183,45 +245,139 @@ export class ParticleEngine {
     }
   }
 
-  render(ctx: CanvasRenderingContext2D): void {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
+  private updateParticleMotion(p: Particle, dt: number): void {
+    if (p.mode === 'explode') {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.98;
+      p.vy *= 0.98;
+      p.vy += 0.05;
+    } else if (p.mode === 'spiral') {
+      if (p.radius < 100 + Math.random() * 50) {
+        p.radius += p.radiusSpeed * dt * 60;
+      }
+      p.angle += p.angularSpeed * dt * 60;
+      p.x = p.focusX + Math.cos(p.angle) * p.radius;
+      p.y = p.focusY + Math.sin(p.angle) * p.radius;
+      p.focusX += (p.vx * 0.02) * dt * 60;
+      p.focusY += (p.vy * 0.02) * dt * 60;
+    } else if (p.mode === 'lissajous') {
+      p.phase += p.angularSpeed * dt * 60 * 2;
+      const t = p.phase;
+      const lx = Math.sin(p.lissajousA * t + p.lissajousDelta) * p.lissajousScale;
+      const ly = Math.sin(p.lissajousB * t) * p.lissajousScale * 0.8;
+      p.x = p.focusX + lx;
+      p.y = p.focusY + ly;
 
-    for (const p of this.particles) {
-      if (p.trail.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(p.trail[0].x, p.trail[0].y);
-        for (let i = 1; i < p.trail.length; i++) {
-          ctx.lineTo(p.trail[i].x, p.trail[i].y);
-        }
-        ctx.strokeStyle = this.lerpColor(p.colorStart, p.colorEnd, Math.random());
-        ctx.lineWidth = p.size * 0.6;
-        ctx.lineCap = 'round';
-        ctx.globalAlpha = p.alpha * 0.4;
-        ctx.stroke();
+      if (p.lissajousScale > 40) {
+        p.lissajousScale -= 0.3 * dt * 60;
+      }
+    } else if (p.mode === 'combo') {
+      p.phase += p.angularSpeed * dt * 60 * 1.5;
+      const t = p.phase;
+
+      if (p.comboType === 'fire-wind') {
+        const baseR = 60 + Math.sin(t * 3) * 40 + (p.life / p.maxLife) * 100;
+        const vortexAngle = t * 2;
+        const lx = Math.cos(vortexAngle) * baseR + Math.sin(t * 5) * 20;
+        const ly = Math.sin(vortexAngle) * baseR * 0.8 + Math.cos(t * 3) * 15;
+        p.x = p.focusX + lx;
+        p.y = p.focusY + ly;
+        p.size += 0.02 * dt * 60;
+      } else if (p.comboType === 'thunder-earth') {
+        const lx = Math.sin(p.lissajousA * t + p.lissajousDelta) * p.lissajousScale * 0.6
+          + Math.sin(t * 7) * 15;
+        const ly = Math.sin(p.lissajousB * t) * p.lissajousScale * 0.5
+          + Math.cos(t * 5) * 15;
+        p.x = p.focusX + lx;
+        p.y = p.focusY + ly;
+      } else {
+        const lx = (Math.sin(p.lissajousA * t + p.lissajousDelta) + Math.cos(t * 2) * 0.3) * p.lissajousScale;
+        const ly = (Math.sin(p.lissajousB * t) + Math.sin(t * 3) * 0.2) * p.lissajousScale * 0.8;
+        p.x = p.focusX + lx;
+        p.y = p.focusY + ly;
       }
 
-      const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
-      const color = this.lerpColor(p.colorStart, p.colorEnd, Math.random());
+      if (p.lissajousScale > 50) {
+        p.lissajousScale -= 0.2 * dt * 60;
+      }
+    }
+  }
 
-      gradient.addColorStop(0, color);
-      gradient.addColorStop(0.5, color);
-      gradient.addColorStop(1, 'transparent');
+  render(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    this.initOffscreen(width, height);
+    if (!this.offscreenCtx || !this.offscreenCanvas) return;
 
-      ctx.globalAlpha = p.alpha;
-      ctx.fillStyle = gradient;
+    const now = performance.now();
+    const shouldUpdateOffscreen = now - this.lastOffscreenUpdate >= this.offscreenUpdateInterval;
+
+    if (shouldUpdateOffscreen) {
+      this.lastOffscreenUpdate = now;
+      const octx = this.offscreenCtx;
+      octx.setTransform(1, 0, 0, 1, 0, 0);
+      octx.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
+      const dpr = window.devicePixelRatio || 1;
+      octx.scale(dpr, dpr);
+
+      octx.save();
+      octx.globalCompositeOperation = 'lighter';
+
+      const sortedParticles = [...this.particles].sort((a, b) => {
+        return this.getDistanceToCenter(a) - this.getDistanceToCenter(b);
+      });
+
+      for (const p of sortedParticles) {
+        this.renderParticle(octx, p);
+      }
+
+      octx.restore();
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(this.offscreenCanvas, 0, 0, width, height);
+    ctx.restore();
+  }
+
+  private renderParticle(ctx: CanvasRenderingContext2D, p: Particle): void {
+    const lod = this.getLODLevel(p);
+    const colorT = (Math.sin(p.phase * 2) + 1) / 2;
+    const color = this.lerpColor(p.colorStart, p.colorEnd, colorT);
+
+    if (lod !== 'low' && p.trail.length > 1) {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(p.trail[0].x, p.trail[0].y);
+      const step = lod === 'high' ? 1 : 2;
+      for (let i = step; i < p.trail.length; i += step) {
+        ctx.lineTo(p.trail[i].x, p.trail[i].y);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = p.size * (lod === 'high' ? 0.6 : 0.4);
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = p.alpha * (lod === 'high' ? 0.4 : 0.25);
+      ctx.stroke();
+    }
 
-      ctx.globalAlpha = p.alpha * 0.8;
+    const glowSize = lod === 'high' ? p.size * 2.5 : lod === 'medium' ? p.size * 2 : p.size * 1.5;
+    const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowSize);
+
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(0.4, color);
+    gradient.addColorStop(1, 'transparent');
+
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, glowSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (lod === 'high') {
+      ctx.globalAlpha = p.alpha * 0.9;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * 0.4, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    ctx.restore();
   }
 
   clear(): void {
@@ -229,10 +385,19 @@ export class ParticleEngine {
       this.releaseParticle(p);
     }
     this.particles = [];
+
+    if (this.offscreenCtx && this.offscreenCanvas) {
+      this.offscreenCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.offscreenCtx.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
+    }
   }
 
   getParticleCount(): number {
     return this.particles.length;
+  }
+
+  getFps(): number {
+    return this.fpsMonitor.currentFps;
   }
 
   setFocusPoint(x: number, y: number): void {
@@ -240,6 +405,8 @@ export class ParticleEngine {
       p.focusX = x;
       p.focusY = y;
     }
+    this.centerX = x;
+    this.centerY = y;
   }
 }
 

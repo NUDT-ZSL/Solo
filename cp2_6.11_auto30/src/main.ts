@@ -1,4 +1,4 @@
-import { recognizeRune, getElementName, getElementColor, getCombinedElement, ElementType, Point } from './runeRecognizer';
+import { recognizeRune, getElementName, getElementColor, getCombinedElement, ElementType, Point, ComboType } from './runeRecognizer';
 import { ParticleEngine, Starfield } from './particleEngine';
 import { UIManager, HistoryItem } from './uiManager';
 
@@ -16,6 +16,8 @@ class Game {
 
   private currentRuneSequence: ElementType[] = [];
   private comboCooldown: number = 0;
+  private isClearing: boolean = false;
+  private clearProgress: number = 0;
 
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -53,8 +55,14 @@ class Game {
     this.canvas.style.width = rect.width + 'px';
     this.canvas.style.height = rect.height + 'px';
 
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
     this.starfield.resize(rect.width, rect.height);
+
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    this.particleEngine.setCenter(centerX, centerY);
+    this.particleEngine.setFocusPoint(centerX, centerY);
   }
 
   private initEventListeners(): void {
@@ -90,6 +98,7 @@ class Game {
   }
 
   private onMouseDown(e: MouseEvent): void {
+    if (this.isClearing) return;
     this.isDrawing = true;
     this.currentPoints = [this.getCanvasPoint(e)];
   }
@@ -110,7 +119,7 @@ class Game {
     if (!this.isDrawing) return;
     this.isDrawing = false;
 
-    if (this.currentPoints.length < 5) {
+    if (this.currentPoints.length < 8) {
       this.currentPoints = [];
       return;
     }
@@ -121,19 +130,19 @@ class Game {
   private recognizeAndSummon(): void {
     const result = recognizeRune(this.currentPoints);
 
+    const width = this.canvas.width / (window.devicePixelRatio || 1);
+    const height = this.canvas.height / (window.devicePixelRatio || 1);
+    const centerX = width / 2;
+    const centerY = height / 2;
+
     if (result.element) {
       this.currentRuneSequence.push(result.element);
-
-      const centerX = this.canvas.width / (window.devicePixelRatio || 1) / 2;
-      const centerY = this.canvas.height / (window.devicePixelRatio || 1) / 2;
 
       if (this.currentRuneSequence.length >= 2) {
         const combo = getCombinedElement(this.currentRuneSequence);
         if (combo) {
-          for (const element of this.currentRuneSequence) {
-            this.particleEngine.spawnElementParticles(element, centerX, centerY, 60, true);
-          }
-          this.uiManager.showFloatingText(`${combo.name} 召唤成功！`, this.currentRuneSequence[0]);
+          this.spawnComboParticles(combo.elements, combo.comboType, centerX, centerY);
+          this.uiManager.showFloatingText(`${combo.name} 召唤成功！`, combo.elements[0]);
           this.uiManager.addToHistory([...this.currentRuneSequence], combo.name);
           this.currentRuneSequence = [];
         } else {
@@ -148,7 +157,7 @@ class Game {
         this.uiManager.addToHistory([result.element]);
       }
 
-      this.comboCooldown = 3;
+      this.comboCooldown = 4;
       this.uiManager.triggerFlash();
       this.uiManager.triggerShake();
     } else {
@@ -158,16 +167,29 @@ class Game {
 
     setTimeout(() => {
       this.currentPoints = [];
-    }, 100);
+    }, 150);
+  }
+
+  private spawnComboParticles(elements: ElementType[], comboType: ComboType, centerX: number, centerY: number): void {
+    this.particleEngine.spawnComboParticles(elements, comboType, centerX, centerY);
   }
 
   private handleHistorySelect(item: HistoryItem): void {
-    const centerX = this.canvas.width / (window.devicePixelRatio || 1) / 2;
-    const centerY = this.canvas.height / (window.devicePixelRatio || 1) / 2;
+    const width = this.canvas.width / (window.devicePixelRatio || 1);
+    const height = this.canvas.height / (window.devicePixelRatio || 1);
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-    const isCombo = item.elements.length > 1;
-    for (const element of item.elements) {
-      this.particleEngine.spawnElementParticles(element, centerX, centerY, 60, isCombo);
+    if (item.comboName && item.elements.length > 1) {
+      const combo = getCombinedElement(item.elements);
+      if (combo) {
+        this.spawnComboParticles(combo.elements, combo.comboType, centerX, centerY);
+      }
+    } else {
+      const isCombo = item.elements.length > 1;
+      for (const element of item.elements) {
+        this.particleEngine.spawnElementParticles(element, centerX, centerY, 60, isCombo);
+      }
     }
 
     this.uiManager.triggerFlash();
@@ -182,23 +204,53 @@ class Game {
   }
 
   private clearCanvas(): void {
+    if (this.isClearing) return;
+
+    this.isClearing = true;
+    this.clearProgress = 0;
     this.currentPoints = [];
     this.currentRuneSequence = [];
     this.particleEngine.clear();
     this.uiManager.clearHistory();
+    this.uiManager.showFloatingText('画布清除中...');
+  }
 
-    const dpr = window.devicePixelRatio || 1;
-    this.ctx.save();
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.uiManager.clearCanvasWithAnimation(
-      this.canvas,
-      this.ctx
-    ).then(() => {
-      this.ctx.restore();
-      this.ctx.scale(dpr, dpr);
-    });
+  private updateClearEffect(dt: number): void {
+    if (!this.isClearing) return;
 
-    this.uiManager.showFloatingText('画布已清除');
+    this.clearProgress += dt;
+    const duration = 1.0;
+
+    if (this.clearProgress >= duration) {
+      this.isClearing = false;
+      this.clearProgress = 0;
+      this.uiManager.showFloatingText('画布已清除');
+    }
+  }
+
+  private drawClearOverlay(): void {
+    if (!this.isClearing) return;
+
+    const width = this.canvas.width / (window.devicePixelRatio || 1);
+    const height = this.canvas.height / (window.devicePixelRatio || 1);
+    const progress = Math.min(this.clearProgress / 1.0, 1);
+
+    const gradient = this.ctx.createRadialGradient(
+      width / 2, height / 2, 0,
+      width / 2, height / 2, Math.max(width, height) * 0.8
+    );
+
+    const alpha = progress * 0.4;
+    gradient.addColorStop(0, `rgba(255, 69, 0, ${alpha * 0.8})`);
+    gradient.addColorStop(0.5, `rgba(255, 99, 71, ${alpha * 0.5})`);
+    gradient.addColorStop(1, `rgba(255, 69, 0, 0)`);
+
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, width, height);
+
+    const fadeAlpha = progress * 0.12;
+    this.ctx.fillStyle = `rgba(11, 0, 20, ${fadeAlpha})`;
+    this.ctx.fillRect(0, 0, width, height);
   }
 
   private drawBackground(): void {
@@ -265,6 +317,7 @@ class Game {
   private update(dt: number): void {
     this.starfield.update(dt);
     this.particleEngine.update(dt);
+    this.updateClearEffect(dt);
 
     if (this.comboCooldown > 0) {
       this.comboCooldown -= dt;
@@ -275,9 +328,13 @@ class Game {
   }
 
   private render(): void {
+    const width = this.canvas.width / (window.devicePixelRatio || 1);
+    const height = this.canvas.height / (window.devicePixelRatio || 1);
+
     this.drawBackground();
-    this.particleEngine.render(this.ctx);
+    this.particleEngine.render(this.ctx, width, height);
     this.drawCurrentRune();
+    this.drawClearOverlay();
   }
 
   private hideLoading(): void {

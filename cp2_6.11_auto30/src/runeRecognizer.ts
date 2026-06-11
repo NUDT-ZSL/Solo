@@ -58,6 +58,97 @@ function distance(p1: Point, p2: Point): number {
   return Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
 }
 
+function filterIsolatedPoints(points: Point[], threshold: number = 8): Point[] {
+  if (points.length < 3) return points;
+
+  const result: Point[] = [];
+
+  for (let i = 0; i < points.length; i++) {
+    let hasNeighbor = false;
+
+    for (let j = 0; j < points.length; j++) {
+      if (i === j) continue;
+      if (distance(points[i], points[j]) < threshold) {
+        hasNeighbor = true;
+        break;
+      }
+    }
+
+    if (hasNeighbor || i === 0 || i === points.length - 1) {
+      result.push(points[i]);
+    }
+  }
+
+  return result.length >= 3 ? result : points;
+}
+
+function filterShortSegments(points: Point[], minSegmentLength: number = 5): Point[] {
+  if (points.length < 3) return points;
+
+  const result: Point[] = [points[0]];
+  let accumulatedDist = 0;
+
+  for (let i = 1; i < points.length; i++) {
+    const d = distance(points[i - 1], points[i]);
+    accumulatedDist += d;
+
+    if (accumulatedDist >= minSegmentLength || i === points.length - 1) {
+      result.push(points[i]);
+      accumulatedDist = 0;
+    }
+  }
+
+  return result.length >= 3 ? result : points;
+}
+
+function resamplePoints(points: Point[], targetSpacing: number = 5): Point[] {
+  if (points.length < 2) return points;
+
+  const result: Point[] = [points[0]];
+  let currentDist = 0;
+
+  for (let i = 1; i < points.length; i++) {
+    const segDist = distance(points[i - 1], points[i]);
+
+    if (currentDist + segDist >= targetSpacing) {
+      const remaining = targetSpacing - currentDist;
+      const t = remaining / segDist;
+      const newPoint: Point = {
+        x: points[i - 1].x + (points[i].x - points[i - 1].x) * t,
+        y: points[i - 1].y + (points[i].y - points[i - 1].y) * t
+      };
+      result.push(newPoint);
+      points.splice(i, 0, newPoint);
+      currentDist = 0;
+    } else {
+      currentDist += segDist;
+    }
+  }
+
+  return result;
+}
+
+function normalizeStrokeDirection(points: Point[]): Point[] {
+  if (points.length < 3) return points;
+
+  let totalAngle = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const v1x = points[i].x - points[i - 1].x;
+    const v1y = points[i].y - points[i - 1].y;
+    const v2x = points[i + 1].x - points[i].x;
+    const v2y = points[i + 1].y - points[i].y;
+
+    const cross = v1x * v2y - v1y * v2x;
+    totalAngle += cross;
+  }
+
+  if (totalAngle < 0) {
+    return [...points].reverse();
+  }
+
+  return points;
+}
+
 function normalizePoints(points: Point[]): Point[] {
   if (points.length < 2) return points;
 
@@ -74,10 +165,12 @@ function normalizePoints(points: Point[]): Point[] {
   const width = maxX - minX || 1;
   const height = maxY - minY || 1;
   const scale = Math.max(width, height);
+  const offsetX = (scale - width) / 2;
+  const offsetY = (scale - height) / 2;
 
   return points.map(p => ({
-    x: (p.x - minX) / scale,
-    y: (p.y - minY) / scale
+    x: (p.x - minX + offsetX) / scale,
+    y: (p.y - minY + offsetY) / scale
   }));
 }
 
@@ -95,10 +188,12 @@ function downsample(points: Point[], targetCount: number = 64): Point[] {
   return result;
 }
 
-function smoothPoints(points: Point[], iterations: number = 2): Point[] {
+function smoothPoints(points: Point[], iterations: number = 3): Point[] {
   let result = [...points];
 
   for (let iter = 0; iter < iterations; iter++) {
+    if (result.length < 3) break;
+
     const smoothed: Point[] = [result[0]];
     for (let i = 1; i < result.length - 1; i++) {
       smoothed.push({
@@ -111,6 +206,20 @@ function smoothPoints(points: Point[], iterations: number = 2): Point[] {
   }
 
   return result;
+}
+
+function preprocessPoints(points: Point[]): Point[] {
+  let processed = [...points];
+
+  processed = filterIsolatedPoints(processed, 10);
+  processed = filterShortSegments(processed, 4);
+  processed = resamplePoints(processed, 6);
+  processed = normalizeStrokeDirection(processed);
+  processed = downsample(processed, 64);
+  processed = normalizePoints(processed);
+  processed = smoothPoints(processed, 3);
+
+  return processed;
 }
 
 function totalPathLength(points: Point[]): number {
@@ -126,7 +235,7 @@ function calculateClosedness(points: Point[]): number {
   const startEndDist = distance(points[0], points[points.length - 1]);
   const pathLength = totalPathLength(points);
   if (pathLength === 0) return 0;
-  return Math.max(0, 1 - startEndDist / (pathLength * 0.25));
+  return Math.max(0, 1 - startEndDist / (pathLength * 0.3));
 }
 
 function calculateStraightness(points: Point[]): number {
@@ -150,7 +259,7 @@ function calculateDirectionChanges(points: Point[]): number {
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
 
-    if (Math.abs(diff) > Math.PI / 6) {
+    if (Math.abs(diff) > Math.PI / 8) {
       changes++;
     }
 
@@ -162,7 +271,7 @@ function calculateDirectionChanges(points: Point[]): number {
 
 function calculateWaviness(points: Point[]): number {
   const dirChanges = calculateDirectionChanges(points);
-  const normalized = dirChanges / 20;
+  const normalized = dirChanges / 15;
   return Math.min(1, normalized);
 }
 
@@ -205,9 +314,9 @@ function calculateSpiralness(points: Point[]): number {
 
   const radiusExpansion = maxRadius > 0 ? (maxRadius - minRadius) / maxRadius : 0;
 
-  if (rotations < 0.5) return 0;
+  if (rotations < 0.4) return 0;
 
-  return Math.min(1, rotations * 0.5 + radiusExpansion * 0.5);
+  return Math.min(1, rotations * 0.4 + radiusExpansion * 0.6);
 }
 
 function lineIntersects(
@@ -235,7 +344,7 @@ function countCrossings(points: Point[]): number {
   if (points.length < 4) return 0;
 
   let crossings = 0;
-  const step = Math.max(1, Math.floor(points.length / 30));
+  const step = Math.max(1, Math.floor(points.length / 25));
 
   for (let i = 0; i < points.length - step - 1; i += step) {
     for (let j = i + step * 2; j < points.length - step; j += step) {
@@ -249,13 +358,11 @@ function countCrossings(points: Point[]): number {
 }
 
 function extractFeatures(points: Point[]): RuneFeatures {
-  const downsampled = downsample(points, 64);
-  const normalized = normalizePoints(downsampled);
-  const smoothed = smoothPoints(normalized, 2);
+  const processed = preprocessPoints(points);
 
   let minX = Infinity, minY = Infinity;
   let maxX = -Infinity, maxY = -Infinity;
-  for (const p of smoothed) {
+  for (const p of processed) {
     minX = Math.min(minX, p.x);
     minY = Math.min(minY, p.y);
     maxX = Math.max(maxX, p.x);
@@ -265,35 +372,35 @@ function extractFeatures(points: Point[]): RuneFeatures {
   const height = maxY - minY;
 
   return {
-    closedness: calculateClosedness(smoothed),
-    straightness: calculateStraightness(smoothed),
-    waviness: calculateWaviness(smoothed),
-    spiralness: calculateSpiralness(smoothed),
-    crossings: countCrossings(smoothed),
-    totalLength: totalPathLength(smoothed),
+    closedness: calculateClosedness(processed),
+    straightness: calculateStraightness(processed),
+    waviness: calculateWaviness(processed),
+    spiralness: calculateSpiralness(processed),
+    crossings: countCrossings(processed),
+    totalLength: totalPathLength(processed),
     boundingBox: { width, height, area: width * height },
-    directionChanges: calculateDirectionChanges(smoothed),
-    rotations: calculateRotations(smoothed)
+    directionChanges: calculateDirectionChanges(processed),
+    rotations: calculateRotations(processed)
   };
 }
 
 function scoreFire(features: RuneFeatures): number {
   let score = 0;
 
-  if (features.closedness > 0.6) {
-    score += features.closedness * 40;
+  if (features.closedness > 0.5) {
+    score += features.closedness * 45;
   }
 
-  if (features.straightness > 0.3 && features.straightness < 0.7) {
-    score += (1 - Math.abs(features.straightness - 0.5) * 2) * 25;
+  if (features.straightness > 0.25 && features.straightness < 0.75) {
+    score += (1 - Math.abs(features.straightness - 0.5) * 2.5) * 30;
   }
 
-  if (features.rotations > 0.3 && features.rotations < 1.5) {
-    score += 20;
+  if (features.rotations > 0.2 && features.rotations < 2) {
+    score += Math.min(25, features.rotations * 15);
   }
 
-  if (features.directionChanges > 2 && features.directionChanges < 10) {
-    score += 15;
+  if (features.directionChanges > 1 && features.directionChanges < 12) {
+    score += Math.min(15, features.directionChanges * 2);
   }
 
   return score;
@@ -302,19 +409,19 @@ function scoreFire(features: RuneFeatures): number {
 function scoreThunder(features: RuneFeatures): number {
   let score = 0;
 
-  if (features.waviness > 0.4) {
-    score += features.waviness * 50;
+  if (features.waviness > 0.3) {
+    score += features.waviness * 55;
   }
 
-  if (features.straightness < 0.5) {
-    score += (1 - features.straightness) * 20;
+  if (features.straightness < 0.55) {
+    score += (1 - features.straightness) * 25;
   }
 
-  if (features.directionChanges > 6) {
-    score += Math.min(30, features.directionChanges * 2);
+  if (features.directionChanges > 5) {
+    score += Math.min(35, features.directionChanges * 2.5);
   }
 
-  if (features.closedness < 0.4) {
+  if (features.closedness < 0.45) {
     score += 15;
   }
 
@@ -324,20 +431,20 @@ function scoreThunder(features: RuneFeatures): number {
 function scoreWind(features: RuneFeatures): number {
   let score = 0;
 
-  if (features.spiralness > 0.3) {
-    score += features.spiralness * 55;
+  if (features.spiralness > 0.25) {
+    score += features.spiralness * 60;
   }
 
-  if (features.rotations > 1) {
-    score += Math.min(25, features.rotations * 10);
+  if (features.rotations > 0.8) {
+    score += Math.min(30, features.rotations * 12);
   }
 
-  if (features.closedness < 0.5) {
-    score += 10;
+  if (features.closedness < 0.55) {
+    score += 15;
   }
 
-  if (features.boundingBox.area > 0.3) {
-    score += 10;
+  if (features.boundingBox.area > 0.25) {
+    score += Math.min(15, features.boundingBox.area * 20);
   }
 
   return score;
@@ -347,26 +454,26 @@ function scoreEarth(features: RuneFeatures): number {
   let score = 0;
 
   if (features.crossings > 0) {
-    score += Math.min(40, features.crossings * 8);
+    score += Math.min(45, features.crossings * 10);
   }
 
-  if (features.closedness > 0.4) {
-    score += features.closedness * 25;
+  if (features.closedness > 0.35) {
+    score += features.closedness * 30;
   }
 
-  if (features.directionChanges > 4) {
-    score += Math.min(20, features.directionChanges * 2);
+  if (features.directionChanges > 3) {
+    score += Math.min(25, features.directionChanges * 2.5);
   }
 
-  if (features.rotations > 0.5) {
-    score += 15;
+  if (features.rotations > 0.4) {
+    score += Math.min(20, features.rotations * 15);
   }
 
   return score;
 }
 
 export function recognizeRune(points: Point[]): RuneResult {
-  if (points.length < 5) {
+  if (points.length < 8) {
     return {
       element: null,
       confidence: 0,
@@ -385,17 +492,28 @@ export function recognizeRune(points: Point[]): RuneResult {
 
   let bestElement: ElementType | null = null;
   let bestScore = 0;
+  let secondScore = 0;
 
-  for (const [element, score] of Object.entries(scores)) {
+  for (const [, score] of Object.entries(scores)) {
     if (score > bestScore) {
+      secondScore = bestScore;
       bestScore = score;
-      bestElement = element as ElementType;
+    } else if (score > secondScore) {
+      secondScore = score;
     }
   }
 
-  const confidence = Math.min(1, bestScore / 70);
+  for (const [element, score] of Object.entries(scores)) {
+    if (score === bestScore) {
+      bestElement = element as ElementType;
+      break;
+    }
+  }
 
-  if (confidence < 0.3) {
+  const confidence = Math.min(1, bestScore / 75);
+  const margin = bestScore - secondScore;
+
+  if (confidence < 0.25 || margin < 10) {
     return {
       element: null,
       confidence,
@@ -410,10 +528,19 @@ export function recognizeRune(points: Point[]): RuneResult {
   };
 }
 
-export function getCombinedElement(elements: ElementType[]): { name: string; elements: ElementType[] } | null {
+export type ComboType = 'fire-wind' | 'thunder-earth' | 'fire-thunder' | 'fire-earth' | 'thunder-wind' | 'wind-earth';
+
+export function getComboType(elements: ElementType[]): ComboType | null {
+  if (elements.length < 2) return null;
+  const sorted = [...elements].sort();
+  return sorted.join('-') as ComboType;
+}
+
+export function getCombinedElement(elements: ElementType[]): { name: string; elements: ElementType[]; comboType: ComboType } | null {
   if (elements.length < 2) return null;
 
   const sorted = [...elements].sort().join('+');
+  const comboType = getComboType(elements);
 
   const combos: Record<string, string> = {
     'fire+wind': '爆燃火焰漩涡',
@@ -425,8 +552,8 @@ export function getCombinedElement(elements: ElementType[]): { name: string; ele
   };
 
   const name = combos[sorted];
-  if (name) {
-    return { name, elements: [...elements] };
+  if (name && comboType) {
+    return { name, elements: [...elements], comboType };
   }
 
   return null;
