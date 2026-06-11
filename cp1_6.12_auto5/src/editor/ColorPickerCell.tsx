@@ -13,9 +13,14 @@ interface Props {
   showContrastWarning?: boolean;
 }
 
-const CONTRAST_CHECK_PAIRS: Partial<Record<ColorKey, 'background'>> = {
-  primary: 'background',
-  text: 'background',
+type ContrastCheckMode = 'on-bg' | 'as-bg-white';
+
+const CONTRAST_CHECK_PAIRS: Record<ColorKey, ContrastCheckMode> = {
+  primary: 'as-bg-white',
+  secondary: 'as-bg-white',
+  background: 'on-bg',
+  text: 'on-bg',
+  accent: 'as-bg-white',
 };
 
 export const ColorPickerCell: React.FC<Props> = React.memo(function ColorPickerCell({
@@ -44,13 +49,22 @@ export const ColorPickerCell: React.FC<Props> = React.memo(function ColorPickerC
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
-  const contrastPair = CONTRAST_CHECK_PAIRS[colorKey];
+  const checkMode = CONTRAST_CHECK_PAIRS[colorKey];
   const contrastInfo = useMemo(() => {
-    if (!showContrastWarning || !contrastPair) return null;
-    return calculateContrast(value, background);
-  }, [colorKey, value, background, contrastPair, showContrastWarning]);
+    if (!showContrastWarning) return null;
+    if (checkMode === 'on-bg') {
+      return {
+        label: '与背景色',
+        result: calculateContrast(value, background),
+      };
+    }
+    return {
+      label: '白字在上',
+      result: calculateContrast('#ffffff', value),
+    };
+  }, [colorKey, value, background, checkMode, showContrastWarning]);
 
-  const showWarning = contrastInfo && !contrastInfo.passAA;
+  const showWarning = contrastInfo && !contrastInfo.result.passAA;
 
   const handlePickerChange = (hex: string) => {
     const norm = normalizeHex(hex);
@@ -75,9 +89,28 @@ export const ColorPickerCell: React.FC<Props> = React.memo(function ColorPickerC
       <div className="color-cell__header">
         <span className="color-cell__label">{COLOR_KEY_LABELS[colorKey]}</span>
         {showWarning && contrastInfo && (
-          <span className="color-cell__warning" title="对比度低于 WCAG AA (4.5:1)">
-            <AlertTriangle />
-            {contrastInfo.ratio}:1
+          <span
+            className="color-cell__warning"
+            title={`${contrastInfo.label}对比度 ${contrastInfo.result.ratio}:1，低于 WCAG AA 标准 (4.5:1)`}
+          >
+            <AlertTriangle size={12} />
+            {contrastInfo.result.ratio}:1
+          </span>
+        )}
+        {!showWarning && contrastInfo && contrastInfo.result.passAA && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 11,
+              color: 'var(--app-success)',
+              fontWeight: 500,
+              opacity: 0.8,
+            }}
+            title={`${contrastInfo.label}对比度 ${contrastInfo.result.ratio}:1，满足 WCAG AA`}
+          >
+            {contrastInfo.result.ratio}:1
           </span>
         )}
       </div>

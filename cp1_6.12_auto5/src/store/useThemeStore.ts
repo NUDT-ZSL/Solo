@@ -238,9 +238,14 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     const snap = get().history.find((s) => s.id === snapshotId);
     const id = get().activeThemeId;
     if (!snap || !id) return;
+    // 深拷贝快照颜色，避免与历史版本共享引用
+    const clonedColors =
+      typeof structuredClone === 'function'
+        ? structuredClone(snap.colors)
+        : JSON.parse(JSON.stringify(snap.colors));
     const themes = get().themes.map((t) =>
       t.id === id
-        ? { ...t, colors: { ...snap.colors }, updatedAt: Date.now() }
+        ? { ...t, colors: clonedColors, updatedAt: Date.now() }
         : t
     );
     persistThemes(themes);
@@ -286,10 +291,15 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
   },
 
   importSharedTheme: (shared) => {
+    // 深拷贝，避免外部引用污染
+    const clonedColors =
+      typeof structuredClone === 'function'
+        ? structuredClone(shared.colors)
+        : JSON.parse(JSON.stringify(shared.colors));
     const theme: Theme = {
       id: uid(),
       name: shared.name || '共享主题',
-      colors: shared.colors,
+      colors: clonedColors,
       comments: shared.comments || '',
       createdAt: Date.now(),
       updatedAt: Date.now(),

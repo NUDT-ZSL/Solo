@@ -1,5 +1,11 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { CheckCircle2, Palette, History, Share2, MessageSquareText } from 'lucide-react';
+import {
+  CheckCircle2,
+  Palette,
+  History,
+  Share2,
+  MessageSquareText,
+} from 'lucide-react';
 import { EditorPanel } from '@/editor/EditorPanel';
 import { PreviewArea } from '@/preview/PreviewArea';
 import { useThemeStore, initFromStorage } from '@/store/useThemeStore';
@@ -85,8 +91,30 @@ function App() {
 
   const isTablet = viewportMode === 'tablet';
 
+  const handleQuickSave = useCallback(() => {
+    useThemeStore.getState().saveSnapshot();
+  }, []);
+
+  const handleQuickShare = useCallback(async () => {
+    const link = useThemeStore.getState().generateShareLink();
+    try {
+      await navigator.clipboard.writeText(link);
+      useThemeStore.getState().setToast('✓ 分享链接已复制');
+    } catch {
+      window.prompt('复制链接：', link);
+    }
+  }, []);
+
   return (
     <div className="app-container">
+      {/* 背景装饰色块 — 用于毛玻璃效果的视觉参考 */}
+      <div className="app-bg-blobs" aria-hidden="true">
+        <div className="app-bg-blob app-bg-blob--1" />
+        <div className="app-bg-blob app-bg-blob--2" />
+        <div className="app-bg-blob app-bg-blob--3" />
+      </div>
+
+      {/* 平板模式：图标侧边栏 */}
       {isTablet && (
         <aside className="editor-rail" aria-label="快捷工具栏">
           <button
@@ -97,31 +125,23 @@ function App() {
             onClick={handleOpenPanel}
             title="打开主题编辑面板"
           >
-            <Palette />
+            <Palette size={22} />
           </button>
           <button
             type="button"
             className="editor-rail__icon-btn"
-            onClick={() => useThemeStore.getState().saveSnapshot()}
+            onClick={handleQuickSave}
             title="保存版本快照"
           >
-            <History />
+            <History size={22} />
           </button>
           <button
             type="button"
             className="editor-rail__icon-btn"
-            onClick={async () => {
-              const link = useThemeStore.getState().generateShareLink();
-              try {
-                await navigator.clipboard.writeText(link);
-                useThemeStore.getState().setToast('✓ 分享链接已复制');
-              } catch {
-                window.prompt('复制链接：', link);
-              }
-            }}
+            onClick={handleQuickShare}
             title="生成分享链接"
           >
-            <Share2 />
+            <Share2 size={22} />
           </button>
           <button
             type="button"
@@ -129,8 +149,9 @@ function App() {
             onClick={handleOpenPanel}
             title="添加注释"
           >
-            <MessageSquareText />
+            <MessageSquareText size={22} />
           </button>
+          <div className="editor-rail__divider" />
           <div className="editor-rail__swatches">
             {(COLOR_KEYS as ColorKey[]).map((k) => (
               <div
@@ -143,12 +164,14 @@ function App() {
         </aside>
       )}
 
+      {/* 编辑面板 — 桌面固定显示，平板/移动为抽屉 */}
       <EditorPanel
         open={panelOpen}
         onClose={handleClosePanel}
         updateTheme={updateTheme}
       />
 
+      {/* 遮罩层 — 仅在平板和移动模式打开抽屉时显示 */}
       {showOverlay && (
         <div
           className="drawer-overlay"
@@ -157,8 +180,10 @@ function App() {
         />
       )}
 
+      {/* 预览区域 */}
       <PreviewArea colors={previewColors} onOpenEditor={handleOpenPanel} />
 
+      {/* Toast 提示 */}
       {toast && (
         <div className="toast" role="status">
           <CheckCircle2 />
