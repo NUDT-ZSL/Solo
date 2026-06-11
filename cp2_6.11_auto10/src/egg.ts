@@ -33,7 +33,7 @@ export class Egg {
       { egg: '#60A5FA', body: '#3B82F6', eye: '#1E3A5F', accent: '#F472B6' },
       { egg: '#F87171', body: '#EF4444', eye: '#1B2838', accent: '#FCD34D' },
     ];
-    const palette = palettes[Math.floor(Math.random() * palettes.length);
+    const palette = palettes[Math.floor(Math.random() * palettes.length)];
     this.eggColor = palette.egg;
 
     this.genes = {

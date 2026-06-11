@@ -6,12 +6,16 @@ export interface Particle {
   life: number;
   maxLife: number;
   type: 'hatch' | 'evolution' | 'weather' | 'mutation' | 'shell' | 'trail' | 'glow';
+  startX: number;
+  startY: number;
   rotation?: number;
   rotationSpeed?: number;
   angle?: number;
   radius?: number;
   centerX?: number;
   centerY?: number;
+  colorStart?: string;
+  colorEnd?: string;
 }
 
 export interface ShellFragment {
@@ -21,6 +25,8 @@ export interface ShellFragment {
   color: string;
   life: number;
   maxLife: number;
+  startX: number;
+  startY: number;
   rotation: number;
   rotationSpeed: number;
   pixelPattern: number[][];
@@ -38,38 +44,31 @@ export class Renderer {
   public scale: number = 1;
   public particles: Particle[] = [];
   public shellFragments: ShellFragment[] = [];
-  private maxParticles: number = 500;
-  private offscreenGrass: HTMLCanvasElement | null = null;
+  private maxParticles: number = 600;
   public drawCalls: DrawCall = { count: 0 };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('无法获取Canvas 2D上下文');
+    if (!ctx) throw new Error('Canvas 2D 上下文初始化失败');
     this.ctx = ctx;
     this.ctx.imageSmoothingEnabled = false;
     this.setupResponsive();
   }
 
   private setupResponsive(): void {
-    const container = this.canvas.parentElement;
-    if (!container) return;
-
     const resize = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight - 48;
       const scaleX = vw / this.baseWidth;
       const scaleY = vh / this.baseHeight;
       this.scale = Math.max(1, Math.floor(Math.min(scaleX, scaleY)));
-      
       const w = this.baseWidth * this.scale;
       const h = this.baseHeight * this.scale;
       this.canvas.style.width = `${w}px`;
       this.canvas.style.height = `${h}px`;
-      
       this.ctx.imageSmoothingEnabled = false;
     };
-
     window.addEventListener('resize', resize);
     resize();
   }
@@ -79,10 +78,6 @@ export class Renderer {
     this.ctx.fillStyle = '#1B2838';
     this.ctx.fillRect(0, 0, this.baseWidth, this.baseHeight);
     this.drawCalls.count++;
-  }
-
-  public setPixelated(): void {
-    this.ctx.imageSmoothingEnabled = false;
   }
 
   public fillRect(x: number, y: number, w: number, h: number, color: string): void {
@@ -103,9 +98,7 @@ export class Renderer {
     pixelSize: number = 1,
     alpha: number = 1
   ): void {
-    if (alpha < 1) {
-      this.ctx.globalAlpha = alpha;
-    }
+    if (alpha < 1) this.ctx.globalAlpha = alpha;
     for (let row = 0; row < grid.length; row++) {
       for (let col = 0; col < grid[row].length; col++) {
         const color = grid[row][col];
@@ -120,9 +113,7 @@ export class Renderer {
         }
       }
     }
-    if (alpha < 1) {
-      this.ctx.globalAlpha = 1;
-    }
+    if (alpha < 1) this.ctx.globalAlpha = 1;
     this.drawCalls.count++;
   }
 
@@ -133,16 +124,23 @@ export class Renderer {
 
   public addHatchParticles(cx: number, cy: number, color: string, count: number = 25): void {
     const actualCount = Math.min(count, this.maxParticles - this.particles.length);
+    const colors = [color, '#FFFFFF', this.lightenColor(color, 0.3), this.darkenColor(color, 0.2)];
     for (let i = 0; i < actualCount; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 0.5 + Math.random() * 2.5;
+      const speed = 0.6 + Math.random() * 2.8;
+      const offsetX = (Math.random() - 0.5) * 2;
+      const offsetY = (Math.random() - 0.5) * 2;
+      const startX = cx + offsetX;
+      const startY = cy + offsetY;
       this.particles.push({
-        x: cx + (Math.random() - 0.5) * 2,
-        y: cy + (Math.random() - 0.5) * 2,
+        x: startX,
+        y: startY,
+        startX,
+        startY,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        color,
-        size: 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 2 + Math.floor(Math.random() * 2),
         life: 500,
         maxLife: 500,
         type: 'hatch'
@@ -150,19 +148,24 @@ export class Renderer {
     }
   }
 
-  public addEvolutionParticles(cx: number, cy: number, dt: number): void {
-    const colors = ['#F5D442', '#E25822', '#FF6B9D', '#4ECDC4', '#A78BFA', '#34D399'];
-    const batchSize = Math.min(8, this.maxParticles - this.particles.length);
+  public addEvolutionParticles(cx: number, cy: number): void {
+    const palette = ['#F5D442', '#E25822', '#FF6B9D', '#4ECDC4', '#A78BFA', '#34D399', '#FBBF24', '#F87171'];
+    const batchSize = Math.min(10, this.maxParticles - this.particles.length);
     for (let i = 0; i < batchSize; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 10 + Math.random() * 60;
-      const rotSpeed = (Math.random() - 0.5) * 0.08;
+      const radius = 8 + Math.random() * 70;
+      const rotSpeed = (Math.random() > 0.5 ? 1 : -1) * (0.03 + Math.random() * 0.08);
+      const ci = Math.floor(Math.random() * palette.length);
       this.particles.push({
         x: cx + Math.cos(angle) * radius,
         y: cy + Math.sin(angle) * radius,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        color: colors[Math.floor(Math.random() * colors.length)],
+        startX: cx,
+        startY: cy,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        color: palette[ci],
+        colorStart: palette[ci],
+        colorEnd: palette[(ci + 3) % palette.length],
         size: 2 + Math.floor(Math.random() * 3),
         life: 2000,
         maxLife: 2000,
@@ -174,71 +177,77 @@ export class Renderer {
         rotationSpeed: rotSpeed
       });
     }
-    void dt;
+  }
+
+  public triggerEvolutionStorm(cx: number, cy: number): void {
+    for (let i = 0; i < 120; i++) {
+      setTimeout(() => {
+        this.addEvolutionParticles(cx, cy);
+      }, i * 15);
+    }
   }
 
   public addWeatherParticles(weather: string, dt: number): void {
-    if (this.particles.filter(p => p.type === 'weather').length >= 120) return;
-    
+    const weatherCount = this.particles.filter(p => p.type === 'weather').length;
     if (weather === 'cloudy') {
-      if (Math.random() < 0.3) {
+      if (weatherCount < 80 && Math.random() < 0.4 * (dt / 16)) {
+        const x = Math.random() * this.baseWidth;
+        const y = Math.random() * (this.baseHeight * 0.55);
         this.particles.push({
-          x: Math.random() * this.baseWidth,
-          y: Math.random() * (this.baseHeight * 0.6),
-          vx: (Math.random() - 0.3) * 0.3,
-          vy: 0.05,
-          color: `rgba(150, 150, 160, ${0.2 + Math.random() * 0.3})`,
-          size: 4 + Math.floor(Math.random() * 6),
-          life: 8000,
-          maxLife: 8000,
+          x, y, startX: x, startY: y,
+          vx: (Math.random() - 0.4) * 0.25,
+          vy: 0.02,
+          color: `rgba(160, 160, 170, ${0.22 + Math.random() * 0.28})`,
+          size: 4 + Math.floor(Math.random() * 7),
+          life: 9000,
+          maxLife: 9000,
           type: 'weather'
         });
       }
     } else if (weather === 'rain') {
-      const batch = Math.min(5, this.maxParticles - this.particles.length);
-      for (let i = 0; i < batch; i++) {
+      const spawn = Math.min(Math.ceil(6 * dt / 16), this.maxParticles - this.particles.length);
+      for (let i = 0; i < spawn; i++) {
+        if (weatherCount + i >= 180) break;
+        const x = Math.random() * this.baseWidth;
         this.particles.push({
-          x: Math.random() * this.baseWidth,
-          y: -4,
-          vx: -0.5,
-          vy: 6 + Math.random() * 3,
-          color: '#4A90D9',
+          x, y: -4, startX: x, startY: -4,
+          vx: -0.4,
+          vy: 5.5 + Math.random() * 3.5,
+          color: '#5B9BD9',
           size: 1,
-          life: 3000,
-          maxLife: 3000,
+          life: 3500,
+          maxLife: 3500,
           type: 'weather'
         });
       }
     } else if (weather === 'snow') {
-      if (Math.random() < 0.7) {
+      if (weatherCount < 140 && Math.random() < 0.85 * (dt / 16)) {
+        const x = Math.random() * this.baseWidth;
         this.particles.push({
-          x: Math.random() * this.baseWidth,
-          y: -3,
-          vx: (Math.random() - 0.5) * 1,
-          vy: 1 + Math.random() * 2,
-          color: '#FFFFFF',
+          x, y: -3, startX: x, startY: -3,
+          vx: (Math.random() - 0.5) * 0.9,
+          vy: 0.6 + Math.random() * 1.8,
+          color: Math.random() > 0.3 ? '#FFFFFF' : '#F0F4FF',
           size: 2 + Math.floor(Math.random() * 2),
-          life: 10000,
-          maxLife: 10000,
+          life: 12000,
+          maxLife: 12000,
           type: 'weather'
         });
       }
     }
-    void dt;
   }
 
   public addMutationParticles(cx: number, cy: number): void {
-    const colors = ['#F5D442', '#FFFFFF', '#FFE066'];
-    for (let i = 0; i < 20; i++) {
+    const colors = ['#F5D442', '#FFFFFF', '#FFE066', '#FFF3B0'];
+    for (let i = 0; i < 24; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 0.3 + Math.random() * 2;
+      const speed = 0.4 + Math.random() * 2.2;
       this.particles.push({
-        x: cx,
-        y: cy,
+        x: cx, y: cy, startX: cx, startY: cy,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1,
+        vy: Math.sin(angle) * speed - 1.2,
         color: colors[Math.floor(Math.random() * colors.length)],
-        size: 2,
+        size: 2 + Math.floor(Math.random() * 2),
         life: 300,
         maxLife: 300,
         type: 'mutation'
@@ -248,10 +257,11 @@ export class Renderer {
 
   public addTrailParticles(x: number, y: number): void {
     this.particles.push({
-      x: x + (Math.random() - 0.5) * 4,
-      y: y + (Math.random() - 0.5) * 4,
+      x: x + (Math.random() - 0.5) * 5,
+      y: y + (Math.random() - 0.5) * 5,
+      startX: x, startY: y,
       vx: (Math.random() - 0.5) * 0.2,
-      vy: 0.3,
+      vy: 0.25,
       color: 'rgba(245, 212, 66, 0.6)',
       size: 3,
       life: 500,
@@ -262,91 +272,82 @@ export class Renderer {
 
   public addGlowParticles(cx: number, cy: number, radius: number): void {
     const count = this.particles.filter(p => p.type === 'glow').length;
-    if (count >= 40) return;
-    
+    if (count >= 45) return;
     const angle = Math.random() * Math.PI * 2;
+    const r = radius * (0.45 + Math.random() * 0.25);
     this.particles.push({
-      x: cx + Math.cos(angle) * (radius * 0.6),
-      y: cy + Math.sin(angle) * (radius * 0.6),
-      vx: 0,
-      vy: 0,
+      x: cx + Math.cos(angle) * r,
+      y: cy + Math.sin(angle) * r,
+      startX: cx, startY: cy,
+      vx: 0, vy: 0,
       angle,
-      centerX: cx,
-      centerY: cy,
-      radius: radius * 0.6,
-      rotationSpeed: 0.02,
-      color: 'rgba(255, 230, 102, 0.5)',
+      centerX: cx, centerY: cy,
+      radius: r,
+      rotationSpeed: 0.015 + Math.random() * 0.01,
+      color: Math.random() > 0.5 ? 'rgba(255, 230, 102, 0.55)' : 'rgba(245, 212, 66, 0.45)',
       size: 2,
-      life: 2000,
-      maxLife: 2000,
+      life: 2200,
+      maxLife: 2200,
       type: 'glow'
     });
   }
 
   public createShellFragments(cx: number, cy: number, eggSize: number, color: string): void {
-    const patternSize = 8;
+    const ps = 8;
     for (let i = 0; i < 8; i++) {
       const pattern: number[][] = [];
-      for (let r = 0; r < patternSize; r++) {
+      for (let r = 0; r < ps; r++) {
         const row: number[] = [];
-        for (let c = 0; c < patternSize; c++) {
-          row.push(Math.random() > 0.4 ? 1 : 0);
-        }
+        for (let c = 0; c < ps; c++) row.push(Math.random() > 0.38 ? 1 : 0);
         pattern.push(row);
       }
-      const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.3;
-      const speed = 2 + Math.random() * 3;
+      const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.35;
+      const speed = 2.2 + Math.random() * 3.2;
       this.shellFragments.push({
-        x: cx,
-        y: cy,
+        x: cx, y: cy, startX: cx, startY: cy,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 2,
-        size: eggSize / patternSize,
+        vy: Math.sin(angle) * speed - 2.4,
+        size: eggSize / ps,
         color,
         life: 1000,
         maxLife: 1000,
         rotation: 0,
-        rotationSpeed: (Math.random() - 0.5) * 0.2,
+        rotationSpeed: (Math.random() - 0.5) * 0.22,
         pixelPattern: pattern
       });
     }
   }
 
   public updateParticles(dt: number): void {
-    const dtFactor = dt / 16.67;
-    
+    const f = dt / 16.67;
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
-      
-      if (p.life <= 0) {
-        this.particles.splice(i, 1);
-        continue;
-      }
+      if (p.life <= 0) { this.particles.splice(i, 1); continue; }
 
       if (p.type === 'evolution' && p.centerX !== undefined && p.centerY !== undefined) {
-        p.angle = (p.angle || 0) + (p.rotationSpeed || 0) * dtFactor;
-        p.radius = (p.radius || 0) + 0.15 * dtFactor;
+        p.angle = (p.angle || 0) + (p.rotationSpeed || 0) * f;
+        p.radius = (p.radius || 0) + 0.18 * f;
         p.x = p.centerX + Math.cos(p.angle) * p.radius;
         p.y = p.centerY + Math.sin(p.angle) * p.radius;
-        p.vx *= 0.98;
-        p.vy *= 0.98;
-        p.x += p.vx * dtFactor;
-        p.y += p.vy * dtFactor;
+        p.vx *= 0.985; p.vy *= 0.985;
+        p.x += p.vx * f; p.y += p.vy * f;
+        if (p.colorStart && p.colorEnd) {
+          const t = 1 - p.life / p.maxLife;
+          p.color = this.interpolateColor(p.colorStart, p.colorEnd, t);
+        }
       } else if (p.type === 'glow' && p.centerX !== undefined && p.centerY !== undefined) {
-        p.angle = (p.angle || 0) + (p.rotationSpeed || 0) * dtFactor;
+        p.angle = (p.angle || 0) + (p.rotationSpeed || 0) * f;
         p.x = p.centerX + Math.cos(p.angle) * (p.radius || 20);
         p.y = p.centerY + Math.sin(p.angle) * (p.radius || 20);
       } else {
-        p.x += p.vx * dtFactor;
-        p.y += p.vy * dtFactor;
-        
+        p.x += p.vx * f;
+        p.y += p.vy * f;
         if (p.type === 'hatch' || p.type === 'mutation' || p.type === 'trail') {
-          p.vy += 0.05 * dtFactor;
+          p.vy += 0.055 * f;
         }
       }
-
-      if (p.type === 'weather' && p.y > this.baseHeight) {
+      if (p.type === 'weather' && p.y > this.baseHeight + 10) {
         this.particles.splice(i, 1);
       }
     }
@@ -354,80 +355,64 @@ export class Renderer {
     for (let i = this.shellFragments.length - 1; i >= 0; i--) {
       const s = this.shellFragments[i];
       s.life -= dt;
-      if (s.life <= 0) {
-        this.shellFragments.splice(i, 1);
-        continue;
-      }
-      s.x += s.vx * dtFactor;
-      s.y += s.vy * dtFactor;
-      s.vy += 0.15 * dtFactor;
-      s.rotation += s.rotationSpeed * dtFactor;
+      if (s.life <= 0) { this.shellFragments.splice(i, 1); continue; }
+      s.x += s.vx * f;
+      s.y += s.vy * f;
+      s.vy += 0.16 * f;
+      s.rotation += s.rotationSpeed * f;
     }
   }
 
   public drawParticles(): void {
-    const hatchParticles = this.particles.filter(p => p.type === 'hatch' || p.type === 'mutation');
-    const evolutionParticles = this.particles.filter(p => p.type === 'evolution');
-    const weatherParticles = this.particles.filter(p => p.type === 'weather');
-    const trailParticles = this.particles.filter(p => p.type === 'trail');
-    const glowParticles = this.particles.filter(p => p.type === 'glow');
+    const hatch = this.particles.filter(p => p.type === 'hatch' || p.type === 'mutation');
+    const evo = this.particles.filter(p => p.type === 'evolution');
+    const weather = this.particles.filter(p => p.type === 'weather');
+    const trail = this.particles.filter(p => p.type === 'trail');
+    const glow = this.particles.filter(p => p.type === 'glow');
 
-    if (hatchParticles.length > 0) {
-      for (const p of hatchParticles) {
-        const alpha = p.life / p.maxLife;
-        this.ctx.globalAlpha = Math.max(0, alpha);
+    if (hatch.length > 0) {
+      for (const p of hatch) {
+        this.ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
         this.drawPixel(p.x, p.y, p.size, p.color);
       }
       this.ctx.globalAlpha = 1;
       this.drawCalls.count++;
     }
-
-    if (evolutionParticles.length > 0) {
-      for (const p of evolutionParticles) {
-        const alpha = p.life / p.maxLife;
-        this.ctx.globalAlpha = Math.max(0, alpha);
+    if (evo.length > 0) {
+      for (const p of evo) {
+        this.ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
         this.drawPixel(p.x, p.y, p.size, p.color);
       }
       this.ctx.globalAlpha = 1;
       this.drawCalls.count++;
     }
-
-    if (weatherParticles.length > 0) {
-      for (const p of weatherParticles) {
+    if (weather.length > 0) {
+      for (const p of weather) {
         this.ctx.fillStyle = p.color;
-        if (p.size <= 1) {
-          this.ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 1, 4);
-        } else {
-          this.ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
-        }
+        if (p.size <= 1) this.ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 1, 5);
+        else this.ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
       }
       this.drawCalls.count++;
     }
-
-    if (trailParticles.length > 0) {
-      for (const p of trailParticles) {
-        const alpha = p.life / p.maxLife;
-        this.ctx.globalAlpha = Math.max(0, alpha);
+    if (trail.length > 0) {
+      for (const p of trail) {
+        this.ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
         this.drawPixel(p.x, p.y, p.size, p.color);
       }
       this.ctx.globalAlpha = 1;
       this.drawCalls.count++;
     }
-
-    if (glowParticles.length > 0) {
-      for (const p of glowParticles) {
-        const alpha = p.life / p.maxLife;
-        this.ctx.globalAlpha = Math.max(0, alpha * 0.7);
+    if (glow.length > 0) {
+      for (const p of glow) {
+        this.ctx.globalAlpha = Math.max(0, (p.life / p.maxLife) * 0.75);
         this.drawPixel(p.x, p.y, p.size, p.color);
       }
       this.ctx.globalAlpha = 1;
       this.drawCalls.count++;
     }
-
     if (this.shellFragments.length > 0) {
       for (const s of this.shellFragments) {
-        const alpha = s.life / s.maxLife;
-        this.ctx.globalAlpha = Math.max(0, alpha);
+        this.ctx.globalAlpha = Math.max(0, s.life / s.maxLife);
         this.ctx.save();
         this.ctx.translate(s.x, s.y);
         this.ctx.rotate(s.rotation);
@@ -438,8 +423,7 @@ export class Renderer {
               this.ctx.fillRect(
                 Math.floor(c * s.size - (s.pixelPattern[r].length * s.size) / 2),
                 Math.floor(r * s.size - (s.pixelPattern.length * s.size) / 2),
-                Math.ceil(s.size),
-                Math.ceil(s.size)
+                Math.ceil(s.size), Math.ceil(s.size)
               );
             }
           }
@@ -451,6 +435,33 @@ export class Renderer {
     }
   }
 
+  private lightenColor(hex: string, amt: number): string {
+    const n = parseInt(hex.replace('#', ''), 16);
+    const a = Math.round(255 * amt);
+    const R = Math.min(255, (n >> 16) + a);
+    const G = Math.min(255, ((n >> 8) & 0xFF) + a);
+    const B = Math.min(255, (n & 0xFF) + a);
+    return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+  }
+
+  private darkenColor(hex: string, amt: number): string {
+    const n = parseInt(hex.replace('#', ''), 16);
+    const a = Math.round(255 * amt);
+    const R = Math.max(0, (n >> 16) - a);
+    const G = Math.max(0, ((n >> 8) & 0xFF) - a);
+    const B = Math.max(0, (n & 0xFF) - a);
+    return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+  }
+
+  private interpolateColor(c1: string, c2: string, t: number): string {
+    const n1 = parseInt(c1.replace('#', ''), 16);
+    const n2 = parseInt(c2.replace('#', ''), 16);
+    const r = Math.floor(((n1 >> 16) * (1 - t) + (n2 >> 16) * t));
+    const g = Math.floor((((n1 >> 8) & 0xFF) * (1 - t) + ((n2 >> 8) & 0xFF) * t));
+    const b = Math.floor(((n1 & 0xFF) * (1 - t) + ((n2 & 0xFF) * t)));
+    return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
+  }
+
   public getCanvasCoords(clientX: number, clientY: number): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     return {
@@ -459,11 +470,6 @@ export class Renderer {
     };
   }
 
-  public getContext(): CanvasRenderingContext2D {
-    return this.ctx;
-  }
-
-  public getBaseDimensions(): { w: number; h: number } {
-    return { w: this.baseWidth, h: this.baseHeight };
-  }
+  public getContext(): CanvasRenderingContext2D { return this.ctx; }
+  public getBaseDimensions(): { w: number; h: number } { return { w: this.baseWidth, h: this.baseHeight }; }
 }
