@@ -82,12 +82,15 @@ export class Renderer {
 
   private analysisResult: AnalysisResult | null = null;
 
-  private lastRippleTrigger: number = 0;
+  private pendingMouseX: number = -1;
+  private pendingMouseY: number = -1;
+  private mousePending: boolean = false;
+  private lastRippleCheck: number = 0;
+  private readonly RIPPLE_CHECK_INTERVAL = 16;
 
   private readonly RIPPLE_DURATION = 800;
   private readonly MAX_RIPPLES = 5;
   private readonly RIPPLE_INFLUENCE_RADIUS = 150;
-  private readonly RIPPLE_THROTTLE = 80;
   private readonly MAX_DOTS = 25;
   private readonly MAX_STROKES = 15;
 
@@ -109,8 +112,8 @@ export class Renderer {
 
   resize(): void {
     const rect = this.canvas.getBoundingClientRect();
-    this.width = rect.width;
-    this.height = rect.height;
+    this.width = Math.max(1, rect.width);
+    this.height = Math.max(1, rect.height);
 
     this.canvas.width = Math.floor(this.width * this.dpr);
     this.canvas.height = Math.floor(this.height * this.dpr);
@@ -118,8 +121,8 @@ export class Renderer {
     this.ctx.scale(this.dpr, this.dpr);
 
     this.offscreenBackground = document.createElement('canvas');
-    this.offscreenBackground.width = Math.floor(this.width * this.dpr);
-    this.offscreenBackground.height = Math.floor(this.height * this.dpr);
+    this.offscreenBackground.width = Math.max(1, Math.floor(this.width * this.dpr));
+    this.offscreenBackground.height = Math.max(1, Math.floor(this.height * this.dpr));
     this.offscreenBgCtx = this.offscreenBackground.getContext('2d');
     if (this.offscreenBgCtx) {
       this.offscreenBgCtx.scale(this.dpr, this.dpr);
@@ -198,16 +201,20 @@ export class Renderer {
   }
 
   private generateInkDots(result: AnalysisResult): void {
-    const padX = this.width * 0.12;
-    const padY = this.height * 0.12;
-    const usableWidth = this.width - padX * 2;
-    const usableHeight = this.height - padY * 2;
+    const minMargin = 60;
+    const padX = Math.max(minMargin, this.width * 0.12);
+    const padY = Math.max(minMargin, this.height * 0.12);
+    const maxRadius = 10 + 5 * 7;
+    const safePadX = padX + maxRadius * 0.6;
+    const safePadY = padY + maxRadius * 0.6;
+    const usableWidth = Math.max(1, this.width - safePadX * 2);
+    const usableHeight = Math.max(1, this.height - safePadY * 2);
 
     const emotionXOffset: Record<EmotionType, number> = {
-      happy: -0.18,
-      sad: 0.18,
-      angry: -0.1,
-      calm: 0.1,
+      happy: -0.15,
+      sad: 0.15,
+      angry: -0.08,
+      calm: 0.08,
       anxious: 0
     };
 
@@ -216,8 +223,8 @@ export class Renderer {
     for (let sIdx = 0; sIdx < result.sentences.length && dotCount < this.MAX_DOTS; sIdx++) {
       const sentence = result.sentences[sIdx];
 
-      const baseX = padX + sentence.charIndex * usableWidth;
-      const baseY = padY + usableHeight * 0.5;
+      const baseX = safePadX + sentence.charIndex * usableWidth;
+      const baseY = safePadY + usableHeight * 0.5;
 
       const dotsForSentence = Math.min(sentence.keywords.length + 1, 3);
 
@@ -229,14 +236,21 @@ export class Renderer {
           ? sentence.intensity
           : (sentence.keywords[i - 1]?.intensity || sentence.intensity);
 
-        const emotionOffset = emotionXOffset[emotion] * usableWidth * 0.3;
-        const jitterX = (Math.random() - 0.5) * 50;
-        const jitterY = (Math.random() - 0.5) * (usableHeight * 0.6);
-
-        const x = Math.max(padX + 20, Math.min(this.width - padX - 20, baseX + emotionOffset + jitterX));
-        const y = Math.max(padY + 20, Math.min(this.height - padY - 20, baseY + jitterY));
-
         const baseRadius = 10 + intensity * 7;
+        const emotionOffset = emotionXOffset[emotion] * usableWidth * 0.25;
+        const maxJitterX = Math.min(40, usableWidth * 0.08);
+        const maxJitterY = Math.min(60, usableHeight * 0.35);
+        const jitterX = (Math.random() - 0.5) * maxJitterX * 2;
+        const jitterY = (Math.random() - 0.5) * maxJitterY * 2;
+
+        const rawX = baseX + emotionOffset + jitterX;
+        const rawY = baseY + jitterY;
+        const minX = safePadX + baseRadius * 0.6;
+        const maxX = this.width - safePadX - baseRadius * 0.6;
+        const minY = safePadY + baseRadius * 0.6;
+        const maxY = this.height - safePadY - baseRadius * 0.6;
+        const x = Math.max(minX, Math.min(maxX, rawX));
+        const y = Math.max(minY, Math.min(maxY, rawY));
 
         this.inkDots.push({
           x,
@@ -351,33 +365,43 @@ export class Renderer {
   }
 
   handleMouseMove(x: number, y: number): void {
-    const now = performance.now();
+    this.pendingMouseX = x;
+    this.pendingMouseY = y;
+    this.mousePending = true;
+  }
 
-    if (now - this.lastRippleTrigger > this.RIPPLE_THROTTLE) {
-      const nearest = this.findNearestDotSpatially(x, y);
-      if (nearest && !nearest.rippleActive) {
-        const activeRipples = this.rippleEffects.filter(r => r.active).length;
-        if (activeRipples < this.MAX_RIPPLES) {
-          nearest.rippleActive = true;
-          nearest.ripplePhase = 0;
+  private processPendingMouse(now: number, deltaTime: number): void {
+    if (!this.mousePending) return;
+    void deltaTime;
 
-          this.rippleEffects.push({
-            x: nearest.x,
-            y: nearest.y,
-            radius: nearest.baseRadius,
-            maxRadius: nearest.baseRadius * 2.5,
-            opacity: 0.55,
-            color: nearest.color,
-            active: true,
-            startTime: now
-          });
-
-          this.lastRippleTrigger = now;
-        }
-      }
-    }
+    const x = this.pendingMouseX;
+    const y = this.pendingMouseY;
+    this.mousePending = false;
 
     this.updateStrokeStretch(x, y);
+
+    if (now - this.lastRippleCheck < this.RIPPLE_CHECK_INTERVAL) return;
+    this.lastRippleCheck = now;
+
+    const nearest = this.findNearestDotSpatially(x, y);
+    if (nearest && !nearest.rippleActive) {
+      const activeRipples = this.rippleEffects.filter(r => r.active).length;
+      if (activeRipples < this.MAX_RIPPLES) {
+        nearest.rippleActive = true;
+        nearest.ripplePhase = 0;
+
+        this.rippleEffects.push({
+          x: nearest.x,
+          y: nearest.y,
+          radius: nearest.baseRadius,
+          maxRadius: nearest.baseRadius * 2.5,
+          opacity: 0.55,
+          color: nearest.color,
+          active: true,
+          startTime: now
+        });
+      }
+    }
   }
 
   private updateStrokeStretch(mouseX: number, mouseY: number): void {
@@ -413,10 +437,13 @@ export class Renderer {
     this.lastFrameTime = timestamp;
     const elapsed = timestamp - this.animationStartTime;
 
+    this.processPendingMouse(timestamp, deltaTime);
+
     this.ctx.clearRect(0, 0, this.width, this.height);
 
     this.renderBackgroundLayers(deltaTime);
-    if (this.offscreenBackground && this.offscreenBgCtx) {
+    if (this.offscreenBackground && this.offscreenBgCtx
+      && this.offscreenBackground.width > 0 && this.offscreenBackground.height > 0) {
       this.ctx.drawImage(this.offscreenBackground, 0, 0, this.width, this.height);
     }
 
@@ -616,8 +643,15 @@ export class Renderer {
 
     if (!exportCtx) throw new Error('Failed to create export context');
 
+    exportCtx.save();
+    exportCtx.globalCompositeOperation = 'destination-over';
+    exportCtx.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
+    exportCtx.restore();
+
+    exportCtx.save();
     exportCtx.scale(this.dpr, this.dpr);
-    exportCtx.clearRect(0, 0, this.width, this.height);
+
+    const alphaHex = (v: number) => Math.floor(Math.max(0, Math.min(255, v * 255))).toString(16).padStart(2, '0');
 
     exportCtx.save();
     exportCtx.globalCompositeOperation = 'multiply';
@@ -626,7 +660,6 @@ export class Renderer {
         layer.x, layer.y, 0,
         layer.x, layer.y, layer.radius
       );
-      const alphaHex = (v: number) => Math.floor(v * 255).toString(16).padStart(2, '0');
       gradient.addColorStop(0, layer.color + alphaHex(layer.targetOpacity));
       gradient.addColorStop(0.45, layer.color + alphaHex(layer.targetOpacity * 0.55));
       gradient.addColorStop(1, layer.color + '00');
@@ -654,22 +687,22 @@ export class Renderer {
     exportCtx.save();
     exportCtx.globalCompositeOperation = 'multiply';
     for (const dot of this.inkDots) {
+      const r = dot.targetRadius;
       const gradient = exportCtx.createRadialGradient(
-        dot.x - dot.targetRadius * 0.18, dot.y - dot.targetRadius * 0.18, 0,
-        dot.x, dot.y, dot.targetRadius
+        dot.x - r * 0.18, dot.y - r * 0.18, 0,
+        dot.x, dot.y, r
       );
-      const a0 = Math.floor(dot.opacity * 200).toString(16).padStart(2, '0');
-      const a1 = Math.floor(dot.opacity * 255).toString(16).padStart(2, '0');
-      const a2 = Math.floor(dot.opacity * 90).toString(16).padStart(2, '0');
-      gradient.addColorStop(0, dot.color + a0);
-      gradient.addColorStop(0.6, dot.color + a1);
-      gradient.addColorStop(0.85, dot.color + a2);
+      gradient.addColorStop(0, dot.color + alphaHex(dot.opacity * 200 / 255));
+      gradient.addColorStop(0.6, dot.color + alphaHex(dot.opacity));
+      gradient.addColorStop(0.85, dot.color + alphaHex(dot.opacity * 90 / 255));
       gradient.addColorStop(1, dot.color + '00');
       exportCtx.fillStyle = gradient;
       exportCtx.beginPath();
-      exportCtx.arc(dot.x, dot.y, dot.targetRadius, 0, Math.PI * 2);
+      exportCtx.arc(dot.x, dot.y, r, 0, Math.PI * 2);
       exportCtx.fill();
     }
+    exportCtx.restore();
+
     exportCtx.restore();
 
     return exportCanvas.toDataURL('image/png');

@@ -54,7 +54,7 @@ export function getEmotionColor(emotion: EmotionType): string {
 
 export function splitSentences(text: string): Array<{ text: string; start: number; end: number }> {
   const result: Array<{ text: string; start: number; end: number }> = [];
-  const punctuationRegex = /[。，,；;！!？?]/g;
+  const punctuationRegex = /[。.，,；;！!？?]/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 

@@ -37,10 +37,15 @@ class App {
     this.exportBtn = exportBtn;
     this.resetBtn = resetBtn;
     this.renderer = new Renderer(canvas);
+    (canvas as any)._renderer = this.renderer;
 
     this.bindEvents();
     this.renderer.startAnimationLoop();
     this.updateCharCount();
+
+    requestAnimationFrame(() => {
+      this.renderer.resize();
+    });
   }
 
   private bindEvents(): void {
@@ -192,10 +197,31 @@ class App {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function bootstrap() {
   try {
-    new App();
+    const app = new App();
+    void app;
+    setTimeout(() => {
+      const canvas = document.getElementById('inkCanvas') as HTMLCanvasElement | null;
+      if (canvas && (canvas as any)._renderer) {
+        (canvas as any)._renderer.resize();
+      }
+    }, 50);
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const canvas = document.getElementById('inkCanvas') as HTMLCanvasElement | null;
+        if (canvas && (canvas as any)._renderer) {
+          (canvas as any)._renderer.resize();
+        }
+      }, 50);
+    });
   } catch (error) {
     console.error('Failed to initialize app:', error);
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrap);
+} else {
+  bootstrap();
+}
