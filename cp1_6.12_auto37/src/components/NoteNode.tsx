@@ -96,10 +96,9 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
-      setSize({
-        width: Math.max(120, startWidth + deltaX),
-        height: Math.max(80, startHeight + deltaY),
-      });
+      const newWidth = Math.max(120, startWidth + deltaX);
+      const newHeight = Math.max(80, startHeight + deltaY);
+      setSize({ width: newWidth, height: newHeight });
     };
 
     const handleMouseUp = () => {
@@ -110,6 +109,16 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!isEditing) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
   };
 
   const nodeStyle: React.CSSProperties = {
@@ -128,11 +137,13 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
     border: selected ? '2px solid #4ECDC4' : '2px solid transparent',
     overflow: 'hidden',
     cursor: isEditing ? 'text' : 'grab',
+    display: 'flex',
+    flexDirection: 'column',
   };
 
   const textareaStyle: React.CSSProperties = {
     width: '100%',
-    height: image ? '40%' : '100%',
+    flex: image ? '0 0 auto' : '1',
     border: 'none',
     outline: 'none',
     resize: 'none',
@@ -142,27 +153,49 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
     color: '#333',
     lineHeight: '1.4',
     padding: 0,
+    margin: 0,
+    minHeight: '40px',
+  };
+
+  const displayTextStyle: React.CSSProperties = {
+    fontSize: '14px',
+    color: '#333',
+    lineHeight: '1.4',
+    wordBreak: 'break-word',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    flex: image ? '0 0 auto' : '1',
+    minHeight: '20px',
+  };
+
+  const imageContainerStyle: React.CSSProperties = {
+    flex: '1 1 auto',
+    display: image ? 'flex' : 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 0,
+    marginTop: '8px',
   };
 
   const imageStyle: React.CSSProperties = {
-    width: '100%',
-    maxHeight: '60%',
+    maxWidth: '100%',
+    maxHeight: '100%',
     objectFit: 'contain',
     borderRadius: '4px',
-    marginTop: '8px',
   };
 
   const resizeHandleStyle: React.CSSProperties = {
     position: 'absolute',
     right: '4px',
     bottom: '4px',
-    width: '12px',
-    height: '12px',
+    width: '14px',
+    height: '14px',
     cursor: 'se-resize',
     background:
-      'linear-gradient(135deg, transparent 50%, #ccc 50%, #ccc 60%, transparent 60%, transparent 70%, #ccc 70%, #ccc 80%, transparent 80%)',
+      'linear-gradient(135deg, transparent 50%, #bbb 50%, #bbb 60%, transparent 60%, transparent 70%, #bbb 70%, #bbb 80%, transparent 80%)',
     opacity: selected ? 1 : 0,
     transition: 'opacity 0.2s',
+    zIndex: 10,
   };
 
   return (
@@ -170,28 +203,52 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
       ref={nodeRef}
       style={nodeStyle}
       onDoubleClick={handleDoubleClick}
-      onMouseDown={() => setIsDragging(true)}
-      onMouseUp={() => setIsDragging(false)}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
     >
       <Handle
         type="target"
         position={Position.Top}
-        style={{ background: '#90CAF9', width: 10, height: 10 }}
+        style={{
+          background: '#90CAF9',
+          width: 10,
+          height: 10,
+          border: '2px solid #fff',
+          top: -5,
+        }}
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        style={{ background: '#90CAF9', width: 10, height: 10 }}
+        style={{
+          background: '#90CAF9',
+          width: 10,
+          height: 10,
+          border: '2px solid #fff',
+          bottom: -5,
+        }}
       />
       <Handle
         type="target"
         position={Position.Left}
-        style={{ background: '#90CAF9', width: 10, height: 10 }}
+        style={{
+          background: '#90CAF9',
+          width: 10,
+          height: 10,
+          border: '2px solid #fff',
+          left: -5,
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        style={{ background: '#90CAF9', width: 10, height: 10 }}
+        style={{
+          background: '#90CAF9',
+          width: 10,
+          height: 10,
+          border: '2px solid #fff',
+          right: -5,
+        }}
       />
 
       {isEditing ? (
@@ -205,22 +262,14 @@ const NoteNode: React.FC<NodeProps<NoteData>> = ({ data, selected, id }) => {
           maxLength={500}
         />
       ) : (
-        <div
-          style={{
-            fontSize: '14px',
-            color: '#333',
-            lineHeight: '1.4',
-            wordBreak: 'break-word',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            height: image ? '40%' : '100%',
-          }}
-        >
-          {text || <span style={{ color: '#999' }}>双击编辑...</span>}
+        <div style={displayTextStyle}>
+          {text || <span style={{ color: '#aaa' }}>双击编辑...</span>}
         </div>
       )}
 
-      {image && <img src={image} alt="便签图片" style={imageStyle} />}
+      <div style={imageContainerStyle}>
+        {image && <img src={image} alt="便签图片" style={imageStyle} />}
+      </div>
 
       <div style={resizeHandleStyle} onMouseDown={handleResizeStart} />
     </div>

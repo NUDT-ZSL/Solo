@@ -2,7 +2,6 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import ReactFlow, {
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -36,28 +35,47 @@ const Whiteboard: React.FC<{
   currentUser: User | null;
   users: User[];
 }> = ({ roomId, currentUser, users }) => {
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([
-    {
-      id: 'test-node-1',
-      type: 'default',
-      position: { x: 100, y: 100 },
-      data: { label: '测试便签' },
-    },
-  ]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, project } = useReactFlow();
   const [cursors, setCursors] = useState<CursorState>({});
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [edgeLabel, setEdgeLabel] = useState('');
   const isRemoteUpdateRef = useRef(false);
   const lastCursorUpdateRef = useRef(0);
+  const hasRoomStateRef = useRef(false);
+  const lastClickTimeRef = useRef(0);
+
+  const handlePaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      const now = Date.now();
+      if (now - lastClickTimeRef.current < 300) {
+        const position = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+
+        const newNode: Node = {
+          id: uuidv4(),
+          type: 'noteNode',
+          position,
+          data: { text: '', image: undefined },
+        };
+
+        setNodes((nds) => [...nds, newNode]);
+      }
+      lastClickTimeRef.current = now;
+    },
+    [screenToFlowPosition, setNodes]
+  );
 
   useEffect(() => {
     const handleRoomState = (state: { nodes: Node[]; edges: Edge[] }) => {
       isRemoteUpdateRef.current = true;
-      setNodes(state.nodes);
-      setEdges(state.edges);
+      hasRoomStateRef.current = true;
+      setNodes(state.nodes || []);
+      setEdges(state.edges || []);
       setTimeout(() => {
         isRemoteUpdateRef.current = false;
       }, 50);
@@ -119,6 +137,7 @@ const Whiteboard: React.FC<{
 
   useEffect(() => {
     if (isRemoteUpdateRef.current) return;
+    if (!hasRoomStateRef.current) return;
     const timeout = setTimeout(() => {
       socketService.sendNodesUpdate(nodes);
     }, 30);
@@ -127,6 +146,7 @@ const Whiteboard: React.FC<{
 
   useEffect(() => {
     if (isRemoteUpdateRef.current) return;
+    if (!hasRoomStateRef.current) return;
     const timeout = setTimeout(() => {
       socketService.sendEdgesUpdate(edges);
     }, 30);
@@ -142,40 +162,16 @@ const Whiteboard: React.FC<{
             type: 'smoothstep',
             style: { stroke: '#90CAF9', strokeWidth: 2 },
             markerEnd: { type: MarkerType.ArrowClosed, color: '#90CAF9' },
-            animated: false,
             label: '',
             labelStyle: { fill: '#666', fontSize: 12 },
-            labelBgStyle: { fill: '#fff' },
+            labelBgStyle: { fill: '#fff', fillOpacity: 0.8 },
+            labelShowBg: true,
           },
           eds
         )
       );
     },
     [setEdges]
-  );
-
-  const handleDoubleClick = useCallback(
-    (event: React.MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const isOnPane = target.closest('.react-flow__pane');
-      if (!isOnPane) return;
-      if (target.closest('.react-flow__node') || target.closest('.react-flow__edge')) return;
-
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      const newNode: Node = {
-        id: uuidv4(),
-        type: 'noteNode',
-        position,
-        data: { text: '' },
-      };
-
-      setNodes((nds) => [...nds, newNode]);
-    },
-    [screenToFlowPosition, setNodes]
   );
 
   const handleMouseMove = useCallback(
@@ -232,6 +228,10 @@ const Whiteboard: React.FC<{
     }
   }, []);
 
+  const handlePaneContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+  }, []);
+
   const cursorElements = useMemo(() => {
     return Object.entries(cursors).map(([userId, cursorData]) => {
       if (userId === currentUser?.id) return null;
@@ -281,7 +281,7 @@ const Whiteboard: React.FC<{
 
   return (
     <div
-      ref={reactFlowWrapper}
+      ref={containerRef}
       style={{ width: '100%', height: '100%', position: 'relative' }}
     >
       <ReactFlow
@@ -291,8 +291,9 @@ const Whiteboard: React.FC<{
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onEdgeClick={handleEdgeClick}
-        onDoubleClick={handleDoubleClick}
+        onClick={handlePaneClick}
         onMouseMove={handleMouseMove}
+        onPaneContextMenu={handlePaneContextMenu}
         nodeTypes={nodeTypes}
         fitView
         minZoom={0.3}
@@ -409,6 +410,22 @@ const Whiteboard: React.FC<{
         ))}
       </div>
 
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          backgroundColor: 'rgba(255,255,255,0.9)',
+          padding: '8px 12px',
+          borderRadius: '6px',
+          fontSize: '12px',
+          color: '#888',
+          zIndex: 100,
+        }}
+      >
+        双击添加便签 · 拖拽连接点连线 · 滚轮缩放
+      </div>
+
       {selectedEdge && (
         <div
           style={{
@@ -428,6 +445,11 @@ const Whiteboard: React.FC<{
             value={edgeLabel}
             onChange={handleLabelChange}
             onBlur={handleLabelBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleLabelBlur();
+              }
+            }}
             placeholder="输入连线标注..."
             style={{
               padding: '6px 10px',
