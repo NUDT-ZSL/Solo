@@ -131,6 +131,7 @@ export class BadgeEngine {
   private isGenerating: boolean = false;
   private centerX: number = 200;
   private centerY: number = 200;
+  private lastFrameTime: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -140,6 +141,7 @@ export class BadgeEngine {
     }
     this.ctx = ctx;
     this.lastGlobalRotationChange = performance.now();
+    this.lastFrameTime = performance.now();
   }
 
   setStyle(style: StyleType): void {
@@ -263,7 +265,7 @@ export class BadgeEngine {
   private getShapeType(random: SeededRandom): ShapeType {
     switch (this.style) {
       case 'nature':
-        return random.pick(['ellipse', 'waterdrop', 'circle', 'ellipse'] as ShapeType[]);
+        return random.pick(['ellipse', 'waterdrop', 'waterdrop', 'ellipse', 'circle'] as ShapeType[]);
       case 'cyber':
         return random.pick(['hexagon', 'triangle', 'diamond', 'circle', 'hexagon'] as ShapeType[]);
       case 'minimal':
@@ -310,6 +312,8 @@ export class BadgeEngine {
 
   private update(): void {
     const now = performance.now();
+    const deltaTime = now - this.lastFrameTime;
+    this.lastFrameTime = now;
 
     if (now - this.lastGlobalRotationChange > 3000) {
       this.globalRotationDirection *= -1;
@@ -325,17 +329,18 @@ export class BadgeEngine {
     }
 
     const easeProgress = this.easeOutCubic(generationProgress);
+    const frameRateFactor = deltaTime / 16.67;
 
     for (const shape of this.shapes) {
       shape.x = shape.finalX + (shape.x - shape.finalX) * (1 - easeProgress);
       shape.y = shape.finalY + (shape.y - shape.finalY) * (1 - easeProgress);
       shape.opacity = shape.finalOpacity * easeProgress;
 
-      shape.rotation += shape.rotationSpeed * shape.rotationDirection * this.globalRotationDirection;
-      shape.wobblePhase += shape.wobbleSpeed;
+      shape.rotation += shape.rotationSpeed * shape.rotationDirection * this.globalRotationDirection * frameRateFactor;
+      shape.wobblePhase += shape.wobbleSpeed * frameRateFactor;
 
       if (this.style === 'nature') {
-        shape.flickerPhase += shape.flickerSpeed;
+        shape.flickerPhase += shape.flickerSpeed * frameRateFactor;
         shape.opacity = shape.finalOpacity * (0.6 + 0.4 * Math.sin(shape.flickerPhase));
       }
     }
@@ -462,8 +467,8 @@ export class BadgeEngine {
   private drawWaterdrop(ctx: CanvasRenderingContext2D, size: number): void {
     const r = size / 2;
     ctx.moveTo(0, -r);
-    ctx.bezierCurveTo(r * 0.8, -r * 0.3, r * 0.6, r * 0.6, 0, r * 0.8);
-    ctx.bezierCurveTo(-r * 0.6, r * 0.6, -r * 0.8, -r * 0.3, 0, -r);
+    ctx.bezierCurveTo(r * 0.65, -r * 0.1, r * 0.5, r * 0.5, 0, r * 0.8);
+    ctx.bezierCurveTo(-r * 0.5, r * 0.5, -r * 0.65, -r * 0.1, 0, -r);
   }
 
   exportPNG(): Blob {
