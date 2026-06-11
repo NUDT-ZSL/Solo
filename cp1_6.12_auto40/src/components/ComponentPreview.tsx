@@ -1,10 +1,34 @@
-import React, { memo, useMemo, useState, useCallback } from 'react';
+/**
+ * ComponentPreview.tsx - 组件预览面板
+ *
+ * 数据流向：
+ *   - 输入：useComponent() 获取当前选中组件数据 + 状态标签映射
+ *   - 内部状态：interactiveState 管理所有可交互组件的实时状态
+ *   - 渲染：根据 variants × states 矩阵生成预览网格
+ *   - 输出：渲染对应的 ui/Button, ui/Input, ui/Alert, ui/Switch 组件
+ *
+ * 交互事件流：
+ *   用户点击/输入 → handleXxx 回调 → 更新 interactiveState →
+ *   → 对应 UI 组件收到新 props → CSS 类名变化 → 样式/动画更新
+ *
+ * 定时器管理：
+ *   - 所有 setTimeout ID 存储在 timerRef.current 数组中
+ *   - 每次触发新动画前先 clearAllTimers 清理旧定时器，避免冲突
+ *   - useEffect cleanup 在卸载时清理所有定时器
+ *
+ * 调用关系：
+ *   - 消费：useComponent (from componentStore)
+ *   - 被调用：App.tsx 作为中央区域引入
+ *   - 调用：Button / Input / Alert / Switch (UI 组件)
+ */
+
+import { memo, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useComponent } from '@/state/componentStore';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Alert from './ui/Alert';
 import Switch from './ui/Switch';
-import { ComponentState, ComponentType } from '@/types/component';
+import { type ComponentState, type ComponentType } from '@/types/component';
 import './ComponentPreview.css';
 
 interface InteractiveState {
@@ -30,21 +54,40 @@ const ComponentPreview = () => {
     alertVisible: true,
   });
 
+  const timerRef = useRef<number[]>([]);
+
+  const clearAllTimers = useCallback(() => {
+    timerRef.current.forEach(id => clearTimeout(id));
+    timerRef.current = [];
+  }, []);
+
+  const addTimer = useCallback((callback: () => void, delay: number) => {
+    const id = window.setTimeout(callback, delay);
+    timerRef.current.push(id);
+    return id;
+  }, []);
+
+  useEffect(() => {
+    return () => clearAllTimers();
+  }, [clearAllTimers]);
+
   const handleButtonClick = useCallback((simulateError = false) => {
+    clearAllTimers();
     setInteractiveState(prev => ({
       ...prev,
       buttonLoading: true,
       buttonSuccess: false,
       buttonError: false,
     }));
-    setTimeout(() => {
+    addTimer(() => {
       if (simulateError) {
         setInteractiveState(prev => ({
           ...prev,
           buttonLoading: false,
           buttonError: true,
+          buttonSuccess: false,
         }));
-        setTimeout(() => {
+        addTimer(() => {
           setInteractiveState(prev => ({ ...prev, buttonError: false }));
         }, 1500);
       } else {
@@ -52,13 +95,14 @@ const ComponentPreview = () => {
           ...prev,
           buttonLoading: false,
           buttonSuccess: true,
+          buttonError: false,
         }));
-        setTimeout(() => {
+        addTimer(() => {
           setInteractiveState(prev => ({ ...prev, buttonSuccess: false }));
         }, 1500);
       }
     }, 1500);
-  }, []);
+  }, [clearAllTimers, addTimer]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInteractiveState(prev => ({ ...prev, inputValue: e.target.value }));
@@ -77,11 +121,12 @@ const ComponentPreview = () => {
   }, []);
 
   const handleAlertClose = useCallback(() => {
+    clearAllTimers();
     setInteractiveState(prev => ({ ...prev, alertVisible: false }));
-    setTimeout(() => {
+    addTimer(() => {
       setInteractiveState(prev => ({ ...prev, alertVisible: true }));
     }, 2000);
-  }, []);
+  }, [clearAllTimers, addTimer]);
 
   const renderComponent = useCallback((
     componentId: ComponentType,
@@ -89,12 +134,11 @@ const ComponentPreview = () => {
     state: ComponentState,
     isInteractive: boolean
   ) => {
-
     switch (componentId) {
       case 'button':
         if (isInteractive) {
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+            <div className="component-preview__interactive-buttons">
               <Button
                 variant={variantProps?.variant as any}
                 onClick={() => handleButtonClick(false)}
@@ -144,7 +188,7 @@ const ComponentPreview = () => {
           );
         }
         if (isInteractive && !interactiveState.alertVisible) {
-          return <span style={{ fontSize: 12, color: '#999' }}>2秒后重新显示...</span>;
+          return <span className="component-preview__empty-hint">2秒后重新显示...</span>;
         }
         return (
           <Alert
@@ -176,7 +220,15 @@ const ComponentPreview = () => {
       default:
         return null;
     }
-  }, [handleButtonClick, handleInputChange, handleInputFocus, handleInputBlur, handleSwitchChange, handleAlertClose, interactiveState]);
+  }, [
+    handleButtonClick,
+    handleInputChange,
+    handleInputFocus,
+    handleInputBlur,
+    handleSwitchChange,
+    handleAlertClose,
+    interactiveState,
+  ]);
 
   const previewGrid = useMemo(() => {
     const { states, variants } = selectedComponent;
@@ -206,9 +258,9 @@ const ComponentPreview = () => {
         </div>
       </div>
 
-      <div className="component-preview__content">
+      <div className="component-preview__content" key={selectedComponent.id}>
         {previewGrid.map(({ variant, stateItems }) => (
-          <div key={variant.id} className="component-preview__variant-section">
+          <section key={variant.id} className="component-preview__variant-section">
             <h3 className="component-preview__variant-title">{variant.name}</h3>
             <div className="component-preview__states-grid">
               {stateItems.map(({ state, isInteractive }) => (
@@ -228,7 +280,7 @@ const ComponentPreview = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </main>
