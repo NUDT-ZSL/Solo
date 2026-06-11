@@ -4,6 +4,18 @@
   box-sizing: border-box;
 }
 
+@property --col1 {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 1fr;
+}
+
+@property --col2 {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 1fr;
+}
+
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: #ffffff;
@@ -39,14 +51,14 @@ body {
 
 .card-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: var(--col1, 1fr) var(--col2, 1fr);
   grid-template-areas:
     "card1 card2"
     "card3 card4";
   gap: 24px;
   width: 100%;
   max-width: 900px;
-  transition: grid-template-columns 0.8s ease-in-out;
+  transition: --col1 0.8s ease-in-out, --col2 0.8s ease-in-out;
 }
 
 .dashboard {
@@ -93,7 +105,7 @@ body {
 
 @media (min-width: 768px) and (max-width: 1439px) {
   .card-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: var(--col1, 1fr) var(--col2, 1fr);
     grid-template-areas:
       "card1 card2"
       "card3 card3"

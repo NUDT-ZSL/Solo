@@ -10,8 +10,8 @@
   user-select: none;
   min-height: 180px;
   background: linear-gradient(135deg, #add8e6 0%, #c5e3f0 100%);
-  transition: background-color 0.8s ease-in-out, color 0.8s ease-in-out,
-    box-shadow 0.5s ease, transform 0.3s ease;
+  transition: background-color 0.8s ease-in-out, background 0.8s ease-in-out,
+    color 0.8s ease-in-out, box-shadow 0.5s ease, transform 0.3s ease;
 }
 
 .adaptive-card:hover {
@@ -20,6 +20,7 @@
 
 .adaptive-card:active {
   transform: scale(0.95);
+  transition: transform 0.15s ease;
 }
 
 .adaptive-card.pulsing {
@@ -31,7 +32,8 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
   50% {
-    box-shadow: 0 0 30px currentColor, 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 0 30px var(--glow-color, rgba(173, 216, 230, 0.6)),
+      0 4px 12px rgba(0, 0, 0, 0.15);
     transform: scale(1.02);
   }
   100% {
@@ -85,7 +87,7 @@
   font-size: 16px;
   font-weight: 600;
   color: #4caf50;
-  animation: floatUp 1.5s forwards;
+  animation: floatUp 1.5s ease-out forwards;
   pointer-events: none;
   z-index: 10;
 }
@@ -94,6 +96,9 @@
   0% {
     opacity: 1;
     transform: translateY(0);
+  }
+  60% {
+    opacity: 0.8;
   }
   100% {
     opacity: 0;

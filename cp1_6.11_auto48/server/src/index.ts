@@ -36,7 +36,9 @@ interface LayoutResponse {
 }
 
 function calculateScore(clicks: number, hoverSeconds: number, scrollDepth: number): number {
-  return clicks * 2 + hoverSeconds + scrollDepth * 0.5
+  const normalizedHover = hoverSeconds > 1000 ? hoverSeconds / 1000 : hoverSeconds
+  const normalizedScroll = (scrollDepth / 100) * 0.5
+  return clicks * 2 + normalizedHover + normalizedScroll
 }
 
 function getScoreLevel(score: number, maxScore: number): 'high' | 'medium' | 'low' {

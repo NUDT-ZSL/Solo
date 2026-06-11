@@ -37,31 +37,28 @@ function AdaptiveCard({
   clickAnimations,
   gridArea,
 }: AdaptiveCardProps) {
+  const isInitial = layout.score === 0
+
   const cardStyle: CSSProperties = {
-    backgroundColor: layout.backgroundColor,
+    '--glow-color': layout.glowColor,
     color: layout.textColor,
     gridArea,
-    transition: 'background-color 0.8s ease-in-out, color 0.8s ease-in-out, transform 0.3s ease',
-  }
+    transition: 'background-color 0.8s ease-in-out, background 0.8s ease-in-out, color 0.8s ease-in-out, box-shadow 0.5s ease, transform 0.3s ease',
+  } as CSSProperties
 
-  const pulseStyle: CSSProperties = isPulsing
-    ? {
-        boxShadow: `0 0 20px ${layout.glowColor}, 0 4px 12px rgba(0,0,0,0.1)`,
-        animation: 'pulseGlow 0.5s ease-in-out',
-      }
-    : {}
-
-  const handleMouseDown = () => {
-    onClick()
+  if (isInitial) {
+    cardStyle.background = 'linear-gradient(135deg, #add8e6 0%, #c5e3f0 100%)'
+  } else {
+    cardStyle.backgroundColor = layout.backgroundColor
   }
 
   return (
     <div
       className={`adaptive-card ${isPulsing ? 'pulsing' : ''}`}
-      style={{ ...cardStyle, ...pulseStyle }}
+      style={cardStyle}
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
-      onMouseDown={handleMouseDown}
+      onClick={onClick}
     >
       <div className="card-icon">{icon}</div>
       <h3 className="card-title">{title}</h3>

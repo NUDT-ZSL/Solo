@@ -150,7 +150,13 @@ function App() {
     }
   }
 
-  const gridTemplateColumns = layouts.map((l) => `${l.gridWeight}fr`).join(' ')
+  const col1Weight = (layouts[0].gridWeight + layouts[2].gridWeight) / 2
+  const col2Weight = (layouts[1].gridWeight + layouts[3].gridWeight) / 2
+
+  const gridVars = {
+    '--col1': `${col1Weight}fr`,
+    '--col2': `${col2Weight}fr`,
+  } as React.CSSProperties
 
   return (
     <div className="app-container">
@@ -159,7 +165,7 @@ function App() {
         <p className="subtitle">自适应体验原型 · 基于用户行为动态调整</p>
       </header>
 
-      <main className="card-grid" style={{ gridTemplateColumns }}>
+      <main className="card-grid" style={gridVars}>
         {DEFAULT_CARDS.map((card, index) => {
           const layout = layouts[index] || layouts[0]
           const hasClickAnimation = clickAnimations.filter((a) => a.id === card.id)
