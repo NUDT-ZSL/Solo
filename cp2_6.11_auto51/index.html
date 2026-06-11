@@ -2,248 +2,338 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
-  <meta name="theme-color" content="#F5F0E8" />
-  <title>墨舞蝶影 · Ink Dance Butterfly</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>幻音涂鸦 | Phantom Sound Doodle</title>
   <style>
-    :root {
-      --paper-start: #F5F0E8;
-      --paper-end: #D4CFC8;
-      --border-soft: #C4B998;
-      --ink-dark: #1A1A1A;
-      --ink-brown: #3D2B1F;
-      --seal-brown: #8B7355;
-      --gold: #FFD700;
-      --coral: #FF6B6B;
-      --teal: #4ECDC4;
-      --canvas-width: 95vw;
-      --canvas-height: 90vh;
-      --canvas-padding: 3vw;
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
+    * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
     }
 
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      font-family: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", "STSong", serif;
-      -webkit-font-smoothing: antialiased;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: none;
+      background: #0D0D1A;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: #ffffff;
       user-select: none;
-      background: linear-gradient(180deg, var(--paper-start) 0%, var(--paper-end) 100%);
     }
 
-    body {
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
       position: relative;
+    }
+
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #0D0D1A;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: var(--canvas-padding);
+      z-index: 9999;
+      transition: opacity 0.6s ease;
     }
 
-    .app-wrapper {
-      position: relative;
-      width: var(--canvas-width);
-      height: var(--canvas-height);
-    }
-
-    .seal-layer {
-      position: absolute;
-      inset: 0;
+    #loading.fade-out {
+      opacity: 0;
       pointer-events: none;
-      z-index: 0;
     }
 
-    .seal {
-      position: absolute;
+    .loader {
+      display: flex;
+      gap: 12px;
+    }
+
+    .loader-dot {
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
-      background: var(--seal-brown);
-      opacity: 0.08;
-      box-shadow: inset 0 0 4px rgba(139, 115, 85, 0.4);
+      animation: bounce 1.2s ease-in-out infinite;
     }
 
-    .canvas-container {
-      position: relative;
+    .loader-dot:nth-child(1) { background: #FF3366; animation-delay: 0s; }
+    .loader-dot:nth-child(2) { background: #00BFFF; animation-delay: 0.15s; }
+    .loader-dot:nth-child(3) { background: #39FF14; animation-delay: 0.3s; }
+    .loader-dot:nth-child(4) { background: #9932CC; animation-delay: 0.45s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.4); opacity: 0.5; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+
+    .loader-text {
+      position: absolute;
+      bottom: 35%;
+      font-size: 14px;
+      letter-spacing: 4px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    #main-container {
+      display: flex;
+      flex: 1;
+      min-height: 0;
       width: 100%;
-      height: 100%;
-      z-index: 1;
-      border: 0.5px solid var(--border-soft);
-      background: transparent;
-      box-shadow:
-        -8px -8px 16px -8px rgba(0, 0, 0, 0.15),
-         8px -8px 16px -8px rgba(0, 0, 0, 0.15),
-        -8px  8px 16px -8px rgba(0, 0, 0, 0.15),
-         8px  8px 16px -8px rgba(0, 0, 0, 0.15);
+    }
+
+    #toolbar {
+      width: 60px;
+      background: rgba(255,255,255,0.03);
+      border-right: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 20px 0;
+      flex-shrink: 0;
+    }
+
+    .tool-note {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: grab;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      position: relative;
+    }
+
+    .tool-note:hover {
+      transform: scale(1.12);
+    }
+
+    .tool-note:active {
+      cursor: grabbing;
+      transform: scale(0.95);
+    }
+
+    .tool-note.red {
+      background: #FF3366;
+      box-shadow: 0 0 18px rgba(255, 51, 102, 0.6), 0 0 36px rgba(255, 51, 102, 0.3);
+    }
+
+    .tool-note.blue {
+      background: #00BFFF;
+      box-shadow: 0 0 18px rgba(0, 191, 255, 0.6), 0 0 36px rgba(0, 191, 255, 0.3);
+    }
+
+    .tool-note.green {
+      background: #39FF14;
+      box-shadow: 0 0 18px rgba(57, 255, 20, 0.6), 0 0 36px rgba(57, 255, 20, 0.3);
+    }
+
+    .tool-note.purple {
+      background: #9932CC;
+      box-shadow: 0 0 18px rgba(153, 50, 204, 0.6), 0 0 36px rgba(153, 50, 204, 0.3);
+    }
+
+    #canvas-wrapper {
+      flex: 1;
+      position: relative;
+      min-width: 400px;
+      min-height: 300px;
       overflow: hidden;
     }
 
-    .canvas-container::before,
-    .canvas-container::after {
-      content: '';
-      position: absolute;
-      width: 60px;
-      height: 60px;
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    .canvas-container::before {
-      top: 0;
-      left: 0;
-      background:
-        linear-gradient(135deg, rgba(0,0,0,0.15) 0%, transparent 50%);
-      clip-path: polygon(0 0, 100% 0, 0 100%);
-    }
-
-    .canvas-container::after {
-      bottom: 0;
-      right: 0;
-      background:
-        linear-gradient(315deg, rgba(0,0,0,0.15) 0%, transparent 50%);
-      clip-path: polygon(100% 100%, 100% 0, 0 100%);
-    }
-
-    .corner-tr,
-    .corner-bl {
-      position: absolute;
-      width: 60px;
-      height: 60px;
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    .corner-tr {
-      top: 0;
-      right: 0;
-      background: linear-gradient(225deg, rgba(0,0,0,0.15) 0%, transparent 50%);
-      clip-path: polygon(100% 0, 0 0, 100% 100%);
-    }
-
-    .corner-bl {
-      bottom: 0;
-      left: 0;
-      background: linear-gradient(45deg, rgba(0,0,0,0.15) 0%, transparent 50%);
-      clip-path: polygon(0 100%, 0 0, 100% 100%);
-    }
-
-    #mainCanvas {
-      position: absolute;
-      inset: 0;
+    #canvas {
+      display: block;
       width: 100%;
       height: 100%;
-      display: block;
-      cursor: crosshair;
     }
 
-    .stats-panel {
-      position: absolute;
-      left: 16px;
-      bottom: 16px;
-      z-index: 20;
-      background: rgba(255, 255, 255, 0.55);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      padding: 10px 14px;
-      border-radius: 6px;
-      border: 0.5px solid rgba(196, 185, 152, 0.6);
-      font-size: 13px;
-      line-height: 1.7;
-      color: #3D2B1F;
-      letter-spacing: 0.5px;
+    #drag-ghost {
+      position: fixed;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
       pointer-events: none;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      z-index: 1000;
+      opacity: 0.85;
+      transform: translate(-50%, -50%);
+      display: none;
     }
 
-    .stats-panel .stat-row {
+    #controls {
+      height: 50px;
+      background: rgba(255,255,255,0.02);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .ctrl-left {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex: 1;
+    }
+
+    .ctrl-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
       display: flex;
       align-items: center;
       gap: 6px;
+      letter-spacing: 0.5px;
     }
 
-    .stats-panel .stat-label {
-      opacity: 0.7;
+    .btn:hover {
+      background: rgba(255,255,255,0.18);
     }
 
-    .stats-panel .stat-value {
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      color: #1A1A1A;
+    .btn:active {
+      transform: scale(0.95);
     }
 
-    .stats-panel .stat-cap {
-      font-size: 11px;
-      opacity: 0.5;
-      font-weight: 400;
+    .btn.primary {
+      background: rgba(0, 191, 255, 0.25);
     }
 
-    .title-watermark {
-      position: absolute;
-      top: 14px;
-      right: 18px;
-      z-index: 20;
-      font-size: 14px;
-      color: rgba(61, 43, 31, 0.35);
-      letter-spacing: 4px;
-      writing-mode: vertical-rl;
-      text-orientation: upright;
-      pointer-events: none;
-      user-select: none;
+    .btn.primary:hover {
+      background: rgba(0, 191, 255, 0.45);
     }
 
-    @media (max-width: 768px) {
-      :root {
-        --canvas-padding: 2vw;
+    .btn.danger {
+      background: rgba(255, 51, 102, 0.2);
+    }
+
+    .btn.danger:hover {
+      background: rgba(255, 51, 102, 0.35);
+    }
+
+    .speed-label {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      min-width: 44px;
+    }
+
+    #speed-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 140px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.15);
+      outline: none;
+      cursor: pointer;
+    }
+
+    #speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #00BFFF;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 191, 255, 0.6);
+      transition: transform 0.1s ease;
+    }
+
+    #speed-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    #speed-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #00BFFF;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px rgba(0, 191, 255, 0.6);
+    }
+
+    @media (max-width: 600px) {
+      #main-container {
+        flex-direction: column;
       }
 
-      .stats-panel {
-        left: 10px;
-        bottom: 10px;
-        padding: 7px 10px;
-        font-size: 11px;
-        line-height: 1.65;
+      #toolbar {
+        width: 100%;
+        height: 70px;
+        flex-direction: row;
+        border-right: none;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 0 20px;
+        gap: 20px;
       }
 
-      .title-watermark {
-        font-size: 11px;
-        letter-spacing: 3px;
-        top: 10px;
-        right: 10px;
+      #canvas-wrapper {
+        min-width: unset;
+        min-height: 260px;
+      }
+
+      .btn {
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      #speed-slider {
+        width: 90px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="app-wrapper">
-    <div class="seal-layer" id="sealLayer" aria-hidden="true"></div>
-
-    <div class="canvas-container">
-      <div class="corner-tr"></div>
-      <div class="corner-bl"></div>
-      <canvas id="mainCanvas"></canvas>
-
-      <div class="stats-panel" role="status" aria-live="polite">
-        <div class="stat-row">
-          <span class="stat-label">蝴蝶数量</span>
-          <span class="stat-value"><span id="statButterfly">0</span><span class="stat-cap">/60</span></span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">轨迹长度</span>
-          <span class="stat-value"><span id="statLength">0</span><span class="stat-cap"> px</span></span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">绘制时间</span>
-          <span class="stat-value"><span id="statTime">0.0</span><span class="stat-cap"> s</span></span>
-        </div>
+  <div id="app">
+    <div id="loading">
+      <div class="loader">
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
       </div>
-
-      <div class="title-watermark">墨舞蝶影</div>
+      <div class="loader-text">幻音涂鸦加载中...</div>
     </div>
+
+    <div id="main-container">
+      <aside id="toolbar">
+        <div class="tool-note red" draggable="true" data-color="red"></div>
+        <div class="tool-note blue" draggable="true" data-color="blue"></div>
+        <div class="tool-note green" draggable="true" data-color="green"></div>
+        <div class="tool-note purple" draggable="true" data-color="purple"></div>
+      </aside>
+
+      <div id="canvas-wrapper">
+        <canvas id="canvas"></canvas>
+      </div>
+    </div>
+
+    <div id="controls">
+      <div class="ctrl-left">
+        <button id="btn-play" class="btn primary">▶ 播放</button>
+        <button id="btn-undo" class="btn">↶ 撤销</button>
+        <button id="btn-clear" class="btn danger">✕ 清空</button>
+      </div>
+      <div class="ctrl-right">
+        <span class="speed-label" id="speed-value">1.0x</span>
+        <input type="range" id="speed-slider" min="0.5" max="3" step="0.1" value="1" />
+      </div>
+    </div>
+
+    <div id="drag-ghost"></div>
   </div>
 
   <script type="module" src="/src/main.ts"></script>
