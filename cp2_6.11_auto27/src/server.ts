@@ -21,15 +21,32 @@ export interface ScentEntry {
 
 let entries: ScentEntry[] = [];
 
-const validateEntry = (entry: Partial<ScentEntry>): entry is ScentEntry => {
-  return !!(
-    entry.date &&
-    entry.scentType &&
-    entry.description !== undefined &&
-    entry.emotion &&
-    ['flower', 'food', 'nature', 'city'].includes(entry.scentType) &&
-    ['happy', 'calm', 'nostalgic', 'melancholy', 'excited'].includes(entry.emotion)
-  );
+const validateEntry = (entry: Partial<ScentEntry>): string[] => {
+  const errors: string[] = [];
+
+  if (!entry.date) {
+    errors.push('缺少必填字段: date');
+  }
+
+  if (!entry.scentType) {
+    errors.push('缺少必填字段: scentType');
+  } else if (!['flower', 'food', 'nature', 'city'].includes(entry.scentType)) {
+    errors.push('scentType必须是flower/food/nature/city之一');
+  }
+
+  if (entry.description === undefined || entry.description === null) {
+    errors.push('缺少必填字段: description');
+  } else if (entry.description === '') {
+    errors.push('description不能为空');
+  }
+
+  if (!entry.emotion) {
+    errors.push('缺少必填字段: emotion');
+  } else if (!['happy', 'calm', 'nostalgic', 'melancholy', 'excited'].includes(entry.emotion)) {
+    errors.push('emotion必须是happy/calm/nostalgic/melancholy/excited之一');
+  }
+
+  return errors;
 };
 
 app.get('/api/entries', (_req, res) => {
@@ -50,8 +67,9 @@ app.post('/api/entries', (req, res) => {
     updatedAt: Date.now(),
   };
 
-  if (!validateEntry(newEntry)) {
-    return res.status(400).json({ error: '缺少必填字段或字段格式错误' });
+  const errors = validateEntry(newEntry);
+  if (errors.length > 0) {
+    return res.status(400).json({ error: errors.join('; ') });
   }
 
   entries.push(newEntry);
@@ -73,8 +91,9 @@ app.put('/api/entries/:id', (req, res) => {
     updatedAt: Date.now(),
   };
 
-  if (!validateEntry(updatedEntry)) {
-    return res.status(400).json({ error: '字段格式错误' });
+  const errors = validateEntry(updatedEntry);
+  if (errors.length > 0) {
+    return res.status(400).json({ error: errors.join('; ') });
   }
 
   entries[index] = updatedEntry;

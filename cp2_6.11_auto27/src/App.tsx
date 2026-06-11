@@ -313,9 +313,6 @@ const RecordPage: React.FC<{
   onSave: () => void;
 }> = ({ state, dispatch, onSave }) => {
   const petalCount = Math.min(20, state.description.length);
-  const baseColor = state.selectedScentType
-    ? SCENT_COLORS[state.selectedScentType]
-    : '#90EE90';
 
   useEffect(() => {
     if (state.selectedScentType && state.bloomProgress < 1) {
@@ -381,7 +378,7 @@ const RecordPage: React.FC<{
       >
         <FlowerCanvas
           petalCount={state.selectedScentType ? petalCount : 0}
-          baseColor={baseColor}
+          scentType={state.selectedScentType || undefined}
           textDescription={state.description}
           imageData={state.imageData || undefined}
           bloomProgress={state.bloomProgress}
@@ -830,7 +827,7 @@ const CalendarPage: React.FC<{
             <div style={{ marginBottom: '16px' }}>
               <FlowerCanvas
                 petalCount={Math.min(20, previewEntry.description.length)}
-                baseColor={SCENT_COLORS[previewEntry.scentType]}
+                scentType={previewEntry.scentType}
                 textDescription={previewEntry.description}
                 imageData={previewEntry.imageData}
                 bloomProgress={1}
@@ -982,7 +979,7 @@ const DetailPage: React.FC<{
         <div style={{ marginBottom: '20px' }}>
           <FlowerCanvas
             petalCount={Math.min(20, entry.description.length)}
-            baseColor={SCENT_COLORS[entry.scentType]}
+            scentType={entry.scentType}
             textDescription={entry.description}
             imageData={entry.imageData}
             bloomProgress={1}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 
 interface FlowerCanvasProps {
   petalCount: number;
-  baseColor: string;
+  scentType?: 'flower' | 'food' | 'nature' | 'city';
   textDescription: string;
   imageData?: string;
   bloomProgress?: number;
@@ -15,12 +15,18 @@ interface Petal {
   cp2x: number;
   cp2y: number;
   length: number;
-  width: number;
 }
+
+const SCENT_COLORS: Record<string, string> = {
+  flower: '#FFB6C1',
+  food: '#FFBF00',
+  nature: '#7CCD7C',
+  city: '#6B7B8D',
+};
 
 const FlowerCanvas = ({
   petalCount,
-  baseColor,
+  scentType,
   textDescription,
   imageData,
   bloomProgress = 1,
@@ -32,33 +38,36 @@ const FlowerCanvas = ({
   const imagePatternRef = useRef<CanvasPattern | null>(null);
   const lastTimeRef = useRef<number>(performance.now());
   const fpsRef = useRef<number[]>([]);
+  const propsRef = useRef({ petalCount, scentType, textDescription, imageData, bloomProgress });
+
+  useEffect(() => {
+    propsRef.current = { petalCount, scentType, textDescription, imageData, bloomProgress };
+  }, [petalCount, scentType, textDescription, imageData, bloomProgress]);
 
   const generatePetals = useCallback((count: number, text: string) => {
+    const actualCount = Math.min(count, 20);
     const petals: Petal[] = [];
-    const chars = text.padEnd(count, ' ').slice(0, count);
+    const chars = text.slice(0, actualCount).padEnd(actualCount, ' ');
 
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < actualCount; i++) {
       const charCode = chars.charCodeAt(i) || 32;
-      const angle = (i / count) * Math.PI * 2;
+      const angle = (i / actualCount) * Math.PI * 2;
       const normalized = (charCode % 100) / 100;
 
       petals.push({
         angle,
-        cp1x: 20 + normalized * 30,
-        cp1y: -30 - (charCode % 20),
-        cp2x: 40 + normalized * 20,
-        cp2y: -60 - (charCode % 15),
+        cp1x: -30 - (charCode % 20),
+        cp1y: -30 - normalized * 30,
+        cp2x: -50 - (charCode % 15),
+        cp2y: -60 - normalized * 20,
         length: 60 + (charCode % 40),
-        width: 15 + (charCode % 10),
       });
     }
     return petals;
   }, []);
 
   useEffect(() => {
-    if (petalCount > 0) {
-      petalsRef.current = generatePetals(petalCount, textDescription);
-    }
+    petalsRef.current = generatePetals(petalCount, textDescription);
   }, [petalCount, textDescription, generatePetals]);
 
   useEffect(() => {
@@ -68,6 +77,7 @@ const FlowerCanvas = ({
     }
 
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -94,6 +104,9 @@ const FlowerCanvas = ({
     ctx.scale(dpr, dpr);
 
     const drawFlower = (time: number) => {
+      const { petalCount, scentType, bloomProgress } = propsRef.current;
+      const baseColor = scentType ? SCENT_COLORS[scentType] : '#90EE90';
+
       const deltaTime = time - lastTimeRef.current;
       lastTimeRef.current = time;
 
@@ -103,7 +116,7 @@ const FlowerCanvas = ({
         fpsRef.current.shift();
       }
       const avgFps = fpsRef.current.reduce((a, b) => a + b, 0) / fpsRef.current.length;
-      if (frameCountRef.current % 300 === 0) {
+      if (frameCountRef.current % 300 === 0 && frameCountRef.current > 0) {
         console.log(`平均帧率: ${avgFps.toFixed(1)}fps`);
       }
 
@@ -128,8 +141,8 @@ const FlowerCanvas = ({
       const breathScale = 1 + Math.sin(time / 200 * Math.PI * 2) * 0.05;
 
       const petals = petalsRef.current;
-      if (petals.length === 0) {
-        const closedScale = 0.3 + bloomProgress * 0.7;
+      if (petalCount === 0 || petals.length === 0) {
+        const closedScale = bloomProgress;
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.scale(closedScale, closedScale);
@@ -154,25 +167,25 @@ const FlowerCanvas = ({
 
       for (let i = 0; i < petals.length; i++) {
         const petal = petals[i];
-        const bloomScale = bloomProgress;
+        const currentBloom = bloomProgress;
 
         ctx.save();
         ctx.rotate(petal.angle);
 
-        const petalGradient = ctx.createLinearGradient(0, 0, 0, -petal.length * bloomScale);
+        const petalGradient = ctx.createLinearGradient(0, 0, 0, -petal.length * currentBloom);
         petalGradient.addColorStop(0, baseColor);
         petalGradient.addColorStop(1, adjustBrightness(baseColor, 30));
 
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.bezierCurveTo(
-          -petal.width / 2 * bloomScale, petal.cp1y * bloomScale,
-          -petal.width * bloomScale, petal.cp2y * bloomScale,
-          0, -petal.length * bloomScale
+          petal.cp1x * currentBloom, petal.cp1y * currentBloom,
+          petal.cp2x * currentBloom, petal.cp2y * currentBloom,
+          0, -petal.length * currentBloom
         );
         ctx.bezierCurveTo(
-          petal.width * bloomScale, petal.cp2y * bloomScale,
-          petal.width / 2 * bloomScale, petal.cp1y * bloomScale,
+          -petal.cp2x * currentBloom, petal.cp2y * currentBloom,
+          -petal.cp1x * currentBloom, petal.cp1y * currentBloom,
           0, 0
         );
 
@@ -180,10 +193,11 @@ const FlowerCanvas = ({
         ctx.fill();
 
         if (imagePatternRef.current) {
+          ctx.save();
           ctx.globalAlpha = 0.2;
           ctx.fillStyle = imagePatternRef.current;
           ctx.fill();
-          ctx.globalAlpha = 1;
+          ctx.restore();
         }
 
         ctx.strokeStyle = adjustBrightness(baseColor, -20);
@@ -223,7 +237,7 @@ const FlowerCanvas = ({
     return () => {
       cancelAnimationFrame(animationRef.current);
     };
-  }, [baseColor]);
+  }, []);
 
   return (
     <canvas
