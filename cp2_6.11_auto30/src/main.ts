@@ -1,284 +1,304 @@
-import {
-  PixelChar,
-  getPixelMap,
-  renderCharToOffscreen,
-  layoutChars,
-  computeOptimalScale,
-  getCharCellSize,
-  BASE_PIXEL_SIZE,
-} from './pixelEngine';
-import {
-  InteractionState,
-  initInteraction,
-  renderFrame,
-  setCharsAppear,
-  exportCanvas,
-  updateGlobalColor,
-} from './interaction';
+import { recognizeRune, getElementName, getElementColor, getCombinedElement, ElementType, Point } from './runeRecognizer';
+import { ParticleEngine, Starfield } from './particleEngine';
+import { UIManager, HistoryItem } from './uiManager';
 
-const PALETTE = [
-  '#E74C3C', '#E67E22', '#F1C40F', '#2ECC71', '#1ABC9C',
-  '#3498DB', '#9B59B6', '#E91E63', '#4A6FA5', '#C5A55A',
-  '#2C3E6B', '#34495E',
-];
+class Game {
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private particleEngine: ParticleEngine;
+  private starfield: Starfield;
+  private uiManager: UIManager;
 
-const DEFAULT_COLOR = '#4A6FA5';
-const MAX_CHARS = 20;
-const MAX_PER_ROW = 10;
+  private isDrawing: boolean = false;
+  private currentPoints: Point[] = [];
+  private lastTime: number = 0;
+  private animationId: number = 0;
 
-let interactionState: InteractionState | null = null;
-let rafId = 0;
-let currentColor = DEFAULT_COLOR;
-let isLoopRunning = false;
+  private currentRuneSequence: ElementType[] = [];
+  private comboCooldown: number = 0;
 
-interface AppConfig {
-  canvasBaseWidth: number;
-  canvasHeight: number;
-}
+  constructor() {
+    this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+    this.ctx = this.canvas.getContext('2d')!;
 
-let config: AppConfig = {
-  canvasBaseWidth: 1100,
-  canvasHeight: 600,
-};
+    this.particleEngine = new ParticleEngine({ maxParticles: 500 });
+    this.starfield = new Starfield(180);
 
-function main(): void {
-  setupResponsiveConfig();
-  initUI();
-  bindInputEvents();
-  startRenderLoop();
-  generatePixelArt('文字像素画8月S你好');
-}
-
-function setupResponsiveConfig(): void {
-  const w = window.innerWidth;
-  if (w < 1200) {
-    config.canvasBaseWidth = 1000;
-    const palette = document.getElementById('palette');
-    if (palette) {
-      palette.classList.remove('palette-left');
-      palette.classList.add('palette-right');
-    }
-  } else {
-    config.canvasBaseWidth = 1100;
-    const palette = document.getElementById('palette');
-    if (palette) {
-      palette.classList.remove('palette-right');
-      palette.classList.add('palette-left');
-    }
-  }
-
-  const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-  if (canvas) {
-    canvas.width = config.canvasBaseWidth;
-    canvas.height = config.canvasHeight;
-    canvas.style.width = `${config.canvasBaseWidth}px`;
-    canvas.style.height = `${config.canvasHeight}px`;
-  }
-}
-
-function initUI(): void {
-  const paletteEl = document.getElementById('palette') as HTMLDivElement;
-  paletteEl.innerHTML = '';
-  PALETTE.forEach((color, idx) => {
-    const swatch = document.createElement('div');
-    swatch.className = 'swatch';
-    swatch.style.backgroundColor = color;
-    if (color === currentColor) swatch.classList.add('swatch-active');
-    swatch.title = `颜色 ${idx + 1}`;
-    swatch.addEventListener('click', () => {
-      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('swatch-active'));
-      swatch.classList.add('swatch-active');
-      handlePaletteChange(color);
+    this.uiManager = new UIManager({
+      onClear: () => this.clearCanvas(),
+      onHistorySelect: (item) => this.handleHistorySelect(item)
     });
-    paletteEl.appendChild(swatch);
-  });
 
-  const exportBtn = document.getElementById('exportBtn') as HTMLButtonElement;
-  exportBtn.addEventListener('click', handleExport);
+    this.initCanvas();
+    this.initEventListeners();
+    this.startGameLoop();
 
-  const modalClose = document.getElementById('modalClose') as HTMLButtonElement;
-  const modalCancel = document.getElementById('modalCancel') as HTMLButtonElement;
-  const modalSave = document.getElementById('modalSave') as HTMLButtonElement;
-  modalClose.addEventListener('click', hideExportModal);
-  modalCancel.addEventListener('click', hideExportModal);
-  modalSave.addEventListener('click', handleSaveImage);
+    this.hideLoading();
+  }
 
-  const overlay = document.getElementById('exportOverlay') as HTMLDivElement;
-  overlay.addEventListener('click', (e: MouseEvent) => {
-    if (e.target === overlay) hideExportModal();
-  });
-}
+  private initCanvas(): void {
+    this.resizeCanvas();
+    window.addEventListener('resize', () => this.resizeCanvas());
+  }
 
-function bindInputEvents(): void {
-  const input = document.getElementById('textInput') as HTMLInputElement;
-  const btn = document.getElementById('generateBtn') as HTMLButtonElement;
+  private resizeCanvas(): void {
+    const wrapper = this.canvas.parentElement;
+    if (!wrapper) return;
 
-  input.addEventListener('input', () => {
-    if (input.value.length > MAX_CHARS) {
-      input.value = input.value.substring(0, MAX_CHARS);
-    }
-  });
+    const rect = wrapper.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
 
-  input.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    this.canvas.style.width = rect.width + 'px';
+    this.canvas.style.height = rect.height + 'px';
+
+    this.ctx.scale(dpr, dpr);
+    this.starfield.resize(rect.width, rect.height);
+  }
+
+  private initEventListeners(): void {
+    this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+    this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+    this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+    this.canvas.addEventListener('mouseleave', (e) => this.onMouseUp(e));
+
+    this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      doGenerate();
-    }
-  });
+      const touch = e.touches[0];
+      this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent);
+    });
 
-  btn.addEventListener('click', doGenerate);
-}
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent);
+    });
 
-function doGenerate(): void {
-  const input = document.getElementById('textInput') as HTMLInputElement;
-  const btn = document.getElementById('generateBtn') as HTMLButtonElement;
-  const text = input.value.trim();
-  if (!text) return;
-
-  btn.classList.add('loading');
-  const originalText = btn.innerHTML;
-  btn.innerHTML = '<span class="spinner"></span><span>生成中...</span>';
-  btn.disabled = true;
-
-  setTimeout(() => {
-    generatePixelArt(text);
-    btn.classList.remove('loading');
-    btn.innerHTML = originalText;
-    btn.disabled = false;
-  }, 320);
-}
-
-function generatePixelArt(text: string): void {
-  const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-  canvas.width = config.canvasBaseWidth;
-  canvas.height = config.canvasHeight;
-
-  const scale = computeOptimalScale(
-    text.length,
-    canvas.width,
-    canvas.height,
-    40,
-    40,
-    MAX_PER_ROW
-  );
-  const { w: cellW, h: cellH } = getCharCellSize(scale);
-  const layout = layoutChars(text, canvas.width, scale, 40, MAX_PER_ROW);
-  const pixelChars: PixelChar[] = [];
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const code = ch.charCodeAt(0);
-    const map = getPixelMap(code, ch);
-    const offscreen = renderCharToOffscreen(map, currentColor, scale);
-    const pos = layout[i];
-    pixelChars.push({
-      char: ch,
-      charCode: code,
-      x: pos.baseX,
-      y: pos.baseY,
-      baseX: pos.baseX,
-      baseY: pos.baseY,
-      pixelMap: map,
-      color: currentColor,
-      glowStartTime: -9999999,
-      pulseStartTime: -9999999,
-      offscreenCanvas: offscreen,
-      charWidth: cellW,
-      charHeight: cellH,
-      pixelScale: scale,
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      this.onMouseUp({} as MouseEvent);
     });
   }
 
-  interactionState = initInteraction(canvas, pixelChars, currentColor);
-  setCharsAppear(interactionState);
-  renderFrame(interactionState, true);
-}
-
-function handlePaletteChange(color: string): void {
-  currentColor = color;
-  if (!interactionState) return;
-  updateGlobalColor(interactionState, color, (pc, newColor) => {
-    pc.offscreenCanvas = renderCharToOffscreen(pc.pixelMap, newColor, pc.pixelScale || BASE_PIXEL_SIZE);
-    pc.color = newColor;
-  });
-  renderFrame(interactionState, true);
-}
-
-function handleExport(): void {
-  if (!interactionState) return;
-  const preview = document.getElementById('previewImg') as HTMLImageElement;
-  showExportModal();
-
-  exportCanvas(interactionState, (blob) => {
-    if (blob) {
-      const url = URL.createObjectURL(blob);
-      preview.src = url;
-      (preview as any)._blobUrl = url;
-    }
-  });
-}
-
-function showExportModal(): void {
-  const overlay = document.getElementById('exportOverlay') as HTMLDivElement;
-  overlay.classList.add('visible');
-}
-
-function hideExportModal(): void {
-  const overlay = document.getElementById('exportOverlay') as HTMLDivElement;
-  overlay.classList.remove('visible');
-  const preview = document.getElementById('previewImg') as HTMLImageElement;
-  if ((preview as any)._blobUrl) {
-    URL.revokeObjectURL((preview as any)._blobUrl);
-    (preview as any)._blobUrl = null;
+  private getCanvasPoint(e: MouseEvent): Point {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
   }
-  preview.src = '';
-}
 
-function handleSaveImage(): void {
-  if (!interactionState) return;
-  const preview = document.getElementById('previewImg') as HTMLImageElement;
-  const save = (blob: Blob | null) => {
-    if (!blob) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `文字像素画_${Date.now()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    hideExportModal();
-  };
-  if ((preview as any)._blobUrl) {
-    fetch((preview as any)._blobUrl)
-      .then(r => r.blob())
-      .then(save);
-  } else {
-    exportCanvas(interactionState, save);
+  private onMouseDown(e: MouseEvent): void {
+    this.isDrawing = true;
+    this.currentPoints = [this.getCanvasPoint(e)];
+  }
+
+  private onMouseMove(e: MouseEvent): void {
+    if (!this.isDrawing) return;
+
+    const point = this.getCanvasPoint(e);
+    const lastPoint = this.currentPoints[this.currentPoints.length - 1];
+
+    const dist = Math.sqrt((point.x - lastPoint.x) ** 2 + (point.y - lastPoint.y) ** 2);
+    if (dist > 2) {
+      this.currentPoints.push(point);
+    }
+  }
+
+  private onMouseUp(_e: MouseEvent): void {
+    if (!this.isDrawing) return;
+    this.isDrawing = false;
+
+    if (this.currentPoints.length < 5) {
+      this.currentPoints = [];
+      return;
+    }
+
+    this.recognizeAndSummon();
+  }
+
+  private recognizeAndSummon(): void {
+    const result = recognizeRune(this.currentPoints);
+
+    if (result.element) {
+      this.currentRuneSequence.push(result.element);
+
+      const centerX = this.canvas.width / (window.devicePixelRatio || 1) / 2;
+      const centerY = this.canvas.height / (window.devicePixelRatio || 1) / 2;
+
+      if (this.currentRuneSequence.length >= 2) {
+        const combo = getCombinedElement(this.currentRuneSequence);
+        if (combo) {
+          for (const element of this.currentRuneSequence) {
+            this.particleEngine.spawnElementParticles(element, centerX, centerY, 60, true);
+          }
+          this.uiManager.showFloatingText(`${combo.name} 召唤成功！`, this.currentRuneSequence[0]);
+          this.uiManager.addToHistory([...this.currentRuneSequence], combo.name);
+          this.currentRuneSequence = [];
+        } else {
+          this.particleEngine.spawnElementParticles(result.element, centerX, centerY, 80, false);
+          this.uiManager.showFloatingText(`${getElementName(result.element)}元素识别成功`, result.element);
+          this.uiManager.addToHistory([result.element]);
+          this.currentRuneSequence = [result.element];
+        }
+      } else {
+        this.particleEngine.spawnElementParticles(result.element, centerX, centerY, 80, false);
+        this.uiManager.showFloatingText(`${getElementName(result.element)}元素识别成功`, result.element);
+        this.uiManager.addToHistory([result.element]);
+      }
+
+      this.comboCooldown = 3;
+      this.uiManager.triggerFlash();
+      this.uiManager.triggerShake();
+    } else {
+      this.uiManager.showFloatingText('符文识别失败...');
+      this.currentRuneSequence = [];
+    }
+
+    setTimeout(() => {
+      this.currentPoints = [];
+    }, 100);
+  }
+
+  private handleHistorySelect(item: HistoryItem): void {
+    const centerX = this.canvas.width / (window.devicePixelRatio || 1) / 2;
+    const centerY = this.canvas.height / (window.devicePixelRatio || 1) / 2;
+
+    const isCombo = item.elements.length > 1;
+    for (const element of item.elements) {
+      this.particleEngine.spawnElementParticles(element, centerX, centerY, 60, isCombo);
+    }
+
+    this.uiManager.triggerFlash();
+    this.uiManager.triggerShake();
+    this.uiManager.toggleHistoryPanel();
+
+    if (item.comboName) {
+      this.uiManager.showFloatingText(`${item.comboName} 再次召唤！`, item.elements[0]);
+    } else {
+      this.uiManager.showFloatingText(`${getElementName(item.elements[0])}元素 再次召唤！`, item.elements[0]);
+    }
+  }
+
+  private clearCanvas(): void {
+    this.currentPoints = [];
+    this.currentRuneSequence = [];
+    this.particleEngine.clear();
+    this.uiManager.clearHistory();
+
+    const dpr = window.devicePixelRatio || 1;
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.uiManager.clearCanvasWithAnimation(
+      this.canvas,
+      this.ctx
+    ).then(() => {
+      this.ctx.restore();
+      this.ctx.scale(dpr, dpr);
+    });
+
+    this.uiManager.showFloatingText('画布已清除');
+  }
+
+  private drawBackground(): void {
+    const width = this.canvas.width / (window.devicePixelRatio || 1);
+    const height = this.canvas.height / (window.devicePixelRatio || 1);
+
+    const gradient = this.ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#0B0014');
+    gradient.addColorStop(1, '#1A0033');
+
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, width, height);
+
+    this.starfield.render(this.ctx);
+  }
+
+  private drawCurrentRune(): void {
+    if (this.currentPoints.length < 2) return;
+
+    const currentElement = this.uiManager.getCurrentElement();
+    const colors = getElementColor(currentElement);
+
+    this.ctx.save();
+    this.ctx.strokeStyle = colors.end;
+    this.ctx.lineWidth = 3;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.shadowColor = colors.end;
+    this.ctx.shadowBlur = 15;
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(this.currentPoints[0].x, this.currentPoints[0].y);
+
+    for (let i = 1; i < this.currentPoints.length; i++) {
+      this.ctx.lineTo(this.currentPoints[i].x, this.currentPoints[i].y);
+    }
+
+    this.ctx.stroke();
+
+    this.ctx.shadowBlur = 0;
+    this.ctx.strokeStyle = colors.start;
+    this.ctx.lineWidth = 1;
+    this.ctx.stroke();
+
+    this.ctx.restore();
+  }
+
+  private startGameLoop(): void {
+    this.lastTime = performance.now();
+    this.loop();
+  }
+
+  private loop(): void {
+    const currentTime = performance.now();
+    const dt = Math.min((currentTime - this.lastTime) / 1000, 0.1);
+    this.lastTime = currentTime;
+
+    this.update(dt);
+    this.render();
+
+    this.animationId = requestAnimationFrame(() => this.loop());
+  }
+
+  private update(dt: number): void {
+    this.starfield.update(dt);
+    this.particleEngine.update(dt);
+
+    if (this.comboCooldown > 0) {
+      this.comboCooldown -= dt;
+      if (this.comboCooldown <= 0) {
+        this.currentRuneSequence = [];
+      }
+    }
+  }
+
+  private render(): void {
+    this.drawBackground();
+    this.particleEngine.render(this.ctx);
+    this.drawCurrentRune();
+  }
+
+  private hideLoading(): void {
+    const loading = document.getElementById('loading');
+    if (loading) {
+      setTimeout(() => {
+        loading.classList.add('hidden');
+        setTimeout(() => {
+          loading.style.display = 'none';
+        }, 800);
+      }, 500);
+    }
+  }
+
+  public destroy(): void {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+    }
   }
 }
 
-function startRenderLoop(): void {
-  if (isLoopRunning) return;
-  isLoopRunning = true;
-  const loop = () => {
-    if (interactionState) {
-      renderFrame(interactionState);
-    }
-    rafId = requestAnimationFrame(loop);
-  };
-  rafId = requestAnimationFrame(loop);
-}
-
-window.addEventListener('resize', () => {
-  setupResponsiveConfig();
-  const input = document.getElementById('textInput') as HTMLInputElement;
-  const t = input.value.trim() || '文字像素画8月S你好';
-  generatePixelArt(t);
+window.addEventListener('DOMContentLoaded', () => {
+  new Game();
 });
-
-document.addEventListener('DOMContentLoaded', main);
-if (document.readyState !== 'loading') {
-  main();
-}
-
-export {};

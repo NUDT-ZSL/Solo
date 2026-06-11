@@ -1,7 +1,7 @@
 {
-  "name": "text-pixel-art",
+  "name": "rune-workshop",
+  "private": true,
   "version": "1.0.0",
-  "description": "文字像素画 - 将文字转换为创意像素画",
   "type": "module",
   "scripts": {
     "dev": "vite",

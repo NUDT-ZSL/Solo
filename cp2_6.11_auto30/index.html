@@ -1,394 +1,503 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>文字像素画</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>符咒工坊 - Rune Workshop</title>
   <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
+    * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
     }
 
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: linear-gradient(135deg, #E8EDF2 0%, #F5F7FA 100%);
-      color: #2C3E6B;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    #app {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .header {
-      position: relative;
-      z-index: 10;
-      width: 96%;
-      max-width: 1280px;
-      height: 60px;
-      margin: 16px auto 0;
-      padding: 0 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 12px;
-      border: 1px solid rgba(197, 165, 90, 0.5);
-      background: rgba(255, 255, 255, 0.55);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      box-shadow: 0 4px 18px rgba(44, 62, 107, 0.08), 0 0 0 1px rgba(197, 165, 90, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    }
-
-    .header h1 {
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      background: linear-gradient(90deg, #2C3E6B 0%, #4A6FA5 50%, #C5A55A 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-
-    .header .deco {
-      position: absolute;
-      left: 24px;
-      display: flex;
-      gap: 6px;
-    }
-    .header .deco span {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-    }
-    .header .deco span:nth-child(1) { background: #E74C3C; }
-    .header .deco span:nth-child(2) { background: #F1C40F; }
-    .header .deco span:nth-child(3) { background: #2ECC71; }
-
-    .canvas-wrapper {
-      position: relative;
-      margin-top: 24px;
-      flex-shrink: 0;
-    }
-
-    #canvas {
-      display: block;
-      border-radius: 8px;
-      border: 1px solid #1a1a1a;
-      box-shadow: 0 12px 36px rgba(44, 62, 107, 0.12);
-      background: #F5F7FA;
-      cursor: default;
-    }
-
-    #exportBtn {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      width: 40px;
-      height: 40px;
-      border: none;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.8);
-      border: 1px solid rgba(74, 111, 165, 0.25);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(44, 62, 107, 0.15);
-      transition: all 0.22s ease;
-      z-index: 5;
-    }
-    #exportBtn:hover {
-      background: #c8d1e0;
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(44, 62, 107, 0.22);
-    }
-    #exportBtn svg {
-      width: 20px; height: 20px;
-      stroke: #2C3E6B;
-      fill: none;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    #palette {
-      position: fixed;
-      bottom: 110px;
-      z-index: 20;
-      padding: 10px 14px;
-      background: rgba(255, 255, 255, 0.78);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-radius: 14px;
-      border: 1px solid rgba(74, 111, 165, 0.18);
-      box-shadow: 0 8px 24px rgba(44, 62, 107, 0.14);
-      display: flex;
-      gap: 10px;
-    }
-    .palette-left { left: 28px; }
-    .palette-right { right: 28px; }
-
-    .swatch {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      cursor: pointer;
-      border: 2px solid rgba(255, 255, 255, 0.9);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-      position: relative;
-    }
-    .swatch:hover {
-      transform: scale(1.12) translateY(-1px);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
-    }
-    .swatch-active {
-      border-color: #C5A55A;
-      transform: scale(1.18);
-      box-shadow: 0 0 0 3px rgba(197, 165, 90, 0.3), 0 4px 12px rgba(0, 0, 0, 0.18);
-    }
-
-    .input-bar {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 60%;
-      max-width: 820px;
-      min-width: 520px;
-      display: flex;
-      gap: 14px;
-      z-index: 30;
-    }
-
-    #textInput {
-      flex: 1;
-      height: 44px;
-      padding: 0 18px;
-      font-size: 15px;
-      font-family: inherit;
-      border: 1px solid rgba(74, 111, 165, 0.25);
-      border-radius: 6px;
-      outline: none;
-      background: rgba(255, 255, 255, 0.95);
-      color: #2C3E6B;
-      box-shadow: inset 0 2px 6px rgba(44, 62, 107, 0.08);
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-    #textInput::placeholder {
-      color: #A0A5B0;
-    }
-    #textInput:focus {
-      border-color: #4A6FA5;
-      box-shadow: inset 0 2px 6px rgba(44, 62, 107, 0.1), 0 0 0 3px rgba(74, 111, 165, 0.12);
-    }
-
-    #generateBtn {
-      height: 44px;
-      padding: 0 28px;
-      font-size: 14px;
-      font-weight: 600;
-      font-family: inherit;
+      font-family: 'Courier New', 'Consolas', monospace;
+      background: linear-gradient(135deg, #0B0014 0%, #1A0033 100%);
       color: #fff;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      background: linear-gradient(180deg, #4A6FA5 0%, #2C3E6B 100%);
-      box-shadow: 0 4px 14px rgba(44, 62, 107, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-      transition: filter 0.18s ease, transform 0.1s ease, box-shadow 0.2s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-    }
-    #generateBtn:hover {
-      filter: brightness(1.15);
-      box-shadow: 0 6px 18px rgba(44, 62, 107, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    }
-    #generateBtn:active {
-      transform: translateY(1.5px);
-      filter: brightness(0.92);
-      box-shadow: 0 2px 8px rgba(44, 62, 107, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    }
-    #generateBtn:disabled {
-      cursor: wait;
-      opacity: 0.88;
     }
 
-    .spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255, 255, 255, 0.35);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.3s linear;
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: linear-gradient(135deg, #0B0014 0%, #1A0033 100%);
+      z-index: 9999;
+      transition: opacity 0.8s ease-out;
     }
+
+    #loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 32px;
+      letter-spacing: 8px;
+      color: #00BFFF;
+      text-shadow: 0 0 10px #00BFFF, 0 0 20px #00BFFF, 0 0 40px #00BFFF;
+      margin-bottom: 30px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .loading-ring {
+      width: 60px;
+      height: 60px;
+      border: 2px solid rgba(0, 191, 255, 0.2);
+      border-top: 2px solid #00BFFF;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      box-shadow: 0 0 15px rgba(0, 191, 255, 0.5);
+    }
+
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
 
-    #exportOverlay {
-      position: fixed;
-      inset: 0;
-      z-index: 100;
-      background: rgba(44, 62, 107, 0.28);
-      backdrop-filter: blur(5px);
-      -webkit-backdrop-filter: blur(5px);
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    #game-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.28s ease, visibility 0.28s ease;
-    }
-    #exportOverlay.visible {
-      opacity: 1;
-      visibility: visible;
     }
 
-    .modal {
+    #canvas-wrapper {
       position: relative;
-      background: #fff;
-      border-radius: 14px;
-      padding: 22px 26px 26px;
-      width: min(800px, 80vw);
-      max-height: 88vh;
+      width: 80%;
+      height: 85%;
+      border: 2px solid #00BFFF;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0, 191, 255, 0.4),
+                  inset 0 0 30px rgba(0, 191, 255, 0.1);
+      overflow: hidden;
+      transition: box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+
+    #canvas-wrapper.fire {
+      border-color: #FF4500;
+      box-shadow: 0 0 20px rgba(255, 69, 0, 0.4),
+                  inset 0 0 30px rgba(255, 69, 0, 0.1);
+    }
+
+    #canvas-wrapper.thunder {
+      border-color: #8A2BE2;
+      box-shadow: 0 0 20px rgba(138, 43, 226, 0.4),
+                  inset 0 0 30px rgba(138, 43, 226, 0.1);
+    }
+
+    #canvas-wrapper.wind {
+      border-color: #00CED1;
+      box-shadow: 0 0 20px rgba(0, 206, 209, 0.4),
+                  inset 0 0 30px rgba(0, 206, 209, 0.1);
+    }
+
+    #canvas-wrapper.earth {
+      border-color: #8B4513;
+      box-shadow: 0 0 20px rgba(139, 69, 19, 0.4),
+                  inset 0 0 30px rgba(139, 69, 19, 0.1);
+    }
+
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    #toolbar {
+      position: fixed;
+      left: 24px;
+      top: 50%;
+      transform: translateY(-50%);
       display: flex;
       flex-direction: column;
       gap: 16px;
-      box-shadow: 0 24px 64px rgba(44, 62, 107, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-      transform: translateY(12px) scale(0.98);
-      transition: transform 0.3s ease;
-    }
-    #exportOverlay.visible .modal {
-      transform: translateY(0) scale(1);
+      padding: 20px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 191, 255, 0.3);
+      border-radius: 16px;
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    #toolbar.fire {
+      border-color: rgba(255, 69, 0, 0.5);
+      box-shadow: 0 8px 32px rgba(255, 69, 0, 0.2);
     }
-    .modal-header h2 {
-      font-size: 17px;
-      font-weight: 600;
-      color: #2C3E6B;
+
+    #toolbar.thunder {
+      border-color: rgba(138, 43, 226, 0.5);
+      box-shadow: 0 8px 32px rgba(138, 43, 226, 0.2);
     }
-    #modalClose {
-      width: 32px; height: 32px;
-      border: none;
-      border-radius: 8px;
-      background: rgba(44, 62, 107, 0.06);
-      cursor: pointer;
+
+    #toolbar.wind {
+      border-color: rgba(0, 206, 209, 0.5);
+      box-shadow: 0 8px 32px rgba(0, 206, 209, 0.2);
+    }
+
+    #toolbar.earth {
+      border-color: rgba(139, 69, 19, 0.5);
+      box-shadow: 0 8px 32px rgba(139, 69, 19, 0.2);
+    }
+
+    .tool-btn {
+      width: 48px;
+      height: 48px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
       font-size: 18px;
-      color: #2C3E6B;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s ease;
-    }
-    #modalClose:hover {
-      background: rgba(44, 62, 107, 0.12);
-    }
-
-    .preview-wrap {
-      background: #f0f2f5;
-      border-radius: 8px;
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: auto;
-      max-height: 58vh;
-    }
-    #previewImg {
-      max-width: 100%;
-      max-height: 54vh;
-      border-radius: 8px;
-      border: 8px solid #fff;
-      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
-      background: #fff;
-    }
-
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-    }
-    #modalCancel, #modalSave {
-      height: 38px;
-      padding: 0 22px;
-      font-size: 14px;
-      font-weight: 600;
-      font-family: inherit;
-      border-radius: 6px;
       cursor: pointer;
-      border: none;
-      transition: filter 0.18s ease, transform 0.1s ease;
+      transition: all 0.3s ease-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
     }
-    #modalCancel {
-      background: #A0A0A0;
-      color: #fff;
-    }
-    #modalSave {
-      background: #4A6FA5;
-      color: #fff;
-      box-shadow: 0 4px 12px rgba(74, 111, 165, 0.3);
-    }
-    #modalCancel:hover { filter: brightness(1.1); }
-    #modalSave:hover { filter: brightness(1.12); }
-    #modalCancel:active, #modalSave:active { transform: translateY(1px); }
 
-    @media (max-width: 1200px) {
-      .canvas-wrapper { transform: scale(0.9); transform-origin: top center; margin-top: 8px; }
-      .input-bar { min-width: 480px; }
+    .tool-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 20px currentColor;
+    }
+
+    .tool-btn.active {
+      transform: scale(1.1);
+      box-shadow: 0 0 25px currentColor;
+    }
+
+    .tool-btn.fire {
+      color: #FFD700;
+      border-color: rgba(255, 69, 0, 0.6);
+      background: rgba(255, 69, 0, 0.2);
+    }
+
+    .tool-btn.thunder {
+      color: #FF00FF;
+      border-color: rgba(138, 43, 226, 0.6);
+      background: rgba(138, 43, 226, 0.2);
+    }
+
+    .tool-btn.wind {
+      color: #7FFF00;
+      border-color: rgba(0, 206, 209, 0.6);
+      background: rgba(0, 206, 209, 0.2);
+    }
+
+    .tool-btn.earth {
+      color: #DEB887;
+      border-color: rgba(139, 69, 19, 0.6);
+      background: rgba(139, 69, 19, 0.2);
+    }
+
+    .tool-btn.clear-btn {
+      background: linear-gradient(135deg, #FF4500 0%, #FF6347 100%);
+      border-color: rgba(255, 69, 0, 0.8);
+      color: #fff;
+    }
+
+    .tool-btn.clear-btn:hover {
+      box-shadow: 0 0 25px rgba(255, 69, 0, 0.8);
+    }
+
+    .tool-btn.history-btn {
+      color: #00BFFF;
+    }
+
+    .tool-divider {
+      width: 100%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.15);
+      margin: 4px 0;
+    }
+
+    .tool-label {
+      font-size: 11px;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: -8px;
+      letter-spacing: 1px;
+    }
+
+    #rune-thumbnails {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 191, 255, 0.3);
+      border-radius: 12px;
+      z-index: 100;
+      min-height: 60px;
+      min-width: 200px;
+      align-items: center;
+    }
+
+    .rune-thumb {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: all 0.3s ease-out;
+    }
+
+    .rune-thumb.show {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .rune-thumb.fire { color: #FFD700; border-color: #FF4500; }
+    .rune-thumb.thunder { color: #FF00FF; border-color: #8A2BE2; }
+    .rune-thumb.wind { color: #7FFF00; border-color: #00CED1; }
+    .rune-thumb.earth { color: #DEB887; border-color: #8B4513; }
+
+    .rune-combo-plus {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    #floating-text {
+      position: fixed;
+      left: 50%;
+      bottom: 22%;
+      transform: translateX(-50%);
+      font-size: 28px;
+      font-weight: bold;
+      letter-spacing: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      text-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 40px currentColor;
+      z-index: 200;
+    }
+
+    #floating-text.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-10px);
+    }
+
+    #flash-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 500;
+      transition: opacity 1s ease-out;
+    }
+
+    #flash-overlay.show {
+      opacity: 1;
+      transition: opacity 0.05s ease-out;
+    }
+
+    #history-panel {
+      position: fixed;
+      left: 24px;
+      bottom: -100%;
+      width: 280px;
+      max-height: 300px;
+      background: rgba(15, 5, 30, 0.95);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border: 1px solid rgba(0, 191, 255, 0.4);
+      border-radius: 16px;
+      padding: 16px;
+      z-index: 150;
+      transition: bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow-y: auto;
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    #history-panel.show {
+      bottom: 24px;
+    }
+
+    .history-title {
+      font-size: 14px;
+      color: #00BFFF;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(0, 191, 255, 0.3);
+      letter-spacing: 2px;
+      text-shadow: 0 0 8px rgba(0, 191, 255, 0.5);
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .history-item:hover {
+      background: rgba(0, 191, 255, 0.1);
+      border-color: rgba(0, 191, 255, 0.4);
+      transform: translateX(4px);
+    }
+
+    .history-icon {
+      font-size: 20px;
+      width: 32px;
+      text-align: center;
+    }
+
+    .history-info {
+      flex: 1;
+    }
+
+    .history-name {
+      font-size: 13px;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+
+    .history-time {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .history-empty {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 12px;
+      padding: 20px 0;
+    }
+
+    #element-aura {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 50;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    #element-aura.show {
+      opacity: 1;
+    }
+
+    .aura-corner {
+      position: absolute;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      filter: blur(60px);
+      opacity: 0.3;
+    }
+
+    .aura-corner.top-left { top: -50px; left: -50px; }
+    .aura-corner.top-right { top: -50px; right: -50px; }
+    .aura-corner.bottom-left { bottom: -50px; left: -50px; }
+    .aura-corner.bottom-right { bottom: -50px; right: -50px; }
+
+    @keyframes shake {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(-3px, 2px); }
+      50% { transform: translate(3px, -2px); }
+      75% { transform: translate(-2px, -3px); }
+    }
+
+    #canvas-wrapper.shaking {
+      animation: shake 0.2s ease-in-out;
+    }
+
+    .hint-text {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.4);
+      letter-spacing: 2px;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
-  <div id="app">
-    <header class="header">
-      <div class="deco"><span></span><span></span><span></span></div>
-      <h1>✦ 文字像素画 ✦ Text Pixel Art</h1>
-    </header>
+  <div id="loading">
+    <div class="loading-title">符咒工坊</div>
+    <div class="loading-ring"></div>
+  </div>
 
-    <div class="canvas-wrapper">
-      <canvas id="canvas" width="1100" height="600"></canvas>
-      <button id="exportBtn" title="导出图片">
-        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-      </button>
+  <div id="game-container">
+    <div id="element-aura">
+      <div class="aura-corner top-left"></div>
+      <div class="aura-corner top-right"></div>
+      <div class="aura-corner bottom-left"></div>
+      <div class="aura-corner bottom-right"></div>
     </div>
 
-    <div id="palette" class="palette-left"></div>
-
-    <div class="input-bar">
-      <input id="textInput" type="text" maxlength="20" placeholder="请输入中文或英文（最多20字），按回车或点击生成" />
-      <button id="generateBtn">✦ 生成像素</button>
+    <div id="canvas-wrapper">
+      <canvas id="game-canvas"></canvas>
+      <div class="hint-text">按住鼠标绘制符文 · 松开召唤精灵</div>
     </div>
 
-    <div id="exportOverlay">
-      <div class="modal">
-        <div class="modal-header">
-          <h2>图片预览</h2>
-          <button id="modalClose">✕</button>
-        </div>
-        <div class="preview-wrap">
-          <img id="previewImg" alt="预览" />
-        </div>
-        <div class="modal-actions">
-          <button id="modalCancel">取消</button>
-          <button id="modalSave">保存为 PNG</button>
-        </div>
+    <div id="toolbar">
+      <button class="tool-btn fire active" data-element="fire" title="火元素">🔥</button>
+      <button class="tool-btn thunder" data-element="thunder" title="雷元素">⚡</button>
+      <button class="tool-btn wind" data-element="wind" title="风元素">🌀</button>
+      <button class="tool-btn earth" data-element="earth" title="土元素">🪨</button>
+      <div class="tool-divider"></div>
+      <button class="tool-btn clear-btn" id="clear-btn" title="清除画布">✕</button>
+      <button class="tool-btn history-btn" id="history-btn" title="历史记录">📜</button>
+    </div>
+
+    <div id="rune-thumbnails">
+      <span style="font-size:12px;color:rgba(255,255,255,0.5);letter-spacing:1px;">符文序列</span>
+    </div>
+
+    <div id="floating-text"></div>
+    <div id="flash-overlay"></div>
+
+    <div id="history-panel">
+      <div class="history-title">历史符文</div>
+      <div id="history-list">
+        <div class="history-empty">暂无历史记录</div>
       </div>
     </div>
   </div>
