@@ -6,6 +6,15 @@ export interface MeteorConfig {
   speed: number;
 }
 
+export interface PoolStats {
+  activeMeteors: number;
+  totalMeteors: number;
+  activeDebris: number;
+  totalDebris: number;
+  meteorPoolExhausted: number;
+  debrisPoolExhausted: number;
+}
+
 const TRAIL_LENGTH = 40;
 const METEOR_MAX_LIFE = 1.5;
 const DEBRIS_MAX_LIFE = 2.0;
@@ -34,6 +43,7 @@ interface DebrisParticle {
   maxLife: number;
   flickerPhase: number;
   flickerSpeed: number;
+  flickerSpeed2: number;
   active: boolean;
   size: number;
   baseColor: THREE.Color;
@@ -47,6 +57,9 @@ export class MeteorParticleSystem {
   private debrisPool: DebrisParticle[] = [];
   private activeMeteors: MeteorParticle[] = [];
   private activeDebris: DebrisParticle[] = [];
+
+  private meteorPoolExhausted = 0;
+  private debrisPoolExhausted = 0;
 
   private meteorGeometry!: THREE.BufferGeometry;
   private meteorMaterial!: THREE.PointsMaterial;
@@ -99,6 +112,7 @@ export class MeteorParticleSystem {
       maxLife: DEBRIS_MAX_LIFE,
       flickerPhase: 0,
       flickerSpeed: 1,
+      flickerSpeed2: 1,
       active: false,
       size: 1,
       baseColor: new THREE.Color()
@@ -113,14 +127,18 @@ export class MeteorParticleSystem {
         return m;
       }
     }
+    this.meteorPoolExhausted++;
+    console.debug(`[ParticleSystem] 流星对象池耗尽！活跃: ${this.activeMeteors.length}, 总池: ${METEOR_POOL_SIZE}, 累计溢出: ${this.meteorPoolExhausted}`);
     return null;
   }
 
   private releaseMeteor(m: MeteorParticle): void {
     m.active = false;
+    m.life = 0;
     const idx = this.activeMeteors.indexOf(m);
     if (idx !== -1) {
-      this.activeMeteors.splice(idx, 1);
+      this.activeMeteors[idx] = this.activeMeteors[this.activeMeteors.length - 1];
+      this.activeMeteors.pop();
     }
   }
 
@@ -132,14 +150,18 @@ export class MeteorParticleSystem {
         return d;
       }
     }
+    this.debrisPoolExhausted++;
+    console.debug(`[ParticleSystem] 碎片对象池耗尽！活跃: ${this.activeDebris.length}, 总池: ${DEBRIS_POOL_SIZE}, 累计溢出: ${this.debrisPoolExhausted}`);
     return null;
   }
 
   private releaseDebris(d: DebrisParticle): void {
     d.active = false;
+    d.life = 0;
     const idx = this.activeDebris.indexOf(d);
     if (idx !== -1) {
-      this.activeDebris.splice(idx, 1);
+      this.activeDebris[idx] = this.activeDebris[this.activeDebris.length - 1];
+      this.activeDebris.pop();
     }
   }
 
@@ -199,7 +221,9 @@ export class MeteorParticleSystem {
   }
 
   public updateConfig(config: MeteorConfig): void {
+    const oldDensity = this.config.density;
     this.config = { ...config };
+    console.debug(`[ParticleSystem] updateConfig: density ${oldDensity} → ${this.config.density}, direction=${this.config.direction}, speed=${this.config.speed}`);
   }
 
   private spawnMeteor(): void {
@@ -255,7 +279,8 @@ export class MeteorParticleSystem {
       d.life = DEBRIS_MAX_LIFE;
       d.maxLife = DEBRIS_MAX_LIFE;
       d.flickerPhase = Math.random() * Math.PI * 2;
-      d.flickerSpeed = 8 + Math.random() * 14;
+      d.flickerSpeed = 15 + Math.random() * 25;
+      d.flickerSpeed2 = 7 + Math.random() * 13;
       d.size = 0.4 + Math.random() * 0.8;
 
       const colorMix = Math.random();
@@ -282,6 +307,14 @@ export class MeteorParticleSystem {
     }
     const fade = lifeRatio * (1 - trailRatio * 0.85);
     out.multiplyScalar(fade);
+  }
+
+  private computeFlicker(time: number, d: DebrisParticle): number {
+    const wave1 = Math.sin(time * d.flickerSpeed + d.flickerPhase);
+    const wave2 = Math.sin(time * d.flickerSpeed2 + d.flickerPhase * 1.7);
+    const combined = 0.5 * wave1 + 0.5 * wave2;
+    const normalized = 0.5 + 0.5 * combined;
+    return 0.2 + 0.8 * normalized;
   }
 
   public update(dt: number, time: number): void {
@@ -403,7 +436,7 @@ export class MeteorParticleSystem {
       debrisPosArr[i * 3 + 2] = d.position.z;
 
       const lifeRatio = Math.max(0, d.life / d.maxLife);
-      const flicker = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(time * d.flickerSpeed + d.flickerPhase));
+      const flicker = this.computeFlicker(time, d);
       const alpha = lifeRatio * flicker;
       debrisColArr[i * 3] = d.baseColor.r * alpha;
       debrisColArr[i * 3 + 1] = d.baseColor.g * alpha;
@@ -420,6 +453,21 @@ export class MeteorParticleSystem {
 
   public getActiveDebrisCount(): number {
     return this.activeDebris.length;
+  }
+
+  public getPoolStats(): PoolStats {
+    return {
+      activeMeteors: this.activeMeteors.length,
+      totalMeteors: METEOR_POOL_SIZE,
+      activeDebris: this.activeDebris.length,
+      totalDebris: DEBRIS_POOL_SIZE,
+      meteorPoolExhausted: this.meteorPoolExhausted,
+      debrisPoolExhausted: this.debrisPoolExhausted
+    };
+  }
+
+  public getConfig(): MeteorConfig {
+    return { ...this.config };
   }
 
   public dispose(): void {

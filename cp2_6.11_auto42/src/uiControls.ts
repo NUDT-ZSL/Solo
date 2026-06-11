@@ -14,6 +14,7 @@ export class UIControls {
 
   private controlPanel: HTMLElement;
   private burstIndicator: HTMLElement;
+  private divider: HTMLElement;
 
   private onConfigUpdate: ConfigUpdateCallback;
   private onBurstTrigger: BurstTriggerCallback;
@@ -39,6 +40,7 @@ export class UIControls {
 
     this.controlPanel = document.getElementById('control-panel') as HTMLElement;
     this.burstIndicator = document.getElementById('burst-indicator') as HTMLElement;
+    this.divider = document.querySelector('.divider') as HTMLElement;
 
     this.currentDensity = parseInt(this.densitySlider.value, 10);
     this.currentDirection = parseInt(this.directionSlider.value, 10);
@@ -69,9 +71,18 @@ export class UIControls {
       this.onConfigUpdate({ speed: value });
     });
 
+    this.controlPanel.addEventListener('mouseenter', () => {
+      this.divider.classList.add('divider-hover');
+    });
+
+    this.controlPanel.addEventListener('mouseleave', () => {
+      this.divider.classList.remove('divider-hover');
+    });
+
     document.addEventListener('click', (e) => {
       const target = e.target as Node;
       if (!this.controlPanel.contains(target)) {
+        console.debug(`[UIControls] 面板外点击触发爆发, density=${this.currentDensity}`);
         this.triggerBurstFeedback();
         this.onBurstTrigger();
       }

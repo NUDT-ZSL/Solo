@@ -5,6 +5,8 @@ import { UIControls } from './uiControls';
 
 const BURST_DURATION = 3.0;
 const BURST_MULTIPLIER = 2;
+const FPS_WARNING_THRESHOLD = 45;
+const FPS_DEGRADE_THRESHOLD = 30;
 
 class App {
   private container: HTMLElement;
@@ -32,6 +34,9 @@ class App {
   private frameCount = 0;
   private fpsElapsed = 0;
   private currentFps = 0;
+
+  private degradeActive = false;
+  private degradeDensityReduction = 0;
 
   constructor() {
     this.container = document.getElementById('canvas-container')!;
@@ -139,41 +144,55 @@ class App {
     this.scene.add(pointLight);
   }
 
+  private getEffectiveDensity(): number {
+    let density = this.baseDensity;
+    if (this.burstActive) {
+      density = this.baseDensity * BURST_MULTIPLIER;
+    }
+    if (this.degradeActive) {
+      density = Math.max(1, density - this.degradeDensityReduction);
+    }
+    return density;
+  }
+
   public updateConfig(partial: Partial<MeteorConfig>): void {
     if (partial.density !== undefined) {
       this.currentConfig.density = partial.density;
       this.baseDensity = partial.density;
-      if (this.burstActive) {
-        this.particleSystem.updateConfig({
-          ...this.currentConfig,
-          density: this.baseDensity * BURST_MULTIPLIER
-        });
-      } else {
-        this.particleSystem.updateConfig(this.currentConfig);
-      }
+      console.debug(`[App] updateConfig: density=${partial.density}, baseDensity=${this.baseDensity}, burstActive=${this.burstActive}`);
     } else {
       Object.assign(this.currentConfig, partial);
-      if (this.burstActive) {
-        this.particleSystem.updateConfig({
-          ...this.currentConfig,
-          density: this.baseDensity * BURST_MULTIPLIER
-        });
-      } else {
-        this.particleSystem.updateConfig(this.currentConfig);
-      }
     }
+
+    const effectiveDensity = this.getEffectiveDensity();
+    console.debug(`[App] 应用密度: baseDensity=${this.baseDensity} → effectiveDensity=${effectiveDensity}, burst=${this.burstActive}, degrade=${this.degradeActive}`);
+    console.assert(effectiveDensity > 0, `[App] 密度断言失败: effectiveDensity=${effectiveDensity}`);
+    console.assert(effectiveDensity === this.baseDensity || this.burstActive || this.degradeActive,
+      `[App] 密度不一致: effectiveDensity=${effectiveDensity} !== baseDensity=${this.baseDensity} 但无激活状态`);
+
+    this.particleSystem.updateConfig({
+      ...this.currentConfig,
+      density: effectiveDensity
+    });
   }
 
   private triggerBurst(): void {
+    const wasBurstActive = this.burstActive;
     if (!this.burstActive) {
       this.burstActive = true;
       this.burstRemaining = BURST_DURATION;
+
+      const burstDensity = this.getEffectiveDensity();
+      console.debug(`[App] triggerBurst: baseDensity=${this.baseDensity} × ${BURST_MULTIPLIER} = ${burstDensity}, wasActive=${wasBurstActive}`);
+
       this.particleSystem.updateConfig({
         ...this.currentConfig,
-        density: this.baseDensity * BURST_MULTIPLIER
+        density: burstDensity
       });
+      console.debug(`[App] 验证: particleSystem.config.density=${this.particleSystem.getConfig().density}`);
     } else {
       this.burstRemaining = BURST_DURATION;
+      console.debug(`[App] triggerBurst: 重置爆发倒计时, remaining=${this.burstRemaining}`);
     }
   }
 
@@ -189,11 +208,52 @@ class App {
 
     if (this.fpsElapsed >= 0.5) {
       this.currentFps = Math.round(this.frameCount / this.fpsElapsed);
-      const meteorCount = this.particleSystem.getActiveMeteorCount();
-      const debrisCount = this.particleSystem.getActiveDebrisCount();
-      this.fpsCounter.textContent = `FPS: ${this.currentFps} | 流星: ${meteorCount} | 碎片: ${debrisCount}`;
+      const poolStats = this.particleSystem.getPoolStats();
+      const meteorUtil = Math.round((poolStats.activeMeteors / poolStats.totalMeteors) * 100);
+      const debrisUtil = Math.round((poolStats.activeDebris / poolStats.totalDebris) * 100);
+      const burstTag = this.burstActive ? ' [爆发中]' : '';
+      const degradeTag = this.degradeActive ? ' [降级]' : '';
+
+      this.fpsCounter.textContent = `FPS: ${this.currentFps} | 流星: ${poolStats.activeMeteors}/${poolStats.totalMeteors}(${meteorUtil}%) | 碎片: ${poolStats.activeDebris}/${poolStats.totalDebris}(${debrisUtil}%)${burstTag}${degradeTag}`;
+
+      if (poolStats.meteorPoolExhausted > 0 || poolStats.debrisPoolExhausted > 0) {
+        console.debug(`[App] 对象池溢出: meteor=${poolStats.meteorPoolExhausted}, debris=${poolStats.debrisPoolExhausted}`);
+      }
+
       this.frameCount = 0;
       this.fpsElapsed = 0;
+    }
+
+    if (this.currentFps < FPS_DEGRADE_THRESHOLD && !this.degradeActive) {
+      this.degradeActive = true;
+      this.degradeDensityReduction = 0;
+      console.debug(`[App] FPS严重过低(${this.currentFps}), 启动降级模式`);
+    } else if (this.currentFps < FPS_WARNING_THRESHOLD && this.degradeActive) {
+      this.degradeDensityReduction = Math.min(this.baseDensity - 1, this.degradeDensityReduction + 2);
+      console.debug(`[App] FPS偏低(${this.currentFps}), 降级减少密度: -${this.degradeDensityReduction}`);
+      this.particleSystem.updateConfig({
+        ...this.currentConfig,
+        density: this.getEffectiveDensity()
+      });
+    } else if (this.currentFps >= FPS_WARNING_THRESHOLD && this.degradeActive) {
+      this.degradeActive = false;
+      this.degradeDensityReduction = 0;
+      console.debug(`[App] FPS恢复(${this.currentFps}), 退出降级模式`);
+      this.particleSystem.updateConfig({
+        ...this.currentConfig,
+        density: this.getEffectiveDensity()
+      });
+    }
+
+    if (this.currentFps >= FPS_WARNING_THRESHOLD) {
+      this.fpsCounter.style.color = 'rgba(255, 255, 255, 0.7)';
+      this.fpsCounter.style.borderColor = 'rgba(255, 140, 0, 0.2)';
+    } else if (this.currentFps >= FPS_DEGRADE_THRESHOLD) {
+      this.fpsCounter.style.color = '#FF8C00';
+      this.fpsCounter.style.borderColor = 'rgba(255, 140, 0, 0.6)';
+    } else {
+      this.fpsCounter.style.color = '#FF4444';
+      this.fpsCounter.style.borderColor = 'rgba(255, 68, 68, 0.6)';
     }
   }
 
@@ -210,10 +270,13 @@ class App {
       if (this.burstRemaining <= 0) {
         this.burstActive = false;
         this.burstRemaining = 0;
+        const restoreDensity = this.getEffectiveDensity();
+        console.debug(`[App] 爆发结束, 恢复密度: ${restoreDensity}, baseDensity=${this.baseDensity}`);
         this.particleSystem.updateConfig({
           ...this.currentConfig,
-          density: this.baseDensity
+          density: restoreDensity
         });
+        console.debug(`[App] 验证恢复: particleSystem.config.density=${this.particleSystem.getConfig().density}`);
       }
     }
 
