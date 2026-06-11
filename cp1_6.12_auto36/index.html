@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>行星轨道模拟器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a2e; }
+    #app { display: flex; width: 100%; height: 100%; }
+    #canvas-container { flex: 1; position: relative; }
+    #simCanvas { display: block; width: 100%; height: 100%; }
+    #panel {
+      width: 280px;
+      min-width: 280px;
+      background: rgba(10, 15, 50, 0.85);
+      border-radius: 12px;
+      margin: 12px;
+      padding: 16px;
+      color: #fff;
+      font-size: 14px;
+      font-family: 'Segoe UI', sans-serif;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    #panel h2 { font-size: 16px; text-align: center; margin-bottom: 4px; }
+    .param-group { display: flex; flex-direction: column; gap: 6px; }
+    .param-group label { font-size: 13px; color: #aab; }
+    .param-group .row { display: flex; align-items: center; gap: 8px; }
+    .param-group input[type="range"] { flex: 1; accent-color: #5af; }
+    .param-group .val { min-width: 36px; text-align: right; font-size: 13px; }
+    .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; color: #fff; background: #2a4a8a; transition: background 0.2s; }
+    .btn:hover { background: #3a6abf; }
+    .btn.active { background: #5af; }
+    .info-block { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; font-size: 13px; line-height: 1.6; }
+    .info-block span { color: #8bf; }
+    .section-title { font-size: 14px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 4px; margin-top: 4px; }
+    #launch-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.5); font-size: 13px; pointer-events: none; font-family: 'Segoe UI', sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container">
+      <canvas id="simCanvas"></canvas>
+      <div id="launch-hint">从恒星位置拖拽鼠标发射小行星</div>
+    </div>
+    <div id="panel">
+      <h2>🪐 轨道参数控制</h2>
+
+      <div class="section-title">模拟参数</div>
+      <div class="param-group">
+        <label>引力常数 G</label>
+        <div class="row">
+          <input type="range" id="sliderG" min="0.1" max="2.0" step="0.1" value="1.0" />
+          <span class="val" id="valG">1.0</span>
+        </div>
+      </div>
+      <div class="param-group">
+        <label>时间加速</label>
+        <div class="row">
+          <button class="btn active" data-speed="1">1x</button>
+          <button class="btn" data-speed="2">2x</button>
+          <button class="btn" data-speed="5">5x</button>
+          <button class="btn" data-speed="10">10x</button>
+        </div>
+      </div>
+
+      <div class="section-title">尾迹设置</div>
+      <div class="param-group">
+        <div class="row">
+          <button class="btn active" id="btnTrail">轨迹: 开</button>
+          <input type="range" id="sliderTrailLen" min="50" max="500" step="10" value="200" />
+          <span class="val" id="valTrailLen">200</span>
+        </div>
+      </div>
+
+      <div class="section-title">小行星发射</div>
+      <div class="param-group">
+        <label>质量 (地球质量)</label>
+        <div class="row">
+          <input type="range" id="sliderAMass" min="0.1" max="5.0" step="0.1" value="1.0" />
+          <span class="val" id="valAMass">1.0</span>
+        </div>
+      </div>
+      <div class="param-group">
+        <label>速度 (单位/秒)</label>
+        <div class="row">
+          <input type="range" id="sliderASpeed" min="20" max="200" step="5" value="80" />
+          <span class="val" id="valASpeed">80</span>
+        </div>
+      </div>
+      <div class="param-group">
+        <label>半径 (px)</label>
+        <div class="row">
+          <input type="range" id="sliderARadius" min="2" max="8" step="1" value="4" />
+          <span class="val" id="valARadius">4</span>
+        </div>
+      </div>
+
+      <div class="section-title">选中天体信息</div>
+      <div class="info-block" id="bodyInfo">
+        点击行星查看信息
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
