@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FaceData, Triangle } from './faceGenerator';
+import { FaceData, Triangle, SharedEdge } from './faceGenerator';
 
 export interface FaceMeshInfo {
   mesh: THREE.Mesh;
@@ -7,18 +7,16 @@ export interface FaceMeshInfo {
   group: THREE.Group;
   baseColor: THREE.Color;
   centroid: THREE.Vector3;
-  sharedEdge?: {
-    pivot: THREE.Vector3;
-    axis: THREE.Vector3;
-    angle: number;
-  };
+  pivotPoint: THREE.Vector3;
+  foldAxis: THREE.Vector3;
+  foldAngle: number;
+  foldOrder: number;
   uvBounds: { minX: number; minY: number; maxX: number; maxY: number };
   avgColor: { r: number; g: number; b: number };
   waveFreq: number;
   waveAmp: number;
   wavePhase: number;
   foldProgress: number;
-  foldTarget: number;
   index: number;
 }
 
@@ -37,6 +35,7 @@ export class OrigamiModel {
   private domElement: HTMLElement;
   private selectedFace: FaceMeshInfo | null = null;
   private originalEmissiveMap: Map<FaceMeshInfo, THREE.Color> = new Map();
+
   private unfoldStartTime: number = 0;
   private unfolding: boolean = false;
   private unfoldDuration: number = 2000;
@@ -47,11 +46,11 @@ export class OrigamiModel {
 
   private isDragging: boolean = false;
   private prevMouse: { x: number; y: number } = { x: 0, y: 0 };
-  private targetRotation: { x: number; y: number } = { x: -0.3, y: 0 };
-  private currentRotation: { x: number; y: number } = { x: -0.3, y: 0 };
+  private targetRotation: { x: number; y: number } = { x: -0.25, y: 0 };
+  private currentRotation: { x: number; y: number } = { x: -0.25, y: 0 };
   private rotationVelocity: { x: number; y: number } = { x: 0, y: 0 };
-  private damping: number = 0.9;
-  private initialCameraPosition: THREE.Vector3;
+  private damping: number = 0.92;
+  private _initialCameraPosition: THREE.Vector3;
   private currentCameraDistance: number = 600;
   private targetCameraDistance: number = 600;
 
@@ -73,7 +72,7 @@ export class OrigamiModel {
     this.scene.add(this.group);
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
-    this.initialCameraPosition = camera.position.clone();
+    this._initialCameraPosition = camera.position.clone();
     this.setupEventListeners();
   }
 
@@ -113,7 +112,7 @@ export class OrigamiModel {
 
     this.domElement.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 1.1 : 0.9;
+      const factor = e.deltaY > 0 ? 1.08 : 0.92;
       this.targetCameraDistance = Math.max(300, Math.min(1800, this.targetCameraDistance * factor));
     }, { passive: false });
   }
@@ -143,7 +142,7 @@ export class OrigamiModel {
     const mat = faceInfo.mesh.material as THREE.MeshStandardMaterial;
     this.originalEmissiveMap.set(faceInfo, mat.emissive.clone());
     mat.emissive.setHex(0x00B4FF);
-    mat.emissiveIntensity = 0.5;
+    mat.emissiveIntensity = 0.55;
     const edgeMat = faceInfo.edges.material as THREE.LineBasicMaterial;
     edgeMat.color.setHex(0x00B4FF);
     edgeMat.opacity = 1;
@@ -163,17 +162,64 @@ export class OrigamiModel {
     }
   }
 
+  private computeBFSTriangleOrder(triangles: Triangle[]): number[] {
+    if (triangles.length === 0) return [];
+    const visited = new Set<number>();
+    const order: number[] = [];
+    const queue: number[] = [];
+    let largestIdx = 0;
+    let largestArea = 0;
+    for (let i = 0; i < triangles.length; i++) {
+      if (triangles[i].area > largestArea) {
+        largestArea = triangles[i].area;
+        largestIdx = i;
+      }
+    }
+    queue.push(largestIdx);
+    visited.add(largestIdx);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      order.push(current);
+      const tri = triangles[current];
+      for (const neighborIdx of tri.neighbors) {
+        if (!visited.has(neighborIdx) && neighborIdx < triangles.length) {
+          visited.add(neighborIdx);
+          queue.push(neighborIdx);
+        }
+      }
+    }
+    for (let i = 0; i < triangles.length; i++) {
+      if (!visited.has(i)) {
+        order.push(i);
+        visited.add(i);
+      }
+    }
+    return order;
+  }
+
+  private findFoldEdge(tri: Triangle, _triIdx: number, foldedSet: Set<number>): SharedEdge | null {
+    for (const se of tri.sharedEdges) {
+      if (foldedSet.has(se.neighborIndex)) {
+        return se;
+      }
+    }
+    return null;
+  }
+
   public buildModel(faceData: FaceData) {
     this.clearModel();
     const { triangles, imageWidth, imageHeight, normalizedScale } = faceData;
     const offsetX = imageWidth / 2;
     const offsetY = imageHeight / 2;
-    const foldedAngles = [Math.PI / 2, (3 * Math.PI) / 4];
+    const foldAngles = [Math.PI / 2, (3 * Math.PI) / 4];
 
-    const meshMap = new Map<number, FaceMeshInfo>();
-    const centerPoint = new THREE.Vector3(0, 0, 0);
+    const order = this.computeBFSTriangleOrder(triangles);
+    const foldedSet = new Set<number>();
 
-    triangles.forEach((tri: Triangle, idx: number) => {
+    const tempInfos: Map<number, FaceMeshInfo> = new Map();
+
+    for (let i = 0; i < triangles.length; i++) {
+      const tri = triangles[i];
       const geometry = new THREE.BufferGeometry();
       const vertices = new Float32Array(9);
       const points = [tri.a, tri.b, tri.c].map(p => {
@@ -181,11 +227,10 @@ export class OrigamiModel {
         const y = -(p.y - offsetY) * normalizedScale;
         return new THREE.Vector3(x, y, 0);
       });
-      centerPoint.add(points[0]).add(points[1]).add(points[2]);
-      for (let i = 0; i < 3; i++) {
-        vertices[i * 3] = points[i].x;
-        vertices[i * 3 + 1] = points[i].y;
-        vertices[i * 3 + 2] = points[i].z;
+      for (let j = 0; j < 3; j++) {
+        vertices[j * 3] = points[j].x;
+        vertices[j * 3 + 1] = points[j].y;
+        vertices[j * 3 + 2] = points[j].z;
       }
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
       geometry.computeVertexNormals();
@@ -200,7 +245,7 @@ export class OrigamiModel {
         color: color,
         side: THREE.DoubleSide,
         flatShading: true,
-        metalness: 0.1,
+        metalness: 0.08,
         roughness: 0.7,
         emissive: new THREE.Color(0x000000),
         emissiveIntensity: 0,
@@ -234,56 +279,59 @@ export class OrigamiModel {
         group: faceGroup,
         baseColor: color.clone(),
         centroid: centroidVec,
+        pivotPoint: new THREE.Vector3(),
+        foldAxis: new THREE.Vector3(0, 0, 1),
+        foldAngle: 0,
+        foldOrder: 0,
         uvBounds: tri.uvBounds,
         avgColor: tri.avgColor,
         waveFreq: 0.3 + Math.random() * 0.5,
         waveAmp: 2 + Math.random() * 2,
         wavePhase: Math.random() * Math.PI * 2,
         foldProgress: 0,
-        foldTarget: 0,
-        index: idx
+        index: i
       };
 
-      mesh.userData.faceIndex = idx;
+      mesh.userData.faceIndex = i;
+      tempInfos.set(i, faceInfo);
       this.faceMeshInfos.push(faceInfo);
-      meshMap.set(idx, faceInfo);
-    });
+    }
 
-    centerPoint.divideScalar(triangles.length * 3);
-    this.group.position.sub(centerPoint);
+    for (let orderIdx = 0; orderIdx < order.length; orderIdx++) {
+      const triIdx = order[orderIdx];
+      const info = tempInfos.get(triIdx)!;
+      const tri = triangles[triIdx];
 
-    triangles.forEach((tri, idx) => {
-      const info = meshMap.get(idx)!;
-      if (tri.neighbors.length > 0) {
-        const neighborIdx = tri.neighbors[Math.floor(Math.random() * tri.neighbors.length)];
-        const neighborTri = triangles[neighborIdx];
-        if (neighborTri) {
-          const sharedEdge = this.findSharedEdge(tri, neighborTri);
-          if (sharedEdge) {
-            const p1 = new THREE.Vector3(
-              (sharedEdge.p1.x - offsetX) * normalizedScale,
-              -(sharedEdge.p1.y - offsetY) * normalizedScale,
-              0
-            );
-            const p2 = new THREE.Vector3(
-              (sharedEdge.p2.x - offsetX) * normalizedScale,
-              -(sharedEdge.p2.y - offsetY) * normalizedScale,
-              0
-            );
-            const pivot = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-            const axis = new THREE.Vector3().subVectors(p2, p1).normalize();
-            const angle = foldedAngles[Math.floor(Math.random() * foldedAngles.length)];
-            const sign = Math.random() > 0.5 ? 1 : -1;
-            info.sharedEdge = {
-              pivot,
-              axis,
-              angle: angle * sign
-            };
-            info.foldTarget = 1;
-          }
-        }
+      info.foldOrder = orderIdx;
+
+      if (orderIdx === 0) {
+        info.foldAngle = 0;
+        info.pivotPoint.copy(info.centroid);
+        info.foldAxis.set(1, 0, 0);
+        foldedSet.add(triIdx);
+        continue;
       }
-      if (!info.sharedEdge) {
+
+      const foldEdge = this.findFoldEdge(tri, triIdx, foldedSet);
+      if (foldEdge) {
+        const p1 = new THREE.Vector3(
+          (foldEdge.edge[0].x - offsetX) * normalizedScale,
+          -(foldEdge.edge[0].y - offsetY) * normalizedScale,
+          0
+        );
+        const p2 = new THREE.Vector3(
+          (foldEdge.edge[1].x - offsetX) * normalizedScale,
+          -(foldEdge.edge[1].y - offsetY) * normalizedScale,
+          0
+        );
+        const pivot = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+        const axis = new THREE.Vector3().subVectors(p2, p1).normalize();
+        const angle = foldAngles[Math.floor(Math.random() * foldAngles.length)];
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        info.pivotPoint.copy(pivot);
+        info.foldAxis.copy(axis);
+        info.foldAngle = angle * dir;
+      } else {
         const pts = [tri.a, tri.b, tri.c];
         const edgeIdx = Math.floor(Math.random() * 3);
         const p1 = new THREE.Vector3(
@@ -298,37 +346,24 @@ export class OrigamiModel {
         );
         const pivot = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
         const axis = new THREE.Vector3().subVectors(p2, p1).normalize();
-        info.sharedEdge = {
-          pivot,
-          axis,
-          angle: foldedAngles[Math.floor(Math.random() * foldedAngles.length)] * (Math.random() > 0.5 ? 1 : -1)
-        };
-        info.foldTarget = 0.85;
+        info.pivotPoint.copy(pivot);
+        info.foldAxis.copy(axis);
+        info.foldAngle = foldAngles[Math.floor(Math.random() * foldAngles.length)] * (Math.random() > 0.5 ? 0.6 : -0.6);
       }
-    });
+      foldedSet.add(triIdx);
+    }
+
+    const centerPoint = new THREE.Vector3();
+    for (const info of this.faceMeshInfos) {
+      centerPoint.add(info.centroid);
+    }
+    centerPoint.divideScalar(this.faceMeshInfos.length);
+    this.group.position.sub(centerPoint);
 
     this.unfolding = true;
     this.unfoldStartTime = performance.now();
-    this.waveStartTime = performance.now() + this.unfoldDuration + 500;
+    this.waveStartTime = performance.now() + this.unfoldDuration + 400;
     this.faceMeshInfos.sort((a, b) => a.index - b.index);
-  }
-
-  private findSharedEdge(t1: Triangle, t2: Triangle): { p1: { x: number; y: number }; p2: { x: number; y: number } } | null {
-    const pts1 = [t1.a, t1.b, t1.c];
-    const pts2 = [t2.a, t2.b, t2.c];
-    const shared: { x: number; y: number }[] = [];
-    for (const p1 of pts1) {
-      for (const p2 of pts2) {
-        if (Math.abs(p1.x - p2.x) < 1 && Math.abs(p1.y - p2.y) < 1) {
-          shared.push(p1);
-          break;
-        }
-      }
-    }
-    if (shared.length >= 2) {
-      return { p1: shared[0], p2: shared[1] };
-    }
-    return null;
   }
 
   private easeOutCubic(t: number): number {
@@ -351,32 +386,25 @@ export class OrigamiModel {
   }
 
   private applyFoldTransform(info: FaceMeshInfo, progress: number) {
-    if (!info.sharedEdge) return;
-    const { pivot, axis, angle } = info.sharedEdge;
     const eased = this.easeOutCubic(Math.min(1, Math.max(0, progress)));
-    const currentAngle = angle * eased;
+    const currentAngle = info.foldAngle * eased;
     info.group.position.set(0, 0, 0);
     info.group.rotation.set(0, 0, 0);
     info.group.updateMatrix();
-    const pivotWorld = pivot.clone();
-    const axisWorld = axis.clone();
-    const quaternion = new THREE.Quaternion().setFromAxisAngle(axisWorld, currentAngle);
-    info.group.position.sub(pivotWorld);
+    const quaternion = new THREE.Quaternion().setFromAxisAngle(info.foldAxis, currentAngle);
+    info.group.position.sub(info.pivotPoint);
     info.group.position.applyQuaternion(quaternion);
-    info.group.position.add(pivotWorld);
+    info.group.position.add(info.pivotPoint);
     info.group.setRotationFromQuaternion(quaternion);
   }
 
-  private applyWaveTransform(info: FaceMeshInfo, time: number) {
-    const t = time / 1000;
+  private applyWaveTransform(info: FaceMeshInfo, timeMs: number) {
+    const t = timeMs / 1000;
     const offset = Math.sin(t * info.waveFreq * Math.PI * 2 + info.wavePhase) * info.waveAmp;
-    if (info.sharedEdge) {
-      const normal = new THREE.Vector3(0, 0, 1);
-      normal.applyAxisAngle(info.sharedEdge.axis, info.sharedEdge.angle * info.foldProgress);
-      info.group.position.add(normal.multiplyScalar(offset * 0.3));
-    } else {
-      info.group.position.z += offset;
-    }
+    const normal = new THREE.Vector3(0, 0, 1);
+    normal.applyAxisAngle(info.foldAxis, info.foldAngle * info.foldProgress);
+    normal.normalize();
+    info.group.position.add(normal.multiplyScalar(offset * 0.35));
   }
 
   public update(deltaTime: number, now: number) {
@@ -410,23 +438,23 @@ export class OrigamiModel {
   private updateReset(now: number) {
     const elapsed = now - this.resetStartTime;
     if (this.resetPhase === 'camera') {
-      const dur = 600;
+      const dur = 500;
       const t = Math.min(1, elapsed / dur);
       const eased = this.easeOutCubic(t);
-      this.targetRotation.x = -0.3 * eased;
-      this.targetRotation.y = 0 * eased;
-      this.targetCameraDistance = 600 + (this.initialCameraPosition.length() - 600) * (1 - eased);
+      this.targetRotation.x = -0.25 + (this.targetRotation.x + 0.25) * (1 - eased);
+      this.targetRotation.y *= (1 - eased);
+      this.targetCameraDistance = 600 + (this.targetCameraDistance - 600) * (1 - eased);
       if (elapsed >= dur) {
         this.resetStartTime = now;
         this.resetPhase = 'collapse';
       }
     } else if (this.resetPhase === 'collapse') {
-      const dur = 800;
+      const dur = 900;
       const t = Math.min(1, elapsed / dur);
       const progress = 1 - this.easeOutCubic(t);
       for (const info of this.faceMeshInfos) {
-        info.foldProgress = progress * info.foldTarget;
-        this.applyFoldTransform(info, info.foldProgress / info.foldTarget);
+        info.foldProgress = progress;
+        this.applyFoldTransform(info, progress);
         const edgeMat = info.edges.material as THREE.LineBasicMaterial;
         edgeMat.opacity = 0.6 * (1 - t);
       }
@@ -437,13 +465,15 @@ export class OrigamiModel {
       }
     } else if (this.resetPhase === 'expand') {
       const dur = 2000;
-      const t = Math.min(1, elapsed / dur);
-      const eased = this.easeOutCubic(t);
       for (const info of this.faceMeshInfos) {
-        info.foldProgress = eased * info.foldTarget;
+        const maxOrder = Math.max(1, this.faceMeshInfos.length);
+        const staggerDelay = (info.foldOrder / maxOrder) * 400;
+        const localT = Math.max(0, Math.min(1, (elapsed - staggerDelay) / (dur - 400)));
+        const eased = this.easeOutCubic(localT);
+        info.foldProgress = eased;
         this.applyFoldTransform(info, eased);
         const edgeMat = info.edges.material as THREE.LineBasicMaterial;
-        edgeMat.opacity = 0.6 * eased;
+        edgeMat.opacity = Math.min(0.6, eased * 0.7);
       }
       if (elapsed >= dur * 0.8) {
         this.waveEnabled = true;
@@ -458,29 +488,24 @@ export class OrigamiModel {
   private updateAnimations(now: number) {
     if (this.unfolding && !this.resetting) {
       const elapsed = now - this.unfoldStartTime;
-      const t = Math.min(1, elapsed / this.unfoldDuration);
-      void t;
-      for (let i = 0; i < this.faceMeshInfos.length; i++) {
-        const info = this.faceMeshInfos[i];
-        const staggerDelay = (i / Math.max(1, this.faceMeshInfos.length)) * 300;
+      const maxOrder = Math.max(1, this.faceMeshInfos.length);
+      for (const info of this.faceMeshInfos) {
+        const staggerDelay = (info.foldOrder / maxOrder) * 350;
         const localT = Math.max(0, Math.min(1, (elapsed - staggerDelay) / (this.unfoldDuration - 200)));
-        const localEased = this.easeOutCubic(localT);
-        info.foldProgress = localEased * info.foldTarget;
-        if (info.sharedEdge) {
-          this.applyFoldTransform(info, localEased);
-        }
+        const eased = this.easeOutCubic(localT);
+        info.foldProgress = eased;
+        this.applyFoldTransform(info, eased);
         const edgeMat = info.edges.material as THREE.LineBasicMaterial;
-        edgeMat.opacity = Math.min(0.6, localEased * 0.8);
+        edgeMat.opacity = Math.min(0.6, eased * 0.8);
       }
-      if (elapsed >= this.unfoldDuration + 500) {
+      if (elapsed >= this.unfoldDuration + 400) {
         this.unfolding = false;
         this.waveEnabled = true;
+        this.waveStartTime = now;
       }
     } else if (!this.resetting) {
       for (const info of this.faceMeshInfos) {
-        if (info.sharedEdge && !this.resetting) {
-          this.applyFoldTransform(info, info.foldProgress / Math.max(0.01, info.foldTarget));
-        }
+        this.applyFoldTransform(info, info.foldProgress);
       }
     }
     if (this.waveEnabled && !this.resetting) {

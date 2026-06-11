@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { generateFaces, FaceData, Triangle, Point } from './faceGenerator';
+import { generateFaces } from './faceGenerator';
 import { OrigamiModel, FaceMeshInfo } from './origamiModel';
 import { UIController } from './uiController';
 
@@ -136,114 +136,50 @@ class Application {
   }
 
   private buildDefaultModel() {
-    const demoFaceData = this.generateDemoFaceData();
-    this.origamiModel.buildModel(demoFaceData);
-    this.uiController.setFaceCount(demoFaceData.triangles.length);
+    const file = this.generateDemoImageFile();
+    generateFaces(file).then((faceData) => {
+      this.origamiModel.buildModel(faceData);
+      this.uiController.setFaceCount(faceData.triangles.length);
+    }).catch((err) => {
+      console.error('Demo model generation failed:', err);
+    });
   }
 
-  private generateDemoFaceData(): FaceData {
-    const w = 400;
-    const h = 300;
-    const cols = 10;
-    const rows = 7;
-    const cellW = w / cols;
-    const cellH = h / rows;
-    const triangles: Triangle[] = [];
-    const pointsArr: { x: number; y: number }[][] = [];
-    for (let r = 0; r <= rows; r++) {
-      pointsArr[r] = [];
-      for (let c = 0; c <= cols; c++) {
-        pointsArr[r][c] = {
-          x: c * cellW + (Math.random() - 0.5) * cellW * 0.2,
-          y: r * cellH + (Math.random() - 0.5) * cellH * 0.2
-        };
-      }
+  private generateDemoImageFile(): File {
+    const canvas = document.createElement('canvas');
+    const w = 640;
+    const h = 480;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    const gradient = ctx.createLinearGradient(0, 0, w, h);
+    gradient.addColorStop(0, '#00B4FF');
+    gradient.addColorStop(0.25, '#7B68EE');
+    gradient.addColorStop(0.5, '#FF6B9D');
+    gradient.addColorStop(0.75, '#FFD93D');
+    gradient.addColorStop(1, '#6BCF7B');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 0.3;
+    for (let i = 0; i < 12; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      const r = 30 + Math.random() * 80;
+      const hue = Math.random() * 360;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
+      ctx.fill();
     }
-    const colorPalette = [
-      { r: 0x00, g: 0xB4, b: 0xFF },
-      { r: 0x7B, g: 0x68, b: 0xEE },
-      { r: 0xFF, g: 0x6B, b: 0x9D },
-      { r: 0xFF, g: 0xD9, b: 0x3D },
-      { r: 0x6B, g: 0xCF, b: 0x7B },
-      { r: 0xFF, g: 0x8C, b: 0x42 },
-      { r: 0x58, g: 0x56, b: 0xD8 },
-      { r: 0xF0, g: 0x93, b: 0xFB }
-    ];
-    let idx = 0;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const p00 = pointsArr[r][c];
-        const p10 = pointsArr[r][c + 1];
-        const p01 = pointsArr[r + 1][c];
-        const p11 = pointsArr[r + 1][c + 1];
-        const cx = (c + 0.5) / cols;
-        const cy = (r + 0.5) / rows;
-        const gradient = (p: Point) => {
-          const t1 = p.x / w;
-          const baseColor1 = colorPalette[Math.floor(t1 * (colorPalette.length - 1)) % colorPalette.length];
-          const baseColor2 = colorPalette[(Math.floor(t1 * (colorPalette.length - 1)) + 1) % colorPalette.length];
-          const lt = t1 * (colorPalette.length - 1) - Math.floor(t1 * (colorPalette.length - 1));
-          const colorByX = {
-            r: Math.round(baseColor1.r * (1 - lt) + baseColor2.r * lt),
-            g: Math.round(baseColor1.g * (1 - lt) + baseColor2.g * lt),
-            b: Math.round(baseColor1.b * (1 - lt) + baseColor2.b * lt)
-          };
-          const bright = 0.7 + 0.3 * (1 - Math.abs(cy - 0.5) * 1.5);
-          return {
-            r: Math.min(255, Math.round(colorByX.r * bright)),
-            g: Math.min(255, Math.round(colorByX.g * bright)),
-            b: Math.min(255, Math.round(colorByX.b * bright))
-          };
-        };
-        const avg1 = gradient({ x: (p00.x + p10.x + p01.x) / 3, y: (p00.y + p10.y + p01.y) / 3 });
-        triangles.push({
-          a: { ...p00 }, b: { ...p10 }, c: { ...p01 },
-          centroid: { x: (p00.x + p10.x + p01.x) / 3, y: (p00.y + p10.y + p01.y) / 3 },
-          avgColor: avg1,
-          neighbors: [],
-          uvBounds: { minX: cx - 0.5 / cols, minY: cy - 0.5 / rows, maxX: cx + 0.5 / cols, maxY: cy + 0.5 / rows }
-        });
-        idx++;
-        const avg2 = gradient({ x: (p10.x + p11.x + p01.x) / 3, y: (p10.y + p11.y + p01.y) / 3 });
-        triangles.push({
-          a: { ...p10 }, b: { ...p11 }, c: { ...p01 },
-          centroid: { x: (p10.x + p11.x + p01.x) / 3, y: (p10.y + p11.y + p01.y) / 3 },
-          avgColor: avg2,
-          neighbors: [],
-          uvBounds: { minX: cx - 0.5 / cols, minY: cy - 0.5 / rows, maxX: cx + 0.5 / cols, maxY: cy + 0.5 / rows }
-        });
-        idx++;
-      }
+    ctx.globalAlpha = 1;
+    const dataUrl = canvas.toDataURL('image/png');
+    const byteString = atob(dataUrl.split(',')[1]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
     }
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const baseIdx = (r * cols + c) * 2;
-        const t1Idx = baseIdx;
-        const t2Idx = baseIdx + 1;
-        triangles[t1Idx].neighbors.push(t2Idx);
-        triangles[t2Idx].neighbors.push(t1Idx);
-        if (c > 0) {
-          const leftBase = (r * cols + (c - 1)) * 2;
-          triangles[t1Idx].neighbors.push(leftBase);
-          triangles[leftBase].neighbors.push(t1Idx);
-          triangles[t2Idx].neighbors.push(leftBase);
-          triangles[leftBase + 1].neighbors.push(t2Idx);
-        }
-        if (r > 0) {
-          const topBase = ((r - 1) * cols + c) * 2;
-          triangles[t1Idx].neighbors.push(topBase);
-          triangles[topBase + 1].neighbors.push(t1Idx);
-          triangles[t2Idx].neighbors.push(topBase);
-          triangles[topBase + 1].neighbors.push(t2Idx);
-        }
-      }
-    }
-    return {
-      triangles,
-      imageWidth: w,
-      imageHeight: h,
-      normalizedScale: 400 / Math.max(w, h)
-    };
+    return new File([ab], 'demo.png', { type: 'image/png' });
   }
 
   private handleResize() {
