@@ -111,15 +111,15 @@ const StatsDashboard: React.FC<StatsDashboardProps> = ({ project, cards, lists, 
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const width = Math.max(rect.width, 200);
+    const height = Math.max(rect.height, 200);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = Math.min(centerX, centerY) - 20;
+    const radius = Math.max(10, Math.min(centerX, centerY) - 20);
 
     ctx.clearRect(0, 0, width, height);
 
@@ -127,6 +127,7 @@ const StatsDashboard: React.FC<StatsDashboardProps> = ({ project, cards, lists, 
       ctx.fillStyle = '#bdc3c7';
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillText('暂无数据', centerX, centerY);
       return;
     }
@@ -170,15 +171,15 @@ const StatsDashboard: React.FC<StatsDashboardProps> = ({ project, cards, lists, 
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const width = Math.max(rect.width, 200);
+    const height = Math.max(rect.height, 200);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
     const padding = { top: 20, right: 20, bottom: 40, left: 40 };
-    const chartWidth = width - padding.left - padding.right;
-    const chartHeight = height - padding.top - padding.bottom;
+    const chartWidth = Math.max(100, width - padding.left - padding.right);
+    const chartHeight = Math.max(80, height - padding.top - padding.bottom);
 
     ctx.clearRect(0, 0, width, height);
 

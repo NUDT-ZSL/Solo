@@ -18,6 +18,16 @@ import {
 const CURRENT_USER_EMAIL = 'demo@example.com';
 const CURRENT_USER_NAME = '演示用户';
 
+type PendingActionType = 'addCard' | 'moveCard';
+
+interface PendingAction {
+  id: string;
+  type: PendingActionType;
+  timestamp: number;
+  payload: Record<string, unknown>;
+  executed?: boolean;
+}
+
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -33,26 +43,17 @@ const App: React.FC = () => {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [toastFading, setToastFading] = useState<Set<string>>(new Set());
-  const pendingActionsRef = useRef<Array<() => void>>([]);
+  const pendingActionsRef = useRef<PendingAction[]>([]);
+  const syncingRef = useRef<boolean>(false);
 
   const addToast = useCallback((message: string, type: ToastNotification['type'] = 'info') => {
     const id = uuidv4();
     const toast: ToastNotification = { id, message, type, visible: true };
     setToasts((prev) => [...prev, toast]);
+  }, []);
 
-    setTimeout(() => {
-      setToastFading((prev) => new Set([...prev, id]));
-    }, 1700);
-
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-      setToastFading((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }, 2000);
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const handleCardCreated = useCallback(
@@ -137,27 +138,86 @@ const App: React.FC = () => {
     onMemberJoined: handleMemberJoined,
   });
 
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      addToast('网络已恢复，正在同步数据...', 'success');
-      pendingActionsRef.current.forEach((action) => action());
-      pendingActionsRef.current = [];
-      loadAllData();
-    };
+  const flushPendingActions = useCallback(async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
 
-    const handleOffline = () => {
-      setIsOnline(false);
-      addToast('网络已断开，您的操作将在恢复后同步', 'warning');
-    };
+    const pending = [...pendingActionsRef.current];
+    pendingActionsRef.current = [];
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    if (pending.length === 0) {
+      syncingRef.current = false;
+      return;
+    }
 
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+    addToast(`正在同步 ${pending.length} 条离线操作...`, 'info');
+
+    const deduped: PendingAction[] = [];
+    const seen = new Map<string, PendingAction>();
+
+    pending.forEach((action) => {
+      if (action.type === 'moveCard') {
+        const key = `move_${action.payload.cardId as string}`;
+        seen.set(key, action);
+      } else {
+        deduped.push(action);
+      }
+    });
+    seen.forEach((v) => deduped.push(v));
+
+    deduped.sort((a, b) => a.timestamp - b.timestamp);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const action of deduped) {
+      try {
+        if (action.type === 'addCard') {
+          const { listId, title, description, priority, dueDate, assignee, tempCardId } = action.payload as {
+            listId: string; title: string; description: string; priority: Priority;
+            dueDate: string | null; assignee: string | null; tempCardId: string;
+          };
+
+          const res = await fetch(`/api/lists/${listId}/cards`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description, priority, dueDate, assignee, userEmail: CURRENT_USER_EMAIL }),
+          });
+
+          if (res.ok) {
+            const serverCard = await res.json();
+            setCards((prev) => prev.map((c) => (c.id === tempCardId ? serverCard : c)));
+            successCount++;
+          } else {
+            failCount++;
+            setCards((prev) => prev.filter((c) => c.id !== tempCardId));
+          }
+        } else if (action.type === 'moveCard') {
+          const { cardId, newListId, newOrder } = action.payload as {
+            cardId: string; newListId: string; newOrder: number;
+          };
+
+          const res = await fetch(`/api/cards/${cardId}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newListId, newOrder, userEmail: CURRENT_USER_EMAIL }),
+          });
+
+          if (res.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) addToast(`成功同步 ${successCount} 条操作`, 'success');
+    if (failCount > 0) addToast(`${failCount} 条操作同步失败`, 'warning');
+
+    syncingRef.current = false;
   }, [addToast]);
 
   const loadAllData = useCallback(async () => {
@@ -201,6 +261,33 @@ const App: React.FC = () => {
   }, [selectedProjectId]);
 
   useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      addToast('网络已恢复', 'success');
+      try {
+        await loadAllData();
+      } catch {
+        console.warn('Initial load failed, proceeding with sync');
+      }
+      await flushPendingActions();
+      await loadAllData();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      addToast('网络已断开，您的操作将在恢复后同步', 'warning');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [addToast, loadAllData, flushPendingActions]);
+
+  useEffect(() => {
     loadAllData();
   }, [loadAllData]);
 
@@ -231,7 +318,13 @@ const App: React.FC = () => {
       setCards((prev) => [...prev, tempCard]);
 
       if (!isOnline) {
-        pendingActionsRef.current.push(() => handleAddCard(listId, title, description, priority, dueDate, assignee));
+        const action: PendingAction = {
+          id: uuidv4(),
+          type: 'addCard',
+          timestamp: Date.now(),
+          payload: { listId, title, description, priority, dueDate, assignee, tempCardId: tempCard.id },
+        };
+        pendingActionsRef.current.push(action);
         return;
       }
 
@@ -301,7 +394,13 @@ const App: React.FC = () => {
       });
 
       if (!isOnline) {
-        pendingActionsRef.current.push(() => handleMoveCard(cardId, newListId, newOrder));
+        const action: PendingAction = {
+          id: uuidv4(),
+          type: 'moveCard',
+          timestamp: Date.now(),
+          payload: { cardId, newListId, newOrder },
+        };
+        pendingActionsRef.current.push(action);
         return;
       }
 
@@ -510,7 +609,12 @@ const App: React.FC = () => {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`toast toast-${toast.type} ${toastFading.has(toast.id) ? 'toast-fading' : ''}`}
+            className={`toast toast-${toast.type}`}
+            onAnimationEnd={(e) => {
+              if (e.animationName === 'toastFadeOut') {
+                removeToast(toast.id);
+              }
+            }}
           >
             <span className="toast-icon">
               {toast.type === 'success' && '✓'}
@@ -851,8 +955,8 @@ const App: React.FC = () => {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           font-size: 14px;
           min-width: 280px;
-          animation: toastSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          animation: toastSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both,
+                     toastFadeOut 0.35s cubic-bezier(0.4, 0, 0.2, 1) 1.65s both;
           border-left: 4px solid var(--accent-color);
         }
 
@@ -872,10 +976,6 @@ const App: React.FC = () => {
           border-left-color: #3498db;
         }
 
-        .toast-fading {
-          animation: toastSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
-        }
-
         @keyframes toastSlideIn {
           0% {
             opacity: 0;
@@ -890,7 +990,7 @@ const App: React.FC = () => {
           }
         }
 
-        @keyframes toastSlideOut {
+        @keyframes toastFadeOut {
           0% {
             opacity: 1;
             transform: translateX(0) scale(1);
