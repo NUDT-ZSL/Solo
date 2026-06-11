@@ -33,9 +33,6 @@ class GameMain {
 
   private lastTimestamp = 0;
   private rafId: number | null = null;
-  private _fps = 60;
-  private _fpsCounter = 0;
-  private _fpsTimer = 0;
 
   private animationReady = false;
 
@@ -111,20 +108,9 @@ class GameMain {
 
       for (let j = 0; j < numNodes; j++) {
         const t = j / (numNodes - 1);
-        const easedT = this.easeInOutQuad(t);
-
-        const baseX = j === 0
-          ? layout.startX
-          : j === numNodes - 1
-            ? layout.endX
-            : layout.startX + (layout.midX - layout.startX) * Math.sin(t * Math.PI * 0.8)
-                + (layout.endX - layout.midX) * Math.pow(t, 1.5);
 
         const pathMidY = editorBottom + (playBottom - editorBottom) * 0.55
           + Math.sin((j + i * 0.5) * 0.9) * 55;
-
-        const baseY = startY * (1 - easedT) * (j < 2 ? 1 : 0)
-          + Math.max(editorBottom + 50, pathMidY + Math.sin((i + j) * 1.3) * 65) * easedT;
 
         let x: number, y: number;
         if (j === 0) {
@@ -294,7 +280,6 @@ class GameMain {
   }
 
   private touchToMouse(t: Touch): MouseEvent {
-    const rect = this.canvas.getBoundingClientRect();
     return {
       clientX: t.clientX,
       clientY: t.clientY,
