@@ -18,11 +18,17 @@ export interface UpgradedRune extends RuneDefinition {
 
 export interface WeaponRecipe {
   name: string;
+  symbol: string;
   elements: RuneElement[];
   attackPower: number;
+  defensePower: number;
   elementType: RuneElement;
   description: string;
 }
+
+export const BASE_MANA_COST = 5;
+export const UPGRADED_MANA_COST = 15;
+export const WEAPON_FORGE_MANA_COST = 20;
 
 export const RUNE_DEFINITIONS: Record<RuneElement, RuneDefinition> = {
   fire: {
@@ -165,57 +171,82 @@ export const UPGRADED_RUNE_MAP: Record<string, UpgradedRune> = {
 export const WEAPON_RECIPES: WeaponRecipe[] = [
   {
     name: '火焰剑',
+    symbol: '⚔',
     elements: ['fire', 'fire', 'wind'],
     attackPower: 25,
+    defensePower: 5,
     elementType: 'fire',
     description: '烈焰与疾风铸成的灼热之剑',
   },
   {
+    name: '冰霜盾',
+    symbol: '🛡',
+    elements: ['water', 'water', 'earth'],
+    attackPower: 10,
+    defensePower: 30,
+    elementType: 'water',
+    description: '寒冰与大地之力凝铸的坚盾',
+  },
+  {
     name: '冰霜弓',
+    symbol: '🏹',
     elements: ['water', 'water', 'wind'],
     attackPower: 22,
+    defensePower: 8,
     elementType: 'water',
     description: '寒冰凝聚的远程利器',
   },
   {
     name: '大地之锤',
+    symbol: '🔨',
     elements: ['earth', 'earth', 'fire'],
     attackPower: 28,
+    defensePower: 12,
     elementType: 'earth',
     description: '大地之力与烈焰锻造的重锤',
   },
   {
     name: '圣光之杖',
+    symbol: '🪄',
     elements: ['light', 'light', 'wind'],
     attackPower: 20,
+    defensePower: 10,
     elementType: 'light',
     description: '圣光祝福的神圣权杖',
   },
   {
     name: '暗影匕首',
+    symbol: '🗡',
     elements: ['dark', 'dark', 'wind'],
     attackPower: 30,
+    defensePower: 3,
     elementType: 'dark',
     description: '虚空之力凝聚的暗杀利刃',
   },
   {
     name: '风暴长矛',
+    symbol: '🌩',
     elements: ['wind', 'wind', 'fire'],
     attackPower: 24,
+    defensePower: 6,
     elementType: 'wind',
     description: '暴风与烈焰交织的长矛',
   },
   {
     name: '生命之盾',
+    symbol: '💚',
     elements: ['water', 'earth', 'light'],
     attackPower: 15,
+    defensePower: 25,
     elementType: 'light',
     description: '守护之力的圣盾',
   },
   {
     name: '毁灭法杖',
+    symbol: '💀',
     elements: ['fire', 'dark', 'dark'],
     attackPower: 35,
+    defensePower: 2,
     elementType: 'dark',
     description: '焚尽一切的黑暗法杖',
   },

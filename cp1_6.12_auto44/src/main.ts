@@ -1,225 +1,209 @@
 import Phaser from 'phaser';
-import { RuneBoard, RuneBoardEvents } from './game/RuneBoard';
-import { RuneElement, WeaponRecipe, UpgradedRune, RUNE_DEFINITIONS } from './game/RuneData';
-import { BattleManager, BattleEvents } from './battle/BattleManager';
-import { UIPanel, UIPanelEvents } from './ui/UIPanel';
+import { RuneBoard, RUNE_BOARD_EVENTS, RunePlacedEvent, RuneMergedEvent, WeaponForgedEvent } from './game/RuneBoard';
+import { UIPanel, UI_EVENTS } from './ui/UIPanel';
+import { BattleManager, BATTLE_EVENTS } from './battle/BattleManager';
+import { WEAPON_RECIPES, WeaponRecipe, RUNE_DEFINITIONS, BASE_MANA_COST, UPGRADED_MANA_COST, WEAPON_FORGE_MANA_COST } from './game/RuneData';
 
 class GameScene extends Phaser.Scene {
   private runeBoard!: RuneBoard;
-  private battleManager!: BattleManager;
   private uiPanel!: UIPanel;
-  private backgroundGraphics!: Phaser.GameObjects.Graphics;
+  private battleManager!: BattleManager;
 
   constructor() {
-    super({ key: 'GameScene' });
+    super('GameScene');
   }
 
   preload() {
-    const graphics = this.add.graphics();
-    graphics.fillStyle(0xffffff, 1);
-    graphics.fillCircle(3, 3, 3);
-    graphics.generateTexture('mergeParticle', 6, 6);
-    graphics.destroy();
+    const runeKeys = Object.keys(RUNE_DEFINITIONS);
+    runeKeys.forEach((key) => {
+      const def = RUNE_DEFINITIONS[key as keyof typeof RUNE_DEFINITIONS];
+      const gfx = this.make.graphics({ x: 0, y: 0, add: false });
+      gfx.fillStyle(def.color, 1);
+      gfx.fillCircle(8, 8, 8);
+      gfx.generateTexture(`rune_${key}`, 16, 16);
+    });
+
+    const mergeGfx = this.make.graphics({ x: 0, y: 0, add: false });
+    mergeGfx.fillStyle(0xffffff, 1);
+    mergeGfx.fillCircle(4, 4, 4);
+    mergeGfx.generateTexture('mergeParticle', 8, 8);
+
+    const sparkleGfx = this.make.graphics({ x: 0, y: 0, add: false });
+    sparkleGfx.fillStyle(0xC9A96E, 1);
+    sparkleGfx.fillCircle(3, 3, 3);
+    sparkleGfx.generateTexture('sparkle', 6, 6);
   }
 
   create() {
-    this.createBackground();
+    this.cameras.main.setBackgroundColor('#2D1B4E');
 
-    const boardEvents: RuneBoardEvents = {
-      onRunePlaced: (row, col, element) => this.onRunePlaced(row, col, element),
-      onRuneMerged: (row, col, upgraded) => this.onRuneMerged(row, col, upgraded),
-      onWeaponForged: (recipe) => this.onWeaponForged(recipe),
-      onManaInsufficient: () => this.onManaInsufficient(),
-    };
+    this.battleManager = new BattleManager(this);
+    this.runeBoard = new RuneBoard(this);
+    this.uiPanel = new UIPanel(this);
 
-    const battleEvents: BattleEvents = {
-      onPlayerAttack: (damage, element) => this.onPlayerAttack(damage, element),
-      onMonsterAttack: (damage) => this.onMonsterAttack(damage),
-      onMonsterDeath: (monster) => this.onMonsterDeath(monster),
-      onPlayerDeath: () => this.onPlayerDeath(),
-      onNewWave: (wave, monster) => this.onNewWave(wave, monster),
-      onTurnStart: (turn) => this.onTurnStart(turn),
-      onHpChange: (hp, maxHp) => this.onHpChange(hp, maxHp),
-      onMpChange: (mp, maxMp) => this.onMpChange(mp, maxMp),
-    };
-
-    const uiEvents: UIPanelEvents = {
-      onForgeRequested: () => this.onForgeRequested(),
-      onResetRequested: () => this.onResetRequested(),
-    };
-
-    this.runeBoard = new RuneBoard(this, boardEvents);
-    this.battleManager = new BattleManager(this, battleEvents);
-    this.uiPanel = new UIPanel(this, uiEvents);
+    this.setupEventBindings();
 
     this.battleManager.startBattle();
 
-    const playerState = this.battleManager.getPlayerState();
-    this.uiPanel.updateHpBar(playerState.hp, playerState.maxHp);
-    this.uiPanel.updateMpBar(playerState.mp, playerState.maxMp);
-    this.uiPanel.updateWave(this.battleManager.getCurrentWave());
+    this.scale.on('resize', this.handleResize, this);
   }
 
-  private createBackground() {
-    this.backgroundGraphics = this.add.graphics();
-    this.backgroundGraphics.fillStyle(0x0a0a14, 1);
-    this.backgroundGraphics.fillRect(0, 0, this.scale.width, this.scale.height);
+  private setupEventBindings() {
+    this.battleManager.on(BATTLE_EVENTS.PLAYER_HP_CHANGED, (hp: number, maxHp: number) => {
+      this.uiPanel.updateHpBar(hp, maxHp);
+    });
 
-    const bg = this.add.graphics();
-    bg.fillStyle(0x2D1B4E, 0.15);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height * 0.12);
+    this.battleManager.on(BATTLE_EVENTS.PLAYER_MP_CHANGED, (mp: number, maxMp: number) => {
+      this.uiPanel.updateMpBar(mp, maxMp);
+    });
 
-    bg.fillStyle(0x2D1B4E, 0.08);
-    bg.fillRect(0, this.scale.height * 0.65, this.scale.width, this.scale.height * 0.35);
+    this.battleManager.on(BATTLE_EVENTS.WAVE_CHANGED, (wave: number) => {
+      this.uiPanel.updateWave(wave);
+    });
 
-    bg.lineStyle(1, 0xC9A96E, 0.2);
-    bg.lineBetween(0, this.scale.height * 0.12, this.scale.width, this.scale.height * 0.12);
-    bg.lineBetween(0, this.scale.height * 0.65, this.scale.width, this.scale.height * 0.65);
+    this.battleManager.on(BATTLE_EVENTS.BATTLE_TURN, (turn: number) => {
+      this.uiPanel.updateTurn(turn);
+    });
 
-    this.createAmbientParticles();
-  }
+    this.battleManager.on(BATTLE_EVENTS.MONSTER_HIT, (damage: number) => {
+      const pos = this.battleManager.getMonsterPosition();
+      this.uiPanel.showDamageNumber(damage, pos.x + Phaser.Math.Between(-20, 20), pos.y - 20);
+    });
 
-  private createAmbientParticles() {
-    const g = this.add.graphics();
-    g.fillStyle(0xC9A96E, 1);
-    g.fillCircle(2, 2, 2);
-    g.generateTexture('ambientParticle', 4, 4);
-    g.destroy();
+    this.battleManager.on(BATTLE_EVENTS.PLAYER_HIT, (damage: number) => {
+      this.cameras.main.shake(150, 0.008);
+      const screenMidX = this.scale.width / 2;
+      const screenBottom = this.scale.height - 120;
+      this.uiPanel.showDamageNumber(damage, screenMidX + Phaser.Math.Between(-30, 30), screenBottom, '#ff7675');
+    });
 
-    const emitter = this.add.particles(this.scale.width / 2, this.scale.height + 10, 'ambientParticle', {
-      speed: { min: 10, max: 40 },
-      lifespan: { min: 4000, max: 8000 },
-      scale: { start: 0.4, end: 0 },
-      alpha: { start: 0.3, end: 0 },
-      tint: [0xC9A96E, 0x2D1B4E, 0x8B0000],
-      frequency: 300,
-      emitZone: {
-        type: 'random',
-        source: new Phaser.Geom.Rectangle(-this.scale.width / 2, 0, this.scale.width, 10),
-      },
+    this.battleManager.on(BATTLE_EVENTS.MONSTER_DEFEATED, () => {
+      const pos = this.battleManager.getMonsterPosition();
+      this.uiPanel.showFloatingText('击败!', pos.x, pos.y - 30, '#00b894');
+    });
+
+    this.battleManager.on(BATTLE_EVENTS.GAME_OVER, () => {
+      this.uiPanel.showGameOver();
+    });
+
+    this.runeBoard.on('request:mana', (amount: number, callback: (ok: boolean) => void) => {
+      const ok = this.battleManager.consumeMana(amount);
+      if (!ok) {
+        this.uiPanel.flashManaInsufficient();
+      }
+      callback(ok);
+    });
+
+    this.runeBoard.on(RUNE_BOARD_EVENTS.RUNE_MERGED, (data: RuneMergedEvent) => {
+      this.uiPanel.showFloatingText('融合成功!', this.scale.width / 2, 250, '#00b894');
+    });
+
+    this.runeBoard.on(RUNE_BOARD_EVENTS.WEAPON_FORGED, (data: WeaponForgedEvent) => {
+      this.battleManager.equipWeapon(data.recipe);
+      this.uiPanel.updateWeapon(data.recipe);
+    });
+
+    this.runeBoard.on(RUNE_BOARD_EVENTS.MANA_INSUFFICIENT, () => {
+      this.uiPanel.flashManaInsufficient();
+    });
+
+    this.uiPanel.on(UI_EVENTS.FORGE_REQUESTED, () => {
+      this.tryForgeWeapon();
+    });
+
+    this.uiPanel.on(UI_EVENTS.RESET_REQUESTED, () => {
+      this.resetGame();
     });
   }
 
-  private onRunePlaced(row: number, col: number, element: RuneElement) {
-    const def = RUNE_DEFINITIONS[element];
-    const manaCost = def.manaCost;
-    if (!this.battleManager.consumeMana(manaCost)) {
-      this.runeBoard.triggerManaInsufficientEffect();
-      this.uiPanel.flashManaInsufficient();
+  private tryForgeWeapon() {
+    const boardState = this.runeBoard.getBoardState();
+    const allCells = [];
+
+    for (let r = 0; r < 3; r++) {
+      const rowRunes = [];
+      for (let c = 0; c < 3; c++) {
+        const cell = boardState[r][c];
+        rowRunes.push(cell);
+        if (cell.element) {
+          allCells.push(cell);
+        }
+      }
+      const recipe = this.matchRecipe(rowRunes.map(r => r.element!).filter(Boolean));
+      if (recipe && this.battleManager.checkMana(WEAPON_FORGE_MANA_COST)) {
+        this.runeBoard.clearRow(r);
+        this.runeBoard.playForgeAnimation(r, 0, r, 2, recipe);
+        this.battleManager.consumeMana(WEAPON_FORGE_MANA_COST);
+        this.battleManager.equipWeapon(recipe);
+        this.uiPanel.updateWeapon(recipe);
+        this.uiPanel.showFloatingText(`铸造: ${recipe.name}!`, this.scale.width / 2, 240, '#C9A96E');
+        return;
+      }
     }
-  }
 
-  private onRuneMerged(row: number, col: number, upgraded: UpgradedRune) {
-    this.uiPanel.showFloatingText(
-      `${upgraded.name} 合成!`,
-      this.scale.width / 2,
-      this.scale.height * 0.45,
-      `#${upgraded.glowColor.toString(16).padStart(6, '0')}`
-    );
-  }
-
-  private onWeaponForged(recipe: WeaponRecipe) {
-    this.battleManager.equipWeapon(recipe);
-    this.uiPanel.updateWeapon(recipe);
-    this.uiPanel.showFloatingText(
-      `铸造: ${recipe.name}!`,
-      this.scale.width / 2,
-      this.scale.height * 0.55,
-      '#ffd700'
-    );
-  }
-
-  private onManaInsufficient() {
-    this.uiPanel.flashManaInsufficient();
-  }
-
-  private onPlayerAttack(damage: number, element: RuneElement | null) {
-    const monster = this.battleManager.getCurrentMonster();
-    if (monster) {
-      this.uiPanel.showDamageNumber(
-        damage,
-        this.scale.width / 2,
-        this.scale.height * 0.15,
-        element ? `#${RUNE_DEFINITIONS[element].glowColor.toString(16).padStart(6, '0')}` : '#ff4757'
-      );
+    for (let c = 0; c < 3; c++) {
+      const colRunes = [];
+      for (let r = 0; r < 3; r++) {
+        colRunes.push(boardState[r][c]);
+      }
+      const recipe = this.matchRecipe(colRunes.map(r => r.element!).filter(Boolean));
+      if (recipe && this.battleManager.checkMana(WEAPON_FORGE_MANA_COST)) {
+        this.runeBoard.clearColumn(c);
+        this.runeBoard.playForgeAnimation(0, c, 2, c, recipe);
+        this.battleManager.consumeMana(WEAPON_FORGE_MANA_COST);
+        this.battleManager.equipWeapon(recipe);
+        this.uiPanel.updateWeapon(recipe);
+        this.uiPanel.showFloatingText(`铸造: ${recipe.name}!`, this.scale.width / 2, 240, '#C9A96E');
+        return;
+      }
     }
+
+    this.uiPanel.showFloatingText('无匹配配方', this.scale.width / 2, 250, '#ff7675');
   }
 
-  private onMonsterAttack(damage: number) {
-    this.uiPanel.showDamageNumber(damage, this.scale.width / 2, this.scale.height * 0.55, '#ff4757');
+  private matchRecipe(elements: string[]): WeaponRecipe | null {
+    if (elements.length < 3) return null;
+
+    for (const recipe of WEAPON_RECIPES) {
+      const recipeElems = [...recipe.elements].sort();
+      const inputElems = [...elements].sort();
+      if (JSON.stringify(recipeElems) === JSON.stringify(inputElems)) {
+        return recipe;
+      }
+    }
+    return null;
   }
 
-  private onMonsterDeath(monster: any) {
-    this.uiPanel.showFloatingText(
-      `${monster.name} 被击败!`,
-      this.scale.width / 2,
-      this.scale.height * 0.3,
-      '#00b894'
-    );
-  }
-
-  private onPlayerDeath() {
-    this.uiPanel.showGameOver();
-  }
-
-  private onNewWave(wave: number, monster: any) {
-    this.uiPanel.updateWave(wave);
-  }
-
-  private onTurnStart(turn: number) {
-    this.uiPanel.updateTurn(turn);
-  }
-
-  private onHpChange(hp: number, maxHp: number) {
-    this.uiPanel.updateHpBar(hp, maxHp);
-  }
-
-  private onMpChange(mp: number, maxMp: number) {
-    this.uiPanel.updateMpBar(mp, maxMp);
-  }
-
-  private onForgeRequested() {
-    this.runeBoard.resetBoard();
-    this.battleManager.healPlayer(20);
-    const state = this.battleManager.getPlayerState();
-    this.uiPanel.updateHpBar(state.hp, state.maxHp);
-    this.uiPanel.showFloatingText('符文板已重置', this.scale.width / 2, this.scale.height * 0.5, '#C9A96E');
-  }
-
-  private onResetRequested() {
-    this.runeBoard.resetBoard();
-    this.battleManager.resetBattle();
-    this.battleManager.startBattle();
+  private resetGame() {
+    this.battleManager.reset();
+    this.runeBoard.reset();
     this.uiPanel.updateWeapon(null);
-    const state = this.battleManager.getPlayerState();
-    this.uiPanel.updateHpBar(state.hp, state.maxHp);
-    this.uiPanel.updateMpBar(state.mp, state.maxMp);
-    this.uiPanel.updateWave(1);
-    this.uiPanel.updateTurn(0);
-    this.uiPanel.showFloatingText('游戏已重置', this.scale.width / 2, this.scale.height * 0.5, '#C9A96E');
+    this.battleManager.startBattle();
+  }
+
+  private handleResize = () => {
+    this.cameras.main.setBackgroundColor('#2D1B4E');
   }
 }
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  parent: 'game-container',
   width: window.innerWidth,
   height: window.innerHeight,
-  backgroundColor: '#0a0a14',
+  parent: 'game-container',
+  backgroundColor: '#2D1B4E',
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: GameScene,
-  render: {
-    antialias: true,
-    pixelArt: false,
-    roundPixels: false,
+  physics: {
+    default: 'arcade',
+    arcade: {
+      gravity: { y: 0 },
+      debug: false,
+    },
   },
-  fps: {
-    target: 60,
-    forceSetTimeOut: false,
-  },
+  scene: [GameScene],
 };
 
-const game = new Phaser.Game(config);
+new Phaser.Game(config);
