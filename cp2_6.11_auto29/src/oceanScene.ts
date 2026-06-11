@@ -96,10 +96,13 @@ export class OceanScene {
 
     const positions = geometry.attributes.position;
     const colors = new Float32Array(positions.count * 3);
+    const alphas = new Float32Array(positions.count);
 
-    const colorNear = new THREE.Color(0x0B3D5D);
-    const colorFar = new THREE.Color(0x051D2D);
+    const colorStart = new THREE.Color(0x0B3D5D);
+    const colorEnd = new THREE.Color(0x051D2D);
     const halfSize = this.terrainSize / 2;
+    const opacityStart = 0.9;
+    const opacityEnd = 0.5;
 
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
@@ -110,20 +113,44 @@ export class OceanScene {
 
       const distFromCenter = Math.sqrt(x * x + z * z) / halfSize;
       const t = Math.min(1, Math.max(0, distFromCenter));
-      const color = colorNear.clone().lerp(colorFar, t);
+      
+      const color = colorStart.clone().lerp(colorEnd, t);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
+      
+      alphas[i] = opacityStart - (opacityStart - opacityEnd) * t;
     }
 
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
     geometry.computeVertexNormals();
 
-    const material = new THREE.MeshPhongMaterial({
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 }
+      },
+      vertexShader: `
+        attribute float alpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        
+        void main() {
+          vColor = color;
+          vAlpha = alpha;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        
+        void main() {
+          gl_FragColor = vec4(vColor, vAlpha);
+        }
+      `,
       vertexColors: true,
       transparent: true,
-      opacity: 0.7,
-      flatShading: false,
       side: THREE.DoubleSide
     });
 
@@ -228,10 +255,13 @@ export class OceanScene {
   private updateTerrain(): void {
     const positions = this.terrain.geometry.attributes.position;
     const colors = this.terrain.geometry.attributes.color as THREE.BufferAttribute;
+    const alphas = this.terrain.geometry.attributes.alpha as THREE.BufferAttribute;
 
-    const colorNear = new THREE.Color(0x0B3D5D);
-    const colorFar = new THREE.Color(0x051D2D);
+    const colorStart = new THREE.Color(0x0B3D5D);
+    const colorEnd = new THREE.Color(0x051D2D);
     const halfSize = this.terrainSize / 2;
+    const opacityStart = 0.9;
+    const opacityEnd = 0.5;
 
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
@@ -242,12 +272,16 @@ export class OceanScene {
 
       const distFromCenter = Math.sqrt(x * x + z * z) / halfSize;
       const t = Math.min(1, Math.max(0, distFromCenter));
-      const color = colorNear.clone().lerp(colorFar, t);
+      
+      const color = colorStart.clone().lerp(colorEnd, t);
       colors.setXYZ(i, color.r, color.g, color.b);
+      
+      alphas.setX(i, opacityStart - (opacityStart - opacityEnd) * t);
     }
 
     positions.needsUpdate = true;
     colors.needsUpdate = true;
+    alphas.needsUpdate = true;
     this.terrain.geometry.computeVertexNormals();
   }
 

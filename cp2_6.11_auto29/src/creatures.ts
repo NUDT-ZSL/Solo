@@ -254,11 +254,28 @@ export class Creatures {
       this.lastPathSwitch = time;
     }
     
+    if (this.pathTransitionProgress < 1) {
+      this.pathTransitionProgress = Math.min(1, this.pathTransitionProgress + delta / this.pathTransitionDuration);
+    }
+    
     this.fishPathProgress += delta * 0.05;
     if (this.fishPathProgress > 1) this.fishPathProgress -= 1;
     
-    const pathPos = this.getBezierPoint(this.fishPathProgress, this.fishPathPoints);
-    const pathTangent = this.getBezierTangent(this.fishPathProgress, this.fishPathPoints);
+    const newPathPos = this.getBezierPoint(this.fishPathProgress, this.fishPathPoints);
+    const newPathTangent = this.getBezierTangent(this.fishPathProgress, this.fishPathPoints);
+    
+    let pathPos = newPathPos;
+    let pathTangent = newPathTangent;
+    
+    if (this.pathTransitionProgress < 1 && this.oldFishPathPoints.length >= 4) {
+      const oldPathPos = this.getBezierPoint(this.fishPathProgress, this.oldFishPathPoints);
+      const oldPathTangent = this.getBezierTangent(this.fishPathProgress, this.oldFishPathPoints);
+      
+      const easeT = this.pathTransitionProgress * this.pathTransitionProgress * (3 - 2 * this.pathTransitionProgress);
+      
+      pathPos = oldPathPos.clone().lerp(newPathPos, easeT);
+      pathTangent = oldPathTangent.clone().lerp(newPathTangent, easeT).normalize();
+    }
     
     if (time - this.lastSchoolMove > this.schoolMoveInterval) {
       this.schoolTarget.set(
