@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>幻音涂鸦</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0D0D1A;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #ffffff;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #0B0B2A 0%, #1B0B2A 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.6s ease;
+    }
+
+    .loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loader {
+      width: 60px;
+      height: 60px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #FF3366;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    .toolbar {
+      width: 60px;
+      background: rgba(255, 255, 255, 0.03);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 20px 0;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .note-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      cursor: grab;
+      cursor: -webkit-grab;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+
+    .note-btn:hover {
+      transform: scale(1.1);
+    }
+
+    .note-btn:active {
+      cursor: grabbing;
+      cursor: -webkit-grabbing;
+      transform: scale(0.95);
+    }
+
+    .note-btn.red {
+      background: #FF3366;
+      box-shadow: 0 0 15px rgba(255, 51, 102, 0.6);
+    }
+
+    .note-btn.blue {
+      background: #00BFFF;
+      box-shadow: 0 0 15px rgba(0, 191, 255, 0.6);
+    }
+
+    .note-btn.green {
+      background: #39FF14;
+      box-shadow: 0 0 15px rgba(57, 255, 20, 0.6);
+    }
+
+    .note-btn.purple {
+      background: #9932CC;
+      box-shadow: 0 0 15px rgba(153, 50, 204, 0.6);
+    }
+
+    .canvas-wrapper {
+      flex: 1;
+      position: relative;
+      min-width: 400px;
+      min-height: 300px;
+    }
+
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .control-bar {
+      height: 50px;
+      background: rgba(255, 255, 255, 0.03);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .control-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .control-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-btn {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    .control-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .control-btn:active {
+      transform: scale(0.95);
+    }
+
+    .speed-label {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    .speed-slider {
+      width: 120px;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00BFFF;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 191, 255, 0.6);
+    }
+
+    .speed-slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00BFFF;
+      cursor: pointer;
+      border: none;
+    }
+
+    .speed-value {
+      font-size: 12px;
+      min-width: 36px;
+      text-align: right;
+      opacity: 0.7;
+    }
+
+    @media (max-width: 600px) {
+      .main-container {
+        flex-direction: column;
+      }
+
+      .toolbar {
+        width: 100%;
+        height: 60px;
+        flex-direction: row;
+        gap: 16px;
+        padding: 0 20px;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .canvas-wrapper {
+        min-width: unset;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading" id="loading">
+      <div class="loader"></div>
+    </div>
+    <div class="main-container">
+      <div class="toolbar" id="toolbar">
+        <button class="note-btn red" draggable="true" data-color="red" title="Do"></button>
+        <button class="note-btn blue" draggable="true" data-color="blue" title="Re"></button>
+        <button class="note-btn green" draggable="true" data-color="green" title="Mi"></button>
+        <button class="note-btn purple" draggable="true" data-color="purple" title="Fa"></button>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas id="gameCanvas"></canvas>
+      </div>
+    </div>
+    <div class="control-bar">
+      <div class="control-left">
+        <button class="control-btn" id="playBtn">播放</button>
+        <button class="control-btn" id="undoBtn">撤销</button>
+        <button class="control-btn" id="clearBtn">清空</button>
+      </div>
+      <div class="control-right">
+        <span class="speed-label">速度</span>
+        <input type="range" class="speed-slider" id="speedSlider" min="0.5" max="3" step="0.1" value="1" />
+        <span class="speed-value" id="speedValue">1.0x</span>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
