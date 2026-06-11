@@ -8,6 +8,7 @@ export interface AudioFeature {
   dominant: 'low' | 'mid' | 'high';
   beatIntensity: number;
   isOnset: boolean;
+  bpmConfidence: number;
 }
 
 export type ParticlePreset = 'nebula' | 'volcano' | 'deepSea';
@@ -79,5 +80,8 @@ export interface SavedParticleState {
 export interface CanvasSnapshotState {
   particles: SavedParticleState[];
   backgroundColor: { r: number; g: number; b: number };
+  overlayOpacity: number;
+  globalCompositeOperation: GlobalCompositeOperation;
+  preset: ParticlePreset;
   timestamp: number;
 }

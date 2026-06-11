@@ -161,6 +161,8 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
   
   const overlayImageRef = useRef<HTMLImageElement | null>(null);
   const snapshotStateRef = useRef<CanvasSnapshotState | null>(null);
+  const snapshotOpacityRef = useRef<number>(snapshotOpacity);
+  const compositeOperationRef = useRef<GlobalCompositeOperation>('source-over');
   
   const onFeatureUpdateRef = useRef(onFeatureUpdate);
 
@@ -169,6 +171,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
   useEffect(() => { hasAudioRef.current = hasAudio; }, [hasAudio]);
   useEffect(() => { volumeRef.current = volume; }, [volume]);
   useEffect(() => { onFeatureUpdateRef.current = onFeatureUpdate; }, [onFeatureUpdate]);
+  useEffect(() => { snapshotOpacityRef.current = snapshotOpacity; }, [snapshotOpacity]);
 
   const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -228,6 +231,9 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
       return {
         particles,
         backgroundColor: { ...bgColorRef.current },
+        overlayOpacity: snapshotOpacityRef.current,
+        globalCompositeOperation: compositeOperationRef.current,
+        preset: presetRef.current,
         timestamp: performance.now(),
       };
     },
@@ -235,6 +241,11 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
       snapshotStateRef.current = state;
       bgColorRef.current = { ...state.backgroundColor };
       targetBgColorRef.current = { ...state.backgroundColor };
+      snapshotOpacityRef.current = state.overlayOpacity ?? 30;
+      compositeOperationRef.current = state.globalCompositeOperation ?? 'source-over';
+      if (state.preset) {
+        presetRef.current = state.preset;
+      }
       
       const pool = particlePoolRef.current;
       while (pool.count > 0) pool.release(0);
@@ -329,28 +340,32 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
 
       switch (config.spawnType) {
         case 'center': {
-          p.x = width / 2;
-          p.y = height / 2;
           if (presetKey === 'volcano') {
-            const volcanoAngle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.7;
-            const volcanoSpeed = speed * (1.5 + Math.random() * 2);
+            p.x = width / 2 + (Math.random() - 0.5) * width * 0.15;
+            p.y = height - 10;
+            const volcanoAngle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.6;
+            const volcanoSpeed = speed * (2 + Math.random() * 2.5);
             p.vx = Math.cos(volcanoAngle) * volcanoSpeed;
             p.vy = Math.sin(volcanoAngle) * volcanoSpeed;
           } else {
+            p.x = width / 2;
+            p.y = height / 2;
             p.vx = Math.cos(angle) * speed;
             p.vy = Math.sin(angle) * speed;
           }
           break;
         }
         case 'bottom': {
-          p.x = Math.random() * width;
-          p.y = height - 5;
           if (presetKey === 'deepSea') {
-            const seaAngle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.4;
-            const seaSpeed = speed * (0.8 + Math.random() * 0.6);
+            p.x = Math.random() * width;
+            p.y = height - Math.random() * height * 0.3;
+            const seaAngle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.5;
+            const seaSpeed = speed * (0.6 + Math.random() * 0.8);
             p.vx = Math.cos(seaAngle) * seaSpeed;
             p.vy = Math.sin(seaAngle) * seaSpeed;
           } else {
+            p.x = Math.random() * width;
+            p.y = height - 5;
             p.vx = (Math.random() - 0.5) * speed * 0.5;
             p.vy = -speed * (0.5 + Math.random() * 0.5);
           }
@@ -361,12 +376,13 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
           if (presetKey === 'nebula') {
             const centerX = width / 2;
             const centerY = height / 2;
-            const radius = Math.min(width, height) * 0.3 * Math.random();
+            const maxRadius = Math.min(width, height) * 0.45;
+            const radius = maxRadius * Math.pow(Math.random(), 0.5);
             const randAngle = Math.random() * Math.PI * 2;
             p.x = centerX + Math.cos(randAngle) * radius;
             p.y = centerY + Math.sin(randAngle) * radius;
-            const tangent = randAngle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
-            const orbitSpeed = speed * 0.6;
+            const tangent = randAngle + Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+            const orbitSpeed = speed * (0.4 + Math.random() * 0.6);
             p.vx = Math.cos(tangent) * orbitSpeed;
             p.vy = Math.sin(tangent) * orbitSpeed;
           } else {
@@ -630,9 +646,10 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
         }
       }
 
-      if (overlayImageRef.current && snapshotOpacity > 0) {
+      if (overlayImageRef.current && snapshotOpacityRef.current > 0) {
         ctx.save();
-        ctx.globalAlpha = snapshotOpacity / 100;
+        ctx.globalAlpha = snapshotOpacityRef.current / 100;
+        ctx.globalCompositeOperation = compositeOperationRef.current;
         ctx.drawImage(overlayImageRef.current, 0, 0, width, height);
         ctx.restore();
       }
@@ -648,7 +665,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((pr
     return () => {
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [snapshotOpacity]);
+  }, []);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

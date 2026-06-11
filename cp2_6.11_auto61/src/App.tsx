@@ -122,6 +122,13 @@ const App: React.FC = () => {
         try {
           const state: CanvasSnapshotState = JSON.parse(snapshot.stateData);
           particleCanvasRef.current.restoreState(state);
+          
+          if (state.preset) {
+            setPreset(state.preset);
+          }
+          if (typeof state.overlayOpacity === 'number') {
+            setSnapshotOpacity(state.overlayOpacity);
+          }
         } catch (err) {
           console.warn('Failed to restore snapshot state:', err);
         }
