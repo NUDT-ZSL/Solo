@@ -1,183 +1,202 @@
 ## 1. 架构设计
 
 ```mermaid
-graph TD
-    A["index.html 入口页面"] --> B["main.ts 游戏主控制器"]
-    B --> C["level.ts 关卡系统"]
-    B --> D["player.ts 玩家/粒子系统"]
-    B --> E["ui.ts UI渲染系统"]
-    B --> F["Web Audio API 音效系统"]
-    B --> G["localStorage 存档系统"]
-    C --> H["关卡数据定义"]
-    C --> I["网格/碰撞检测"]
-    C --> J["通断检测算法"]
-    D --> K["方向输入处理"]
-    D --> L["粒子轨迹计算"]
-    D --> M["碰撞反弹物理"]
-    D --> N["粒子特效渲染"]
-    E --> O["菜单绘制"]
-    E --> P["HUD绘制"]
-    E --> Q["过渡动画"]
-    E --> R["关卡结束界面"]
+graph TB
+    subgraph Frontend["前端 - React 18 + TypeScript + Vite"]
+        A["App.tsx - 路由/状态/错误边界"]
+        B["MapView.tsx - Mapbox GL JS地图"]
+        C["SoundCard.tsx - 详情卡片+粒子动画"]
+        D["CreatePanel - 声景创建/编辑"]
+        E["ProfilePage - 个人主页"]
+        F["audioVisualizer.ts - 粒子动画引擎"]
+        G["Zustand Store - 全局状态"]
+    end
+
+    subgraph Backend["后端 - Express + TypeScript"]
+        H["server.ts - REST API"]
+        I["Multer - 文件上传处理"]
+        J["/uploads - 静态文件服务"]
+    end
+
+    subgraph Data["数据层"]
+        K["内存数据存储（开发阶段）"]
+        L["文件系统 - 音频/图片文件"]
+    end
+
+    A --> B
+    A --> C
+    A --> D
+    A --> E
+    C --> F
+    B --> G
+    Frontend -->|API请求| Backend
+    Backend --> Data
 ```
 
 ## 2. 技术说明
 
-- **前端框架**：纯 TypeScript + HTML5 Canvas（无React/Vue，按用户需求）
-- **构建工具**：Vite 5.x + TypeScript 5.x（严格模式，目标ES2020）
-- **渲染引擎**：2D Canvas API，requestAnimationFrame驱动
-- **音频引擎**：Web Audio API（原生，无第三方库）
-- **数据存储**：localStorage（存档）
-- **外部依赖**：仅 typescript、vite（用户明确指定）
+- **前端**：React@18 + TypeScript + Vite + Tailwind CSS@3 + Zustand（状态管理）+ Mapbox GL JS（地图）
+- **初始化工具**：vite-init（react-express-ts模板）
+- **后端**：Express@4 + TypeScript + Multer（文件上传）+ CORS + UUID
+- **数据库**：内存数据存储（开发阶段，使用JSON文件持久化）
+- **音频处理**：Web Audio API（AnalyserNode, fftSize=256）
+- **粒子动画**：Canvas 2D API + requestAnimationFrame
+- **地图**：Mapbox GL JS
 
-## 3. 文件结构
+## 3. 路由定义
 
-| 文件路径 | 职责 |
-|-------|------|
-| `package.json` | 项目依赖与脚本配置 |
-| `vite.config.js` | Vite构建配置（支持HMR） |
-| `tsconfig.json` | TypeScript编译配置（严格模式，ES2020） |
-| `index.html` | 入口HTML，深空黑背景，游戏标题 |
-| `src/main.ts` | 游戏入口：Canvas初始化、游戏循环、事件分发 |
-| `src/level.ts` | 关卡系统：网格定义、障碍物、端口、关卡生成、碰撞/通断检测 |
-| `src/player.ts` | 玩家系统：输入处理、粒子系统、抛物线轨迹、反弹物理、爆炸效果 |
-| `src/ui.ts` | UI系统：菜单、HUD、生命值、关卡过渡、结束界面、锁图标动画 |
+| 路由 | 用途 |
+|------|------|
+| / | 地图探索主页，全屏地图+声景标记 |
+| /profile | 个人主页，旅行日志+收藏管理 |
+| /profile/favorites | 收藏夹独立页面 |
 
-## 4. 核心类型定义
+## 4. API定义
+
+### 4.1 TypeScript类型定义
 
 ```typescript
-// 网格坐标（等距菱形网格使用行列坐标）
-interface GridPos {
-    row: number;
-    col: number;
+interface SoundMarker {
+  id: string;
+  userId: string;
+  lat: number;
+  lng: number;
+  title: string;
+  note: string;
+  audioUrl: string;
+  imageUrl: string;
+  emotionTag: EmotionTag;
+  isPublic: boolean;
+  likes: number;
+  likesToday: number;
+  playCount: number;
+  comments: Comment[];
+  createdAt: string;
+  expiresAt: string;
 }
 
-// 像素坐标
-interface PixelPos {
-    x: number;
-    y: number;
+type EmotionTag = 
+  | 'serene' | 'noisy' | 'melancholy' | 'cheerful' 
+  | 'mysterious' | 'leisurely' | 'tense' | 'warm' 
+  | 'ethereal' | 'nostalgic';
+
+interface Comment {
+  id: string;
+  userId: string;
+  username: string;
+  content: string;
+  createdAt: string;
 }
 
-// 方向枚举
-enum Direction {
-    UP = 'UP',
-    DOWN = 'DOWN',
-    LEFT = 'LEFT',
-    RIGHT = 'RIGHT'
+interface Favorite {
+  id: string;
+  userId: string;
+  markerId: string;
+  note: string;
+  createdAt: string;
 }
 
-// 格子类型
-enum CellType {
-    EMPTY = 'EMPTY',
-    OBSTACLE_STONE = 'OBSTACLE_STONE',
-    OBSTACLE_ENERGY = 'OBSTACLE_ENERGY',
-    EMITTER = 'EMITTER',
-    RECEIVER = 'RECEIVER'
-}
-
-// 端口数据
-interface Port {
-    id: string;
-    type: 'emitter' | 'receiver';
-    position: GridPos;
-    lockId?: string;
-    unlocked?: boolean;
-}
-
-// 障碍物
-interface Obstacle {
-    id: string;
-    type: 'stone' | 'energy' | 'moving';
-    position: GridPos;
-    path?: GridPos[];
-    moveInterval?: number;
-}
-
-// 关卡数据
-interface Level {
-    id: number;
-    name: string;
-    gridSize: { rows: number; cols: number };
-    ports: Port[];
-    obstacles: Obstacle[];
-    locks: { id: string; receiverIds: string[]; order?: number[] }[];
-}
-
-// 粒子
-interface Particle {
-    id: number;
-    position: PixelPos;
-    velocity: PixelPos;
-    life: number;
-    maxLife: number;
-    color: string;
-    size: number;
-}
-
-// 主游戏状态
-enum GameState {
-    MENU = 'MENU',
-    PLAYING = 'PLAYING',
-    TRANSITION = 'TRANSITION',
-    GAME_OVER = 'GAME_OVER'
+interface User {
+  id: string;
+  username: string;
+  email: string;
+  avatar: string;
 }
 ```
 
-## 5. 核心算法
+### 4.2 API端点
 
-### 5.1 等距菱形网格坐标转换
+| 方法 | 路径 | 请求格式 | 响应格式 | 描述 |
+|------|------|----------|----------|------|
+| GET | /api/markers | query: search, tag, sort, page, lat, lng | { markers: SoundMarker[], total: number } | 获取公开标记列表 |
+| POST | /api/markers | multipart/form-data | SoundMarker | 创建新标记（含音频+图片上传） |
+| PUT | /api/markers/:id | JSON | SoundMarker | 更新标记信息（笔记/标签/图片/可见性） |
+| GET | /api/markers/:id | - | SoundMarker | 获取单个标记详情 |
+| POST | /api/markers/:id/like | JSON | { likes: number, likesToday: number } | 点赞 |
+| POST | /api/markers/:id/comment | JSON { content: string } | Comment | 评论 |
+| GET | /api/users/:id/markers | query: page | { markers: SoundMarker[], total: number } | 获取用户个人标记 |
+| POST | /api/favorites/:id | JSON { note?: string } | Favorite | 收藏标记 |
+| GET | /api/favorites | query: page | { favorites: (Favorite & { marker: SoundMarker })[], total: number } | 获取收藏列表 |
+| DELETE | /api/favorites/:id | - | { success: boolean } | 取消收藏 |
+
+## 5. 服务端架构图
+
+```mermaid
+graph LR
+    A["Express Router"] --> B["Marker Controller"]
+    A --> C["User Controller"]
+    A --> D["Favorite Controller"]
+    B --> E["Marker Service"]
+    C --> F["User Service"]
+    D --> G["Favorite Service"]
+    E --> H["Data Store"]
+    F --> H
+    G --> H
+    B --> I["Multer Upload"]
+    I --> J["/uploads 目录"]
 ```
-// 行列坐标 -> 屏幕像素坐标（等距投影）
-pixelX = (col - row) * tileWidth / 2 + offsetX
-pixelY = (col + row) * tileHeight / 2 + offsetY
 
-// 屏幕像素坐标 -> 行列坐标（逆变换）
-col = ( (x - offsetX) / (tileWidth/2) + (y - offsetY) / (tileHeight/2) ) / 2
-row = ( (y - offsetY) / (tileHeight/2) - (x - offsetX) / (tileWidth/2) ) / 2
+## 6. 数据模型
+
+### 6.1 数据模型定义
+
+```mermaid
+erDiagram
+    User {
+        string id PK
+        string username
+        string email
+        string avatar
+    }
+    SoundMarker {
+        string id PK
+        string userId FK
+        float lat
+        float lng
+        string title
+        string note
+        string audioUrl
+        string imageUrl
+        string emotionTag
+        boolean isPublic
+        int likes
+        int likesToday
+        int playCount
+        string createdAt
+        string expiresAt
+    }
+    Comment {
+        string id PK
+        string markerId FK
+        string userId FK
+        string username
+        string content
+        string createdAt
+    }
+    Favorite {
+        string id PK
+        string userId FK
+        string markerId FK
+        string note
+        string createdAt
+    }
+    User ||--o{ SoundMarker : creates
+    SoundMarker ||--o{ Comment : has
+    User ||--o{ Favorite : bookmarks
+    SoundMarker ||--o{ Favorite : bookmarked
 ```
 
-### 5.2 粒子反弹物理
-- 水平障碍物：翻转 y 方向速度分量
-- 垂直障碍物：翻转 x 方向速度分量
-- 精确反射：入射角 = 反射角
+### 6.2 情绪标签映射
 
-### 5.3 通断检测
-使用BFS/DFS沿网格直线检测粒子路径，考虑障碍物反弹后的可达性。
-
-### 5.4 波浪过渡动画
-对每个网格单元计算到中心点的距离，按时间进度 t 控制亮度：
-```
-brightness = smoothstep(distance - waveWidth, distance, t * maxDistance)
-```
-
-## 6. 性能优化策略
-
-| 策略 | 说明 |
-|------|------|
-| 对象池 | 粒子对象复用，避免频繁GC |
-| 脏矩形渲染 | 仅重绘变化区域（优化备选） |
-| 离屏Canvas | 静态网格预渲染缓存 |
-| 帧率控制 | requestAnimationFrame + deltaTime计算 |
-| 粒子上限 | 活跃粒子数 ≤ 50 |
-| 事件节流 | 键盘输入去抖动 |
-
-## 7. 音效定义
-
-| 音效 | 波形 | 频率 | 时长 | 触发时机 |
-|------|------|------|------|----------|
-| 解锁音效 | 正弦波(sine) | 440Hz | 200ms | 粒子到达接收端 |
-| 错误提示 | 方波(square) | 200Hz | 100ms | 点击未解锁关卡 |
-
-## 8. 关卡设计
-
-| 关卡 | 主题 | 难度特征 |
-|------|------|----------|
-| 第1关 | 初始跃迁 | 单发射-单接收，极简路径 |
-| 第2关 | 折射初试 | 少量障碍物，一次反弹 |
-| 第3关 | 镜面回廊 | 多次反弹路径 |
-| 第4关 | 分岔迷途 | 多方向可选，仅一解 |
-| 第5关 | 混沌迷宫 | 移动障碍物引入 |
-| 第6关 | 时序迷阵 | 移动障碍物 + 精确时机 |
-| 第7关 | 双锁之门 | 双端口协同，顺序解锁 |
-| 第8关 | 三联核心 | 三端口顺序解锁 |
-| 第9关 | 量子终局 | 多端口 + 移动障碍综合挑战 |
+| 标签键 | 中文标签 | 色值 | 色相偏移 |
+|--------|----------|------|----------|
+| serene | 宁静 | #6ECB63 | +30° → 绿偏黄 |
+| noisy | 喧闹 | #FF6B6B | +30° → 红偏橙 |
+| melancholy | 忧郁 | #5C6BC0 | +30° → 蓝偏紫 |
+| cheerful | 欢快 | #FFD93D | +30° → 黄偏绿 |
+| mysterious | 神秘 | #AB47BC | +30° → 紫偏粉 |
+| leisurely | 悠然 | #26A69A | +30° → 青偏绿 |
+| tense | 紧张 | #EF5350 | +30° → 红偏黄 |
+| warm | 温馨 | #FF8A65 | +30° → 橙偏黄 |
+| ethereal | 空灵 | #42A5F5 | +30° → 蓝偏青 |
+| nostalgic | 怀恋 | #8D6E63 | +30° → 棕偏红 |
