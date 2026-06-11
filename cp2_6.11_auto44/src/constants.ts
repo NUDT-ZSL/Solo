@@ -26,9 +26,10 @@ export interface Marble {
   trackId: string;
   currentNodeIndex: number;
   progress: number;
-  speed: number;
+  velocity: number;
   position: Point;
   active: boolean;
+  direction: number;
 }
 
 export interface Particle {
@@ -40,6 +41,7 @@ export interface Particle {
   maxLife: number;
   color: string;
   size: number;
+  angle: number;
 }
 
 export const CANVAS_WIDTH = 1280;
@@ -65,16 +67,16 @@ export const COLORS = {
   synthLight: '#FFA500',
 };
 
-export const MARBLE_COLORS: Record<MarbleType, { core: string; light: string; glow: string }> = {
-  drum: { core: '#FF3366', light: '#FF99AA', glow: 'rgba(255, 51, 102, 0.6)' },
-  bass: { core: '#00BFFF', light: '#66DDFF', glow: 'rgba(0, 191, 255, 0.6)' },
-  piano: { core: '#00FF88', light: '#99FFCC', glow: 'rgba(0, 255, 136, 0.6)' },
-  synth: { core: '#FFD700', light: '#FFEE99', glow: 'rgba(255, 215, 0, 0.6)' },
+export const MARBLE_COLORS: Record<MarbleType, { core: string; light: string; dark: string; glow: string }> = {
+  drum:  { core: '#FF3366', light: '#FF99AA', dark: '#CC1144', glow: 'rgba(255, 51, 102, 0.6)' },
+  bass:  { core: '#00BFFF', light: '#66DDFF', dark: '#0077BB', glow: 'rgba(0, 191, 255, 0.6)' },
+  piano: { core: '#00FF88', light: '#99FFCC', dark: '#00AA55', glow: 'rgba(0, 255, 136, 0.6)' },
+  synth: { core: '#FFD700', light: '#FFEE99', dark: '#CC9900', glow: 'rgba(255, 215, 0, 0.6)' },
 };
 
 export const MARBLE_NAMES: Record<MarbleType, string> = {
-  drum: 'DRUM · 鼓',
-  bass: 'BASS · 贝斯',
+  drum:  'DRUM · 鼓',
+  bass:  'BASS · 贝斯',
   piano: 'PIANO · 钢琴',
   synth: 'SYNTH · 合成器',
 };
@@ -99,7 +101,8 @@ export const MAX_NODE_INTERVAL = 1.5;
 export const NODE_TRIGGER_FLASH = 200;
 export const PARTICLE_COUNT_MIN = 5;
 export const PARTICLE_COUNT_MAX = 10;
-export const PARTICLE_LIFE = 100;
+export const PARTICLE_LIFE = 150;
+export const GRAVITY = 400;
 
 export const MAX_TRACKS = 4;
 export const MIN_NODES_PER_TRACK = 6;
@@ -107,7 +110,8 @@ export const MAX_NODES_PER_TRACK = 8;
 export const MAX_MARBLES = 4;
 export const NODE_RADIUS = 12;
 export const MARBLE_RADIUS = 14;
-export const COLLISION_DISTANCE = 30;
+export const COLLISION_DISTANCE = 36;
+export const COLLISION_COOLDOWN = 500;
 
 export function generateId(prefix = 'id'): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -136,4 +140,15 @@ export function clamp(value: number, min: number, max: number): number {
 
 export function getMarbleColorHex(type: MarbleType): string {
   return MARBLE_COLORS[type].core;
+}
+
+export function segmentLength(a: Point, b: Point): number {
+  return distance(a, b);
+}
+
+export function pointOnSegment(a: Point, b: Point, t: number): Point {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+  };
 }

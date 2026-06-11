@@ -22,10 +22,24 @@ import { AudioEngine } from './audioEngine';
 import { PhysicsEngine, TriggerEvent } from './physicsEngine';
 import { RenderEngine } from './renderEngine';
 
+interface NodeDragState {
+  type: 'node';
+  trackId: string;
+  nodeId: string;
+  offsetX: number;
+  offsetY: number;
+}
+
+interface MarbleDragState {
+  type: 'marble';
+  marbleType: MarbleType;
+  ghost: HTMLElement;
+}
+
 type DragState =
   | { type: 'none' }
-  | { type: 'node'; trackId: string; nodeId: string }
-  | { type: 'marble'; marbleType: MarbleType; ghost: HTMLElement };
+  | NodeDragState
+  | MarbleDragState;
 
 class GameMain {
   private canvas: HTMLCanvasElement;
@@ -81,30 +95,36 @@ class GameMain {
   }
 
   private initDefaultTracks(): void {
-    const centerX = CANVAS_WIDTH / 2;
-    const trackSpacing = 260;
-    const startX = centerX - trackSpacing * 1.5;
+    const positions = [
+      [
+        { x: 320, y: EDIT_AREA_TOP + 40 },
+        { x: 360, y: EDIT_AREA_TOP + 110 },
+        { x: 310, y: EDIT_AREA_TOP + 185 },
+        { x: 380, y: EDIT_AREA_TOP + 260 },
+        { x: 330, y: EDIT_AREA_TOP + 335 },
+        { x: 390, y: EDIT_AREA_TOP + 400 },
+        { x: 340, y: EDIT_AREA_TOP + 460 },
+      ],
+      [
+        { x: 960, y: EDIT_AREA_TOP + 40 },
+        { x: 920, y: EDIT_AREA_TOP + 110 },
+        { x: 970, y: EDIT_AREA_TOP + 185 },
+        { x: 900, y: EDIT_AREA_TOP + 260 },
+        { x: 950, y: EDIT_AREA_TOP + 335 },
+        { x: 890, y: EDIT_AREA_TOP + 400 },
+        { x: 940, y: EDIT_AREA_TOP + 460 },
+      ],
+    ];
 
     for (let i = 0; i < 2; i++) {
-      const baseX = startX + i * trackSpacing * 2 + trackSpacing;
-      const nodes: TrackNode[] = [];
-      const nodeCount = 7;
-      for (let j = 0; j < nodeCount; j++) {
-        const t = j / (nodeCount - 1);
-        const y = EDIT_AREA_TOP + 30 + t * (EDIT_AREA_BOTTOM - EDIT_AREA_TOP - 60);
-        const wave = Math.sin(t * Math.PI * 2 + i * Math.PI) * 60;
-        nodes.push({
-          id: generateId('node'),
-          position: {
-            x: clamp(baseX + wave, 80, CANVAS_WIDTH - 80),
-            y,
-          },
-          noteIndex: j % 8,
-          triggered: false,
-          triggerTime: 0,
-          triggerColor: '#FFFFFF',
-        });
-      }
+      const nodes: TrackNode[] = positions[i].map((pos, j) => ({
+        id: generateId('node'),
+        position: { x: pos.x, y: pos.y },
+        noteIndex: j % 8,
+        triggered: false,
+        triggerTime: 0,
+        triggerColor: '#FFFFFF',
+      }));
       const track: Track = {
         id: generateId('track'),
         nodes,
@@ -122,7 +142,9 @@ class GameMain {
     this.canvas.addEventListener('mousemove', (e) => this.onCanvasMouseMove(e));
     window.addEventListener('mouseup', (e) => this.onWindowMouseUp(e));
     this.canvas.addEventListener('mouseleave', () => {
-      this.renderer.setHoverNode(null);
+      if (this.dragState.type !== 'node' && this.dragState.type !== 'marble') {
+        this.renderer.setHoverNode(null);
+      }
     });
 
     this.elSpeedSlider.addEventListener('input', () => {
@@ -134,6 +156,10 @@ class GameMain {
 
     this.elResetBtn.addEventListener('click', () => {
       this.physics.clearMarbles();
+      this.tracks = [];
+      this.selectedTrackId = null;
+      this.renderer.setSelectedTrack(null);
+      this.initDefaultTracks();
       this.syncState();
     });
 
@@ -165,7 +191,7 @@ class GameMain {
     const size = 40;
     ghost.style.width = `${size}px`;
     ghost.style.height = `${size}px`;
-    ghost.style.background = `radial-gradient(circle at 30% 30%, ${colors.light}, ${colors.core} 50%, ${colors.core})`;
+    ghost.style.background = `radial-gradient(circle at 30% 30%, ${colors.light}, ${colors.core} 50%, ${colors.dark})`;
     ghost.style.boxShadow = `0 0 20px ${colors.glow}`;
     ghost.style.left = `${e.clientX}px`;
     ghost.style.top = `${e.clientY}px`;
@@ -184,15 +210,37 @@ class GameMain {
     };
   }
 
-  private findNodeAt(point: Point): { trackId: string; nodeId: string } | null {
+  private findNodeAt(point: Point): { trackId: string; nodeId: string; nodePos: Point } | null {
     for (const track of this.tracks) {
       for (const node of track.nodes) {
-        if (distance(point, node.position) < NODE_RADIUS + 4) {
-          return { trackId: track.id, nodeId: node.id };
+        if (distance(point, node.position) < NODE_RADIUS + 6) {
+          return { trackId: track.id, nodeId: node.id, nodePos: node.position };
         }
       }
     }
     return null;
+  }
+
+  private findClosestTrack(point: Point): Track | null {
+    let closest: Track | null = null;
+    let minDist = Infinity;
+    for (const track of this.tracks) {
+      if (track.nodes.length < 2) continue;
+      for (let i = 0; i < track.nodes.length - 1; i++) {
+        const a = track.nodes[i].position;
+        const b = track.nodes[i + 1].position;
+        const segLen = distance(a, b);
+        if (segLen < 1) continue;
+        const t = clamp(((point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y)) / (segLen * segLen), 0, 1);
+        const proj = { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+        const d = distance(point, proj);
+        if (d < minDist) {
+          minDist = d;
+          closest = track;
+        }
+      }
+    }
+    return minDist < 60 ? closest : null;
   }
 
   private onCanvasMouseDown(e: MouseEvent): void {
@@ -203,18 +251,33 @@ class GameMain {
 
     const hit = this.findNodeAt(point);
     if (hit) {
-      this.dragState = { type: 'node', trackId: hit.trackId, nodeId: hit.nodeId };
+      this.dragState = {
+        type: 'node',
+        trackId: hit.trackId,
+        nodeId: hit.nodeId,
+        offsetX: hit.nodePos.x - point.x,
+        offsetY: hit.nodePos.y - point.y,
+      };
       this.selectedTrackId = hit.trackId;
       this.renderer.setSelectedTrack(hit.trackId);
+      this.canvas.style.cursor = 'grabbing';
       return;
     }
 
     if (point.y < EDIT_AREA_TOP || point.y > EDIT_AREA_BOTTOM) return;
 
-    if (e.shiftKey) {
+    if (e.shiftKey || this.tracks.length === 0) {
       if (this.tracks.length < MAX_TRACKS) {
-        this.createTrack(point);
+        this.createTrackWithFirstNode(point);
       }
+      return;
+    }
+
+    const closestTrack = this.findClosestTrack(point);
+    if (closestTrack && closestTrack.nodes.length < MAX_NODES_PER_TRACK) {
+      this.addNodeToTrack(closestTrack, point);
+      this.selectedTrackId = closestTrack.id;
+      this.renderer.setSelectedTrack(closestTrack.id);
       return;
     }
 
@@ -238,11 +301,11 @@ class GameMain {
       }
     }
     if (!added && this.tracks.length < MAX_TRACKS) {
-      this.createTrack(point);
+      this.createTrackWithFirstNode(point);
     }
   }
 
-  private createTrack(firstPoint: Point): void {
+  private createTrackWithFirstNode(firstPoint: Point): void {
     const node: TrackNode = {
       id: generateId('node'),
       position: { ...firstPoint },
@@ -263,14 +326,28 @@ class GameMain {
   }
 
   private addNodeToTrack(track: Track, point: Point): void {
-    track.nodes.push({
+    const lastNode = track.nodes[track.nodes.length - 1];
+    const newNode: TrackNode = {
       id: generateId('node'),
       position: { ...point },
       noteIndex: track.nodes.length % 8,
       triggered: false,
       triggerTime: 0,
       triggerColor: '#FFFFFF',
-    });
+    };
+
+    if (lastNode && point.y <= lastNode.position.y) {
+      const insertIdx = track.nodes.findIndex((n) => n.position.y > point.y);
+      if (insertIdx >= 0) {
+        track.nodes.splice(insertIdx, 0, newNode);
+      } else {
+        track.nodes.push(newNode);
+      }
+    } else {
+      track.nodes.push(newNode);
+    }
+
+    track.nodes.forEach((n, i) => { n.noteIndex = i % 8; });
     this.syncTracks();
   }
 
@@ -284,12 +361,13 @@ class GameMain {
     const point = this.getCanvasPoint(e);
 
     if (this.dragState.type === 'node') {
-      const track = this.tracks.find((t) => t.id === this.dragState!.trackId);
+      const ds = this.dragState as NodeDragState;
+      const track = this.tracks.find((t) => t.id === ds.trackId);
       if (track) {
-        const node = track.nodes.find((n) => n.id === this.dragState!.nodeId);
+        const node = track.nodes.find((n) => n.id === ds.nodeId);
         if (node) {
-          node.position.x = clamp(point.x, 20, CANVAS_WIDTH - 20);
-          node.position.y = clamp(point.y, EDIT_AREA_TOP, EDIT_AREA_BOTTOM);
+          node.position.x = clamp(point.x + ds.offsetX, 20, CANVAS_WIDTH - 20);
+          node.position.y = clamp(point.y + ds.offsetY, EDIT_AREA_TOP, EDIT_AREA_BOTTOM);
           this.syncTracks();
         }
       }
@@ -311,15 +389,17 @@ class GameMain {
     if (this.dragState.type === 'marble') {
       const point = this.getCanvasPoint(e);
       let spawned = false;
+
       for (const track of this.tracks) {
         if (track.nodes.length >= 2) {
           const startNode = track.nodes[0];
-          if (distance(point, startNode.position) < NODE_RADIUS * 3) {
+          if (distance(point, startNode.position) < NODE_RADIUS * 4) {
             spawned = this.physics.spawnMarble(this.dragState.marbleType, track.id);
             if (spawned) break;
           }
         }
       }
+
       if (!spawned) {
         for (const track of this.tracks) {
           if (track.nodes.length >= 2) {
@@ -328,6 +408,7 @@ class GameMain {
           }
         }
       }
+
       this.dragState.ghost.remove();
       this.dragState = { type: 'none' };
       this.syncState();
@@ -347,7 +428,7 @@ class GameMain {
     }
 
     if (evt.harmonyWith) {
-      this.audio.playThirdHarmony(evt.marbleType, evt.noteIndex);
+      this.audio.playThirdHarmony(evt.marbleType, evt.noteIndex, evt.harmonyWith);
     } else {
       this.audio.playNote(evt.marbleType, evt.noteIndex);
     }

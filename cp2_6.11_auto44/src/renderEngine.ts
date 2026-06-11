@@ -4,6 +4,7 @@ import {
   Particle,
   MarbleType,
   Point,
+  TrackNode,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   EDIT_AREA_TOP,
@@ -171,32 +172,34 @@ export class RenderEngine {
     const nodes = track.nodes;
     if (nodes.length < 2) return;
 
+    const points: Point[] = nodes.map((n) => n.position);
+
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     ctx.strokeStyle = 'rgba(0, 212, 255, 0.15)';
     ctx.lineWidth = 8;
-    this.drawTrackCurve(nodes);
+    this.drawTrackCurve(points);
 
     ctx.shadowColor = COLORS.neonBlue;
     ctx.shadowBlur = isSelected ? 18 : 10;
     ctx.strokeStyle = isSelected ? '#66E5FF' : COLORS.track;
     ctx.lineWidth = 2;
-    this.drawTrackCurve(nodes);
+    this.drawTrackCurve(points);
 
     ctx.shadowBlur = 0;
     ctx.restore();
   }
 
-  private drawTrackCurve(nodes: Point[]): void {
+  private drawTrackCurve(points: Point[]): void {
     const ctx = this.ctx;
-    if (nodes.length < 2) return;
+    if (points.length < 2) return;
 
-    const extended: Point[] = [nodes[0], ...nodes, nodes[nodes.length - 1]];
+    const extended: Point[] = [points[0], ...points, points[points.length - 1]];
 
     ctx.beginPath();
-    ctx.moveTo(nodes[0].x, nodes[0].y);
+    ctx.moveTo(points[0].x, points[0].y);
 
     for (let i = 0; i < extended.length - 3; i++) {
       const p0 = extended[i];
@@ -245,6 +248,15 @@ export class RenderEngine {
       ctx.lineWidth = isFlashing ? 3 : 2;
       ctx.stroke();
 
+      if (isFlashing) {
+        ctx.beginPath();
+        ctx.arc(node.position.x, node.position.y, radius * 0.6, 0, Math.PI * 2);
+        ctx.fillStyle = node.triggerColor || '#FFFFFF';
+        ctx.globalAlpha = flashT * 0.4;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
       if (index === 0) {
         ctx.beginPath();
         ctx.arc(node.position.x, node.position.y, radius * 0.4, 0, Math.PI * 2);
@@ -287,7 +299,7 @@ export class RenderEngine {
     );
     gradient.addColorStop(0, colors.light);
     gradient.addColorStop(0.5, colors.core);
-    gradient.addColorStop(1, this.darkenColor(colors.core, 0.5));
+    gradient.addColorStop(1, colors.dark);
 
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
@@ -324,25 +336,25 @@ export class RenderEngine {
 
   private drawParticle(p: Particle): void {
     const ctx = this.ctx;
-    const alpha = p.life / p.maxLife;
+    const alpha = Math.max(0, p.life / p.maxLife);
+    const sizeScale = alpha;
+    const currentSize = p.size * sizeScale;
+
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle);
 
-  private darkenColor(hex: string, factor: number): string {
-    const rgb = hexToRgb(hex);
-    return rgbToString({
-      r: rgb.r * factor,
-      g: rgb.g * factor,
-      b: rgb.b * factor,
-    });
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    const aspect = 0.4;
+    ctx.ellipse(0, 0, currentSize, currentSize * aspect, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   }
 
   render(deltaMs: number): void {

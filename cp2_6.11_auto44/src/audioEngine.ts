@@ -1,7 +1,5 @@
 import { MarbleType, SCALE_FREQUENCIES, NOTE_DURATION, clamp } from './constants';
 
-type OscillatorType = OscillatorTypeEnum;
-
 interface VoiceConfig {
   waveform: OscillatorType;
   attack: number;
@@ -18,37 +16,37 @@ const VOICE_CONFIGS: Record<MarbleType, VoiceConfig> = {
   drum: {
     waveform: 'square',
     attack: 0.001,
-    decay: 0.08,
+    decay: 0.06,
     sustain: 0.0,
-    release: 0.05,
-    volume: 0.25,
+    release: 0.04,
+    volume: 0.22,
   },
   bass: {
     waveform: 'sawtooth',
     attack: 0.005,
-    decay: 0.15,
-    sustain: 0.4,
-    release: 0.2,
+    decay: 0.12,
+    sustain: 0.35,
+    release: 0.15,
     filterFreq: 800,
     filterQ: 3,
-    volume: 0.22,
+    volume: 0.20,
   },
   piano: {
     waveform: 'triangle',
     attack: 0.003,
-    decay: 0.2,
-    sustain: 0.3,
-    release: 0.4,
-    volume: 0.2,
+    decay: 0.18,
+    sustain: 0.25,
+    release: 0.35,
+    volume: 0.18,
   },
   synth: {
     waveform: 'sine',
-    attack: 0.01,
-    decay: 0.15,
-    sustain: 0.5,
-    release: 0.3,
+    attack: 0.008,
+    decay: 0.12,
+    sustain: 0.45,
+    release: 0.25,
     detune: 7,
-    volume: 0.18,
+    volume: 0.16,
   },
 };
 
@@ -56,8 +54,6 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private initialized = false;
-
-  constructor() {}
 
   init(): void {
     if (this.initialized) return;
@@ -87,7 +83,6 @@ export class AudioEngine {
   playNote(type: MarbleType, noteIndex: number, duration: number = NOTE_DURATION): void {
     const ctx = this.ensureContext();
     if (!ctx || !this.masterGain) return;
-
     const freq = SCALE_FREQUENCIES[clamp(noteIndex, 0, SCALE_FREQUENCIES.length - 1)];
     this.playFrequency(type, freq, duration);
   }
@@ -109,10 +104,10 @@ export class AudioEngine {
     }
 
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, now);
+    gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(config.volume, now + config.attack);
     gain.gain.linearRampToValueAtTime(config.volume * config.sustain, now + config.attack + config.decay);
-    gain.gain.linearRampToValueAtTime(0, now + totalDuration);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + totalDuration);
 
     if (type === 'synth') {
       const lfo = ctx.createOscillator();
@@ -124,41 +119,38 @@ export class AudioEngine {
       lfoGain.connect(osc.detune);
       lfo.start(now);
       lfo.stop(now + totalDuration + 0.05);
+      lfo.onended = () => { lfo.disconnect(); lfoGain.disconnect(); };
     }
 
-    let lastNode: AudioNode = osc;
-
+    let filter: BiquadFilterNode | null = null;
     if (config.filterFreq) {
-      const filter = ctx.createBiquadFilter();
+      filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(config.filterFreq, now);
       if (config.filterQ) filter.Q.setValueAtTime(config.filterQ, now);
-      lastNode.connect(filter);
+      osc.connect(filter);
       filter.connect(gain);
     } else {
-      lastNode.connect(gain);
+      osc.connect(gain);
     }
 
     gain.connect(this.masterGain);
 
     osc.start(now);
     osc.stop(now + totalDuration + 0.05);
+
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+      if (filter) filter.disconnect();
+    };
   }
 
-  playHarmony(type: MarbleType, baseNoteIndex: number, intervals: number[]): void {
-    intervals.forEach((interval) => {
-      const note = baseNoteIndex + interval;
-      if (note >= 0 && note < SCALE_FREQUENCIES.length) {
-        this.playNote(type, note, NOTE_DURATION);
-      }
-    });
-  }
-
-  playThirdHarmony(type: MarbleType, noteIndex: number): void {
+  playThirdHarmony(type: MarbleType, noteIndex: number, secondType: MarbleType): void {
     this.playNote(type, noteIndex, NOTE_DURATION);
     const thirdNote = noteIndex + 2;
     if (thirdNote < SCALE_FREQUENCIES.length) {
-      this.playNote(type, thirdNote, NOTE_DURATION);
+      this.playNote(secondType, thirdNote, NOTE_DURATION);
     }
   }
 

@@ -5,15 +5,19 @@ import {
   Particle,
   MarbleType,
   generateId,
-  lerpPoint,
   distance,
+  segmentLength,
+  pointOnSegment,
   DEFAULT_NODE_INTERVAL,
-  MARBLE_RADIUS,
   COLLISION_DISTANCE,
+  COLLISION_COOLDOWN,
   PARTICLE_COUNT_MIN,
   PARTICLE_COUNT_MAX,
   PARTICLE_LIFE,
+  GRAVITY,
+  MARBLE_RADIUS,
   getMarbleColorHex,
+  clamp,
 } from './constants';
 
 export interface TriggerEvent {
@@ -32,9 +36,8 @@ export class PhysicsEngine {
   private particles: Particle[] = [];
   private nodeInterval: number = DEFAULT_NODE_INTERVAL;
   private lastTriggerTimes: Map<string, number> = new Map();
+  private collisionCooldowns: Map<string, number> = new Map();
   private onTriggerCallback: ((event: TriggerEvent) => void) | null = null;
-
-  constructor() {}
 
   setTracks(tracks: Track[]): void {
     this.tracks = tracks;
@@ -79,9 +82,10 @@ export class PhysicsEngine {
       trackId,
       currentNodeIndex: 0,
       progress: 0,
-      speed: 1,
+      velocity: 0,
       position: startPos,
       active: true,
+      direction: 1,
     };
     this.marbles.push(marble);
     return true;
@@ -106,17 +110,18 @@ export class PhysicsEngine {
   private emitParticles(position: Point, color: string): void {
     const count = PARTICLE_COUNT_MIN + Math.floor(Math.random() * (PARTICLE_COUNT_MAX - PARTICLE_COUNT_MIN + 1));
     for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+      const angle = Math.random() * Math.PI * 2;
       const speed = 1.5 + Math.random() * 3;
       this.particles.push({
         x: position.x,
         y: position.y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        life: PARTICLE_LIFE,
+        life: PARTICLE_LIFE * (0.7 + Math.random() * 0.6),
         maxLife: PARTICLE_LIFE,
         color,
-        size: 2 + Math.random() * 3,
+        size: 1.5 + Math.random() * 3,
+        angle,
       });
     }
   }
@@ -130,7 +135,7 @@ export class PhysicsEngine {
 
     const key = `${marble.id}_${nodeIndex}`;
     const lastTrigger = this.lastTriggerTimes.get(key) || 0;
-    if (now - lastTrigger < 100) return;
+    if (now - lastTrigger < 80) return;
     this.lastTriggerTimes.set(key, now);
 
     node.triggered = true;
@@ -141,7 +146,7 @@ export class PhysicsEngine {
     for (const other of this.marbles) {
       if (other.id === marble.id || !other.active) continue;
       if (other.trackId !== marble.trackId) continue;
-      if (Math.abs(other.currentNodeIndex - nodeIndex) <= 1 && other.progress > 0.7) {
+      if (other.currentNodeIndex === nodeIndex || other.currentNodeIndex === nodeIndex - 1) {
         harmonyWith = other.type;
         break;
       }
@@ -171,18 +176,44 @@ export class PhysicsEngine {
 
         const dist = distance(a.position, b.position);
         if (dist < COLLISION_DISTANCE) {
+          const collisionKey = [a.id, b.id].sort().join('_');
+          const lastCollision = this.collisionCooldowns.get(collisionKey) || 0;
+          if (now - lastCollision < COLLISION_COOLDOWN) continue;
+          this.collisionCooldowns.set(collisionKey, now);
+
+          const dx = b.position.x - a.position.x;
+          const dy = b.position.y - a.position.y;
+          const len = Math.max(dist, 0.01);
+          const nx = dx / len;
+          const ny = dy / len;
+
           const tempTrackId = a.trackId;
-          const tempNodeIndex = a.currentNodeIndex;
-          const tempProgress = a.progress;
+          const tempNodeIdx = a.currentNodeIndex;
+          const tempProg = a.progress;
+
           a.trackId = b.trackId;
           a.currentNodeIndex = b.currentNodeIndex;
-          a.progress = b.progress;
-          b.trackId = tempTrackId;
-          b.currentNodeIndex = tempNodeIndex;
-          b.progress = tempProgress;
+          a.progress = Math.max(0, b.progress - 0.1);
 
-          this.emitParticles(a.position, '#FFFFFF');
-          this.emitParticles(b.position, '#FFFFFF');
+          b.trackId = tempTrackId;
+          b.currentNodeIndex = tempNodeIdx;
+          b.progress = Math.min(1, tempProg + 0.1);
+
+          a.velocity *= 0.7;
+          b.velocity *= 0.7;
+
+          const pushDist = (COLLISION_DISTANCE - dist) / 2 + 2;
+          a.position.x -= nx * pushDist;
+          a.position.y -= ny * pushDist;
+          b.position.x += nx * pushDist;
+          b.position.y += ny * pushDist;
+
+          this.emitParticles(
+            { x: (a.position.x + b.position.x) / 2, y: (a.position.y + b.position.y) / 2 },
+            '#FFFFFF'
+          );
+          this.emitParticles(a.position, getMarbleColorHex(a.type));
+          this.emitParticles(b.position, getMarbleColorHex(b.type));
 
           if (this.onTriggerCallback) {
             this.onTriggerCallback({
@@ -190,7 +221,7 @@ export class PhysicsEngine {
               nodeIndex: a.currentNodeIndex,
               marbleType: a.type,
               noteIndex: -1,
-              position: { ...a.position },
+              position: { x: (a.position.x + b.position.x) / 2, y: (a.position.y + b.position.y) / 2 },
               isCollision: true,
             });
           }
@@ -201,6 +232,7 @@ export class PhysicsEngine {
 
   update(deltaMs: number): void {
     const now = performance.now();
+    const deltaSec = deltaMs / 1000;
 
     for (const marble of this.marbles) {
       if (!marble.active) continue;
@@ -217,9 +249,23 @@ export class PhysicsEngine {
         continue;
       }
 
-      const intervalMs = this.nodeInterval * 1000;
-      const increment = deltaMs / intervalMs;
-      marble.progress += increment * marble.speed;
+      const fromNode = track.nodes[marble.currentNodeIndex];
+      const toNode = track.nodes[marble.currentNodeIndex + 1];
+      const segLen = segmentLength(fromNode.position, toNode.position);
+      const segLenClamped = Math.max(segLen, 10);
+
+      const dy = toNode.position.y - fromNode.position.y;
+      const gravityComponent = (dy / segLenClamped) * GRAVITY * deltaSec;
+      marble.velocity += gravityComponent;
+
+      const friction = 0.998;
+      marble.velocity *= friction;
+
+      const maxVelocity = segLenClamped / (this.nodeInterval * 1000) * 3;
+      marble.velocity = clamp(marble.velocity, 20, maxVelocity);
+
+      const progressIncrement = (marble.velocity * deltaMs) / segLenClamped;
+      marble.progress += progressIncrement;
 
       while (marble.progress >= 1 && marble.currentNodeIndex < totalNodes - 1) {
         marble.progress -= 1;
@@ -230,13 +276,21 @@ export class PhysicsEngine {
           marble.active = false;
           break;
         }
+
+        const nextFrom = track.nodes[marble.currentNodeIndex];
+        const nextTo = track.nodes[marble.currentNodeIndex + 1];
+        const nextLen = segmentLength(nextFrom.position, nextTo.position);
+        const nextDy = nextTo.position.y - nextFrom.position.y;
+        const nextGravity = (nextDy / Math.max(nextLen, 10)) * GRAVITY * deltaSec;
+        marble.velocity += nextGravity;
+        marble.velocity = clamp(marble.velocity, 20, maxVelocity);
       }
 
       if (!marble.active) continue;
 
       const from = track.nodes[marble.currentNodeIndex].position;
       const to = track.nodes[marble.currentNodeIndex + 1].position;
-      marble.position = lerpPoint(from, to, marble.progress);
+      marble.position = pointOnSegment(from, to, clamp(marble.progress, 0, 1));
     }
 
     this.checkCollisions(now);
@@ -245,9 +299,11 @@ export class PhysicsEngine {
       const p = this.particles[i];
       p.x += p.vx;
       p.y += p.vy;
-      p.vx *= 0.96;
-      p.vy *= 0.96;
+      p.vx *= 0.94;
+      p.vy *= 0.94;
+      p.vy += 0.05;
       p.life -= deltaMs;
+      p.angle += 0.1;
       if (p.life <= 0) {
         this.particles.splice(i, 1);
       }
