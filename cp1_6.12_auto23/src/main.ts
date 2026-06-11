@@ -1,6 +1,41 @@
 import { GameMap, GRID_SIZE, TILE_SIZE, TileType } from './gameMap';
 import { Enemy, Particle } from './enemy';
-import { Tower, TowerType, TOWER_CONFIGS, Projectile, updateProjectiles, renderProjectiles } from './tower';
+import {
+  Tower, TowerType, TOWER_CONFIGS, Projectile, updateProjectiles, renderProjectiles,
+  easeInOutQuad, DEATH_PARTICLE_COUNT,
+  DEATH_PARTICLE_GRAVITY, DEATH_PARTICLE_DRAG
+} from './tower';
+
+const INITIAL_GOLD = 200;
+const INITIAL_LIVES = 20;
+const WAVE_BONUS = 20;
+const WAVE_INTERVAL = 5;
+const MIN_ENEMIES_PER_WAVE = 10;
+const MAX_ENEMIES_PER_WAVE = 20;
+const FIRST_WAVE_PREPARE_TIME = 2;
+
+const WAVE_TRANSITION_DURATION = 2.5;
+const WAVE_TRANSITION_FADE_IN_PORTION = 0.2;
+const WAVE_TRANSITION_FADE_OUT_PORTION = 0.2;
+const WAVE_TRANSITION_PULSE_SCALE = 1.1;
+const WAVE_TRANSITION_FONT_SIZE = 56;
+const WAVE_TRANSITION_STROKE_WIDTH = 6;
+const WAVE_TRANSITION_VERTICAL_OFFSET = 100;
+
+const RESIZE_DEBOUNCE_MS = 150;
+const MAX_SCALE = 1.2;
+const HUD_HEIGHT_EXTRA = 120;
+const HUD_VERTICAL_OFFSET = 60;
+
+const FLOATING_TEXT_DURATION = 1.2;
+const FLOATING_TEXT_SPEED = 40;
+
+const PARTICLE_POOL_INITIAL_SIZE = 200;
+const PROJECTILE_POOL_INITIAL_SIZE = 50;
+const MAX_PARTICLES = 500;
+const MAX_PROJECTILES = 100;
+
+const SPATIAL_GRID_CELL_SIZE = TILE_SIZE * 2;
 
 interface FloatingText {
   x: number;
@@ -18,12 +53,61 @@ interface WaveTransition {
   maxLife: number;
 }
 
-const INITIAL_GOLD = 200;
-const INITIAL_LIVES = 20;
-const WAVE_BONUS = 20;
-const WAVE_INTERVAL = 5;
-const MIN_ENEMIES_PER_WAVE = 10;
-const MAX_ENEMIES_PER_WAVE = 20;
+interface SpatialGrid {
+  cellSize: number;
+  cols: number;
+  rows: number;
+  cells: Map<string, number[]>;
+}
+
+function buildSpatialGrid(enemies: Enemy[]): SpatialGrid {
+  const pixelW = GRID_SIZE * TILE_SIZE;
+  const pixelH = GRID_SIZE * TILE_SIZE;
+  const cols = Math.ceil(pixelW / SPATIAL_GRID_CELL_SIZE);
+  const rows = Math.ceil(pixelH / SPATIAL_GRID_CELL_SIZE);
+  const cells = new Map<string, number[]>();
+
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    if (enemy.isDead() || enemy.hasReachedEnd()) continue;
+    const cx = Math.max(0, Math.min(cols - 1, Math.floor(enemy.getX() / SPATIAL_GRID_CELL_SIZE)));
+    const cy = Math.max(0, Math.min(rows - 1, Math.floor(enemy.getY() / SPATIAL_GRID_CELL_SIZE)));
+    const key = `${cx},${cy}`;
+    let arr = cells.get(key);
+    if (!arr) { arr = []; cells.set(key, arr); }
+    arr.push(i);
+  }
+
+  return { cellSize: SPATIAL_GRID_CELL_SIZE, cols, rows, cells };
+}
+
+function querySpatialRange(
+  grid: SpatialGrid, enemies: Enemy[],
+  cx: number, cy: number, range: number
+): Enemy[] {
+  const results: Enemy[] = [];
+  const rangeSq = range * range;
+  const cellMinX = Math.max(0, Math.floor((cx - range) / grid.cellSize));
+  const cellMaxX = Math.min(grid.cols - 1, Math.floor((cx + range) / grid.cellSize));
+  const cellMinY = Math.max(0, Math.floor((cy - range) / grid.cellSize));
+  const cellMaxY = Math.min(grid.rows - 1, Math.floor((cy + range) / grid.cellSize));
+
+  for (let gx = cellMinX; gx <= cellMaxX; gx++) {
+    for (let gy = cellMinY; gy <= cellMaxY; gy++) {
+      const arr = grid.cells.get(`${gx},${gy}`);
+      if (!arr) continue;
+      for (const idx of arr) {
+        const e = enemies[idx];
+        const dx = e.getX() - cx;
+        const dy = e.getY() - cy;
+        if (dx * dx + dy * dy <= rangeSq) {
+          results.push(e);
+        }
+      }
+    }
+  }
+  return results;
+}
 
 class Game {
   private canvas: HTMLCanvasElement;
@@ -60,10 +144,16 @@ class Game {
 
   private lastTime: number;
   private _animationFrameId: number | null;
+  private _resizeTimer: number | null;
+  private _dpr: number;
+
+  private _spatialGrid: SpatialGrid | null;
+  private _spatialGridDirty: boolean;
 
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
+    this._dpr = window.devicePixelRatio || 1;
 
     this.gameMap = new GameMap();
     this.towers = [];
@@ -84,7 +174,7 @@ class Game {
     this.enemiesToSpawn = 0;
     this.spawnTimer = 0;
     this.spawnInterval = 1;
-    this.waveCooldown = 2;
+    this.waveCooldown = FIRST_WAVE_PREPARE_TIME;
     this.waveTransition = null;
 
     this.selectedTile = null;
@@ -98,10 +188,33 @@ class Game {
 
     this.lastTime = performance.now();
     this._animationFrameId = null;
+    this._resizeTimer = null;
 
+    this._spatialGrid = null;
+    this._spatialGridDirty = true;
+
+    this.preallocatePools();
     this.resizeCanvas();
     this.setupEventListeners();
     this.showWaveTransition('第 1 波 即将开始');
+  }
+
+  private preallocatePools(): void {
+    for (let i = 0; i < PARTICLE_POOL_INITIAL_SIZE; i++) {
+      this.particles.push({
+        x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 1, color: '#fff', size: 3
+      });
+    }
+    this.particles.length = 0;
+
+    for (let i = 0; i < PROJECTILE_POOL_INITIAL_SIZE; i++) {
+      this.projectiles.push({
+        x: 0, y: 0, targetX: 0, targetY: 0, targetEnemy: null,
+        speed: 0, damage: 0, color: '#fff', type: TowerType.ARROW,
+        dead: false, trail: []
+      });
+    }
+    this.projectiles.length = 0;
   }
 
   start(): void {
@@ -110,17 +223,17 @@ class Game {
 
   private resizeCanvas(): void {
     const container = document.getElementById('game-container')!;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = this._dpr;
 
     const maxWidth = container.clientWidth;
     const maxHeight = container.clientHeight;
 
     const baseWidth = this.gameMap.getGridPixelWidth();
-    const baseHeight = this.gameMap.getGridPixelHeight() + 120;
+    const baseHeight = this.gameMap.getGridPixelHeight() + HUD_HEIGHT_EXTRA;
 
     const scaleX = maxWidth / baseWidth;
     const scaleY = maxHeight / baseHeight;
-    this.scale = Math.min(scaleX, scaleY, 1.2);
+    this.scale = Math.min(scaleX, scaleY, MAX_SCALE);
 
     const displayWidth = baseWidth * this.scale;
     const displayHeight = baseHeight * this.scale;
@@ -129,15 +242,27 @@ class Game {
     this.canvas.height = displayHeight * dpr;
     this.canvas.style.width = displayWidth + 'px';
     this.canvas.style.height = displayHeight + 'px';
+    this.canvas.style.transformOrigin = 'center center';
+    this.canvas.style.imageRendering = 'auto';
 
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     this.offsetX = (displayWidth - baseWidth * this.scale) / 2;
-    this.offsetY = (displayHeight - baseHeight * this.scale) / 2 + 60 * this.scale;
+    this.offsetY = (displayHeight - baseHeight * this.scale) / 2
+                   + HUD_VERTICAL_OFFSET * this.scale;
   }
 
   private setupEventListeners(): void {
-    window.addEventListener('resize', () => this.resizeCanvas());
+    window.addEventListener('resize', () => {
+      if (this._resizeTimer !== null) {
+        window.clearTimeout(this._resizeTimer);
+      }
+      this._resizeTimer = window.setTimeout(() => {
+        this._dpr = window.devicePixelRatio || 1;
+        this.resizeCanvas();
+        this._resizeTimer = null;
+      }, RESIZE_DEBOUNCE_MS);
+    });
 
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     this.canvas.addEventListener('click', (e) => this.handleClick(e));
@@ -364,19 +489,22 @@ class Game {
   }
 
   private addFloatingText(x: number, y: number, text: string, color: string): void {
+    if (this.floatingTexts.length >= 40) {
+      this.floatingTexts.shift();
+    }
     this.floatingTexts.push({
       x, y, text, color,
-      life: 1.2,
-      maxLife: 1.2,
-      vy: -40
+      life: FLOATING_TEXT_DURATION,
+      maxLife: FLOATING_TEXT_DURATION,
+      vy: -FLOATING_TEXT_SPEED
     });
   }
 
   private showWaveTransition(text: string): void {
     this.waveTransition = {
       text,
-      life: 2.5,
-      maxLife: 2.5
+      life: WAVE_TRANSITION_DURATION,
+      maxLife: WAVE_TRANSITION_DURATION
     };
   }
 
@@ -439,6 +567,7 @@ class Game {
           this.enemies.push(new Enemy(this.currentWave, this.gameMap));
           this.enemiesSpawned++;
           this.spawnTimer = this.spawnInterval;
+          this._spatialGridDirty = true;
         }
       }
 
@@ -453,6 +582,7 @@ class Game {
       if (enemy.hasReachedEnd() && !enemy.isDead()) {
         this.lives--;
         (enemy as unknown as { dead: boolean }).dead = true;
+        this._spatialGridDirty = true;
 
         if (this.lives <= 0) {
           this.lives = 0;
@@ -464,45 +594,60 @@ class Game {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
       if (enemy.isDead() && !enemy.hasReachedEnd()) {
-        this.particles.push(...enemy.createDeathParticles());
+        this.spawnDeathParticles(enemy);
         this.gold += enemy.getReward();
         this.totalKills++;
         this.addFloatingText(enemy.getX(), enemy.getY() - 20, `+${enemy.getReward()}`, '#ffd43b');
         this.enemies.splice(i, 1);
+        this._spatialGridDirty = true;
       } else if (enemy.hasReachedEnd() && enemy.isDead()) {
         this.enemies.splice(i, 1);
+        this._spatialGridDirty = true;
       }
+    }
+
+    if (this._spatialGridDirty) {
+      this._spatialGrid = buildSpatialGrid(this.enemies);
+      this._spatialGridDirty = false;
     }
 
     for (const tower of this.towers) {
-      tower.update(deltaTime, this.enemies, this.projectiles);
+      this.updateTower(tower, deltaTime);
     }
 
     updateProjectiles(this.projectiles, this.enemies, deltaTime, (enemy) => {
-      if (enemy.isDead()) {
-        const alreadyProcessed = this.particles.some(
-          p => Math.abs(p.x - enemy.getX()) < 5 && Math.abs(p.y - enemy.getY()) < 5
-        );
-        if (!alreadyProcessed) {
-          this.particles.push(...enemy.createDeathParticles());
+      if (enemy.isDead() && !enemy.hasReachedEnd()) {
+        const aliveIdx = this.enemies.indexOf(enemy);
+        if (aliveIdx !== -1) {
+          this.spawnDeathParticles(enemy);
           this.gold += enemy.getReward();
           this.totalKills++;
           this.addFloatingText(enemy.getX(), enemy.getY() - 20, `+${enemy.getReward()}`, '#ffd43b');
+          this.enemies.splice(aliveIdx, 1);
+          this._spatialGridDirty = true;
         }
       }
     });
+
+    if (this.projectiles.length > MAX_PROJECTILES) {
+      this.projectiles.length = MAX_PROJECTILES;
+    }
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= deltaTime;
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 20 * deltaTime;
-      p.vx *= 0.98;
+      p.vy += DEATH_PARTICLE_GRAVITY * deltaTime;
+      p.vx *= DEATH_PARTICLE_DRAG;
 
       if (p.life <= 0) {
         this.particles.splice(i, 1);
       }
+    }
+
+    if (this.particles.length > MAX_PARTICLES) {
+      this.particles.splice(0, this.particles.length - MAX_PARTICLES);
     }
 
     for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
@@ -516,10 +661,42 @@ class Game {
     }
   }
 
+  private updateTower(tower: Tower, deltaTime: number): void {
+    const grid = this._spatialGrid;
+    if (grid) {
+      const candidates = querySpatialRange(
+        grid, this.enemies,
+        tower.getCenterX(), tower.getCenterY(), tower.getRange()
+      );
+      tower.update(deltaTime, candidates, this.projectiles);
+    } else {
+      tower.update(deltaTime, this.enemies, this.projectiles);
+    }
+  }
+
+  private spawnDeathParticles(enemy: Enemy): void {
+    const extra = enemy.createDeathParticles();
+    if (this.particles.length + extra.length > MAX_PARTICLES) {
+      const allowed = Math.max(0, MAX_PARTICLES - this.particles.length);
+      const ratio = allowed / extra.length;
+      const capped = Math.floor(DEATH_PARTICLE_COUNT * 0.7);
+      for (let i = 0; i < Math.min(capped, extra.length); i++) {
+        if (Math.random() <= ratio + 0.1) {
+          this.particles.push(extra[i]);
+        }
+      }
+    } else {
+      for (const p of extra) {
+        this.particles.push(p);
+      }
+    }
+  }
+
   private render(): void {
     const ctx = this.ctx;
-    const width = this.canvas.width / (window.devicePixelRatio || 1);
-    const height = this.canvas.height / (window.devicePixelRatio || 1);
+    const dpr = this._dpr;
+    const width = this.canvas.width / dpr;
+    const height = this.canvas.height / dpr;
 
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, width, height);
@@ -645,7 +822,7 @@ class Game {
   private renderParticles(): void {
     const ctx = this.ctx;
     for (const p of this.particles) {
-      const alpha = p.life / p.maxLife;
+      const alpha = Math.max(0, Math.min(1, p.life / p.maxLife));
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
       ctx.beginPath();
@@ -661,7 +838,7 @@ class Game {
     ctx.textAlign = 'center';
 
     for (const ft of this.floatingTexts) {
-      const alpha = ft.life / ft.maxLife;
+      const alpha = Math.max(0, Math.min(1, ft.life / ft.maxLife));
       ctx.globalAlpha = alpha;
       ctx.fillStyle = '#000';
       ctx.fillText(ft.text, ft.x + 1, ft.y + 1);
@@ -718,10 +895,7 @@ class Game {
   private renderTowerOption(
     ctx: CanvasRenderingContext2D,
     type: TowerType,
-    x: number,
-    y: number,
-    w: number,
-    h: number
+    x: number, y: number, w: number, h: number
   ): void {
     const config = TOWER_CONFIGS[type];
     const canAfford = this.gold >= config.cost;
@@ -754,9 +928,6 @@ class Game {
     ctx.fillStyle = goldColor;
     ctx.fillText(`💰 ${config.cost}`, x + w / 2, y + h * 0.82);
 
-    if (!canAfford) {
-      ctx.globalAlpha = 0.5;
-    }
     ctx.globalAlpha = 1;
   }
 
@@ -913,29 +1084,31 @@ class Game {
     const progress = this.waveTransition.life / this.waveTransition.maxLife;
 
     let alpha = 1;
-    if (progress > 0.8) {
-      alpha = 1 - (progress - 0.8) / 0.2;
-    } else if (progress < 0.2) {
-      alpha = progress / 0.2;
+    if (progress > (1 - WAVE_TRANSITION_FADE_OUT_PORTION)) {
+      const fadeStart = 1 - WAVE_TRANSITION_FADE_OUT_PORTION;
+      alpha = 1 - (progress - fadeStart) / WAVE_TRANSITION_FADE_OUT_PORTION;
+    } else if (progress < WAVE_TRANSITION_FADE_IN_PORTION) {
+      alpha = progress / WAVE_TRANSITION_FADE_IN_PORTION;
     }
 
-    const scale = 1 + Math.sin((1 - progress) * Math.PI) * 0.1;
+    const pulseProgress = easeInOutQuad(progress);
+    const pulse = 1 + Math.sin(pulseProgress * Math.PI) * (WAVE_TRANSITION_PULSE_SCALE - 1);
 
     ctx.save();
-    ctx.globalAlpha = alpha * 0.9;
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha)) * 0.9;
 
     const centerX = width / 2;
-    const centerY = height / 2 - 100 * this.scale;
+    const centerY = height / 2 - WAVE_TRANSITION_VERTICAL_OFFSET * this.scale;
 
     ctx.translate(centerX, centerY);
-    ctx.scale(scale, scale);
+    ctx.scale(pulse, pulse);
 
-    ctx.font = 'bold 56px "Cinzel", "Noto Serif SC", serif';
+    ctx.font = `bold ${WAVE_TRANSITION_FONT_SIZE}px "Cinzel", "Noto Serif SC", serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 6;
+    ctx.lineWidth = WAVE_TRANSITION_STROKE_WIDTH;
     ctx.strokeText(this.waveTransition.text, 0, 0);
 
     const gradient = ctx.createLinearGradient(0, -40, 0, 40);
@@ -1014,7 +1187,7 @@ class Game {
 
     this.canvas.onclick = (e: MouseEvent) => {
       const rect = this.canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = this._dpr;
       const x = (e.clientX - rect.left) * (this.canvas.width / rect.width) / dpr;
       const y = (e.clientY - rect.top) * (this.canvas.height / rect.height) / dpr;
 
@@ -1046,15 +1219,21 @@ class Game {
     this.enemiesSpawned = 0;
     this.enemiesToSpawn = 0;
     this.spawnTimer = 0;
-    this.waveCooldown = 2;
+    this.waveCooldown = FIRST_WAVE_PREPARE_TIME;
     this.waveTransition = null;
 
     this.selectedTile = null;
     this.showBuildPanel = false;
     this.selectedTower = null;
 
+    this._spatialGrid = null;
+    this._spatialGridDirty = true;
+
     this.setupEventListeners();
+    this.preallocatePools();
+    this.lastTime = performance.now();
     this.showWaveTransition('第 1 波 即将开始');
+    this.gameLoop();
   }
 }
 

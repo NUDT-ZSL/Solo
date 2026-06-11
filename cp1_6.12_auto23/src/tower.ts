@@ -1,6 +1,44 @@
 import { Enemy } from './enemy';
 import { TILE_SIZE } from './gameMap';
 
+export const BUILD_ANIMATION_DURATION = 0.33;
+export const BUILD_ANIMATION_OVERSHOOT = 1.15;
+export const SHOOT_ANIMATION_DURATION = 0.2;
+export const SHOOT_SCALE_FACTOR = 1.15;
+export const PROJECTILE_TRAIL_LENGTH = 8;
+
+export const DEATH_PARTICLE_COUNT = 24;
+export const DEATH_PARTICLE_MIN_SPEED = 1;
+export const DEATH_PARTICLE_MAX_SPEED = 5;
+export const DEATH_PARTICLE_MIN_LIFE = 0.6;
+export const DEATH_PARTICLE_MAX_LIFE = 1.0;
+export const DEATH_PARTICLE_GRAVITY = 20;
+export const DEATH_PARTICLE_DRAG = 0.98;
+export const DEATH_PARTICLE_COLORS = [
+  '#ff6b6b', '#ff8787', '#ffa8a8', '#ffc9c9', '#ffd43b'
+];
+
+export const CANNON_SPLASH_FALLOFF = 0.5;
+export const MAGIC_SLOW_DEFAULT_FACTOR = 0.55;
+export const MAGIC_SLOW_DEFAULT_DURATION = 1.8;
+export const MAX_UPGRADE_LEVEL = 3;
+export const UPGRADE_FIRERATE_FACTOR = 0.9;
+export const SELL_VALUE_RATIO = 0.6;
+
+export const easeOutBack = (t: number): number => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
+
+export const easeOutCubic = (t: number): number => {
+  return 1 - Math.pow(1 - t, 3);
+};
+
+export const easeInOutQuad = (t: number): number => {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+};
+
 export enum TowerType {
   ARROW = 'arrow',
   CANNON = 'cannon',
@@ -69,8 +107,8 @@ export const TOWER_CONFIGS: Record<TowerType, TowerConfig> = {
     bulletSpeed: 450,
     bulletColor: '#74c0fc',
     description: '魔法减速效果',
-    slowFactor: 0.55,
-    slowDuration: 1.8,
+    slowFactor: MAGIC_SLOW_DEFAULT_FACTOR,
+    slowDuration: MAGIC_SLOW_DEFAULT_DURATION,
     upgradeCost: 60,
     upgradeDamageMultiplier: 1.5,
     upgradeRangeMultiplier: 1.15
@@ -106,8 +144,9 @@ export class Tower {
   private fireRate: number;
   private fireTimer: number;
   private level: number;
-  private buildAnimationProgress: number;
-  private shootAnimation: number;
+  private buildProgress: number;
+  private buildDuration: number;
+  private shootProgress: number;
   private totalKills: number;
 
   constructor(gridX: number, gridY: number, type: TowerType) {
@@ -122,30 +161,31 @@ export class Tower {
     this.fireRate = this.config.fireRate;
     this.fireTimer = 0;
     this.level = 1;
-    this.buildAnimationProgress = 0;
-    this.shootAnimation = 0;
+    this.buildProgress = 0;
+    this.buildDuration = BUILD_ANIMATION_DURATION;
+    this.shootProgress = 0;
     this.totalKills = 0;
   }
 
   update(deltaTime: number, enemies: Enemy[], projectiles: Projectile[]): void {
-    if (this.buildAnimationProgress < 1) {
-      this.buildAnimationProgress = Math.min(1, this.buildAnimationProgress + deltaTime * 3);
+    if (this.buildProgress < 1) {
+      this.buildProgress = Math.min(1, this.buildProgress + deltaTime / this.buildDuration);
     }
 
     if (this.fireTimer > 0) {
       this.fireTimer -= deltaTime;
     }
 
-    if (this.shootAnimation > 0) {
-      this.shootAnimation = Math.max(0, this.shootAnimation - deltaTime * 5);
+    if (this.shootProgress > 0) {
+      this.shootProgress = Math.max(0, this.shootProgress - deltaTime / SHOOT_ANIMATION_DURATION);
     }
 
-    if (this.fireTimer <= 0) {
+    if (this.fireTimer <= 0 && this.buildProgress >= 0.6) {
       const target = this.findTarget(enemies);
       if (target) {
         this.fire(target, projectiles);
         this.fireTimer = this.fireRate;
-        this.shootAnimation = 1;
+        this.shootProgress = 1;
       }
     }
   }
@@ -154,15 +194,15 @@ export class Tower {
     let bestTarget: Enemy | null = null;
     let bestProgress = -1;
 
+    const rangeSq = this.range * this.range;
     for (const enemy of enemies) {
       if (enemy.isDead() || enemy.hasReachedEnd()) continue;
 
-      const distance = Math.sqrt(
-        Math.pow(enemy.getX() - this.centerX, 2) +
-        Math.pow(enemy.getY() - this.centerY, 2)
-      );
+      const dx = enemy.getX() - this.centerX;
+      const dy = enemy.getY() - this.centerY;
+      const distSq = dx * dx + dy * dy;
 
-      if (distance <= this.range) {
+      if (distSq <= rangeSq) {
         const progress = (enemy as unknown as { pathIndex?: number }).pathIndex ?? 0;
         if (progress > bestProgress) {
           bestProgress = progress;
@@ -195,16 +235,16 @@ export class Tower {
   }
 
   upgrade(): boolean {
-    if (this.level >= 3) return false;
+    if (this.level >= MAX_UPGRADE_LEVEL) return false;
     this.level++;
     this.damage = Math.floor(this.damage * this.config.upgradeDamageMultiplier);
     this.range = this.range * this.config.upgradeRangeMultiplier;
-    this.fireRate = this.fireRate * 0.9;
+    this.fireRate = this.fireRate * UPGRADE_FIRERATE_FACTOR;
     return true;
   }
 
   canUpgrade(): boolean {
-    return this.level < 3;
+    return this.level < MAX_UPGRADE_LEVEL;
   }
 
   getUpgradeCost(): number {
@@ -216,7 +256,7 @@ export class Tower {
     for (let i = 1; i < this.level; i++) {
       totalCost += this.config.upgradeCost * i;
     }
-    return Math.floor(totalCost * 0.6);
+    return Math.floor(totalCost * SELL_VALUE_RATIO);
   }
 
   render(ctx: CanvasRenderingContext2D, showRange: boolean = false): void {
@@ -224,23 +264,23 @@ export class Tower {
     ctx.translate(this.centerX, this.centerY);
 
     const scale = this.getBuildScale();
+    const alpha = this.getBuildAlpha();
+    ctx.globalAlpha = alpha;
     ctx.scale(scale, scale);
 
     if (showRange) {
-      ctx.globalAlpha = 0.15;
+      ctx.globalAlpha = alpha * 0.15;
       ctx.fillStyle = this.config.color;
       ctx.beginPath();
       ctx.arc(0, 0, this.range / scale, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
-
+      ctx.globalAlpha = alpha * 0.5;
       ctx.strokeStyle = this.config.color;
       ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.5;
       ctx.beginPath();
       ctx.arc(0, 0, this.range / scale, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = alpha;
     }
 
     this.renderBase(ctx);
@@ -250,18 +290,23 @@ export class Tower {
     ctx.restore();
 
     if (this.level > 1) {
+      ctx.globalAlpha = Math.min(1, this.buildProgress * 1.5);
       this.renderLevelIndicator(ctx);
+      ctx.globalAlpha = 1;
     }
   }
 
   private getBuildScale(): number {
-    if (this.buildAnimationProgress < 0.5) {
-      const t = this.buildAnimationProgress / 0.5;
-      return 0.3 + t * 0.7;
-    } else {
-      const t = (this.buildAnimationProgress - 0.5) / 0.5;
-      return 1 + Math.sin(t * Math.PI) * 0.15 * (1 - t);
+    if (this.buildProgress >= 1) {
+      return 1;
     }
+    return easeOutBack(this.buildProgress) * BUILD_ANIMATION_OVERSHOOT
+      - (BUILD_ANIMATION_OVERSHOOT - 1) * easeOutCubic(this.buildProgress);
+  }
+
+  private getBuildAlpha(): number {
+    if (this.buildProgress >= 1) return 1;
+    return easeOutCubic(this.buildProgress);
   }
 
   private renderBase(ctx: CanvasRenderingContext2D): void {
@@ -329,7 +374,7 @@ export class Tower {
 
   private renderTop(ctx: CanvasRenderingContext2D): void {
     const topY = -TILE_SIZE * 0.45;
-    const shootScale = 1 + this.shootAnimation * 0.15;
+    const shootScale = 1 + easeOutCubic(1 - this.shootProgress) * (SHOOT_SCALE_FACTOR - 1);
 
     ctx.save();
     ctx.translate(0, topY);
@@ -421,6 +466,7 @@ export class Tower {
   getLevel(): number { return this.level; }
   getCenterX(): number { return this.centerX; }
   getCenterY(): number { return this.centerY; }
+  getBuildProgress(): number { return this.buildProgress; }
   addKill(): void { this.totalKills++; }
   getTotalKills(): number { return this.totalKills; }
 }
@@ -435,7 +481,7 @@ export function updateProjectiles(
     if (projectile.dead) continue;
 
     projectile.trail.push({ x: projectile.x, y: projectile.y });
-    if (projectile.trail.length > 8) {
+    if (projectile.trail.length > PROJECTILE_TRAIL_LENGTH) {
       projectile.trail.shift();
     }
 
@@ -484,7 +530,7 @@ function handleProjectileHit(
       const dy = enemy.getY() - projectile.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= projectile.splashRadius) {
-        const falloff = 1 - (dist / projectile.splashRadius) * 0.5;
+        const falloff = 1 - (dist / projectile.splashRadius) * CANNON_SPLASH_FALLOFF;
         enemy.takeDamage(projectile.damage * falloff);
         if (enemy.isDead() && particlesCallback) {
           particlesCallback(enemy);
@@ -524,14 +570,14 @@ function handleProjectileHit(
 export function renderProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]): void {
   for (const projectile of projectiles) {
     for (let i = 0; i < projectile.trail.length; i++) {
-      const alpha = i / projectile.trail.length;
-      ctx.globalAlpha = alpha * 0.5;
+      const alpha = (i / projectile.trail.length) * 0.5;
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = projectile.color;
       ctx.beginPath();
       ctx.arc(
         projectile.trail[i].x,
         projectile.trail[i].y,
-        2 + i * 0.5,
+        2 + (i / projectile.trail.length) * 2.5,
         0,
         Math.PI * 2
       );

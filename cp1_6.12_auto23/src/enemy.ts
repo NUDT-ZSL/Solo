@@ -1,4 +1,32 @@
 import { GameMap, TILE_SIZE } from './gameMap';
+import {
+  DEATH_PARTICLE_COUNT,
+  DEATH_PARTICLE_MIN_SPEED,
+  DEATH_PARTICLE_MAX_SPEED,
+  DEATH_PARTICLE_MIN_LIFE,
+  DEATH_PARTICLE_MAX_LIFE,
+  DEATH_PARTICLE_COLORS
+} from './tower';
+
+export const HIT_FLASH_DURATION = 0.1;
+export const HIT_FLASH_SHADOW_BLUR = 20;
+export const HIT_FLASH_SHADOW_COLOR = '#ff4444';
+
+export const HEALTH_BAR_WIDTH_RATIO = 2.2;
+export const HEALTH_BAR_HEIGHT = 5;
+export const HEALTH_BAR_OFFSET = 12;
+
+export const ENEMY_SIZE_RATIO = 0.35;
+export const SLOW_RING_WIDTH = 2;
+export const SLOW_RING_DASH = [4, 4];
+export const SLOW_RING_OFFSET = 4;
+export const SLOW_RING_COLOR = 'rgba(100, 200, 255, 0.7)';
+
+export const ENEMY_BASE_HEALTH = 80;
+export const ENEMY_HEALTH_PER_WAVE = 25;
+export const ENEMY_BASE_SPEED = 1.2;
+export const ENEMY_SPEED_PER_WAVE = 0.08;
+export const ENEMY_KILL_REWARD = 10;
 
 export interface Particle {
   x: number;
@@ -31,16 +59,16 @@ export class Enemy {
 
   constructor(wave: number, gameMap: GameMap) {
     this.waveNumber = wave;
-    this.baseHealth = 80 + wave * 25;
+    this.baseHealth = ENEMY_BASE_HEALTH + wave * ENEMY_HEALTH_PER_WAVE;
     this.maxHealth = this.baseHealth;
     this.health = this.baseHealth;
-    this.baseSpeed = 1.2 + wave * 0.08;
+    this.baseSpeed = ENEMY_BASE_SPEED + wave * ENEMY_SPEED_PER_WAVE;
     this.speed = this.baseSpeed;
     this.slowTimer = 0;
     this.slowFactor = 1;
     this.hitFlashTimer = 0;
-    this.reward = 10;
-    this.size = TILE_SIZE * 0.35;
+    this.reward = ENEMY_KILL_REWARD;
+    this.size = TILE_SIZE * ENEMY_SIZE_RATIO;
     this.dead = false;
     this.reachedEnd = false;
     this.pathIndex = 0;
@@ -94,7 +122,7 @@ export class Enemy {
 
   takeDamage(damage: number): void {
     this.health -= damage;
-    this.hitFlashTimer = 0.1;
+    this.hitFlashTimer = HIT_FLASH_DURATION;
     if (this.health <= 0) {
       this.health = 0;
       this.dead = true;
@@ -110,20 +138,28 @@ export class Enemy {
 
   createDeathParticles(): Particle[] {
     const particles: Particle[] = [];
-    const particleCount = 20;
-    const colors = ['#ff6b6b', '#ff8787', '#ffa8a8', '#ffc9c9', '#ffd43b'];
 
-    for (let i = 0; i < particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / particleCount + Math.random() * 0.5;
-      const speed = 2 + Math.random() * 4;
+    for (let i = 0; i < DEATH_PARTICLE_COUNT; i++) {
+      const baseAngle = (Math.PI * 2 * i) / DEATH_PARTICLE_COUNT;
+      const angleJitter = (Math.random() - 0.5) * 0.5;
+      const angle = baseAngle + angleJitter;
+
+      const speedRange = DEATH_PARTICLE_MAX_SPEED - DEATH_PARTICLE_MIN_SPEED;
+      const speed = DEATH_PARTICLE_MIN_SPEED + Math.random() * speedRange;
+
+      const lifeRange = DEATH_PARTICLE_MAX_LIFE - DEATH_PARTICLE_MIN_LIFE;
+      const life = DEATH_PARTICLE_MIN_LIFE + Math.random() * lifeRange;
+
+      const colorIndex = Math.floor(Math.random() * DEATH_PARTICLE_COLORS.length);
+
       particles.push({
-        x: this.x,
-        y: this.y,
+        x: this.x + (Math.random() - 0.5) * this.size,
+        y: this.y + (Math.random() - 0.5) * this.size,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        life: 0.6 + Math.random() * 0.4,
-        maxLife: 1,
-        color: colors[Math.floor(Math.random() * colors.length)],
+        life,
+        maxLife: DEATH_PARTICLE_MAX_LIFE,
+        color: DEATH_PARTICLE_COLORS[colorIndex],
         size: 3 + Math.random() * 5
       });
     }
@@ -137,8 +173,8 @@ export class Enemy {
     ctx.translate(this.x, this.y);
 
     if (this.hitFlashTimer > 0) {
-      ctx.shadowColor = '#ff4444';
-      ctx.shadowBlur = 20;
+      ctx.shadowColor = HIT_FLASH_SHADOW_COLOR;
+      ctx.shadowBlur = HIT_FLASH_SHADOW_BLUR;
     }
 
     const gradient = ctx.createRadialGradient(0, -2, 0, 0, 0, this.size);
@@ -180,11 +216,11 @@ export class Enemy {
     if (this.slowFactor < 1) {
       ctx.save();
       ctx.translate(this.x, this.y);
-      ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = SLOW_RING_COLOR;
+      ctx.lineWidth = SLOW_RING_WIDTH;
+      ctx.setLineDash(SLOW_RING_DASH);
       ctx.beginPath();
-      ctx.arc(0, 0, this.size + 4, 0, Math.PI * 2);
+      ctx.arc(0, 0, this.size + SLOW_RING_OFFSET, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
@@ -192,10 +228,10 @@ export class Enemy {
   }
 
   private renderHealthBar(ctx: CanvasRenderingContext2D): void {
-    const barWidth = this.size * 2.2;
-    const barHeight = 5;
+    const barWidth = this.size * HEALTH_BAR_WIDTH_RATIO;
+    const barHeight = HEALTH_BAR_HEIGHT;
     const barX = this.x - barWidth / 2;
-    const barY = this.y - this.size - 12;
+    const barY = this.y - this.size - HEALTH_BAR_OFFSET;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
@@ -218,6 +254,7 @@ export class Enemy {
 
   getX(): number { return this.x; }
   getY(): number { return this.y; }
+  getPathIndex(): number { return this.pathIndex; }
   getHealth(): number { return this.health; }
   getMaxHealth(): number { return this.maxHealth; }
   getReward(): number { return this.reward; }
@@ -229,5 +266,11 @@ export class Enemy {
     const dx = this.x - otherX;
     const dy = this.y - otherY;
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  distanceToSq(otherX: number, otherY: number): number {
+    const dx = this.x - otherX;
+    const dy = this.y - otherY;
+    return dx * dx + dy * dy;
   }
 }

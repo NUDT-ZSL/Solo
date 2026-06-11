@@ -14,6 +14,29 @@ export interface Point {
   y: number;
 }
 
+export interface PathPoint {
+  gridX: number;
+  gridY: number;
+  description: string;
+}
+
+export const PATH_WAYPOINTS: PathPoint[] = [
+  { gridX: 0,  gridY: 7,  description: '入口点（左侧中间）' },
+  { gridX: 3,  gridY: 7,  description: '第一转折点（向右直行）' },
+  { gridX: 3,  gridY: 2,  description: '第二转折点（向上直行）' },
+  { gridX: 7,  gridY: 2,  description: '第三转折点（向右直行）' },
+  { gridX: 7,  gridY: 9,  description: '第四转折点（向下直行）' },
+  { gridX: 11, gridY: 9,  description: '第五转折点（向右直行）' },
+  { gridX: 11, gridY: 5,  description: '第六转折点（向上直行）' },
+  { gridX: 14, gridY: 5,  description: '终点点（右侧出口）' }
+];
+
+export const PATH_INTERPOLATION_STEP = 2;
+export const ADJACENT_OFFSETS: Array<[number, number]> = [
+  [-1, 0], [1, 0], [0, -1], [0, 1],
+  [-1, -1], [1, -1], [-1, 1], [1, 1]
+];
+
 export class GameMap {
   private grid: TileType[][];
   private pathPoints: Point[];
@@ -21,7 +44,7 @@ export class GameMap {
 
   constructor() {
     this.grid = this.createGrid();
-    this.pathPoints = this.definePath();
+    this.pathPoints = this.convertWaypointsToGrid();
     this.markPathOnGrid();
     this.markBuildableTiles();
     this.smoothPath = this.generateSmoothPath();
@@ -38,20 +61,8 @@ export class GameMap {
     return grid;
   }
 
-  private definePath(): Point[] {
-    const path: Point[] = [];
-    const midY = Math.floor(GRID_SIZE / 2);
-
-    path.push({ x: 0, y: midY });
-    path.push({ x: 3, y: midY });
-    path.push({ x: 3, y: 2 });
-    path.push({ x: 7, y: 2 });
-    path.push({ x: 7, y: midY + 2 });
-    path.push({ x: 11, y: midY + 2 });
-    path.push({ x: 11, y: 5 });
-    path.push({ x: GRID_SIZE - 1, y: 5 });
-
-    return path;
+  private convertWaypointsToGrid(): Point[] {
+    return PATH_WAYPOINTS.map(wp => ({ x: wp.gridX, y: wp.gridY }));
   }
 
   private markPathOnGrid(): void {
@@ -93,20 +104,14 @@ export class GameMap {
   }
 
   private isAdjacentToPath(x: number, y: number): boolean {
-    const directions = [
-      { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
-      { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
-      { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
-      { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
-    ];
-
-    for (const dir of directions) {
-      const nx = x + dir.dx;
-      const ny = y + dir.dy;
+    for (const [dx, dy] of ADJACENT_OFFSETS) {
+      const nx = x + dx;
+      const ny = y + dy;
       if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-        if (this.grid[ny][nx] === TileType.PATH ||
-            this.grid[ny][nx] === TileType.START ||
-            this.grid[ny][nx] === TileType.END) {
+        const tile = this.grid[ny][nx];
+        if (tile === TileType.PATH ||
+            tile === TileType.START ||
+            tile === TileType.END) {
           return true;
         }
       }
@@ -127,13 +132,13 @@ export class GameMap {
       const endX = end.x * TILE_SIZE + tileHalf;
       const endY = end.y * TILE_SIZE + tileHalf;
 
-      const distance = Math.sqrt(
+      const segmentLength = Math.sqrt(
         Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2)
       );
-      const steps = Math.ceil(distance / 2);
+      const stepCount = Math.max(1, Math.ceil(segmentLength / PATH_INTERPOLATION_STEP));
 
-      for (let t = 0; t < steps; t++) {
-        const progress = t / steps;
+      for (let t = 0; t < stepCount; t++) {
+        const progress = t / stepCount;
         points.push({
           x: startX + (endX - startX) * progress,
           y: startY + (endY - startY) * progress
@@ -193,5 +198,9 @@ export class GameMap {
 
   getGridPixelHeight(): number {
     return GRID_SIZE * TILE_SIZE;
+  }
+
+  getWaypoints(): PathPoint[] {
+    return PATH_WAYPOINTS.slice();
   }
 }
