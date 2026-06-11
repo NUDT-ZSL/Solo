@@ -278,6 +278,10 @@ export class Network {
     } else if (node.highlighted) {
       color = this.HIGHLIGHT_COLOR;
       glowIntensity = 25;
+    } else if (node.energyCollected) {
+      color = this.HIGHLIGHT_COLOR;
+      glowIntensity = 12;
+      ctx.globalAlpha = 0.85;
     }
 
     ctx.shadowBlur = glowIntensity;
@@ -289,6 +293,7 @@ export class Network {
     ctx.fill();
 
     ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.arc(0, 0, node.radius * 0.5, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';

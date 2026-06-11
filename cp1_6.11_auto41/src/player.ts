@@ -5,9 +5,6 @@ export interface EnergyOrb {
   active: boolean;
   startX: number;
   startY: number;
-  targetX: number;
-  targetY: number;
-  lockedTarget: boolean;
   currentX: number;
   currentY: number;
   progress: number;
@@ -125,9 +122,6 @@ export class Player {
       active: true,
       startX: node.x,
       startY: node.y,
-      targetX: this.x,
-      targetY: this.y,
-      lockedTarget: true,
       currentX: node.x,
       currentY: node.y,
       progress: 0,
@@ -146,15 +140,22 @@ export class Player {
 
       if (orb.progress >= 1) {
         const dist = Math.hypot(orb.currentX - this.x, orb.currentY - this.y);
-        if (dist < 60) {
+        if (dist < 20) {
           this.collectOrb(orb, particles);
         }
         this.energyOrbs.splice(i, 1);
       } else {
         const t = orb.progress;
         const arcHeight = 60 * (1 - Math.abs(t - 0.5) * 2);
-        orb.currentX = orb.startX + (orb.targetX - orb.startX) * t;
-        orb.currentY = orb.startY + (orb.targetY - orb.startY) * t - arcHeight * t * (1 - t) * 4;
+        const targetX = this.x;
+        const targetY = this.y;
+        orb.currentX = orb.startX + (targetX - orb.startX) * t;
+        orb.currentY = orb.startY + (targetY - orb.startY) * t - arcHeight * t * (1 - t) * 4;
+
+        if (Math.hypot(orb.currentX - this.x, orb.currentY - this.y) < 20) {
+          this.collectOrb(orb, particles);
+          this.energyOrbs.splice(i, 1);
+        }
       }
     }
   }

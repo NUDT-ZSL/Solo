@@ -16,6 +16,8 @@ interface Game {
   breathPhase: number;
   keys: Set<string>;
   victoryAngle: number;
+  victoryStartWidth: number;
+  victoryStartHeight: number;
   running: boolean;
 }
 
@@ -32,6 +34,8 @@ const game: Game = {
   breathPhase: 0,
   keys: new Set(),
   victoryAngle: 0,
+  victoryStartWidth: 0,
+  victoryStartHeight: 0,
   running: true
 };
 
@@ -72,6 +76,8 @@ function init(): void {
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1;
+  const oldWidth = game.width;
+  const oldHeight = game.height;
   game.width = Math.max(800, window.innerWidth);
   game.height = Math.max(600, window.innerHeight);
 
@@ -87,6 +93,26 @@ function resize(): void {
   }
   if (game.ui) {
     game.ui.resize(game.width, game.height);
+  }
+
+  if (game.player && game.ui.state === 'victory' && oldWidth > 0 && oldHeight > 0) {
+    const oldCx = oldWidth / 2;
+    const oldCy = oldHeight / 2;
+    const oldRadius = Math.min(oldWidth, oldHeight) * 0.35;
+    const progress = game.ui.getVictoryProgress();
+    const oldR = oldRadius * (1 - progress * 0.3);
+
+    const oldRelX = (game.player.x - oldCx) / oldR;
+    const oldRelY = (game.player.y - oldCy) / oldR;
+
+    const newCx = game.width / 2;
+    const newCy = game.height / 2;
+    const newRadius = Math.min(game.width, game.height) * 0.35;
+    const newR = newRadius * (1 - progress * 0.3);
+
+    game.player.x = newCx + oldRelX * newR;
+    game.player.y = newCy + oldRelY * newR;
+    game.victoryAngle = Math.atan2(oldRelY, oldRelX);
   }
 }
 
@@ -203,6 +229,9 @@ function update(dt: number): void {
       if (collected >= total) {
         game.ui.triggerVictory(collected, game.ui.elapsedTime);
         game.particles.clearStarPoints();
+        game.victoryStartWidth = game.width;
+        game.victoryStartHeight = game.height;
+        game.victoryAngle = 0;
       }
     }
 
@@ -216,17 +245,25 @@ function updateVictoryAnimation(dt: number): void {
   if (!game.player) return;
 
   const progress = game.ui.getVictoryProgress();
-  const cx = game.width / 2;
-  const cy = game.height / 2;
-  const baseRadius = Math.min(game.width, game.height) * 0.35;
+  const w = Math.max(800, game.width);
+  const h = Math.max(600, game.height);
+  const cx = w / 2;
+  const cy = h / 2;
+  const baseRadius = Math.min(w, h) * 0.35;
 
   game.victoryAngle += dt / 1000 * Math.PI * 0.8;
   const radius = baseRadius * (1 - progress * 0.3);
 
-  game.player.x = cx + Math.cos(game.victoryAngle) * radius;
-  game.player.y = cy + Math.sin(game.victoryAngle) * radius;
-  game.player.directionX = -Math.sin(game.victoryAngle);
-  game.player.directionY = Math.cos(game.victoryAngle);
+  const nextX = cx + Math.cos(game.victoryAngle) * radius;
+  const nextY = cy + Math.sin(game.victoryAngle) * radius;
+
+  const margin = 60;
+  game.player.x = Math.max(margin, Math.min(w - margin, nextX));
+  game.player.y = Math.max(margin, Math.min(h - margin, nextY));
+
+  const tangentAngle = game.victoryAngle + Math.PI / 2;
+  game.player.directionX = Math.cos(tangentAngle);
+  game.player.directionY = Math.sin(tangentAngle);
   game.player.isMoving = true;
 
   if (Math.random() < 0.4) {

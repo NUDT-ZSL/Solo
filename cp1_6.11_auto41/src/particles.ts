@@ -47,19 +47,52 @@ export class ParticleSystem {
     const limit = Math.floor(this.MAX_PARTICLES * this.EVICT_THRESHOLD);
     if (this.particles.length + needed <= limit) return;
 
-    const evictable = this.particles
-      .map((p, i) => ({ p, i }))
-      .filter(x => x.p.type !== 'starpoint' && x.p.maxLife !== Infinity)
-      .sort((a, b) => a.p.life - b.p.life);
+    const toEvict = this.particles.length + needed - limit;
+    if (toEvict <= 0) return;
 
-    const toEvict = Math.min(
-      evictable.length,
-      this.particles.length + needed - limit
-    );
-
-    for (let i = toEvict - 1; i >= 0; i--) {
-      this.particles.splice(evictable[i].i, 1);
+    const candidates: { index: number; life: number; type: string }[] = [];
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      candidates.push({
+        index: i,
+        life: p.maxLife === Infinity ? Infinity : p.life,
+        type: p.type
+      });
     }
+
+    candidates.sort((a, b) => a.life - b.life);
+
+    const indicesToRemove = new Set<number>();
+    let evicted = 0;
+    for (const c of candidates) {
+      if (evicted >= toEvict) break;
+      if (c.type === 'starpoint' && this.countStarPoints() <= this.getMaxStarPoints()) continue;
+      indicesToRemove.add(c.index);
+      evicted++;
+    }
+
+    if (evicted < toEvict) {
+      for (const c of candidates) {
+        if (evicted >= toEvict) break;
+        if (indicesToRemove.has(c.index)) continue;
+        indicesToRemove.add(c.index);
+        evicted++;
+      }
+    }
+
+    this.particles = this.particles.filter((_, i) => !indicesToRemove.has(i));
+  }
+
+  private countStarPoints(): number {
+    let count = 0;
+    for (const p of this.particles) {
+      if (p.type === 'starpoint') count++;
+    }
+    return count;
+  }
+
+  private getMaxStarPoints(): number {
+    return Math.floor(this.MAX_PARTICLES * 0.4);
   }
 
   spawnTrail(x: number, y: number, dirX: number, dirY: number): void {

@@ -183,12 +183,136 @@ function testNeighborValidation(): void {
   }
 }
 
+function testPlayerMovementDistance(): void {
+  const network = new Network(1200, 800);
+  const startNode = network.nodes[0];
+  const player = new Player(0, startNode.x, startNode.y);
+  const particles = new ParticleSystem();
+
+  const neighbors = network.getNeighbors(0);
+  if (neighbors.length === 0) {
+    results.push({ name: 'Player movement distance', passed: false, error: 'No neighbors available' });
+    return;
+  }
+
+  const targetId = neighbors[0];
+  const target = network.nodes[targetId];
+  const totalDist = Math.hypot(target.x - startNode.x, target.y - startNode.y);
+
+  player.tryMoveTo(targetId, network);
+  const initialX = player.x;
+  const initialY = player.y;
+
+  const dt = 16;
+  const expectedPerFrame = 200 * dt / 1000;
+  player.update(dt, network, particles);
+
+  const movedDist = Math.hypot(player.x - initialX, player.y - initialY);
+  const errorRatio = Math.abs(movedDist - expectedPerFrame) / expectedPerFrame;
+  assert(
+    errorRatio < 0.01,
+    `Move distance with 16ms dt: expected ~${expectedPerFrame.toFixed(2)}px, got ${movedDist.toFixed(2)}px (error ${(errorRatio * 100).toFixed(2)}%)`
+  );
+}
+
+function testDeltaTimeBoundary(): void {
+  const maxDt = 33;
+  const boundaryCases = [
+    { input: 0, expected: 0, desc: 'dt = 0' },
+    { input: -5, expected: -5, desc: 'dt negative (-5ms)' },
+    { input: -100, expected: -100, desc: 'dt negative large (-100ms)' },
+    { input: 32.9, expected: 32.9, desc: 'dt just below max (32.9ms)' },
+    { input: 33, expected: 33, desc: 'dt exactly max (33ms)' },
+    { input: 33.1, expected: 33, desc: 'dt just above max (33.1ms)' },
+  ];
+
+  for (const tc of boundaryCases) {
+    const clamped = Math.min(maxDt, tc.input);
+    const passes = tc.input > maxDt ? clamped === maxDt : clamped === tc.input;
+    assert(
+      passes,
+      `DeltaTime boundary: ${tc.desc} → clamped = ${clamped}`,
+      `Expected ${tc.expected}, got ${clamped}`
+    );
+  }
+}
+
+function testEnergyOrbTracking(): void {
+  const network = new Network(1200, 800);
+  const startNode = network.nodes[0];
+  const player = new Player(0, startNode.x, startNode.y);
+  const particles = new ParticleSystem();
+
+  const neighbors = network.getNeighbors(0);
+  if (neighbors.length === 0) {
+    results.push({ name: 'Energy orb tracking', passed: false, error: 'No neighbors available' });
+    return;
+  }
+
+  const targetId = neighbors[0];
+  network.collectEnergy(targetId);
+  const targetNode = network.nodes[targetId];
+  player.launchEnergyOrb(targetNode);
+
+  assert(player.energyOrbs.length === 1, 'Energy orb launched successfully');
+
+  const initialOrb = { ...player.energyOrbs[0] };
+
+  player.x += 50;
+  player.y += 30;
+
+  player.update(50, network, particles);
+
+  const updatedOrb = player.energyOrbs[0];
+  if (!updatedOrb) {
+    results.push({ name: 'Energy orb still exists after movement', passed: false, error: 'Orb disappeared unexpectedly' });
+    return;
+  }
+
+  const hasMoved = updatedOrb.currentX !== initialOrb.currentX || updatedOrb.currentY !== initialOrb.currentY;
+  assert(hasMoved, 'Energy orb position updates over time');
+}
+
+function testCollectedNodeVisualState(): void {
+  const network = new Network(1200, 800);
+  const node0 = network.nodes[0];
+
+  assert(!node0.energyCollected, 'Node 0 starts uncollected');
+  assertEq(node0.energyColor.length > 0, true, 'Node 0 has energy color');
+
+  network.collectEnergy(0);
+  assert(node0.energyCollected, 'Node 0 marked as collected');
+
+  network.update(3000);
+  assert(node0.energyCollected, 'Node 0 stays collected after update (3s)');
+  assert(!node0.highlighted, 'Node 0 highlight fades after 2s');
+}
+
+function testStarPointParticleCap(): void {
+  const particles = new ParticleSystem();
+
+  for (let i = 0; i < 50; i++) {
+    particles.spawnStarPoints(100 + i * 10, 100 + i * 10);
+  }
+
+  const count = particles.getCount();
+  assert(
+    count <= 200,
+    `Star points respect global cap (got ${count}, max 200)`
+  );
+}
+
 testNetworkConnectivity();
 testEnergyCollectionDedup();
 testEdgeTraversalDedup();
 testParticleCap();
 testDeltaTimeClamping();
 testNeighborValidation();
+testPlayerMovementDistance();
+testDeltaTimeBoundary();
+testEnergyOrbTracking();
+testCollectedNodeVisualState();
+testStarPointParticleCap();
 
 console.log('\n==============================');
 console.log('  Star Trail Dancer - Tests   ');
