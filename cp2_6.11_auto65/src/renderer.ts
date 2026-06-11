@@ -283,57 +283,62 @@ export class CanvasRenderer {
   }
 
   public exportHiRes(events: TimelineEvent[], particles: Particle[]): string {
-    const EXPORT_W = 1920;
-    const EXPORT_H = 1080;
+    const EXPORT_CSS_W = 1920;
+    const EXPORT_CSS_H = 1080;
+    const EXPORT_DPR = Math.max(2, this.dpr);
     const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = EXPORT_W;
-    exportCanvas.height = EXPORT_H;
+    exportCanvas.width = Math.floor(EXPORT_CSS_W * EXPORT_DPR);
+    exportCanvas.height = Math.floor(EXPORT_CSS_H * EXPORT_DPR);
     const ectx = exportCanvas.getContext('2d')!;
 
-    const bgGrad = ectx.createLinearGradient(0, 0, 0, EXPORT_H);
+    const { w: cssW, h: cssH } = this.getCssSize();
+    const srcW = cssW || 800;
+    const srcH = cssH || 500;
+    const scaleX = EXPORT_CSS_W / srcW;
+    const scaleY = EXPORT_CSS_H / srcH;
+
+    ectx.setTransform(EXPORT_DPR * scaleX, 0, 0, EXPORT_DPR * scaleY, 0, 0);
+
+    const bgGrad = ectx.createLinearGradient(0, 0, 0, srcH);
     bgGrad.addColorStop(0, '#0D1117');
     bgGrad.addColorStop(1, '#161B22');
     ectx.fillStyle = bgGrad;
-    ectx.fillRect(0, 0, EXPORT_W, EXPORT_H);
+    ectx.fillRect(0, 0, srcW, srcH);
 
     ectx.strokeStyle = GRID_COLOR + '80';
-    ectx.lineWidth = 0.5;
-    for (let x = GRID_SPACING; x < EXPORT_W; x += GRID_SPACING) {
+    ectx.lineWidth = 0.5 / Math.max(scaleX, scaleY);
+    for (let x = GRID_SPACING; x < srcW; x += GRID_SPACING) {
       ectx.beginPath();
       ectx.moveTo(x, 0);
-      ectx.lineTo(x, EXPORT_H);
+      ectx.lineTo(x, srcH);
       ectx.stroke();
     }
-    for (let y = GRID_SPACING; y < EXPORT_H; y += GRID_SPACING) {
+    for (let y = GRID_SPACING; y < srcH; y += GRID_SPACING) {
       ectx.beginPath();
       ectx.moveTo(0, y);
-      ectx.lineTo(EXPORT_W, y);
+      ectx.lineTo(srcW, y);
       ectx.stroke();
     }
 
     ectx.save();
     ectx.shadowColor = TIMELINE_LINE_COLOR;
-    ectx.shadowBlur = 6;
+    ectx.shadowBlur = 6 / Math.max(scaleX, scaleY);
     ectx.strokeStyle = TIMELINE_LINE_COLOR;
-    ectx.lineWidth = TIMELINE_HEIGHT;
+    ectx.lineWidth = TIMELINE_HEIGHT / Math.max(scaleX, scaleY);
     ectx.beginPath();
     ectx.moveTo(0, TIMELINE_Y);
-    ectx.lineTo(EXPORT_W, TIMELINE_Y);
+    ectx.lineTo(srcW, TIMELINE_Y);
     ectx.stroke();
     ectx.restore();
 
-    const { w: cssW, h: cssH } = this.getCssSize();
-    const scaleX = EXPORT_W / (cssW || EXPORT_W);
-    const scaleY = EXPORT_H / (cssH || EXPORT_H);
-    ectx.scale(scaleX, scaleY);
-
     const savedCtx = this.ctx;
     (this as any).ctx = ectx;
-
-    this.renderParticles(particles);
-    this.renderCards(events);
-
-    (this as any).ctx = savedCtx;
+    try {
+      this.renderParticles(particles);
+      this.renderCards(events);
+    } finally {
+      (this as any).ctx = savedCtx;
+    }
 
     return exportCanvas.toDataURL('image/png');
   }

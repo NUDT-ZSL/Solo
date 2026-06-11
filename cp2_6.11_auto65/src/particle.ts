@@ -131,13 +131,16 @@ export class ParticleSystem {
     for (const p of this.pool) {
       const ev = eventsById.get(p.eventId);
       if (ev) {
-        const targetFade = ev.cardScale < 0.5 ? 1 : 0;
+        const targetFade = 1 - ev.cardScale;
         const speed = 1 / 0.3;
-
-        if (targetFade > 0.5 && p.fadeProgress < 1) {
-          p.fadeProgress = Math.min(1, p.fadeProgress + dt * speed * 2);
-        } else if (targetFade < 0.5 && p.fadeProgress > 0) {
-          p.fadeProgress = Math.max(0, p.fadeProgress - dt * speed);
+        const delta = (targetFade - p.fadeProgress);
+        const maxStep = dt * speed * 1.5;
+        if (Math.abs(delta) <= maxStep) {
+          p.fadeProgress = targetFade;
+        } else if (delta > 0) {
+          p.fadeProgress = Math.min(1, p.fadeProgress + maxStep);
+        } else {
+          p.fadeProgress = Math.max(0, p.fadeProgress - maxStep);
         }
       }
     }

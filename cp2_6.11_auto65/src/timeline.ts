@@ -54,17 +54,19 @@ export class TimelineManager {
       color,
       position: 0,
       targetPosition: 0,
-      bounceProgress: 1,
+      bounceProgress: 0,
       bounceCount: 0,
       flashProgress: 0,
-      visibility: 1,
-      cardScale: 1,
+      visibility: 0,
+      cardScale: 0,
       isDragging: false,
       dragOffsetX: 0,
     };
     this.events.push(newEvent);
     this.recalculatePositions();
-    newEvent.bounceProgress = 0;
+    newEvent.position = newEvent.targetPosition;
+    this.dragStartPositions.set(newEvent.id, newEvent.targetPosition);
+    newEvent.bounceProgress = 1;
     this.notify();
     return newEvent;
   }

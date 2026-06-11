@@ -92,6 +92,22 @@ canvas#timeline-canvas {
   background: transparent;
 }
 
+.dual-slider input[type=range]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.dual-slider input[type=range]::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
 .dual-slider input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
