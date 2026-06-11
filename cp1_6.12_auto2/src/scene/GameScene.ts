@@ -25,6 +25,7 @@ export class GameScene extends Phaser.Scene {
   private readonly INTERPOLATION_DELAY: number = 100;
 
   private snakeGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
+  private snakeGlowGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
   private foodGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
   private particles: Particle[] = [];
   private particlePool: Particle[] = [];
@@ -158,53 +159,56 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.keys['ArrowUp'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    this.keys['ArrowDown'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    this.keys['ArrowLeft'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
-    this.keys['ArrowRight'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
-    this.keys['W'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.keys['S'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.keys['A'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keys['D'] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    const keyboard = this.input.keyboard;
+    if (keyboard) {
+      this.keys['ArrowUp'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+      this.keys['ArrowDown'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
+      this.keys['ArrowLeft'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+      this.keys['ArrowRight'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+      this.keys['W'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+      this.keys['S'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+      this.keys['A'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+      this.keys['D'] = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
 
-    this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
-      if (!this.isGameRunning) return;
+      keyboard.on('keydown', (event: KeyboardEvent) => {
+        if (!this.isGameRunning) return;
 
-      let direction: Direction | null = null;
+        let direction: Direction | null = null;
 
-      switch (event.key) {
-        case 'ArrowUp':
-        case 'w':
-        case 'W':
-          direction = 'up';
-          break;
-        case 'ArrowDown':
-        case 's':
-        case 'S':
-          direction = 'down';
-          break;
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-          direction = 'left';
-          break;
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-          direction = 'right';
-          break;
-      }
-
-      if (direction && direction !== this.lastDirection) {
-        const opposites: Record<Direction, Direction> = {
-          up: 'down', down: 'up', left: 'right', right: 'left'
-        };
-        if (opposites[direction] !== this.lastDirection) {
-          this.lastDirection = direction;
-          socketManager.changeDirection(direction);
+        switch (event.key) {
+          case 'ArrowUp':
+          case 'w':
+          case 'W':
+            direction = 'up';
+            break;
+          case 'ArrowDown':
+          case 's':
+          case 'S':
+            direction = 'down';
+            break;
+          case 'ArrowLeft':
+          case 'a':
+          case 'A':
+            direction = 'left';
+            break;
+          case 'ArrowRight':
+          case 'd':
+          case 'D':
+            direction = 'right';
+            break;
         }
-      }
-    });
+
+        if (direction && direction !== this.lastDirection) {
+          const opposites: Record<Direction, Direction> = {
+            up: 'down', down: 'up', left: 'right', right: 'left'
+          };
+          if (opposites[direction] !== this.lastDirection) {
+            this.lastDirection = direction;
+            socketManager.changeDirection(direction);
+          }
+        }
+      });
+    }
 
     const touchStart = { x: 0, y: 0 };
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -290,70 +294,108 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 168, g: 85, b: 247 };
+  }
+
+  private rgbToPhaserColor(r: number, g: number, b: number): number {
+    return (r << 16) | (g << 8) | b;
+  }
+
   private drawSnake(snake: Snake, body: Position[]): void {
     let graphics = this.snakeGraphics.get(snake.id);
+    let glowGraphics = this.snakeGlowGraphics.get(snake.id);
     if (!graphics) {
       graphics = this.add.graphics();
       this.snakeGraphics.set(snake.id, graphics);
     }
+    if (!glowGraphics) {
+      glowGraphics = this.add.graphics();
+      this.snakeGlowGraphics.set(snake.id, glowGraphics);
+      this.children!.moveBelow(glowGraphics, graphics);
+    }
 
     graphics.clear();
+    glowGraphics.clear();
 
-    const color = Phaser.Display.Color.HexStringToColor(snake.color).color;
+    const rgb = this.hexToRgb(snake.color);
     const padding = 2;
     const size = this.cellSize - padding * 2;
+    const centerX = this.cellSize / 2;
+    const centerY = this.cellSize / 2;
 
     for (let i = body.length - 1; i >= 0; i--) {
       const segment = body[i];
       const x = this.offsetX + segment.x * this.cellSize + padding;
       const y = this.offsetY + segment.y * this.cellSize + padding;
+      const segCenterX = x + size / 2;
+      const segCenterY = y + size / 2;
 
-      const gradient = i / Math.max(body.length - 1, 1);
-      const alpha = 0.6 + gradient * 0.4;
+      const progress = i / Math.max(body.length - 1, 1);
+      const glowIntensity = 0.5 + (1 - progress) * 0.5;
+      const bodyAlpha = 0.5 + (1 - progress) * 0.5;
+
+      const mixR = Math.min(255, rgb.r + (1 - progress) * 40);
+      const mixG = Math.min(255, rgb.g + (1 - progress) * 40);
+      const mixB = Math.min(255, rgb.b + (1 - progress) * 40);
+      const segColor = this.rgbToPhaserColor(mixR, mixG, mixB);
+      const glowColor = snake.isBoosted ? 0x06b6d4 : segColor;
+      const glowAlphaBase = snake.isBoosted ? glowIntensity * 0.7 : glowIntensity * 0.45;
+
+      for (let layer = 5; layer >= 1; layer--) {
+        const r = (snake.isBoosted ? size * 0.2 : size * 0.15) * layer;
+        const a = glowAlphaBase * (0.18 / layer);
+        glowGraphics.fillStyle(glowColor, a);
+        glowGraphics.fillCircle(segCenterX, segCenterY, r);
+      }
 
       if (i === 0) {
         if (snake.isBoosted) {
-          graphics.fillStyle(0x06b6d4, 1);
-          graphics.fillRoundedRect(x - 2, y - 2, size + 4, size + 4, 4);
-          
-          graphics.lineStyle(2, 0x06b6d4, 0.8);
+          graphics.lineStyle(3, 0x06b6d4, 0.9);
           graphics.strokeCircle(
-            x + size / 2,
-            y + size / 2,
-            size + 4 + Math.sin(Date.now() / 100) * 3
+            segCenterX,
+            segCenterY,
+            size * 0.9 + Math.sin(Date.now() / 80) * 2
           );
+          graphics.fillStyle(0x06b6d4, 1);
         } else {
-          graphics.fillStyle(color, 1);
+          graphics.fillStyle(segColor, 1);
         }
+        graphics.fillRoundedRect(x, y, size, size, 5);
+
+        graphics.lineStyle(1, 0xffffff, 0.3);
+        graphics.strokeRoundedRect(x, y, size, size, 5);
+
+        this.drawSnakeEyes(graphics, x, y, size, snake.direction, segColor);
+      } else {
+        graphics.fillStyle(segColor, bodyAlpha);
         graphics.fillRoundedRect(x, y, size, size, 4);
 
-        this.drawSnakeEyes(graphics, x, y, size, snake.direction, color);
-      } else {
-        graphics.fillStyle(color, alpha);
-        graphics.fillRoundedRect(x, y, size, size, 3);
-      }
-
-      if (snake.isBoosted) {
-        graphics.lineStyle(1, 0x06b6d4, 0.6);
-        graphics.strokeRoundedRect(x - 1, y - 1, size + 2, size + 2, 3);
+        graphics.lineStyle(1, segColor, bodyAlpha * 0.5);
+        graphics.strokeRoundedRect(x + 0.5, y + 0.5, size - 1, size - 1, 3);
       }
     }
 
     if (snake.isBoosted) {
-      for (let i = 1; i < Math.min(5, body.length); i++) {
+      for (let i = 1; i < Math.min(6, body.length); i++) {
         const segment = body[i];
-        const trailX = this.offsetX + segment.x * this.cellSize + this.cellSize / 2;
-        const trailY = this.offsetY + segment.y * this.cellSize + this.cellSize / 2;
-        
+        const trailX = this.offsetX + segment.x * this.cellSize + centerX;
+        const trailY = this.offsetY + segment.y * this.cellSize + centerY;
+
         const particle = this.getParticle();
-        particle.x = trailX + (Math.random() - 0.5) * 10;
-        particle.y = trailY + (Math.random() - 0.5) * 10;
-        particle.vx = (Math.random() - 0.5) * 2;
-        particle.vy = (Math.random() - 0.5) * 2;
-        particle.life = 300;
-        particle.maxLife = 300;
+        particle.x = trailX + (Math.random() - 0.5) * 12;
+        particle.y = trailY + (Math.random() - 0.5) * 12;
+        particle.vx = (Math.random() - 0.5) * 3;
+        particle.vy = (Math.random() - 0.5) * 3 - 0.5;
+        particle.life = 400;
+        particle.maxLife = 400;
         particle.color = 0x06b6d4;
-        particle.size = 3 + Math.random() * 3;
+        particle.size = 4 + Math.random() * 4;
         this.particles.push(particle);
       }
     }
@@ -546,6 +588,11 @@ export class GameScene extends Phaser.Scene {
       graphics.destroy();
       this.snakeGraphics.delete(id);
     }
+    const glowGraphics = this.snakeGlowGraphics.get(id);
+    if (glowGraphics) {
+      glowGraphics.destroy();
+      this.snakeGlowGraphics.delete(id);
+    }
   }
 
   private removeFoodGraphics(id: string): void {
@@ -561,6 +608,11 @@ export class GameScene extends Phaser.Scene {
       graphics.destroy();
     }
     this.snakeGraphics.clear();
+
+    for (const [, graphics] of this.snakeGlowGraphics) {
+      graphics.destroy();
+    }
+    this.snakeGlowGraphics.clear();
 
     for (const [, graphics] of this.foodGraphics) {
       graphics.destroy();

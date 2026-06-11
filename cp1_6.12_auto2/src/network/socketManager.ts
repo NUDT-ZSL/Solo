@@ -79,10 +79,10 @@ export class SocketManager {
       reconnectionDelayMax: 5000,
     });
 
-    this.playerId = this.socket.id;
+    this.playerId = this.socket.id ?? '';
 
     this.socket.on('connect', () => {
-      this.playerId = this.socket.id;
+      this.playerId = this.socket.id ?? '';
       this.emit('connected', { playerId: this.playerId });
     });
 

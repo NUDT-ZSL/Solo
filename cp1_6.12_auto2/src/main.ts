@@ -5,11 +5,17 @@ import { RoomPanel } from './ui/roomPanel.js';
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
+  type: Phaser.CANVAS,
   canvas: canvas,
   width: 960,
   height: 540,
-  parent: 'game-area',
+  parent: 'game-canvas-wrapper',
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 960,
+    height: 540,
+  },
   scene: [GameScene],
   backgroundColor: '#0a0a0f',
   fps: {
@@ -32,29 +38,6 @@ const game = new Phaser.Game(config);
 game.events.on('ready', () => {
   const roomPanel = new RoomPanel();
   roomPanel.initialize();
-
-  function resizeCanvas() {
-    const gameArea = document.querySelector('.game-area') as HTMLElement;
-    if (!gameArea) return;
-
-    const maxWidth = gameArea.clientWidth - 32;
-    const maxHeight = gameArea.clientHeight - 32;
-    const aspectRatio = 16 / 9;
-
-    let width = maxWidth;
-    let height = width / aspectRatio;
-
-    if (height > maxHeight) {
-      height = maxHeight;
-      width = height * aspectRatio;
-    }
-
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-  }
-
-  window.addEventListener('resize', resizeCanvas);
-  resizeCanvas();
 });
 
 window.addEventListener('beforeunload', () => {
