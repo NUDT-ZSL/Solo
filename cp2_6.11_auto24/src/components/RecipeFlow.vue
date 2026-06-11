@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted } from 'vue'
+import { ref, nextTick, watch, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import { v4 as uuidv4 } from 'uuid'
 import StepCard from './StepCard.vue'
@@ -8,10 +8,10 @@ import type { Step, Recipe } from '../types'
 const recipeTitle = ref('红烧肉')
 const rawText = ref(
 `步骤1: 将500克五花肉切块，冷水下锅焯水，加入姜片和料酒去腥，焯水5分钟
-步骤2: 锅中放少许油，加入30克冰糖，小火慢慢炒糖色，大约3分钟至焦糖色
-步骤3: 放入焯好水的五花肉，翻炒均匀上色，加入葱段和3片八角
-步骤4: 倒入2汤匙生抽、1汤匙老抽、1汤匙料酒，翻炒出香味约1分钟
-步骤5: 加入没过五花肉的热水，大火烧开后转小火，盖盖炖煮45分钟
+步骤2. 锅中放少许油，加入30克冰糖，小火慢慢炒糖色，大约3分钟至焦糖色
+Step 3: 放入焯好水的五花肉，翻炒均匀上色，加入葱段和3片八角
+4. 倒入2汤匙生抽、1汤匙老抽、1汤匙料酒，翻炒出香味约1分钟
+步骤5：加入没过五花肉的热水，大火烧开后转小火，盖盖炖煮45分钟
 步骤6: 开盖转大火，加入适量盐调味，收汁8分钟至汤汁浓稠即可`
 )
 const steps = ref<Step[]>([])
@@ -19,14 +19,16 @@ const activeIndex = ref<number>(0)
 const completedIds = ref<Set<string>>(new Set())
 const recipes = ref<Recipe[]>([])
 const flowContainer = ref<HTMLElement | null>(null)
-const flowWrapper = ref<HTMLElement | null>(null)
 const cardRefs = ref<any[]>([])
 const parseError = ref('')
 const saveMsg = ref('')
-const cardWidth = ref(300)
-const cardGap = ref(60)
-const wrapperWidth = ref(0)
-const containerWidth = ref(0)
+const screenWidth = ref(window.innerWidth)
+
+// 流动光点状态
+type Dot = { x: number; connectorIdx: number }
+const lightDots = ref<Dot[]>([])
+let dotsRaf: number | null = null
+const dotsStartTime = ref<number>(0)
 
 const COMMON_INGREDIENTS = [
   '五花肉', '猪肉', '牛肉', '鸡肉', '羊肉', '鸡蛋', '豆腐', '土豆',
@@ -36,7 +38,108 @@ const COMMON_INGREDIENTS = [
   '花椒', '八角', '桂皮', '香叶', '干辣椒', '豆瓣酱', '淀粉', '面粉',
   '米饭', '面条', '油', '香油', '鸡精', '味精', '胡椒粉'
 ]
+// 默认时长：无法解析到时，使用此值（秒），0 表示不计时（显示完成按钮）
+const DEFAULT_DURATION = 0
 
+// === 响应式布局计算 ===
+type LayoutMode = 'desktop' | 'tablet' | 'mobile'
+const layoutMode = computed<LayoutMode>(() => {
+  const w = screenWidth.value
+  if (w >= 1024) return 'desktop'
+  if (w >= 768) return 'tablet'
+  return 'mobile'
+})
+const cardComputedWidth = computed(() => {
+  switch (layoutMode.value) {
+    case 'desktop': return 300
+    case 'tablet':  return 280
+    case 'mobile':  return Math.min(360, screenWidth.value - 32)
+  }
+})
+const columns = computed(() => layoutMode.value === 'desktop' ? 2 : 1)
+const cardColGap = computed(() => layoutMode.value === 'desktop' ? 40 : 24)
+const cardRowGap = computed(() => 80) // 给连接线留空间
+
+// 网格列数/行数计算
+const totalRows = computed(() => Math.ceil(steps.value.length / Math.max(1, columns.value)))
+// 每个步骤的网格位置(列,行)
+function getGridPos(idx: number) {
+  const col = idx % columns.value
+  const row = Math.floor(idx / columns.value)
+  return { col, row }
+}
+// 容器高度（响应式）
+const containerHeight = computed(() => {
+  const rows = totalRows.value
+  // 每张卡片估算高度 300 + rowGap连接线空间
+  const estCardH = 320
+  return rows * estCardH + (rows - 1) * (cardRowGap.value - estCardH + estCardH)
+})
+
+// 连接线起止坐标计算（相对flow-wrapper）
+function connectorFor(idx: number): null | {
+  x1: number; y1: number; x2: number; y2: number; curve: boolean
+} {
+  if (idx >= steps.value.length - 1) return null
+  const a = getGridPos(idx)
+  const b = getGridPos(idx + 1)
+  const cw = cardComputedWidth.value
+  const cGapX = cardColGap.value
+  const cGapY = cardRowGap.value
+  const cardH = 320
+  const centerOffsetX = cw / 2
+  const midY = 160 // 卡片中上部
+
+  const x1 = a.col * (cw + cGapX) + centerOffsetX
+  const y1 = a.row * cGapY + midY
+
+  const x2 = b.col * (cw + cGapX) + centerOffsetX
+  const y2 = b.row * cGapY + midY
+
+  return { x1, y1, x2, y2, curve: (a.col !== b.col || a.row !== b.row) }
+}
+
+const wrapperInnerWidth = computed(() => {
+  return columns.value * cardComputedWidth.value + (columns.value - 1) * cardColGap.value
+})
+const wrapperInnerHeight = computed(() => {
+  return totalRows.value * cardRowGap.value + 160 + 200
+})
+
+// === 流动光点动画 ===
+function startDotsAnimation(): void {
+  stopDotsAnimation()
+  dotsStartTime.value = performance.now()
+  lightDots.value = steps.value.slice(0, -1).map((_, i) => ({ x: 0, connectorIdx: i }))
+  const loop = () => {
+    const t = (performance.now() - dotsStartTime.value) / 1000
+    for (let i = 0; i < lightDots.value.length; i++) {
+      // 每个连接器偏移一点相位
+      const phase = ((t + i * 0.33) % 1 + 1) % 1
+      lightDots.value[i].x = phase
+    }
+    dotsRaf = requestAnimationFrame(loop)
+  }
+  dotsRaf = requestAnimationFrame(loop)
+}
+function stopDotsAnimation(): void {
+  if (dotsRaf != null) {
+    cancelAnimationFrame(dotsRaf)
+    dotsRaf = null
+  }
+}
+
+// 根据进度0-1计算路径上的点
+function pointOnConnector(idx: number, t: number): { x: number; y: number } {
+  const c = connectorFor(idx)
+  if (!c) return { x: 0, y: 0 }
+  return {
+    x: c.x1 + (c.x2 - c.x1) * t,
+    y: c.y1 + (c.y2 - c.y1) * t
+  }
+}
+
+// === 解析增强 ===
 function parseRecipe(): void {
   parseError.value = ''
   const text = rawText.value.trim()
@@ -44,53 +147,82 @@ function parseRecipe(): void {
     parseError.value = '请输入菜谱文本'
     return
   }
-  const stepRegex = /步骤\s*(\d+)\s*[:：]\s*([\s\S]*?)(?=(?:步骤\s*\d+\s*[:：])|$)/g
-  const matches = Array.from(text.matchAll(stepRegex))
-  if (matches.length === 0) {
-    const lines = text.split(/\n+/).filter((l) => l.trim())
-    const parsed = lines.map((line, idx) => parseLine(line.trim(), idx + 1))
-    steps.value = parsed.filter((s): s is Step => s != null)
+
+  // 多种前缀匹配：
+  //  步骤1: 步骤 1： 步骤1. Step 1: STEP 2. 1) 1、 1. [1]
+  const headerRegex = /(?:^\s*)(?:步骤|Step|STEP|step|第)?\s*(\d{1,3})\s*(?:[:：.、\)）]|\]\s*|(?=\s+[\u4e00-\u9fa5A-Za-z]))/gm
+  const raw: string = '\n' + text
+  const positions: { start: number; index: number }[] = []
+  let m: RegExpExecArray | null
+  while ((m = headerRegex.exec(raw)) !== null) {
+    positions.push({ start: m.index + m[0].length, index: parseInt(m[1], 10) })
+  }
+  let parsed: Step[] = []
+  if (positions.length >= 1) {
+    for (let i = 0; i < positions.length; i++) {
+      const p = positions[i]
+      const end = i + 1 < positions.length ? positions[i + 1].start - raw.length + text.length + 1 : text.length
+      // 映射回原始text的位置
+      const sInText = p.start - 1
+      const eInText = i + 1 < positions.length ? positions[i + 1].start - 1 : text.length
+      const slice = text.slice(Math.max(0, sInText), Math.max(0, eInText)).trim()
+      if (slice) {
+        const step = parseLine(slice, p.index)
+        if (step) parsed.push(step)
+      }
+    }
   } else {
-    steps.value = matches
-      .map((m) => {
-        const index = parseInt(m[1], 10)
-        const content = m[2].trim()
-        return parseLine(content, index)
-      })
+    const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean)
+    parsed = lines
+      .map((line, i) => parseLine(line, i + 1))
       .filter((s): s is Step => s != null)
   }
-  if (steps.value.length === 0) {
+  // 按序号排序
+  parsed.sort((a, b) => a.index - b.index)
+  // 重新赋值连续index
+  parsed = parsed.map((s, i) => ({ ...s, index: i + 1 }))
+  if (parsed.length === 0) {
     parseError.value = '未能解析出任何步骤，请检查格式'
     return
   }
+  steps.value = parsed
   activeIndex.value = 0
   completedIds.value.clear()
   nextTick(() => {
     scrollToActive()
-    measureLayout()
+    startDotsAnimation()
   })
 }
 
 function parseLine(content: string, index: number): Step | null {
   if (!content) return null
-  const durationRegex = /(\d+(?:\.\d+)?)\s*(分钟|分|min|m|秒|sec|s)/gi
+  // 时长解析：支持 中文/英文 分钟 分 min m 秒 sec s，以及 "半分钟" "1.5分钟"
+  const durationRegex = /(\d+(?:\.\d+)?)\s*(分钟|分|钟|min|mins|m|秒|sec|secs|s)|(半)\s*(分钟|分)/gi
   let totalSec = 0
   let actionText = content
+  let hasTime = false
   const dm = Array.from(content.matchAll(durationRegex))
   if (dm.length > 0) {
+    hasTime = true
     for (const m of dm) {
-      const num = parseFloat(m[1])
-      const unit = m[2].toLowerCase()
-      if (unit.startsWith('分') || unit === 'min' || unit === 'm') {
-        totalSec += Math.round(num * 60)
+      if (m[3] === '半') {
+        totalSec += 30
       } else {
-        totalSec += Math.round(num)
+        const num = parseFloat(m[1])
+        const unit = (m[2] || '').toLowerCase()
+        if (unit.startsWith('分') || unit === '钟' || unit === 'min' || unit === 'mins' || unit === 'm') {
+          totalSec += Math.round(num * 60)
+        } else {
+          totalSec += Math.round(num)
+        }
       }
     }
     actionText = content.replace(durationRegex, '').trim()
   }
+  // 进一步去除前缀序号残留（如内容开头还有 "1"）
+  actionText = actionText.replace(/^\s*\d{1,3}\s*[:：.、\)）]\s*/, '').trim()
   const actionClean = actionText.replace(/[，,。.\s]+$/, '').trim()
-  const titleMatch = actionClean.split(/[，,。.;；]/)[0].slice(0, 16)
+  const titleMatch = actionClean.split(/[，,。.;；!！?？]/)[0].slice(0, 18) || `步骤 ${index}`
   const ingredients: string[] = []
   for (const ing of COMMON_INGREDIENTS) {
     if (content.includes(ing) && !ingredients.includes(ing)) {
@@ -100,45 +232,33 @@ function parseLine(content: string, index: number): Step | null {
   return {
     id: uuidv4(),
     index,
-    title: titleMatch || `步骤 ${index}`,
+    title: titleMatch,
     action: actionClean || content,
     ingredients: ingredients.slice(0, 6),
-    duration: totalSec,
+    duration: hasTime ? totalSec : DEFAULT_DURATION,
     detail: '',
     image: ''
   }
 }
 
-function measureLayout(): void {
-  if (!flowContainer.value) return
-  const rect = flowContainer.value.getBoundingClientRect()
-  containerWidth.value = rect.width
-  updateCardMetrics()
+// === 滚动到活动步骤到视野中央 ===
+function scrollToActive(): void {
+  nextTick(() => {
+    if (activeIndex.value < 0 || activeIndex.value >= steps.value.length) return
+    const el = cardRefs.value[activeIndex.value]
+    if (!el || !el.$el) return
+    const cardEl: HTMLElement = el.$el
+    const container = flowContainer.value
+    if (!container) return
+    const cRect = container.getBoundingClientRect()
+    const elRect = cardEl.getBoundingClientRect()
+    const deltaTop = elRect.top - cRect.top - (cRect.height - elRect.height) / 2
+    const targetTop = container.scrollTop + deltaTop
+    container.scrollTo({ top: Math.max(0, targetTop), left: 0, behavior: 'smooth' })
+  })
 }
 
-function updateCardMetrics(): void {
-  if (!flowContainer.value) return
-  const w = containerWidth.value
-  if (w < 768) {
-    cardWidth.value = Math.min(360, w - 32)
-    cardGap.value = 24
-  } else if (w < 1024) {
-    cardWidth.value = 280
-    cardGap.value = 24
-  } else {
-    cardWidth.value = 300
-    cardGap.value = 60
-  }
-  wrapperWidth.value =
-    steps.value.length * cardWidth.value +
-    Math.max(0, steps.value.length - 1) * cardGap.value
-}
-
-watch(
-  () => steps.value.length,
-  () => updateCardMetrics()
-)
-
+// === 事件 ===
 function onStart(stepId: string): void {
   const idx = steps.value.findIndex((s) => s.id === stepId)
   if (idx !== -1 && idx !== activeIndex.value) {
@@ -146,50 +266,24 @@ function onStart(stepId: string): void {
     scrollToActive()
   }
 }
-
 function onComplete(stepId: string): void {
   completedIds.value.add(stepId)
   const idx = steps.value.findIndex((s) => s.id === stepId)
   if (idx !== -1 && idx < steps.value.length - 1) {
     activeIndex.value = idx + 1
-    nextTick(() => {
-      scrollToActive()
-    })
+    nextTick(scrollToActive)
   } else if (idx === steps.value.length - 1) {
     activeIndex.value = -1
   }
 }
 
-function scrollToActive(): void {
-  nextTick(() => {
-    if (activeIndex.value < 0) return
-    const el = cardRefs.value[activeIndex.value]
-    if (!el || !el.$el) return
-    const cardEl: HTMLElement = el.$el
-    const container = flowContainer.value
-    if (!container) return
-    const containerRect = container.getBoundingClientRect()
-    const cardRect = cardEl.getBoundingClientRect()
-    const scrollLeft =
-      container.scrollLeft +
-      (cardRect.left - containerRect.left) -
-      (containerRect.width - cardWidth.value) / 2
-    container.scrollTo({
-      left: Math.max(0, scrollLeft),
-      behavior: 'smooth'
-    })
-  })
-}
-
+// === API ===
 async function loadRecipes(): Promise<void> {
   try {
     const res = await axios.get('/api/recipes')
     recipes.value = res.data as Recipe[]
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 }
-
 async function saveRecipe(): Promise<void> {
   if (steps.value.length === 0) {
     parseRecipe()
@@ -209,50 +303,53 @@ async function saveRecipe(): Promise<void> {
     setTimeout(() => (saveMsg.value = ''), 2000)
   }
 }
-
 function loadRecipe(recipe: Recipe): void {
   recipeTitle.value = recipe.title
   rawText.value = recipe.rawText
-  steps.value = [...recipe.steps]
-  activeIndex.value = 0
-  completedIds.value.clear()
-  nextTick(() => {
-    scrollToActive()
-    measureLayout()
-  })
+  parseRecipe()
 }
-
 async function deleteRecipe(id: string, e: Event): Promise<void> {
   e.stopPropagation()
   try {
     await axios.delete(`/api/recipes/${id}`)
     recipes.value = recipes.value.filter((r) => r.id !== id)
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 }
-
 function setCardRef(el: any, idx: number): void {
   cardRefs.value[idx] = el
 }
-
-function handleResize(): void {
-  measureLayout()
-  scrollToActive()
+function onResize(): void {
+  screenWidth.value = window.innerWidth
+  startDotsAnimation()
 }
+
+watch(
+  () => steps.value.length,
+  () => startDotsAnimation()
+)
 
 onMounted(() => {
   parseRecipe()
   loadRecipes()
-  window.addEventListener('resize', handleResize)
+  window.addEventListener('resize', onResize)
+})
+onUnmounted(() => {
+  stopDotsAnimation()
+  window.removeEventListener('resize', onResize)
 })
 
-function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number; y2: number } {
-  const x1 = idx * (cardWidth.value + cardGap.value) + cardWidth.value
-  const y1 = 200
-  const x2 = (idx + 1) * (cardWidth.value + cardGap.value)
-  const y2 = 200
-  return { x1, y1, x2, y2 }
+// SVG path 生成(贝塞尔曲线连接两点)
+function svgPath(c: { x1: number; y1: number; x2: number; y2: number; curve: boolean }): string {
+  if (!c.curve || Math.abs(c.y2 - c.y1) < 5) {
+    const mx = (c.x1 + c.x2) / 2
+    const my = c.y1
+    return `M ${c.x1} ${c.y1} L ${c.x2} ${c.y2}`
+  }
+  // 跨行连接：先走水平到一半，再垂直下，再水平（平滑）
+  const midY = (c.y1 + c.y2) / 2
+  const cp1x = c.x1, cp1y = midY
+  const cp2x = c.x2, cp2y = midY
+  return `M ${c.x1} ${c.y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${c.x2} ${c.y2}`
 }
 </script>
 
@@ -266,6 +363,9 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
           <p>交互式菜谱导航 · 让做菜更从容</p>
         </div>
       </div>
+      <div class="layout-badge" :title="`布局模式: ${layoutMode}`">
+        {{ layoutMode === 'desktop' ? '🖥 桌面 · 双列' : layoutMode === 'tablet' ? '📱 平板 · 单列' : '📲 手机 · 自适应' }}
+      </div>
     </header>
 
     <section class="input-section">
@@ -273,17 +373,11 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
         <div class="input-row">
           <div class="field-group grow">
             <label>菜谱名称</label>
-            <input
-              v-model="recipeTitle"
-              type="text"
-              placeholder="给菜谱起个名字"
-            />
+            <input v-model="recipeTitle" type="text" placeholder="给菜谱起个名字" />
           </div>
           <div class="field-group">
             <label>&nbsp;</label>
-            <button class="btn btn-primary" @click="parseRecipe">
-              ✨ 解析菜谱
-            </button>
+            <button class="btn btn-primary" @click="parseRecipe">✨ 解析菜谱</button>
           </div>
           <div class="field-group">
             <label>&nbsp;</label>
@@ -294,12 +388,17 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
           </div>
         </div>
         <div class="field-group">
-          <label>菜谱文本（格式：步骤X: 操作描述 时长）</label>
+          <label>菜谱文本（支持 步骤1: / Step 1: / 1. / 1、 多种写法，自动识别时长）</label>
           <textarea
             v-model="rawText"
-            rows="6"
-            placeholder="步骤1: 把水烧开，煮5分钟&#10;步骤2: 加入鸡蛋，煮8分钟&#10;步骤3: 捞起过凉水，即可"
+            rows="7"
+            placeholder="支持写法示例：&#10;步骤1: 把水烧开，煮5分钟&#10;步骤2. 加入鸡蛋&#10;Step 3: 小火慢炖30秒&#10;4、捞起过凉水即可"
           ></textarea>
+        </div>
+        <div class="parse-meta" v-if="steps.length > 0">
+          ✅ 已解析出 <b>{{ steps.length }}</b> 个步骤，
+          其中 <b>{{ steps.filter(s => s.duration > 0).length }}</b> 步带自动计时，
+          总时长约 <b>{{ Math.ceil(steps.reduce((a, s) => a + s.duration, 0) / 60) || '<1' }}</b> 分钟
         </div>
         <p v-if="parseError" class="error-msg">{{ parseError }}</p>
 
@@ -328,9 +427,7 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
       <div class="flow-toolbar">
         <div class="progress-info">
           <span class="info-label">进度</span>
-          <span class="info-value">
-            {{ completedIds.size }} / {{ steps.length }}
-          </span>
+          <span class="info-value">{{ completedIds.size }} / {{ steps.length }}</span>
           <div class="progress-bar">
             <div
               class="progress-fill"
@@ -344,37 +441,42 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
             步骤 {{ steps[activeIndex].index }} · {{ steps[activeIndex].title }}
           </span>
         </div>
-        <div class="active-info done" v-else-if="completedIds.size === steps.length && steps.length > 0">
-          <span class="info-label">🎉 全部完成</span>
+        <div class="active-info done" v-else-if="completedIds.size === steps.length">
+          <span class="info-label">🎉 全部完成，享受美味！</span>
         </div>
       </div>
 
-      <div
-        class="flow-container"
-        ref="flowContainer"
-      >
+      <div class="flow-container" ref="flowContainer">
         <div
           class="flow-wrapper"
-          ref="flowWrapper"
-          :style="{ width: `${wrapperWidth}px` }"
+          :style="{
+            width: `${wrapperInnerWidth}px`,
+            height: `${wrapperInnerHeight}px`
+          }"
         >
+          <!-- SVG 连接线层 -->
           <svg
             class="connector-svg"
-            :viewBox="`0 0 ${wrapperWidth} 400`"
-            :width="wrapperWidth"
-            :height="400"
+            :width="wrapperInnerWidth"
+            :height="wrapperInnerHeight"
+            :viewBox="`0 0 ${wrapperInnerWidth} ${wrapperInnerHeight}`"
           >
             <defs>
-              <linearGradient
-                id="lineGradient"
-                x1="0%"
-                y1="0%"
-                x2="100%"
-                y2="0%"
-              >
+              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stop-color="#FF6B35" />
                 <stop offset="100%" stop-color="#F7C948" />
               </linearGradient>
+              <linearGradient id="lineGradientV" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#FF6B35" />
+                <stop offset="100%" stop-color="#F7C948" />
+              </linearGradient>
+              <filter id="dotGlow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
               <marker
                 id="arrowHead"
                 viewBox="0 0 10 10"
@@ -387,77 +489,63 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#F7C948" />
               </marker>
             </defs>
-            <template v-for="(_, idx) in steps.slice(0, -1)" :key="idx">
-              <g>
-                <line
-                  :x1="getConnectorPosition(idx).x1"
-                  :y1="getConnectorPosition(idx).y1"
-                  :x2="getConnectorPosition(idx).x2"
-                  :y2="getConnectorPosition(idx).y2"
-                  stroke="url(#lineGradient)"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  marker-end="url(#arrowHead)"
-                  opacity="0.85"
-                />
-                <circle
-                  r="6"
-                  fill="#FF6B35"
-                  :stroke="completedIds.has(steps[idx].id) ? '#38A169' : '#FF6B35'"
-                  stroke-width="2"
-                >
-                  <animateMotion
-                    :dur="'1s'"
-                    repeatCount="indefinite"
-                    begin="0s"
-                  >
-                    <mpath />
-                    <animate
-                      attributeName="path"
-                      :values="`M ${getConnectorPosition(idx).x1} ${getConnectorPosition(idx).y1} L ${getConnectorPosition(idx).x2} ${getConnectorPosition(idx).y2}`;
-                               `M ${getConnectorPosition(idx).x1} ${getConnectorPosition(idx).y1} L ${getConnectorPosition(idx).x2} ${getConnectorPosition(idx).y2}`"
-                      dur="1s"
-                      repeatCount="indefinite"
-                    />
-                  </animateMotion>
-                  <animate
-                    attributeName="cx"
-                    :values="`${getConnectorPosition(idx).x1};${getConnectorPosition(idx).x2}`"
-                    dur="1s"
-                    repeatCount="indefinite"
-                  />
-                  <animate
-                    attributeName="cy"
-                    :values="`${getConnectorPosition(idx).y1};${getConnectorPosition(idx).y2}`"
-                    dur="1s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-              </g>
+            <template v-for="(_, idx) in steps.slice(0, -1)" :key="`line-${idx}`">
+              <path
+                v-if="connectorFor(idx)"
+                :d="svgPath(connectorFor(idx)!)"
+                :stroke="connectorFor(idx)!.curve ? 'url(#lineGradientV)' : 'url(#lineGradient)'"
+                stroke-width="3"
+                stroke-linecap="round"
+                fill="none"
+                marker-end="url(#arrowHead)"
+                opacity="0.85"
+              />
+            </template>
+            <!-- 流动光点 (RAF驱动) -->
+            <template v-for="(dot, i) in lightDots" :key="`dot-${i}`">
+              <circle
+                v-if="connectorFor(i)"
+                :cx="pointOnConnector(i, dot.x).x"
+                :cy="pointOnConnector(i, dot.x).y"
+                r="7"
+                fill="#FF6B35"
+                filter="url(#dotGlow)"
+              />
+              <circle
+                v-if="connectorFor(i)"
+                :cx="pointOnConnector(i, dot.x).x"
+                :cy="pointOnConnector(i, dot.x).y"
+                r="3"
+                fill="#FFF8F0"
+              />
             </template>
           </svg>
 
-          <div
-            class="cards-row"
-            :style="{ gap: `${cardGap}px` }"
-          >
-            <StepCard
-              v-for="(step, idx) in steps"
-              :key="step.id"
-              :ref="(el: any) => setCardRef(el, idx)"
-              :step="step"
-              :is-active="idx === activeIndex"
-              :is-completed="completedIds.has(step.id)"
-              @start="onStart"
-              @complete="onComplete"
-              :style="{ width: `${cardWidth}px` }"
-            />
-          </div>
+          <!-- 卡片层：绝对定位 -->
+          <template v-for="(step, idx) in steps" :key="step.id">
+            <div
+              class="card-slot"
+              :style="{
+                left: `${getGridPos(idx).col * (cardComputedWidth + cardColGap)}px`,
+                top: `${getGridPos(idx).row * cardRowGap}px`,
+                width: `${cardComputedWidth}px`
+              }"
+            >
+              <StepCard
+                :ref="(el: any) => setCardRef(el, idx)"
+                :step="step"
+                :is-active="idx === activeIndex"
+                :is-completed="completedIds.has(step.id)"
+                @start="onStart"
+                @complete="onComplete"
+              />
+            </div>
+          </template>
         </div>
       </div>
 
       <div class="flow-hint">
-        <span>← 左右滑动查看更多步骤 · 点击卡片展开详情 · 点击 ▶ 开始计时</span>
+        <span>↓ 上下滑动 · 点击卡片展开详情与配图 · 点击 ▶ 开始计时</span>
       </div>
     </section>
 
@@ -470,13 +558,21 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
 <style scoped>
 .app-container {
   min-height: 100vh;
-  background: linear-gradient(180deg, #FFF8F0 0%, #FFEFDC 100%);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(255, 203, 141, 0.25) 0%, transparent 60%),
+    radial-gradient(900px 500px at 110% 20%, rgba(255, 107, 53, 0.14) 0%, transparent 60%),
+    linear-gradient(180deg, #FFF8F0 0%, #FFEFDC 100%);
   padding: 24px 0 60px;
 }
 .app-header {
   max-width: 1200px;
   margin: 0 auto 28px;
   padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 .brand {
   display: flex;
@@ -504,6 +600,15 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   font-size: 13px;
   color: rgba(45, 24, 16, 0.6);
   margin-top: 2px;
+}
+.layout-badge {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(45, 24, 16, 0.1);
+  border-radius: 20px;
+  font-size: 12px;
+  color: rgba(45, 24, 16, 0.65);
+  font-weight: 500;
 }
 .input-section {
   max-width: 1200px;
@@ -546,7 +651,7 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   color: #2D1810;
   background: #FFFAF4;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   line-height: 1.6;
   font-family: inherit;
 }
@@ -560,6 +665,17 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   resize: vertical;
   min-height: 120px;
 }
+.parse-meta {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, rgba(255, 107, 53, 0.08), rgba(247, 201, 72, 0.1));
+  border-radius: 10px;
+  font-size: 13px;
+  color: #4a2c1c;
+}
+.parse-meta b {
+  color: #FF6B35;
+}
 .btn {
   padding: 10px 22px;
   border-radius: 10px;
@@ -568,6 +684,9 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   transition: all 0.2s ease;
   white-space: nowrap;
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .btn-primary {
   background: linear-gradient(135deg, #FF6B35, #F7C948);
@@ -586,7 +705,6 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   background: #38A169;
 }
 .save-msg {
-  margin-left: 6px;
   font-size: 12px;
   opacity: 0.9;
 }
@@ -720,28 +838,31 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   transition: width 0.4s ease;
 }
 .flow-container {
-  overflow-x: auto;
-  overflow-y: visible;
-  padding: 20px 4px 28px;
+  max-height: calc(100vh - 220px);
+  min-height: 500px;
+  overflow: auto;
+  padding: 30px 10px 50px;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 16px;
+  border: 1px solid rgba(45, 24, 16, 0.08);
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   position: relative;
 }
 .flow-container::-webkit-scrollbar {
-  height: 8px;
+  width: 10px;
 }
 .flow-container::-webkit-scrollbar-track {
-  background: rgba(45, 24, 16, 0.06);
-  border-radius: 8px;
+  background: rgba(45, 24, 16, 0.05);
+  border-radius: 10px;
 }
 .flow-container::-webkit-scrollbar-thumb {
-  background: linear-gradient(90deg, #FF6B35, #F7C948);
-  border-radius: 8px;
+  background: linear-gradient(180deg, #FF6B35, #F7C948);
+  border-radius: 10px;
 }
 .flow-wrapper {
   position: relative;
-  padding-top: 0;
-  min-height: 400px;
+  margin: 0 auto;
 }
 .connector-svg {
   position: absolute;
@@ -751,11 +872,10 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   z-index: 0;
   overflow: visible;
 }
-.cards-row {
-  display: flex;
-  position: relative;
+.card-slot {
+  position: absolute;
   z-index: 1;
-  padding-top: 0;
+  will-change: transform;
 }
 .flow-hint {
   text-align: center;
@@ -771,6 +891,7 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   color: rgba(45, 24, 16, 0.5);
 }
 
+/* 响应式：手机居中单列 */
 @media (max-width: 767px) {
   .app-header {
     padding: 0 16px;
@@ -801,6 +922,13 @@ function getConnectorPosition(idx: number): { x1: number; y1: number; x2: number
   }
   .progress-bar {
     width: 100px;
+  }
+}
+
+/* 平板：单列 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .flow-wrapper {
+    margin: 0 auto;
   }
 }
 </style>
