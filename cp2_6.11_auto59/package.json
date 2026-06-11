@@ -1,0 +1,16 @@
+{
+  "name": "weaving-dream-diary",
+  "version": "1.0.0",
+  "description": "织梦日记 - 将每日记录转化为动态抽象画作的艺术生成器",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "5.3.3",
+    "vite": "5.0.12"
+  }
+}

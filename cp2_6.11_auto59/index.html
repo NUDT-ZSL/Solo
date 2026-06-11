@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="织梦日记 - 将每日记录转化为动态抽象画作的艺术生成器">
+  <meta name="keywords" content="织梦日记,艺术生成器,情绪绘画,抽象画,日记">
+  <meta name="author" content="Weaving Dream Diary">
+  <title>织梦日记 · Weaving Dream Diary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0A0A0A;
+      color: #E0E0E0;
+      font-family: 'Noto Serif SC', 'Cormorant Garamond', serif;
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #0A0A0A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.8s ease;
+    }
+
+    #loading-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-text {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      color: #E0E0E0;
+      text-shadow: 0 0 20px rgba(224, 224, 224, 0.3);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    #app {
+      display: none;
+      width: 100%;
+      height: 100%;
+    }
+
+    #app.ready {
+      display: flex;
+    }
+
+    .canvas-container {
+      width: 70%;
+      height: 100%;
+      position: relative;
+      background-color: #0A0A0A;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .sidebar {
+      width: 30%;
+      height: 100%;
+      background-color: #0D0D0D;
+      border-left: 1px solid rgba(224, 224, 224, 0.08);
+      padding: 40px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      overflow-y: auto;
+    }
+
+    .header {
+      text-align: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid rgba(224, 224, 224, 0.08);
+    }
+
+    .title {
+      font-size: 32px;
+      font-weight: 400;
+      letter-spacing: 6px;
+      margin-bottom: 8px;
+      color: #E0E0E0;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      font-weight: 300;
+      letter-spacing: 3px;
+      color: rgba(224, 224, 224, 0.5);
+      font-style: italic;
+    }
+
+    .input-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-label {
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 2px;
+      color: rgba(224, 224, 224, 0.7);
+    }
+
+    #diary-input {
+      width: 100%;
+      min-height: 160px;
+      padding: 16px;
+      background-color: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(224, 224, 224, 0.15);
+      border-radius: 4px;
+      color: #E0E0E0;
+      font-family: 'Noto Serif SC', serif;
+      font-size: 15px;
+      line-height: 1.8;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.6s ease, box-shadow 0.6s ease;
+    }
+
+    #diary-input::placeholder {
+      color: rgba(224, 224, 224, 0.25);
+      font-style: italic;
+    }
+
+    #diary-input:focus {
+      background-color: rgba(255, 255, 255, 0.04);
+    }
+
+    .char-count {
+      font-size: 12px;
+      color: rgba(224, 224, 224, 0.4);
+      text-align: right;
+      letter-spacing: 1px;
+    }
+
+    .generate-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, rgba(224, 224, 224, 0.1), rgba(224, 224, 224, 0.05));
+      border: 1px solid rgba(224, 224, 224, 0.2);
+      border-radius: 4px;
+      color: #E0E0E0;
+      font-family: 'Noto Serif SC', serif;
+      font-size: 14px;
+      letter-spacing: 4px;
+      cursor: pointer;
+      transition: all 0.4s ease;
+    }
+
+    .generate-btn:hover {
+      background: linear-gradient(135deg, rgba(224, 224, 224, 0.15), rgba(224, 224, 224, 0.08));
+      border-color: rgba(224, 224, 224, 0.35);
+      letter-spacing: 6px;
+    }
+
+    .legend-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .legend-title {
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 3px;
+      color: rgba(224, 224, 224, 0.7);
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(224, 224, 224, 0.08);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .legend-color {
+      width: 40px;
+      height: 20px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .legend-name {
+      font-size: 13px;
+      letter-spacing: 2px;
+      color: rgba(224, 224, 224, 0.75);
+    }
+
+    .legend-keywords {
+      font-size: 11px;
+      color: rgba(224, 224, 224, 0.35);
+      margin-top: 2px;
+      letter-spacing: 1px;
+    }
+
+    .current-mood {
+      padding: 20px;
+      background-color: rgba(255, 255, 255, 0.02);
+      border-radius: 4px;
+      border: 1px solid rgba(224, 224, 224, 0.08);
+    }
+
+    .current-mood-label {
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: rgba(224, 224, 224, 0.4);
+      margin-bottom: 8px;
+    }
+
+    .current-mood-name {
+      font-size: 20px;
+      letter-spacing: 4px;
+      color: #E0E0E0;
+      margin-bottom: 8px;
+    }
+
+    .current-mood-keywords {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .keyword-tag {
+      padding: 4px 10px;
+      background-color: rgba(224, 224, 224, 0.06);
+      border-radius: 10px;
+      font-size: 11px;
+      color: rgba(224, 224, 224, 0.6);
+      letter-spacing: 1px;
+    }
+
+    .fps-counter {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      font-size: 11px;
+      color: rgba(224, 224, 224, 0.3);
+      letter-spacing: 1px;
+      font-family: monospace;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-screen">
+    <div class="loading-text">正在织梦...</div>
+  </div>
+
+  <div id="app">
+    <div class="canvas-container">
+      <canvas id="canvas"></canvas>
+      <div class="fps-counter" id="fps-counter"></div>
+    </div>
+    <div class="sidebar">
+      <div class="header">
+        <h1 class="title">织梦日记</h1>
+        <p class="subtitle">Weaving Dream Diary</p>
+      </div>
+
+      <div class="input-section">
+        <label class="input-label">今日心情</label>
+        <textarea 
+          id="diary-input" 
+          placeholder="写下今天的心情，50-200字...&#10;&#10;比如：今天阳光很好，在公园散步时遇到了一只橘猫，它懒洋洋地躺在长椅上，让我感到很治愈..."
+          maxlength="200"
+        ></textarea>
+        <div class="char-count"><span id="char-count">0</span> / 200</div>
+        <button class="generate-btn" id="generate-btn">编 织 梦 境</button>
+      </div>
+
+      <div class="current-mood" id="current-mood" style="display: none;">
+        <div class="current-mood-label">当前情绪</div>
+        <div class="current-mood-name" id="current-mood-name">—</div>
+        <div class="current-mood-keywords" id="current-mood-keywords"></div>
+      </div>
+
+      <div class="legend-section">
+        <div class="legend-title">情绪调色板</div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: linear-gradient(90deg, #FFD700, #FF6347);"></div>
+          <div>
+            <div class="legend-name">快乐 Joy</div>
+            <div class="legend-keywords">开心 · 温暖 · 阳光 · 笑容</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: linear-gradient(90deg, #87CEEB, #98FB98);"></div>
+          <div>
+            <div class="legend-name">平静 Peace</div>
+            <div class="legend-keywords">安静 · 治愈 · 放松 · 安宁</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: linear-gradient(90deg, #1E90FF, #7B68EE);"></div>
+          <div>
+            <div class="legend-name">悲伤 Sadness</div>
+            <div class="legend-keywords">难过 · 失落 · 孤独 · 眼泪</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: linear-gradient(90deg, #C71585, #696969);"></div>
+          <div>
+            <div class="legend-name">焦虑 Anxiety</div>
+            <div class="legend-keywords">紧张 · 烦躁 · 不安 · 压力</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
