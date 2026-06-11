@@ -1,4 +1,5 @@
-import { GRID_SIZE, Cell, Animal } from './ecosystem'
+import { GRID_SIZE, CreatureType } from './types'
+import type { CellState, Animal } from './types'
 
 interface Star {
   x: number
@@ -12,7 +13,10 @@ interface Star {
 interface RenderState {
   animationProgress: number
   lastStepTime: number
+  isAnimating: boolean
 }
+
+const ANIMATION_DURATION = 200
 
 export class Renderer {
   private gameCanvas: HTMLCanvasElement
@@ -23,12 +27,14 @@ export class Renderer {
   private offsetX = 0
   private offsetY = 0
   private stars: Star[] = []
-  private animationFrame: number | null = null
+  private animationFrameId: number | null = null
   private state: RenderState = {
     animationProgress: 1,
-    lastStepTime: 0
+    lastStepTime: 0,
+    isAnimating: false
   }
   private hoverCell: { x: number; y: number } | null = null
+  private currentGrid: CellState[][] = []
 
   constructor(gameCanvas: HTMLCanvasElement, starsCanvas: HTMLCanvasElement) {
     this.gameCanvas = gameCanvas
@@ -39,6 +45,7 @@ export class Renderer {
     this.initStars()
     this.resize()
     window.addEventListener('resize', () => this.resize())
+    this.startAnimationLoop()
   }
 
   private initStars(): void {
@@ -52,6 +59,29 @@ export class Renderer {
         twinkleSpeed: Math.random() * 0.02 + 0.005,
         phase: Math.random() * Math.PI * 2
       })
+    }
+  }
+
+  private startAnimationLoop(): void {
+    const loop = () => {
+      if (this.currentGrid.length > 0) {
+        this.updateAnimationProgress()
+        this.renderFrame()
+      }
+      this.animationFrameId = requestAnimationFrame(loop)
+    }
+    this.animationFrameId = requestAnimationFrame(loop)
+  }
+
+  private updateAnimationProgress(): void {
+    if (!this.state.isAnimating) return
+
+    const now = performance.now()
+    const elapsed = now - this.state.lastStepTime
+    this.state.animationProgress = Math.min(1, elapsed / ANIMATION_DURATION)
+
+    if (this.state.animationProgress >= 1) {
+      this.state.isAnimating = false
     }
   }
 
@@ -79,6 +109,7 @@ export class Renderer {
   public onStep(): void {
     this.state.animationProgress = 0
     this.state.lastStepTime = performance.now()
+    this.state.isAnimating = true
   }
 
   public setHoverCell(x: number | null, y: number | null): void {
@@ -107,13 +138,14 @@ export class Renderer {
     }
   }
 
-  public render(grid: Cell[][]): void {
-    const now = performance.now()
-    const elapsed = now - this.state.lastStepTime
-    this.state.animationProgress = Math.min(1, elapsed / 200)
+  public render(grid: CellState[][]): void {
+    this.currentGrid = grid
+  }
 
+  private renderFrame(): void {
+    const now = performance.now()
     this.renderStars(now)
-    this.renderGame(grid)
+    this.renderGame(this.currentGrid)
   }
 
   private renderStars(time: number): void {
@@ -140,7 +172,7 @@ export class Renderer {
     }
   }
 
-  private renderGame(grid: Cell[][]): void {
+  private renderGame(grid: CellState[][]): void {
     const ctx = this.gameCtx
     const size = this.cellSize * GRID_SIZE
 
@@ -168,7 +200,7 @@ export class Renderer {
     }
 
     if (this.hoverCell) {
-      this.renderHover(ctx, this.hoverCell.x, this.hoverCell.y, grid)
+      this.renderHover(ctx, this.hoverCell.x, this.hoverCell.y)
     }
 
     ctx.restore()
@@ -197,7 +229,7 @@ export class Renderer {
     ctx.strokeRect(0, 0, size, size)
   }
 
-  private renderCell(ctx: CanvasRenderingContext2D, cell: Cell): void {
+  private renderCell(ctx: CanvasRenderingContext2D, cell: CellState): void {
     const px = cell.x * this.cellSize
     const py = cell.y * this.cellSize
 
@@ -205,8 +237,8 @@ export class Renderer {
       ctx.fillStyle = 'rgba(80, 30, 30, 0.4)'
       ctx.fillRect(px, py, this.cellSize, this.cellSize)
 
-      ctx.strokeStyle = 'rgba(200, 80, 80, 0.8)'
-      ctx.lineWidth = 2
+      ctx.strokeStyle = 'rgba(200, 80, 80, 0.9)'
+      ctx.lineWidth = 3
       const margin = this.cellSize * 0.25
       
       ctx.beginPath()
@@ -218,6 +250,10 @@ export class Renderer {
       ctx.moveTo(px + this.cellSize - margin, py + margin)
       ctx.lineTo(px + margin, py + this.cellSize - margin)
       ctx.stroke()
+
+      ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4)
       return
     }
 
@@ -254,8 +290,8 @@ export class Renderer {
         ctx.fillStyle = 'rgba(74, 158, 122, 0.25)'
         ctx.fill()
 
-        ctx.fillStyle = 'rgba(150, 200, 170, 0.7)'
-        ctx.font = `${this.cellSize * 0.3}px Consolas, monospace`
+        ctx.fillStyle = 'rgba(150, 200, 170, 0.9)'
+        ctx.font = `bold ${this.cellSize * 0.35}px Consolas, monospace`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(cell.grass.regrowTimer.toString(), centerX, centerY)
@@ -276,7 +312,7 @@ export class Renderer {
 
     const radius = this.cellSize * 0.35
 
-    if (animal.type === 'rabbit') {
+    if (animal.type === CreatureType.Rabbit) {
       const bodyGradient = ctx.createRadialGradient(
         x - radius * 0.3, y - radius * 0.3, 0,
         x, y, radius
@@ -292,7 +328,7 @@ export class Renderer {
 
       ctx.beginPath()
       ctx.arc(x - radius * 0.25, y - radius * 0.25, radius * 0.25, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
       ctx.fill()
 
       ctx.fillStyle = '#2a2a3a'
@@ -326,7 +362,7 @@ export class Renderer {
 
       ctx.beginPath()
       ctx.arc(x, y, radius + 2, 0, Math.PI * 2)
-      ctx.strokeStyle = 'rgba(139, 30, 30, 0.7)'
+      ctx.strokeStyle = 'rgba(139, 30, 30, 0.8)'
       ctx.lineWidth = 3
       ctx.stroke()
 
@@ -395,15 +431,15 @@ export class Renderer {
     ctx.strokeRect(barX, barY, barWidth, barHeight)
   }
 
-  private renderHover(ctx: CanvasRenderingContext2D, x: number, y: number, _grid: Cell[][]): void {
+  private renderHover(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     const px = x * this.cellSize
     const py = y * this.cellSize
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
     ctx.lineWidth = 2
     ctx.strokeRect(px + 1, py + 1, this.cellSize - 2, this.cellSize - 2)
 
-    ctx.fillStyle = 'rgba(142, 202, 230, 0.15)'
+    ctx.fillStyle = 'rgba(142, 202, 230, 0.2)'
     ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4)
   }
 
@@ -416,8 +452,9 @@ export class Renderer {
   }
 
   public destroy(): void {
-    if (this.animationFrame !== null) {
-      cancelAnimationFrame(this.animationFrame)
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId)
+      this.animationFrameId = null
     }
     window.removeEventListener('resize', () => this.resize())
   }

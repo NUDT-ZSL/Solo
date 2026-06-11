@@ -1,52 +1,19 @@
-export const GRID_SIZE = 20
+import {
+  GRID_SIZE,
+  CreatureType,
+  Position,
+  Grass,
+  Animal,
+  CellState,
+  EcosystemStats,
+  SimConfig,
+  RegrowTask
+} from './types'
 
-export type OrganismType = 'grass' | 'rabbit' | 'fox' | 'empty'
+export { GRID_SIZE, CreatureType }
+export type { Position, Grass, Animal, CellState, EcosystemStats, SimConfig }
 
-export interface Position {
-  x: number
-  y: number
-}
-
-export interface Grass {
-  type: 'grass'
-  regrowTimer: number
-}
-
-export interface Animal {
-  type: 'rabbit' | 'fox'
-  energy: number
-  x: number
-  y: number
-  prevX: number
-  prevY: number
-  id: number
-}
-
-export interface Cell {
-  x: number
-  y: number
-  grass: Grass | null
-  animal: Animal | null
-  forbidden: boolean
-}
-
-export interface EcosystemStats {
-  grassCount: number
-  rabbitCount: number
-  foxCount: number
-  grassCoverage: number
-  turn: number
-}
-
-export interface EcosystemConfig {
-  grassDensity: number
-  rabbitCount: number
-  foxCount: number
-  grassRegrowTime: number
-  rabbitBreedThreshold: number
-}
-
-const DEFAULT_CONFIG: EcosystemConfig = {
+const DEFAULT_CONFIG: SimConfig = {
   grassDensity: 50,
   rabbitCount: 20,
   foxCount: 5,
@@ -65,15 +32,16 @@ const FOX_STARVATION_THRESHOLD = 20
 const FOX_HUNGER_LIMIT = 15
 
 export class Ecosystem {
-  private grid: Cell[][] = []
+  private grid: CellState[][] = []
   private animals: Animal[] = []
   private turnCount = 0
-  private config: EcosystemConfig
+  private config: SimConfig
   private history: EcosystemStats[] = []
   private nextAnimalId = 1
   private foxHungerCounter: Map<number, number> = new Map()
+  private regrowQueue: Map<string, RegrowTask> = new Map()
 
-  constructor(config: Partial<EcosystemConfig> = {}) {
+  constructor(config: Partial<SimConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
     this.initializeGrid()
   }
@@ -85,6 +53,7 @@ export class Ecosystem {
     this.turnCount = 0
     this.nextAnimalId = 1
     this.foxHungerCounter.clear()
+    this.regrowQueue.clear()
 
     for (let y = 0; y < GRID_SIZE; y++) {
       this.grid[y] = []
@@ -105,17 +74,17 @@ export class Ecosystem {
       const x = Math.floor(Math.random() * GRID_SIZE)
       const y = Math.floor(Math.random() * GRID_SIZE)
       if (!this.grid[y][x].grass && !this.grid[y][x].forbidden) {
-        this.grid[y][x].grass = { type: 'grass', regrowTimer: 0 }
+        this.grid[y][x].grass = { type: CreatureType.Grass, regrowTimer: 0 }
         grassPlaced++
       }
     }
 
-    this.placeAnimals('rabbit', this.config.rabbitCount)
-    this.placeAnimals('fox', this.config.foxCount)
+    this.placeAnimals(CreatureType.Rabbit, this.config.rabbitCount)
+    this.placeAnimals(CreatureType.Fox, this.config.foxCount)
     this.recordStats()
   }
 
-  private placeAnimals(type: 'rabbit' | 'fox', count: number): void {
+  private placeAnimals(type: CreatureType.Rabbit | CreatureType.Fox, count: number): void {
     let placed = 0
     let attempts = 0
     const maxAttempts = count * 100
@@ -130,7 +99,7 @@ export class Ecosystem {
 
       const animal: Animal = {
         type,
-        energy: type === 'rabbit' ? 80 : 100,
+        energy: type === CreatureType.Rabbit ? 80 : 100,
         x,
         y,
         prevX: x,
@@ -140,14 +109,14 @@ export class Ecosystem {
 
       this.grid[y][x].animal = animal
       this.animals.push(animal)
-      if (type === 'fox') {
+      if (type === CreatureType.Fox) {
         this.foxHungerCounter.set(animal.id, 0)
       }
       placed++
     }
   }
 
-  public updateConfig(config: Partial<EcosystemConfig>): void {
+  public updateConfig(config: Partial<SimConfig>): void {
     this.config = { ...this.config, ...config }
   }
 
@@ -163,7 +132,7 @@ export class Ecosystem {
       a.prevY = a.y
     })
 
-    this.growGrass()
+    this.processRegrowQueue()
     this.rabbitActions()
     this.foxActions()
     this.moveAllAnimals()
@@ -171,25 +140,51 @@ export class Ecosystem {
     this.recordStats()
   }
 
-  private growGrass(): void {
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        const cell = this.grid[y][x]
-        if (cell.forbidden) continue
+  private processRegrowQueue(): void {
+    const toRemove: string[] = []
 
-        if (!cell.grass) {
-          continue
-        }
-
-        if (cell.grass.regrowTimer > 0) {
-          cell.grass.regrowTimer--
-        }
+    for (const [key, task] of this.regrowQueue) {
+      task.remainingTurns--
+      
+      const cell = this.grid[task.y][task.x]
+      if (cell.grass) {
+        cell.grass.regrowTimer = task.remainingTurns
       }
+
+      if (task.remainingTurns <= 0) {
+        if (cell.grass) {
+          cell.grass.regrowTimer = 0
+        }
+        toRemove.push(key)
+      }
+    }
+
+    for (const key of toRemove) {
+      this.regrowQueue.delete(key)
+    }
+  }
+
+  private addToRegrowQueue(x: number, y: number): void {
+    const key = `${x},${y}`
+    if (this.regrowQueue.has(key)) return
+
+    const regrowTime = this.config.grassRegrowTime + Math.floor(Math.random() * 3)
+    const task: RegrowTask = {
+      x,
+      y,
+      remainingTurns: Math.max(1, regrowTime)
+    }
+
+    this.regrowQueue.set(key, task)
+    
+    const cell = this.grid[y][x]
+    if (cell.grass) {
+      cell.grass.regrowTimer = task.remainingTurns
     }
   }
 
   private rabbitActions(): void {
-    const rabbits = this.animals.filter(a => a.type === 'rabbit')
+    const rabbits = this.animals.filter(a => a.type === CreatureType.Rabbit)
 
     for (const rabbit of rabbits) {
       if (rabbit.energy <= 0) continue
@@ -198,8 +193,7 @@ export class Ecosystem {
       
       if (cell.grass && cell.grass.regrowTimer === 0) {
         rabbit.energy += RABBIT_ENERGY_FROM_GRASS
-        const regrowTime = this.config.grassRegrowTime + Math.floor(Math.random() * 3)
-        cell.grass.regrowTimer = Math.max(1, regrowTime)
+        this.addToRegrowQueue(rabbit.x, rabbit.y)
       }
 
       if (rabbit.energy >= this.config.rabbitBreedThreshold) {
@@ -213,7 +207,7 @@ export class Ecosystem {
   }
 
   private foxActions(): void {
-    const foxes = this.animals.filter(a => a.type === 'fox')
+    const foxes = this.animals.filter(a => a.type === CreatureType.Fox)
 
     for (const fox of foxes) {
       if (fox.energy <= 0) continue
@@ -223,7 +217,7 @@ export class Ecosystem {
 
       for (const neighbor of neighbors) {
         const cell = this.grid[neighbor.y][neighbor.x]
-        if (cell.animal && cell.animal.type === 'rabbit') {
+        if (cell.animal && cell.animal.type === CreatureType.Rabbit) {
           this.removeAnimal(cell.animal)
           fox.energy += FOX_ENERGY_FROM_RABBIT
           this.foxHungerCounter.set(fox.id, 0)
@@ -269,7 +263,7 @@ export class Ecosystem {
       
       const newAnimal: Animal = {
         type: animal.type,
-        energy: animal.type === 'rabbit' ? 50 : 70,
+        energy: animal.type === CreatureType.Rabbit ? 50 : 70,
         x: birthPlace.x,
         y: birthPlace.y,
         prevX: birthPlace.x,
@@ -280,7 +274,7 @@ export class Ecosystem {
       this.grid[birthPlace.y][birthPlace.x].animal = newAnimal
       this.animals.push(newAnimal)
       
-      if (animal.type === 'fox') {
+      if (animal.type === CreatureType.Fox) {
         this.foxHungerCounter.set(newAnimal.id, 0)
       }
 
@@ -299,7 +293,7 @@ export class Ecosystem {
       const validMoves = this.getValidMoves(animal.x, animal.y)
       
       if (validMoves.length === 0) {
-        if (animal.type === 'rabbit') {
+        if (animal.type === CreatureType.Rabbit) {
           animal.energy -= RABBIT_MOVE_ENERGY_COST
         } else {
           animal.energy -= FOX_MOVE_ENERGY_COST
@@ -309,7 +303,7 @@ export class Ecosystem {
 
       let target: Position | null = null
 
-      if (animal.type === 'rabbit') {
+      if (animal.type === CreatureType.Rabbit) {
         const grassNeighbor = validMoves.find(pos => {
           const cell = this.grid[pos.y][pos.x]
           return cell.grass && cell.grass.regrowTimer === 0 && !cell.animal
@@ -318,7 +312,7 @@ export class Ecosystem {
           target = grassNeighbor
         } else {
           const foxPositions = this.animals
-            .filter(a => a.type === 'fox')
+            .filter(a => a.type === CreatureType.Fox)
             .map(a => ({ x: a.x, y: a.y }))
           
           let bestMove = validMoves[0]
@@ -340,7 +334,7 @@ export class Ecosystem {
         }
       } else {
         const rabbitPositions = this.animals
-          .filter(a => a.type === 'rabbit')
+          .filter(a => a.type === CreatureType.Rabbit)
           .map(a => ({ x: a.x, y: a.y }))
 
         if (rabbitPositions.length > 0) {
@@ -348,7 +342,8 @@ export class Ecosystem {
           let minMaxDistance = Infinity
 
           for (const move of validMoves) {
-            if (this.grid[move.y][move.x].animal && this.grid[move.y][move.x].animal?.type !== 'rabbit') continue
+            const moveCell = this.grid[move.y][move.x]
+            if (moveCell.animal && moveCell.animal.type !== CreatureType.Rabbit) continue
             let minDistance = Infinity
             for (const rabbit of rabbitPositions) {
               const dist = Math.abs(move.x - rabbit.x) + Math.abs(move.y - rabbit.y)
@@ -375,7 +370,7 @@ export class Ecosystem {
         this.grid[target.y][target.x].animal = animal
       }
 
-      if (animal.type === 'rabbit') {
+      if (animal.type === CreatureType.Rabbit) {
         animal.energy -= RABBIT_MOVE_ENERGY_COST
       } else {
         animal.energy -= FOX_MOVE_ENERGY_COST
@@ -471,8 +466,8 @@ export class Ecosystem {
     }
 
     for (const animal of this.animals) {
-      if (animal.type === 'rabbit') rabbitCount++
-      else if (animal.type === 'fox') foxCount++
+      if (animal.type === CreatureType.Rabbit) rabbitCount++
+      else if (animal.type === CreatureType.Fox) foxCount++
     }
 
     return {
@@ -488,11 +483,11 @@ export class Ecosystem {
     return [...this.history]
   }
 
-  public getGrid(): Cell[][] {
+  public getGrid(): CellState[][] {
     return this.grid
   }
 
-  public getCell(x: number, y: number): Cell | null {
+  public getCell(x: number, y: number): CellState | null {
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return null
     return this.grid[y][x]
   }
@@ -506,6 +501,12 @@ export class Ecosystem {
       this.removeAnimal(cell.animal)
     }
     
+    if (cell.forbidden && cell.grass) {
+      const key = `${x},${y}`
+      this.regrowQueue.delete(key)
+      cell.grass = null
+    }
+    
     return cell.forbidden
   }
 
@@ -513,7 +514,11 @@ export class Ecosystem {
     return this.turnCount
   }
 
-  public getConfig(): EcosystemConfig {
+  public getConfig(): SimConfig {
     return { ...this.config }
+  }
+
+  public getRegrowQueue(): Map<string, RegrowTask> {
+    return new Map(this.regrowQueue)
   }
 }

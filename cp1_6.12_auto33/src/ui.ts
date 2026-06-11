@@ -1,4 +1,5 @@
-import { EcosystemStats, EcosystemConfig, Cell } from './ecosystem'
+import { CreatureType } from './types'
+import type { EcosystemStats, SimConfig, CellState } from './types'
 
 type SeriesType = 'grass' | 'rabbit' | 'fox'
 
@@ -14,6 +15,16 @@ const DEFAULT_CHART_OPTIONS: ChartOptions = {
     rabbit: '#d0d4dc',
     fox: '#ff8c42'
   }
+}
+
+const CREATURE_TYPE_NAMES: Record<string, string> = {
+  [CreatureType.Rabbit]: '🐰 兔子',
+  [CreatureType.Fox]: '🦊 狐狸'
+}
+
+const CREATURE_TYPE_COLORS: Record<string, string> = {
+  [CreatureType.Rabbit]: '#d0d4dc',
+  [CreatureType.Fox]: '#ff8c42'
 }
 
 export class UIManager {
@@ -112,7 +123,7 @@ export class UIManager {
     this.chartCtx.scale(dpr, dpr)
   }
 
-  public getConfigFromUI(): Partial<EcosystemConfig> {
+  public getConfigFromUI(): Partial<SimConfig> {
     return {
       grassDensity: parseInt(this.sliderElements['grass-density'].value),
       rabbitCount: parseInt(this.sliderElements['rabbit-count'].value),
@@ -122,7 +133,7 @@ export class UIManager {
     }
   }
 
-  public setConfigToUI(config: EcosystemConfig): void {
+  public setConfigToUI(config: SimConfig): void {
     this.sliderElements['grass-density'].value = config.grassDensity.toString()
     this.valueDisplayElements['grass-density'].textContent = config.grassDensity.toString()
     
@@ -155,11 +166,11 @@ export class UIManager {
     this.pauseBtn.textContent = isPaused ? '▶️ 继续' : '⏸️ 暂停'
   }
 
-  public showTooltip(screenX: number, screenY: number, cell: Cell): void {
+  public showTooltip(screenX: number, screenY: number, cell: CellState): void {
     let content = `<strong>位置</strong>: (${cell.x}, ${cell.y})`
     
     if (cell.forbidden) {
-      content += `<br/><span style="color: #ef476f;">🚫 禁区</span>`
+      content += `<br/><span style="color: #ef476f;">🚫 禁区 - 生物无法进入</span>`
     } else {
       if (cell.grass) {
         if (cell.grass.regrowTimer === 0) {
@@ -170,8 +181,8 @@ export class UIManager {
       }
       
       if (cell.animal) {
-        const typeName = cell.animal.type === 'rabbit' ? '🐰 兔子' : '🦊 狐狸'
-        const typeColor = cell.animal.type === 'rabbit' ? '#d0d4dc' : '#ff8c42'
+        const typeName = CREATURE_TYPE_NAMES[cell.animal.type] || cell.animal.type
+        const typeColor = CREATURE_TYPE_COLORS[cell.animal.type] || '#ffffff'
         content += `<br/><span style="color: ${typeColor};">${typeName}</span>`
         content += `<br/><strong>能量</strong>: ${cell.animal.energy}`
         content += `<br/><strong>ID</strong>: #${cell.animal.id}`
@@ -258,12 +269,7 @@ export class UIManager {
       return
     }
 
-    let maxValue = 0
-    for (const series of visibleDataPoints) {
-      const seriesMax = Math.max(...series.values)
-      maxValue = Math.max(maxValue, seriesMax)
-    }
-    maxValue = Math.max(1, Math.ceil(maxValue * 1.1))
+    const maxValue = this.calculateOptimalMaxValue(visibleDataPoints)
 
     this.drawGrid(ctx, padding, chartWidth, chartHeight, maxValue)
     this.drawAxes(ctx, padding, chartWidth, chartHeight, maxValue)
@@ -271,6 +277,36 @@ export class UIManager {
     for (const series of visibleDataPoints) {
       this.drawLine(ctx, series.values, padding, chartWidth, chartHeight, maxValue, this.options.colors[series.key])
     }
+  }
+
+  private calculateOptimalMaxValue(series: Array<{ key: SeriesType; values: number[] }>): number {
+    let absoluteMax = 0
+    for (const s of series) {
+      const seriesMax = Math.max(...s.values)
+      absoluteMax = Math.max(absoluteMax, seriesMax)
+    }
+
+    if (absoluteMax <= 0) return 10
+
+    const targetMax = absoluteMax * 1.15
+
+    const magnitude = Math.pow(10, Math.floor(Math.log10(targetMax)))
+    const normalized = targetMax / magnitude
+
+    let niceMax: number
+    if (normalized <= 1) {
+      niceMax = 1
+    } else if (normalized <= 2) {
+      niceMax = 2
+    } else if (normalized <= 2.5) {
+      niceMax = 2.5
+    } else if (normalized <= 5) {
+      niceMax = 5
+    } else {
+      niceMax = 10
+    }
+
+    return Math.max(1, niceMax * magnitude)
   }
 
   private drawGrid(
@@ -283,7 +319,7 @@ export class UIManager {
     ctx.strokeStyle = 'rgba(100, 110, 130, 0.15)'
     ctx.lineWidth = 1
 
-    const ySteps = 4
+    const ySteps = 5
     for (let i = 0; i <= ySteps; i++) {
       const y = padding.top + (height / ySteps) * i
       ctx.beginPath()
@@ -318,7 +354,7 @@ export class UIManager {
     ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
 
-    const ySteps = 4
+    const ySteps = 5
     for (let i = 0; i <= ySteps; i++) {
       const value = Math.round((maxValue / ySteps) * (ySteps - i))
       const y = padding.top + (height / ySteps) * i
