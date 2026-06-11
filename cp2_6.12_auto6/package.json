@@ -1,0 +1,12 @@
+{
+  "name": "requirement-kanban",
+  "version": "1.0.0",
+  "description": "实时协作需求看板应用",
+  "scripts": {
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
