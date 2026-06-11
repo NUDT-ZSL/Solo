@@ -6,18 +6,48 @@ export interface TerrainData {
   uvs: Float32Array;
   colors: Float32Array;
   indices: Uint32Array;
-  width: number;
-  height: number;
+  gridWidth: number;
+  gridHeight: number;
   minElevation: number;
   maxElevation: number;
   vertexCount: number;
   rawHeights: Float32Array;
+  scaleXZ: number;
+  scaleY: number;
 }
 
 export interface TerrainObject {
   geometry: THREE.BufferGeometry;
   data: TerrainData;
 }
+
+function lerpColor(
+  t: number,
+  stops: { t: number; r: number; g: number; b: number }[]
+): [number, number, number] {
+  if (t <= stops[0].t) return [stops[0].r, stops[0].g, stops[0].b];
+  if (t >= stops[stops.length - 1].t) return [stops[stops.length - 1].r, stops[stops.length - 1].g, stops[stops.length - 1].b];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i].t && t <= stops[i + 1].t) {
+      const s = (t - stops[i].t) / (stops[i + 1].t - stops[i].t);
+      return [
+        stops[i].r + s * (stops[i + 1].r - stops[i].r),
+        stops[i].g + s * (stops[i + 1].g - stops[i].g),
+        stops[i].b + s * (stops[i + 1].b - stops[i].b),
+      ];
+    }
+  }
+  return [1, 1, 1];
+}
+
+const HEIGHT_COLOR_STOPS = [
+  { t: 0.0, r: 0.12, g: 0.38, b: 0.15 },
+  { t: 0.3, r: 0.30, g: 0.60, b: 0.20 },
+  { t: 0.55, r: 0.70, g: 0.62, b: 0.38 },
+  { t: 0.75, r: 0.55, g: 0.40, b: 0.28 },
+  { t: 0.9, r: 0.78, g: 0.75, b: 0.70 },
+  { t: 1.0, r: 0.98, g: 0.98, b: 1.0 },
+];
 
 export async function loadTerrainFromCSV(
   url: string,
@@ -29,92 +59,74 @@ export async function loadTerrainFromCSV(
   if (!response.ok) throw new Error(`Failed to load terrain CSV: ${response.statusText}`);
   const text = await response.text();
   const rows = text.trim().split('\n');
-  const gridHeight = rows.length;
-  const gridWidth = rows[0].split(',').length;
+  const rawGridHeight = rows.length;
+  const rawGridWidth = rows[0].split(',').length;
 
-  const skip = Math.max(1, lodSkip);
-  const effWidth = Math.ceil(gridWidth / skip);
-  const effHeight = Math.ceil(gridHeight / skip);
-  const vertexCount = effWidth * effHeight;
+  const skip = Math.max(1, Math.floor(lodSkip));
+  const gridWidth = Math.ceil(rawGridWidth / skip);
+  const gridHeight = Math.ceil(rawGridHeight / skip);
+  const vertexCount = gridWidth * gridHeight;
 
-  const positions = new Float32Array(vertexCount * 3);
-  const uvs = new Float32Array(vertexCount * 2);
-  const colors = new Float32Array(vertexCount * 3);
   const rawHeights = new Float32Array(vertexCount);
-
   let minElev = Infinity;
   let maxElev = -Infinity;
 
-  for (let gz = 0; gz < effHeight; gz++) {
-    const ri = Math.min(gz * skip, gridHeight - 1);
-    const cols = rows[ri].split(',');
-    for (let gx = 0; gx < effWidth; gx++) {
-      const ci = Math.min(gx * skip, cols.length - 1);
-      const h = parseFloat(cols[ci]) || 0;
+  for (let z = 0; z < gridHeight; z++) {
+    const srcZ = Math.min(z * skip, rawGridHeight - 1);
+    const cols = rows[srcZ].split(',');
+    for (let x = 0; x < gridWidth; x++) {
+      const srcX = Math.min(x * skip, cols.length - 1);
+      const h = parseFloat(cols[srcX]) || 0;
+      const idx = z * gridWidth + x;
+      rawHeights[idx] = h;
       if (h < minElev) minElev = h;
       if (h > maxElev) maxElev = h;
-      const idx = gz * effWidth + gx;
-      rawHeights[idx] = h;
     }
   }
 
   const elevRange = maxElev - minElev || 1;
+  const halfX = scaleXZ / 2;
+  const halfZ = scaleXZ / 2;
 
-  for (let gz = 0; gz < effHeight; gz++) {
-    for (let gx = 0; gx < effWidth; gx++) {
-      const idx = gz * effWidth + gx;
+  const positions = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const colors = new Float32Array(vertexCount * 3);
+
+  for (let z = 0; z < gridHeight; z++) {
+    for (let x = 0; x < gridWidth; x++) {
+      const idx = z * gridWidth + x;
       const h = rawHeights[idx];
       const t = (h - minElev) / elevRange;
 
-      const x = (gx / (effWidth - 1) - 0.5) * scaleXZ;
-      const y = t * scaleY;
-      const z = (gz / (effHeight - 1) - 0.5) * scaleXZ;
+      positions[idx * 3] = (x / (gridWidth - 1)) * scaleXZ - halfX;
+      positions[idx * 3 + 1] = t * scaleY;
+      positions[idx * 3 + 2] = (z / (gridHeight - 1)) * scaleXZ - halfZ;
 
-      positions[idx * 3] = x;
-      positions[idx * 3 + 1] = y;
-      positions[idx * 3 + 2] = z;
+      uvs[idx * 2] = x / (gridWidth - 1);
+      uvs[idx * 2 + 1] = z / (gridHeight - 1);
 
-      uvs[idx * 2] = gx / (effWidth - 1);
-      uvs[idx * 2 + 1] = gz / (effHeight - 1);
-
-      if (t < 0.3) {
-        colors[idx * 3] = 0.15 + t * 0.6;
-        colors[idx * 3 + 1] = 0.45 + t * 0.8;
-        colors[idx * 3 + 2] = 0.1 + t * 0.2;
-      } else if (t < 0.6) {
-        const s = (t - 0.3) / 0.3;
-        colors[idx * 3] = 0.33 + s * 0.4;
-        colors[idx * 3 + 1] = 0.69 - s * 0.1;
-        colors[idx * 3 + 2] = 0.16 + s * 0.2;
-      } else if (t < 0.85) {
-        const s = (t - 0.6) / 0.25;
-        colors[idx * 3] = 0.73 + s * 0.15;
-        colors[idx * 3 + 1] = 0.59 + s * 0.2;
-        colors[idx * 3 + 2] = 0.36 + s * 0.3;
-      } else {
-        const s = (t - 0.85) / 0.15;
-        colors[idx * 3] = 0.88 + s * 0.12;
-        colors[idx * 3 + 1] = 0.79 + s * 0.21;
-        colors[idx * 3 + 2] = 0.66 + s * 0.34;
-      }
+      const [r, g, b] = lerpColor(t, HEIGHT_COLOR_STOPS);
+      colors[idx * 3] = r;
+      colors[idx * 3 + 1] = g;
+      colors[idx * 3 + 2] = b;
     }
   }
 
-  const indexCount = (effWidth - 1) * (effHeight - 1) * 6;
+  const indexCount = (gridWidth - 1) * (gridHeight - 1) * 6;
   const indices = new Uint32Array(indexCount);
-  let ii = 0;
-  for (let gz = 0; gz < effHeight - 1; gz++) {
-    for (let gx = 0; gx < effWidth - 1; gx++) {
-      const a = gz * effWidth + gx;
+  let i = 0;
+  for (let z = 0; z < gridHeight - 1; z++) {
+    for (let x = 0; x < gridWidth - 1; x++) {
+      const a = z * gridWidth + x;
       const b = a + 1;
-      const c = a + effWidth;
+      const c = a + gridWidth;
       const d = c + 1;
-      indices[ii++] = a;
-      indices[ii++] = c;
-      indices[ii++] = b;
-      indices[ii++] = b;
-      indices[ii++] = c;
-      indices[ii++] = d;
+      indices[i++] = a;
+      indices[i++] = c;
+      indices[i++] = b;
+      indices[i++] = b;
+      indices[i++] = c;
+      indices[i++] = d;
     }
   }
 
@@ -125,28 +137,54 @@ export async function loadTerrainFromCSV(
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   geometry.computeVertexNormals();
 
+  const normalAttr = geometry.getAttribute('normal') as THREE.BufferAttribute;
+  const normals = new Float32Array(vertexCount * 3);
+  normals.set(normalAttr.array as Float32Array);
+
   const data: TerrainData = {
     positions,
-    normals: new Float32Array(vertexCount * 3),
+    normals,
     uvs,
     colors,
     indices,
-    width: effWidth,
-    height: effHeight,
+    gridWidth,
+    gridHeight,
     minElevation: minElev,
     maxElevation: maxElev,
     vertexCount,
     rawHeights,
+    scaleXZ,
+    scaleY,
   };
 
-  const normalAttr = geometry.getAttribute('normal');
-  if (normalAttr) {
-    for (let i = 0; i < vertexCount; i++) {
-      data.normals[i * 3] = normalAttr.getX(i);
-      data.normals[i * 3 + 1] = normalAttr.getY(i);
-      data.normals[i * 3 + 2] = normalAttr.getZ(i);
-    }
-  }
-
   return { geometry, data };
+}
+
+export function getElevationAtUV(data: TerrainData, u: number, v: number): number {
+  const x = Math.max(0, Math.min(data.gridWidth - 1, u * (data.gridWidth - 1)));
+  const z = Math.max(0, Math.min(data.gridHeight - 1, v * (data.gridHeight - 1)));
+  const x0 = Math.floor(x);
+  const z0 = Math.floor(z);
+  const x1 = Math.min(x0 + 1, data.gridWidth - 1);
+  const z1 = Math.min(z0 + 1, data.gridHeight - 1);
+  const fx = x - x0;
+  const fz = z - z0;
+
+  const h00 = data.rawHeights[z0 * data.gridWidth + x0];
+  const h10 = data.rawHeights[z0 * data.gridWidth + x1];
+  const h01 = data.rawHeights[z1 * data.gridWidth + x0];
+  const h11 = data.rawHeights[z1 * data.gridWidth + x1];
+
+  const h0 = h00 * (1 - fx) + h10 * fx;
+  const h1 = h01 * (1 - fx) + h11 * fx;
+  return h0 * (1 - fz) + h1 * fz;
+}
+
+export function getWorldPositionAtUV(data: TerrainData, u: number, v: number): THREE.Vector3 {
+  const elevation = getElevationAtUV(data, u, v);
+  const t = (elevation - data.minElevation) / (data.maxElevation - data.minElevation || 1);
+  const x = u * data.scaleXZ - data.scaleXZ / 2;
+  const z = v * data.scaleXZ - data.scaleXZ / 2;
+  const y = t * data.scaleY;
+  return new THREE.Vector3(x, y, z);
 }

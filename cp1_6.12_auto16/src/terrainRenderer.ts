@@ -1,120 +1,154 @@
 import * as THREE from 'three';
-import type { TerrainData, TerrainObject } from './terrainLoader';
+import type { TerrainObject } from './terrainLoader';
 
-export interface TerrainRendererResult {
+export interface TerrainRenderable {
   group: THREE.Group;
-  mesh: THREE.Mesh;
-  material: THREE.MeshStandardMaterial;
+  lod: THREE.LOD;
+  meshes: Map<string, THREE.Mesh[]>;
   dirLight: THREE.DirectionalLight;
   ambLight: THREE.AmbientLight;
+  currentLOD: 'high' | 'medium';
+  fadeInDuration: number;
 }
 
-export interface LODState {
-  currentLevel: 'high' | 'medium';
-  vertexCount: number;
-  switchTime: number;
+export interface LODLevel {
+  level: 'high' | 'medium' | 'low';
+  skip: number;
+  distance: number;
 }
 
-export function createTerrainRenderable(terrain: TerrainObject): TerrainRendererResult {
-  const group = new THREE.Group();
+const LOD_LEVELS: LODLevel[] = [
+  { level: 'high', skip: 1, distance: 0 },
+  { level: 'medium', skip: 2, distance: 300 },
+  { level: 'low', skip: 4, distance: 500 },
+];
 
-  const material = new THREE.MeshStandardMaterial({
+function createTerrainMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.82,
-    metalness: 0.05,
+    roughness: 0.85,
+    metalness: 0.03,
     flatShading: false,
-    side: THREE.FrontSide,
+    side: THREE.DoubleSide,
     transparent: true,
     opacity: 0,
   });
-
-  const mesh = new THREE.Mesh(terrain.geometry, material);
-  mesh.name = 'terrainMesh';
-  mesh.receiveShadow = true;
-  mesh.castShadow = true;
-  group.add(mesh);
-
-  const dirLight = new THREE.DirectionalLight(0xffeedd, 1.6);
-  dirLight.position.set(200, 300, 150);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
-  dirLight.shadow.camera.near = 1;
-  dirLight.shadow.camera.far = 1000;
-  dirLight.shadow.camera.left = -300;
-  dirLight.shadow.camera.right = 300;
-  dirLight.shadow.camera.top = 300;
-  dirLight.shadow.camera.bottom = -300;
-  group.add(dirLight);
-
-  const ambLight = new THREE.AmbientLight(0x445577, 0.6);
-  group.add(ambLight);
-
-  fadeInMaterial(material);
-
-  return { group, mesh, material, dirLight, ambLight };
 }
 
-function fadeInMaterial(material: THREE.MeshStandardMaterial): void {
+function fadeInMesh(mesh: THREE.Mesh, duration: number = 300): void {
+  const mat = mesh.material as THREE.MeshStandardMaterial;
   const start = performance.now();
-  const duration = 300;
   function tick() {
     const elapsed = performance.now() - start;
     const t = Math.min(elapsed / duration, 1);
-    material.opacity = t;
-    material.needsUpdate = true;
+    mat.opacity = t;
+    mat.needsUpdate = true;
     if (t < 1) requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
 }
 
-export function checkAndApplyLOD(
-  terrain: TerrainObject,
-  renderer: TerrainRendererResult,
-  csvUrl: string,
-  scaleXZ: number,
-  scaleY: number,
-  onLoad: (newTerrain: TerrainObject, newRenderer: TerrainRendererResult) => void
-): LODState {
-  const vertexCount = terrain.data.vertexCount;
-  if (vertexCount <= 1_000_000) {
-    return { currentLevel: 'high', vertexCount, switchTime: 0 };
-  }
+export function createTerrainRenderable(terrain: TerrainObject): TerrainRenderable {
+  const group = new THREE.Group();
+  const lod = new THREE.LOD();
+  group.add(lod);
 
-  const skip = Math.ceil(Math.sqrt(vertexCount / (vertexCount * 0.3)));
-  const t0 = performance.now();
+  const highMat = createTerrainMaterial();
+  const highMesh = new THREE.Mesh(terrain.geometry, highMat);
+  highMesh.name = 'terrain_high';
+  highMesh.receiveShadow = true;
+  highMesh.castShadow = true;
+  lod.addLevel(highMesh, 0);
 
-  import('./terrainLoader').then(({ loadTerrainFromCSV }) => {
-    loadTerrainFromCSV(csvUrl, scaleXZ, scaleY, skip).then((newTerrain) => {
-      renderer.group.remove(renderer.mesh);
-      renderer.mesh.geometry.dispose();
-      renderer.material.dispose();
+  fadeInMesh(highMesh, 300);
 
-      const newMaterial = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        roughness: 0.82,
-        metalness: 0.05,
-        flatShading: false,
-        side: THREE.FrontSide,
-        transparent: true,
-        opacity: 0,
-      });
+  const dirLight = new THREE.DirectionalLight(0xfff0dd, 1.5);
+  dirLight.position.set(180, 280, 160);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.camera.near = 1;
+  dirLight.shadow.camera.far = 800;
+  dirLight.shadow.camera.left = -350;
+  dirLight.shadow.camera.right = 350;
+  dirLight.shadow.camera.top = 350;
+  dirLight.shadow.camera.bottom = -350;
+  dirLight.shadow.bias = -0.0005;
+  group.add(dirLight);
 
-      const newMesh = new THREE.Mesh(newTerrain.geometry, newMaterial);
-      newMesh.name = 'terrainMesh';
-      newMesh.receiveShadow = true;
-      newMesh.castShadow = true;
-      renderer.group.add(newMesh);
+  const ambLight = new THREE.AmbientLight(0x445577, 0.55);
+  group.add(ambLight);
 
-      fadeInMaterial(newMaterial);
+  const hemLight = new THREE.HemisphereLight(0x88aaff, 0x443322, 0.35);
+  group.add(hemLight);
 
-      renderer.mesh = newMesh;
-      renderer.material = newMaterial;
+  const meshes = new Map<string, THREE.Mesh[]>();
+  meshes.set('high', [highMesh]);
 
-      const switchTime = performance.now() - t0;
-      onLoad(newTerrain, renderer);
-    });
-  });
-
-  return { currentLevel: 'medium', vertexCount: Math.floor(vertexCount * 0.3), switchTime: 0 };
+  return {
+    group,
+    lod,
+    meshes,
+    dirLight,
+    ambLight,
+    currentLOD: 'high',
+    fadeInDuration: 300,
+  };
 }
+
+export function addMediumLOD(
+  renderable: TerrainRenderable,
+  terrain: TerrainObject,
+  distance: number = 300
+): void {
+  if (renderable.meshes.has('medium')) return;
+
+  const medMat = createTerrainMaterial();
+  const medMesh = new THREE.Mesh(terrain.geometry, medMat);
+  medMesh.name = 'terrain_medium';
+  medMesh.receiveShadow = true;
+  medMesh.castShadow = true;
+
+  renderable.lod.addLevel(medMesh, distance);
+  renderable.meshes.set('medium', [medMesh]);
+
+  fadeInMesh(medMesh, 300);
+}
+
+export function updateLOD(
+  renderable: TerrainRenderable,
+  camera: THREE.Camera
+): 'high' | 'medium' | 'low' {
+  renderable.lod.update(camera);
+
+  const levels = renderable.lod.levels;
+  let currentLevel: 'high' | 'medium' | 'low' = 'high';
+  for (let i = levels.length - 1; i >= 0; i--) {
+    const level = levels[i];
+    const mesh = level.object as THREE.Mesh;
+    if (mesh.visible) {
+      if (mesh.name === 'terrain_medium') currentLevel = 'medium';
+      else if (mesh.name === 'terrain_low') currentLevel = 'low';
+      else currentLevel = 'high';
+      break;
+    }
+  }
+  renderable.currentLOD = currentLevel;
+  return currentLevel;
+}
+
+export function getCurrentMesh(renderable: TerrainRenderable): THREE.Mesh | null {
+  const levels = renderable.lod.levels;
+  for (let i = 0; i < levels.length; i++) {
+    const mesh = levels[i].object as THREE.Mesh;
+    if (mesh.visible) return mesh;
+  }
+  return null;
+}
+
+export function getHighestMesh(renderable: TerrainRenderable): THREE.Mesh | null {
+  const high = renderable.meshes.get('high');
+  return high ? high[0] : null;
+}
+
+export { LOD_LEVELS };

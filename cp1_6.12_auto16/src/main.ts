@@ -1,46 +1,55 @@
 import * as THREE from 'three';
 import { loadTerrainFromCSV, type TerrainObject } from './terrainLoader';
-import { createTerrainRenderable, checkAndApplyLOD, type TerrainRendererResult, type LODState } from './terrainRenderer';
 import {
-  createInteractionManager,
-  probeTerrain,
-  toggleContours,
-  resetCamera,
-  updateCameraReset,
-  updateMousePosition,
-  generateContours,
-  clearContours,
-  type InteractionManager,
-} from './interaction';
+  createTerrainRenderable,
+  addMediumLOD,
+  updateLOD,
+  getHighestMesh,
+  type TerrainRenderable,
+} from './terrainRenderer';
+import { createCameraController, type CameraController } from './cameraController';
+import { createInteractionManager, type InteractionManager, type ProbeResult } from './interaction';
+import { createContourGenerator, type ContourGenerator } from './contour';
 import { createUIPanel, type UIPanelData } from './uiPanel';
 
 const CSV_URL = '/data/terrain_1024.csv';
 const SCALE_XZ = 500;
 const SCALE_Y = 80;
+const LOD_VERTEX_THRESHOLD = 1_000_000;
+const FPS_LOW_THRESHOLD = 35;
+const FPS_HIGH_THRESHOLD = 55;
 
 let scene: THREE.Scene;
-let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
+let cameraCtrl: CameraController;
 let interaction: InteractionManager;
-let terrainRenderable: TerrainRendererResult;
-let currentTerrain: TerrainObject;
-let lodState: LODState;
+let contourGen: ContourGenerator;
+let terrainRenderable: TerrainRenderable;
+let highTerrain: TerrainObject;
+let mediumTerrain: TerrainObject | null = null;
 let uiPanel: ReturnType<typeof createUIPanel>;
+let sceneContainer: HTMLElement;
 
 let frameCount = 0;
 let lastFpsTime = performance.now();
 let currentFps = 0;
+let lastLODLevel: 'high' | 'medium' | 'low' = 'high';
+let lodStableFrames = 0;
+let autoLODEnabled = true;
 
 async function init() {
-  const sceneContainer = document.getElementById('scene-container')!;
+  sceneContainer = document.getElementById('scene-container')!;
   const infoPanel = document.getElementById('info-panel')!;
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d0d1a);
-  scene.fog = new THREE.Fog(0x0d0d1a, 400, 800);
+  scene.fog = new THREE.Fog(0x0d0d1a, 450, 900);
 
-  camera = new THREE.PerspectiveCamera(60, sceneContainer.clientWidth / sceneContainer.clientHeight, 0.5, 2000);
-  camera.position.set(0, 200, 280);
+  cameraCtrl = createCameraController(
+    sceneContainer.clientWidth,
+    sceneContainer.clientHeight,
+    sceneContainer
+  );
 
   renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -51,102 +60,125 @@ async function init() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = 1.15;
   sceneContainer.insertBefore(renderer.domElement, sceneContainer.firstChild);
 
-  interaction = createInteractionManager(camera, renderer.domElement, scene);
+  interaction = createInteractionManager(scene);
+
+  contourGen = createContourGenerator(scene);
 
   uiPanel = createUIPanel(infoPanel, {
     onResetCamera: () => {
-      resetCamera(interaction);
+      cameraCtrl.reset();
     },
     onToggleContours: (enabled: boolean) => {
-      toggleContours(interaction, enabled);
-      if (enabled && interaction.contourGroup.children.length === 0) {
-        generateContours(interaction);
+      contourGen.setVisible(enabled);
+      if (enabled && contourGen.lines.length === 0) {
+        contourGen.generate(highTerrain.data, contourGen.interval);
       }
     },
     onContourIntervalChange: (interval: number) => {
-      interaction.contourInterval = interval;
-      if (interaction.contourEnabled) {
-        clearContours(interaction);
-        generateContours(interaction);
+      contourGen.interval = interval;
+      if (contourGen.enabled) {
+        contourGen.generate(highTerrain.data, interval);
       }
     },
   });
 
-  currentTerrain = await loadTerrainFromCSV(CSV_URL, SCALE_XZ, SCALE_Y, 1);
-  terrainRenderable = createTerrainRenderable(currentTerrain);
+  highTerrain = await loadTerrainFromCSV(CSV_URL, SCALE_XZ, SCALE_Y, 1);
+  terrainRenderable = createTerrainRenderable(highTerrain);
   scene.add(terrainRenderable.group);
 
-  interaction.terrainData = currentTerrain.data;
-  interaction.terrainMesh = terrainRenderable.mesh;
+  const mesh = getHighestMesh(terrainRenderable);
+  if (mesh) {
+    interaction.setTerrainMesh(mesh, highTerrain.data);
+  }
 
-  lodState = checkAndApplyLOD(
-    currentTerrain,
-    terrainRenderable,
-    CSV_URL,
-    SCALE_XZ,
-    SCALE_Y,
-    (newTerrain, newRenderer) => {
-      currentTerrain = newTerrain;
-      terrainRenderable = newRenderer;
-      interaction.terrainData = newTerrain.data;
-      interaction.terrainMesh = newRenderer.mesh;
-      lodState = { currentLevel: 'medium', vertexCount: newTerrain.data.vertexCount, switchTime: performance.now() };
-
-      const lodIndicator = document.getElementById('lod-indicator')!;
-      lodIndicator.textContent = `LOD: 中等 (${newTerrain.data.vertexCount.toLocaleString()} 顶点)`;
-      lodIndicator.classList.add('visible');
-      setTimeout(() => lodIndicator.classList.remove('visible'), 3000);
-    }
-  );
+  if (highTerrain.data.vertexCount > LOD_VERTEX_THRESHOLD) {
+    mediumTerrain = await loadTerrainFromCSV(CSV_URL, SCALE_XZ, SCALE_Y, 2);
+    addMediumLOD(terrainRenderable, mediumTerrain, 250);
+    autoLODEnabled = true;
+    lastLODLevel = 'medium';
+  }
 
   sceneContainer.addEventListener('mousemove', (e) => {
-    updateMousePosition(interaction, e, sceneContainer);
+    interaction.updateMousePosition(e, sceneContainer);
   });
 
   sceneContainer.addEventListener('mouseleave', () => {
-    interaction.probeMarker.visible = false;
-    const tooltip = document.getElementById('probe-tooltip')!;
-    tooltip.classList.remove('visible');
+    interaction.setMarkerVisible(false);
+    uiPanel.hideProbe();
   });
 
   window.addEventListener('resize', () => {
     const w = sceneContainer.clientWidth;
     const h = sceneContainer.clientHeight;
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    cameraCtrl.resize(w, h);
     renderer.setSize(w, h);
   });
 
   animate();
 }
 
+function updateProbeTooltip(probe: ProbeResult): void {
+  if (!probe.isValid) {
+    uiPanel.hideProbe();
+    return;
+  }
+
+  const projected = probe.position.clone().project(cameraCtrl.camera);
+  const rect = renderer.domElement.getBoundingClientRect();
+  const sx = (projected.x * 0.5 + 0.5) * rect.width;
+  const sy = (-projected.y * 0.5 + 0.5) * rect.height;
+
+  const tooltip = document.getElementById('probe-tooltip');
+  if (tooltip) {
+    tooltip.style.left = `${Math.min(sx + 16, rect.width - 160)}px`;
+    tooltip.style.top = `${Math.max(sy - 30, 10)}px`;
+  }
+
+  uiPanel.updateProbe(probe.position.x, probe.position.y, probe.position.z, probe.elevation);
+}
+
+function checkAutoLOD(fps: number): void {
+  if (!autoLODEnabled) return;
+
+  lodStableFrames++;
+  if (lodStableFrames < 60) return;
+
+  const current = terrainRenderable.currentLOD;
+
+  if (fps < FPS_LOW_THRESHOLD && current === 'high' && mediumTerrain) {
+    terrainRenderable.lod.levels[0].distance = 300;
+    terrainRenderable.lod.levels[1].distance = 0;
+    lodStableFrames = 0;
+    uiPanel.showLODIndicator('medium', mediumTerrain.data.vertexCount);
+  } else if (fps > FPS_HIGH_THRESHOLD && current === 'medium' && mediumTerrain) {
+    terrainRenderable.lod.levels[0].distance = 0;
+    terrainRenderable.lod.levels[1].distance = 300;
+    lodStableFrames = 0;
+    uiPanel.showLODIndicator('high', highTerrain.data.vertexCount);
+  }
+}
+
 function animate() {
   requestAnimationFrame(animate);
 
-  updateCameraReset(interaction);
-  interaction.controls.update();
+  cameraCtrl.update();
 
-  const probeResult = probeTerrain(interaction, document.getElementById('scene-container')!);
-  const tooltip = document.getElementById('probe-tooltip')!;
-  if (probeResult.isValid) {
-    const p = probeResult.position;
-    tooltip.innerHTML = `X: ${p.x.toFixed(1)}&nbsp;&nbsp;Y: ${p.y.toFixed(1)}&nbsp;&nbsp;Z: ${p.z.toFixed(1)}<br/>海拔: ${probeResult.elevation.toFixed(1)} m`;
-    tooltip.classList.add('visible');
-
-    const rect = (renderer.domElement as HTMLElement).getBoundingClientRect();
-    const projected = probeResult.position.clone().project(camera);
-    const sx = (projected.x * 0.5 + 0.5) * rect.width;
-    const sy = (-projected.y * 0.5 + 0.5) * rect.height;
-    tooltip.style.left = `${sx + 16}px`;
-    tooltip.style.top = `${sy - 30}px`;
-  } else {
-    tooltip.classList.remove('visible');
+  const lodLevel = updateLOD(terrainRenderable, cameraCtrl.camera);
+  if (lodLevel !== lastLODLevel) {
+    lastLODLevel = lodLevel;
+    const vc = lodLevel === 'high'
+      ? highTerrain.data.vertexCount
+      : mediumTerrain?.data.vertexCount || highTerrain.data.vertexCount;
+    uiPanel.showLODIndicator(lodLevel, vc);
   }
 
-  renderer.render(scene, camera);
+  const probeResult = interaction.probeTerrain(cameraCtrl.camera);
+  updateProbeTooltip(probeResult);
+
+  renderer.render(scene, cameraCtrl.camera);
 
   frameCount++;
   const now = performance.now();
@@ -155,29 +187,39 @@ function animate() {
     frameCount = 0;
     lastFpsTime = now;
 
-    uiPanel.update({
-      cameraX: camera.position.x,
-      cameraY: camera.position.y,
-      cameraZ: camera.position.z,
-      minElevation: currentTerrain.data.minElevation,
-      maxElevation: currentTerrain.data.maxElevation,
-      vertexCount: currentTerrain.data.vertexCount,
+    checkAutoLOD(currentFps);
+
+    const uiData: UIPanelData = {
+      cameraX: cameraCtrl.camera.position.x,
+      cameraY: cameraCtrl.camera.position.y,
+      cameraZ: cameraCtrl.camera.position.z,
+      minElevation: highTerrain.data.minElevation,
+      maxElevation: highTerrain.data.maxElevation,
+      vertexCount: lastLODLevel === 'high'
+        ? highTerrain.data.vertexCount
+        : mediumTerrain?.data.vertexCount || highTerrain.data.vertexCount,
       fps: currentFps,
-      lodState,
-      contourEnabled: interaction.contourEnabled,
-    });
-  } else if (frameCount % 10 === 0) {
-    uiPanel.update({
-      cameraX: camera.position.x,
-      cameraY: camera.position.y,
-      cameraZ: camera.position.z,
-      minElevation: currentTerrain.data.minElevation,
-      maxElevation: currentTerrain.data.maxElevation,
-      vertexCount: currentTerrain.data.vertexCount,
+      lodLevel: lastLODLevel,
+      contourEnabled: contourGen.enabled,
+      contourInterval: contourGen.interval,
+    };
+    uiPanel.update(uiData);
+  } else if (frameCount % 6 === 0) {
+    const uiData: UIPanelData = {
+      cameraX: cameraCtrl.camera.position.x,
+      cameraY: cameraCtrl.camera.position.y,
+      cameraZ: cameraCtrl.camera.position.z,
+      minElevation: highTerrain.data.minElevation,
+      maxElevation: highTerrain.data.maxElevation,
+      vertexCount: lastLODLevel === 'high'
+        ? highTerrain.data.vertexCount
+        : mediumTerrain?.data.vertexCount || highTerrain.data.vertexCount,
       fps: currentFps,
-      lodState,
-      contourEnabled: interaction.contourEnabled,
-    });
+      lodLevel: lastLODLevel,
+      contourEnabled: contourGen.enabled,
+      contourInterval: contourGen.interval,
+    };
+    uiPanel.update(uiData);
   }
 }
 
