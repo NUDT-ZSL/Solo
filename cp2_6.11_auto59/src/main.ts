@@ -1,6 +1,17 @@
 import { ArtRenderer } from './renderer';
 import { analyzeMood, getComplementary, MoodResult } from './moodEngine';
 
+function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let timer: number | null = null;
+  return ((...args: any[]) => {
+    if (timer) clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      fn(...args);
+      timer = null;
+    }, delay);
+  }) as T;
+}
+
 class WeavingDreamApp {
   private renderer: ArtRenderer;
   private diaryInput: HTMLTextAreaElement;
@@ -10,6 +21,7 @@ class WeavingDreamApp {
   private currentMoodName: HTMLElement;
   private currentMoodKeywords: HTMLElement;
   private currentMoodResult: MoodResult | null = null;
+  private debouncedUpdateBorder: () => void;
 
   constructor() {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -26,6 +38,8 @@ class WeavingDreamApp {
     this.currentMoodName = document.getElementById('current-mood-name') as HTMLElement;
     this.currentMoodKeywords = document.getElementById('current-mood-keywords') as HTMLElement;
 
+    this.debouncedUpdateBorder = debounce(() => this.updateInputBorder(), 300);
+
     this.bindEvents();
     this.init();
   }
@@ -33,7 +47,7 @@ class WeavingDreamApp {
   private bindEvents(): void {
     this.diaryInput.addEventListener('input', () => {
       this.updateCharCount();
-      this.updateInputBorder();
+      this.debouncedUpdateBorder();
     });
 
     this.generateBtn.addEventListener('click', () => {

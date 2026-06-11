@@ -19,35 +19,60 @@ interface MoodKeywordMap {
   [key: string]: MoodType;
 }
 
-const moodKeywords: MoodKeywordMap = {
-  '开心': 'joy', '快乐': 'joy', '高兴': 'joy', '愉快': 'joy', '喜悦': 'joy',
-  '兴奋': 'joy', '幸福': 'joy', '满足': 'joy', '温暖': 'joy', '阳光': 'joy',
-  '笑容': 'joy', '笑': 'joy', '甜蜜': 'joy', '美好': 'joy', '希望': 'joy',
-  '惊喜': 'joy', '爱': 'joy', '喜欢': 'joy', '棒': 'joy', '好': 'joy',
-  '赞': 'joy', '优秀': 'joy', '成功': 'joy', '庆祝': 'joy', '欢乐': 'joy',
-  'happy': 'joy', 'joy': 'joy', 'glad': 'joy', 'smile': 'joy', 'love': 'joy',
+const joyKeywords = [
+  '开心', '快乐', '高兴', '愉快', '喜悦', '兴奋', '幸福', '满足',
+  '温暖', '阳光', '笑容', '甜蜜', '美好', '希望', '惊喜', '庆祝',
+  '欢乐', '优秀', '成功', '棒', '喜欢', '爱', '笑', '赞',
+  'happy', 'joy', 'glad', 'smile', 'love'
+];
 
-  '平静': 'peace', '安静': 'peace', '宁静': 'peace', '安宁': 'peace', '放松': 'peace',
-  '舒适': 'peace', '惬意': 'peace', '治愈': 'peace', '悠闲': 'peace', '悠然': 'peace',
-  '淡然': 'peace', '从容': 'peace', '自在': 'peace', '安心': 'peace', '踏实': 'peace',
-  '温柔': 'peace', '柔和': 'peace', '清新': 'peace', '自然': 'peace', '风': 'peace',
-  '云': 'peace', '雨': 'peace', '茶': 'peace', '咖啡': 'peace', '书': 'peace',
-  'peaceful': 'peace', 'calm': 'peace', 'quiet': 'peace', 'relax': 'peace',
+const peaceKeywords = [
+  '平静', '安静', '宁静', '安宁', '放松', '舒适', '惬意', '治愈',
+  '悠闲', '悠然', '淡然', '从容', '自在', '安心', '踏实', '温柔',
+  '柔和', '清新', '自然', '风', '云', '雨', '茶', '咖啡', '书',
+  'peaceful', 'calm', 'quiet', 'relax'
+];
 
-  '悲伤': 'sadness', '难过': 'sadness', '伤心': 'sadness', '失落': 'sadness', '忧郁': 'sadness',
-  '孤独': 'sadness', '寂寞': 'sadness', '想哭': 'sadness', '眼泪': 'sadness', '哭': 'sadness',
-  '痛苦': 'sadness', '心碎': 'sadness', '绝望': 'sadness', '沮丧': 'sadness', '消沉': 'sadness',
-  '思念': 'sadness', '想念': 'sadness', '遗憾': 'sadness', '后悔': 'sadness', '无奈': 'sadness',
-  '离别': 'sadness', '分离': 'sadness', '失去': 'sadness', '冷': 'sadness', '阴雨': 'sadness',
-  'sad': 'sadness', 'lonely': 'sadness', 'cry': 'sadness', 'miss': 'sadness',
+const sadnessKeywords = [
+  '悲伤', '难过', '伤心', '失落', '忧郁', '孤独', '寂寞', '想哭',
+  '眼泪', '哭', '痛苦', '心碎', '绝望', '沮丧', '消沉', '思念',
+  '想念', '遗憾', '后悔', '无奈', '离别', '分离', '失去', '冷',
+  'sad', 'lonely', 'cry', 'miss'
+];
 
-  '焦虑': 'anxiety', '紧张': 'anxiety', '烦躁': 'anxiety', '不安': 'anxiety', '压力': 'anxiety',
-  '担心': 'anxiety', '担忧': 'anxiety', '害怕': 'anxiety', '恐惧': 'anxiety', '慌': 'anxiety',
-  '着急': 'anxiety', '急躁': 'anxiety', '烦闷': 'anxiety', '压抑': 'anxiety', '纠结': 'anxiety',
-  '混乱': 'anxiety', '迷茫': 'anxiety', '困惑': 'anxiety', '累': 'anxiety', '疲惫': 'anxiety',
-  '生气': 'anxiety', '愤怒': 'anxiety', '恼火': 'anxiety', '烦躁不安': 'anxiety',
-  'anxious': 'anxiety', 'stress': 'anxiety', 'worry': 'anxiety', 'nervous': 'anxiety', 'angry': 'anxiety'
-};
+const anxietyKeywords = [
+  '焦虑', '紧张', '烦躁', '不安', '压力', '担心', '担忧', '害怕',
+  '恐惧', '慌', '着急', '急躁', '烦闷', '压抑', '纠结', '混乱',
+  '迷茫', '困惑', '累', '疲惫', '生气', '愤怒', '恼火', '烦躁不安',
+  'anxious', 'stress', 'worry', 'nervous', 'angry'
+];
+
+function buildKeywordMap(): MoodKeywordMap {
+  const map: MoodKeywordMap = {};
+  const allKeywords: { keywords: string[]; mood: MoodType }[] = [
+    { keywords: joyKeywords, mood: 'joy' },
+    { keywords: peaceKeywords, mood: 'peace' },
+    { keywords: sadnessKeywords, mood: 'sadness' },
+    { keywords: anxietyKeywords, mood: 'anxiety' }
+  ];
+
+  const priorityOrder: MoodType[] = ['anxiety', 'sadness', 'joy', 'peace'];
+
+  for (const mood of priorityOrder) {
+    const group = allKeywords.find(g => g.mood === mood);
+    if (group) {
+      for (const keyword of group.keywords) {
+        if (!(keyword in map)) {
+          map[keyword] = mood;
+        }
+      }
+    }
+  }
+
+  return map;
+}
+
+const moodKeywords: MoodKeywordMap = buildKeywordMap();
 
 const moodPalettes: Record<MoodType, MoodPalette> = {
   joy: {
