@@ -171,8 +171,8 @@ function handleClientMessage(clientId: string, rawData: WebSocket.RawData): void
       break;
     }
     case 'CLEAR_CANVAS': {
-      if (!client.isAdmin) {
-        sendToClient(client.ws, { type: 'ERROR', payload: { message: 'Permission denied' } });
+      if (!client.isAdmin || clientId !== adminId) {
+        sendToClient(client.ws, { type: 'ERROR', payload: { message: 'Permission denied: admin only' } });
         return;
       }
       strokeHistory.length = 0;

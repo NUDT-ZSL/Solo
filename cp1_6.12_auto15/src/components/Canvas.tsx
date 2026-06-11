@@ -3,6 +3,7 @@ import { network, type DrawPayload, type Point, type ClientMessage } from '@/uti
 import { v4 as uuidv4 } from 'uuid';
 
 const MAX_POINTS_PER_STROKE = 1000;
+const MAX_CHUNK_POINTS = 100;
 const MAX_MESSAGE_BYTES = 10 * 1024;
 const GRID_SIZE = 50;
 
@@ -197,14 +198,23 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     pendingPointsRef.current = [];
 
     if (active.points.length >= MAX_POINTS_PER_STROKE) {
+      const completed: DrawPayload = {
+        strokeId: active.strokeId,
+        userId,
+        color: active.color,
+        size: active.size,
+        points: active.points.slice(0, MAX_POINTS_PER_STROKE),
+      };
+      onStrokeEnd(completed);
       isDrawingRef.current = false;
       activeStrokeRef.current = null;
+      fullRedraw();
       return;
     }
 
     const spaceLeft = MAX_POINTS_PER_STROKE - active.points.length;
-    const chunk = toSend.slice(0, spaceLeft);
-    active.points.push(...chunk);
+    const cappedToSend = toSend.slice(0, Math.min(spaceLeft, MAX_CHUNK_POINTS));
+    active.points.push(...cappedToSend);
 
     const payload: ClientMessage = {
       type: 'DRAW',
@@ -213,28 +223,36 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         userId,
         color: active.color,
         size: active.size,
-        points: chunk,
+        points: cappedToSend,
       },
     };
 
-    let serialized: string;
-    try {
-      serialized = JSON.stringify(payload);
-    } catch (e) {
-      console.warn('Serialization failed', e);
-      return;
-    }
-
-    const byteLength = typeof Buffer !== 'undefined'
-      ? Buffer.byteLength(serialized, 'utf8')
-      : new TextEncoder().encode(serialized).length;
+    const serialized = JSON.stringify(payload);
+    const byteLength = new TextEncoder().encode(serialized).length;
 
     if (byteLength > MAX_MESSAGE_BYTES) {
-      console.warn('Draw message exceeds 10KB, chunk dropped');
-      return;
+      const halfChunk = cappedToSend.slice(0, Math.floor(cappedToSend.length / 2));
+      active.points.length = active.points.length - cappedToSend.length + halfChunk.length;
+      if (halfChunk.length > 0) {
+        const reducedPayload: ClientMessage = {
+          type: 'DRAW',
+          payload: {
+            strokeId: active.strokeId,
+            userId,
+            color: active.color,
+            size: active.size,
+            points: halfChunk,
+          },
+        };
+        const reducedSize = new TextEncoder().encode(JSON.stringify(reducedPayload)).length;
+        if (reducedSize <= MAX_MESSAGE_BYTES) {
+          network.send(reducedPayload);
+        }
+      }
+    } else {
+      network.send(payload);
     }
 
-    network.send(payload);
     fullRedraw();
 
     if (active.points.length >= MAX_POINTS_PER_STROKE) {
@@ -243,7 +261,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         userId,
         color: active.color,
         size: active.size,
-        points: active.points,
+        points: active.points.slice(0, MAX_POINTS_PER_STROKE),
       };
       onStrokeEnd(completed);
       isDrawingRef.current = false;
@@ -292,13 +310,29 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const handlePointerMove = useCallback(
     (e: MouseEvent | TouchEvent) => {
       if (!isDrawingRef.current) return;
+      const active = activeStrokeRef.current;
+      if (active && active.points.length >= MAX_POINTS_PER_STROKE) {
+        isDrawingRef.current = false;
+        activeStrokeRef.current = null;
+        pendingPointsRef.current = [];
+        const completed: DrawPayload = {
+          strokeId: active.strokeId,
+          userId,
+          color: active.color,
+          size: active.size,
+          points: active.points.slice(0, MAX_POINTS_PER_STROKE),
+        };
+        onStrokeEnd(completed);
+        fullRedraw();
+        return;
+      }
       const point = getCoordinates(e);
       if (!point) return;
 
       e.preventDefault();
       queuePoints(point);
     },
-    [getCoordinates, queuePoints]
+    [getCoordinates, queuePoints, userId, onStrokeEnd, fullRedraw]
   );
 
   const handlePointerUp = useCallback(() => {
@@ -310,16 +344,29 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     }
 
     const active = activeStrokeRef.current;
-    if (active && pendingPointsRef.current.length > 0) {
+    if (!active) {
+      isDrawingRef.current = false;
+      return;
+    }
+
+    if (pendingPointsRef.current.length > 0) {
       const spaceLeft = MAX_POINTS_PER_STROKE - active.points.length;
       if (spaceLeft <= 0) {
+        const completed: DrawPayload = {
+          strokeId: active.strokeId,
+          userId,
+          color: active.color,
+          size: active.size,
+          points: active.points.slice(0, MAX_POINTS_PER_STROKE),
+        };
+        onStrokeEnd(completed);
         isDrawingRef.current = false;
         activeStrokeRef.current = null;
         pendingPointsRef.current = [];
         fullRedraw();
         return;
       }
-      const chunk = pendingPointsRef.current.slice(0, spaceLeft);
+      const chunk = pendingPointsRef.current.slice(0, Math.min(spaceLeft, MAX_CHUNK_POINTS));
       active.points.push(...chunk);
 
       if (chunk.length > 0) {
@@ -334,22 +381,21 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           },
         };
         const serialized = JSON.stringify(payload);
-        const byteLength = typeof Buffer !== 'undefined'
-          ? Buffer.byteLength(serialized, 'utf8')
-          : new TextEncoder().encode(serialized).length;
-        if (byteLength <= MAX_MESSAGE_BYTES) {
+        const byteLen = new TextEncoder().encode(serialized).length;
+        if (byteLen <= MAX_MESSAGE_BYTES) {
           network.send(payload);
         }
       }
     }
 
-    if (active && active.points.length > 0) {
+    const finalPoints = active.points.slice(0, MAX_POINTS_PER_STROKE);
+    if (finalPoints.length > 0) {
       const completed: DrawPayload = {
         strokeId: active.strokeId,
         userId,
         color: active.color,
         size: active.size,
-        points: active.points,
+        points: finalPoints,
       };
       onStrokeEnd(completed);
     }
@@ -393,7 +439,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         el.classList.remove('fading');
         textEl.classList.remove('fading-text');
         fadeTimerRef.current = null;
-      }, 400);
+      }, 500);
     }
   }, [onlineCount]);
 

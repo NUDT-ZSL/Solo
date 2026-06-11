@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Canvas, { type CanvasHandle } from '@/components/Canvas';
 import Toolbar, { PRESET_COLORS } from '@/components/Toolbar';
-import { network, type DrawPayload, type UndoPayload } from '@/utils/network';
+import { network, type DrawPayload, type UndoPayload, type ClientMessage } from '@/utils/network';
 
 function ConfirmDialog({
   open,
@@ -89,10 +89,11 @@ function App() {
 
     canvasRef.current?.undoStroke(strokeId);
 
-    network.send({
+    const undoMsg: ClientMessage = {
       type: 'UNDO',
-      payload: { userId, strokeId } as UndoPayload,
-    });
+      payload: { userId, strokeId },
+    };
+    network.send(undoMsg);
   }, [userId]);
 
   const handleClearCanvasRequested = useCallback(() => {
@@ -109,7 +110,8 @@ function App() {
       undoneStrokesRef.current = new Set();
       myStrokeIdsRef.current = [];
       canvasRef.current?.clearAll();
-      network.send({ type: 'CLEAR_CANVAS', payload: { userId } });
+      const clearMsg: ClientMessage = { type: 'CLEAR_CANVAS', payload: { userId } };
+      network.send(clearMsg);
 
       setTimeout(() => {
         setIsClearing(false);
