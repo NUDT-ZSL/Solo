@@ -5,7 +5,6 @@ interface Raindrop {
   mesh: THREE.Mesh;
   baseVelocityFactor: number;
   active: boolean;
-  createdAt: number;
   source: CollisionSource;
 }
 
@@ -17,7 +16,8 @@ const BASE_FALL_SPEED = 3.0;
 
 export class RaindropSystem {
   private scene: THREE.Scene;
-  private raindrops: Raindrop[] = [];
+  private buffer: (Raindrop | null)[];
+  private writePtr: number = 0;
   private sharedGeometry: THREE.SphereGeometry;
   private sharedMaterial: THREE.MeshBasicMaterial;
   private speedMultiplierRef: { value: number };
@@ -34,6 +34,7 @@ export class RaindropSystem {
     this.scene = scene;
     this.onCollision = onCollision;
     this.speedMultiplierRef = speedRef ?? { value: 1.0 };
+    this.buffer = new Array(MAX_RAINDROPS).fill(null);
 
     this.sharedGeometry = new THREE.SphereGeometry(1, 6, 6);
     this.sharedMaterial = new THREE.MeshBasicMaterial({
@@ -55,44 +56,51 @@ export class RaindropSystem {
     this.currentMaterial = material;
   }
 
-  spawnDrop(x: number, z: number, isManual: boolean = false): void {
-    if (this.raindrops.length >= MAX_RAINDROPS) {
-      this.removeOldest();
-    }
+  private disposeSlot(idx: number): void {
+    const drop = this.buffer[idx];
+    if (!drop) return;
+    try {
+      this.scene.remove(drop.mesh);
+    } catch (_) { /* noop */ }
+    this.buffer[idx] = null;
+  }
 
+  private allocSlot(): number {
+    for (let i = 0; i < MAX_RAINDROPS; i++) {
+      const idx = (this.writePtr + i) % MAX_RAINDROPS;
+      const slot = this.buffer[idx];
+      if (!slot || !slot.active) {
+        this.disposeSlot(idx);
+        this.writePtr = (idx + 1) % MAX_RAINDROPS;
+        return idx;
+      }
+    }
+    const idx = this.writePtr;
+    this.disposeSlot(idx);
+    this.writePtr = (idx + 1) % MAX_RAINDROPS;
+    return idx;
+  }
+
+  spawnDrop(x: number, z: number, isManual: boolean = false): void {
     const mesh = new THREE.Mesh(this.sharedGeometry, this.sharedMaterial);
     mesh.scale.set(0.03, 0.15, 0.03);
     mesh.position.set(x, SPAWN_HEIGHT, z);
     this.scene.add(mesh);
 
     const source: CollisionSource = isManual ? 'manual' : 'auto';
-    this.raindrops.push({
+    const idx = this.allocSlot();
+    this.buffer[idx] = {
       mesh,
       baseVelocityFactor: isManual ? 2.5 : 1.8,
       active: true,
-      createdAt: performance.now(),
       source
-    });
+    };
   }
 
   spawnRandomDrop(): void {
     const x = (Math.random() - 0.5) * GROUND_HALF * 1.8;
     const z = (Math.random() - 0.5) * GROUND_HALF * 1.8;
     this.spawnDrop(x, z, false);
-  }
-
-  private removeOldest(): void {
-    if (this.raindrops.length === 0) return;
-    let oldestIdx = 0;
-    let oldestTime = this.raindrops[0].createdAt;
-    for (let i = 1; i < this.raindrops.length; i++) {
-      if (this.raindrops[i].createdAt < oldestTime) {
-        oldestTime = this.raindrops[i].createdAt;
-        oldestIdx = i;
-      }
-    }
-    const drop = this.raindrops.splice(oldestIdx, 1)[0];
-    this.scene.remove(drop.mesh);
   }
 
   update(dt: number): void {
@@ -106,9 +114,9 @@ export class RaindropSystem {
     const currentSpeedMul = this.speedMultiplierRef.value;
     const currentFallSpeed = BASE_FALL_SPEED * currentSpeedMul;
 
-    for (let i = this.raindrops.length - 1; i >= 0; i--) {
-      const drop = this.raindrops[i];
-      if (!drop.active) continue;
+    for (let i = 0; i < MAX_RAINDROPS; i++) {
+      const drop = this.buffer[i];
+      if (!drop || !drop.active) continue;
 
       const fallSpeedThisFrame = currentFallSpeed * drop.baseVelocityFactor;
       drop.mesh.position.y -= fallSpeedThisFrame * dt;
@@ -120,21 +128,23 @@ export class RaindropSystem {
           material: this.currentMaterial,
           source: drop.source
         });
-
-        this.scene.remove(drop.mesh);
-        this.raindrops.splice(i, 1);
+        drop.active = false;
+        this.disposeSlot(i);
       }
     }
   }
 
   clearAll(): void {
-    while (this.raindrops.length > 0) {
-      this.removeOldest();
+    for (let i = 0; i < MAX_RAINDROPS; i++) {
+      this.disposeSlot(i);
     }
+    this.writePtr = 0;
     this.dropTimer = 0;
   }
 
   getCount(): number {
-    return this.raindrops.length;
+    let c = 0;
+    for (let i = 0; i < MAX_RAINDROPS; i++) if (this.buffer[i]?.active) c++;
+    return c;
   }
 }

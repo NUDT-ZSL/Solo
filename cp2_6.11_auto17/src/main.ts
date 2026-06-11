@@ -4,6 +4,13 @@ import { RaindropSystem } from './raindrop';
 import { ParticleSystem, MaterialType, MATERIAL_COLORS, CollisionEvent } from './particles';
 import { UIController } from './ui';
 
+const GROUND_TEXTURE_CONFIG: Record<MaterialType, { roughness: number; metalness: number; transparent?: boolean; opacity?: number }> = {
+  water: { roughness: 0.3, metalness: 0.1 },
+  metal: { roughness: 0.3, metalness: 0.9 },
+  glass: { roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.85 },
+  leaf: { roughness: 0.7, metalness: 0.0 }
+};
+
 class RainStoriesApp {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -95,15 +102,27 @@ class RainStoriesApp {
     this.scene.add(fillLight);
   }
 
+  private createSolidMaterial(type: MaterialType): THREE.MeshStandardMaterial {
+    const color = MATERIAL_COLORS[type];
+    const cfg = GROUND_TEXTURE_CONFIG[type];
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      roughness: cfg.roughness,
+      metalness: cfg.metalness,
+      transparent: cfg.transparent ?? false,
+      opacity: cfg.opacity ?? 1.0
+    });
+  }
+
   private createGround(): void {
     const geo = new THREE.PlaneGeometry(4, 4);
-
     const types: MaterialType[] = ['water', 'metal', 'glass', 'leaf'];
+
     types.forEach((type) => {
-      this.groundMaterials[type] = this.createFallbackMaterial(type);
+      this.groundMaterials[type] = this.createSolidMaterial(type);
     });
 
-    this.loadAllTextures(types);
+    this.tryLoadTextures(types);
 
     this.groundMesh = new THREE.Mesh(geo, this.groundMaterials.water);
     this.groundMesh.rotation.x = -Math.PI / 2;
@@ -111,151 +130,38 @@ class RainStoriesApp {
     this.scene.add(this.groundMesh);
   }
 
-  private createFallbackMaterial(type: MaterialType): THREE.MeshStandardMaterial {
-    const color = MATERIAL_COLORS[type];
-    const fallbackTex = this.createProgrammaticTexture(type);
-    const params: THREE.MeshStandardMaterialParameters = {
-      map: fallbackTex,
-      color: color,
-      roughness: type === 'metal' ? 0.3 : type === 'glass' ? 0.1 : 0.7,
-      metalness: type === 'metal' ? 0.9 : type === 'glass' ? 0.1 : 0.0
-    };
-    if (type === 'glass') {
-      params.transparent = true;
-      params.opacity = 0.85;
+  private tryLoadTextures(types: MaterialType[]): void {
+    try {
+      types.forEach((type) => {
+        try {
+          const assetPath = `./assets/${type}.jpg`;
+          this.textureLoader.load(
+            assetPath,
+            (texture) => {
+              try {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.needsUpdate = true;
+                const mat = this.groundMaterials[type];
+                if (mat) {
+                  mat.map = texture;
+                  mat.color.set(0xffffff);
+                  mat.needsUpdate = true;
+                }
+              } catch (_) { /* noop */ }
+            },
+            undefined,
+            () => {
+              // Texture not available - using solid color fallback
+            }
+          );
+        } catch (_) {
+          // Individual texture load error - fallback already active
+        }
+      });
+    } catch (_) {
+      // Global texture system error - all materials stay on solid color fallback
     }
-    return new THREE.MeshStandardMaterial(params);
-  }
-
-  private loadAllTextures(types: MaterialType[]): void {
-    types.forEach((type) => {
-      const assetPath = `/assets/${type}.jpg`;
-      this.textureLoader.load(
-        assetPath,
-        (texture) => {
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.wrapT = THREE.RepeatWrapping;
-          texture.needsUpdate = true;
-          const mat = this.groundMaterials[type];
-          if (mat) {
-            mat.map = texture;
-            mat.color.set(0xffffff);
-            mat.needsUpdate = true;
-          }
-        },
-        undefined,
-        () => {
-          // Texture load failed - fallback already set, do nothing
-          console.log(`[Texture] Fallback used for ${type}`);
-        }
-      );
-    });
-  }
-
-  private createProgrammaticTexture(type: MaterialType): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d')!;
-
-    switch (type) {
-      case 'water': {
-        const waterGrad = ctx.createLinearGradient(0, 0, 512, 512);
-        waterGrad.addColorStop(0, '#2e6fa8');
-        waterGrad.addColorStop(0.5, '#4A90D9');
-        waterGrad.addColorStop(1, '#2e6fa8');
-        ctx.fillStyle = waterGrad;
-        ctx.fillRect(0, 0, 512, 512);
-        for (let i = 0; i < 80; i++) {
-          ctx.strokeStyle = `rgba(255,255,255,${0.05 + Math.random() * 0.1})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          const wy = Math.random() * 512;
-          ctx.moveTo(0, wy);
-          for (let x = 0; x < 512; x += 20) {
-            ctx.lineTo(x, wy + Math.sin(x * 0.02 + i) * 4);
-          }
-          ctx.stroke();
-        }
-        break;
-      }
-      case 'metal': {
-        const metalGrad = ctx.createLinearGradient(0, 0, 512, 512);
-        metalGrad.addColorStop(0, '#8a8a8a');
-        metalGrad.addColorStop(0.3, '#e0e0e0');
-        metalGrad.addColorStop(0.5, '#ffffff');
-        metalGrad.addColorStop(0.7, '#d0d0d0');
-        metalGrad.addColorStop(1, '#707070');
-        ctx.fillStyle = metalGrad;
-        ctx.fillRect(0, 0, 512, 512);
-        for (let i = 0; i < 200; i++) {
-          ctx.strokeStyle = `rgba(100,100,100,${0.05 + Math.random() * 0.08})`;
-          ctx.lineWidth = 0.5;
-          const sx = Math.random() * 512;
-          const sy = Math.random() * 512;
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(sx + 30 + Math.random() * 50, sy + Math.random() * 10 - 5);
-          ctx.stroke();
-        }
-        break;
-      }
-      case 'glass': {
-        const glassGrad = ctx.createLinearGradient(0, 0, 0, 512);
-        glassGrad.addColorStop(0, 'rgba(200, 240, 255, 0.6)');
-        glassGrad.addColorStop(0.5, 'rgba(176, 224, 230, 0.8)');
-        glassGrad.addColorStop(1, 'rgba(150, 210, 230, 0.6)');
-        ctx.fillStyle = glassGrad;
-        ctx.fillRect(0, 0, 512, 512);
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(50, 80);
-        ctx.lineTo(150, 40);
-        ctx.lineTo(300, 120);
-        ctx.lineTo(450, 60);
-        ctx.stroke();
-        for (let i = 0; i < 15; i++) {
-          ctx.fillStyle = `rgba(255,255,255,${0.08 + Math.random() * 0.12})`;
-          ctx.fillRect(Math.random() * 400 + 50, Math.random() * 400 + 50, Math.random() * 40 + 20, 2);
-        }
-        break;
-      }
-      case 'leaf': {
-        const leafGrad = ctx.createLinearGradient(0, 0, 512, 512);
-        leafGrad.addColorStop(0, '#1a6b1a');
-        leafGrad.addColorStop(0.5, '#228B22');
-        leafGrad.addColorStop(1, '#0f5f0f');
-        ctx.fillStyle = leafGrad;
-        ctx.fillRect(0, 0, 512, 512);
-        ctx.strokeStyle = 'rgba(10,80,10,0.5)';
-        ctx.lineWidth = 3;
-        for (let i = 0; i < 8; i++) {
-          const ly = 60 + i * 60;
-          ctx.beginPath();
-          ctx.moveTo(0, ly);
-          for (let x = 0; x <= 512; x += 10) {
-            ctx.lineTo(x, ly + Math.sin(x * 0.015 + i * 0.7) * 8);
-          }
-          ctx.stroke();
-        }
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 30; i++) {
-          const vx = Math.random() * 512;
-          ctx.beginPath();
-          ctx.moveTo(vx, 0);
-          ctx.lineTo(vx + Math.random() * 20 - 10, 512);
-          ctx.stroke();
-        }
-        break;
-      }
-    }
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.needsUpdate = true;
-    return texture;
   }
 
   private initSystems(): void {
