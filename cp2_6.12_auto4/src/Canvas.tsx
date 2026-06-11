@@ -7,13 +7,14 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import type { ToolType, DrawAction, Point, StrokeShape } from './types';
+import type { ToolType, DrawAction, Point, StrokeShape, ConnectedUser } from './types';
 
 interface CanvasProps {
   tool: ToolType;
   color: string;
   lineWidth: number;
   actions: DrawAction[];
+  users: ConnectedUser[];
   userId: string;
   userName: string;
   onDrawComplete: (action: DrawAction) => void;
@@ -29,6 +30,7 @@ interface DrawingState {
   currentColor: string;
   currentLineWidth: number;
   currentTool: ToolType;
+  dirty: boolean;
 }
 
 function generateId() {
@@ -45,8 +47,30 @@ function hexToRgba(hex: string, alpha: number) {
 const CANVAS_W = 1920;
 const CANVAS_H = 1080;
 
+const USER_COLOR_PALETTE = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+  '#ec4899', '#14b8a6', '#f43f5e', '#f59e0b',
+  '#10b981', '#0ea5e9', '#8b5cf6', '#e11d48',
+];
+
+function userIdToColor(uid: string): string {
+  let hash = 0;
+  for (let i = 0; i < uid.length; i++) {
+    hash = (hash * 31 + uid.charCodeAt(i)) >>> 0;
+  }
+  return USER_COLOR_PALETTE[hash % USER_COLOR_PALETTE.length];
+}
+
+function resolveActionColor(action: DrawAction, users: ConnectedUser[], localUserId: string): string {
+  if (action.userId === localUserId && action.color) return action.color;
+  const matched = users.find((u) => u.id === action.userId);
+  if (matched) return matched.color;
+  return action.color || userIdToColor(action.userId);
+}
+
 const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
-  { tool, color, lineWidth, actions, userId, userName, onDrawComplete, undoingIds, redoingIds },
+  { tool, color, lineWidth, actions, users, userId, userName, onDrawComplete, undoingIds, redoingIds },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -59,7 +83,14 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
     currentColor: color,
     currentLineWidth: lineWidth,
     currentTool: tool,
+    dirty: false,
   });
+  const actionsRef = useRef<DrawAction[]>(actions);
+  const usersRef = useRef<ConnectedUser[]>(users);
+  const undoingRef = useRef<Set<string>>(undoingIds);
+  const redoingRef = useRef<Set<string>>(redoingIds);
+  const animProgressRef = useRef<Map<string, number>>(new Map());
+
   const [textInput, setTextInput] = useState<{
     visible: boolean;
     x: number;
@@ -72,6 +103,12 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
   }>({ visible: false, x: 0, y: 0, canvasX: 0, canvasY: 0, value: '', fontSize: 16, color });
   const [scale, setScale] = useState(1);
   const animFrameRef = useRef<number>();
+  const lastFrameRef = useRef<number>(performance.now());
+
+  useEffect(() => { actionsRef.current = actions; }, [actions]);
+  useEffect(() => { usersRef.current = users; }, [users]);
+  useEffect(() => { undoingRef.current = undoingIds; }, [undoingIds]);
+  useEffect(() => { redoingRef.current = redoingIds; }, [redoingIds]);
 
   useImperativeHandle(ref, () => ({}));
 
@@ -120,13 +157,12 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
       width: number,
       baseOpacity: number = 1
     ) => {
+      if (points.length <= 0) return;
       if (points.length < 2) {
-        if (points.length === 1) {
-          ctx.fillStyle = hexToRgba(strokeColor, baseOpacity * 0.85);
-          ctx.beginPath();
-          ctx.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.fillStyle = hexToRgba(strokeColor, baseOpacity * 0.85);
+        ctx.beginPath();
+        ctx.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2);
+        ctx.fill();
         return;
       }
 
@@ -134,32 +170,30 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
       ctx.lineJoin = 'round';
       ctx.strokeStyle = hexToRgba(strokeColor, baseOpacity * 0.9);
       ctx.lineWidth = width;
-      ctx.shadowColor = hexToRgba(strokeColor, baseOpacity * 0.3);
-      ctx.shadowBlur = width * 0.5;
+      ctx.shadowColor = hexToRgba(strokeColor, baseOpacity * 0.25);
+      ctx.shadowBlur = width * 0.45;
 
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
-
       for (let i = 1; i < points.length - 1; i++) {
         const xc = (points[i].x + points[i + 1].x) / 2;
         const yc = (points[i].y + points[i + 1].y) / 2;
         ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
       }
-      if (points.length >= 2) {
-        const last = points[points.length - 1];
-        ctx.lineTo(last.x, last.y);
-      }
+      const last = points[points.length - 1];
+      ctx.lineTo(last.x, last.y);
       ctx.stroke();
 
       if (width >= 3) {
         ctx.shadowBlur = 0;
-        for (let i = 1; i < points.length; i++) {
-          const p0 = points[i - 1];
+        const step = Math.max(1, Math.floor(points.length / 80));
+        for (let i = step; i < points.length; i += step) {
+          const p0 = points[i - step];
           const p1 = points[i];
           const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
           const speedFactor = Math.min(1, 30 / Math.max(dist, 1));
           const inkR = width * (0.15 + speedFactor * 0.2);
-          const inkAlpha = baseOpacity * 0.08 * speedFactor;
+          const inkAlpha = baseOpacity * 0.07 * speedFactor;
           const midX = (p0.x + p1.x) / 2;
           const midY = (p0.y + p1.y) / 2;
           const grd = ctx.createRadialGradient(midX, midY, 0, midX, midY, inkR);
@@ -205,9 +239,9 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
         ctx.beginPath();
         const cx = (shape.startX + shape.endX) / 2;
         const cy = (shape.startY + shape.endY) / 2;
-        const rx = Math.abs(shape.endX - shape.startX) / 2;
-        const ry = Math.abs(shape.endY - shape.startY) / 2;
         if (shapeType === 'circle') {
+          const rx = Math.abs(shape.endX - shape.startX) / 2;
+          const ry = Math.abs(shape.endY - shape.startY) / 2;
           const r = Math.max(rx, ry);
           ctx.shadowColor = hexToRgba(strokeColor, baseOpacity * 0.2);
           ctx.shadowBlur = width * 0.3;
@@ -251,7 +285,6 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
     if (!ctx) return;
 
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -269,50 +302,90 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
     }
     ctx.stroke();
 
-    for (const action of actions) {
-      const isUndoing = undoingIds.has(action.id);
-      const isRedoing = redoingIds.has(action.id);
-      const baseOpacity = isUndoing || isRedoing ? 0.4 : action.opacity;
+    const currentActions = actionsRef.current;
+    const currentUsers = usersRef.current;
+    const undoing = undoingRef.current;
+    const redoing = redoingRef.current;
+    const now = performance.now();
 
-      if (isUndoing) {
-        ctx.save();
-        ctx.globalAlpha = 0;
+    for (const action of currentActions) {
+      const isUndoing = undoing.has(action.id);
+      const isRedoing = redoing.has(action.id);
+      const isAnimating = isUndoing || isRedoing;
+
+      let opacity = action.opacity;
+      let visiblePointRatio = 1;
+
+      if (isAnimating) {
+        if (!animProgressRef.current.has(action.id)) {
+          animProgressRef.current.set(action.id, now);
+        }
+        const startedAt = animProgressRef.current.get(action.id)!;
+        const elapsed = now - startedAt;
+        const totalDuration = 480;
+        const t = Math.min(1, elapsed / totalDuration);
+        const eased = 1 - Math.pow(1 - t, 3);
+
+        if (isUndoing) {
+          opacity = Math.max(0, 1 - eased);
+          visiblePointRatio = Math.max(0, 1 - eased);
+        } else {
+          opacity = Math.min(1, eased);
+          visiblePointRatio = Math.min(1, eased);
+        }
+        if (t >= 1) {
+          animProgressRef.current.delete(action.id);
+        }
+      } else {
+        if (animProgressRef.current.has(action.id)) {
+          animProgressRef.current.delete(action.id);
+        }
       }
-      if (isRedoing) {
-        ctx.save();
-      }
+
+      if (opacity <= 0.01) continue;
+
+      const resolvedColor = resolveActionColor(action, currentUsers, userId);
 
       if (action.tool === 'brush' && action.points) {
-        drawBrushStroke(ctx, action.points, action.color, action.lineWidth, baseOpacity);
+        const count = Math.max(1, Math.floor(action.points.length * visiblePointRatio));
+        const visible = action.points.slice(0, count);
+        drawBrushStroke(ctx, visible, resolvedColor, action.lineWidth, opacity);
       } else if ((action.tool === 'rectangle' || action.tool === 'circle' || action.tool === 'eraser') && action.shape) {
-        drawShape(ctx, action.shape, action.color, action.lineWidth, action.tool, baseOpacity);
+        drawShape(ctx, action.shape, resolvedColor, action.lineWidth, action.tool, opacity);
       } else if (action.tool === 'text' && action.text && action.textPosition) {
-        drawText(ctx, action.text, action.textPosition, action.color, baseOpacity);
-      }
-
-      if (isUndoing || isRedoing) {
-        ctx.restore();
+        drawText(ctx, action.text, action.textPosition, resolvedColor, opacity);
       }
     }
 
     const ds = drawingRef.current;
     if (ds.isDrawing) {
       if ((ds.currentTool === 'brush' || ds.currentTool === 'eraser') && ds.points.length > 0) {
-        drawBrushStroke(ctx, ds.points, ds.currentColor, ds.currentLineWidth, 0.85);
+        drawBrushStroke(ctx, ds.points, ds.currentColor, ds.currentLineWidth, 0.9);
       } else if (
         (ds.currentTool === 'rectangle' || ds.currentTool === 'circle') &&
         ds.shape
       ) {
-        drawShape(ctx, ds.shape, ds.currentColor, ds.currentLineWidth, ds.currentTool, 0.85);
+        drawShape(ctx, ds.shape, ds.currentColor, ds.currentLineWidth, ds.currentTool, 0.9);
       }
     }
-  }, [actions, undoingIds, redoingIds, drawBrushStroke, drawShape, drawText]);
+  }, [drawBrushStroke, drawShape, drawText, userId]);
 
   useEffect(() => {
     let running = true;
+    let fpsCounter = 0;
+    let fpsTimer = performance.now();
     const loop = () => {
       if (!running) return;
-      renderAll();
+      const now = performance.now();
+      if (now - lastFrameRef.current >= 16) {
+        renderAll();
+        lastFrameRef.current = now;
+        fpsCounter++;
+        if (now - fpsTimer > 1000) {
+          fpsTimer = now;
+          fpsCounter = 0;
+        }
+      }
       animFrameRef.current = requestAnimationFrame(loop);
     };
     animFrameRef.current = requestAnimationFrame(loop);
@@ -372,6 +445,7 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
       ds.currentLineWidth = lineWidth;
       ds.points = [p];
       ds.shape = { startX: p.x, startY: p.y, endX: p.x, endY: p.y };
+      ds.dirty = true;
     },
     [tool, color, lineWidth, getCanvasPoint]
   );
@@ -384,8 +458,9 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
 
       if (ds.currentTool === 'brush' || ds.currentTool === 'eraser') {
         const last = ds.points[ds.points.length - 1];
-        if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 0.5) {
+        if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= 0.8) {
           ds.points.push(p);
+          ds.dirty = true;
         }
       } else {
         ds.shape = {
@@ -394,6 +469,7 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
           endX: p.x,
           endY: p.y,
         };
+        ds.dirty = true;
       }
     },
     [getCanvasPoint]
@@ -462,6 +538,7 @@ const Canvas = forwardRef<unknown, CanvasProps>(function Canvas(
       ds.currentLineWidth = lineWidth;
       ds.points = [p];
       ds.shape = { startX: p.x, startY: p.y, endX: p.x, endY: p.y };
+      ds.dirty = true;
     },
     [tool, color, lineWidth, getCanvasPoint, handleTextClick]
   );

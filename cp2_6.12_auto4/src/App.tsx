@@ -13,6 +13,22 @@ function generateId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+async function detectBackendPort(): Promise<number> {
+  const candidates = [3001, 3002, 3003, 3004, 3005, 3006];
+  for (const p of candidates) {
+    try {
+      const r = await fetch(`http://${window.location.hostname || 'localhost'}:${p}/api/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(400),
+      });
+      if (r.ok) return p;
+    } catch {
+      // try next
+    }
+  }
+  return 3001;
+}
+
 export default function App() {
   const [tool, setTool] = useState<ToolType>('brush');
   const [color, setColor] = useState('#3b82f6');
@@ -25,16 +41,27 @@ export default function App() {
   const [userColor, setUserColor] = useState('#3b82f6');
   const [undoingIds, setUndoingIds] = useState<Set<string>>(new Set());
   const [redoingIds, setRedoingIds] = useState<Set<string>>(new Set());
+  const [bouncingTool, setBouncingTool] = useState<ToolType | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const pendingRef = useRef<DrawAction[]>([]);
+  const backendPortRef = useRef<number>(3001);
 
   const MAX_HISTORY = 50;
   const userNameRef = useRef('用户' + Math.floor(Math.random() * 1000));
 
-  const connect = useCallback(() => {
+  useEffect(() => {
+    if (tool === bouncingTool) return;
+    setBouncingTool(tool);
+    const t = setTimeout(() => setBouncingTool(null), 350);
+    return () => clearTimeout(t);
+  }, [tool]);
+
+  const connect = useCallback(async () => {
+    const port = await detectBackendPort();
+    backendPortRef.current = port;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.hostname || 'localhost';
-    const ws = new WebSocket(`${protocol}//${host}:3002`);
+    const ws = new WebSocket(`${protocol}//${host}:${port}`);
 
     ws.onopen = () => {
       setConnected(true);
@@ -139,7 +166,7 @@ export default function App() {
         next.delete(actionId);
         return next;
       });
-    }, 400);
+    }, 500);
   }, []);
 
   const handleRemoteRedo = useCallback((action: DrawAction) => {
@@ -158,10 +185,11 @@ export default function App() {
         next.delete(action.id);
         return next;
       });
-    }, 400);
+    }, 500);
   }, []);
 
   const handleUndo = useCallback(() => {
+    if (undoingIds.size > 0 || redoingIds.size > 0) return;
     setActions((prev) => {
       const myActions = prev.filter((a) => a.userId === userId);
       if (myActions.length === 0) return prev;
@@ -187,13 +215,14 @@ export default function App() {
           next.delete(last.id);
           return next;
         });
-      }, 400);
+      }, 500);
 
       return prev;
     });
-  }, [userId]);
+  }, [userId, undoingIds.size, redoingIds.size]);
 
   const handleRedo = useCallback(() => {
+    if (undoingIds.size > 0 || redoingIds.size > 0) return;
     setUndoStack((stack) => {
       if (stack.length === 0) return stack;
       const last = stack[stack.length - 1];
@@ -220,11 +249,11 @@ export default function App() {
           next.delete(last.id);
           return next;
         });
-      }, 400);
+      }, 500);
 
       return stack.slice(0, -1);
     });
-  }, [userId]);
+  }, [userId, undoingIds.size, redoingIds.size]);
 
   const myActions = actions.filter((a) => a.userId === userId);
   const canUndo = myActions.length > 0 && undoingIds.size === 0;
@@ -234,6 +263,7 @@ export default function App() {
     <div style={{ width: '100%', height: '100%' }}>
       <Toolbar
         tool={tool}
+        bouncingTool={bouncingTool}
         setTool={setTool}
         color={color}
         setColor={setColor}
@@ -255,6 +285,7 @@ export default function App() {
         color={color}
         lineWidth={lineWidth}
         actions={actions}
+        users={users}
         userId={userId}
         userName={userNameRef.current}
         onDrawComplete={handleDrawComplete}

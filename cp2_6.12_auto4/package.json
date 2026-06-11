@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "concurrently \"ts-node server/index.ts\" \"vite\"",
     "build": "tsc && vite build",
-    "server": "ts-node server/index.ts"
+    "server": "ts-node server/index.ts",
+    "start": "ts-node server/index.ts"
   },
+  "description": "实时协作多人白板 - 服务端自动从 3001 端口开始递增查找可用端口；前端会自动探测后端端口并连接 WebSocket",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

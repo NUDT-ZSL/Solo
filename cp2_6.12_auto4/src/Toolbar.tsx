@@ -3,6 +3,7 @@ import type { ToolType, ConnectedUser } from './types';
 
 interface ToolbarProps {
   tool: ToolType;
+  bouncingTool: ToolType | null;
   setTool: (t: ToolType) => void;
   color: string;
   setColor: (c: string) => void;
@@ -87,6 +88,7 @@ const REDO_ICON = (
 
 function Toolbar({
   tool,
+  bouncingTool,
   setTool,
   color,
   setColor,
@@ -102,11 +104,11 @@ function Toolbar({
   currentUserId,
   currentUserColor,
 }: ToolbarProps) {
-  const [bouncingTool, setBouncingTool] = useState<ToolType | null>(tool);
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const paletteRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -118,20 +120,36 @@ function Toolbar({
   }, []);
 
   useEffect(() => {
-    setBouncingTool(tool);
-    const t = setTimeout(() => setBouncingTool(null), 300);
-    return () => clearTimeout(t);
-  }, [tool]);
-
-  useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (paletteRef.current && !paletteRef.current.contains(e.target as Node)) {
         setShowPalette(false);
+      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        const target = e.target as HTMLElement;
+        if (!target.closest('.hamburger-btn')) {
+          setMenuOpen(false);
+        }
       }
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        onUndo();
+      } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+        e.preventDefault();
+        onRedo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onUndo, onRedo]);
 
   const handleSliderClick = useCallback(
     (e: React.MouseEvent) => {
@@ -167,19 +185,29 @@ function Toolbar({
 
   const sliderPct = ((lineWidth - 1) / 19) * 100;
 
+  const handleToolClick = (t: ToolType) => {
+    setTool(t);
+    if (isMobile) {
+      setMenuOpen(false);
+    }
+  };
+
   const ToolbarContent = (
     <>
-      {TOOLS.map((t) => (
-        <button
-          key={t.id}
-          className={`toolbar-btn ${tool === t.id ? 'active' : ''} ${bouncingTool === t.id ? 'tool-bounce' : ''}`}
-          title={t.label}
-          onClick={() => setTool(t.id)}
-          type="button"
-        >
-          {t.icon}
-        </button>
-      ))}
+      {TOOLS.map((t) => {
+        const isBouncing = bouncingTool === t.id;
+        return (
+          <button
+            key={t.id}
+            className={`toolbar-btn ${tool === t.id ? 'active' : ''} ${isBouncing ? 'tool-bounce' : ''}`}
+            title={t.label}
+            onClick={() => handleToolClick(t.id)}
+            type="button"
+          >
+            {t.icon}
+          </button>
+        );
+      })}
 
       <div className="divider" />
 
@@ -332,7 +360,11 @@ function Toolbar({
             <span />
             <span />
           </button>
-          {menuOpen && <div className="mobile-menu glass-panel">{ToolbarContent}</div>}
+          {menuOpen && (
+            <div ref={menuRef} className="mobile-menu glass-panel">
+              <div className="mobile-menu-row">{ToolbarContent}</div>
+            </div>
+          )}
         </>
       )}
 
