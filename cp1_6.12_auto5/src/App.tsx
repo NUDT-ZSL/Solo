@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { CheckCircle2, Palette, History, Share2, MessageSquareText } from 'lucide-react';
 import { EditorPanel } from '@/editor/EditorPanel';
 import { PreviewArea } from '@/preview/PreviewArea';
 import { useThemeStore, initFromStorage } from '@/store/useThemeStore';
-import type { ThemeColors, ShareableTheme } from '@/store/types';
+import type { ThemeColors, ShareableTheme, ColorKey } from '@/store/types';
+import { COLOR_KEYS } from '@/store/types';
 
 const DEFAULT_COLORS: ThemeColors = {
   primary: '#6366f1',
@@ -13,21 +14,19 @@ const DEFAULT_COLORS: ThemeColors = {
   accent: '#ec4899',
 };
 
-function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = useState<boolean>(
-    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
-  );
-  useEffect(() => {
-    const handler = () => setIsDesktop(window.innerWidth >= 1024);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  return isDesktop;
+type ViewportMode = 'desktop' | 'tablet' | 'mobile';
+
+function getViewportMode(): ViewportMode {
+  if (typeof window === 'undefined') return 'desktop';
+  const w = window.innerWidth;
+  if (w >= 1025) return 'desktop';
+  if (w >= 769) return 'tablet';
+  return 'mobile';
 }
 
 function App() {
-  const isDesktop = useIsDesktop();
-  const [panelOpen, setPanelOpen] = useState<boolean>(isDesktop);
+  const [viewportMode, setViewportMode] = useState<ViewportMode>(getViewportMode());
+  const [panelOpen, setPanelOpen] = useState<boolean>(viewportMode === 'desktop');
 
   const toast = useThemeStore((s) => s.toast);
   const loadFromHash = useThemeStore((s) => s.loadFromHash);
@@ -36,7 +35,17 @@ function App() {
 
   const [previewColors, setPreviewColors] = useState<ThemeColors>(DEFAULT_COLORS);
 
-  // 初始化
+  useEffect(() => {
+    const handler = () => {
+      const mode = getViewportMode();
+      setViewportMode(mode);
+      if (mode === 'desktop') setPanelOpen(true);
+      if (mode === 'mobile') setPanelOpen(false);
+    };
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
   useEffect(() => {
     initFromStorage();
     const shared = loadFromHash();
@@ -48,54 +57,110 @@ function App() {
         exportedAt: Date.now(),
       };
       importSharedTheme(payload);
-      // 清理 hash，避免重复导入
       history.replaceState(null, '', window.location.pathname);
     }
   }, [loadFromHash, importSharedTheme]);
 
-  // 同步 activeTheme 的初始颜色
   useEffect(() => {
     if (activeTheme) {
       setPreviewColors(activeTheme.colors);
-      // 同步设置 CSS 变量
       applyThemeToRoot(activeTheme.colors);
     }
   }, [activeTheme?.id]);
 
-  // 响应式：桌面默认展开
-  useEffect(() => {
-    setPanelOpen(isDesktop);
-  }, [isDesktop]);
-
-  // EditorPanel 调用的 updateTheme 函数：更新预览颜色 + CSS 变量
   const updateTheme = useCallback((colors: ThemeColors) => {
     setPreviewColors(colors);
     applyThemeToRoot(colors);
   }, []);
 
-  const handleOpenEditor = useCallback(() => setPanelOpen(true), []);
-  const handleCloseEditor = useCallback(() => {
-    if (!isDesktop) setPanelOpen(false);
-  }, [isDesktop]);
+  const handleOpenPanel = useCallback(() => setPanelOpen(true), []);
+  const handleClosePanel = useCallback(() => {
+    if (viewportMode !== 'desktop') setPanelOpen(false);
+  }, [viewportMode]);
 
   const showOverlay = useMemo(
-    () => !isDesktop && panelOpen,
-    [isDesktop, panelOpen]
+    () => (viewportMode === 'tablet' || viewportMode === 'mobile') && panelOpen,
+    [viewportMode, panelOpen]
   );
+
+  const isTablet = viewportMode === 'tablet';
 
   return (
     <div className="app-container">
+      {isTablet && (
+        <aside className="editor-rail" aria-label="快捷工具栏">
+          <button
+            type="button"
+            className={`editor-rail__icon-btn ${
+              panelOpen ? 'editor-rail__icon-btn--active' : ''
+            }`}
+            onClick={handleOpenPanel}
+            title="打开主题编辑面板"
+          >
+            <Palette />
+          </button>
+          <button
+            type="button"
+            className="editor-rail__icon-btn"
+            onClick={() => useThemeStore.getState().saveSnapshot()}
+            title="保存版本快照"
+          >
+            <History />
+          </button>
+          <button
+            type="button"
+            className="editor-rail__icon-btn"
+            onClick={async () => {
+              const link = useThemeStore.getState().generateShareLink();
+              try {
+                await navigator.clipboard.writeText(link);
+                useThemeStore.getState().setToast('✓ 分享链接已复制');
+              } catch {
+                window.prompt('复制链接：', link);
+              }
+            }}
+            title="生成分享链接"
+          >
+            <Share2 />
+          </button>
+          <button
+            type="button"
+            className="editor-rail__icon-btn"
+            onClick={handleOpenPanel}
+            title="添加注释"
+          >
+            <MessageSquareText />
+          </button>
+          <div className="editor-rail__swatches">
+            {(COLOR_KEYS as ColorKey[]).map((k) => (
+              <div
+                key={k}
+                className="editor-rail__swatch"
+                style={{ backgroundColor: previewColors[k] }}
+              />
+            ))}
+          </div>
+        </aside>
+      )}
+
       <EditorPanel
         open={panelOpen}
-        onClose={handleCloseEditor}
+        onClose={handleClosePanel}
         updateTheme={updateTheme}
       />
+
       {showOverlay && (
-        <div className="drawer-overlay" onClick={handleCloseEditor} />
+        <div
+          className="drawer-overlay"
+          onClick={handleClosePanel}
+          aria-hidden="true"
+        />
       )}
-      <PreviewArea colors={previewColors} onOpenEditor={handleOpenEditor} />
+
+      <PreviewArea colors={previewColors} onOpenEditor={handleOpenPanel} />
+
       {toast && (
-        <div className="toast">
+        <div className="toast" role="status">
           <CheckCircle2 />
           {toast}
         </div>

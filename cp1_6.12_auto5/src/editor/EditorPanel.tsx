@@ -9,7 +9,6 @@ import {
   History as HistoryIcon,
   MessageSquareText,
   X,
-  CheckCircle2,
 } from 'lucide-react';
 import { useThemeStore } from '@/store/useThemeStore';
 import type { ColorKey, ThemeColors } from '@/store/types';

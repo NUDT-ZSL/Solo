@@ -1,22 +1,50 @@
-import React from 'react';
-import type { ThemeColors } from '@/store/types';
+import React, { useMemo } from 'react';
 import { calculateContrast } from '@/utils/contrastCheck';
 
 interface Props {
-  colors: ThemeColors;
+  primary: string;
+  secondary: string;
+  background: string;
+  text: string;
+  accent: string;
 }
 
 const NAV_ITEMS = [
-  { label: '仪表盘', active: true, dot: 'primary' },
-  { label: '项目管理', active: false, dot: 'secondary' },
-  { label: '成员协作', active: false, dot: 'accent' },
-  { label: '数据统计', active: false, dot: 'primary' },
-  { label: '系统设置', active: false, dot: 'secondary' },
-] as const;
+  { label: '仪表盘', active: true, dot: 'primary' as const },
+  { label: '项目管理', active: false, dot: 'secondary' as const },
+  { label: '成员协作', active: false, dot: 'accent' as const },
+  { label: '数据统计', active: false, dot: 'primary' as const },
+  { label: '系统设置', active: false, dot: 'secondary' as const },
+];
 
-export const SidebarDemo: React.FC<Props> = React.memo(function SidebarDemo({ colors }) {
-  const textContrast = calculateContrast(colors.text, colors.background);
-  const badgeOk = textContrast.passAA;
+export const SidebarDemo: React.FC<Props> = React.memo(function SidebarDemo({
+  primary,
+  secondary,
+  background,
+  text,
+  accent,
+}) {
+  const textContrast = useMemo(
+    () => calculateContrast(text, background),
+    [text, background]
+  );
+
+  const containerStyle = useMemo(
+    () => ({
+      '--c-primary': primary,
+      '--c-secondary': secondary,
+      '--c-background': background,
+      '--c-text': text,
+      '--c-accent': accent,
+    } as React.CSSProperties),
+    [primary, secondary, background, text, accent]
+  );
+
+  const dotColor = (k: 'primary' | 'secondary' | 'accent') => {
+    if (k === 'primary') return 'var(--c-primary)';
+    if (k === 'secondary') return 'var(--c-secondary)';
+    return 'var(--c-accent)';
+  };
 
   return (
     <article className="preview-card">
@@ -24,32 +52,50 @@ export const SidebarDemo: React.FC<Props> = React.memo(function SidebarDemo({ co
         <h3 className="preview-card__title">侧边栏 Sidebar</h3>
         <span
           className={`preview-card__badge ${
-            badgeOk ? 'preview-card__badge--ok' : 'preview-card__badge--warn'
+            textContrast.passAA
+              ? 'preview-card__badge--ok'
+              : 'preview-card__badge--warn'
           }`}
+          title={`文字对比度 ${textContrast.ratio}:1`}
         >
-          {badgeOk ? '✓ 对比度达标' : `⚠ 文字 ${textContrast.ratio}:1`}
+          {textContrast.passAA
+            ? '✓ 文字对比度达标'
+            : `⚠ 文字 ${textContrast.ratio}:1`}
         </span>
       </header>
-      <div className="demo-stage" style={{ backgroundColor: colors.background }}>
+      <div className="demo-stage" style={containerStyle}>
         <aside
           className="demo-sidebar"
           style={{
-            backgroundColor: colors.background,
-            border: `1px solid ${colors.secondary}22`,
+            backgroundColor: 'var(--c-background)',
+            border: '1px solid color-mix(in srgb, var(--c-secondary) 14%, transparent)',
           }}
         >
-          <div className="demo-sidebar__head" style={{ borderColor: `${colors.secondary}33` }}>
+          <div
+            className="demo-sidebar__head"
+            style={{
+              borderColor:
+                'color-mix(in srgb, var(--c-secondary) 20%, transparent)',
+            }}
+          >
             <div
               className="demo-sidebar__avatar"
               style={{
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
+                background:
+                  'linear-gradient(135deg, var(--c-primary), var(--c-accent))',
               }}
             />
             <div className="demo-sidebar__user">
-              <span className="demo-sidebar__name" style={{ color: colors.text }}>
+              <span
+                className="demo-sidebar__name"
+                style={{ color: 'var(--c-text)' }}
+              >
                 设计师 Aria
               </span>
-              <span className="demo-sidebar__email" style={{ color: colors.text }}>
+              <span
+                className="demo-sidebar__email"
+                style={{ color: 'var(--c-text)' }}
+              >
                 aria@colorlab.io
               </span>
             </div>
@@ -59,16 +105,16 @@ export const SidebarDemo: React.FC<Props> = React.memo(function SidebarDemo({ co
               key={item.label}
               className="demo-sidebar__item"
               style={{
-                color: colors.text,
-                backgroundColor: item.active ? `${colors.primary}16` : 'transparent',
+                color: 'var(--c-text)',
+                backgroundColor: item.active
+                  ? 'color-mix(in srgb, var(--c-primary) 9%, transparent)'
+                  : 'transparent',
                 fontWeight: item.active ? 600 : 500,
               }}
             >
               <span
                 className="demo-sidebar__dot"
-                style={{
-                  backgroundColor: colors[item.dot as keyof ThemeColors],
-                }}
+                style={{ backgroundColor: dotColor(item.dot) }}
               />
               {item.label}
             </div>
@@ -77,6 +123,13 @@ export const SidebarDemo: React.FC<Props> = React.memo(function SidebarDemo({ co
       </div>
     </article>
   );
-});
+},
+  (prev, next) =>
+    prev.primary === next.primary &&
+    prev.secondary === next.secondary &&
+    prev.background === next.background &&
+    prev.text === next.text &&
+    prev.accent === next.accent
+);
 
 export default SidebarDemo;

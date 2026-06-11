@@ -215,15 +215,21 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     const id = get().activeThemeId;
     const theme = get().getActiveTheme();
     if (!id || !theme) return;
+    // 使用 structuredClone 深拷贝，避免后续修改污染历史版本
+    const clonedColors =
+      typeof structuredClone === 'function'
+        ? structuredClone(theme.colors)
+        : JSON.parse(JSON.stringify(theme.colors));
     const snap: HistorySnapshot = {
       id: uid(),
       themeId: id,
-      colors: { ...theme.colors },
+      colors: clonedColors,
       timestamp: Date.now(),
       label,
     };
     const next = [snap, ...get().history].slice(0, MAX_HISTORY);
-    saveHistory(id, next);
+    // 存 localStorage 时也做一次深拷贝序列化
+    saveHistory(id, JSON.parse(JSON.stringify(next)));
     set({ history: next });
     get().setToast('✓ 版本快照已保存');
   },

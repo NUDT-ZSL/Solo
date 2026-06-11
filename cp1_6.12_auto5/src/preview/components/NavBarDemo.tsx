@@ -1,15 +1,40 @@
-import React from 'react';
-import type { ThemeColors } from '@/store/types';
+import React, { useMemo } from 'react';
 import { calculateContrast } from '@/utils/contrastCheck';
 
 interface Props {
-  colors: ThemeColors;
+  primary: string;
+  secondary: string;
+  background: string;
+  text: string;
 }
 
-export const NavBarDemo: React.FC<Props> = React.memo(function NavBarDemo({ colors }) {
-  const textContrast = calculateContrast(colors.text, colors.background);
-  const ctaContrast = calculateContrast('#ffffff', colors.primary);
+const NAV_ITEMS = ['首页', '作品', '文档', '团队'];
+
+export const NavBarDemo: React.FC<Props> = React.memo(function NavBarDemo({
+  primary,
+  secondary,
+  background,
+  text,
+}) {
+  const textContrast = useMemo(
+    () => calculateContrast(text, background),
+    [text, background]
+  );
+  const ctaContrast = useMemo(
+    () => calculateContrast('#ffffff', primary),
+    [primary]
+  );
   const badgeOk = textContrast.passAA && ctaContrast.passAA;
+
+  const containerStyle = useMemo(
+    () => ({
+      '--c-primary': primary,
+      '--c-secondary': secondary,
+      '--c-background': background,
+      '--c-text': text,
+    } as React.CSSProperties),
+    [primary, secondary, background, text]
+  );
 
   return (
     <article className="preview-card">
@@ -19,32 +44,44 @@ export const NavBarDemo: React.FC<Props> = React.memo(function NavBarDemo({ colo
           className={`preview-card__badge ${
             badgeOk ? 'preview-card__badge--ok' : 'preview-card__badge--warn'
           }`}
+          title={
+            badgeOk
+              ? '对比度满足 WCAG AA'
+              : `文字-背景 ${textContrast.ratio}:1 · 按钮-白 ${ctaContrast.ratio}:1`
+          }
         >
-          {badgeOk ? '✓ 对比度达标' : `⚠ 文字 ${textContrast.ratio}:1`}
+          {badgeOk
+            ? '✓ 对比度达标'
+            : `⚠ 文字 ${textContrast.ratio}:1 / 按钮 ${ctaContrast.ratio}:1`}
         </span>
       </header>
-      <div className="demo-stage" style={{ backgroundColor: colors.background }}>
+      <div className="demo-stage" style={containerStyle}>
         <nav
           className="demo-navbar"
           style={{
-            backgroundColor: colors.background,
-            border: `1px solid ${colors.secondary}22`,
+            backgroundColor: 'var(--c-background)',
+            border: '1px solid color-mix(in srgb, var(--c-secondary) 14%, transparent)',
           }}
         >
-          <span className="demo-navbar__brand" style={{ color: colors.primary }}>
+          <span
+            className="demo-navbar__brand"
+            style={{ color: 'var(--c-primary)' }}
+          >
             ColorLab
           </span>
           <div className="demo-navbar__links">
-            {['首页', '作品', '文档', '团队'].map((label, i) => (
+            {NAV_ITEMS.map((label, i) => (
               <span
                 key={label}
                 className={`demo-navbar__link ${
                   i === 0 ? 'demo-navbar__link--active' : ''
                 }`}
                 style={{
-                  color: colors.text,
+                  color: 'var(--c-text)',
                   backgroundColor:
-                    i === 0 ? `${colors.primary}18` : 'transparent',
+                    i === 0
+                      ? 'color-mix(in srgb, var(--c-primary) 10%, transparent)'
+                      : 'transparent',
                 }}
               >
                 {label}
@@ -55,8 +92,8 @@ export const NavBarDemo: React.FC<Props> = React.memo(function NavBarDemo({ colo
             type="button"
             className="demo-navbar__cta"
             style={{
-              backgroundColor: colors.primary,
-              color: '#ffffff',
+              backgroundColor: 'var(--c-primary)',
+              color: '#fff',
             }}
           >
             立即开始
@@ -65,6 +102,12 @@ export const NavBarDemo: React.FC<Props> = React.memo(function NavBarDemo({ colo
       </div>
     </article>
   );
-});
+},
+  (prev, next) =>
+    prev.primary === next.primary &&
+    prev.secondary === next.secondary &&
+    prev.background === next.background &&
+    prev.text === next.text
+);
 
 export default NavBarDemo;

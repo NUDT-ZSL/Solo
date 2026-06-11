@@ -1,9 +1,12 @@
-import React from 'react';
-import type { ThemeColors } from '@/store/types';
+import React, { useMemo } from 'react';
 import { calculateContrast } from '@/utils/contrastCheck';
 
 interface Props {
-  colors: ThemeColors;
+  primary: string;
+  secondary: string;
+  background: string;
+  text: string;
+  accent: string;
 }
 
 const ITEMS = [
@@ -12,9 +15,34 @@ const ITEMS = [
   { label: '强调色填充', value: 88, color: 'accent' as const },
 ];
 
-export const ProgressDemo: React.FC<Props> = React.memo(function ProgressDemo({ colors }) {
-  const textContrast = calculateContrast(colors.text, colors.background);
-  const badgeOk = textContrast.passAA;
+export const ProgressDemo: React.FC<Props> = React.memo(function ProgressDemo({
+  primary,
+  secondary,
+  background,
+  text,
+  accent,
+}) {
+  const textContrast = useMemo(
+    () => calculateContrast(text, background),
+    [text, background]
+  );
+
+  const containerStyle = useMemo(
+    () => ({
+      '--c-primary': primary,
+      '--c-secondary': secondary,
+      '--c-background': background,
+      '--c-text': text,
+      '--c-accent': accent,
+    } as React.CSSProperties),
+    [primary, secondary, background, text, accent]
+  );
+
+  const fillColor = (k: 'primary' | 'secondary' | 'accent') => {
+    if (k === 'primary') return 'var(--c-primary)';
+    if (k === 'secondary') return 'var(--c-secondary)';
+    return 'var(--c-accent)';
+  };
 
   return (
     <article className="preview-card">
@@ -22,29 +50,42 @@ export const ProgressDemo: React.FC<Props> = React.memo(function ProgressDemo({ 
         <h3 className="preview-card__title">进度条 Progress</h3>
         <span
           className={`preview-card__badge ${
-            badgeOk ? 'preview-card__badge--ok' : 'preview-card__badge--warn'
+            textContrast.passAA
+              ? 'preview-card__badge--ok'
+              : 'preview-card__badge--warn'
           }`}
+          title={`文字对比度 ${textContrast.ratio}:1`}
         >
-          {badgeOk ? '✓ 对比度达标' : `⚠ 文字 ${textContrast.ratio}:1`}
+          {textContrast.passAA
+            ? '✓ 文字对比度达标'
+            : `⚠ 文字 ${textContrast.ratio}:1`}
         </span>
       </header>
-      <div className="demo-stage" style={{ backgroundColor: colors.background }}>
+      <div className="demo-stage" style={containerStyle}>
         <div className="demo-progress" style={{ width: '100%' }}>
           {ITEMS.map((item) => (
             <React.Fragment key={item.label}>
-              <div className="demo-progress__row" style={{ color: colors.text }}>
+              <div
+                className="demo-progress__row"
+                style={{ color: 'var(--c-text)' }}
+              >
                 <span>{item.label}</span>
-                <span style={{ color: colors[item.color] }}>{item.value}%</span>
+                <span style={{ color: fillColor(item.color) }}>
+                  {item.value}%
+                </span>
               </div>
               <div
                 className="demo-progress__bar"
-                style={{ backgroundColor: `${colors.secondary}22` }}
+                style={{
+                  backgroundColor:
+                    'color-mix(in srgb, var(--c-secondary) 14%, transparent)',
+                }}
               >
                 <div
                   className="demo-progress__fill"
                   style={{
                     width: `${item.value}%`,
-                    backgroundColor: colors[item.color],
+                    backgroundColor: fillColor(item.color),
                   }}
                 />
               </div>
@@ -54,6 +95,13 @@ export const ProgressDemo: React.FC<Props> = React.memo(function ProgressDemo({ 
       </div>
     </article>
   );
-});
+},
+  (prev, next) =>
+    prev.primary === next.primary &&
+    prev.secondary === next.secondary &&
+    prev.background === next.background &&
+    prev.text === next.text &&
+    prev.accent === next.accent
+);
 
 export default ProgressDemo;

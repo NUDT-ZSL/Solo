@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import { AlertTriangle } from 'lucide-react';
-import type { ColorKey, ThemeColors } from '@/store/types';
+import type { ColorKey } from '@/store/types';
 import { COLOR_KEY_LABELS } from '@/store/types';
 import { calculateContrast, isValidHex, normalizeHex } from '@/utils/contrastCheck';
 
