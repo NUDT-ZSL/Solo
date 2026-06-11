@@ -150,15 +150,21 @@ interface Particle {
   x: number;
   y: number;
   size: number;
+  baseSize: number;
   opacity: number;
+  maxOpacity: number;
   speed: number;
-  drift: number;
+  driftSpeed: number;
+  driftOffset: number;
+  driftDirection: number;
+  phase: number;
 }
 
 const SyncOverlay: React.FC<{ syncStatus: SyncStatus }> = ({ syncStatus }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animationRef = useRef<number>(0);
+  const timeRef = useRef<number>(0);
 
   useEffect(() => {
     if (syncStatus !== 'syncing') return;
@@ -177,38 +183,60 @@ const SyncOverlay: React.FC<{ syncStatus: SyncStatus }> = ({ syncStatus }) => {
     const particleCount = Math.floor(Math.random() * 31) + 20;
     particlesRef.current = [];
 
-    for (let i = 0; i < particleCount; i++) {
-      particlesRef.current.push({
+    const createParticle = (startY?: number): Particle => {
+      const riseDuration = Math.random() * 1 + 0.5;
+      const speed = height / (riseDuration * 60);
+      const baseSize = Math.random() * 20 + 15;
+      const maxOpacity = Math.random() * 0.25 + 0.15;
+
+      return {
         x: Math.random() * width,
-        y: height + Math.random() * 100,
-        size: Math.random() * 8 + 4,
-        opacity: Math.random() * 0.3 + 0.2,
-        speed: Math.random() * 1 + 0.5,
-        drift: (Math.random() - 0.5) * 2,
-      });
+        y: startY !== undefined ? startY : height + Math.random() * 100,
+        size: baseSize * 0.3,
+        baseSize,
+        opacity: 0,
+        maxOpacity,
+        speed,
+        driftSpeed: Math.random() * 0.02 + 0.01,
+        driftOffset: Math.random() * Math.PI * 2,
+        driftDirection: Math.random() > 0.5 ? 1 : -1,
+        phase: Math.random(),
+      };
+    };
+
+    for (let i = 0; i < particleCount; i++) {
+      particlesRef.current.push(createParticle(Math.random() * height));
     }
 
     const animate = () => {
       ctx.clearRect(0, 0, width, height);
+      timeRef.current += 0.016;
 
       particlesRef.current.forEach((p, i) => {
         p.y -= p.speed;
-        p.x += p.drift * 0.5;
-        p.opacity = Math.max(0, p.opacity - 0.002);
+        p.phase += p.driftSpeed;
+        p.x += Math.sin(p.phase + p.driftOffset) * p.driftDirection * 0.8;
 
-        if (p.y < -20 || p.opacity <= 0) {
-          particlesRef.current[i] = {
-            x: Math.random() * width,
-            y: height + 20,
-            size: Math.random() * 8 + 4,
-            opacity: Math.random() * 0.3 + 0.2,
-            speed: Math.random() * 1 + 0.5,
-            drift: (Math.random() - 0.5) * 2,
-          };
+        const progress = 1 - p.y / height;
+
+        if (progress < 0.2) {
+          p.opacity = (progress / 0.2) * p.maxOpacity;
+        } else if (progress > 0.7) {
+          p.opacity = ((1 - progress) / 0.3) * p.maxOpacity;
+        } else {
+          p.opacity = p.maxOpacity;
+        }
+
+        p.size = p.baseSize * (0.4 + progress * 0.8);
+
+        if (p.y < -p.size || p.opacity <= 0) {
+          particlesRef.current[i] = createParticle();
         }
 
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
         gradient.addColorStop(0, `rgba(255, 248, 220, ${p.opacity})`);
+        gradient.addColorStop(0.4, `rgba(255, 248, 220, ${p.opacity * 0.6})`);
+        gradient.addColorStop(0.7, `rgba(255, 248, 220, ${p.opacity * 0.2})`);
         gradient.addColorStop(1, 'rgba(255, 248, 220, 0)');
 
         ctx.fillStyle = gradient;
@@ -222,8 +250,16 @@ const SyncOverlay: React.FC<{ syncStatus: SyncStatus }> = ({ syncStatus }) => {
 
     animationRef.current = requestAnimationFrame(animate);
 
+    const handleResize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    window.addEventListener('resize', handleResize);
+
     return () => {
       cancelAnimationFrame(animationRef.current);
+      window.removeEventListener('resize', handleResize);
     };
   }, [syncStatus]);
 
@@ -237,13 +273,13 @@ const SyncOverlay: React.FC<{ syncStatus: SyncStatus }> = ({ syncStatus }) => {
         left: 0,
         width: '100%',
         height: '100%',
-        background: 'rgba(26, 26, 46, 0.8)',
+        background: 'rgba(26, 26, 46, 0.85)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
-        backdropFilter: 'blur(4px)',
+        backdropFilter: 'blur(6px)',
       }}
     >
       <canvas

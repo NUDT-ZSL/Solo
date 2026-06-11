@@ -14,7 +14,13 @@ interface Petal {
   cp1y: number;
   cp2x: number;
   cp2y: number;
+  cp3x: number;
+  cp3y: number;
+  cp4x: number;
+  cp4y: number;
   length: number;
+  width: number;
+  tipRoundness: number;
 }
 
 const SCENT_COLORS: Record<string, string> = {
@@ -52,15 +58,33 @@ const FlowerCanvas = ({
     for (let i = 0; i < actualCount; i++) {
       const charCode = chars.charCodeAt(i) || 32;
       const angle = (i / actualCount) * Math.PI * 2;
-      const normalized = (charCode % 100) / 100;
+
+      const length = 50 + (charCode % 50);
+      const width = 20 + ((charCode * 7) % 25);
+      const tipRoundness = 0.3 + ((charCode * 3) % 50) / 100;
+
+      const cp1x = width * 0.4 + (charCode % 8);
+      const cp1y = -length * 0.15 - ((charCode * 2) % 10);
+      const cp2x = width * 0.9 + ((charCode * 5) % 10);
+      const cp2y = -length * 0.5 - ((charCode * 3) % 15);
+      const cp3x = width * 0.7 + ((charCode * 4) % 8);
+      const cp3y = -length * 0.85 - ((charCode * 2) % 10);
+      const cp4x = width * 0.2 + (charCode % 6);
+      const cp4y = -length + (charCode % 8);
 
       petals.push({
         angle,
-        cp1x: -30 - (charCode % 20),
-        cp1y: -30 - normalized * 30,
-        cp2x: -50 - (charCode % 15),
-        cp2y: -60 - normalized * 20,
-        length: 60 + (charCode % 40),
+        cp1x,
+        cp1y,
+        cp2x,
+        cp2y,
+        cp3x,
+        cp3y,
+        cp4x,
+        cp4y,
+        length,
+        width,
+        tipRoundness,
       });
     }
     return petals;
@@ -103,6 +127,34 @@ const FlowerCanvas = ({
     canvas.style.height = `${size}px`;
     ctx.scale(dpr, dpr);
 
+    const drawPetalPath = (petal: Petal, time: number, bloom: number) => {
+      const breathScale = 1 + Math.sin(time / 200 * Math.PI * 2 + petal.angle) * 0.05;
+      const b = bloom;
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+
+      ctx.bezierCurveTo(
+        petal.cp1x * b * breathScale, petal.cp1y * b,
+        petal.cp2x * b * breathScale, petal.cp2y * b,
+        petal.cp3x * b * breathScale, petal.cp3y * b
+      );
+
+      ctx.bezierCurveTo(
+        petal.cp4x * b * breathScale, petal.cp4y * b,
+        -petal.cp4x * b * breathScale, petal.cp4y * b,
+        -petal.cp3x * b * breathScale, petal.cp3y * b
+      );
+
+      ctx.bezierCurveTo(
+        -petal.cp2x * b * breathScale, petal.cp2y * b,
+        -petal.cp1x * b * breathScale, petal.cp1y * b,
+        0, 0
+      );
+
+      ctx.closePath();
+    };
+
     const drawFlower = (time: number) => {
       const { petalCount, scentType, bloomProgress } = propsRef.current;
       const baseColor = scentType ? SCENT_COLORS[scentType] : '#90EE90';
@@ -112,15 +164,15 @@ const FlowerCanvas = ({
 
       const fps = 1000 / deltaTime;
       fpsRef.current.push(fps);
-      if (fpsRef.current.length > 60) {
+      if (fpsRef.current.length > 300) {
         fpsRef.current.shift();
       }
-      const avgFps = fpsRef.current.reduce((a, b) => a + b, 0) / fpsRef.current.length;
+      frameCountRef.current++;
       if (frameCountRef.current % 300 === 0 && frameCountRef.current > 0) {
+        const avgFps = fpsRef.current.reduce((a, b) => a + b, 0) / fpsRef.current.length;
         console.log(`平均帧率: ${avgFps.toFixed(1)}fps`);
       }
 
-      frameCountRef.current++;
       const centerX = size / 2;
       const centerY = size / 2;
 
@@ -138,14 +190,18 @@ const FlowerCanvas = ({
       ctx.fill();
 
       const rotation = (time / 15000) * Math.PI * 2;
-      const breathScale = 1 + Math.sin(time / 200 * Math.PI * 2) * 0.05;
 
       const petals = petalsRef.current;
-      if (petalCount === 0 || petals.length === 0) {
-        const closedScale = bloomProgress;
+      const hasScent = scentType && petalCount > 0 && petals.length > 0;
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+
+      if (!hasScent) {
+        const budScale = 1 - bloomProgress * 0.3;
+
         ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.scale(closedScale, closedScale);
+        ctx.scale(budScale, budScale);
 
         const budGradient = ctx.createRadialGradient(0, -10, 0, 0, -10, 50);
         budGradient.addColorStop(0, '#90EE90');
@@ -155,76 +211,87 @@ const FlowerCanvas = ({
         ctx.ellipse(0, 0, 25, 40, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.restore();
-        animationRef.current = requestAnimationFrame(drawFlower);
-        return;
-      }
-
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(rotation);
-      ctx.scale(breathScale, breathScale);
-
-      for (let i = 0; i < petals.length; i++) {
-        const petal = petals[i];
-        const currentBloom = bloomProgress;
-
-        ctx.save();
-        ctx.rotate(petal.angle);
-
-        const petalGradient = ctx.createLinearGradient(0, 0, 0, -petal.length * currentBloom);
-        petalGradient.addColorStop(0, baseColor);
-        petalGradient.addColorStop(1, adjustBrightness(baseColor, 30));
+        ctx.strokeStyle = '#228B22';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -35);
+        ctx.quadraticCurveTo(8, -20, 5, 0);
+        ctx.quadraticCurveTo(8, 20, 0, 35);
+        ctx.stroke();
 
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.bezierCurveTo(
-          petal.cp1x * currentBloom, petal.cp1y * currentBloom,
-          petal.cp2x * currentBloom, petal.cp2y * currentBloom,
-          0, -petal.length * currentBloom
-        );
-        ctx.bezierCurveTo(
-          -petal.cp2x * currentBloom, petal.cp2y * currentBloom,
-          -petal.cp1x * currentBloom, petal.cp1y * currentBloom,
-          0, 0
-        );
-
-        ctx.fillStyle = petalGradient;
-        ctx.fill();
-
-        if (imagePatternRef.current) {
-          ctx.save();
-          ctx.globalAlpha = 0.2;
-          ctx.fillStyle = imagePatternRef.current;
-          ctx.fill();
-          ctx.restore();
-        }
-
-        ctx.strokeStyle = adjustBrightness(baseColor, -20);
-        ctx.lineWidth = 1;
+        ctx.moveTo(0, -35);
+        ctx.quadraticCurveTo(-8, -20, -5, 0);
+        ctx.quadraticCurveTo(-8, 20, 0, 35);
         ctx.stroke();
 
         ctx.restore();
-      }
+      } else {
+        ctx.rotate(rotation);
 
-      const centerGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 25);
-      centerGradient.addColorStop(0, '#FFD700');
-      centerGradient.addColorStop(0.5, '#FFA500');
-      centerGradient.addColorStop(1, '#CD853F');
+        for (let i = 0; i < petals.length; i++) {
+          const petal = petals[i];
+          const delay = (i / petals.length) * 0.3;
+          const adjustedBloom = Math.max(0, Math.min(1, (bloomProgress - delay) / (1 - delay)));
 
-      ctx.fillStyle = centerGradient;
-      ctx.beginPath();
-      ctx.arc(0, 0, 20, 0, Math.PI * 2);
-      ctx.fill();
+          if (adjustedBloom <= 0) continue;
 
-      for (let i = 0; i < 8; i++) {
-        const dotAngle = (i / 8) * Math.PI * 2;
-        const dotX = Math.cos(dotAngle) * 12;
-        const dotY = Math.sin(dotAngle) * 12;
-        ctx.fillStyle = '#FFF8DC';
+          ctx.save();
+          ctx.rotate(petal.angle);
+
+          drawPetalPath(petal, time, adjustedBloom);
+
+          const petalGradient = ctx.createRadialGradient(
+            0, 0, 0,
+            0, -petal.length * adjustedBloom * 0.5, petal.length * adjustedBloom
+          );
+          petalGradient.addColorStop(0, adjustBrightness(baseColor, 20));
+          petalGradient.addColorStop(0.5, baseColor);
+          petalGradient.addColorStop(1, adjustBrightness(baseColor, -15));
+
+          ctx.fillStyle = petalGradient;
+          ctx.fill();
+
+          if (imagePatternRef.current) {
+            ctx.save();
+            ctx.globalAlpha = 0.25;
+            ctx.fillStyle = imagePatternRef.current;
+            ctx.fill();
+            ctx.restore();
+          }
+
+          ctx.strokeStyle = adjustBrightness(baseColor, -25);
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+
+          ctx.restore();
+        }
+
+        const centerScale = 0.5 + bloomProgress * 0.5;
+        ctx.save();
+        ctx.scale(centerScale, centerScale);
+
+        const centerGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 25);
+        centerGradient.addColorStop(0, '#FFD700');
+        centerGradient.addColorStop(0.5, '#FFA500');
+        centerGradient.addColorStop(1, '#CD853F');
+
+        ctx.fillStyle = centerGradient;
         ctx.beginPath();
-        ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
         ctx.fill();
+
+        for (let i = 0; i < 8; i++) {
+          const dotAngle = (i / 8) * Math.PI * 2 + rotation * 0.5;
+          const dotX = Math.cos(dotAngle) * 12;
+          const dotY = Math.sin(dotAngle) * 12;
+          ctx.fillStyle = '#FFF8DC';
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
       }
 
       ctx.restore();

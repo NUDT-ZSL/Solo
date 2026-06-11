@@ -8,6 +8,10 @@ const MAX_ENTRIES = 30;
 
 export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
 
+interface ScentEntryWithSync extends ScentEntry {
+  synced: number;
+}
+
 interface UseIndexedDBReturn {
   saveOffline: (entry: ScentEntry) => Promise<void>;
   loadOffline: () => Promise<ScentEntry[]>;
@@ -35,7 +39,7 @@ const openDB = (): Promise<IDBDatabase> => {
   });
 };
 
-const loadAllEntries = async (): Promise<ScentEntry[]> => {
+const loadAllEntries = async (): Promise<ScentEntryWithSync[]> => {
   const startTime = performance.now();
   const db = await openDB();
   const transaction = db.transaction(STORE_NAME, 'readonly');
@@ -46,7 +50,7 @@ const loadAllEntries = async (): Promise<ScentEntry[]> => {
     request.onsuccess = () => {
       const duration = performance.now() - startTime;
       console.log(`IndexedDB 读取耗时: ${duration.toFixed(2)}ms`);
-      resolve(request.result);
+      resolve(request.result as ScentEntryWithSync[]);
     };
     request.onerror = () => reject(request.error);
     transaction.oncomplete = () => db.close();
@@ -72,16 +76,14 @@ export const useIndexedDB = (): UseIndexedDBReturn => {
   );
   const syncWithServerRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
-  const saveOffline = useCallback(async (entry: ScentEntry): Promise<void> => {
+  const saveEntryWithSync = useCallback(async (entry: ScentEntryWithSync): Promise<void> => {
     const startTime = performance.now();
     const db = await openDB();
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
 
-    const entryWithSync = { ...entry, synced: navigator.onLine ? 1 : 0 };
-
     return new Promise((resolve, reject) => {
-      const request = store.put(entryWithSync);
+      const request = store.put(entry);
       request.onsuccess = async () => {
         const allEntries = await loadAllEntries();
         if (allEntries.length > MAX_ENTRIES) {
@@ -100,8 +102,14 @@ export const useIndexedDB = (): UseIndexedDBReturn => {
     });
   }, []);
 
+  const saveOffline = useCallback(async (entry: ScentEntry): Promise<void> => {
+    const entryWithSync: ScentEntryWithSync = { ...entry, synced: navigator.onLine ? 1 : 0 };
+    await saveEntryWithSync(entryWithSync);
+  }, [saveEntryWithSync]);
+
   const loadOffline = useCallback(async (): Promise<ScentEntry[]> => {
-    return loadAllEntries();
+    const entries = await loadAllEntries();
+    return entries.map(({ synced, ...rest }) => rest);
   }, []);
 
   const deleteOffline = useCallback(async (id: string): Promise<void> => {
@@ -109,8 +117,9 @@ export const useIndexedDB = (): UseIndexedDBReturn => {
   }, []);
 
   const updateOffline = useCallback(async (entry: ScentEntry): Promise<void> => {
-    await saveOffline({ ...entry, synced: navigator.onLine ? 1 : 0 });
-  }, [saveOffline]);
+    const entryWithSync: ScentEntryWithSync = { ...entry, synced: navigator.onLine ? 1 : 0 };
+    await saveEntryWithSync(entryWithSync);
+  }, [saveEntryWithSync]);
 
   const syncWithServer = useCallback(async (): Promise<void> => {
     if (!navigator.onLine) {
@@ -121,7 +130,7 @@ export const useIndexedDB = (): UseIndexedDBReturn => {
     setSyncStatus('syncing');
     try {
       const allEntries = await loadAllEntries();
-      const unsynced = allEntries.filter((e) => (e as any).synced === 0);
+      const unsynced = allEntries.filter((e) => e.synced === 0);
 
       for (const entry of unsynced) {
         try {
@@ -131,7 +140,7 @@ export const useIndexedDB = (): UseIndexedDBReturn => {
             body: JSON.stringify(entry),
           });
           if (response.ok) {
-            await saveOffline({ ...entry, synced: 1 } as ScentEntry);
+            await saveEntryWithSync({ ...entry, synced: 1 });
           }
         } catch {
           continue;
@@ -142,7 +151,8 @@ export const useIndexedDB = (): UseIndexedDBReturn => {
       if (serverResponse.ok) {
         const serverEntries: ScentEntry[] = await serverResponse.json();
         for (const entry of serverEntries) {
-          await saveOffline({ ...entry, synced: 1 });
+          const entryWithSync: ScentEntryWithSync = { ...entry, synced: 1 };
+          await saveEntryWithSync(entryWithSync);
         }
       }
 
@@ -151,7 +161,7 @@ export const useIndexedDB = (): UseIndexedDBReturn => {
       setSyncStatus('error');
       setTimeout(() => setSyncStatus('idle'), 3000);
     }
-  }, [saveOffline]);
+  }, [saveEntryWithSync]);
 
   useEffect(() => {
     syncWithServerRef.current = syncWithServer;
