@@ -528,6 +528,31 @@ onMounted(() => {
   font-weight: 500;
 }
 
+.warnings-wrap {
+  padding: 12px 16px;
+  background: rgba(247, 201, 72, 0.08);
+  border: 1px solid rgba(247, 201, 72, 0.25);
+  border-radius: 8px;
+}
+
+.warnings-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #B7791F;
+  margin-bottom: var(--spacing-xs);
+}
+
+.warnings-list {
+  list-style: disc;
+  padding-left: 18px;
+}
+
+.warning-item {
+  font-size: 13px;
+  color: #975A16;
+  line-height: 1.6;
+}
+
 .samples-wrap {
   margin-top: var(--spacing-lg);
   padding-top: var(--spacing-md);
@@ -715,30 +740,30 @@ onMounted(() => {
   }
 
   .flow-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--spacing-lg) var(--spacing-2xl);
-    align-items: start;
-    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-lg) 0;
+    justify-content: center;
+    align-items: stretch;
   }
 
   .card-slot {
+    width: 50%;
+    max-width: 340px;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    padding: 0 var(--spacing-md);
+    box-sizing: border-box;
+  }
+
+  .card-slot > :deep(*) {
     width: 100%;
     max-width: 300px;
-    justify-self: center;
   }
 
   .connector-slot {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 40px;
-    position: relative;
-  }
-
-  .card-slot:nth-child(4n + 1),
-  .card-slot:nth-child(4n + 2) {
-    order: unset;
+    display: none;
   }
 }
 
@@ -756,9 +781,20 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px) and (min-width: 481px) {
   .input-card {
     padding: var(--spacing-lg);
+    border-radius: 14px;
+  }
+
+  .mobile-flow > :deep(.step-card) {
+    max-width: 90%;
+  }
+}
+
+@media (max-width: 480px) {
+  .input-card {
+    padding: var(--spacing-md);
     border-radius: 12px;
   }
 
@@ -775,7 +811,9 @@ onMounted(() => {
 
   .btn {
     flex: 1;
-    min-width: 120px;
+    min-width: 100px;
+    padding: 10px 14px;
+    font-size: 14px;
   }
 
   .samples-list {
@@ -785,6 +823,19 @@ onMounted(() => {
 
   .sample-btn {
     width: 100%;
+  }
+
+  .mobile-flow > :deep(.step-card) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .input-title {
+    font-size: 18px;
+  }
+
+  .flow-title {
+    font-size: 20px;
   }
 }
 </style>

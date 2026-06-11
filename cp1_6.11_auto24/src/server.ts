@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import type { Recipe, RecipeStep } from './types'
+import { parseRecipeText } from './utils/recipeParser'
 
 const app = express()
 const PORT = 3001
@@ -13,97 +14,128 @@ const DATA_FILE = path.join(DATA_DIR, 'recipes.json')
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true })
+app.use((err: Error, _req: express.Request, _res: express.Response, next: express.NextFunction) => {
+  if (err instanceof SyntaxError && 'status' in err && (err as any).status === 400 && 'body' in err) {
+    _res.status(400).json({
+      success: false,
+      error: '请求体JSON格式无效',
+      detail: err.message
+    })
+    return
+  }
+  next(err)
+})
+
+function ensureDataDir(): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+    if (!fs.existsSync(DATA_FILE)) {
+      fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf-8')
+    }
+  } catch (e) {
+    console.error('初始化数据目录失败:', (e as Error).message)
+  }
 }
 
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf-8')
-}
+ensureDataDir()
 
-const readRecipes = (): Recipe[] => {
+const readRecipes = (): { data: Recipe[] | null; error: string | null } => {
   try {
     const data = fs.readFileSync(DATA_FILE, 'utf-8')
-    return JSON.parse(data) as Recipe[]
-  } catch {
-    return []
+    const parsed = JSON.parse(data)
+    if (!Array.isArray(parsed)) {
+      return { data: null, error: '数据文件格式错误：期望数组' }
+    }
+    return { data: parsed as Recipe[], error: null }
+  } catch (e) {
+    const msg = (e as Error).message
+    console.error('读取数据文件失败:', msg)
+    return { data: null, error: `读取数据失败: ${msg}` }
   }
 }
 
-const writeRecipes = (recipes: Recipe[]): void => {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(recipes, null, 2), 'utf-8')
+const writeRecipes = (recipes: Recipe[]): { success: boolean; error: string | null } => {
+  try {
+    const tmpFile = DATA_FILE + '.tmp'
+    fs.writeFileSync(tmpFile, JSON.stringify(recipes, null, 2), 'utf-8')
+    fs.renameSync(tmpFile, DATA_FILE)
+    return { success: true, error: null }
+  } catch (e) {
+    const msg = (e as Error).message
+    console.error('写入数据文件失败:', msg)
+    return { success: false, error: `写入数据失败: ${msg}` }
+  }
 }
 
-const parseRecipeText = (text: string, title: string): RecipeStep[] => {
-  const lines = text.split(/\r?\n/).filter(line => line.trim())
-  const steps: RecipeStep[] = []
-  const stepRegex = /^步骤?\s*(\d+)\s*[:：.\-、]\s*(.*)$/i
-  const durationRegex = /(\d+(?:\.\d+)?)\s*(分钟|分|min|秒|s|sec)/i
-  const ingredientRegex = /加入\s*([^，,。；;]+?)(?=\s*[,，。；;]|$)/g
+function validateRecipeInput(body: any): { valid: boolean; error: string | null } {
+  if (!body || typeof body !== 'object') {
+    return { valid: false, error: '请求体必须为JSON对象' }
+  }
 
-  let stepNumber = 0
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    let match = trimmed.match(stepRegex)
-
-    let currentStepNumber: number
-    let actionText: string
-
-    if (match) {
-      currentStepNumber = parseInt(match[1], 10)
-      actionText = match[2].trim()
-      stepNumber = currentStepNumber
-    } else {
-      if (!trimmed) continue
-      stepNumber++
-      currentStepNumber = stepNumber
-      actionText = trimmed
+  if (body.rawText !== undefined) {
+    if (typeof body.rawText !== 'string') {
+      return { valid: false, error: 'rawText 必须为字符串' }
     }
+    if (!body.rawText.trim()) {
+      return { valid: false, error: '菜谱内容不能为空' }
+    }
+    if (body.rawText.length > 50000) {
+      return { valid: false, error: '菜谱内容过长，请控制在50000字符以内' }
+    }
+  }
 
-    const durationMatch = actionText.match(durationRegex)
-    let duration = 0
-    if (durationMatch) {
-      const value = parseFloat(durationMatch[1])
-      const unit = durationMatch[2].toLowerCase()
-      if (unit === '秒' || unit === 's' || unit === 'sec') {
-        duration = Math.round(value)
-      } else {
-        duration = Math.round(value * 60)
+  if (body.title !== undefined) {
+    if (typeof body.title !== 'string') {
+      return { valid: false, error: 'title 必须为字符串' }
+    }
+    if (body.title.length > 200) {
+      return { valid: false, error: '菜谱标题过长，请控制在200字符以内' }
+    }
+  }
+
+  if (body.steps !== undefined) {
+    if (!Array.isArray(body.steps)) {
+      return { valid: false, error: 'steps 必须为数组' }
+    }
+    for (let i = 0; i < body.steps.length; i++) {
+      const step = body.steps[i]
+      if (!step || typeof step !== 'object') {
+        return { valid: false, error: `steps[${i}] 必须为对象` }
+      }
+      if (typeof step.stepNumber !== 'number' || step.stepNumber < 0) {
+        return { valid: false, error: `steps[${i}].stepNumber 必须为非负数` }
+      }
+      if (typeof step.duration !== 'number' || step.duration < 0) {
+        return { valid: false, error: `steps[${i}].duration 必须为非负数` }
       }
     }
-
-    const ingredients: string[] = []
-    let ingredientMatch: RegExpExecArray | null
-    while ((ingredientMatch = ingredientRegex.exec(actionText)) !== null) {
-      const ingStr = ingredientMatch[1].trim()
-      const parts = ingStr.split(/[和与、,\s]+/).filter(p => p.trim())
-      ingredients.push(...parts)
-    }
-
-    steps.push({
-      id: uuidv4(),
-      stepNumber: currentStepNumber,
-      action: actionText.replace(durationRegex, '').replace(/[。；;]\s*$/, '').trim(),
-      duration,
-      ingredients,
-      detail: actionText,
-      imageUrl: '',
-      status: 'pending'
-    })
   }
 
-  return steps
+  return { valid: true, error: null }
 }
 
 app.get('/api/recipes', (_req, res) => {
-  const recipes = readRecipes()
-  res.json({ success: true, data: recipes })
+  const { data, error } = readRecipes()
+  if (error) {
+    return res.status(500).json({ success: false, error })
+  }
+  res.json({ success: true, data })
 })
 
 app.get('/api/recipes/:id', (req, res) => {
-  const recipes = readRecipes()
-  const recipe = recipes.find(r => r.id === req.params.id)
+  const id = req.params.id
+  if (!id || id.trim().length === 0) {
+    return res.status(400).json({ success: false, error: '无效的菜谱ID' })
+  }
+
+  const { data, error } = readRecipes()
+  if (error) {
+    return res.status(500).json({ success: false, error })
+  }
+
+  const recipe = data!.find(r => r.id === id)
   if (!recipe) {
     return res.status(404).json({ success: false, error: '菜谱不存在' })
   }
@@ -111,38 +143,76 @@ app.get('/api/recipes/:id', (req, res) => {
 })
 
 app.post('/api/recipes', (req, res) => {
+  const validation = validateRecipeInput(req.body)
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, error: validation.error })
+  }
+
   const { title, rawText } = req.body as { title?: string; rawText?: string }
 
   if (!rawText || !rawText.trim()) {
     return res.status(400).json({ success: false, error: '菜谱内容不能为空' })
   }
 
-  const steps = parseRecipeText(rawText, title || '未命名菜谱')
+  const result = parseRecipeText(rawText)
 
-  if (steps.length === 0) {
-    return res.status(400).json({ success: false, error: '未能解析出有效的步骤' })
+  if (result.steps.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: '未能解析出有效的步骤，请检查格式（步骤1: / Step 1 / 一、 / 1. 等）',
+      warnings: result.warnings
+    })
   }
 
   const recipe: Recipe = {
     id: uuidv4(),
-    title: title || '我的菜谱',
+    title: (title && title.trim()) || '我的菜谱',
     rawText,
-    steps,
+    steps: result.steps,
     createdAt: Date.now(),
     updatedAt: Date.now()
   }
 
-  const recipes = readRecipes()
-  recipes.unshift(recipe)
-  writeRecipes(recipes)
+  const { data, error: readError } = readRecipes()
+  if (readError) {
+    return res.status(500).json({ success: false, error: readError })
+  }
 
-  res.status(201).json({ success: true, data: recipe })
+  data!.unshift(recipe)
+
+  const { success: writeOk, error: writeError } = writeRecipes(data!)
+  if (!writeOk) {
+    return res.status(500).json({ success: false, error: writeError })
+  }
+
+  res.status(201).json({
+    success: true,
+    data: recipe,
+    warnings: result.warnings.length > 0 ? result.warnings : undefined
+  })
 })
 
 app.put('/api/recipes/:id', (req, res) => {
-  const recipes = readRecipes()
-  const index = recipes.findIndex(r => r.id === req.params.id)
+  const id = req.params.id
+  if (!id || id.trim().length === 0) {
+    return res.status(400).json({ success: false, error: '无效的菜谱ID' })
+  }
 
+  const validation = validateRecipeInput(req.body)
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, error: validation.error })
+  }
+
+  if (Object.keys(req.body).length === 0) {
+    return res.status(400).json({ success: false, error: '请求体不能为空，至少需要一个更新字段' })
+  }
+
+  const { data, error: readError } = readRecipes()
+  if (readError) {
+    return res.status(500).json({ success: false, error: readError })
+  }
+
+  const index = data!.findIndex(r => r.id === id)
   if (index === -1) {
     return res.status(404).json({ success: false, error: '菜谱不存在' })
   }
@@ -150,50 +220,89 @@ app.put('/api/recipes/:id', (req, res) => {
   const { title, rawText, steps } = req.body as Partial<Recipe>
 
   if (title !== undefined) {
-    recipes[index].title = title
+    data![index].title = title.trim() || data![index].title
   }
   if (rawText !== undefined) {
-    recipes[index].rawText = rawText
+    data![index].rawText = rawText
   }
   if (steps !== undefined) {
-    recipes[index].steps = steps
+    data![index].steps = steps
   }
-  recipes[index].updatedAt = Date.now()
+  data![index].updatedAt = Date.now()
 
-  writeRecipes(recipes)
-  res.json({ success: true, data: recipes[index] })
+  const { success: writeOk, error: writeError } = writeRecipes(data!)
+  if (!writeOk) {
+    return res.status(500).json({ success: false, error: writeError })
+  }
+
+  res.json({ success: true, data: data![index] })
 })
 
 app.delete('/api/recipes/:id', (req, res) => {
-  const recipes = readRecipes()
-  const filtered = recipes.filter(r => r.id !== req.params.id)
+  const id = req.params.id
+  if (!id || id.trim().length === 0) {
+    return res.status(400).json({ success: false, error: '无效的菜谱ID' })
+  }
 
-  if (filtered.length === recipes.length) {
+  const { data, error: readError } = readRecipes()
+  if (readError) {
+    return res.status(500).json({ success: false, error: readError })
+  }
+
+  const filtered = data!.filter(r => r.id !== id)
+
+  if (filtered.length === data!.length) {
     return res.status(404).json({ success: false, error: '菜谱不存在' })
   }
 
-  writeRecipes(filtered)
+  const { success: writeOk, error: writeError } = writeRecipes(filtered)
+  if (!writeOk) {
+    return res.status(500).json({ success: false, error: writeError })
+  }
+
   res.json({ success: true })
 })
 
 app.post('/api/parse', (req, res) => {
+  const validation = validateRecipeInput(req.body)
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, error: validation.error })
+  }
+
   const { title, rawText } = req.body as { title?: string; rawText?: string }
 
   if (!rawText || !rawText.trim()) {
     return res.status(400).json({ success: false, error: '菜谱内容不能为空' })
   }
 
-  const steps = parseRecipeText(rawText, title || '未命名菜谱')
+  const result = parseRecipeText(rawText)
 
-  if (steps.length === 0) {
-    return res.status(400).json({ success: false, error: '未能解析出有效的步骤，请检查格式是否正确' })
+  if (result.steps.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: '未能解析出有效的步骤，请检查格式是否正确',
+      warnings: result.warnings
+    })
   }
 
-  res.json({ success: true, data: steps })
+  res.json({
+    success: true,
+    data: result.steps,
+    warnings: result.warnings.length > 0 ? result.warnings : undefined
+  })
 })
 
 app.get('/api/health', (_req, res) => {
   res.json({ success: true, timestamp: Date.now() })
+})
+
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('服务器错误:', err.message)
+  res.status(500).json({
+    success: false,
+    error: '服务器内部错误',
+    detail: process.env.NODE_ENV === 'development' ? err.message : undefined
+  })
 })
 
 app.listen(PORT, () => {

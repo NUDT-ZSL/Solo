@@ -35,17 +35,6 @@ function chineseToNumber(str: string): number | null {
   return result + temp
 }
 
-const STEP_PATTERNS: RegExp[] = [
-  /^步\s*骤\s*([\d一二三四五六七八九十零〇两廿]+)\s*[:：.\-、\s]\s*(.*)$/i,
-  /^步\s*驟\s*([\d一二三四五六七八九十零〇两廿]+)\s*[:：.\-、\s]\s*(.*)$/i,
-  /^(?:step|st)\s*[\.\-:]?\s*(\d+)\s*[:：.\-、\s]\s*(.*)$/i,
-  /^第\s*([\d一二三四五六七八九十零〇两廿]+)\s*步\s*[:：.\-、\s]?\s*(.*)$/i,
-  /^第\s*([\d一二三四五六七八九十零〇两廿]+)\s*[条项步节]\s*[:：.\-、\s]?\s*(.*)$/i,
-  /^(\d{1,2})\s*[.．、\-)）]\s*(.*)$/,
-  /^[\(（](\d{1,2})[\)）]\s*(.*)$/,
-  /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*(.*)$/,
-]
-
 const CIRCLED_NUM_MAP: Record<string, number> = {
   '①': 1, '②': 2, '③': 3, '④': 4, '⑤': 5,
   '⑥': 6, '⑦': 7, '⑧': 8, '⑨': 9, '⑩': 10,
@@ -53,21 +42,101 @@ const CIRCLED_NUM_MAP: Record<string, number> = {
   '⑯': 16, '⑰': 17, '⑱': 18, '⑲': 19, '⑳': 20
 }
 
-const DURATION_PATTERNS: Array<{
-  regex: RegExp
-  multiplier: number
-  groupIndex: number
-}> = [
-  { regex: /(\d+(?:\.\d+)?)\s*(?:个半)?\s*(?:小时|钟头|时|h|hr|hour)/i, multiplier: 3600, groupIndex: 1 },
-  { regex: /(\d+(?:\.\d+)?)\s*(?:个半)?\s*(?:分钟|分|min|minute|m)(?!\w)/i, multiplier: 60, groupIndex: 1 },
-  { regex: /(\d+(?:\.\d+)?)\s*(?:秒钟|秒|sec|second|s)(?!\w)/i, multiplier: 1, groupIndex: 1 },
-  { regex: /(\d{1,2})[:：](\d{2})(?:[:：](\d{2}))?/, multiplier: -1, groupIndex: 1 },
-  { regex: /一个半?\s*(?:小时|钟头)/i, multiplier: 5400, groupIndex: 0 },
-  { regex: /半个?\s*(?:小时|钟头)/i, multiplier: 1800, groupIndex: 0 },
-  { regex: /一刻钟|15分钟|十五分/, multiplier: 900, groupIndex: 0 },
-  { regex: /半小时|半个钟头|30分钟|三十分/, multiplier: 1800, groupIndex: 0 },
-  { regex: /三刻钟|45分钟|四十五分/, multiplier: 2700, groupIndex: 0 }
+const NUM_CHARS = '[\\d一二三四五六七八九十零〇两廿]+'
+
+const STEP_PATTERNS: RegExp[] = [
+  new RegExp(`^步\\s*骤\\s*(${NUM_CHARS})\\s*[:：.\\-、\\s]\\s*(.*)$`, 'i'),
+  new RegExp(`^步\\s*驟\\s*(${NUM_CHARS})\\s*[:：.\\-、\\s]\\s*(.*)$`, 'i'),
+  new RegExp(`^步\\s*骤\\s*(${NUM_CHARS})\\s+(.*)$`, 'i'),
+  new RegExp(`^(?:step|st)\\s*[\\.\\-:]?\\s*(\\d+)\\s*[:：.\\-、\\s]\\s*(.*)$`, 'i'),
+  new RegExp(`^(?:step|st)\\s+[\\.\\-:]?\\s*(\\d+)\\s+(.*)$`, 'i'),
+  new RegExp(`^第\\s*(${NUM_CHARS})\\s*步\\s*[:：.\\-、\\s]?\\s*(.*)$`, 'i'),
+  new RegExp(`^第\\s*(${NUM_CHARS})\\s*[条项步节]\\s*[:：.\\-、\\s]?\\s*(.*)$`, 'i'),
+  /^(\d{1,2})\s*[.．、\-)）]\s*(.*)$/,
+  /^[\(（](\d{1,2})[\)）]\s*(.*)$/,
+  /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*(.*)$/,
 ]
+
+function parseCompoundDuration(text: string): { seconds: number; matchedText: string } {
+  let totalSeconds = 0
+  let matchedParts: string[] = []
+
+  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:个半)?\s*(?:小时|钟头|时|h|hr|hour)/i)
+  if (hourMatch) {
+    totalSeconds += Math.round(parseFloat(hourMatch[1]) * 3600)
+    matchedParts.push(hourMatch[0])
+  }
+
+  const halfHourMatch = text.match(/半个?\s*(?:小时|钟头)/i)
+  if (halfHourMatch && !hourMatch) {
+    totalSeconds += 1800
+    matchedParts.push(halfHourMatch[0])
+  }
+
+  const oneAndHalfMatch = text.match(/一个半\s*(?:小时|钟头)/i)
+  if (oneAndHalfMatch && !hourMatch) {
+    totalSeconds += 5400
+    matchedParts.push(oneAndHalfMatch[0])
+  }
+
+  const quarterMatch = text.match(/一刻钟/i)
+  if (quarterMatch && !hourMatch) {
+    totalSeconds += 900
+    matchedParts.push(quarterMatch[0])
+  }
+
+  const compoundMinSec = text.match(/(\d+)\s*(?:分钟|分|min|minute)\s*(\d+)\s*(?:秒钟|秒|sec|second|s)(?!\w)/i)
+  if (compoundMinSec) {
+    totalSeconds += parseInt(compoundMinSec[1], 10) * 60 + parseInt(compoundMinSec[2], 10)
+    matchedParts.push(compoundMinSec[0])
+    return { seconds: totalSeconds, matchedText: matchedParts.join('') }
+  }
+
+  const compoundHourMin = text.match(/(\d+)\s*(?:小时|钟头|h|hr)\s*(\d+)\s*(?:分钟|分|min)/i)
+  if (compoundHourMin) {
+    totalSeconds += parseInt(compoundHourMin[1], 10) * 3600 + parseInt(compoundHourMin[2], 10) * 60
+    matchedParts.push(compoundHourMin[0])
+    return { seconds: totalSeconds, matchedText: matchedParts.join('') }
+  }
+
+  const minMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:个半)?\s*(?:分钟|分|min|minute|m)(?!\w)/i)
+  if (minMatch) {
+    totalSeconds += Math.round(parseFloat(minMatch[1]) * 60)
+    matchedParts.push(minMatch[0])
+  }
+
+  const secMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:秒钟|秒|sec|second|s)(?!\w)/i)
+  if (secMatch) {
+    totalSeconds += Math.round(parseFloat(secMatch[1]))
+    matchedParts.push(secMatch[0])
+  }
+
+  if (matchedParts.length > 0) {
+    return { seconds: totalSeconds, matchedText: matchedParts.join('') }
+  }
+
+  const timeFormatMatch = text.match(/(\d{1,2})[:：](\d{2})(?:[:：](\d{2}))?/)
+  if (timeFormatMatch) {
+    const h = parseInt(timeFormatMatch[1], 10)
+    const m = parseInt(timeFormatMatch[2], 10)
+    const s = timeFormatMatch[3] ? parseInt(timeFormatMatch[3], 10) : 0
+    if (m < 60 && s < 60) {
+      return { seconds: h * 3600 + m * 60 + s, matchedText: timeFormatMatch[0] }
+    }
+  }
+
+  const presetPatterns: Array<{ regex: RegExp; seconds: number }> = [
+    { regex: /三刻钟|45分钟|四十五分/, seconds: 2700 },
+    { regex: /半小时|半个钟头|30分钟|三十分/, seconds: 1800 },
+  ]
+  for (const { regex, seconds } of presetPatterns) {
+    if (regex.test(text)) {
+      return { seconds, matchedText: text.match(regex)![0] }
+    }
+  }
+
+  return { seconds: 0, matchedText: '' }
+}
 
 const INGREDIENT_PATTERNS: RegExp[] = [
   /加入\s*([^，,。；;]+?)(?=\s*[,，。；;]|$)/g,
@@ -81,7 +150,8 @@ const INGREDIENT_PATTERNS: RegExp[] = [
 export function parseStepNumberAndContent(line: string): { number: number | null; content: string } {
   const trimmed = line.trim()
 
-  for (const pattern of STEP_PATTERNS) {
+  for (let i = 0; i < STEP_PATTERNS.length; i++) {
+    const pattern = STEP_PATTERNS[i]
     const match = trimmed.match(pattern)
     if (!match) continue
 
@@ -94,31 +164,26 @@ export function parseStepNumberAndContent(line: string): { number: number | null
       }
     }
 
-    if (pattern.source.startsWith('^(step|st)')) {
-      return {
-        number: parseInt(firstGroup, 10),
-        content: (match[2] || '').trim()
+    if (pattern.source.includes('step|st') || pattern.source.includes('Step|ST')) {
+      const num = parseInt(firstGroup, 10)
+      if (!isNaN(num) && num > 0) {
+        return { number: num, content: (match[2] || '').trim() }
       }
+      continue
     }
 
-    const timeMatch = firstGroup.match(/(\d{1,2})[:：](\d{2})/)
-    if (timeMatch && !line.includes('步骤') && !line.includes('Step')) {
+    const isTimeOnly = /^(\d{1,2})[:：](\d{2})/.test(firstGroup)
+    if (isTimeOnly && !trimmed.includes('步骤') && !trimmed.toLowerCase().includes('step') && !trimmed.includes('第')) {
       continue
     }
 
     const num = chineseToNumber(firstGroup)
-    if (num !== null) {
-      return {
-        number: num,
-        content: (match[2] || '').trim()
-      }
+    if (num !== null && num >= 0) {
+      return { number: num, content: (match[2] || '').trim() }
     }
 
-    if (match[2]) {
-      return {
-        number: null,
-        content: match[2].trim()
-      }
+    if (match[2] && match[2].trim()) {
+      return { number: null, content: match[2].trim() }
     }
   }
 
@@ -126,36 +191,7 @@ export function parseStepNumberAndContent(line: string): { number: number | null
 }
 
 export function parseDurationToSeconds(text: string): { seconds: number; matchedText: string } {
-  let totalSeconds = 0
-  let matchedText = ''
-
-  for (const { regex, multiplier, groupIndex } of DURATION_PATTERNS) {
-    const match = text.match(regex)
-    if (!match) continue
-
-    matchedText = match[0]
-
-    if (multiplier === -1) {
-      const hours = match[1] ? parseInt(match[1], 10) : 0
-      const mins = match[2] ? parseInt(match[2], 10) : 0
-      const secs = match[3] ? parseInt(match[3], 10) : 0
-      totalSeconds = hours * 3600 + mins * 60 + secs
-      break
-    }
-
-    if (groupIndex === 0) {
-      totalSeconds = multiplier
-      break
-    }
-
-    const value = parseFloat(match[groupIndex])
-    if (!isNaN(value)) {
-      totalSeconds = Math.round(value * multiplier)
-      break
-    }
-  }
-
-  return { seconds: totalSeconds, matchedText }
+  return parseCompoundDuration(text)
 }
 
 export function extractIngredients(text: string): string[] {
@@ -246,7 +282,7 @@ export function parseRecipeText(text: string): ParseResult {
       }
     }
 
-    const { seconds: duration, matchedText } = parseDurationToSeconds(content)
+    const { seconds: duration, matchedText } = parseCompoundDuration(content)
 
     let action = content
     if (matchedText) {

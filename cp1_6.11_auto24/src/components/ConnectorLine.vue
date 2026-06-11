@@ -12,30 +12,36 @@
       v-if="direction === 'horizontal'"
       class="line-svg"
       :viewBox="`0 0 ${hWidth} ${hHeight}`"
-      preserveAspectRatio="none"
     >
       <defs>
-        <linearGradient :id="hGradId" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" style="stop-color: #FF6B35; stop-opacity: 1" />
-          <stop offset="100%" style="stop-color: #F7C948; stop-opacity: 1" />
+        <linearGradient :id="hGradId" x1="0%" y1="0%" x2="100%" y2="0%" gradientUnits="userSpaceOnUse">
+          <stop :offset="'0%'" :stop-color="gradientStart" />
+          <stop :offset="'100%'" :stop-color="gradientEnd" />
         </linearGradient>
+        <filter :id="hGlowId">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
 
       <line
-        :x1="0"
+        :x1="4"
         :y1="hHeight / 2"
-        :x2="hWidth"
+        :x2="hWidth - 4"
         :y2="hHeight / 2"
-        stroke="rgba(45,24,16,0.12)"
+        stroke="rgba(45,24,16,0.1)"
         stroke-width="3"
         stroke-linecap="round"
       />
 
       <line
         v-if="isActive || isCompleted"
-        :x1="0"
+        :x1="4"
         :y1="hHeight / 2"
-        :x2="hWidth"
+        :x2="hWidth - 4"
         :y2="hHeight / 2"
         :stroke="isCompleted ? '#38A169' : `url(#${hGradId})`"
         stroke-width="3"
@@ -45,33 +51,36 @@
 
       <line
         v-if="isActive && !isCompleted"
-        :x1="0"
+        :x1="4"
         :y1="hHeight / 2"
-        :x2="hWidth"
+        :x2="hWidth - 4"
         :y2="hHeight / 2"
         :stroke="`url(#${hGradId})`"
-        stroke-width="5"
+        stroke-width="4"
         stroke-linecap="round"
-        stroke-dasharray="8, 16"
-        class="flow-dash"
+        :stroke-dasharray="dashArray"
+        :stroke-dashoffset="dashOffset"
+        class="flow-dash-line"
+        :filter="`url(#${hGlowId})`"
       />
 
       <circle
         v-if="isActive && !isCompleted"
-        :cx="lightPos"
+        :cx="currentLightPos"
         :cy="hHeight / 2"
-        r="5"
-        fill="#FFF"
-        stroke="#FF6B35"
+        r="4"
+        fill="white"
+        :stroke="`url(#${hGradId})`"
         stroke-width="2"
         class="light-dot"
+        :filter="`url(#${hGlowId})`"
       />
 
       <path
         :d="arrowPathH"
         fill="none"
-        :stroke="isCompleted ? '#38A169' : (isActive ? '#FF6B35' : 'rgba(45,24,16,0.2)')"
-        stroke-width="2"
+        :stroke="isCompleted ? '#38A169' : (isActive ? '#FF6B35' : 'rgba(45,24,16,0.18)')"
+        stroke-width="2.5"
         stroke-linecap="round"
         stroke-linejoin="round"
         class="arrow-head"
@@ -82,21 +91,27 @@
       v-else
       class="line-svg"
       :viewBox="`0 0 ${vWidth} ${vHeight}`"
-      preserveAspectRatio="none"
     >
       <defs>
-        <linearGradient :id="vGradId" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" style="stop-color: #FF6B35; stop-opacity: 1" />
-          <stop offset="100%" style="stop-color: #F7C948; stop-opacity: 1" />
+        <linearGradient :id="vGradId" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="userSpaceOnUse">
+          <stop :offset="'0%'" :stop-color="gradientStart" />
+          <stop :offset="'100%'" :stop-color="gradientEnd" />
         </linearGradient>
+        <filter :id="vGlowId">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
 
       <line
         :x1="vWidth / 2"
-        :y1="0"
+        :y1="4"
         :x2="vWidth / 2"
-        :y2="vHeight"
-        stroke="rgba(45,24,16,0.12)"
+        :y2="vHeight - 4"
+        stroke="rgba(45,24,16,0.1)"
         stroke-width="3"
         stroke-linecap="round"
       />
@@ -104,9 +119,9 @@
       <line
         v-if="isActive || isCompleted"
         :x1="vWidth / 2"
-        :y1="0"
+        :y1="4"
         :x2="vWidth / 2"
-        :y2="vHeight"
+        :y2="vHeight - 4"
         :stroke="isCompleted ? '#38A169' : `url(#${vGradId})`"
         stroke-width="3"
         stroke-linecap="round"
@@ -116,32 +131,35 @@
       <line
         v-if="isActive && !isCompleted"
         :x1="vWidth / 2"
-        :y1="0"
+        :y1="4"
         :x2="vWidth / 2"
-        :y2="vHeight"
+        :y2="vHeight - 4"
         :stroke="`url(#${vGradId})`"
-        stroke-width="5"
+        stroke-width="4"
         stroke-linecap="round"
-        stroke-dasharray="8, 16"
-        class="flow-dash"
+        :stroke-dasharray="dashArray"
+        :stroke-dashoffset="dashOffset"
+        class="flow-dash-line"
+        :filter="`url(#${vGlowId})`"
       />
 
       <circle
         v-if="isActive && !isCompleted"
         :cx="vWidth / 2"
-        :cy="vLightPos"
-        r="5"
-        fill="#FFF"
-        stroke="#FF6B35"
+        :cy="vCurrentLightPos"
+        r="4"
+        fill="white"
+        :stroke="`url(#${vGradId})`"
         stroke-width="2"
         class="light-dot"
+        :filter="`url(#${vGlowId})`"
       />
 
       <path
         :d="arrowPathV"
         fill="none"
-        :stroke="isCompleted ? '#38A169' : (isActive ? '#FF6B35' : 'rgba(45,24,16,0.2)')"
-        stroke-width="2"
+        :stroke="isCompleted ? '#38A169' : (isActive ? '#FF6B35' : 'rgba(45,24,16,0.18)')"
+        stroke-width="2.5"
         stroke-linecap="round"
         stroke-linejoin="round"
         class="arrow-head"
@@ -151,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 
 interface Props {
   isActive?: boolean
@@ -167,6 +185,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const hGradId = `hgrad-${Math.random().toString(36).slice(2, 9)}`
 const vGradId = `vgrad-${Math.random().toString(36).slice(2, 9)}`
+const hGlowId = `hglow-${Math.random().toString(36).slice(2, 9)}`
+const vGlowId = `vglow-${Math.random().toString(36).slice(2, 9)}`
 
 const hWidth = 80
 const hHeight = 40
@@ -174,23 +194,41 @@ const vWidth = 40
 const vHeight = 60
 
 const lightProgress = ref(0)
+const dashOffset = ref(0)
 let rafId: number | null = null
-let lastUpdate = 0
+let animStartTime = 0
+let pauseProgress = 0
 
-const lightPos = computed(() => {
-  const progress = lightProgress.value / 100
-  return 6 + (hWidth - 20) * progress
+const gradientStart = computed(() => {
+  if (props.isCompleted) return '#38A169'
+  if (!props.isActive) return 'rgba(45,24,16,0.2)'
+  return '#FF6B35'
 })
 
-const vLightPos = computed(() => {
-  const progress = lightProgress.value / 100
-  return 6 + (vHeight - 20) * progress
+const gradientEnd = computed(() => {
+  if (props.isCompleted) return '#48BB78'
+  if (!props.isActive) return 'rgba(45,24,16,0.15)'
+  return '#F7C948'
+})
+
+const dashArray = '8, 16'
+
+const currentLightPos = computed(() => {
+  const padding = 8
+  const range = hWidth - padding * 2
+  return padding + range * lightProgress.value
+})
+
+const vCurrentLightPos = computed(() => {
+  const padding = 8
+  const range = vHeight - padding * 2
+  return padding + range * lightProgress.value
 })
 
 const arrowPathH = computed(() => {
   const endX = hWidth - 6
   const centerY = hHeight / 2
-  return `M ${endX - 8} ${centerY - 6 L ${endX} ${centerY} L ${endX - 8} ${centerY + 6}`
+  return `M ${endX - 8} ${centerY - 6} L ${endX} ${centerY} L ${endX - 8} ${centerY + 6}`
 })
 
 const arrowPathV = computed(() => {
@@ -199,31 +237,65 @@ const arrowPathV = computed(() => {
   return `M ${centerX - 6} ${endY - 8} L ${centerX} ${endY} L ${centerX + 6} ${endY - 8}`
 })
 
+function startAnimation() {
+  animStartTime = performance.now() - pauseProgress * 1000
+  rafId = requestAnimationFrame(animate)
+}
+
+function stopAnimation() {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
+  pauseProgress = lightProgress.value * 10
+}
+
 function animate(timestamp: number) {
   if (!props.isActive || props.isCompleted) {
     rafId = null
     return
   }
 
-  if (timestamp - lastUpdate >= 1000) {
-    lastUpdate = timestamp
-    lightProgress.value = (lightProgress.value + 10) % 110
-  }
+  const elapsed = timestamp - animStartTime
+  const cycleDuration = 10000
+
+  const progress = (elapsed % cycleDuration) / cycleDuration
+  lightProgress.value = progress
+
+  dashOffset.value = -(elapsed / 50) % 24
 
   rafId = requestAnimationFrame(animate)
 }
 
+watch(() => props.isActive, (newVal) => {
+  if (newVal && !props.isCompleted) {
+    startAnimation()
+  } else {
+    stopAnimation()
+    if (!newVal) {
+      lightProgress.value = 0
+      dashOffset.value = 0
+      pauseProgress = 0
+    }
+  }
+})
+
+watch(() => props.isCompleted, (newVal) => {
+  if (newVal) {
+    stopAnimation()
+    lightProgress.value = 1
+    dashOffset.value = 0
+  }
+})
+
 onMounted(() => {
   if (props.isActive && !props.isCompleted) {
-    lastUpdate = performance.now()
-    rafId = requestAnimationFrame(animate)
+    startAnimation()
   }
 })
 
 onUnmounted(() => {
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId)
-  }
+  stopAnimation()
 })
 </script>
 
@@ -253,26 +325,15 @@ onUnmounted(() => {
 }
 
 .base-line {
-  opacity: 0.6;
+  transition: stroke 0.4s ease;
 }
 
-.flow-dash {
-  animation: dashFlow 1s linear infinite;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 4px rgba(255, 107, 53, 0.5));
-}
-
-@keyframes dashFlow {
-  from {
-    stroke-dashoffset: 24;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+.flow-dash-line {
+  opacity: 0.85;
 }
 
 .light-dot {
-  filter: drop-shadow(0 0 6px rgba(255, 107, 53, 0.8));
+  transition: none;
 }
 
 .arrow-head {
@@ -280,7 +341,7 @@ onUnmounted(() => {
 }
 
 .connector-line.active .arrow-head {
-  filter: drop-shadow(0 0 2px rgba(255, 107, 53, 0.6));
+  filter: drop-shadow(0 0 2px rgba(255, 107, 53, 0.5));
 }
 
 .connector-line.completed .base-line {

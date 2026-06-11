@@ -144,10 +144,9 @@ const showSuccess = ref(false)
 const imageError = ref(false)
 
 const remainingTime = ref(props.step.duration)
-const startTime = ref<number>(0)
-const accumulatedTime = ref<number>(0)
 let rafId: number | null = null
-let lastFrameTime = 0
+let playStartWallTime = 0
+let playStartRemaining = 0
 
 const isCompleted = computed(() => props.step.status === 'completed')
 
@@ -206,51 +205,52 @@ const playDingSound = () => {
   }
 }
 
-const tick = (timestamp: number) => {
+const tick = () => {
   if (!isPlaying.value) return
 
-  if (lastFrameTime === 0) {
-    lastFrameTime = timestamp
+  const now = performance.now()
+  const elapsedMs = now - playStartWallTime
+  const elapsedSec = elapsedMs / 1000
+  const newRemaining = playStartRemaining - elapsedSec
+
+  if (newRemaining <= 0) {
+    remainingTime.value = 0
+    isPlaying.value = false
+    handleComplete()
+    return
   }
 
-  const delta = (timestamp - lastFrameTime) / 1000
-  lastFrameTime = timestamp
-
-  if (delta > 0 && delta < 1) {
-    const newRemaining = remainingTime.value - delta
-    if (newRemaining <= 0) {
-      remainingTime.value = 0
-      isPlaying.value = false
-      handleComplete()
-      return
-    }
-    remainingTime.value = newRemaining
-  }
-
+  remainingTime.value = newRemaining
   rafId = requestAnimationFrame(tick)
 }
 
 const handlePlayPause = () => {
   if (isCompleted.value) {
     remainingTime.value = props.step.duration
-    accumulatedTime.value = 0
     isPlaying.value = false
+    playStartWallTime = 0
+    playStartRemaining = 0
     emit('update', props.step.id, { status: 'pending' })
     return
   }
 
   if (isPlaying.value) {
+    const now = performance.now()
+    const elapsedSec = (now - playStartWallTime) / 1000
+    playStartRemaining = playStartRemaining - elapsedSec
+    if (playStartRemaining < 0) playStartRemaining = 0
+    remainingTime.value = playStartRemaining
+
     isPlaying.value = false
     if (rafId !== null) {
       cancelAnimationFrame(rafId)
       rafId = null
     }
-    lastFrameTime = 0
   } else {
     isPlaying.value = true
     emit('play', props.step.id)
-    lastFrameTime = 0
-    startTime.value = performance.now()
+    playStartWallTime = performance.now()
+    playStartRemaining = remainingTime.value
     rafId = requestAnimationFrame(tick)
   }
 }
