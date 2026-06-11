@@ -1,31 +1,459 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>回声弹幕</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>歌词声波可视化乐谱</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     html, body {
-      width: 100%;
       height: 100%;
-      overflow: hidden;
-      background-color: #0B1026;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(180deg, #0A0A23 0%, #1A1A3E 100%);
+      background-attachment: fixed;
+      min-height: 100vh;
+      color: #E0E0FF;
     }
-    body {
+
+    .app-container {
+      width: 900px;
+      max-width: 95%;
+      margin: 0 auto;
+      padding: 30px 20px;
+    }
+
+    .app-title {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      background: linear-gradient(90deg, #4169E1, #8A2BE2, #FF69B4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 2px;
+    }
+
+    .input-section {
       display: flex;
-      justify-content: center;
-      align-items: center;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
     }
-    canvas {
-      display: block;
+
+    .input-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .lyric-input {
       width: 100%;
-      height: 100%;
+      height: 40px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background-color: #2C2C3C;
+      color: #E0E0FF;
+      border: 2px solid transparent;
+      outline: none;
+      font-size: 15px;
+      font-family: 'Segoe UI', sans-serif;
+      transition: border-color 0.2s ease;
+    }
+
+    .lyric-input:focus {
+      border-color: #4169E1;
+    }
+
+    .lyric-input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .input-actions {
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .btn {
+      height: 40px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Segoe UI', sans-serif;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      white-space: nowrap;
+    }
+
+    .btn-generate {
+      width: 120px;
+      background: linear-gradient(135deg, #4169E1 0%, #8A2BE2 100%);
+      color: white;
+    }
+
+    .btn-generate:hover:not(:disabled) {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(65, 105, 225, 0.4);
+    }
+
+    .btn-generate:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-reset {
+      width: 80px;
+      background: linear-gradient(135deg, #4A4A6A 0%, #3A3A5A 100%);
+      color: #E0E0FF;
+    }
+
+    .btn-reset:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+
+    .btn-play {
+      width: 100px;
+      background: linear-gradient(135deg, #FF69B4 0%, #FF8C00 100%);
+      color: white;
+    }
+
+    .btn-play:hover:not(:disabled) {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(255, 105, 180, 0.4);
+    }
+
+    .btn-play:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-stop {
+      width: 80px;
+      background: linear-gradient(135deg, #DC143C 0%, #B22222 100%);
+      color: white;
+    }
+
+    .btn-stop:hover:not(:disabled) {
+      filter: brightness(1.15);
+    }
+
+    .btn-stop:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .char-counter {
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .char-count {
+      color: #32CD32;
+    }
+
+    .char-count.over-limit {
+      color: #FF4500;
+    }
+
+    .hint-text {
+      color: #707090;
+      font-size: 12px;
+    }
+
+    .skip-warning {
+      color: #FFA500;
+      font-size: 12px;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    .params-panel {
+      background: rgba(44, 44, 60, 0.6);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .panel-title {
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .panel-toggle {
+      color: #707090;
+      font-size: 16px;
+      transition: transform 0.3s ease;
+    }
+
+    .panel-toggle.collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .panel-content {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      overflow: hidden;
+      transition: max-height 0.3s ease, margin-top 0.3s ease;
+    }
+
+    .panel-content.collapsed {
+      max-height: 0;
+      margin-top: 0;
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #B0B0D0;
+    }
+
+    .slider-value {
+      color: #4169E1;
+      font-weight: 600;
+    }
+
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #3A3A5A, #5A5A7A);
+      outline: none;
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4169E1, #6495ED);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(65, 105, 225, 0.5);
+      border: 2px solid #ffffff;
+      transition: transform 0.15s ease;
+    }
+
+    .slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4169E1, #6495ED);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(65, 105, 225, 0.5);
+      border: 2px solid #ffffff;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .canvas-wrapper {
+      background-color: #0A0A0A;
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(65, 105, 225, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #waveCanvas {
+      width: 100%;
+      height: 260px;
+      display: block;
+      border-radius: 8px;
+      cursor: crosshair;
+    }
+
+    .info-card {
+      position: absolute;
+      background: #F5F5F5;
+      color: #333333;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      pointer-events: none;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      z-index: 100;
+      display: none;
+      min-width: 140px;
+      transform: translateX(-50%);
+    }
+
+    .info-card.visible {
+      display: block;
+    }
+
+    .info-card-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 3px 0;
+    }
+
+    .info-card-label {
+      color: #666;
+      font-size: 11px;
+    }
+
+    .info-card-value {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .info-card-char {
+      font-size: 24px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #ddd;
+      color: #4169E1;
+    }
+
+    @media (max-width: 920px) {
+      .app-container {
+        width: 95%;
+        padding: 20px 10px;
+      }
+
+      .panel-content {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
+  <div class="app-container">
+    <h1 class="app-title">🎵 歌词声波可视化乐谱</h1>
+
+    <div class="input-section">
+      <div class="input-wrapper">
+        <input
+          type="text"
+          id="lyricInput"
+          class="lyric-input"
+          placeholder="请输入歌词（支持中英文，10-100个字符，按回车生成）"
+          maxlength="150"
+        />
+        <div class="char-counter">
+          <span class="hint-text">字符范围：10-100</span>
+          <span><span id="charCount" class="char-count">0</span> / 100</span>
+        </div>
+        <div id="skipWarning" class="skip-warning"></div>
+      </div>
+      <div class="input-actions">
+        <button id="btnGenerate" class="btn btn-generate" disabled>生成波形</button>
+        <button id="btnReset" class="btn btn-reset">重置</button>
+      </div>
+    </div>
+
+    <div class="params-panel">
+      <div class="panel-header" id="panelHeader">
+        <span class="panel-title">调节参数</span>
+        <span class="panel-toggle" id="panelToggle">▼</span>
+      </div>
+      <div class="panel-content" id="panelContent">
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>播放速度</span>
+            <span><span id="speedValue" class="slider-value">1.0</span>x</span>
+          </div>
+          <input
+            type="range"
+            id="speedSlider"
+            class="slider"
+            min="0.5"
+            max="3.0"
+            step="0.1"
+            value="1.0"
+          />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>波幅缩放</span>
+            <span><span id="ampValue" class="slider-value">1.0</span>x</span>
+          </div>
+          <input
+            type="range"
+            id="ampSlider"
+            class="slider"
+            min="0.5"
+            max="2.0"
+            step="0.1"
+            value="1.0"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <button id="btnPlay" class="btn btn-play" disabled>▶ 播放</button>
+      <button id="btnStop" class="btn btn-stop" disabled>■ 停止</button>
+    </div>
+
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <canvas id="waveCanvas"></canvas>
+      <div class="info-card" id="infoCard">
+        <div class="info-card-char" id="cardChar">-</div>
+        <div class="info-card-row">
+          <span class="info-card-label">Unicode</span>
+          <span class="info-card-value" id="cardUnicode">-</span>
+        </div>
+        <div class="info-card-row">
+          <span class="info-card-label">音高频率</span>
+          <span class="info-card-value" id="cardFreq">- Hz</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

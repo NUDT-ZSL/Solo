@@ -1,7 +1,7 @@
 {
-  "name": "echo-bullet",
+  "name": "lyric-wave-visualizer",
+  "private": true,
   "version": "1.0.0",
-  "description": "回声弹幕 - 一款基于Canvas的太空射击游戏",
   "type": "module",
   "scripts": {
     "dev": "vite",
