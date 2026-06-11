@@ -1,5 +1,26 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
-import { ComponentType, ComponentItem, ComponentState } from '@/types/component';
+/**
+ * componentStore.tsx - 组件数据管理模块
+ *
+ * 职责：
+ *   1. 维护内置组件列表的静态定义（组件 ID、名称、状态、变体等）
+ *   2. 管理当前选中的组件 ID
+ *   3. 通过 React Context 向消费组件下发组件数据和操作方法
+ *
+ * 数据流向：
+ *   ComponentList（用户点击组件列表）
+ *       ↓ 调用 selectComponent(id)
+ *   setSelectedComponentId → 更新 selectedComponentId state
+ *       ↓ useMemo 重新计算 selectedComponent
+ *   ComponentPreview → 读取 selectedComponent → 渲染组件所有状态矩阵
+ *
+ * 调用关系：
+ *   - App.tsx: 用 <ComponentProvider> 包裹整个应用树
+ *   - ComponentList.tsx: 通过 useComponent() 读取 components、selectedComponentId，调用 selectComponent
+ *   - ComponentPreview.tsx: 通过 useComponent() 读取 selectedComponent、getStateLabel
+ */
+
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { type ComponentType, type ComponentItem, type ComponentState } from '@/types/component';
 
 const COMPONENTS: ComponentItem[] = [
   {
@@ -76,7 +97,7 @@ const STATE_LABELS: Record<ComponentState, string> = {
   error: '错误',
 };
 
-export const ComponentProvider: React.FC<ComponentProviderProps> = ({ children }) => {
+export const ComponentProvider = ({ children }: ComponentProviderProps) => {
   const [selectedComponentId, setSelectedComponentId] = useState<ComponentType>('button');
 
   const selectComponent = useCallback((id: ComponentType) => {

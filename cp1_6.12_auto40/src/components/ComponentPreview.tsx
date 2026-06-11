@@ -1,6 +1,5 @@
 import React, { memo, useMemo, useState, useCallback } from 'react';
 import { useComponent } from '@/state/componentStore';
-import { useTheme } from '@/state/themeStore';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Alert from './ui/Alert';
@@ -13,7 +12,9 @@ interface InteractiveState {
   buttonSuccess: boolean;
   buttonError: boolean;
   inputValue: string;
+  inputFocused: boolean;
   switchChecked: boolean;
+  alertVisible: boolean;
 }
 
 const ComponentPreview = () => {
@@ -24,16 +25,38 @@ const ComponentPreview = () => {
     buttonSuccess: false,
     buttonError: false,
     inputValue: '',
+    inputFocused: false,
     switchChecked: true,
+    alertVisible: true,
   });
 
-  const handleButtonClick = useCallback(() => {
-    setInteractiveState(prev => ({ ...prev, buttonLoading: true, buttonSuccess: false, buttonError: false }));
+  const handleButtonClick = useCallback((simulateError = false) => {
+    setInteractiveState(prev => ({
+      ...prev,
+      buttonLoading: true,
+      buttonSuccess: false,
+      buttonError: false,
+    }));
     setTimeout(() => {
-      setInteractiveState(prev => ({ ...prev, buttonLoading: false, buttonSuccess: true }));
-      setTimeout(() => {
-        setInteractiveState(prev => ({ ...prev, buttonSuccess: false }));
-      }, 1500);
+      if (simulateError) {
+        setInteractiveState(prev => ({
+          ...prev,
+          buttonLoading: false,
+          buttonError: true,
+        }));
+        setTimeout(() => {
+          setInteractiveState(prev => ({ ...prev, buttonError: false }));
+        }, 1500);
+      } else {
+        setInteractiveState(prev => ({
+          ...prev,
+          buttonLoading: false,
+          buttonSuccess: true,
+        }));
+        setTimeout(() => {
+          setInteractiveState(prev => ({ ...prev, buttonSuccess: false }));
+        }, 1500);
+      }
     }, 1500);
   }, []);
 
@@ -41,8 +64,23 @@ const ComponentPreview = () => {
     setInteractiveState(prev => ({ ...prev, inputValue: e.target.value }));
   }, []);
 
+  const handleInputFocus = useCallback(() => {
+    setInteractiveState(prev => ({ ...prev, inputFocused: true }));
+  }, []);
+
+  const handleInputBlur = useCallback(() => {
+    setInteractiveState(prev => ({ ...prev, inputFocused: false }));
+  }, []);
+
   const handleSwitchChange = useCallback((checked: boolean) => {
     setInteractiveState(prev => ({ ...prev, switchChecked: checked }));
+  }, []);
+
+  const handleAlertClose = useCallback(() => {
+    setInteractiveState(prev => ({ ...prev, alertVisible: false }));
+    setTimeout(() => {
+      setInteractiveState(prev => ({ ...prev, alertVisible: true }));
+    }, 2000);
   }, []);
 
   const renderComponent = useCallback((
@@ -56,15 +94,23 @@ const ComponentPreview = () => {
       case 'button':
         if (isInteractive) {
           return (
-            <Button
-              variant={variantProps?.variant as any}
-              onClick={handleButtonClick}
-              loading={interactiveState.buttonLoading}
-              success={interactiveState.buttonSuccess}
-              error={interactiveState.buttonError}
-            >
-              点击我
-            </Button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+              <Button
+                variant={variantProps?.variant as any}
+                onClick={() => handleButtonClick(false)}
+                loading={interactiveState.buttonLoading}
+                success={interactiveState.buttonSuccess}
+                error={interactiveState.buttonError}
+              >
+                点击成功
+              </Button>
+              <Button
+                variant={variantProps?.variant as any}
+                onClick={() => handleButtonClick(true)}
+              >
+                点击失败
+              </Button>
+            </div>
           );
         }
         return <Button variant={variantProps?.variant as any} state={state}>按钮</Button>;
@@ -76,13 +122,30 @@ const ComponentPreview = () => {
               type={variantProps?.type as any}
               value={interactiveState.inputValue}
               onChange={handleInputChange}
-              placeholder="请输入内容..."
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
+              placeholder={interactiveState.inputFocused ? '正在输入...' : '请输入内容...'}
             />
           );
         }
         return <Input type={variantProps?.type as any} state={state} placeholder="请输入内容" />;
 
       case 'alert':
+        if (isInteractive && interactiveState.alertVisible) {
+          return (
+            <Alert
+              type={variantProps?.type as any}
+              state={state}
+              message="这是一条可关闭的提示信息"
+              showIcon
+              closable
+              onClose={handleAlertClose}
+            />
+          );
+        }
+        if (isInteractive && !interactiveState.alertVisible) {
+          return <span style={{ fontSize: 12, color: '#999' }}>2秒后重新显示...</span>;
+        }
         return (
           <Alert
             type={variantProps?.type as any}
@@ -98,7 +161,7 @@ const ComponentPreview = () => {
             <Switch
               checked={interactiveState.switchChecked}
               onChange={handleSwitchChange}
-              label="可交互开关"
+              label={interactiveState.switchChecked ? '已开启' : '已关闭'}
             />
           );
         }
@@ -113,7 +176,7 @@ const ComponentPreview = () => {
       default:
         return null;
     }
-  }, [handleButtonClick, handleInputChange, handleSwitchChange, interactiveState]);
+  }, [handleButtonClick, handleInputChange, handleInputFocus, handleInputBlur, handleSwitchChange, handleAlertClose, interactiveState]);
 
   const previewGrid = useMemo(() => {
     const { states, variants } = selectedComponent;
