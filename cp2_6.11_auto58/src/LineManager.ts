@@ -4,24 +4,24 @@ import { Station, StationManager } from './StationManager';
 
 export const PRESET_COLORS = [
   '#ff6b6b',
-  '#4ecdc4',
-  '#45b7d1',
-  '#96ceb4',
-  '#ffeaa7',
-  '#dfe6e9',
-  '#fd79a8',
-  '#a29bfe'
+  '#ffd93d',
+  '#6bcb77',
+  '#4d96ff',
+  '#ff8fab',
+  '#845ef7',
+  '#20c997',
+  '#ffa94d'
 ];
 
 export const COLOR_NAMES: Record<string, string> = {
   '#ff6b6b': '红线',
-  '#4ecdc4': '青线',
-  '#45b7d1': '蓝线',
-  '#96ceb4': '绿线',
-  '#ffeaa7': '黄线',
-  '#dfe6e9': '灰线',
-  '#fd79a8': '粉线',
-  '#a29bfe': '紫线'
+  '#ffd93d': '黄线',
+  '#6bcb77': '绿线',
+  '#4d96ff': '蓝线',
+  '#ff8fab': '粉线',
+  '#845ef7': '紫线',
+  '#20c997': '青线',
+  '#ffa94d': '橙线'
 };
 
 export interface LineData {

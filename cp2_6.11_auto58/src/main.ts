@@ -38,6 +38,8 @@ class MetroPlannerApp {
   private tempLineMesh: THREE.Line | null = null;
   private hoverStation: Station | null = null;
   private fileInput: HTMLInputElement;
+  private contextMenuEl: HTMLElement | null = null;
+  private pendingDeleteStation: Station | null = null;
 
   private readonly DEFAULT_CAMERA_POS = new THREE.Vector3(15, 15, 15);
   private readonly DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
@@ -116,6 +118,77 @@ class MetroPlannerApp {
     this.fileInput.addEventListener('change', (e) => this.handleFileImport(e));
     document.body.appendChild(this.fileInput);
 
+    {
+      const menu = document.createElement('div');
+      menu.style.cssText = `
+        position: fixed; z-index: 9999; min-width: 180px;
+        background: rgba(20, 20, 40, 0.95);
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 100, 100, 0.3); border-radius: 8px;
+        padding: 8px 0; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+        display: none; font-family: 'Segoe UI', sans-serif; user-select: none;
+      `;
+      const title = document.createElement('div');
+      title.style.cssText = 'padding:6px 16px;font-size:11px;color:#888;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:4px;';
+      title.id = 'ctx-menu-title';
+      title.textContent = '站点';
+      const delBtn = document.createElement('div');
+      delBtn.style.cssText = `
+        padding: 10px 16px; font-size: 13px; color: #ff6464; cursor: pointer;
+        display: flex; align-items: center; gap: 8px; transition: all 0.15s ease;
+      `;
+      delBtn.innerHTML = '<span style="font-size:16px;">🗑️</span> 删除站点';
+      delBtn.addEventListener('mouseenter', () => {
+        delBtn.style.background = 'rgba(255, 100, 100, 0.15)';
+        delBtn.style.transform = 'scale(1.02)';
+      });
+      delBtn.addEventListener('mouseleave', () => {
+        delBtn.style.background = 'transparent';
+        delBtn.style.transform = 'scale(1)';
+      });
+      delBtn.addEventListener('mousedown', () => {
+        delBtn.style.background = 'rgba(255, 100, 100, 0.3)';
+      });
+      delBtn.addEventListener('click', () => {
+        const station = this.pendingDeleteStation;
+        this.hideContextMenu();
+        if (!station) return;
+        const affectedLines = this.lineManager.getAllLines().filter(l => l.stationIds.includes(station.id));
+        let msg = `确定要删除站点「${station.name}」吗？`;
+        if (affectedLines.length > 0) {
+          msg += `\n\n这将影响 ${affectedLines.length} 条线路：\n${affectedLines.map(l => '  • ' + l.name).join('\n')}`;
+        }
+        if (!confirm(msg)) return;
+        for (const line of this.lineManager.getAllLines()) {
+          this.lineManager.removeStationFromLine(line.id, station.id);
+        }
+        this.stationManager.removeStation(station.id);
+        this.trainSimulator.createTrainsForAllLines();
+        this.uiPanel.refreshAll();
+      });
+      const cancelBtn = document.createElement('div');
+      cancelBtn.style.cssText = `
+        padding: 8px 16px; font-size: 12px; color: #888; cursor: pointer;
+        border-top: 1px solid rgba(255,255,255,0.05); margin-top: 4px;
+        transition: all 0.15s ease;
+      `;
+      cancelBtn.textContent = '取消';
+      cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.background = 'rgba(255,255,255,0.05)';
+        cancelBtn.style.color = '#aaa';
+      });
+      cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.background = 'transparent';
+        cancelBtn.style.color = '#888';
+      });
+      cancelBtn.addEventListener('click', () => this.hideContextMenu());
+      menu.appendChild(title);
+      menu.appendChild(delBtn);
+      menu.appendChild(cancelBtn);
+      this.contextMenuEl = menu;
+      document.body.appendChild(this.contextMenuEl);
+    }
+
     this.setupEventListeners();
     this.uiPanel.refreshAll();
 
@@ -179,15 +252,151 @@ class MetroPlannerApp {
     this.scene.add(pointLight2);
   }
 
+  private createContextMenu(): HTMLElement {
+    const menu = document.createElement('div');
+    menu.style.cssText = `
+      position: fixed;
+      z-index: 9999;
+      min-width: 180px;
+      background: rgba(20, 20, 40, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 100, 100, 0.3);
+      border-radius: 8px;
+      padding: 8px 0;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      display: none;
+      font-family: 'Segoe UI', sans-serif;
+      user-select: none;
+    `;
+
+    const title = document.createElement('div');
+    title.style.cssText = 'padding:6px 16px;font-size:11px;color:#888;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:4px;';
+    title.id = 'ctx-menu-title';
+    title.textContent = '站点';
+
+    const delBtn = document.createElement('div');
+    delBtn.style.cssText = `
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #ff6464;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    `;
+    delBtn.innerHTML = '<span style="font-size:16px;">🗑️</span> 删除站点';
+    delBtn.addEventListener('mouseenter', () => {
+      delBtn.style.background = 'rgba(255, 100, 100, 0.15)';
+      delBtn.style.transform = 'scale(1.02)';
+    });
+    delBtn.addEventListener('mouseleave', () => {
+      delBtn.style.background = 'transparent';
+      delBtn.style.transform = 'scale(1)';
+    });
+    delBtn.addEventListener('mousedown', () => {
+      delBtn.style.background = 'rgba(255, 100, 100, 0.3)';
+    });
+    delBtn.addEventListener('click', () => this.confirmDeleteStation());
+
+    const cancelBtn = document.createElement('div');
+    cancelBtn.style.cssText = `
+      padding: 8px 16px;
+      font-size: 12px;
+      color: #888;
+      cursor: pointer;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      margin-top: 4px;
+      transition: all 0.15s ease;
+    `;
+    cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('mouseenter', () => {
+      cancelBtn.style.background = 'rgba(255,255,255,0.05)';
+      cancelBtn.style.color = '#aaa';
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+      cancelBtn.style.background = 'transparent';
+      cancelBtn.style.color = '#888';
+    });
+    cancelBtn.addEventListener('click', () => this.hideContextMenu());
+
+    menu.appendChild(title);
+    menu.appendChild(delBtn);
+    menu.appendChild(cancelBtn);
+    return menu;
+  }
+
+  private showContextMenu(x: number, y: number, stationName: string): void {
+    if (!this.contextMenuEl) return;
+    const titleEl = this.contextMenuEl.querySelector('#ctx-menu-title');
+    if (titleEl) titleEl.textContent = `站点: ${stationName}`;
+
+    this.contextMenuEl.style.display = 'block';
+    const menuRect = this.contextMenuEl.getBoundingClientRect();
+    const maxX = window.innerWidth - menuRect.width - 10;
+    const maxY = window.innerHeight - menuRect.height - 10;
+    this.contextMenuEl.style.left = Math.min(x + 4, maxX) + 'px';
+    this.contextMenuEl.style.top = Math.min(y + 4, maxY) + 'px';
+  }
+
+  private hideContextMenu(): void {
+    if (this.contextMenuEl) {
+      this.contextMenuEl.style.display = 'none';
+    }
+    this.pendingDeleteStation = null;
+  }
+
+  private confirmDeleteStation(): void {
+    const station = this.pendingDeleteStation;
+    this.hideContextMenu();
+    if (!station) return;
+
+    const affectedLines = this.lineManager.getAllLines().filter(l => l.stationIds.includes(station.id));
+    let msg = `确定要删除站点「${station.name}」吗？`;
+    if (affectedLines.length > 0) {
+      msg += `\n\n这将影响 ${affectedLines.length} 条线路：\n${affectedLines.map(l => '  • ' + l.name).join('\n')}`;
+    }
+
+    if (!confirm(msg)) return;
+
+    for (const line of this.lineManager.getAllLines()) {
+      this.lineManager.removeStationFromLine(line.id, station.id);
+    }
+    this.stationManager.removeStation(station.id);
+    this.trainSimulator.createTrainsForAllLines();
+    this.uiPanel.refreshAll();
+  }
+
+  private onContextMenu(e: MouseEvent): void {
+    e.preventDefault();
+    this.updateMouse(e as unknown as PointerEvent);
+
+    const station = this.intersectStations();
+    if (!station) {
+      this.hideContextMenu();
+      return;
+    }
+
+    this.pendingDeleteStation = station;
+    this.showContextMenu(e.clientX, e.clientY, station.name);
+  }
+
   private setupEventListeners(): void {
     window.addEventListener('resize', () => this.onWindowResize());
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
+    window.addEventListener('pointerdown', (e) => {
+      if (this.contextMenuEl && !this.contextMenuEl.contains(e.target as Node)) {
+        this.hideContextMenu();
+      }
+    });
 
     const canvas = this.renderer.domElement;
-    canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-    canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
-    canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+    canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
+    canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
+    canvas.addEventListener('pointerleave', (e) => this.onPointerUp(e));
+    canvas.addEventListener('contextmenu', (e) => this.onContextMenu(e));
 
     const dropZone = document.getElementById('file-drop-zone')!;
     window.addEventListener('dragover', (e) => {
@@ -209,7 +418,7 @@ class MetroPlannerApp {
     });
   }
 
-  private updateMouse(e: MouseEvent): void {
+  private updateMouse(e: PointerEvent): void {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -237,28 +446,9 @@ class MetroPlannerApp {
     return null;
   }
 
-  private onMouseDown(e: MouseEvent): void {
+  private onPointerDown(e: PointerEvent): void {
+    this.hideContextMenu();
     this.updateMouse(e);
-
-    if (e.button === 2) {
-      this.isDraggingStation = false;
-      this.draggedStation = null;
-      this.isCreatingLine = false;
-      this.lineStartStation = null;
-      this.stationWasDragged = false;
-      this.controls.enabled = true;
-
-      const station = this.intersectStations();
-      if (station) {
-        for (const line of this.lineManager.getAllLines()) {
-          this.lineManager.removeStationFromLine(line.id, station.id);
-        }
-        this.stationManager.removeStation(station.id);
-        this.trainSimulator.createTrainsForAllLines();
-        this.uiPanel.refreshAll();
-        return;
-      }
-    }
 
     if (e.button === 0) {
       const station = this.intersectStations();
@@ -270,6 +460,7 @@ class MetroPlannerApp {
         this.controls.enabled = false;
         this.isCreatingLine = true;
         this.lineStartStation = station;
+        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         return;
       }
 
@@ -278,7 +469,7 @@ class MetroPlannerApp {
         const color = this.uiPanel.getDefaultStationColor();
         const size = this.uiPanel.getDefaultStationSize();
         const density = this.uiPanel.getDefaultStationDensity();
-        const newStation = this.stationManager.addStation(
+        this.stationManager.addStation(
           new THREE.Vector3(point.x, size / 2, point.z),
           color,
           size,
@@ -289,7 +480,7 @@ class MetroPlannerApp {
     }
   }
 
-  private onMouseMove(e: MouseEvent): void {
+  private onPointerMove(e: PointerEvent): void {
     this.updateMouse(e);
 
     const station = this.intersectStations();
@@ -330,7 +521,7 @@ class MetroPlannerApp {
     }
   }
 
-  private onMouseUp(e: MouseEvent): void {
+  private onPointerUp(e: PointerEvent): void {
     if (e.button === 0) {
       if (this.isCreatingLine && this.lineStartStation) {
         this.updateMouse(e);
@@ -394,7 +585,7 @@ class MetroPlannerApp {
     this.controls.enabled = true;
   }
 
-  private updateTempLine(_e: MouseEvent): void {
+  private updateTempLine(_e: PointerEvent): void {
     if (!this.lineStartStation) return;
     const point = this.intersectGround();
     if (!point) return;
