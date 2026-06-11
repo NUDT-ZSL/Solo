@@ -3,26 +3,108 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>回声漂流瓶</title>
+  <title>星尘拓印 — Stardust Relief</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', 'PingFang SC', sans-serif; }
+
+    #loading-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      background: radial-gradient(ellipse at center, #1A0033 0%, #000000 100%);
+      display: flex; align-items: center; justify-content: center; flex-direction: column;
+      transition: opacity 0.8s ease;
     }
-    html, body, #root {
-      width: 100%;
-      height: 100%;
+    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+
+    .nebula-spinner {
+      width: 120px; height: 120px;
+      animation: nebula-spin 4s linear infinite;
+    }
+    @keyframes nebula-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .nebula-spinner svg { width: 100%; height: 100%; }
+
+    .loading-text {
+      margin-top: 24px;
+      color: #CC88FF;
+      font-size: 14px;
+      letter-spacing: 4px;
+      animation: pulse-text 2s ease-in-out infinite;
+    }
+    @keyframes pulse-text {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    #app-container {
+      width: 100%; height: 100%;
+      display: flex;
+      position: relative;
+    }
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
       overflow: hidden;
     }
-    body {
-      background: linear-gradient(180deg, #003366 0%, #66B2FF 100%);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    #canvas-wrap canvas { display: block; }
+
+    #tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: rgba(26, 0, 51, 0.9);
+      border: 1px solid #8822AA;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.5;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      white-space: nowrap;
     }
+    #tooltip.visible { opacity: 1; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="module" src="/src/client/main.tsx"></script>
+
+<div id="loading-screen">
+  <div class="nebula-spinner">
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="ng1" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#CC66FF" stop-opacity="0.9"/>
+          <stop offset="40%" stop-color="#8822AA" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#1A0033" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="ng2" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#FF66AA" stop-opacity="0.6"/>
+          <stop offset="60%" stop-color="#6622AA" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="100" cy="100" rx="90" ry="60" fill="url(#ng1)" transform="rotate(30 100 100)"/>
+      <ellipse cx="100" cy="100" rx="70" ry="45" fill="url(#ng2)" transform="rotate(-45 100 100)"/>
+      <ellipse cx="100" cy="100" rx="50" ry="30" fill="url(#ng1)" transform="rotate(70 100 100)"/>
+      <circle cx="100" cy="100" r="20" fill="#E0D0FF" opacity="0.4"/>
+      <circle cx="100" cy="100" r="8" fill="#FFFFFF" opacity="0.7"/>
+      <circle cx="60" cy="80" r="3" fill="#FFFFFF" opacity="0.5"/>
+      <circle cx="130" cy="120" r="2" fill="#FFFFFF" opacity="0.4"/>
+      <circle cx="90" cy="140" r="2.5" fill="#FFFFFF" opacity="0.3"/>
+      <circle cx="140" cy="70" r="1.5" fill="#FFFFFF" opacity="0.6"/>
+    </svg>
+  </div>
+  <div class="loading-text">STARDUST RELIEF</div>
+</div>
+
+<div id="app-container">
+  <div id="canvas-wrap"></div>
+</div>
+
+<div id="tooltip"></div>
+
+<script type="module" src="/src/main.ts"></script>
 </body>
 </html>
