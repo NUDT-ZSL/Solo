@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>光织立方 - 三维光影雕塑生成器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: monospace;
+      font-size: 14px;
+      color: #CCCCCC;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, #0A0A1E 0%, #000011 100%);
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at center, #0A0A1E 0%, #000011 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.8s ease-out;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loader-cube {
+      width: 60px;
+      height: 60px;
+      position: relative;
+      transform-style: preserve-3d;
+      animation: rotateCube 3s infinite linear;
+    }
+
+    .loader-cube div {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border: 2px solid rgba(100, 150, 255, 0.6);
+      background: rgba(50, 100, 200, 0.1);
+      box-shadow: 0 0 20px rgba(100, 150, 255, 0.4);
+    }
+
+    .loader-cube .front { transform: translateZ(30px); }
+    .loader-cube .back { transform: rotateY(180deg) translateZ(30px); }
+    .loader-cube .left { transform: rotateY(-90deg) translateZ(30px); }
+    .loader-cube .right { transform: rotateY(90deg) translateZ(30px); }
+    .loader-cube .top { transform: rotateX(90deg) translateZ(30px); }
+    .loader-cube .bottom { transform: rotateX(-90deg) translateZ(30px); }
+
+    @keyframes rotateCube {
+      0% { transform: rotateX(0deg) rotateY(0deg); }
+      100% { transform: rotateX(360deg) rotateY(360deg); }
+    }
+
+    .loader-text {
+      margin-top: 30px;
+      font-size: 14px;
+      letter-spacing: 4px;
+      color: rgba(200, 200, 255, 0.8);
+      text-transform: uppercase;
+    }
+
+    .loader-dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0%, 20% { content: ''; }
+      40% { content: '.'; }
+      60% { content: '..'; }
+      80%, 100% { content: '...'; }
+    }
+
+    #control-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 280px;
+      max-height: calc(100vh - 40px);
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 20px;
+      z-index: 100;
+      overflow-y: auto;
+      transition: transform 0.4s ease;
+    }
+
+    #control-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #control-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #control-panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #fff;
+      text-shadow: 0 0 10px rgba(100, 150, 255, 0.5);
+      letter-spacing: 2px;
+    }
+
+    .light-section {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .light-section:last-child {
+      border-bottom: none;
+    }
+
+    .light-label {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      font-weight: bold;
+    }
+
+    .light-color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 10px;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: rgba(200, 200, 200, 0.7);
+    }
+
+    .control-value {
+      color: #fff;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.15);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    .color-picker-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type="color"] {
+      -webkit-appearance: none;
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    }
+
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 50%;
+    }
+
+    input[type="color"]::-moz-color-swatch {
+      border: none;
+      border-radius: 50%;
+    }
+
+    .hue-slider {
+      flex: 1;
+      background: linear-gradient(to right, 
+        #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+    }
+
+    .hue-slider::-webkit-slider-thumb {
+      border: 2px solid #fff;
+    }
+
+    #mobile-toggle {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 101;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    #mobile-toggle:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        top: auto;
+        left: 0;
+        width: 100%;
+        max-height: 60vh;
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+        bottom: 0;
+      }
+
+      #control-panel.open {
+        transform: translateY(0);
+      }
+
+      #mobile-toggle {
+        display: flex;
+      }
+
+      #mobile-toggle.hidden {
+        display: none;
+      }
+    }
+
+    .info-text {
+      font-size: 11px;
+      color: rgba(200, 200, 200, 0.5);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <div id="loading-screen">
+      <div class="loader-cube">
+        <div class="front"></div>
+        <div class="back"></div>
+        <div class="left"></div>
+        <div class="right"></div>
+        <div class="top"></div>
+        <div class="bottom"></div>
+      </div>
+      <div class="loader-text">加载中<span class="loader-dots"></span></div>
+    </div>
+
+    <div id="control-panel">
+      <div class="panel-title">光织立方</div>
+      
+      <div id="lights-container"></div>
+
+      <div class="info-text">
+        拖拽场景：鼠标左键拖拽旋转场景<br>
+        拖拽光源：直接拖拽发光球体<br>
+        旋转面：点击立方体面并拖拽
+      </div>
+    </div>
+
+    <button id="mobile-toggle" title="控制面板">⚙</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
