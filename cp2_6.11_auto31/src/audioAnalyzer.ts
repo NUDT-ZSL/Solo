@@ -47,6 +47,7 @@ export class AudioAnalyzer {
   async startRecording(maxDuration: number = 5): Promise<void> {
     const t0 = performance.now();
     this.maxDuration = maxDuration;
+    console.log(`[AudioAnalyzer] T0 开始请求麦克风权限 @ ${t0.toFixed(1)}ms`);
 
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -63,6 +64,9 @@ export class AudioAnalyzer {
       throw err;
     }
 
+    const t1 = performance.now();
+    console.log(`[AudioAnalyzer] T1 权限获取成功, 耗时: ${(t1 - t0).toFixed(1)}ms`);
+
     this.audioContext = new AudioContext({ sampleRate: 44100 });
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
@@ -71,15 +75,15 @@ export class AudioAnalyzer {
     this.analyser.smoothingTimeConstant = 0.8;
     this.sourceNode.connect(this.analyser);
 
-    const t1 = performance.now();
-    console.log(`[AudioAnalyzer] 音频初始化耗时: ${(t1 - t0).toFixed(1)}ms`);
+    const t2 = performance.now();
+    console.log(`[AudioAnalyzer] T2 AudioContext+Analyser初始化完成, 耗时: ${(t2 - t1).toFixed(1)}ms`);
 
     this.mediaRecorder = new MediaRecorder(this.mediaStream);
     this.mediaRecorder.start();
 
     this.state = 'recording';
     this.recordingStartTime = performance.now();
-    console.log(`[AudioAnalyzer] 开始录制 @ ${new Date().toISOString()}`);
+    console.log(`[AudioAnalyzer] T3 正式开始录制 @ ${this.recordingStartTime.toFixed(1)}ms (从请求权限到开始录制总延迟: ${(this.recordingStartTime - t0).toFixed(1)}ms)`);
 
     this.startSpectrumLoop();
 
@@ -120,6 +124,7 @@ export class AudioAnalyzer {
 
   async stopRecording(): Promise<AudioAnalysisResult> {
     const t0 = performance.now();
+    console.log(`[AudioAnalyzer] T0_stop 收到停止录制请求 @ ${t0.toFixed(1)}ms`);
 
     if (this.autoStopTimer) {
       window.clearTimeout(this.autoStopTimer);
@@ -134,6 +139,8 @@ export class AudioAnalyzer {
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
     }
+    const t1 = performance.now();
+    console.log(`[AudioAnalyzer] T1_stop MediaRecorder已停止, 耗时: ${(t1 - t0).toFixed(1)}ms`);
 
     if (!this.analyser || !this.audioContext) {
       this.state = 'done';
@@ -143,14 +150,18 @@ export class AudioAnalyzer {
     const bufferLength = this.analyser.frequencyBinCount;
     const frequencyData = new Uint8Array(bufferLength);
     this.analyser.getByteFrequencyData(frequencyData);
+    const t2 = performance.now();
+    console.log(`[AudioAnalyzer] T2_stop FFT分析完成 (fftSize=256, bins=${bufferLength}), 耗时: ${(t2 - t1).toFixed(1)}ms`);
 
-    const t1 = performance.now();
-    this.lastAnalysisTime = t1 - t0;
-    console.log(`[AudioAnalyzer] FFT分析耗时: ${this.lastAnalysisTime.toFixed(1)}ms`);
-    console.log(`[AudioAnalyzer] 录制总时长: ${((t1 - this.recordingStartTime) / 1000).toFixed(2)}s`);
-    console.log(`[AudioAnalyzer] 录制→分析延迟: ${(t1 - this.recordingStartTime).toFixed(1)}ms`);
+    this.lastAnalysisTime = t2 - t0;
+    console.log(`[AudioAnalyzer] T3_stop 总分析延迟: ${this.lastAnalysisTime.toFixed(1)}ms (阈值≤200ms ${this.lastAnalysisTime <= 200 ? '✅' : '⚠️ 超出'})`);
+    console.log(`[AudioAnalyzer] 录制总时长: ${((t2 - this.recordingStartTime) / 1000).toFixed(2)}s`);
 
+    const t3 = performance.now();
     const normalizedAmplitudes = this.computeNormalizedAmplitudes(frequencyData);
+    const t4 = performance.now();
+    console.log(`[AudioAnalyzer] T4_stop 频段归一化完成, ${this.ringCount}个频段, 耗时: ${(t4 - t3).toFixed(1)}ms`);
+    console.log(`[AudioAnalyzer] 振幅结果: [${normalizedAmplitudes.map(a => a.toFixed(3)).join(', ')}]`);
 
     this.state = 'done';
 

@@ -107,30 +107,40 @@ class SpectrumRenderer {
 
     const cx = w / 2;
     const cy = h / 2;
-    const radius = Math.min(cx, cy) * 0.85;
-    const maxBarHeight = Math.min(cx, cy) * 0.12;
+    const innerPadding = 16;
+    const baseRadius = Math.min(cx, cy) - innerPadding;
+    const maxBarHeight = 40;
 
     for (let i = 0; i < barCount; i++) {
       const angle = (i / barCount) * Math.PI * 2 - Math.PI / 2;
       const barHeight = this.bars[i] * maxBarHeight;
 
-      const innerR = radius;
-      const outerR = radius + barHeight;
+      const innerR = baseRadius;
+      const outerR = baseRadius - barHeight;
 
       const x1 = cx + Math.cos(angle) * innerR;
       const y1 = cy + Math.sin(angle) * innerR;
       const x2 = cx + Math.cos(angle) * outerR;
       const y2 = cy + Math.sin(angle) * outerR;
 
-      const hue = (i / barCount) * 60 + 200;
-      this.ctx.strokeStyle = `hsla(${hue}, 80%, 60%, 0.8)`;
-      this.ctx.lineWidth = Math.max(2, (2 * Math.PI * radius) / barCount * 0.6);
+      const t = i / barCount;
+      const r = Math.round(0 + (255 - 0) * t);
+      const g = Math.round(80 + (215 - 80) * t);
+      const b = Math.round(255 + (0 - 255) * t);
+      this.ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
+      this.ctx.lineWidth = Math.max(1.5, (2 * Math.PI * baseRadius) / barCount * 0.5);
       this.ctx.lineCap = 'round';
       this.ctx.beginPath();
       this.ctx.moveTo(x1, y1);
       this.ctx.lineTo(x2, y2);
       this.ctx.stroke();
     }
+
+    this.ctx.strokeStyle = 'rgba(0, 191, 255, 0.35)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, baseRadius, 0, Math.PI * 2);
+    this.ctx.stroke();
   }
 }
 
