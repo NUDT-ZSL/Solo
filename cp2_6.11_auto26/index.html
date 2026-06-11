@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>森语棋局</title>
+  <title>暗影棋盘</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700&display=swap');
-
     * {
       margin: 0;
       padding: 0;
@@ -17,35 +15,447 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: linear-gradient(135deg, #0B1A10 0%, #0D2B20 100%);
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #0F0F23 0%, #1A1A2E 100%);
+      color: #ffffff;
+      user-select: none;
     }
 
-    canvas {
-      display: block;
-      cursor: default;
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
     }
 
-    #game-title {
-      position: fixed;
-      top: 18px;
+    .game-title {
+      position: absolute;
+      top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      font-family: 'Ma Shan Zheng', 'Noto Serif SC', serif;
-      font-size: 32px;
-      color: #A8E6CF;
-      letter-spacing: 12px;
-      text-shadow:
-        0 0 10px rgba(168, 230, 207, 0.4),
-        0 0 30px rgba(168, 230, 207, 0.15);
-      pointer-events: none;
+      font-size: 28px;
+      font-weight: bold;
+      letter-spacing: 4px;
+      background: linear-gradient(90deg, #E94560, #FFD700);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 30px rgba(233, 69, 96, 0.3);
       z-index: 10;
-      user-select: none;
+    }
+
+    .game-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 30px;
+      position: relative;
+    }
+
+    .side-panel {
+      width: 140px;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+
+    .turn-indicator {
+      text-align: center;
+      position: relative;
+    }
+
+    .turn-label {
+      font-size: 14px;
+      color: #8888aa;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+    }
+
+    .turn-team {
+      font-size: 20px;
+      font-weight: bold;
+      padding: 10px 20px;
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .turn-team.red {
+      color: #E94560;
+      text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+    }
+
+    .turn-team.blue {
+      color: #4A90D9;
+      text-shadow: 0 0 10px rgba(74, 144, 217, 0.5);
+    }
+
+    .turn-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      transform: translate(-50%, -50%);
+      border: 2px solid;
+      border-radius: 12px;
+      animation: rotate-glow 2s linear infinite;
+      pointer-events: none;
+    }
+
+    .turn-glow.red {
+      border-color: #E94560;
+      box-shadow: 0 0 15px rgba(233, 69, 96, 0.3);
+    }
+
+    .turn-glow.blue {
+      border-color: #4A90D9;
+      box-shadow: 0 0 15px rgba(74, 144, 217, 0.3);
+    }
+
+    @keyframes rotate-glow {
+      0% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 50% 0%);
+      }
+      25% {
+        clip-path: polygon(50% 50%, 100% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 50% 0%);
+      }
+      50% {
+        clip-path: polygon(50% 50%, 100% 50%, 100% 100%, 100% 100%, 0% 100%, 0% 0%, 50% 0%);
+      }
+      75% {
+        clip-path: polygon(50% 50%, 50% 100%, 50% 100%, 0% 100%, 0% 100%, 0% 0%, 50% 0%);
+      }
+      100% {
+        clip-path: polygon(50% 50%, 0% 50%, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%);
+      }
+    }
+
+    .status-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .team-status {
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .team-status.red {
+      border-left: 3px solid #E94560;
+    }
+
+    .team-status.blue {
+      border-left: 3px solid #4A90D9;
+    }
+
+    .team-name {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .team-status.red .team-name {
+      color: #E94560;
+    }
+
+    .team-status.blue .team-name {
+      color: #4A90D9;
+    }
+
+    .team-stat {
+      font-size: 12px;
+      color: #a0a0b0;
+      display: flex;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+
+    .team-stat-value {
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    #gameCanvas {
+      display: block;
+      border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.5),
+                  0 0 80px rgba(233, 69, 96, 0.1);
+      cursor: pointer;
+      min-width: 500px;
+      max-width: 800px;
+      width: 80vw;
+      aspect-ratio: 1 / 1;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 15px;
+      z-index: 10;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      letter-spacing: 1px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #E94560, #c73650);
+      color: white;
+      box-shadow: 0 4px 15px rgba(233, 69, 96, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(233, 69, 96, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      transform: translateY(-2px);
+    }
+
+    .btn-skill {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      color: #1A1A2E;
+      box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+    }
+
+    .btn-skill:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+    }
+
+    .btn-skill:disabled {
+      background: #555;
+      color: #888;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .victory-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .victory-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .victory-plaque {
+      text-align: center;
+      padding: 40px 60px;
+      background: linear-gradient(135deg, #1A1A2E, #2C2C3A);
+      border: 2px solid #FFD700;
+      border-radius: 16px;
+      box-shadow: 0 0 60px rgba(255, 215, 0, 0.3);
+      transform: scale(0.5);
+      opacity: 0;
+      transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .victory-overlay.active .victory-plaque {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    .victory-title {
+      font-size: 36px;
+      font-weight: bold;
+      letter-spacing: 6px;
+      background: linear-gradient(90deg, #FFD700, #FFA500);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 20px;
+    }
+
+    .victory-team {
+      font-size: 24px;
+      margin-bottom: 30px;
+      font-weight: bold;
+    }
+
+    .victory-team.red {
+      color: #E94560;
+    }
+
+    .victory-team.blue {
+      color: #4A90D9;
+    }
+
+    .gold-particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: #FFD700;
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: 0 0 6px #FFD700;
+    }
+
+    .hint-text {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px;
+      color: #6666aa;
+      letter-spacing: 1px;
+      z-index: 10;
+    }
+
+    @media (max-width: 600px) {
+      .game-title {
+        font-size: 20px;
+        top: 10px;
+      }
+
+      .game-container {
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .side-panel {
+        width: 90%;
+        min-height: auto;
+        flex-direction: row;
+        justify-content: space-around;
+      }
+
+      .status-panel {
+        flex-direction: row;
+        gap: 10px;
+      }
+
+      .team-status {
+        flex: 1;
+      }
+
+      #gameCanvas {
+        width: 90vw;
+        min-width: auto;
+        max-width: none;
+      }
+
+      .controls {
+        bottom: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .btn {
+        padding: 8px 16px;
+        font-size: 12px;
+      }
+
+      .hint-text {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
-  <div id="game-title">森 语 棋 局</div>
-  <canvas id="gameCanvas"></canvas>
+  <div id="app">
+    <h1 class="game-title">暗影棋盘</h1>
+    <p class="hint-text">选择己方棋子 → 移动到目标格 → 攻击敌方棋子</p>
+    
+    <div class="game-container">
+      <div class="side-panel">
+        <div class="turn-indicator">
+          <div class="turn-label">当前回合</div>
+          <div class="turn-team red" id="turnTeam">
+            红方
+            <div class="turn-glow red" id="turnGlow"></div>
+          </div>
+        </div>
+      </div>
+
+      <canvas id="gameCanvas"></canvas>
+
+      <div class="side-panel">
+        <div class="status-panel">
+          <div class="team-status red">
+            <div class="team-name">红方</div>
+            <div class="team-stat">
+              <span>剩余棋子</span>
+              <span class="team-stat-value" id="redCount">5</span>
+            </div>
+            <div class="team-stat">
+              <span>总生命</span>
+              <span class="team-stat-value" id="redHp">51</span>
+            </div>
+          </div>
+          <div class="team-status blue">
+            <div class="team-name">蓝方</div>
+            <div class="team-stat">
+              <span>剩余棋子</span>
+              <span class="team-stat-value" id="blueCount">5</span>
+            </div>
+            <div class="team-stat">
+              <span>总生命</span>
+              <span class="team-stat-value" id="blueHp">51</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-secondary" id="modeBtn">AI 模式</button>
+      <button class="btn btn-skill" id="skillBtn" disabled>释放技能</button>
+      <button class="btn btn-primary" id="restartBtn">再来一局</button>
+    </div>
+
+    <div class="victory-overlay" id="victoryOverlay">
+      <div class="victory-plaque" id="victoryPlaque">
+        <div class="victory-title">胜 利</div>
+        <div class="victory-team red" id="victoryTeam">红方获胜</div>
+        <button class="btn btn-primary" id="playAgainBtn">再来一局</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
