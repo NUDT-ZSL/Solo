@@ -103,9 +103,11 @@ class App {
     this.bookShelf.setSourceImage(img);
 
     try {
+      const ocrStartTime = performance.now();
       const result = await performOcr(img, (progress) => {
         this.uiPanel.setStatus(`OCR 识别中... ${progress}%`);
       });
+      const ocrDuration = Math.round(performance.now() - ocrStartTime);
 
       if (result.entries.length === 0) {
         this.uiPanel.setStatus('未识别到有效的目录条目，请尝试更清晰的截图');
@@ -113,10 +115,18 @@ class App {
         return;
       }
 
-      this.uiPanel.setStatus(`识别完成，共 ${result.entries.length} 个条目`);
+      this.uiPanel.setStatus(`识别完成，共 ${result.entries.length} 个条目 (OCR: ${ocrDuration}ms)`);
       this.uiPanel.renderTable(result.entries);
-      this.bookShelf.buildShelf(result.entries);
+
+      const buildStartTime = performance.now();
+      const buildDuration = this.bookShelf.buildShelf(result.entries);
+      console.log(`[Performance] OCR: ${ocrDuration}ms, Shelf build: ${Math.round(buildDuration)}ms`);
+
       this.bookShelf.start();
+
+      this.uiPanel.setStatus(
+        `识别完成 (OCR: ${ocrDuration}ms / 构建: ${Math.round(buildDuration)}ms)，共 ${result.entries.length} 个条目`
+      );
     } catch (err) {
       console.error('OCR failed:', err);
       this.uiPanel.setStatus('OCR 识别失败，请重试');

@@ -14,10 +14,12 @@ const LEVEL_THICKNESS: Record<number, number> = {
 };
 
 const BOOK_HEIGHT = 80;
-const SHELF_PADDING = 10;
 const HOVER_POP_DISTANCE = 15;
 const HOVER_DURATION = 0.3;
 const CLICK_DURATION = 0.8;
+const BREATH_AMPLITUDE = 0.5;
+const BREATH_PERIOD = 6;
+const BLUR_PERIOD = 2;
 
 interface SpineData {
   mesh: THREE.Group;
@@ -30,6 +32,7 @@ interface SpineData {
   highlightIntensity: number;
   layerIndex: number;
   positionInLayer: number;
+  glowMesh?: THREE.Mesh;
 }
 
 type BackgroundStyle = 'wood' | 'black' | 'blue';
@@ -49,7 +52,6 @@ export class BookShelf {
   private spines: SpineData[] = [];
   private hoveredSpine: SpineData | null = null;
   private selectedSpine: SpineData | null = null;
-  private cameraTarget: THREE.Vector3 = new THREE.Vector3();
   private cameraAnimating = false;
   private cameraAnimProgress = 0;
   private cameraStartPos = new THREE.Vector3();
@@ -80,6 +82,11 @@ export class BookShelf {
   private shelfWidth = 600;
   private animationId: number = 0;
   private lastTime = 0;
+  private tooltipImg: HTMLImageElement | null = null;
+  private tooltipMouseX = 0;
+  private tooltipMouseY = 0;
+  private tooltipActive = false;
+  private shelfBackPlane: THREE.Mesh | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -91,7 +98,7 @@ export class BookShelf {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x1a1a2e);
+    this.renderer.setClearColor(BG_GRADIENTS[this.bgStyle].top);
 
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(-999, -999);
@@ -146,9 +153,6 @@ export class BookShelf {
       transition: opacity 0.3s ease-out;
       z-index: 50;
       overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     `;
 
     const arrow = document.createElement('div');
@@ -165,10 +169,9 @@ export class BookShelf {
     `;
     this.tooltipEl.appendChild(arrow);
 
-    const img = document.createElement('img');
-    img.style.cssText = `width: 100%; height: 100%; object-fit: cover;`;
-    img.id = 'tooltip-blur-img';
-    this.tooltipEl.appendChild(img);
+    this.tooltipImg = document.createElement('img');
+    this.tooltipImg.style.cssText = `width: 100%; height: 100%; object-fit: cover; display: block;`;
+    this.tooltipEl.appendChild(this.tooltipImg);
 
     document.body.appendChild(this.tooltipEl);
   }
@@ -211,23 +214,43 @@ export class BookShelf {
     const grad = BG_GRADIENTS[this.bgStyle];
     this.renderer.setClearColor(grad.top);
 
-    if (this.shelfGroup.children.length > 0) {
-      this.shelfGroup.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.userData.isShelfBoard) {
+    if (this.shelfBackPlane) {
+      const backCanvas = document.createElement('canvas');
+      backCanvas.width = 512;
+      backCanvas.height = 512;
+      const ctx = backCanvas.getContext('2d')!;
+      const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+      gradient.addColorStop(0, '#' + grad.top.toString(16).padStart(6, '0'));
+      gradient.addColorStop(1, '#' + grad.bottom.toString(16).padStart(6, '0'));
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 512, 512);
+
+      const mat = this.shelfBackPlane.material as THREE.MeshStandardMaterial;
+      if (mat.map) {
+        mat.map.dispose();
+      }
+      mat.map = new THREE.CanvasTexture(backCanvas);
+      mat.needsUpdate = true;
+    }
+
+    this.shelfGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        if (child.userData.isShelfBoard === true) {
           const mat = child.material as THREE.MeshStandardMaterial;
           mat.color.setHex(grad.bottom);
         }
-        if (child instanceof THREE.Mesh && child.userData.isShelfBack) {
+        if (child.userData.isShelfBack === true) {
           const mat = child.material as THREE.MeshStandardMaterial;
           const topColor = new THREE.Color(grad.top);
           const botColor = new THREE.Color(grad.bottom);
           mat.color.copy(topColor).lerp(botColor, 0.5);
         }
-      });
-    }
+      }
+    });
   }
 
-  buildShelf(entries: CatalogEntry[]) {
+  buildShelf(entries: CatalogEntry[]): number {
+    const startTime = performance.now();
     this.entries = entries;
 
     while (this.shelfGroup.children.length > 0) {
@@ -236,6 +259,9 @@ export class BookShelf {
       if (child instanceof THREE.Mesh) {
         child.geometry.dispose();
         if (child.material instanceof THREE.Material) child.material.dispose();
+        if (child.material instanceof THREE.MeshStandardMaterial && child.material.map) {
+          child.material.map.dispose();
+        }
       }
     }
     this.spines = [];
@@ -249,6 +275,8 @@ export class BookShelf {
     const perLayer = Math.ceil(entries.length / layers);
     const layerHeight = BOOK_HEIGHT + 40;
     const totalHeight = layers * layerHeight;
+
+    this.createShelfBack(totalHeight);
 
     this.createParticles(totalHeight);
 
@@ -284,6 +312,7 @@ export class BookShelf {
           highlightIntensity: 0,
           layerIndex: layer,
           positionInLayer: i,
+          glowMesh: (spine as any).userData.glowMesh,
         });
 
         xOffset += thickness + this.spineSpacing;
@@ -305,13 +334,39 @@ export class BookShelf {
       }
     }
 
-    this.setupDefaultCamera();
     this.defaultCameraPos.set(0, 0, totalHeight * 0.9);
     this.camera.position.copy(this.defaultCameraPos);
     this.currentLookAt.set(0, 0, 0);
     this.camera.lookAt(this.currentLookAt);
 
     this.updateShelfBackground();
+
+    return performance.now() - startTime;
+  }
+
+  private createShelfBack(totalHeight: number) {
+    const grad = BG_GRADIENTS[this.bgStyle];
+    const backCanvas = document.createElement('canvas');
+    backCanvas.width = 512;
+    backCanvas.height = 512;
+    const ctx = backCanvas.getContext('2d')!;
+    const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+    gradient.addColorStop(0, '#' + grad.top.toString(16).padStart(6, '0'));
+    gradient.addColorStop(1, '#' + grad.bottom.toString(16).padStart(6, '0'));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 512, 512);
+
+    const texture = new THREE.CanvasTexture(backCanvas);
+    const backGeo = new THREE.PlaneGeometry(this.shelfWidth + 40, totalHeight + 60);
+    const backMat = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.9,
+      side: THREE.DoubleSide,
+    });
+    this.shelfBackPlane = new THREE.Mesh(backGeo, backMat);
+    this.shelfBackPlane.position.set(0, 0, -45);
+    this.shelfBackPlane.userData.isShelfBackPlane = true;
+    this.shelfGroup.add(this.shelfBackPlane);
   }
 
   private createShelfBoard(x: number, y: number, color: number) {
@@ -326,17 +381,6 @@ export class BookShelf {
     board.userData.isShelfBoard = true;
     board.receiveShadow = true;
     this.shelfGroup.add(board);
-
-    const backGeo = new THREE.PlaneGeometry(this.shelfWidth, 100);
-    const backMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(color).lerp(new THREE.Color(0x000000), 0.3).getHex(),
-      roughness: 0.9,
-      side: THREE.DoubleSide,
-    });
-    const back = new THREE.Mesh(backGeo, backMat);
-    back.position.set(x, y + 45, -40);
-    back.userData.isShelfBack = true;
-    this.shelfGroup.add(back);
   }
 
   private createSpine(entry: CatalogEntry, thickness: number, layerIndex: number, posInLayer: number): THREE.Group {
@@ -353,62 +397,88 @@ export class BookShelf {
       emissiveIntensity: 0,
     });
     const spineMesh = new THREE.Mesh(spineGeo, spineMat);
+    spineMesh.userData.isSpineBody = true;
     group.add(spineMesh);
 
+    const glowGeo = new THREE.BoxGeometry(thickness + 3, BOOK_HEIGHT + 3, 31);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0,
+      side: THREE.BackSide,
+    });
+    const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+    glowMesh.position.z = 0.5;
+    glowMesh.userData.isGlow = true;
+    group.add(glowMesh);
+
+    const pixelRatio = 4;
     const titleCanvas = document.createElement('canvas');
-    titleCanvas.width = BOOK_HEIGHT * 2;
-    titleCanvas.height = thickness * 6;
+    titleCanvas.width = Math.round(thickness * pixelRatio);
+    titleCanvas.height = Math.round(BOOK_HEIGHT * pixelRatio);
     const ctx = titleCanvas.getContext('2d')!;
 
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, titleCanvas.width, titleCanvas.height);
+    ctx.clearRect(0, 0, titleCanvas.width, titleCanvas.height);
+
+    ctx.save();
+    ctx.translate(titleCanvas.width / 2, titleCanvas.height / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.translate(-titleCanvas.height / 2, -titleCanvas.width / 2);
 
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${Math.min(28, titleCanvas.height * 0.6)}px "Microsoft YaHei", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const maxTextWidth = titleCanvas.width * 0.9;
-    let title = entry.title;
-    let fontSize = Math.min(28, titleCanvas.height * 0.6);
-    ctx.font = `bold ${fontSize}px "Microsoft YaHei", sans-serif`;
-    while (ctx.measureText(title).width > maxTextWidth && fontSize > 8) {
+    const maxTextWidth = titleCanvas.height * 0.9;
+    let fontSize = titleCanvas.width * 0.7;
+    fontSize = Math.min(fontSize, 48 * pixelRatio / 2);
+    let displayTitle = entry.title;
+
+    ctx.font = `bold ${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+
+    while (ctx.measureText(displayTitle).width > maxTextWidth && fontSize > 10 * pixelRatio / 2) {
       fontSize -= 1;
-      ctx.font = `bold ${fontSize}px "Microsoft YaHei", sans-serif`;
+      ctx.font = `bold ${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
     }
-    if (ctx.measureText(title).width > maxTextWidth) {
-      while (ctx.measureText(title + '…').width > maxTextWidth && title.length > 1) {
-        title = title.slice(0, -1);
+
+    if (ctx.measureText(displayTitle).width > maxTextWidth) {
+      while (ctx.measureText(displayTitle + '…').width > maxTextWidth && displayTitle.length > 1) {
+        displayTitle = displayTitle.slice(0, -1);
       }
-      title += '…';
+      displayTitle += '…';
     }
-    ctx.fillText(title, titleCanvas.width / 2, titleCanvas.height / 2);
+
+    ctx.fillText(displayTitle, titleCanvas.height / 2, titleCanvas.width / 2);
+    ctx.restore();
 
     const titleTexture = new THREE.CanvasTexture(titleCanvas);
     titleTexture.minFilter = THREE.LinearFilter;
+    titleTexture.magFilter = THREE.LinearFilter;
     const titleMat = new THREE.MeshBasicMaterial({
       map: titleTexture,
       transparent: true,
       side: THREE.FrontSide,
     });
-    const titlePlane = new THREE.PlaneGeometry(BOOK_HEIGHT * 0.9, thickness * 0.8);
+    const titlePlane = new THREE.PlaneGeometry(thickness, BOOK_HEIGHT);
     const titleMesh = new THREE.Mesh(titlePlane, titleMat);
     titleMesh.position.z = 15.1;
-    titleMesh.rotation.z = -Math.PI / 2;
+    titleMesh.userData.isTitle = true;
     group.add(titleMesh);
 
     if (entry.page) {
+      const pagePixelRatio = 4;
       const pageCanvas = document.createElement('canvas');
-      pageCanvas.width = 64;
-      pageCanvas.height = 32;
+      const pageW = 16 * pagePixelRatio;
+      const pageH = 8 * pagePixelRatio;
+      pageCanvas.width = pageW;
+      pageCanvas.height = pageH;
       const pctx = pageCanvas.getContext('2d')!;
-      pctx.fillStyle = '#00000000';
-      pctx.clearRect(0, 0, 64, 32);
+      pctx.clearRect(0, 0, pageW, pageH);
       pctx.fillStyle = '#FFD700';
-      pctx.font = 'bold 18px "Microsoft YaHei", sans-serif';
+      pctx.font = `bold ${pageH * 0.7}px "Microsoft YaHei", sans-serif`;
       pctx.textAlign = 'left';
       pctx.textBaseline = 'top';
-      pctx.fillText(entry.page, 4, 4);
+      pctx.fillText(entry.page, 0, 0);
 
       const pageTexture = new THREE.CanvasTexture(pageCanvas);
       pageTexture.minFilter = THREE.LinearFilter;
@@ -419,9 +489,11 @@ export class BookShelf {
       });
       const pagePlane = new THREE.PlaneGeometry(16, 8);
       const pageMesh = new THREE.Mesh(pagePlane, pageMat);
-      pageMesh.position.set(-thickness / 2 + 8, BOOK_HEIGHT / 2 - 8, 15.1);
+      pageMesh.position.set(-thickness / 2 + 8, BOOK_HEIGHT / 2 - 8, 15.2);
       group.add(pageMesh);
     }
+
+    (group as any).userData.glowMesh = glowMesh;
 
     return group;
   }
@@ -497,18 +569,14 @@ export class BookShelf {
   }
 
   private onMouseMove(event: MouseEvent) {
+    this.tooltipMouseX = event.clientX;
+    this.tooltipMouseY = event.clientY;
+
     const rect = this.canvas.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
-
-    const meshes: THREE.Object3D[] = [];
-    this.shelfGroup.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.userData.isSpine !== undefined) {
-        meshes.push(child);
-      }
-    });
 
     const allMeshes: THREE.Object3D[] = [];
     this.shelfGroup.traverse((child) => {
@@ -547,41 +615,44 @@ export class BookShelf {
       found.isHovered = true;
       found.targetZ = found.originalZ + HOVER_POP_DISTANCE;
       this.canvas.style.cursor = 'pointer';
-      this.updateTooltip(found, event.clientX, event.clientY);
+      this.tooltipActive = true;
     } else {
       this.canvas.style.cursor = 'default';
-      this.hideTooltip();
+      this.tooltipActive = false;
     }
   }
 
-  private updateTooltip(spine: SpineData, mouseX: number, mouseY: number) {
-    if (!this.tooltipEl || !this.sourceImage) return;
+  private updateTooltipImage() {
+    if (!this.hoveredSpine || !this.sourceImage || !this.blurCtx || !this.tooltipImg) return;
 
-    const entry = spine.entry;
-    if (entry.region && this.blurCtx) {
-      const sx = (entry.region.x / this.sourceImage.naturalWidth) * this.sourceImage.naturalWidth;
-      const sy = (entry.region.y / this.sourceImage.naturalHeight) * this.sourceImage.naturalHeight;
-      const sw = (entry.region.w / this.sourceImage.naturalWidth) * this.sourceImage.naturalWidth;
-      const sh = (entry.region.h / this.sourceImage.naturalHeight) * this.sourceImage.naturalHeight;
+    const entry = this.hoveredSpine.entry;
+    if (!entry.region) return;
 
-      this.blurCtx.clearRect(0, 0, 120, 80);
-      this.blurCtx.filter = `blur(${2 + 2 * Math.sin(this.blurPhase)}px)`;
-      this.blurCtx.drawImage(this.sourceImage, sx, sy, sw, sh, 0, 0, 120, 80);
-      this.blurCtx.filter = 'none';
+    const { x, y, w, h } = entry.region;
+    const imgW = this.sourceImage.naturalWidth;
+    const imgH = this.sourceImage.naturalHeight;
 
-      const img = this.tooltipEl.querySelector('#tooltip-blur-img') as HTMLImageElement;
-      if (img) {
-        img.src = this.blurCanvas!.toDataURL();
-      }
-    }
+    if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > imgW || y + h > imgH) return;
 
-    this.tooltipEl.style.left = `${mouseX - 135}px`;
-    this.tooltipEl.style.top = `${mouseY - 40}px`;
-    this.tooltipEl.style.opacity = '1';
+    const blurRadius = 2 + 2 * Math.sin(this.blurPhase);
+
+    this.blurCtx.clearRect(0, 0, 120, 80);
+    this.blurCtx.save();
+    this.blurCtx.filter = `blur(${blurRadius}px)`;
+    this.blurCtx.drawImage(this.sourceImage, x, y, w, h, -4, -4, 128, 88);
+    this.blurCtx.restore();
+
+    this.tooltipImg.src = this.blurCanvas!.toDataURL();
   }
 
-  private hideTooltip() {
-    if (this.tooltipEl) {
+  private updateTooltipPosition() {
+    if (!this.tooltipEl) return;
+
+    if (this.tooltipActive) {
+      this.tooltipEl.style.left = `${this.tooltipMouseX - 135}px`;
+      this.tooltipEl.style.top = `${this.tooltipMouseY - 40}px`;
+      this.tooltipEl.style.opacity = '1';
+    } else {
       this.tooltipEl.style.opacity = '0';
     }
   }
@@ -620,9 +691,9 @@ export class BookShelf {
     this.lastTime = time;
 
     this.breathTime += delta;
-    this.blurPhase += delta * Math.PI;
+    this.blurPhase += delta * (2 * Math.PI) / BLUR_PERIOD;
 
-    const breathOffset = Math.sin(this.breathTime * ((2 * Math.PI) / 6)) * 0.5;
+    const breathOffset = Math.sin((this.breathTime * 2 * Math.PI) / BREATH_PERIOD) * BREATH_AMPLITUDE;
     this.shelfGroup.position.z = breathOffset;
 
     if (this.particles) {
@@ -630,8 +701,8 @@ export class BookShelf {
       for (let i = 0; i < positions.count; i++) {
         let y = positions.getY(i);
         y -= delta * 8;
-        if (y < -positions.getY(i) * 0.5 - 100) {
-          y = positions.getY(i) * 0.5 + 100;
+        if (y < -250) {
+          y = 250;
         }
         positions.setY(i, y);
       }
@@ -641,7 +712,7 @@ export class BookShelf {
     for (const spine of this.spines) {
       const speed = HOVER_POP_DISTANCE / HOVER_DURATION;
       const diff = spine.targetZ - spine.currentZ;
-      if (Math.abs(diff) > 0.1) {
+      if (Math.abs(diff) > 0.01) {
         const step = Math.sign(diff) * Math.min(Math.abs(diff), speed * delta);
         spine.currentZ += step;
         spine.mesh.position.z = spine.currentZ;
@@ -656,13 +727,17 @@ export class BookShelf {
         spine.highlightIntensity = Math.max(0, spine.highlightIntensity - delta * 2);
       }
 
+      if (spine.glowMesh) {
+        const glowMat = spine.glowMesh.material as THREE.MeshBasicMaterial;
+        glowMat.opacity = spine.highlightIntensity * 0.5;
+      }
+
       spine.mesh.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          if (child.userData.isSpine !== false) {
-            const levelColor = LEVEL_COLORS[spine.entry.level] || 0xffd700;
-            child.material.emissive.setHex(levelColor);
-            child.material.emissiveIntensity = spine.highlightIntensity * 0.5;
-          }
+        if (child instanceof THREE.Mesh && child.userData.isSpineBody === true) {
+          const mat = child.material as THREE.MeshStandardMaterial;
+          const levelColor = LEVEL_COLORS[spine.entry.level] || 0xffd700;
+          mat.emissive.setHex(levelColor);
+          mat.emissiveIntensity = spine.highlightIntensity * 0.4;
         }
       });
     }
@@ -679,6 +754,11 @@ export class BookShelf {
       this.currentLookAt.lerpVectors(this.cameraStartLookAt, this.cameraEndLookAt, t);
       this.camera.lookAt(this.currentLookAt);
     }
+
+    if (this.tooltipActive && this.hoveredSpine) {
+      this.updateTooltipImage();
+    }
+    this.updateTooltipPosition();
 
     this.renderer.render(this.scene, this.camera);
   }
