@@ -28,6 +28,12 @@ export interface CreatureState {
 const EVOLUTION_THRESHOLD = 10;
 const MAX_PARTICLES = 200;
 const WALL_HIT_COOLDOWN = 500;
+const BASE_SPEED = 0.8;
+const EVOLUTION_SPEED_BONUS = 1.15;
+const SLOW_DURATION_MS = 500;
+const SLOW_FACTOR = 0.3;
+
+export type WallHitCallback = () => void;
 
 export class Creature {
   readonly state: CreatureState;
@@ -35,8 +41,10 @@ export class Creature {
   private lastWallHitTime = 0;
   private heading: { x: number; y: number } = { x: 1, y: 0 };
   private trailInterval = 0;
+  private onWallHitCb: WallHitCallback | null = null;
 
-  constructor() {
+  constructor(onWallHit?: WallHitCallback) {
+    this.onWallHitCb = onWallHit ?? null;
     this.state = {
       x: 1,
       y: 1,
@@ -50,6 +58,10 @@ export class Creature {
       particles: [],
       isSlowed: false,
     };
+  }
+
+  setWallHitCallback(cb: WallHitCallback | null): void {
+    this.onWallHitCb = cb;
   }
 
   reset(): void {
@@ -95,6 +107,8 @@ export class Creature {
       this.state.hp = Math.max(0, this.state.hp - 1);
       this.lastHpTick = now;
     }
+
+    this.trimParticles();
   }
 
   onAteFood(color: FoodColor): void {
@@ -115,7 +129,7 @@ export class Creature {
     }
     this.lastWallHitTime = now;
     this.state.hp = Math.max(0, this.state.hp - 5);
-    this.state.slowUntil = now + 500;
+    this.state.slowUntil = now + SLOW_DURATION_MS;
     this.state.isSlowed = true;
     for (let i = 0; i < 8; i++) {
       this.emitBurstParticle();
@@ -147,13 +161,12 @@ export class Creature {
   }
 
   private computeVelocity(params: AudioParams, now: number): { vx: number; vy: number } {
-    const baseSpeed = 0.8 * (1 + this.state.evolutionLevel * 0.15);
+    const baseSpeed = BASE_SPEED * Math.pow(EVOLUTION_SPEED_BONUS, this.state.evolutionLevel);
     const loudFactor = 0.15 + (params.loudness / 100) * 0.85;
     let speed = baseSpeed * loudFactor;
 
     if (now < this.state.slowUntil) {
-      const slowRemaining = (this.state.slowUntil - now) / 500;
-      speed *= 0.3 + 0.1 * (1 - slowRemaining);
+      speed *= SLOW_FACTOR;
     }
 
     if (params.loudness < 5) {
@@ -197,10 +210,8 @@ export class Creature {
   }
 
   private moveAndCollide(vx: number, vy: number, dt: number, maze: Maze): void {
-    const prevX = this.state.x;
-    const prevY = this.state.y;
-    const nextX = prevX + vx * dt * 60;
-    const nextY = prevY + vy * dt * 60;
+    const nextX = this.state.x + vx * dt * 60;
+    const nextY = this.state.y + vy * dt * 60;
 
     if (!this.wouldHitWall(nextX, this.state.y, 0.35)) {
       this.state.x = nextX;
@@ -260,7 +271,9 @@ export class Creature {
     const gy = Math.round(this.state.y);
     maze.markWallHit(gx, gy);
     this.onWallHit();
-    (window as unknown as { __rendererShake?: () => void }).__rendererShake?.();
+    if (this.onWallHitCb) {
+      this.onWallHitCb();
+    }
   }
 
   private updateParticles(dt: number): void {
@@ -278,9 +291,6 @@ export class Creature {
 
   private emitTrailParticle(): void {
     const arr = this.state.particles;
-    if (arr.length >= MAX_PARTICLES) {
-      arr.shift();
-    }
     const trailLen = 1 + Math.floor(this.state.evolutionLevel * 0.6);
     for (let t = 0; t < trailLen; t++) {
       if (arr.length >= MAX_PARTICLES) {

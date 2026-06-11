@@ -123,8 +123,8 @@ export class Renderer {
           if (isTransparent) {
             const remaining = ws!.transparentUntil - now;
             const totalDuration = 2000;
-            const fadeInLen = 200;
-            const fadeOutLen = 300;
+            const fadeInLen = 250;
+            const fadeOutLen = 350;
 
             let factor: number;
             if (remaining > totalDuration - fadeInLen) {
@@ -135,22 +135,45 @@ export class Renderer {
               factor = 1;
             }
 
-            alpha = 0.03 + 0.57 * (1 - factor);
+            alpha = 0.02 + 0.58 * (1 - factor);
             color = [206, 147, 216];
-            glow = 16 * factor;
+            glow = 18 * factor;
 
-            if (factor > 0.95) {
+            if (factor > 0.92) {
               skipDraw = true;
             }
           }
 
           if (skipDraw) {
             ctx.save();
-            ctx.strokeStyle = 'rgba(206, 147, 216, 0.08)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([4, 4]);
-            ctx.strokeRect(px + 4, py + 4, cs - 8, cs - 8);
+            const pulse = 0.5 + Math.sin(now / 120) * 0.5;
+            const borderAlpha = 0.25 + pulse * 0.4;
+            const hueShift = (now / 20) % 360;
+            ctx.strokeStyle = `hsla(${290 + hueShift * 0.1}, 85%, 70%, ${borderAlpha})`;
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = `hsla(${290 + hueShift * 0.1}, 90%, 70%, 1)`;
+            ctx.shadowBlur = 18 + pulse * 12;
+            ctx.setLineDash([5, 6]);
+            ctx.strokeRect(px + 3, py + 3, cs - 6, cs - 6);
             ctx.setLineDash([]);
+
+            ctx.fillStyle = `hsla(${290 + hueShift * 0.1}, 80%, 85%, ${0.15 + pulse * 0.15})`;
+            ctx.fillRect(px + 5, py + 5, cs - 10, cs - 10);
+
+            ctx.shadowBlur = 10;
+            const dotR = 2.5 + pulse * 1.5;
+            ctx.fillStyle = `hsla(${300}, 100%, 85%, 0.9)`;
+            const cxp = px + cs / 2;
+            const cyp = py + cs / 2;
+            for (let a = 0; a < 4; a++) {
+              const ang = (now / 400 + a * Math.PI / 2);
+              const dr = cs * 0.28;
+              const dxp = cxp + Math.cos(ang) * dr;
+              const dyp = cyp + Math.sin(ang) * dr;
+              ctx.beginPath();
+              ctx.arc(dxp, dyp, dotR, 0, Math.PI * 2);
+              ctx.fill();
+            }
             ctx.restore();
             continue;
           }

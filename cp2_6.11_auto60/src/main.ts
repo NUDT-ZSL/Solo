@@ -19,7 +19,6 @@ interface Game {
 declare global {
   interface Window {
     __mazeRef?: Maze;
-    __rendererShake?: () => void;
   }
 }
 
@@ -66,7 +65,7 @@ function resetGame(): void {
   game.creature.reset();
   game.maze.reset();
   window.__mazeRef = game.maze;
-  window.__rendererShake = () => game.renderer.notifyShake();
+  game.creature.setWallHitCallback(() => game.renderer.notifyShake());
   game.phase = 'playing';
   game.startAt = performance.now();
   game.lastFrame = game.startAt;
@@ -148,7 +147,7 @@ function boot(): void {
   const canvas = $('game') as HTMLCanvasElement;
   game.renderer = new Renderer(canvas);
   window.__mazeRef = game.maze;
-  window.__rendererShake = () => game.renderer.notifyShake();
+  game.creature.setWallHitCallback(() => game.renderer.notifyShake());
   bindEvents();
   startLoop();
 }

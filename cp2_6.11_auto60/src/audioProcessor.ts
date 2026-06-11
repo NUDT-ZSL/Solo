@@ -195,6 +195,14 @@ export class AudioProcessor {
       return;
     }
 
+    let sum = 0;
+    for (const iv of intervals) sum += iv;
+    const mean = sum / intervals.length;
+    const stdDev = Math.sqrt(
+      intervals.reduce((s, v) => s + (v - mean) * (v - mean), 0) / intervals.length
+    );
+    const normScale = stdDev > 1 ? stdDev : 1;
+
     let bestLag = minLagMs;
     let bestCorr = -Infinity;
 
@@ -202,13 +210,13 @@ export class AudioProcessor {
       let corr = 0;
       let count = 0;
       for (const iv of intervals) {
-        const dist = Math.abs(iv - lag);
-        const dist2 = Math.abs(iv - lag * 2);
-        const distHalf = Math.abs(iv - lag / 2);
+        const ivNorm = (iv - lag) / normScale;
+        const iv2Norm = (iv - lag * 2) / normScale;
+        const ivHalfNorm = (iv - lag / 2) / normScale;
         const score = Math.max(
-          Math.exp(-dist * dist / (2 * 80 * 80)),
-          Math.exp(-dist2 * dist2 / (2 * 80 * 80)) * 0.7,
-          Math.exp(-distHalf * distHalf / (2 * 80 * 80)) * 0.5
+          Math.exp(-ivNorm * ivNorm / 2),
+          Math.exp(-iv2Norm * iv2Norm / 2) * 0.7,
+          Math.exp(-ivHalfNorm * ivHalfNorm / 2) * 0.5
         );
         corr += score;
         count++;
@@ -218,6 +226,13 @@ export class AudioProcessor {
         bestCorr = corr;
         bestLag = lag;
       }
+    }
+
+    const onsetDensity = onsets.length / ((onsets[onsets.length - 1] - onsets[0] + 1) / 1000);
+    const confThreshold = 0.35;
+    if (bestCorr < confThreshold && onsetDensity < 1.2) {
+      this.autocorrBpm = 60;
+      return;
     }
 
     const rawBpm = 60000 / bestLag;
