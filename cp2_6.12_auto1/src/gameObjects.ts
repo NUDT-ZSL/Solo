@@ -1,6 +1,70 @@
+export enum EnemyType {
+  ASTEROID_SMALL = 'asteroid_small',
+  ASTEROID_MEDIUM = 'asteroid_medium',
+  ASTEROID_LARGE = 'asteroid_large',
+  FIGHTER = 'fighter',
+  BOSS = 'boss'
+}
+
+export const COLORS = {
+  NEON_GREEN: '#39ff14',
+  NEON_RED: '#ff4500',
+  NEON_ORANGE: '#ff6600',
+  NEON_YELLOW: '#ffaa00',
+  SHIELD_BLUE: '#64c8ff',
+  SHIELD_LIGHT: '#88ddff',
+  SHIELD_DARK: '#4a90c0',
+  PLANET_1: '#4a3a7a',
+  PLANET_2: '#5a4a8a',
+  PLANET_3: '#6a5a9a',
+  PLANET_4: '#7a6aaa',
+  ASTEROID_1: '#5a5a5a',
+  ASTEROID_2: '#6a6a6a',
+  ASTEROID_3: '#7a7a7a',
+  ASTEROID_4: '#4a4a4a',
+  ASTEROID_5: '#8a8a8a',
+  ASTEROID_6: '#3a3a3a',
+  FIGHTER_DARK: '#8b0000',
+  FIGHTER_MID: '#ff4500',
+  FIGHTER_LIGHT: '#ffff00',
+  BOSS_1: '#4a0a0a',
+  BOSS_2: '#6a1a1a',
+  BOSS_3: '#8b0000',
+  BOSS_4: '#a02020',
+  BOSS_5: '#ff4500',
+  BOSS_COCKPIT: '#2a2a4a'
+} as const;
+
+export interface EnemyConfig {
+  hp: number;
+  radius: number;
+  damage: number;
+  score: number;
+  speed: number;
+  fireRate?: number;
+  shield?: number;
+  shieldRegen?: number;
+}
+
+export const ENEMY_CONFIG: Record<EnemyType, EnemyConfig> = {
+  [EnemyType.ASTEROID_SMALL]: { hp: 30, radius: 15, damage: 10, score: 50, speed: 60 },
+  [EnemyType.ASTEROID_MEDIUM]: { hp: 50, radius: 22, damage: 15, score: 100, speed: 45 },
+  [EnemyType.ASTEROID_LARGE]: { hp: 80, radius: 30, damage: 20, score: 200, speed: 30 },
+  [EnemyType.FIGHTER]: { hp: 15, radius: 12, damage: 5, score: 150, speed: 120, fireRate: 2000 },
+  [EnemyType.BOSS]: { hp: 500, radius: 50, damage: 30, score: 1000, speed: 40, fireRate: 800, shield: 200, shieldRegen: 5 }
+} as const;
+
+export const DEFAULT_ENEMY_TYPE = EnemyType.ASTEROID_SMALL;
+
 export interface Vector2 {
   x: number;
   y: number;
+}
+
+export interface Bounds {
+  x: number;
+  y: number;
+  radius: number;
 }
 
 export interface GameObject {
@@ -8,7 +72,13 @@ export interface GameObject {
   y: number;
   update(deltaTime: number, ...args: unknown[]): unknown;
   render(ctx: CanvasRenderingContext2D): void;
-  getBounds(): { x: number; y: number; radius: number };
+  getBounds(): Bounds;
+}
+
+export interface ShieldHitResult {
+  shieldDamage: number;
+  hpDamage: number;
+  shieldBroken: boolean;
 }
 
 export class Bullet implements GameObject {
@@ -32,7 +102,7 @@ export class Bullet implements GameObject {
     this.isEnemy = isEnemy;
     this.life = 2;
     this.maxLife = 2;
-    this.color = isEnemy ? '#ff4500' : '#39ff14';
+    this.color = isEnemy ? COLORS.NEON_RED : COLORS.NEON_GREEN;
     this.size = isEnemy ? 4 : 3;
   }
 
@@ -56,7 +126,7 @@ export class Bullet implements GameObject {
     ctx.restore();
   }
 
-  getBounds() {
+  getBounds(): Bounds {
     return { x: this.x, y: this.y, radius: this.size * 2 };
   }
 
@@ -105,8 +175,8 @@ export class PlanetCore implements GameObject {
 
     const pixelSize = 4;
     const colors = [
-      '#4a3a7a', '#5a4a8a', '#6a5a9a', '#7a6aaa',
-      '#3a2a6a', '#2a1a5a', '#5a4a8a', '#4a3a7a'
+      COLORS.PLANET_1, COLORS.PLANET_2, COLORS.PLANET_3, COLORS.PLANET_4,
+      '#3a2a6a', '#2a1a5a', COLORS.PLANET_2, COLORS.PLANET_1
     ];
 
     for (let py = -this.radius; py <= this.radius; py += pixelSize) {
@@ -131,12 +201,16 @@ export class PlanetCore implements GameObject {
     ctx.restore();
   }
 
-  getBounds() {
+  getBounds(): Bounds {
     return { x: this.x, y: this.y, radius: this.radius };
   }
 
   takeDamage(damage: number): void {
     this.currentHp = Math.max(0, this.currentHp - damage);
+  }
+
+  getHpPercent(): number {
+    return this.currentHp / this.maxHp;
   }
 
   isDestroyed(): boolean {
@@ -203,14 +277,14 @@ export class Turret implements GameObject {
 
     const glowIntensity = Math.sin(Date.now() * 0.01) * 0.3 + 0.7;
     ctx.fillStyle = `rgba(57, 255, 20, ${glowIntensity})`;
-    ctx.shadowColor = '#39ff14';
+    ctx.shadowColor = COLORS.NEON_GREEN;
     ctx.shadowBlur = 8;
     ctx.fillRect(18, -2, 4, 4);
 
     ctx.restore();
   }
 
-  getBounds() {
+  getBounds(): Bounds {
     return { x: this.x, y: this.y, radius: 15 };
   }
 
@@ -224,14 +298,6 @@ export class Turret implements GameObject {
     const bulletY = this.y + Math.sin(this.angle) * 24;
     return new Bullet(bulletX, bulletY, this.angle, 600, 5, false);
   }
-}
-
-export enum EnemyType {
-  ASTEROID_SMALL = 'asteroid_small',
-  ASTEROID_MEDIUM = 'asteroid_medium',
-  ASTEROID_LARGE = 'asteroid_large',
-  FIGHTER = 'fighter',
-  BOSS = 'boss'
 }
 
 export class Enemy implements GameObject {
@@ -253,8 +319,11 @@ export class Enemy implements GameObject {
   maxShield: number;
   shieldRegenRate: number;
   shieldFlashTime: number;
+  shieldHitIntensity: number;
+  shieldCracks: { angle: number; startR: number; segments: { len: number; angle: number }[] }[];
   pixels: { x: number; y: number; color: string }[];
   hitFlashTime: number;
+  wasShieldBroken: boolean;
 
   constructor(type: EnemyType, x: number, y: number, targetX: number, targetY: number) {
     this.type = type;
@@ -265,64 +334,76 @@ export class Enemy implements GameObject {
     this.lastFireTime = 0;
     this.hitFlashTime = 0;
     this.shieldFlashTime = 0;
+    this.shieldHitIntensity = 0;
+    this.shieldCracks = [];
     this.pixels = [];
+    this.wasShieldBroken = false;
 
     const angle = Math.atan2(targetY - y, targetX - x);
     const spread = (Math.random() - 0.5) * 0.5;
 
+    const config = ENEMY_CONFIG[type] || ENEMY_CONFIG[DEFAULT_ENEMY_TYPE];
+
+    this.hp = config.hp;
+    this.maxHp = config.hp;
+    this.radius = config.radius;
+    this.damage = config.damage;
+    this.score = config.score;
+    this.vx = Math.cos(angle + spread) * config.speed;
+    this.vy = Math.sin(angle + spread) * config.speed;
+
+    this.fireRate = config.fireRate ?? 0;
+    this.shield = config.shield ?? 0;
+    this.maxShield = config.shield ?? 0;
+    this.shieldRegenRate = config.shieldRegen ?? 0;
+
+    if ((config.shield ?? 0) > 0) {
+      this.generateShieldCracks();
+    }
+
     switch (type) {
       case EnemyType.ASTEROID_SMALL:
-        this.hp = 30; this.maxHp = 30;
-        this.radius = 15; this.damage = 10; this.score = 50;
-        this.vx = Math.cos(angle + spread) * 60;
-        this.vy = Math.sin(angle + spread) * 60;
-        this.fireRate = 0; this.shield = 0; this.maxShield = 0; this.shieldRegenRate = 0;
-        this.generateAsteroidPixels(15);
-        break;
       case EnemyType.ASTEROID_MEDIUM:
-        this.hp = 50; this.maxHp = 50;
-        this.radius = 22; this.damage = 15; this.score = 100;
-        this.vx = Math.cos(angle + spread) * 45;
-        this.vy = Math.sin(angle + spread) * 45;
-        this.fireRate = 0; this.shield = 0; this.maxShield = 0; this.shieldRegenRate = 0;
-        this.generateAsteroidPixels(22);
-        break;
       case EnemyType.ASTEROID_LARGE:
-        this.hp = 80; this.maxHp = 80;
-        this.radius = 30; this.damage = 20; this.score = 200;
-        this.vx = Math.cos(angle + spread) * 30;
-        this.vy = Math.sin(angle + spread) * 30;
-        this.fireRate = 0; this.shield = 0; this.maxShield = 0; this.shieldRegenRate = 0;
-        this.generateAsteroidPixels(30);
+        this.generateAsteroidPixels(config.radius);
         break;
       case EnemyType.FIGHTER:
-        this.hp = 15; this.maxHp = 15;
-        this.radius = 12; this.damage = 5; this.score = 150;
-        this.vx = Math.cos(angle + spread) * 120;
-        this.vy = Math.sin(angle + spread) * 120;
-        this.fireRate = 2000; this.shield = 0; this.maxShield = 0; this.shieldRegenRate = 0;
         this.generateFighterPixels();
         break;
       case EnemyType.BOSS:
-        this.hp = 500; this.maxHp = 500;
-        this.radius = 50; this.damage = 30; this.score = 1000;
-        this.vx = Math.cos(angle) * 20;
-        this.vy = Math.sin(angle) * 20;
-        this.fireRate = 800; this.shield = 200; this.maxShield = 200; this.shieldRegenRate = 5;
         this.generateBossPixels();
         break;
       default:
-        this.hp = 30; this.maxHp = 30;
-        this.radius = 15; this.damage = 10; this.score = 50;
-        this.vx = 50; this.vy = 0;
-        this.fireRate = 0; this.shield = 0; this.maxShield = 0; this.shieldRegenRate = 0;
-        this.generateAsteroidPixels(15);
+        this.generateAsteroidPixels(config.radius);
+    }
+  }
+
+  private generateShieldCracks(): void {
+    this.shieldCracks = [];
+    const crackCount = 6;
+    for (let i = 0; i < crackCount; i++) {
+      const segments: { len: number; angle: number }[] = [];
+      const segCount = 3 + Math.floor(Math.random() * 3);
+      for (let s = 0; s < segCount; s++) {
+        segments.push({
+          len: 8 + Math.random() * 10,
+          angle: (Math.random() - 0.5) * 1.0
+        });
+      }
+      this.shieldCracks.push({
+        angle: (i / crackCount) * Math.PI * 2 + Math.random() * 0.3,
+        startR: this.radius + 2,
+        segments
+      });
     }
   }
 
   private generateAsteroidPixels(size: number): void {
     const pixelSize = 4;
-    const colors = ['#5a5a5a', '#6a6a6a', '#7a7a7a', '#4a4a4a', '#8a8a8a', '#3a3a3a'];
+    const colors = [
+      COLORS.ASTEROID_1, COLORS.ASTEROID_2, COLORS.ASTEROID_3,
+      COLORS.ASTEROID_4, COLORS.ASTEROID_5, COLORS.ASTEROID_6
+    ];
     for (let py = -size; py <= size; py += pixelSize) {
       for (let px = -size; px <= size; px += pixelSize) {
         const dist = Math.sqrt(px * px + py * py);
@@ -338,15 +419,15 @@ export class Enemy implements GameObject {
   private generateFighterPixels(): void {
     const pixelSize = 3;
     const shape = [
-      [0,0,0,1,0,0,0],
-      [0,0,1,1,1,0,0],
-      [0,1,1,2,1,1,0],
-      [1,1,2,2,2,1,1],
-      [1,2,2,3,2,2,1],
-      [0,1,1,2,1,1,0],
-      [0,0,1,1,1,0,0],
+      [0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 1, 1, 1, 0, 0],
+      [0, 1, 1, 2, 1, 1, 0],
+      [1, 1, 2, 2, 2, 1, 1],
+      [1, 2, 2, 3, 2, 2, 1],
+      [0, 1, 1, 2, 1, 1, 0],
+      [0, 0, 1, 1, 1, 0, 0],
     ];
-    const colors = ['transparent', '#8b0000', '#ff4500', '#ffff00'];
+    const colors = ['transparent', COLORS.FIGHTER_DARK, COLORS.FIGHTER_MID, COLORS.FIGHTER_LIGHT];
     for (let row = 0; row < shape.length; row++) {
       for (let col = 0; col < shape[row].length; col++) {
         const colorIndex = shape[row][col];
@@ -363,7 +444,10 @@ export class Enemy implements GameObject {
 
   private generateBossPixels(): void {
     const pixelSize = 4;
-    const colors = ['#4a0a0a', '#6a1a1a', '#8b0000', '#a02020', '#ff4500', '#2a2a4a'];
+    const colors = [
+      COLORS.BOSS_1, COLORS.BOSS_2, COLORS.BOSS_3,
+      COLORS.BOSS_4, COLORS.BOSS_5, COLORS.BOSS_COCKPIT
+    ];
     for (let py = -this.radius; py <= this.radius; py += pixelSize) {
       for (let px = -this.radius; px <= this.radius; px += pixelSize) {
         const dist = Math.sqrt(px * px + py * py);
@@ -386,8 +470,9 @@ export class Enemy implements GameObject {
     this.rotation += this.rotationSpeed * deltaTime;
     if (this.hitFlashTime > 0) this.hitFlashTime -= deltaTime;
     if (this.shieldFlashTime > 0) this.shieldFlashTime -= deltaTime;
+    if (this.shieldHitIntensity > 0) this.shieldHitIntensity = Math.max(0, this.shieldHitIntensity - deltaTime * 3);
 
-    if (this.shieldRegenRate > 0 && this.shield < this.maxShield) {
+    if (this.shieldRegenRate > 0 && this.shield < this.maxShield && this.shieldFlashTime <= 0) {
       this.shield = Math.min(this.maxShield, this.shield + this.shieldRegenRate * deltaTime);
     }
 
@@ -396,7 +481,8 @@ export class Enemy implements GameObject {
       this.vx = this.vx * 0.98 + Math.cos(angle) * 2;
       this.vy = this.vy * 0.98 + Math.sin(angle) * 2;
       const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-      const maxSpeed = this.type === EnemyType.BOSS ? 40 : 150;
+      const config = ENEMY_CONFIG[this.type] || ENEMY_CONFIG[DEFAULT_ENEMY_TYPE];
+      const maxSpeed = config.speed;
       if (speed > maxSpeed) {
         this.vx = (this.vx / speed) * maxSpeed;
         this.vy = (this.vy / speed) * maxSpeed;
@@ -417,14 +503,10 @@ export class Enemy implements GameObject {
 
   private drawPixelatedPolygon(
     ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    radius: number,
-    sides: number,
-    rotation: number,
-    pixelSize: number,
-    fillColor: string,
-    strokeColor: string,
+    cx: number, cy: number,
+    radius: number, sides: number,
+    rotation: number, pixelSize: number,
+    fillColor: string, strokeColor: string,
     alpha: number
   ): void {
     const points: { x: number; y: number }[] = [];
@@ -468,7 +550,8 @@ export class Enemy implements GameObject {
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
       const xi = points[i].x, yi = points[i].y;
       const xj = points[j].x, yj = points[j].y;
-      const intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+      const intersect = ((yi > py) !== (yj > py)) &&
+        (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
       if (intersect) inside = !inside;
     }
     return inside;
@@ -476,10 +559,8 @@ export class Enemy implements GameObject {
 
   private drawPixelatedLine(
     ctx: CanvasRenderingContext2D,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
+    x1: number, y1: number,
+    x2: number, y2: number,
     pixelSize: number
   ): void {
     const dx = Math.abs(x2 - x1);
@@ -501,78 +582,61 @@ export class Enemy implements GameObject {
     }
   }
 
-  private drawShieldCracks(
+  private drawShieldHitEffect(
     ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    radius: number,
-    sides: number,
-    rotation: number,
-    pixelSize: number,
-    crackIntensity: number
+    cx: number, cy: number,
+    shieldRadius: number
   ): void {
-    const crackCount = Math.floor(3 + crackIntensity * 12);
-    ctx.save();
-    ctx.fillStyle = `rgba(255, 100, 100, ${0.4 + crackIntensity * 0.4})`;
+    if (this.shieldHitIntensity <= 0) return;
 
-    for (let i = 0; i < crackCount; i++) {
-      const startAngle = rotation + (i * Math.PI * 2) / crackCount + Math.random() * 0.3;
-      const startRadius = radius * (0.5 + Math.random() * 0.4);
-      const startX = cx + Math.cos(startAngle) * startRadius;
-      const startY = cy + Math.sin(startAngle) * startRadius;
-
-      let currentX = startX;
-      let currentY = startY;
-      let currentAngle = startAngle + (Math.random() - 0.5) * 1.5;
-      const segments = Math.floor(2 + crackIntensity * 5);
-
-      for (let s = 0; s < segments; s++) {
-        const segLen = (radius - startRadius) / segments + Math.random() * 5;
-        const nextX = currentX + Math.cos(currentAngle) * segLen;
-        const nextY = currentY + Math.sin(currentAngle) * segLen;
-        this.drawPixelatedLine(ctx, currentX, currentY, nextX, nextY, pixelSize);
-        currentX = nextX;
-        currentY = nextY;
-        currentAngle += (Math.random() - 0.5) * 1.2;
-      }
+    const intensity = this.shieldHitIntensity;
+    const rings = 3;
+    for (let r = 0; r < rings; r++) {
+      const ringRadius = shieldRadius + r * 4 + intensity * 8;
+      const ringAlpha = (1 - r / rings) * intensity * 0.6;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${ringAlpha})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
     }
-    ctx.restore();
   }
 
-  private drawShieldBrokenRemains(
+  private drawShieldCracksOnHit(
     ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    radius: number,
-    sides: number,
-    rotation: number,
-    pixelSize: number
+    cx: number, cy: number,
+    shieldRadius: number,
+    pixelSize: number,
+    shieldRatio: number
   ): void {
+    if (this.shieldCracks.length === 0) return;
+
+    const crackAlpha = Math.max(this.shieldHitIntensity * 0.8, (1 - shieldRatio) * 0.6);
+    if (crackAlpha <= 0.05) return;
+
     ctx.save();
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = 'rgba(150, 200, 255, 0.5)';
+    ctx.fillStyle = `rgba(255, 100, 100, ${crackAlpha})`;
+    ctx.shadowColor = '#ff6666';
+    ctx.shadowBlur = 3;
 
-    const fragmentCount = 6;
-    for (let i = 0; i < fragmentCount; i++) {
-      const angle = rotation + (i * Math.PI * 2) / fragmentCount;
-      const fragRadius = radius * (0.7 + Math.random() * 0.2);
-      const fragCx = cx + Math.cos(angle) * fragRadius * 0.5;
-      const fragCy = cy + Math.sin(angle) * fragRadius * 0.5;
-      const fragSize = 3 + Math.random() * 5;
+    const extendRatio = shieldRadius / (this.radius + 8);
+    for (const crack of this.shieldCracks) {
+      const startR = crack.startR * extendRatio;
+      let currentX = cx + Math.cos(crack.angle) * startR;
+      let currentY = cy + Math.sin(crack.angle) * startR;
+      let currentAngle = crack.angle;
 
-      for (let py = -fragSize; py <= fragSize; py += pixelSize) {
-        for (let px = -fragSize; px <= fragSize; px += pixelSize) {
-          if (Math.random() > 0.5 && Math.sqrt(px * px + py * py) <= fragSize) {
-            ctx.fillRect(
-              Math.floor(fragCx + px),
-              Math.floor(fragCy + py),
-              pixelSize,
-              pixelSize
-            );
-          }
-        }
+      for (const seg of crack.segments) {
+        const segLen = seg.len * extendRatio;
+        const endX = currentX + Math.cos(currentAngle + seg.angle) * segLen;
+        const endY = currentY + Math.sin(currentAngle + seg.angle) * segLen;
+        this.drawPixelatedLine(ctx, currentX, currentY, endX, endY, pixelSize);
+        currentX = endX;
+        currentY = endY;
+        currentAngle += seg.angle;
       }
     }
+
     ctx.restore();
   }
 
@@ -587,49 +651,68 @@ export class Enemy implements GameObject {
       const pixelSize = 4;
       const shieldRatio = this.maxShield > 0 ? this.shield / this.maxShield : 0;
       const isFlashing = this.shieldFlashTime > 0;
+      const flashFlicker = isFlashing ? (Math.sin(this.shieldFlashTime * 80) > 0 ? 1 : 0.4) : 1;
 
       if (this.shield > 0) {
         const baseAlpha = 0.35 + 0.15 * Math.sin(Date.now() * 0.006);
-        const flashAlpha = isFlashing ? 1.0 : baseAlpha;
+        const intensityAlpha = baseAlpha + this.shieldHitIntensity * 0.4;
 
         const fillColor = isFlashing
-          ? 'rgba(255, 255, 255, 0.7)'
-          : `rgba(80, 160, 255, ${0.25})`;
+          ? `rgba(255, 255, 255, ${0.7 * flashFlicker})`
+          : `rgba(80, 160, 255, ${0.25 + this.shieldHitIntensity * 0.2})`;
         const strokeColor = isFlashing
           ? '#ffffff'
-          : '#64c8ff';
+          : COLORS.SHIELD_BLUE;
 
-        ctx.shadowColor = isFlashing ? '#ffffff' : '#64c8ff';
-        ctx.shadowBlur = isFlashing ? 25 : 12;
+        ctx.shadowColor = isFlashing ? '#ffffff' : COLORS.SHIELD_BLUE;
+        ctx.shadowBlur = (isFlashing ? 25 : 12) * flashFlicker + this.shieldHitIntensity * 10;
 
         this.drawPixelatedPolygon(
           ctx, cx, cy, shieldRadius, 8, this.rotation * 0.3,
-          pixelSize, fillColor, strokeColor, flashAlpha
+          pixelSize, fillColor, strokeColor, intensityAlpha
         );
 
         this.drawPixelatedPolygon(
           ctx, cx, cy, shieldRadius - 6, 6, -this.rotation * 0.2,
-          pixelSize, 'rgba(100, 180, 255, 0.15)', '#88ddff', baseAlpha * 0.7
+          pixelSize, 'rgba(100, 180, 255, 0.15)', COLORS.SHIELD_LIGHT, baseAlpha * 0.7
         );
 
-        if (shieldRatio < 0.5) {
-          const crackIntensity = (0.5 - shieldRatio) * 2;
-          this.drawShieldCracks(
-            ctx, cx, cy, shieldRadius, 8, this.rotation * 0.3,
-            pixelSize, crackIntensity
-          );
-        }
+        this.drawShieldCracksOnHit(ctx, cx, cy, shieldRadius, pixelSize, shieldRatio);
+
+        this.drawShieldHitEffect(ctx, cx, cy, shieldRadius);
       } else if (this.maxShield > 0) {
-        this.drawShieldBrokenRemains(
-          ctx, cx, cy, shieldRadius, 8, this.rotation * 0.3, pixelSize
-        );
+        ctx.save();
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = 'rgba(150, 200, 255, 0.5)';
+
+        const fragmentCount = 8;
+        for (let i = 0; i < fragmentCount; i++) {
+          const angle = this.rotation * 0.3 + (i * Math.PI * 2) / fragmentCount;
+          const fragRadius = shieldRadius * (0.6 + Math.random() * 0.3);
+          const fragCx = cx + Math.cos(angle) * fragRadius * 0.5;
+          const fragCy = cy + Math.sin(angle) * fragRadius * 0.5;
+          const fragSize = 4 + Math.random() * 6;
+
+          for (let py = -fragSize; py <= fragSize; py += pixelSize) {
+            for (let px = -fragSize; px <= fragSize; px += pixelSize) {
+              if (Math.random() > 0.5 && Math.sqrt(px * px + py * py) <= fragSize) {
+                ctx.fillRect(
+                  Math.floor(fragCx + px),
+                  Math.floor(fragCy + py),
+                  pixelSize, pixelSize
+                );
+              }
+            }
+          }
+        }
+        ctx.restore();
       }
     } else {
       if (this.shield > 0) {
         const shieldAlpha = 0.3 + 0.2 * Math.sin(Date.now() * 0.005);
         ctx.strokeStyle = `rgba(100, 200, 255, ${shieldAlpha})`;
         ctx.lineWidth = 3;
-        ctx.shadowColor = '#64c8ff';
+        ctx.shadowColor = COLORS.SHIELD_BLUE;
         ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.arc(cx, cy, this.radius + 8, 0, Math.PI * 2);
@@ -641,11 +724,13 @@ export class Enemy implements GameObject {
     ctx.rotate(this.rotation);
 
     const flash = this.hitFlashTime > 0;
+    const flashFlicker = flash ? (Math.sin(this.hitFlashTime * 100) > 0 ? 1 : 0.5) : 1;
+
     for (const p of this.pixels) {
-      ctx.fillStyle = flash ? '#ffffff' : p.color;
+      ctx.fillStyle = flash ? `rgba(255, 255, 255, ${flashFlicker})` : p.color;
       if (flash) {
         ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 10 * flashFlicker;
       }
       ctx.fillRect(p.x, p.y, 4, 4);
     }
@@ -653,30 +738,72 @@ export class Enemy implements GameObject {
     ctx.restore();
   }
 
-  getBounds() {
+  getBounds(): Bounds {
     return { x: this.x, y: this.y, radius: this.radius };
   }
 
-  takeDamage(damage: number): number {
+  takeDamage(damage: number): ShieldHitResult {
     this.hitFlashTime = 0.1;
+
+    const result: ShieldHitResult = {
+      shieldDamage: 0,
+      hpDamage: 0,
+      shieldBroken: false
+    };
+
     if (this.shield > 0) {
       const shieldDamage = Math.min(this.shield, damage);
       this.shield -= shieldDamage;
       damage -= shieldDamage;
-      this.shieldFlashTime = 0.15;
+      result.shieldDamage = shieldDamage;
+
+      this.shieldFlashTime = 0.2;
+      this.shieldHitIntensity = Math.min(1, this.shieldHitIntensity + shieldDamage / this.maxShield * 1.5);
+
+      if (this.shield <= 0 && !this.wasShieldBroken) {
+        this.wasShieldBroken = true;
+        result.shieldBroken = true;
+      }
     }
+
     this.hp = Math.max(0, this.hp - damage);
-    return damage;
+    result.hpDamage = damage;
+
+    return result;
   }
 
   isDestroyed(): boolean {
     return this.hp <= 0;
   }
+
+  getHpPercent(): number {
+    return this.hp / this.maxHp;
+  }
+
+  getShieldPercent(): number {
+    if (this.maxShield <= 0) return 0;
+    return this.shield / this.maxShield;
+  }
 }
 
-export function checkCollision(a: { x: number; y: number; radius: number }, b: { x: number; y: number; radius: number }): boolean {
+export function checkCollision(a: Bounds, b: Bounds): boolean {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  return dist < a.radius + b.radius;
+  const distSq = dx * dx + dy * dy;
+  const radiusSum = a.radius + b.radius;
+  return distSq < radiusSum * radiusSum;
+}
+
+export function distance(a: Vector2, b: Vector2): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }

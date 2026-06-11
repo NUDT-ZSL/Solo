@@ -1,4 +1,4 @@
-import { Turret, Enemy, EnemyType, Bullet, PlanetCore, checkCollision } from './gameObjects';
+import { Turret, Enemy, EnemyType, Bullet, PlanetCore, checkCollision, ShieldHitResult } from './gameObjects';
 import { ParticleSystem, StarField } from './particleSystem';
 import { UIManager } from './uiManager';
 
@@ -13,6 +13,7 @@ class Game {
   private ctx: CanvasRenderingContext2D;
   private width: number;
   private height: number;
+  private dpr: number;
 
   private gameState: GameState;
   private score: number;
@@ -45,12 +46,16 @@ class Game {
   private fpsTimer: number;
   private isPaused: boolean;
 
+  private resizeThrottleTimer: number | null;
+  private boundHandleResize: () => void;
+
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('Failed to get canvas context');
     this.ctx = ctx;
 
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = window.innerWidth;
     this.height = window.innerHeight;
 
@@ -87,18 +92,25 @@ class Game {
     this.fpsTimer = 0;
     this.isPaused = false;
 
+    this.resizeThrottleTimer = null;
+    this.boundHandleResize = this.handleResize.bind(this);
+
     this.setupCanvas();
     this.bindEvents();
     this.hideLoading();
   }
 
   private setupCanvas(): void {
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = this.width * dpr;
-    this.canvas.height = this.height * dpr;
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = Math.floor(this.width * this.dpr);
+    this.canvas.height = Math.floor(this.height * this.dpr);
+
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.scale(dpr, dpr);
+    this.ctx.scale(this.dpr, this.dpr);
     this.ctx.imageSmoothingEnabled = false;
+
+    this.canvas.style.width = `${this.width}px`;
+    this.canvas.style.height = `${this.height}px`;
   }
 
   private hideLoading(): void {
@@ -111,24 +123,40 @@ class Game {
   private bindEvents(): void {
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-    this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+    window.addEventListener('mouseup', () => this.handleMouseUp());
     this.canvas.addEventListener('mouseleave', () => this.handleMouseUp());
 
     this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
     this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-    this.canvas.addEventListener('touchend', () => this.handleTouchEnd());
+    window.addEventListener('touchend', () => this.handleTouchEnd());
+    window.addEventListener('touchcancel', () => this.handleTouchEnd());
 
-    window.addEventListener('resize', () => this.handleResize());
+    window.addEventListener('resize', this.boundHandleResize);
+    window.addEventListener('orientationchange', this.boundHandleResize);
+
     window.addEventListener('blur', () => { this.isPaused = true; });
     window.addEventListener('focus', () => { this.isPaused = false; });
   }
 
-  private handleMouseMove(e: MouseEvent): void {
+  private unbindEvents(): void {
+    window.removeEventListener('resize', this.boundHandleResize);
+    window.removeEventListener('orientationchange', this.boundHandleResize);
+  }
+
+  private getCanvasCoordinates(clientX: number, clientY: number): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = this.width / rect.width;
     const scaleY = this.height / rect.height;
-    this.mouseX = (e.clientX - rect.left) * scaleX;
-    this.mouseY = (e.clientY - rect.top) * scaleY;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  private handleMouseMove(e: MouseEvent): void {
+    const pos = this.getCanvasCoordinates(e.clientX, e.clientY);
+    this.mouseX = pos.x;
+    this.mouseY = pos.y;
   }
 
   private handleMouseDown(e: MouseEvent): void {
@@ -151,11 +179,12 @@ class Game {
   private handleTouchMove(e: TouchEvent): void {
     e.preventDefault();
     if (e.touches.length > 0) {
-      const rect = this.canvas.getBoundingClientRect();
-      const scaleX = this.width / rect.width;
-      const scaleY = this.height / rect.height;
-      this.mouseX = (e.touches[0].clientX - rect.left) * scaleX;
-      this.mouseY = (e.touches[0].clientY - rect.top) * scaleY;
+      const pos = this.getCanvasCoordinates(
+        e.touches[0].clientX,
+        e.touches[0].clientY
+      );
+      this.mouseX = pos.x;
+      this.mouseY = pos.y;
     }
   }
 
@@ -170,11 +199,12 @@ class Game {
       return;
     }
     if (e.touches.length > 0) {
-      const rect = this.canvas.getBoundingClientRect();
-      const scaleX = this.width / rect.width;
-      const scaleY = this.height / rect.height;
-      this.mouseX = (e.touches[0].clientX - rect.left) * scaleX;
-      this.mouseY = (e.touches[0].clientY - rect.top) * scaleY;
+      const pos = this.getCanvasCoordinates(
+        e.touches[0].clientX,
+        e.touches[0].clientY
+      );
+      this.mouseX = pos.x;
+      this.mouseY = pos.y;
     }
     this.isMouseDown = true;
   }
@@ -184,17 +214,25 @@ class Game {
   }
 
   private handleResize(): void {
-    this.width = window.innerWidth;
-    this.height = window.innerHeight;
-    this.setupCanvas();
+    if (this.resizeThrottleTimer !== null) {
+      window.clearTimeout(this.resizeThrottleTimer);
+    }
 
-    const centerX = this.width / 2;
-    const centerY = this.height / 2;
-    this.planet.x = centerX;
-    this.planet.y = centerY;
+    this.resizeThrottleTimer = window.setTimeout(() => {
+      this.width = window.innerWidth;
+      this.height = window.innerHeight;
+      this.setupCanvas();
 
-    this.starField.resize(this.width, this.height);
-    this.uiManager.resize(this.width, this.height);
+      const centerX = this.width / 2;
+      const centerY = this.height / 2;
+      this.planet.x = centerX;
+      this.planet.y = centerY;
+
+      this.starField.resize(this.width, this.height);
+      this.uiManager.resize(this.width, this.height);
+
+      this.resizeThrottleTimer = null;
+    }, 100);
   }
 
   private startGame(): void {
@@ -206,6 +244,7 @@ class Game {
     this.bullets = [];
     this.enemyBullets = [];
     this.particleSystem.clear();
+    this.uiManager.setHpPercent(1);
     this.startNextWave();
   }
 
@@ -303,6 +342,8 @@ class Game {
     }
 
     this.planet.update(deltaTime);
+    this.uiManager.setHpPercent(this.planet.getHpPercent());
+
     this.turret.update(deltaTime);
     this.turret.updateOrbit(this.planet.x, this.planet.y);
     this.turret.aimAt(this.mouseX, this.mouseY);
@@ -333,8 +374,13 @@ class Game {
       for (let j = this.enemies.length - 1; j >= 0; j--) {
         const enemy = this.enemies[j];
         if (checkCollision(bullet.getBounds(), enemy.getBounds())) {
-          enemy.takeDamage(bullet.damage);
+          const hitResult = enemy.takeDamage(bullet.damage) as ShieldHitResult;
           this.particleSystem.emitHit(bullet.x, bullet.y, quality);
+
+          if (hitResult.shieldBroken && enemy.type === EnemyType.BOSS) {
+            this.particleSystem.emitShieldBreak(enemy.x, enemy.y, quality);
+          }
+
           this.bullets.splice(i, 1);
 
           if (enemy.isDestroyed()) {
@@ -417,7 +463,7 @@ class Game {
 
   private gameOver(): void {
     this.gameState = GameState.GAME_OVER;
-    this.uiManager.triggerDamageFeedback(30);
+    this.uiManager.triggerDamageFeedback(50);
     const colors = ['#ff4500', '#ff6600', '#ff8800', '#ffff00', '#ffffff'];
     this.particleSystem.emitExplosion(this.planet.x, this.planet.y, 80, colors, 1);
   }
@@ -459,7 +505,7 @@ class Game {
       this.uiManager.drawScore(this.ctx, this.score);
       this.uiManager.drawWave(this.ctx, this.wave, this.waveEnemiesTotal - this.waveEnemiesSpawned + this.enemies.length, this.isBossWave);
       this.uiManager.drawWaveAnnouncement(this.ctx, this.wave, this.isBossWave, this.waveAnnouncementAlpha);
-      this.uiManager.drawFPS(this.ctx, this.fps, this.particleSystem.getParticleCount());
+      this.uiManager.drawFPS(this.ctx, this.fps, this.particleSystem.getParticleCount(), this.particleSystem.getQuality());
     } else if (this.gameState === GameState.START) {
       this.uiManager.drawStartScreen(this.ctx);
     } else if (this.gameState === GameState.GAME_OVER) {
@@ -479,6 +525,10 @@ class Game {
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
+    }
+    this.unbindEvents();
+    if (this.resizeThrottleTimer !== null) {
+      window.clearTimeout(this.resizeThrottleTimer);
     }
   }
 }

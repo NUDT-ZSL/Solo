@@ -1,3 +1,16 @@
+import { clamp, lerp } from './gameObjects';
+
+const FEEDBACK_CONFIG = {
+  MIN_DAMAGE: 1,
+  MAX_DAMAGE: 50,
+  MIN_SHAKE: 1,
+  MAX_SHAKE: 25,
+  MIN_FLASH: 0.05,
+  MAX_FLASH: 0.7,
+  LOW_HP_THRESHOLD: 0.3,
+  LOW_HP_MULTIPLIER: 1.8
+} as const;
+
 export class UIManager {
   private width: number;
   private height: number;
@@ -6,6 +19,7 @@ export class UIManager {
   private redFlashAlpha: number;
   private redFlashDecay: number;
   private pulseTime: number;
+  private currentHpPercent: number;
 
   constructor(width: number, height: number) {
     this.width = width;
@@ -15,6 +29,7 @@ export class UIManager {
     this.redFlashAlpha = 0;
     this.redFlashDecay = 0.95;
     this.pulseTime = 0;
+    this.currentHpPercent = 1;
   }
 
   resize(width: number, height: number): void {
@@ -22,12 +37,16 @@ export class UIManager {
     this.height = height;
   }
 
+  setHpPercent(hpPercent: number): void {
+    this.currentHpPercent = clamp(hpPercent, 0, 1);
+  }
+
   update(deltaTime: number): void {
     this.pulseTime += deltaTime;
     this.shakeIntensity *= this.shakeDecay;
-    if (this.shakeIntensity < 0.1) this.shakeIntensity = 0;
+    if (this.shakeIntensity < 0.05) this.shakeIntensity = 0;
     this.redFlashAlpha *= this.redFlashDecay;
-    if (this.redFlashAlpha < 0.01) this.redFlashAlpha = 0;
+    if (this.redFlashAlpha < 0.005) this.redFlashAlpha = 0;
   }
 
   triggerShake(intensity: number): void {
@@ -39,11 +58,22 @@ export class UIManager {
   }
 
   triggerDamageFeedback(damage: number): void {
-    const t = Math.max(0, Math.min(1, (damage - 5) / (30 - 5)));
-    const shakeIntensity = 3 + t * (20 - 3);
-    const redFlashAlpha = 0.1 + t * (0.6 - 0.1);
-    this.triggerShake(shakeIntensity);
-    this.triggerRedFlash(redFlashAlpha);
+    const { MIN_DAMAGE, MAX_DAMAGE, MIN_SHAKE, MAX_SHAKE, MIN_FLASH, MAX_FLASH, LOW_HP_THRESHOLD, LOW_HP_MULTIPLIER } = FEEDBACK_CONFIG;
+
+    const clampedDamage = clamp(damage, MIN_DAMAGE, MAX_DAMAGE);
+    const t = (clampedDamage - MIN_DAMAGE) / (MAX_DAMAGE - MIN_DAMAGE);
+
+    let baseShake = lerp(MIN_SHAKE, MAX_SHAKE, t);
+    let baseFlash = lerp(MIN_FLASH, MAX_FLASH, t);
+
+    if (this.currentHpPercent < LOW_HP_THRESHOLD) {
+      const hpFactor = 1 + (LOW_HP_MULTIPLIER - 1) * (1 - this.currentHpPercent / LOW_HP_THRESHOLD);
+      baseShake *= hpFactor;
+      baseFlash *= hpFactor;
+    }
+
+    this.triggerShake(baseShake);
+    this.triggerRedFlash(baseFlash);
   }
 
   applyScreenShake(ctx: CanvasRenderingContext2D): void {
@@ -70,8 +100,10 @@ export class UIManager {
     const y = 20;
     const padding = 4;
 
-    const pulse = Math.sin(this.pulseTime * 4) * 0.3 + 0.7;
     const healthPercent = current / max;
+    const urgency = 1 - healthPercent;
+    const pulseSpeed = 4 + urgency * 8;
+    const pulse = Math.sin(this.pulseTime * pulseSpeed) * 0.3 + 0.7;
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -99,7 +131,7 @@ export class UIManager {
     }
     ctx.fillStyle = gradient;
     ctx.shadowColor = '#ff4500';
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 6 + urgency * 10;
     ctx.fillRect(x, y, fillWidth, barHeight);
 
     ctx.fillStyle = `rgba(255, 200, 100, ${0.3 * pulse})`;
@@ -172,7 +204,7 @@ export class UIManager {
       ctx.fillRect(x, y - 10, barWidth, 6);
       ctx.fillStyle = '#64c8ff';
       ctx.shadowColor = '#64c8ff';
-      ctx.shadowBlur = 4;
+      ctx.shadowBlur = 4 + (1 - shieldPercent) * 6;
       ctx.fillRect(x, y - 10, barWidth * shieldPercent, 6);
     }
 
@@ -185,7 +217,7 @@ export class UIManager {
     gradient.addColorStop(1, '#cc0000');
     ctx.fillStyle = gradient;
     ctx.shadowColor = '#ff0000';
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 6 + (1 - hpPercent) * 8;
     ctx.fillRect(x, y, barWidth * hpPercent, barHeight);
 
     ctx.fillStyle = '#ff4500';
@@ -298,16 +330,24 @@ export class UIManager {
     ctx.restore();
   }
 
-  drawFPS(ctx: CanvasRenderingContext2D, fps: number, particleCount: number): void {
+  drawFPS(ctx: CanvasRenderingContext2D, fps: number, particleCount: number, quality: number): void {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = particleCount > 200 ? '#ffaa00' : '#39ff14';
+
+    let color = '#39ff14';
+    if (particleCount > 200) color = '#ffaa00';
+    if (quality <= 0) color = '#ff4500';
+
+    ctx.fillStyle = color;
     ctx.font = '12px "Courier New", monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowColor = color;
     ctx.shadowBlur = 2;
-    ctx.fillText(`FPS: ${fps} | PARTICLES: ${particleCount}`, 10, 10);
+
+    const qualityLabel = quality >= 2 ? 'HIGH' : quality === 1 ? 'MED' : 'LOW';
+    ctx.fillText(`FPS: ${fps} | PARTICLES: ${particleCount} | QUALITY: ${qualityLabel}`, 10, 10);
+
     ctx.restore();
   }
 }
