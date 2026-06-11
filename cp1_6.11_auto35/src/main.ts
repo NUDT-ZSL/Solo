@@ -1,5 +1,5 @@
 import { wordToPixelGrid, PixelGrid } from './templates';
-import { Animator, MoodType, moodColors } from './animator';
+import { Animator, MoodType, moodColors, FilledPixel } from './animator';
 
 const MOOD_LABELS: Record<MoodType, string> = {
   happy: 'Happy',
@@ -26,6 +26,7 @@ class PixelIconApp {
   private currentWord: string = '';
   private currentMood: MoodType = 'happy';
   private hoveredPixelKey: string | null = null;
+  private isSmallScreen: boolean = false;
 
   constructor() {
     this.canvas = document.getElementById('pixelCanvas') as HTMLCanvasElement;
@@ -38,18 +39,32 @@ class PixelIconApp {
 
     this.animator = new Animator();
 
+    this.checkScreenSize();
     this.setupCanvas();
     this.bindEvents();
     this.generateInitial();
     this.startAnimationLoop();
   }
 
+  private checkScreenSize(): void {
+    this.isSmallScreen = window.innerWidth < 900;
+  }
+
   private setupCanvas(): void {
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
+
+    const scale = this.isSmallScreen ? 0.9 : 1.0;
+    const displayWidth = rect.width * scale;
+    const displayHeight = rect.height * scale;
+
+    this.canvas.width = displayWidth * dpr;
+    this.canvas.height = displayHeight * dpr;
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
+
+    this.canvas.style.width = `${displayWidth}px`;
+    this.canvas.style.height = `${displayHeight}px`;
   }
 
   private bindEvents(): void {
@@ -82,12 +97,19 @@ class PixelIconApp {
 
     if (word.length === 0) {
       this.pixelGrid = null;
+      this.animator.setFilledPixels([]);
       this.updateInfoText();
       return;
     }
 
     this.pixelGrid = wordToPixelGrid(word);
     this.calculateLayout();
+
+    const filledPixels: FilledPixel[] = this.pixelGrid.pixels
+      .filter((p) => p.filled)
+      .map((p) => ({ x: p.x, y: p.y, charCode: p.charCode }));
+    this.animator.setFilledPixels(filledPixels);
+
     this.animator.setGridSize(this.pixelGrid.width, this.pixelGrid.height, this.pixelSize);
     this.updateInfoText();
   }
@@ -100,13 +122,13 @@ class PixelIconApp {
   private calculateLayout(): void {
     if (!this.pixelGrid) return;
 
-    const rect = this.canvas.getBoundingClientRect();
-    const canvasWidth = rect.width;
-    const canvasHeight = rect.height;
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = this.canvas.width / dpr;
+    const cssHeight = this.canvas.height / dpr;
     const padding = 30;
 
-    const availableWidth = canvasWidth - padding * 2;
-    const availableHeight = canvasHeight - padding * 2;
+    const availableWidth = cssWidth - padding * 2;
+    const availableHeight = cssHeight - padding * 2;
 
     const gridWidth = this.pixelGrid.width;
     const gridHeight = this.pixelGrid.height;
@@ -120,8 +142,8 @@ class PixelIconApp {
     const totalWidth = gridWidth * this.pixelSize + (gridWidth - 1) * 1;
     const totalHeight = gridHeight * this.pixelSize + (gridHeight - 1) * 1;
 
-    this.offsetX = (canvasWidth - totalWidth) / 2;
-    this.offsetY = (canvasHeight - totalHeight) / 2;
+    this.offsetX = (cssWidth - totalWidth) / 2;
+    this.offsetY = (cssHeight - totalHeight) / 2;
   }
 
   private setMood(mood: MoodType): void {
@@ -155,8 +177,12 @@ class PixelIconApp {
     if (!this.pixelGrid) return;
 
     const rect = this.canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const dpr = window.devicePixelRatio || 1;
+
+    const mouseX = (e.clientX - rect.left) * scaleX / dpr;
+    const mouseY = (e.clientY - rect.top) * scaleY / dpr;
 
     const pixelKey = this.getPixelAtPosition(mouseX, mouseY);
 
@@ -194,13 +220,8 @@ class PixelIconApp {
   }
 
   private handleResize(): void {
-    const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
-
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
-    this.ctx.scale(dpr, dpr);
+    this.checkScreenSize();
+    this.setupCanvas();
 
     if (this.pixelGrid) {
       this.calculateLayout();
@@ -218,20 +239,22 @@ class PixelIconApp {
 
   private render(time: number): void {
     const ctx = this.ctx;
-    const rect = this.canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = this.canvas.width / dpr;
+    const cssHeight = this.canvas.height / dpr;
 
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
 
     if (!this.pixelGrid || this.pixelSize <= 0) return;
 
     const step = this.pixelSize + 1;
     const gapSize = 1;
-    const drawPixelSize = this.pixelSize;
 
     for (const pixel of this.pixelGrid.pixels) {
       if (!pixel.filled) continue;
 
       const anim = this.animator.getPixelAnimation(pixel.x, pixel.y, time);
+
       const gradientColor = this.animator.getGradientColor(time);
 
       let baseColor: string;
@@ -246,25 +269,27 @@ class PixelIconApp {
       const centerX = this.offsetX + pixel.x * step + this.pixelSize / 2;
       const centerY = this.offsetY + pixel.y * step + this.pixelSize / 2 + anim.offsetY;
 
-      const scaledSize = drawPixelSize * anim.scale;
-      const actualDrawSize = scaledSize - gapSize;
-      const drawX = centerX - actualDrawSize / 2;
-      const drawY = centerY - actualDrawSize / 2;
+      const scaledSize = this.pixelSize * anim.scale;
+      const drawSize = scaledSize - gapSize;
+      const drawX = centerX - drawSize / 2;
+      const drawY = centerY - drawSize / 2;
 
       if (anim.glowIntensity > 0) {
+        ctx.save();
         ctx.shadowColor = finalColor;
-        ctx.shadowBlur = 8 * anim.glowIntensity * 5;
-      } else {
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 12 * anim.glowIntensity;
       }
 
       ctx.globalAlpha = anim.alpha;
       ctx.fillStyle = finalColor;
-      ctx.fillRect(drawX, drawY, actualDrawSize, actualDrawSize);
+      ctx.fillRect(drawX, drawY, drawSize, drawSize);
+
+      if (anim.glowIntensity > 0) {
+        ctx.restore();
+      }
     }
 
     ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
   }
 }
 

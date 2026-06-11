@@ -19,9 +19,12 @@ export interface GlowState {
   duration: number;
 }
 
-export interface RippleRing {
-  ringNumber: number;
-  delay: number;
+export interface RipplePixelInfo {
+  x: number;
+  y: number;
+  distance: number;
+  ring: number;
+  animStart: number;
 }
 
 export interface RippleState {
@@ -29,7 +32,7 @@ export interface RippleState {
   centerY: number;
   startTime: number;
   duration: number;
-  rings: RippleRing[];
+  pixelMap: Map<string, RipplePixelInfo>;
   glowStates: Map<string, GlowState>;
 }
 
@@ -41,9 +44,10 @@ export interface PixelAnimationData {
   glowIntensity: number;
 }
 
-export interface PixelColorInfo {
-  baseColor: string;
-  isOdd: boolean;
+export interface FilledPixel {
+  x: number;
+  y: number;
+  charCode: number;
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -92,6 +96,7 @@ export class Animator {
   private gridWidth: number = 0;
   private gridHeight: number = 0;
   private pixelSize: number = 10;
+  private filledPixels: FilledPixel[] = [];
 
   setMood(mood: MoodType): void {
     this.mood = mood;
@@ -109,19 +114,59 @@ export class Animator {
     this.pixelSize = pixelSize;
   }
 
+  setFilledPixels(pixels: FilledPixel[]): void {
+    this.filledPixels = pixels;
+  }
+
+  getManhattanDistance(x1: number, y1: number, x2: number, y2: number): number {
+    return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+  }
+
   triggerRipple(centerX: number, centerY: number): void {
     const now = performance.now();
-    const rings: RippleRing[] = [
-      { ringNumber: 1, delay: 0 },
-      { ringNumber: 2, delay: 100 },
-    ];
+    const pixelMap = new Map<string, RipplePixelInfo>();
+
+    const sorted = this.filledPixels
+      .map((p) => ({
+        x: p.x,
+        y: p.y,
+        distance: this.getManhattanDistance(p.x, p.y, centerX, centerY),
+      }))
+      .sort((a, b) => a.distance - b.distance);
+
+    const firstRingCount = Math.min(8, sorted.length);
+    const secondRingCount = Math.min(16, Math.max(0, sorted.length - firstRingCount));
+
+    for (let i = 0; i < firstRingCount; i++) {
+      const p = sorted[i];
+      const key = `${p.x},${p.y}`;
+      pixelMap.set(key, {
+        x: p.x,
+        y: p.y,
+        distance: p.distance,
+        ring: 1,
+        animStart: now + 0,
+      });
+    }
+
+    for (let i = firstRingCount; i < firstRingCount + secondRingCount; i++) {
+      const p = sorted[i];
+      const key = `${p.x},${p.y}`;
+      pixelMap.set(key, {
+        x: p.x,
+        y: p.y,
+        distance: p.distance,
+        ring: 2,
+        animStart: now + 100,
+      });
+    }
 
     this.ripple = {
       centerX,
       centerY,
       startTime: now,
       duration: 800,
-      rings,
+      pixelMap,
       glowStates: new Map(),
     };
   }
@@ -163,54 +208,21 @@ export class Animator {
     }
   }
 
-  getPixelBaseColor(charCode: number, baseMoodColor: string): string {
-    const isOdd = charCode % 2 === 1;
-    if (isOdd) {
-      return mixWithWhite(baseMoodColor, 0.3);
-    } else {
-      return mixWithBlack(baseMoodColor, 0.1);
-    }
+  getRipplePixelInfo(pixelX: number, pixelY: number): RipplePixelInfo | null {
+    if (!this.ripple) return null;
+    const key = `${pixelX},${pixelY}`;
+    return this.ripple.pixelMap.get(key) || null;
   }
 
-  getChebyshevDistance(x1: number, y1: number, x2: number, y2: number): number {
-    return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
-  }
-
-  getPixelRing(pixelX: number, pixelY: number, centerX: number, centerY: number): number {
-    const distance = this.getChebyshevDistance(pixelX, pixelY, centerX, centerY);
-    
-    if (distance === 0) return 1;
-    if (distance <= 2) return 1;
-    if (distance <= 4) return 2;
-    return 0;
-  }
-
-  getRingPixelCount(ringNumber: number): number {
-    if (ringNumber === 1) return 8;
-    if (ringNumber === 2) return 16;
-    return 0;
-  }
-
-  getRippleProgressForRing(
+  getRippleScaleAndOffset(
     pixelX: number,
     pixelY: number,
     time: number
   ): { scale: number; offsetY: number } {
-    if (!this.ripple) return { scale: 1.0, offsetY: 0 };
+    const info = this.getRipplePixelInfo(pixelX, pixelY);
+    if (!info) return { scale: 1.0, offsetY: 0 };
 
-    const ring = this.getPixelRing(
-      pixelX,
-      pixelY,
-      this.ripple.centerX,
-      this.ripple.centerY
-    );
-
-    if (ring === 0) return { scale: 1.0, offsetY: 0 };
-
-    const ringInfo = this.ripple.rings.find((r) => r.ringNumber === ring);
-    if (!ringInfo) return { scale: 1.0, offsetY: 0 };
-
-    const elapsed = time - this.ripple.startTime - ringInfo.delay;
+    const elapsed = time - info.animStart;
     if (elapsed < 0) return { scale: 1.0, offsetY: 0 };
 
     const animationDuration = 300;
@@ -228,21 +240,13 @@ export class Animator {
   updateGlowState(pixelX: number, pixelY: number, time: number): void {
     if (!this.ripple) return;
 
+    const info = this.getRipplePixelInfo(pixelX, pixelY);
+    if (!info) return;
+
     const pixelKey = `${pixelX},${pixelY}`;
-    const ring = this.getPixelRing(
-      pixelX,
-      pixelY,
-      this.ripple.centerX,
-      this.ripple.centerY
-    );
+    const elapsed = time - info.animStart;
 
-    if (ring === 0) return;
-
-    const ringInfo = this.ripple.rings.find((r) => r.ringNumber === ring);
-    if (!ringInfo) return;
-
-    const elapsed = time - this.ripple.startTime - ringInfo.delay;
-    if (elapsed >= 0 && elapsed < 100 && !this.ripple.glowStates.has(pixelKey)) {
+    if (elapsed >= 0 && elapsed < 50 && !this.ripple.glowStates.has(pixelKey)) {
       this.ripple.glowStates.set(pixelKey, {
         startTime: time,
         duration: 500,
@@ -269,7 +273,7 @@ export class Animator {
   getPixelAnimation(pixelX: number, pixelY: number, time: number): PixelAnimationData {
     const breathingAlpha = this.getBreathingAlpha(time);
 
-    const { scale, offsetY } = this.getRippleProgressForRing(pixelX, pixelY, time);
+    const { scale, offsetY } = this.getRippleScaleAndOffset(pixelX, pixelY, time);
 
     this.updateGlowState(pixelX, pixelY, time);
     const glowIntensity = this.getGlowIntensity(pixelX, pixelY, time);
