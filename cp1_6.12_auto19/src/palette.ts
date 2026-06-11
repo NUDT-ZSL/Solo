@@ -39,14 +39,21 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
 }
 
 function normalizeHue(h: number): number {
-  const mod = ((h % 360) + 360) % 360;
-  return mod;
+  return ((h % 360) + 360) % 360;
+}
+
+function clampSaturation(s: number): number {
+  return Math.max(0, Math.min(100, s));
+}
+
+function clampLightness(l: number): number {
+  return Math.max(0, Math.min(100, l));
 }
 
 function hslToHex(h: number, s: number, l: number): string {
   h = normalizeHue(h);
-  s = Math.max(0, Math.min(100, s)) / 100;
-  l = Math.max(0, Math.min(100, l)) / 100;
+  s = clampSaturation(s) / 100;
+  l = clampLightness(l) / 100;
   const k = (n: number) => (n + h / 30) % 12;
   const a = s * Math.min(l, 1 - l);
   const f = (n: number) => {
@@ -230,7 +237,7 @@ export class PaletteManager {
               <span class="section-subtitle">0 / ${MAX_PALETTE_SIZE}</span>
             </div>
             <div class="section-actions">
-              <button class="btn btn-outline" id="palette-save" disabled>
+              <button class="btn btn-primary" id="palette-save">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                   <polyline points="17,21 17,13 7,13 7,21" />
