@@ -7,6 +7,8 @@ const CARD_HEIGHT = 220;
 const CARD_GAP = 20;
 const BREAKPOINT_TABLET = 768;
 const BREAKPOINT_MOBILE = 480;
+const RESIZE_DEBOUNCE_MS = 150;
+const COMMENT_ANIM_DURATION = 350;
 
 const css = `
 @keyframes heartbeat {
@@ -24,20 +26,20 @@ const css = `
   0% {
     opacity: 0;
     transform: scale(0.5);
-    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.7), 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 0 0 0 var(--diffuse-glow-start, rgba(124, 58, 237, 0.7)), var(--card-shadow, 0 4px 12px rgba(0,0,0,0.3));
   }
   30% {
     opacity: 0.5;
-    box-shadow: 0 0 25px 8px rgba(124, 58, 237, 0.4), 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 0 25px 8px var(--diffuse-glow-mid, rgba(124, 58, 237, 0.4)), var(--card-shadow, 0 4px 12px rgba(0,0,0,0.3));
   }
   60% {
     opacity: 0.8;
-    box-shadow: 0 0 40px 15px rgba(124, 58, 237, 0.15), 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 0 40px 15px var(--diffuse-glow-end, rgba(124, 58, 237, 0.15)), var(--card-shadow, 0 4px 12px rgba(0,0,0,0.3));
   }
   100% {
     opacity: 1;
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0), 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 0 0 0 transparent, var(--card-shadow, 0 4px 12px rgba(0,0,0,0.3));
   }
 }
 @keyframes slideInFromBottom {
@@ -72,6 +74,9 @@ const css = `
   animation: heartbeat 0.5s ease-in-out;
 }
 .diffuse-enter {
+  --diffuse-glow-start: rgba(124, 58, 237, 0.7);
+  --diffuse-glow-mid: rgba(124, 58, 237, 0.4);
+  --diffuse-glow-end: rgba(124, 58, 237, 0.15);
   animation: diffuseIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 .comment-enter {
@@ -103,6 +108,12 @@ const css = `
 }
 `;
 
+function getColumnsForWidth(w: number): number {
+  if (w <= BREAKPOINT_MOBILE) return 1;
+  if (w <= BREAKPOINT_TABLET) return 2;
+  return 3;
+}
+
 function VirtualCardGrid({ cards, onCardClick, onLike, likedSet, newCardId, filterKey }: {
   cards: Card[];
   onCardClick: (id: string) => void;
@@ -112,27 +123,53 @@ function VirtualCardGrid({ cards, onCardClick, onLike, likedSet, newCardId, filt
   filterKey: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const resizeTimerRef = useRef<number | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(800);
   const [columns, setColumns] = useState(3);
 
+  const updateSize = useCallback(() => {
+    if (!containerRef.current) return;
+    setContainerHeight(Math.max(400, window.innerHeight - 180));
+    const w = containerRef.current.clientWidth;
+    setColumns((prev) => {
+      const next = getColumnsForWidth(w);
+      if (next !== prev && containerRef.current) {
+        const firstCardTop = containerRef.current.scrollTop;
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            const prevRowHeight = CARD_HEIGHT + CARD_GAP;
+            const currentRow = firstCardTop / prevRowHeight;
+            const newRowHeight = CARD_HEIGHT + CARD_GAP;
+            containerRef.current.scrollTop = currentRow * newRowHeight;
+          }
+        });
+      }
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
-    const updateSize = () => {
-      if (!containerRef.current) return;
-      setContainerHeight(window.innerHeight - 180);
-      const w = containerRef.current.clientWidth;
-      if (w <= BREAKPOINT_MOBILE) {
-        setColumns(1);
-      } else if (w <= BREAKPOINT_TABLET) {
-        setColumns(2);
-      } else {
-        setColumns(3);
+    updateSize();
+    const handleResize = () => {
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+      }
+      resizeTimerRef.current = window.setTimeout(() => {
+        updateSize();
+        if (containerRef.current) {
+          setScrollTop(containerRef.current.scrollTop);
+        }
+      }, RESIZE_DEBOUNCE_MS);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
       }
     };
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, []);
+  }, [updateSize]);
 
   const handleScroll = useCallback(() => {
     if (containerRef.current) {
@@ -154,6 +191,19 @@ function VirtualCardGrid({ cards, onCardClick, onLike, likedSet, newCardId, filt
   const visibleRows = Math.ceil(containerHeight / rowHeight) + 4;
   const endRow = Math.min(rows.length, startRow + visibleRows);
 
+  const visibleRowsSlice = rows.slice(startRow, endRow);
+  const visibleStartGlobalIdx = startRow * columns;
+
+  const handleDiffuseEnd = useCallback((e: React.AnimationEvent<HTMLDivElement>, cardId: string) => {
+    if (e.animationName === 'diffuseIn') {
+      const target = e.currentTarget;
+      target.classList.remove('diffuse-enter');
+      target.style.removeProperty('--diffuse-glow-start');
+      target.style.removeProperty('--diffuse-glow-mid');
+      target.style.removeProperty('--diffuse-glow-end');
+    }
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -166,15 +216,12 @@ function VirtualCardGrid({ cards, onCardClick, onLike, likedSet, newCardId, filt
         position: 'relative',
       }}
     >
-      <div
-        key={filterKey}
-        style={{ height: totalHeight, position: 'relative' }}
-      >
-        {rows.slice(startRow, endRow).map((row, ri) => {
-          const actualRowIdx = startRow + ri;
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        {visibleRowsSlice.map((row, visibleRowIdx) => {
+          const actualRowIdx = startRow + visibleRowIdx;
           return (
             <div
-              key={`row-${actualRowIdx}-${filterKey}`}
+              key={`row-${actualRowIdx}`}
               style={{
                 position: 'absolute',
                 top: actualRowIdx * rowHeight,
@@ -187,14 +234,29 @@ function VirtualCardGrid({ cards, onCardClick, onLike, likedSet, newCardId, filt
               }}
             >
               {row.map((card, ci) => {
-                const globalIdx = actualRowIdx * columns + ci;
+                const visibleIdx = visibleRowIdx * columns + ci;
+                const globalIdx = visibleStartGlobalIdx + visibleIdx;
                 const isNew = card.id === newCardId;
+                const shouldAnimate = isNew || (visibleIdx < 20);
+
                 return (
                   <div
-                    key={`card-${card.id}-${filterKey}`}
-                    className={isNew ? 'diffuse-enter' : 'filter-fade-in'}
+                    key={`card-${card.id}`}
+                    className={
+                      isNew
+                        ? 'diffuse-enter'
+                        : shouldAnimate
+                        ? 'filter-fade-in'
+                        : ''
+                    }
+                    onAnimationEnd={isNew ? (e) => handleDiffuseEnd(e, card.id) : undefined}
                     style={{
-                      animationDelay: isNew ? '0ms' : `${globalIdx * 100}ms`,
+                      animationDelay: isNew
+                        ? '0ms'
+                        : shouldAnimate
+                        ? `${visibleIdx * 100}ms`
+                        : '0ms',
+                      animationFillMode: 'both',
                     }}
                   >
                     <CardItem
@@ -221,15 +283,24 @@ function CardItem({ card, onClick, onLike, isLiked }: {
   isLiked: boolean;
 }) {
   const [heartAnim, setHeartAnim] = useState(false);
+  const heartRef = useRef<SVGSVGElement>(null);
+  const timeoutRef = useRef<number | null>(null);
 
   const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!heartAnim) {
       setHeartAnim(true);
-      setTimeout(() => setHeartAnim(false), 500);
+      if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => setHeartAnim(false), 500);
     }
     onLike(e);
   };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   return (
     <div
@@ -311,6 +382,7 @@ function CardItem({ card, onClick, onLike, isLiked }: {
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
         >
           <svg
+            ref={heartRef}
             className={heartAnim ? 'heartbeat-anim' : ''}
             width="18"
             height="18"
@@ -343,12 +415,16 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [newCommentIds, setNewCommentIds] = useState<Set<string>>(new Set());
+  const [animatingCommentIds, setAnimatingCommentIds] = useState<Map<string, number>>(new Map());
   const [hasLoaded, setHasLoaded] = useState(false);
+  const submissionQueueRef = useRef<Array<{ username: string; content: string }>>([]);
+  const isProcessingQueueRef = useRef(false);
 
   useEffect(() => {
     setHasLoaded(false);
-    setNewCommentIds(new Set());
+    setAnimatingCommentIds(new Map());
+    submissionQueueRef.current = [];
+    isProcessingQueueRef.current = false;
     fetchComments(card.id).then((data) => {
       setComments(data);
       setLoading(false);
@@ -359,33 +435,57 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
     });
   }, [card.id]);
 
-  const handleSubmit = async () => {
-    if (!newComment.trim() || !username.trim()) return;
-    setSubmitting(true);
-    try {
-      const comment = await createComment(card.id, {
-        username: username.trim(),
-        content: newComment.trim(),
-      });
-      setComments((prev) => [comment, ...prev]);
-      setNewCommentIds((prev) => {
-        const next = new Set(prev);
-        next.add(comment.id);
-        return next;
-      });
-      setNewComment('');
-      setTimeout(() => {
-        setNewCommentIds((prev) => {
-          const next = new Set(prev);
-          next.delete(comment.id);
+  useEffect(() => {
+    return () => {
+      animatingCommentIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, [animatingCommentIds]);
+
+  const processQueue = useCallback(async () => {
+    if (isProcessingQueueRef.current) return;
+    while (submissionQueueRef.current.length > 0) {
+      isProcessingQueueRef.current = true;
+      const item = submissionQueueRef.current.shift();
+      if (!item) break;
+      try {
+        const comment = await createComment(card.id, item);
+        setComments((prev) => [comment, ...prev]);
+        setAnimatingCommentIds((prev) => {
+          const next = new Map(prev);
+          if (next.has(comment.id)) {
+            window.clearTimeout(next.get(comment.id));
+          }
+          const timeoutId = window.setTimeout(() => {
+            setAnimatingCommentIds((p) => {
+              const n = new Map(p);
+              n.delete(comment.id);
+              return n;
+            });
+          }, COMMENT_ANIM_DURATION + 50);
+          next.set(comment.id, timeoutId);
           return next;
         });
-      }, 500);
-    } catch (err) {
-      console.error(err);
+      } catch (err) {
+        console.error(err);
+      }
     }
+    isProcessingQueueRef.current = false;
     setSubmitting(false);
-  };
+  }, [card.id]);
+
+  const handleSubmit = useCallback(async () => {
+    const trimmedUser = username.trim();
+    const trimmedContent = newComment.trim();
+    if (!trimmedContent || !trimmedUser) return;
+
+    submissionQueueRef.current.push({ username: trimmedUser, content: trimmedContent });
+    setNewComment('');
+    setSubmitting(true);
+
+    if (!isProcessingQueueRef.current) {
+      await processQueue();
+    }
+  }, [username, newComment, processQueue]);
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -467,7 +567,7 @@ function CardDetail({ card, onBack }: { card: Card; onBack: () => void }) {
           comments.map((comment, idx) => (
             <div
               key={comment.id}
-              className={newCommentIds.has(comment.id) ? 'comment-enter' : ''}
+              className={animatingCommentIds.has(comment.id) ? 'comment-enter' : ''}
               style={{
                 display: 'flex',
                 gap: '12px',
