@@ -15,6 +15,7 @@ interface GenerateResult {
     chords: number[][];
     bpm: number;
     baseVolume: number;
+    audioDataUrl?: string;
   };
 }
 
@@ -233,7 +234,9 @@ const styles: Record<string, React.CSSProperties> = {
   styleButton: {
     padding: '12px 28px',
     borderRadius: '30px',
-    border: '2px solid #444',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: '#444',
     backgroundColor: 'rgba(30, 30, 50, 0.5)',
     color: '#E0E0E0',
     fontSize: '15px',
