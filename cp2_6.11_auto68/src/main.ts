@@ -1,4 +1,4 @@
-import { createInitialGameData, GameData, updateGame, resetGame } from './game';
+import { createInitialGameData, GameData, updateGame, resetGame, pauseGame, resumeGame } from './game';
 import { createRenderContext, resizeCanvas, render, RenderContext } from './renderer';
 import { 
   createKeyState, 
@@ -110,9 +110,9 @@ function handleGlobalKeys(key: string): void {
   
   if (key === 'p') {
     if (gameData.gameState === 'playing') {
-      gameData.gameState = 'paused';
+      pauseGame(gameData);
     } else if (gameData.gameState === 'paused') {
-      gameData.gameState = 'playing';
+      resumeGame(gameData);
     }
     return;
   }
@@ -139,9 +139,9 @@ function handleGlobalKeys(key: string): void {
   
   if (key === 'escape') {
     if (gameData.gameState === 'paused') {
-      gameData.gameState = 'playing';
+      resumeGame(gameData);
     } else if (gameData.gameState === 'playing') {
-      gameData.gameState = 'paused';
+      pauseGame(gameData);
     }
     return;
   }

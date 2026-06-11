@@ -1,4 +1,4 @@
-import { GameData, PlayerId, moveLightPiece, useShadowAbility, endTurn, getLightPieces, canMoveLightPiece, isValidPosition } from './game';
+import { GameData, PlayerId, moveLightPiece, useShadowAbility, endTurn, getLightPieces, canMoveLightPiece, isValidPosition, checkGameOver } from './game';
 
 export interface KeyState {
   keys: Set<string>;
@@ -46,6 +46,37 @@ const PLAYER2_KEYS = {
   select: 'shift'
 };
 
+export function hasAnyValidMove(gameData: GameData, player: PlayerId): boolean {
+  const lightPieces = getLightPieces(gameData, player);
+  
+  if (lightPieces.length === 0) return false;
+  
+  for (const piece of lightPieces) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        if (canMoveLightPiece(gameData, piece, dx, dy)) {
+          return true;
+        }
+      }
+    }
+  }
+  
+  return false;
+}
+
+export function checkNoMovesGameOver(gameData: GameData): boolean {
+  if (checkGameOver(gameData)) return true;
+  
+  if (!hasAnyValidMove(gameData, gameData.currentPlayer)) {
+    gameData.gameState = 'gameover';
+    gameData.winner = gameData.currentPlayer === 1 ? 2 : 1;
+    return true;
+  }
+  
+  return false;
+}
+
 export function handlePlayerInput(
   gameData: GameData,
   keyState: KeyState,
@@ -57,7 +88,9 @@ export function handlePlayerInput(
   const keys = player === 1 ? PLAYER1_KEYS : PLAYER2_KEYS;
   const lightPieces = getLightPieces(gameData, player);
   
-  if (lightPieces.length === 0) return false;
+  if (lightPieces.length === 0) {
+    return false;
+  }
   
   let selectedPiece = gameData.selectedPiece;
   
@@ -90,6 +123,7 @@ export function handlePlayerInput(
     
     if (moveLightPiece(gameData, selectedPiece, dx, dy)) {
       endTurn(gameData);
+      checkNoMovesGameOver(gameData);
       return true;
     }
   }
@@ -97,17 +131,19 @@ export function handlePlayerInput(
   if (keyState.justPressed.has(keys.ability)) {
     if (useShadowAbility(gameData, player)) {
       endTurn(gameData);
+      checkNoMovesGameOver(gameData);
       return true;
     }
   }
   
   if (keyState.justPressed.has(keys.select)) {
     const aliveLightPieces = lightPieces.filter(p => p.alive);
-    if (aliveLightPieces.length > 1) return false;
+    if (aliveLightPieces.length <= 1) return false;
     
     const currentIndex = aliveLightPieces.findIndex(p => p.id === selectedPiece?.id);
     const nextIndex = (currentIndex + 1) % aliveLightPieces.length;
     gameData.selectedPiece = aliveLightPieces[nextIndex];
+    return true;
   }
   
   return false;

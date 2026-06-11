@@ -200,14 +200,49 @@ function drawTrails(renderCtx: RenderContext, gameData: GameData): void {
   
   for (const [pieceId, trail] of gameData.trails) {
     const piece = gameData.pieces.find(p => p.id === pieceId);
-    if (!piece) continue;
+    if (!piece || trail.length < 2) continue;
     
     const color = piece.player === 1 ? COLORS.player1Light : COLORS.player2Light;
     
+    for (let i = 1; i < trail.length; i++) {
+      const prev = trail[i - 1];
+      const curr = trail[i];
+      
+      const alpha = curr.alpha * 0.95;
+      const lineWidth = cellSize * 0.35 * curr.alpha;
+      
+      const x1 = prev.x * cellSize + cellSize / 2;
+      const y1 = prev.y * cellSize + cellSize / 2;
+      const x2 = curr.x * cellSize + cellSize / 2;
+      const y2 = curr.y * cellSize + cellSize / 2;
+      
+      const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+      gradient.addColorStop(0, hexToRgba(color, alpha * 0.3));
+      gradient.addColorStop(0.5, hexToRgba(color, alpha));
+      gradient.addColorStop(1, hexToRgba(color, alpha * 0.3));
+      
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      
+      const glowGradient = ctx.createRadialGradient(x2, y2, 0, x2, y2, lineWidth * 2);
+      glowGradient.addColorStop(0, hexToRgba(color, alpha));
+      glowGradient.addColorStop(1, hexToRgba(color, 0));
+      
+      ctx.beginPath();
+      ctx.arc(x2, y2, lineWidth * 2, 0, Math.PI * 2);
+      ctx.fillStyle = glowGradient;
+      ctx.fill();
+    }
+    
     for (let i = 0; i < trail.length; i++) {
       const point = trail[i];
-      const alpha = point.alpha * 0.7;
-      const size = cellSize * 0.35 * point.alpha;
+      const alpha = point.alpha * 0.85;
+      const size = cellSize * 0.3 * point.alpha;
       
       const gradient = ctx.createRadialGradient(
         point.x * cellSize + cellSize / 2,
@@ -215,20 +250,32 @@ function drawTrails(renderCtx: RenderContext, gameData: GameData): void {
         0,
         point.x * cellSize + cellSize / 2,
         point.y * cellSize + cellSize / 2,
-        size
+        size * 2.5
       );
       gradient.addColorStop(0, hexToRgba(color, alpha));
+      gradient.addColorStop(0.4, hexToRgba(color, alpha * 0.7));
       gradient.addColorStop(1, hexToRgba(color, 0));
       
       ctx.beginPath();
       ctx.arc(
         point.x * cellSize + cellSize / 2,
         point.y * cellSize + cellSize / 2,
-        size,
+        size * 2.5,
         0,
         Math.PI * 2
       );
       ctx.fillStyle = gradient;
+      ctx.fill();
+      
+      ctx.beginPath();
+      ctx.arc(
+        point.x * cellSize + cellSize / 2,
+        point.y * cellSize + cellSize / 2,
+        size * 0.6,
+        0,
+        Math.PI * 2
+      );
+      ctx.fillStyle = hexToRgba('#FFFFFF', alpha * 0.9);
       ctx.fill();
     }
   }
@@ -693,41 +740,56 @@ function drawTitleScreen(renderCtx: RenderContext, _gameData: GameData): void {
 function drawPauseScreen(renderCtx: RenderContext, _gameData: GameData): void {
   const { ctx, canvas, time } = renderCtx;
   
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  bgGradient.addColorStop(0, 'rgba(10, 10, 20, 0.92)');
+  bgGradient.addColorStop(0.5, 'rgba(15, 15, 35, 0.95)');
+  bgGradient.addColorStop(1, 'rgba(10, 10, 20, 0.92)');
+  ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  ctx.font = '28px "Press Start 2P", monospace';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.font = '32px "Press Start 2P", monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = COLORS.goldLine;
   ctx.shadowColor = COLORS.goldLine;
-  ctx.shadowBlur = 20;
-  ctx.fillText('游戏暂停', canvas.width / 2, canvas.height / 2 - 50);
+  ctx.shadowBlur = 25;
+  const titleY = canvas.height / 2 - 60 + Math.sin(time * 2) * 3;
+  ctx.fillText('游戏暂停', canvas.width / 2, titleY);
   ctx.shadowBlur = 0;
   
-  const buttonY = canvas.height / 2 + 20;
-  const buttonWidth = 180;
-  const buttonHeight = 50;
+  const buttonY = canvas.height / 2 + 10;
+  const buttonWidth = 200;
+  const buttonHeight = 55;
   const buttonX = canvas.width / 2 - buttonWidth / 2;
   
   const hoverPulse = Math.sin(time * 4) * 0.1 + 0.9;
   
-  ctx.fillStyle = '#1a1a2e';
+  const btnGradient = ctx.createLinearGradient(buttonX, buttonY, buttonX, buttonY + buttonHeight);
+  btnGradient.addColorStop(0, '#2a2a4e');
+  btnGradient.addColorStop(1, '#1a1a3e');
+  ctx.fillStyle = btnGradient;
   ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
   
   ctx.strokeStyle = COLORS.uiBorder;
   ctx.lineWidth = 2 * hoverPulse;
   ctx.shadowColor = COLORS.uiBorder;
-  ctx.shadowBlur = 10 * hoverPulse;
+  ctx.shadowBlur = 15 * hoverPulse;
   ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, buttonWidth - 1, buttonHeight - 1);
   ctx.shadowBlur = 0;
   
   ctx.fillStyle = COLORS.text;
-  ctx.font = '11px "Press Start 2P", monospace';
+  ctx.shadowColor = COLORS.text;
+  ctx.shadowBlur = 5;
+  ctx.font = '12px "Press Start 2P", monospace';
   ctx.fillText('继续游戏', canvas.width / 2, buttonY + buttonHeight / 2 + 4);
+  ctx.shadowBlur = 0;
   
-  ctx.font = '8px "Press Start 2P", monospace';
-  ctx.fillStyle = '#666';
-  ctx.fillText('按 P 键继续游戏', canvas.width / 2, buttonY + buttonHeight + 30);
+  ctx.font = '9px "Press Start 2P", monospace';
+  ctx.fillStyle = '#888';
+  ctx.fillText('按 P 键继续游戏', canvas.width / 2, buttonY + buttonHeight + 35);
+  ctx.fillText('按 R 键重新开始', canvas.width / 2, buttonY + buttonHeight + 55);
 }
 
 function drawGameOverScreen(renderCtx: RenderContext, gameData: GameData): void {

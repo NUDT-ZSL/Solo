@@ -70,11 +70,14 @@ export interface GameData {
   stars: StarParticle[];
   trails: Map<number, TrailPoint[]>;
   ripples: Ripple[];
+  shadowRevealTimer: number;
   shadowRevealInterval: number;
   shadowRevealDuration: number;
-  shadowRevealTimer: number;
+  
   shadowAutoMoveInterval: number;
   shadowAutoMoveTimer: number;
+  
+  isShadowMoving: boolean;
   mousePosition: Position;
   shadowCooldown: Map<PlayerId, number>;
   shadowMoveThisTurn: Map<PlayerId, boolean>;
@@ -205,6 +208,7 @@ export function createInitialGameData(): GameData {
     shadowRevealTimer: 0,
     shadowAutoMoveInterval: SHADOW_AUTO_MOVE_INTERVAL,
     shadowAutoMoveTimer: 0,
+    isShadowMoving: false,
     mousePosition: { x: -100, y: -100 },
     shadowCooldown: new Map([[1, 0], [2, 0]]),
     shadowMoveThisTurn: new Map([[1, false], [2, false]])
@@ -256,14 +260,14 @@ export function moveLightPiece(gameData: GameData, piece: Piece, dx: number, dy:
   const newY = piece.position.y + dy;
   
   const trail = gameData.trails.get(piece.id) || [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i <= 8; i++) {
     trail.push({ 
-      x: oldX + dx * (i / 3), 
-      y: oldY + dy * (i / 3), 
-      alpha: 1 - i * 0.2 
+      x: oldX + dx * (i / 8), 
+      y: oldY + dy * (i / 8), 
+      alpha: 1 
     });
   }
-  while (trail.length > 15) trail.shift();
+  while (trail.length > 24) trail.shift();
   gameData.trails.set(piece.id, trail);
   
   piece.position.x = newX;
@@ -294,16 +298,26 @@ export function capturePiece(gameData: GameData, attacker: Piece, target: Piece)
 function getParticleFromPool(gameData: GameData): Particle | null {
   for (const p of gameData.particlePool) {
     if (!p.active) {
+      p.active = true;
       return p;
     }
   }
+  
   if (gameData.particles.length > 0) {
     const oldest = gameData.particles.shift();
     if (oldest) {
-      oldest.active = false;
+      oldest.active = true;
       return oldest;
     }
   }
+  
+  if (gameData.particlePool.length < gameData.maxParticles) {
+    const newParticle = createParticle();
+    newParticle.active = true;
+    gameData.particlePool.push(newParticle);
+    return newParticle;
+  }
+  
   return null;
 }
 
@@ -369,6 +383,10 @@ export function addRipple(gameData: GameData, x: number, y: number, color: strin
 }
 
 export function autoMoveShadowPieces(gameData: GameData): void {
+  if (gameData.isShadowMoving) return;
+  gameData.isShadowMoving = true;
+  
+  try {
   for (const player of [1, 2] as PlayerId[]) {
     const shadows = getShadowPieces(gameData, player);
     const enemyLightPieces = getLightPieces(gameData, player === 1 ? 2 : 1);
@@ -473,9 +491,16 @@ export function autoMoveShadowPieces(gameData: GameData): void {
       addRipple(gameData, currentX + 0.5, currentY + 0.5, '#4a4a6a');
     }
   }
+  } finally {
+    gameData.isShadowMoving = false;
+  }
 }
 
 export function moveShadowPieces(gameData: GameData, player: PlayerId): void {
+  if (gameData.isShadowMoving) return;
+  gameData.isShadowMoving = true;
+  
+  try {
   const shadows = getShadowPieces(gameData, player);
   const enemyLightPieces = getLightPieces(gameData, player === 1 ? 2 : 1);
   
@@ -562,6 +587,14 @@ export function moveShadowPieces(gameData: GameData, player: PlayerId): void {
     
     shadow.position.x = currentX;
     shadow.position.y = currentY;
+    
+    shadow.isRevealed = true;
+    shadow.revealTimer = gameData.shadowRevealDuration;
+    shadow.revealPulse = 1;
+    addRipple(gameData, currentX + 0.5, currentY + 0.5, '#4a4a6a');
+  }
+  } finally {
+    gameData.isShadowMoving = false;
   }
 }
 
@@ -640,42 +673,43 @@ export function checkGameOver(gameData: GameData): boolean {
 }
 
 export function updateGame(gameData: GameData, deltaTime: number): void {
-  if (gameData.gameState !== 'playing') return;
-  
-  gameData.shadowRevealTimer += deltaTime;
-  if (gameData.shadowRevealTimer >= gameData.shadowRevealInterval) {
-    gameData.shadowRevealTimer = 0;
-    for (const piece of gameData.pieces) {
-      if (piece.type === 'shadow' && piece.alive) {
-        piece.isRevealed = true;
-        piece.revealTimer = gameData.shadowRevealDuration;
-        piece.revealPulse = 1;
+  if (gameData.gameState === 'playing') {
+    gameData.shadowRevealTimer += deltaTime;
+    if (gameData.shadowRevealTimer >= gameData.shadowRevealInterval) {
+      gameData.shadowRevealTimer = 0;
+      for (const piece of gameData.pieces) {
+        if (piece.type === 'shadow' && piece.alive && !piece.isRevealed) {
+          piece.isRevealed = true;
+          piece.revealTimer = gameData.shadowRevealDuration;
+          piece.revealPulse = 1;
+        }
       }
     }
-  }
-  
-  gameData.shadowAutoMoveTimer += deltaTime;
-  if (gameData.shadowAutoMoveTimer >= gameData.shadowAutoMoveInterval) {
-    gameData.shadowAutoMoveTimer = 0;
-    autoMoveShadowPieces(gameData);
+    
+    gameData.shadowAutoMoveTimer += deltaTime;
+    if (gameData.shadowAutoMoveTimer >= gameData.shadowAutoMoveInterval) {
+      gameData.shadowAutoMoveTimer = 0;
+      autoMoveShadowPieces(gameData);
+    }
+    
+    for (const [playerId, cooldown] of gameData.shadowCooldown) {
+      if (cooldown > 0) {
+        gameData.shadowCooldown.set(playerId as PlayerId, Math.max(0, cooldown - deltaTime));
+      }
+    }
   }
   
   for (const piece of gameData.pieces) {
     if (piece.type === 'shadow') {
       if (piece.revealTimer > 0) {
         piece.revealTimer -= deltaTime;
-        piece.revealPulse = Math.min(1, piece.revealPulse - deltaTime / 1000);
+        piece.revealPulse = Math.max(0, piece.revealPulse - deltaTime / 1000);
         if (piece.revealTimer <= 0) {
           piece.isRevealed = false;
           piece.revealTimer = 0;
+          piece.revealPulse = 0;
         }
       }
-    }
-  }
-  
-  for (const [playerId, cooldown] of gameData.shadowCooldown) {
-    if (cooldown > 0) {
-      gameData.shadowCooldown.set(playerId as PlayerId, Math.max(0, cooldown - deltaTime));
     }
   }
   
@@ -701,7 +735,7 @@ export function updateGame(gameData: GameData, deltaTime: number): void {
   
   for (const [, trail] of gameData.trails) {
     for (let i = trail.length - 1; i >= 0; i--) {
-      trail[i].alpha -= deltaTime / 400;
+      trail[i].alpha -= deltaTime / 300;
       if (trail[i].alpha <= 0) {
         trail.splice(i, 1);
       }
@@ -725,6 +759,20 @@ export function updateGame(gameData: GameData, deltaTime: number): void {
       star.y = 0;
       star.x = Math.random() * 100;
     }
+  }
+}
+
+export function pauseGame(gameData: GameData): void {
+  if (gameData.gameState === 'playing') {
+    gameData.gameState = 'paused';
+  }
+}
+
+export function resumeGame(gameData: GameData): void {
+  if (gameData.gameState === 'paused') {
+    gameData.gameState = 'playing';
+    gameData.shadowRevealTimer = 0;
+    gameData.shadowAutoMoveTimer = 0;
   }
 }
 
