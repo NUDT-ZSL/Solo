@@ -19,6 +19,7 @@ interface Game {
 declare global {
   interface Window {
     __mazeRef?: Maze;
+    __rendererShake?: () => void;
   }
 }
 
@@ -65,6 +66,7 @@ function resetGame(): void {
   game.creature.reset();
   game.maze.reset();
   window.__mazeRef = game.maze;
+  window.__rendererShake = () => game.renderer.notifyShake();
   game.phase = 'playing';
   game.startAt = performance.now();
   game.lastFrame = game.startAt;
@@ -120,19 +122,6 @@ function update(dt: number, now: number): void {
 
   game.creature.update(dt, params, game.maze);
 
-  const cgx = Math.round(game.creature.state.x);
-  const cgy = Math.round(game.creature.state.y);
-  const result = game.maze.checkCollision(prevGx, prevGy, game.creature.state.x, game.creature.state.y);
-
-  if (result.hitWall) {
-    game.renderer.notifyShake();
-  }
-
-  if (result.ateFood) {
-    game.creature.onAteFood(result.ateFood.color);
-    void cgx; void cgy;
-  }
-
   if (game.creature.state.hp <= 0) {
     showGameOver();
   }
@@ -159,6 +148,7 @@ function boot(): void {
   const canvas = $('game') as HTMLCanvasElement;
   game.renderer = new Renderer(canvas);
   window.__mazeRef = game.maze;
+  window.__rendererShake = () => game.renderer.notifyShake();
   bindEvents();
   startLoop();
 }

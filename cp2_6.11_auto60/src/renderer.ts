@@ -112,6 +112,7 @@ export class Renderer {
           let alpha = 0.6;
           let color: [number, number, number] = [79, 195, 247];
           let glow = 0;
+          let skipDraw = false;
 
           if (isFlashing) {
             const t = (ws!.flashUntil - now) / 300;
@@ -121,12 +122,37 @@ export class Renderer {
           }
           if (isTransparent) {
             const remaining = ws!.transparentUntil - now;
-            const fadeIn = remaining > 1800 ? Math.max(0, (2000 - remaining) / 200) : 0;
-            const fadeOut = remaining < 400 ? remaining / 400 : 1;
-            const factor = Math.min(1 - fadeIn, fadeOut);
-            alpha = 0.06 + 0.54 * factor;
+            const totalDuration = 2000;
+            const fadeInLen = 200;
+            const fadeOutLen = 300;
+
+            let factor: number;
+            if (remaining > totalDuration - fadeInLen) {
+              factor = (totalDuration - remaining) / fadeInLen;
+            } else if (remaining < fadeOutLen) {
+              factor = remaining / fadeOutLen;
+            } else {
+              factor = 1;
+            }
+
+            alpha = 0.03 + 0.57 * (1 - factor);
             color = [206, 147, 216];
-            glow = 14 * factor;
+            glow = 16 * factor;
+
+            if (factor > 0.95) {
+              skipDraw = true;
+            }
+          }
+
+          if (skipDraw) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(206, 147, 216, 0.08)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(px + 4, py + 4, cs - 8, cs - 8);
+            ctx.setLineDash([]);
+            ctx.restore();
+            continue;
           }
 
           const [r, g, b] = color;
@@ -222,13 +248,27 @@ export class Renderer {
     const colorDeep = `hsl(${h} ${s}% ${Math.max(20, l - 20)}%)`;
 
     ctx.save();
-    ctx.shadowColor = colorStr;
-    ctx.shadowBlur = 36 + c.evolutionLevel * 6;
+
+    if (c.isSlowed) {
+      ctx.shadowColor = '#FF5252';
+      ctx.shadowBlur = 30;
+      const slowPulse = 0.4 + Math.sin(performance.now() / 50) * 0.3;
+      ctx.globalAlpha = 0.5 + slowPulse * 0.5;
+    } else {
+      ctx.shadowColor = colorStr;
+      ctx.shadowBlur = 36 + c.evolutionLevel * 6;
+    }
 
     const halo = ctx.createRadialGradient(px, py, baseR * 0.5, px, py, baseR * 3);
-    halo.addColorStop(0, `hsla(${h},${s}%,${l}%,0.55)`);
-    halo.addColorStop(0.5, `hsla(${h},${s}%,${l}%,0.18)`);
-    halo.addColorStop(1, 'transparent');
+    if (c.isSlowed) {
+      halo.addColorStop(0, 'rgba(255, 82, 82, 0.5)');
+      halo.addColorStop(0.5, 'rgba(255, 82, 82, 0.12)');
+      halo.addColorStop(1, 'transparent');
+    } else {
+      halo.addColorStop(0, `hsla(${h},${s}%,${l}%,0.55)`);
+      halo.addColorStop(0.5, `hsla(${h},${s}%,${l}%,0.18)`);
+      halo.addColorStop(1, 'transparent');
+    }
     ctx.fillStyle = halo;
     ctx.beginPath();
     ctx.arc(px, py, baseR * 3, 0, Math.PI * 2);
@@ -238,39 +278,52 @@ export class Renderer {
       px - baseR * 0.35, py - baseR * 0.35, baseR * 0.1,
       px, py, baseR
     );
-    body.addColorStop(0, colorBright);
-    body.addColorStop(0.55, colorStr);
-    body.addColorStop(1, colorDeep);
+    if (c.isSlowed) {
+      body.addColorStop(0, '#FF8A80');
+      body.addColorStop(0.55, '#FF5252');
+      body.addColorStop(1, '#B71C1C');
+    } else {
+      body.addColorStop(0, colorBright);
+      body.addColorStop(0.55, colorStr);
+      body.addColorStop(1, colorDeep);
+    }
     ctx.fillStyle = body;
     ctx.beginPath();
     ctx.arc(px, py, baseR, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.restore();
+
     if (c.evolutionLevel > 0) {
-      ctx.restore();
       ctx.save();
-      ctx.strokeStyle = `hsla(${h},${s}%,${l}%,0.9)`;
-      ctx.lineWidth = 1.6;
-      ctx.shadowColor = colorStr;
-      ctx.shadowBlur = 10;
-      for (let i = 0; i < c.evolutionLevel && i < 5; i++) {
+      const spiralColor = c.isSlowed
+        ? 'rgba(255, 138, 128, 0.85)'
+        : `hsla(${h},${s}%,${l}%,0.85)`;
+      ctx.strokeStyle = spiralColor;
+      ctx.lineWidth = 1.6 + c.evolutionLevel * 0.3;
+      ctx.shadowColor = c.isSlowed ? '#FF5252' : colorStr;
+      ctx.shadowBlur = 10 + c.evolutionLevel * 3;
+      const maxSpirals = Math.min(c.evolutionLevel, 5);
+      for (let i = 0; i < maxSpirals; i++) {
         ctx.beginPath();
-        const rr = baseR * (0.55 + i * 0.18);
+        const rr = baseR * (0.5 + i * 0.16);
         const rot = c.pulsePhase + i * 0.7;
-        for (let a = 0; a < Math.PI * 2; a += 0.05) {
-          const r = rr + Math.sin(a * 3 + rot) * (baseR * 0.08);
-          const x = px + Math.cos(a + rot * 0.3) * r;
-          const y = py + Math.sin(a + rot * 0.3) * r;
+        const petalCount = 3 + i;
+        for (let a = 0; a <= Math.PI * 2; a += 0.03) {
+          const spiralArm = Math.sin(a * petalCount + rot) * (baseR * 0.1);
+          const r = rr + spiralArm;
+          const x = px + Math.cos(a + rot * 0.25) * r;
+          const y = py + Math.sin(a + rot * 0.25) * r;
           if (a === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.closePath();
         ctx.stroke();
       }
+      ctx.restore();
     }
 
-    ctx.restore();
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillStyle = c.isSlowed ? 'rgba(255,200,200,0.85)' : 'rgba(255,255,255,0.85)';
     ctx.beginPath();
     ctx.arc(px - baseR * 0.3, py - baseR * 0.35, baseR * 0.22, 0, Math.PI * 2);
     ctx.fill();

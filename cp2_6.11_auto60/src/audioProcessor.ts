@@ -14,15 +14,19 @@ export class AudioProcessor {
   private timeBuf: Uint8Array | null = null;
   private freqBuf: Uint8Array | null = null;
 
-  private readonly FFT = 1024;
+  private readonly FFT = 2048;
   private readonly SAMPLE_RATE = 44100;
 
-  private beatHistory: number[] = [];
-  private lastBeatTime = 0;
-  private peakThreshold = 140;
   private smoothedLoudness = 0;
   private smoothedFreq = 300;
   private smoothedBpm = 60;
+
+  private onsetHistory: number[] = [];
+  private prevSpectralFlux = 0;
+  private spectralFluxHistory: number[] = [];
+  private readonly ONSET_WINDOW_SEC = 4;
+
+  private autocorrBpm = 60;
 
   constructor() {}
 
@@ -45,7 +49,7 @@ export class AudioProcessor {
       this.ctx = new Ctx();
       this.analyser = this.ctx.createAnalyser();
       this.analyser.fftSize = this.FFT;
-      this.analyser.smoothingTimeConstant = 0.6;
+      this.analyser.smoothingTimeConstant = 0.5;
 
       this.source = this.ctx.createMediaStreamSource(this.stream);
       this.source.connect(this.analyser);
@@ -91,9 +95,10 @@ export class AudioProcessor {
     const rawFreq = this.calcDominantFreq(this.freqBuf);
     this.smoothedFreq = this.lerp(this.smoothedFreq, rawFreq, 0.25);
 
-    this.updateBeat(rawLoud);
-    const rawBpm = this.estimateBpm();
-    this.smoothedBpm = this.lerp(this.smoothedBpm, rawBpm, 0.15);
+    this.detectOnset(this.freqBuf);
+    this.runAutocorrelation();
+
+    this.smoothedBpm = this.lerp(this.smoothedBpm, this.autocorrBpm, 0.08);
 
     return {
       loudness: this.smoothedLoudness,
@@ -119,7 +124,8 @@ export class AudioProcessor {
     let peakIdx = 0;
     let peakVal = 0;
     const len = buf.length;
-    for (let i = 1; i < len; i++) {
+    const searchEnd = Math.min(len, Math.floor(len * 0.5));
+    for (let i = 1; i < searchEnd; i++) {
       if (buf[i] > peakVal) {
         peakVal = buf[i];
         peakIdx = i;
@@ -130,30 +136,99 @@ export class AudioProcessor {
     return Math.max(60, Math.min(8000, peakIdx * binHz));
   }
 
-  private updateBeat(loudness: number): void {
+  private detectOnset(freqBuf: Uint8Array): void {
     const now = performance.now();
-    this.beatHistory.push(now);
-    const cutoff = now - 2000;
-    while (this.beatHistory.length > 0 && this.beatHistory[0] < cutoff) {
-      this.beatHistory.shift();
+    let flux = 0;
+    const len = freqBuf.length;
+    for (let i = 0; i < len; i++) {
+      const diff = freqBuf[i] - (this.prevSpectralFlux > 0 ? freqBuf[i] * 0.7 : 0);
+      if (diff > 0) flux += diff;
+    }
+    this.prevSpectralFlux = flux;
+
+    this.spectralFluxHistory.push(flux);
+    const cutoff = now - this.ONSET_WINDOW_SEC * 1000;
+
+    const windowSize = 10;
+    let localSum = 0;
+    let localCount = 0;
+    const start = Math.max(0, this.spectralFluxHistory.length - windowSize);
+    for (let i = start; i < this.spectralFluxHistory.length; i++) {
+      localSum += this.spectralFluxHistory[i];
+      localCount++;
+    }
+    const localMean = localCount > 0 ? localSum / localCount : 0;
+    const threshold = localMean * 1.5 + 500;
+
+    if (flux > threshold) {
+      if (this.onsetHistory.length === 0 || now - this.onsetHistory[this.onsetHistory.length - 1] > 200) {
+        this.onsetHistory.push(now);
+      }
     }
 
-    if (loudness > this.peakThreshold && now - this.lastBeatTime > 250) {
-      this.lastBeatTime = now;
-      this.peakThreshold = this.lerp(this.peakThreshold, loudness * 0.7, 0.1);
-    } else {
-      this.peakThreshold = this.lerp(this.peakThreshold, 140, 0.02);
+    while (this.onsetHistory.length > 0 && this.onsetHistory[0] < cutoff) {
+      this.onsetHistory.shift();
+    }
+    while (this.spectralFluxHistory.length > 300) {
+      this.spectralFluxHistory.shift();
     }
   }
 
-  private estimateBpm(): number {
-    const wins = this.beatHistory.length;
-    if (wins < 2) return 60;
-    const first = this.beatHistory[0];
-    const last = this.beatHistory[wins - 1];
-    const spanSec = Math.max(0.5, (last - first) / 1000);
-    const bpm = (wins - 1) * 60 / spanSec;
-    return Math.max(40, Math.min(240, bpm));
+  private runAutocorrelation(): void {
+    const onsets = this.onsetHistory;
+    if (onsets.length < 4) {
+      this.autocorrBpm = 60;
+      return;
+    }
+
+    const minBpm = 40;
+    const maxBpm = 220;
+    const minLagMs = 60000 / maxBpm;
+    const maxLagMs = 60000 / minBpm;
+
+    const intervals: number[] = [];
+    for (let i = 1; i < onsets.length; i++) {
+      intervals.push(onsets[i] - onsets[i - 1]);
+    }
+    if (intervals.length < 2) {
+      this.autocorrBpm = 60;
+      return;
+    }
+
+    let bestLag = minLagMs;
+    let bestCorr = -Infinity;
+
+    for (let lag = minLagMs; lag <= maxLagMs; lag += 5) {
+      let corr = 0;
+      let count = 0;
+      for (const iv of intervals) {
+        const dist = Math.abs(iv - lag);
+        const dist2 = Math.abs(iv - lag * 2);
+        const distHalf = Math.abs(iv - lag / 2);
+        const score = Math.max(
+          Math.exp(-dist * dist / (2 * 80 * 80)),
+          Math.exp(-dist2 * dist2 / (2 * 80 * 80)) * 0.7,
+          Math.exp(-distHalf * distHalf / (2 * 80 * 80)) * 0.5
+        );
+        corr += score;
+        count++;
+      }
+      corr /= count;
+      if (corr > bestCorr) {
+        bestCorr = corr;
+        bestLag = lag;
+      }
+    }
+
+    const rawBpm = 60000 / bestLag;
+    if (rawBpm > maxBpm * 1.5) {
+      this.autocorrBpm = rawBpm / 2;
+    } else if (rawBpm < minBpm) {
+      this.autocorrBpm = rawBpm * 2;
+    } else {
+      this.autocorrBpm = rawBpm;
+    }
+    this.autocorrBpm = Math.max(minBpm, Math.min(maxBpm, this.autocorrBpm));
   }
 
   private lerp(a: number, b: number, t: number): number {

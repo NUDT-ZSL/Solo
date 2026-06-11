@@ -22,15 +22,19 @@ export interface CreatureState {
   pulsePhase: number;
   slowUntil: number;
   particles: Particle[];
+  isSlowed: boolean;
 }
 
 const EVOLUTION_THRESHOLD = 10;
 const MAX_PARTICLES = 200;
+const WALL_HIT_COOLDOWN = 500;
 
 export class Creature {
   readonly state: CreatureState;
   private lastHpTick = 0;
+  private lastWallHitTime = 0;
   private heading: { x: number; y: number } = { x: 1, y: 0 };
+  private trailInterval = 0;
 
   constructor() {
     this.state = {
@@ -44,6 +48,7 @@ export class Creature {
       pulsePhase: 0,
       slowUntil: 0,
       particles: [],
+      isSlowed: false,
     };
   }
 
@@ -58,12 +63,17 @@ export class Creature {
     this.state.pulsePhase = 0;
     this.state.slowUntil = 0;
     this.state.particles.length = 0;
+    this.state.isSlowed = false;
     this.lastHpTick = 0;
+    this.lastWallHitTime = 0;
+    this.trailInterval = 0;
     this.heading = { x: 1, y: 0 };
   }
 
   update(dt: number, params: AudioParams, maze: Maze): void {
     const now = performance.now();
+
+    this.state.isSlowed = now < this.state.slowUntil;
 
     this.updateAppearance(params);
 
@@ -73,7 +83,13 @@ export class Creature {
     this.state.pulsePhase += dt * (params.bpm / 60) * Math.PI * 2;
 
     this.updateParticles(dt);
-    this.emitTrailParticle();
+
+    this.trailInterval += dt;
+    const trailRate = Math.max(0.016, 0.04 - this.state.evolutionLevel * 0.004);
+    if (this.trailInterval >= trailRate) {
+      this.trailInterval = 0;
+      this.emitTrailParticle();
+    }
 
     if (now - this.lastHpTick >= 3000) {
       this.state.hp = Math.max(0, this.state.hp - 1);
@@ -93,11 +109,18 @@ export class Creature {
   }
 
   onWallHit(): void {
+    const now = performance.now();
+    if (now - this.lastWallHitTime < WALL_HIT_COOLDOWN) {
+      return;
+    }
+    this.lastWallHitTime = now;
     this.state.hp = Math.max(0, this.state.hp - 5);
-    this.state.slowUntil = performance.now() + 500;
+    this.state.slowUntil = now + 500;
+    this.state.isSlowed = true;
     for (let i = 0; i < 8; i++) {
       this.emitBurstParticle();
     }
+    this.trimParticles();
   }
 
   private evolve(): void {
@@ -105,6 +128,7 @@ export class Creature {
     for (let i = 0; i < 24; i++) {
       this.emitBurstParticle();
     }
+    this.trimParticles();
   }
 
   private updateAppearance(params: AudioParams): void {
@@ -119,22 +143,25 @@ export class Creature {
 
     this.state.color.h = this.lerpAngle(this.state.color.h, targetHue, 0.15);
     this.state.color.s = 90;
-    this.state.color.l = 55 + this.state.evolutionLevel * 3;
+    this.state.color.l = 55 + this.state.evolutionLevel * 4;
   }
 
   private computeVelocity(params: AudioParams, now: number): { vx: number; vy: number } {
-    const baseSpeed = 0.8 + this.state.evolutionLevel * 0.12;
+    const baseSpeed = 0.8 * (1 + this.state.evolutionLevel * 0.15);
     const loudFactor = 0.15 + (params.loudness / 100) * 0.85;
     let speed = baseSpeed * loudFactor;
 
-    if (now < this.state.slowUntil) speed *= 0.4;
+    if (now < this.state.slowUntil) {
+      const slowRemaining = (this.state.slowUntil - now) / 500;
+      speed *= 0.3 + 0.1 * (1 - slowRemaining);
+    }
 
     if (params.loudness < 5) {
       return { vx: 0, vy: 0 };
     }
 
     const dirNoise = (params.frequency / 1000) * Math.PI * 2;
-    const beatBias = Math.sin(params.bpm) * 0.3;
+    const beatBias = Math.sin(params.bpm / 60 * Math.PI * 2 * now / 1000) * 0.2;
     const angle = dirNoise + beatBias + this.headingAngle() * 0.5;
 
     let dx = Math.cos(angle);
@@ -178,18 +205,36 @@ export class Creature {
     if (!this.wouldHitWall(nextX, this.state.y, 0.35)) {
       this.state.x = nextX;
     } else {
-      this.triggerWallHit(prevX, prevY, maze);
+      this.triggerWallHit(maze);
     }
     if (!this.wouldHitWall(this.state.x, nextY, 0.35)) {
       this.state.y = nextY;
     } else {
-      this.triggerWallHit(prevX, prevY, maze);
+      this.triggerWallHit(maze);
     }
+
+    this.checkFoodPickup(maze);
 
     const limLo = 0.4;
     const limHi = maze.size - 1.4;
     this.state.x = Math.max(limLo, Math.min(limHi, this.state.x));
     this.state.y = Math.max(limLo, Math.min(limHi, this.state.y));
+  }
+
+  private checkFoodPickup(maze: Maze): void {
+    const foods = maze.state.foods;
+    for (let i = foods.length - 1; i >= 0; i--) {
+      const f = foods[i];
+      const dx = this.state.x - f.gx;
+      const dy = this.state.y - f.gy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.6) {
+        const eaten = foods.splice(i, 1)[0];
+        maze.state.totalFoodCollected++;
+        this.onAteFood(eaten.color);
+        maze.respawnOneFood();
+      }
+    }
   }
 
   private wouldHitWall(x: number, y: number, r: number): boolean {
@@ -210,11 +255,12 @@ export class Creature {
     return (window as unknown as { __mazeRef?: Maze }).__mazeRef?.isWall?.(gx, gy) ?? false;
   }
 
-  private triggerWallHit(_px: number, _py: number, maze: Maze): void {
+  private triggerWallHit(maze: Maze): void {
     const gx = Math.round(this.state.x);
     const gy = Math.round(this.state.y);
     maze.markWallHit(gx, gy);
     this.onWallHit();
+    (window as unknown as { __rendererShake?: () => void }).__rendererShake?.();
   }
 
   private updateParticles(dt: number): void {
@@ -231,13 +277,39 @@ export class Creature {
   }
 
   private emitTrailParticle(): void {
-    if (this.state.particles.length >= MAX_PARTICLES) {
-      this.state.particles.shift();
+    const arr = this.state.particles;
+    if (arr.length >= MAX_PARTICLES) {
+      arr.shift();
+    }
+    const trailLen = 1 + Math.floor(this.state.evolutionLevel * 0.6);
+    for (let t = 0; t < trailLen; t++) {
+      if (arr.length >= MAX_PARTICLES) {
+        arr.shift();
+      }
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 0.015 + Math.random() * 0.04;
+      const life = 500 + this.state.evolutionLevel * 100 + Math.random() * 400;
+      arr.push({
+        x: this.state.x + (Math.random() - 0.5) * 0.15,
+        y: this.state.y + (Math.random() - 0.5) * 0.15,
+        vx: Math.cos(ang) * spd - this.heading.x * 0.02,
+        vy: Math.sin(ang) * spd - this.heading.y * 0.02,
+        life,
+        maxLife: life,
+        color: `hsl(${this.state.color.h} ${this.state.color.s}% ${this.state.color.l}%)`,
+      });
+    }
+  }
+
+  private emitBurstParticle(): void {
+    const arr = this.state.particles;
+    if (arr.length >= MAX_PARTICLES) {
+      arr.shift();
     }
     const ang = Math.random() * Math.PI * 2;
-    const spd = 0.02 + Math.random() * 0.05;
-    const life = 600 + this.state.evolutionLevel * 80 + Math.random() * 400;
-    this.state.particles.push({
+    const spd = 0.08 + Math.random() * 0.15;
+    const life = 400 + Math.random() * 500;
+    arr.push({
       x: this.state.x,
       y: this.state.y,
       vx: Math.cos(ang) * spd,
@@ -248,22 +320,10 @@ export class Creature {
     });
   }
 
-  private emitBurstParticle(): void {
-    if (this.state.particles.length >= MAX_PARTICLES) {
+  private trimParticles(): void {
+    while (this.state.particles.length > MAX_PARTICLES) {
       this.state.particles.shift();
     }
-    const ang = Math.random() * Math.PI * 2;
-    const spd = 0.08 + Math.random() * 0.15;
-    const life = 500 + Math.random() * 500;
-    this.state.particles.push({
-      x: this.state.x,
-      y: this.state.y,
-      vx: Math.cos(ang) * spd,
-      vy: Math.sin(ang) * spd,
-      life,
-      maxLife: life,
-      color: `hsl(${this.state.color.h} ${this.state.color.s}% ${this.state.color.l}%)`,
-    });
   }
 
   private lerp(a: number, b: number, t: number): number {

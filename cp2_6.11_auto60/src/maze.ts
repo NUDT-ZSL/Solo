@@ -108,7 +108,7 @@ export class Maze {
       result.ateFood = this.state.foods[idx];
       this.state.foods.splice(idx, 1);
       this.state.totalFoodCollected++;
-      this.respawnFood();
+      this.respawnOneFood();
     }
 
     return result;
@@ -136,7 +136,7 @@ export class Maze {
     }
   }
 
-  private respawnFood(): void {
+  respawnOneFood(): void {
     const open: Array<[number, number]> = [];
     for (let y = 0; y < GRID; y++) {
       for (let x = 0; x < GRID; x++) {
@@ -161,7 +161,7 @@ export class Maze {
   }
 
   private spawnInitialFood(): void {
-    this.respawnFood();
+    this.respawnOneFood();
   }
 
   private generateMaze(): CellType[][] {
