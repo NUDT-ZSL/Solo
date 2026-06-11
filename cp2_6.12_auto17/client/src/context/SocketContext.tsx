@@ -22,7 +22,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const { currentUser } = useUser();
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3001', {
+    const newSocket = io('http://localhost:3002', {
       query: { userId: currentUser.id },
     });
 

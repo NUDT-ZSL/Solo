@@ -3,8 +3,8 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import BookList from './pages/BookList';
 import MyLibrary from './pages/MyLibrary';
 import ExchangeRequests from './pages/ExchangeRequests';
-import { useUser, UserProvider } from './context/UserContext';
-import { useSocket, SocketProvider } from './context/SocketContext';
+import { useUser } from './context/UserContext';
+import { useSocket } from './context/SocketContext';
 import { USERS, User } from './types';
 
 const Navbar: React.FC = () => {
@@ -75,10 +75,15 @@ const NotificationList: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
-  const { isTransitioning } = useUser();
+  const { isTransitioning, slideDirection } = useUser();
+
+  const getSlideClass = () => {
+    if (!isTransitioning) return '';
+    return slideDirection === 'left' ? 'slide-right' : 'slide-left';
+  };
 
   return (
-    <div className={`page-wrapper ${isTransitioning ? 'slide-right' : ''}`}>
+    <div className={`page-wrapper ${getSlideClass()}`}>
       <Navbar />
       <div className="main-content">
         <Routes>
@@ -93,9 +98,7 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  return (
-    <AppContent />
-  );
+  return <AppContent />;
 };
 
 export default App;

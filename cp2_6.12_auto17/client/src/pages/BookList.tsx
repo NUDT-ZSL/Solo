@@ -15,7 +15,9 @@ const BookList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [sort, setSort] = useState<SortType>('newest');
+  const [sortAnimating, setSortAnimating] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const sortTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -61,8 +63,20 @@ const BookList: React.FC = () => {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const handleSortChange = (newSort: SortType) => {
-    setSort(newSort);
+    if (newSort === sort) return;
+
+    setSortAnimating(true);
+    if (sortTimerRef.current) {
+      clearTimeout(sortTimerRef.current);
+    }
+
     setPage(1);
+    setTimeout(() => {
+      setSort(newSort);
+      sortTimerRef.current = setTimeout(() => {
+        setSortAnimating(false);
+      }, 400);
+    }, 200);
   };
 
   return (
@@ -110,12 +124,12 @@ const BookList: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="books-grid">
+          <div className={`books-grid ${sortAnimating ? 'sorting' : ''}`}>
             {books.map((book, index) => (
               <BookCard
                 key={book.id}
                 book={book}
-                animationDelay={index * 50}
+                animationDelay={sortAnimating ? index * 30 : index * 50}
               />
             ))}
           </div>
@@ -125,7 +139,7 @@ const BookList: React.FC = () => {
               <button
                 className="page-btn"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
+                disabled={page === 1 || loading}
               >
                 上一页
               </button>
@@ -134,6 +148,7 @@ const BookList: React.FC = () => {
                   key={pageNum}
                   className={`page-btn ${page === pageNum ? 'active' : ''}`}
                   onClick={() => setPage(pageNum)}
+                  disabled={loading}
                 >
                   {pageNum}
                 </button>
@@ -141,7 +156,7 @@ const BookList: React.FC = () => {
               <button
                 className="page-btn"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
+                disabled={page === totalPages || loading}
               >
                 下一页
               </button>

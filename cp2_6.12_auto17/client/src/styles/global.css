@@ -216,6 +216,26 @@ html {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
+  transition: opacity 0.2s ease;
+}
+
+.books-grid.sorting {
+  opacity: 0.5;
+}
+
+.books-grid.sorting .book-card {
+  animation: shuffleCard 0.4s ease forwards;
+}
+
+@keyframes shuffleCard {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .book-card {
