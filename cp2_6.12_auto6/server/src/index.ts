@@ -19,13 +19,50 @@ const io = new Server(httpServer, {
   },
   pingInterval: 10000,
   pingTimeout: 5000,
+  transports: ['websocket', 'polling'],
 });
 
 const connectedUsers = new Map<string, User>();
 
+let pendingUpdates: { type: string; data: unknown }[] = [];
+let batchTimer: NodeJS.Timeout | null = null;
+const BATCH_INTERVAL = 150;
+
+let userListDirty = false;
+let userListTimer: NodeJS.Timeout | null = null;
+const USER_LIST_BATCH_INTERVAL = 200;
+
+function scheduleBatchBroadcast(): void {
+  if (batchTimer) return;
+  batchTimer = setTimeout(() => {
+    if (pendingUpdates.length > 0) {
+      const updates = [...pendingUpdates];
+      pendingUpdates = [];
+      io.emit('cards:batch', updates);
+    }
+    batchTimer = null;
+  }, BATCH_INTERVAL);
+}
+
+function queueBroadcast(type: string, data: unknown): void {
+  pendingUpdates.push({ type, data });
+  scheduleBatchBroadcast();
+}
+
 function broadcastUserList(): void {
+  if (userListTimer) {
+    userListDirty = true;
+    return;
+  }
+  userListDirty = false;
   const users = Array.from(connectedUsers.values());
   io.emit('users:update', users);
+  userListTimer = setTimeout(() => {
+    userListTimer = null;
+    if (userListDirty) {
+      broadcastUserList();
+    }
+  }, USER_LIST_BATCH_INTERVAL);
 }
 
 io.on('connection', (socket) => {
@@ -60,9 +97,11 @@ io.on('connection', (socket) => {
         creatorColor: data.creatorColor || user.color,
       });
 
-      io.emit('card:added', card);
+      socket.emit('card:added:ack', { id: card.id, success: true });
+      queueBroadcast('card:added', card);
     } catch (error) {
       console.error('Error adding card:', error);
+      socket.emit('card:added:ack', { success: false, error: (error as Error).message });
     }
   });
 
@@ -91,7 +130,7 @@ io.on('connection', (socket) => {
       const updatedCard = boardStore.updateCard(data.id, updates);
 
       if (updatedCard) {
-        io.emit('card:updated', updatedCard);
+        queueBroadcast('card:updated', updatedCard);
       }
     } catch (error) {
       console.error('Error updating card:', error);
@@ -104,12 +143,15 @@ io.on('connection', (socket) => {
     try {
       const deleted = boardStore.deleteCard(data.id);
       if (deleted) {
-        io.emit('card:deleted', { id: data.id });
+        queueBroadcast('card:deleted', { id: data.id });
       }
     } catch (error) {
       console.error('Error deleting card:', error);
     }
   });
+
+  let lastMoveTime = 0;
+  const MOVE_THROTTLE = 50;
 
   socket.on('card:move', (data: {
     id: string;
@@ -119,6 +161,10 @@ io.on('connection', (socket) => {
     if (!data?.id) return;
     if (!['todo', 'in-progress', 'done'].includes(data.newStatus)) return;
 
+    const now = Date.now();
+    if (now - lastMoveTime < MOVE_THROTTLE) return;
+    lastMoveTime = now;
+
     try {
       const result = boardStore.moveCard(
         data.id,
@@ -127,7 +173,7 @@ io.on('connection', (socket) => {
       );
 
       if (result) {
-        io.emit('card:moved', {
+        queueBroadcast('card:moved', {
           id: data.id,
           newStatus: data.newStatus,
           newOrder: data.newOrder,
@@ -172,6 +218,8 @@ httpServer.listen(PORT, () => {
   console.log(`  端口: ${PORT}`);
   console.log(`  WebSocket: ws://localhost:${PORT}`);
   console.log(`  健康检查: http://localhost:${PORT}/api/health`);
+  console.log(`  批量广播间隔: ${BATCH_INTERVAL}ms`);
+  console.log(`  拖拽节流: ${50}ms`);
   console.log(`========================================\n`);
 });
 

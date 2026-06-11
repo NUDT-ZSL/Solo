@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useRef, memo } from 'react';
 import { Card, CardStatus, ColumnId } from '../types';
 import { CardItem } from './CardItem';
 import { CardModal } from './CardModal';
@@ -31,6 +31,20 @@ interface BoardProps {
   }) => void;
 }
 
+const MemoCardItem = memo(CardItem, (prev, next) => {
+  return (
+    prev.card.id === next.card.id &&
+    prev.card.title === next.card.title &&
+    prev.card.description === next.card.description &&
+    prev.card.priority === next.card.priority &&
+    prev.card.status === next.card.status &&
+    prev.card.order === next.card.order &&
+    prev.card.updatedAt === next.card.updatedAt &&
+    prev.isDragging === next.isDragging &&
+    prev.index === next.index
+  );
+});
+
 export const Board: React.FC<BoardProps> = ({
   cards,
   currentUserId,
@@ -47,116 +61,146 @@ export const Board: React.FC<BoardProps> = ({
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalInitialStatus, setModalInitialStatus] = useState<CardStatus>('todo');
+  const dragOverCardIdRef = useRef<string | null>(null);
 
-  const getCardsByStatus = useCallback((status: CardStatus): Card[] => {
-    return cards
-      .filter((card) => card.status === status)
-      .sort((a, b) => a.order - b.order);
+  const cardsByStatus = useMemo(() => {
+    const result: Record<CardStatus, Card[]> = {
+      todo: [],
+      'in-progress': [],
+      done: [],
+    };
+
+    for (const card of cards) {
+      result[card.status].push(card);
+    }
+
+    for (const status of Object.keys(result) as CardStatus[]) {
+      result[status].sort((a, b) => a.order - b.order);
+    }
+
+    return result;
   }, [cards]);
 
-  const handleDragStart = (e: React.DragEvent, card: Card) => {
+  const handleDragStart = useCallback((e: React.DragEvent, card: Card) => {
     setDraggingCard(card);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', card.id);
     const target = e.currentTarget as HTMLElement;
     target.style.opacity = '0.4';
-  };
+  }, []);
 
-  const handleDragEnd = (e: React.DragEvent) => {
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
     const target = e.currentTarget as HTMLElement;
     target.style.opacity = '1';
     setDraggingCard(null);
     setDragOverColumn(null);
     setDragOverCardId(null);
-  };
+    dragOverCardIdRef.current = null;
+  }, []);
 
-  const handleColumnDragOver = (e: React.DragEvent, columnId: ColumnId) => {
+  const handleColumnDragOver = useCallback((e: React.DragEvent, columnId: ColumnId) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (dragOverColumn !== columnId) {
       setDragOverColumn(columnId);
     }
-  };
+  }, [dragOverColumn]);
 
-  const handleColumnDragLeave = () => {
+  const handleColumnDragLeave = useCallback(() => {
     setDragOverColumn(null);
-  };
+  }, []);
 
-  const handleCardDragOver = (e: React.DragEvent, targetCardId: string) => {
+  const handleCardDragOver = useCallback((e: React.DragEvent, targetCardId: string) => {
     e.preventDefault();
     e.stopPropagation();
     if (draggingCard && draggingCard.id !== targetCardId) {
-      setDragOverCardId(targetCardId);
+      if (dragOverCardIdRef.current !== targetCardId) {
+        dragOverCardIdRef.current = targetCardId;
+        setDragOverCardId(targetCardId);
+      }
     }
-  };
+  }, [draggingCard]);
 
-  const handleColumnDrop = (e: React.DragEvent, columnId: ColumnId) => {
-    e.preventDefault();
-    if (!draggingCard) return;
+  const handleColumnDrop = useCallback(
+    (e: React.DragEvent, columnId: ColumnId) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const columnCards = getCardsByStatus(columnId).filter(
-      (c) => c.id !== draggingCard.id
-    );
+      if (!draggingCard) return;
 
-    let newOrder: number;
-    if (dragOverCardId) {
-      const targetIndex = columnCards.findIndex((c) => c.id === dragOverCardId);
-      newOrder = targetIndex >= 0 ? targetIndex : columnCards.length;
-    } else {
-      newOrder = columnCards.length;
-    }
+      const columnCards = cardsByStatus[columnId].filter(
+        (c) => c.id !== draggingCard.id
+      );
 
-    if (draggingCard.status !== columnId || draggingCard.order !== newOrder) {
-      onMoveCard({
-        id: draggingCard.id,
-        newStatus: columnId,
-        newOrder,
-      });
-    }
+      let newOrder: number;
+      if (dragOverCardId) {
+        const targetIndex = columnCards.findIndex((c) => c.id === dragOverCardId);
+        newOrder = targetIndex >= 0 ? targetIndex : columnCards.length;
+      } else {
+        newOrder = columnCards.length;
+      }
 
-    setDraggingCard(null);
-    setDragOverColumn(null);
-    setDragOverCardId(null);
-  };
+      if (draggingCard.status !== columnId || draggingCard.order !== newOrder) {
+        onMoveCard({
+          id: draggingCard.id,
+          newStatus: columnId,
+          newOrder,
+        });
+      }
 
-  const openAddModal = (status: CardStatus) => {
+      setDraggingCard(null);
+      setDragOverColumn(null);
+      setDragOverCardId(null);
+      dragOverCardIdRef.current = null;
+    },
+    [draggingCard, dragOverCardId, cardsByStatus, onMoveCard]
+  );
+
+  const openAddModal = useCallback((status: CardStatus) => {
     setEditingCard(null);
     setModalInitialStatus(status);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const openEditModal = (card: Card) => {
+  const openEditModal = useCallback((card: Card) => {
     setEditingCard(card);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleModalSubmit = (data: {
-    title: string;
-    description: string;
-    priority: Card['priority'];
-  }) => {
-    if (editingCard) {
-      onUpdateCard({
-        id: editingCard.id,
-        ...data,
-      });
-    } else {
-      if (currentUserId && userColor && userName) {
-        onAddCard({
+  const handleModalSubmit = useCallback(
+    (data: {
+      title: string;
+      description: string;
+      priority: Card['priority'];
+    }) => {
+      if (editingCard) {
+        onUpdateCard({
+          id: editingCard.id,
           ...data,
-          status: modalInitialStatus,
-          createdBy: userName,
-          creatorColor: userColor,
         });
+      } else {
+        if (currentUserId && userColor && userName) {
+          onAddCard({
+            ...data,
+            status: modalInitialStatus,
+            createdBy: userName,
+            creatorColor: userColor,
+          });
+        }
       }
-    }
-  };
+    },
+    [editingCard, currentUserId, userColor, userName, modalInitialStatus, onAddCard, onUpdateCard]
+  );
+
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
+  }, []);
 
   return (
     <>
       <div className="board-container">
         {COLUMNS.map((column) => {
-          const columnCards = getCardsByStatus(column.id);
+          const columnCards = cardsByStatus[column.id];
           const isDragOver = dragOverColumn === column.id;
 
           return (
@@ -186,10 +230,13 @@ export const Board: React.FC<BoardProps> = ({
                 {columnCards.map((card, index) => (
                   <React.Fragment key={card.id}>
                     {draggingCard && dragOverCardId === card.id && draggingCard.id !== card.id && (
-                      <div className="card-placeholder" />
+                      <div className="card-placeholder" aria-hidden="true" />
                     )}
-                    <div onDragOver={(e) => handleCardDragOver(e, card.id)}>
-                      <CardItem
+                    <div
+                      onDragOver={(e) => handleCardDragOver(e, card.id)}
+                      className="card-wrapper"
+                    >
+                      <MemoCardItem
                         card={card}
                         onEdit={openEditModal}
                         onDelete={onDeleteCard}
@@ -202,10 +249,20 @@ export const Board: React.FC<BoardProps> = ({
                   </React.Fragment>
                 ))}
                 {draggingCard && isDragOver && !dragOverCardId && (
-                  <div className="card-placeholder" />
+                  <div className="card-placeholder" aria-hidden="true" />
                 )}
                 {columnCards.length === 0 && !draggingCard && (
-                  <div className="column-empty" onClick={() => openAddModal(column.id)}>
+                  <div
+                    className="column-empty"
+                    onClick={() => openAddModal(column.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        openAddModal(column.id);
+                      }
+                    }}
+                  >
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
@@ -221,7 +278,7 @@ export const Board: React.FC<BoardProps> = ({
 
       <CardModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={closeModal}
         onSubmit={handleModalSubmit}
         editingCard={editingCard}
         initialStatus={modalInitialStatus}

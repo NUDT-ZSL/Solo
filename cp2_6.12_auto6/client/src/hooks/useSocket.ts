@@ -4,11 +4,19 @@ import { Card, User } from '../types';
 
 const SOCKET_URL = '';
 
+interface BatchUpdate {
+  type: string;
+  data: unknown;
+}
+
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+
+  const lastMoveTimeRef = useRef(0);
+  const MOVE_THROTTLE = 40;
 
   const connect = useCallback(() => {
     if (socketRef.current) return;
@@ -16,8 +24,10 @@ export function useSocket() {
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     socket.on('connect', () => {
@@ -64,6 +74,20 @@ export function useSocket() {
     };
   }, []);
 
+  const onBatchUpdates = useCallback(
+    (handler: (updates: BatchUpdate[]) => void) => {
+      if (socketRef.current) {
+        socketRef.current.on('cards:batch', handler);
+      }
+      return () => {
+        if (socketRef.current) {
+          socketRef.current.off('cards:batch', handler);
+        }
+      };
+    },
+    []
+  );
+
   const requestInitialCards = useCallback((): Promise<Card[]> => {
     return new Promise((resolve) => {
       if (!socketRef.current) {
@@ -77,25 +101,42 @@ export function useSocket() {
     });
   }, []);
 
-  const addCard = useCallback((card: Omit<Card, 'id' | 'createdAt' | 'updatedAt' | 'order'>) => {
-    sendEvent('card:add', card);
-  }, [sendEvent]);
+  const addCard = useCallback(
+    (card: Omit<Card, 'id' | 'createdAt' | 'updatedAt' | 'order'>) => {
+      sendEvent('card:add', card);
+    },
+    [sendEvent]
+  );
 
-  const updateCard = useCallback((card: Partial<Card> & { id: string }) => {
-    sendEvent('card:update', card);
-  }, [sendEvent]);
+  const updateCard = useCallback(
+    (card: Partial<Card> & { id: string }) => {
+      sendEvent('card:update', card);
+    },
+    [sendEvent]
+  );
 
-  const deleteCard = useCallback((id: string) => {
-    sendEvent('card:delete', { id });
-  }, [sendEvent]);
+  const deleteCard = useCallback(
+    (id: string) => {
+      sendEvent('card:delete', { id });
+    },
+    [sendEvent]
+  );
 
-  const moveCard = useCallback((data: {
-    id: string;
-    newStatus: Card['status'];
-    newOrder: number;
-  }) => {
-    sendEvent('card:move', data);
-  }, [sendEvent]);
+  const moveCard = useCallback(
+    (data: {
+      id: string;
+      newStatus: Card['status'];
+      newOrder: number;
+    }) => {
+      const now = Date.now();
+      if (now - lastMoveTimeRef.current < MOVE_THROTTLE) {
+        return;
+      }
+      lastMoveTimeRef.current = now;
+      sendEvent('card:move', data);
+    },
+    [sendEvent]
+  );
 
   useEffect(() => {
     connect();
@@ -110,6 +151,7 @@ export function useSocket() {
     disconnect,
     sendEvent,
     onEvent,
+    onBatchUpdates,
     requestInitialCards,
     addCard,
     updateCard,
