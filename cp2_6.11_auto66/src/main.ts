@@ -23,7 +23,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.setClearColor(0x000000, 0)
 canvasContainer.appendChild(renderer.domElement)
 
-camera.position.set(0, 2, 18)
+camera.position.set(0, 3, 16)
 camera.lookAt(0, 0, 0)
 
 const gridHelper = new THREE.GridHelper(20, 20, new THREE.Color(0x00ff88), new THREE.Color(0x00ff88))
@@ -55,18 +55,15 @@ scene.add(trailRenderer.group)
 let isDragging = false
 let previousMousePosition = { x: 0, y: 0 }
 let cameraAngle = { theta: 0, phi: Math.PI / 3 }
-let cameraDistance = 18
+let cameraDistance = 16
 let targetCameraAngle = { theta: 0, phi: Math.PI / 3 }
-let targetCameraDistance = 18
+let targetCameraDistance = 16
 let isTouching = false
 
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
+const hoverPoint = new THREE.Vector3()
 let isHovering = false
-let hoverStartTime = 0
-const hoverDuration = 1.5
-let hoverRecoveryActive = false
-let hoverRecoveryStart = 0
 
 let frameCount = 0
 let lastFpsUpdate = performance.now()
@@ -146,7 +143,7 @@ function onTouchEnd(): void {
   isTouching = false
   isDragging = false
   isHovering = false
-  particleSystem.resetColors()
+  particleSystem.resetHover()
 }
 
 function checkHover(): void {
@@ -155,33 +152,13 @@ function checkHover(): void {
 
   if (intersects.length > 0) {
     const point = intersects[0].point
-    if (!isHovering) {
-      isHovering = true
-      hoverStartTime = performance.now()
-      hoverRecoveryActive = false
-    }
-    particleSystem.applyHoverEffect(point, 2.5)
+    hoverPoint.copy(point)
+    isHovering = true
+    particleSystem.applyHoverEffect(hoverPoint, 1.0, 2.5)
   } else {
-    if (isHovering && !hoverRecoveryActive) {
-      hoverRecoveryActive = true
-      hoverRecoveryStart = performance.now()
-    }
-    if (hoverRecoveryActive) {
-      const elapsed = (performance.now() - hoverRecoveryStart) / 1000
-      if (elapsed > hoverDuration) {
-        isHovering = false
-        hoverRecoveryActive = false
-        particleSystem.resetColors()
-      } else {
-        const alpha = 1 - elapsed / hoverDuration
-        raycaster.setFromCamera(mouse, camera)
-        const newIntersects = raycaster.intersectObject(particleSystem.points)
-        if (newIntersects.length > 0) {
-          particleSystem.applyHoverEffect(newIntersects[0].point, 2.5 * alpha)
-        } else {
-          particleSystem.resetColors()
-        }
-      }
+    if (isHovering) {
+      isHovering = false
+      particleSystem.resetHover()
     }
   }
 }
@@ -213,7 +190,7 @@ function animate(): void {
     fpsCounter.textContent = `FPS: ${fps}`
   }
 
-  const lerpFactor = 0.08
+  const lerpFactor = 0.1
   cameraAngle.theta += (targetCameraAngle.theta - cameraAngle.theta) * lerpFactor
   cameraAngle.phi += (targetCameraAngle.phi - cameraAngle.phi) * lerpFactor
   cameraDistance += (targetCameraDistance - cameraDistance) * lerpFactor
@@ -227,12 +204,8 @@ function animate(): void {
 
   particleSystem.update(deltaTime)
 
-  const positions: THREE.Vector3[] = []
-  const colors: THREE.Color[] = []
-  for (let i = 0; i < particleSystem.getCount(); i++) {
-    positions.push(particleSystem.particles[i].position)
-    colors.push(particleSystem.particles[i].color)
-  }
+  const positions = particleSystem.getPositionBuffer()
+  const colors = particleSystem.getColorBuffer()
   trailRenderer.update(positions, colors)
 
   renderer.render(scene, camera)
@@ -325,25 +298,31 @@ function setupUI(): void {
     }
 
     .control-panel {
-      position: fixed;
-      top: 50%;
-      transform: translateY(-50%);
+      position: fixed !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
       padding: 24px;
       background: linear-gradient(135deg, rgba(240, 240, 240, 0.92) 0%, rgba(224, 224, 224, 0.92) 100%);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border-radius: 16px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      z-index: 50;
+      z-index: 60 !important;
       min-width: 240px;
+      max-width: 280px;
     }
 
     .left-panel {
-      left: 24px;
+      left: 24px !important;
+      right: auto !important;
+      bottom: auto !important;
     }
 
     .right-panel {
-      right: 24px;
+      right: 24px !important;
+      left: auto !important;
+      top: 50% !important;
+      bottom: auto !important;
     }
 
     .panel-title {
@@ -391,6 +370,8 @@ function setupUI(): void {
       pointer-events: none;
       transform: translate(-50%, -50%);
       background: #00d4ff;
+      left: 0;
+      top: 0;
     }
 
     .color-input-row {
@@ -527,35 +508,36 @@ function setupUI(): void {
       box-shadow: 0 0 12px rgba(0, 212, 255, 1);
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 768px) {
       .control-panel {
-        min-width: auto;
-        padding: 16px;
+        min-width: auto !important;
+        max-width: none !important;
+        padding: 16px !important;
+        transform: none !important;
       }
 
       .left-panel {
-        left: 12px;
-        right: 12px;
-        top: auto;
-        bottom: 12px;
-        transform: none;
+        left: 12px !important;
+        right: 12px !important;
+        top: auto !important;
+        bottom: 12px !important;
       }
 
       .right-panel {
-        right: 12px;
-        top: 60px;
-        transform: none;
-        width: calc(50% - 18px);
+        right: 12px !important;
+        left: auto !important;
+        top: 60px !important;
+        width: calc(50% - 18px) !important;
       }
 
       .color-wheel-container {
-        width: 120px;
-        height: 120px;
+        width: 120px !important;
+        height: 120px !important;
       }
 
       #color-wheel {
-        width: 120px;
-        height: 120px;
+        width: 120px !important;
+        height: 120px !important;
       }
     }
   `
@@ -605,14 +587,6 @@ function setupColorWheel(): void {
     const dy = y - centerY
     const dist = Math.sqrt(dx * dx + dy * dy)
 
-    let clampedX = x
-    let clampedY = y
-    if (dist > radius) {
-      const ratio = radius / dist
-      clampedX = centerX + dx * ratio
-      clampedY = centerY + dy * ratio
-    }
-
     const angle = Math.atan2(dy, dx) * (180 / Math.PI)
     const saturation = Math.min(dist / radius, 1)
     const hue = (angle + 360) % 360
@@ -653,29 +627,31 @@ function setupColorWheel(): void {
   }
 
   const initialHue = 190
-  const initialSaturation = 0.9
+  const initialSaturation = 0.85
   const initialX = centerX + Math.cos((initialHue * Math.PI) / 180) * radius * initialSaturation
   const initialY = centerY + Math.sin((initialHue * Math.PI) / 180) * radius * initialSaturation
   handleColorPick(initialX, initialY)
 
-  canvas.addEventListener('mousedown', (e) => {
-    isColorDragging = true
+  function getEventCoords(e: MouseEvent | Touch): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect()
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
-    const x = (e.clientX - rect.left) * scaleX
-    const y = (e.clientY - rect.top) * scaleY
-    handleColorPick(x, y)
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    }
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    isColorDragging = true
+    const coords = getEventCoords(e)
+    handleColorPick(coords.x, coords.y)
   })
 
   document.addEventListener('mousemove', (e) => {
     if (!isColorDragging) return
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    const x = (e.clientX - rect.left) * scaleX
-    const y = (e.clientY - rect.top) * scaleY
-    handleColorPick(x, y)
+    const coords = getEventCoords(e)
+    handleColorPick(coords.x, coords.y)
   })
 
   document.addEventListener('mouseup', () => {
@@ -684,22 +660,14 @@ function setupColorWheel(): void {
 
   canvas.addEventListener('touchstart', (e) => {
     isColorDragging = true
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    const x = (e.touches[0].clientX - rect.left) * scaleX
-    const y = (e.touches[0].clientY - rect.top) * scaleY
-    handleColorPick(x, y)
+    const coords = getEventCoords(e.touches[0])
+    handleColorPick(coords.x, coords.y)
   })
 
   document.addEventListener('touchmove', (e) => {
     if (!isColorDragging) return
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    const x = (e.touches[0].clientX - rect.left) * scaleX
-    const y = (e.touches[0].clientY - rect.top) * scaleY
-    handleColorPick(x, y)
+    const coords = getEventCoords(e.touches[0])
+    handleColorPick(coords.x, coords.y)
   })
 
   document.addEventListener('touchend', () => {
@@ -711,13 +679,6 @@ function updateSliderGlow(colorHex: string): void {
   const styleEl = document.getElementById('ui-styles') as HTMLStyleElement
   if (!styleEl) return
 
-  const sliders = document.querySelectorAll('.custom-slider.primary-glow')
-  sliders.forEach((slider, index) => {
-    ;(slider as HTMLInputElement).style.setProperty('--thumb-color', colorHex)
-    ;(slider as HTMLInputElement).style.setProperty('--glow-color', colorHex + 'cc')
-  })
-
-  let cssText = styleEl.textContent || ''
   const webkitRule = `.custom-slider.primary-glow::-webkit-slider-thumb { background: ${colorHex}; box-shadow: 0 0 8px ${colorHex}cc; }`
   const mozRule = `.custom-slider.primary-glow::-moz-range-thumb { background: ${colorHex}; box-shadow: 0 0 8px ${colorHex}cc; }`
   const hoverWebkit = `.custom-slider.primary-glow::-webkit-slider-thumb:hover { box-shadow: 0 0 14px ${colorHex}; }`
@@ -732,6 +693,8 @@ function updateSliderGlow(colorHex: string): void {
 
   const markerStart = '/* DYNAMIC_SLIDER_STYLES_START */'
   const markerEnd = '/* DYNAMIC_SLIDER_STYLES_END */'
+
+  let cssText = styleEl.textContent || ''
 
   if (cssText.includes(markerStart)) {
     const startIdx = cssText.indexOf(markerStart)
