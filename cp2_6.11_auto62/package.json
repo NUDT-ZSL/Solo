@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/",
+    "test:paper": "node --test tests/paper.test.ts"
   },
   "dependencies": {
     "three": "^0.160.0",

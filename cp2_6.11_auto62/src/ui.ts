@@ -1,15 +1,13 @@
 import * as THREE from 'three';
 import { CreatureType, CreatureManager, CREATURE_NAMES } from './creature';
-import { PaperSheet, SnapDetector, CompoundStructure, StructureType } from './paper';
+import { PaperSheet, SnapDetector, CompoundStructure } from './paper';
 
 export type GameMode = 'fold' | 'snap';
 
 export class UIManager {
-  private container: HTMLElement;
   private sceneContainer: HTMLElement;
   private mode: GameMode = 'fold';
   private creatureManager: CreatureManager;
-  private snapDetector: SnapDetector;
   private papers: PaperSheet[];
   private compounds: CompoundStructure[] = [];
 
@@ -47,10 +45,10 @@ export class UIManager {
     snapDetector: SnapDetector,
     papers: PaperSheet[]
   ) {
-    this.container = container;
+    void container;
+    void snapDetector;
     this.sceneContainer = sceneContainer;
     this.creatureManager = creatureManager;
-    this.snapDetector = snapDetector;
     this.papers = papers;
 
     this.btnFold = document.getElementById('btn-fold') as HTMLButtonElement;

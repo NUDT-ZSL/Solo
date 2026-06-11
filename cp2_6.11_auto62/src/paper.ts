@@ -25,11 +25,9 @@ export class PaperSheet {
   foldLineGroup: THREE.Group;
   compoundId: string | null = null;
 
-  private scene: THREE.Scene;
-
   constructor(scene: THREE.Scene, position: THREE.Vector3, id: string) {
     this.id = id;
-    this.scene = scene;
+    void scene;
     this.color = new THREE.Color('#F5F5DC');
     this.originalColor = new THREE.Color('#F5F5DC');
 
@@ -93,42 +91,87 @@ export class PaperSheet {
 
     if (!this.isFoldable()) return;
 
-    const n = this.vertices.length;
+    const verts = this.vertices;
+    const n = verts.length;
 
-    if (n === 4) {
-      this.addFoldLine(this.vertices[0], this.vertices[2]);
-      this.addFoldLine(this.vertices[1], this.vertices[3]);
-      const mid01 = new THREE.Vector3().addVectors(this.vertices[0], this.vertices[1]).multiplyScalar(0.5);
-      const mid23 = new THREE.Vector3().addVectors(this.vertices[2], this.vertices[3]).multiplyScalar(0.5);
-      this.addFoldLine(mid01, mid23);
-      const mid03 = new THREE.Vector3().addVectors(this.vertices[0], this.vertices[3]).multiplyScalar(0.5);
-      const mid12 = new THREE.Vector3().addVectors(this.vertices[1], this.vertices[2]).multiplyScalar(0.5);
-      this.addFoldLine(mid03, mid12);
-    } else {
-      for (let i = 0; i < n; i++) {
-        const next = (i + 1) % n;
-        const mid = new THREE.Vector3().addVectors(this.vertices[i], this.vertices[next]).multiplyScalar(0.5);
-        const oppositeIdx = (i + Math.floor(n / 2)) % n;
-        const oppositeNext = (oppositeIdx + 1) % n;
-        const oppositeMid = new THREE.Vector3().addVectors(this.vertices[oppositeIdx], this.vertices[oppositeNext]).multiplyScalar(0.5);
-        this.addFoldLine(mid, oppositeMid);
+    if (n < 3) return;
+
+    const centroid = new THREE.Vector3();
+    for (const v of verts) centroid.add(v);
+    centroid.divideScalar(n);
+
+    const polygonNormal = this.computePolygonNormal(verts, centroid);
+    if (polygonNormal.lengthSq() < 0.001) polygonNormal.set(0, 1, 0);
+
+    const edgeMids: THREE.Vector3[] = [];
+    for (let i = 0; i < n; i++) {
+      const mid = new THREE.Vector3().addVectors(verts[i], verts[(i + 1) % n]).multiplyScalar(0.5);
+      edgeMids.push(mid);
+    }
+
+    for (let i = 0; i < n; i++) {
+      const start = edgeMids[i];
+      let bestEnd: THREE.Vector3 | null = null;
+      let bestDist = Infinity;
+
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const end = edgeMids[j];
+        const midLine = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+        const toCentroid = centroid.distanceTo(midLine);
+
+        const dir = new THREE.Vector3().subVectors(end, start);
+        const cross = new THREE.Vector3().crossVectors(dir, polygonNormal);
+
+        let posCount = 0;
+        let negCount = 0;
+        for (const v of verts) {
+          const toVert = new THREE.Vector3().subVectors(v, start);
+          const dot = toVert.dot(cross);
+          if (dot > 0.01) posCount++;
+          else if (dot < -0.01) negCount++;
+        }
+
+        if (posCount > 0 && negCount > 0 && toCentroid < bestDist) {
+          bestDist = toCentroid;
+          bestEnd = end;
+        }
       }
 
-      if (n <= 6) {
-        for (let i = 0; i < n; i++) {
-          const oppositeIdx = (i + Math.floor(n / 2)) % n;
-          this.addFoldLine(this.vertices[i], this.vertices[oppositeIdx]);
+      if (bestEnd) {
+        this.addFoldLine(start, bestEnd, polygonNormal);
+      }
+    }
+
+    if (n <= 6) {
+      for (let i = 0; i < n; i++) {
+        const start = verts[i];
+        let bestOpposite = -1;
+        let bestDist = Infinity;
+        for (let j = 0; j < n; j++) {
+          if (j === i || j === (i + 1) % n || j === (i - 1 + n) % n) continue;
+          const d = start.distanceTo(verts[j]);
+          if (d < bestDist) {
+            bestDist = d;
+            bestOpposite = j;
+          }
+        }
+        if (bestOpposite >= 0) {
+          this.addFoldLine(start, verts[bestOpposite], polygonNormal);
         }
       }
     }
+
+    this.deduplicateFoldLines();
   }
 
-  private addFoldLine(start: THREE.Vector3, end: THREE.Vector3): void {
-    const dir = new THREE.Vector3().subVectors(end, start);
-    const up = new THREE.Vector3(0, 1, 0);
-    const normal = new THREE.Vector3().crossVectors(dir, up).normalize();
+  private addFoldLine(start: THREE.Vector3, end: THREE.Vector3, polygonNormal: THREE.Vector3): void {
+    const dir = new THREE.Vector3().subVectors(end, start).normalize();
+    if (dir.lengthSq() < 0.0001) return;
+
+    const normal = new THREE.Vector3().crossVectors(dir, polygonNormal).normalize();
     if (normal.length() < 0.001) {
-      normal.set(1, 0, 0);
+      normal.set(0, 0, 1);
     }
 
     this.foldLines.push({
@@ -137,6 +180,43 @@ export class PaperSheet {
       normal,
       mesh: null,
     });
+  }
+
+  private computePolygonNormal(verts: THREE.Vector3[], centroid: THREE.Vector3): THREE.Vector3 {
+    const normal = new THREE.Vector3();
+    const n = verts.length;
+
+    for (let i = 0; i < n; i++) {
+      const v0 = verts[i].clone().sub(centroid);
+      const v1 = verts[(i + 1) % n].clone().sub(centroid);
+      const cross = new THREE.Vector3().crossVectors(v0, v1);
+      normal.add(cross);
+    }
+
+    normal.normalize();
+    return normal;
+  }
+
+  private deduplicateFoldLines(): void {
+    const unique: FoldLine[] = [];
+    const epsilon = 0.05;
+
+    for (const fl of this.foldLines) {
+      let isDuplicate = false;
+      for (const u of unique) {
+        const d1 = fl.startPoint.distanceTo(u.startPoint) + fl.endPoint.distanceTo(u.endPoint);
+        const d2 = fl.startPoint.distanceTo(u.endPoint) + fl.endPoint.distanceTo(u.startPoint);
+        if (Math.min(d1, d2) < epsilon) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      if (!isDuplicate) {
+        unique.push(fl);
+      }
+    }
+
+    this.foldLines = unique;
   }
 
   private clearFoldLines(): void {
@@ -386,21 +466,36 @@ export class PaperSheet {
 
 export class SnapDetector {
   private snapThreshold: number = 0.5;
+  private sceneScale: number = 1.0;
+
+  constructor(sceneScale: number = 1.0) {
+    this.sceneScale = sceneScale;
+  }
+
+  setSceneScale(scale: number): void {
+    this.sceneScale = scale;
+  }
+
+  getAdjustedThreshold(): number {
+    return this.snapThreshold * this.sceneScale;
+  }
 
   detect(paperA: PaperSheet, paperB: PaperSheet): boolean {
     if (paperA.id === paperB.id) return false;
     if (paperA.foldCount === 0 && paperB.foldCount === 0) return false;
 
+    const threshold = this.getAdjustedThreshold();
     const centerA = paperA.getWorldCenter();
     const centerB = paperB.getWorldCenter();
     const distance = centerA.distanceTo(centerB);
 
-    return distance < this.snapThreshold;
+    return distance < threshold;
   }
 
   findClosestPair(papers: PaperSheet[]): [PaperSheet, PaperSheet] | null {
     let closestPair: [PaperSheet, PaperSheet] | null = null;
     let closestDist = Infinity;
+    const threshold = this.getAdjustedThreshold();
 
     for (let i = 0; i < papers.length; i++) {
       for (let j = i + 1; j < papers.length; j++) {
@@ -409,7 +504,7 @@ export class SnapDetector {
         if (a.foldCount === 0 && b.foldCount === 0) continue;
 
         const dist = a.getWorldCenter().distanceTo(b.getWorldCenter());
-        if (dist < this.snapThreshold && dist < closestDist) {
+        if (dist < threshold && dist < closestDist) {
           closestDist = dist;
           closestPair = [a, b];
         }
@@ -454,15 +549,162 @@ export class CompoundStructure {
   }
 
   getStructureType(): StructureType | null {
-    if (this.faceCount >= 5 && this.faceCount <= 7 && this.vertexCount >= 7) {
+    const topology = this.analyzeTopology();
+    return this.classifyByTopology(topology);
+  }
+
+  private analyzeTopology(): {
+    faceCount: number;
+    vertexCount: number;
+    edgeCount: number;
+    uniqueVertices: THREE.Vector3[];
+    adjacencyMap: Map<number, number[]>;
+    sharpCorners: number;
+    eulerCharacteristic: number;
+  } {
+    const uniqueVertices = this.collectUniqueVertices();
+    const vertexCount = uniqueVertices.length;
+
+    const adjacencyMap = this.buildAdjacencyMap(uniqueVertices);
+    let edgeCount = 0;
+    for (const [, neighbors] of adjacencyMap) {
+      edgeCount += neighbors.length;
+    }
+    edgeCount = edgeCount / 2;
+
+    const faceCount = this.faceCount;
+    const eulerCharacteristic = vertexCount - edgeCount + faceCount;
+
+    const sharpCorners = this.countSharpCorners(uniqueVertices, adjacencyMap);
+
+    return {
+      faceCount,
+      vertexCount,
+      edgeCount,
+      uniqueVertices,
+      adjacencyMap,
+      sharpCorners,
+      eulerCharacteristic,
+    };
+  }
+
+  private collectUniqueVertices(): THREE.Vector3[] {
+    const allVerts: THREE.Vector3[] = [];
+    for (const paper of this.papers) {
+      for (const v of paper.vertices) {
+        const worldV = v.clone().applyMatrix4(paper.mesh.matrixWorld);
+        allVerts.push(worldV);
+      }
+    }
+
+    const unique: THREE.Vector3[] = [];
+    const epsilon = 0.1;
+    for (const v of allVerts) {
+      let isDuplicate = false;
+      for (const u of unique) {
+        if (v.distanceTo(u) < epsilon) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      if (!isDuplicate) unique.push(v);
+    }
+    return unique;
+  }
+
+  private buildAdjacencyMap(uniqueVerts: THREE.Vector3[]): Map<number, number[]> {
+    const adjacency = new Map<number, number[]>();
+    const epsilon = 0.15;
+
+    for (let i = 0; i < uniqueVerts.length; i++) {
+      adjacency.set(i, []);
+    }
+
+    for (const paper of this.papers) {
+      const n = paper.vertices.length;
+      for (let i = 0; i < n; i++) {
+        const v1 = paper.vertices[i].clone().applyMatrix4(paper.mesh.matrixWorld);
+        const v2 = paper.vertices[(i + 1) % n].clone().applyMatrix4(paper.mesh.matrixWorld);
+
+        let idx1 = -1, idx2 = -1;
+        for (let j = 0; j < uniqueVerts.length; j++) {
+          if (idx1 < 0 && v1.distanceTo(uniqueVerts[j]) < epsilon) idx1 = j;
+          if (idx2 < 0 && v2.distanceTo(uniqueVerts[j]) < epsilon) idx2 = j;
+          if (idx1 >= 0 && idx2 >= 0) break;
+        }
+
+        if (idx1 >= 0 && idx2 >= 0 && idx1 !== idx2) {
+          const neighbors1 = adjacency.get(idx1)!;
+          const neighbors2 = adjacency.get(idx2)!;
+          if (!neighbors1.includes(idx2)) neighbors1.push(idx2);
+          if (!neighbors2.includes(idx1)) neighbors2.push(idx1);
+        }
+      }
+    }
+
+    return adjacency;
+  }
+
+  private countSharpCorners(verts: THREE.Vector3[], adjacency: Map<number, number[]>): number {
+    let sharpCount = 0;
+    const sharpAngleThreshold = 60 * Math.PI / 180;
+
+    for (let i = 0; i < verts.length; i++) {
+      const neighbors = adjacency.get(i);
+      if (!neighbors || neighbors.length < 2) continue;
+
+      let minAngle = Math.PI * 2;
+      for (let a = 0; a < neighbors.length; a++) {
+        for (let b = a + 1; b < neighbors.length; b++) {
+          const va = new THREE.Vector3().subVectors(verts[neighbors[a]], verts[i]).normalize();
+          const vb = new THREE.Vector3().subVectors(verts[neighbors[b]], verts[i]).normalize();
+          const dot = Math.max(-1, Math.min(1, va.dot(vb)));
+          const angle = Math.acos(dot);
+          minAngle = Math.min(minAngle, angle);
+        }
+      }
+
+      if (minAngle < sharpAngleThreshold) {
+        sharpCount++;
+      }
+    }
+
+    return sharpCount;
+  }
+
+  private classifyByTopology(topology: {
+    faceCount: number;
+    vertexCount: number;
+    edgeCount: number;
+    sharpCorners: number;
+    eulerCharacteristic: number;
+  }): StructureType | null {
+    const { faceCount, vertexCount, sharpCorners, eulerCharacteristic } = topology;
+
+    if (Math.abs(eulerCharacteristic - 2) < 0.1 && faceCount === 6 && vertexCount >= 8) {
       return StructureType.HEXAHEDRON;
     }
-    if (this.faceCount >= 3 && this.faceCount <= 5 && this.vertexCount >= 4 && this.vertexCount <= 6) {
+
+    if (faceCount >= 4 && faceCount <= 6 && vertexCount >= 4 && vertexCount <= 6 && sharpCorners >= 3) {
       return StructureType.TETRAHEDRON;
     }
-    if (this.vertexCount >= 8) {
+
+    if (sharpCorners >= 5 || (faceCount >= 8 && vertexCount >= 8)) {
       return StructureType.STAR;
     }
+
+    if (faceCount >= 5 && faceCount <= 7 && vertexCount >= 7) {
+      return StructureType.HEXAHEDRON;
+    }
+
+    if (faceCount >= 3 && faceCount <= 5 && vertexCount >= 4 && vertexCount <= 6) {
+      return StructureType.TETRAHEDRON;
+    }
+
+    if (vertexCount >= 8) {
+      return StructureType.STAR;
+    }
+
     return null;
   }
 

@@ -428,7 +428,6 @@ export class ParticleSystem {
 }
 
 export class CreatureManager {
-  private scene: THREE.Scene;
   private creatures: Map<CreatureType, Creature> = new Map();
   private unlockedTypes: Set<CreatureType> = new Set();
   totalCreatures: number = 3;
@@ -436,7 +435,6 @@ export class CreatureManager {
   onCreatureUnlocked: ((creature: Creature) => void) | null = null;
 
   constructor(scene: THREE.Scene) {
-    this.scene = scene;
     this.creatures.set(CreatureType.CRANE, new Creature(CreatureType.CRANE, scene));
     this.creatures.set(CreatureType.FOX, new Creature(CreatureType.FOX, scene));
     this.creatures.set(CreatureType.DRAGON, new Creature(CreatureType.DRAGON, scene));
@@ -482,7 +480,7 @@ export class CreatureManager {
   }
 
   update(deltaMs: number): void {
-    for (const [type, creature] of this.creatures) {
+    for (const [, creature] of this.creatures) {
       if (creature.isUnlocked) {
         creature.update(deltaMs);
       }
