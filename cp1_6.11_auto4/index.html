@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>音律星轨</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0E1A;
+      font-family: -apple-system, 'Segoe UI', 'Helvetica Neue', sans-serif;
+      font-weight: 500;
+      color: #E0E5EC;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      touch-action: none;
+      user-select: none;
+    }
+
+    canvas#starCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      background: rgba(10, 14, 26, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 12px;
+      padding: 16px;
+      width: 240px;
+      z-index: 10;
+      border: 1px solid rgba(224, 229, 236, 0.08);
+      transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    }
+
+    .control-panel h3 {
+      font-size: 13px;
+      font-weight: 500;
+      color: #E0E5EC;
+      margin-bottom: 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }
+
+    .control-group {
+      margin-bottom: 14px;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: #E0E5EC;
+      margin-bottom: 6px;
+      opacity: 0.9;
+    }
+
+    .control-group label span.value {
+      color: #00D4FF;
+      font-variant-numeric: tabular-nums;
+      min-width: 28px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(224, 229, 236, 0.15);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #00D4FF;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
+      transition: transform 0.15s ease-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: #00D4FF;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
+    }
+
+    .btn-reset {
+      width: 100%;
+      padding: 8px 0;
+      background: #8B2252;
+      color: #E0E5EC;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.2s ease-out, transform 0.1s ease-out;
+      letter-spacing: 0.3px;
+    }
+
+    .btn-reset:hover {
+      background: #C44569;
+    }
+
+    .btn-reset:active {
+      transform: scale(0.95);
+    }
+
+    .hint-overlay {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 5;
+      pointer-events: none;
+      transition: opacity 1.5s ease-out;
+    }
+
+    .hint-overlay h1 {
+      font-size: 36px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      color: rgba(224, 229, 236, 0.6);
+      margin-bottom: 12px;
+    }
+
+    .hint-overlay p {
+      font-size: 13px;
+      font-weight: 400;
+      color: rgba(224, 229, 236, 0.35);
+      letter-spacing: 1px;
+    }
+
+    .hint-overlay.hidden {
+      opacity: 0;
+    }
+
+    @media (max-width: 640px) {
+      .control-panel {
+        width: 180px;
+        padding: 12px;
+        bottom: 16px;
+        left: 16px;
+      }
+
+      .control-panel h3 {
+        font-size: 11px;
+        margin-bottom: 10px;
+      }
+
+      .control-group {
+        margin-bottom: 10px;
+      }
+
+      .control-group label {
+        font-size: 11px;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        width: 18px;
+        height: 18px;
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+      }
+
+      .btn-reset {
+        padding: 6px 0;
+        font-size: 11px;
+      }
+
+      .hint-overlay h1 {
+        font-size: 24px;
+        letter-spacing: 4px;
+      }
+
+      .hint-overlay p {
+        font-size: 11px;
+      }
+    }
+
+    @media (orientation: landscape) and (max-width: 900px) {
+      .control-panel {
+        left: auto;
+        right: 16px;
+        bottom: 16px;
+        width: 180px;
+        padding: 12px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) and (orientation: portrait) {
+      .control-panel {
+        padding: 18px;
+      }
+
+      .control-group {
+        margin-bottom: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="starCanvas"></canvas>
+
+  <div class="hint-overlay" id="hintOverlay">
+    <h1>音律星轨</h1>
+    <p>按 1-7 或点击屏幕创造星轨</p>
+  </div>
+
+  <div class="control-panel" id="controlPanel">
+    <h3>星轨控制</h3>
+    <div class="control-group">
+      <label>密度 <span class="value" id="densityValue">50</span></label>
+      <input type="range" id="densitySlider" min="30" max="80" value="50" />
+    </div>
+    <div class="control-group">
+      <label>时长 <span class="value" id="decayValue">10s</span></label>
+      <input type="range" id="decaySlider" min="5" max="20" value="10" />
+    </div>
+    <button class="btn-reset" id="resetBtn">重置</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
