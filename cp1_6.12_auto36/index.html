@@ -29,12 +29,14 @@
     .param-group { display: flex; flex-direction: column; gap: 6px; }
     .param-group label { font-size: 13px; color: #aab; }
     .param-group .row { display: flex; align-items: center; gap: 8px; }
-    .param-group input[type="range"] { flex: 1; accent-color: #5af; }
-    .param-group .val { min-width: 36px; text-align: right; font-size: 13px; }
-    .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; color: #fff; background: #2a4a8a; transition: background 0.2s; }
-    .btn:hover { background: #3a6abf; }
-    .btn.active { background: #5af; }
-    .info-block { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; font-size: 13px; line-height: 1.6; }
+    .param-group input[type="range"] { flex: 1; accent-color: #5af; transition: all 0.2s ease; }
+    .param-group .val { min-width: 36px; text-align: right; font-size: 13px; transition: transform 0.2s ease, color 0.2s ease; display: inline-block; }
+    .param-group .val.updated { transform: scale(1.15); color: #7cf; }
+    .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; color: #fff; background: #2a4a8a; transition: background 0.2s, transform 0.1s; }
+    .btn:hover { background: #3a6abf; transform: translateY(-1px); }
+    .btn.active { background: #5af; transition: background 0.2s; }
+    .btn:active { transform: scale(0.95); }
+    .info-block { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; font-size: 13px; line-height: 1.6; transition: all 0.3s ease; }
     .info-block span { color: #8bf; }
     .section-title { font-size: 14px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 4px; margin-top: 4px; }
     #launch-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.5); font-size: 13px; pointer-events: none; font-family: 'Segoe UI', sans-serif; }
@@ -71,6 +73,9 @@
       <div class="param-group">
         <div class="row">
           <button class="btn active" id="btnTrail">轨迹: 开</button>
+        </div>
+        <label>尾迹点数量</label>
+        <div class="row">
           <input type="range" id="sliderTrailLen" min="50" max="500" step="10" value="200" />
           <span class="val" id="valTrailLen">200</span>
         </div>

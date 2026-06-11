@@ -43,7 +43,8 @@ export function integrateEuler(
   }
 }
 
-export function detectCollisions(state: SimulationState): CelestialBody[] | null {
+export function detectCollisions(state: SimulationState): CelestialBody[][] {
+  const collisions: CelestialBody[][] = [];
   const asteroids = state.bodies.filter((b) => b.isAsteroid);
   const others = state.bodies.filter((b) => !b.isAsteroid);
 
@@ -54,20 +55,29 @@ export function detectCollisions(state: SimulationState): CelestialBody[] | null
       const dy = ast.pos.y - other.pos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < ast.collisionRadius + other.collisionRadius) {
-        return [ast, other];
+        collisions.push([ast, other]);
       }
     }
   }
-  return null;
+  return collisions;
 }
 
 export function checkStableOrbit(
   asteroid: CelestialBody,
   star: CelestialBody,
-  elapsedTime: number
+  elapsedTime: number,
+  G: number
 ): boolean {
+  if (asteroid.isStableOrbit) return true;
+
   if (asteroid.orbitStartTime === 0) {
     asteroid.orbitStartTime = elapsedTime;
+    asteroid.lastAngle = Math.atan2(
+      asteroid.pos.y - star.pos.y,
+      asteroid.pos.x - star.pos.x
+    );
+    asteroid.orbitAngleSum = 0;
+    return false;
   }
 
   const currentAngle = Math.atan2(
@@ -88,10 +98,10 @@ export function checkStableOrbit(
     if (timeSinceStart >= STABLE_ORBIT_CHECK_TIME) {
       asteroid.orbitPeriod = timeSinceStart / fullRotations;
       const dist = asteroid.distanceTo(star);
-      const expectedV = Math.sqrt(state_G * star.mass / dist);
+      const expectedV = Math.sqrt(G * star.mass / dist);
       const actualV = asteroid.speed();
       const ratio = Math.abs(actualV - expectedV) / expectedV;
-      return ratio < STABLE_ORBIT_THRESHOLD * 5;
+      return ratio < STABLE_ORBIT_THRESHOLD * 8;
     }
   }
 
@@ -104,10 +114,15 @@ export function setStateG(g: number): void {
   state_G = g;
 }
 
-export function updatePhysics(state: SimulationState, dt: number, totalTime: number): void {
+export function updatePhysics(
+  state: SimulationState,
+  dt: number,
+  totalTime: number,
+  targetEnergy: number | null
+): { driftPercent: number; corrected: boolean } {
   const effectiveDt = dt * state.timeScale;
 
-  const subSteps = Math.max(1, Math.ceil(state.timeScale));
+  const subSteps = Math.max(2, Math.ceil(state.timeScale * 2));
   const subDt = effectiveDt / subSteps;
 
   state_G = state.G;
@@ -115,6 +130,21 @@ export function updatePhysics(state: SimulationState, dt: number, totalTime: num
   for (let s = 0; s < subSteps; s++) {
     const accels = computeGravity(state.bodies, state.G);
     integrateEuler(state.bodies, accels, subDt);
+
+    const collisions = detectCollisions(state);
+    for (const collision of collisions) {
+      const [asteroid, other] = collision;
+      if (!asteroid.isAsteroid) continue;
+      state.spawnCollisionParticles(asteroid.pos, asteroid.color, 50);
+      state.spawnCollisionParticles(other.pos, other.color, 20);
+      state.bodies = state.bodies.filter((b) => b !== asteroid);
+      if (state.selectedBody === asteroid) {
+        state.selectedBody = null;
+      }
+      if (state.cameraTarget === asteroid) {
+        state.cameraTarget = null;
+      }
+    }
   }
 
   for (const body of state.bodies) {
@@ -126,9 +156,9 @@ export function updatePhysics(state: SimulationState, dt: number, totalTime: num
   const star = state.bodies.find((b) => b.isStar);
   if (star) {
     for (const body of state.bodies) {
-      if (body.isAsteroid && star) {
-        const stable = checkStableOrbit(body, star, totalTime);
-        if (stable && !body.isStableOrbit) {
+      if (body.isAsteroid && !body.isStableOrbit) {
+        const stable = checkStableOrbit(body, star, totalTime, state.G);
+        if (stable) {
           body.isStableOrbit = true;
           body.highlighted = true;
         }
@@ -136,21 +166,29 @@ export function updatePhysics(state: SimulationState, dt: number, totalTime: num
     }
   }
 
-  const collision = detectCollisions(state);
-  if (collision) {
-    const [asteroid, other] = collision;
-    state.spawnCollisionParticles(asteroid.pos, asteroid.color, 40);
-    state.spawnCollisionParticles(other.pos, other.color, 15);
-    state.bodies = state.bodies.filter((b) => b !== asteroid);
-    if (state.selectedBody === asteroid) {
-      state.selectedBody = null;
-    }
-    if (state.cameraTarget === asteroid) {
-      state.cameraTarget = null;
+  state.updateParticles(effectiveDt);
+
+  let driftPercent = 0;
+  let corrected = false;
+
+  if (targetEnergy !== null) {
+    const currentEnergy = computeTotalEnergy(state.bodies, state.G);
+    if (Math.abs(targetEnergy) > 0.001) {
+      driftPercent = Math.abs((currentEnergy - targetEnergy) / targetEnergy) * 100;
+      if (driftPercent > 1.0) {
+        const correctionFactor = Math.sqrt(Math.abs(targetEnergy / currentEnergy));
+        for (const body of state.bodies) {
+          if (!body.isStar) {
+            body.vel.x *= correctionFactor;
+            body.vel.y *= correctionFactor;
+          }
+        }
+        corrected = true;
+      }
     }
   }
 
-  state.updateParticles(effectiveDt);
+  return { driftPercent, corrected };
 }
 
 export function computeTotalEnergy(bodies: CelestialBody[], G: number): number {

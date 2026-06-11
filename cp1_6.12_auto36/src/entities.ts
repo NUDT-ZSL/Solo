@@ -68,8 +68,10 @@ export class CelestialBody {
     if (this.trail.length > this.maxTrailLen) {
       this.trail.shift();
     }
-    for (let i = 0; i < this.trail.length; i++) {
-      this.trail[i].alpha = (i + 1) / this.trail.length;
+    const len = this.trail.length;
+    for (let i = 0; i < len; i++) {
+      const t = i / len;
+      this.trail[i].alpha = Math.pow(t, 1.2);
     }
   }
 
@@ -161,16 +163,16 @@ export class SimulationState {
     this.bodies = this.bodies.filter((b) => !b.isAsteroid);
   }
 
-  spawnCollisionParticles(pos: Vec2, color: string, count: number = 30): void {
+  spawnCollisionParticles(pos: Vec2, color: string, count: number = 50): void {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 30 + Math.random() * 120;
+      const speed = 50 + Math.random() * 150;
       const vel: Vec2 = {
         x: Math.cos(angle) * speed,
         y: Math.sin(angle) * speed,
       };
-      const life = 0.5 + Math.random() * 0.5;
-      this.particles.push(new Particle(pos, vel, life, color, 1.5 + Math.random() * 2));
+      const life = 1.0 + Math.random() * 0.5;
+      this.particles.push(new Particle(pos, vel, life, color, 2 + Math.random() * 3));
     }
   }
 

@@ -35,10 +35,16 @@ export function getUIPanel(): UIPanel {
 }
 
 export function bindUI(ui: UIPanel, state: SimulationState): void {
+  const flashValue = (el: HTMLElement) => {
+    el.classList.add('updated');
+    setTimeout(() => el.classList.remove('updated'), 200);
+  };
+
   ui.sliderG.addEventListener('input', () => {
     const val = parseFloat(ui.sliderG.value);
     state.G = val;
     ui.valG.textContent = val.toFixed(1);
+    flashValue(ui.valG);
   });
 
   ui.speedBtns.forEach((btn) => {
@@ -65,6 +71,7 @@ export function bindUI(ui: UIPanel, state: SimulationState): void {
     const val = parseInt(ui.sliderTrailLen.value, 10);
     state.trailLength = val;
     ui.valTrailLen.textContent = val.toString();
+    flashValue(ui.valTrailLen);
     for (const body of state.bodies) {
       body.maxTrailLen = val;
       if (body.trail.length > val) {
@@ -75,14 +82,17 @@ export function bindUI(ui: UIPanel, state: SimulationState): void {
 
   ui.sliderAMass.addEventListener('input', () => {
     ui.valAMass.textContent = parseFloat(ui.sliderAMass.value).toFixed(1);
+    flashValue(ui.valAMass);
   });
 
   ui.sliderASpeed.addEventListener('input', () => {
     ui.valASpeed.textContent = ui.sliderASpeed.value;
+    flashValue(ui.valASpeed);
   });
 
   ui.sliderARadius.addEventListener('input', () => {
     ui.valARadius.textContent = ui.sliderARadius.value;
+    flashValue(ui.valARadius);
   });
 }
 

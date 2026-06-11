@@ -147,13 +147,14 @@ export function drawTrail(
   for (let i = 1; i < body.trail.length; i++) {
     const p0 = body.trail[i - 1];
     const p1 = body.trail[i];
-    const alpha = p1.alpha * 0.6;
+    const alpha = Math.pow(i / body.trail.length, 1.5) * 0.9;
 
     ctx.beginPath();
     ctx.moveTo(p0.x + camOffset.x, p0.y + camOffset.y);
     ctx.lineTo(p1.x + camOffset.x, p1.y + camOffset.y);
     ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha.toFixed(3)})`;
-    ctx.lineWidth = body.isAsteroid ? 1 : 1.5;
+    ctx.lineWidth = body.isAsteroid ? 1 : 1.8;
+    ctx.lineCap = 'round';
     ctx.stroke();
   }
 }

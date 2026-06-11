@@ -59,6 +59,9 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+let canvasW = 0;
+let canvasH = 0;
+
 function updateCamera(state: SimulationState, now: number): Vec2 {
   if (state.cameraTarget && !state.cameraTarget.isStar) {
     const elapsed = now - state.cameraTransitionStart;
@@ -79,16 +82,15 @@ function updateCamera(state: SimulationState, now: number): Vec2 {
   } else {
     const star = state.bodies.find((b) => b.isStar);
     if (star) {
-      state.cameraPos.x = -star.pos.x + (canvasW / 2);
-      state.cameraPos.y = -star.pos.y + (canvasH / 2);
+      const targetCamX = -star.pos.x + (canvasW / 2);
+      const targetCamY = -star.pos.y + (canvasH / 2);
+      state.cameraPos.x += (targetCamX - state.cameraPos.x) * 0.1;
+      state.cameraPos.y += (targetCamY - state.cameraPos.y) * 0.1;
     }
   }
 
   return state.cameraPos;
 }
-
-let canvasW = 0;
-let canvasH = 0;
 
 function screenToWorld(sx: number, sy: number, camOffset: Vec2): Vec2 {
   return {
@@ -102,18 +104,35 @@ function main(): void {
   const container = document.getElementById('canvas-container') as HTMLElement;
   const ctx = canvas.getContext('2d')!;
 
-  const size = resizeCanvas(canvas, container);
-  canvasW = size.width;
-  canvasH = size.height;
-
-  const state = createInitialState(canvasW, canvasH);
-
-  const ui = getUIPanel();
-  bindUI(ui, state);
+  if (!canvas || !container || !ctx) {
+    console.error('Failed to get required DOM elements');
+    return;
+  }
 
   let isDragging = false;
   let dragStart: Vec2 | null = null;
   let dragEnd: Vec2 | null = null;
+  let lastTime = performance.now();
+  let totalTime = 0;
+  let frameCount = 0;
+  let fpsTime = 0;
+  let currentFps = 60;
+  let initialEnergy = 0;
+  let lastDriftPercent = 0;
+  let wasCorrected = false;
+
+  canvasW = Math.max(container.clientWidth, 800);
+  canvasH = Math.floor(canvasW * 9 / 16);
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+
+  const state = createInitialState(canvasW, canvasH);
+  const ui = getUIPanel();
+  bindUI(ui, state);
+
+  initialEnergy = computeTotalEnergy(state.bodies, state.G);
 
   canvas.addEventListener('mousedown', (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
@@ -169,12 +188,13 @@ function main(): void {
           { x: dragStart.x, y: dragStart.y },
           vel,
           params.radius,
-          '#aabbcc',
+          '#88ccff',
           false,
           true
         );
         asteroid.maxTrailLen = state.trailLength;
         state.addBody(asteroid);
+        initialEnergy = computeTotalEnergy(state.bodies, state.G);
       }
     }
 
@@ -195,14 +215,6 @@ function main(): void {
     canvasH = sz.height;
   });
 
-  let lastTime = performance.now();
-  let totalTime = 0;
-  let frameCount = 0;
-  let fpsTime = 0;
-  let currentFps = 60;
-
-  const initialEnergy = computeTotalEnergy(state.bodies, state.G);
-
   function loop(now: number): void {
     const rawDt = (now - lastTime) / 1000;
     lastTime = now;
@@ -218,7 +230,13 @@ function main(): void {
       fpsTime = 0;
     }
 
-    updatePhysics(state, dt, totalTime);
+    const physicsResult = updatePhysics(state, dt, totalTime, initialEnergy);
+    lastDriftPercent = physicsResult.driftPercent;
+    wasCorrected = physicsResult.corrected;
+
+    if (wasCorrected) {
+      initialEnergy = computeTotalEnergy(state.bodies, state.G);
+    }
 
     const camOffset = updateCamera(state, now);
 
@@ -233,13 +251,10 @@ function main(): void {
       ctx.fillText(`FPS: ${currentFps.toFixed(0)}`, 10, 20);
     }
 
-    const currentEnergy = computeTotalEnergy(state.bodies, state.G);
-    if (initialEnergy !== 0) {
-      const energyDrift = Math.abs((currentEnergy - initialEnergy) / initialEnergy) * 100;
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillText(`能量偏移: ${energyDrift.toFixed(2)}%`, 10, 36);
-    }
+    ctx.fillStyle = lastDriftPercent > 1.0 ? 'rgba(255,150,150,0.6)' : 'rgba(255,255,255,0.3)';
+    ctx.fillText(`能量偏移: ${lastDriftPercent.toFixed(2)}%${wasCorrected ? ' [已校正]' : ''}`, 10, 36);
 
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.fillText(`天体数: ${state.bodies.length}`, 10, 52);
 
     requestAnimationFrame(loop);
@@ -248,4 +263,8 @@ function main(): void {
   requestAnimationFrame(loop);
 }
 
-main();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', main);
+} else {
+  main();
+}
