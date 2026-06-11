@@ -29,23 +29,30 @@ interface StaggeredItem {
 
 function useStaggeredAnimation(count: number, trigger: any): StaggeredItem[] {
   const [items, setItems] = useState<StaggeredItem[]>(
-    Array.from({ length: count }, () => ({ visible: false, delay: 0 }))
+    Array.from({ length: count }, (_, i) => ({ visible: false, delay: i * 100 }))
   );
 
   useEffect(() => {
+    if (count === 0) return;
+
     setItems(Array.from({ length: count }, (_, i) => ({ visible: false, delay: i * 100 })));
+
     const timers: ReturnType<typeof setTimeout>[] = [];
+
     for (let i = 0; i < count; i++) {
       timers.push(
         setTimeout(() => {
           setItems(prev => {
             const next = [...prev];
-            if (next[i]) next[i] = { ...next[i], visible: true };
+            if (next[i]) {
+              next[i] = { ...next[i], visible: true };
+            }
             return next;
           });
-        }, i * 100 + 50)
+        }, i * 100)
       );
     }
+
     return () => timers.forEach(t => clearTimeout(t));
   }, [trigger, count]);
 
@@ -324,8 +331,10 @@ export default function Dashboard({ summary, loading }: Props) {
                   dot={(props: any) => {
                     const { cx, cy, index } = props;
                     const visible = trendAnim[index]?.visible;
+                    const delay = trendAnim[index]?.delay || 0;
                     return (
                       <circle
+                        key={`income-dot-${index}`}
                         cx={cx}
                         cy={cy}
                         r={visible ? 5 : 0}
@@ -333,7 +342,9 @@ export default function Dashboard({ summary, loading }: Props) {
                         stroke="#6BCB77"
                         strokeWidth={2}
                         style={{
-                          transition: 'r 300ms ease-out',
+                          opacity: visible ? 1 : 0,
+                          transition: 'r 300ms ease-out, opacity 300ms ease-out',
+                          transitionDelay: `${delay}ms`,
                           filter: visible ? 'drop-shadow(0 2px 4px rgba(107,203,119,0.4))' : 'none'
                         }}
                       />
@@ -350,8 +361,10 @@ export default function Dashboard({ summary, loading }: Props) {
                   dot={(props: any) => {
                     const { cx, cy, index } = props;
                     const visible = trendAnim[index]?.visible;
+                    const delay = trendAnim[index]?.delay || 0;
                     return (
                       <circle
+                        key={`expense-dot-${index}`}
                         cx={cx}
                         cy={cy}
                         r={visible ? 5 : 0}
@@ -359,8 +372,9 @@ export default function Dashboard({ summary, loading }: Props) {
                         stroke="#FF6B6B"
                         strokeWidth={2}
                         style={{
-                          transition: 'r 300ms ease-out',
-                          transitionDelay: '50ms',
+                          opacity: visible ? 1 : 0,
+                          transition: 'r 300ms ease-out, opacity 300ms ease-out',
+                          transitionDelay: `${delay + 50}ms`,
                           filter: visible ? 'drop-shadow(0 2px 4px rgba(255,107,107,0.4))' : 'none'
                         }}
                       />

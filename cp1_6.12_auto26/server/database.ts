@@ -1,4 +1,4 @@
-import initSqlJs, { Database, QueryExecResult } from 'sql.js';
+import initSqlJs, { Database, Statement, QueryExecResult } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -30,6 +30,57 @@ function getCurrentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function execQuery(sql: string, params: any[] = []): QueryExecResult[] {
+  const stmt = db.prepare(sql);
+  try {
+    stmt.bind(params);
+    const results: QueryExecResult[] = [];
+    const columns = stmt.getColumnNames();
+    const values: any[][] = [];
+
+    while (stmt.step()) {
+      values.push(stmt.get());
+    }
+
+    if (columns.length > 0) {
+      results.push({ columns, values });
+    }
+
+    return results;
+  } finally {
+    stmt.free();
+  }
+}
+
+function execRun(sql: string, params: any[] = []): { changes: number } {
+  const stmt = db.prepare(sql);
+  try {
+    stmt.bind(params);
+    stmt.step();
+    return { changes: db.getRowsModified() };
+  } finally {
+    stmt.free();
+  }
+}
+
+function queryOneValue(sql: string, params: any[] = []): any {
+  const result = execQuery(sql, params);
+  return result[0]?.values[0]?.[0];
+}
+
+function queryAllRows(sql: string, params: any[] = []): any[] {
+  const result = execQuery(sql, params);
+  if (!result || result.length === 0) return [];
+  const { columns, values } = result[0];
+  return values.map(row => {
+    const obj: any = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj;
+  });
+}
+
 export async function initDatabase(): Promise<void> {
   const SQL = await initSqlJs();
 
@@ -45,7 +96,7 @@ export async function initDatabase(): Promise<void> {
     db = new SQL.Database();
   }
 
-  db.run(`
+  execRun(`
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
@@ -58,7 +109,7 @@ export async function initDatabase(): Promise<void> {
     );
   `);
 
-  db.run(`
+  execRun(`
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
       month TEXT NOT NULL,
@@ -69,10 +120,10 @@ export async function initDatabase(): Promise<void> {
     );
   `);
 
-  db.run('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_budgets_month ON budgets(month)');
+  execRun('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)');
+  execRun('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category)');
+  execRun('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)');
+  execRun('CREATE INDEX IF NOT EXISTS idx_budgets_month ON budgets(month)');
 
   const currentMonth = getCurrentMonth();
   const defaultBudgets = [
@@ -85,22 +136,21 @@ export async function initDatabase(): Promise<void> {
   ];
 
   defaultBudgets.forEach(b => {
-    db.run(
+    execRun(
       'INSERT OR IGNORE INTO budgets (id, month, category, amount) VALUES (?, ?, ?, ?)',
       [`budget-${b.month}-${b.category}`, b.month, b.category, b.amount]
     );
   });
 
-  const countResult = db.exec('SELECT COUNT(*) as cnt FROM transactions');
-  const count = countResult[0]?.values[0]?.[0] as number || 0;
+  const count = queryOneValue('SELECT COUNT(*) as cnt FROM transactions') as number || 0;
   if (count === 0) {
     seedSampleData();
   }
 
   saveDatabase();
 
-  const finalCount = db.exec('SELECT COUNT(*) as cnt FROM transactions')[0]?.values[0]?.[0] as number || 0;
-  const budgetCount = db.exec('SELECT COUNT(*) as cnt FROM budgets')[0]?.values[0]?.[0] as number || 0;
+  const finalCount = queryOneValue('SELECT COUNT(*) as cnt FROM transactions') as number || 0;
+  const budgetCount = queryOneValue('SELECT COUNT(*) as cnt FROM budgets') as number || 0;
   console.log(`Database initialized: ${finalCount} transactions, ${budgetCount} budgets`);
 }
 
@@ -124,7 +174,7 @@ function seedSampleData(): void {
     const dateStr = date.toISOString().split('T')[0];
     const createdAt = date.toISOString();
 
-    db.run(
+    execRun(
       'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [
         `tx-sample-${idCounter++}`,
@@ -139,7 +189,7 @@ function seedSampleData(): void {
     );
 
     if (i % 2 === 0) {
-      db.run(
+      execRun(
         'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           `tx-sample-${idCounter++}`,
@@ -155,7 +205,7 @@ function seedSampleData(): void {
     }
 
     if (i % 15 === 0) {
-      db.run(
+      execRun(
         'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           `tx-sample-${idCounter++}`,
@@ -171,7 +221,7 @@ function seedSampleData(): void {
     }
 
     if (i % 4 === 0) {
-      db.run(
+      execRun(
         'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           `tx-sample-${idCounter++}`,
@@ -187,7 +237,7 @@ function seedSampleData(): void {
     }
 
     if (i % 10 === 0) {
-      db.run(
+      execRun(
         'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           `tx-sample-${idCounter++}`,
@@ -203,7 +253,7 @@ function seedSampleData(): void {
     }
 
     if (i % 30 === 0) {
-      db.run(
+      execRun(
         'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           `tx-sample-${idCounter++}`,
@@ -218,18 +268,6 @@ function seedSampleData(): void {
       );
     }
   }
-}
-
-function rowsToObjects(result: QueryExecResult[]): any[] {
-  if (!result || result.length === 0) return [];
-  const { columns, values } = result[0];
-  return values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, i) => {
-      obj[col] = row[i];
-    });
-    return obj;
-  });
 }
 
 export function getAllTransactions(
@@ -264,8 +302,7 @@ export function getAllTransactions(
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
-  const countResult = db.exec(`SELECT COUNT(*) as cnt FROM transactions ${whereClause}`, params);
-  const total = countResult[0]?.values[0]?.[0] as number || 0;
+  const total = queryOneValue(`SELECT COUNT(*) as cnt FROM transactions ${whereClause}`, params) as number || 0;
 
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 10;
@@ -276,17 +313,16 @@ export function getAllTransactions(
     ORDER BY date DESC, created_at DESC
     LIMIT ? OFFSET ?
   `;
-  params.push(pageSize, offset);
+  const queryParams = [...params, pageSize, offset];
 
-  const result = db.exec(query, params);
-  const data = rowsToObjects(result) as TransactionRow[];
+  const data = queryAllRows(query, queryParams) as TransactionRow[];
 
   return { data, total };
 }
 
 export function createTransaction(tx: Omit<TransactionRow, 'created_at'>): TransactionRow {
   const createdAt = new Date().toISOString();
-  db.run(
+  execRun(
     'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     [tx.id, tx.type, tx.amount, tx.category, tx.description, tx.tags, tx.date, createdAt]
   );
@@ -295,42 +331,39 @@ export function createTransaction(tx: Omit<TransactionRow, 'created_at'>): Trans
 }
 
 export function deleteTransaction(id: string): boolean {
-  const before = db.exec('SELECT changes() as n')[0]?.values[0]?.[0] as number;
-  db.run('DELETE FROM transactions WHERE id = ?', [id]);
-  const after = db.exec('SELECT changes() as n')[0]?.values[0]?.[0] as number;
-  const changed = after !== before || (after === 0 && before === 0 && false);
+  const resultBefore = queryOneValue('SELECT COUNT(*) as cnt FROM transactions WHERE id = ?', [id]) as number;
+  const existsBefore = resultBefore > 0;
 
-  const result = db.exec('SELECT COUNT(*) as cnt FROM transactions WHERE id = ?', [id]);
-  const exists = (result[0]?.values[0]?.[0] as number) > 0;
-  if (!exists) {
-    saveDatabase();
-    return true;
-  }
-  return false;
+  execRun('DELETE FROM transactions WHERE id = ?', [id]);
+
+  const resultAfter = queryOneValue('SELECT COUNT(*) as cnt FROM transactions WHERE id = ?', [id]) as number;
+  const existsAfter = resultAfter > 0;
+
+  const changed = existsBefore && !existsAfter;
+  if (changed) saveDatabase();
+  return changed;
 }
 
 export function getAllBudgets(): BudgetRow[] {
-  const result = db.exec('SELECT * FROM budgets ORDER BY month DESC, category');
-  return rowsToObjects(result) as BudgetRow[];
+  return queryAllRows('SELECT * FROM budgets ORDER BY month DESC, category') as BudgetRow[];
 }
 
 export function getBudgetsByMonth(month: string): BudgetRow[] {
-  const result = db.exec('SELECT * FROM budgets WHERE month = ? ORDER BY category', [month]);
-  return rowsToObjects(result) as BudgetRow[];
+  return queryAllRows('SELECT * FROM budgets WHERE month = ? ORDER BY category', [month]) as BudgetRow[];
 }
 
 export function createBudget(budget: Omit<BudgetRow, 'created_at'>): BudgetRow {
-  const existing = db.exec('SELECT id FROM budgets WHERE month = ? AND category = ?', [budget.month, budget.category]);
+  const existing = queryAllRows('SELECT id FROM budgets WHERE month = ? AND category = ?', [budget.month, budget.category]);
 
-  if (existing[0]?.values.length > 0) {
-    db.run('UPDATE budgets SET amount = ? WHERE month = ? AND category = ?', [budget.amount, budget.month, budget.category]);
+  if (existing.length > 0) {
+    execRun('UPDATE budgets SET amount = ? WHERE month = ? AND category = ?', [budget.amount, budget.month, budget.category]);
     saveDatabase();
-    const result = db.exec('SELECT * FROM budgets WHERE month = ? AND category = ?', [budget.month, budget.category]);
-    return rowsToObjects(result)[0] as BudgetRow;
+    const result = queryAllRows('SELECT * FROM budgets WHERE month = ? AND category = ?', [budget.month, budget.category]);
+    return result[0] as BudgetRow;
   }
 
   const createdAt = new Date().toISOString();
-  db.run(
+  execRun(
     'INSERT INTO budgets (id, month, category, amount, created_at) VALUES (?, ?, ?, ?, ?)',
     [budget.id, budget.month, budget.category, budget.amount, createdAt]
   );
@@ -339,13 +372,13 @@ export function createBudget(budget: Omit<BudgetRow, 'created_at'>): BudgetRow {
 }
 
 export function deleteBudget(id: string): boolean {
-  const resultBefore = db.exec('SELECT COUNT(*) as cnt FROM budgets WHERE id = ?', [id]);
-  const existsBefore = (resultBefore[0]?.values[0]?.[0] as number) > 0;
+  const resultBefore = queryOneValue('SELECT COUNT(*) as cnt FROM budgets WHERE id = ?', [id]) as number;
+  const existsBefore = resultBefore > 0;
 
-  db.run('DELETE FROM budgets WHERE id = ?', [id]);
+  execRun('DELETE FROM budgets WHERE id = ?', [id]);
 
-  const resultAfter = db.exec('SELECT COUNT(*) as cnt FROM budgets WHERE id = ?', [id]);
-  const existsAfter = (resultAfter[0]?.values[0]?.[0] as number) > 0;
+  const resultAfter = queryOneValue('SELECT COUNT(*) as cnt FROM budgets WHERE id = ?', [id]) as number;
+  const existsAfter = resultAfter > 0;
 
   const changed = existsBefore && !existsAfter;
   if (changed) saveDatabase();
@@ -363,17 +396,15 @@ export function getSummary(months: number = 6): any {
     const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
     const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-    const incomeResult = db.exec(
+    const income = queryOneValue(
       "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'income' AND date >= ? AND date < ?",
       [monthStart, monthEnd]
-    );
-    const expenseResult = db.exec(
+    ) as number || 0;
+
+    const expense = queryOneValue(
       "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'expense' AND date >= ? AND date < ?",
       [monthStart, monthEnd]
-    );
-
-    const income = (incomeResult[0]?.values[0]?.[0] as number) || 0;
-    const expense = (expenseResult[0]?.values[0]?.[0] as number) || 0;
+    ) as number || 0;
 
     monthData.push({
       month: monthLabel,
@@ -386,7 +417,7 @@ export function getSummary(months: number = 6): any {
   const nmStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const cmEnd = `${nmStart.getFullYear()}-${String(nmStart.getMonth() + 1).padStart(2, '0')}-01`;
 
-  const catResult = db.exec(
+  const catRows = queryAllRows(
     `SELECT category, COALESCE(SUM(amount), 0) as amount
      FROM transactions
      WHERE type = 'expense' AND date >= ? AND date < ?
@@ -394,28 +425,26 @@ export function getSummary(months: number = 6): any {
      ORDER BY amount DESC`,
     [cmStart, cmEnd]
   );
-  const catRows = catResult[0]?.values || [];
+
   const categoryExpense = catRows.map(row => ({
-    category: row[0] as string,
-    amount: +(row[1] as number).toFixed(2)
+    category: row.category as string,
+    amount: +(row.amount as number).toFixed(2)
   }));
 
-  const totalIncomeResult = db.exec("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'income'");
-  const totalExpenseResult = db.exec("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'expense'");
-  const totalIncome = (totalIncomeResult[0]?.values[0]?.[0] as number) || 0;
-  const totalExpense = (totalExpenseResult[0]?.values[0]?.[0] as number) || 0;
+  const totalIncome = queryOneValue("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'income'") as number || 0;
+  const totalExpense = queryOneValue("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'expense'") as number || 0;
 
-  const allTagsResult = db.exec("SELECT tags FROM transactions WHERE tags != '[]'");
+  const allTagsRows = queryAllRows("SELECT tags FROM transactions WHERE tags != '[]'");
   const allTagsSet = new Set<string>();
-  (allTagsResult[0]?.values || []).forEach(row => {
+  allTagsRows.forEach(row => {
     try {
-      const tags = JSON.parse(row[0] as string);
+      const tags = JSON.parse(row.tags as string);
       if (Array.isArray(tags)) tags.forEach((tag: string) => allTagsSet.add(tag));
     } catch {}
   });
 
-  const allCategoriesResult = db.exec('SELECT DISTINCT category FROM transactions ORDER BY category');
-  const allCategories = (allCategoriesResult[0]?.values || []).map(row => row[0] as string);
+  const allCategoriesRows = queryAllRows('SELECT DISTINCT category FROM transactions ORDER BY category');
+  const allCategories = allCategoriesRows.map(row => row.category as string);
 
   return {
     monthTrend: monthData,
@@ -434,7 +463,7 @@ export function getCategorySpentByMonth(month: string): Array<{ category: string
   const nextMonth = new Date(year, monthNum, 1);
   const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
 
-  const result = db.exec(
+  const rows = queryAllRows(
     `SELECT category, COALESCE(SUM(amount), 0) as spent
      FROM transactions
      WHERE type = 'expense' AND date >= ? AND date < ?
@@ -442,9 +471,8 @@ export function getCategorySpentByMonth(month: string): Array<{ category: string
     [monthStart, monthEnd]
   );
 
-  const rows = result[0]?.values || [];
   return rows.map(row => ({
-    category: row[0] as string,
-    spent: +(row[1] as number).toFixed(2)
+    category: row.category as string,
+    spent: +(row.spent as number).toFixed(2)
   }));
 }

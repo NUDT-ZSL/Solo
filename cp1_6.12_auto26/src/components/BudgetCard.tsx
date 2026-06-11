@@ -296,16 +296,14 @@ export default function BudgetCard({ budgets, onAdd, onDelete, onFetchBudgets }:
               titleColor = '#E65100';
             }
 
-            const shakeAnim = isShaking
+            const barShakeAnim = isShaking
               ? warnLevel === 'danger'
                 ? 'shakeRed 0.45s ease-in-out 2'
                 : 'shakeYellow 0.45s ease-in-out 2'
               : 'none';
 
-            const pulseAnim = hasWarning
-              ? warnLevel === 'danger'
-                ? 'pulseDanger 2s ease-in-out infinite'
-                : 'pulseWarning 2s ease-in-out infinite'
+            const barPulseAnim = hasWarning
+              ? 'barPulse 1.5s ease-in-out infinite'
               : 'none';
 
             return (
@@ -320,7 +318,7 @@ export default function BudgetCard({ budgets, onAdd, onDelete, onFetchBudgets }:
                   boxShadow: hasWarning
                     ? `0 4px 16px ${warnLevel === 'danger' ? 'rgba(229,57,53,0.2)' : 'rgba(251,140,0,0.2)'}`
                     : '0 2px 8px rgba(0,0,0,0.06)',
-                  animation: `fadeSlideIn 300ms ease ${idx * 50}ms both, ${shakeAnim}, ${pulseAnim}`,
+                  animation: `fadeSlideIn 300ms ease ${idx * 50}ms both, ${barShakeAnim}`,
                   transform: isShaking ? 'translateZ(0)' : undefined,
                   transition: 'all 250ms ease'
                 }}
@@ -418,7 +416,7 @@ export default function BudgetCard({ budgets, onAdd, onDelete, onFetchBudgets }:
                       borderRadius: '4px',
                       transition: 'width 400ms ease-out, background 300ms',
                       boxShadow: warnLevel !== 'normal' ? `0 0 8px ${barColor}88` : 'none',
-                      animation: warnLevel !== 'normal' ? `barPulse 1.5s ease-in-out infinite` : 'none'
+                      animation: `${barPulseAnim}, ${barShakeAnim}`
                     }}
                   />
                 </div>

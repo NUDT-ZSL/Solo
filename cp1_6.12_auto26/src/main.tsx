@@ -174,11 +174,18 @@ const GlobalStyles: React.FC = () => (
     }
 
     @keyframes barPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.75; }
+    }
+
+    @keyframes blink {
       0%, 100% {
         opacity: 1;
+        transform: scale(1);
       }
       50% {
-        opacity: 0.75;
+        opacity: 0.7;
+        transform: scale(1.005);
       }
     }
 
@@ -202,11 +209,11 @@ const GlobalStyles: React.FC = () => (
     }
 
     .notification-warning {
-      animation: slideDown 300ms ease both, flashWarning 1.2s ease-in-out 300ms infinite;
+      animation: slideDown 300ms ease both, flashWarning 1.2s ease-in-out 300ms infinite, blink 0.8s ease-in-out 300ms 3;
     }
 
     .notification-danger {
-      animation: slideDown 300ms ease both, flashDanger 1s ease-in-out 300ms infinite;
+      animation: slideDown 300ms ease both, flashDanger 1s ease-in-out 300ms infinite, blink 0.6s ease-in-out 300ms 5;
     }
 
     .nav-link {
