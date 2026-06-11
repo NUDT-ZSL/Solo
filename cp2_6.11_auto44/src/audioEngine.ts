@@ -18,7 +18,7 @@ const VOICE_CONFIGS: Record<MarbleType, VoiceConfig> = {
     attack: 0.001,
     decay: 0.06,
     sustain: 0.0,
-    release: 0.04,
+    release: 0.05,
     volume: 0.22,
   },
   bass: {
@@ -26,7 +26,7 @@ const VOICE_CONFIGS: Record<MarbleType, VoiceConfig> = {
     attack: 0.005,
     decay: 0.12,
     sustain: 0.35,
-    release: 0.15,
+    release: 0.18,
     filterFreq: 800,
     filterQ: 3,
     volume: 0.20,
@@ -34,7 +34,7 @@ const VOICE_CONFIGS: Record<MarbleType, VoiceConfig> = {
   piano: {
     waveform: 'triangle',
     attack: 0.003,
-    decay: 0.18,
+    decay: 0.2,
     sustain: 0.25,
     release: 0.35,
     volume: 0.18,
@@ -54,6 +54,7 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private initialized = false;
+  private activeNodes: Set<AudioNode> = new Set();
 
   init(): void {
     if (this.initialized) return;
@@ -87,13 +88,35 @@ export class AudioEngine {
     this.playFrequency(type, freq, duration);
   }
 
+  private cleanupNodes(...nodes: AudioNode[]): void {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const cleanupTime = ctx.currentTime + 0.2;
+    nodes.forEach((n) => {
+      try {
+        this.activeNodes.add(n);
+        setTimeout(() => {
+          try {
+            n.disconnect();
+          } catch (e) { /* ignore */ }
+          this.activeNodes.delete(n);
+        }, 250);
+      } catch (e) { /* ignore */ }
+    });
+  }
+
   playFrequency(type: MarbleType, frequency: number, duration: number = NOTE_DURATION): void {
     const ctx = this.ensureContext();
     if (!ctx || !this.masterGain) return;
 
     const config = VOICE_CONFIGS[type];
     const now = ctx.currentTime;
-    const totalDuration = duration + config.attack + config.decay + config.release;
+    const peakGain = config.volume;
+    const sustainGain = peakGain * config.sustain;
+    const attackEnd = now + config.attack;
+    const decayEnd = attackEnd + config.decay;
+    const releaseStart = decayEnd + duration;
+    const releaseEnd = releaseStart + config.release;
 
     const osc = ctx.createOscillator();
     osc.type = config.waveform;
@@ -105,22 +128,12 @@ export class AudioEngine {
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(config.volume, now + config.attack);
-    gain.gain.linearRampToValueAtTime(config.volume * config.sustain, now + config.attack + config.decay);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + totalDuration);
-
-    if (type === 'synth') {
-      const lfo = ctx.createOscillator();
-      const lfoGain = ctx.createGain();
-      lfo.type = 'sine';
-      lfo.frequency.setValueAtTime(5, now);
-      lfoGain.gain.setValueAtTime(4, now);
-      lfo.connect(lfoGain);
-      lfoGain.connect(osc.detune);
-      lfo.start(now);
-      lfo.stop(now + totalDuration + 0.05);
-      lfo.onended = () => { lfo.disconnect(); lfoGain.disconnect(); };
+    gain.gain.exponentialRampToValueAtTime(peakGain, attackEnd);
+    if (sustainGain > 0.0001) {
+      gain.gain.exponentialRampToValueAtTime(sustainGain, decayEnd);
     }
+    gain.gain.setValueAtTime(Math.max(sustainGain, 0.0001), releaseStart);
+    gain.gain.exponentialRampToValueAtTime(0.0001, releaseEnd);
 
     let filter: BiquadFilterNode | null = null;
     if (config.filterFreq) {
@@ -128,28 +141,41 @@ export class AudioEngine {
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(config.filterFreq, now);
       if (config.filterQ) filter.Q.setValueAtTime(config.filterQ, now);
+    }
+
+    let lfo: OscillatorNode | null = null;
+    let lfoGain: GainNode | null = null;
+    if (type === 'synth') {
+      lfo = ctx.createOscillator();
+      lfoGain = ctx.createGain();
+      lfo.type = 'sine';
+      lfo.frequency.setValueAtTime(5, now);
+      lfoGain.gain.setValueAtTime(4, now);
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.detune);
+      lfo.start(now);
+      lfo.stop(releaseEnd + 0.02);
+      this.cleanupNodes(lfo, lfoGain);
+    }
+
+    if (filter) {
       osc.connect(filter);
       filter.connect(gain);
+      this.cleanupNodes(filter);
     } else {
       osc.connect(gain);
     }
-
     gain.connect(this.masterGain);
 
     osc.start(now);
-    osc.stop(now + totalDuration + 0.05);
-
-    osc.onended = () => {
-      osc.disconnect();
-      gain.disconnect();
-      if (filter) filter.disconnect();
-    };
+    osc.stop(releaseEnd + 0.02);
+    this.cleanupNodes(osc, gain);
   }
 
-  playThirdHarmony(type: MarbleType, noteIndex: number, secondType: MarbleType): void {
-    this.playNote(type, noteIndex, NOTE_DURATION);
-    const thirdNote = noteIndex + 2;
-    if (thirdNote < SCALE_FREQUENCIES.length) {
+  playThirdHarmony(firstType: MarbleType, firstNoteIndex: number, secondType: MarbleType): void {
+    this.playNote(firstType, firstNoteIndex, NOTE_DURATION);
+    const thirdNote = firstNoteIndex + 2;
+    if (thirdNote >= 0 && thirdNote < SCALE_FREQUENCIES.length) {
       this.playNote(secondType, thirdNote, NOTE_DURATION);
     }
   }
@@ -159,11 +185,16 @@ export class AudioEngine {
     const type = baseType || types[Math.floor(Math.random() * types.length)];
     const noteIndex = Math.floor(Math.random() * SCALE_FREQUENCIES.length);
     const freq = SCALE_FREQUENCIES[noteIndex];
-    this.playFrequency(type, freq * (Math.random() > 0.5 ? 1 : 2), NOTE_DURATION * 0.8);
+    const multiplier = Math.random() > 0.5 ? 1 : (Math.random() > 0.5 ? 2 : 0.5);
+    this.playFrequency(type, freq * multiplier, NOTE_DURATION * 0.8);
   }
 
   get isReady(): boolean {
     return this.initialized && this.ctx !== null;
+  }
+
+  get activeNodeCount(): number {
+    return this.activeNodes.size;
   }
 
   setMasterVolume(vol: number): void {
