@@ -7,7 +7,7 @@ import {
   IColorHistory
 } from './types';
 
-export { HistoryItem, HistoryUpdateCallback, HistorySelectCallback, HistoryDeleteCallback } from './types';
+export type { HistoryItem, HistoryUpdateCallback, HistorySelectCallback, HistoryDeleteCallback } from './types';
 
 export class ColorHistory implements IColorHistory {
   private items: HistoryItem[] = [];

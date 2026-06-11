@@ -1,21 +1,23 @@
 import { ColorData, HSL, RGB, IColorProbe, ImageRect } from './types';
 
-export { ColorData, RGB, HSL } from './types';
+export type { ColorData, RGB, HSL } from './types';
 
 export class ColorProbe implements IColorProbe {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private imageData: ImageData | null = null;
+  private fullCanvasImageData: ImageData | null = null;
   private imageWidth: number = 0;
   private imageHeight: number = 0;
   private offsetX: number = 0;
   private offsetY: number = 0;
   private scale: number = 1;
   private imageRect: ImageRect | null = null;
+  private bgColor: string = '#1a1a2e';
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('无法获取Canvas上下文');
     this.ctx = ctx;
   }
@@ -51,8 +53,16 @@ export class ColorProbe implements IColorProbe {
       scale: this.scale
     };
 
-    this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    this.ctx.fillStyle = this.bgColor;
+    this.ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     this.ctx.drawImage(image, this.offsetX, this.offsetY, this.imageWidth, this.imageHeight);
+
+    try {
+      this.fullCanvasImageData = this.ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+    } catch (e) {
+      console.error('缓存全画布ImageData失败，可能是跨域图片', e);
+      this.fullCanvasImageData = null;
+    }
 
     try {
       this.imageData = this.ctx.getImageData(
@@ -64,6 +74,17 @@ export class ColorProbe implements IColorProbe {
     } catch (e) {
       console.error('获取ImageData失败，可能是跨域图片', e);
       this.imageData = null;
+    }
+  }
+
+  restoreCanvasBase(): void {
+    if (!this.fullCanvasImageData) return;
+    const { width, height } = this.canvas;
+    if (width === 0 || height === 0) return;
+    try {
+      this.ctx.putImageData(this.fullCanvasImageData, 0, 0);
+    } catch (e) {
+      console.warn('恢复Canvas底图失败', e);
     }
   }
 

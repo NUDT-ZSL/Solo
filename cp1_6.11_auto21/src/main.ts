@@ -1,146 +1,188 @@
 import { ProbeController } from './controller';
+import type { ProbeControllerOptions } from './types';
 
 let controller: ProbeController | null = null;
+let mainCanvasDpr: number = 1;
 
 function init(): void {
-  const mainCanvas = document.getElementById('mainCanvas') as HTMLCanvasElement;
-  const gradientCanvas = document.getElementById('gradientCanvas') as HTMLCanvasElement;
-  const historyContainer = document.getElementById('colorHistory') as HTMLElement;
-  const uploadZone = document.getElementById('uploadZone') as HTMLElement;
-  const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-  const canvasSection = document.getElementById('canvasSection') as HTMLElement;
-  const loadingOverlay = document.getElementById('loadingOverlay') as HTMLElement;
-  
-  const tooltip = document.getElementById('colorTooltip') as HTMLElement;
-  const tooltipColor = document.getElementById('tooltipColor') as HTMLElement;
-  const tooltipHex = document.getElementById('tooltipHex') as HTMLElement;
-  const tooltipRgb = document.getElementById('tooltipRgb') as HTMLElement;
-  const tooltipHsl = document.getElementById('tooltipHsl') as HTMLElement;
-  
-  const startColorSwatch = document.getElementById('startColorSwatch') as HTMLElement;
-  const endColorSwatch = document.getElementById('endColorSwatch') as HTMLElement;
-  
-  const fineTuneSection = document.getElementById('fineTuneSection') as HTMLElement;
-  const fineTunePreview = document.getElementById('fineTunePreview') as HTMLElement;
-  const lockBtn = document.getElementById('lockBtn') as HTMLElement;
-  
-  const rSlider = document.getElementById('rSlider') as HTMLInputElement;
-  const gSlider = document.getElementById('gSlider') as HTMLInputElement;
-  const bSlider = document.getElementById('bSlider') as HTMLInputElement;
-  const hSlider = document.getElementById('hSlider') as HTMLInputElement;
-  const sSlider = document.getElementById('sSlider') as HTMLInputElement;
-  const lSlider = document.getElementById('lSlider') as HTMLInputElement;
-  
-  const rInput = document.getElementById('rInput') as HTMLInputElement;
-  const gInput = document.getElementById('gInput') as HTMLInputElement;
-  const bInput = document.getElementById('bInput') as HTMLInputElement;
-  const hInput = document.getElementById('hInput') as HTMLInputElement;
-  const sInput = document.getElementById('sInput') as HTMLInputElement;
-  const lInput = document.getElementById('lInput') as HTMLInputElement;
-  
-  const exportBtn = document.getElementById('exportBtn') as HTMLElement;
-  const copyFeedback = document.getElementById('copyFeedback') as HTMLElement;
-  const linearModeBtn = document.getElementById('linearModeBtn') as HTMLElement;
-  const radialModeBtn = document.getElementById('radialModeBtn') as HTMLElement;
-  
-  const clearBtn = document.getElementById('clearBtn') as HTMLElement;
-  const confirmModal = document.getElementById('confirmModal') as HTMLElement;
-  const modalCancel = document.getElementById('modalCancel') as HTMLElement;
-  const modalConfirm = document.getElementById('modalConfirm') as HTMLElement;
-  
-  const panelToggle = document.getElementById('panelToggle') as HTMLElement;
-  const sidePanel = document.getElementById('sidePanel') as HTMLElement;
+  const els = getRequiredElements();
+  if (!els) {
+    console.error('流光探针初始化失败：缺少必要的DOM元素');
+    return;
+  }
 
-  resizeMainCanvas(mainCanvas, canvasSection);
-  
-  controller = new ProbeController({
-    mainCanvas,
-    gradientCanvas,
-    historyContainer,
-    tooltip,
-    tooltipColor,
-    tooltipHex,
-    tooltipRgb,
-    tooltipHsl,
-    startColorSwatch,
-    endColorSwatch,
-    fineTuneSection,
-    fineTunePreview,
-    lockBtn,
-    rSlider,
-    gSlider,
-    bSlider,
-    hSlider,
-    sSlider,
-    lSlider,
-    rInput,
-    gInput,
-    bInput,
-    hInput,
-    sInput,
-    lInput,
-    exportBtn,
-    copyFeedback,
-    linearModeBtn,
-    radialModeBtn
-  });
+  mainCanvasDpr = window.devicePixelRatio || 1;
+  resizeMainCanvas(els.mainCanvas, els.canvasSection);
 
-  setupUploadHandlers(uploadZone, fileInput, mainCanvas, loadingOverlay);
-  setupClearHandler(clearBtn, confirmModal, modalCancel, modalConfirm);
-  setupPanelToggle(panelToggle, sidePanel);
-  
+  const controllerOptions: ProbeControllerOptions = {
+    mainCanvas: els.mainCanvas,
+    gradientCanvas: els.gradientCanvas,
+    historyContainer: els.historyContainer,
+    tooltip: els.tooltip,
+    tooltipColor: els.tooltipColor,
+    tooltipHex: els.tooltipHex,
+    tooltipRgb: els.tooltipRgb,
+    tooltipHsl: els.tooltipHsl,
+    startColorSwatch: els.startColorSwatch,
+    endColorSwatch: els.endColorSwatch,
+    fineTuneSection: els.fineTuneSection,
+    fineTunePreview: els.fineTunePreview,
+    lockBtn: els.lockBtn,
+    rSlider: els.rSlider,
+    gSlider: els.gSlider,
+    bSlider: els.bSlider,
+    hSlider: els.hSlider,
+    sSlider: els.sSlider,
+    lSlider: els.lSlider,
+    rInput: els.rInput,
+    gInput: els.gInput,
+    bInput: els.bInput,
+    hInput: els.hInput,
+    sInput: els.sInput,
+    lInput: els.lInput,
+    exportBtn: els.exportBtn,
+    copyFeedback: els.copyFeedback,
+    linearModeBtn: els.linearModeBtn,
+    radialModeBtn: els.radialModeBtn
+  };
+
+  controller = new ProbeController(controllerOptions);
+
+  setupUploadHandlers(els.uploadZone, els.fileInput, els.mainCanvas, els.loadingOverlay, els.canvasSection);
+  setupClearHandler(els.clearBtn, els.confirmModal, els.modalCancel, els.modalConfirm);
+  setupPanelToggle(els.panelToggle, els.sidePanel);
+
   window.addEventListener('resize', () => {
-    resizeMainCanvas(mainCanvas, canvasSection);
-    resizeGradientCanvas(gradientCanvas);
+    const newDpr = window.devicePixelRatio || 1;
+    const dprChanged = newDpr !== mainCanvasDpr;
+    if (dprChanged) mainCanvasDpr = newDpr;
+    resizeMainCanvas(els.mainCanvas, els.canvasSection);
   });
 
-  resizeGradientCanvas(gradientCanvas);
-  
   setTimeout(() => {
-    loadingOverlay.style.opacity = '0';
+    els.loadingOverlay.style.opacity = '0';
     setTimeout(() => {
-      loadingOverlay.style.display = 'none';
+      els.loadingOverlay.style.display = 'none';
     }, 300);
   }, 500);
 }
 
-function resizeMainCanvas(canvas: HTMLCanvasElement, container: HTMLElement): void {
-  const rect = container.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  canvas.style.width = `${rect.width}px`;
-  canvas.style.height = `${rect.height}px`;
-  
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.scale(dpr, dpr);
-  }
+interface RequiredElements {
+  mainCanvas: HTMLCanvasElement;
+  gradientCanvas: HTMLCanvasElement;
+  historyContainer: HTMLElement;
+  uploadZone: HTMLElement;
+  fileInput: HTMLInputElement;
+  canvasSection: HTMLElement;
+  loadingOverlay: HTMLElement;
+  tooltip: HTMLElement;
+  tooltipColor: HTMLElement;
+  tooltipHex: HTMLElement;
+  tooltipRgb: HTMLElement;
+  tooltipHsl: HTMLElement;
+  startColorSwatch: HTMLElement;
+  endColorSwatch: HTMLElement;
+  fineTuneSection: HTMLElement;
+  fineTunePreview: HTMLElement;
+  lockBtn: HTMLElement;
+  rSlider: HTMLInputElement;
+  gSlider: HTMLInputElement;
+  bSlider: HTMLInputElement;
+  hSlider: HTMLInputElement;
+  sSlider: HTMLInputElement;
+  lSlider: HTMLInputElement;
+  rInput: HTMLInputElement;
+  gInput: HTMLInputElement;
+  bInput: HTMLInputElement;
+  hInput: HTMLInputElement;
+  sInput: HTMLInputElement;
+  lInput: HTMLInputElement;
+  exportBtn: HTMLElement;
+  copyFeedback: HTMLElement;
+  linearModeBtn: HTMLElement;
+  radialModeBtn: HTMLElement;
+  clearBtn: HTMLElement;
+  confirmModal: HTMLElement;
+  modalCancel: HTMLElement;
+  modalConfirm: HTMLElement;
+  panelToggle: HTMLElement;
+  sidePanel: HTMLElement;
 }
 
-function resizeGradientCanvas(canvas: HTMLCanvasElement): void {
-  const container = canvas.parentElement;
-  if (!container) return;
-  
-  const rect = container.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  
-  canvas.width = Math.max(rect.width * dpr, 300 * dpr);
-  canvas.height = rect.height * dpr;
-  canvas.style.width = `${Math.max(rect.width, 300)}px`;
-  canvas.style.height = `${rect.height}px`;
-  
-  if (controller) {
-    controller.resizeGradientCanvas(canvas.width, canvas.height);
+function getRequiredElements(): RequiredElements | null {
+  const byId = <T extends HTMLElement>(id: string): T | null =>
+    document.getElementById(id) as T | null;
+
+  const result = {
+    mainCanvas: byId<HTMLCanvasElement>('mainCanvas'),
+    gradientCanvas: byId<HTMLCanvasElement>('gradientCanvas'),
+    historyContainer: byId('colorHistory'),
+    uploadZone: byId('uploadZone'),
+    fileInput: byId<HTMLInputElement>('fileInput'),
+    canvasSection: byId('canvasSection'),
+    loadingOverlay: byId('loadingOverlay'),
+    tooltip: byId('colorTooltip'),
+    tooltipColor: byId('tooltipColor'),
+    tooltipHex: byId('tooltipHex'),
+    tooltipRgb: byId('tooltipRgb'),
+    tooltipHsl: byId('tooltipHsl'),
+    startColorSwatch: byId('startColorSwatch'),
+    endColorSwatch: byId('endColorSwatch'),
+    fineTuneSection: byId('fineTuneSection'),
+    fineTunePreview: byId('fineTunePreview'),
+    lockBtn: byId('lockBtn'),
+    rSlider: byId<HTMLInputElement>('rSlider'),
+    gSlider: byId<HTMLInputElement>('gSlider'),
+    bSlider: byId<HTMLInputElement>('bSlider'),
+    hSlider: byId<HTMLInputElement>('hSlider'),
+    sSlider: byId<HTMLInputElement>('sSlider'),
+    lSlider: byId<HTMLInputElement>('lSlider'),
+    rInput: byId<HTMLInputElement>('rInput'),
+    gInput: byId<HTMLInputElement>('gInput'),
+    bInput: byId<HTMLInputElement>('bInput'),
+    hInput: byId<HTMLInputElement>('hInput'),
+    sInput: byId<HTMLInputElement>('sInput'),
+    lInput: byId<HTMLInputElement>('lInput'),
+    exportBtn: byId('exportBtn'),
+    copyFeedback: byId('copyFeedback'),
+    linearModeBtn: byId('linearModeBtn'),
+    radialModeBtn: byId('radialModeBtn'),
+    clearBtn: byId('clearBtn'),
+    confirmModal: byId('confirmModal'),
+    modalCancel: byId('modalCancel'),
+    modalConfirm: byId('modalConfirm'),
+    panelToggle: byId('panelToggle'),
+    sidePanel: byId('sidePanel')
+  };
+
+  for (const [key, value] of Object.entries(result)) {
+    if (!value) {
+      console.error(`缺少元素: #${key}`);
+      return null;
+    }
   }
+  return result as RequiredElements;
+}
+
+// 只设置物理尺寸，不做 context 缩放；避免与 probe.ts 的内部坐标计算冲突
+function resizeMainCanvas(canvas: HTMLCanvasElement, container: HTMLElement): void {
+  const rect = container.getBoundingClientRect();
+  const dpr = mainCanvasDpr;
+  const cssWidth = Math.max(1, Math.floor(rect.width));
+  const cssHeight = Math.max(1, Math.floor(rect.height));
+
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  canvas.style.width = `${cssWidth}px`;
+  canvas.style.height = `${cssHeight}px`;
 }
 
 function setupUploadHandlers(
   uploadZone: HTMLElement,
   fileInput: HTMLInputElement,
   canvas: HTMLCanvasElement,
-  loadingOverlay: HTMLElement
+  loadingOverlay: HTMLElement,
+  canvasSection: HTMLElement
 ): void {
   uploadZone.addEventListener('click', () => {
     fileInput.click();
@@ -150,7 +192,7 @@ function setupUploadHandlers(
     const target = e.target as HTMLInputElement;
     const file = target.files?.[0];
     if (file) {
-      handleFile(file, uploadZone, canvas, loadingOverlay);
+      handleFile(file, uploadZone, canvas, loadingOverlay, canvasSection);
     }
   });
 
@@ -166,10 +208,10 @@ function setupUploadHandlers(
   uploadZone.addEventListener('drop', (e) => {
     e.preventDefault();
     uploadZone.classList.remove('dragover');
-    
+
     const file = e.dataTransfer?.files?.[0];
     if (file && file.type.startsWith('image/')) {
-      handleFile(file, uploadZone, canvas, loadingOverlay);
+      handleFile(file, uploadZone, canvas, loadingOverlay, canvasSection);
     }
   });
 }
@@ -178,7 +220,8 @@ function handleFile(
   file: File,
   uploadZone: HTMLElement,
   canvas: HTMLCanvasElement,
-  loadingOverlay: HTMLElement
+  loadingOverlay: HTMLElement,
+  canvasSection: HTMLElement
 ): void {
   loadingOverlay.style.display = 'flex';
   loadingOverlay.style.opacity = '1';
@@ -187,13 +230,15 @@ function handleFile(
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
+      resizeMainCanvas(canvas, canvasSection);
+
       uploadZone.style.display = 'none';
       canvas.style.display = 'block';
-      
+
       if (controller) {
         controller.loadImage(img);
       }
-      
+
       setTimeout(() => {
         loadingOverlay.style.opacity = '0';
         setTimeout(() => {
@@ -201,7 +246,15 @@ function handleFile(
         }, 300);
       }, 200);
     };
+    img.onerror = () => {
+      loadingOverlay.style.display = 'none';
+      console.error('图片加载失败');
+    };
     img.src = e.target?.result as string;
+  };
+  reader.onerror = () => {
+    loadingOverlay.style.display = 'none';
+    console.error('文件读取失败');
   };
   reader.readAsDataURL(file);
 }
@@ -240,4 +293,8 @@ function setupPanelToggle(toggle: HTMLElement, panel: HTMLElement): void {
   });
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

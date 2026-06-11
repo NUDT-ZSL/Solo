@@ -1,16 +1,17 @@
-import { GradientConfig, GradientType, IGradientGenerator, RGB } from './types';
+import { GradientConfig, IGradientGenerator } from './types';
 import { ColorProbe } from './probe';
 
-export { GradientType, GradientConfig } from './types';
+export type { GradientConfig } from './types';
 
 export class GradientGenerator implements IGradientGenerator {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private config: GradientConfig;
+  private resizeObserver: ResizeObserver | null = null;
   private animationFrameId: number | null = null;
   private pendingRender: boolean = false;
   private readonly MIN_WIDTH: number = 300;
-  private readonly DEFAULT_HEIGHT: number = 60;
+  private readonly MIN_HEIGHT: number = 40;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -22,10 +23,66 @@ export class GradientGenerator implements IGradientGenerator {
       endColor: '#0000FF',
       type: 'linear'
     };
+
+    this.setupResizeObserver();
+  }
+
+  private setupResizeObserver(): void {
+    if (typeof ResizeObserver === 'undefined') return;
+
+    try {
+      this.resizeObserver = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          this.resizeTo(Math.ceil(width), Math.ceil(height));
+        }
+      });
+
+      requestAnimationFrame(() => {
+        if (!this.resizeObserver) return;
+        const container = this.canvas.parentElement || this.canvas;
+        this.resizeObserver.observe(container);
+
+        const rect = container.getBoundingClientRect();
+        if (rect.width > 0 || rect.height > 0) {
+          this.resizeTo(Math.ceil(rect.width), Math.ceil(rect.height));
+        }
+      });
+    } catch (e) {
+      console.warn('ResizeObserver初始化失败，使用窗口resize事件降级', e);
+    }
+  }
+
+  private resizeTo(width: number, height: number): void {
+    const safeWidth = Math.max(width, this.MIN_WIDTH);
+    const safeHeight = Math.max(height, this.MIN_HEIGHT);
+
+    const currentWidth = this.canvas.width;
+    const currentHeight = this.canvas.height;
+
+    if (currentWidth === safeWidth && currentHeight === safeHeight) return;
+
+    this.canvas.width = safeWidth;
+    this.canvas.height = safeHeight;
+
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = `${safeHeight}px`;
+
+    this.scheduleRender();
   }
 
   setConfig(config: Partial<GradientConfig>): void {
-    this.config = { ...this.config, ...config };
+    const next: GradientConfig = { ...this.config, ...config };
+
+    if (
+      next.startColor === this.config.startColor &&
+      next.endColor === this.config.endColor &&
+      next.type === this.config.type
+    ) {
+      return;
+    }
+
+    this.config = next;
     this.scheduleRender();
   }
 
@@ -34,19 +91,7 @@ export class GradientGenerator implements IGradientGenerator {
   }
 
   setSize(width: number, height: number): void {
-    const safeWidth = Math.max(width, this.MIN_WIDTH);
-    const safeHeight = Math.max(height, 1);
-
-    this.canvas.width = safeWidth;
-    this.canvas.height = safeHeight;
-
-    const styleWidth = safeWidth;
-    const styleHeight = safeHeight;
-
-    this.canvas.style.width = `${styleWidth}px`;
-    this.canvas.style.height = `${styleHeight}px`;
-
-    this.scheduleRender();
+    this.resizeTo(width, height);
   }
 
   render(): void {
@@ -65,12 +110,12 @@ export class GradientGenerator implements IGradientGenerator {
       this.ctx.fillRect(0, 0, width, height);
     } catch (e) {
       console.error('渐变渲染失败:', e);
-      this.ctx.fillStyle = this.config.startColor;
+      this.ctx.fillStyle = this.sanitizeColor(this.config.startColor);
       this.ctx.fillRect(0, 0, width, height);
     }
   }
 
-  private createLinearGradient(width: number, height: number): CanvasGradient {
+  private createLinearGradient(width: number, _height: number): CanvasGradient {
     const gradient = this.ctx.createLinearGradient(0, 0, width, 0);
     gradient.addColorStop(0, this.sanitizeColor(this.config.startColor));
     gradient.addColorStop(1, this.sanitizeColor(this.config.endColor));
@@ -80,10 +125,10 @@ export class GradientGenerator implements IGradientGenerator {
   private createRadialGradient(width: number, height: number): CanvasGradient {
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = Math.max(width, height) / 2;
+    const halfDiagonal = Math.sqrt(width * width + height * height) / 2;
 
     const innerRadius = 0;
-    const outerRadius = radius;
+    const outerRadius = halfDiagonal;
 
     const gradient = this.ctx.createRadialGradient(
       centerX,
@@ -97,12 +142,9 @@ export class GradientGenerator implements IGradientGenerator {
     const startColor = this.sanitizeColor(this.config.startColor);
     const endColor = this.sanitizeColor(this.config.endColor);
 
-    const steps = 20;
-    for (let i = 0; i <= steps; i++) {
-      const ratio = i / steps;
-      const color = this.interpolateColor(startColor, endColor, ratio);
-      gradient.addColorStop(ratio, color);
-    }
+    gradient.addColorStop(0, startColor);
+    gradient.addColorStop(0.5, this.interpolateColor(startColor, endColor, 0.5));
+    gradient.addColorStop(1, endColor);
 
     return gradient;
   }
@@ -113,9 +155,10 @@ export class GradientGenerator implements IGradientGenerator {
 
     if (!c1 || !c2) return color1Hex;
 
-    const r = Math.round(c1.r + (c2.r - c1.r) * ratio);
-    const g = Math.round(c1.g + (c2.g - c1.g) * ratio);
-    const b = Math.round(c1.b + (c2.b - c1.b) * ratio);
+    const safeRatio = Math.max(0, Math.min(1, ratio));
+    const r = Math.round(c1.r + (c2.r - c1.r) * safeRatio);
+    const g = Math.round(c1.g + (c2.g - c1.g) * safeRatio);
+    const b = Math.round(c1.b + (c2.b - c1.b) * safeRatio);
 
     return ColorProbe.rgbToHex(r, g, b);
   }
@@ -175,6 +218,10 @@ export class GradientGenerator implements IGradientGenerator {
   }
 
   destroy(): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
