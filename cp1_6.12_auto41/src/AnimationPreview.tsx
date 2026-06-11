@@ -13,9 +13,11 @@ export const AnimationPreview: React.FC = () => {
   const lastTimeRef = useRef<number>(0);
   const stageRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const [fps, setFps] = useState(0);
   const fpsCounterRef = useRef({ count: 0, lastUpdate: 0 });
   const [isDraggingProgress, setIsDraggingProgress] = useState(false);
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
 
   const activeLine = lyricsData
     ? getActiveLine(lyricsData.lines, playerState.currentTime)
@@ -90,6 +92,28 @@ export const AnimationPreview: React.FC = () => {
     }
   }, [lyricsData, playerState, setPlayerState]);
 
+  const updateTooltipPosition = useCallback((clientX: number) => {
+    if (!progressBarRef.current) return;
+    
+    const barRect = progressBarRef.current.getBoundingClientRect();
+    const tooltipWidth = 60;
+    const edgePadding = 4;
+    
+    let ratio = (clientX - barRect.left) / barRect.width;
+    ratio = Math.max(0, Math.min(1, ratio));
+    
+    const centerX = ratio * barRect.width;
+    let tooltipLeft = centerX - tooltipWidth / 2;
+    const minLeft = edgePadding;
+    const maxLeft = barRect.width - tooltipWidth - edgePadding;
+    tooltipLeft = Math.max(minLeft, Math.min(maxLeft, tooltipLeft));
+    
+    setTooltipStyle({
+      left: `${tooltipLeft}px`,
+      transform: 'none',
+    });
+  }, []);
+
   const seekToPosition = useCallback((clientX: number) => {
     if (!progressBarRef.current || !lyricsData) return;
     const rect = progressBarRef.current.getBoundingClientRect();
@@ -99,7 +123,8 @@ export const AnimationPreview: React.FC = () => {
       currentTime: newTime,
       isPlaying: false,
     });
-  }, [lyricsData, playerState.duration, setPlayerState]);
+    updateTooltipPosition(clientX);
+  }, [lyricsData, playerState.duration, setPlayerState, updateTooltipPosition]);
 
   const handleProgressBarMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -115,11 +140,23 @@ export const AnimationPreview: React.FC = () => {
       setIsDraggingProgress(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+    
+    const handleScroll = () => {
+      if (progressBarRef.current && playerState.duration > 0) {
+        const rect = progressBarRef.current.getBoundingClientRect();
+        const ratio = playerState.currentTime / playerState.duration;
+        updateTooltipPosition(rect.left + ratio * rect.width);
+      }
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [seekToPosition]);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+  }, [seekToPosition, updateTooltipPosition, playerState.currentTime, playerState.duration]);
 
   if (!lyricsData) {
     return (
@@ -230,19 +267,22 @@ export const AnimationPreview: React.FC = () => {
             </div>
             {isDraggingProgress && (
               <div
+                ref={tooltipRef}
                 style={{
                   position: 'absolute',
                   bottom: '100%',
-                  left: `${playerState.duration > 0 ? (playerState.currentTime / playerState.duration) * 100 : 0}%`,
-                  transform: 'translateX(-50%)',
-                  padding: '4px 8px',
+                  ...tooltipStyle,
+                  padding: '5px 10px',
                   backgroundColor: 'var(--accent-color)',
                   color: 'white',
                   fontSize: '12px',
                   fontFamily: 'monospace',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   whiteSpace: 'nowrap',
-                  marginBottom: '8px',
+                  marginBottom: '10px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  pointerEvents: 'none',
+                  zIndex: 100,
                 }}
               >
                 {formatTime(playerState.currentTime)}

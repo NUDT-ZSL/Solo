@@ -128,7 +128,14 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
   const exportProgress = useLyricsStore((state) => state.exportProgress);
   const setExportProgress = useLyricsStore((state) => state.setExportProgress);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const simulatedProgressRef = useRef({ current: 0, target: 0, timer: null as ReturnType<typeof setInterval> | null });
+  const displayProgressRef = useRef({
+    current: 0,
+    target: 0,
+    rafId: null as number | null,
+    lastFrameTime: 0,
+    frameCount: 0,
+    avgFrameTime: 16,
+  });
 
   const exportVideo = useCallback(async () => {
     if (!lyricsData || lyricsData.lines.length === 0) {
@@ -250,38 +257,76 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
   const [displayProgress, setDisplayProgress] = useState(0);
 
   React.useEffect(() => {
-    if (exportProgress.status === 'processing') {
-      simulatedProgressRef.current.target = exportProgress.progress;
-      
-      if (!simulatedProgressRef.current.timer) {
-        simulatedProgressRef.current.timer = setInterval(() => {
-          simulatedProgressRef.current.current += Math.max(0.1, (simulatedProgressRef.current.target - simulatedProgressRef.current.current) * 0.1);
-          if (simulatedProgressRef.current.current > simulatedProgressRef.current.target) {
-            simulatedProgressRef.current.current = simulatedProgressRef.current.target;
-          }
-          if (simulatedProgressRef.current.current < 99.5 && simulatedProgressRef.current.target < 99.5) {
-            simulatedProgressRef.current.current += 0.05;
-          }
-          setDisplayProgress(Math.min(100, Math.round(simulatedProgressRef.current.current * 10) / 10));
-        }, 50);
+    const state = displayProgressRef.current;
+
+    const animate = (timestamp: number) => {
+      if (state.lastFrameTime === 0) {
+        state.lastFrameTime = timestamp;
       }
-    } else if (simulatedProgressRef.current.timer) {
-      clearInterval(simulatedProgressRef.current.timer);
-      simulatedProgressRef.current.timer = null;
-      simulatedProgressRef.current.current = 0;
-      simulatedProgressRef.current.target = 0;
+      
+      const deltaTime = timestamp - state.lastFrameTime;
+      state.lastFrameTime = timestamp;
+      
+      state.frameCount++;
+      state.avgFrameTime = state.avgFrameTime * 0.9 + deltaTime * 0.1;
+      
+      const diff = state.target - state.current;
+      const baseSpeed = 0.15;
+      const speedFactor = Math.min(3, Math.max(0.5, 16 / state.avgFrameTime));
+      const speed = baseSpeed * speedFactor;
+      
+      if (Math.abs(diff) > 0.01) {
+        state.current += diff * speed;
+        if (Math.abs(diff) < 0.1) {
+          state.current = state.target;
+        }
+      }
+      
+      setDisplayProgress(Math.min(100, Math.round(state.current * 10) / 10));
+      
+      if (Math.abs(state.target - state.current) > 0.001 || state.target < 99.9) {
+        state.rafId = requestAnimationFrame(animate);
+      } else {
+        state.rafId = null;
+      }
+    };
+
+    if (exportProgress.status === 'processing') {
+      state.target = exportProgress.progress;
+      
+      if (!state.rafId) {
+        state.lastFrameTime = 0;
+        state.rafId = requestAnimationFrame(animate);
+      }
+    } else if (exportProgress.status === 'completed') {
+      state.target = 100;
+      if (!state.rafId) {
+        state.lastFrameTime = 0;
+        state.rafId = requestAnimationFrame(animate);
+      }
+    } else if (state.rafId) {
+      cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+      state.current = 0;
+      state.target = 0;
+      state.lastFrameTime = 0;
+      state.frameCount = 0;
+      state.avgFrameTime = 16;
       setDisplayProgress(0);
     }
 
     return () => {
-      if (simulatedProgressRef.current.timer) {
-        clearInterval(simulatedProgressRef.current.timer);
+      if (state.rafId) {
+        cancelAnimationFrame(state.rafId);
+        state.rafId = null;
       }
     };
   }, [exportProgress.status, exportProgress.progress]);
 
   const buttonText = exportProgress.status === 'processing'
     ? `导出中 ${displayProgress}%...`
+    : exportProgress.status === 'completed'
+    ? `导出完成 ${displayProgress}%`
     : '导出 WebM 视频';
 
   return (
@@ -296,7 +341,7 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
           minWidth: '160px',
         }}
       >
-        {exportProgress.status === 'processing' && (
+        {exportProgress.status === 'processing' || exportProgress.status === 'completed' ? (
           <div
             style={{
               position: 'absolute',
@@ -304,11 +349,13 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
               top: 0,
               bottom: 0,
               width: `${displayProgress}%`,
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              transition: 'width 0.1s linear',
+              backgroundColor: exportProgress.status === 'completed' 
+                ? 'rgba(76, 175, 80, 0.4)' 
+                : 'rgba(255,255,255,0.2)',
+              transition: 'background-color 0.3s ease',
             }}
           />
-        )}
+        ) : null}
         <span style={{ position: 'relative', zIndex: 1 }}>
           {buttonText}
         </span>

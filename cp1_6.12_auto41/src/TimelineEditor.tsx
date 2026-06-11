@@ -33,8 +33,11 @@ const LyricItem: React.FC<LyricItemProps> = ({
   const resizeStartX = useRef(0);
   const resizeStartTime = useRef(0);
   const resizeEndTime = useRef(0);
+  const pixelsPerSecondRef = useRef(50);
   const itemRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingDeltaRef = useRef(0);
 
   const [{ isDragging }, drag] = useDrag<DragItem, unknown, { isDragging: boolean }>({
     type: 'LYRIC_ITEM',
@@ -53,52 +56,129 @@ const LyricItem: React.FC<LyricItemProps> = ({
     },
   });
 
-  const handleResizeStart = useCallback((e: React.MouseEvent, edge: 'left' | 'right') => {
-    e.stopPropagation();
+  const calculatePixelsPerSecond = useCallback(() => {
+    if (!itemRef.current) return 50;
+    const duration = Math.max(line.endTime - line.startTime, 0.5);
+    const rect = itemRef.current.getBoundingClientRect();
+    const cssWidth = rect.width;
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const scaledWidth = cssWidth / devicePixelRatio;
+    return Math.max(30, scaledWidth / duration);
+  }, [line.startTime, line.endTime]);
+
+  const applyResizeDelta = useCallback((edge: 'left' | 'right', lineId: string) => {
+    if (pendingDeltaRef.current === 0) {
+      rafRef.current = null;
+      return;
+    }
+
+    const deltaTime = roundToStep(pendingDeltaRef.current / pixelsPerSecondRef.current, 0.1);
+    pendingDeltaRef.current = 0;
+
+    if (edge === 'left') {
+      const newStartTime = clamp(
+        resizeStartTime.current + deltaTime,
+        0,
+        resizeEndTime.current - 0.2
+      );
+      onUpdateTime(lineId, newStartTime, resizeEndTime.current);
+    } else {
+      const newEndTime = clamp(
+        resizeEndTime.current + deltaTime,
+        resizeStartTime.current + 0.2,
+        Number.MAX_SAFE_INTEGER
+      );
+      onUpdateTime(lineId, resizeStartTime.current, newEndTime);
+    }
+
+    rafRef.current = requestAnimationFrame(() => applyResizeDelta(edge, lineId));
+  }, [onUpdateTime]);
+
+  const handleResizeMove = useCallback((clientX: number, edge: 'left' | 'right') => {
+    const deltaX = clientX - resizeStartX.current;
+    pendingDeltaRef.current = deltaX;
+    
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => applyResizeDelta(edge, line.id));
+    }
+  }, [applyResizeDelta, line.id]);
+
+  const handleResizeEnd = useCallback((_edge: 'left' | 'right') => {
+    setIsResizing(null);
+    
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    
+    pendingDeltaRef.current = 0;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    document.body.style.touchAction = '';
+    
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('touchmove', handleTouchMove);
+    document.removeEventListener('touchend', handleTouchEnd);
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     e.preventDefault();
-    setIsResizing(edge);
-    resizeStartX.current = e.clientX;
+    if (isResizing) {
+      handleResizeMove(e.clientX, isResizing);
+    }
+  }, [isResizing, handleResizeMove]);
+
+  const handleMouseUp = useCallback(() => {
+    if (isResizing) {
+      handleResizeEnd(isResizing);
+    }
+  }, [isResizing, handleResizeEnd]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    e.preventDefault();
+    if (isResizing && e.touches.length > 0) {
+      handleResizeMove(e.touches[0].clientX, isResizing);
+    }
+  }, [isResizing, handleResizeMove]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (isResizing) {
+      handleResizeEnd(isResizing);
+    }
+  }, [isResizing, handleResizeEnd]);
+
+  const startResize = useCallback((clientX: number, edge: 'left' | 'right') => {
+    pixelsPerSecondRef.current = calculatePixelsPerSecond();
+    resizeStartX.current = clientX;
     resizeStartTime.current = line.startTime;
     resizeEndTime.current = line.endTime;
-
-    const duration = line.endTime - line.startTime;
-    const pixelsPerSecond = Math.max(20, itemRef.current ? itemRef.current.offsetWidth / Math.max(duration, 1) : 50);
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      moveEvent.preventDefault();
-      const deltaX = moveEvent.clientX - resizeStartX.current;
-      const deltaTime = roundToStep(deltaX / pixelsPerSecond, 0.1);
-
-      if (edge === 'left') {
-        const newStartTime = clamp(
-          resizeStartTime.current + deltaTime,
-          0,
-          resizeEndTime.current - 0.2
-        );
-        onUpdateTime(line.id, newStartTime, resizeEndTime.current);
-      } else {
-        const newEndTime = clamp(
-          resizeEndTime.current + deltaTime,
-          resizeStartTime.current + 0.2,
-          Number.MAX_SAFE_INTEGER
-        );
-        onUpdateTime(line.id, resizeStartTime.current, newEndTime);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(null);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    document.body.style.cursor = edge === 'left' || edge === 'right' ? 'ew-resize' : '';
+    pendingDeltaRef.current = 0;
+    setIsResizing(edge);
+    
+    document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', handleMouseMove);
+    document.body.style.touchAction = 'none';
+    
+    document.addEventListener('mousemove', handleMouseMove, { passive: false });
     document.addEventListener('mouseup', handleMouseUp);
-  }, [line.id, line.startTime, line.endTime, onUpdateTime]);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+  }, [line.startTime, line.endTime, calculatePixelsPerSecond, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent, edge: 'left' | 'right') => {
+    e.stopPropagation();
+    e.preventDefault();
+    startResize(e.clientX, edge);
+  }, [startResize]);
+
+  const handleResizeTouchStart = useCallback((e: React.TouchEvent, edge: 'left' | 'right') => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (e.touches.length > 0) {
+      startResize(e.touches[0].clientX, edge);
+    }
+  }, [startResize]);
 
   drag(dragHandleRef);
   drop(itemRef);
@@ -135,47 +215,55 @@ const LyricItem: React.FC<LyricItemProps> = ({
 
       <div
         className={`resize-handle resize-handle-left ${isResizing === 'left' ? 'active' : ''}`}
-        onMouseDown={(e) => handleResizeStart(e, 'left')}
+        onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
         onMouseDownCapture={(e) => e.stopPropagation()}
+        onTouchStart={(e) => handleResizeTouchStart(e, 'left')}
+        onTouchStartCapture={(e) => e.stopPropagation()}
         style={{
           left: 0,
-          width: '12px',
+          width: '20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'ew-resize',
-          zIndex: 5,
+          zIndex: 10,
+          touchAction: 'none',
         }}
         title="拖拽调整开始时间"
       >
         <div style={{
-          width: '3px',
-          height: '20px',
+          width: '4px',
+          height: '28px',
           backgroundColor: isResizing === 'left' ? 'var(--accent-color)' : 'rgba(233, 69, 96, 0.4)',
-          borderRadius: '2px',
+          borderRadius: '3px',
+          transition: 'background-color 0.2s ease, height 0.2s ease',
         }} />
       </div>
 
       <div
         className={`resize-handle resize-handle-right ${isResizing === 'right' ? 'active' : ''}`}
-        onMouseDown={(e) => handleResizeStart(e, 'right')}
+        onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
         onMouseDownCapture={(e) => e.stopPropagation()}
+        onTouchStart={(e) => handleResizeTouchStart(e, 'right')}
+        onTouchStartCapture={(e) => e.stopPropagation()}
         style={{
           right: 0,
-          width: '12px',
+          width: '20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'ew-resize',
-          zIndex: 5,
+          zIndex: 10,
+          touchAction: 'none',
         }}
         title="拖拽调整结束时间"
       >
         <div style={{
-          width: '3px',
-          height: '20px',
+          width: '4px',
+          height: '28px',
           backgroundColor: isResizing === 'right' ? 'var(--accent-color)' : 'rgba(233, 69, 96, 0.4)',
-          borderRadius: '2px',
+          borderRadius: '3px',
+          transition: 'background-color 0.2s ease, height 0.2s ease',
         }} />
       </div>
 
