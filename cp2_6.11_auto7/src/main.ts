@@ -40,6 +40,7 @@ class CloudPatternLoom {
   private textureGenTimes: number[] = [];
   private debugPanel: HTMLDivElement | null = null;
   private showDebugPanel: boolean = false;
+  private isDegraded: boolean = false;
 
   constructor() {
     this.container = document.getElementById('canvas-container')!;
@@ -270,9 +271,10 @@ class CloudPatternLoom {
     const fadeOut = (startTime: number) => {
       const elapsed = performance.now() - startTime;
       const progress = Math.min(elapsed / halfDuration, 1);
+      const easedProgress = this.easeInOutQuad(progress);
 
       if (oldMesh) {
-        (oldMesh.material as THREE.MeshStandardMaterial).opacity = 1 - progress;
+        (oldMesh.material as THREE.MeshStandardMaterial).opacity = 1 - easedProgress;
       }
 
       if (progress < 1) {
@@ -288,9 +290,10 @@ class CloudPatternLoom {
         const fadeIn = () => {
           const elapsed = performance.now() - fadeInStartTime;
           const progress = Math.min(elapsed / halfDuration, 1);
+          const easedProgress = this.easeInOutQuad(progress);
 
           if (this.currentMesh) {
-            (this.currentMesh.material as THREE.MeshStandardMaterial).opacity = progress;
+            (this.currentMesh.material as THREE.MeshStandardMaterial).opacity = easedProgress;
           }
 
           if (progress < 1) {
@@ -326,7 +329,7 @@ class CloudPatternLoom {
   }
 
   private flashAnimation(): void {
-    if (this.isFlashing || !this.currentMesh) return;
+    if (!this.currentMesh) return;
     this.isFlashing = true;
 
     const halfDuration = 150;
@@ -403,6 +406,20 @@ class CloudPatternLoom {
         this.fpsHistory.shift();
       }
 
+      if (fps < 45 && !this.isDegraded) {
+        this.isDegraded = true;
+        this.renderer.setPixelRatio(1);
+        this.controls.dampingFactor = 0.05;
+        console.warn(`触发性能降级: FPS ${fps.toFixed(1)}, 已降低像素比`);
+      }
+
+      if (fps >= 58 && this.isDegraded) {
+        this.isDegraded = false;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.controls.dampingFactor = 0.1;
+        console.log(`性能已恢复: FPS ${fps.toFixed(1)}, 已恢复像素比`);
+      }
+
       this.frameCount++;
       if (this.frameCount % 60 === 0) {
         const avgFps = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
@@ -419,7 +436,7 @@ class CloudPatternLoom {
 
     this.flowOffset += this.params.flowSpeed * delta * 60;
 
-    if (this.currentMesh && !this.isTransitioning && !this.isFlashing) {
+    if (this.currentMesh && !this.isFlashing) {
       const material = this.currentMesh.material as THREE.MeshStandardMaterial;
       if (material.map) {
         material.map.offset.y = this.flowOffset;
@@ -427,7 +444,7 @@ class CloudPatternLoom {
       }
     }
 
-    if (this.currentMesh && !this.isTransitioning) {
+    if (this.currentMesh) {
       this.currentMesh.rotation.y += 0.002;
     }
 

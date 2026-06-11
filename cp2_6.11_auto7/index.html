@@ -216,6 +216,19 @@
       justify-content: space-between;
       padding: 0 16px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .panel {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    input[type="range"] {
+      -webkit-tap-highlight-color: transparent;
     }
 
     .mobile-title {
@@ -257,12 +270,19 @@
         pointer-events: none;
         transition: all 0.3s ease;
         z-index: 15;
+        -webkit-overflow-scrolling: touch;
+        overflow-y: auto;
+        max-height: calc(100vh - 80px);
       }
 
       #ui-container.open {
         opacity: 1;
         transform: translateY(0);
         pointer-events: auto;
+      }
+
+      #ui-container.open .panel {
+        touch-action: none;
       }
 
       .mobile-toggle {

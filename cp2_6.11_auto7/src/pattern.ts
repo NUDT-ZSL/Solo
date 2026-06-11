@@ -40,6 +40,10 @@ export class CloudPatternGenerator {
     return { ...this.params };
   }
 
+  private scale(val: number): number {
+    return val * (this.size / 1024);
+  }
+
   private generate(): void {
     const ctx = this.ctx;
     const w = this.size;
@@ -73,7 +77,7 @@ export class CloudPatternGenerator {
         const rotation = (i * 0.5 + layerOffset + curlFactor * Math.PI) % (Math.PI * 2);
 
         if (i % 3 === 0) {
-          this.drawSpiralCloud(ctx, wrapX, wrapY, 90 * scale, {
+          this.drawSpiralCloud(ctx, wrapX, wrapY, this.scale(90) * scale, {
             curl: curlFactor,
             alpha,
             color: cloudColor,
@@ -81,7 +85,7 @@ export class CloudPatternGenerator {
             goldHue: colorShift
           });
         } else if (i % 3 === 1) {
-          this.drawRuyiCloud(ctx, wrapX, wrapY, 100 * scale, 55 * scale, {
+          this.drawRuyiCloud(ctx, wrapX, wrapY, this.scale(100) * scale, this.scale(55) * scale, {
             curl: curlFactor,
             alpha,
             color: cloudColor,
@@ -89,7 +93,7 @@ export class CloudPatternGenerator {
             goldHue: colorShift
           });
         } else {
-          this.drawScrollCloud(ctx, wrapX, wrapY, 85 * scale, 45 * scale, {
+          this.drawScrollCloud(ctx, wrapX, wrapY, this.scale(85) * scale, this.scale(45) * scale, {
             curl: curlFactor,
             alpha,
             color: cloudColor,
@@ -140,7 +144,7 @@ export class CloudPatternGenerator {
       ctx.rotate(rotation);
       ctx.globalAlpha = alpha;
 
-      const gradient = ctx.createRadialGradient(0, 0, size * 0.1, 0, 0, size * 0.6);
+      const gradient = ctx.createRadialGradient(0, 0, size * this.scale(0.1), 0, 0, size * this.scale(0.6));
       gradient.addColorStop(0, color);
       gradient.addColorStop(0.4, this.adjustColor(color, -10));
       gradient.addColorStop(0.7, this.adjustColor(color, -25));
@@ -154,10 +158,10 @@ export class CloudPatternGenerator {
 
       for (let i = 0; i <= segments; i++) {
         const t = (i / segments) * turns * Math.PI * 2;
-        const r = (t / (turns * Math.PI * 2)) * size * 0.6;
-        const curlOffset = Math.sin(t * 3 + curl * Math.PI) * (size * 0.08 * curl);
+        const r = (t / (turns * Math.PI * 2)) * size * this.scale(0.6);
+        const curlOffset = Math.sin(t * 3 + curl * Math.PI) * (size * this.scale(0.08) * curl);
         const px = Math.cos(t) * (r + curlOffset);
-        const py = Math.sin(t) * (r + curlOffset) * 0.7;
+        const py = Math.sin(t) * (r + curlOffset) * this.scale(0.7);
         points.push([px, py]);
       }
 
@@ -173,7 +177,7 @@ export class CloudPatternGenerator {
       for (let i = points.length - 2; i >= 0; i--) {
         const prev = points[i + 1];
         const curr = points[i];
-        const innerOffset = size * 0.15 * (1 - i / segments);
+        const innerOffset = size * this.scale(0.15) * (1 - i / segments);
         const cpx = prev[0] + (curr[0] - prev[0]) * 0.5;
         const cpy = prev[1] + (curr[1] - prev[1]) * 0.5 - innerOffset;
         ctx.quadraticCurveTo(cpx, cpy, curr[0], curr[1] - innerOffset * 0.5);
@@ -183,7 +187,7 @@ export class CloudPatternGenerator {
 
       const goldColor = `hsla(${(45 + goldHue) % 360}, 85%, 65%, ${alpha * 0.7})`;
       ctx.strokeStyle = goldColor;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = this.scale(1.5);
       ctx.stroke();
 
       ctx.globalAlpha = alpha * 0.4;
@@ -193,23 +197,23 @@ export class CloudPatternGenerator {
         ctx.moveTo(p[0], p[1]);
         for (let j = 0; j <= 5; j++) {
           const t2 = j / 5;
-          const r2 = t2 * size * 0.1;
+          const r2 = t2 * size * this.scale(0.1);
           const ang = t2 * Math.PI * 1.5;
-          ctx.lineTo(p[0] + Math.cos(ang) * r2, p[1] + Math.sin(ang) * r2 * 0.6);
+          ctx.lineTo(p[0] + Math.cos(ang) * r2, p[1] + Math.sin(ang) * r2 * this.scale(0.6));
         }
       }
       ctx.strokeStyle = goldColor;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = this.scale(1);
       ctx.stroke();
 
       ctx.restore();
     };
 
     drawAt(0, 0);
-    if (x < size * 0.6) drawAt(w, 0);
-    if (x > w - size * 0.6) drawAt(-w, 0);
-    if (y < size * 0.6) drawAt(0, h);
-    if (y > h - size * 0.6) drawAt(0, -h);
+    if (x < size * this.scale(0.6)) drawAt(w, 0);
+    if (x > w - size * this.scale(0.6)) drawAt(-w, 0);
+    if (y < size * this.scale(0.6)) drawAt(0, h);
+    if (y > h - size * this.scale(0.6)) drawAt(0, -h);
   }
 
   private drawRuyiCloud(
@@ -236,7 +240,7 @@ export class CloudPatternGenerator {
       ctx.rotate(rotation);
       ctx.globalAlpha = alpha;
 
-      const gradient = ctx.createRadialGradient(-width * 0.1, 0, width * 0.1, 0, 0, width * 0.6);
+      const gradient = ctx.createRadialGradient(-width * this.scale(0.1), 0, width * this.scale(0.1), 0, 0, width * this.scale(0.6));
       gradient.addColorStop(0, color);
       gradient.addColorStop(0.5, this.adjustColor(color, -15));
       gradient.addColorStop(0.8, this.adjustColor(color, -30));
@@ -244,62 +248,62 @@ export class CloudPatternGenerator {
       ctx.fillStyle = gradient;
 
       ctx.beginPath();
-      const headWidth = width * 0.5;
-      const headHeight = height * 0.9;
-      const tailLength = width * 0.6;
-      const curlAmount = curl * height * 0.3;
+      const headWidth = width * this.scale(0.5);
+      const headHeight = height * this.scale(0.9);
+      const tailLength = width * this.scale(0.6);
+      const curlAmount = curl * height * this.scale(0.3);
 
-      ctx.moveTo(-headWidth * 0.3, -headHeight * 0.4);
+      ctx.moveTo(-headWidth * this.scale(0.3), -headHeight * this.scale(0.4));
 
       ctx.bezierCurveTo(
-        -headWidth * 0.3 - curlAmount, -headHeight * 0.8,
-        headWidth * 0.2 - curlAmount, -headHeight * 0.9,
-        headWidth * 0.5, -headHeight * 0.3
+        -headWidth * this.scale(0.3) - curlAmount, -headHeight * this.scale(0.8),
+        headWidth * this.scale(0.2) - curlAmount, -headHeight * this.scale(0.9),
+        headWidth * this.scale(0.5), -headHeight * this.scale(0.3)
       );
 
       ctx.bezierCurveTo(
-        headWidth * 0.6 + curlAmount * 0.5, -headHeight * 0.1,
-        headWidth * 0.55 + curlAmount * 0.8, headHeight * 0.2,
-        headWidth * 0.35, headHeight * 0.45
+        headWidth * this.scale(0.6) + curlAmount * 0.5, -headHeight * this.scale(0.1),
+        headWidth * this.scale(0.55) + curlAmount * 0.8, headHeight * this.scale(0.2),
+        headWidth * this.scale(0.35), headHeight * this.scale(0.45)
       );
 
       ctx.bezierCurveTo(
-        headWidth * 0.1, headHeight * 0.6,
-        -headWidth * 0.2, headHeight * 0.55,
-        -headWidth * 0.4, headHeight * 0.35
+        headWidth * this.scale(0.1), headHeight * this.scale(0.6),
+        -headWidth * this.scale(0.2), headHeight * this.scale(0.55),
+        -headWidth * this.scale(0.4), headHeight * this.scale(0.35)
       );
 
       ctx.bezierCurveTo(
-        -headWidth * 0.5, headHeight * 0.15,
-        -headWidth * 0.45, -headHeight * 0.1,
-        -headWidth * 0.3, -headHeight * 0.4
+        -headWidth * this.scale(0.5), headHeight * this.scale(0.15),
+        -headWidth * this.scale(0.45), -headHeight * this.scale(0.1),
+        -headWidth * this.scale(0.3), -headHeight * this.scale(0.4)
       );
 
       ctx.closePath();
       ctx.fill();
 
       ctx.beginPath();
-      ctx.moveTo(headWidth * 0.35, headHeight * 0.3);
+      ctx.moveTo(headWidth * this.scale(0.35), headHeight * this.scale(0.3));
 
-      const tailCurl1 = curl * tailLength * 0.2;
-      const tailCurl2 = curl * tailLength * 0.35;
+      const tailCurl1 = curl * tailLength * this.scale(0.2);
+      const tailCurl2 = curl * tailLength * this.scale(0.35);
 
       ctx.bezierCurveTo(
-        headWidth * 0.6, headHeight * 0.4 + tailCurl1,
-        headWidth * 0.9, headHeight * 0.5 + tailCurl2,
-        tailLength, headHeight * 0.3
+        headWidth * this.scale(0.6), headHeight * this.scale(0.4) + tailCurl1,
+        headWidth * this.scale(0.9), headHeight * this.scale(0.5) + tailCurl2,
+        tailLength, headHeight * this.scale(0.3)
       );
 
       ctx.bezierCurveTo(
-        tailLength * 0.85, headHeight * 0.15,
-        tailLength * 0.7, headHeight * 0.05,
-        tailLength * 0.55, headHeight * 0.12
+        tailLength * this.scale(0.85), headHeight * this.scale(0.15),
+        tailLength * this.scale(0.7), headHeight * this.scale(0.05),
+        tailLength * this.scale(0.55), headHeight * this.scale(0.12)
       );
 
       ctx.bezierCurveTo(
-        tailLength * 0.45 + tailCurl1, headHeight * 0.18,
-        tailLength * 0.35 + tailCurl2, headHeight * 0.22,
-        tailLength * 0.25, headHeight * 0.25
+        tailLength * this.scale(0.45) + tailCurl1, headHeight * this.scale(0.18),
+        tailLength * this.scale(0.35) + tailCurl2, headHeight * this.scale(0.22),
+        tailLength * this.scale(0.25), headHeight * this.scale(0.25)
       );
 
       ctx.fillStyle = gradient;
@@ -307,61 +311,61 @@ export class CloudPatternGenerator {
 
       const goldColor = `hsla(${(45 + goldHue) % 360}, 85%, 65%, ${alpha * 0.75})`;
       ctx.strokeStyle = goldColor;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = this.scale(1.8);
 
       ctx.beginPath();
-      ctx.moveTo(-headWidth * 0.3, -headHeight * 0.4);
+      ctx.moveTo(-headWidth * this.scale(0.3), -headHeight * this.scale(0.4));
       ctx.bezierCurveTo(
-        -headWidth * 0.3 - curlAmount, -headHeight * 0.8,
-        headWidth * 0.2 - curlAmount, -headHeight * 0.9,
-        headWidth * 0.5, -headHeight * 0.3
+        -headWidth * this.scale(0.3) - curlAmount, -headHeight * this.scale(0.8),
+        headWidth * this.scale(0.2) - curlAmount, -headHeight * this.scale(0.9),
+        headWidth * this.scale(0.5), -headHeight * this.scale(0.3)
       );
       ctx.bezierCurveTo(
-        headWidth * 0.6 + curlAmount * 0.5, -headHeight * 0.1,
-        headWidth * 0.55 + curlAmount * 0.8, headHeight * 0.2,
-        headWidth * 0.35, headHeight * 0.45
+        headWidth * this.scale(0.6) + curlAmount * 0.5, -headHeight * this.scale(0.1),
+        headWidth * this.scale(0.55) + curlAmount * 0.8, headHeight * this.scale(0.2),
+        headWidth * this.scale(0.35), headHeight * this.scale(0.45)
       );
       ctx.bezierCurveTo(
-        headWidth * 0.1, headHeight * 0.6,
-        -headWidth * 0.2, headHeight * 0.55,
-        -headWidth * 0.4, headHeight * 0.35
+        headWidth * this.scale(0.1), headHeight * this.scale(0.6),
+        -headWidth * this.scale(0.2), headHeight * this.scale(0.55),
+        -headWidth * this.scale(0.4), headHeight * this.scale(0.35)
       );
       ctx.bezierCurveTo(
-        -headWidth * 0.5, headHeight * 0.15,
-        -headWidth * 0.45, -headHeight * 0.1,
-        -headWidth * 0.3, -headHeight * 0.4
+        -headWidth * this.scale(0.5), headHeight * this.scale(0.15),
+        -headWidth * this.scale(0.45), -headHeight * this.scale(0.1),
+        -headWidth * this.scale(0.3), -headHeight * this.scale(0.4)
       );
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(headWidth * 0.35, headHeight * 0.3);
+      ctx.moveTo(headWidth * this.scale(0.35), headHeight * this.scale(0.3));
       ctx.bezierCurveTo(
-        headWidth * 0.6, headHeight * 0.4 + tailCurl1,
-        headWidth * 0.9, headHeight * 0.5 + tailCurl2,
-        tailLength, headHeight * 0.3
+        headWidth * this.scale(0.6), headHeight * this.scale(0.4) + tailCurl1,
+        headWidth * this.scale(0.9), headHeight * this.scale(0.5) + tailCurl2,
+        tailLength, headHeight * this.scale(0.3)
       );
       ctx.bezierCurveTo(
-        tailLength * 0.85, headHeight * 0.15,
-        tailLength * 0.7, headHeight * 0.05,
-        tailLength * 0.55, headHeight * 0.12
+        tailLength * this.scale(0.85), headHeight * this.scale(0.15),
+        tailLength * this.scale(0.7), headHeight * this.scale(0.05),
+        tailLength * this.scale(0.55), headHeight * this.scale(0.12)
       );
       ctx.stroke();
 
       ctx.globalAlpha = alpha * 0.5;
       ctx.beginPath();
-      ctx.arc(0, -headHeight * 0.1, headWidth * 0.18, 0, Math.PI * 2);
+      ctx.arc(0, -headHeight * this.scale(0.1), headWidth * this.scale(0.18), 0, Math.PI * 2);
       ctx.strokeStyle = goldColor;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = this.scale(1);
       ctx.stroke();
 
       ctx.restore();
     };
 
     drawAt(0, 0);
-    if (x < width * 0.6) drawAt(w, 0);
-    if (x > w - width * 0.6) drawAt(-w, 0);
-    if (y < height * 0.6) drawAt(0, h);
-    if (y > h - height * 0.6) drawAt(0, -h);
+    if (x < width * this.scale(0.6)) drawAt(w, 0);
+    if (x > w - width * this.scale(0.6)) drawAt(-w, 0);
+    if (y < height * this.scale(0.6)) drawAt(0, h);
+    if (y > h - height * this.scale(0.6)) drawAt(0, -h);
   }
 
   private drawScrollCloud(
@@ -388,100 +392,100 @@ export class CloudPatternGenerator {
       ctx.rotate(rotation);
       ctx.globalAlpha = alpha;
 
-      const gradient = ctx.createRadialGradient(0, 0, width * 0.1, 0, 0, width * 0.55);
+      const gradient = ctx.createRadialGradient(0, 0, width * this.scale(0.1), 0, 0, width * this.scale(0.55));
       gradient.addColorStop(0, color);
       gradient.addColorStop(0.45, this.adjustColor(color, -12));
       gradient.addColorStop(0.75, this.adjustColor(color, -28));
       gradient.addColorStop(1, 'transparent');
       ctx.fillStyle = gradient;
 
-      const mainWidth = width * 0.55;
-      const mainHeight = height * 0.75;
-      const hookSize = width * 0.35;
-      const curlAmount = curl * height * 0.35;
+      const mainWidth = width * this.scale(0.55);
+      const mainHeight = height * this.scale(0.75);
+      const hookSize = width * this.scale(0.35);
+      const curlAmount = curl * height * this.scale(0.35);
 
       ctx.beginPath();
 
-      ctx.moveTo(-mainWidth * 0.4, -mainHeight * 0.45);
+      ctx.moveTo(-mainWidth * this.scale(0.4), -mainHeight * this.scale(0.45));
 
       ctx.bezierCurveTo(
-        -mainWidth * 0.45, -mainHeight * 0.75,
-        -mainWidth * 0.2 - curlAmount * 0.3, -mainHeight * 0.85,
-        -mainWidth * 0.05, -mainHeight * 0.65
+        -mainWidth * this.scale(0.45), -mainHeight * this.scale(0.75),
+        -mainWidth * this.scale(0.2) - curlAmount * 0.3, -mainHeight * this.scale(0.85),
+        -mainWidth * this.scale(0.05), -mainHeight * this.scale(0.65)
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.1, -mainHeight * 0.45,
-        mainWidth * 0.15 + curlAmount * 0.2, -mainHeight * 0.2,
-        mainWidth * 0.2, 0
+        mainWidth * this.scale(0.1), -mainHeight * this.scale(0.45),
+        mainWidth * this.scale(0.15) + curlAmount * 0.2, -mainHeight * this.scale(0.2),
+        mainWidth * this.scale(0.2), 0
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.22 + curlAmount * 0.3, mainHeight * 0.25,
-        mainWidth * 0.15, mainHeight * 0.5,
-        -mainWidth * 0.05, mainHeight * 0.55
+        mainWidth * this.scale(0.22) + curlAmount * 0.3, mainHeight * this.scale(0.25),
+        mainWidth * this.scale(0.15), mainHeight * this.scale(0.5),
+        -mainWidth * this.scale(0.05), mainHeight * this.scale(0.55)
       );
 
       ctx.bezierCurveTo(
-        -mainWidth * 0.3, mainHeight * 0.6,
-        -mainWidth * 0.5, mainHeight * 0.4,
-        -mainWidth * 0.55, mainHeight * 0.1
+        -mainWidth * this.scale(0.3), mainHeight * this.scale(0.6),
+        -mainWidth * this.scale(0.5), mainHeight * this.scale(0.4),
+        -mainWidth * this.scale(0.55), mainHeight * this.scale(0.1)
       );
 
       ctx.bezierCurveTo(
-        -mainWidth * 0.6 - curlAmount * 0.2, -mainHeight * 0.15,
-        -mainWidth * 0.5 - curlAmount * 0.4, -mainHeight * 0.35,
-        -mainWidth * 0.4, -mainHeight * 0.45
+        -mainWidth * this.scale(0.6) - curlAmount * 0.2, -mainHeight * this.scale(0.15),
+        -mainWidth * this.scale(0.5) - curlAmount * 0.4, -mainHeight * this.scale(0.35),
+        -mainWidth * this.scale(0.4), -mainHeight * this.scale(0.45)
       );
 
       ctx.closePath();
       ctx.fill();
 
       ctx.beginPath();
-      ctx.moveTo(-mainWidth * 0.05, -mainHeight * 0.65);
+      ctx.moveTo(-mainWidth * this.scale(0.05), -mainHeight * this.scale(0.65));
 
       const hookCurl = curl * hookSize * 0.4;
 
       ctx.bezierCurveTo(
-        mainWidth * 0.05, -mainHeight * 0.75 - hookCurl * 0.3,
-        mainWidth * 0.2, -mainHeight * 0.8 - hookCurl * 0.5,
-        mainWidth * 0.35, -mainHeight * 0.7 - hookCurl * 0.4
+        mainWidth * this.scale(0.05), -mainHeight * this.scale(0.75) - hookCurl * 0.3,
+        mainWidth * this.scale(0.2), -mainHeight * this.scale(0.8) - hookCurl * 0.5,
+        mainWidth * this.scale(0.35), -mainHeight * this.scale(0.7) - hookCurl * 0.4
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.5 + hookCurl * 0.2, -mainHeight * 0.55,
-        mainWidth * 0.55 + hookCurl * 0.4, -mainHeight * 0.3,
-        mainWidth * 0.5, -mainHeight * 0.05
+        mainWidth * this.scale(0.5) + hookCurl * 0.2, -mainHeight * this.scale(0.55),
+        mainWidth * this.scale(0.55) + hookCurl * 0.4, -mainHeight * this.scale(0.3),
+        mainWidth * this.scale(0.5), -mainHeight * this.scale(0.05)
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.45, mainHeight * 0.15,
-        mainWidth * 0.35, mainHeight * 0.25,
-        mainWidth * 0.2, mainHeight * 0.2
+        mainWidth * this.scale(0.45), mainHeight * this.scale(0.15),
+        mainWidth * this.scale(0.35), mainHeight * this.scale(0.25),
+        mainWidth * this.scale(0.2), mainHeight * this.scale(0.2)
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.1, mainHeight * 0.15,
-        mainWidth * 0.05, mainHeight * 0.05,
-        mainWidth * 0.05, -mainHeight * 0.05
+        mainWidth * this.scale(0.1), mainHeight * this.scale(0.15),
+        mainWidth * this.scale(0.05), mainHeight * this.scale(0.05),
+        mainWidth * this.scale(0.05), -mainHeight * this.scale(0.05)
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.08, -mainHeight * 0.15,
-        mainWidth * 0.15, -mainHeight * 0.2,
-        mainWidth * 0.22, -mainHeight * 0.18
+        mainWidth * this.scale(0.08), -mainHeight * this.scale(0.15),
+        mainWidth * this.scale(0.15), -mainHeight * this.scale(0.2),
+        mainWidth * this.scale(0.22), -mainHeight * this.scale(0.18)
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.3 + hookCurl * 0.2, -mainHeight * 0.15,
-        mainWidth * 0.35, -mainHeight * 0.25,
-        mainWidth * 0.32, -mainHeight * 0.35
+        mainWidth * this.scale(0.3) + hookCurl * 0.2, -mainHeight * this.scale(0.15),
+        mainWidth * this.scale(0.35), -mainHeight * this.scale(0.25),
+        mainWidth * this.scale(0.32), -mainHeight * this.scale(0.35)
       );
 
       ctx.bezierCurveTo(
-        mainWidth * 0.28, -mainHeight * 0.45,
-        mainWidth * 0.2, -mainHeight * 0.5,
-        mainWidth * 0.1, -mainHeight * 0.48
+        mainWidth * this.scale(0.28), -mainHeight * this.scale(0.45),
+        mainWidth * this.scale(0.2), -mainHeight * this.scale(0.5),
+        mainWidth * this.scale(0.1), -mainHeight * this.scale(0.48)
       );
 
       ctx.fillStyle = gradient;
@@ -489,71 +493,71 @@ export class CloudPatternGenerator {
 
       const goldColor = `hsla(${(45 + goldHue) % 360}, 85%, 65%, ${alpha * 0.7})`;
       ctx.strokeStyle = goldColor;
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = this.scale(1.6);
 
       ctx.beginPath();
-      ctx.moveTo(-mainWidth * 0.4, -mainHeight * 0.45);
+      ctx.moveTo(-mainWidth * this.scale(0.4), -mainHeight * this.scale(0.45));
       ctx.bezierCurveTo(
-        -mainWidth * 0.45, -mainHeight * 0.75,
-        -mainWidth * 0.2 - curlAmount * 0.3, -mainHeight * 0.85,
-        -mainWidth * 0.05, -mainHeight * 0.65
+        -mainWidth * this.scale(0.45), -mainHeight * this.scale(0.75),
+        -mainWidth * this.scale(0.2) - curlAmount * 0.3, -mainHeight * this.scale(0.85),
+        -mainWidth * this.scale(0.05), -mainHeight * this.scale(0.65)
       );
       ctx.bezierCurveTo(
-        mainWidth * 0.1, -mainHeight * 0.45,
-        mainWidth * 0.15 + curlAmount * 0.2, -mainHeight * 0.2,
-        mainWidth * 0.2, 0
+        mainWidth * this.scale(0.1), -mainHeight * this.scale(0.45),
+        mainWidth * this.scale(0.15) + curlAmount * 0.2, -mainHeight * this.scale(0.2),
+        mainWidth * this.scale(0.2), 0
       );
       ctx.bezierCurveTo(
-        mainWidth * 0.22 + curlAmount * 0.3, mainHeight * 0.25,
-        mainWidth * 0.15, mainHeight * 0.5,
-        -mainWidth * 0.05, mainHeight * 0.55
+        mainWidth * this.scale(0.22) + curlAmount * 0.3, mainHeight * this.scale(0.25),
+        mainWidth * this.scale(0.15), mainHeight * this.scale(0.5),
+        -mainWidth * this.scale(0.05), mainHeight * this.scale(0.55)
       );
       ctx.bezierCurveTo(
-        -mainWidth * 0.3, mainHeight * 0.6,
-        -mainWidth * 0.5, mainHeight * 0.4,
-        -mainWidth * 0.55, mainHeight * 0.1
+        -mainWidth * this.scale(0.3), mainHeight * this.scale(0.6),
+        -mainWidth * this.scale(0.5), mainHeight * this.scale(0.4),
+        -mainWidth * this.scale(0.55), mainHeight * this.scale(0.1)
       );
       ctx.bezierCurveTo(
-        -mainWidth * 0.6 - curlAmount * 0.2, -mainHeight * 0.15,
-        -mainWidth * 0.5 - curlAmount * 0.4, -mainHeight * 0.35,
-        -mainWidth * 0.4, -mainHeight * 0.45
+        -mainWidth * this.scale(0.6) - curlAmount * 0.2, -mainHeight * this.scale(0.15),
+        -mainWidth * this.scale(0.5) - curlAmount * 0.4, -mainHeight * this.scale(0.35),
+        -mainWidth * this.scale(0.4), -mainHeight * this.scale(0.45)
       );
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(-mainWidth * 0.05, -mainHeight * 0.65);
+      ctx.moveTo(-mainWidth * this.scale(0.05), -mainHeight * this.scale(0.65));
       ctx.bezierCurveTo(
-        mainWidth * 0.05, -mainHeight * 0.75 - hookCurl * 0.3,
-        mainWidth * 0.2, -mainHeight * 0.8 - hookCurl * 0.5,
-        mainWidth * 0.35, -mainHeight * 0.7 - hookCurl * 0.4
+        mainWidth * this.scale(0.05), -mainHeight * this.scale(0.75) - hookCurl * 0.3,
+        mainWidth * this.scale(0.2), -mainHeight * this.scale(0.8) - hookCurl * 0.5,
+        mainWidth * this.scale(0.35), -mainHeight * this.scale(0.7) - hookCurl * 0.4
       );
       ctx.bezierCurveTo(
-        mainWidth * 0.5 + hookCurl * 0.2, -mainHeight * 0.55,
-        mainWidth * 0.55 + hookCurl * 0.4, -mainHeight * 0.3,
-        mainWidth * 0.5, -mainHeight * 0.05
+        mainWidth * this.scale(0.5) + hookCurl * 0.2, -mainHeight * this.scale(0.55),
+        mainWidth * this.scale(0.55) + hookCurl * 0.4, -mainHeight * this.scale(0.3),
+        mainWidth * this.scale(0.5), -mainHeight * this.scale(0.05)
       );
       ctx.bezierCurveTo(
-        mainWidth * 0.45, mainHeight * 0.15,
-        mainWidth * 0.35, mainHeight * 0.25,
-        mainWidth * 0.2, mainHeight * 0.2
+        mainWidth * this.scale(0.45), mainHeight * this.scale(0.15),
+        mainWidth * this.scale(0.35), mainHeight * this.scale(0.25),
+        mainWidth * this.scale(0.2), mainHeight * this.scale(0.2)
       );
       ctx.stroke();
 
       ctx.globalAlpha = alpha * 0.45;
       ctx.beginPath();
-      ctx.arc(-mainWidth * 0.15, 0, mainWidth * 0.12, 0, Math.PI * 2);
+      ctx.arc(-mainWidth * this.scale(0.15), 0, mainWidth * this.scale(0.12), 0, Math.PI * 2);
       ctx.strokeStyle = goldColor;
-      ctx.lineWidth = 0.8;
+      ctx.lineWidth = this.scale(0.8);
       ctx.stroke();
 
       ctx.restore();
     };
 
     drawAt(0, 0);
-    if (x < width * 0.6) drawAt(w, 0);
-    if (x > w - width * 0.6) drawAt(-w, 0);
-    if (y < height * 0.6) drawAt(0, h);
-    if (y > h - height * 0.6) drawAt(0, -h);
+    if (x < width * this.scale(0.6)) drawAt(w, 0);
+    if (x > w - width * this.scale(0.6)) drawAt(-w, 0);
+    if (y < height * this.scale(0.6)) drawAt(0, h);
+    if (y > h - height * this.scale(0.6)) drawAt(0, -h);
   }
 
   private adjustColor(color: string, amount: number): string {

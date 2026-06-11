@@ -75,6 +75,15 @@ export class UIPanel {
         }
       }
     });
+
+    document.addEventListener('touchend', (e) => {
+      if (this.isMobile() && this.isMobileOpen) {
+        const target = e.target as Node;
+        if (!this.uiContainer.contains(target) && !this.mobileMenuBtn.contains(target)) {
+          this.closeMobileMenu();
+        }
+      }
+    });
   }
 
   private initEventListeners(): void {
@@ -141,6 +150,39 @@ export class UIPanel {
     this.mobileMenuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleMobileMenu();
+    });
+
+    this.mobileMenuBtn.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.toggleMobileMenu();
+    });
+
+    this.uiContainer.addEventListener('touchstart', (e) => {
+      if (this.isMobile() && this.isMobileOpen) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    });
+
+    this.uiContainer.addEventListener('touchmove', (e) => {
+      if (this.isMobile() && this.isMobileOpen) {
+        e.stopPropagation();
+      }
+    });
+
+    this.uiContainer.addEventListener('touchend', (e) => {
+      if (this.isMobile() && this.isMobileOpen) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    });
+
+    this.uiContainer.addEventListener('touchcancel', (e) => {
+      if (this.isMobile() && this.isMobileOpen) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
     });
   }
 
