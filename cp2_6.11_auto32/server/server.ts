@@ -9,12 +9,27 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+const getLocalDateString = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getTodayDateString = (): string => {
+  return getLocalDateString();
+};
+
+const sortMilestones = (data: Milestone[]): Milestone[] => {
+  return [...data].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+};
+
 let milestones: Milestone[] = [
   {
     id: cuid(),
     title: '完成需求分析文档',
     description: '完成项目需求分析和技术选型，输出详细的产品需求文档和技术架构设计方案，为后续开发工作奠定基础。',
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    deadline: getLocalDateString(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
     progress: 45,
     createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
     celebrations: [
@@ -22,26 +37,26 @@ let milestones: Milestone[] = [
       { id: cuid(), timestamp: Date.now() - 1 * 24 * 60 * 60 * 1000, progressIncrease: 5 }
     ],
     celebrationCount: 2,
-    lastCelebrationDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    lastCelebrationDate: getLocalDateString(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))
   },
   {
     id: cuid(),
     title: '用户界面设计稿完成',
     description: '完成所有页面的UI设计稿，包括首页、详情页、表单页等，确保视觉风格统一且符合品牌定位。',
-    deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    deadline: getLocalDateString(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)),
     progress: 20,
     createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
     celebrations: [
       { id: cuid(), timestamp: Date.now() - 12 * 60 * 60 * 1000, progressIncrease: 5 }
     ],
     celebrationCount: 1,
-    lastCelebrationDate: new Date().toISOString().split('T')[0]
+    lastCelebrationDate: getLocalDateString()
   },
   {
     id: cuid(),
     title: '后端API开发',
     description: '开发完整的后端API接口，包括用户认证、数据CRUD操作、权限管理等核心功能模块。',
-    deadline: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    deadline: getLocalDateString(new Date(Date.now() + 21 * 24 * 60 * 60 * 1000)),
     progress: 0,
     createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
     celebrations: [],
@@ -52,7 +67,7 @@ let milestones: Milestone[] = [
     id: cuid(),
     title: '前端功能开发',
     description: '实现前端所有页面功能，包括数据展示、表单交互、状态管理、响应式布局等。',
-    deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    deadline: getLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
     progress: 0,
     createdAt: Date.now(),
     celebrations: [],
@@ -61,24 +76,12 @@ let milestones: Milestone[] = [
   }
 ];
 
-const getTodayDateString = (): string => {
-  return new Date().toISOString().split('T')[0];
-};
-
-const sortMilestones = (data: Milestone[]): Milestone[] => {
-  return [...data].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
-};
-
 app.get('/api/milestones', (_req: Request, res: Response<Milestone[]>): void => {
   res.json(sortMilestones(milestones));
 });
 
 app.post('/api/milestones', (req: Request<unknown, unknown, CreateMilestoneRequest>, res: Response): void => {
   const { title, description = '', deadline } = req.body;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const deadlineDate = new Date(deadline);
-  deadlineDate.setHours(0, 0, 0, 0);
 
   if (!title || title.trim().length === 0) {
     res.status(400).json({ error: '标题不能为空' });
@@ -95,12 +98,29 @@ app.post('/api/milestones', (req: Request<unknown, unknown, CreateMilestoneReque
     return;
   }
 
-  if (!deadline || isNaN(deadlineDate.getTime())) {
+  if (!deadline) {
+    res.status(400).json({ error: '请选择截止日期' });
+    return;
+  }
+
+  const deadlineParts = deadline.split('-');
+  if (deadlineParts.length !== 3) {
+    res.status(400).json({ error: '请选择有效的截止日期' });
+    return;
+  }
+  const deadlineYear = parseInt(deadlineParts[0], 10);
+  const deadlineMonth = parseInt(deadlineParts[1], 10) - 1;
+  const deadlineDay = parseInt(deadlineParts[2], 10);
+  const deadlineDate = new Date(deadlineYear, deadlineMonth, deadlineDay);
+
+  if (isNaN(deadlineDate.getTime())) {
     res.status(400).json({ error: '请选择有效的截止日期' });
     return;
   }
 
-  if (deadlineDate < today) {
+  const today = new Date();
+  const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (deadlineDate < todayLocal) {
     res.status(400).json({ error: '截止日期必须是未来日期' });
     return;
   }
@@ -195,11 +215,12 @@ app.post('/api/milestones/:id/celebrate', (req: Request<{ id: string }>, res: Re
 
   const progressIncrease = 5;
   const newProgress = Math.min(milestone.progress + progressIncrease, 100);
+  const actualIncrease = newProgress - milestone.progress;
 
   const record: CelebrationRecord = {
     id: cuid(),
     timestamp: Date.now(),
-    progressIncrease
+    progressIncrease: actualIncrease
   };
 
   milestone.progress = newProgress;

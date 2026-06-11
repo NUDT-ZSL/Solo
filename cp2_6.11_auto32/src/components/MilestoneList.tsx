@@ -25,22 +25,22 @@ const MilestoneList = ({ milestones, newMilestoneId, onCelebrate, onUpdate }: Mi
   const calculateVisibility = useCallback(() => {
     const newVisibility: CardVisibility = {};
     const viewportHeight = window.innerHeight;
+    const visibleRange = viewportHeight * 0.8;
 
     milestones.forEach((milestone) => {
       const cardElement = cardRefs.current[milestone.id];
       if (cardElement) {
         const rect = cardElement.getBoundingClientRect();
         const cardTop = rect.top;
-        const cardBottom = rect.bottom;
+        const cardCenterY = cardTop + rect.height / 2;
 
-        if (cardBottom < 0 || cardTop > viewportHeight) {
+        if (cardCenterY < 0 || cardCenterY > viewportHeight) {
           newVisibility[milestone.id] = { opacity: 0.4, translateY: 10 };
         } else {
-          const distanceFromTop = Math.max(0, cardTop);
-          const maxDistance = viewportHeight * 0.5;
-          const progress = Math.min(1, distanceFromTop / maxDistance);
-          const opacity = 0.4 + (1 - progress) * 0.6;
-          const translateY = progress * 10;
+          const distanceFromTop = Math.max(0, cardCenterY);
+          const ratio = Math.min(1, distanceFromTop / visibleRange);
+          const opacity = 1 - ratio * 0.6;
+          const translateY = ratio * 10;
 
           newVisibility[milestone.id] = { opacity, translateY };
         }

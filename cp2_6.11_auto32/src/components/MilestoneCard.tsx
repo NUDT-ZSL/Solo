@@ -21,41 +21,68 @@ interface Particle {
   rotationSpeed: number;
 }
 
-const THEME_COLORS = [
-  { r: 233, g: 69, b: 96 },
-  { r: 15, g: 52, b: 96 },
-  { r: 22, g: 33, b: 62 },
-];
+const rgbToHsl = (r: number, g: number, b: number): [number, number, number] => {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
 
-const hexToRgb = (hex: string) => {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
-  } : { r: 233, g: 69, b: 96 };
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
 };
 
-const rgbToHex = (r: number, g: number, b: number) => {
+const hslToHex = (h: number, s: number, l: number): string => {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * Math.max(0, Math.min(1, color)));
+  };
+  const r = f(0);
+  const g = f(8);
+  const b = f(4);
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 };
 
-const getRandomColor = () => {
-  const baseColor = THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
-  const hueShift = (Math.random() - 0.5) * 60;
-  
-  const r = Math.max(0, Math.min(255, Math.round(baseColor.r + hueShift + (Math.random() - 0.5) * 40)));
-  const g = Math.max(0, Math.min(255, Math.round(baseColor.g + hueShift + (Math.random() - 0.5) * 40)));
-  const b = Math.max(0, Math.min(255, Math.round(baseColor.b + hueShift + (Math.random() - 0.5) * 40)));
-  
-  return rgbToHex(r, g, b);
+const THEME_HSL_COLORS = [
+  rgbToHsl(233, 69, 96),
+  rgbToHsl(15, 52, 96),
+  rgbToHsl(22, 33, 62),
+];
+
+const getRandomAdjacentColor = (): string => {
+  const baseHsl = THEME_HSL_COLORS[Math.floor(Math.random() * THEME_HSL_COLORS.length)];
+  const hueOffset = (Math.random() - 0.5) * 80;
+  const newH = ((baseHsl[0] + hueOffset) % 360 + 360) % 360;
+  const newS = Math.max(30, Math.min(100, baseHsl[1] + (Math.random() - 0.5) * 30));
+  const newL = Math.max(25, Math.min(80, baseHsl[2] + (Math.random() - 0.5) * 30));
+  return hslToHex(newH, newS, newL);
+};
+
+const getLocalDateString = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCelebrating, setIsCelebrating] = useState(false);
   const [displayProgress, setDisplayProgress] = useState(milestone.progress);
-  const [particles, setParticles] = useState<Particle[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTitle, setEditTitle] = useState(milestone.title);
   const [editDescription, setEditDescription] = useState(milestone.description);
@@ -64,17 +91,23 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
+  const prevProgressRef = useRef(milestone.progress);
 
   useEffect(() => {
-    animateNumber(milestone.progress);
+    if (milestone.progress !== prevProgressRef.current) {
+      const target = Math.min(milestone.progress, 100);
+      animateNumber(target);
+      prevProgressRef.current = milestone.progress;
+    }
   }, [milestone.progress]);
 
   const animateNumber = useCallback((targetProgress: number) => {
     const startProgress = displayProgress;
-    const difference = targetProgress - startProgress;
+    const clampedTarget = Math.min(targetProgress, 100);
+    const difference = clampedTarget - startProgress;
+    if (difference === 0) return;
     const duration = 800;
     const startTime = performance.now();
 
@@ -82,11 +115,13 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      const current = Math.round(startProgress + difference * easeOutQuart);
+      const current = Math.min(Math.round(startProgress + difference * easeOutQuart), 100);
       setDisplayProgress(current);
 
       if (progress < 1) {
         requestAnimationFrame(updateNumber);
+      } else {
+        setDisplayProgress(clampedTarget);
       }
     };
 
@@ -100,7 +135,7 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
     for (let i = 0; i < particleCount; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 8 + 3;
-      const color = getRandomColor();
+      const color = getRandomAdjacentColor();
       
       newParticles.push({
         id: i,
@@ -118,7 +153,6 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
     }
 
     particlesRef.current = newParticles;
-    setParticles(newParticles);
   }, []);
 
   const animateParticles = useCallback((startTime: number) => {
@@ -160,14 +194,14 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
       };
     }).filter((particle) => particle.life > 0);
 
-    setParticles([...particlesRef.current]);
-
     if (elapsed < 3000 && particlesRef.current.length > 0) {
       animationRef.current = requestAnimationFrame(() => animateParticles(startTime));
     } else {
       setIsCelebrating(false);
       particlesRef.current = [];
-      setParticles([]);
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     }
   }, []);
 
@@ -186,7 +220,7 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
       return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const isNewDay = milestone.lastCelebrationDate !== today;
     const currentCount = isNewDay ? 0 : milestone.celebrationCount;
     
@@ -281,7 +315,7 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
   };
 
   const daysRemaining = getDaysRemaining();
-  const progressPercent = displayProgress;
+  const progressPercent = Math.min(displayProgress, 100);
 
   return (
     <div
@@ -391,7 +425,7 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
           transition: 'max-height 300ms ease-out, opacity 300ms ease-out',
         }}
       >
-        <div ref={contentRef} style={styles.expandedContentInner}>
+        <div style={styles.expandedContentInner}>
           <div style={styles.detailSection}>
             <h4 style={styles.detailTitle}>完整描述</h4>
             <p style={styles.detailText}>{milestone.description}</p>
@@ -406,7 +440,7 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
             <div style={styles.detailSection}>
               <h4 style={styles.detailTitle}>庆祝历史</h4>
               <div style={styles.celebrationList}>
-                {milestone.celebrations.map((record, index) => (
+                {milestone.celebrations.map((record) => (
                   <div key={record.id} style={styles.celebrationItem}>
                     <span style={styles.celebrationIcon}>🎉</span>
                     <span style={styles.celebrationTime}>
@@ -424,7 +458,7 @@ const MilestoneCard = ({ milestone, onCelebrate, onUpdate }: MilestoneCardProps)
           <div style={styles.detailSection}>
             <h4 style={styles.detailTitle}>今日庆祝次数</h4>
             <p style={styles.detailText}>
-              {new Date().toISOString().split('T')[0] === milestone.lastCelebrationDate 
+              {getLocalDateString() === milestone.lastCelebrationDate 
                 ? milestone.celebrationCount 
                 : 0} / 5
             </p>
