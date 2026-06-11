@@ -117,6 +117,7 @@ export class Board {
     for (let dx = -range; dx <= range; dx++) {
       for (let dy = -range; dy <= range; dy++) {
         if (dx === 0 && dy === 0) continue;
+        if (Math.abs(dx) + Math.abs(dy) > range) continue;
         const nx = unit.position.x + dx;
         const ny = unit.position.y + dy;
         if (nx >= 0 && nx < this.gridSize && ny >= 0 && ny < this.gridSize) {
@@ -136,12 +137,9 @@ export class Board {
     for (let dx = -range; dx <= range; dx++) {
       for (let dy = -range; dy <= range; dy++) {
         if (dx === 0 && dy === 0) continue;
-        if (Math.abs(dx) + Math.abs(dy) > range * 2 - 0) {
-          if (unit.attackRange > 1) {
-            if (Math.abs(dx) > range || Math.abs(dy) > range) continue;
-          } else {
-            continue;
-          }
+        if (Math.abs(dx) + Math.abs(dy) > range) continue;
+        if (unit.attackRange > 1) {
+          if (dx !== 0 && dy !== 0) continue;
         }
         const nx = pos.x + dx;
         const ny = pos.y + dy;

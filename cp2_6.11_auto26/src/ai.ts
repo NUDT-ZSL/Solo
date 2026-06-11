@@ -248,7 +248,10 @@ export class AI {
     for (let dx = -range; dx <= range; dx++) {
       for (let dy = -range; dy <= range; dy++) {
         if (dx === 0 && dy === 0) continue;
-        if (unit.attackRange <= 1 && (Math.abs(dx) + Math.abs(dy) > 1)) continue;
+        if (Math.abs(dx) + Math.abs(dy) > range) continue;
+        if (unit.attackRange > 1) {
+          if (dx !== 0 && dy !== 0) continue;
+        }
         const nx = fromPos.x + dx;
         const ny = fromPos.y + dy;
         if (nx >= 0 && nx < board.gridSize && ny >= 0 && ny < board.gridSize) {
