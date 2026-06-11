@@ -26,13 +26,15 @@ export interface ParticleCluster {
   animType: 'recall' | 'restore' | 'highlight' | null
   animProgress: number
   highlightTimer: number | null
+  preHighlightSizes: Float32Array | null
 }
 
 const MAX_TOTAL_PARTICLES = 2000
 const RECALL_DURATION_SEC = 1.0
-const COLOR_FADE_SEC = 0.5
 const HIGHLIGHT_DURATION_MS = 300
 const HIGHLIGHT_SCALE = 1.5
+const PULSE_PERIOD_MS = 2000
+const PULSE_AMPLITUDE = 0.1
 
 const EMOTION_COLORS: Record<EmotionTag, [number, string, string]> = {
   '喜悦': [0, '#FF8C00', '#FFD700'],
@@ -132,7 +134,7 @@ export class ParticleMemorySystem {
       const u = rng()
       const v = rng()
       const theta = 2 * Math.PI * u
-      const phi = Math.acos(2 * v - 1)
+      const phi = Math.acos(1 - 2 * v)
       const r = shellRadius * (0.7 + rng() * 0.3)
 
       positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
@@ -187,6 +189,7 @@ export class ParticleMemorySystem {
       animType: null,
       animProgress: 0,
       highlightTimer: null,
+      preHighlightSizes: null,
     }
 
     this.clusters.push(cluster)
@@ -234,8 +237,11 @@ export class ParticleMemorySystem {
 
     const sizes = cluster.points.geometry.attributes.size as THREE.BufferAttribute
     const sizeArr = sizes.array as Float32Array
+
+    cluster.preHighlightSizes = new Float32Array(sizeArr)
+
     for (let i = 0; i < sizeArr.length; i++) {
-      sizeArr[i] = cluster.originalSizes[i] * HIGHLIGHT_SCALE
+      sizeArr[i] = sizeArr[i] * HIGHLIGHT_SCALE
     }
     sizes.needsUpdate = true
     cluster.points.geometry.setAttribute('size', sizes)
@@ -252,8 +258,16 @@ export class ParticleMemorySystem {
   restoreHighlight(cluster: ParticleCluster) {
     const sizes = cluster.points.geometry.attributes.size as THREE.BufferAttribute
     const sizeArr = sizes.array as Float32Array
-    for (let i = 0; i < sizeArr.length; i++) {
-      sizeArr[i] = cluster.originalSizes[i]
+
+    if (cluster.preHighlightSizes !== null) {
+      for (let i = 0; i < sizeArr.length; i++) {
+        sizeArr[i] = cluster.preHighlightSizes[i]
+      }
+      cluster.preHighlightSizes = null
+    } else {
+      for (let i = 0; i < sizeArr.length; i++) {
+        sizeArr[i] = cluster.originalSizes[i]
+      }
     }
     sizes.needsUpdate = true
     cluster.points.geometry.setAttribute('size', sizes)
@@ -290,7 +304,8 @@ export class ParticleMemorySystem {
         const orb = cluster.recallGroup.getObjectByName('energyOrb') as THREE.Mesh
         const glow = cluster.recallGroup.getObjectByName('energyGlow') as THREE.Mesh
         if (orb) {
-          const scale = 1 + Math.sin((now / 1000) * Math.PI) * 0.1
+          const pulsePhase = (now / PULSE_PERIOD_MS) * Math.PI * 2
+          const scale = 1 + Math.sin(pulsePhase) * PULSE_AMPLITUDE
           orb.scale.setScalar(scale)
           if (glow) glow.scale.setScalar(scale)
         }
@@ -314,7 +329,7 @@ export class ParticleMemorySystem {
 
     const shrinkT = Math.min(elapsed / RECALL_DURATION_SEC, 1.0)
     const eased = easeOutCubic(shrinkT)
-    const colorT = Math.min(elapsed / COLOR_FADE_SEC, 1.0)
+    const colorT = shrinkT
     cluster.animProgress = eased
 
     const total = posArr.length
