@@ -7,8 +7,7 @@ interface VisualizerProps {
 
 const BAR_COUNT = 64
 const SMOOTHING_FACTOR = 0.15
-const TARGET_FPS = 60
-const FRAME_INTERVAL = 1000 / TARGET_FPS
+const UPDATE_EVERY_N_FRAMES = 1
 
 function easeOutElastic(t: number): number {
   if (t === 0 || t === 1) return t
@@ -20,21 +19,25 @@ export default function Visualizer({ getFrequencyData }: VisualizerProps) {
   const rafRef = useRef<number>(0)
   const smoothedHeightsRef = useRef<Float32Array>(new Float32Array(BAR_COUNT))
   const targetHeightsRef = useRef<Float32Array>(new Float32Array(BAR_COUNT))
-  const frameCountRef = useRef(0)
-  const lastDrawTimeRef = useRef(0)
+  const frameCounterRef = useRef(0)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
 
   const draw = useCallback(() => {
-    const now = performance.now()
-    frameCountRef.current++
+    frameCounterRef.current++
 
-    if (now - lastDrawTimeRef.current >= FRAME_INTERVAL) {
-      lastDrawTimeRef.current = now - (now % FRAME_INTERVAL)
+    if (frameCounterRef.current >= UPDATE_EVERY_N_FRAMES) {
+      frameCounterRef.current = 0
 
       const canvas = canvasRef.current
-      if (!canvas) return
+      if (!canvas) {
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
       const ctx = canvas.getContext('2d')
-      if (!ctx) return
+      if (!ctx) {
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
 
       const dpr = window.devicePixelRatio || 1
       const rect = canvas.getBoundingClientRect()

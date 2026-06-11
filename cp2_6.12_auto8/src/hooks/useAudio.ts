@@ -2,44 +2,27 @@ import { useRef, useEffect, useCallback } from 'react'
 import { usePlayerStore } from '@/store/playerStore'
 
 const FADE_DURATION = 0.3
-const FADE_CURVE = 'linear' as const
-
-type FadeType = 'in' | 'out'
 
 function applyFade(
   gainNode: GainNode,
   ctx: AudioContext,
-  type: FadeType,
   targetVolume: number,
   duration: number
 ): Promise<void> {
   return new Promise((resolve) => {
-    const currentTime = ctx.currentTime
-    gainNode.gain.cancelScheduledValues(currentTime)
-    gainNode.gain.setValueAtTime(gainNode.gain.value, currentTime)
-
-    if (type === 'in') {
-      if (FADE_CURVE === 'linear') {
-        gainNode.gain.linearRampToValueAtTime(targetVolume, currentTime + duration)
-      } else {
-        gainNode.gain.exponentialRampToValueAtTime(Math.max(targetVolume, 0.0001), currentTime + duration)
-      }
-    } else {
-      if (FADE_CURVE === 'linear') {
-        gainNode.gain.linearRampToValueAtTime(0, currentTime + duration)
-      } else {
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, currentTime + duration)
-      }
-    }
-
-    setTimeout(resolve, duration * 1000 + 50)
+    const now = ctx.currentTime
+    gainNode.gain.cancelScheduledValues(now)
+    gainNode.gain.setValueAtTime(gainNode.gain.value, now)
+    gainNode.gain.linearRampToValueAtTime(Math.max(targetVolume, 0.0001), now + duration)
+    setTimeout(resolve, duration * 1000 + 10)
   })
 }
 
 export function useAudio() {
   const audioContextRef = useRef<AudioContext | null>(null)
+  const masterGainRef = useRef<GainNode | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
-  const gainNodeRef = useRef<GainNode | null>(null)
+  const oscillatorGainRef = useRef<GainNode | null>(null)
   const oscillatorsRef = useRef<OscillatorNode[]>([])
   const rafIdRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
@@ -49,17 +32,27 @@ export function useAudio() {
 
   const initAudio = useCallback(() => {
     if (isInitializedRef.current) return
+
     const ctx = new AudioContext()
+
+    const masterGain = ctx.createGain()
+    masterGain.gain.value = 0
+
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 128
-    analyser.smoothingTimeConstant = 0.8
-    const gainNode = ctx.createGain()
-    gainNode.gain.value = 0
-    analyser.connect(gainNode)
-    gainNode.connect(ctx.destination)
+    analyser.smoothingTimeConstant = 0.75
+
+    const oscillatorGain = ctx.createGain()
+    oscillatorGain.gain.value = 0.15
+
+    oscillatorGain.connect(analyser)
+    analyser.connect(masterGain)
+    masterGain.connect(ctx.destination)
+
     audioContextRef.current = ctx
+    masterGainRef.current = masterGain
     analyserRef.current = analyser
-    gainNodeRef.current = gainNode
+    oscillatorGainRef.current = oscillatorGain
     isInitializedRef.current = true
   }, [])
 
@@ -79,18 +72,22 @@ export function useAudio() {
     (frequencies: number[], oscTypes: OscillatorType[]) => {
       stopOscillators()
       const ctx = audioContextRef.current
-      const analyser = analyserRef.current
-      if (!ctx || !analyser) return
+      const oscGain = oscillatorGainRef.current
+      if (!ctx || !oscGain) return
 
       const oscs: OscillatorNode[] = []
+      const count = frequencies.length
+
       frequencies.forEach((freq, i) => {
         const osc = ctx.createOscillator()
         osc.type = oscTypes[i] || 'sine'
         osc.frequency.value = freq
-        const oscGain = ctx.createGain()
-        oscGain.gain.value = 0.15 / frequencies.length
-        osc.connect(oscGain)
-        oscGain.connect(analyser)
+
+        const individualGain = ctx.createGain()
+        individualGain.gain.value = 1 / count
+
+        osc.connect(individualGain)
+        individualGain.connect(oscGain)
         osc.start()
         oscs.push(osc)
       })
@@ -113,11 +110,14 @@ export function useAudio() {
         if (newTime >= state.playlist[state.currentSongIndex].duration) {
           store.getState().nextSong()
           const newState = store.getState()
+          stopOscillators()
           createOscillators(
             newState.playlist[newState.currentSongIndex].frequencies,
             newState.playlist[newState.currentSongIndex].oscTypes
           )
-          fadeIn()
+          if (masterGainRef.current && audioContextRef.current) {
+            applyFade(masterGainRef.current, audioContextRef.current, newState.volume, FADE_DURATION)
+          }
         } else {
           store.getState().setCurrentTime(newTime)
         }
@@ -126,24 +126,24 @@ export function useAudio() {
     }
     lastTimeRef.current = 0
     rafIdRef.current = requestAnimationFrame(tick)
-  }, [store, createOscillators])
+  }, [store, createOscillators, stopOscillators])
 
-  const fadeIn = useCallback(async () => {
-    const gainNode = gainNodeRef.current
+  const fadeInMaster = useCallback(async () => {
+    const masterGain = masterGainRef.current
     const ctx = audioContextRef.current
-    if (!gainNode || !ctx) return
+    if (!masterGain || !ctx) return
     const vol = store.getState().volume
     store.getState().setIsFading(true)
-    await applyFade(gainNode, ctx, 'in', vol, FADE_DURATION)
+    await applyFade(masterGain, ctx, vol, FADE_DURATION)
     store.getState().setIsFading(false)
   }, [store])
 
-  const fadeOut = useCallback(async (): Promise<void> => {
-    const gainNode = gainNodeRef.current
+  const fadeOutMaster = useCallback(async (): Promise<void> => {
+    const masterGain = masterGainRef.current
     const ctx = audioContextRef.current
-    if (!gainNode || !ctx) return Promise.resolve()
+    if (!masterGain || !ctx) return Promise.resolve()
     store.getState().setIsFading(true)
-    await applyFade(gainNode, ctx, 'out', 0, FADE_DURATION)
+    await applyFade(masterGain, ctx, 0.0001, FADE_DURATION)
     store.getState().setIsFading(false)
   }, [store])
 
@@ -159,15 +159,15 @@ export function useAudio() {
     if (oscillatorsRef.current.length === 0) {
       createOscillators(song.frequencies, song.oscTypes)
     }
-    fadeIn()
+    fadeInMaster()
     store.getState().setIsPlaying(true)
-  }, [initAudio, createOscillators, fadeIn, store])
+  }, [initAudio, createOscillators, fadeInMaster, store])
 
   const pause = useCallback(() => {
-    fadeOut().then(() => {
+    fadeOutMaster().then(() => {
       store.getState().setIsPlaying(false)
     })
-  }, [fadeOut, store])
+  }, [fadeOutMaster, store])
 
   const togglePlay = useCallback(() => {
     const state = store.getState()
@@ -182,27 +182,26 @@ export function useAudio() {
     (index: number) => {
       const state = store.getState()
       const wasPlaying = state.isPlaying
-      const doSwitch = () => {
+
+      const performSwitch = () => {
         stopOscillators()
         store.getState().setCurrentSongIndex(index)
         store.getState().setCurrentTime(0)
-        const newState = store.getState()
-        createOscillators(
-          newState.playlist[newState.currentSongIndex].frequencies,
-          newState.playlist[newState.currentSongIndex].oscTypes
-        )
+        const newSong = store.getState().playlist[index]
+        createOscillators(newSong.frequencies, newSong.oscTypes)
         if (wasPlaying) {
-          fadeIn()
+          fadeInMaster()
           store.getState().setIsPlaying(true)
         }
       }
+
       if (wasPlaying) {
-        fadeOut().then(doSwitch)
+        fadeOutMaster().then(performSwitch)
       } else {
-        doSwitch()
+        performSwitch()
       }
     },
-    [stopOscillators, createOscillators, fadeIn, fadeOut, store]
+    [stopOscillators, createOscillators, fadeOutMaster, fadeInMaster, store]
   )
 
   const next = useCallback(() => {
@@ -218,8 +217,7 @@ export function useAudio() {
       return
     }
     const prevIndex =
-      (state.currentSongIndex - 1 + state.playlist.length) %
-      state.playlist.length
+      (state.currentSongIndex - 1 + state.playlist.length) % state.playlist.length
     switchSong(prevIndex)
   }, [switchSong, store])
 
@@ -234,12 +232,12 @@ export function useAudio() {
     (vol: number) => {
       const clamped = Math.max(0, Math.min(1, vol))
       store.getState().setVolume(clamped)
-      const gainNode = gainNodeRef.current
+      const masterGain = masterGainRef.current
       const ctx = audioContextRef.current
-      if (gainNode && ctx && store.getState().isPlaying) {
-        gainNode.gain.cancelScheduledValues(ctx.currentTime)
-        gainNode.gain.setValueAtTime(gainNode.gain.value, ctx.currentTime)
-        gainNode.gain.linearRampToValueAtTime(clamped, ctx.currentTime + 0.05)
+      if (masterGain && ctx && store.getState().isPlaying) {
+        masterGain.gain.cancelScheduledValues(ctx.currentTime)
+        masterGain.gain.setValueAtTime(masterGain.gain.value, ctx.currentTime)
+        masterGain.gain.linearRampToValueAtTime(clamped, ctx.currentTime + 0.08)
       }
     },
     [store]

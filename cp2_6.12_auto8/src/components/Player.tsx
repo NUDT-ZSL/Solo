@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react'
+import { useCallback, useState, useRef, useEffect } from 'react'
 import { usePlayerStore } from '@/store/playerStore'
 import {
   Play,
@@ -72,6 +72,40 @@ export default function Player({
 
   const VolumeIcon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
   const coverUrl = song?.coverUrl || ''
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault()
+          togglePlay()
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          seek(Math.max(0, usePlayerStore.getState().currentTime - 5))
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          const state = usePlayerStore.getState()
+          const dur = state.playlist[state.currentSongIndex]?.duration || 0
+          seek(Math.min(dur, state.currentTime + 5))
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setVolume(usePlayerStore.getState().volume + 0.05)
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          setVolume(usePlayerStore.getState().volume - 0.05)
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [togglePlay, seek, setVolume])
 
   return (
     <>

@@ -19,53 +19,83 @@ export default function Playlist({ switchSong }: PlaylistProps) {
   const isPlaying = usePlayerStore((s) => s.isPlaying)
 
   const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const dragCounterRef = useRef(0)
+  const dragSourceIndexRef = useRef<number | null>(null)
 
-  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
+  const onDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', String(index))
+    dragSourceIndexRef.current = index
     setDragIndex(index)
     dragCounterRef.current = 0
-  }, [])
 
-  const handleDragEnter = useCallback((e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    dragCounterRef.current++
-    setOverIndex(index)
-  }, [])
-
-  const handleDragLeave = useCallback(() => {
-    dragCounterRef.current--
-    if (dragCounterRef.current === 0) {
-      setOverIndex(null)
+    const target = e.currentTarget
+    if (target && 'querySelector' in target) {
+      const img = target.querySelector('img')
+      if (img) {
+        e.dataTransfer.setDragImage(img, 22, 22)
+      }
     }
   }, [])
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const onDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+    e.stopPropagation()
+    dragCounterRef.current++
+    if (dragIndex !== null && dragSourceIndexRef.current !== index) {
+      setDragOverIndex(index)
+    }
+  }, [dragIndex])
+
+  const onDragLeave = useCallback(() => {
+    dragCounterRef.current--
+    if (dragCounterRef.current <= 0) {
+      setDragOverIndex(null)
+      dragCounterRef.current = 0
+    }
   }, [])
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent, toIndex: number) => {
+  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    return false
+  }, [])
+
+  const onDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, toIndex: number) => {
       e.preventDefault()
-      const fromIndex = Number(e.dataTransfer.getData('text/plain'))
-      if (fromIndex !== toIndex) {
+      e.stopPropagation()
+
+      const rawIndex = e.dataTransfer.getData('text/plain')
+      const fromIndex = rawIndex !== '' ? Number(rawIndex) : null
+
+      if (fromIndex !== null && !isNaN(fromIndex) && fromIndex !== toIndex) {
         reorderPlaylist(fromIndex, toIndex)
       }
+
       setDragIndex(null)
-      setOverIndex(null)
+      setDragOverIndex(null)
+      dragSourceIndexRef.current = null
       dragCounterRef.current = 0
     },
     [reorderPlaylist]
   )
 
-  const handleDragEnd = useCallback(() => {
+  const onDragEnd = useCallback(() => {
     setDragIndex(null)
-    setOverIndex(null)
+    setDragOverIndex(null)
+    dragSourceIndexRef.current = null
     dragCounterRef.current = 0
   }, [])
+
+  const handleItemClick = useCallback(
+    (index: number) => {
+      switchSong(index)
+    },
+    [switchSong]
+  )
 
   return (
     <div className="playlist-container">
@@ -78,22 +108,23 @@ export default function Playlist({ switchSong }: PlaylistProps) {
         {playlist.map((song: Song, index: number) => {
           const isCurrent = index === currentSongIndex
           const isDragging = index === dragIndex
-          const isOver = index === overIndex
+          const isDragOver = index === dragOverIndex && dragIndex !== null && dragIndex !== index
+
           return (
             <div
               key={song.id}
-              className={`playlist-item ${isCurrent ? 'current' : ''} ${isDragging ? 'dragging' : ''} ${isOver ? 'drag-over' : ''}`}
-              onClick={() => switchSong(index)}
+              className={`playlist-item ${isCurrent ? 'current' : ''} ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
+              onClick={() => handleItemClick(index)}
               draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragEnter={(e) => handleDragEnter(e, index)}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
+              onDragStart={(e) => onDragStart(e, index)}
+              onDragEnter={(e) => onDragEnter(e, index)}
+              onDragLeave={onDragLeave}
+              onDragOver={onDragOver}
+              onDrop={(e) => onDrop(e, index)}
+              onDragEnd={onDragEnd}
             >
               <div className="playlist-item-glow" />
-              <div className="playlist-item-drag-handle">
+              <div className="playlist-item-drag-handle" onMouseDown={(e) => e.stopPropagation()}>
                 <GripVertical size={14} />
               </div>
               <img src={song.coverUrl} alt={song.title} className="playlist-item-cover" />
