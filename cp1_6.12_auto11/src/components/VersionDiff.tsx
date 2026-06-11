@@ -17,7 +17,6 @@ interface DiffLine {
 function computeDiff(text1: string, text2: string): DiffLine[] {
   const lines1 = text1.split('\n');
   const lines2 = text2.split('\n');
-
   const result: DiffLine[] = [];
 
   const dp: number[][] = Array(lines1.length + 1)
@@ -72,29 +71,44 @@ export default function VersionDiff({ versionId1, versionId2, articleId }: Versi
   const [v1, setV1] = useState<Version | null>(null);
   const [v2, setV2] = useState<Version | null>(null);
   const [diff, setDiff] = useState<DiffLine[]>([]);
-  const [visibleLines, setVisibleLines] = useState<Set<number>>(new Set());
+  const [visibleCount, setVisibleCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const revealTimer = useRef<number | null>(null);
 
   useEffect(() => {
     loadVersions();
     return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
+      if (revealTimer.current) {
+        window.clearInterval(revealTimer.current);
       }
     };
   }, [versionId1, versionId2, articleId]);
 
   useEffect(() => {
-    if (diff.length > 0) {
-      setVisibleLines(new Set());
-      diff.forEach((_, idx) => {
-        setTimeout(() => {
-          setVisibleLines((prev) => new Set(prev).add(idx));
-        }, idx * 20);
-      });
+    if (diff.length === 0) {
+      setVisibleCount(0);
+      return;
     }
+    setVisibleCount(0);
+    if (revealTimer.current) {
+      window.clearInterval(revealTimer.current);
+    }
+    const batchSize = Math.max(1, Math.ceil(diff.length / 30));
+    revealTimer.current = window.setInterval(() => {
+      setVisibleCount((prev) => {
+        const next = prev + batchSize;
+        if (next >= diff.length) {
+          if (revealTimer.current) {
+            window.clearInterval(revealTimer.current);
+            revealTimer.current = null;
+          }
+          return diff.length;
+        }
+        return next;
+      });
+    }, 25);
   }, [diff]);
 
   const loadVersions = async () => {
@@ -110,12 +124,10 @@ export default function VersionDiff({ versionId1, versionId2, articleId }: Versi
 
       const titleDiff = computeDiff(ver1.title, ver2.title);
       const contentDiff = computeDiff(ver1.content, ver2.content);
-
       const separator: DiffLine = {
         type: 'unchanged',
         content: '--- 正文内容 ---'
       };
-
       setDiff([...titleDiff, separator, ...contentDiff]);
     } catch (e) {
       setError('加载版本对比失败');
@@ -136,12 +148,8 @@ export default function VersionDiff({ versionId1, versionId2, articleId }: Versi
     <div>
       <div className="diff-container">
         <div className="diff-header">
-          <span>
-            版本1: v{v1?.version_number} - {v1?.editor_nickname}
-          </span>
-          <span>
-            版本2: v{v2?.version_number} - {v2?.editor_nickname}
-          </span>
+          <span>版本1: v{v1?.version_number} - {v1?.editor_nickname}</span>
+          <span>版本2: v{v2?.version_number} - {v2?.editor_nickname}</span>
         </div>
         {diff.length === 0 ? (
           <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>
@@ -149,19 +157,19 @@ export default function VersionDiff({ versionId1, versionId2, articleId }: Versi
           </div>
         ) : (
           diff.map((line, idx) => {
-            const isVisible = visibleLines.has(idx);
+            const isVisible = idx < visibleCount;
+            const isChanged = line.type === 'added' || line.type === 'removed';
             return (
               <div
                 key={idx}
-                className={`diff-line ${line.type} ${isVisible ? 'diff-visible' : 'diff-hidden'}`}
-                style={{
-                  maxHeight: isVisible ? '500px' : '0px',
-                  opacity: isVisible ? 1 : 0,
-                  paddingTop: isVisible ? '4px' : '0px',
-                  paddingBottom: isVisible ? '4px' : '0px'
+                ref={(el) => {
+                  if (el) lineRefs.current.set(idx, el);
                 }}
+                className={`diff-line ${line.type} ${isVisible ? 'diff-visible' : ''}`}
               >
-                <span className="line-number">{line.lineNumber || ''}</span>
+                <span className="line-number">
+                  {isChanged ? '' : line.lineNumber || ''}
+                </span>
                 <span className="line-content">{line.content || ' '}</span>
               </div>
             );

@@ -163,11 +163,15 @@ input, textarea {
 
 .article-detail {
   display: flex;
+  flex-direction: row;
   gap: 30px;
+  align-items: flex-start;
 }
 
 .article-content {
-  flex: 7;
+  flex: 0 0 70%;
+  width: 70%;
+  min-width: 0;
 }
 
 .article-content h1 {
@@ -243,7 +247,8 @@ input, textarea {
 }
 
 .version-sidebar {
-  flex: 3;
+  flex: 0 0 30%;
+  width: 30%;
   position: sticky;
   top: 20px;
   align-self: flex-start;
@@ -412,20 +417,25 @@ input, textarea {
   overflow: hidden;
   max-height: 0;
   opacity: 0;
-  transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.35s ease, background-color 0.2s ease;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease,
+              padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.2s ease;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .diff-line.diff-visible {
   padding: 4px 16px;
-  max-height: 500px;
+  max-height: 1000px;
   opacity: 1;
 }
 
-.diff-line.added {
+.diff-line.added.diff-visible {
   background-color: #e8f5e9;
 }
 
-.diff-line.removed {
+.diff-line.removed.diff-visible {
   background-color: #ffebee;
 }
 

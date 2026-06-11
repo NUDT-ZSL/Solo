@@ -1,10 +1,8 @@
-import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
+import Database from 'better-sqlite3';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-
-let db: Database | null = null;
-let dbReady: Promise<Database> | null = null;
+import fs from 'fs';
 
 export interface Article {
   id: string;
@@ -28,159 +26,257 @@ function getDbPath(): string {
   return path.join(__dirname, '..', 'wiki.db');
 }
 
-async function initDb(): Promise<Database> {
-  const database = await open({
-    filename: getDbPath(),
-    driver: sqlite3.Database
-  });
+function initDatabase(): DatabaseType {
+  const dbPath = getDbPath();
 
-  await database.exec(`
-    CREATE TABLE IF NOT EXISTS articles (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS versions (
-      id TEXT PRIMARY KEY,
-      article_id TEXT NOT NULL,
-      version_number INTEGER NOT NULL,
-      title TEXT NOT NULL,
-      content TEXT NOT NULL,
-      editor_nickname TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_versions_article_id ON versions(article_id);
-    CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title);
-  `);
-
-  return database;
-}
-
-export async function getDb(): Promise<Database> {
-  if (!dbReady) {
-    dbReady = initDb();
+  try {
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+  } catch (err) {
+    console.error('Failed to create database directory:', err);
+    throw new Error('数据库目录创建失败，请检查权限');
   }
-  if (!db) {
-    db = await dbReady;
+
+  let db: DatabaseType;
+  try {
+    db = new Database(dbPath);
+  } catch (err: any) {
+    if (err.code === 'SQLITE_CANTOPEN') {
+      console.error('Cannot open database file. Check file permissions or corruption:', err.message);
+      throw new Error(`数据库文件无法打开: ${err.message}`);
+    }
+    console.error('Failed to initialize database:', err);
+    throw new Error(`数据库初始化失败: ${err.message}`);
   }
+
+  try {
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS articles (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS versions (
+        id TEXT PRIMARY KEY,
+        article_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        editor_nickname TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_versions_article_id ON versions(article_id);
+      CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title);
+    `);
+  } catch (err: any) {
+    console.error('Failed to create tables/indexes:', err);
+    db.close();
+    throw new Error(`表结构初始化失败: ${err.message}`);
+  }
+
   return db;
 }
 
-export async function getAllArticles(search?: string): Promise<Article[]> {
-  const database = await getDb();
-  if (search && search.trim()) {
-    return database.all<Article[]>(
-      'SELECT * FROM articles WHERE title LIKE ? ORDER BY updated_at DESC',
-      [`%${search.trim()}%`]
-    );
+let db: DatabaseType;
+try {
+  db = initDatabase();
+} catch (err: any) {
+  console.error('Fatal database error during startup:', err.message);
+  process.exit(1);
+}
+
+process.on('exit', () => {
+  if (db && db.open) {
+    try { db.close(); } catch (_) { /* ignore */ }
   }
-  return database.all<Article[]>('SELECT * FROM articles ORDER BY updated_at DESC');
+});
+
+export function getAllArticles(search?: string): Article[] {
+  try {
+    if (search && search.trim()) {
+      const stmt = db.prepare(`
+        SELECT * FROM articles 
+        WHERE title LIKE ? 
+        ORDER BY updated_at DESC
+      `);
+      return stmt.all(`%${search.trim()}%`) as Article[];
+    }
+    const stmt = db.prepare('SELECT * FROM articles ORDER BY updated_at DESC');
+    return stmt.all() as Article[];
+  } catch (err: any) {
+    console.error('getAllArticles error:', err.message);
+    throw new Error('查询词条列表失败');
+  }
 }
 
-export async function getArticleById(id: string): Promise<Article | undefined> {
-  const database = await getDb();
-  const result = await database.get<Article>('SELECT * FROM articles WHERE id = ?', [id]);
-  return result;
+export function getArticleById(id: string): Article | undefined {
+  try {
+    const stmt = db.prepare('SELECT * FROM articles WHERE id = ?');
+    return stmt.get(id) as Article | undefined;
+  } catch (err: any) {
+    console.error('getArticleById error:', err.message);
+    throw new Error('查询词条失败');
+  }
 }
 
-export async function createArticle(
+export function createArticle(
   title: string,
   content: string,
   editorNickname: string
-): Promise<Article> {
-  const database = await getDb();
+): Article {
   const now = new Date().toISOString();
   const id = uuidv4();
 
-  await database.run(
-    'INSERT INTO articles (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-    [id, title, content, now, now]
-  );
+  const insertArticle = db.prepare(`
+    INSERT INTO articles (id, title, content, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const insertVersion = db.prepare(`
+    INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at)
+    VALUES (?, ?, 1, ?, ?, ?, ?)
+  `);
 
-  await database.run(
-    'INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at) VALUES (?, ?, 1, ?, ?, ?, ?)',
-    [uuidv4(), id, title, content, editorNickname, now]
-  );
+  const transaction = db.transaction(() => {
+    insertArticle.run(id, title, content, now, now);
+    insertVersion.run(uuidv4(), id, title, content, editorNickname, now);
+  });
+
+  try {
+    transaction();
+  } catch (err: any) {
+    console.error('createArticle transaction error:', err.message);
+    throw new Error('创建词条失败');
+  }
 
   return { id, title, content, created_at: now, updated_at: now };
 }
 
-export async function updateArticle(
+export function updateArticle(
   id: string,
   title: string,
   content: string,
   editorNickname: string
-): Promise<Article | undefined> {
-  const database = await getDb();
-  const article = await getArticleById(id);
+): Article | undefined {
+  const article = getArticleById(id);
   if (!article) return undefined;
 
   const now = new Date().toISOString();
 
-  const maxResult = await database.get<{ max_num: number }>(
-    'SELECT COALESCE(MAX(version_number), 0) as max_num FROM versions WHERE article_id = ?',
-    [id]
-  );
-  const newVersionNumber = (maxResult?.max_num || 0) + 1;
+  const getMaxVersion = db.prepare(`
+    SELECT COALESCE(MAX(version_number), 0) as max_num FROM versions WHERE article_id = ?
+  `);
+  const { max_num } = getMaxVersion.get(id) as { max_num: number };
+  const newVersionNumber = max_num + 1;
 
-  await database.run(
-    'INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [uuidv4(), id, newVersionNumber, article.title, article.content, editorNickname, now]
-  );
+  const insertVersion = db.prepare(`
+    INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateArticleStmt = db.prepare(`
+    UPDATE articles SET title = ?, content = ?, updated_at = ? WHERE id = ?
+  `);
 
-  await database.run(
-    'UPDATE articles SET title = ?, content = ?, updated_at = ? WHERE id = ?',
-    [title, content, now, id]
-  );
+  const transaction = db.transaction(() => {
+    insertVersion.run(
+      uuidv4(),
+      id,
+      newVersionNumber,
+      article.title,
+      article.content,
+      editorNickname,
+      now
+    );
+    updateArticleStmt.run(title, content, now, id);
+  });
+
+  try {
+    transaction();
+  } catch (err: any) {
+    console.error('updateArticle transaction error:', err.message);
+    throw new Error('更新词条失败');
+  }
 
   return { ...article, title, content, updated_at: now };
 }
 
-export async function getVersionsByArticleId(articleId: string): Promise<Version[]> {
-  const database = await getDb();
-  return database.all<Version[]>(
-    'SELECT * FROM versions WHERE article_id = ? ORDER BY version_number DESC',
-    [articleId]
-  );
+export function getVersionsByArticleId(articleId: string): Version[] {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM versions 
+      WHERE article_id = ? 
+      ORDER BY version_number DESC
+    `);
+    return stmt.all(articleId) as Version[];
+  } catch (err: any) {
+    console.error('getVersionsByArticleId error:', err.message);
+    throw new Error('查询版本历史失败');
+  }
 }
 
-export async function getVersionById(versionId: string): Promise<Version | undefined> {
-  const database = await getDb();
-  const result = await database.get<Version>('SELECT * FROM versions WHERE id = ?', [versionId]);
-  return result;
+export function getVersionById(versionId: string): Version | undefined {
+  try {
+    const stmt = db.prepare('SELECT * FROM versions WHERE id = ?');
+    return stmt.get(versionId) as Version | undefined;
+  } catch (err: any) {
+    console.error('getVersionById error:', err.message);
+    throw new Error('查询版本失败');
+  }
 }
 
-export async function restoreVersion(
+export function restoreVersion(
   articleId: string,
   versionId: string,
   editorNickname: string
-): Promise<Article | undefined> {
-  const database = await getDb();
-  const article = await getArticleById(articleId);
-  const version = await getVersionById(versionId);
+): Article | undefined {
+  const article = getArticleById(articleId);
+  const version = getVersionById(versionId);
   if (!article || !version) return undefined;
 
   const now = new Date().toISOString();
 
-  const maxResult = await database.get<{ max_num: number }>(
-    'SELECT COALESCE(MAX(version_number), 0) as max_num FROM versions WHERE article_id = ?',
-    [articleId]
-  );
-  const newVersionNumber = (maxResult?.max_num || 0) + 1;
+  const getMaxVersion = db.prepare(`
+    SELECT COALESCE(MAX(version_number), 0) as max_num FROM versions WHERE article_id = ?
+  `);
+  const { max_num } = getMaxVersion.get(articleId) as { max_num: number };
+  const newVersionNumber = max_num + 1;
 
-  await database.run(
-    'INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [uuidv4(), articleId, newVersionNumber, article.title, article.content, editorNickname, now]
-  );
+  const insertVersion = db.prepare(`
+    INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateArticleStmt = db.prepare(`
+    UPDATE articles SET title = ?, content = ?, updated_at = ? WHERE id = ?
+  `);
 
-  await database.run(
-    'UPDATE articles SET title = ?, content = ?, updated_at = ? WHERE id = ?',
-    [version.title, version.content, now, articleId]
-  );
+  const transaction = db.transaction(() => {
+    insertVersion.run(
+      uuidv4(),
+      articleId,
+      newVersionNumber,
+      article.title,
+      article.content,
+      editorNickname,
+      now
+    );
+    updateArticleStmt.run(version.title, version.content, now, articleId);
+  });
+
+  try {
+    transaction();
+  } catch (err: any) {
+    console.error('restoreVersion transaction error:', err.message);
+    throw new Error('回滚版本失败');
+  }
 
   return {
     ...article,

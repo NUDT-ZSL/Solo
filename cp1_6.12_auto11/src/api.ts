@@ -35,13 +35,16 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export function getArticles(search?: string): Promise<Article[]> {
-  const url = search ? `/articles?search=${encodeURIComponent(search)}` : '/articles';
-  return request<Article[]>(url);
+export function getArticles(): Promise<Article[]> {
+  return request<Article[]>('/articles');
 }
 
 export function searchArticles(keyword: string): Promise<Article[]> {
-  return getArticles(keyword);
+  const trimmed = (keyword || '').trim();
+  if (!trimmed) {
+    return Promise.resolve([]);
+  }
+  return request<Article[]>(`/articles/search?q=${encodeURIComponent(trimmed)}`);
 }
 
 export function createArticle(

@@ -27,17 +27,31 @@ interface RestoreVersionBody {
   editorNickname: string;
 }
 
-router.get('/articles', async (req: Request, res: Response) => {
+router.get('/articles', (req: Request, res: Response) => {
   try {
     const { search } = req.query;
-    const articles = await getAllArticles(search as string | undefined);
+    const articles = getAllArticles(search as string | undefined);
     res.json(articles);
-  } catch (error) {
-    res.status(500).json({ error: '获取词条列表失败' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取词条列表失败' });
   }
 });
 
-router.post('/articles', async (req: Request, res: Response) => {
+router.get('/articles/search', (req: Request, res: Response) => {
+  try {
+    const { q } = req.query;
+    const keyword = (q as string) || '';
+    if (!keyword.trim()) {
+      return res.json([]);
+    }
+    const articles = getAllArticles(keyword);
+    res.json(articles);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '搜索词条失败' });
+  }
+});
+
+router.post('/articles', (req: Request, res: Response) => {
   try {
     const { title, content, editorNickname } = req.body as CreateArticleBody;
 
@@ -51,27 +65,27 @@ router.post('/articles', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '编辑者昵称不能为空' });
     }
 
-    const article = await createArticle(title.trim(), content || '', editorNickname.trim());
+    const article = createArticle(title.trim(), content || '', editorNickname.trim());
     res.status(201).json(article);
-  } catch (error) {
-    res.status(500).json({ error: '创建词条失败' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '创建词条失败' });
   }
 });
 
-router.get('/articles/:id', async (req: Request, res: Response) => {
+router.get('/articles/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const article = await getArticleById(id);
+    const article = getArticleById(id);
     if (!article) {
       return res.status(404).json({ error: '词条不存在' });
     }
     res.json(article);
-  } catch (error) {
-    res.status(500).json({ error: '获取词条失败' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取词条失败' });
   }
 });
 
-router.put('/articles/:id', async (req: Request, res: Response) => {
+router.put('/articles/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { title, content, editorNickname } = req.body as UpdateArticleBody;
@@ -86,44 +100,44 @@ router.put('/articles/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '编辑者昵称不能为空' });
     }
 
-    const article = await updateArticle(id, title.trim(), content || '', editorNickname.trim());
+    const article = updateArticle(id, title.trim(), content || '', editorNickname.trim());
     if (!article) {
       return res.status(404).json({ error: '词条不存在' });
     }
     res.json(article);
-  } catch (error) {
-    res.status(500).json({ error: '更新词条失败' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '更新词条失败' });
   }
 });
 
-router.get('/articles/:id/versions', async (req: Request, res: Response) => {
+router.get('/articles/:id/versions', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const article = await getArticleById(id);
+    const article = getArticleById(id);
     if (!article) {
       return res.status(404).json({ error: '词条不存在' });
     }
-    const versions = await getVersionsByArticleId(id);
+    const versions = getVersionsByArticleId(id);
     res.json(versions);
-  } catch (error) {
-    res.status(500).json({ error: '获取版本历史失败' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取版本历史失败' });
   }
 });
 
-router.get('/articles/:id/versions/:versionId', async (req: Request, res: Response) => {
+router.get('/articles/:id/versions/:versionId', (req: Request, res: Response) => {
   try {
     const { versionId } = req.params;
-    const version = await getVersionById(versionId);
+    const version = getVersionById(versionId);
     if (!version) {
       return res.status(404).json({ error: '版本不存在' });
     }
     res.json(version);
-  } catch (error) {
-    res.status(500).json({ error: '获取版本失败' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取版本失败' });
   }
 });
 
-router.post('/articles/:id/restore/:versionId', async (req: Request, res: Response) => {
+router.post('/articles/:id/restore/:versionId', (req: Request, res: Response) => {
   try {
     const { id, versionId } = req.params;
     const { editorNickname } = req.body as RestoreVersionBody;
@@ -132,13 +146,13 @@ router.post('/articles/:id/restore/:versionId', async (req: Request, res: Respon
       return res.status(400).json({ error: '编辑者昵称不能为空' });
     }
 
-    const article = await restoreVersion(id, versionId, editorNickname.trim());
+    const article = restoreVersion(id, versionId, editorNickname.trim());
     if (!article) {
       return res.status(404).json({ error: '词条或版本不存在' });
     }
     res.json(article);
-  } catch (error) {
-    res.status(500).json({ error: '回滚版本失败' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '回滚版本失败' });
   }
 });
 
