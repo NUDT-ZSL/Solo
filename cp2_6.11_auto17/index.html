@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>星语石碑 · Stellar Stele</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>雨痕物语 - 雨滴粒子模拟</title>
   <style>
     * {
       margin: 0;
@@ -15,179 +15,412 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-    }
-
-    body {
-      background: linear-gradient(180deg, #0A1128 0%, #1B0A2E 100%);
-      position: relative;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%);
     }
 
     #app {
-      width: 100vw;
-      height: 100vh;
-      display: block;
+      width: 100%;
+      height: 100%;
+      position: relative;
     }
 
-    #loading {
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #splash {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
+      background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%);
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(180deg, #0A1128 0%, #1B0A2E 100%);
-      z-index: 100;
+      z-index: 1000;
       transition: opacity 0.8s ease-out;
     }
 
-    #loading.hidden {
+    #splash.fade-out {
       opacity: 0;
       pointer-events: none;
     }
 
-    .loader {
-      width: 60px;
-      height: 60px;
-      border: 3px solid rgba(212, 175, 55, 0.2);
-      border-top-color: #D4AF37;
-      border-radius: 50%;
-      animation: spin 1.2s linear infinite;
+    .splash-content {
+      text-align: center;
+      color: #ffffff;
     }
 
-    .loader-text {
-      margin-top: 24px;
-      color: rgba(255, 255, 255, 0.7);
+    .splash-title {
+      font-size: 48px;
+      font-weight: 300;
+      letter-spacing: 12px;
+      margin-bottom: 16px;
+      text-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+    }
+
+    .splash-subtitle {
       font-size: 14px;
       letter-spacing: 4px;
-      animation: pulse 2s ease-in-out infinite;
+      opacity: 0.6;
+    }
+
+    .splash-loader {
+      margin-top: 40px;
+      width: 40px;
+      height: 40px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #e94560;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 0.5; }
-      50% { opacity: 1; }
-    }
-
-    #info-panel {
+    #control-panel {
       position: fixed;
-      top: 20px;
+      top: 50%;
       right: 20px;
-      width: 240px;
-      padding: 20px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-radius: 16px;
-      border: 2px solid #6FA3D9;
-      transition: border-color 0.5s ease;
-      z-index: 10;
-      user-select: none;
-    }
-
-    #info-panel.resonance {
-      border-color: #D4AF37;
-      box-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
+      transform: translateY(-50%);
+      width: 220px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 12px;
+      padding: 16px;
+      color: #ffffff;
+      z-index: 100;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s ease-out;
     }
 
     .panel-title {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 12px;
-      letter-spacing: 2px;
+      font-size: 20px;
+      font-weight: 500;
       margin-bottom: 16px;
-      text-transform: uppercase;
+      text-align: center;
+      letter-spacing: 2px;
     }
 
-    .panel-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .panel-row:last-child {
-      border-bottom: none;
-    }
-
-    .panel-label {
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 11px;
+    .section-label {
+      font-size: 12px;
+      opacity: 0.7;
+      margin-bottom: 8px;
       letter-spacing: 1px;
     }
 
-    .panel-value {
-      color: rgba(255, 255, 255, 0.95);
-      font-size: 14px;
-      font-weight: 600;
+    .material-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 8px;
     }
 
-    .status-dot {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
+    .material-btn {
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
-      margin-right: 6px;
-      vertical-align: middle;
+      border: 2px solid transparent;
+      cursor: pointer;
+      opacity: 0.5;
+      position: relative;
+      transition: all 0.2s ease-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
     }
 
-    .status-prelude {
-      background: #6FA3D9;
-      box-shadow: 0 0 8px #6FA3D9;
+    .material-btn:hover {
+      opacity: 0.8;
     }
 
-    .status-resonance {
-      background: #D4AF37;
-      box-shadow: 0 0 8px #D4AF37;
+    .material-btn.active {
+      opacity: 1;
+      transform: scale(1.1);
+      box-shadow: 0 0 8px #e94560;
+      border-color: #e94560;
     }
 
-    #hint {
+    .material-btn .mat-label {
+      position: absolute;
+      bottom: -18px;
+      font-size: 10px;
+      opacity: 0.7;
+      white-space: nowrap;
+    }
+
+    .material-btn.water { background: #4A90D9; }
+    .material-btn.metal { background: #C0C0C0; }
+    .material-btn.glass { background: #B0E0E6; }
+    .material-btn.leaf { background: #228B22; }
+
+    .slider-group {
+      margin-bottom: 16px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .slider-value {
+      font-size: 12px;
+      color: #e94560;
+      font-weight: 600;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #e94560;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+      transition: all 0.2s ease-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #e94560;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+    }
+
+    .reset-btn {
+      width: 100%;
+      padding: 10px 16px;
+      background: #e94560;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      letter-spacing: 2px;
+      margin-top: 8px;
+      transition: all 0.2s ease-out;
+    }
+
+    .reset-btn:hover {
+      background: #d63850;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
+    }
+
+    .reset-btn:active {
+      transform: translateY(0);
+    }
+
+    .mobile-popup {
+      display: none;
       position: fixed;
-      bottom: 30px;
+      bottom: 100px;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.4);
-      font-size: 12px;
-      letter-spacing: 2px;
-      z-index: 10;
-      user-select: none;
-      pointer-events: none;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 16px;
+      border-radius: 12px;
+      min-width: 240px;
+      z-index: 150;
+    }
+
+    .mobile-popup.show {
+      display: block;
+    }
+
+    .popup-close {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      background: none;
+      border: none;
+      color: #ffffff;
+      font-size: 20px;
+      cursor: pointer;
+      opacity: 0.6;
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        transform: none;
+        width: 100%;
+        height: 80px;
+        border-radius: 12px 12px 0 0;
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        overflow-x: auto;
+      }
+
+      .panel-title {
+        display: none;
+      }
+
+      .section-label {
+        display: none;
+      }
+
+      .material-row {
+        margin-bottom: 0;
+        gap: 12px;
+      }
+
+      .material-btn {
+        width: 32px;
+        height: 32px;
+      }
+
+      .material-btn .mat-label {
+        display: none;
+      }
+
+      .slider-group {
+        display: none;
+      }
+
+      .reset-btn {
+        width: auto;
+        padding: 8px 14px;
+        margin-top: 0;
+        font-size: 12px;
+      }
+
+      .mobile-slider-btn {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        flex-shrink: 0;
+        transition: all 0.2s ease-out;
+      }
+
+      .mobile-slider-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+      }
+    }
+
+    .mobile-slider-btn {
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div id="loading">
-    <div class="loader"></div>
-    <div class="loader-text">召唤星语石碑</div>
-  </div>
-
-  <canvas id="app"></canvas>
-
-  <div id="info-panel">
-    <div class="panel-title">星语共鸣 · Console</div>
-    <div class="panel-row">
-      <span class="panel-label">激活符号</span>
-      <span class="panel-value" id="activated-count">0 / 12</span>
-    </div>
-    <div class="panel-row">
-      <span class="panel-label">当前状态</span>
-      <span class="panel-value" id="current-status">
-        <span class="status-dot status-prelude"></span>序曲
-      </span>
-    </div>
-    <div class="panel-row">
-      <span class="panel-label">最近共振</span>
-      <span class="panel-value" id="last-resonance">--:--</span>
+  <div id="splash">
+    <div class="splash-content">
+      <div class="splash-title">雨痕物语</div>
+      <div class="splash-subtitle">RAIN STORIES</div>
+      <div class="splash-loader"></div>
     </div>
   </div>
 
-  <div id="hint">点击符号激活 · 按正确顺序可触发共鸣 · 拖拽旋转 · 滚轮缩放</div>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <div id="control-panel">
+      <div class="panel-title">雨痕控制</div>
+
+      <div class="section-label">材质切换</div>
+      <div class="material-row" id="material-row">
+        <button class="material-btn water active" data-material="water">
+          <span class="mat-label">水面</span>
+        </button>
+        <button class="material-btn metal" data-material="metal">
+          <span class="mat-label">金属</span>
+        </button>
+        <button class="material-btn glass" data-material="glass">
+          <span class="mat-label">玻璃</span>
+        </button>
+        <button class="material-btn leaf" data-material="leaf">
+          <span class="mat-label">树叶</span>
+        </button>
+      </div>
+
+      <button class="mobile-slider-btn" id="speed-popup-btn" title="速度">V</button>
+      <button class="mobile-slider-btn" id="rate-popup-btn" title="数量">N</button>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="section-label" style="margin-bottom:0">雨滴速度</span>
+          <span class="slider-value" id="speed-value">1.0</span>
+        </div>
+        <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1.0" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="section-label" style="margin-bottom:0">雨滴数量</span>
+          <span class="slider-value" id="rate-value">300</span>
+        </div>
+        <input type="range" id="rate-slider" min="100" max="500" step="10" value="300" />
+      </div>
+
+      <button class="reset-btn" id="reset-btn">重设场景</button>
+    </div>
+
+    <div class="mobile-popup" id="speed-popup">
+      <button class="popup-close" data-close="speed-popup">×</button>
+      <div class="section-label">雨滴速度</div>
+      <div class="slider-header">
+        <span></span>
+        <span class="slider-value" id="speed-value-mobile">1.0</span>
+      </div>
+      <input type="range" id="speed-slider-mobile" min="0.5" max="2.0" step="0.1" value="1.0" />
+    </div>
+
+    <div class="mobile-popup" id="rate-popup">
+      <button class="popup-close" data-close="rate-popup">×</button>
+      <div class="section-label">雨滴数量</div>
+      <div class="slider-header">
+        <span></span>
+        <span class="slider-value" id="rate-value-mobile">300</span>
+      </div>
+      <input type="range" id="rate-slider-mobile" min="100" max="500" step="10" value="300" />
+    </div>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>
