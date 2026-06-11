@@ -405,12 +405,20 @@ input, textarea {
 
 .diff-line {
   display: flex;
-  padding: 4px 16px;
+  padding: 0 16px;
   font-family: 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
   overflow: hidden;
-  transition: max-height 0.3s ease, padding 0.3s ease;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.35s ease, background-color 0.2s ease;
+}
+
+.diff-line.diff-visible {
+  padding: 4px 16px;
+  max-height: 500px;
+  opacity: 1;
 }
 
 .diff-line.added {

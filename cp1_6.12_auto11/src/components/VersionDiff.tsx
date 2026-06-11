@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getVersionById } from '../api';
 import type { Version } from '../api';
 
@@ -19,7 +19,6 @@ function computeDiff(text1: string, text2: string): DiffLine[] {
   const lines2 = text2.split('\n');
 
   const result: DiffLine[] = [];
-  const maxLen = Math.max(lines1.length, lines2.length);
 
   const dp: number[][] = Array(lines1.length + 1)
     .fill(null)
@@ -73,12 +72,30 @@ export default function VersionDiff({ versionId1, versionId2, articleId }: Versi
   const [v1, setV1] = useState<Version | null>(null);
   const [v2, setV2] = useState<Version | null>(null);
   const [diff, setDiff] = useState<DiffLine[]>([]);
+  const [visibleLines, setVisibleLines] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadVersions();
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
   }, [versionId1, versionId2, articleId]);
+
+  useEffect(() => {
+    if (diff.length > 0) {
+      setVisibleLines(new Set());
+      diff.forEach((_, idx) => {
+        setTimeout(() => {
+          setVisibleLines((prev) => new Set(prev).add(idx));
+        }, idx * 20);
+      });
+    }
+  }, [diff]);
 
   const loadVersions = async () => {
     setLoading(true);
@@ -131,15 +148,24 @@ export default function VersionDiff({ versionId1, versionId2, articleId }: Versi
             两个版本内容完全相同
           </div>
         ) : (
-          diff.map((line, idx) => (
-            <div
-              key={idx}
-              className={`diff-line ${line.type}`}
-            >
-              <span className="line-number">{line.lineNumber || ''}</span>
-              <span className="line-content">{line.content || ' '}</span>
-            </div>
-          ))
+          diff.map((line, idx) => {
+            const isVisible = visibleLines.has(idx);
+            return (
+              <div
+                key={idx}
+                className={`diff-line ${line.type} ${isVisible ? 'diff-visible' : 'diff-hidden'}`}
+                style={{
+                  maxHeight: isVisible ? '500px' : '0px',
+                  opacity: isVisible ? 1 : 0,
+                  paddingTop: isVisible ? '4px' : '0px',
+                  paddingBottom: isVisible ? '4px' : '0px'
+                }}
+              >
+                <span className="line-number">{line.lineNumber || ''}</span>
+                <span className="line-content">{line.content || ' '}</span>
+              </div>
+            );
+          })
         )}
       </div>
     </div>

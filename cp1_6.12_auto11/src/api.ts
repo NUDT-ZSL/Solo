@@ -40,6 +40,10 @@ export function getArticles(search?: string): Promise<Article[]> {
   return request<Article[]>(url);
 }
 
+export function searchArticles(keyword: string): Promise<Article[]> {
+  return getArticles(keyword);
+}
+
 export function createArticle(
   title: string,
   content: string,

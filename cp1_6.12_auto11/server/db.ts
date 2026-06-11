@@ -1,10 +1,10 @@
-import initSqlJs, { Database } from 'sql.js';
+import sqlite3 from 'sqlite3';
+import { open, Database } from 'sqlite';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import fs from 'fs';
 
 let db: Database | null = null;
-let dbReady: Promise<void> | null = null;
+let dbReady: Promise<Database> | null = null;
 
 export interface Article {
   id: string;
@@ -28,27 +28,13 @@ function getDbPath(): string {
   return path.join(__dirname, '..', 'wiki.db');
 }
 
-function saveDb() {
-  if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(getDbPath(), buffer);
-}
-
-async function initDb(): Promise<void> {
-  const SQL = await initSqlJs({
-    locateFile: (file: string) => path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', file)
+async function initDb(): Promise<Database> {
+  const database = await open({
+    filename: getDbPath(),
+    driver: sqlite3.Database
   });
 
-  const dbPath = getDbPath();
-  if (fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    db = new SQL.Database();
-  }
-
-  db.run(`
+  await database.exec(`
     CREATE TABLE IF NOT EXISTS articles (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -71,74 +57,51 @@ async function initDb(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title);
   `);
 
-  saveDb();
+  return database;
 }
 
-function ensureDb(): Database {
+export async function getDb(): Promise<Database> {
+  if (!dbReady) {
+    dbReady = initDb();
+  }
   if (!db) {
-    throw new Error('Database not initialized');
+    db = await dbReady;
   }
   return db;
 }
 
-export function getDbReady(): Promise<void> {
-  if (!dbReady) {
-    dbReady = initDb();
-  }
-  return dbReady;
-}
-
-function queryAll<T>(sql: string, params: any[] = []): T[] {
-  const database = ensureDb();
-  const stmt = database.prepare(sql);
-  stmt.bind(params);
-  const results: T[] = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject() as unknown as T);
-  }
-  stmt.free();
-  return results;
-}
-
-function queryOne<T>(sql: string, params: any[] = []): T | undefined {
-  const results = queryAll<T>(sql, params);
-  return results[0];
-}
-
-function run(sql: string, params: any[] = []): void {
-  const database = ensureDb();
-  database.run(sql, params);
-  saveDb();
-}
-
-export function getAllArticles(search?: string): Article[] {
+export async function getAllArticles(search?: string): Promise<Article[]> {
+  const database = await getDb();
   if (search && search.trim()) {
-    return queryAll<Article>(
+    return database.all<Article[]>(
       'SELECT * FROM articles WHERE title LIKE ? ORDER BY updated_at DESC',
       [`%${search.trim()}%`]
     );
   }
-  return queryAll<Article>('SELECT * FROM articles ORDER BY updated_at DESC');
+  return database.all<Article[]>('SELECT * FROM articles ORDER BY updated_at DESC');
 }
 
-export function getArticleById(id: string): Article | undefined {
-  return queryOne<Article>('SELECT * FROM articles WHERE id = ?', [id]);
+export async function getArticleById(id: string): Promise<Article | undefined> {
+  const database = await getDb();
+  const result = await database.get<Article>('SELECT * FROM articles WHERE id = ?', [id]);
+  return result;
 }
 
-export function createArticle(
+export async function createArticle(
   title: string,
   content: string,
   editorNickname: string
-): Article {
+): Promise<Article> {
+  const database = await getDb();
   const now = new Date().toISOString();
   const id = uuidv4();
 
-  run(
+  await database.run(
     'INSERT INTO articles (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
     [id, title, content, now, now]
   );
 
-  run(
+  await database.run(
     'INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at) VALUES (?, ?, 1, ?, ?, ?, ?)',
     [uuidv4(), id, title, content, editorNickname, now]
   );
@@ -146,30 +109,30 @@ export function createArticle(
   return { id, title, content, created_at: now, updated_at: now };
 }
 
-export function updateArticle(
+export async function updateArticle(
   id: string,
   title: string,
   content: string,
   editorNickname: string
-): Article | undefined {
-  const article = getArticleById(id);
+): Promise<Article | undefined> {
+  const database = await getDb();
+  const article = await getArticleById(id);
   if (!article) return undefined;
 
   const now = new Date().toISOString();
 
-  const { max_num } = queryOne<{ max_num: number }>(
+  const maxResult = await database.get<{ max_num: number }>(
     'SELECT COALESCE(MAX(version_number), 0) as max_num FROM versions WHERE article_id = ?',
     [id]
-  ) || { max_num: 0 };
+  );
+  const newVersionNumber = (maxResult?.max_num || 0) + 1;
 
-  const newVersionNumber = (max_num || 0) + 1;
-
-  run(
+  await database.run(
     'INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [uuidv4(), id, newVersionNumber, article.title, article.content, editorNickname, now]
   );
 
-  run(
+  await database.run(
     'UPDATE articles SET title = ?, content = ?, updated_at = ? WHERE id = ?',
     [title, content, now, id]
   );
@@ -177,41 +140,44 @@ export function updateArticle(
   return { ...article, title, content, updated_at: now };
 }
 
-export function getVersionsByArticleId(articleId: string): Version[] {
-  return queryAll<Version>(
+export async function getVersionsByArticleId(articleId: string): Promise<Version[]> {
+  const database = await getDb();
+  return database.all<Version[]>(
     'SELECT * FROM versions WHERE article_id = ? ORDER BY version_number DESC',
     [articleId]
   );
 }
 
-export function getVersionById(versionId: string): Version | undefined {
-  return queryOne<Version>('SELECT * FROM versions WHERE id = ?', [versionId]);
+export async function getVersionById(versionId: string): Promise<Version | undefined> {
+  const database = await getDb();
+  const result = await database.get<Version>('SELECT * FROM versions WHERE id = ?', [versionId]);
+  return result;
 }
 
-export function restoreVersion(
+export async function restoreVersion(
   articleId: string,
   versionId: string,
   editorNickname: string
-): Article | undefined {
-  const article = getArticleById(articleId);
-  const version = getVersionById(versionId);
+): Promise<Article | undefined> {
+  const database = await getDb();
+  const article = await getArticleById(articleId);
+  const version = await getVersionById(versionId);
   if (!article || !version) return undefined;
 
   const now = new Date().toISOString();
 
-  const { max_num } = queryOne<{ max_num: number }>(
+  const maxResult = await database.get<{ max_num: number }>(
     'SELECT COALESCE(MAX(version_number), 0) as max_num FROM versions WHERE article_id = ?',
     [articleId]
-  ) || { max_num: 0 };
+  );
+  const newVersionNumber = (maxResult?.max_num || 0) + 1;
 
-  const newVersionNumber = (max_num || 0) + 1;
-
-  run(
+  await database.run(
     'INSERT INTO versions (id, article_id, version_number, title, content, editor_nickname, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [uuidv4(), articleId, newVersionNumber, article.title, article.content, editorNickname, now]
   );
 
-  run(
+  await database.run(
     'UPDATE articles SET title = ?, content = ?, updated_at = ? WHERE id = ?',
     [version.title, version.content, now, articleId]
   );

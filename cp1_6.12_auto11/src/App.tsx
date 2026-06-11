@@ -5,6 +5,7 @@ import {
   Article,
   Version,
   getArticles,
+  searchArticles,
   getArticleById,
   getVersions,
   createArticle,
@@ -72,7 +73,7 @@ function HomePage() {
   const loadArticles = async () => {
     setLoading(true);
     try {
-      const data = await getArticles(search);
+      const data = search ? await searchArticles(search) : await getArticles();
       setArticles(data);
     } catch (e) {
       setToast({ message: '加载词条失败', type: 'error' });
