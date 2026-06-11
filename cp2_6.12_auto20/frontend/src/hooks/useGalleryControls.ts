@@ -2,10 +2,17 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 
+export interface CollisionBox {
+  minX: number; maxX: number;
+  minY: number; maxY: number;
+  minZ: number; maxZ: number;
+}
+
 interface UseGalleryControlsOptions {
   hallWidth: number;
   hallHeight: number;
   hallDepth: number;
+  collisionBoxes?: CollisionBox[];
   onCollision?: () => void;
 }
 
@@ -17,7 +24,7 @@ const BOB_AMPLITUDE = 0.08;
 const BOB_SPEED = 8;
 
 export function useGalleryControls(options: UseGalleryControlsOptions) {
-  const { hallWidth, hallHeight, hallDepth, onCollision } = options;
+  const { hallWidth, hallHeight, hallDepth, collisionBoxes, onCollision } = options;
 
   const groupRef = useRef<THREE.Group>(null!);
   const [collisionFlash, setCollisionFlash] = useState(false);
@@ -133,6 +140,26 @@ export function useGalleryControls(options: UseGalleryControlsOptions) {
       if (newPos.z < -halfD || newPos.z > halfD) {
         newPos.z = THREE.MathUtils.clamp(newPos.z, -halfD, halfD);
         collided = true;
+      }
+
+      if (collisionBoxes) {
+        for (const box of collisionBoxes) {
+          const cx = Math.max(box.minX, Math.min(newPos.x, box.maxX));
+          const cy = Math.max(box.minY, Math.min(newPos.y, box.maxY));
+          const cz = Math.max(box.minZ, Math.min(newPos.z, box.maxZ));
+          const dx = newPos.x - cx;
+          const dy = newPos.y - cy;
+          const dz = newPos.z - cz;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          const r = PLAYER_RADIUS;
+          if (distSq < r * r) {
+            const dist = Math.sqrt(distSq) || 0.0001;
+            const overlap = r - dist;
+            newPos.x += (dx / dist) * overlap;
+            newPos.z += (dz / dist) * overlap;
+            collided = true;
+          }
+        }
       }
 
       if (collided) {

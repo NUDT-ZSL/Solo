@@ -15,6 +15,12 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+const DATA_FILE = path.join(__dirname, '..', 'data', 'gallery-data.json');
+const DATA_DIR = path.dirname(DATA_FILE);
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use('/uploads', express.static(UPLOADS_DIR));
@@ -32,6 +38,31 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const halls = new Map<string, Hall>();
+
+function saveData() {
+  try {
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const arr = Array.from(halls.values());
+    fs.writeFileSync(DATA_FILE, JSON.stringify(arr, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Failed to save data:', e);
+  }
+}
+
+function loadData() {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return false;
+    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    const arr = JSON.parse(raw) as Hall[];
+    halls.clear();
+    for (const h of arr) halls.set(h.id, h);
+    return true;
+  } catch (e) {
+    console.error('Failed to load data:', e);
+    return false;
+  }
+}
 
 app.get('/api/halls', (_req, res) => {
   const list = Array.from(halls.values());
@@ -61,6 +92,7 @@ app.post('/api/halls', (req, res) => {
     artworks: [],
   };
   halls.set(id, hall);
+  saveData();
   res.status(201).json(hall);
 });
 
@@ -77,6 +109,7 @@ app.put('/api/halls/:id', (req, res) => {
   if (wallColor !== undefined) hall.wallColor = wallColor;
   if (floorTexture !== undefined) hall.floorTexture = floorTexture;
   if (connections !== undefined) hall.connections = connections;
+  saveData();
   res.json(hall);
 });
 
@@ -90,6 +123,7 @@ app.delete('/api/halls/:id', (req, res) => {
       (c) => c.targetHallId !== req.params.id
     );
   }
+  saveData();
   res.status(204).end();
 });
 
@@ -117,6 +151,7 @@ app.post(
       height: req.body.height ? Number(req.body.height) : 2,
     };
     hall.artworks.push(artwork);
+    saveData();
     res.status(201).json(artwork);
   }
 );
@@ -131,7 +166,39 @@ app.delete('/api/halls/:hallId/artworks/:artworkId', (req, res) => {
     return res.status(404).json({ error: 'Artwork not found' });
   }
   hall.artworks.splice(idx, 1);
+  saveData();
   res.status(204).end();
+});
+
+app.get('/api/export', (_req, res) => {
+  const arr = Array.from(halls.values());
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename="gallery-backup.json"');
+  res.json(arr);
+});
+
+app.post('/api/import', (req, res) => {
+  const body = req.body;
+  if (!Array.isArray(body)) {
+    return res.status(400).json({ error: 'Invalid data format' });
+  }
+  for (const h of body) {
+    if (
+      typeof h !== 'object' ||
+      h === null ||
+      typeof h.id !== 'string' ||
+      typeof h.name !== 'string' ||
+      typeof h.width !== 'number' ||
+      typeof h.height !== 'number' ||
+      typeof h.depth !== 'number'
+    ) {
+      return res.status(400).json({ error: 'Invalid data format' });
+    }
+  }
+  halls.clear();
+  for (const h of body) halls.set(h.id, h);
+  saveData();
+  res.status(200).json({ imported: body.length });
 });
 
 function seedData() {
@@ -242,7 +309,9 @@ function seedData() {
   halls.set(hall2Id, hall2);
 }
 
-seedData();
+if (!loadData()) {
+  seedData();
+}
 
 app.listen(PORT, () => {
   console.log(`Virtual Gallery server running on http://localhost:${PORT}`);

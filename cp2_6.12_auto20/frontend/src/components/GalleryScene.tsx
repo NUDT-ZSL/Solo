@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { Hall, Artwork } from '../services/api';
-import { useGalleryControls } from '../hooks/useGalleryControls';
+import { useGalleryControls, CollisionBox } from '../hooks/useGalleryControls';
 
 interface GallerySceneProps {
   halls: Hall[];
@@ -20,6 +20,7 @@ interface ArtworkFrameProps {
 interface SpotlightProps {
   position: [number, number, number];
   targetPosition: [number, number, number];
+  particleDensity?: number;
 }
 
 interface DoorFrameProps {
@@ -39,6 +40,76 @@ interface HallRoomProps {
   onArtworkClick: (artwork: Artwork) => void;
 }
 
+class TextureErrorBoundary extends React.Component<{children: React.ReactNode; fallback: React.ReactNode}, {hasError: boolean}> {
+  constructor(props: {children: React.ReactNode; fallback: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(_: Error) { return { hasError: true }; }
+  componentDidCatch(_e: Error, _i: React.ErrorInfo) {}
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
+function createPlaceholderTexture(): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#D7CCC8';
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.strokeStyle = '#BCAAA4';
+  ctx.lineWidth = 2;
+  for (let i = -size; i < size * 2; i += 40) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + size, size);
+    ctx.stroke();
+  }
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const frameW = size * 0.35;
+  const frameH = size * 0.28;
+  ctx.strokeStyle = '#8D6E63';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(cx - frameW / 2, cy - frameH / 2, frameW, frameH);
+  ctx.fillStyle = '#A1887F';
+  ctx.fillRect(cx - 8, cy - 3, 16, 6);
+
+  ctx.strokeStyle = '#A1887F';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx - frameW / 4, cy + frameH / 4);
+  ctx.lineTo(cx, cy - frameH / 6);
+  ctx.lineTo(cx + frameW / 5, cy + frameH / 10);
+  ctx.lineTo(cx + frameW / 3, cy - frameH / 5);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+const PLACEHOLDER_TEXTURE = createPlaceholderTexture();
+
+function PlaceholderFallback({ transparent = false }: { transparent?: boolean }) {
+  return (
+    <meshStandardMaterial
+      color="#D7CCC8"
+      side={THREE.FrontSide}
+      map={PLACEHOLDER_TEXTURE}
+      transparent={transparent}
+      opacity={transparent ? 0.6 : 1}
+    />
+  );
+}
+
 const WALL_THICKNESS = 0.15;
 const DEFAULT_WALL_COLOR = '#F5F0E8';
 const FLOOR_COLOR = '#2A2A2A';
@@ -46,6 +117,101 @@ const GRID_COLOR = '#3A3A3A';
 const GOLD_COLOR = '#C5A55A';
 const FRAME_DEPTH = 0.05;
 const FRAME_BORDER = 0.08;
+
+const DOOR_WIDTH = 1.0;
+const DOOR_HEIGHT = 2.2;
+const DOOR_FRAME_BORDER = 0.1;
+const DOOR_FRAME_DEPTH = WALL_THICKNESS + 0.02;
+const DOOR_OPEN_THRESHOLD = 3;
+const DOOR_CLOSE_THRESHOLD = 5;
+const DOOR_MAX_STEP = 0.03;
+
+export function computeDoorCollisionBox(
+  position: [number, number, number],
+  rotation: [number, number, number],
+  wallWidth: number,
+  wallHeight: number,
+  wallDepth: number
+): THREE.Box3 {
+  const halfWidth = wallWidth / 2 + DOOR_FRAME_BORDER;
+  const fullHeight = wallHeight + DOOR_FRAME_BORDER;
+  const halfDepth = wallDepth / 2;
+
+  const localMin = new THREE.Vector3(-halfWidth, 0, -halfDepth);
+  const localMax = new THREE.Vector3(halfWidth, fullHeight, halfDepth);
+
+  const q = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(rotation[0], rotation[1], rotation[2])
+  );
+  const p = new THREE.Vector3(...position);
+
+  const corners = [
+    new THREE.Vector3(localMin.x, localMin.y, localMin.z),
+    new THREE.Vector3(localMax.x, localMin.y, localMin.z),
+    new THREE.Vector3(localMin.x, localMax.y, localMin.z),
+    new THREE.Vector3(localMax.x, localMax.y, localMin.z),
+    new THREE.Vector3(localMin.x, localMin.y, localMax.z),
+    new THREE.Vector3(localMax.x, localMin.y, localMax.z),
+    new THREE.Vector3(localMin.x, localMax.y, localMax.z),
+    new THREE.Vector3(localMax.x, localMax.y, localMax.z),
+  ];
+
+  const worldCorners = corners.map((c) => c.applyQuaternion(q).add(p));
+
+  const box = new THREE.Box3();
+  worldCorners.forEach((c) => box.expandByPoint(c));
+  return box;
+}
+
+export function computeArtworkCollisionBox(artwork: Artwork): CollisionBox {
+  const fw = (artwork.width ?? 1) + FRAME_BORDER * 2;
+  const fh = (artwork.height ?? 0.7) + FRAME_BORDER * 2;
+  const fd = FRAME_DEPTH + 0.08;
+
+  const px = artwork.positionX ?? 0;
+  const py = artwork.positionY ?? 1.4;
+  const wallOffset = WALL_THICKNESS / 2 + fd / 2 + 0.005;
+
+  const halfW = fw / 2;
+  const halfH = fh / 2;
+  const halfD = fd / 2;
+
+  let minX = 0, maxX = 0, minY = py - halfH, maxY = py + halfH, minZ = 0, maxZ = 0;
+
+  switch (artwork.wall) {
+    case 'north':
+      minX = px - halfW; maxX = px + halfW;
+      minZ = -wallOffset - halfD; maxZ = -wallOffset + halfD;
+      break;
+    case 'south':
+      minX = px - halfW; maxX = px + halfW;
+      minZ = wallOffset - halfD; maxZ = wallOffset + halfD;
+      break;
+    case 'east':
+      minX = wallOffset - halfD; maxX = wallOffset + halfD;
+      minZ = px - halfW; maxZ = px + halfW;
+      break;
+    case 'west':
+      minX = -wallOffset - halfD; maxX = -wallOffset + halfD;
+      minZ = px - halfW; maxZ = px + halfW;
+      break;
+  }
+
+  return { minX, maxX, minY, maxY, minZ, maxZ };
+}
+
+export function computeDoorFrameCollisionBox(
+  position: [number, number, number],
+  rotation: [number, number, number],
+): CollisionBox {
+  const box = computeDoorCollisionBox(
+    position, rotation, DOOR_WIDTH, DOOR_HEIGHT, WALL_THICKNESS);
+  return {
+    minX: box.min.x, maxX: box.max.x,
+    minY: box.min.y, maxY: box.max.y,
+    minZ: box.min.z, maxZ: box.max.z,
+  };
+}
 
 function ArtworkTexture({ url }: { url: string }) {
   const texture = useTexture(url);
@@ -105,13 +271,17 @@ const ArtworkFrame = React.memo(function ArtworkFrame({ artwork, onClick }: Artw
 
       <mesh position={[0, 0, FRAME_DEPTH / 2 + 0.002]}>
         <planeGeometry args={[canvasWidth, canvasHeight]} />
-        <meshStandardMaterial color="#888888" side={THREE.FrontSide}>
-          {artwork.imageUrl && (
-            <Suspense fallback={null}>
-              <ArtworkTexture url={artwork.imageUrl} />
+        {!artwork.imageUrl ? (
+          <PlaceholderFallback />
+        ) : (
+          <TextureErrorBoundary fallback={<PlaceholderFallback />}>
+            <Suspense fallback={<PlaceholderFallback transparent />}>
+              <meshStandardMaterial color="#FFFFFF" side={THREE.FrontSide}>
+                <ArtworkTexture url={artwork.imageUrl} />
+              </meshStandardMaterial>
             </Suspense>
-          )}
-        </meshStandardMaterial>
+          </TextureErrorBoundary>
+        )}
       </mesh>
 
       {hovered && (
@@ -124,26 +294,56 @@ const ArtworkFrame = React.memo(function ArtworkFrame({ artwork, onClick }: Artw
   );
 });
 
-function Particles({ count = 30 }: { count?: number }) {
+function ParticleLayer({
+  count,
+  size,
+  opacity,
+  spread = 0.3,
+}: {
+  count: number;
+  size: number;
+  opacity: number;
+  spread?: number;
+}) {
   const pointsRef = useRef<THREE.Points>(null);
-  const positions = useMemo(() => {
-    const arr = new Float32Array(count * 3);
+  const { positions, baseX, baseZ, phases } = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const bx = new Float32Array(count);
+    const bz = new Float32Array(count);
+    const ph = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      arr[i * 3] = (Math.random() - 0.5) * 0.3;
-      arr[i * 3 + 1] = Math.random() * -1.2;
-      arr[i * 3 + 2] = (Math.random() - 0.5) * 0.3;
+      const x = (Math.random() - 0.5) * spread;
+      const z = (Math.random() - 0.5) * spread;
+      bx[i] = x;
+      bz[i] = z;
+      pos[i * 3] = x;
+      pos[i * 3 + 1] = Math.random() * -1.2;
+      pos[i * 3 + 2] = z;
+      ph[i] = Math.random() * Math.PI * 2;
     }
-    return arr;
-  }, [count]);
+    return { positions: pos, baseX: bx, baseZ: bz, phases: ph };
+  }, [count, spread]);
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     if (!pointsRef.current) return;
+    const time = clock.elapsedTime;
     const posAttr = pointsRef.current.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < count; i++) {
+      const phase = phases[i];
       let y = posAttr.getY(i);
-      y += delta * 0.08;
+      const speedFactor = 0.5 + ((Math.sin(phase) + 1) / 2) * 1.0;
+      y += delta * 0.08 * speedFactor;
       if (y > 0) y = -1.2;
       posAttr.setY(i, y);
+      const driftX = Math.sin(time * 0.5 + phase) * delta * 0.02;
+      const driftZ = Math.cos(time * 0.4 + phase * 1.3) * delta * 0.02;
+      let x = posAttr.getX(i) + driftX;
+      let z = posAttr.getZ(i) + driftZ;
+      const maxOff = spread * 0.5;
+      x = baseX[i] + Math.max(-maxOff, Math.min(maxOff, x - baseX[i]));
+      z = baseZ[i] + Math.max(-maxOff, Math.min(maxOff, z - baseZ[i]));
+      posAttr.setX(i, x);
+      posAttr.setZ(i, z);
     }
     posAttr.needsUpdate = true;
   });
@@ -160,9 +360,9 @@ function Particles({ count = 30 }: { count?: number }) {
       </bufferGeometry>
       <pointsMaterial
         color="#FFF8E1"
-        size={0.015}
+        size={size}
         transparent
-        opacity={0.6}
+        opacity={opacity}
         sizeAttenuation
         depthWrite={false}
       />
@@ -170,10 +370,34 @@ function Particles({ count = 30 }: { count?: number }) {
   );
 }
 
-const Spotlight = React.memo(function Spotlight({ position, targetPosition }: SpotlightProps) {
+function Particles({ count = 30 }: { count?: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const smallCount = Math.ceil(count * 0.6);
+  const mediumCount = Math.ceil(count * 0.3);
+  const largeCount = Math.max(1, count - smallCount - mediumCount);
+
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y += delta * 0.08;
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      <ParticleLayer count={smallCount} size={0.012} opacity={0.4} />
+      <ParticleLayer count={mediumCount} size={0.018} opacity={0.65} />
+      <ParticleLayer count={largeCount} size={0.024} opacity={0.85} />
+    </group>
+  );
+}
+
+const Spotlight = React.memo(function Spotlight({ position, targetPosition, particleDensity = 1 }: SpotlightProps) {
   const coneHeight = Math.abs(position[1] - targetPosition[1]);
   const coneRadius = coneHeight * Math.tan(0.4);
   const targetRef = useRef<THREE.Object3D>(null);
+
+  const baseCount = 30;
+  const particleCount = Math.min(60, Math.max(10, Math.ceil(baseCount * particleDensity)));
 
   useEffect(() => {
     if (targetRef.current) {
@@ -204,7 +428,7 @@ const Spotlight = React.memo(function Spotlight({ position, targetPosition }: Sp
         />
       </mesh>
       <group position={position}>
-        <Particles count={30} />
+        <Particles count={particleCount} />
       </group>
     </group>
   );
@@ -217,18 +441,39 @@ const DoorFrame = React.memo(function DoorFrame({
 }: DoorFrameProps) {
   const leftDoorRef = useRef<THREE.Mesh>(null);
   const rightDoorRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const openness = useRef(0);
+  const lastTarget = useRef(0);
 
-  const doorWidth = 1.0;
-  const doorHeight = 2.2;
-  const frameBorderW = 0.1;
+  const doorWidth = DOOR_WIDTH;
+  const doorHeight = DOOR_HEIGHT;
+  const frameBorderW = DOOR_FRAME_BORDER;
 
   useFrame(() => {
-    const doorWorldPos = new THREE.Vector3(...position);
+    let doorWorldPos: THREE.Vector3;
+    if (groupRef.current) {
+      groupRef.current.updateMatrixWorld(true);
+      doorWorldPos = new THREE.Vector3();
+      groupRef.current.getWorldPosition(doorWorldPos);
+    } else {
+      doorWorldPos = new THREE.Vector3(...position);
+    }
     const dist = camera.position.distanceTo(doorWorldPos);
-    const targetOpenness = dist < 3 ? 1 : 0;
-    openness.current = THREE.MathUtils.lerp(openness.current, targetOpenness, 0.05);
+
+    let targetOpenness: number;
+    if (dist < DOOR_OPEN_THRESHOLD) {
+      targetOpenness = 1;
+    } else if (dist > DOOR_CLOSE_THRESHOLD) {
+      targetOpenness = 0;
+    } else {
+      targetOpenness = lastTarget.current;
+    }
+    lastTarget.current = targetOpenness;
+
+    const rawDelta = targetOpenness - openness.current;
+    const clampedDelta = THREE.MathUtils.clamp(rawDelta, -DOOR_MAX_STEP, DOOR_MAX_STEP);
+    openness.current += clampedDelta;
 
     if (leftDoorRef.current) {
       leftDoorRef.current.position.x = -doorWidth / 4 - (openness.current * doorWidth / 2);
@@ -239,17 +484,22 @@ const DoorFrame = React.memo(function DoorFrame({
   });
 
   return (
-    <group position={position} rotation={rotation}>
+    <group ref={groupRef} position={position} rotation={rotation}>
+      {/* Door collision volume (frame, not opening)
+          AABB: x in [-(doorWidth/2+frameBorderW), doorWidth/2+frameBorderW],
+          y in [0, doorHeight+frameBorderW],
+          z in [-(WALL_THICKNESS+0.02)/2, (WALL_THICKNESS+0.02)/2
+          Use computeDoorCollisionBox() to get world-space AABB for this door */}
       <mesh position={[0, doorHeight / 2 + frameBorderW / 2, 0]}>
-        <boxGeometry args={[doorWidth + frameBorderW * 2, frameBorderW, WALL_THICKNESS + 0.02]} />
+        <boxGeometry args={[doorWidth + frameBorderW * 2, frameBorderW, DOOR_FRAME_DEPTH]} />
         <meshStandardMaterial color={GOLD_COLOR} metalness={0.6} roughness={0.3} />
       </mesh>
       <mesh position={[-(doorWidth / 2 + frameBorderW / 2), doorHeight / 2, 0]}>
-        <boxGeometry args={[frameBorderW, doorHeight, WALL_THICKNESS + 0.02]} />
+        <boxGeometry args={[frameBorderW, doorHeight, DOOR_FRAME_DEPTH]} />
         <meshStandardMaterial color={GOLD_COLOR} metalness={0.6} roughness={0.3} />
       </mesh>
       <mesh position={[(doorWidth / 2 + frameBorderW / 2), doorHeight / 2, 0]}>
-        <boxGeometry args={[frameBorderW, doorHeight, WALL_THICKNESS + 0.02]} />
+        <boxGeometry args={[frameBorderW, doorHeight, DOOR_FRAME_DEPTH]} />
         <meshStandardMaterial color={GOLD_COLOR} metalness={0.6} roughness={0.3} />
       </mesh>
 
@@ -335,6 +585,8 @@ const HallRoom = React.memo(function HallRoom({ hall, onArtworkClick }: HallRoom
   const h = hall.height;
   const d = hall.depth;
   const wallColor = hall.wallColor || DEFAULT_WALL_COLOR;
+  const totalArtworks = (hall.artworks ?? []).length;
+  const particleDensity = 1 + totalArtworks * 0.05;
 
   const gridTexture = useMemo(() => createGridTexture(), []);
 
@@ -431,7 +683,12 @@ const HallRoom = React.memo(function HallRoom({ hall, onArtworkClick }: HallRoom
       ))}
 
       {spotlights.map((s) => (
-        <Spotlight key={s.key} position={s.lightPos} targetPosition={s.targetPos} />
+        <Spotlight
+          key={s.key}
+          position={s.lightPos}
+          targetPosition={s.targetPos}
+          particleDensity={particleDensity}
+        />
       ))}
 
       {doors.map((door) => (
@@ -482,16 +739,18 @@ const HallRoom = React.memo(function HallRoom({ hall, onArtworkClick }: HallRoom
   );
 });
 
-function PlayerController({ hallWidth, hallHeight, hallDepth, onCollisionFlash }: {
+function PlayerController({ hallWidth, hallHeight, hallDepth, collisionBoxes, onCollisionFlash }: {
   hallWidth: number;
   hallHeight: number;
   hallDepth: number;
+  collisionBoxes?: CollisionBox[];
   onCollisionFlash: (flash: boolean) => void;
 }) {
   const { groupRef, collisionFlash } = useGalleryControls({
     hallWidth,
     hallHeight,
     hallDepth,
+    collisionBoxes,
   });
 
   const { camera } = useThree();
@@ -499,10 +758,15 @@ function PlayerController({ hallWidth, hallHeight, hallDepth, onCollisionFlash }
   useEffect(() => {
     if (groupRef.current) {
       groupRef.current.add(camera);
+      camera.position.set(0, 0, 0);
+      camera.rotation.set(0, 0, 0);
+      camera.quaternion.identity();
+      camera.updateMatrixWorld(true);
     }
     return () => {
       if (groupRef.current) {
         groupRef.current.remove(camera);
+        camera.position.set(0, 1.6, 0);
       }
     };
   }, [camera, groupRef]);
@@ -527,6 +791,38 @@ function SceneContent({
     [halls, activeHallId]
   );
 
+  const collisionBoxes = useMemo<CollisionBox[]>(() => {
+    if (!activeHall) return [];
+    const boxes: CollisionBox[] = [];
+    for (const artwork of activeHall.artworks ?? []) {
+      boxes.push(computeArtworkCollisionBox(artwork));
+    }
+    for (const conn of activeHall.connections ?? []) {
+      let pos: [number, number, number] = [0, 0, 0];
+      let rot: [number, number, number] = [0, 0, 0];
+      switch (conn.direction) {
+        case 'north':
+          pos = [0, 0, -activeHall.depth / 2];
+          rot = [0, 0, 0];
+          break;
+        case 'south':
+          pos = [0, 0, activeHall.depth / 2];
+          rot = [0, Math.PI, 0];
+          break;
+        case 'east':
+          pos = [activeHall.width / 2, 0, 0];
+          rot = [0, -Math.PI / 2, 0];
+          break;
+        case 'west':
+          pos = [-activeHall.width / 2, 0, 0];
+          rot = [0, Math.PI / 2, 0];
+          break;
+      }
+      boxes.push(computeDoorFrameCollisionBox(pos, rot));
+    }
+    return boxes;
+  }, [activeHall]);
+
   useEffect(() => {
     if (activeHall) {
       const color = activeHall.wallColor || DEFAULT_WALL_COLOR;
@@ -543,6 +839,7 @@ function SceneContent({
           hallWidth={activeHall.width}
           hallHeight={activeHall.height}
           hallDepth={activeHall.depth}
+          collisionBoxes={collisionBoxes}
           onCollisionFlash={onCollisionFlash}
         />
       )}
@@ -614,12 +911,13 @@ export default function GalleryScene({ halls, activeHallId, onHallChange, onArtw
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
         camera={{ fov: 65, near: 0.1, far: 100, position: [0, 1.6, 0] }}
-        shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         gl={{ antialias: true, alpha: false }}
       >
+        <color attach="background" args={[DEFAULT_WALL_COLOR]} />
+        <fog attach="fog" args={[DEFAULT_WALL_COLOR, 15, 40]} />
+        <FPSCounter fpsRef={fpsRef} />
         <Suspense fallback={null}>
-          <FPSCounter fpsRef={fpsRef} />
           <SceneContent
             halls={halls}
             activeHallId={activeHallId}

@@ -6,29 +6,43 @@ interface ArtworkPopupProps {
   onClose: () => void;
 }
 
+const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
+
 const ArtworkPopup: React.FC<ArtworkPopupProps> = ({ artwork, onClose }) => {
-  const [isClosing, setIsClosing] = useState(false);
+  const [phase, setPhase] = useState<'entering' | 'visible' | 'exiting'>('entering');
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setPhase('visible'));
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   useEffect(() => {
     if (!artwork) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        handleClose();
+        triggerExit();
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [artwork]);
+  }, [artwork, phase]);
 
-  const handleClose = () => {
-    if (isClosing) return;
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
+  const triggerExit = () => {
+    if (phase === 'exiting' || phase === 'entering') {
       onClose();
-    }, 300);
+      return;
+    }
+    setPhase('exiting');
+  };
+
+  const handleTransitionEnd = (e: React.TransitionEvent) => {
+    if (e.propertyName === 'transform' && phase === 'exiting') {
+      onClose();
+    }
   };
 
   if (!artwork) return null;
@@ -43,8 +57,30 @@ const ArtworkPopup: React.FC<ArtworkPopupProps> = ({ artwork, onClose }) => {
     background: 'rgba(0,0,0,0.6)',
     backdropFilter: 'blur(8px)',
     WebkitBackdropFilter: 'blur(8px)',
-    opacity: isClosing ? 0 : 1,
-    transition: 'opacity 0.3s ease',
+    opacity: phase === 'visible' ? 1 : 0,
+    transition: `opacity 0.25s ${EASING}`,
+  };
+
+  const getCardTransform = () => {
+    switch (phase) {
+      case 'entering':
+        return 'scale(0.85)';
+      case 'visible':
+        return 'scale(1)';
+      case 'exiting':
+        return 'scale(0.6)';
+    }
+  };
+
+  const getCardOpacity = () => {
+    switch (phase) {
+      case 'entering':
+        return 0;
+      case 'visible':
+        return 1;
+      case 'exiting':
+        return 0;
+    }
   };
 
   const cardStyle: React.CSSProperties = {
@@ -55,9 +91,9 @@ const ArtworkPopup: React.FC<ArtworkPopupProps> = ({ artwork, onClose }) => {
     border: '2px solid #C5A55A',
     overflow: 'hidden',
     position: 'relative',
-    transform: isClosing ? 'scale(0.7)' : 'scale(1)',
-    opacity: isClosing ? 0 : 1,
-    transition: 'transform 0.3s ease, opacity 0.3s ease',
+    transform: getCardTransform(),
+    opacity: getCardOpacity(),
+    transition: `transform 0.3s ${EASING}, opacity 0.3s ${EASING}`,
     fontFamily: '"Georgia", "Times New Roman", serif',
   };
 
@@ -119,9 +155,9 @@ const ArtworkPopup: React.FC<ArtworkPopupProps> = ({ artwork, onClose }) => {
   };
 
   return (
-    <div style={backdropStyle} onClick={handleClose}>
-      <div style={cardStyle} onClick={(e) => e.stopPropagation()}>
-        <button style={closeButtonStyle} onClick={handleClose}>
+    <div style={backdropStyle} onClick={triggerExit}>
+      <div style={cardStyle} onClick={(e) => e.stopPropagation()} onTransitionEnd={handleTransitionEnd}>
+        <button style={closeButtonStyle} onClick={triggerExit}>
           ✕
         </button>
         {artwork.imageUrl && <img src={artwork.imageUrl} alt={artwork.title} style={imageStyle} />}
