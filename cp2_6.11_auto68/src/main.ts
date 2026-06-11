@@ -14,6 +14,10 @@ import {
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 const loadingScreen = document.getElementById('loading-screen') as HTMLDivElement;
 
+if (!canvas) {
+  throw new Error('Canvas element not found');
+}
+
 const gameData: GameData = createInitialGameData();
 const renderCtx: RenderContext = createRenderContext(canvas);
 const keyState: KeyState = createKeyState();
@@ -23,40 +27,48 @@ let lastTime = 0;
 let memoryCheckTime = 0;
 const MEMORY_CHECK_INTERVAL = 60000;
 let initialMemory = 0;
-let memoryWarnings = 0;
+let _memoryWarnings = 0;
 
 function init(): void {
   resize();
   setupEventListeners();
   
   setTimeout(() => {
-    loadingScreen.classList.add('hidden');
-  }, 500);
+    if (loadingScreen) {
+      loadingScreen.classList.add('hidden');
+    }
+  }, 800);
   
   lastTime = performance.now();
-  gameLoop(lastTime);
+  requestAnimationFrame(gameLoop);
 }
 
 function resize(): void {
   const container = document.getElementById('game-container');
+  let width = window.innerWidth;
+  let height = window.innerHeight;
+  
   if (container) {
-    resizeCanvas(renderCtx, container.clientWidth, container.clientHeight);
-  } else {
-    resizeCanvas(renderCtx, window.innerWidth, window.innerHeight);
+    width = container.clientWidth;
+    height = container.clientHeight;
   }
+  
+  width = Math.max(800, width);
+  height = Math.max(600, height);
+  
+  resizeCanvas(renderCtx, width, height);
 }
 
 function setupEventListeners(): void {
   window.addEventListener('resize', resize);
   
   window.addEventListener('keydown', (e) => {
-    handleKeyDown(keyState, e.key);
-    
-    if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
-        e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const preventKeys = [' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+    if (preventKeys.includes(e.key)) {
       e.preventDefault();
     }
     
+    handleKeyDown(keyState, e.key);
     handleGlobalKeys(e.key.toLowerCase());
   });
   
@@ -92,6 +104,7 @@ function handleGlobalKeys(key: string): void {
     if (gameData.gameState === 'title') {
       gameData.gameState = 'playing';
       resetGame(gameData);
+      return;
     }
   }
   
@@ -101,24 +114,36 @@ function handleGlobalKeys(key: string): void {
     } else if (gameData.gameState === 'paused') {
       gameData.gameState = 'playing';
     }
+    return;
   }
   
   if (key === 'r') {
     if (gameData.gameState === 'playing' || gameData.gameState === 'paused' || gameData.gameState === 'gameover') {
       gameData.gameState = 'restart-confirm';
     }
+    return;
   }
   
   if (gameData.gameState === 'restart-confirm') {
     if (key === 'y') {
       resetGame(gameData);
-    } else if (key === 'n') {
+    } else if (key === 'n' || key === 'escape') {
       if (gameData.winner) {
         gameData.gameState = 'gameover';
       } else {
         gameData.gameState = 'playing';
       }
     }
+    return;
+  }
+  
+  if (key === 'escape') {
+    if (gameData.gameState === 'paused') {
+      gameData.gameState = 'playing';
+    } else if (gameData.gameState === 'playing') {
+      gameData.gameState = 'paused';
+    }
+    return;
   }
 }
 
@@ -131,7 +156,8 @@ function gameLoop(currentTime: number): void {
   updateGame(gameData, deltaTime);
   
   if (gameData.gameState === 'playing') {
-    handlePlayerInput(gameData, keyState, gameData.currentPlayer);
+    handlePlayerInput(gameData, keyState, 1);
+    handlePlayerInput(gameData, keyState, 2);
   }
   
   clearJustPressed(keyState);
@@ -150,15 +176,17 @@ function checkMemoryLeak(currentTime: number): void {
     const particleCount = gameData.particles.length;
     const trailCount = gameData.trails.size;
     const pieceCount = gameData.pieces.length;
+    const rippleCount = gameData.ripples.length;
+    const activeParticles = gameData.particlePool.filter(p => p.active).length;
     
     if (initialMemory === 0) {
-      initialMemory = particleCount + trailCount + pieceCount;
+      initialMemory = particleCount + trailCount + pieceCount + rippleCount + activeParticles;
     } else {
-      const currentMemory = particleCount + trailCount + pieceCount;
-      const growth = (currentMemory - initialMemory) / initialMemory;
+      const currentMemory = particleCount + trailCount + pieceCount + rippleCount + activeParticles;
+      const growth = initialMemory > 0 ? (currentMemory - initialMemory) / initialMemory : 0;
       
       if (growth > 0.05) {
-        memoryWarnings++;
+        _memoryWarnings++;
         console.warn(`[Memory Warning] Memory growth detected: ${(growth * 100).toFixed(2)}%`);
       }
     }
