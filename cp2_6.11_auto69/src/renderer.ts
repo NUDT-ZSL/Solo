@@ -1,4 +1,4 @@
-import type { DeformedPage, Point } from './paper';
+import type { DeformedPage } from './paper';
 
 export interface PageRenderData {
   frontImage: HTMLImageElement | HTMLCanvasElement | null;
@@ -69,14 +69,16 @@ export class CanvasRenderer {
     ctx.save();
     ctx.translate(this.paperX, this.paperY);
 
-    if (!deformed || deformed.progress === 0) {
+    if (!deformed || deformed.progress < 0.005) {
       this.drawStaticPage(data.frontImage, data.pageNumber, data.totalPages);
       ctx.restore();
       return;
     }
 
     this.drawBasePage(data, deformed);
+    this.drawBackFaceWithImage(deformed, data);
     this.drawFlippingPage(deformed, data);
+    this.drawFoldHighlight(deformed);
 
     ctx.restore();
   }
@@ -104,14 +106,22 @@ export class CanvasRenderer {
     ctx.beginPath();
     if (deformed.direction === 'next') {
       ctx.moveTo(deformed.foldStart.x, deformed.foldStart.y);
-      ctx.lineTo(w, 0);
+      ctx.bezierCurveTo(
+        deformed.foldControl.x, deformed.foldControl.y,
+        deformed.foldControl2.x, deformed.foldControl2.y,
+        deformed.foldEnd.x, deformed.foldEnd.y
+      );
       ctx.lineTo(w, h);
-      ctx.lineTo(deformed.foldEnd.x, deformed.foldEnd.y);
+      ctx.lineTo(w, 0);
     } else {
       ctx.moveTo(0, 0);
-      ctx.lineTo(deformed.foldStart.x, deformed.foldStart.y);
-      ctx.lineTo(deformed.foldEnd.x, deformed.foldEnd.y);
       ctx.lineTo(0, h);
+      ctx.lineTo(deformed.foldEnd.x, deformed.foldEnd.y);
+      ctx.bezierCurveTo(
+        deformed.foldControl2.x, deformed.foldControl2.y,
+        deformed.foldControl.x, deformed.foldControl.y,
+        deformed.foldStart.x, deformed.foldStart.y
+      );
     }
     ctx.closePath();
     ctx.clip();
@@ -131,13 +141,29 @@ export class CanvasRenderer {
 
   private drawFlippingPage(deformed: DeformedPage, data: PageRenderData): void {
     const ctx = this.ctx;
+    const t = deformed.progress;
 
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(deformed.topLeft.x, deformed.topLeft.y);
-    ctx.quadraticCurveTo(deformed.foldControl.x, deformed.foldControl.y, deformed.topRight.x, deformed.topRight.y);
-    ctx.lineTo(deformed.bottomRight.x, deformed.bottomRight.y);
-    ctx.quadraticCurveTo(deformed.foldControl.x, deformed.foldControl.y, deformed.bottomLeft.x, deformed.bottomLeft.y);
+    if (deformed.direction === 'next') {
+      ctx.moveTo(deformed.topLeft.x, deformed.topLeft.y);
+      ctx.lineTo(deformed.foldStart.x, deformed.foldStart.y);
+      ctx.bezierCurveTo(
+        deformed.foldControl.x, deformed.foldControl.y,
+        deformed.foldControl2.x, deformed.foldControl2.y,
+        deformed.foldEnd.x, deformed.foldEnd.y
+      );
+      ctx.lineTo(deformed.bottomLeft.x, deformed.bottomLeft.y);
+    } else {
+      ctx.moveTo(deformed.topRight.x, deformed.topRight.y);
+      ctx.lineTo(deformed.foldEnd.x, deformed.foldEnd.y);
+      ctx.bezierCurveTo(
+        deformed.foldControl2.x, deformed.foldControl2.y,
+        deformed.foldControl.x, deformed.foldControl.y,
+        deformed.foldStart.x, deformed.foldStart.y
+      );
+      ctx.lineTo(deformed.bottomRight.x, deformed.bottomRight.y);
+    }
     ctx.closePath();
     ctx.clip();
 
@@ -152,69 +178,101 @@ export class CanvasRenderer {
     this.drawPageNumber(showPage, data.totalPages);
 
     ctx.restore();
-    this.drawBackFace(deformed);
-    this.drawFoldHighlight(deformed);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const fadeGrad = ctx.createLinearGradient(
+      deformed.direction === 'next' ? deformed.foldStart.x - 30 : deformed.foldStart.x,
+      0,
+      deformed.direction === 'next' ? deformed.foldStart.x + 30 : deformed.foldStart.x - 30,
+      0
+    );
+    const shadowAlpha = Math.sin(t * Math.PI) * 0.35;
+    fadeGrad.addColorStop(0, `rgba(0, 0, 0, 0)`);
+    fadeGrad.addColorStop(0.45, `rgba(0, 0, 0, ${shadowAlpha})`);
+    fadeGrad.addColorStop(0.55, `rgba(0, 0, 0, ${shadowAlpha * 0.8})`);
+    fadeGrad.addColorStop(1, `rgba(0, 0, 0, 0)`);
+    ctx.fillStyle = fadeGrad;
+    ctx.fillRect(0, 0, this.paperWidth, this.paperHeight);
+    ctx.restore();
   }
 
-  private drawBackFace(deformed: DeformedPage): void {
+  private drawBackFaceWithImage(deformed: DeformedPage, data: PageRenderData): void {
     const ctx = this.ctx;
     const t = deformed.progress;
-    if (t < 0.15) return;
+    if (t < 0.12) return;
+
+    const backImg = deformed.direction === 'next' ? data.frontImage : data.backImage;
 
     ctx.save();
     ctx.beginPath();
     if (deformed.direction === 'next') {
       ctx.moveTo(deformed.backTopLeft.x, deformed.backTopLeft.y);
       ctx.quadraticCurveTo(
-        deformed.backTopLeft.x + (deformed.backTopRight.x - deformed.backTopLeft.x) * 0.5 + t * 8,
-        this.paperHeight / 2,
-        deformed.backBottomLeft.x,
-        deformed.backBottomLeft.y
+        deformed.backFoldControl.x, deformed.backFoldControl.y,
+        deformed.backBottomLeft.x, deformed.backBottomLeft.y
       );
       ctx.lineTo(deformed.backBottomRight.x, deformed.backBottomRight.y);
       ctx.quadraticCurveTo(
-        deformed.backTopRight.x + (deformed.backBottomRight.x - deformed.backTopRight.x) * 0.5 - t * 8,
-        this.paperHeight / 2,
-        deformed.backTopRight.x,
-        deformed.backTopRight.y
+        deformed.backFoldControl.x, deformed.backFoldControl.y,
+        deformed.backTopRight.x, deformed.backTopRight.y
       );
     } else {
       ctx.moveTo(deformed.backTopLeft.x, deformed.backTopLeft.y);
       ctx.quadraticCurveTo(
-        deformed.backTopLeft.x + (deformed.backTopRight.x - deformed.backTopLeft.x) * 0.5 - t * 8,
-        this.paperHeight / 2,
-        deformed.backBottomLeft.x,
-        deformed.backBottomLeft.y
+        deformed.backFoldControl.x, deformed.backFoldControl.y,
+        deformed.backBottomLeft.x, deformed.backBottomLeft.y
       );
       ctx.lineTo(deformed.backBottomRight.x, deformed.backBottomRight.y);
       ctx.quadraticCurveTo(
-        deformed.backTopRight.x + (deformed.backBottomRight.x - deformed.backTopRight.x) * 0.5 + t * 8,
-        this.paperHeight / 2,
-        deformed.backTopRight.x,
-        deformed.backTopRight.y
+        deformed.backFoldControl.x, deformed.backFoldControl.y,
+        deformed.backTopRight.x, deformed.backTopRight.y
       );
     }
     ctx.closePath();
 
-    const alpha = Math.min(0.55, (t - 0.15) * 0.9);
-    const gradient = ctx.createLinearGradient(
+    ctx.save();
+    ctx.clip();
+
+    if (backImg) {
+      ctx.save();
+      ctx.filter = 'blur(1.5px) brightness(0.55) saturate(0.6)';
+      ctx.globalAlpha = 0.35;
+      this.drawImageCover(backImg, 0, 0, this.paperWidth, this.paperHeight, 0);
+      ctx.restore();
+    }
+
+    const overlayAlpha = Math.min(0.5, (t - 0.12) * 0.9);
+    const paperGrad = ctx.createLinearGradient(
       deformed.foldStart.x, 0,
-      deformed.direction === 'next' ? deformed.foldStart.x + 60 : deformed.foldStart.x - 60,
+      deformed.direction === 'next' ? deformed.foldStart.x + 80 : deformed.foldStart.x - 80,
       0
     );
-    gradient.addColorStop(0, `rgba(220, 220, 220, ${alpha})`);
-    gradient.addColorStop(1, `rgba(180, 180, 180, ${alpha * 0.5})`);
-    ctx.fillStyle = gradient;
-    ctx.filter = 'blur(0.8px)';
+    paperGrad.addColorStop(0, `rgba(210, 210, 210, ${overlayAlpha * 0.9})`);
+    paperGrad.addColorStop(0.5, `rgba(190, 190, 190, ${overlayAlpha * 0.7})`);
+    paperGrad.addColorStop(1, `rgba(170, 170, 170, ${overlayAlpha * 0.4})`);
+    ctx.fillStyle = paperGrad;
+    ctx.fillRect(0, 0, this.paperWidth, this.paperHeight);
+
+    ctx.restore();
+
+    const edgeGrad = ctx.createLinearGradient(
+      deformed.foldStart.x, 0,
+      deformed.direction === 'next' ? deformed.foldStart.x + 20 : deformed.foldStart.x - 20,
+      0
+    );
+    edgeGrad.addColorStop(0, `rgba(0, 0, 0, ${Math.min(0.4, t * 0.8)})`);
+    edgeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = edgeGrad;
     ctx.fill();
-    ctx.filter = 'none';
+
     ctx.restore();
   }
 
   private drawFoldHighlight(deformed: DeformedPage): void {
     const ctx = this.ctx;
     const t = deformed.progress;
-    if (t < 0.03 || t > 0.97) return;
+    if (t < 0.02 || t > 0.98) return;
 
     ctx.save();
     ctx.lineWidth = 2;
@@ -224,20 +282,19 @@ export class CanvasRenderer {
       deformed.foldStart.x, deformed.foldStart.y,
       deformed.foldEnd.x, deformed.foldEnd.y
     );
-    grad.addColorStop(0, 'rgba(255, 200, 90, 0.0)');
-    grad.addColorStop(0.2, 'rgba(255, 200, 90, 0.75)');
-    grad.addColorStop(0.5, 'rgba(255, 160, 50, 0.95)');
-    grad.addColorStop(0.8, 'rgba(220, 110, 30, 0.7)');
-    grad.addColorStop(1, 'rgba(180, 80, 20, 0.0)');
+    grad.addColorStop(0, 'rgba(255, 220, 130, 0)');
+    grad.addColorStop(0.15, 'rgba(255, 200, 90, 0.8)');
+    grad.addColorStop(0.5, 'rgba(255, 165, 50, 0.95)');
+    grad.addColorStop(0.85, 'rgba(220, 120, 30, 0.7)');
+    grad.addColorStop(1, 'rgba(180, 80, 20, 0)');
     ctx.strokeStyle = grad;
 
     ctx.beginPath();
-    ctx.moveTo(deformed.foldStart.x, deformed.foldStart.y + 6);
-    ctx.quadraticCurveTo(
-      deformed.foldControl.x,
-      deformed.foldControl.y,
-      deformed.foldEnd.x,
-      deformed.foldEnd.y - 6
+    ctx.moveTo(deformed.foldStart.x, deformed.foldStart.y + 8);
+    ctx.bezierCurveTo(
+      deformed.foldControl.x, deformed.foldControl.y,
+      deformed.foldControl2.x, deformed.foldControl2.y,
+      deformed.foldEnd.x, deformed.foldEnd.y - 8
     );
     ctx.stroke();
     ctx.restore();
@@ -298,7 +355,9 @@ export class CanvasRenderer {
 
     ctx.save();
     if (desaturate > 0.01) {
-      ctx.filter = `saturate(${1 - desaturate}) brightness(${1 - desaturate * 0.1})`;
+      const sat = Math.max(0.05, 1 - desaturate);
+      const bright = 1 - desaturate * 0.15;
+      ctx.filter = `saturate(${sat}) brightness(${bright})`;
     }
     ctx.drawImage(img, dx, dy, dw, dh);
     ctx.restore();

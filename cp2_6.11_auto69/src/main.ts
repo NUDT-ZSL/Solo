@@ -380,14 +380,28 @@ class PaperGalleryApp {
       }
       const el = document.createElement('div');
       el.className = 'thumb-item' + (idx === this.state.currentPage ? ' active' : '');
+      el.dataset.pageIndex = String(idx);
+
+      const inner = document.createElement('div');
+      inner.className = 'thumb-inner';
       const thumbImg = document.createElement('img');
       thumbImg.src = img.thumb.toDataURL('image/png');
       thumbImg.alt = img.name;
-      el.appendChild(thumbImg);
+      inner.appendChild(thumbImg);
+      el.appendChild(inner);
+
       const title = document.createElement('span');
       title.className = 'thumb-title';
       title.textContent = img.name.replace(/\.[^.]+$/, '');
       el.appendChild(title);
+
+      el.addEventListener('mouseenter', () => {
+        el.classList.add('is-hovered');
+      });
+      el.addEventListener('mouseleave', () => {
+        el.classList.remove('is-hovered');
+      });
+
       el.addEventListener('click', () => this.jumpToPage(idx));
       this.thumbsBar.appendChild(el);
     });

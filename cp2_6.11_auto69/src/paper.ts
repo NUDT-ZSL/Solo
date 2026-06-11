@@ -9,12 +9,15 @@ export interface DeformedPage {
   bottomLeft: Point;
   bottomRight: Point;
   foldControl: Point;
+  foldControl2: Point;
   foldStart: Point;
   foldEnd: Point;
+  foldMid: Point;
   backTopLeft: Point;
   backTopRight: Point;
   backBottomLeft: Point;
   backBottomRight: Point;
+  backFoldControl: Point;
   progress: number;
   direction: 'next' | 'prev';
   desaturate: number;
@@ -22,11 +25,21 @@ export interface DeformedPage {
 
 type FlipState = 'idle' | 'dragging' | 'inertia';
 
+function bezierCubic(t: number, p0: Point, p1: Point, p2: Point, p3: Point): Point {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x,
+    y: mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y
+  };
+}
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
 export class PageFlipper {
   private width: number;
   private height: number;
-  private cx: number;
-  private cy: number;
 
   private state: FlipState = 'idle';
   private direction: 'next' | 'prev' = 'next';
@@ -39,22 +52,17 @@ export class PageFlipper {
   private readonly flipThreshold: number = 0.35;
 
   private dragStartX: number = 0;
-  private dragX: number = 0;
   private lastMoveTime: number = 0;
   private lastMoveX: number = 0;
 
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
-    this.cx = width / 2;
-    this.cy = height / 2;
   }
 
   resize(width: number, height: number): void {
     this.width = width;
     this.height = height;
-    this.cx = width / 2;
-    this.cy = height / 2;
   }
 
   isAnimating(): boolean {
@@ -73,7 +81,6 @@ export class PageFlipper {
     this.state = 'dragging';
     this.direction = side === 'right' ? 'next' : 'prev';
     this.dragStartX = x;
-    this.dragX = x;
     this.lastMoveX = x;
     this.lastMoveTime = performance.now();
     this.velocity = 0;
@@ -86,14 +93,13 @@ export class PageFlipper {
     this.velocity = (x - this.lastMoveX) / dt;
     this.lastMoveX = x;
     this.lastMoveTime = now;
-    this.dragX = x;
 
     if (this.direction === 'next') {
       const dx = this.dragStartX - x;
-      this.progress = Math.max(0, Math.min(1, dx / (this.width * 0.85)));
+      this.progress = Math.max(0, Math.min(1, dx / (this.width * 0.82)));
     } else {
       const dx = x - this.dragStartX;
-      this.progress = Math.max(0, Math.min(1, dx / (this.width * 0.85)));
+      this.progress = Math.max(0, Math.min(1, dx / (this.width * 0.82)));
     }
   }
 
@@ -103,7 +109,7 @@ export class PageFlipper {
     }
     this.state = 'inertia';
 
-    const vThreshold = 0.35;
+    const vThreshold = 0.3;
     let willFlip: boolean;
     if (Math.abs(this.velocity) > vThreshold) {
       willFlip = this.direction === 'next' ? this.velocity < 0 : this.velocity > 0;
@@ -114,8 +120,8 @@ export class PageFlipper {
     const targetProgress = willFlip ? 1 : 0;
     const distance = targetProgress - this.progress;
     this.velocity = distance * this.elasticity * 10;
-    if (willFlip) {
-      this.velocity = Math.max(this.velocity, (willFlip ? 1 : -1) * 2.5);
+    if (Math.abs(this.velocity) < 2.2) {
+      this.velocity = (willFlip ? 1 : -1) * 2.2;
     }
 
     return { committed: willFlip, direction: this.direction };
@@ -126,7 +132,7 @@ export class PageFlipper {
     this.state = 'inertia';
     this.direction = direction;
     this.progress = 0;
-    this.velocity = (direction === 'next' ? 1 : -1) * 3.2;
+    this.velocity = (direction === 'next' ? 1 : -1) * 3.0;
   }
 
   update(dtMs: number): boolean {
@@ -158,27 +164,57 @@ export class PageFlipper {
     const w = this.width;
     const h = this.height;
 
-    const tl: Point = { x: 0, y: 0 };
-    const bl: Point = { x: 0, y: h };
-
     if (this.direction === 'next') {
-      const foldX = w * (1 - t);
-      const curveDepth = Math.sin(t * Math.PI) * w * 0.12;
+      const curvedT = easeOutCubic(t);
+      const foldX = w * (1 - curvedT);
+      const arcDepth = Math.sin(t * Math.PI) * w * 0.18;
+      const lift = Math.sin(t * Math.PI) * h * 0.04;
 
-      const tr: Point = { x: foldX - curveDepth, y: -h * 0.02 * t };
-      const br: Point = { x: foldX - curveDepth, y: h + h * 0.02 * t };
+      const tl: Point = { x: 0, y: 0 };
+      const bl: Point = { x: 0, y: h };
+
+      const trFixed: Point = { x: w, y: 0 };
+      const brFixed: Point = { x: w, y: h };
+
+      const tr: Point = {
+        x: foldX - arcDepth * 0.7,
+        y: -lift
+      };
+      const br: Point = {
+        x: foldX - arcDepth * 0.7,
+        y: h + lift
+      };
 
       const foldStart: Point = { x: foldX, y: 0 };
       const foldEnd: Point = { x: foldX, y: h };
-      const foldControl: Point = {
-        x: foldX - curveDepth * 1.4,
+      const foldMid: Point = {
+        x: foldX - arcDepth * 1.0,
         y: h / 2
       };
 
+      const foldControl: Point = {
+        x: foldX - arcDepth * 1.3,
+        y: h * 0.12
+      };
+      const foldControl2: Point = {
+        x: foldX - arcDepth * 1.3,
+        y: h * 0.88
+      };
+
       const backTl: Point = { x: foldX, y: 0 };
-      const backTr: Point = { x: foldX + curveDepth * 0.6, y: h * 0.05 * t };
+      const backTr: Point = {
+        x: foldX + arcDepth * 0.45,
+        y: lift * 0.6
+      };
       const backBl: Point = { x: foldX, y: h };
-      const backBr: Point = { x: foldX + curveDepth * 0.6, y: h - h * 0.05 * t };
+      const backBr: Point = {
+        x: foldX + arcDepth * 0.45,
+        y: h - lift * 0.6
+      };
+      const backFoldControl: Point = {
+        x: foldX + arcDepth * 0.6,
+        y: h / 2
+      };
 
       return {
         topLeft: tl,
@@ -186,37 +222,70 @@ export class PageFlipper {
         bottomLeft: bl,
         bottomRight: br,
         foldControl,
+        foldControl2,
         foldStart,
         foldEnd,
+        foldMid,
         backTopLeft: backTl,
         backTopRight: backTr,
         backBottomLeft: backBl,
         backBottomRight: backBr,
+        backFoldControl,
         progress: t,
         direction: this.direction,
-        desaturate: Math.sin(t * Math.PI) * 0.7
+        desaturate: Math.sin(t * Math.PI) * 0.85
       };
     } else {
-      const foldX = w * t;
-      const curveDepth = Math.sin(t * Math.PI) * w * 0.12;
+      const curvedT = easeOutCubic(t);
+      const foldX = w * curvedT;
+      const arcDepth = Math.sin(t * Math.PI) * w * 0.18;
+      const lift = Math.sin(t * Math.PI) * h * 0.04;
 
       const tr: Point = { x: w, y: 0 };
       const br: Point = { x: w, y: h };
 
-      const dtl: Point = { x: foldX + curveDepth, y: -h * 0.02 * t };
-      const dbl: Point = { x: foldX + curveDepth, y: h + h * 0.02 * t };
+      const tlFixed: Point = { x: 0, y: 0 };
+      const blFixed: Point = { x: 0, y: h };
+
+      const dtl: Point = {
+        x: foldX + arcDepth * 0.7,
+        y: -lift
+      };
+      const dbl: Point = {
+        x: foldX + arcDepth * 0.7,
+        y: h + lift
+      };
 
       const foldStart: Point = { x: foldX, y: 0 };
       const foldEnd: Point = { x: foldX, y: h };
-      const foldControl: Point = {
-        x: foldX + curveDepth * 1.4,
+      const foldMid: Point = {
+        x: foldX + arcDepth * 1.0,
         y: h / 2
       };
 
-      const backTl: Point = { x: foldX - curveDepth * 0.6, y: h * 0.05 * t };
+      const foldControl: Point = {
+        x: foldX + arcDepth * 1.3,
+        y: h * 0.12
+      };
+      const foldControl2: Point = {
+        x: foldX + arcDepth * 1.3,
+        y: h * 0.88
+      };
+
+      const backTl: Point = {
+        x: foldX - arcDepth * 0.45,
+        y: lift * 0.6
+      };
       const backTr: Point = { x: foldX, y: 0 };
-      const backBl: Point = { x: foldX - curveDepth * 0.6, y: h - h * 0.05 * t };
+      const backBl: Point = {
+        x: foldX - arcDepth * 0.45,
+        y: h - lift * 0.6
+      };
       const backBr: Point = { x: foldX, y: h };
+      const backFoldControl: Point = {
+        x: foldX - arcDepth * 0.6,
+        y: h / 2
+      };
 
       return {
         topLeft: dtl,
@@ -224,17 +293,38 @@ export class PageFlipper {
         bottomLeft: dbl,
         bottomRight: br,
         foldControl,
+        foldControl2,
         foldStart,
         foldEnd,
+        foldMid,
         backTopLeft: backTl,
         backTopRight: backTr,
         backBottomLeft: backBl,
         backBottomRight: backBr,
+        backFoldControl,
         progress: t,
         direction: this.direction,
-        desaturate: Math.sin(t * Math.PI) * 0.7
+        desaturate: Math.sin(t * Math.PI) * 0.85
       };
     }
+  }
+
+  sampleFoldCurve(progress: number): Point[] {
+    const t = progress;
+    const deformed = this.getDeformedPage();
+    const samples: Point[] = [];
+    for (let i = 0; i <= 20; i++) {
+      const st = i / 20;
+      const p = bezierCubic(
+        st,
+        deformed.foldStart,
+        deformed.foldControl,
+        deformed.foldControl2,
+        deformed.foldEnd
+      );
+      samples.push(p);
+    }
+    return samples;
   }
 
   reset(): void {
