@@ -196,7 +196,7 @@ export class DrawCanvas {
     if (sampled.length < 3) return [];
 
     const brightnessFactor = getBrightnessFactor(seg.color);
-    const densityMultiplier = 0.3 + brightnessFactor * 2.2;
+    const densityMultiplier = 0.25 + brightnessFactor * 3.5;
 
     const result: SampledParticle[] = [];
     const addParticleAt = (idx: number) => {

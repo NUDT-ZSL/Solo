@@ -260,7 +260,9 @@ export class ParticleCloud {
     const len2d = Math.sqrt(nx * nx + ny * ny) || 1;
     const ux = nx / len2d;
     const uy = ny / len2d;
-    return { tx: ux, ty: uy, tz: 0 };
+    const nzBias = (Math.random() - 0.5) * 0.8;
+    const total = Math.sqrt(ux * ux + uy * uy + nzBias * nzBias) || 1;
+    return { tx: ux / total, ty: uy / total, tz: nzBias / total };
   }
 
   resetView(): void {
@@ -385,10 +387,11 @@ export class ParticleCloud {
         const wave = Math.sin(t * p.frequency * Math.PI * 2 + p.phase);
         const displacement = wave * p.amplitude;
         const sizeFactor = 0.5 + 0.5 * (wave * 0.5 + 0.5);
+        const hoverBoost = (i === this.hoveredIndex) ? 2.2 : 1.0;
         pos[i * 3] = p.baseX + p.normalX * displacement;
         pos[i * 3 + 1] = p.baseY + p.normalY * displacement;
         pos[i * 3 + 2] = p.baseZ + p.normalZ * displacement;
-        sz[i] = p.baseSize * (0.5 + sizeFactor);
+        sz[i] = p.baseSize * (0.5 + sizeFactor) * hoverBoost;
       }
       posAttr.needsUpdate = true;
       sizeAttr.needsUpdate = true;
