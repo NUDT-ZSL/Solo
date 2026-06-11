@@ -1,34 +1,166 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>音轨重构者</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: linear-gradient(180deg, #0F0A1A 0%, #1F1530 100%);
-      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-      min-width: 1024px;
-      min-height: 768px;
-    }
-    #gameCanvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-      cursor: pointer;
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>流光探针 - 颜色提取与渐变生成工具</title>
+  <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
-  <script type="module" src="/src/main.ts"></script>
+  <div id="app">
+    <header class="app-header">
+      <h1 class="app-title">流光探针</h1>
+      <p class="app-subtitle">交互式颜色提取与渐变色生成工具</p>
+    </header>
+
+    <main class="main-container">
+      <section class="left-panel" id="leftPanel">
+        <div class="canvas-wrapper card">
+          <div class="upload-overlay" id="uploadOverlay">
+            <div class="upload-content">
+              <div class="upload-icon">📷</div>
+              <p>拖入图片或点击上传</p>
+              <p class="upload-hint">支持 PNG / JPG / WebP</p>
+            </div>
+          </div>
+          <canvas id="probeCanvas" width="800" height="600"></canvas>
+          <div class="crosshair-info" id="crosshairInfo" style="display: none;">
+            <div class="info-row"><span class="info-label">HEX</span><span class="info-value" id="crosshairHex">#000000</span></div>
+            <div class="info-row"><span class="info-label">RGB</span><span class="info-value" id="crosshairRgb">rgb(0,0,0)</span></div>
+            <div class="info-row"><span class="info-label">HSL</span><span class="info-value" id="crosshairHsl">hsl(0,0%,0%)</span></div>
+          </div>
+          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" hidden>
+        </div>
+        <div class="gradient-preview card">
+          <div class="gradient-header">
+            <h3>渐变预览</h3>
+            <button class="btn-mode" id="gradientModeBtn">线性渐变</button>
+          </div>
+          <canvas id="gradientCanvas" height="60"></canvas>
+          <button class="btn-export" id="exportBtn">导出 CSS 渐变</button>
+          <div class="copy-toast" id="copyToast">已复制 ✓</div>
+        </div>
+      </section>
+
+      <aside class="right-panel" id="rightPanel">
+        <button class="toggle-panel-btn" id="togglePanelBtn">«</button>
+        <div class="panel-content">
+          <div class="color-info card">
+            <h3>当前颜色</h3>
+            <div class="color-display" id="colorDisplay">
+              <div class="color-swatch" id="currentSwatch"></div>
+              <div class="color-values">
+                <div class="color-row">
+                  <span class="label">HEX</span>
+                  <span class="value" id="hexValue">#000000</span>
+                </div>
+                <div class="color-row">
+                  <span class="label">RGB</span>
+                  <span class="value" id="rgbValue">rgb(0, 0, 0)</span>
+                </div>
+                <div class="color-row">
+                  <span class="label">HSL</span>
+                  <span class="value" id="hslValue">hsl(0, 0%, 0%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="color-adjust card" id="adjustPanel" style="display: none;">
+            <div class="adjust-header">
+              <h3>颜色微调</h3>
+              <div class="adjust-actions">
+                <button class="btn-lock" id="lockBtn" title="锁定颜色">🔓</button>
+                <button class="btn-close" id="closeAdjustBtn">✕</button>
+              </div>
+            </div>
+            <div class="adjust-section">
+              <h4>RGB</h4>
+              <div class="slider-group">
+                <label>
+                  <span class="slider-label">R</span>
+                  <input type="range" id="rSlider" min="0" max="255" step="1" value="0">
+                  <input type="number" id="rInput" min="0" max="255" step="1" value="0">
+                </label>
+                <label>
+                  <span class="slider-label">G</span>
+                  <input type="range" id="gSlider" min="0" max="255" step="1" value="0">
+                  <input type="number" id="gInput" min="0" max="255" step="1" value="0">
+                </label>
+                <label>
+                  <span class="slider-label">B</span>
+                  <input type="range" id="bSlider" min="0" max="255" step="1" value="0">
+                  <input type="number" id="bInput" min="0" max="255" step="1" value="0">
+                </label>
+              </div>
+            </div>
+            <div class="adjust-section">
+              <h4>HSL</h4>
+              <div class="slider-group">
+                <label>
+                  <span class="slider-label">H</span>
+                  <input type="range" id="hSlider" min="0" max="360" step="1" value="0">
+                  <input type="number" id="hInput" min="0" max="360" step="1" value="0">
+                </label>
+                <label>
+                  <span class="slider-label">S</span>
+                  <input type="range" id="sSlider" min="0" max="100" step="1" value="0">
+                  <input type="number" id="sInput" min="0" max="100" step="1" value="0">
+                </label>
+                <label>
+                  <span class="slider-label">L</span>
+                  <input type="range" id="lSlider" min="0" max="100" step="1" value="0">
+                  <input type="number" id="lInput" min="0" max="100" step="1" value="0">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="gradient-select card">
+            <h3>渐变选择</h3>
+            <div class="select-info">
+              <div class="select-item">
+                <span class="label">起始色</span>
+                <div class="select-swatch" id="startColor"></div>
+              </div>
+              <div class="select-arrow">→</div>
+              <div class="select-item">
+                <span class="label">结束色</span>
+                <div class="select-swatch" id="endColor"></div>
+              </div>
+            </div>
+            <p class="select-hint">点击历史色块选择起始色和结束色</p>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="history-section card">
+      <div class="history-header">
+        <h3>取色历史</h3>
+        <button class="btn-clear" id="clearBtn">清空</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </footer>
+
+    <div class="confirm-modal" id="confirmModal" style="display: none;">
+      <div class="modal-overlay"></div>
+      <div class="modal-card">
+        <h3>确认清空</h3>
+        <p>确定要清空所有历史记录吗？锁定的颜色将被保留。</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" id="cancelClearBtn">取消</button>
+          <button class="btn-confirm" id="confirmClearBtn">确认清空</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <p>加载中...</p>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
 </body>
 </html>
