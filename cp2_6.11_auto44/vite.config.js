@@ -1,21 +1,13 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  root: '.',
-  base: './',
   server: {
-    port: 5188,
-    strictPort: true,
+    port: 5173,
     open: false,
-    hmr: true,
-    host: true,
+    hmr: true
   },
   build: {
     target: 'es2020',
-    outDir: 'dist',
-    sourcemap: true,
-  },
-  optimizeDeps: {
-    include: ['three'],
-  },
+    sourcemap: true
+  }
 });
