@@ -6,6 +6,8 @@ export interface AudioFeature {
   midFreq: number;
   highFreq: number;
   dominant: 'low' | 'mid' | 'high';
+  beatIntensity: number;
+  isOnset: boolean;
 }
 
 export type ParticlePreset = 'nebula' | 'volcano' | 'deepSea';
@@ -19,6 +21,7 @@ export interface ParticleConfig {
   };
   baseSpeed: number;
   sizeMultiplier: number;
+  vortexStrength?: number;
 }
 
 export const PRESET_CONFIGS: Record<ParticlePreset, ParticleConfig> = {
@@ -29,7 +32,7 @@ export const PRESET_CONFIGS: Record<ParticlePreset, ParticleConfig> = {
       mid: '#FF8C00',
       high: '#00BFFF',
     },
-    baseSpeed: 1.5,
+    baseSpeed: 1.2,
     sizeMultiplier: 1,
   },
   volcano: {
@@ -39,8 +42,8 @@ export const PRESET_CONFIGS: Record<ParticlePreset, ParticleConfig> = {
       mid: '#FF4500',
       high: '#FFD700',
     },
-    baseSpeed: 3,
-    sizeMultiplier: 1.2,
+    baseSpeed: 3.5,
+    sizeMultiplier: 1.3,
   },
   deepSea: {
     spawnType: 'bottom',
@@ -49,8 +52,9 @@ export const PRESET_CONFIGS: Record<ParticlePreset, ParticleConfig> = {
       mid: '#00CED1',
       high: '#E0FFFF',
     },
-    baseSpeed: 1,
-    sizeMultiplier: 0.8,
+    baseSpeed: 1.5,
+    sizeMultiplier: 0.85,
+    vortexStrength: 0.3,
   },
 };
 
@@ -59,3 +63,21 @@ export const BG_COLORS = {
   mid: '#3E2723',
   high: '#0A0A2E',
 };
+
+export interface SavedParticleState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  color: string;
+  alpha: number;
+  life: number;
+  maxLife: number;
+}
+
+export interface CanvasSnapshotState {
+  particles: SavedParticleState[];
+  backgroundColor: { r: number; g: number; b: number };
+  timestamp: number;
+}

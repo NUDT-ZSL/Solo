@@ -1,13 +1,15 @@
 import React, { useState, useRef, useCallback } from 'react';
-import ParticleCanvas from './components/ParticleCanvas';
+import ParticleCanvas, { ParticleCanvasHandle } from './components/ParticleCanvas';
 import ControlPanel from './components/ControlPanel';
 import AudioInput from './components/AudioInput';
 import Snapshots from './components/Snapshots';
-import type { AudioFeature, ParticlePreset } from './types';
+import { AudioAnalyzer } from './utils/audioAnalyzer';
+import type { AudioFeature, ParticlePreset, CanvasSnapshotState } from './types';
 
 export interface Snapshot {
   id: string;
   dataUrl: string;
+  stateData: string;
   timestamp: number;
 }
 
@@ -22,24 +24,65 @@ const App: React.FC = () => {
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
   
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const particleCanvasRef = useRef<any>(null);
+  const particleCanvasRef = useRef<ParticleCanvasHandle>(null);
+  const audioAnalyzerRef = useRef<AudioAnalyzer | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   const handlePlayToggle = useCallback(() => {
-    setIsPlaying(prev => !prev);
+    setIsPlaying(prev => {
+      const newState = !prev;
+      
+      const audio = audioElementRef.current;
+      if (audio) {
+        if (newState) {
+          audio.play().catch(err => console.warn('Playback failed:', err));
+        } else {
+          audio.pause();
+        }
+      }
+      
+      const analyzer = audioAnalyzerRef.current;
+      if (analyzer) {
+        if (newState) {
+          analyzer.start();
+        } else {
+          analyzer.stop();
+        }
+      }
+      
+      return newState;
+    });
   }, []);
 
   const handleVolumeChange = useCallback((value: number) => {
     setVolume(value);
+    if (audioElementRef.current) {
+      audioElementRef.current.volume = value / 100;
+    }
   }, []);
 
   const handlePresetChange = useCallback((newPreset: ParticlePreset) => {
     setPreset(newPreset);
   }, []);
 
+  const handleAudioElementCreated = useCallback((audio: HTMLAudioElement) => {
+    audioElementRef.current = audio;
+    audio.volume = volume / 100;
+  }, [volume]);
+
+  const handleAnalyzerCreated = useCallback((analyzer: AudioAnalyzer) => {
+    audioAnalyzerRef.current = analyzer;
+    if (particleCanvasRef.current) {
+      particleCanvasRef.current.setAnalyzer(analyzer);
+    }
+  }, []);
+
   const handleAudioLoaded = useCallback(() => {
     setHasAudio(true);
     setIsPlaying(true);
+    if (audioAnalyzerRef.current) {
+      audioAnalyzerRef.current.start();
+    }
   }, []);
 
   const handleFeatureUpdate = useCallback((feature: AudioFeature) => {
@@ -47,12 +90,19 @@ const App: React.FC = () => {
   }, []);
 
   const handleCapture = useCallback(() => {
-    if (!canvasRef.current) return;
+    if (!particleCanvasRef.current) return;
     
-    const dataUrl = canvasRef.current.toDataURL('image/png');
+    const canvas = document.querySelector('canvas.particle-canvas') as HTMLCanvasElement;
+    if (!canvas) return;
+    
+    const dataUrl = canvas.toDataURL('image/png');
+    const state = particleCanvasRef.current.captureState();
+    const stateData = JSON.stringify(state);
+    
     const newSnapshot: Snapshot = {
       id: `snapshot-${Date.now()}`,
       dataUrl,
+      stateData,
       timestamp: Date.now(),
     };
     
@@ -60,8 +110,26 @@ const App: React.FC = () => {
   }, []);
 
   const handleSnapshotClick = useCallback((id: string) => {
-    setActiveSnapshot(prev => prev === id ? null : id);
-  }, []);
+    setActiveSnapshot(prev => {
+      const isCurrentlyActive = prev === id;
+      
+      if (isCurrentlyActive) {
+        return null;
+      }
+      
+      const snapshot = snapshots.find(s => s.id === id);
+      if (snapshot && particleCanvasRef.current) {
+        try {
+          const state: CanvasSnapshotState = JSON.parse(snapshot.stateData);
+          particleCanvasRef.current.restoreState(state);
+        } catch (err) {
+          console.warn('Failed to restore snapshot state:', err);
+        }
+      }
+      
+      return id;
+    });
+  }, [snapshots]);
 
   const handleSnapshotDelete = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -81,8 +149,7 @@ const App: React.FC = () => {
     <div className="app-container">
       <div className="canvas-container">
         <ParticleCanvas
-          canvasRef={canvasRef}
-          particleCanvasRef={particleCanvasRef}
+          ref={particleCanvasRef}
           isPlaying={isPlaying}
           volume={volume}
           preset={preset}
@@ -90,12 +157,15 @@ const App: React.FC = () => {
           onFeatureUpdate={handleFeatureUpdate}
           snapshotOverlay={activeSnapshotData?.dataUrl || null}
           snapshotOpacity={snapshotOpacity}
+          audioAnalyzerRef={audioAnalyzerRef}
+          onAnalyzerCreated={handleAnalyzerCreated}
         />
       </div>
       
       <button
         className={`hamburger-btn ${mobilePanelOpen ? 'open' : ''}`}
         onClick={handleToggleMobilePanel}
+        aria-label="切换控制面板"
       >
         <span></span>
         <span></span>
@@ -104,10 +174,19 @@ const App: React.FC = () => {
       
       <div className={`control-panel ${mobilePanelOpen ? 'mobile-open' : ''}`}>
         <div className="panel-section">
-          <h2 className="panel-title">音乐色彩流</h2>
+          <h2 className="panel-title">音乐情感色彩流</h2>
+          {currentFeature && (
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
+              BPM: {Math.round(currentFeature.bpm)} | 能量: {Math.round(currentFeature.energy * 100)}%
+            </div>
+          )}
         </div>
         
-        <AudioInput onAudioLoaded={handleAudioLoaded} />
+        <AudioInput
+          onAudioLoaded={handleAudioLoaded}
+          onAudioElementCreated={handleAudioElementCreated}
+          onAnalyzerCreated={handleAnalyzerCreated}
+        />
         
         <div className="panel-section">
           <label className="section-label">播放控制</label>
@@ -115,6 +194,7 @@ const App: React.FC = () => {
             className="play-button"
             onClick={handlePlayToggle}
             title={isPlaying ? '暂停' : '播放'}
+            disabled={!hasAudio && !isPlaying ? false : false}
           >
             {isPlaying ? (
               <div className="pause-icon"></div>

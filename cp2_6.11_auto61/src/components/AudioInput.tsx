@@ -3,16 +3,31 @@ import { AudioAnalyzer } from '../utils/audioAnalyzer';
 
 interface AudioInputProps {
   onAudioLoaded: () => void;
-  onAudioAnalyzer?: (analyzer: AudioAnalyzer) => void;
+  onAudioElementCreated?: (audio: HTMLAudioElement) => void;
+  onAnalyzerCreated?: (analyzer: AudioAnalyzer) => void;
 }
 
-const AudioInput: React.FC<AudioInputProps> = ({ onAudioLoaded, onAudioAnalyzer }) => {
+const AudioInput: React.FC<AudioInputProps> = ({
+  onAudioLoaded,
+  onAudioElementCreated,
+  onAnalyzerCreated,
+}) => {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyzerRef = useRef<AudioAnalyzer | null>(null);
+
+  const getOrCreateAnalyzer = useCallback((): AudioAnalyzer => {
+    if (!analyzerRef.current) {
+      analyzerRef.current = new AudioAnalyzer();
+      if (onAnalyzerCreated) {
+        onAnalyzerCreated(analyzerRef.current);
+      }
+    }
+    return analyzerRef.current;
+  }, [onAnalyzerCreated]);
 
   const loadFromUrl = useCallback(async () => {
     if (!url.trim()) {
@@ -27,28 +42,48 @@ const AudioInput: React.FC<AudioInputProps> = ({ onAudioLoaded, onAudioAnalyzer 
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.crossOrigin = 'anonymous';
+        audioRef.current.loop = true;
+        if (onAudioElementCreated) {
+          onAudioElementCreated(audioRef.current);
+        }
       }
 
-      if (!analyzerRef.current) {
-        analyzerRef.current = new AudioAnalyzer();
-      }
+      const analyzer = getOrCreateAnalyzer();
 
-      audioRef.current.src = url;
+      try {
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+        audioRef.current.src = proxyUrl;
+      } catch {
+        audioRef.current.src = url;
+      }
       
       await new Promise<void>((resolve, reject) => {
         if (!audioRef.current) {
           reject(new Error('Audio element not found'));
           return;
         }
-        audioRef.current.oncanplay = () => resolve();
-        audioRef.current.onerror = () => reject(new Error('音频加载失败'));
+        const onCanPlay = () => {
+          audioRef.current?.removeEventListener('canplay', onCanPlay);
+          audioRef.current?.removeEventListener('error', onError);
+          resolve();
+        };
+        const onError = () => {
+          audioRef.current?.removeEventListener('canplay', onCanPlay);
+          audioRef.current?.removeEventListener('error', onError);
+          
+          if (audioRef.current && audioRef.current.src !== url) {
+            audioRef.current.src = url;
+            audioRef.current.addEventListener('canplay', onCanPlay, { once: true });
+            audioRef.current.addEventListener('error', () => reject(new Error('音频加载失败')), { once: true });
+          } else {
+            reject(new Error('音频加载失败'));
+          }
+        };
+        audioRef.current.addEventListener('canplay', onCanPlay, { once: true });
+        audioRef.current.addEventListener('error', onError, { once: true });
       });
 
-      await analyzerRef.current.loadFromElement(audioRef.current);
-      
-      if (onAudioAnalyzer) {
-        onAudioAnalyzer(analyzerRef.current);
-      }
+      await analyzer.loadFromElement(audioRef.current);
       
       onAudioLoaded();
     } catch (err) {
@@ -57,7 +92,7 @@ const AudioInput: React.FC<AudioInputProps> = ({ onAudioLoaded, onAudioAnalyzer 
     } finally {
       setLoading(false);
     }
-  }, [url, onAudioLoaded, onAudioAnalyzer]);
+  }, [url, getOrCreateAnalyzer, onAudioElementCreated, onAudioLoaded]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -68,16 +103,19 @@ const AudioInput: React.FC<AudioInputProps> = ({ onAudioLoaded, onAudioAnalyzer 
 
     try {
       const arrayBuffer = await file.arrayBuffer();
+      const analyzer = getOrCreateAnalyzer();
       
-      if (!analyzerRef.current) {
-        analyzerRef.current = new AudioAnalyzer();
-      }
-
-      const audioBuffer = await analyzerRef.current.decodeAudioData(arrayBuffer);
-      await analyzerRef.current.loadFromBuffer(audioBuffer);
+      const audioBuffer = await analyzer.decodeAudioData(arrayBuffer);
+      await analyzer.loadFromBuffer(audioBuffer);
       
-      if (onAudioAnalyzer) {
-        onAudioAnalyzer(analyzerRef.current);
+      const source = analyzer.getSource() as AudioBufferSourceNode;
+      if (source) {
+        source.loop = true;
+        try {
+          source.start();
+        } catch (err) {
+          console.warn('Source start warning:', err);
+        }
       }
       
       onAudioLoaded();
@@ -87,7 +125,7 @@ const AudioInput: React.FC<AudioInputProps> = ({ onAudioLoaded, onAudioAnalyzer 
     } finally {
       setLoading(false);
     }
-  }, [onAudioLoaded, onAudioAnalyzer]);
+  }, [getOrCreateAnalyzer, onAudioLoaded]);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -115,7 +153,13 @@ const AudioInput: React.FC<AudioInputProps> = ({ onAudioLoaded, onAudioAnalyzer 
           {loading ? '...' : '加载'}
         </button>
       </div>
-      <div className="upload-btn" onClick={handleUploadClick}>
+      <div
+        className="upload-btn"
+        onClick={handleUploadClick}
+        onKeyDown={(e) => e.key === 'Enter' && handleUploadClick()}
+        role="button"
+        tabIndex={0}
+      >
         {loading ? '加载中...' : '点击上传音频文件'}
       </div>
       <input
@@ -126,7 +170,7 @@ const AudioInput: React.FC<AudioInputProps> = ({ onAudioLoaded, onAudioAnalyzer 
         className="upload-input"
       />
       {error && (
-        <div style={{ color: '#ff6b6b', fontSize: '11px', marginTop: '4px' }}>
+        <div style={{ color: '#ff6b6b', fontSize: '11px', marginTop: '4px', lineHeight: 1.4 }}>
           {error}
         </div>
       )}

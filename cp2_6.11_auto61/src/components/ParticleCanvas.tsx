@@ -1,11 +1,9 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { AudioAnalyzer } from '../utils/audioAnalyzer';
-import type { AudioFeature, ParticlePreset } from '../types';
+import type { AudioFeature, ParticlePreset, SavedParticleState, CanvasSnapshotState } from '../types';
 import { PRESET_CONFIGS, BG_COLORS } from '../types';
 
 interface ParticleCanvasProps {
-  canvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
-  particleCanvasRef: React.MutableRefObject<any>;
   isPlaying: boolean;
   volume: number;
   preset: ParticlePreset;
@@ -13,6 +11,15 @@ interface ParticleCanvasProps {
   onFeatureUpdate?: (feature: AudioFeature) => void;
   snapshotOverlay: string | null;
   snapshotOpacity: number;
+  audioAnalyzerRef?: React.MutableRefObject<AudioAnalyzer | null>;
+  onAnalyzerCreated?: (analyzer: AudioAnalyzer) => void;
+}
+
+export interface ParticleCanvasHandle {
+  captureState: () => CanvasSnapshotState;
+  restoreState: (state: CanvasSnapshotState) => void;
+  getAnalyzer: () => AudioAnalyzer | null;
+  setAnalyzer: (analyzer: AudioAnalyzer) => void;
 }
 
 class Particle {
@@ -25,7 +32,6 @@ class Particle {
   alpha: number;
   life: number;
   maxLife: number;
-  targetColor: string;
 
   constructor(x: number, y: number, vx: number, vy: number, radius: number, color: string) {
     this.x = x;
@@ -34,429 +40,622 @@ class Particle {
     this.vy = vy;
     this.radius = radius;
     this.color = color;
-    this.targetColor = color;
     this.alpha = 1;
     this.life = 0;
     this.maxLife = 3000;
   }
 
-  update(deltaTime: number, feature: AudioFeature | null, preset: ParticlePreset): boolean {
-    this.life += deltaTime;
-    
-    const lifeRatio = this.life / this.maxLife;
-    if (lifeRatio < 0.1) {
-      this.alpha = lifeRatio / 0.1;
-    } else if (lifeRatio > 0.7) {
-      this.alpha = (1 - lifeRatio) / 0.3;
-    } else {
-      this.alpha = 1;
-    }
-    
-    if (feature) {
-      const config = PRESET_CONFIGS[preset];
-      const speedMultiplier = 1 + feature.energy * 2;
-      
-      if (feature.dominant === 'low') {
-        this.vy += 0.05 * feature.lowFreq;
-      } else if (feature.dominant === 'high') {
-        const angle = Math.atan2(this.vy, this.vx);
-        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-        const newSpeed = speed * (1 + feature.highFreq * 0.1);
-        this.vx = Math.cos(angle) * newSpeed;
-        this.vy = Math.sin(angle) * newSpeed;
-      } else if (feature.dominant === 'mid') {
-        const centerX = typeof window !== 'undefined' ? window.innerWidth / 2 : 400;
-        const centerY = typeof window !== 'undefined' ? window.innerHeight / 2 : 300;
-        const dx = centerX - this.x;
-        const dy = centerY - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 1) {
-          this.vx += (dx / dist) * 0.02 * feature.midFreq;
-          this.vy += (dy / dist) * 0.02 * feature.midFreq;
-        }
-      }
-      
-      const baseSpeed = config.baseSpeed;
-      const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-      const maxSpeed = baseSpeed * speedMultiplier * 3;
-      if (currentSpeed > maxSpeed) {
-        this.vx = (this.vx / currentSpeed) * maxSpeed;
-        this.vy = (this.vy / currentSpeed) * maxSpeed;
-      }
-    }
-    
-    this.x += this.vx;
-    this.y += this.vy;
-    
-    this.vx *= 0.99;
-    this.vy *= 0.99;
-    
-    return this.life < this.maxLife;
+  save(): SavedParticleState {
+    return {
+      x: this.x,
+      y: this.y,
+      vx: this.vx,
+      vy: this.vy,
+      radius: this.radius,
+      color: this.color,
+      alpha: this.alpha,
+      life: this.life,
+      maxLife: this.maxLife,
+    };
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    ctx.save();
-    ctx.globalAlpha = this.alpha;
-    ctx.fillStyle = this.color;
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = this.radius * 2;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+  restore(state: SavedParticleState): void {
+    this.x = state.x;
+    this.y = state.y;
+    this.vx = state.vx;
+    this.vy = state.vy;
+    this.radius = state.radius;
+    this.color = state.color;
+    this.alpha = state.alpha;
+    this.life = state.life;
+    this.maxLife = state.maxLife;
   }
 }
 
-class ParticleSystem {
-  particles: Particle[];
-  maxParticles: number;
-  canvasWidth: number;
-  canvasHeight: number;
-  lastSpawnTime: number;
-  spawnInterval: number;
+class ParticlePool {
+  private pool: Particle[] = [];
+  private activeCount: number = 0;
+  private maxSize: number;
 
-  constructor(width: number, height: number) {
-    this.particles = [];
-    this.maxParticles = 200;
-    this.canvasWidth = width;
-    this.canvasHeight = height;
-    this.lastSpawnTime = 0;
-    this.spawnInterval = 50;
-  }
-
-  resize(width: number, height: number): void {
-    this.canvasWidth = width;
-    this.canvasHeight = height;
-  }
-
-  spawnParticles(feature: AudioFeature | null, preset: ParticlePreset, count: number): void {
-    const config = PRESET_CONFIGS[preset];
-    
-    for (let i = 0; i < count; i++) {
-      let x: number, y: number;
-      let vx: number, vy: number;
-      
-      const speed = config.baseSpeed * (0.5 + Math.random() * 1);
-      const angle = Math.random() * Math.PI * 2;
-      
-      switch (config.spawnType) {
-        case 'center':
-          x = this.canvasWidth / 2;
-          y = this.canvasHeight / 2;
-          vx = Math.cos(angle) * speed;
-          vy = Math.sin(angle) * speed;
-          break;
-        case 'bottom':
-          x = Math.random() * this.canvasWidth;
-          y = this.canvasHeight - 10;
-          vx = (Math.random() - 0.5) * speed * 0.5;
-          vy = -speed * (0.5 + Math.random() * 0.5);
-          break;
-        case 'random':
-        default:
-          x = Math.random() * this.canvasWidth;
-          y = Math.random() * this.canvasHeight;
-          vx = Math.cos(angle) * speed * 0.5;
-          vy = Math.sin(angle) * speed * 0.5;
-          break;
-      }
-      
-      let color: string;
-      if (feature) {
-        const colors = config.colorTendency;
-        const total = feature.lowFreq + feature.midFreq + feature.highFreq;
-        if (total === 0) {
-          color = colors.mid;
-        } else {
-          const rand = Math.random() * total;
-          if (rand < feature.lowFreq) {
-            color = colors.low;
-          } else if (rand < feature.lowFreq + feature.midFreq) {
-            color = colors.mid;
-          } else {
-            color = colors.high;
-          }
-        }
-      } else {
-        color = `rgba(255, 255, 255, 0.6)`;
-      }
-      
-      const baseRadius = 2;
-      const sizeMultiplier = config.sizeMultiplier;
-      const energyMultiplier = feature ? 1 + feature.energy * 3 : 1;
-      const radius = baseRadius * sizeMultiplier * energyMultiplier * (0.8 + Math.random() * 0.4);
-      
-      if (this.particles.length < this.maxParticles) {
-        this.particles.push(new Particle(x, y, vx, vy, radius, color));
-      }
+  constructor(initialSize: number, maxSize: number) {
+    this.maxSize = maxSize;
+    for (let i = 0; i < initialSize; i++) {
+      this.pool.push(new Particle(0, 0, 0, 0, 0, '#ffffff'));
     }
   }
 
-  update(deltaTime: number, feature: AudioFeature | null, preset: ParticlePreset): void {
-    if (feature) {
-      this.maxParticles = Math.floor(200 + feature.bpm * 4);
-      this.spawnInterval = Math.max(10, 100 - feature.energy * 80);
-    } else {
-      this.maxParticles = 20;
-      this.spawnInterval = 400;
+  acquire(): Particle | null {
+    if (this.activeCount >= this.maxSize) return null;
+    
+    if (this.activeCount >= this.pool.length) {
+      this.pool.push(new Particle(0, 0, 0, 0, 0, '#ffffff'));
     }
     
-    this.particles = this.particles.filter(p => p.update(deltaTime, feature, preset));
+    const p = this.pool[this.activeCount++];
+    p.alpha = 1;
+    p.life = 0;
+    return p;
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    for (const particle of this.particles) {
-      particle.draw(ctx);
+  release(index: number): void {
+    if (index >= this.activeCount) return;
+    this.activeCount--;
+    if (index < this.activeCount) {
+      const temp = this.pool[index];
+      this.pool[index] = this.pool[this.activeCount];
+      this.pool[this.activeCount] = temp;
     }
+  }
+
+  getActive(): Particle[] {
+    return this.pool.slice(0, this.activeCount);
+  }
+
+  get count(): number {
+    return this.activeCount;
+  }
+
+  getMaxSize(): number {
+    return this.maxSize;
+  }
+
+  setMaxSize(size: number): void {
+    this.maxSize = size;
   }
 }
 
-const ParticleCanvas: React.FC<ParticleCanvasProps> = ({
-  canvasRef,
-  particleCanvasRef,
-  isPlaying,
-  volume,
-  preset,
-  hasAudio,
-  onFeatureUpdate,
-  snapshotOverlay,
-  snapshotOpacity,
-}) => {
+const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasProps>((props, ref) => {
+  const {
+    isPlaying,
+    volume,
+    preset,
+    hasAudio,
+    onFeatureUpdate,
+    snapshotOverlay,
+    snapshotOpacity,
+    audioAnalyzerRef,
+    onAnalyzerCreated,
+  } = props;
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number>(0);
-  const particleSystemRef = useRef<ParticleSystem | null>(null);
-  const audioAnalyzerRef = useRef<AudioAnalyzer | null>(null);
+  
+  const particlePoolRef = useRef<ParticlePool>(new ParticlePool(200, 1500));
+  const audioAnalyzerInternalRef = useRef<AudioAnalyzer | null>(null);
+  
+  const presetRef = useRef<ParticlePreset>(preset);
+  const isPlayingRef = useRef<boolean>(isPlaying);
+  const hasAudioRef = useRef<boolean>(hasAudio);
+  const volumeRef = useRef<number>(volume);
+  
   const lastTimeRef = useRef<number>(0);
   const lastSpawnRef = useRef<number>(0);
-  const currentBgColorRef = useRef<{ r: number; g: number; b: number }>({ r: 10, g: 10, b: 15 });
+  const defaultTimerRef = useRef<number>(0);
+  
+  const bgColorRef = useRef<{ r: number; g: number; b: number }>({ r: 10, g: 10, b: 15 });
   const targetBgColorRef = useRef<{ r: number; g: number; b: number }>({ r: 10, g: 10, b: 15 });
   const bgTransitionStartRef = useRef<number>(0);
-  const featuresRef = useRef<AudioFeature[]>([]);
+  
+  const featureHistoryRef = useRef<AudioFeature[]>([]);
+  
   const overlayImageRef = useRef<HTMLImageElement | null>(null);
-  const defaultParticleTimerRef = useRef<number>(0);
+  const snapshotStateRef = useRef<CanvasSnapshotState | null>(null);
+  
+  const onFeatureUpdateRef = useRef(onFeatureUpdate);
+
+  useEffect(() => { presetRef.current = preset; }, [preset]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { hasAudioRef.current = hasAudio; }, [hasAudio]);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { onFeatureUpdateRef.current = onFeatureUpdate; }, [onFeatureUpdate]);
 
   const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16),
-        }
-      : { r: 0, g: 0, b: 0 };
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+    } : { r: 0, g: 0, b: 0 };
   };
 
-  const updateBackgroundColor = useCallback((dominant: 'low' | 'mid' | 'high') => {
-    let targetColor: string;
-    switch (dominant) {
-      case 'low':
-        targetColor = BG_COLORS.low;
-        break;
-      case 'high':
-        targetColor = BG_COLORS.high;
-        break;
-      default:
-        targetColor = BG_COLORS.mid;
-    }
-    
-    const targetRgb = hexToRgb(targetColor);
-    if (
-      targetRgb.r !== targetBgColorRef.current.r ||
-      targetRgb.g !== targetBgColorRef.current.g ||
-      targetRgb.b !== targetBgColorRef.current.b
-    ) {
-      currentBgColorRef.current = { ...targetBgColorRef.current };
-      targetBgColorRef.current = targetRgb;
-      bgTransitionStartRef.current = performance.now();
-    }
-  }, []);
+  const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
   const lerpColor = (
     current: { r: number; g: number; b: number },
     target: { r: number; g: number; b: number },
     t: number
-  ): { r: number; g: number; b: number } => {
-    const clampedT = Math.min(t, 1);
-    return {
-      r: Math.floor(current.r + (target.r - current.r) * clampedT),
-      g: Math.floor(current.g + (target.g - current.g) * clampedT),
-      b: Math.floor(current.b + (target.b - current.b) * clampedT),
-    };
+  ): { r: number; g: number; b: number } => ({
+    r: Math.floor(lerp(current.r, target.r, t)),
+    g: Math.floor(lerp(current.g, target.g, t)),
+    b: Math.floor(lerp(current.b, target.b, t)),
+  });
+
+  const updateBackgroundColor = (dominant: 'low' | 'mid' | 'high') => {
+    let targetHex: string;
+    switch (dominant) {
+      case 'low': targetHex = BG_COLORS.low; break;
+      case 'high': targetHex = BG_COLORS.high; break;
+      default: targetHex = BG_COLORS.mid;
+    }
+    const target = hexToRgb(targetHex);
+    const cur = targetBgColorRef.current;
+    if (cur.r !== target.r || cur.g !== target.g || cur.b !== target.b) {
+      bgColorRef.current = { ...targetBgColorRef.current };
+      targetBgColorRef.current = target;
+      bgTransitionStartRef.current = performance.now();
+    }
   };
 
-  const getDominantFromHistory = useCallback((): 'low' | 'mid' | 'high' => {
-    const features = featuresRef.current;
-    if (features.length === 0) return 'mid';
-    
-    let lowSum = 0;
-    let midSum = 0;
-    let highSum = 0;
-    
-    for (const f of features) {
-      lowSum += f.lowFreq;
-      midSum += f.midFreq;
-      highSum += f.highFreq;
-    }
-    
-    const max = Math.max(lowSum, midSum, highSum);
-    if (max === lowSum) return 'low';
-    if (max === highSum) return 'high';
+  const getDominantFromHistory = (): 'low' | 'mid' | 'high' => {
+    const hist = featureHistoryRef.current;
+    if (hist.length === 0) return 'mid';
+    let l = 0, m = 0, h = 0;
+    for (const f of hist) { l += f.lowFreq; m += f.midFreq; h += f.highFreq; }
+    const max = Math.max(l, m, h);
+    if (max === l) return 'low';
+    if (max === h) return 'high';
     return 'mid';
-  }, []);
+  };
+
+  useImperativeHandle(ref, (): ParticleCanvasHandle => ({
+    captureState: () => {
+      const pool = particlePoolRef.current;
+      const particles: SavedParticleState[] = [];
+      for (let i = 0; i < pool.count; i++) {
+        particles.push(pool.getActive()[i].save());
+      }
+      return {
+        particles,
+        backgroundColor: { ...bgColorRef.current },
+        timestamp: performance.now(),
+      };
+    },
+    restoreState: (state: CanvasSnapshotState) => {
+      snapshotStateRef.current = state;
+      bgColorRef.current = { ...state.backgroundColor };
+      targetBgColorRef.current = { ...state.backgroundColor };
+      
+      const pool = particlePoolRef.current;
+      while (pool.count > 0) pool.release(0);
+      
+      for (const saved of state.particles) {
+        const p = pool.acquire();
+        if (p) p.restore(saved);
+      }
+    },
+    getAnalyzer: () => audioAnalyzerInternalRef.current,
+    setAnalyzer: (analyzer: AudioAnalyzer) => {
+      audioAnalyzerInternalRef.current = analyzer;
+      if (audioAnalyzerRef) {
+        audioAnalyzerRef.current = analyzer;
+      }
+    },
+  }));
 
   useEffect(() => {
-    if (!canvasRef.current) return;
-    if (!containerRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    const resizeCanvas = () => {
-      if (!containerRef.current || !canvas) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      ctx.scale(dpr, dpr);
-      
-      if (particleSystemRef.current) {
-        particleSystemRef.current.resize(rect.width, rect.height);
-      } else {
-        particleSystemRef.current = new ParticleSystem(rect.width, rect.height);
+    if (!audioAnalyzerInternalRef.current) {
+      audioAnalyzerInternalRef.current = new AudioAnalyzer();
+      if (onAnalyzerCreated) {
+        onAnalyzerCreated(audioAnalyzerInternalRef.current);
       }
-    };
-    
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    
-    return () => {
-      window.removeEventListener('resize', resizeCanvas);
-    };
-  }, [canvasRef]);
+      if (audioAnalyzerRef) {
+        audioAnalyzerRef.current = audioAnalyzerInternalRef.current;
+      }
+    }
+  }, [audioAnalyzerRef, onAnalyzerCreated]);
+
+  useEffect(() => {
+    const analyzerFromProp = audioAnalyzerRef?.current;
+    if (analyzerFromProp && audioAnalyzerInternalRef.current !== analyzerFromProp) {
+      audioAnalyzerInternalRef.current = analyzerFromProp;
+    }
+  }, [audioAnalyzerRef]);
+
+  useEffect(() => {
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const canvas = canvasRef.current;
+        if (!canvas) continue;
+        const rect = entry.contentRect;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+      }
+    });
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    return () => resizeObserver.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!snapshotOverlay) {
       overlayImageRef.current = null;
       return;
     }
-    
     const img = new Image();
-    img.onload = () => {
-      overlayImageRef.current = img;
-    };
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { overlayImageRef.current = img; };
     img.src = snapshotOverlay;
-    
-    return () => {
-      overlayImageRef.current = null;
-    };
+    return () => { overlayImageRef.current = null; };
   }, [snapshotOverlay]);
 
   useEffect(() => {
-    if (!canvasRef.current) return;
-    if (!particleSystemRef.current) return;
-    
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
-    
-    const audioAnalyzer = new AudioAnalyzer();
-    audioAnalyzerRef.current = audioAnalyzer;
-    
-    particleCanvasRef.current = {
-      getAnalyzer: () => audioAnalyzerRef.current,
-      setAudioAnalyzer: (analyzer: AudioAnalyzer) => {
-        audioAnalyzerRef.current = analyzer;
-      },
-    };
-    
-    const animate = (time: number) => {
-      const deltaTime = time - lastTimeRef.current;
-      lastTimeRef.current = time;
-      
-      const rect = canvas.getBoundingClientRect();
-      const width = rect.width;
-      const height = rect.height;
-      
-      let currentFeature: AudioFeature | null = null;
-      
-      if (hasAudio && isPlaying && audioAnalyzerRef.current) {
-        currentFeature = audioAnalyzerRef.current.getCurrentFeature();
-        
-        if (onFeatureUpdate) {
-          onFeatureUpdate(currentFeature);
+
+    const spawnParticle = (
+      width: number,
+      height: number,
+      feature: AudioFeature | null,
+      presetKey: ParticlePreset
+    ) => {
+      const config = PRESET_CONFIGS[presetKey];
+      const pool = particlePoolRef.current;
+      const p = pool.acquire();
+      if (!p) return;
+
+      const speed = config.baseSpeed * (0.5 + Math.random() * 1);
+      const angle = Math.random() * Math.PI * 2;
+
+      switch (config.spawnType) {
+        case 'center': {
+          p.x = width / 2;
+          p.y = height / 2;
+          if (presetKey === 'volcano') {
+            const volcanoAngle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.7;
+            const volcanoSpeed = speed * (1.5 + Math.random() * 2);
+            p.vx = Math.cos(volcanoAngle) * volcanoSpeed;
+            p.vy = Math.sin(volcanoAngle) * volcanoSpeed;
+          } else {
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+          }
+          break;
         }
-        
-        featuresRef.current.push(currentFeature);
-        if (featuresRef.current.length > 10) {
-          featuresRef.current.shift();
+        case 'bottom': {
+          p.x = Math.random() * width;
+          p.y = height - 5;
+          if (presetKey === 'deepSea') {
+            const seaAngle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.4;
+            const seaSpeed = speed * (0.8 + Math.random() * 0.6);
+            p.vx = Math.cos(seaAngle) * seaSpeed;
+            p.vy = Math.sin(seaAngle) * seaSpeed;
+          } else {
+            p.vx = (Math.random() - 0.5) * speed * 0.5;
+            p.vy = -speed * (0.5 + Math.random() * 0.5);
+          }
+          break;
         }
-        
-        const dominant = getDominantFromHistory();
-        updateBackgroundColor(dominant);
-        
-        if (particleSystemRef.current && time - lastSpawnRef.current > particleSystemRef.current.spawnInterval) {
-          const spawnCount = Math.floor(1 + currentFeature.energy * 5);
-          particleSystemRef.current.spawnParticles(currentFeature, preset, spawnCount);
-          lastSpawnRef.current = time;
+        case 'random':
+        default: {
+          if (presetKey === 'nebula') {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = Math.min(width, height) * 0.3 * Math.random();
+            const randAngle = Math.random() * Math.PI * 2;
+            p.x = centerX + Math.cos(randAngle) * radius;
+            p.y = centerY + Math.sin(randAngle) * radius;
+            const tangent = randAngle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+            const orbitSpeed = speed * 0.6;
+            p.vx = Math.cos(tangent) * orbitSpeed;
+            p.vy = Math.sin(tangent) * orbitSpeed;
+          } else {
+            p.x = Math.random() * width;
+            p.y = Math.random() * height;
+            p.vx = Math.cos(angle) * speed * 0.5;
+            p.vy = Math.sin(angle) * speed * 0.5;
+          }
+          break;
+        }
+      }
+
+      const colors = config.colorTendency;
+      let color: string;
+      if (feature) {
+        const total = feature.lowFreq + feature.midFreq + feature.highFreq;
+        if (total === 0) {
+          color = colors.mid;
+        } else {
+          const rand = Math.random() * total;
+          if (rand < feature.lowFreq) color = colors.low;
+          else if (rand < feature.lowFreq + feature.midFreq) color = colors.mid;
+          else color = colors.high;
+        }
+        if (feature.isOnset) {
+          color = colors.high;
         }
       } else {
-        defaultParticleTimerRef.current += deltaTime;
-        if (defaultParticleTimerRef.current > 400 && particleSystemRef.current) {
-          particleSystemRef.current.spawnParticles(null, preset, 5);
-          defaultParticleTimerRef.current = 0;
+        const alpha = 0.3 + Math.random() * 0.4;
+        color = `rgba(255, 255, 255, ${alpha})`;
+      }
+      p.color = color;
+
+      const baseRadius = 2;
+      const sizeMultiplier = config.sizeMultiplier;
+      const energyMult = feature ? 1 + feature.energy * 3 + (feature.beatIntensity * 1.5) : 1;
+      p.radius = baseRadius * sizeMultiplier * energyMult * (0.8 + Math.random() * 0.4);
+
+      p.alpha = 0;
+      p.life = 0;
+      p.maxLife = 3000 + Math.random() * 1000;
+    };
+
+    const updateParticle = (
+      p: Particle,
+      dt: number,
+      width: number,
+      height: number,
+      feature: AudioFeature | null,
+      presetKey: ParticlePreset
+    ): boolean => {
+      p.life += dt;
+      if (p.life >= p.maxLife) return false;
+
+      const lifeRatio = p.life / p.maxLife;
+      if (lifeRatio < 0.08) {
+        p.alpha = lifeRatio / 0.08;
+      } else if (lifeRatio > 0.75) {
+        p.alpha = (1 - lifeRatio) / 0.25;
+      } else {
+        p.alpha = 1;
+      }
+
+      const config = PRESET_CONFIGS[presetKey];
+
+      if (feature) {
+        const speedMult = 1 + feature.energy * 2 + feature.beatIntensity;
+
+        if (presetKey === 'nebula') {
+          const centerX = width / 2;
+          const centerY = height / 2;
+          const dx = p.x - centerX;
+          const dy = p.y - centerY;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 0.001;
+          const orbitStrength = 0.02 * (1 + feature.midFreq);
+          p.vx += (-dy / dist) * orbitStrength * speedMult;
+          p.vy += (dx / dist) * orbitStrength * speedMult;
+          const pullStrength = 0.005 * feature.lowFreq;
+          p.vx -= (dx / dist) * pullStrength;
+          p.vy -= (dy / dist) * pullStrength;
+          if (feature.highFreq > 0.3) {
+            const pushStrength = 0.01 * feature.highFreq;
+            p.vx += (dx / dist) * pushStrength;
+            p.vy += (dy / dist) * pushStrength;
+          }
+        } else if (presetKey === 'volcano') {
+          p.vy += 0.05 + feature.lowFreq * 0.03;
+          if (feature.isOnset) {
+            p.vx += (Math.random() - 0.5) * 3;
+            p.vy -= 2 + feature.beatIntensity * 3;
+          }
+          if (feature.dominant === 'high') {
+            p.vx += (Math.random() - 0.5) * 0.5;
+          }
+        } else if (presetKey === 'deepSea') {
+          const centerX = width / 2;
+          const vortex = config.vortexStrength || 0.3;
+          const dx = p.x - centerX;
+          const dy = p.y - height / 2;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 0.001;
+          const vortexStr = vortex * (0.5 + feature.midFreq);
+          p.vx += (-dy / dist) * vortexStr * 0.05 * speedMult;
+          p.vy += (dx / dist) * vortexStr * 0.05 * speedMult;
+          const buoyancy = -0.02 - feature.highFreq * 0.04;
+          p.vy += buoyancy;
+          if (feature.dominant === 'low') {
+            p.vy += 0.03 * feature.lowFreq;
+          }
+        } else {
+          switch (feature.dominant) {
+            case 'low':
+              p.vy += 0.05 * feature.lowFreq;
+              break;
+            case 'high': {
+              const curSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy) + 0.001;
+              const accel = feature.highFreq * 0.3;
+              p.vx = (p.vx / curSpeed) * (curSpeed + accel);
+              p.vy = (p.vy / curSpeed) * (curSpeed + accel);
+              break;
+            }
+            case 'mid': {
+              const cx = width / 2;
+              const cy = height / 2;
+              const ddx = cx - p.x;
+              const ddy = cy - p.y;
+              const d = Math.sqrt(ddx * ddx + ddy * ddy) + 0.001;
+              p.vx += (ddx / d) * 0.02 * feature.midFreq;
+              p.vy += (ddy / d) * 0.02 * feature.midFreq;
+              break;
+            }
+          }
+        }
+
+        if (feature.isOnset) {
+          p.vx += (Math.random() - 0.5) * feature.beatIntensity * 4;
+          p.vy += (Math.random() - 0.5) * feature.beatIntensity * 4;
+        }
+
+        const maxSpeed = config.baseSpeed * speedMult * 4;
+        const curSpd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        if (curSpd > maxSpeed) {
+          p.vx = (p.vx / curSpd) * maxSpeed;
+          p.vy = (p.vy / curSpd) * maxSpeed;
         }
       }
-      
+
+      p.x += p.vx * (dt / 16);
+      p.y += p.vy * (dt / 16);
+      p.vx *= 0.995;
+      p.vy *= 0.995;
+
+      if (p.x < -50 || p.x > width + 50 || p.y < -50 || p.y > height + 50) {
+        return false;
+      }
+
+      return true;
+    };
+
+    const drawParticle = (c: CanvasRenderingContext2D, p: Particle) => {
+      if (p.alpha <= 0) return;
+      c.save();
+      c.globalAlpha = p.alpha;
+      c.fillStyle = p.color;
+      c.shadowColor = p.color;
+      c.shadowBlur = p.radius * 2;
+      c.beginPath();
+      c.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    };
+
+    const animate = (time: number) => {
+      const dt = time - lastTimeRef.current;
+      lastTimeRef.current = time;
+      if (dt <= 0 || dt > 100) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      const width = rect.width;
+      const height = rect.height;
+
+      const currentPreset = presetRef.current;
+      const pool = particlePoolRef.current;
+      const config = PRESET_CONFIGS[currentPreset];
+
+      let feature: AudioFeature | null = null;
+      if (hasAudioRef.current && isPlayingRef.current && audioAnalyzerInternalRef.current) {
+        try {
+          feature = audioAnalyzerInternalRef.current.getCurrentFeature();
+          
+          const vol = volumeRef.current / 100;
+          feature.energy *= vol;
+          feature.lowFreq *= vol;
+          feature.midFreq *= vol;
+          feature.highFreq *= vol;
+          feature.beatIntensity *= vol;
+
+          featureHistoryRef.current.push(feature);
+          if (featureHistoryRef.current.length > 10) featureHistoryRef.current.shift();
+
+          const dominant = getDominantFromHistory();
+          updateBackgroundColor(dominant);
+
+          if (onFeatureUpdateRef.current) {
+            try { onFeatureUpdateRef.current(feature); } catch (_) {}
+          }
+
+          const maxParticles = Math.min(1500, Math.floor(200 + feature.bpm * 4 + feature.beatIntensity * 300));
+          pool.setMaxSize(maxParticles);
+
+          const baseInterval = Math.max(8, 80 - feature.energy * 60 - feature.beatIntensity * 30);
+          if (time - lastSpawnRef.current > baseInterval) {
+            const spawnCount = Math.floor(1 + feature.energy * 8 + feature.beatIntensity * 5);
+            for (let i = 0; i < spawnCount; i++) {
+              spawnParticle(width, height, feature, currentPreset);
+            }
+            if (feature.isOnset) {
+              const burstCount = Math.floor(10 + feature.beatIntensity * 30);
+              for (let i = 0; i < burstCount; i++) {
+                spawnParticle(width, height, feature, currentPreset);
+              }
+            }
+            lastSpawnRef.current = time;
+          }
+        } catch (err) {
+          console.warn('Feature extraction error:', err);
+        }
+      } else {
+        pool.setMaxSize(100);
+        defaultTimerRef.current += dt;
+        if (defaultTimerRef.current > 400) {
+          for (let i = 0; i < 5; i++) {
+            spawnParticle(width, height, null, currentPreset);
+          }
+          defaultTimerRef.current = 0;
+        }
+      }
+
       const bgT = Math.min((time - bgTransitionStartRef.current) / 500, 1);
-      const bgColor = lerpColor(currentBgColorRef.current, targetBgColorRef.current, bgT);
-      
+      const bgColor = lerpColor(bgColorRef.current, targetBgColorRef.current, bgT);
+      bgColorRef.current = bgColor;
+
       ctx.fillStyle = `rgb(${bgColor.r}, ${bgColor.g}, ${bgColor.b})`;
       ctx.fillRect(0, 0, width, height);
-      
-      if (particleSystemRef.current) {
-        particleSystemRef.current.update(deltaTime, currentFeature, preset);
-        particleSystemRef.current.draw(ctx);
+
+      const active = pool.getActive();
+      const count = pool.count;
+      for (let i = count - 1; i >= 0; i--) {
+        const p = active[i];
+        const alive = updateParticle(p, dt, width, height, feature, currentPreset);
+        if (!alive) {
+          pool.release(i);
+        } else {
+          drawParticle(ctx, p);
+        }
       }
-      
+
       if (overlayImageRef.current && snapshotOpacity > 0) {
         ctx.save();
         ctx.globalAlpha = snapshotOpacity / 100;
         ctx.drawImage(overlayImageRef.current, 0, 0, width, height);
         ctx.restore();
       }
-      
+
       animationFrameRef.current = requestAnimationFrame(animate);
     };
-    
+
     lastTimeRef.current = performance.now();
     lastSpawnRef.current = performance.now();
     bgTransitionStartRef.current = performance.now();
     animationFrameRef.current = requestAnimationFrame(animate);
-    
+
     return () => {
       cancelAnimationFrame(animationFrameRef.current);
-      audioAnalyzer.close();
     };
-  }, [
-    canvasRef,
-    particleCanvasRef,
-    isPlaying,
-    hasAudio,
-    preset,
-    onFeatureUpdate,
-    snapshotOpacity,
-    getDominantFromHistory,
-    updateBackgroundColor,
-  ]);
+  }, [snapshotOpacity]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <canvas ref={canvasRef} className="particle-canvas" />
     </div>
   );
-};
+});
 
+ParticleCanvas.displayName = 'ParticleCanvas';
 export default ParticleCanvas;
