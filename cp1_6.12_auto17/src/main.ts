@@ -1,7 +1,8 @@
 import { Player } from './player';
 import { EnemyManager } from './enemy';
 import { Renderer } from './renderer';
-import type { GameUIState } from './renderer';
+import { PowerUpManager, PowerUpType } from './powerup';
+import type { GameUIState, PowerUpState } from './types';
 
 class Game {
   private canvas: HTMLCanvasElement;
@@ -9,12 +10,14 @@ class Game {
   private player: Player;
   private enemyManager: EnemyManager;
   private renderer: Renderer;
+  private powerUpManager: PowerUpManager;
   private score: number = 0;
   private isGameOver: boolean = false;
   private lastTime: number = 0;
   private isMobile: boolean;
   private autoShootTimer: number = 0;
   private readonly autoShootInterval: number = 150;
+  private touchActive: boolean = false;
 
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -28,6 +31,7 @@ class Game {
     this.enemyManager = new EnemyManager();
     this.enemyManager.reset();
     this.renderer = new Renderer(this.ctx, rect.width, rect.height);
+    this.powerUpManager = new PowerUpManager(rect.width, rect.height);
 
     this.setupEventListeners();
     this.gameLoop = this.gameLoop.bind(this);
@@ -49,15 +53,17 @@ class Game {
     this.canvas.style.width = `${rect.width}px`;
     this.canvas.style.height = `${rect.height}px`;
 
-    if (this.player && this.renderer) {
+    if (this.player && this.renderer && this.powerUpManager) {
       this.player.state.x = Math.min(this.player.state.x, rect.width - this.player.state.width);
       this.player.state.y = Math.min(this.player.state.y, rect.height - this.player.state.height - 60);
       this.renderer.resize(rect.width, rect.height);
+      this.powerUpManager.resize(rect.width, rect.height);
     }
   }
 
   private setupEventListeners(): void {
     window.addEventListener('keydown', (e) => {
+      if (this.touchActive) return;
       if (this.player.isShootKey(e.key) || e.code === 'Space') {
         e.preventDefault();
         if (!this.isGameOver) {
@@ -69,10 +75,12 @@ class Game {
     });
 
     window.addEventListener('keyup', (e) => {
+      if (this.touchActive) return;
       this.player.setKey(e.key, false);
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
+      if (this.touchActive) return;
       e.preventDefault();
       if (this.isGameOver) {
         const rect = this.canvas.getBoundingClientRect();
@@ -88,6 +96,7 @@ class Game {
 
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
+      this.touchActive = true;
       const rect = this.canvas.getBoundingClientRect();
 
       for (let i = 0; i < e.touches.length; i++) {
@@ -132,6 +141,21 @@ class Game {
         this.renderer.handleJoystickTouchEnd(touch);
         this.renderer.handleShootButtonTouchEnd(touch);
       }
+
+      if (e.touches.length === 0) {
+        this.touchActive = false;
+        this.player.keys.clear();
+      }
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      this.touchActive = false;
+      this.player.keys.clear();
+      this.renderer.joystick.active = false;
+      this.renderer.joystick.touchId = -1;
+      this.renderer.shootButton.active = false;
+      this.renderer.shootButton.touchId = -1;
     }, { passive: false });
 
     window.addEventListener('resize', () => {
@@ -148,7 +172,9 @@ class Game {
       isPowerUp: this.player.state.isPowerUp,
       isMobile: this.isMobile,
       canvasWidth: this.canvas.width / (window.devicePixelRatio || 1),
-      canvasHeight: this.canvas.height / (window.devicePixelRatio || 1)
+      canvasHeight: this.canvas.height / (window.devicePixelRatio || 1),
+      shieldActive: this.player.state.shieldActive,
+      speedBoostActive: this.player.state.speedBoostActive
     };
   }
 
@@ -205,22 +231,26 @@ class Game {
         enemy.x + enemy.width / 2,
         enemy.y + enemy.height / 2
       );
-      this.enemyManager.dropPowerUp(
+      this.powerUpManager.trySpawnWithChance(
         enemy.x + enemy.width / 2,
         enemy.y + enemy.height / 2
       );
     });
 
-    if (this.enemyManager.checkPlayerCollision(this.player.getRect())) {
+    if (this.enemyManager.checkPlayerCollision(this.player.getCollisionRect())) {
       if (this.player.takeDamage()) {
         this.gameOver();
       }
     }
 
-    if (this.enemyManager.checkPowerUpCollision(this.player.getRect())) {
-      this.player.activatePowerUp();
-    }
+    this.powerUpManager.update(deltaTime);
 
+    const collectedPowerUps = this.powerUpManager.checkCollisions(this.player.getCollisionRect());
+    collectedPowerUps.forEach(type => {
+      this.player.activatePowerUp(type as PowerUpType);
+    });
+
+    this.powerUpManager.cleanup();
     this.player.bullets = this.player.bullets.filter(b => b.active);
   }
 
@@ -229,9 +259,10 @@ class Game {
       this.player.state,
       this.player.bullets,
       this.enemyManager.enemies,
-      this.enemyManager.powerUps,
+      this.powerUpManager.powerUps.map(p => p.state as PowerUpState),
       this.getUIState(),
-      deltaTime
+      deltaTime,
+      this.player.isFlickerVisible()
     );
   }
 
@@ -245,9 +276,11 @@ class Game {
 
     this.score = 0;
     this.isGameOver = false;
+    this.touchActive = false;
     this.player.reset(canvasWidth, canvasHeight);
     this.enemyManager.reset();
     this.renderer.reset();
+    this.powerUpManager.reset();
     this.autoShootTimer = 0;
   }
 

@@ -1,59 +1,33 @@
-import type { PlayerState, Bullet } from './player';
-import type { Enemy, PowerUp } from './enemy';
+import type { PlayerState, Bullet, Enemy, PowerUpState, Particle, Star, VirtualJoystick, ShootButton, GameUIState } from './types';
+import { POWER_UP_CONFIGS, PowerUpType } from './powerup';
 
-export interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  color: string;
-  size: number;
-}
+const PARTICLE_COLORS = ['#ff4444', '#ff8800', '#ffcc00', '#ffffff', '#ff6600', '#ff3366'];
+const PARTICLE_MIN_SPEED = 0.1;
+const PARTICLE_MAX_SPEED = 0.5;
+const PARTICLE_MIN_SIZE = 2;
+const PARTICLE_MAX_SIZE = 5;
+const PARTICLE_MIN_LIFE = 500;
+const PARTICLE_MAX_LIFE = 1200;
+const PARTICLE_POOL_SIZE = 200;
+const EXPLOSION_PARTICLE_MIN = 20;
+const EXPLOSION_PARTICLE_MAX = 35;
 
-export interface Star {
-  x: number;
-  y: number;
-  size: number;
-  speed: number;
-  twinkle: number;
-  twinkleSpeed: number;
-}
+const STAR_MIN_SIZE = 0.5;
+const STAR_MAX_SIZE = 2.5;
+const STAR_MIN_SPEED = 0.02;
+const STAR_MAX_SPEED = 0.07;
+const STAR_TWINKLE_MIN = 0.02;
+const STAR_TWINKLE_MAX = 0.06;
 
-export interface VirtualJoystick {
-  active: boolean;
-  touchId: number;
-  baseX: number;
-  baseY: number;
-  stickX: number;
-  stickY: number;
-  radius: number;
-}
-
-export interface ShootButton {
-  x: number;
-  y: number;
-  radius: number;
-  active: boolean;
-  touchId: number;
-}
-
-export interface GameUIState {
-  score: number;
-  lives: number;
-  fireLevel: number;
-  isGameOver: boolean;
-  isPowerUp: boolean;
-  isMobile: boolean;
-  canvasWidth: number;
-  canvasHeight: number;
-}
+const GLOW_MIN_RADIUS = 35;
+const GLOW_MAX_RADIUS = 55;
+const SHIELD_RADIUS = 45;
 
 export class Renderer {
   ctx: CanvasRenderingContext2D;
   stars: Star[] = [];
   particles: Particle[] = [];
+  private particlePool: Particle[] = [];
   joystick: VirtualJoystick;
   shootButton: ShootButton;
   readonly starCount: number = 150;
@@ -79,7 +53,33 @@ export class Renderer {
       active: false,
       touchId: -1
     };
+    this.initParticlePool();
     this.initStars(canvasWidth, canvasHeight);
+  }
+
+  private initParticlePool(): void {
+    for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+      this.particlePool.push({
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        life: 0,
+        maxLife: 1,
+        color: '#ffffff',
+        size: 2,
+        active: false
+      });
+    }
+  }
+
+  private getParticleFromPool(): Particle | null {
+    const particle = this.particlePool.find(p => !p.active);
+    if (particle) {
+      particle.active = true;
+      return particle;
+    }
+    return null;
   }
 
   initStars(canvasWidth: number, canvasHeight: number): void {
@@ -88,10 +88,10 @@ export class Renderer {
       this.stars.push({
         x: Math.random() * canvasWidth,
         y: Math.random() * canvasHeight,
-        size: Math.random() * 2 + 0.5,
-        speed: Math.random() * 0.05 + 0.02,
+        size: STAR_MIN_SIZE + Math.random() * (STAR_MAX_SIZE - STAR_MIN_SIZE),
+        speed: STAR_MIN_SPEED + Math.random() * (STAR_MAX_SPEED - STAR_MIN_SPEED),
         twinkle: Math.random() * Math.PI * 2,
-        twinkleSpeed: Math.random() * 0.05 + 0.02
+        twinkleSpeed: STAR_TWINKLE_MIN + Math.random() * (STAR_TWINKLE_MAX - STAR_TWINKLE_MIN)
       });
     }
   }
@@ -100,9 +100,10 @@ export class Renderer {
     player: PlayerState,
     bullets: Bullet[],
     enemies: Enemy[],
-    powerUps: PowerUp[],
+    powerUps: PowerUpState[],
     uiState: GameUIState,
-    deltaTime: number
+    deltaTime: number,
+    isFlickerVisible: boolean
   ): void {
     const { canvasWidth, canvasHeight } = uiState;
 
@@ -113,7 +114,7 @@ export class Renderer {
     this.renderBullets(bullets);
     this.renderEnemies(enemies);
     this.renderPowerUps(powerUps);
-    this.renderPlayer(player, deltaTime);
+    this.renderPlayer(player, isFlickerVisible);
     this.renderParticles(deltaTime);
     this.renderUI(uiState);
 
@@ -154,26 +155,18 @@ export class Renderer {
     });
   }
 
-  private renderPlayer(player: PlayerState, _deltaTime: number): void {
-    const { x, y, width, height, isPowerUp, invincibleTimer } = player;
+  private renderPlayer(player: PlayerState, isFlickerVisible: boolean): void {
+    const { x, y, width, height, isPowerUp, glowIntensity, shieldActive } = player;
 
-    if (isPowerUp) {
-      const glowSize = 40 + Math.sin(Date.now() * 0.01) * 10;
-      const gradient = this.ctx.createRadialGradient(
-        x + width / 2, y + height / 2, 0,
-        x + width / 2, y + height / 2, glowSize
-      );
-      gradient.addColorStop(0, 'rgba(100, 200, 255, 0.4)');
-      gradient.addColorStop(0.5, 'rgba(50, 150, 255, 0.2)');
-      gradient.addColorStop(1, 'rgba(50, 100, 255, 0)');
-      this.ctx.fillStyle = gradient;
-      this.ctx.beginPath();
-      this.ctx.arc(x + width / 2, y + height / 2, glowSize, 0, Math.PI * 2);
-      this.ctx.fill();
+    if (!isFlickerVisible) return;
+
+    if (shieldActive) {
+      this.renderShield(x + width / 2, y + height / 2);
     }
 
-    const flickerAlpha = invincibleTimer > 0 ? (Math.sin(Date.now() * 0.02) > 0 ? 1 : 0.3) : 1;
-    this.ctx.globalAlpha = flickerAlpha;
+    if (isPowerUp || glowIntensity > 0) {
+      this.renderGlow(x + width / 2, y + height / 2, glowIntensity);
+    }
 
     const flameHeight = 15 + Math.random() * 8;
     const flameGradient = this.ctx.createLinearGradient(
@@ -225,12 +218,51 @@ export class Renderer {
     this.ctx.beginPath();
     this.ctx.ellipse(x + width / 2, y + height * 0.38, width * 0.1, height * 0.12, 0, 0, Math.PI * 2);
     this.ctx.fill();
+  }
 
-    this.ctx.globalAlpha = 1;
+  private renderGlow(centerX: number, centerY: number, intensity: number): void {
+    const glowSize = GLOW_MIN_RADIUS + (GLOW_MAX_RADIUS - GLOW_MIN_RADIUS) * intensity;
+    const gradient = this.ctx.createRadialGradient(
+      centerX, centerY, 0,
+      centerX, centerY, glowSize
+    );
+    gradient.addColorStop(0, `rgba(100, 200, 255, ${0.4 * intensity})`);
+    gradient.addColorStop(0.5, `rgba(50, 150, 255, ${0.2 * intensity})`);
+    gradient.addColorStop(1, 'rgba(50, 100, 255, 0)');
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, glowSize, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  private renderShield(centerX: number, centerY: number): void {
+    const time = Date.now() * 0.003;
+    const pulseSize = SHIELD_RADIUS + Math.sin(time) * 5;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = `rgba(74, 158, 255, ${0.6 + Math.sin(time * 2) * 0.2})`;
+    this.ctx.lineWidth = 3;
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, pulseSize, 0, Math.PI * 2);
+    this.ctx.stroke();
+
+    const gradient = this.ctx.createRadialGradient(
+      centerX, centerY, pulseSize * 0.8,
+      centerX, centerY, pulseSize
+    );
+    gradient.addColorStop(0, 'rgba(74, 158, 255, 0)');
+    gradient.addColorStop(1, 'rgba(74, 158, 255, 0.2)');
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, pulseSize, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
   }
 
   private renderBullets(bullets: Bullet[]): void {
     bullets.forEach(bullet => {
+      if (!bullet.active) return;
+
       const gradient = this.ctx.createLinearGradient(
         bullet.x, bullet.y + bullet.height,
         bullet.x, bullet.y
@@ -250,6 +282,8 @@ export class Renderer {
 
   private renderEnemies(enemies: Enemy[]): void {
     enemies.forEach(enemy => {
+      if (!enemy.active) return;
+
       const { x, y, width, height } = enemy;
 
       this.ctx.fillStyle = '#8b0000';
@@ -293,17 +327,20 @@ export class Renderer {
     });
   }
 
-  private renderPowerUps(powerUps: PowerUp[]): void {
+  private renderPowerUps(powerUps: PowerUpState[]): void {
     powerUps.forEach(powerUp => {
-      const { x, y, width, height, rotation } = powerUp;
+      if (!powerUp.active || powerUp.picked) return;
+
+      const { x, y, width, height, rotation, type } = powerUp;
       const centerX = x + width / 2;
       const centerY = y + height / 2;
+      const config = POWER_UP_CONFIGS[type as PowerUpType];
 
       const glowSize = width * 0.8 + Math.sin(Date.now() * 0.008) * 5;
       const gradient = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowSize);
-      gradient.addColorStop(0, 'rgba(50, 255, 100, 0.6)');
-      gradient.addColorStop(0.5, 'rgba(0, 200, 50, 0.3)');
-      gradient.addColorStop(1, 'rgba(0, 150, 0, 0)');
+      gradient.addColorStop(0, config.glowColor);
+      gradient.addColorStop(0.5, config.glowColor.replace('0.6', '0.3'));
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
       this.ctx.fillStyle = gradient;
       this.ctx.beginPath();
       this.ctx.arc(centerX, centerY, glowSize, 0, Math.PI * 2);
@@ -313,47 +350,76 @@ export class Renderer {
       this.ctx.translate(centerX, centerY);
       this.ctx.rotate(rotation);
 
-      this.ctx.fillStyle = '#00ff66';
+      this.ctx.fillStyle = config.color;
       this.ctx.fillRect(-width / 2, -height / 2, width, height);
 
-      this.ctx.fillStyle = '#66ff99';
+      this.ctx.fillStyle = this.lightenColor(config.color, 30);
       this.ctx.fillRect(-width / 2, -height / 2, width, height * 0.3);
 
       this.ctx.fillStyle = '#ffffff';
       this.ctx.font = `bold ${width * 0.6}px Arial`;
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('⚡', 0, 0);
+      this.ctx.fillText(config.icon, 0, 0);
 
       this.ctx.restore();
     });
   }
 
+  private lightenColor(color: string, percent: number): string {
+    const num = parseInt(color.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = (num >> 16) + amt;
+    const G = (num >> 8 & 0x00FF) + amt;
+    const B = (num & 0x0000FF) + amt;
+    return '#' + (
+      0x1000000 +
+      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 1 ? 0 : B) : 255)
+    ).toString(16).slice(1);
+  }
+
   createExplosion(x: number, y: number): void {
-    const particleCount = 25 + Math.floor(Math.random() * 10);
-    const colors = ['#ff4444', '#ff8800', '#ffcc00', '#ffffff', '#ff6600'];
+    const particleCount = EXPLOSION_PARTICLE_MIN +
+      Math.floor(Math.random() * (EXPLOSION_PARTICLE_MAX - EXPLOSION_PARTICLE_MIN));
 
     for (let i = 0; i < particleCount; i++) {
+      const particle = this.getParticleFromPool();
+      if (!particle) continue;
+
       const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 0.4 + 0.1;
-      this.particles.push({
-        x: x,
-        y: y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1,
-        maxLife: 1,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        size: Math.random() * 4 + 2
-      });
+      const speed = PARTICLE_MIN_SPEED + Math.random() * (PARTICLE_MAX_SPEED - PARTICLE_MIN_SPEED);
+      const life = PARTICLE_MIN_LIFE + Math.random() * (PARTICLE_MAX_LIFE - PARTICLE_MIN_LIFE);
+
+      particle.x = x;
+      particle.y = y;
+      particle.vx = Math.cos(angle) * speed;
+      particle.vy = Math.sin(angle) * speed;
+      particle.life = life;
+      particle.maxLife = life;
+      particle.color = PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
+      particle.size = PARTICLE_MIN_SIZE + Math.random() * (PARTICLE_MAX_SIZE - PARTICLE_MIN_SIZE);
+      particle.active = true;
+
+      if (!this.particles.includes(particle)) {
+        this.particles.push(particle);
+      }
     }
   }
 
   private renderParticles(deltaTime: number): void {
+    const activeParticles: Particle[] = [];
+
     this.particles.forEach(particle => {
+      if (!particle.active || particle.life <= 0) {
+        particle.active = false;
+        return;
+      }
+
       particle.x += particle.vx * deltaTime;
       particle.y += particle.vy * deltaTime;
-      particle.life -= deltaTime * 0.001;
+      particle.life -= deltaTime;
 
       if (particle.life > 0) {
         const alpha = particle.life / particle.maxLife;
@@ -362,15 +428,18 @@ export class Renderer {
         this.ctx.beginPath();
         this.ctx.arc(particle.x, particle.y, particle.size * alpha, 0, Math.PI * 2);
         this.ctx.fill();
+        activeParticles.push(particle);
+      } else {
+        particle.active = false;
       }
     });
 
     this.ctx.globalAlpha = 1;
-    this.particles = this.particles.filter(p => p.life > 0);
+    this.particles = activeParticles;
   }
 
   private renderUI(uiState: GameUIState): void {
-    const { score, lives, fireLevel, canvasWidth, canvasHeight } = uiState;
+    const { score, lives, fireLevel, canvasWidth, canvasHeight, shieldActive, speedBoostActive } = uiState;
     const barY = canvasHeight - this.statusBarHeight;
 
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
@@ -385,22 +454,38 @@ export class Renderer {
     this.ctx.fillText(`分数: ${score}`, 20, barY + this.statusBarHeight / 2);
 
     const heartSpacing = 35;
-    const heartStartX = canvasWidth / 2 - ((lives - 1) * heartSpacing) / 2;
-    for (let i = 0; i < lives; i++) {
-      this.drawHeart(heartStartX + i * heartSpacing, barY + this.statusBarHeight / 2, 12);
+    const heartStartX = canvasWidth / 2 - ((3 - 1) * heartSpacing) / 2;
+    for (let i = 0; i < 3; i++) {
+      if (i < lives) {
+        this.drawHeart(heartStartX + i * heartSpacing, barY + this.statusBarHeight / 2, 12, '#ff4444');
+      } else {
+        this.drawHeart(heartStartX + i * heartSpacing, barY + this.statusBarHeight / 2, 12, 'rgba(100, 100, 100, 0.5)');
+      }
     }
 
     const starStartX = canvasWidth - 80;
-    for (let i = 0; i < fireLevel; i++) {
-      this.drawStar(starStartX + i * 30, barY + this.statusBarHeight / 2, 10, '#00bfff');
+    for (let i = 0; i < 2; i++) {
+      const color = i < fireLevel ? '#00bfff' : 'rgba(100, 100, 100, 0.5)';
+      this.drawStar(starStartX + i * 30, barY + this.statusBarHeight / 2, 10, color);
     }
-    for (let i = fireLevel; i < 2; i++) {
-      this.drawStar(starStartX + i * 30, barY + this.statusBarHeight / 2, 10, 'rgba(100, 100, 100, 0.5)');
+
+    let statusX = 20;
+    const statusY = barY + this.statusBarHeight / 2 + 25;
+    if (shieldActive) {
+      this.ctx.fillStyle = '#4a9eff';
+      this.ctx.font = '14px "Segoe UI", sans-serif';
+      this.ctx.fillText('🛡️ 护盾', statusX, statusY);
+      statusX += 60;
+    }
+    if (speedBoostActive) {
+      this.ctx.fillStyle = '#ffd700';
+      this.ctx.font = '14px "Segoe UI", sans-serif';
+      this.ctx.fillText('🚀 加速', statusX, statusY);
     }
   }
 
-  private drawHeart(x: number, y: number, size: number): void {
-    this.ctx.fillStyle = '#ff4444';
+  private drawHeart(x: number, y: number, size: number, color: string): void {
+    this.ctx.fillStyle = color;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y + size * 0.3);
     this.ctx.bezierCurveTo(x, y - size * 0.3, x - size, y - size * 0.3, x - size, y + size * 0.1);
@@ -613,16 +698,17 @@ export class Renderer {
   }
 
   resize(canvasWidth: number, canvasHeight: number): void {
-    this.joystick.baseX = 100;
+    this.joystick.baseX = Math.min(100, canvasWidth * 0.15);
     this.joystick.baseY = canvasHeight - 130;
     this.joystick.stickX = this.joystick.baseX;
     this.joystick.stickY = this.joystick.baseY;
-    this.shootButton.x = canvasWidth - 80;
+    this.shootButton.x = Math.max(canvasWidth - 80, canvasWidth * 0.85);
     this.shootButton.y = canvasHeight - 130;
     this.initStars(canvasWidth, canvasHeight);
   }
 
   reset(): void {
+    this.particles.forEach(p => p.active = false);
     this.particles = [];
     this.joystick.active = false;
     this.joystick.touchId = -1;

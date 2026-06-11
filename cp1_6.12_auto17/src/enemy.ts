@@ -1,40 +1,18 @@
-import type { Rect } from './player';
+import type { Rect, Enemy, FormationType } from './types';
 
-export interface Enemy {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  speed: number;
-  active: boolean;
-  formation: 'v' | 'line';
-}
-
-export interface PowerUp {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  speed: number;
-  active: boolean;
-  rotation: number;
-}
-
-type FormationType = 'v' | 'line';
+export { Enemy };
 
 export class EnemyManager {
   enemies: Enemy[] = [];
-  powerUps: PowerUp[] = [];
   spawnTimer: number = 0;
   readonly spawnInterval: number = 2000;
   readonly minEnemiesPerWave: number = 3;
   readonly maxEnemiesPerWave: number = 5;
-  readonly powerUpDropChance: number = 0.15;
   readonly minSpeed: number = 0.15;
   readonly maxSpeed: number = 0.35;
   readonly enemyWidth: number = 40;
   readonly enemyHeight: number = 40;
-  readonly powerUpSize: number = 30;
+  readonly collisionShrink: number = 0.85;
 
   spawnWave(canvasWidth: number): void {
     const count = Math.floor(Math.random() * (this.maxEnemiesPerWave - this.minEnemiesPerWave + 1)) + this.minEnemiesPerWave;
@@ -108,18 +86,7 @@ export class EnemyManager {
       }
     });
 
-    this.powerUps.forEach(powerUp => {
-      if (powerUp.active) {
-        powerUp.y += powerUp.speed * deltaTime;
-        powerUp.rotation += 0.05;
-        if (powerUp.y > canvasHeight + 50) {
-          powerUp.active = false;
-        }
-      }
-    });
-
     this.enemies = this.enemies.filter(e => e.active);
-    this.powerUps = this.powerUps.filter(p => p.active);
 
     return playerHit;
   }
@@ -128,9 +95,13 @@ export class EnemyManager {
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
 
+      const enemyRect = this.getShrunkenRect(enemy);
+
       for (let i = 0; i < bullets.length; i++) {
         const bullet = bullets[i];
-        if (this.checkCollision(enemy, bullet)) {
+        if (!bullet || !(bullet as any).active) continue;
+
+        if (this.checkCollision(enemyRect, bullet)) {
           onHit(enemy, i);
           break;
         }
@@ -139,9 +110,13 @@ export class EnemyManager {
   }
 
   checkPlayerCollision(playerRect: Rect): boolean {
+    const playerShrink = this.getShrunkenRect(playerRect);
+
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
-      if (this.checkCollision(enemy, playerRect)) {
+
+      const enemyRect = this.getShrunkenRect(enemy);
+      if (this.checkCollision(enemyRect, playerShrink)) {
         enemy.active = false;
         return true;
       }
@@ -149,29 +124,15 @@ export class EnemyManager {
     return false;
   }
 
-  checkPowerUpCollision(playerRect: Rect): boolean {
-    for (const powerUp of this.powerUps) {
-      if (!powerUp.active) continue;
-      if (this.checkCollision(powerUp, playerRect)) {
-        powerUp.active = false;
-        return true;
-      }
-    }
-    return false;
-  }
-
-  dropPowerUp(x: number, y: number): void {
-    if (Math.random() < this.powerUpDropChance) {
-      this.powerUps.push({
-        x: x - this.powerUpSize / 2,
-        y: y,
-        width: this.powerUpSize,
-        height: this.powerUpSize,
-        speed: 0.1,
-        active: true,
-        rotation: 0
-      });
-    }
+  private getShrunkenRect(rect: Rect): Rect {
+    const w = rect.width * this.collisionShrink;
+    const h = rect.height * this.collisionShrink;
+    return {
+      x: rect.x + (rect.width - w) / 2,
+      y: rect.y + (rect.height - h) / 2,
+      width: w,
+      height: h
+    };
   }
 
   private checkCollision(a: Rect, b: Rect): boolean {
@@ -183,7 +144,6 @@ export class EnemyManager {
 
   reset(): void {
     this.enemies = [];
-    this.powerUps = [];
     this.spawnTimer = 3000;
   }
 }

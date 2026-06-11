@@ -7,6 +7,24 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    minify: 'terser'
+    minify: 'terser',
+    outDir: './dist',
+    sourcemap: true
+  },
+  resolve: {
+    extensions: ['.ts', '.js', '.d.ts']
+  },
+  esbuild: {
+    tsconfigRaw: {
+      compilerOptions: {
+        strict: true,
+        target: 'ESNext',
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+        skipLibCheck: true,
+        noUnusedLocals: true,
+        noUnusedParameters: true
+      }
+    }
   }
 });
