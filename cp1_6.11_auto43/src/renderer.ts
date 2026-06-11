@@ -72,8 +72,6 @@ export class InkRenderer {
 
   private animationId: number | null = null;
   private lastTime: number = 0;
-  private frameCount: number = 0;
-  private fps: number = 60;
 
   private analysisResult: AnalysisResult | null = null;
 
@@ -117,11 +115,25 @@ export class InkRenderer {
 
   resize(): void {
     const rect = this.canvas.getBoundingClientRect();
-    this.width = rect.width;
-    this.height = rect.height;
-    this.canvas.width = rect.width * this.dpr;
-    this.canvas.height = rect.height * this.dpr;
+    let width = rect.width;
+    let height = rect.height;
+
+    if (width <= 0 || height <= 0) {
+      const parent = this.canvas.parentElement;
+      if (parent) {
+        const parentRect = parent.getBoundingClientRect();
+        width = width <= 0 ? parentRect.width : width;
+        height = height <= 0 ? parentRect.height : height;
+      }
+    }
+
+    this.width = width;
+    this.height = height;
+    this.canvas.width = Math.max(1, width * this.dpr);
+    this.canvas.height = Math.max(1, height * this.dpr);
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(this.dpr, this.dpr);
+    this.createPaperTexture();
   }
 
   private bindEvents(): void {
@@ -184,6 +196,7 @@ export class InkRenderer {
 
   setAnalysis(result: AnalysisResult): void {
     this.analysisResult = result;
+    this.resize();
     this.generateElements();
   }
 
@@ -211,7 +224,7 @@ export class InkRenderer {
       const progress = totalSentences > 1 ? i / (totalSentences - 1) : 0.5;
 
       const baseX = padding + (0.2 + progress * 0.6) * usableWidth + (Math.random() - 0.5) * 60;
-      const baseY = padding + (0.3 + (sentence.startIndex / 500) * 0.4) * usableHeight + (Math.random() - 0.5) * 40;
+      const baseY = padding + (0.3 + (sentence.anchorIndex / 500) * 0.4) * usableHeight + (Math.random() - 0.5) * 40;
 
       const dotCount = Math.max(1, Math.min(5, sentence.keywords.length));
       const baseRadius = 10 + (sentence.intensity / 5) * 40;
@@ -304,8 +317,12 @@ export class InkRenderer {
         { x: 0.70, y: 0.65 }
       ];
 
+      const rawRatios = sortedEmotions.map(e => overallEmotions[e] / totalScore);
+      const sumRaw = rawRatios.reduce((s, r) => s + r, 0);
+      const normalizedRatios = rawRatios.map(r => r / sumRaw);
+
       sortedEmotions.forEach((emotion, idx) => {
-        const ratio = overallEmotions[emotion] / totalScore;
+        const ratio = normalizedRatios[idx];
         const pos = positions[idx % positions.length];
         const jitterX = (Math.random() - 0.5) * 0.15;
         const jitterY = (Math.random() - 0.5) * 0.15;
@@ -319,7 +336,7 @@ export class InkRenderer {
           y: layerY,
           radius: layerRadius,
           color: emotionColors[emotion],
-          alpha: 0.08 + ratio * 0.20
+          alpha: 0.08 + ratio * 0.18
         });
       });
     }
@@ -334,11 +351,6 @@ export class InkRenderer {
     const now = performance.now();
     const deltaTime = now - this.lastTime;
     this.lastTime = now;
-
-    this.frameCount++;
-    if (this.frameCount % 30 === 0) {
-      this.fps = Math.round(1000 / deltaTime);
-    }
 
     this.update(deltaTime);
     this.render();
@@ -393,6 +405,10 @@ export class InkRenderer {
 
   private render(): void {
     const ctx = this.ctx;
+
+    for (const stroke of this.strokes) {
+      stroke.stretchFactor = Math.max(0, Math.min(0.2, stroke.stretchFactor));
+    }
 
     ctx.clearRect(0, 0, this.width, this.height);
 
@@ -586,9 +602,11 @@ export class InkRenderer {
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = this.canvas.width;
     tempCanvas.height = this.canvas.height;
-    const tempCtx = tempCanvas.getContext('2d');
+    const tempCtx = tempCanvas.getContext('2d', { alpha: true });
     if (!tempCtx) return '';
 
+    tempCtx.globalCompositeOperation = 'source-over';
+    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
     tempCtx.scale(this.dpr, this.dpr);
     this.drawInkContent(tempCtx);
 
@@ -601,10 +619,6 @@ export class InkRenderer {
     this.ripples = [];
     this.colorLayers = [];
     this.analysisResult = null;
-  }
-
-  getFPS(): number {
-    return this.fps;
   }
 
   destroy(): void {

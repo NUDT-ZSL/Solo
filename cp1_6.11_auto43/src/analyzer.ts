@@ -10,6 +10,7 @@ export interface SentenceAnalysis {
   sentence: string;
   startIndex: number;
   endIndex: number;
+  anchorIndex: number;
   keywords: EmotionKeyword[];
   primaryEmotion: EmotionType | null;
   intensity: number;
@@ -102,8 +103,18 @@ const emotionWordMap: Record<string, { emotion: EmotionType; baseIntensity: numb
 const intensifiers = ['非常', '特别', '很', '太', '真', '超', '极其', '格外', '分外', '无比'];
 const weakeners = ['有点', '稍微', '些许', '一点儿', '不太', '略'];
 
+interface KeywordMatch {
+  word: string;
+  globalIndex: number;
+  emotion: EmotionType;
+  baseIntensity: number;
+}
+
 export function analyzeText(text: string): AnalysisResult {
   const sentences = splitSentences(text);
+
+  const allMatches = scanGlobalKeywords(text);
+
   const sentenceAnalyses: SentenceAnalysis[] = [];
   const overallEmotions: Record<EmotionType, number> = {
     joy: 0,
@@ -115,7 +126,18 @@ export function analyzeText(text: string): AnalysisResult {
   const totalKeywords: EmotionKeyword[] = [];
 
   for (const sentence of sentences) {
-    const analysis = analyzeSentence(sentence.text, sentence.startIndex, sentence.endIndex);
+    const sentenceMatches = allMatches.filter(
+      m => m.globalIndex >= sentence.startIndex && m.globalIndex < sentence.endIndex
+    );
+
+    const analysis = buildSentenceAnalysis(
+      sentence.text,
+      sentence.startIndex,
+      sentence.endIndex,
+      sentenceMatches,
+      text
+    );
+
     sentenceAnalyses.push(analysis);
 
     for (const emotion of Object.keys(analysis.emotionScores) as EmotionType[]) {
@@ -128,6 +150,121 @@ export function analyzeText(text: string): AnalysisResult {
     sentences: sentenceAnalyses,
     overallEmotions,
     totalKeywords
+  };
+}
+
+function scanGlobalKeywords(text: string): KeywordMatch[] {
+  const matches: KeywordMatch[] = [];
+  const usedRanges: Array<[number, number]> = [];
+
+  const sortedWords = Object.keys(emotionWordMap).sort((a, b) => b.length - a.length);
+
+  for (const word of sortedWords) {
+    const info = emotionWordMap[word];
+    let searchFrom = 0;
+
+    while (searchFrom <= text.length - word.length) {
+      const idx = text.indexOf(word, searchFrom);
+      if (idx === -1) break;
+
+      const overlaps = usedRanges.some(
+        ([s, e]) => idx < e && idx + word.length > s
+      );
+
+      if (!overlaps) {
+        let intensity = info.baseIntensity;
+
+        for (const intensifier of intensifiers) {
+          const beforeStart = Math.max(0, idx - 3);
+          const beforeText = text.substring(beforeStart, idx);
+          if (beforeText.includes(intensifier)) {
+            intensity = Math.min(5, intensity + 1);
+            break;
+          }
+        }
+
+        for (const weakener of weakeners) {
+          const beforeStart = Math.max(0, idx - 3);
+          const beforeText = text.substring(beforeStart, idx);
+          if (beforeText.includes(weakener)) {
+            intensity = Math.max(1, intensity - 1);
+            break;
+          }
+        }
+
+        matches.push({
+          word,
+          globalIndex: idx,
+          emotion: info.emotion,
+          baseIntensity: intensity
+        });
+
+        usedRanges.push([idx, idx + word.length]);
+      }
+
+      searchFrom = idx + 1;
+    }
+  }
+
+  matches.sort((a, b) => a.globalIndex - b.globalIndex);
+  return matches;
+}
+
+function buildSentenceAnalysis(
+  sentence: string,
+  startIndex: number,
+  endIndex: number,
+  matches: KeywordMatch[],
+  _fullText: string
+): SentenceAnalysis {
+  const keywords: EmotionKeyword[] = matches.map(m => ({
+    word: m.word,
+    emotion: m.emotion,
+    baseIntensity: m.baseIntensity
+  }));
+
+  const emotionScores: Record<EmotionType, number> = {
+    joy: 0,
+    sadness: 0,
+    anger: 0,
+    calm: 0,
+    anxiety: 0
+  };
+
+  for (const m of matches) {
+    emotionScores[m.emotion] += m.baseIntensity;
+  }
+
+  let primaryEmotion: EmotionType | null = null;
+  let maxScore = 0;
+
+  for (const emotion of Object.keys(emotionScores) as EmotionType[]) {
+    if (emotionScores[emotion] > maxScore) {
+      maxScore = emotionScores[emotion];
+      primaryEmotion = emotion;
+    }
+  }
+
+  let anchorIndex: number;
+  if (matches.length > 0) {
+    const sumIdx = matches.reduce((s, m) => s + m.globalIndex, 0);
+    anchorIndex = Math.round(sumIdx / matches.length);
+  } else {
+    anchorIndex = Math.round((startIndex + endIndex) / 2);
+  }
+
+  const totalIntensity = keywords.reduce((sum, k) => sum + k.baseIntensity, 0);
+  const avgIntensity = keywords.length > 0 ? totalIntensity / keywords.length : 0;
+
+  return {
+    sentence,
+    startIndex,
+    endIndex,
+    anchorIndex,
+    keywords,
+    primaryEmotion,
+    intensity: Math.min(5, Math.max(1, Math.round(avgIntensity || 0))),
+    emotionScores
   };
 }
 
@@ -193,83 +330,6 @@ function splitSentences(text: string): Array<{ text: string; startIndex: number;
   }
 
   return sentences;
-}
-
-function analyzeSentence(
-  sentence: string,
-  startIndex: number,
-  endIndex: number
-): SentenceAnalysis {
-  const keywords: EmotionKeyword[] = [];
-  const emotionScores: Record<EmotionType, number> = {
-    joy: 0,
-    sadness: 0,
-    anger: 0,
-    calm: 0,
-    anxiety: 0
-  };
-
-  const foundWords = new Set<string>();
-
-  for (const [word, info] of Object.entries(emotionWordMap)) {
-    if (sentence.includes(word) && !foundWords.has(word)) {
-      foundWords.add(word);
-      let intensity = info.baseIntensity;
-
-      for (const intensifier of intensifiers) {
-        const idx = sentence.indexOf(word);
-        if (idx >= 0 && idx > 0) {
-          const beforeText = sentence.substring(Math.max(0, idx - 3), idx);
-          if (beforeText.includes(intensifier)) {
-            intensity = Math.min(5, intensity + 1);
-            break;
-          }
-        }
-      }
-
-      for (const weakener of weakeners) {
-        const idx = sentence.indexOf(word);
-        if (idx >= 0 && idx > 0) {
-          const beforeText = sentence.substring(Math.max(0, idx - 3), idx);
-          if (beforeText.includes(weakener)) {
-            intensity = Math.max(1, intensity - 1);
-            break;
-          }
-        }
-      }
-
-      keywords.push({
-        word,
-        emotion: info.emotion,
-        baseIntensity: intensity
-      });
-
-      emotionScores[info.emotion] += intensity;
-    }
-  }
-
-  let primaryEmotion: EmotionType | null = null;
-  let maxScore = 0;
-
-  for (const emotion of Object.keys(emotionScores) as EmotionType[]) {
-    if (emotionScores[emotion] > maxScore) {
-      maxScore = emotionScores[emotion];
-      primaryEmotion = emotion;
-    }
-  }
-
-  const totalIntensity = keywords.reduce((sum, k) => sum + k.baseIntensity, 0);
-  const avgIntensity = keywords.length > 0 ? totalIntensity / keywords.length : 0;
-
-  return {
-    sentence,
-    startIndex,
-    endIndex,
-    keywords,
-    primaryEmotion,
-    intensity: Math.min(5, Math.max(1, Math.round(avgIntensity || 0))),
-    emotionScores
-  };
 }
 
 export const emotionColors: Record<EmotionType, string> = {
