@@ -160,6 +160,30 @@
       position: relative;
       width: 320px;
       height: 320px;
+      transition: all 0.2s ease;
+    }
+
+    .mixing-bowl-container.drag-over {
+      transform: scale(1.05);
+    }
+
+    .mixing-bowl-container.drag-over::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      border: 3px dashed rgba(159, 122, 234, 0.8);
+      animation: spin 3s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes spin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
     }
 
     #mixingCanvas {

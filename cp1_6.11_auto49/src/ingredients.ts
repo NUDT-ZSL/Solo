@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export interface Ingredient {
   id: string;
   name: string;
@@ -39,7 +41,7 @@ export const ingredients: Record<string, Ingredient> = {
     id: 'berry',
     name: '发光莓果',
     color: '#FF6B6B',
-    particleColor: 'rgba(255, 107, 107, 0.8)',
+    particleColor: 'rgba(255, 107, 107, 0.9)',
     sweetness: 3,
     fluffiness: 1,
     glow: 2,
@@ -49,7 +51,7 @@ export const ingredients: Record<string, Ingredient> = {
     id: 'flour',
     name: '星屑面粉',
     color: '#FFE66D',
-    particleColor: 'rgba(255, 230, 109, 0.8)',
+    particleColor: 'rgba(255, 230, 109, 0.9)',
     sweetness: 1,
     fluffiness: 3,
     glow: 1,
@@ -59,7 +61,7 @@ export const ingredients: Record<string, Ingredient> = {
     id: 'cream',
     name: '月光奶油',
     color: '#C9B8FF',
-    particleColor: 'rgba(201, 184, 255, 0.8)',
+    particleColor: 'rgba(201, 184, 255, 0.9)',
     sweetness: 2,
     fluffiness: 2,
     glow: 2,
@@ -69,7 +71,7 @@ export const ingredients: Record<string, Ingredient> = {
     id: 'sugar',
     name: '彗星糖霜',
     color: '#7DD3FC',
-    particleColor: 'rgba(125, 211, 252, 0.8)',
+    particleColor: 'rgba(125, 211, 252, 0.9)',
     sweetness: 3,
     fluffiness: 1,
     glow: 3,
@@ -94,7 +96,10 @@ export class IngredientsSystem {
   };
   private animationId: number = 0;
   private onMixChangeCallback: ((amounts: Record<string, number>) => void) | null = null;
+  private isDragging: boolean = false;
   private dragIngredient: string | null = null;
+  private dragGhost: HTMLElement | null = null;
+  private bowlHover: boolean = false;
 
   constructor() {}
 
@@ -118,11 +123,11 @@ export class IngredientsSystem {
   }
 
   private initIngredientParticles() {
-    const items = document.querySelectorAll('.ingredient-item');
+    const items = document.querySelectorAll<HTMLDivElement>('.ingredient-item');
     items.forEach((item) => {
       const id = item.getAttribute('data-ingredient');
       if (!id) return;
-      const canvas = item.querySelector('.ingredient-particles') as HTMLCanvasElement;
+      const canvas = item.querySelector<HTMLCanvasElement>('.ingredient-particles');
       if (!canvas) return;
       this.ingredientCanvases.set(id, canvas);
       this.ingredientParticles.set(id, []);
@@ -156,9 +161,11 @@ export class IngredientsSystem {
     const ingredient = ingredients[id];
     if (!particles || !canvas || !ingredient) return;
 
-    const count = 15;
+    const count = 20;
+    const width = canvas.width / (window.devicePixelRatio || 1);
+    const height = canvas.height / (window.devicePixelRatio || 1);
     for (let i = 0; i < count; i++) {
-      particles.push(this.createIngredientParticle(id, canvas.width / (window.devicePixelRatio || 1), canvas.height / (window.devicePixelRatio || 1)));
+      particles.push(this.createIngredientParticle(id, width, height));
     }
   }
 
@@ -167,9 +174,9 @@ export class IngredientsSystem {
     return {
       x: Math.random() * width,
       y: Math.random() * height,
-      vx: (Math.random() - 0.5) * 0.8,
-      vy: (Math.random() - 0.5) * 0.8 - 0.3,
-      size: Math.random() * 3 + 1,
+      vx: (Math.random() - 0.5) * 1,
+      vy: -0.3 - Math.random() * 0.8,
+      size: Math.random() * 3 + 1.5,
       life: Math.random() * 100 + 50,
       maxLife: 150,
       color: ingredient.particleColor
@@ -195,73 +202,130 @@ export class IngredientsSystem {
     }
     this.bowlCenterX = rect.width / 2;
     this.bowlCenterY = rect.height / 2;
-    this.bowlRadius = Math.min(rect.width, rect.height) * 0.32;
+    this.bowlRadius = Math.min(rect.width, rect.height) * 0.35;
   }
 
   private initDragAndDrop() {
-    const items = document.querySelectorAll('.ingredient-item');
-    const bowlContainer = document.querySelector('.mixing-bowl-container');
+    const items = document.querySelectorAll<HTMLDivElement>('.ingredient-item');
+    const bowlContainer = document.querySelector<HTMLDivElement>('.mixing-bowl-container');
 
     items.forEach((item) => {
       const id = item.getAttribute('data-ingredient');
       if (!id) return;
 
+      item.setAttribute('draggable', 'true');
+
       item.addEventListener('dragstart', (e) => {
+        this.isDragging = true;
         this.dragIngredient = id;
         item.classList.add('dragging');
+
         if (e.dataTransfer) {
           e.dataTransfer.effectAllowed = 'copy';
           e.dataTransfer.setData('text/plain', id);
+
+          try {
+            const ghost = item.cloneNode(true) as HTMLElement;
+            ghost.style.position = 'absolute';
+            ghost.style.top = '-1000px';
+            ghost.style.opacity = '0.8';
+            ghost.style.transform = 'scale(0.8)';
+            ghost.style.pointerEvents = 'none';
+            document.body.appendChild(ghost);
+            e.dataTransfer.setDragImage(ghost, 50, 50);
+            setTimeout(() => document.body.removeChild(ghost), 0);
+          } catch (_) {
+          }
         }
       });
 
       item.addEventListener('dragend', () => {
+        this.isDragging = false;
         this.dragIngredient = null;
         item.classList.remove('dragging');
+        this.removeDragGhost();
+        if (bowlContainer) {
+          bowlContainer.classList.remove('drag-over');
+        }
+        this.bowlHover = false;
+      });
+
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const ingredientId = item.getAttribute('data-ingredient');
+        if (ingredientId) {
+          this.addIngredient(ingredientId);
+        }
       });
     });
 
     if (bowlContainer) {
       bowlContainer.addEventListener('dragover', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (e.dataTransfer) {
           e.dataTransfer.dropEffect = 'copy';
+        }
+        if (!this.bowlHover) {
+          this.bowlHover = true;
+          bowlContainer.classList.add('drag-over');
+        }
+      });
+
+      bowlContainer.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        this.bowlHover = true;
+        bowlContainer.classList.add('drag-over');
+      });
+
+      bowlContainer.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        const rect = bowlContainer.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          this.bowlHover = false;
+          bowlContainer.classList.remove('drag-over');
         }
       });
 
       bowlContainer.addEventListener('drop', (e) => {
         e.preventDefault();
-        const id = e.dataTransfer?.getData('text/plain') || this.dragIngredient;
+        e.stopPropagation();
+        this.bowlHover = false;
+        bowlContainer.classList.remove('drag-over');
+
+        let id = '';
+        if (e.dataTransfer) {
+          id = e.dataTransfer.getData('text/plain');
+        }
+        if (!id) {
+          id = this.dragIngredient || '';
+        }
+
         if (id && ingredients[id]) {
           this.addIngredient(id);
-        }
-      });
-
-      bowlContainer.addEventListener('click', () => {
-        if (this.dragIngredient) {
-          this.addIngredient(this.dragIngredient);
         }
       });
     }
+  }
 
-    items.forEach((item) => {
-      item.addEventListener('click', () => {
-        const id = item.getAttribute('data-ingredient');
-        if (id && ingredients[id]) {
-          this.addIngredient(id);
-        }
-      });
-    });
+  private removeDragGhost() {
+    if (this.dragGhost) {
+      this.dragGhost.remove();
+      this.dragGhost = null;
+    }
   }
 
   addIngredient(id: string) {
-    if (!ingredients[id]) return;
-    if (this.getTotalAmount() >= 20) return;
+    if (!ingredients[id]) return false;
+    if (this.getTotalAmount() >= 20) return false;
 
     this.mixAmounts[id] += 1;
-    this.spawnMixParticles(id, 12);
+    this.spawnMixParticles(id, 15);
     this.updateRingProgress();
     this.notifyMixChange();
+    return true;
   }
 
   reset() {
@@ -282,19 +346,19 @@ export class IngredientsSystem {
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const distance = this.bowlRadius * (0.3 + Math.random() * 0.5);
+      const distance = this.bowlRadius * (0.2 + Math.random() * 0.6);
       this.mixParticles.push({
         x: this.bowlCenterX + Math.cos(angle) * distance,
         y: this.bowlCenterY + Math.sin(angle) * distance,
         vx: 0,
         vy: 0,
-        size: Math.random() * 4 + 2,
+        size: Math.random() * 5 + 2,
         color: ingredient.particleColor,
-        life: 120,
-        maxLife: 120,
+        life: 180,
+        maxLife: 180,
         angle: angle,
         distance: distance,
-        speed: 0.02 + Math.random() * 0.03
+        speed: 0.015 + Math.random() * 0.025
       });
     }
 
@@ -305,19 +369,22 @@ export class IngredientsSystem {
 
   private updateRingProgress() {
     const total = this.getTotalAmount();
-    const circumference = 2 * Math.PI * 90;
-    let offset = 0;
+    const radius = 70;
+    const circumference = 2 * Math.PI * radius;
+    let currentOffset = 0;
 
-    const ids = ['berry', 'flour', 'cream', 'sugar'];
+    const ids: Array<keyof typeof ingredients> = ['berry', 'flour', 'cream', 'sugar'];
     ids.forEach((id) => {
-      const ring = document.getElementById(`ring-${id}`) as SVGPathElement | null;
+      const ring = document.getElementById(`ring-${id}`);
       if (!ring) return;
       const amount = this.mixAmounts[id];
       const ratio = total > 0 ? amount / total : 0;
       const dashLength = ratio * circumference;
+      ring.setAttribute('r', String(radius));
       ring.setAttribute('stroke-dasharray', `${dashLength} ${circumference}`);
-      ring.setAttribute('stroke-dashoffset', `${-offset}`);
-      offset += dashLength;
+      ring.setAttribute('stroke-dashoffset', `${-currentOffset}`);
+      ring.style.transition = 'stroke-dasharray 0.3s ease, stroke-dashoffset 0.3s ease';
+      currentOffset += dashLength;
     });
   }
 
@@ -356,16 +423,16 @@ export class IngredientsSystem {
           continue;
         }
 
-        const alpha = Math.min(1, p.life / 50);
+        const alpha = Math.min(1, p.life / 60);
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fillStyle = p.color.replace(/[\d.]+\)$/, `${alpha})`);
         ctx.fill();
 
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
-        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
-        gradient.addColorStop(0, p.color.replace(/[\d.]+\)$/, `${alpha * 0.3})`));
+        ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
+        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2.5);
+        gradient.addColorStop(0, p.color.replace(/[\d.]+\)$/, `${alpha * 0.4})`));
         gradient.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = gradient;
         ctx.fill();
@@ -377,9 +444,9 @@ export class IngredientsSystem {
     for (let i = this.mixParticles.length - 1; i >= 0; i--) {
       const p = this.mixParticles[i];
       p.angle += p.speed;
-      p.distance += (this.bowlRadius * 0.6 - p.distance) * 0.02;
+      p.distance += (this.bowlRadius * 0.55 - p.distance) * 0.02;
       p.x = this.bowlCenterX + Math.cos(p.angle) * p.distance;
-      p.y = this.bowlCenterY + Math.sin(p.angle) * p.distance * 0.7;
+      p.y = this.bowlCenterY + Math.sin(p.angle) * p.distance * 0.6;
       p.life--;
 
       if (p.life <= 0) {
@@ -400,23 +467,23 @@ export class IngredientsSystem {
     if (total > 0) {
       ctx.save();
       ctx.beginPath();
-      ctx.ellipse(this.bowlCenterX, this.bowlCenterY, this.bowlRadius * 0.85, this.bowlRadius * 0.55, 0, 0, Math.PI * 2);
+      ctx.ellipse(this.bowlCenterX, this.bowlCenterY, this.bowlRadius * 0.82, this.bowlRadius * 0.52, 0, 0, Math.PI * 2);
       ctx.clip();
 
-      const ids = ['berry', 'flour', 'cream', 'sugar'];
+      const ids: Array<keyof typeof ingredients> = ['berry', 'flour', 'cream', 'sugar'];
       const colors = ids.map((id) => ingredients[id].color);
-      const ratios = ids.map((id) => this.mixAmounts[id] / Math.max(1, total));
 
       const gradient = ctx.createConicGradient
-        ? ctx.createConicGradient(0, this.bowlCenterX, this.bowlCenterY)
+        ? ctx.createConicGradient(Date.now() * 0.001, this.bowlCenterX, this.bowlCenterY)
         : ctx.createLinearGradient(0, 0, width, height);
 
       if ('createConicGradient' in CanvasRenderingContext2D.prototype) {
         let offset = 0;
         ids.forEach((id, i) => {
-          (gradient as ConicGradient).addColorStop(offset, colors[i]);
-          offset += ratios[i];
-          (gradient as ConicGradient).addColorStop(Math.min(1, offset), colors[i]);
+          const ratio = this.mixAmounts[id] / Math.max(1, total);
+          (gradient as CanvasGradient).addColorStop(offset, colors[i]);
+          offset += ratio;
+          (gradient as CanvasGradient).addColorStop(Math.min(1, offset), colors[i]);
         });
       } else {
         gradient.addColorStop(0, colors[0]);
@@ -426,8 +493,13 @@ export class IngredientsSystem {
       }
 
       ctx.fillStyle = gradient;
-      ctx.globalAlpha = 0.6;
-      ctx.fillRect(this.bowlCenterX - this.bowlRadius, this.bowlCenterY - this.bowlRadius, this.bowlRadius * 2, this.bowlRadius * 2);
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(
+        this.bowlCenterX - this.bowlRadius * 1.2,
+        this.bowlCenterY - this.bowlRadius * 1.2,
+        this.bowlRadius * 2.4,
+        this.bowlRadius * 2.4
+      );
       ctx.globalAlpha = 1;
       ctx.restore();
     }
@@ -440,9 +512,9 @@ export class IngredientsSystem {
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
-      const glowGradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 1.8);
-      glowGradient.addColorStop(0, p.color.replace(/[\d.]+\)$/, `${alpha * 0.4})`));
+      ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
+      const glowGradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
+      glowGradient.addColorStop(0, p.color.replace(/[\d.]+\)$/, `${alpha * 0.5})`));
       glowGradient.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glowGradient;
       ctx.fill();
@@ -451,8 +523,8 @@ export class IngredientsSystem {
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(this.bowlCenterX, this.bowlCenterY, this.bowlRadius, this.bowlRadius * 0.65, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = this.bowlHover ? 'rgba(159, 122, 234, 0.8)' : 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = this.bowlHover ? 4 : 3;
     ctx.stroke();
 
     ctx.beginPath();
@@ -466,4 +538,20 @@ export class IngredientsSystem {
   destroy() {
     cancelAnimationFrame(this.animationId);
   }
+}
+
+export function mixColor(colors: string[], ratios: number[]): string {
+  let r = 0, g = 0, b = 0;
+  const total = ratios.reduce((a, b) => a + b, 0);
+  if (total === 0) return '#888888';
+
+  colors.forEach((color, i) => {
+    const c = new THREE.Color(color);
+    r += c.r * ratios[i];
+    g += c.g * ratios[i];
+    b += c.b * ratios[i];
+  });
+
+  const result = new THREE.Color(r / total, g / total, b / total);
+  return `#${result.getHexString()}`;
 }

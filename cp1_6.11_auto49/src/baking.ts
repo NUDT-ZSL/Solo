@@ -11,6 +11,7 @@ export interface BakeResult {
   stats: BakeStats;
   finalColor: THREE.Color;
   scale: number;
+  glowIntensity: number;
 }
 
 interface BubbleParticle {
@@ -28,7 +29,11 @@ export class BakingSystem {
   private cakeMaterial: THREE.MeshStandardMaterial | null = null;
   private ovenLight: THREE.PointLight | null = null;
   private ambientLight: THREE.AmbientLight | null = null;
+  private topLight: THREE.PointLight | null = null;
+  private rimLight: THREE.SpotLight | null = null;
   private bubbleParticles: BubbleParticle[] = [];
+  private heatParticles: THREE.Points | null = null;
+  private heatParticleCount: number = 80;
   private isBaking: boolean = false;
   private bakeProgress: number = 0;
   private bakeDuration: number = 8000;
@@ -41,6 +46,9 @@ export class BakingSystem {
   private mixAmounts: Record<string, number> = { berry: 0, flour: 0, cream: 0, sugar: 0 };
   private targetScale: number = 1.5;
   private container: HTMLElement | null = null;
+  private cakeGlow: THREE.Mesh | null = null;
+  private ovenDoorLeft: THREE.Mesh | null = null;
+  private ovenDoorRight: THREE.Mesh | null = null;
 
   constructor() {}
 
@@ -58,8 +66,8 @@ export class BakingSystem {
     this.container = container;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a0a00);
-    this.scene.fog = new THREE.Fog(0x1a0a00, 3, 10);
+    this.scene.background = new THREE.Color(0x1a0800);
+    this.scene.fog = new THREE.FogExp2(0x1a0800, 0.15);
 
     const canvas = document.getElementById('ovenCanvas') as HTMLCanvasElement;
     if (!canvas) return;
@@ -69,15 +77,16 @@ export class BakingSystem {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.3;
 
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    this.camera.position.set(0, 0.5, 4);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    this.camera.position.set(0, 0.5, 4.5);
     this.camera.lookAt(0, 0, 0);
 
     this.setupLights();
     this.setupCake();
     this.setupOvenInterior();
+    this.setupHeatParticles();
     this.resize();
 
     window.addEventListener('resize', () => this.resize());
@@ -86,88 +95,167 @@ export class BakingSystem {
   private setupLights() {
     if (!this.scene) return;
 
-    this.ambientLight = new THREE.AmbientLight(0x403020, 0.4);
+    this.ambientLight = new THREE.AmbientLight(0x402010, 0.3);
     this.scene.add(this.ambientLight);
 
-    this.ovenLight = new THREE.PointLight(0xff8844, 0.5, 10);
-    this.ovenLight.position.set(0, 2, 0);
+    this.ovenLight = new THREE.PointLight(0xff7722, 0.3, 12, 2);
+    this.ovenLight.position.set(0, 2.5, 0);
     this.ovenLight.castShadow = true;
+    this.ovenLight.shadow.mapSize.width = 1024;
+    this.ovenLight.shadow.mapSize.height = 1024;
     this.scene.add(this.ovenLight);
 
-    const topLight = new THREE.PointLight(0xffaa66, 0.3, 8);
-    topLight.position.set(0, 3, -1);
-    this.scene.add(topLight);
+    this.topLight = new THREE.PointLight(0xff9944, 0.4, 10);
+    this.topLight.position.set(0, 3, -1.5);
+    this.scene.add(this.topLight);
 
-    const fillLight = new THREE.DirectionalLight(0xffddaa, 0.2);
-    fillLight.position.set(-2, 1, 2);
+    this.rimLight = new THREE.SpotLight(0xffaa66, 0.5, 10, Math.PI / 6, 0.5);
+    this.rimLight.position.set(0, 2, -2);
+    this.rimLight.target.position.set(0, 0, 0);
+    this.scene.add(this.rimLight);
+    this.scene.add(this.rimLight.target);
+
+    const fillLight = new THREE.DirectionalLight(0xffccaa, 0.2);
+    fillLight.position.set(-3, 1, 2);
     this.scene.add(fillLight);
   }
 
   private setupCake() {
     if (!this.scene) return;
 
-    const geometry = new THREE.SphereGeometry(0.8, 64, 64);
+    const geometry = new THREE.SphereGeometry(0.9, 64, 64);
     
     this.cakeMaterial = new THREE.MeshStandardMaterial({
       color: this.initialColor,
       roughness: 0.7,
-      metalness: 0.1,
+      metalness: 0.05,
       emissive: 0x000000,
       emissiveIntensity: 0
     });
 
     this.cakeMesh = new THREE.Mesh(geometry, this.cakeMaterial);
-    this.cakeMesh.position.y = 0;
+    this.cakeMesh.position.y = -0.2;
     this.cakeMesh.castShadow = true;
     this.cakeMesh.receiveShadow = true;
+    this.cakeMesh.scale.set(0.6, 0.6, 0.6);
     this.scene.add(this.cakeMesh);
+
+    const glowGeometry = new THREE.SphereGeometry(1.1, 32, 32);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffaa44,
+      transparent: true,
+      opacity: 0,
+      side: THREE.BackSide
+    });
+    this.cakeGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+    this.cakeGlow.position.y = -0.2;
+    this.scene.add(this.cakeGlow);
   }
 
   private setupOvenInterior() {
     if (!this.scene) return;
 
-    const floorGeo = new THREE.PlaneGeometry(6, 6);
+    const floorGeo = new THREE.PlaneGeometry(8, 8);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x2a1a0a,
+      color: 0x2a1505,
       roughness: 0.9,
       metalness: 0.1
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -1;
+    floor.position.y = -1.2;
     floor.receiveShadow = true;
     this.scene.add(floor);
 
     const wallMat = new THREE.MeshStandardMaterial({
-      color: 0x1a0f05,
-      roughness: 0.9,
+      color: 0x1a0a00,
+      roughness: 0.95,
       side: THREE.BackSide
     });
 
-    const backWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), wallMat);
-    backWall.position.z = -2;
+    const backWall = new THREE.Mesh(new THREE.PlaneGeometry(8, 6), wallMat);
+    backWall.position.z = -3;
     backWall.position.y = 1;
     this.scene.add(backWall);
 
-    const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), wallMat);
+    const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), wallMat);
     leftWall.rotation.y = Math.PI / 2;
-    leftWall.position.x = -3;
+    leftWall.position.x = -4;
     leftWall.position.y = 1;
     this.scene.add(leftWall);
 
-    const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), wallMat);
+    const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), wallMat);
     rightWall.rotation.y = -Math.PI / 2;
-    rightWall.position.x = 3;
+    rightWall.position.x = 4;
     rightWall.position.y = 1;
     this.scene.add(rightWall);
 
-    const heatingElement = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.03, 0.03, 4, 8),
-      new THREE.MeshBasicMaterial({ color: 0xff4400 })
-    );
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(8, 6), wallMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = 3;
+    this.scene.add(ceiling);
+
+    const heatingElementGeo = new THREE.CylinderGeometry(0.04, 0.04, 5, 12);
+    const heatingElementMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+    const heatingElement = new THREE.Mesh(heatingElementGeo, heatingElementMat);
     heatingElement.rotation.z = Math.PI / 2;
-    heatingElement.position.set(0, 1.8, -1.5);
+    heatingElement.position.set(0, 2.2, -2.5);
     this.scene.add(heatingElement);
+
+    const heatingElement2 = new THREE.Mesh(heatingElementGeo, heatingElementMat);
+    heatingElement2.rotation.z = Math.PI / 2;
+    heatingElement2.position.set(0, 2.2, 2);
+    this.scene.add(heatingElement2);
+
+    const rackGeo = new THREE.BoxGeometry(5, 0.05, 3);
+    const rackMat = new THREE.MeshStandardMaterial({
+      color: 0x555555,
+      roughness: 0.5,
+      metalness: 0.8
+    });
+    const rack = new THREE.Mesh(rackGeo, rackMat);
+    rack.position.set(0, -1.1, 0);
+    rack.receiveShadow = true;
+    this.scene.add(rack);
+  }
+
+  private setupHeatParticles() {
+    if (!this.scene) return;
+
+    const particleCount = this.heatParticleCount;
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+
+    for (let i = 0; i < particleCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 2;
+      positions[i * 3 + 1] = -1 + Math.random() * 0.5;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+
+      colors[i * 3] = 1;
+      colors[i * 3 + 1] = 0.5 + Math.random() * 0.3;
+      colors[i * 3 + 2] = 0.2;
+
+      sizes[i] = Math.random() * 0.1 + 0.05;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    const material = new THREE.PointsMaterial({
+      size: 0.1,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true
+    });
+
+    this.heatParticles = new THREE.Points(geometry, material);
+    this.heatParticles.visible = false;
+    this.scene.add(this.heatParticles);
   }
 
   private resize() {
@@ -224,7 +312,7 @@ export class BakingSystem {
     const baseColor = new THREE.Color(0xd4a574);
     const mixColor = new THREE.Color(r / total, g / total, b / total);
     
-    const finalColor = new THREE.Color().lerpColors(baseColor, mixColor, 0.4);
+    const finalColor = new THREE.Color().lerpColors(baseColor, mixColor, 0.45);
     return finalColor;
   }
 
@@ -235,16 +323,33 @@ export class BakingSystem {
     this.bakeProgress = 0;
     this.startTime = performance.now();
     this.finalColor = this.calculateFinalColor(mixAmounts);
-    this.targetScale = 1 + 0.5 * (this.calculateStats(mixAmounts).fluffiness / 5);
+    
+    const stats = this.calculateStats(mixAmounts);
+    this.targetScale = 0.6 + 0.9 * (stats.fluffiness / 5);
 
     if (this.cakeMesh) {
-      this.cakeMesh.scale.set(0.7, 0.7, 0.7);
+      this.cakeMesh.scale.set(0.6, 0.6, 0.6);
+      this.cakeMesh.position.y = -0.2;
     }
     if (this.cakeMaterial) {
       this.cakeMaterial.color.copy(this.initialColor);
       this.cakeMaterial.emissive.setHex(0x000000);
       this.cakeMaterial.emissiveIntensity = 0;
     }
+    if (this.cakeGlow) {
+      const glowMat = this.cakeGlow.material as THREE.MeshBasicMaterial;
+      glowMat.opacity = 0;
+    }
+    if (this.heatParticles) {
+      this.heatParticles.visible = true;
+    }
+
+    this.bubbleParticles.forEach(b => {
+      this.scene?.remove(b.mesh);
+      b.mesh.geometry.dispose();
+      (b.mesh.material as THREE.Material).dispose();
+    });
+    this.bubbleParticles = [];
 
     this.animate();
   }
@@ -258,7 +363,8 @@ export class BakingSystem {
 
     this.updateBakeState();
     this.updateBubbles();
-    this.updateLight();
+    this.updateHeatParticles();
+    this.updateLights();
     this.rotateCake();
     this.render();
 
@@ -275,24 +381,36 @@ export class BakingSystem {
   };
 
   private updateBakeState() {
-    if (!this.cakeMesh || !this.cakeMaterial) return;
+    if (!this.cakeMesh || !this.cakeMaterial || !this.cakeGlow) return;
 
     const t = this.bakeProgress;
+    const stats = this.calculateStats(this.mixAmounts);
 
-    const startScale = 0.7;
+    const startScale = 0.6;
     const endScale = this.targetScale;
-    const scale = startScale + (endScale - startScale) * this.easeOutCubic(t);
+    const scale = startScale + (endScale - startScale) * this.easeOutBack(t);
     this.cakeMesh.scale.set(scale, scale, scale);
 
-    const color = new THREE.Color().lerpColors(this.initialColor, this.finalColor, this.easeInQuad(t));
+    const riseAmount = 0.5 * this.easeOutCubic(t);
+    this.cakeMesh.position.y = -0.2 + riseAmount;
+
+    const colorT = this.easeInQuad(Math.min(1, t * 1.2));
+    const color = new THREE.Color().lerpColors(this.initialColor, this.finalColor, colorT);
     this.cakeMaterial.color.copy(color);
 
-    const glowIntensity = Math.sin(t * Math.PI) * 0.3 * (this.calculateStats(this.mixAmounts).glow / 5);
+    const glowIntensity = Math.sin(t * Math.PI) * 0.4 * (stats.glow / 5);
     this.cakeMaterial.emissive.copy(this.finalColor);
     this.cakeMaterial.emissiveIntensity = glowIntensity;
 
-    if (t > 0.4 && this.bubbleParticles.length < 200) {
-      if (Math.random() < 0.3) {
+    const glowMat = this.cakeGlow.material as THREE.MeshBasicMaterial;
+    glowMat.color.copy(this.finalColor);
+    glowMat.opacity = glowIntensity * 0.5;
+    this.cakeGlow.scale.set(scale * 1.1, scale * 1.1, scale * 1.1);
+    this.cakeGlow.position.y = -0.2 + riseAmount;
+
+    if (t > 0.25 && this.bubbleParticles.length < 200) {
+      const spawnRate = 0.4 + t * 0.8;
+      if (Math.random() < spawnRate * 0.1) {
         this.spawnBubble();
       }
     }
@@ -302,14 +420,16 @@ export class BakingSystem {
     if (!this.scene || !this.cakeMesh) return;
 
     const angle = Math.random() * Math.PI * 2;
-    const radius = 0.5 * this.cakeMesh.scale.x;
-    const height = (Math.random() - 0.3) * this.cakeMesh.scale.x;
+    const scale = this.cakeMesh.scale.x;
+    const radius = 0.7 * scale;
+    const height = (Math.random() - 0.2) * scale;
 
-    const geometry = new THREE.SphereGeometry(0.03 + Math.random() * 0.05, 8, 8);
+    const size = 0.03 + Math.random() * 0.07;
+    const geometry = new THREE.SphereGeometry(size, 8, 8);
     const material = new THREE.MeshBasicMaterial({
       color: 0xffddaa,
       transparent: true,
-      opacity: 0.7
+      opacity: 0.8
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(
@@ -322,9 +442,9 @@ export class BakingSystem {
     this.bubbleParticles.push({
       mesh,
       velocity: new THREE.Vector3(
-        (Math.random() - 0.5) * 0.01,
-        0.02 + Math.random() * 0.03,
-        (Math.random() - 0.5) * 0.01
+        (Math.random() - 0.5) * 0.015,
+        0.02 + Math.random() * 0.04,
+        (Math.random() - 0.5) * 0.015
       ),
       life: 1,
       maxLife: 1
@@ -337,35 +457,62 @@ export class BakingSystem {
     for (let i = this.bubbleParticles.length - 1; i >= 0; i--) {
       const bubble = this.bubbleParticles[i];
       bubble.mesh.position.add(bubble.velocity);
-      bubble.life -= 0.01;
+      bubble.life -= 0.008;
       
       const mat = bubble.mesh.material as THREE.MeshBasicMaterial;
-      mat.opacity = bubble.life * 0.7;
-      bubble.mesh.scale.setScalar(bubble.life);
+      mat.opacity = Math.max(0, bubble.life * 0.8);
+      bubble.mesh.scale.setScalar(Math.max(0.1, bubble.life));
 
       if (bubble.life <= 0) {
         this.scene.remove(bubble.mesh);
         bubble.mesh.geometry.dispose();
-        (bubble.mesh.material as THREE.Material).dispose();
+        mat.dispose();
         this.bubbleParticles.splice(i, 1);
       }
     }
   }
 
-  private updateLight() {
+  private updateHeatParticles() {
+    if (!this.heatParticles || !this.heatParticles.geometry) return;
+
+    const positions = this.heatParticles.geometry.attributes.position.array as Float32Array;
+    const count = this.heatParticleCount;
+
+    for (let i = 0; i < count; i++) {
+      positions[i * 3 + 1] += 0.015 + Math.random() * 0.01;
+      positions[i * 3] += (Math.random() - 0.5) * 0.005;
+
+      if (positions[i * 3 + 1] > 2.5) {
+        positions[i * 3] = (Math.random() - 0.5) * 2;
+        positions[i * 3 + 1] = -1;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+      }
+    }
+
+    this.heatParticles.geometry.attributes.position.needsUpdate = true;
+  }
+
+  private updateLights() {
     if (this.ovenLight) {
-      const flicker = 0.8 + Math.random() * 0.4;
-      const baseIntensity = 0.5 + this.bakeProgress * 1.5;
+      const flicker = 0.75 + Math.random() * 0.5;
+      const baseIntensity = 0.3 + this.bakeProgress * 2;
       this.ovenLight.intensity = baseIntensity * flicker;
     }
+    if (this.topLight) {
+      const flicker = 0.8 + Math.random() * 0.4;
+      this.topLight.intensity = (0.4 + this.bakeProgress * 1) * flicker;
+    }
     if (this.ambientLight) {
-      this.ambientLight.intensity = 0.3 + this.bakeProgress * 0.3;
+      this.ambientLight.intensity = 0.2 + this.bakeProgress * 0.4;
+    }
+    if (this.rimLight) {
+      this.rimLight.intensity = 0.3 + this.bakeProgress * 0.7;
     }
   }
 
   private rotateCake() {
     if (this.cakeMesh) {
-      this.cakeMesh.rotation.y += 0.005;
+      this.cakeMesh.rotation.y += 0.008;
     }
   }
 
@@ -381,11 +528,18 @@ export class BakingSystem {
     const result: BakeResult = {
       stats,
       finalColor: this.finalColor.clone(),
-      scale: this.targetScale
+      scale: this.targetScale,
+      glowIntensity: stats.glow / 5 * 0.3
     };
 
+    if (this.heatParticles) {
+      this.heatParticles.visible = false;
+    }
+
     if (this.onCompleteCallback) {
-      this.onCompleteCallback(result);
+      setTimeout(() => {
+        this.onCompleteCallback?.(result);
+      }, 800);
     }
   }
 
@@ -417,19 +571,33 @@ export class BakingSystem {
     return t * t;
   }
 
+  private easeOutBack(t: number): number {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+
   reset() {
     this.isBaking = false;
     this.bakeProgress = 0;
     cancelAnimationFrame(this.animationId);
     
     if (this.cakeMesh) {
-      this.cakeMesh.scale.set(0.7, 0.7, 0.7);
+      this.cakeMesh.scale.set(0.6, 0.6, 0.6);
       this.cakeMesh.rotation.y = 0;
+      this.cakeMesh.position.y = -0.2;
     }
     if (this.cakeMaterial) {
       this.cakeMaterial.color.copy(this.initialColor);
       this.cakeMaterial.emissive.setHex(0x000000);
       this.cakeMaterial.emissiveIntensity = 0;
+    }
+    if (this.cakeGlow) {
+      const glowMat = this.cakeGlow.material as THREE.MeshBasicMaterial;
+      glowMat.opacity = 0;
+    }
+    if (this.heatParticles) {
+      this.heatParticles.visible = false;
     }
 
     this.bubbleParticles.forEach(b => {
