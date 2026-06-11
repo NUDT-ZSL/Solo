@@ -15,8 +15,8 @@ const TRAIL_DURATION_SEC = 0.2;
 const PULSE_DURATION_SEC = 0.5;
 const PULSE_RADIUS_PX = 10;
 const MAX_STARS = 200;
-const MAX_TRAIL_PARTICLES = 600;
-const MAX_PULSE_EFFECTS = 200;
+const MAX_TRAIL_PARTICLES = 200;
+const MAX_PULSE_MESHES = 100;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace('#', '');
@@ -51,41 +51,6 @@ function createPointSpriteTexture(): THREE.Texture {
   return tex;
 }
 
-function createPulseSpriteTexture(): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d')!;
-  const cx = 64;
-  const cy = 64;
-
-  ctx.clearRect(0, 0, 128, 128);
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.lineWidth = 6;
-  for (let i = 3; i >= 0; i--) {
-    const rad = 56 - i * 12;
-    const alpha = 0.15 + i * 0.2;
-    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, rad, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  const inner = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
-  inner.addColorStop(0, 'rgba(255,255,255,0.6)');
-  inner.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = inner;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 20, 0, Math.PI * 2);
-  ctx.fill();
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  return tex;
-}
-
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
@@ -103,11 +68,9 @@ export class StarSystem {
   private animationStartTime: number = 0;
   private lastPxPerUnit: number = 100;
   private lastPxCalcTime: number = 0;
-  private lastStaticResizeTime: number = 0;
   private _lastCamPos: THREE.Vector3 = new THREE.Vector3();
 
   private starTexture: THREE.Texture;
-  private pulseTexture: THREE.Texture;
 
   private starPoints: THREE.Points | null = null;
   private starPositions: Float32Array | null = null;
@@ -119,8 +82,8 @@ export class StarSystem {
   private trailColors: Float32Array | null = null;
   private trailSizes: Float32Array | null = null;
 
-  private pulseSprites: Map<number, { sprite: THREE.Sprite; startTime: number; color: THREE.Color; center: THREE.Vector3 }> = new Map();
-  private pulsePool: THREE.Sprite[] = [];
+  private pulseMeshes: Map<number, { mesh: THREE.Mesh; startTime: number; center: THREE.Vector3 }> = new Map();
+  private pulsePool: THREE.Mesh[] = [];
   private nextPulseId: number = 0;
 
   private connectionsLine: THREE.LineSegments | null = null;
@@ -143,31 +106,31 @@ export class StarSystem {
     this.scene.add(this.rotationGroup);
 
     this.starTexture = createPointSpriteTexture();
-    this.pulseTexture = createPulseSpriteTexture();
 
-    this.initPulsePool();
+    this.initPulseMeshPool();
     this.createEnvironmentStars();
   }
 
-  private initPulsePool(): void {
-    for (let i = 0; i < MAX_PULSE_EFFECTS; i++) {
-      const material = new THREE.SpriteMaterial({
-        map: this.pulseTexture,
+  private initPulseMeshPool(): void {
+    const pulseGeometry = new THREE.CircleGeometry(1, 32);
+    for (let i = 0; i < MAX_PULSE_MESHES; i++) {
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
         transparent: true,
         opacity: 0,
-        depthWrite: false,
         blending: THREE.AdditiveBlending,
-        color: 0xffffff
+        side: THREE.DoubleSide,
+        depthWrite: false
       });
-      const sprite = new THREE.Sprite(material);
-      sprite.visible = false;
-      this.rotationGroup.add(sprite);
-      this.pulsePool.push(sprite);
+      const mesh = new THREE.Mesh(pulseGeometry, material);
+      mesh.visible = false;
+      this.rotationGroup.add(mesh);
+      this.pulsePool.push(mesh);
     }
   }
 
   private createEnvironmentStars(): void {
-    const count = 250;
+    const count = 100;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
 
@@ -228,11 +191,11 @@ export class StarSystem {
       (this.connectionsLine.material as THREE.Material).dispose();
       this.connectionsLine = null;
     }
-    for (const p of this.pulseSprites.values()) {
-      p.sprite.visible = false;
-      (p.sprite.material as THREE.SpriteMaterial).opacity = 0;
+    for (const p of this.pulseMeshes.values()) {
+      p.mesh.visible = false;
+      (p.mesh.material as THREE.MeshBasicMaterial).opacity = 0;
     }
-    this.pulseSprites.clear();
+    this.pulseMeshes.clear();
   }
 
   clear(): void {
@@ -402,74 +365,45 @@ export class StarSystem {
     this.animationStartTime = performance.now();
   }
 
-  private _needsStaticResize(currentTime: number): boolean {
-    if (currentTime - this.lastStaticResizeTime < 250) return false;
-    this.lastStaticResizeTime = currentTime;
-    const camPos = this.cameraRef.position;
-    const d = camPos.distanceToSquared(this._lastCamPos);
-    this._lastCamPos.copy(camPos);
-    return d > 0.001;
-  }
-
-  private recomputePxPerUnit(currentTime: number, pos: THREE.Vector3): number {
-    if (currentTime - this.lastPxCalcTime < 33) {
-      return this.lastPxPerUnit;
-    }
-    this.lastPxCalcTime = currentTime;
-    const v1 = pos.clone().project(this.cameraRef);
-    const p2 = pos.clone();
-    p2.x += 1.0;
-    const v2 = p2.project(this.cameraRef);
-    const px = Math.max(1, Math.abs(v2.x - v1.x) * window.innerWidth * 0.5);
-    this.lastPxPerUnit = px;
-    return px;
-  }
-
-  private pxToWorldSize(pxSize: number, atPosition: THREE.Vector3, currentTime: number): number {
-    const pxPerUnit = this.recomputePxPerUnit(currentTime, atPosition);
-    return pxSize / pxPerUnit;
-  }
-
   private triggerPulse(state: StarState): void {
-    let sprite: THREE.Sprite | null = null;
-    for (const s of this.pulsePool) {
-      if (!s.visible) {
-        sprite = s;
+    let mesh: THREE.Mesh | null = null;
+    for (const m of this.pulsePool) {
+      if (!m.visible) {
+        mesh = m;
         break;
       }
     }
-    if (!sprite) {
+    if (!mesh) {
       let minStart = Infinity;
       let minId = -1;
-      for (const [id, p] of this.pulseSprites) {
+      for (const [id, p] of this.pulseMeshes) {
         if (p.startTime < minStart) {
           minStart = p.startTime;
           minId = id;
         }
       }
       if (minId >= 0) {
-        const p = this.pulseSprites.get(minId)!;
-        sprite = p.sprite;
-        this.pulseSprites.delete(minId);
+        const p = this.pulseMeshes.get(minId)!;
+        mesh = p.mesh;
+        this.pulseMeshes.delete(minId);
       }
     }
-    if (!sprite) return;
+    if (!mesh) return;
 
     const rgb = hexToRgb(state.data.color);
     const color = new THREE.Color(rgb.r, rgb.g, rgb.b);
-    const mat = sprite.material as THREE.SpriteMaterial;
+    const mat = mesh.material as THREE.MeshBasicMaterial;
     mat.color.copy(color);
     mat.opacity = 0;
 
     const targetPos = state.data.targetPosition;
-    sprite.position.copy(targetPos);
+    mesh.position.copy(targetPos);
 
     const pulseId = this.nextPulseId++;
-    sprite.visible = true;
-    this.pulseSprites.set(pulseId, {
-      sprite,
+    mesh.visible = true;
+    this.pulseMeshes.set(pulseId, {
+      mesh,
       startTime: performance.now(),
-      color,
       center: targetPos.clone()
     });
   }
@@ -483,6 +417,8 @@ export class StarSystem {
 
     const numStars = this.stars.length;
     let allArrived = true;
+    const camMoved = this._camMoved();
+    const pxPerUnit = this.recomputePxPerUnitFast(currentTime, camMoved);
 
     if (this.isAnimating && numStars > 0) {
       allArrived = true;
@@ -513,30 +449,33 @@ export class StarSystem {
         this.starPositions![i * 3 + 2] = s.currentPosition.z;
 
         const baseSizePx = 10 + d.brightness * 8;
-        const worldSize = this.pxToWorldSize(baseSizePx, s.currentPosition, currentTime);
+        const worldSize = baseSizePx / pxPerUnit;
         const finalSize = progress < 0.05 ? worldSize * (progress / 0.05) : worldSize;
         this.starSizes![i] = finalSize;
 
         if (progress < 1) {
           allArrived = false;
-          s.trailQueue.push({
-            pos: s.currentPosition.clone(),
-            time: currentTime
-          });
+          if (s.trailQueue.length === 0 || currentTime - s.trailQueue[s.trailQueue.length - 1].time > 20) {
+            s.trailQueue.push({
+              pos: s.currentPosition.clone(),
+              time: currentTime
+            });
+          }
 
           const cutoff = currentTime - TRAIL_DURATION_SEC * 1000;
           while (s.trailQueue.length > 0 && s.trailQueue[0].time < cutoff) {
             s.trailQueue.shift();
           }
+          while (s.trailQueue.length > 5) s.trailQueue.shift();
 
           const trailSteps = s.trailQueue.length;
+          const rgb = hexToRgb(d.color);
           for (let t = 0; t < trailSteps; t++) {
             if (trailIdx >= MAX_TRAIL_PARTICLES) break;
             const entry = s.trailQueue[t];
             const ageRatio = 1 - (entry.time - (currentTime - TRAIL_DURATION_SEC * 1000)) / (TRAIL_DURATION_SEC * 1000);
             const fadeOut = Math.max(0, 1 - progress * 1.5);
             const alpha = (1 - ageRatio) * 0.7 * fadeOut;
-            const rgb = hexToRgb(d.color);
 
             this.trailPositions![trailIdx * 3] = entry.pos.x;
             this.trailPositions![trailIdx * 3 + 1] = entry.pos.y;
@@ -546,7 +485,7 @@ export class StarSystem {
             this.trailColors![trailIdx * 3 + 2] = rgb.b * alpha;
 
             const trailPxSize = (1 - ageRatio) * baseSizePx * 0.5;
-            this.trailSizes![trailIdx] = this.pxToWorldSize(trailPxSize, entry.pos, currentTime);
+            this.trailSizes![trailIdx] = trailPxSize / pxPerUnit;
             trailIdx++;
           }
         } else {
@@ -557,13 +496,13 @@ export class StarSystem {
           const fadeOutStart = starElapsed - d.flyDuration;
           const fadeOutRatio = Math.max(0, 1 - fadeOutStart / 0.2);
           const trailSteps = s.trailQueue.length;
+          const rgb = hexToRgb(d.color);
           for (let t = 0; t < trailSteps; t++) {
             if (trailIdx >= MAX_TRAIL_PARTICLES) break;
             const entry = s.trailQueue[t];
             const ageRatio = 1 - (entry.time - (currentTime - TRAIL_DURATION_SEC * 1000)) / (TRAIL_DURATION_SEC * 1000);
             const alpha = (1 - ageRatio) * 0.7 * fadeOutRatio;
             if (alpha <= 0.01) continue;
-            const rgb = hexToRgb(d.color);
             this.trailPositions![trailIdx * 3] = entry.pos.x;
             this.trailPositions![trailIdx * 3 + 1] = entry.pos.y;
             this.trailPositions![trailIdx * 3 + 2] = entry.pos.z;
@@ -571,7 +510,7 @@ export class StarSystem {
             this.trailColors![trailIdx * 3 + 1] = rgb.g * alpha;
             this.trailColors![trailIdx * 3 + 2] = rgb.b * alpha;
             const trailPxSize = (1 - ageRatio) * baseSizePx * 0.5;
-            this.trailSizes![trailIdx] = this.pxToWorldSize(trailPxSize, entry.pos, currentTime);
+            this.trailSizes![trailIdx] = trailPxSize / pxPerUnit;
             trailIdx++;
           }
         }
@@ -582,8 +521,6 @@ export class StarSystem {
           this.triggerPulse(s);
         }
       }
-
-      // trail idx accounted for inline
 
       if (this.starPoints) {
         (this.starPoints.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
@@ -609,23 +546,19 @@ export class StarSystem {
         (this.connectionsLine.material as THREE.LineBasicMaterial).opacity = this.connectionsOpacity;
       }
     } else {
-      if (this.starPoints && numStars > 0 && this._needsStaticResize(currentTime)) {
+      if (this.starPoints && numStars > 0 && camMoved) {
         for (let i = 0; i < numStars; i++) {
           const s = this.stars[i];
           if (!s.arrived) continue;
-          this.starPositions![i * 3] = s.currentPosition.x;
-          this.starPositions![i * 3 + 1] = s.currentPosition.y;
-          this.starPositions![i * 3 + 2] = s.currentPosition.z;
           const baseSizePx = 10 + s.data.brightness * 8;
-          this.starSizes![i] = this.pxToWorldSize(baseSizePx, s.currentPosition, currentTime);
+          this.starSizes![i] = baseSizePx / pxPerUnit;
         }
-        (this.starPoints.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
         (this.starPoints.geometry.attributes as any).size.needsUpdate = true;
       }
     }
 
     const expiredIds: number[] = [];
-    for (const [id, p] of this.pulseSprites) {
+    for (const [id, p] of this.pulseMeshes) {
       const pulseElapsed = (currentTime - p.startTime) / 1000;
       const pulseProgress = pulseElapsed / PULSE_DURATION_SEC;
 
@@ -637,21 +570,46 @@ export class StarSystem {
       const anim = Math.sin(pulseProgress * Math.PI);
       const alpha = anim * 0.9;
 
-      const radiusPx = anim * PULSE_RADIUS_PX * 1.5 + 2;
-      const worldRadius = this.pxToWorldSize(radiusPx, p.center, currentTime);
-      p.sprite.scale.set(worldRadius * 2, worldRadius * 2, 1);
-      p.sprite.position.copy(p.center);
-      (p.sprite.material as THREE.SpriteMaterial).opacity = alpha;
+      const radiusPx = PULSE_RADIUS_PX * anim * 1.2 + 1;
+      const worldRadius = radiusPx / pxPerUnit;
+      p.mesh.scale.setScalar(worldRadius);
+      p.mesh.position.copy(p.center);
+      (p.mesh.material as THREE.MeshBasicMaterial).opacity = alpha;
     }
 
     for (const id of expiredIds) {
-      const p = this.pulseSprites.get(id)!;
-      p.sprite.visible = false;
-      (p.sprite.material as THREE.SpriteMaterial).opacity = 0;
-      this.pulseSprites.delete(id);
+      const p = this.pulseMeshes.get(id)!;
+      p.mesh.visible = false;
+      (p.mesh.material as THREE.MeshBasicMaterial).opacity = 0;
+      this.pulseMeshes.delete(id);
     }
 
     this.rotationGroup.rotation.y += (this.rotationSpeed * Math.PI / 180) * deltaTime;
+  }
+
+  private _camMoved(): boolean {
+    const camPos = this.cameraRef.position;
+    const d = camPos.distanceToSquared(this._lastCamPos);
+    if (d > 0.001) {
+      this._lastCamPos.copy(camPos);
+      return true;
+    }
+    return false;
+  }
+
+  private recomputePxPerUnitFast(currentTime: number, force: boolean): number {
+    if (!force && currentTime - this.lastPxCalcTime < 100) {
+      return this.lastPxPerUnit;
+    }
+    this.lastPxCalcTime = currentTime;
+    const origin = new THREE.Vector3(0, 0, 0);
+    const v1 = origin.clone().project(this.cameraRef);
+    const p2 = origin.clone();
+    p2.x += 1.0;
+    const v2 = p2.project(this.cameraRef);
+    const px = Math.max(1, Math.abs(v2.x - v1.x) * window.innerWidth * 0.5);
+    this.lastPxPerUnit = px;
+    return px;
   }
 
   resetRotation(): void {
@@ -671,14 +629,16 @@ export class StarSystem {
       (this.environmentStars.material as THREE.Material).dispose();
     }
 
-    for (const s of this.pulsePool) {
-      this.rotationGroup.remove(s);
-      (s.material as THREE.Material).dispose();
+    for (const m of this.pulsePool) {
+      this.rotationGroup.remove(m);
+      (m.material as THREE.Material).dispose();
+    }
+    if (this.pulsePool.length > 0 && this.pulsePool[0].geometry) {
+      this.pulsePool[0].geometry.dispose();
     }
     this.pulsePool = [];
 
     this.starTexture.dispose();
-    this.pulseTexture.dispose();
 
     this.scene.remove(this.rotationGroup);
   }

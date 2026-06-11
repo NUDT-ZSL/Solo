@@ -50,15 +50,14 @@ class App {
     this.camera.position.set(0, 2, 18);
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: false,
       alpha: false,
       powerPreference: 'high-performance',
       preserveDrawingBuffer: false
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.info.autoReset = true;
     this.container.appendChild(this.renderer.domElement);
 

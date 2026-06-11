@@ -37,7 +37,7 @@ const POSITIVE_WORDS: SentimentWord[] = [
   { word: '爱', score: 3, category: '情感' },
   { word: '喜欢', score: 2.5, category: '情感' },
   { word: '热爱', score: 3, category: '情感' },
-  { word: '美好', score: 2.5, category: '状态' },
+  { word: '美好', score: 3.2, category: '状态' },
   { word: '光明', score: 3, category: '意象' },
   { word: '希望', score: 3, category: '心理' },
   { word: '温暖', score: 2.5, category: '感觉' },
@@ -54,7 +54,8 @@ const POSITIVE_WORDS: SentimentWord[] = [
   { word: '勇敢', score: 2.5, category: '性格' },
   { word: '梦想', score: 3, category: '心理' },
   { word: '自由', score: 3, category: '状态' },
-  { word: '璀璨', score: 2.5, category: '形容' },
+  { word: '璀璨', score: 3.2, category: '形容' },
+  { word: '星光', score: 3, category: '意象' },
   { word: '绚烂', score: 2.5, category: '形容' },
   { word: '静谧', score: 1.5, category: '状态' },
   { word: '悠然', score: 1.5, category: '状态' },
@@ -84,7 +85,6 @@ const POSITIVE_WORDS: SentimentWord[] = [
   { word: '仁慈', score: 2.5, category: '性格' },
   { word: '正义', score: 2.5, category: '品德' },
   { word: '智慧', score: 2.5, category: '品德' },
-  { word: '希望', score: 3, category: '心理' },
   { word: '憧憬', score: 2.5, category: '心理' },
   { word: '珍藏', score: 2, category: '动作' },
   { word: '铭记', score: 2, category: '动作' },
@@ -160,6 +160,8 @@ const NEGATIVE_WORDS: SentimentWord[] = [
   { word: '惆怅', score: 2.5, category: '情绪' },
   { word: '怅惘', score: 2.5, category: '情绪' }
 ];
+
+const NEGATION_WORDS = ['不', '没', '无', '非', '未', '勿', '莫', '别'];
 
 const STOP_WORDS = new Set([
   '的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个',
@@ -241,7 +243,7 @@ function segmentChinese(text: string): string[] {
       }
     }
 
-    if (!STOP_WORDS.has(c) && /[\u4e00-\u9fa5a-zA-Z0-9]/.test(c)) {
+    if ((!STOP_WORDS.has(c) || NEGATION_WORDS.includes(c)) && /[\u4e00-\u9fa5a-zA-Z0-9]/.test(c)) {
       words.push(c);
     }
     i++;
@@ -262,7 +264,7 @@ interface SentimentResult {
   confidence: number;
 }
 
-function analyzeSentimentWord(word: string, fullText: string): SentimentResult {
+function analyzeSentimentWord(word: string, fullText: string, wordIndex: number): SentimentResult {
   let posScore = 0;
   let negScore = 0;
 
@@ -289,18 +291,35 @@ function analyzeSentimentWord(word: string, fullText: string): SentimentResult {
     }
   }
 
-  const threshold = 0.8;
-  const diff = posScore - negScore;
-  const maxScore = Math.max(posScore, negScore);
+  let negationMultiplier = 1;
+  for (let offset = 1; offset <= 2; offset++) {
+    const checkPos = wordIndex - offset;
+    if (checkPos >= 0) {
+      const prevChar = fullText[checkPos];
+      if (NEGATION_WORDS.includes(prevChar)) {
+        negationMultiplier = -0.7;
+        break;
+      }
+    }
+  }
+
+  const threshold = 1.2;
+  let diff = (posScore - negScore) * negationMultiplier;
+  let maxScore = Math.max(posScore, negScore) * (negationMultiplier < 0 ? 0.7 : 1);
+  let confidence = Math.min(1, maxScore / 4);
+
+  if (confidence < 0.3) {
+    return { sentiment: 'neutral', score: 0, confidence };
+  }
 
   if (Math.abs(diff) < threshold || maxScore < threshold) {
     return { sentiment: 'neutral', score: 0, confidence: maxScore / 5 };
   }
 
   if (diff > 0) {
-    return { sentiment: 'positive', score: diff, confidence: Math.min(1, maxScore / 4) };
+    return { sentiment: 'positive', score: diff, confidence };
   } else {
-    return { sentiment: 'negative', score: diff, confidence: Math.min(1, maxScore / 4) };
+    return { sentiment: 'negative', score: diff, confidence };
   }
 }
 
@@ -445,7 +464,7 @@ function generateConnections(
     }
   }
 
-  const maxConn = Math.min(300, stars.length * 2);
+  const maxConn = Math.min(150, stars.length * 1.5);
   connections.sort((a, b) => a.distance - b.distance);
   return connections.slice(0, maxConn);
 }
@@ -463,7 +482,8 @@ export function transformText(
 
   const sentimentCache = new Map<string, SentimentResult>();
   for (const w of new Set(words)) {
-    sentimentCache.set(w, analyzeSentimentWord(w, text));
+    const wordIndex = text.indexOf(w);
+    sentimentCache.set(w, analyzeSentimentWord(w, text, wordIndex >= 0 ? wordIndex : 0));
   }
 
   const uniqueWords = Array.from(new Set(words));
