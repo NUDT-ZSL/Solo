@@ -278,35 +278,51 @@ export default function BudgetCard({ budgets, onAdd, onDelete, onFetchBudgets }:
             const remaining = budget.amount - spent;
             const isShaking = warningTriggered.has(budget.id);
             const warnLevel = budget.warningLevel;
+            const hasWarning = warnLevel !== 'normal';
 
             let barColor = color;
             let cardBorder = 'transparent';
+            let cardBg = '#fff';
+            let titleColor = '#333';
             if (warnLevel === 'danger') {
               barColor = '#E53935';
               cardBorder = '#E53935';
+              cardBg = '#FFF5F5';
+              titleColor = '#E53935';
             } else if (warnLevel === 'warning') {
               barColor = '#FB8C00';
               cardBorder = '#FB8C00';
+              cardBg = '#FFF8E1';
+              titleColor = '#E65100';
             }
+
+            const shakeAnim = isShaking
+              ? warnLevel === 'danger'
+                ? 'shakeRed 0.45s ease-in-out 2'
+                : 'shakeYellow 0.45s ease-in-out 2'
+              : 'none';
+
+            const pulseAnim = hasWarning
+              ? warnLevel === 'danger'
+                ? 'pulseDanger 2s ease-in-out infinite'
+                : 'pulseWarning 2s ease-in-out infinite'
+              : 'none';
 
             return (
               <div
                 key={budget.id}
-                className={`budget-card ${isShaking ? `shake-${warnLevel}` : ''}`}
+                className={`budget-card budget-${warnLevel}`}
                 style={{
                   padding: '18px',
                   borderRadius: '8px',
                   border: `2px solid ${cardBorder}`,
-                  background: '#fff',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                  animation: `fadeSlideIn 300ms ease ${idx * 50}ms both, ${
-                    isShaking
-                      ? warnLevel === 'danger'
-                        ? 'shakeRed 0.5s ease-in-out 3'
-                        : 'shakeYellow 0.5s ease-in-out 2'
-                      : 'none'
-                  }`,
-                  transition: 'transform 200ms, box-shadow 200ms'
+                  background: cardBg,
+                  boxShadow: hasWarning
+                    ? `0 4px 16px ${warnLevel === 'danger' ? 'rgba(229,57,53,0.2)' : 'rgba(251,140,0,0.2)'}`
+                    : '0 2px 8px rgba(0,0,0,0.06)',
+                  animation: `fadeSlideIn 300ms ease ${idx * 50}ms both, ${shakeAnim}, ${pulseAnim}`,
+                  transform: isShaking ? 'translateZ(0)' : undefined,
+                  transition: 'all 250ms ease'
                 }}
               >
                 <div
@@ -402,7 +418,7 @@ export default function BudgetCard({ budgets, onAdd, onDelete, onFetchBudgets }:
                       borderRadius: '4px',
                       transition: 'width 400ms ease-out, background 300ms',
                       boxShadow: warnLevel !== 'normal' ? `0 0 8px ${barColor}88` : 'none',
-                      animation: warnLevel !== 'normal' ? `pulseBar 1.5s ease-in-out infinite` : 'none'
+                      animation: warnLevel !== 'normal' ? `barPulse 1.5s ease-in-out infinite` : 'none'
                     }}
                   />
                 </div>

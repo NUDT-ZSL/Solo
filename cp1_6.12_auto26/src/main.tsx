@@ -155,6 +155,33 @@ const GlobalStyles: React.FC = () => (
       }
     }
 
+    @keyframes pulseDanger {
+      0%, 100% {
+        box-shadow: 0 2px 8px rgba(229, 57, 53, 0.15);
+      }
+      50% {
+        box-shadow: 0 4px 20px rgba(229, 57, 53, 0.35);
+      }
+    }
+
+    @keyframes pulseWarning {
+      0%, 100% {
+        box-shadow: 0 2px 8px rgba(251, 140, 0, 0.15);
+      }
+      50% {
+        box-shadow: 0 4px 20px rgba(251, 140, 0, 0.35);
+      }
+    }
+
+    @keyframes barPulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.75;
+      }
+    }
+
     @keyframes slideDown {
       from {
         opacity: 0;

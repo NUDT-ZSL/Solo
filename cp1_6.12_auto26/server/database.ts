@@ -1,8 +1,8 @@
+import initSqlJs, { Database, QueryExecResult } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 
-const dbDir = process.cwd();
-const dbFile = path.join(dbDir, 'finance.json');
+const dbPath = path.join(process.cwd(), 'finance.db');
 
 export interface TransactionRow {
   id: string;
@@ -23,44 +23,57 @@ export interface BudgetRow {
   created_at: string;
 }
 
-interface DBSchema {
-  transactions: TransactionRow[];
-  budgets: BudgetRow[];
-}
-
-const defaultData: DBSchema = {
-  transactions: [],
-  budgets: []
-};
-
-let data: DBSchema = loadData();
-
-function loadData(): DBSchema {
-  try {
-    if (fs.existsSync(dbFile)) {
-      const raw = fs.readFileSync(dbFile, 'utf-8');
-      return { ...defaultData, ...JSON.parse(raw) };
-    }
-  } catch (e) {
-    console.error('Error loading database:', e);
-  }
-  return JSON.parse(JSON.stringify(defaultData));
-}
-
-function saveData(): void {
-  try {
-    fs.writeFileSync(dbFile, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (e) {
-    console.error('Error saving database:', e);
-  }
-}
+let db: Database;
 
 function getCurrentMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function initDatabase(): void {
+export async function initDatabase(): Promise<void> {
+  const SQL = await initSqlJs();
+
+  if (fs.existsSync(dbPath)) {
+    try {
+      const buffer = fs.readFileSync(dbPath);
+      db = new SQL.Database(buffer);
+    } catch (e) {
+      console.warn('Failed to load existing database, creating new one:', e);
+      db = new SQL.Database();
+    }
+  } else {
+    db = new SQL.Database();
+  }
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS transactions (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+      amount REAL NOT NULL CHECK (amount > 0),
+      category TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      tags TEXT NOT NULL DEFAULT '[]',
+      date TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS budgets (
+      id TEXT PRIMARY KEY,
+      month TEXT NOT NULL,
+      category TEXT NOT NULL,
+      amount REAL NOT NULL CHECK (amount > 0),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(month, category)
+    );
+  `);
+
+  db.run('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_budgets_month ON budgets(month)');
+
   const currentMonth = getCurrentMonth();
   const defaultBudgets = [
     { month: currentMonth, category: '餐饮', amount: 2000 },
@@ -71,91 +84,152 @@ export function initDatabase(): void {
     { month: currentMonth, category: '医疗', amount: 500 }
   ];
 
-  let changed = false;
   defaultBudgets.forEach(b => {
-    if (!data.budgets.find(x => x.month === b.month && x.category === b.category)) {
-      data.budgets.push({
-        id: `budget-${b.month}-${b.category}`,
-        month: b.month,
-        category: b.category,
-        amount: b.amount,
-        created_at: new Date().toISOString()
-      });
-      changed = true;
-    }
+    db.run(
+      'INSERT OR IGNORE INTO budgets (id, month, category, amount) VALUES (?, ?, ?, ?)',
+      [`budget-${b.month}-${b.category}`, b.month, b.category, b.amount]
+    );
   });
 
-  if (data.transactions.length === 0) {
+  const countResult = db.exec('SELECT COUNT(*) as cnt FROM transactions');
+  const count = countResult[0]?.values[0]?.[0] as number || 0;
+  if (count === 0) {
     seedSampleData();
-    changed = true;
   }
 
-  if (changed) saveData();
-  console.log(`Database initialized: ${data.transactions.length} transactions, ${data.budgets.length} budgets`);
+  saveDatabase();
+
+  const finalCount = db.exec('SELECT COUNT(*) as cnt FROM transactions')[0]?.values[0]?.[0] as number || 0;
+  const budgetCount = db.exec('SELECT COUNT(*) as cnt FROM budgets')[0]?.values[0]?.[0] as number || 0;
+  console.log(`Database initialized: ${finalCount} transactions, ${budgetCount} budgets`);
+}
+
+function saveDatabase(): void {
+  try {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  } catch (e) {
+    console.error('Error saving database:', e);
+  }
 }
 
 function seedSampleData(): void {
   const now = new Date();
-  const samples: TransactionRow[] = [];
+  let idCounter = 0;
 
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 90; i++) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
     const dateStr = date.toISOString().split('T')[0];
     const createdAt = date.toISOString();
 
-    samples.push({
-      id: `tx-sample-${i}-1`,
-      type: 'expense',
-      amount: +(Math.random() * 50 + 10).toFixed(2),
-      category: '餐饮',
-      description: '午餐',
-      tags: JSON.stringify(['日常', '外卖']),
-      date: dateStr,
-      created_at: createdAt
-    });
+    db.run(
+      'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        `tx-sample-${idCounter++}`,
+        'expense',
+        +(Math.random() * 50 + 10).toFixed(2),
+        '餐饮',
+        '午餐',
+        JSON.stringify(['日常', '外卖']),
+        dateStr,
+        createdAt
+      ]
+    );
 
-    if (i % 3 === 0) {
-      samples.push({
-        id: `tx-sample-${i}-2`,
-        type: 'expense',
-        amount: +(Math.random() * 30 + 5).toFixed(2),
-        category: '交通',
-        description: '地铁',
-        tags: JSON.stringify(['通勤']),
-        date: dateStr,
-        created_at: createdAt
-      });
+    if (i % 2 === 0) {
+      db.run(
+        'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          `tx-sample-${idCounter++}`,
+          'expense',
+          +(Math.random() * 30 + 5).toFixed(2),
+          '交通',
+          '地铁',
+          JSON.stringify(['通勤']),
+          dateStr,
+          createdAt
+        ]
+      );
     }
 
-    if (i % 7 === 0) {
-      samples.push({
-        id: `tx-sample-${i}-3`,
-        type: 'income',
-        amount: 15000,
-        category: '工资',
-        description: '月薪',
-        tags: JSON.stringify(['固定收入']),
-        date: dateStr,
-        created_at: createdAt
-      });
+    if (i % 15 === 0) {
+      db.run(
+        'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          `tx-sample-${idCounter++}`,
+          'income',
+          15000,
+          '工资',
+          '月薪',
+          JSON.stringify(['固定收入']),
+          dateStr,
+          createdAt
+        ]
+      );
     }
 
-    if (i % 5 === 0) {
-      samples.push({
-        id: `tx-sample-${i}-4`,
-        type: 'expense',
-        amount: +(Math.random() * 200 + 50).toFixed(2),
-        category: '购物',
-        description: '日用品',
-        tags: JSON.stringify(['日常']),
-        date: dateStr,
-        created_at: createdAt
-      });
+    if (i % 4 === 0) {
+      db.run(
+        'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          `tx-sample-${idCounter++}`,
+          'expense',
+          +(Math.random() * 200 + 50).toFixed(2),
+          '购物',
+          '日用品',
+          JSON.stringify(['日常']),
+          dateStr,
+          createdAt
+        ]
+      );
+    }
+
+    if (i % 10 === 0) {
+      db.run(
+        'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          `tx-sample-${idCounter++}`,
+          'expense',
+          +(Math.random() * 100 + 30).toFixed(2),
+          '娱乐',
+          '电影',
+          JSON.stringify(['休闲']),
+          dateStr,
+          createdAt
+        ]
+      );
+    }
+
+    if (i % 30 === 0) {
+      db.run(
+        'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          `tx-sample-${idCounter++}`,
+          'expense',
+          3000,
+          '居住',
+          '房租',
+          JSON.stringify(['固定支出']),
+          dateStr,
+          createdAt
+        ]
+      );
     }
   }
+}
 
-  data.transactions.push(...samples);
+function rowsToObjects(result: QueryExecResult[]): any[] {
+  if (!result || result.length === 0) return [];
+  const { columns, values } = result[0];
+  return values.map(row => {
+    const obj: any = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj;
+  });
 }
 
 export function getAllTransactions(
@@ -168,104 +242,114 @@ export function getAllTransactions(
     pageSize?: number;
   } = {}
 ): { data: TransactionRow[]; total: number } {
-  let result = [...data.transactions];
+  const where: string[] = [];
+  const params: any[] = [];
 
   if (filters.startDate) {
-    result = result.filter(t => t.date >= filters.startDate!);
+    where.push('date >= ?');
+    params.push(filters.startDate);
   }
   if (filters.endDate) {
-    result = result.filter(t => t.date <= filters.endDate!);
+    where.push('date <= ?');
+    params.push(filters.endDate);
   }
   if (filters.category && filters.category !== 'all') {
-    result = result.filter(t => t.category === filters.category);
+    where.push('category = ?');
+    params.push(filters.category);
   }
   if (filters.tag && filters.tag !== 'all') {
-    const tag = filters.tag;
-    result = result.filter(t => {
-      try {
-        const tags = JSON.parse(t.tags);
-        return Array.isArray(tags) && tags.includes(tag);
-      } catch {
-        return false;
-      }
-    });
+    where.push("tags LIKE '%' || ? || '%'");
+    params.push(`"${filters.tag}"`);
   }
 
-  result.sort((a, b) => {
-    const d = b.date.localeCompare(a.date);
-    if (d !== 0) return d;
-    return (b.created_at || '').localeCompare(a.created_at || '');
-  });
+  const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
-  const total = result.length;
+  const countResult = db.exec(`SELECT COUNT(*) as cnt FROM transactions ${whereClause}`, params);
+  const total = countResult[0]?.values[0]?.[0] as number || 0;
+
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 10;
   const offset = (page - 1) * pageSize;
-  const pagedData = result.slice(offset, offset + pageSize);
 
-  return { data: pagedData, total };
+  const query = `
+    SELECT * FROM transactions ${whereClause}
+    ORDER BY date DESC, created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+  params.push(pageSize, offset);
+
+  const result = db.exec(query, params);
+  const data = rowsToObjects(result) as TransactionRow[];
+
+  return { data, total };
 }
 
 export function createTransaction(tx: Omit<TransactionRow, 'created_at'>): TransactionRow {
-  const newTx: TransactionRow = {
-    ...tx,
-    created_at: new Date().toISOString()
-  };
-  data.transactions.push(newTx);
-  saveData();
-  return newTx;
+  const createdAt = new Date().toISOString();
+  db.run(
+    'INSERT INTO transactions (id, type, amount, category, description, tags, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [tx.id, tx.type, tx.amount, tx.category, tx.description, tx.tags, tx.date, createdAt]
+  );
+  saveDatabase();
+  return { ...tx, created_at: createdAt };
 }
 
 export function deleteTransaction(id: string): boolean {
-  const idx = data.transactions.findIndex(t => t.id === id);
-  if (idx === -1) return false;
-  data.transactions.splice(idx, 1);
-  saveData();
-  return true;
+  const before = db.exec('SELECT changes() as n')[0]?.values[0]?.[0] as number;
+  db.run('DELETE FROM transactions WHERE id = ?', [id]);
+  const after = db.exec('SELECT changes() as n')[0]?.values[0]?.[0] as number;
+  const changed = after !== before || (after === 0 && before === 0 && false);
+
+  const result = db.exec('SELECT COUNT(*) as cnt FROM transactions WHERE id = ?', [id]);
+  const exists = (result[0]?.values[0]?.[0] as number) > 0;
+  if (!exists) {
+    saveDatabase();
+    return true;
+  }
+  return false;
 }
 
 export function getAllBudgets(): BudgetRow[] {
-  return [...data.budgets].sort((a, b) => {
-    const m = b.month.localeCompare(a.month);
-    if (m !== 0) return m;
-    return a.category.localeCompare(b.category);
-  });
+  const result = db.exec('SELECT * FROM budgets ORDER BY month DESC, category');
+  return rowsToObjects(result) as BudgetRow[];
 }
 
 export function getBudgetsByMonth(month: string): BudgetRow[] {
-  return data.budgets
-    .filter(b => b.month === month)
-    .sort((a, b) => a.category.localeCompare(b.category));
+  const result = db.exec('SELECT * FROM budgets WHERE month = ? ORDER BY category', [month]);
+  return rowsToObjects(result) as BudgetRow[];
 }
 
 export function createBudget(budget: Omit<BudgetRow, 'created_at'>): BudgetRow {
-  const existing = data.budgets.findIndex(
-    b => b.month === budget.month && b.category === budget.category
-  );
-  if (existing !== -1) {
-    data.budgets[existing] = {
-      ...data.budgets[existing],
-      ...budget,
-      created_at: data.budgets[existing].created_at
-    };
-    saveData();
-    return data.budgets[existing];
+  const existing = db.exec('SELECT id FROM budgets WHERE month = ? AND category = ?', [budget.month, budget.category]);
+
+  if (existing[0]?.values.length > 0) {
+    db.run('UPDATE budgets SET amount = ? WHERE month = ? AND category = ?', [budget.amount, budget.month, budget.category]);
+    saveDatabase();
+    const result = db.exec('SELECT * FROM budgets WHERE month = ? AND category = ?', [budget.month, budget.category]);
+    return rowsToObjects(result)[0] as BudgetRow;
   }
-  const newBudget: BudgetRow = {
-    ...budget,
-    created_at: new Date().toISOString()
-  };
-  data.budgets.push(newBudget);
-  saveData();
-  return newBudget;
+
+  const createdAt = new Date().toISOString();
+  db.run(
+    'INSERT INTO budgets (id, month, category, amount, created_at) VALUES (?, ?, ?, ?, ?)',
+    [budget.id, budget.month, budget.category, budget.amount, createdAt]
+  );
+  saveDatabase();
+  return { ...budget, created_at: createdAt };
 }
 
 export function deleteBudget(id: string): boolean {
-  const idx = data.budgets.findIndex(b => b.id === id);
-  if (idx === -1) return false;
-  data.budgets.splice(idx, 1);
-  saveData();
-  return true;
+  const resultBefore = db.exec('SELECT COUNT(*) as cnt FROM budgets WHERE id = ?', [id]);
+  const existsBefore = (resultBefore[0]?.values[0]?.[0] as number) > 0;
+
+  db.run('DELETE FROM budgets WHERE id = ?', [id]);
+
+  const resultAfter = db.exec('SELECT COUNT(*) as cnt FROM budgets WHERE id = ?', [id]);
+  const existsAfter = (resultAfter[0]?.values[0]?.[0] as number) > 0;
+
+  const changed = existsBefore && !existsAfter;
+  if (changed) saveDatabase();
+  return changed;
 }
 
 export function getSummary(months: number = 6): any {
@@ -279,9 +363,17 @@ export function getSummary(months: number = 6): any {
     const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
     const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-    const inMonth = data.transactions.filter(t => t.date >= monthStart && t.date < monthEnd);
-    const income = inMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-    const expense = inMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const incomeResult = db.exec(
+      "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'income' AND date >= ? AND date < ?",
+      [monthStart, monthEnd]
+    );
+    const expenseResult = db.exec(
+      "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'expense' AND date >= ? AND date < ?",
+      [monthStart, monthEnd]
+    );
+
+    const income = (incomeResult[0]?.values[0]?.[0] as number) || 0;
+    const expense = (expenseResult[0]?.values[0]?.[0] as number) || 0;
 
     monthData.push({
       month: monthLabel,
@@ -294,34 +386,36 @@ export function getSummary(months: number = 6): any {
   const nmStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const cmEnd = `${nmStart.getFullYear()}-${String(nmStart.getMonth() + 1).padStart(2, '0')}-01`;
 
-  const currentMonthTx = data.transactions.filter(
-    t => t.type === 'expense' && t.date >= cmStart && t.date < cmEnd
+  const catResult = db.exec(
+    `SELECT category, COALESCE(SUM(amount), 0) as amount
+     FROM transactions
+     WHERE type = 'expense' AND date >= ? AND date < ?
+     GROUP BY category
+     ORDER BY amount DESC`,
+    [cmStart, cmEnd]
   );
+  const catRows = catResult[0]?.values || [];
+  const categoryExpense = catRows.map(row => ({
+    category: row[0] as string,
+    amount: +(row[1] as number).toFixed(2)
+  }));
 
-  const catMap = new Map<string, number>();
-  currentMonthTx.forEach(t => {
-    catMap.set(t.category, (catMap.get(t.category) || 0) + t.amount);
-  });
-  const categoryExpense = Array.from(catMap.entries())
-    .map(([category, amount]) => ({ category, amount: +amount.toFixed(2) }))
-    .sort((a, b) => b.amount - a.amount);
+  const totalIncomeResult = db.exec("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'income'");
+  const totalExpenseResult = db.exec("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = 'expense'");
+  const totalIncome = (totalIncomeResult[0]?.values[0]?.[0] as number) || 0;
+  const totalExpense = (totalExpenseResult[0]?.values[0]?.[0] as number) || 0;
 
-  const totalIncome = data.transactions
-    .filter(t => t.type === 'income')
-    .reduce((s, t) => s + t.amount, 0);
-  const totalExpense = data.transactions
-    .filter(t => t.type === 'expense')
-    .reduce((s, t) => s + t.amount, 0);
-
+  const allTagsResult = db.exec("SELECT tags FROM transactions WHERE tags != '[]'");
   const allTagsSet = new Set<string>();
-  data.transactions.forEach(t => {
+  (allTagsResult[0]?.values || []).forEach(row => {
     try {
-      const tags = JSON.parse(t.tags);
+      const tags = JSON.parse(row[0] as string);
       if (Array.isArray(tags)) tags.forEach((tag: string) => allTagsSet.add(tag));
     } catch {}
   });
 
-  const allCategories = Array.from(new Set(data.transactions.map(t => t.category))).sort();
+  const allCategoriesResult = db.exec('SELECT DISTINCT category FROM transactions ORDER BY category');
+  const allCategories = (allCategoriesResult[0]?.values || []).map(row => row[0] as string);
 
   return {
     monthTrend: monthData,
@@ -340,17 +434,17 @@ export function getCategorySpentByMonth(month: string): Array<{ category: string
   const nextMonth = new Date(year, monthNum, 1);
   const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
 
-  const inMonth = data.transactions.filter(
-    t => t.type === 'expense' && t.date >= monthStart && t.date < monthEnd
+  const result = db.exec(
+    `SELECT category, COALESCE(SUM(amount), 0) as spent
+     FROM transactions
+     WHERE type = 'expense' AND date >= ? AND date < ?
+     GROUP BY category`,
+    [monthStart, monthEnd]
   );
 
-  const catMap = new Map<string, number>();
-  inMonth.forEach(t => {
-    catMap.set(t.category, (catMap.get(t.category) || 0) + t.amount);
-  });
-
-  return Array.from(catMap.entries()).map(([category, spent]) => ({
-    category,
-    spent: +spent.toFixed(2)
+  const rows = result[0]?.values || [];
+  return rows.map(row => ({
+    category: row[0] as string,
+    spent: +(row[1] as number).toFixed(2)
   }));
 }

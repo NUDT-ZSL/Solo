@@ -25,8 +25,6 @@ app.use((req, res, next) => {
   else next();
 });
 
-initDatabase();
-
 app.get('/api/transactions', (req: Request, res: Response) => {
   try {
     const { startDate, endDate, category, tag, page, pageSize } = req.query;
@@ -145,6 +143,14 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`Finance API server running on http://localhost:${PORT}`);
+async function startServer() {
+  await initDatabase();
+  app.listen(PORT, () => {
+    console.log(`Finance API server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
