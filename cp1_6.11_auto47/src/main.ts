@@ -22,6 +22,7 @@ class CrystalMemoryApp {
   private cameraAnimLookTarget = new THREE.Vector3()
   private cameraAnimStartTime = 0
   private cameraAnimDuration = 0
+  private lastFrameTime = 0
 
   constructor() {
     const container = document.getElementById('app')!
@@ -64,15 +65,21 @@ class CrystalMemoryApp {
     this.startAnimation()
 
     this.hideLoading()
+
+    console.log('[CrystalMemory] 应用已启动, 相机位置:', this.camera.position.toArray().map(v => v.toFixed(1)))
   }
 
   private setupScene() {
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.5)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
     this.scene.add(ambientLight)
 
-    const pointLight = new THREE.PointLight(0x6688cc, 0.8, 100)
-    pointLight.position.set(0, 10, 0)
+    const pointLight = new THREE.PointLight(0x88aaff, 1.2, 100)
+    pointLight.position.set(0, 12, 8)
     this.scene.add(pointLight)
+
+    const pointLight2 = new THREE.PointLight(0xffaa88, 0.6, 100)
+    pointLight2.position.set(-10, -5, -10)
+    this.scene.add(pointLight2)
 
     this.createStarfield()
   }
@@ -80,24 +87,28 @@ class CrystalMemoryApp {
   private createStarfield() {
     const starCount = 1500
     const positions = new Float32Array(starCount * 3)
-    const sizes = new Float32Array(starCount)
+    const colors = new Float32Array(starCount * 3)
 
     for (let i = 0; i < starCount; i++) {
       positions[i * 3] = (Math.random() - 0.5) * 200
       positions[i * 3 + 1] = (Math.random() - 0.5) * 200
       positions[i * 3 + 2] = (Math.random() - 0.5) * 200
-      sizes[i] = Math.random() * 0.08 + 0.02
+
+      const tint = Math.random()
+      colors[i * 3] = 0.7 + tint * 0.3
+      colors[i * 3 + 1] = 0.75 + tint * 0.2
+      colors[i * 3 + 2] = 0.9 + tint * 0.1
     }
 
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
 
     const material = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.08,
+      size: 0.12,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.75,
       sizeAttenuation: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -105,33 +116,38 @@ class CrystalMemoryApp {
 
     const stars = new THREE.Points(geometry, material)
     this.scene.add(stars)
+    console.debug('[CrystalMemory] 背景星空已创建, 星星数:', starCount)
   }
 
   private setupInteractionHandlers() {
     this.renderer.domElement.addEventListener('click', (e) => {
       const clicked = this.particleSystem.handleClick(e, this.camera)
       if (clicked && !clicked.isRecalled) {
+        console.debug('[CrystalMemory] 检测到粒子簇点击')
         this.particleSystem.recallCluster(clicked)
       }
     })
 
     this.particleSystem.setOrbClickHandler(() => {
+      console.debug('[CrystalMemory] 能量光球被点击')
       this.particleSystem.dismissRecall()
     })
 
     this.particleSystem.setClusterClickHandler((cluster) => {
-      this.particleSystem.recallCluster(cluster)
+      console.debug('[CrystalMemory] 粒子簇回调触发:', cluster.id)
     })
 
     this.ui.setTimelineClickHandler((clusterId) => {
       const cluster = this.particleSystem.findClusterById(clusterId)
       if (cluster) {
+        console.log(`[CrystalMemory] 时间轴导航至: ${clusterId}`)
         this.animateCameraToTarget(cluster.center)
         this.particleSystem.highlightCluster(cluster)
       }
     })
 
     this.ui.setResetCameraHandler(() => {
+      console.log('[CrystalMemory] 相机重置')
       this.animateCameraToTarget(INITIAL_CAMERA_TARGET, INITIAL_CAMERA_POS, 0.8)
     })
 
@@ -162,6 +178,7 @@ class CrystalMemoryApp {
 
     this.cameraAnimStartTime = performance.now()
     this.cameraAnimDuration = duration
+    console.debug(`[CrystalMemory] 相机动画启动, 时长=${duration}s`)
   }
 
   private updateCameraAnimation() {
@@ -177,6 +194,7 @@ class CrystalMemoryApp {
 
     if (t >= 1.0) {
       this.isAnimatingCamera = false
+      console.debug('[CrystalMemory] 相机动画完成')
     }
   }
 
@@ -184,6 +202,7 @@ class CrystalMemoryApp {
     const animate = () => {
       this.animationId = requestAnimationFrame(animate)
 
+      const frameStart = performance.now()
       const delta = this.clock.getDelta()
 
       this.particleSystem.update(delta)
@@ -194,6 +213,12 @@ class CrystalMemoryApp {
       }
 
       this.renderer.render(this.scene, this.camera)
+
+      const frameDuration = performance.now() - frameStart
+      if (frameDuration > 16 && frameDuration !== this.lastFrameTime) {
+        this.lastFrameTime = frameDuration
+        console.warn(`[CrystalMemory] 总帧时间: ${frameDuration.toFixed(1)}ms, 渲染=${performance.now() - frameStart}`)
+      }
     }
     animate()
   }
@@ -202,6 +227,7 @@ class CrystalMemoryApp {
     this.camera.aspect = window.innerWidth / window.innerHeight
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(window.innerWidth, window.innerHeight)
+    console.debug('[CrystalMemory] 窗口大小已更新:', window.innerWidth, 'x', window.innerHeight)
   }
 
   private hideLoading() {
@@ -210,6 +236,7 @@ class CrystalMemoryApp {
       loading.classList.add('fade-out')
       setTimeout(() => {
         loading.remove()
+        console.log('[CrystalMemory] 加载层已隐藏')
       }, 700)
     }
   }

@@ -3,12 +3,42 @@ import cuid from 'cuid'
 
 const EMOTIONS: EmotionTag[] = ['喜悦', '忧伤', '怀念', '平静', '期待']
 
-const EMOTION_LABELS: Record<EmotionTag, string> = {
-  '喜悦': '喜悦',
-  '忧伤': '忧伤',
-  '怀念': '怀念',
-  '平静': '平静',
-  '期待': '期待',
+const GLOBAL_CSS = `
+@keyframes emotion-bounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.35); }
+  50%  { transform: scale(0.9); }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1.15); }
+}
+@keyframes timeline-flash {
+  0%   { border-color: rgba(255,255,255,0.1); }
+  50%  { border-color: rgba(255,255,255,0.95); box-shadow: 0 0 16px rgba(255,255,255,0.6); }
+  100% { border-color: rgba(255,255,255,0.1); box-shadow: none; }
+}
+#timeline-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+#timeline-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+#timeline-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+}
+#timeline-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.25);
+}
+`
+
+function injectGlobalCSS() {
+  const style = document.createElement('style')
+  style.id = 'crystal-memory-ui-css'
+  if (!document.getElementById('crystal-memory-ui-css')) {
+    style.textContent = GLOBAL_CSS
+    document.head.appendChild(style)
+    console.debug('[UI] 已注入全局动画 CSS')
+  }
 }
 
 export class UIController {
@@ -27,8 +57,10 @@ export class UIController {
   constructor(container: HTMLElement, particleSystem: ParticleMemorySystem) {
     this.container = container
     this.particleSystem = particleSystem
+    injectGlobalCSS()
     this.createUI()
     this.bindEvents()
+    console.log('[UI] 控制器已初始化')
   }
 
   setTimelineClickHandler(handler: (clusterId: string) => void) {
@@ -62,6 +94,7 @@ export class UIController {
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
       minWidth: '290px',
+      transition: 'box-shadow 0.2s ease',
     })
 
     const titleEl = document.createElement('div')
@@ -124,7 +157,7 @@ export class UIController {
         border: isActive ? '2px solid rgba(255,255,255,0.8)' : '2px solid rgba(255,255,255,0.2)',
         background: `radial-gradient(circle, ${startColor}, ${endColor})`,
         cursor: 'pointer',
-        transition: 'transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
+        transition: 'border-color 0.1s ease, box-shadow 0.1s ease',
         transform: isActive ? 'scale(1.15)' : 'scale(1)',
         boxShadow: isActive ? `0 0 12px ${startColor}66` : 'none',
         padding: '0',
@@ -254,34 +287,60 @@ export class UIController {
   }
 
   private selectEmotion(emotion: EmotionTag) {
+    if (emotion === this.selectedEmotion) return
     this.selectedEmotion = emotion
+
+    console.log(`[UI] 切换情感标签: ${emotion}`)
 
     for (const btn of this.emotionButtons) {
       const em = btn.dataset.emotion as EmotionTag
       const [s, e] = this.particleSystem.getEmotionGradient(em)
       const isActive = em === emotion
-      btn.style.border = isActive ? '2px solid rgba(255,255,255,0.8)' : '2px solid rgba(255,255,255,0.2)'
-      btn.style.transform = isActive ? 'scale(1.15)' : 'scale(1)'
-      btn.style.boxShadow = isActive ? `0 0 12px ${s}66` : 'none'
 
       if (isActive) {
-        btn.style.transition = 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease'
+        btn.style.animation = 'emotion-bounce 0.2s ease forwards'
+        btn.style.border = '2px solid rgba(255,255,255,0.8)'
+        btn.style.boxShadow = `0 0 12px ${s}66`
         setTimeout(() => {
-          btn.style.transition = 'transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease'
-        }, 250)
+          btn.style.animation = ''
+          btn.style.transform = 'scale(1.15)'
+        }, 210)
+      } else {
+        btn.style.animation = ''
+        btn.style.border = '2px solid rgba(255,255,255,0.2)'
+        btn.style.boxShadow = 'none'
+        btn.style.transform = 'scale(1)'
       }
     }
 
     const label = document.getElementById('emotion-label')
-    if (label) label.textContent = emotion
+    if (label) {
+      label.textContent = emotion
+      const [ls] = this.particleSystem.getEmotionGradient(emotion)
+      label.style.color = ls
+      setTimeout(() => {
+        label.style.color = 'rgba(255,255,255,0.6)'
+      }, 350)
+    }
 
     const [start, end] = this.particleSystem.getEmotionGradient(emotion)
     this.addButton.style.background = `linear-gradient(135deg, ${start}, ${end})`
+    this.addButton.onmouseenter = () => {
+      this.addButton.style.boxShadow = `0 0 20px ${start}88`
+      this.addButton.style.transform = 'scale(1.05)'
+    }
   }
 
   private addMemory() {
     const text = this.textInput.value.trim()
-    if (!text || text.length < 1) return
+    if (!text || text.length < 1) {
+      console.debug('[UI] 输入为空, 跳过添加')
+      return
+    }
+    if (text.length > 50) {
+      console.warn(`[UI] 文本长度超过50字: ${text.length}`)
+      return
+    }
 
     const memory: MemoryData = {
       id: cuid(),
@@ -291,8 +350,44 @@ export class UIController {
     }
 
     const cluster = this.particleSystem.addMemory(memory)
+    if (!cluster) {
+      this.showToast('粒子已达上限, 请先清理一些记忆')
+      return
+    }
+
     this.textInput.value = ''
     this.addTimelineItem(cluster)
+    console.log(`[UI] 已提交记忆: "${text}" [${this.selectedEmotion}] -> ${cluster.id}`)
+  }
+
+  private showToast(message: string) {
+    const toast = document.createElement('div')
+    toast.textContent = message
+    Object.assign(toast.style, {
+      position: 'fixed',
+      left: '50%',
+      top: '40px',
+      transform: 'translateX(-50%)',
+      background: 'rgba(255,80,80,0.85)',
+      color: '#fff',
+      padding: '10px 20px',
+      borderRadius: '8px',
+      fontSize: '13px',
+      zIndex: '10000',
+      opacity: '0',
+      transition: 'opacity 0.3s ease, transform 0.3s ease',
+      pointerEvents: 'none' as const,
+    })
+    document.body.appendChild(toast)
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1'
+      toast.style.transform = 'translateX(-50%) translateY(8px)'
+    })
+    setTimeout(() => {
+      toast.style.opacity = '0'
+      toast.style.transform = 'translateX(-50%)'
+      setTimeout(() => toast.remove(), 350)
+    }, 2000)
   }
 
   addTimelineItem(cluster: { id: string; memory: MemoryData }) {
@@ -313,7 +408,7 @@ export class UIController {
       background: `radial-gradient(circle, ${startColor}, ${endColor})`,
       border: '2px solid rgba(255,255,255,0.1)',
       cursor: 'pointer',
-      transition: 'border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
+      transition: 'border-color 0.1s ease, transform 0.1s ease, box-shadow 0.1s ease',
       flexShrink: '0',
       position: 'relative' as const,
     })
@@ -350,10 +445,11 @@ export class UIController {
     })
 
     item.addEventListener('click', () => {
-      item.style.border = '2px solid rgba(255,255,255,0.9)'
+      console.log(`[UI] 点击时间轴缩略图: ${cluster.id} "${cluster.memory.text}"`)
+      item.style.animation = 'timeline-flash 0.2s ease'
       setTimeout(() => {
-        item.style.border = '2px solid rgba(255,255,255,0.1)'
-      }, 200)
+        item.style.animation = ''
+      }, 220)
       this.onTimelineClick?.(cluster.id)
     })
 
@@ -361,20 +457,28 @@ export class UIController {
       scrollArea.appendChild(item)
       this.timelineItems.push(item)
       scrollArea.scrollTop = scrollArea.scrollHeight
+      console.debug(`[UI] 已添加时间轴项目, 当前共 ${this.timelineItems.length} 项`)
     }
   }
 
   private bindEvents() {
     document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (document.activeElement === this.textInput) {
+        if (e.key === 'Enter') {
+          this.addMemory()
+        }
+        return
+      }
       if (e.key === 'r' || e.key === 'R') {
-        if (document.activeElement === this.textInput) return
+        console.log('[UI] 快捷键 R: 重置相机')
         this.onResetCamera?.()
       }
       if (e.key === 'c' || e.key === 'C') {
-        if (document.activeElement === this.textInput) return
+        console.log('[UI] 快捷键 C: 清除高亮')
         this.particleSystem.clearHighlight()
       }
       if (e.key === 'Escape') {
+        console.log('[UI] 快捷键 ESC: 退出召回')
         this.particleSystem.dismissRecall()
       }
     })
