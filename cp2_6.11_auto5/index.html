@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>涡光棱镜 · Vortex Prism</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: #e0e6ff;
+      user-select: none;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, #2D1B4E 0%, #0A0A1A 70%, #050510 100%);
+      cursor: grab;
+    }
+
+    body.dragging {
+      cursor: grabbing;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .control-panel {
+      position: fixed;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 220px;
+      padding: 20px;
+      background: rgba(20, 20, 40, 0.7);
+      border: 1px solid rgba(77, 150, 255, 0.5);
+      border-radius: 12px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+        0 8px 32px rgba(0, 0, 0, 0.4);
+      z-index: 10;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #4D96FF;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      text-shadow: 0 0 8px rgba(77, 150, 255, 0.5);
+    }
+
+    .slider-group {
+      margin-bottom: 18px;
+    }
+
+    .slider-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #b0b8d0;
+      margin-bottom: 8px;
+    }
+
+    .slider-value {
+      font-family: "SF Mono", Consolas, Monaco, monospace;
+      font-size: 12px;
+      color: #4D96FF;
+      background: rgba(77, 150, 255, 0.12);
+      padding: 2px 8px;
+      border-radius: 4px;
+      min-width: 44px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #2A2A3A;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4D96FF, #8B5CF6);
+      box-shadow:
+        0 0 8px rgba(77, 150, 255, 0.8),
+        0 0 16px rgba(77, 150, 255, 0.4);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow:
+        0 0 12px rgba(77, 150, 255, 1),
+        0 0 24px rgba(77, 150, 255, 0.6);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      background: #ffffff;
+      box-shadow:
+        0 0 12px rgba(255, 255, 255, 0.9),
+        0 0 24px rgba(77, 150, 255, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4D96FF, #8B5CF6);
+      box-shadow: 0 0 8px rgba(77, 150, 255, 0.8);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .reset-button {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid rgba(77, 150, 255, 0.5);
+      background: rgba(20, 20, 40, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      cursor: pointer;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.25s ease;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .reset-button:hover {
+      background: rgba(77, 150, 255, 0.2);
+      border-color: rgba(77, 150, 255, 0.8);
+      transform: scale(1.08);
+      box-shadow:
+        0 0 20px rgba(77, 150, 255, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .reset-button:active {
+      transform: scale(0.96);
+    }
+
+    .reset-button svg {
+      width: 22px;
+      height: 22px;
+      stroke: #4D96FF;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: stroke 0.25s ease;
+    }
+
+    .reset-button:hover svg {
+      stroke: #fff;
+      filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+    }
+
+    .reset-button.spinning svg {
+      animation: spin 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .info-tooltip {
+      position: fixed;
+      pointer-events: none;
+      padding: 10px 14px;
+      background: rgba(10, 10, 26, 0.92);
+      border: 1px solid rgba(77, 150, 255, 0.6);
+      border-radius: 8px;
+      font-size: 11px;
+      font-family: "SF Mono", Consolas, Monaco, monospace;
+      color: #e0e6ff;
+      z-index: 20;
+      opacity: 0;
+      transform: translate(-50%, -120%);
+      transition: opacity 0.2s ease;
+      white-space: nowrap;
+      box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.5),
+        0 0 20px rgba(77, 150, 255, 0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .info-tooltip.visible {
+      opacity: 1;
+    }
+
+    .info-tooltip .tooltip-line {
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .info-tooltip .tooltip-line:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-tooltip .tooltip-label {
+      color: #7a85a5;
+      min-width: 56px;
+    }
+
+    .info-tooltip .tooltip-value {
+      color: #4D96FF;
+    }
+
+    .info-tooltip .color-swatch {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      vertical-align: middle;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0A0A1A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 100;
+      transition: opacity 0.8s ease;
+    }
+
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 2px solid rgba(77, 150, 255, 0.2);
+      border-top-color: #4D96FF;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    .loading-text {
+      font-size: 12px;
+      color: #4D96FF;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 768px) {
+      .control-panel {
+        left: 50%;
+        top: 16px;
+        transform: translateX(-50%);
+        width: calc(100% - 32px);
+        max-width: 360px;
+        padding: 14px 16px;
+      }
+
+      .panel-title {
+        margin-bottom: 12px;
+        font-size: 12px;
+      }
+
+      .slider-group {
+        margin-bottom: 12px;
+      }
+
+      .sliders-row {
+        display: flex;
+        gap: 12px;
+      }
+
+      .sliders-row .slider-group {
+        flex: 1;
+      }
+
+      .reset-button {
+        width: 40px;
+        height: 40px;
+        right: 16px;
+        bottom: 16px;
+      }
+
+      .reset-button svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      body {
+        font-size: 12.8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="control-panel">
+    <div class="panel-title">涡光棱镜 · 控制</div>
+
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>旋转速度</span>
+        <span class="slider-value" id="speed-value">1.0</span>
+      </div>
+      <input type="range" id="speed-slider" min="0.5" max="5" step="0.1" value="1" />
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>对称轴数</span>
+        <span class="slider-value" id="axes-value">3</span>
+      </div>
+      <input type="range" id="axes-slider" min="2" max="6" step="1" value="3" />
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>颜色偏移</span>
+        <span class="slider-value" id="color-value">0.0</span>
+      </div>
+      <input type="range" id="color-slider" min="0" max="6.283" step="0.05" value="0" />
+    </div>
+  </div>
+
+  <button class="reset-button" id="reset-btn" title="重置视角">
+    <svg viewBox="0 0 24 24">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+      <polyline points="3 3 3 8 8 8"/>
+    </svg>
+  </button>
+
+  <div class="info-tooltip" id="info-tooltip">
+    <div class="tooltip-line">
+      <span class="tooltip-label">角度</span>
+      <span class="tooltip-value" id="tip-angle">0°</span>
+    </div>
+    <div class="tooltip-line">
+      <span class="tooltip-label">颜色</span>
+      <span class="tooltip-value" id="tip-color">
+        <span class="color-swatch" id="tip-swatch"></span>
+        <span id="tip-color-hex">#FFFFFF</span>
+      </span>
+    </div>
+    <div class="tooltip-line">
+      <span class="tooltip-label">对称组</span>
+      <span class="tooltip-value" id="tip-group">0</span>
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">初始化棱镜阵列</div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
