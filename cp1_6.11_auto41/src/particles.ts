@@ -40,12 +40,33 @@ export type Particle = TrailParticle | WaveParticle | StarPointParticle | Victor
 
 export class ParticleSystem {
   private particles: Particle[] = [];
-  private readonly MAX_PARTICLES = 300;
+  private readonly MAX_PARTICLES = 200;
+  private readonly EVICT_THRESHOLD = 0.9;
+
+  private evictOldParticles(needed: number): void {
+    const limit = Math.floor(this.MAX_PARTICLES * this.EVICT_THRESHOLD);
+    if (this.particles.length + needed <= limit) return;
+
+    const evictable = this.particles
+      .map((p, i) => ({ p, i }))
+      .filter(x => x.p.type !== 'starpoint' && x.p.maxLife !== Infinity)
+      .sort((a, b) => a.p.life - b.p.life);
+
+    const toEvict = Math.min(
+      evictable.length,
+      this.particles.length + needed - limit
+    );
+
+    for (let i = toEvict - 1; i >= 0; i--) {
+      this.particles.splice(evictable[i].i, 1);
+    }
+  }
 
   spawnTrail(x: number, y: number, dirX: number, dirY: number): void {
-    if (this.particles.length >= this.MAX_PARTICLES) return;
-
     const count = 3 + Math.floor(Math.random() * 3);
+    this.evictOldParticles(count);
+    if (this.particles.length + count > this.MAX_PARTICLES) return;
+
     for (let i = 0; i < count; i++) {
       const spread = (Math.random() - 0.5) * 0.5;
       const speed = 20 + Math.random() * 30;
@@ -69,7 +90,8 @@ export class ParticleSystem {
   }
 
   spawnWave(x: number, y: number, color: string = '#8A2BE2'): void {
-    if (this.particles.length >= this.MAX_PARTICLES) return;
+    this.evictOldParticles(1);
+    if (this.particles.length + 1 > this.MAX_PARTICLES) return;
 
     this.particles.push({
       type: 'wave',
@@ -89,9 +111,9 @@ export class ParticleSystem {
   }
 
   spawnStarPoints(centerX: number, centerY: number): void {
-    if (this.particles.length >= this.MAX_PARTICLES - 10) return;
-
     const count = 4 + Math.floor(Math.random() * 3);
+    this.evictOldParticles(count);
+    if (this.particles.length + count > this.MAX_PARTICLES) return;
     const baseAngle = Math.random() * Math.PI * 2;
 
     for (let i = 0; i < count; i++) {
@@ -117,9 +139,9 @@ export class ParticleSystem {
   }
 
   spawnVictoryBurst(x: number, y: number): void {
-    if (this.particles.length >= this.MAX_PARTICLES - 20) return;
-
     const count = 8 + Math.floor(Math.random() * 5);
+    this.evictOldParticles(count);
+    if (this.particles.length + count > this.MAX_PARTICLES) return;
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 50 + Math.random() * 100;

@@ -7,6 +7,7 @@ export interface EnergyOrb {
   startY: number;
   targetX: number;
   targetY: number;
+  lockedTarget: boolean;
   currentX: number;
   currentY: number;
   progress: number;
@@ -111,7 +112,7 @@ export class Player {
 
     if (network.collectEnergy(toId)) {
       const node = network.nodes[toId];
-      this.spawnEnergyOrb(node);
+      this.launchEnergyOrb(node);
     }
 
     this.currentNodeId = nodeId;
@@ -119,13 +120,14 @@ export class Player {
     this.isMoving = false;
   }
 
-  private spawnEnergyOrb(node: NodeData): void {
+  launchEnergyOrb(node: NodeData): void {
     this.energyOrbs.push({
       active: true,
       startX: node.x,
       startY: node.y,
       targetX: this.x,
       targetY: this.y,
+      lockedTarget: true,
       currentX: node.x,
       currentY: node.y,
       progress: 0,
@@ -140,12 +142,13 @@ export class Player {
       const orb = this.energyOrbs[i];
       if (!orb.active) continue;
 
-      orb.targetX = this.x;
-      orb.targetY = this.y;
       orb.progress += dt / orb.duration;
 
       if (orb.progress >= 1) {
-        this.collectOrb(orb, particles);
+        const dist = Math.hypot(orb.currentX - this.x, orb.currentY - this.y);
+        if (dist < 60) {
+          this.collectOrb(orb, particles);
+        }
         this.energyOrbs.splice(i, 1);
       } else {
         const t = orb.progress;

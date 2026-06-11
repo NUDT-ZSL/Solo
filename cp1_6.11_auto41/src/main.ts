@@ -177,6 +177,9 @@ function startNewGame(): void {
   game.player = new Player(startNodeId, startNode.x, startNode.y);
 
   game.network.highlightNode(startNodeId);
+  if (game.network.collectEnergy(startNodeId)) {
+    game.player.launchEnergyOrb(startNode);
+  }
   game.victoryAngle = 0;
 
   game.ui.reset();
@@ -336,7 +339,7 @@ function loop(timestamp: number): void {
   if (!game.running) return;
 
   if (!game.lastTime) game.lastTime = timestamp;
-  const dt = Math.min(50, timestamp - game.lastTime);
+  const dt = Math.min(33, timestamp - game.lastTime);
   game.lastTime = timestamp;
 
   update(dt);
