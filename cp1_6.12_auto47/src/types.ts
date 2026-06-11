@@ -6,6 +6,10 @@ export interface Memo {
   timestamp: number
 }
 
+export interface DisplayMemo extends Memo {
+  opacity: number
+}
+
 export interface MemoInput {
   lng: number
   lat: number

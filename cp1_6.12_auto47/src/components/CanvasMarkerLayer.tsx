@@ -1,10 +1,11 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
-import type { Memo } from '../types'
+import type { DisplayMemo } from '../types'
+import './CanvasMarkerLayer.css'
 
 interface CanvasMarkerLayerProps {
-  memos: Memo[]
+  memos: DisplayMemo[]
   selectedMemoId: number | null
   onSelect: (id: number | null) => void
   getColorByDate: (timestamp: number) => string
@@ -18,9 +19,10 @@ export default function CanvasMarkerLayer({
 }: CanvasMarkerLayerProps) {
   const map = useMap()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const layerRef = useRef<L.Layer | null>(null)
-  const memoPositionsRef = useRef<Array<{ memo: Memo; x: number; y: number; radius: number }>>([]
-  )
+  const memoPositionsRef = useRef<Array<{ memo: DisplayMemo; x: number; y: number; radius: number }>>([])
+  const [activePopup, setActivePopup] = useState<DisplayMemo | null>(null)
+  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null)
+  const popupRef = useRef<HTMLDivElement | null>(null)
 
   const drawMarkers = useCallback(() => {
     const canvas = canvasRef.current
@@ -35,9 +37,11 @@ export default function CanvasMarkerLayer({
 
     ctx.clearRect(0, 0, size.x, size.y)
 
-    const positions: Array<{ memo: Memo; x: number; y: number; radius: number }> = []
+    const positions: Array<{ memo: DisplayMemo; x: number; y: number; radius: number }> = []
 
     memos.forEach((memo) => {
+      if (memo.opacity <= 0) return
+
       const point = map.latLngToContainerPoint([memo.lat, memo.lng])
       const isSelected = memo.id === selectedMemoId
       const radius = isSelected ? 18 : 15
@@ -48,6 +52,8 @@ export default function CanvasMarkerLayer({
       }
 
       positions.push({ memo, x: point.x, y: point.y, radius })
+
+      ctx.globalAlpha = memo.opacity
 
       const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius * 2)
       gradient.addColorStop(0, color + '60')
@@ -81,12 +87,13 @@ export default function CanvasMarkerLayer({
       if (isSelected) {
         ctx.strokeStyle = color
         ctx.lineWidth = 3
-        ctx.globalAlpha = 0.5
+        ctx.globalAlpha = memo.opacity * 0.5
         ctx.beginPath()
         ctx.arc(point.x, point.y, radius + 8, 0, Math.PI * 2)
         ctx.stroke()
-        ctx.globalAlpha = 1
       }
+
+      ctx.globalAlpha = 1
     })
 
     memoPositionsRef.current = positions
@@ -109,9 +116,14 @@ export default function CanvasMarkerLayer({
 
         if (distance <= pos.radius + 5) {
           onSelect(pos.memo.id)
+          setPopupPosition({ x: pos.x, y: pos.y - pos.radius - 10 })
+          setActivePopup(pos.memo)
           return
         }
       }
+
+      setActivePopup(null)
+      setPopupPosition(null)
     },
     [onSelect]
   )
@@ -145,6 +157,10 @@ export default function CanvasMarkerLayer({
     const onMove = () => {
       updateCanvasPosition()
       drawMarkers()
+      if (activePopup) {
+        const point = map.latLngToContainerPoint([activePopup.lat, activePopup.lng])
+        setPopupPosition({ x: point.x, y: point.y - 20 })
+      }
     }
 
     map.on('move', onMove)
@@ -164,11 +180,47 @@ export default function CanvasMarkerLayer({
       }
       canvasRef.current = null
     }
-  }, [map, drawMarkers, handleCanvasClick])
+  }, [map, drawMarkers, handleCanvasClick, activePopup])
 
   useEffect(() => {
     drawMarkers()
   }, [drawMarkers])
 
-  return null
+  useEffect(() => {
+    if (activePopup && selectedMemoId === null) {
+      setActivePopup(null)
+      setPopupPosition(null)
+    }
+  }, [selectedMemoId, activePopup])
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  return (
+    <>
+      {activePopup && popupPosition && (
+        <div
+          ref={popupRef}
+          className="canvas-popup"
+          style={{
+            left: popupPosition.x,
+            top: popupPosition.y,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <div className="canvas-popup-arrow" />
+          <div className="canvas-popup-content">
+            <div className="canvas-popup-time">{formatDate(activePopup.timestamp)}</div>
+            <div className="canvas-popup-text">{activePopup.content}</div>
+          </div>
+        </div>
+      )}
+    </>
+  )
 }

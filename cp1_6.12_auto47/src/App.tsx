@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import type { Memo, DateRange } from './types'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import type { Memo, DisplayMemo, DateRange } from './types'
 import MapView from './components/MapView'
 import MemoPanel from './components/MemoPanel'
 import TimelineSlider from './components/TimelineSlider'
@@ -14,6 +14,8 @@ const COLORS = [
   '#DDA0DD',
   '#98D8C8',
 ]
+
+const FADE_DURATION = 300
 
 function getColorByDate(timestamp: number): string {
   const date = new Date(timestamp)
@@ -31,6 +33,9 @@ export default function App() {
   const [heatmapRadius, setHeatmapRadius] = useState(30)
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [displayMemos, setDisplayMemos] = useState<DisplayMemo[]>([])
+  const prevFilteredIdsRef = useRef<Set<number>>(new Set())
+  const fadeTimerRef = useRef<number | null>(null)
 
   const filteredMemos = useMemo(() => {
     if (dateRange === 'all') return memos
@@ -46,6 +51,99 @@ export default function App() {
     () => memos.find((m) => m.id === selectedMemoId) || null,
     [memos, selectedMemoId]
   )
+
+  useEffect(() => {
+    const newIds = new Set(filteredMemos.map((m) => m.id))
+    const prevIds = prevFilteredIdsRef.current
+
+    const entering: number[] = []
+    const staying: number[] = []
+    const leaving: number[] = []
+
+    newIds.forEach((id) => {
+      if (prevIds.has(id)) {
+        staying.push(id)
+      } else {
+        entering.push(id)
+      }
+    })
+
+    prevIds.forEach((id) => {
+      if (!newIds.has(id)) {
+        leaving.push(id)
+      }
+    })
+
+    const memoMap = new Map<number, Memo>()
+    memos.forEach((m) => memoMap.set(m.id, m))
+
+    const phase1: DisplayMemo[] = []
+
+    staying.forEach((id) => {
+      const m = memoMap.get(id)!
+      phase1.push({ ...m, opacity: 1 })
+    })
+
+    entering.forEach((id) => {
+      const m = memoMap.get(id)!
+      phase1.push({ ...m, opacity: 0 })
+    })
+
+    leaving.forEach((id) => {
+      const m = memoMap.get(id)!
+      phase1.push({ ...m, opacity: 1 })
+    })
+
+    setDisplayMemos(phase1)
+
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current)
+    }
+
+    requestAnimationFrame(() => {
+      const phase2: DisplayMemo[] = []
+
+      staying.forEach((id) => {
+        const m = memoMap.get(id)!
+        phase2.push({ ...m, opacity: 1 })
+      })
+
+      entering.forEach((id) => {
+        const m = memoMap.get(id)!
+        phase2.push({ ...m, opacity: 1 })
+      })
+
+      leaving.forEach((id) => {
+        const m = memoMap.get(id)!
+        phase2.push({ ...m, opacity: 0 })
+      })
+
+      setDisplayMemos(phase2)
+
+      fadeTimerRef.current = window.setTimeout(() => {
+        const phase3: DisplayMemo[] = []
+
+        staying.forEach((id) => {
+          const m = memoMap.get(id)!
+          phase3.push({ ...m, opacity: 1 })
+        })
+
+        entering.forEach((id) => {
+          const m = memoMap.get(id)!
+          phase3.push({ ...m, opacity: 1 })
+        })
+
+        setDisplayMemos(phase3)
+        prevFilteredIdsRef.current = newIds
+      }, FADE_DURATION)
+    })
+
+    return () => {
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current)
+      }
+    }
+  }, [filteredMemos, memos])
 
   const fetchMemos = useCallback(async () => {
     try {
@@ -141,7 +239,7 @@ export default function App() {
     <div className="app-container">
       <div className="map-wrapper">
         <MapView
-          memos={filteredMemos}
+          memos={displayMemos}
           selectedMemoId={selectedMemoId}
           onMemoAdd={handleMemoAdd}
           onMemoSelect={handleMemoSelect}

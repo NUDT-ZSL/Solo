@@ -1,7 +1,8 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Memo } from '../types'
+import './HeatmapLayer.css'
 
 interface HeatmapLayerProps {
   memos: Memo[]
@@ -11,94 +12,110 @@ interface HeatmapLayerProps {
 export default function HeatmapLayer({ memos, radius }: HeatmapLayerProps) {
   const map = useMap()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [renderError, setRenderError] = useState<string | null>(null)
 
   const drawHeatmap = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas || !map) return
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const size = map.getSize()
-    canvas.width = size.x
-    canvas.height = size.y
-
-    ctx.clearRect(0, 0, size.x, size.y)
-
-    if (memos.length === 0) return
-
-    const tempCanvas = document.createElement('canvas')
-    tempCanvas.width = size.x
-    tempCanvas.height = size.y
-    const tempCtx = tempCanvas.getContext('2d')
-    if (!tempCtx) return
-
-    memos.forEach((memo) => {
-      const point = map.latLngToContainerPoint([memo.lat, memo.lng])
-
-      if (point.x < -radius * 3 || point.x > size.x + radius * 3 || 
-          point.y < -radius * 3 || point.y > size.y + radius * 3) {
+    try {
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        setRenderError('Canvas 2D context unavailable')
         return
       }
 
-      const gradient = tempCtx.createRadialGradient(
-        point.x, point.y, 0,
-        point.x, point.y, radius
-      )
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)')
-      gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)')
-      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+      const size = map.getSize()
+      canvas.width = size.x
+      canvas.height = size.y
 
-      tempCtx.fillStyle = gradient
-      tempCtx.beginPath()
-      tempCtx.arc(point.x, point.y, radius, 0, Math.PI * 2)
-      tempCtx.fill()
-    })
+      ctx.clearRect(0, 0, size.x, size.y)
 
-    const imageData = tempCtx.getImageData(0, 0, size.x, size.y)
-    const data = imageData.data
-
-    for (let i = 0; i < data.length; i += 4) {
-      const alpha = data[i + 3]
-      if (alpha === 0) continue
-
-      const intensity = alpha / 255
-      let r: number, g: number, b: number
-
-      if (intensity < 0.2) {
-        const t = intensity / 0.2
-        r = Math.floor(0 + 0 * t)
-        g = Math.floor(0 + 100 * t)
-        b = Math.floor(139 + 116 * t)
-      } else if (intensity < 0.4) {
-        const t = (intensity - 0.2) / 0.2
-        r = Math.floor(0 + 50 * t)
-        g = Math.floor(100 + 155 * t)
-        b = Math.floor(255 - 55 * t)
-      } else if (intensity < 0.6) {
-        const t = (intensity - 0.4) / 0.2
-        r = Math.floor(50 + 200 * t)
-        g = Math.floor(255 - 55 * t)
-        b = Math.floor(200 - 100 * t)
-      } else if (intensity < 0.8) {
-        const t = (intensity - 0.6) / 0.2
-        r = Math.floor(255 + 0 * t)
-        g = Math.floor(200 - 100 * t)
-        b = Math.floor(100 - 100 * t)
-      } else {
-        const t = (intensity - 0.8) / 0.2
-        r = Math.floor(255)
-        g = Math.floor(100 - 80 * t)
-        b = 0
+      if (memos.length === 0) {
+        setRenderError(null)
+        return
       }
 
-      data[i] = r
-      data[i + 1] = g
-      data[i + 2] = b
-      data[i + 3] = Math.floor(alpha * 0.85)
-    }
+      const tempCanvas = document.createElement('canvas')
+      tempCanvas.width = size.x
+      tempCanvas.height = size.y
+      const tempCtx = tempCanvas.getContext('2d')
+      if (!tempCtx) {
+        setRenderError('Failed to create temporary canvas')
+        return
+      }
 
-    ctx.putImageData(imageData, 0, 0)
+      memos.forEach((memo) => {
+        const point = map.latLngToContainerPoint([memo.lat, memo.lng])
+
+        if (point.x < -radius * 3 || point.x > size.x + radius * 3 ||
+            point.y < -radius * 3 || point.y > size.y + radius * 3) {
+          return
+        }
+
+        const gradient = tempCtx.createRadialGradient(
+          point.x, point.y, 0,
+          point.x, point.y, radius
+        )
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)')
+        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)')
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+
+        tempCtx.fillStyle = gradient
+        tempCtx.beginPath()
+        tempCtx.arc(point.x, point.y, radius, 0, Math.PI * 2)
+        tempCtx.fill()
+      })
+
+      const imageData = tempCtx.getImageData(0, 0, size.x, size.y)
+      const data = imageData.data
+
+      for (let i = 0; i < data.length; i += 4) {
+        const alpha = data[i + 3]
+        if (alpha === 0) continue
+
+        const intensity = alpha / 255
+        let r: number, g: number, b: number
+
+        if (intensity < 0.2) {
+          const t = intensity / 0.2
+          r = Math.floor(0)
+          g = Math.floor(0 + 100 * t)
+          b = Math.floor(139 + 116 * t)
+        } else if (intensity < 0.4) {
+          const t = (intensity - 0.2) / 0.2
+          r = Math.floor(0 + 50 * t)
+          g = Math.floor(100 + 155 * t)
+          b = Math.floor(255 - 55 * t)
+        } else if (intensity < 0.6) {
+          const t = (intensity - 0.4) / 0.2
+          r = Math.floor(50 + 200 * t)
+          g = Math.floor(255 - 55 * t)
+          b = Math.floor(200 - 100 * t)
+        } else if (intensity < 0.8) {
+          const t = (intensity - 0.6) / 0.2
+          r = 255
+          g = Math.floor(200 - 100 * t)
+          b = Math.floor(100 - 100 * t)
+        } else {
+          const t = (intensity - 0.8) / 0.2
+          r = 255
+          g = Math.floor(100 - 80 * t)
+          b = 0
+        }
+
+        data[i] = r
+        data[i + 1] = g
+        data[i + 2] = b
+        data[i + 3] = Math.floor(alpha * 0.85)
+      }
+
+      ctx.putImageData(imageData, 0, 0)
+      setRenderError(null)
+    } catch (err) {
+      console.error('Heatmap rendering error:', err)
+      setRenderError('热力图渲染失败，请尝试减小半径或刷新页面')
+    }
   }, [memos, radius, map])
 
   useEffect(() => {
@@ -151,6 +168,17 @@ export default function HeatmapLayer({ memos, radius }: HeatmapLayerProps) {
   useEffect(() => {
     drawHeatmap()
   }, [drawHeatmap])
+
+  if (renderError) {
+    return (
+      <div className="heatmap-error-overlay">
+        <div className="heatmap-error-content">
+          <span className="error-icon">⚠️</span>
+          <span className="error-text">{renderError}</span>
+        </div>
+      </div>
+    )
+  }
 
   return null
 }

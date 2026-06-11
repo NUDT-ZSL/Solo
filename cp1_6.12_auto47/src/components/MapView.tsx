@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useMemo } from 'react'
 import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
-import type { Memo } from '../types'
+import type { DisplayMemo } from '../types'
 import CanvasMarkerLayer from './CanvasMarkerLayer'
 import HeatmapLayer from './HeatmapLayer'
 import './MapView.css'
 
 interface MapViewProps {
-  memos: Memo[]
+  memos: DisplayMemo[]
   selectedMemoId: number | null
   onMemoAdd: (lng: number, lat: number) => void
   onMemoSelect: (memoId: number | null) => void
@@ -32,7 +32,7 @@ function MarkersLayer({
   onSelect,
   getColorByDate,
 }: {
-  memos: Memo[]
+  memos: DisplayMemo[]
   selectedMemoId: number | null
   onSelect: (id: number | null) => void
   getColorByDate: (timestamp: number) => string
@@ -59,13 +59,19 @@ function MarkersLayer({
           popup.setContent(createPopupContent(memo))
         }
         const isSelected = memo.id === selectedMemoId
-        const icon = createCustomIcon(getColorByDate(memo.timestamp), isSelected)
+        const icon = createCustomIcon(getColorByDate(memo.timestamp), isSelected, memo.opacity)
         existing.setIcon(icon)
+
+        const el = existing.getElement()
+        if (el) {
+          el.style.transition = 'opacity 300ms ease'
+          el.style.opacity = String(memo.opacity)
+        }
         return
       }
 
       const isSelected = memo.id === selectedMemoId
-      const icon = createCustomIcon(getColorByDate(memo.timestamp), isSelected)
+      const icon = createCustomIcon(getColorByDate(memo.timestamp), isSelected, memo.opacity)
 
       const marker = L.marker([memo.lat, memo.lng], { icon })
         .addTo(map)
@@ -80,6 +86,12 @@ function MarkersLayer({
         offset: [0, -20],
       })
 
+      const el = marker.getElement()
+      if (el) {
+        el.style.transition = 'opacity 300ms ease'
+        el.style.opacity = String(memo.opacity)
+      }
+
       markersRef.current.set(memo.id, marker)
     })
   }, [memos, selectedMemoId, map, onSelect, getColorByDate])
@@ -87,7 +99,7 @@ function MarkersLayer({
   return null
 }
 
-function createPopupContent(memo: Memo): string {
+function createPopupContent(memo: DisplayMemo): string {
   const date = new Date(memo.timestamp).toLocaleString('zh-CN', {
     month: 'short',
     day: 'numeric',
@@ -108,7 +120,7 @@ function escapeHtml(text: string): string {
   return div.innerHTML
 }
 
-function createCustomIcon(color: string, isSelected: boolean): L.DivIcon {
+function createCustomIcon(color: string, isSelected: boolean, opacity: number = 1): L.DivIcon {
   const size = isSelected ? 36 : 30
   const boxShadow = isSelected
     ? `0 0 20px ${color}, 0 0 40px ${color}40`
@@ -127,6 +139,7 @@ function createCustomIcon(color: string, isSelected: boolean): L.DivIcon {
           border: 2px solid #ffffff40;
           transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
           transform: scale(1);
+          opacity: ${opacity};
         "
         class="marker-dot"
       ></div>
@@ -157,6 +170,11 @@ export default function MapView({
 
   const displayMemos = useMemo(() => memos, [memos])
 
+  const visibleMemosForHeatmap = useMemo(
+    () => memos.filter((m) => m.opacity > 0.5),
+    [memos]
+  )
+
   return (
     <div className="map-container">
       <MapContainer
@@ -175,7 +193,7 @@ export default function MapView({
         <MapClickHandler onClick={handleMapClick} />
 
         {heatmapMode ? (
-          <HeatmapLayer memos={displayMemos} radius={heatmapRadius} />
+          <HeatmapLayer memos={visibleMemosForHeatmap} radius={heatmapRadius} />
         ) : useCanvas ? (
           <CanvasMarkerLayer
             memos={displayMemos}
