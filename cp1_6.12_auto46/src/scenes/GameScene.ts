@@ -448,7 +448,17 @@ export class GameScene extends Phaser.Scene {
       container.valueText.setY(-8);
     }
 
-    container.setInteractive({ draggable: true });
+    const hitArea = new Phaser.Geom.Rectangle(
+      -this.layout.diceSize / 2,
+      -this.layout.diceSize / 2,
+      this.layout.diceSize,
+      this.layout.diceSize
+    );
+    container.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+    if (container.input) {
+      container.input.draggable = true;
+      container.input.cursor = 'pointer';
+    }
 
     container.on('pointerover', () => {
       if (!container.isDragging) {
@@ -795,7 +805,11 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.battleButton.add(this.battleButtonText);
 
-    this.battleButton.setInteractive({ useHandCursor: true });
+    const buttonHitArea = new Phaser.Geom.Rectangle(-70, -22.5, 140, 45);
+    this.battleButton.setInteractive(buttonHitArea, Phaser.Geom.Rectangle.Contains);
+    if (this.battleButton.input) {
+      this.battleButton.input.cursor = 'pointer';
+    }
 
     this.battleButton.on('pointerover', () => {
       this.updateRoundedRectColors(this.battleButtonBg, 0x16c79a, 1, 0xffffff, 3);
