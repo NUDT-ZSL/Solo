@@ -1,11 +1,11 @@
 import { Player } from './player';
 import { SceneManager } from './scene';
-import { ObstacleManager } from './obstacle';
+import { ObstacleManager, CollisionResult } from './obstacle';
 import { UIManager } from './ui';
 
 const BASE_SPEED = 300;
 const MAX_SPEED = 800;
-const SPEED_INCREMENT = 0.015;
+const SCORE_FOR_MAX_SPEED = 2000;
 
 class Game {
   private canvas: HTMLCanvasElement;
@@ -202,27 +202,37 @@ class Game {
       return;
     }
 
-    const speedProgress = Math.min((this.scrollSpeed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED), 1);
-    this.scrollSpeed = BASE_SPEED + speedProgress * (MAX_SPEED - BASE_SPEED);
-    this.scrollSpeed += SPEED_INCREMENT * deltaTime;
-    if (this.scrollSpeed > MAX_SPEED) this.scrollSpeed = MAX_SPEED;
+    const speedProgress = Math.min(this.score / SCORE_FOR_MAX_SPEED, 1);
+    const targetSpeed = BASE_SPEED + speedProgress * (MAX_SPEED - BASE_SPEED);
+    const speedSmoothing = 0.02;
+    this.scrollSpeed += (targetSpeed - this.scrollSpeed) * speedSmoothing;
 
     this.score += Math.floor(this.scrollSpeed * deltaTime * 0.0005);
 
     this.scene.update(this.scrollSpeed, deltaTime);
-    this.player.update(this.scrollSpeed, deltaTime, this.groundY);
 
     const playerBounds = this.player.getBounds();
-    const collided = this.obstacleManager.update(
+    const collisionResult: CollisionResult = this.obstacleManager.update(
       this.scrollSpeed,
       deltaTime,
       this.score,
       playerBounds
     );
 
+    const overPit = this.obstacleManager.isPlayerOverPit(playerBounds);
+
+    const playerResult = this.player.update(
+      this.scrollSpeed,
+      deltaTime,
+      this.groundY,
+      overPit
+    );
+
     this.ui.setScore(this.score);
 
-    if (collided) {
+    if (collisionResult.hit) {
+      this.gameOver();
+    } else if (playerResult.fellOffScreen) {
       this.gameOver();
     }
   }

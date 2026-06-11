@@ -1,4 +1,72 @@
-const MOTIVATIONAL_PHRASES: string[] = [
+const SUBJECTS = [
+  'YOU',
+  'YOUR JOURNEY',
+  'YOUR SPIRIT',
+  'YOUR DREAM',
+  'YOUR POTENTIAL',
+  'YOUR COURAGE',
+  'YOUR FUTURE',
+  'THE CITY',
+  'THE NIGHT',
+  'EVERY STEP',
+  'EVERY JUMP',
+];
+
+const VERBS = [
+  'NEVER STOPS',
+  'KEEPS GOING',
+  'BREAKS BOUNDARIES',
+  'SHINES BRIGHT',
+  'DEFIES LIMITS',
+  'UNLEASHES POWER',
+  'PUSHES FORWARD',
+  'RISES ABOVE',
+  'TRANSCENDS FEAR',
+  'IGNITES THE DARKNESS',
+  'OVERCOMES ALL',
+  'IS INFINITE',
+  'KNOWS NO LIMITS',
+  'IS UNSTOPPABLE',
+  'REACHES NEW HEIGHTS',
+];
+
+const OBJECTS = [
+  'THE SKY',
+  'THE CYBER WORLD',
+  'YOUR GOALS',
+  'THE NEON LIGHTS',
+  'THE SHADOWS',
+  'YOUR FEARS',
+  'ALL OBSTACLES',
+  'THE DISTANCE',
+  'THE HORIZON',
+  'YOUR PAST',
+  'THE RAIN',
+  'THE STORM',
+  'EXPECTATIONS',
+];
+
+const ENDINGS = [
+  'KEEP RUNNING!',
+  'NEVER GIVE UP!',
+  'STAY DETERMINED!',
+  'FORWARD IS THE ONLY WAY!',
+  'THE NIGHT IS YOUNG!',
+  'JUMP HIGHER!',
+  'RUN FASTER!',
+  'DREAM BIGGER!',
+  'YOU GOT THIS!',
+  'ONE MORE STEP!',
+  'DON\'T LOOK BACK!',
+  'FOCUS ON THE GOAL!',
+  'PAIN IS TEMPORARY!',
+  'GLORY IS ETERNAL!',
+  'CHAMPIONS NEVER QUIT!',
+  'RISE AGAIN!',
+  'BE THE LEGEND!',
+];
+
+const CLASSIC_PHRASES = [
   'EVERY JUMP IS A STEP FORWARD!',
   'THE ONLY LIMIT IS YOUR MIND!',
   'KEEP RUNNING, KEEP DREAMING!',
@@ -19,6 +87,10 @@ const MOTIVATIONAL_PHRASES: string[] = [
   'THE FUTURE BELONGS TO THE BRAVE!',
   'YOU ARE YOUR ONLY COMPETITION!',
   'TODAY IS YOUR DAY TO SHINE!',
+  'IN THE DARKNESS, WE FIND OUR LIGHT!',
+  'THE NEON LIGHTS GUIDE YOUR PATH!',
+  'RUN THROUGH THE STORM, EMERGE STRONGER!',
+  'EVERY FALL TEACHES YOU TO FLY!',
 ];
 
 export type ButtonCallback = () => void;
@@ -33,11 +105,13 @@ export class UIManager {
   private restartButtonRect: { x: number; y: number; width: number; height: number } | null = null;
   private onRestartCallback: ButtonCallback | null = null;
   private isStarted: boolean = false;
+  private phraseSeed: number = 0;
 
   constructor(canvasWidth: number, canvasHeight: number) {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     this.loadHighScore();
+    this.updatePhraseSeed();
   }
 
   resize(canvasWidth: number, canvasHeight: number): void {
@@ -75,8 +149,8 @@ export class UIManager {
     this.isGameOver = isOver;
     if (isOver) {
       this.saveHighScore(finalScore);
-      this.motivationalPhrase =
-        MOTIVATIONAL_PHRASES[Math.floor(Math.random() * MOTIVATIONAL_PHRASES.length)];
+      this.updatePhraseSeed();
+      this.motivationalPhrase = this.generatePhrase();
     } else {
       this.motivationalPhrase = '';
     }
@@ -89,6 +163,48 @@ export class UIManager {
 
   setRestartCallback(callback: ButtonCallback): void {
     this.onRestartCallback = callback;
+  }
+
+  private updatePhraseSeed(): void {
+    this.phraseSeed = Math.floor(Math.random() * 1000000);
+  }
+
+  private seededRandom(seed: number): number {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  }
+
+  private pick<T>(arr: T[], index: number): T {
+    return arr[index % arr.length];
+  }
+
+  private generatePhrase(): string {
+    const useCombinatorial = this.seededRandom(this.phraseSeed) > 0.4;
+
+    if (useCombinatorial) {
+      const s1 = this.seededRandom(this.phraseSeed + 1);
+      const s2 = this.seededRandom(this.phraseSeed + 2);
+      const s3 = this.seededRandom(this.phraseSeed + 3);
+      const s4 = this.seededRandom(this.phraseSeed + 4);
+
+      const hasObject = s1 > 0.3;
+      const hasEnding = s2 > 0.2;
+
+      const subject = this.pick(SUBJECTS, Math.floor(s1 * SUBJECTS.length));
+      const verb = this.pick(VERBS, Math.floor(s2 * VERBS.length));
+      const object = hasObject ? this.pick(OBJECTS, Math.floor(s3 * OBJECTS.length)) : null;
+      const ending = hasEnding ? this.pick(ENDINGS, Math.floor(s4 * ENDINGS.length)) : null;
+
+      let parts: string[] = [];
+      parts.push(`${subject} ${verb}`);
+      if (object) parts.push(object);
+      if (ending) parts.push(ending);
+
+      return parts.join(' ');
+    } else {
+      const idx = Math.floor(this.seededRandom(this.phraseSeed) * CLASSIC_PHRASES.length);
+      return CLASSIC_PHRASES[idx];
+    }
   }
 
   handleClick(x: number, y: number): boolean {

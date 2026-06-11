@@ -18,6 +18,11 @@ export interface ObstacleBounds {
   height: number;
 }
 
+export interface CollisionResult {
+  hit: boolean;
+  overPit: boolean;
+}
+
 export class ObstacleManager {
   private obstacles: Obstacle[] = [];
   private canvasWidth: number;
@@ -52,11 +57,13 @@ export class ObstacleManager {
     deltaTime: number,
     score: number,
     playerBounds: ObstacleBounds
-  ): boolean {
+  ): CollisionResult {
     this.difficultyScore = score;
+
+    const speedFactor = (scrollSpeed - 300) / (800 - 300);
     this.spawnInterval = Math.max(
       this.minSpawnInterval,
-      1800 - Math.min(score * 0.3, 1100)
+      1800 - speedFactor * 800 - Math.min(score * 0.2, 300)
     );
 
     this.spawnTimer += deltaTime;
@@ -72,7 +79,7 @@ export class ObstacleManager {
 
     this.obstacles = this.obstacles.filter((obs) => obs.x + obs.width > -50);
 
-    return this.checkCollision(playerBounds);
+    return this.checkCollisions(playerBounds);
   }
 
   private spawnObstacle(): void {
@@ -165,15 +172,17 @@ export class ObstacleManager {
     };
   }
 
-  checkCollision(player: ObstacleBounds): boolean {
+  checkCollisions(player: ObstacleBounds): CollisionResult {
+    let overPit = false;
+
     for (const obs of this.obstacles) {
       if (obs.type === 'pit') {
+        const playerCenterX = player.x + player.width / 2;
         if (
-          player.x + player.width > obs.x + 10 &&
-          player.x < obs.x + obs.width - 10 &&
-          player.y + player.height >= this.groundY - 2
+          playerCenterX > obs.x + 8 &&
+          playerCenterX < obs.x + obs.width - 8
         ) {
-          return true;
+          overPit = true;
         }
       } else {
         if (
@@ -181,6 +190,22 @@ export class ObstacleManager {
           player.x + player.width > obs.x + 6 &&
           player.y < obs.y + obs.height - 6 &&
           player.y + player.height > obs.y + 6
+        ) {
+          return { hit: true, overPit: false };
+        }
+      }
+    }
+
+    return { hit: false, overPit };
+  }
+
+  isPlayerOverPit(playerBounds: ObstacleBounds): boolean {
+    const playerCenterX = playerBounds.x + playerBounds.width / 2;
+    for (const obs of this.obstacles) {
+      if (obs.type === 'pit') {
+        if (
+          playerCenterX > obs.x + 8 &&
+          playerCenterX < obs.x + obs.width - 8
         ) {
           return true;
         }
@@ -253,9 +278,10 @@ export class ObstacleManager {
   }
 
   private renderPit(ctx: CanvasRenderingContext2D, obs: Obstacle): void {
-    const pitGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x, obs.y + 100);
+    const pitGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x, obs.y + 200);
     pitGrad.addColorStop(0, '#000000');
-    pitGrad.addColorStop(1, '#1a0a2e');
+    pitGrad.addColorStop(0.5, '#0a0015');
+    pitGrad.addColorStop(1, '#000000');
     ctx.fillStyle = pitGrad;
     ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
 
@@ -277,8 +303,8 @@ export class ObstacleManager {
     ctx.lineTo(obs.x + obs.width + 5, obs.y);
     ctx.stroke();
 
-    ctx.fillStyle = obs.glowColor + '30';
-    ctx.fillRect(obs.x, obs.y, obs.width, 5);
+    ctx.fillStyle = obs.glowColor + '20';
+    ctx.fillRect(obs.x, obs.y, obs.width, 8);
   }
 
   private renderFlying(ctx: CanvasRenderingContext2D, obs: Obstacle): void {

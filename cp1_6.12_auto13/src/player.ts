@@ -12,15 +12,17 @@ export class Player {
   vy: number;
   width: number;
   height: number;
-  isJumping: boolean;
   jumpCount: number;
   maxJumps: number;
   gravity: number;
-  jumpPower: number;
+  jumpHeight: number;
+  jumpDuration: number;
   groundY: number;
   trail: TrailParticle[];
   runFrame: number;
   runFrameTimer: number;
+  isFallingIntoPit: boolean;
+  pitFallSpeed: number;
 
   constructor(startX: number, groundY: number) {
     this.width = 32;
@@ -29,35 +31,68 @@ export class Player {
     this.groundY = groundY;
     this.y = groundY - this.height;
     this.vy = 0;
-    this.isJumping = false;
     this.jumpCount = 0;
     this.maxJumps = 2;
-    this.gravity = 0.9;
-    this.jumpPower = -16;
+    this.jumpHeight = 120;
+    this.jumpDuration = 0.4;
+    this.gravity = (2 * this.jumpHeight) / (this.jumpDuration * this.jumpDuration);
     this.trail = [];
     this.runFrame = 0;
     this.runFrameTimer = 0;
+    this.isFallingIntoPit = false;
+    this.pitFallSpeed = 0;
   }
 
   jump(): boolean {
+    if (this.isFallingIntoPit) return false;
     if (this.jumpCount < this.maxJumps) {
-      this.vy = this.jumpPower;
-      this.isJumping = true;
+      const initialVelocity = -Math.sqrt(2 * this.gravity * this.jumpHeight);
+      if (this.jumpCount === 1) {
+        this.vy = initialVelocity * 0.85;
+      } else {
+        this.vy = initialVelocity;
+      }
       this.jumpCount++;
       return true;
     }
     return false;
   }
 
-  update(scrollSpeed: number, deltaTime: number, groundY: number): void {
-    this.groundY = groundY;
-    this.vy += this.gravity;
-    this.y += this.vy;
+  startFallingIntoPit(): void {
+    this.isFallingIntoPit = true;
+    this.vy = 0;
+    this.pitFallSpeed = 0;
+  }
 
-    if (this.y + this.height >= this.groundY) {
+  update(
+    scrollSpeed: number,
+    deltaTime: number,
+    groundY: number,
+    overPit: boolean
+  ): { fellOffScreen: boolean } {
+    const dt = deltaTime / 1000;
+    this.groundY = groundY;
+
+    if (this.isFallingIntoPit) {
+      this.pitFallSpeed += this.gravity * dt;
+      this.y += this.pitFallSpeed * dt * 60;
+      this.vy = this.pitFallSpeed;
+
+      const fellOffScreen = this.y > this.groundY + 200;
+      return { fellOffScreen };
+    }
+
+    if (overPit && this.y + this.height >= this.groundY - 5 && this.vy >= 0) {
+      this.startFallingIntoPit();
+      return { fellOffScreen: false };
+    }
+
+    this.vy += this.gravity * dt;
+    this.y += this.vy * dt * 60;
+
+    if (this.y + this.height >= this.groundY && !overPit) {
       this.y = this.groundY - this.height;
       this.vy = 0;
-      this.isJumping = false;
       this.jumpCount = 0;
     }
 
@@ -83,6 +118,8 @@ export class Player {
       this.trail[i].alpha = 0.8 - i * 0.1;
       this.trail[i].x -= scrollSpeed * deltaTime * 0.001;
     }
+
+    return { fellOffScreen: false };
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -93,14 +130,17 @@ export class Player {
       ctx.fillStyle = '#ff00ff';
       ctx.shadowColor = '#ff00ff';
       ctx.shadowBlur = 15;
-      this.drawPixelBody(ctx, t.x, t.y, t.width, t.height, this.runFrame);
+      this.drawPixelBody(ctx, t.x, t.y, t.width, this.runFrame);
       ctx.restore();
     }
 
     ctx.save();
+    if (this.isFallingIntoPit) {
+      ctx.globalAlpha = Math.max(0, 1 - (this.y - this.groundY) / 200);
+    }
     ctx.shadowColor = '#00fff7';
     ctx.shadowBlur = 20;
-    this.drawPixelBody(ctx, this.x, this.y, this.width, this.height, this.runFrame);
+    this.drawPixelBody(ctx, this.x, this.y, this.width, this.runFrame);
     ctx.restore();
   }
 
@@ -109,10 +149,10 @@ export class Player {
     x: number,
     y: number,
     w: number,
-    _h: number,
     frame: number
   ): void {
     const pixel = 4;
+    const isJumping = this.jumpCount > 0 || this.vy < 0;
 
     ctx.fillStyle = '#00fff7';
     ctx.fillRect(x + 4, y, w - 8, pixel);
@@ -139,7 +179,7 @@ export class Player {
     ctx.fillRect(x, y + pixel * 5, pixel, pixel * 3);
     ctx.fillRect(x + w - pixel, y + pixel * 5, pixel, pixel * 3);
 
-    const legOffset = this.isJumping ? 0 : (frame % 2 === 0 ? pixel : -pixel);
+    const legOffset = isJumping ? 0 : (frame % 2 === 0 ? pixel : -pixel);
 
     ctx.fillStyle = '#00fff7';
     ctx.shadowColor = '#00fff7';
@@ -163,15 +203,20 @@ export class Player {
     };
   }
 
+  isOnGround(): boolean {
+    return this.jumpCount === 0 && this.y + this.height >= this.groundY - 1;
+  }
+
   reset(startX: number, groundY: number): void {
     this.x = startX;
     this.groundY = groundY;
     this.y = groundY - this.height;
     this.vy = 0;
-    this.isJumping = false;
     this.jumpCount = 0;
     this.trail = [];
     this.runFrame = 0;
     this.runFrameTimer = 0;
+    this.isFallingIntoPit = false;
+    this.pitFallSpeed = 0;
   }
 }
