@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import SearchBar from './SearchBar';
 import IconGrid from './IconGrid';
 import IconDetailPanel from './IconDetailPanel';
@@ -8,16 +8,6 @@ const App: React.FC = () => {
   const [searchValue, setSearchValue] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [selectedIcon, setSelectedIcon] = useState<IconItem | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const filteredIcons = useMemo(() => {
     return filterIcons(searchValue, categoryFilter || undefined);
@@ -41,6 +31,11 @@ const App: React.FC = () => {
         @keyframes toastIn {
           from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
           to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @media (min-width: 768px) {
+          .main-with-panel {
+            padding-right: 320px;
+          }
         }
       `}</style>
       <header style={styles.header}>
@@ -72,10 +67,7 @@ const App: React.FC = () => {
         onCategoryChange={setCategoryFilter}
       />
 
-      <main style={{
-        ...styles.main,
-        ...(selectedIcon && !isMobile ? styles.mainWithPanel : {}),
-      }}>
+      <main className={selectedIcon ? 'main-with-panel' : ''} style={styles.main}>
         <div style={styles.gridWrapper}>
           <IconGrid
             icons={filteredIcons}
@@ -88,7 +80,6 @@ const App: React.FC = () => {
       <IconDetailPanel
         icon={selectedIcon}
         onClose={handleClosePanel}
-        isMobile={isMobile}
       />
     </div>
   );
@@ -169,9 +160,6 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     display: 'flex',
     transition: 'all 0.3s ease',
-  },
-  mainWithPanel: {
-    paddingRight: '320px',
   },
   gridWrapper: {
     flex: 1,

@@ -40,6 +40,12 @@ export const iconCategories: IconCategory[] = [
       { id: 'arrow-swap', name: '交换箭头', category: 'arrows', tags: ['arrow', 'swap', '交换', '切换'], pathData: 'M16 8l4 4-4 4M20 12H8M8 16l-4-4 4-4M4 12h12', viewBox: '0 0 24 24' },
       { id: 'arrow-expand', name: '展开箭头', category: 'arrows', tags: ['arrow', 'expand', '展开', '放大'], pathData: 'M10 4H4v6M4 4l6 6M14 20h6v-6M20 20l-6-6', viewBox: '0 0 24 24' },
       { id: 'arrow-collapse', name: '收起箭头', category: 'arrows', tags: ['arrow', 'collapse', '收起', '缩小'], pathData: 'M4 10h6V4M10 10L4 4M20 14h-6v6M14 14l6 6', viewBox: '0 0 24 24' },
+      { id: 'arrow-top-right', name: '顶部右箭头', category: 'arrows', tags: ['arrow', 'top-right', '顶部右'], pathData: 'M5 19L19 5M10 5h9v9', viewBox: '0 0 24 24' },
+      { id: 'arrow-top-left', name: '顶部左箭头', category: 'arrows', tags: ['arrow', 'top-left', '顶部左'], pathData: 'M19 19L5 5M14 5H5v9', viewBox: '0 0 24 24' },
+      { id: 'arrow-bottom-right', name: '底部右箭头', category: 'arrows', tags: ['arrow', 'bottom-right', '底部右'], pathData: 'M5 5l14 14M14 19h5v-9', viewBox: '0 0 24 24' },
+      { id: 'arrow-bottom-left', name: '底部左箭头', category: 'arrows', tags: ['arrow', 'bottom-left', '底部左'], pathData: 'M19 5L5 19M10 19H5v-9', viewBox: '0 0 24 24' },
+      { id: 'arrow-shuffle', name: '随机箭头', category: 'arrows', tags: ['arrow', 'shuffle', '随机', '打乱'], pathData: 'M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z', viewBox: '0 0 24 24' },
+      { id: 'arrow-repeat', name: '重复箭头', category: 'arrows', tags: ['arrow', 'repeat', '重复', '循环'], pathData: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z', viewBox: '0 0 24 24' },
     ]
   },
   {

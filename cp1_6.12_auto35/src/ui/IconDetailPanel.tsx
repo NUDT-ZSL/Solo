@@ -4,7 +4,6 @@ import type { IconItem } from '../icons/iconData';
 interface IconDetailPanelProps {
   icon: IconItem | null;
   onClose: () => void;
-  isMobile: boolean;
 }
 
 const PRESET_COLORS = [
@@ -12,7 +11,7 @@ const PRESET_COLORS = [
   '#6bcb77', '#ff6b6b', '#c77dff', '#ff9f43', '#4d96ff',
 ];
 
-const IconDetailPanel: React.FC<IconDetailPanelProps> = ({ icon, onClose, isMobile }) => {
+const IconDetailPanel: React.FC<IconDetailPanelProps> = ({ icon, onClose }) => {
   const [color, setColor] = useState('#e94560');
   const [size, setSize] = useState(48);
   const [rotation, setRotation] = useState(0);
@@ -56,20 +55,81 @@ const IconDetailPanel: React.FC<IconDetailPanelProps> = ({ icon, onClose, isMobi
 
   return (
     <>
+      <style>{`
+        .panel-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.3s ease;
+          z-index: 200;
+        }
+        .panel-overlay.visible {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        .detail-panel {
+          position: fixed;
+          top: 0;
+          right: 0;
+          width: 320px;
+          height: 100vh;
+          background: #16213e;
+          border-left: 1px solid #0f3460;
+          z-index: 201;
+          transform: translateX(100%);
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          display: flex;
+          flex-direction: column;
+          box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+        }
+        .detail-panel.open {
+          transform: translateX(0);
+        }
+        .swatch-btn {
+          transition: all 0.2s ease;
+        }
+        .swatch-btn:hover {
+          transform: scale(1.05);
+        }
+        .swatch-btn.active {
+          border-color: #e94560 !important;
+          transform: scale(1.1);
+          box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.3), inset 0 0 0 1px rgba(255,255,255,0.2) !important;
+        }
+        @media (max-width: 767px) {
+          .panel-overlay {
+            background: rgba(0, 0, 0, 0.5);
+          }
+          .detail-panel {
+            top: auto;
+            bottom: 0;
+            right: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+            max-height: 85vh;
+            border-left: none;
+            border-top: 1px solid #0f3460;
+            transform: translateY(100%);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+          }
+          .detail-panel.open {
+            transform: translateY(0);
+          }
+        }
+      `}</style>
       <div
-        style={{
-          ...styles.overlay,
-          ...(icon ? styles.overlayVisible : {}),
-          ...(isMobile ? styles.overlayMobile : {}),
-        }}
+        className={`panel-overlay${icon ? ' visible' : ''}`}
         onClick={onClose}
       />
       <aside
-        style={{
-          ...styles.panel,
-          ...(isMobile ? styles.panelMobile : {}),
-          ...(icon ? (isMobile ? styles.panelOpenMobile : styles.panelOpen) : {}),
-        }}
+        className={`detail-panel${icon ? ' open' : ''}`}
       >
         {icon ? (
           <>
@@ -146,10 +206,10 @@ const IconDetailPanel: React.FC<IconDetailPanelProps> = ({ icon, onClose, isMobi
                     {PRESET_COLORS.map((c) => (
                       <button
                         key={c}
+                        className={`swatch-btn${color.toLowerCase() === c.toLowerCase() ? ' active' : ''}`}
                         style={{
                           ...styles.swatchBtn,
                           background: c,
-                          ...(color.toLowerCase() === c.toLowerCase() ? styles.swatchActive : {}),
                         }}
                         onClick={() => setColor(c)}
                       />
@@ -223,60 +283,6 @@ const IconDetailPanel: React.FC<IconDetailPanelProps> = ({ icon, onClose, isMobi
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'rgba(0, 0, 0, 0.6)',
-    opacity: 0,
-    pointerEvents: 'none',
-    transition: 'opacity 0.3s ease',
-    zIndex: 200,
-  },
-  overlayVisible: {
-    opacity: 1,
-    pointerEvents: 'auto',
-  },
-  overlayMobile: {
-    background: 'rgba(0, 0, 0, 0.5)',
-  },
-  panel: {
-    position: 'fixed',
-    top: 0,
-    right: 0,
-    width: '320px',
-    height: '100vh',
-    background: '#16213e',
-    borderLeft: '1px solid #0f3460',
-    zIndex: 201,
-    transform: 'translateX(100%)',
-    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    display: 'flex',
-    flexDirection: 'column',
-    boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.4)',
-  },
-  panelOpen: {
-    transform: 'translateX(0)',
-  },
-  panelMobile: {
-    top: 'auto',
-    bottom: 0,
-    right: 0,
-    left: 0,
-    width: '100%',
-    height: 'auto',
-    maxHeight: '85vh',
-    borderLeft: 'none',
-    borderTop: '1px solid #0f3460',
-    transform: 'translateY(100%)',
-    borderRadius: '20px 20px 0 0',
-    boxShadow: '0 -4px 24px rgba(0, 0, 0, 0.4)',
-  },
-  panelOpenMobile: {
-    transform: 'translateY(0)',
-  },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
