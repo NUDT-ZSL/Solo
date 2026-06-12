@@ -1,8 +1,23 @@
 import axios from 'axios';
-import type { DecisionNode, SimulateRequest, SimulateResponse } from './types';
+import type {
+  DecisionNode,
+  DecisionChain,
+  SimulateRequest,
+  SimulateResponse,
+  NodeData,
+} from './types';
+
+export function buildDecisionChain(path: NodeData[]): DecisionChain {
+  return path.map((node) => ({
+    id: node.id,
+    name: node.label || node.id,
+    depth: node.depth ?? 0,
+    parentId: node.parentId ?? null,
+  }));
+}
 
 export async function runSimulation(
-  decisionChain: DecisionNode[],
+  decisionChain: DecisionChain,
 ): Promise<SimulateResponse> {
   const payload: SimulateRequest = {
     decisionChain,
@@ -12,16 +27,26 @@ export async function runSimulation(
   try {
     const response = await axios.post<SimulateResponse>('/api/simulate', payload, {
       timeout: 5000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      console.error('模拟请求失败:', error.message);
+      console.error('模拟请求失败:', error.message, error.response?.data);
     } else {
       console.error('未知错误:', error);
     }
     throw error;
   }
+}
+
+export async function simulateFromPath(
+  pathNodes: NodeData[],
+): Promise<SimulateResponse> {
+  const chain = buildDecisionChain(pathNodes);
+  return runSimulation(chain);
 }
 
 export function formatReplaySummary(nodes: DecisionNode[]): string {

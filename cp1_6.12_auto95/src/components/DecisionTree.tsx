@@ -136,7 +136,7 @@ function layoutTree(
     const status = statusMap.get(node.id)?.status;
     const decisionNode: DecisionNode = {
       id: node.id,
-      name: node.name,
+      name: node.label,
       depth,
       parentId,
     };
@@ -145,7 +145,7 @@ function layoutTree(
       type: 'custom',
       position: { x: pos.left, y: depth * V_GAP },
       data: {
-        label: node.name,
+        label: node.label,
         status,
         selected: node.id === selectedId,
         replaying: replayingIds.includes(node.id),

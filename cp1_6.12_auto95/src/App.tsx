@@ -12,78 +12,78 @@ import type {
 
 const sampleTreeData: TreeNode = {
   id: 'root',
-  name: '关卡开始',
+  label: '关卡开始',
   depth: 0,
   expanded: true,
   children: [
     {
       id: 'n1',
-      name: '对话选项A',
+      label: '对话选项A',
       depth: 1,
       expanded: true,
       children: [
         {
           id: 'n1-1',
-          name: '移动路径A1',
+          label: '移动路径A1',
           depth: 2,
           expanded: false,
           children: [
-            { id: 'n1-1-1', name: '战斗-胜利', depth: 3, expanded: false, children: [] },
-            { id: 'n1-1-2', name: '战斗-失败', depth: 3, expanded: false, children: [] },
+            { id: 'n1-1-1', label: '战斗-胜利', depth: 3, expanded: false, children: [] },
+            { id: 'n1-1-2', label: '战斗-失败', depth: 3, expanded: false, children: [] },
           ],
         },
         {
           id: 'n1-2',
-          name: '移动路径A2',
+          label: '移动路径A2',
           depth: 2,
           expanded: false,
           children: [
-            { id: 'n1-2-1', name: '遭遇NPC', depth: 3, expanded: false, children: [] },
+            { id: 'n1-2-1', label: '遭遇NPC', depth: 3, expanded: false, children: [] },
           ],
         },
       ],
     },
     {
       id: 'n2',
-      name: '对话选项B',
+      label: '对话选项B',
       depth: 1,
       expanded: true,
       children: [
         {
           id: 'n2-1',
-          name: '移动路径B1',
+          label: '移动路径B1',
           depth: 2,
           expanded: false,
           children: [
-            { id: 'n2-1-1', name: '陷阱触发', depth: 3, expanded: false, children: [] },
-            { id: 'n2-1-2', name: '安全通过', depth: 3, expanded: false, children: [] },
+            { id: 'n2-1-1', label: '陷阱触发', depth: 3, expanded: false, children: [] },
+            { id: 'n2-1-2', label: '安全通过', depth: 3, expanded: false, children: [] },
           ],
         },
         {
           id: 'n2-2',
-          name: '移动路径B2',
+          label: '移动路径B2',
           depth: 2,
           expanded: false,
           children: [
-            { id: 'n2-2-1', name: '隐藏宝箱', depth: 3, expanded: false, children: [] },
-            { id: 'n2-2-2', name: 'Boss战', depth: 3, expanded: false, children: [] },
+            { id: 'n2-2-1', label: '隐藏宝箱', depth: 3, expanded: false, children: [] },
+            { id: 'n2-2-2', label: 'Boss战', depth: 3, expanded: false, children: [] },
           ],
         },
       ],
     },
     {
       id: 'n3',
-      name: '对话选项C',
+      label: '对话选项C',
       depth: 1,
       expanded: true,
       children: [
         {
           id: 'n3-1',
-          name: '分支剧情C1',
+          label: '分支剧情C1',
           depth: 2,
           expanded: false,
           children: [
-            { id: 'n3-1-1', name: '结局-和平', depth: 3, expanded: false, children: [] },
+            { id: 'n3-1-1', label: '结局-和平', depth: 3, expanded: false, children: [] },
           ],
         },
       ],
