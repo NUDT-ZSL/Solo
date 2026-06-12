@@ -7,7 +7,7 @@ interface BarChartProps {
   height?: number;
 }
 
-export default function BarChart({ options, width = 600, height = 450 }: BarChartProps) {
+export default function BarChart({ options, width = 600, height = 500 }: BarChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -30,7 +30,7 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
     ctx.clearRect(0, 0, w, height);
 
     const maxVotes = Math.max(...options.map((o) => o.votes), 1);
-    const padding = { top: 50, right: 30, bottom: 80, left: 50 };
+    const padding = { top: 70, right: 30, bottom: 90, left: 55 };
     const chartWidth = w - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
@@ -42,7 +42,7 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
 
     const availableForBarsAndGaps = chartWidth - minGap * (numBars + 1);
     if (availableForBarsAndGaps / numBars <= maxBarWidth) {
-      barWidth = Math.max(16, availableForBarsAndGaps / numBars);
+      barWidth = Math.max(14, availableForBarsAndGaps / numBars);
       gap = minGap;
     } else {
       barWidth = maxBarWidth;
@@ -70,24 +70,25 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
     options.forEach((option, index) => {
       const x = padding.left + gap + index * (barWidth + gap);
       const barHeight = (option.votes / maxVotes) * chartHeight;
-      const barTop = padding.top + chartHeight - barHeight;
+      const clampedBarHeight = barHeight > 0 ? Math.max(4, barHeight) : 0;
+      const barTop = padding.top + chartHeight - clampedBarHeight;
 
-      const gradient = ctx.createLinearGradient(x, barTop, x, barTop + barHeight);
-      gradient.addColorStop(0, option.color + 'dd');
-      gradient.addColorStop(1, option.color + '88');
+      const gradient = ctx.createLinearGradient(x, barTop, x, barTop + clampedBarHeight);
+      gradient.addColorStop(0, option.color + 'ee');
+      gradient.addColorStop(1, option.color + '99');
 
-      const radius = Math.min(6, barWidth / 4);
+      const radius = Math.min(6, barWidth / 4, clampedBarHeight / 2);
       ctx.beginPath();
-      if (barHeight > radius) {
+      if (clampedBarHeight > radius * 2) {
         ctx.moveTo(x + radius, barTop);
         ctx.lineTo(x + barWidth - radius, barTop);
         ctx.quadraticCurveTo(x + barWidth, barTop, x + barWidth, barTop + radius);
-        ctx.lineTo(x + barWidth, barTop + barHeight);
-        ctx.lineTo(x, barTop + barHeight);
+        ctx.lineTo(x + barWidth, barTop + clampedBarHeight);
+        ctx.lineTo(x, barTop + clampedBarHeight);
         ctx.lineTo(x, barTop + radius);
         ctx.quadraticCurveTo(x, barTop, x + radius, barTop);
-      } else {
-        ctx.rect(x, barTop, barWidth, barHeight);
+      } else if (clampedBarHeight > 0) {
+        ctx.rect(x, barTop, barWidth, clampedBarHeight);
       }
       ctx.closePath();
 
@@ -95,15 +96,17 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
       ctx.shadowBlur = 12;
       ctx.shadowOffsetY = 4;
       ctx.fillStyle = gradient;
-      ctx.fill();
+      if (clampedBarHeight > 0) ctx.fill();
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
 
+      const labelY = clampedBarHeight > 0 ? barTop - 12 : padding.top + chartHeight + 12;
+
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 14px sans-serif';
+      ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(String(option.votes), x + barWidth / 2, barTop - 8);
+      ctx.fillText(String(option.votes), x + barWidth / 2, labelY);
 
       const labelMaxWidth = barWidth + gap;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
@@ -124,13 +127,13 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
         }
         displayText = displayText + '…';
       }
-      ctx.fillText(displayText, x + barWidth / 2, padding.top + chartHeight + 14);
+      ctx.fillText(displayText, x + barWidth / 2, padding.top + chartHeight + 18);
 
       const totalVotes = options.reduce((sum, o) => sum + o.votes, 0);
       const pct = totalVotes > 0 ? ((option.votes / totalVotes) * 100).toFixed(0) : '0';
       ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.font = '11px sans-serif';
-      ctx.fillText(`${pct}%`, x + barWidth / 2, padding.top + chartHeight + 34);
+      ctx.fillText(`${pct}%`, x + barWidth / 2, padding.top + chartHeight + 40);
     });
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
