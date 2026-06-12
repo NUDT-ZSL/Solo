@@ -224,30 +224,55 @@ export default function App() {
 
         <div
           onMouseDown={handleMouseDown}
+          onMouseEnter={() => { if (!isDragging) setIsDragging(false as any) }}
           style={{
-            width: '6px',
+            width: '12px',
             cursor: 'col-resize',
-            background: isDragging ? '#2196F3' : '#E0E0E0',
+            background: isDragging ? '#2196F3' : 'transparent',
             transition: 'background 200ms',
             position: 'relative',
-            zIndex: 10,
-            flexShrink: 0
+            zIndex: 100,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.background = isDragging ? '#2196F3' : '#BBDEFB';
+          }}
+          onMouseOut={(e) => {
+            if (!isDragging) {
+              e.currentTarget.style.background = 'transparent';
+            }
           }}
         >
           <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '4px'
+            gap: '4px',
+            background: isDragging ? '#2196F3' : '#E0E0E0',
+            padding: '8px 2px',
+            borderRadius: '4px',
+            transition: 'all 200ms',
+            boxShadow: isDragging ? '0 2px 8px rgba(33,150,243,0.3)' : 'none'
           }}>
             <div style={{
-              width: '2px',
-              height: '20px',
-              background: isDragging ? '#FFFFFF' : '#BDBDBD',
-              borderRadius: '1px'
+              width: '3px',
+              height: '3px',
+              background: isDragging ? '#FFFFFF' : '#9E9E9E',
+              borderRadius: '50%'
+            }} />
+            <div style={{
+              width: '3px',
+              height: '3px',
+              background: isDragging ? '#FFFFFF' : '#9E9E9E',
+              borderRadius: '50%'
+            }} />
+            <div style={{
+              width: '3px',
+              height: '3px',
+              background: isDragging ? '#FFFFFF' : '#9E9E9E',
+              borderRadius: '50%'
             }} />
           </div>
         </div>
