@@ -1,18 +1,118 @@
-import Database from 'better-sqlite3'
+import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const dbPath = path.join(__dirname, '..', '..', '..', 'data.db')
-const db = new Database(dbPath)
 
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+interface PreparedStatement {
+  run: (...params: any[]) => { changes: number; lastInsertRowid: number | bigint }
+  get: (...params: any[]) => any
+  all: (...params: any[]) => any[]
+}
 
-db.exec(`
+function createPreparedStatement(db: SqlJsDatabase, sql: string): PreparedStatement {
+  return {
+    run(...params: any[]) {
+      const stmt = db.prepare(sql)
+      try {
+        stmt.bind(params)
+        stmt.step()
+        const changes = db.getRowsModified()
+        return { changes, lastInsertRowid: 0 }
+      } finally {
+        stmt.free()
+      }
+    },
+    get(...params: any[]) {
+      const stmt = db.prepare(sql)
+      try {
+        stmt.bind(params)
+        if (stmt.step()) {
+          const row = stmt.getAsObject()
+          const cols = stmt.getColumnNames()
+          const result: any = {}
+          for (let i = 0; i < cols.length; i++) {
+            result[cols[i]] = (row as any)[i]
+          }
+          return result
+        }
+        return undefined
+      } finally {
+        stmt.free()
+      }
+    },
+    all(...params: any[]) {
+      const stmt = db.prepare(sql)
+      try {
+        stmt.bind(params)
+        const rows: any[] = []
+        const cols = stmt.getColumnNames()
+        while (stmt.step()) {
+          const row = stmt.getAsObject()
+          const result: any = {}
+          for (let i = 0; i < cols.length; i++) {
+            result[cols[i]] = (row as any)[i]
+          }
+          rows.push(result)
+        }
+        return rows
+      } finally {
+        stmt.free()
+      }
+    },
+  }
+}
+
+interface DatabaseWrapper {
+  prepare: (sql: string) => PreparedStatement
+  exec: (sql: string) => void
+  transaction: <T extends (...args: any[]) => any>(fn: T) => (...args: Parameters<T>) => ReturnType<T>
+}
+
+function createTransaction(db: SqlJsDatabase, saveToDisk: () => void, fn: (...args: any[]) => any) {
+  return (...args: any[]) => {
+    db.run('BEGIN')
+    try {
+      const result = fn(...args)
+      db.run('COMMIT')
+      saveToDisk()
+      return result
+    } catch (error) {
+      db.run('ROLLBACK')
+      throw error
+    }
+  }
+}
+
+const SQL = await initSqlJs({
+  locateFile: (file: string) => {
+    try {
+      const resolved = require.resolve('sql.js.js')
+      return path.join(path.dirname(resolved), file)
+    } catch {
+      return path.join(process.cwd(), 'node_modules', 'sql.js.js', file)
+    }
+  },
+})
+
+let data: Uint8Array | undefined
+if (fs.existsSync(dbPath)) {
+  data = fs.readFileSync(dbPath)
+}
+
+const dbInstance = new SQL.Database(data)
+
+function saveToDisk() {
+  const dataExport = dbInstance.export()
+  fs.writeFileSync(dbPath, Buffer.from(dataExport))
+}
+
+dbInstance.run(`
   CREATE TABLE IF NOT EXISTS flow_instances (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -25,7 +125,9 @@ db.exec(`
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+`)
 
+dbInstance.run(`
   CREATE TABLE IF NOT EXISTS flow_nodes (
     id TEXT PRIMARY KEY,
     flow_id TEXT NOT NULL,
@@ -38,15 +140,25 @@ db.exec(`
     order_index INTEGER NOT NULL,
     FOREIGN KEY (flow_id) REFERENCES flow_instances(id)
   );
-
-  CREATE INDEX IF NOT EXISTS idx_flow_nodes_flow_id ON flow_nodes(flow_id);
-  CREATE INDEX IF NOT EXISTS idx_flow_instances_status ON flow_instances(status);
-  CREATE INDEX IF NOT EXISTS idx_flow_nodes_handler ON flow_nodes(handler_id, status);
 `)
 
+dbInstance.run('CREATE INDEX IF NOT EXISTS idx_flow_nodes_flow_id ON flow_nodes(flow_id)')
+dbInstance.run('CREATE INDEX IF NOT EXISTS idx_flow_instances_status ON flow_instances(status)')
+dbInstance.run('CREATE INDEX IF NOT EXISTS idx_flow_nodes_handler ON flow_nodes(handler_id, status)')
+
 function seedData() {
-  const countRow = db.prepare('SELECT COUNT(*) as cnt FROM flow_instances').get() as { cnt: number }
-  if (countRow.cnt > 0) return
+  const stmt = dbInstance.prepare('SELECT COUNT(*) as cnt FROM flow_instances')
+  stmt.step()
+  const row = stmt.getAsObject()
+  const cols = stmt.getColumnNames()
+  let count = 0
+  for (let i = 0; i < cols.length; i++) {
+    if (cols[i] === 'cnt' || cols[i] === 'COUNT(*)') {
+      count = Number((row as any)[i])
+    }
+  }
+  stmt.free()
+  if (count > 0) return
 
   const now = new Date().toISOString()
 
@@ -119,8 +231,8 @@ function seedData() {
       creatorName: '赵六',
       nodes: [
         { name: '部门主管', handlerId: 'u002', handlerName: '李主管', status: 'rejected', comment: '项目紧张，改期', handledAt: now, orderIndex: 0 },
-        { name: '经理', handlerId: 'u003', handlerName: '王经理', status: 'skipped', orderIndex: 1 },
-        { name: 'HR', handlerId: 'u004', handlerName: '赵HR', status: 'skipped', orderIndex: 2 },
+        { name: '经理', handlerId: 'u003', handlerName: '王经理', status: 'rejected', orderIndex: 1 },
+        { name: 'HR', handlerId: 'u004', handlerName: '赵HR', status: 'rejected', orderIndex: 2 },
       ],
       status: 'rejected',
       currentNodeIndex: 0,
@@ -145,50 +257,56 @@ function seedData() {
     },
   ]
 
-  const insertFlow = db.prepare(`
+  const insertFlow = createPreparedStatement(dbInstance, `
     INSERT INTO flow_instances (id, type, title, form_data, creator_id, creator_name, status, current_node_index, created_at, updated_at)
-    VALUES (@id, @type, @title, @formData, @creatorId, @creatorName, @status, @currentNodeIndex, @createdAt, @updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
-  const insertNode = db.prepare(`
+  const insertNode = createPreparedStatement(dbInstance, `
     INSERT INTO flow_nodes (id, flow_id, name, handler_id, handler_name, status, comment, handled_at, order_index)
-    VALUES (@id, @flowId, @name, @handlerId, @handlerName, @status, @comment, @handledAt, @orderIndex)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
-  const tx = db.transaction((flows: typeof sampleFlows) => {
-    for (const flow of flows) {
-      const flowId = uuidv4()
-      insertFlow.run({
-        id: flowId,
-        type: flow.type,
-        title: flow.title,
-        formData: flow.formData,
-        creatorId: flow.creatorId,
-        creatorName: flow.creatorName,
-        status: flow.status,
-        currentNodeIndex: flow.currentNodeIndex,
-        createdAt: now,
-        updatedAt: now,
-      })
-      for (const node of flow.nodes) {
-        insertNode.run({
-          id: uuidv4(),
-          flowId,
-          name: node.name,
-          handlerId: node.handlerId,
-          handlerName: node.handlerName,
-          status: node.status,
-          comment: node.comment || null,
-          handledAt: node.handledAt || null,
-          orderIndex: node.orderIndex,
-        })
-      }
+  for (const flow of sampleFlows) {
+    const flowId = uuidv4()
+    insertFlow.run(
+      flowId,
+      flow.type,
+      flow.title,
+      flow.formData,
+      flow.creatorId,
+      flow.creatorName,
+      flow.status,
+      flow.currentNodeIndex,
+      now,
+      now
+    )
+    for (const node of flow.nodes) {
+      insertNode.run(
+        uuidv4(),
+        flowId,
+        node.name,
+        node.handlerId,
+        node.handlerName,
+        node.status,
+        node.comment || null,
+        node.handledAt || null,
+        node.orderIndex
+      )
     }
-  })
-
-  tx(sampleFlows)
+  }
 }
 
 seedData()
+saveToDisk()
+
+const db: DatabaseWrapper = {
+  prepare: (sql: string) => createPreparedStatement(dbInstance, sql),
+  exec: (sql: string) => {
+    dbInstance.run(sql)
+    saveToDisk()
+  },
+  transaction: (fn: any) => createTransaction(dbInstance, saveToDisk, fn),
+}
 
 export default db

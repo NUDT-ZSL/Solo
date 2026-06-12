@@ -1,5 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Menu, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { TransformWrapper, TransformComponent, useTransformComponent } from 'react-zoom-pan-pinch';
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+  Menu,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+} from 'lucide-react';
 import type { FlowInstance, FlowStatus, NodeStatus } from '../types';
 
 const STATUS_LABELS: Record<FlowStatus, string> = {
@@ -8,22 +20,28 @@ const STATUS_LABELS: Record<FlowStatus, string> = {
   rejected: '已驳回',
 };
 
-const STATUS_BG: Record<FlowStatus, string> = {
-  pending: 'bg-yellow-50 border-yellow-200',
-  approved: 'bg-green-50 border-green-200',
-  rejected: 'bg-red-50 border-red-200',
+const GROUP_HEADER_BG: Record<FlowStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
 };
 
-const STATUS_HEADER_BG: Record<FlowStatus, string> = {
-  pending: 'bg-yellow-100',
-  approved: 'bg-green-100',
-  rejected: 'bg-red-100',
+const GROUP_HEADER_BAR: Record<FlowStatus, string> = {
+  pending: 'bg-yellow-500',
+  approved: 'bg-green-500',
+  rejected: 'bg-red-500',
 };
 
-const STATUS_TEXT: Record<FlowStatus, string> = {
-  pending: 'text-yellow-700',
-  approved: 'text-green-700',
-  rejected: 'text-red-700',
+const CARD_BG: Record<FlowStatus, string> = {
+  pending: 'bg-yellow-50/70 hover:bg-yellow-50',
+  approved: 'bg-green-50/70 hover:bg-green-50',
+  rejected: 'bg-red-50/70 hover:bg-red-50',
+};
+
+const CARD_BORDER: Record<FlowStatus, string> = {
+  pending: 'border-yellow-200',
+  approved: 'border-green-200',
+  rejected: 'border-red-200',
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -146,36 +164,32 @@ export default function AdminDashboard() {
           sidebarOpen ? 'block' : 'hidden'
         } md:block w-full md:w-[30%] border-r border-gray-200 overflow-y-auto bg-gray-50`}
       >
-        <div className="p-3 space-y-3">
+        <div className="p-3 space-y-4">
           {(Object.keys(groupedFlows) as FlowStatus[]).map((status) => (
-            <div
-              key={status}
-              className={`rounded-lg border overflow-hidden ${STATUS_BG[status]}`}
-            >
+            <div key={status} className="overflow-hidden">
               <button
                 onClick={() => toggleGroup(status)}
-                className={`w-full flex items-center justify-between p-3 ${STATUS_HEADER_BG[status]} hover:brightness-95 transition-all`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 ${GROUP_HEADER_BG[status]} hover:brightness-95 transition-all`}
               >
-                <div className="flex items-center gap-2">
-                  {status === 'pending' && <Clock className="w-4 h-4 text-yellow-600" />}
-                  {status === 'approved' && <CheckCircle className="w-4 h-4 text-green-600" />}
-                  {status === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
-                  <span className={`font-semibold text-sm ${STATUS_TEXT[status]}`}>
-                    {STATUS_LABELS[status]}
-                  </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_TEXT[status]} bg-white/60`}>
+                <div className={`w-1 h-5 rounded-full ${GROUP_HEADER_BAR[status]}`} />
+                <div className="flex items-center gap-2 flex-1">
+                  {status === 'pending' && <Clock className="w-4 h-4" />}
+                  {status === 'approved' && <CheckCircle className="w-4 h-4" />}
+                  {status === 'rejected' && <XCircle className="w-4 h-4" />}
+                  <span className="font-semibold text-sm">{STATUS_LABELS[status]}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-white/60">
                     {groupedFlows[status].length}
                   </span>
                 </div>
                 {expandedGroups[status] ? (
-                  <ChevronDown className={`w-4 h-4 ${STATUS_TEXT[status]}`} />
+                  <ChevronDown className="w-4 h-4" />
                 ) : (
-                  <ChevronRight className={`w-4 h-4 ${STATUS_TEXT[status]}`} />
+                  <ChevronRight className="w-4 h-4" />
                 )}
               </button>
 
               {expandedGroups[status] && (
-                <div className="p-2 space-y-2">
+                <div className="pt-2 space-y-2">
                   {groupedFlows[status].length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-4">暂无数据</p>
                   ) : (
@@ -186,10 +200,10 @@ export default function AdminDashboard() {
                           setSelectedId(flow.id);
                           setSidebarOpen(false);
                         }}
-                        className={`p-3 rounded-lg cursor-pointer transition-all text-left ${
+                        className={`p-3 rounded-lg cursor-pointer transition-all text-left border ${CARD_BG[status]} ${CARD_BORDER[status]} ${
                           selectedId === flow.id
-                            ? 'bg-white shadow-md ring-2 ring-blue-400'
-                            : 'bg-white/70 hover:bg-white hover:shadow-sm'
+                            ? 'ring-2 ring-blue-400 shadow-md'
+                            : 'shadow-sm hover:shadow'
                         }`}
                       >
                         <p className="font-medium text-sm text-gray-900 truncate">{flow.title}</p>
@@ -326,255 +340,263 @@ function InfoItem({ label, value, full }: { label: string; value?: string; full?
   );
 }
 
+function AdminDiagramToolbar() {
+  const { zoomIn, zoomOut, resetTransform } = useTransformComponent((ctx) => ({
+    zoomIn: ctx.instance.zoomIn,
+    zoomOut: ctx.instance.zoomOut,
+    resetTransform: ctx.instance.resetTransform,
+  }));
+  const scale = useTransformComponent((ctx) => ctx.state.scale);
+
+  return (
+    <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs text-gray-500">
+      <span>滚轮缩放 | 拖拽平移</span>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => zoomIn()}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+            title="放大"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => zoomOut()}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+            title="缩小"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => resetTransform()}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+            title="重置"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <span className="font-medium text-gray-700 w-12 text-right">
+          {Math.round(scale * 100)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function FlowPathDiagram({ nodes }: { nodes: FlowInstance['nodes'] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const isDragging = useRef(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale((s) => Math.min(Math.max(s * delta, 0.3), 3));
-  }, []);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    isDragging.current = true;
-    dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging.current) return;
-    setOffset({
-      x: e.clientX - dragStart.current.x,
-      y: e.clientY - dragStart.current.y,
-    });
-  };
-
-  const handleMouseUp = () => {
-    isDragging.current = false;
-  };
-
   const nodeSpacing = 180;
   const nodeRadius = 38;
   const startX = 80;
   const centerY = 90;
-  const totalWidth = startX * 2 + (nodes.length - 1) * nodeSpacing + nodeRadius * 2;
-  const totalHeight = 220;
+  const totalWidth = startX * 2 + Math.max(nodes.length - 1, 0) * nodeSpacing + nodeRadius * 2;
+  const totalHeight = 240;
 
   return (
-    <div
-      ref={containerRef}
-      className="bg-white border border-gray-200 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing select-none"
-      style={{ height: '260px' }}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs text-gray-500">
-        <span>滚轮缩放 | 拖拽平移</span>
-        <span>缩放: {Math.round(scale * 100)}%</span>
-      </div>
-      <div
-        style={{
-          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-          transformOrigin: '0 0',
-          width: totalWidth,
-          height: totalHeight,
-        }}
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <TransformWrapper
+        initialScale={1}
+        minScale={0.3}
+        maxScale={3}
+        limitToBounds={false}
+        centerOnInit={true}
+        smooth={true}
+        wheel={{ step: 20 }}
+        panning={{ disabled: false, velocityDisabled: true }}
       >
-        <svg width={totalWidth} height={totalHeight} className="overflow-visible">
-          {nodes.map((node, i) => {
-            const cx = startX + i * nodeSpacing + nodeRadius;
-            const cy = centerY;
-            const isApproved = node.status === 'approved';
-            const isRejected = node.status === 'rejected';
-            const isSkipped = node.status === 'skipped';
-            const isPending = node.status === 'pending';
-            const processed = isApproved || isRejected;
-
-            let fill = '#ffffff';
-            let stroke = '#cbd5e1';
-            let textColor = '#64748b';
-            if (isApproved) {
-              fill = '#22c55e';
-              stroke = '#16a34a';
-              textColor = '#ffffff';
-            } else if (isRejected) {
-              fill = '#ef4444';
-              stroke = '#dc2626';
-              textColor = '#ffffff';
-            } else if (isSkipped) {
-              fill = '#f1f5f9';
-              stroke = '#94a3b8';
-              textColor = '#94a3b8';
-            }
-
-            return (
-              <g key={node.id}>
-                {i < nodes.length - 1 && (
-                  <line
-                    x1={cx + nodeRadius}
-                    y1={cy}
-                    x2={cx + nodeSpacing - nodeRadius}
-                    y2={cy}
-                    stroke={isSkipped ? '#cbd5e1' : processed ? stroke : '#e2e8f0'}
-                    strokeWidth={2}
-                    strokeDasharray={isSkipped ? '6 4' : 'none'}
-                    markerEnd="url(#arrowhead)"
-                  />
-                )}
-              </g>
-            );
-          })}
-
-          <defs>
-            <marker
-              id="arrowhead"
-              markerWidth="10"
-              markerHeight="7"
-              refX="9"
-              refY="3.5"
-              orient="auto"
+        <AdminDiagramToolbar />
+        <div
+          className="cursor-grab active:cursor-grabbing select-none"
+          style={{ height: '240px' }}
+        >
+          <TransformComponent
+            wrapperStyle={{ width: '100%', height: '100%' }}
+            contentStyle={{ width: '100%', height: '100%' }}
+          >
+            <svg
+              width={totalWidth}
+              height={totalHeight}
+              className="overflow-visible"
+              style={{ display: 'block' }}
             >
-              <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
-            </marker>
-          </defs>
-
-          {nodes.map((node, i) => {
-            const cx = startX + i * nodeSpacing + nodeRadius;
-            const cy = centerY;
-            const isApproved = node.status === 'approved';
-            const isRejected = node.status === 'rejected';
-            const isSkipped = node.status === 'skipped';
-            const isPending = node.status === 'pending';
-            const processed = isApproved || isRejected;
-
-            let fill = '#ffffff';
-            let stroke = '#cbd5e1';
-            let textColor = '#64748b';
-            if (isApproved) {
-              fill = '#22c55e';
-              stroke = '#16a34a';
-              textColor = '#ffffff';
-            } else if (isRejected) {
-              fill = '#ef4444';
-              stroke = '#dc2626';
-              textColor = '#ffffff';
-            } else if (isSkipped) {
-              fill = '#f1f5f9';
-              stroke = '#94a3b8';
-              textColor = '#94a3b8';
-            }
-
-            return (
-              <g key={node.id + '-node'}>
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={nodeRadius}
-                  fill={fill}
-                  stroke={stroke}
-                  strokeWidth={2.5}
-                />
-                <text
-                  x={cx}
-                  y={cy}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill={textColor}
-                  fontSize="13"
-                  fontWeight="600"
+              <defs>
+                <marker
+                  id="arrowhead-admin"
+                  markerWidth="10"
+                  markerHeight="7"
+                  refX="9"
+                  refY="3.5"
+                  orient="auto"
                 >
-                  {node.name.length > 4 ? node.name.slice(0, 4) : node.name}
-                </text>
+                  <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                </marker>
+              </defs>
 
-                {processed && node.approverName && (
-                  <>
+              {nodes.map((node, i) => {
+                const cx = startX + i * nodeSpacing + nodeRadius;
+                const cy = centerY;
+                const isApproved = node.status === 'approved';
+                const isRejected = node.status === 'rejected';
+                const isSkipped = node.status === 'skipped';
+                const processed = isApproved || isRejected;
+
+                let stroke = '#cbd5e1';
+                if (isApproved) stroke = '#16a34a';
+                else if (isRejected) stroke = '#dc2626';
+
+                if (i < nodes.length - 1) {
+                  return (
+                    <line
+                      key={node.id + '-line'}
+                      x1={cx + nodeRadius}
+                      y1={cy}
+                      x2={cx + nodeSpacing - nodeRadius}
+                      y2={cy}
+                      stroke={isSkipped ? '#cbd5e1' : processed ? stroke : '#e2e8f0'}
+                      strokeWidth={2}
+                      strokeDasharray={isSkipped ? '6 4' : 'none'}
+                      markerEnd="url(#arrowhead-admin)"
+                    />
+                  );
+                }
+                return null;
+              })}
+
+              {nodes.map((node, i) => {
+                const cx = startX + i * nodeSpacing + nodeRadius;
+                const cy = centerY;
+                const isApproved = node.status === 'approved';
+                const isRejected = node.status === 'rejected';
+                const isSkipped = node.status === 'skipped';
+                const isPending = node.status === 'pending';
+                const processed = isApproved || isRejected;
+
+                let fill = '#ffffff';
+                let stroke = '#cbd5e1';
+                let textColor = '#64748b';
+                if (isApproved) {
+                  fill = '#22c55e';
+                  stroke = '#16a34a';
+                  textColor = '#ffffff';
+                } else if (isRejected) {
+                  fill = '#ef4444';
+                  stroke = '#dc2626';
+                  textColor = '#ffffff';
+                } else if (isSkipped) {
+                  fill = '#f1f5f9';
+                  stroke = '#94a3b8';
+                  textColor = '#94a3b8';
+                }
+
+                return (
+                  <g key={node.id + '-node'}>
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={nodeRadius}
+                      fill={fill}
+                      stroke={stroke}
+                      strokeWidth={2.5}
+                    />
                     <text
                       x={cx}
-                      y={cy + nodeRadius + 22}
+                      y={cy}
                       textAnchor="middle"
-                      fill="#374151"
-                      fontSize="12"
-                      fontWeight="500"
+                      dominantBaseline="middle"
+                      fill={textColor}
+                      fontSize="13"
+                      fontWeight="600"
                     >
-                      {node.approverName}
+                      {node.name.length > 4 ? node.name.slice(0, 4) : node.name}
                     </text>
-                    {node.approvedAt && (
+
+                    {processed && node.approverName && (
+                      <>
+                        <text
+                          x={cx}
+                          y={cy + nodeRadius + 22}
+                          textAnchor="middle"
+                          fill="#374151"
+                          fontSize="12"
+                          fontWeight="500"
+                        >
+                          {node.approverName}
+                        </text>
+                        {node.approvedAt && (
+                          <text
+                            x={cx}
+                            y={cy + nodeRadius + 40}
+                            textAnchor="middle"
+                            fill="#9ca3af"
+                            fontSize="10"
+                          >
+                            {new Date(node.approvedAt).toLocaleString('zh-CN', {
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </text>
+                        )}
+                      </>
+                    )}
+
+                    {isPending && (
                       <text
                         x={cx}
-                        y={cy + nodeRadius + 40}
+                        y={cy + nodeRadius + 22}
                         textAnchor="middle"
-                        fill="#9ca3af"
-                        fontSize="10"
+                        fill="#d97706"
+                        fontSize="11"
+                        fontWeight="500"
                       >
-                        {new Date(node.approvedAt).toLocaleString('zh-CN', {
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        待处理
                       </text>
                     )}
-                  </>
-                )}
 
-                {isPending && (
-                  <text
-                    x={cx}
-                    y={cy + nodeRadius + 22}
-                    textAnchor="middle"
-                    fill="#d97706"
-                    fontSize="11"
-                    fontWeight="500"
-                  >
-                    待处理
-                  </text>
-                )}
+                    {isSkipped && (
+                      <text
+                        x={cx}
+                        y={cy + nodeRadius + 22}
+                        textAnchor="middle"
+                        fill="#94a3b8"
+                        fontSize="11"
+                      >
+                        已跳过
+                      </text>
+                    )}
 
-                {isSkipped && (
-                  <text
-                    x={cx}
-                    y={cy + nodeRadius + 22}
-                    textAnchor="middle"
-                    fill="#94a3b8"
-                    fontSize="11"
-                  >
-                    已跳过
-                  </text>
-                )}
-
-                {i === 0 && (
-                  <text
-                    x={cx}
-                    y={cy - nodeRadius - 12}
-                    textAnchor="middle"
-                    fill="#6b7280"
-                    fontSize="11"
-                  >
-                    发起
-                  </text>
-                )}
-                {i === nodes.length - 1 && (
-                  <text
-                    x={cx}
-                    y={cy - nodeRadius - 12}
-                    textAnchor="middle"
-                    fill="#6b7280"
-                    fontSize="11"
-                  >
-                    结束
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
+                    {i === 0 && (
+                      <text
+                        x={cx}
+                        y={cy - nodeRadius - 12}
+                        textAnchor="middle"
+                        fill="#6b7280"
+                        fontSize="11"
+                      >
+                        发起
+                      </text>
+                    )}
+                    {i === nodes.length - 1 && (
+                      <text
+                        x={cx}
+                        y={cy - nodeRadius - 12}
+                        textAnchor="middle"
+                        fill="#6b7280"
+                        fontSize="11"
+                      >
+                        结束
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </TransformComponent>
+        </div>
+      </TransformWrapper>
     </div>
   );
 }

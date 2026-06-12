@@ -3,7 +3,7 @@ import db from '../models/db.js'
 
 type FlowType = 'leave' | 'expense' | 'business'
 type FlowStatus = 'pending' | 'approved' | 'rejected'
-type NodeStatus = 'pending' | 'approved' | 'rejected' | 'skipped'
+type NodeStatus = 'pending' | 'approved' | 'rejected'
 
 interface FlowNode {
   id: string
@@ -212,8 +212,8 @@ export function rejectFlow(flowId: string, handlerId: string, comment: string): 
     UPDATE flow_nodes SET status = 'rejected', comment = ?, handled_at = ? WHERE id = ?
   `)
 
-  const updateSkippedNodes = db.prepare(`
-    UPDATE flow_nodes SET status = 'skipped' WHERE flow_id = ? AND order_index > ?
+  const updateRemainingNodes = db.prepare(`
+    UPDATE flow_nodes SET status = 'rejected' WHERE flow_id = ? AND order_index > ?
   `)
 
   const updateFlow = db.prepare(`
@@ -222,7 +222,7 @@ export function rejectFlow(flowId: string, handlerId: string, comment: string): 
 
   const tx = db.transaction(() => {
     updateCurrentNode.run(comment || null, now, currentNode.id)
-    updateSkippedNodes.run(flowId, flow.currentNodeIndex)
+    updateRemainingNodes.run(flowId, flow.currentNodeIndex)
     updateFlow.run(now, flowId)
   })
 

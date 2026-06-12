@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Receipt, Briefcase, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -64,11 +64,16 @@ function FormInput({ label, children }: FormInputProps) {
 const inputBase =
   'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400';
 
+type AnimPhase = 'idle' | 'out' | 'in';
+
 export default function FlowEditor() {
   const navigate = useNavigate();
   const { user } = useStore();
   const [selectedType, setSelectedType] = useState<FlowType | null>(null);
+  const [displayType, setDisplayType] = useState<FlowType | null>(null);
+  const [animPhase, setAnimPhase] = useState<AnimPhase>('idle');
   const [submitting, setSubmitting] = useState(false);
+  const timersRef = useRef<NodeJS.Timeout[]>([]);
 
   const [leaveForm, setLeaveForm] = useState<LeaveForm>({
     type: '年假',
@@ -94,8 +99,39 @@ export default function FlowEditor() {
     budget: 0,
   });
 
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(clearTimeout);
+    };
+  }, []);
+
   const handleTypeSelect = (type: FlowType) => {
+    if (type === displayType) {
+      setSelectedType(type);
+      return;
+    }
+
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+
     setSelectedType(type);
+
+    if (displayType === null) {
+      setDisplayType(type);
+      setAnimPhase('in');
+      const t = setTimeout(() => setAnimPhase('idle'), 300);
+      timersRef.current.push(t);
+      return;
+    }
+
+    setAnimPhase('out');
+    const t1 = setTimeout(() => {
+      setDisplayType(type);
+      setAnimPhase('in');
+      const t2 = setTimeout(() => setAnimPhase('idle'), 300);
+      timersRef.current.push(t2);
+    }, 300);
+    timersRef.current.push(t1);
   };
 
   const calculateLeaveDays = () => {
@@ -162,6 +198,13 @@ export default function FlowEditor() {
     }
   };
 
+  const wrapperClass = cn(
+    'transition-[max-height,opacity] duration-300 ease-out overflow-hidden',
+    animPhase === 'out' ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'
+  );
+
+  const formOuterClass = 'bg-white rounded-xl border border-gray-200 p-6 shadow-sm';
+
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div>
@@ -196,188 +239,175 @@ export default function FlowEditor() {
         </div>
       </div>
 
-      <div className="overflow-hidden">
-        <div
-          className={cn(
-            'transition-all duration-350 ease-out overflow-hidden bg-white rounded-xl border border-gray-200 p-6 shadow-sm',
-            selectedType === 'leave'
-              ? 'max-h-[2000px] opacity-100'
-              : 'max-h-0 opacity-0 py-0 px-0 !border-0 !shadow-none'
-          )}
-        >
-          <div className="space-y-5">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-500" />
-              请假信息
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <FormInput label="开始日期">
-                <input
-                  type="date"
-                  className={inputBase}
-                  value={leaveForm.startDate}
-                  onChange={(e) =>
-                    setLeaveForm((prev) => ({ ...prev, startDate: e.target.value }))
-                  }
-                  onBlur={calculateLeaveDays}
-                />
-              </FormInput>
-              <FormInput label="结束日期">
-                <input
-                  type="date"
-                  className={inputBase}
-                  value={leaveForm.endDate}
-                  onChange={(e) =>
-                    setLeaveForm((prev) => ({ ...prev, endDate: e.target.value }))
-                  }
-                  onBlur={calculateLeaveDays}
-                />
-              </FormInput>
+      {displayType && (
+        <div className={wrapperClass}>
+          {displayType === 'leave' && (
+            <div className={formOuterClass}>
+              <div className="space-y-5">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-blue-500" />
+                  请假信息
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormInput label="开始日期">
+                    <input
+                      type="date"
+                      className={inputBase}
+                      value={leaveForm.startDate}
+                      onChange={(e) =>
+                        setLeaveForm((prev) => ({ ...prev, startDate: e.target.value }))
+                      }
+                      onBlur={calculateLeaveDays}
+                    />
+                  </FormInput>
+                  <FormInput label="结束日期">
+                    <input
+                      type="date"
+                      className={inputBase}
+                      value={leaveForm.endDate}
+                      onChange={(e) =>
+                        setLeaveForm((prev) => ({ ...prev, endDate: e.target.value }))
+                      }
+                      onBlur={calculateLeaveDays}
+                    />
+                  </FormInput>
+                </div>
+                <FormInput label="请假天数">
+                  <input
+                    type="number"
+                    min={1}
+                    className={inputBase}
+                    value={leaveForm.days || ''}
+                    onChange={(e) =>
+                      setLeaveForm((prev) => ({ ...prev, days: Number(e.target.value) }))
+                    }
+                    placeholder="请输入天数"
+                  />
+                </FormInput>
+                <FormInput label="请假原因">
+                  <textarea
+                    rows={4}
+                    className={cn(inputBase, 'resize-none')}
+                    value={leaveForm.reason}
+                    onChange={(e) =>
+                      setLeaveForm((prev) => ({ ...prev, reason: e.target.value }))
+                    }
+                    placeholder="请详细说明请假原因..."
+                  />
+                </FormInput>
+              </div>
             </div>
-            <FormInput label="请假天数">
-              <input
-                type="number"
-                min={1}
-                className={inputBase}
-                value={leaveForm.days || ''}
-                onChange={(e) =>
-                  setLeaveForm((prev) => ({ ...prev, days: Number(e.target.value) }))
-                }
-                placeholder="请输入天数"
-              />
-            </FormInput>
-            <FormInput label="请假原因">
-              <textarea
-                rows={4}
-                className={cn(inputBase, 'resize-none')}
-                value={leaveForm.reason}
-                onChange={(e) =>
-                  setLeaveForm((prev) => ({ ...prev, reason: e.target.value }))
-                }
-                placeholder="请详细说明请假原因..."
-              />
-            </FormInput>
-          </div>
-        </div>
+          )}
 
-        <div
-          className={cn(
-            'transition-all duration-350 ease-out overflow-hidden bg-white rounded-xl border border-gray-200 p-6 shadow-sm',
-            selectedType === 'expense'
-              ? 'max-h-[2000px] opacity-100'
-              : 'max-h-0 opacity-0 py-0 px-0 !border-0 !shadow-none'
-          )}
-        >
-          <div className="space-y-5">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-blue-500" />
-              报销信息
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <FormInput label="报销金额（元）">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className={inputBase}
-                  value={expenseForm.amount || ''}
-                  onChange={(e) =>
-                    setExpenseForm((prev) => ({ ...prev, amount: Number(e.target.value) }))
-                  }
-                  placeholder="请输入金额"
-                />
-              </FormInput>
-              <FormInput label="费用分类">
-                <select
-                  className={inputBase}
-                  value={expenseForm.category}
-                  onChange={(e) =>
-                    setExpenseForm((prev) => ({ ...prev, category: e.target.value }))
-                  }
-                >
-                  <option value="差旅费">差旅费</option>
-                  <option value="办公费">办公费</option>
-                  <option value="餐饮费">餐饮费</option>
-                  <option value="其他">其他</option>
-                </select>
-              </FormInput>
+          {displayType === 'expense' && (
+            <div className={formOuterClass}>
+              <div className="space-y-5">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-blue-500" />
+                  报销信息
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormInput label="报销金额（元）">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className={inputBase}
+                      value={expenseForm.amount || ''}
+                      onChange={(e) =>
+                        setExpenseForm((prev) => ({ ...prev, amount: Number(e.target.value) }))
+                      }
+                      placeholder="请输入金额"
+                    />
+                  </FormInput>
+                  <FormInput label="费用分类">
+                    <select
+                      className={inputBase}
+                      value={expenseForm.category}
+                      onChange={(e) =>
+                        setExpenseForm((prev) => ({ ...prev, category: e.target.value }))
+                      }
+                    >
+                      <option value="差旅费">差旅费</option>
+                      <option value="办公费">办公费</option>
+                      <option value="餐饮费">餐饮费</option>
+                      <option value="其他">其他</option>
+                    </select>
+                  </FormInput>
+                </div>
+                <FormInput label="票据描述">
+                  <textarea
+                    rows={4}
+                    className={cn(inputBase, 'resize-none')}
+                    value={expenseForm.description}
+                    onChange={(e) =>
+                      setExpenseForm((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    placeholder="请说明费用明细及票据情况..."
+                  />
+                </FormInput>
+              </div>
             </div>
-            <FormInput label="票据描述">
-              <textarea
-                rows={4}
-                className={cn(inputBase, 'resize-none')}
-                value={expenseForm.description}
-                onChange={(e) =>
-                  setExpenseForm((prev) => ({ ...prev, description: e.target.value }))
-                }
-                placeholder="请说明费用明细及票据情况..."
-              />
-            </FormInput>
-          </div>
-        </div>
+          )}
 
-        <div
-          className={cn(
-            'transition-all duration-350 ease-out overflow-hidden bg-white rounded-xl border border-gray-200 p-6 shadow-sm',
-            selectedType === 'business'
-              ? 'max-h-[2000px] opacity-100'
-              : 'max-h-0 opacity-0 py-0 px-0 !border-0 !shadow-none'
-          )}
-        >
-          <div className="space-y-5">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-blue-500" />
-              出差信息
-            </h3>
-            <FormInput label="出差地点">
-              <input
-                type="text"
-                className={inputBase}
-                value={businessForm.destination}
-                onChange={(e) =>
-                  setBusinessForm((prev) => ({ ...prev, destination: e.target.value }))
-                }
-                placeholder="请输入出差地点"
-              />
-            </FormInput>
-            <div className="grid grid-cols-2 gap-4">
-              <FormInput label="开始日期">
-                <input
-                  type="date"
-                  className={inputBase}
-                  value={businessForm.startDate}
-                  onChange={(e) =>
-                    setBusinessForm((prev) => ({ ...prev, startDate: e.target.value }))
-                  }
-                />
-              </FormInput>
-              <FormInput label="结束日期">
-                <input
-                  type="date"
-                  className={inputBase}
-                  value={businessForm.endDate}
-                  onChange={(e) =>
-                    setBusinessForm((prev) => ({ ...prev, endDate: e.target.value }))
-                  }
-                />
-              </FormInput>
+          {displayType === 'business' && (
+            <div className={formOuterClass}>
+              <div className="space-y-5">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-blue-500" />
+                  出差信息
+                </h3>
+                <FormInput label="出差地点">
+                  <input
+                    type="text"
+                    className={inputBase}
+                    value={businessForm.destination}
+                    onChange={(e) =>
+                      setBusinessForm((prev) => ({ ...prev, destination: e.target.value }))
+                    }
+                    placeholder="请输入出差地点"
+                  />
+                </FormInput>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormInput label="开始日期">
+                    <input
+                      type="date"
+                      className={inputBase}
+                      value={businessForm.startDate}
+                      onChange={(e) =>
+                        setBusinessForm((prev) => ({ ...prev, startDate: e.target.value }))
+                      }
+                    />
+                  </FormInput>
+                  <FormInput label="结束日期">
+                    <input
+                      type="date"
+                      className={inputBase}
+                      value={businessForm.endDate}
+                      onChange={(e) =>
+                        setBusinessForm((prev) => ({ ...prev, endDate: e.target.value }))
+                      }
+                    />
+                  </FormInput>
+                </div>
+                <FormInput label="预算金额（元）">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className={inputBase}
+                    value={businessForm.budget || ''}
+                    onChange={(e) =>
+                      setBusinessForm((prev) => ({ ...prev, budget: Number(e.target.value) }))
+                    }
+                    placeholder="请输入预算金额"
+                  />
+                </FormInput>
+              </div>
             </div>
-            <FormInput label="预算金额（元）">
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                className={inputBase}
-                value={businessForm.budget || ''}
-                onChange={(e) =>
-                  setBusinessForm((prev) => ({ ...prev, budget: Number(e.target.value) }))
-                }
-                placeholder="请输入预算金额"
-              />
-            </FormInput>
-          </div>
+          )}
         </div>
-      </div>
+      )}
 
       {selectedType && (
         <div className="flex justify-end gap-3">
@@ -385,6 +415,16 @@ export default function FlowEditor() {
             type="button"
             onClick={() => {
               setSelectedType(null);
+              if (displayType !== null) {
+                setAnimPhase('out');
+                timersRef.current.forEach(clearTimeout);
+                timersRef.current = [];
+                const t = setTimeout(() => {
+                  setDisplayType(null);
+                  setAnimPhase('idle');
+                }, 300);
+                timersRef.current.push(t);
+              }
             }}
             className="px-5 py-2.5 rounded-lg text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
           >

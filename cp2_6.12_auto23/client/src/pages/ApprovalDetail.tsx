@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { TransformWrapper, TransformComponent, useTransformComponent } from 'react-zoom-pan-pinch';
 import {
   Calendar,
   Receipt,
@@ -14,6 +15,9 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 import {
   cn,
@@ -187,265 +191,287 @@ function TimelineItem({ node, isCurrent, isLast, expanded, onToggle }: TimelineI
   );
 }
 
+function DiagramToolbar() {
+  const { zoomIn, zoomOut, resetTransform } = useTransformComponent((ctx) => ({
+    zoomIn: ctx.instance.zoomIn,
+    zoomOut: ctx.instance.zoomOut,
+    resetTransform: ctx.instance.resetTransform,
+  }));
+  const scale = useTransformComponent((ctx) => ctx.state.scale);
+
+  return (
+    <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs text-gray-500">
+      <span>滚轮缩放 | 拖拽平移</span>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => zoomIn()}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+            title="放大"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => zoomOut()}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+            title="缩小"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => resetTransform()}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+            title="重置"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <span className="font-medium text-gray-700 w-12 text-right">
+          {Math.round(scale * 100)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function FlowPathDiagram({ nodes }: { nodes: FlowNode[] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const isDragging = useRef(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale((s) => Math.min(Math.max(s * delta, 0.3), 3));
-  }, []);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    isDragging.current = true;
-    dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging.current) return;
-    setOffset({
-      x: e.clientX - dragStart.current.x,
-      y: e.clientY - dragStart.current.y,
-    });
-  };
-
-  const handleMouseUp = () => {
-    isDragging.current = false;
-  };
-
   const nodeSpacing = 180;
   const nodeRadius = 38;
   const startX = 80;
   const centerY = 90;
   const totalWidth = startX * 2 + Math.max(nodes.length - 1, 0) * nodeSpacing + nodeRadius * 2;
-  const totalHeight = 220;
+  const totalHeight = 240;
 
   return (
-    <div
-      ref={containerRef}
-      className="bg-white border border-gray-200 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing select-none"
-      style={{ height: '260px' }}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs text-gray-500">
-        <span>滚轮缩放 | 拖拽平移</span>
-        <span>缩放: {Math.round(scale * 100)}%</span>
-      </div>
-      <div
-        style={{
-          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-          transformOrigin: '0 0',
-          width: totalWidth,
-          height: totalHeight,
-        }}
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <TransformWrapper
+        initialScale={1}
+        minScale={0.3}
+        maxScale={3}
+        limitToBounds={false}
+        centerOnInit={true}
+        smooth={true}
+        wheel={{ step: 20 }}
+        panning={{ disabled: false, velocityDisabled: true }}
       >
-        <svg width={totalWidth} height={totalHeight} className="overflow-visible">
-          <defs>
-            <marker
-              id="arrowhead"
-              markerWidth="10"
-              markerHeight="7"
-              refX="9"
-              refY="3.5"
-              orient="auto"
+        <DiagramToolbar />
+        <div
+          className="cursor-grab active:cursor-grabbing select-none"
+          style={{ height: '240px' }}
+        >
+          <TransformComponent
+            wrapperStyle={{ width: '100%', height: '100%' }}
+            contentStyle={{ width: '100%', height: '100%' }}
+          >
+            <svg
+              width={totalWidth}
+              height={totalHeight}
+              className="overflow-visible"
+              style={{ display: 'block' }}
             >
-              <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
-            </marker>
-          </defs>
+              <defs>
+                <marker
+                  id="arrowhead-approval"
+                  markerWidth="10"
+                  markerHeight="7"
+                  refX="9"
+                  refY="3.5"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                </marker>
+              </defs>
 
-          {nodes.map((node, i) => {
-            const cx = startX + i * nodeSpacing + nodeRadius;
-            const cy = centerY;
-            const isApproved = node.status === 'approved';
-            const isRejected = node.status === 'rejected';
-            const isSkipped = node.status === 'skipped';
-            const processed = isApproved || isRejected;
+              {nodes.map((node, i) => {
+                const cx = startX + i * nodeSpacing + nodeRadius;
+                const cy = centerY;
+                const isApproved = node.status === 'approved';
+                const isRejected = node.status === 'rejected';
+                const isSkipped = node.status === 'skipped';
+                const processed = isApproved || isRejected;
 
-            let stroke = '#cbd5e1';
-            if (isApproved) stroke = '#16a34a';
-            else if (isRejected) stroke = '#dc2626';
+                let stroke = '#cbd5e1';
+                if (isApproved) stroke = '#16a34a';
+                else if (isRejected) stroke = '#dc2626';
 
-            if (i < nodes.length - 1) {
-              return (
-                <line
-                  key={node.id + '-line'}
-                  x1={cx + nodeRadius}
-                  y1={cy}
-                  x2={cx + nodeSpacing - nodeRadius}
-                  y2={cy}
-                  stroke={isSkipped ? '#cbd5e1' : processed ? stroke : '#e2e8f0'}
-                  strokeWidth={2}
-                  strokeDasharray={isSkipped ? '6 4' : 'none'}
-                  markerEnd="url(#arrowhead)"
-                />
-              );
-            }
-            return null;
-          })}
+                if (i < nodes.length - 1) {
+                  return (
+                    <line
+                      key={node.id + '-line'}
+                      x1={cx + nodeRadius}
+                      y1={cy}
+                      x2={cx + nodeSpacing - nodeRadius}
+                      y2={cy}
+                      stroke={isSkipped ? '#cbd5e1' : processed ? stroke : '#e2e8f0'}
+                      strokeWidth={2}
+                      strokeDasharray={isSkipped ? '6 4' : 'none'}
+                      markerEnd="url(#arrowhead-approval)"
+                    />
+                  );
+                }
+                return null;
+              })}
 
-          {nodes.map((node, i) => {
-            const cx = startX + i * nodeSpacing + nodeRadius;
-            const cy = centerY;
-            const isApproved = node.status === 'approved';
-            const isRejected = node.status === 'rejected';
-            const isSkipped = node.status === 'skipped';
-            const processed = isApproved || isRejected;
+              {nodes.map((node, i) => {
+                const cx = startX + i * nodeSpacing + nodeRadius;
+                const cy = centerY;
+                const isApproved = node.status === 'approved';
+                const isRejected = node.status === 'rejected';
+                const isSkipped = node.status === 'skipped';
+                const processed = isApproved || isRejected;
 
-            let fill = '#ffffff';
-            let stroke = '#cbd5e1';
-            let textColor = '#64748b';
-            if (isApproved) {
-              fill = '#22c55e';
-              stroke = '#16a34a';
-              textColor = '#ffffff';
-            } else if (isRejected) {
-              fill = '#ef4444';
-              stroke = '#dc2626';
-              textColor = '#ffffff';
-            } else if (isSkipped) {
-              fill = '#f1f5f9';
-              stroke = '#94a3b8';
-              textColor = '#94a3b8';
-            }
+                let fill = '#ffffff';
+                let stroke = '#cbd5e1';
+                let textColor = '#64748b';
+                if (isApproved) {
+                  fill = '#22c55e';
+                  stroke = '#16a34a';
+                  textColor = '#ffffff';
+                } else if (isRejected) {
+                  fill = '#ef4444';
+                  stroke = '#dc2626';
+                  textColor = '#ffffff';
+                } else if (isSkipped) {
+                  fill = '#f1f5f9';
+                  stroke = '#94a3b8';
+                  textColor = '#94a3b8';
+                }
 
-            const handledAt = (node as any).handledAt || node.approvedAt;
-            const handlerName = (node as any).handlerName || node.approverName;
+                const handledAt = (node as any).handledAt || node.approvedAt;
+                const handlerName = (node as any).handlerName || node.approverName;
 
-            return (
-              <g key={node.id + '-node'}>
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={nodeRadius}
-                  fill={fill}
-                  stroke={stroke}
-                  strokeWidth={2.5}
-                />
-                {isApproved ? (
-                  <CheckCircle2
-                    x={cx - 12}
-                    y={cy - 12}
-                    width={24}
-                    height={24}
-                    fill={textColor}
-                    color={textColor}
-                  />
-                ) : isRejected ? (
-                  <XCircle
-                    x={cx - 12}
-                    y={cy - 12}
-                    width={24}
-                    height={24}
-                    fill={textColor}
-                    color={textColor}
-                  />
-                ) : (
-                  <text
-                    x={cx}
-                    y={cy}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill={textColor}
-                    fontSize="15"
-                    fontWeight="600"
-                  >
-                    {node.name.length > 4 ? node.name.slice(0, 4) : node.name}
-                  </text>
-                )}
-
-                {processed && handlerName && (
-                  <>
-                    <text
-                      x={cx}
-                      y={cy + nodeRadius + 22}
-                      textAnchor="middle"
-                      fill="#374151"
-                      fontSize="12"
-                      fontWeight="500"
-                    >
-                      {handlerName}
-                    </text>
-                    {handledAt && (
+                return (
+                  <g key={node.id + '-node'}>
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={nodeRadius}
+                      fill={fill}
+                      stroke={stroke}
+                      strokeWidth={2.5}
+                    />
+                    {isApproved ? (
+                      <CheckCircle2
+                        x={cx - 12}
+                        y={cy - 12}
+                        width={24}
+                        height={24}
+                        fill={textColor}
+                        color={textColor}
+                      />
+                    ) : isRejected ? (
+                      <XCircle
+                        x={cx - 12}
+                        y={cy - 12}
+                        width={24}
+                        height={24}
+                        fill={textColor}
+                        color={textColor}
+                      />
+                    ) : (
                       <text
                         x={cx}
-                        y={cy + nodeRadius + 40}
+                        y={cy}
                         textAnchor="middle"
-                        fill="#9ca3af"
-                        fontSize="10"
+                        dominantBaseline="middle"
+                        fill={textColor}
+                        fontSize="15"
+                        fontWeight="600"
                       >
-                        {new Date(handledAt).toLocaleString('zh-CN', {
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {node.name.length > 4 ? node.name.slice(0, 4) : node.name}
                       </text>
                     )}
-                  </>
-                )}
 
-                {node.status === 'pending' && (
-                  <text
-                    x={cx}
-                    y={cy + nodeRadius + 22}
-                    textAnchor="middle"
-                    fill="#d97706"
-                    fontSize="11"
-                    fontWeight="500"
-                  >
-                    待处理
-                  </text>
-                )}
+                    {processed && handlerName && (
+                      <>
+                        <text
+                          x={cx}
+                          y={cy + nodeRadius + 22}
+                          textAnchor="middle"
+                          fill="#374151"
+                          fontSize="12"
+                          fontWeight="500"
+                        >
+                          {handlerName}
+                        </text>
+                        {handledAt && (
+                          <text
+                            x={cx}
+                            y={cy + nodeRadius + 40}
+                            textAnchor="middle"
+                            fill="#9ca3af"
+                            fontSize="10"
+                          >
+                            {new Date(handledAt).toLocaleString('zh-CN', {
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </text>
+                        )}
+                      </>
+                    )}
 
-                {isSkipped && (
-                  <text
-                    x={cx}
-                    y={cy + nodeRadius + 22}
-                    textAnchor="middle"
-                    fill="#94a3b8"
-                    fontSize="11"
-                  >
-                    已跳过
-                  </text>
-                )}
+                    {node.status === 'pending' && (
+                      <text
+                        x={cx}
+                        y={cy + nodeRadius + 22}
+                        textAnchor="middle"
+                        fill="#d97706"
+                        fontSize="11"
+                        fontWeight="500"
+                      >
+                        待处理
+                      </text>
+                    )}
 
-                {i === 0 && (
-                  <text
-                    x={cx}
-                    y={cy - nodeRadius - 12}
-                    textAnchor="middle"
-                    fill="#6b7280"
-                    fontSize="11"
-                    fontWeight="500"
-                  >
-                    发起
-                  </text>
-                )}
-                {i === nodes.length - 1 && (
-                  <text
-                    x={cx}
-                    y={cy - nodeRadius - 12}
-                    textAnchor="middle"
-                    fill="#6b7280"
-                    fontSize="11"
-                    fontWeight="500"
-                  >
-                    结束
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
+                    {isSkipped && (
+                      <text
+                        x={cx}
+                        y={cy + nodeRadius + 22}
+                        textAnchor="middle"
+                        fill="#94a3b8"
+                        fontSize="11"
+                      >
+                        已跳过
+                      </text>
+                    )}
+
+                    {i === 0 && (
+                      <text
+                        x={cx}
+                        y={cy - nodeRadius - 12}
+                        textAnchor="middle"
+                        fill="#6b7280"
+                        fontSize="11"
+                        fontWeight="500"
+                      >
+                        发起
+                      </text>
+                    )}
+                    {i === nodes.length - 1 && (
+                      <text
+                        x={cx}
+                        y={cy - nodeRadius - 12}
+                        textAnchor="middle"
+                        fill="#6b7280"
+                        fontSize="11"
+                        fontWeight="500"
+                      >
+                        结束
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </TransformComponent>
+        </div>
+      </TransformWrapper>
     </div>
   );
 }
