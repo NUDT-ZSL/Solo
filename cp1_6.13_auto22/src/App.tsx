@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import EditorCanvas from './EditorCanvas';
 import PreviewRunner from './PreviewRunner';
 import Panel from './components/Panel';
@@ -232,4 +232,141 @@ const App: React.FC = () => {
           ) : (
             <>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <pol
+                <polygon points="8,5 19,12 8,19" />
+              </svg>
+              开始预览
+            </>
+          )}
+        </button>
+
+        <div style={{ flex: 1 }} />
+
+        {saveMessage && (
+          <span
+            style={{
+              color: saveMessage.includes('成功') ? '#22c55e' : '#ef4444',
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            {saveMessage}
+          </span>
+        )}
+
+        <input
+          type="text"
+          value={levelName}
+          onChange={(e) => setLevelName(e.target.value)}
+          placeholder="关卡名称"
+          style={{
+            width: 200,
+            padding: '8px 12px',
+            background: '#1a1a1e',
+            color: '#ffffff',
+            border: '2px solid #3b82f6',
+            borderRadius: 8,
+            fontSize: 13,
+            outline: 'none',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = '#60a5fa';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = '#3b82f6';
+          }}
+        />
+
+        <span
+          style={{
+            color: '#6b7280',
+            fontSize: 12,
+          }}
+        >
+          元素: {elements.length}
+        </span>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: panelWidth,
+            flexShrink: 0,
+            borderRight: '1px solid #2e2e32',
+            transition: 'width 0.3s ease',
+          }}
+        >
+          <Panel onDragStart={handleDragStart} onDragEnd={handleDragEnd} />
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            overflow: 'auto',
+            background: '#16161a',
+          }}
+        >
+          <EditorCanvas
+            elements={elements}
+            onElementsChange={setElements}
+            scale={canvasScale}
+            draggingType={draggingType}
+            onDragEnd={handleDragEnd}
+          />
+        </div>
+
+        <div
+          style={{
+            width: listWidth,
+            flexShrink: 0,
+            transition: 'width 0.3s ease',
+          }}
+        >
+          <LevelList
+            onLoadLevel={handleLoadLevel}
+            currentLevelId={currentLevelId}
+            refreshTrigger={levelListRefresh}
+          />
+        </div>
+
+        <PreviewRunner
+          elements={elements}
+          isRunning={isPreviewRunning}
+          onStop={handleStopPreview}
+          width={previewWidth}
+        />
+      </div>
+
+      <style>{`
+        * {
+          box-sizing: border-box;
+        }
+        ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #1a1a1e;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #3a3a3e;
+          border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #4a4a4e;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;

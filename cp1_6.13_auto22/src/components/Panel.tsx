@@ -3,6 +3,7 @@ import type { ElementType } from '../types';
 
 interface PanelProps {
   onDragStart: (type: ElementType) => void;
+  onDragEnd?: () => void;
 }
 
 const elementConfig: { type: ElementType; label: string }[] = [
@@ -12,11 +13,15 @@ const elementConfig: { type: ElementType; label: string }[] = [
   { type: 'coin', label: '金币道具' },
 ];
 
-const Panel: React.FC<PanelProps> = ({ onDragStart }) => {
+const Panel: React.FC<PanelProps> = ({ onDragStart, onDragEnd }) => {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, type: ElementType) => {
     e.dataTransfer.setData('elementType', type);
     e.dataTransfer.effectAllowed = 'copy';
     onDragStart(type);
+  };
+
+  const handleDragEnd = () => {
+    if (onDragEnd) onDragEnd();
   };
 
   const renderElementIcon = (type: ElementType) => {
@@ -95,6 +100,7 @@ const Panel: React.FC<PanelProps> = ({ onDragStart }) => {
           key={type}
           draggable
           onDragStart={(e) => handleDragStart(e, type)}
+          onDragEnd={handleDragEnd}
           style={{
             display: 'flex',
             alignItems: 'center',
