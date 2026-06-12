@@ -26,8 +26,8 @@ function GridEditor({
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<'add' | 'remove' | null>(null);
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
-  const [animatingWalls, setAnimatingWalls] = useState<Set<string>>(new Set());
-  const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set());
+  const [animatingWalls, setAnimatingWalls] = useState<Map<string, number>>(new Map());
+  const [newItemPositions, setNewItemPositions] = useState<Map<string, number>>(new Map());
   const gridRef = useRef<HTMLDivElement>(null);
 
   const wallMap = new Map<string, Wall>();
@@ -44,6 +44,38 @@ function GridEditor({
     return { x, y };
   }, [room.width, room.height]);
 
+  const addWallAnimation = (x: number, y: number) => {
+    const key = `${x},${y}`;
+    const timestamp = Date.now();
+    setAnimatingWalls(prev => new Map(prev).set(key, timestamp));
+    setTimeout(() => {
+      setAnimatingWalls(prev => {
+        const next = new Map(prev);
+        const t = next.get(key);
+        if (t === timestamp) {
+          next.delete(key);
+        }
+        return next;
+      });
+    }, 350);
+  };
+
+  const addItemAnimation = (x: number, y: number) => {
+    const key = `${x},${y}`;
+    const timestamp = Date.now();
+    setNewItemPositions(prev => new Map(prev).set(key, timestamp));
+    setTimeout(() => {
+      setNewItemPositions(prev => {
+        const next = new Map(prev);
+        const t = next.get(key);
+        if (t === timestamp) {
+          next.delete(key);
+        }
+        return next;
+      });
+    }, 500);
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     const pos = getGridPosition(e.clientX, e.clientY);
     if (!pos) return;
@@ -56,14 +88,7 @@ function GridEditor({
       setDragMode('add');
       if (!hasWall) {
         onToggleWall(pos.x, pos.y, true);
-        setAnimatingWalls(prev => new Set(prev).add(wallKey));
-        setTimeout(() => {
-          setAnimatingWalls(prev => {
-            const next = new Set(prev);
-            next.delete(wallKey);
-            return next;
-          });
-        }, 300);
+        addWallAnimation(pos.x, pos.y);
       }
     } else if (tool === 'erase') {
       setIsDragging(true);
@@ -83,16 +108,8 @@ function GridEditor({
     } else if (onAddItem) {
       const existingItem = room.items.find(item => item.x === pos.x && item.y === pos.y);
       if (!existingItem && !hasWall) {
-        const itemId = `new-${Date.now()}`;
-        setAnimatingItems(prev => new Set(prev).add(itemId));
+        addItemAnimation(pos.x, pos.y);
         onAddItem(tool as ItemType, pos.x, pos.y);
-        setTimeout(() => {
-          setAnimatingItems(prev => {
-            const next = new Set(prev);
-            next.delete(itemId);
-            return next;
-          });
-        }, 400);
       }
     }
   };
@@ -107,14 +124,7 @@ function GridEditor({
 
     if (dragMode === 'add' && !hasWall) {
       onToggleWall(pos.x, pos.y, true);
-      setAnimatingWalls(prev => new Set(prev).add(wallKey));
-      setTimeout(() => {
-        setAnimatingWalls(prev => {
-          const next = new Set(prev);
-          next.delete(wallKey);
-          return next;
-        });
-      }, 300);
+      addWallAnimation(pos.x, pos.y);
     } else if (dragMode === 'remove' && hasWall) {
       onToggleWall(pos.x, pos.y, false);
     } else if (draggedItem) {
@@ -133,12 +143,14 @@ function GridEditor({
 
   const renderGrid = () => {
     const cells = [];
+    const now = Date.now();
+    
     for (let y = 0; y < room.height; y++) {
       for (let x = 0; x < room.width; x++) {
         const key = `${x},${y}`;
         const wall = wallMap.get(key);
         const isWall = wall?.visible;
-        const isAnimating = animatingWalls.has(key);
+        const isAnimating = animatingWalls.has(key) && (now - (animatingWalls.get(key) || 0)) < 350;
         
         cells.push(
           <div
@@ -151,11 +163,11 @@ function GridEditor({
               height: CELL_SIZE,
               backgroundColor: isWall ? '#475569' : 'transparent',
               border: '1px solid rgba(71, 85, 105, 0.3)',
-              transition: 'background-color 0.2s',
-              opacity: isAnimating ? 0 : (isWall ? 1 : 0),
-              animation: isAnimating && isWall ? 'wallFadeIn 0.3s ease-out forwards' : undefined
+              opacity: isWall ? (isAnimating ? 0.01 : 1) : 0,
+              transition: isAnimating ? 'none' : 'opacity 0.1s',
+              animation: isAnimating && isWall ? 'wallFadeIn 0.3s ease-out forwards' : 'none',
+              willChange: isAnimating ? 'opacity' : 'auto'
             }}
-            className={isAnimating && isWall ? 'wall-fade-in' : ''}
           >
             {isWall && (
               <div style={{
@@ -177,7 +189,9 @@ function GridEditor({
                     rgba(0,0,0,0.1) 10px
                   )
                 `,
-                imageRendering: 'pixelated' as const
+                imageRendering: 'pixelated' as const,
+                opacity: isAnimating ? 0 : 1,
+                animation: isAnimating && isWall ? 'wallFadeIn 0.3s ease-out forwards' : 'none'
               }} />
             )}
           </div>
@@ -188,16 +202,18 @@ function GridEditor({
   };
 
   const renderItems = () => {
+    const now = Date.now();
+    
     return room.items
       .filter(item => !item.collected)
       .map(item => {
         const isSelected = item.id === selectedItemId;
-        const isAnimating = animatingItems.has(item.id) || animatingItems.has(`new-${item.id}`);
+        const posKey = `${item.x},${item.y}`;
+        const isNewAnimating = newItemPositions.has(posKey) && (now - (newItemPositions.get(posKey) || 0)) < 500;
         
         return (
           <div
             key={item.id}
-            className={isAnimating ? 'item-drop' : ''}
             style={{
               position: 'absolute',
               left: item.x * CELL_SIZE + 4,
@@ -211,10 +227,12 @@ function GridEditor({
               backgroundColor: isSelected ? 'rgba(249, 115, 22, 0.2)' : 'rgba(30, 41, 59, 0.6)',
               border: isSelected ? '2px solid #f97316' : '1px solid #475569',
               cursor: 'pointer',
-              transition: 'all 0.2s',
+              transition: isNewAnimating ? 'none' : 'all 0.2s',
               boxShadow: isSelected ? '0 0 10px rgba(249, 115, 22, 0.5)' : 'none',
               zIndex: isSelected ? 10 : 1,
-              opacity: isAnimating ? 0 : 1
+              animation: isNewAnimating ? 'itemDrop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards' : 'none',
+              transformOrigin: 'center bottom',
+              willChange: isNewAnimating ? 'transform, opacity' : 'auto'
             }}
             onClick={(e) => {
               e.stopPropagation();

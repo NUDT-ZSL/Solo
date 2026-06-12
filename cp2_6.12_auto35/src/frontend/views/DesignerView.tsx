@@ -9,6 +9,8 @@ import ItemIcon from '../components/ItemIcon';
 
 type ToolType = 'select' | 'wall' | 'erase' | ItemType;
 
+const BACKEND_URL = 'http://localhost:3002';
+
 const tools: { id: ToolType; label: string; icon: string }[] = [
   { id: 'select', label: '选择', icon: '🖱️' },
   { id: 'wall', label: '墙壁', icon: '🧱' },
@@ -42,7 +44,7 @@ function DesignerView() {
   }, [roomId]);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3002');
+    const newSocket = io(BACKEND_URL);
     setSocket(newSocket);
     return () => {
       newSocket.disconnect();
