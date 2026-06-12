@@ -21,6 +21,7 @@ export class Player {
   public hitEnemies: Set<number> = new Set();
   public animFrame: number = 0;
   public animTimer: number = 0;
+  private wasOnGround: boolean = true;
 
   constructor(x: number, y: number, params: GameParams) {
     this.params = params;
@@ -131,6 +132,7 @@ export class Player {
 
   private handleVerticalCollision(platforms: PlatformData[]): void {
     const s = this.state;
+    this.wasOnGround = s.onGround;
     s.onGround = false;
     for (const p of platforms) {
       if (this.rectIntersect(s.x, s.y, s.width, s.height, p.x, p.y, p.width, p.height)) {
@@ -144,6 +146,9 @@ export class Player {
           s.vy = 0;
         }
       }
+    }
+    if (!s.onGround && this.wasOnGround && s.vy >= 0 && s.jumpsRemaining === MAX_JUMPS) {
+      s.jumpsRemaining = MAX_JUMPS - 1;
     }
   }
 

@@ -4,7 +4,7 @@ import { Platform } from '../entities/Platform';
 import { Enemy } from '../entities/Enemy';
 import { InputHandler } from '../systems/InputHandler';
 import { Recorder } from '../systems/Recorder';
-import { GameParams, PlatformData, Hitbox, DirtyRect, AttackType } from '../types';
+import { GameParams, PlatformData, Hitbox } from '../types';
 
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 600;
@@ -29,7 +29,6 @@ export class Game {
   private recorder: Recorder;
   private params: GameParams;
   private cameraX: number = 0;
-  private dirtyRects: DirtyRect[] = [];
   private bgCache: HTMLCanvasElement | null = null;
   private onParamsChange?: (params: GameParams) => void;
   private onGameOver?: () => void;
@@ -59,11 +58,16 @@ export class Game {
     this.platforms.push(new Platform(0, WORLD_HEIGHT - GROUND_HEIGHT, WORLD_WIDTH, GROUND_HEIGHT, true));
 
     const platformCount = 5;
-    const startX = 200;
+    const minX = 100;
+    const maxX = WORLD_WIDTH - 300;
+    const minY = 200;
+    const maxY = WORLD_HEIGHT - GROUND_HEIGHT - 40;
+    const spacing = (maxX - minX) / platformCount;
+
     for (let i = 0; i < platformCount; i++) {
       const width = 120 + Math.random() * 80;
-      const x = startX + i * (WORLD_WIDTH - 400) / platformCount + Math.random() * 50;
-      const y = 250 + Math.random() * 200;
+      const x = Math.max(minX, Math.min(maxX - width, minX + i * spacing + Math.random() * 50));
+      const y = Math.max(minY, Math.min(maxY, minY + Math.random() * (maxY - minY)));
       this.platforms.push(new Platform(x, y, width, 20, false));
     }
   }
@@ -351,7 +355,7 @@ export class Game {
   }
 
   public setParams(params: Partial<GameParams>): void {
-    this.params = { ...this.params, ...params };
+    Object.assign(this.params, params);
     this.player.params = this.params;
   }
 

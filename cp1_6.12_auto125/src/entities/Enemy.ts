@@ -8,6 +8,7 @@ const DEATH_ANIM_DURATION = 0.5;
 
 export class Enemy {
   public state: EnemyState;
+  public vy: number = 0;
 
   constructor(id: number, x: number, y: number, patrolLeft: number, patrolRight: number) {
     this.state = {
@@ -43,7 +44,10 @@ export class Enemy {
     if (s.knockbackTimer > 0) {
       s.knockbackTimer -= dt;
       s.x += s.vx * dt;
+      this.vy += 600 * dt;
+      s.y += this.vy * dt;
     } else {
+      this.vy = 0;
       s.vx = s.direction * PATROL_SPEED;
       s.x += s.vx * dt;
 
@@ -96,6 +100,7 @@ export class Enemy {
     s.hitFlashTimer = HIT_FLASH_DURATION;
     s.knockbackTimer = KNOCKBACK_DURATION;
     s.vx = attackerFacing * KNOCKBACK_SPEED;
+    this.vy = -300;
 
     if (s.health <= 0) {
       s.health = 0;
