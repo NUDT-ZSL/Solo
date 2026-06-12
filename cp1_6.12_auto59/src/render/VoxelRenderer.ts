@@ -41,7 +41,10 @@ export class VoxelRenderer {
 
     const voxels = Array.from(this.voxelGrid.voxels.values());
     const activeSet = this.voxelGrid.activeVoxelIndices;
-    const voxelSize = this.voxelGrid.voxelSize;
+    const { voxelSizeX, voxelSizeY, voxelSizeZ } = this.voxelGrid;
+    const geometry = this.instancedMesh.geometry as THREE.BufferGeometry;
+    const colorAttr = geometry.getAttribute('instanceColor') as THREE.InstancedBufferAttribute;
+    const alphaAttr = geometry.getAttribute('instanceAlpha') as THREE.InstancedBufferAttribute;
 
     let instanceIndex = 0;
     for (let i = 0; i < voxels.length; i++) {
@@ -50,39 +53,32 @@ export class VoxelRenderer {
       const isHighlighted = this.highlightedIndices.has(voxel.index);
 
       if (!isActive && !isHighlighted) {
-        this.dummy.position.set(0, -10000, 0);
-        this.dummy.scale.set(0.001, 0.001, 0.001);
+        this.dummy.position.set(voxel.centerX, voxel.centerY, voxel.centerZ);
+        this.dummy.scale.set(0.0001, 0.0001, 0.0001);
       } else {
         this.dummy.position.set(voxel.centerX, voxel.centerY, voxel.centerZ);
-        const s = voxelSize * 0.92;
-        this.dummy.scale.set(s, s, s);
+        const gap = 0.92;
+        this.dummy.scale.set(voxelSizeX * gap, voxelSizeY * gap, voxelSizeZ * gap);
       }
       this.dummy.updateMatrix();
       this.instancedMesh.setMatrixAt(instanceIndex, this.dummy.matrix);
 
       if (isHighlighted) {
-        const pulseColor = new THREE.Color(0xffffff);
-        this.instancedMesh.setColorAt(instanceIndex, pulseColor);
+        colorAttr.setXYZ(instanceIndex, 1, 1, 1);
+        alphaAttr.setX(instanceIndex, 1.0);
       } else {
         const color = this.getDensityColor(voxel.density);
-        this.instancedMesh.setColorAt(instanceIndex, color);
-      }
-
-      const material = this.instancedMesh.material as THREE.MeshPhysicalMaterial;
-      if (Array.isArray(material) === false) {
-        const mat = material as THREE.MeshPhysicalMaterial;
         const alpha = this.getDensityAlpha(voxel.density);
-        mat.opacity = isActive ? alpha : alpha * 0.3;
-        mat.transparent = true;
+        colorAttr.setXYZ(instanceIndex, color.r, color.g, color.b);
+        alphaAttr.setX(instanceIndex, isActive ? alpha : 0.0);
       }
 
       instanceIndex++;
     }
 
     this.instancedMesh.instanceMatrix.needsUpdate = true;
-    if (this.instancedMesh.instanceColor) {
-      this.instancedMesh.instanceColor.needsUpdate = true;
-    }
+    colorAttr.needsUpdate = true;
+    alphaAttr.needsUpdate = true;
   }
 
   public rebuildMesh(): void {
@@ -101,7 +97,8 @@ export class VoxelRenderer {
     this.highlightedIndices.clear();
 
     if (center && this.voxelGrid) {
-      const voxels = this.voxelGrid.querySphere(center.x, center.y, center.z, radius * this.voxelGrid.voxelSize);
+      const avgSize = (this.voxelGrid.voxelSizeX + this.voxelGrid.voxelSizeY + this.voxelGrid.voxelSizeZ) / 3;
+      const voxels = this.voxelGrid.querySphere(center.x, center.y, center.z, radius * avgSize);
       for (const v of voxels) {
         this.highlightedIndices.add(v.index);
       }
@@ -114,19 +111,31 @@ export class VoxelRenderer {
   public dispose(): void {
     if (this.instancedMesh) {
       this.scene.remove(this.instancedMesh);
-      this.instancedMesh.geometry.dispose();
+      if (this.instancedMesh.geometry) {
+        this.instancedMesh.geometry.dispose();
+      }
       const mat = this.instancedMesh.material;
       if (Array.isArray(mat)) {
         mat.forEach(m => m.dispose());
       } else {
         (mat as THREE.Material).dispose();
       }
+      if (this.instancedMesh.instanceColor) {
+        this.instancedMesh.instanceColor = null as any;
+      }
       this.instancedMesh = null;
     }
     if (this.probeMesh) {
       this.scene.remove(this.probeMesh);
-      this.probeMesh.geometry.dispose();
-      (this.probeMesh.material as THREE.Material).dispose();
+      if (this.probeMesh.geometry) {
+        this.probeMesh.geometry.dispose();
+      }
+      const probeMat = this.probeMesh.material;
+      if (Array.isArray(probeMat)) {
+        probeMat.forEach(m => m.dispose());
+      } else {
+        (probeMat as THREE.Material).dispose();
+      }
       this.probeMesh = null;
     }
   }
@@ -139,21 +148,63 @@ export class VoxelRenderer {
     if (voxelCount === 0) return;
 
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshPhysicalMaterial({
-      vertexColors: true,
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader: `
+        attribute vec3 instanceColor;
+        attribute float instanceAlpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying vec3 vNormal;
+
+        void main() {
+          vColor = instanceColor;
+          vAlpha = instanceAlpha;
+          vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+          vNormal = normalize(normalMatrix * mat3(instanceMatrix) * normal);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uLightDir;
+        uniform vec3 uLightColor;
+        uniform vec3 uAmbientColor;
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying vec3 vNormal;
+
+        void main() {
+          if (vAlpha < 0.001) discard;
+          vec3 normal = normalize(vNormal);
+          vec3 lightDir = normalize(uLightDir);
+          float diff = max(dot(normal, lightDir), 0.0);
+          vec3 diffuse = uLightColor * diff;
+          vec3 ambient = uAmbientColor;
+          vec3 finalColor = vColor * (ambient + diffuse);
+          float rim = pow(1.0 - abs(dot(normal, vec3(0.0, 0.0, 1.0))), 2.0);
+          finalColor += vColor * rim * 0.2;
+          gl_FragColor = vec4(finalColor, vAlpha);
+        }
+      `,
+      uniforms: {
+        uLightDir: { value: new THREE.Vector3(0.5, 1.0, 0.7).normalize() },
+        uLightColor: { value: new THREE.Color(0xffffff).multiplyScalar(0.9) },
+        uAmbientColor: { value: new THREE.Color(0x6060a0).multiplyScalar(0.4) }
+      },
       transparent: true,
-      opacity: 0.7,
-      roughness: 0.6,
-      metalness: 0.1,
-      clearcoat: 0.3,
-      clearcoatRoughness: 0.5,
       side: THREE.DoubleSide,
       depthWrite: false
     });
 
     this.instancedMesh = new THREE.InstancedMesh(geometry, material, voxelCount);
-    this.instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(voxelCount * 3), 3);
     this.instancedMesh.frustumCulled = false;
+
+    const colorAttribute = new THREE.InstancedBufferAttribute(new Float32Array(voxelCount * 3), 3);
+    geometry.setAttribute('instanceColor', colorAttribute);
+
+    const alphaAttribute = new THREE.InstancedBufferAttribute(new Float32Array(voxelCount), 1);
+    geometry.setAttribute('instanceAlpha', alphaAttribute);
+
     this.scene.add(this.instancedMesh);
 
     this.updateInstances();
@@ -170,7 +221,8 @@ export class VoxelRenderer {
 
     if (!this.probeCenter || !this.voxelGrid) return;
 
-    const geometry = new THREE.SphereGeometry(this.probeRadius * this.voxelGrid.voxelSize, 32, 32);
+    const avgSize = (this.voxelGrid.voxelSizeX + this.voxelGrid.voxelSizeY + this.voxelGrid.voxelSizeZ) / 3;
+    const geometry = new THREE.SphereGeometry(this.probeRadius * avgSize, 32, 32);
     const material = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,

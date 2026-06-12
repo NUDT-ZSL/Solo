@@ -4,7 +4,9 @@ export class VoxelGrid {
   public resolution: number;
   public points: Point3D[] = [];
   public boundingBox: BoundingBox;
-  public voxelSize: number = 0;
+  public voxelSizeX: number = 0;
+  public voxelSizeY: number = 0;
+  public voxelSizeZ: number = 0;
   public voxels: Map<number, VoxelData> = new Map();
   public minDensity: number = 0;
   public maxDensity: number = 0;
@@ -29,11 +31,12 @@ export class VoxelGrid {
     this.activeVoxelIndices.clear();
 
     this.computeBoundingBox();
-    this.voxelSize = Math.max(
-      (this.boundingBox.maxX - this.boundingBox.minX) / this.resolution,
-      (this.boundingBox.maxY - this.boundingBox.minY) / this.resolution,
-      (this.boundingBox.maxZ - this.boundingBox.minZ) / this.resolution
-    );
+    const rangeX = this.boundingBox.maxX - this.boundingBox.minX;
+    const rangeY = this.boundingBox.maxY - this.boundingBox.minY;
+    const rangeZ = this.boundingBox.maxZ - this.boundingBox.minZ;
+    this.voxelSizeX = rangeX / this.resolution;
+    this.voxelSizeY = rangeY / this.resolution;
+    this.voxelSizeZ = rangeZ / this.resolution;
 
     const voxelSum: Map<number, { sum: number; count: number }> = new Map();
 
@@ -60,9 +63,9 @@ export class VoxelGrid {
       minD = Math.min(minD, avgDensity);
       maxD = Math.max(maxD, avgDensity);
 
-      const centerX = this.boundingBox.minX + (i + 0.5) * this.voxelSize;
-      const centerY = this.boundingBox.minY + (j + 0.5) * this.voxelSize;
-      const centerZ = this.boundingBox.minZ + (k + 0.5) * this.voxelSize;
+      const centerX = this.boundingBox.minX + (i + 0.5) * this.voxelSizeX;
+      const centerY = this.boundingBox.minY + (j + 0.5) * this.voxelSizeY;
+      const centerZ = this.boundingBox.minZ + (k + 0.5) * this.voxelSizeZ;
 
       this.voxels.set(idx, {
         index: idx,
@@ -86,7 +89,7 @@ export class VoxelGrid {
     }
 
     const elapsed = performance.now() - startTime;
-    console.log(`[VoxelGrid] Built ${this.voxels.size} voxels in ${elapsed.toFixed(2)}ms`);
+    console.log(`[VoxelGrid] Built ${this.voxels.size} voxels in ${elapsed.toFixed(2)}ms (${this.resolution}^3 grid)`);
   }
 
   public getVoxel(i: number, j: number, k: number): VoxelData | undefined {
@@ -172,9 +175,9 @@ export class VoxelGrid {
   }
 
   private pointToVoxel(x: number, y: number, z: number): { i: number; j: number; k: number } {
-    const i = Math.floor((x - this.boundingBox.minX) / this.voxelSize);
-    const j = Math.floor((y - this.boundingBox.minY) / this.voxelSize);
-    const k = Math.floor((z - this.boundingBox.minZ) / this.voxelSize);
+    const i = Math.floor((x - this.boundingBox.minX) / this.voxelSizeX);
+    const j = Math.floor((y - this.boundingBox.minY) / this.voxelSizeY);
+    const k = Math.floor((z - this.boundingBox.minZ) / this.voxelSizeZ);
     return { i, j, k };
   }
 

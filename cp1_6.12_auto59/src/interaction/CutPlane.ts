@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { VoxelGrid } from '@voxel/VoxelGrid';
 import type { CutPlaneState } from '@/types';
 import { eventBus } from '@/utils/EventBus';
@@ -6,6 +7,7 @@ import { eventBus } from '@/utils/EventBus';
 interface PlaneInfo {
   state: CutPlaneState;
   mesh: THREE.Mesh;
+  edgeLines: THREE.LineSegments;
   guideLine: THREE.Line;
 }
 
@@ -13,6 +15,7 @@ export class CutPlaneManager {
   public scene: THREE.Scene;
   public camera: THREE.PerspectiveCamera;
   public renderer: THREE.WebGLRenderer;
+  public controls: OrbitControls;
   public voxelGrid: VoxelGrid | null = null;
 
   private planes: Map<'x' | 'y' | 'z', PlaneInfo> = new Map();
@@ -28,11 +31,13 @@ export class CutPlaneManager {
   constructor(
     scene: THREE.Scene,
     camera: THREE.PerspectiveCamera,
-    renderer: THREE.WebGLRenderer
+    renderer: THREE.WebGLRenderer,
+    controls: OrbitControls
   ) {
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
+    this.controls = controls;
 
     this.initPlane('x');
     this.initPlane('y');
@@ -51,6 +56,7 @@ export class CutPlaneManager {
     if (!plane) return;
     plane.state.enabled = enabled;
     plane.mesh.visible = enabled;
+    plane.edgeLines.visible = enabled;
     plane.guideLine.visible = false;
     this.applyAndNotify();
   }
@@ -81,9 +87,12 @@ export class CutPlaneManager {
     }
     for (const plane of this.planes.values()) {
       this.scene.remove(plane.mesh);
+      this.scene.remove(plane.edgeLines);
       this.scene.remove(plane.guideLine);
       plane.mesh.geometry.dispose();
       (plane.mesh.material as THREE.Material).dispose();
+      plane.edgeLines.geometry.dispose();
+      (plane.edgeLines.material as THREE.Material).dispose();
       plane.guideLine.geometry.dispose();
       (plane.guideLine.material as THREE.Material).dispose();
     }
@@ -92,16 +101,28 @@ export class CutPlaneManager {
 
   private initPlane(axis: 'x' | 'y' | 'z'): void {
     const geometry = new THREE.PlaneGeometry(1, 1);
+    const edgeColor = axis === 'x' ? 0xff8c42 : axis === 'y' ? 0x4aff8c : 0x4a9eff;
     const material = new THREE.MeshBasicMaterial({
-      color: axis === 'x' ? 0xff8c42 : axis === 'y' ? 0x4aff8c : 0x4a9eff,
+      color: edgeColor,
       transparent: true,
-      opacity: 0.25,
+      opacity: 0.12,
       side: THREE.DoubleSide,
-      depthWrite: false
+      depthWrite: false,
+      depthTest: false
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.visible = false;
     this.scene.add(mesh);
+
+    const edgeGeo = new THREE.EdgesGeometry(geometry);
+    const edgeMat = new THREE.LineBasicMaterial({
+      color: edgeColor,
+      transparent: true,
+      opacity: 0.9
+    });
+    const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+    edgeLines.visible = false;
+    this.scene.add(edgeLines);
 
     const lineGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(), new THREE.Vector3()
@@ -114,6 +135,7 @@ export class CutPlaneManager {
     this.planes.set(axis, {
       state: { enabled: false, position: 0.5, axis },
       mesh,
+      edgeLines,
       guideLine
     });
   }
@@ -124,26 +146,40 @@ export class CutPlaneManager {
     const sizeX = bb.maxX - bb.minX;
     const sizeY = bb.maxY - bb.minY;
     const sizeZ = bb.maxZ - bb.minZ;
-    const maxDim = Math.max(sizeX, sizeY, sizeZ) * 1.05;
 
     for (const [axis, plane] of this.planes) {
       const t = plane.state.position;
-      const { mesh } = plane;
+      const { mesh, edgeLines } = plane;
 
       if (axis === 'x') {
         mesh.geometry.dispose();
-        mesh.geometry = new THREE.PlaneGeometry(maxDim, maxDim);
+        mesh.geometry = new THREE.PlaneGeometry(sizeY, sizeZ);
         mesh.position.set(bb.minX + t * sizeX, (bb.minY + bb.maxY) / 2, (bb.minZ + bb.maxZ) / 2);
         mesh.rotation.y = Math.PI / 2;
+
+        edgeLines.geometry.dispose();
+        edgeLines.geometry = new THREE.EdgesGeometry(mesh.geometry);
+        edgeLines.position.copy(mesh.position);
+        edgeLines.rotation.copy(mesh.rotation);
       } else if (axis === 'y') {
         mesh.geometry.dispose();
-        mesh.geometry = new THREE.PlaneGeometry(maxDim, maxDim);
+        mesh.geometry = new THREE.PlaneGeometry(sizeX, sizeZ);
         mesh.position.set((bb.minX + bb.maxX) / 2, bb.minY + t * sizeY, (bb.minZ + bb.maxZ) / 2);
-        mesh.rotation.x = Math.PI / 2;
+        mesh.rotation.x = -Math.PI / 2;
+
+        edgeLines.geometry.dispose();
+        edgeLines.geometry = new THREE.EdgesGeometry(mesh.geometry);
+        edgeLines.position.copy(mesh.position);
+        edgeLines.rotation.copy(mesh.rotation);
       } else {
         mesh.geometry.dispose();
-        mesh.geometry = new THREE.PlaneGeometry(maxDim, maxDim);
+        mesh.geometry = new THREE.PlaneGeometry(sizeX, sizeY);
         mesh.position.set((bb.minX + bb.maxX) / 2, (bb.minY + bb.maxY) / 2, bb.minZ + t * sizeZ);
+
+        edgeLines.geometry.dispose();
+        edgeLines.geometry = new THREE.EdgesGeometry(mesh.geometry);
+        edgeLines.position.copy(mesh.position);
+        edgeLines.rotation.copy(mesh.rotation);
       }
     }
   }
