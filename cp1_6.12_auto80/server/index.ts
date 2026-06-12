@@ -157,6 +157,7 @@ app.post('/api/run', (req, res) => {
 
     const vm = new VM({
       timeout: 3000,
+      memory: 128,
       sandbox: {
         console: {
           log: (...args: unknown[]) => {

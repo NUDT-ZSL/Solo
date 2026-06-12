@@ -5,7 +5,13 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { html } from '@codemirror/lang-html';
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
+import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+  acceptCompletion,
+} from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { useAppContext } from './App';
@@ -28,20 +34,21 @@ export default function CodeEditor() {
   const [language, setLanguage] = useState(editingSnippet?.language || 'JavaScript');
   const [tags, setTags] = useState(editingSnippet?.tags || '');
   const [description, setDescription] = useState(editingSnippet?.description || '');
-  const [code, setCode] = useState(editingSnippet?.code || '');
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [toastFading, setToastFading] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const codeRef = useRef(code);
+  const codeRef = useRef(editingSnippet?.code || '');
 
-  codeRef.current = code;
+  const handleDocChange = useCallback((doc: string) => {
+    codeRef.current = doc;
+  }, []);
 
   useEffect(() => {
     if (!editorRef.current) return;
 
     const state = EditorState.create({
-      doc: code,
+      doc: editingSnippet?.code || '',
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -50,28 +57,41 @@ export default function CodeEditor() {
         foldGutter(),
         closeBrackets(),
         bracketMatching(),
-        autocompletion(),
+        autocompletion({
+          activateOnTyping: true,
+          defaultKeymap: true,
+          icons: false,
+        }),
         keymap.of([
           ...closeBracketsKeymap,
           ...defaultKeymap,
-          ...searchKeymap,
           ...historyKeymap,
           ...foldKeymap,
           ...completionKeymap,
           indentWithTab,
+          { key: 'Tab', run: acceptCompletion, preventDefault: true },
         ]),
         getExtension(language),
         syntaxHighlighting(defaultHighlightStyle),
         oneDark,
         EditorView.updateListener.of(update => {
           if (update.docChanged) {
-            setCode(update.state.doc.toString());
+            handleDocChange(update.state.doc.toString());
           }
         }),
         EditorView.theme({
           '&': { height: '100%', fontSize: '14px' },
           '.cm-scroller': { overflow: 'auto' },
-          '.cm-content': { fontFamily: '"Fira Code", "Consolas", monospace' },
+          '.cm-content': { fontFamily: '"Fira Code", "Consolas", "Cascadia Code", monospace' },
+          '.cm-tooltip': {
+            'background-color': '#252526',
+            border: '1px solid #3c3c3c',
+            'border-radius': '4px',
+          },
+          '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+            'background-color': '#094771',
+            color: '#ffffff',
+          },
         }),
       ],
     });
@@ -87,23 +107,18 @@ export default function CodeEditor() {
       view.destroy();
       viewRef.current = null;
     };
-  }, []);
-
-  useEffect(() => {
-    if (viewRef.current && language !== code) {
-      // Reconfigure language extension on language change
-    }
-  }, [language]);
+  }, [handleDocChange]);
 
   const handleSave = useCallback(() => {
-    if (!title.trim() || !codeRef.current.trim()) return;
+    const currentCode = codeRef.current;
+    if (!title.trim() || !currentCode.trim()) return;
 
     saveSnippet({
       title: title.trim(),
       language,
       tags,
       description,
-      code: codeRef.current,
+      code: currentCode,
     });
 
     setShowSaveToast(true);
@@ -200,5 +215,3 @@ export default function CodeEditor() {
     </div>
   );
 }
-
-const searchKeymap: readonly import('@codemirror/view').KeyBinding[] = [];
