@@ -3,16 +3,18 @@ import type { StickerObject } from './types'
 
 interface StickerRendererProps {
   sticker: StickerObject
-  onDragStart: (id: string, e: React.MouseEvent | React.TouchEvent) => void
+  canvasRef: React.RefObject<HTMLDivElement>
+  onDragStart: (id: string) => void
   onDragMove: (id: string, x: number, y: number) => void
   onDragEnd: (id: string) => void
   onDelete: (id: string) => void
-  onCopy: (id: string) => void
+  onCopy: (id: string, offsetX: number, offsetY: number) => void
   onBringToFront: (id: string) => void
 }
 
 export const StickerRenderer: React.FC<StickerRendererProps> = ({
   sticker,
+  canvasRef,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -21,9 +23,13 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
   onBringToFront
 }) => {
   const [showMenu, setShowMenu] = useState(false)
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 })
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isDragging = useRef(false)
+  const isDraggingState = useRef(false)
   const hasLongPressed = useRef(false)
+  const dragStartPos = useRef({ x: 0, y: 0 })
+  const pointerOffset = useRef({ x: 0, y: 0 })
+  const [isRemoving, setIsRemoving] = useState(false)
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimer.current) {
@@ -32,29 +38,22 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
     }
   }, [])
 
-  const handlePointerDown = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      isDragging.current = true
-      hasLongPressed.current = false
-      onBringToFront(sticker.id)
-
-      longPressTimer.current = setTimeout(() => {
-        if (isDragging.current) {
-          hasLongPressed.current = true
-          setShowMenu(true)
-        }
-      }, 1000)
-
-      onDragStart(sticker.id, e)
+  const getCanvasRelativePos = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!canvasRef.current) return { x: clientX, y: clientY }
+      const rect = canvasRef.current.getBoundingClientRect()
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      }
     },
-    [sticker.id, onDragStart, onBringToFront]
+    [canvasRef]
   )
 
-  const handlePointerMove = useCallback(
+  const handlePointerDown = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
-      if (!isDragging.current || hasLongPressed.current) return
+      e.stopPropagation()
+      e.preventDefault()
 
       let clientX: number, clientY: number
       if ('touches' in e) {
@@ -64,20 +63,67 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
         clientX = e.clientX
         clientY = e.clientY
       }
-      onDragMove(sticker.id, clientX, clientY)
+
+      const canvasPos = getCanvasRelativePos(clientX, clientY)
+      pointerOffset.current = {
+        x: canvasPos.x - sticker.x,
+        y: canvasPos.y - sticker.y
+      }
+
+      isDraggingState.current = true
+      hasLongPressed.current = false
+      dragStartPos.current = { x: clientX, y: clientY }
+
+      onBringToFront(sticker.id)
+      onDragStart(sticker.id)
+
+      longPressTimer.current = setTimeout(() => {
+        if (isDraggingState.current) {
+          hasLongPressed.current = true
+          setMenuPosition({
+            x: sticker.x + sticker.width / 2 + 10,
+            y: sticker.y - sticker.height / 2 - 10
+          })
+          setShowMenu(true)
+          onDragEnd(sticker.id)
+        }
+      }, 1000)
     },
-    [sticker.id, onDragMove]
+    [sticker, getCanvasRelativePos, onBringToFront, onDragStart, onDragEnd]
+  )
+
+  const handlePointerMove = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      if (!isDraggingState.current || hasLongPressed.current) return
+
+      let clientX: number, clientY: number
+      if ('touches' in e) {
+        clientX = e.touches[0].clientX
+        clientY = e.touches[0].clientY
+      } else {
+        clientX = e.clientX
+        clientY = e.clientY
+      }
+
+      const canvasPos = getCanvasRelativePos(clientX, clientY)
+      const x = canvasPos.x - pointerOffset.current.x
+      const y = canvasPos.y - pointerOffset.current.y
+
+      onDragMove(sticker.id, x, y)
+    },
+    [sticker.id, getCanvasRelativePos, onDragMove]
   )
 
   const handlePointerUp = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault()
-      isDragging.current = false
       clearLongPressTimer()
 
-      if (!hasLongPressed.current) {
+      if (!hasLongPressed.current && isDraggingState.current) {
         onDragEnd(sticker.id)
       }
+
+      isDraggingState.current = false
       hasLongPressed.current = false
     },
     [sticker.id, onDragEnd, clearLongPressTimer]
@@ -87,6 +133,29 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
     return () => clearLongPressTimer()
   }, [clearLongPressTimer])
 
+  const handleDelete = useCallback(() => {
+    setShowMenu(false)
+    setIsRemoving(true)
+    setTimeout(() => {
+      onDelete(sticker.id)
+    }, 400)
+  }, [sticker.id, onDelete])
+
+  const handleCopy = useCallback(() => {
+    setShowMenu(false)
+    const offsetX = (Math.random() * 4 + 8) * (Math.random() > 0.5 ? 1 : -1)
+    const offsetY = -(Math.random() * 4 + 8)
+    onCopy(sticker.id, offsetX, offsetY)
+  }, [sticker.id, onCopy])
+
+  const handleBringToFront = useCallback(() => {
+    setShowMenu(false)
+    onBringToFront(sticker.id)
+  }, [sticker.id, onBringToFront])
+
+  const scaleX = sticker.isSquashing ? 0.85 : 1
+  const scaleY = sticker.isSquashing ? 1.15 : 1
+
   const baseStyle: React.CSSProperties = {
     position: 'absolute',
     left: sticker.x - sticker.width / 2,
@@ -94,20 +163,21 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
     width: sticker.width,
     height: sticker.height,
     zIndex: sticker.zIndex,
-    transform: `rotate(${sticker.rotation}rad) scaleX(${sticker.squashScaleX}) scaleY(${sticker.squashScaleY})`,
+    transform: `rotate(${sticker.rotation}rad) scaleX(${scaleX}) scaleY(${scaleY})`,
     transformOrigin: 'center center',
-    transition: sticker.isRemoving
+    transition: isRemoving
       ? 'transform 400ms ease-in, opacity 400ms ease-in'
       : sticker.isSquashing
       ? 'transform 150ms ease-out'
       : 'none',
-    opacity: sticker.isRemoving ? 0 : 1,
+    opacity: isRemoving ? 0 : 1,
     cursor: 'grab',
     userSelect: 'none',
     touchAction: 'none',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    pointerEvents: isRemoving ? 'none' : 'auto'
   }
 
   const renderBubble = () => (
@@ -117,25 +187,25 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
         height: '100%',
         backgroundColor: sticker.color,
         borderRadius: 16,
-        border: '2px solid rgba(0,0,0,0.15)',
+        border: '2px solid rgba(0,0,0,0.2)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '8px 14px',
         boxSizing: 'border-box',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        boxShadow: '0 3px 10px rgba(0,0,0,0.15)'
       }}
     >
       <span
         style={{
-          color: '#fff',
+          color: '#ffffff',
           fontSize: 14,
           fontWeight: 600,
           textAlign: 'center',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
-          lineHeight: 1.3,
-          textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+          lineHeight: 1.35,
+          textShadow: '0 1px 2px rgba(0,0,0,0.3)'
         }}
       >
         {sticker.text}
@@ -146,9 +216,9 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
   const renderEmoji = () => (
     <span
       style={{
-        fontSize: sticker.width * 0.85,
+        fontSize: sticker.width * 0.9,
         lineHeight: 1,
-        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))'
+        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.2))'
       }}
     >
       {sticker.emoji}
@@ -171,84 +241,91 @@ export const StickerRenderer: React.FC<StickerRendererProps> = ({
       </div>
 
       {showMenu && (
-        <div
-          style={{
-            position: 'absolute',
-            left: sticker.x + 30,
-            top: sticker.y - sticker.height / 2 - 10,
-            zIndex: 99999,
-            backgroundColor: '#ffffff',
-            borderRadius: 8,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            padding: 4,
-            display: 'flex',
-            gap: 2
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-        >
-          <MenuButton
-            icon="🗑️"
-            label="删除"
-            onClick={() => {
-              setShowMenu(false)
-              onDelete(sticker.id)
-            }}
-          />
-          <MenuButton
-            icon="📋"
-            label="复制"
-            onClick={() => {
-              setShowMenu(false)
-              onCopy(sticker.id)
-            }}
-          />
-          <MenuButton
-            icon="⬆️"
-            label="置顶"
-            onClick={() => {
-              setShowMenu(false)
-              onBringToFront(sticker.id)
-            }}
-          />
-          <MenuButton
-            icon="✕"
-            label="关闭"
-            onClick={() => setShowMenu(false)}
-          />
-        </div>
+        <FloatingMenu
+          x={menuPosition.x}
+          y={menuPosition.y}
+          zIndex={sticker.zIndex + 1000}
+          onDelete={handleDelete}
+          onCopy={handleCopy}
+          onBringToFront={handleBringToFront}
+          onClose={() => setShowMenu(false)}
+        />
       )}
     </>
   )
 }
 
-const MenuButton: React.FC<{
-  icon: string
-  label: string
-  onClick: () => void
-}> = ({ icon, label, onClick }) => {
-  const [hovered, setHovered] = useState(false)
+interface FloatingMenuProps {
+  x: number
+  y: number
+  zIndex: number
+  onDelete: () => void
+  onCopy: () => void
+  onBringToFront: () => void
+  onClose: () => void
+}
+
+const FloatingMenu: React.FC<FloatingMenuProps> = ({
+  x,
+  y,
+  zIndex,
+  onDelete,
+  onCopy,
+  onBringToFront,
+  onClose
+}) => {
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+
+  const menuItems = [
+    { id: 'delete', icon: '🗑️', label: '删除', onClick: onDelete },
+    { id: 'copy', icon: '📋', label: '复制', onClick: onCopy },
+    { id: 'front', icon: '⬆️', label: '置顶', onClick: onBringToFront },
+    { id: 'close', icon: '✕', label: '关闭', onClick: onClose }
+  ]
+
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <div
       style={{
+        position: 'absolute',
+        left: x,
+        top: y,
+        zIndex,
+        backgroundColor: '#ffffff',
+        borderRadius: 8,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+        padding: 4,
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '6px 8px',
-        border: 'none',
-        borderRadius: 6,
-        backgroundColor: hovered ? '#f0f0f0' : 'transparent',
-        cursor: 'pointer',
         gap: 2,
-        minWidth: 44
+        animation: 'fadeIn 150ms ease-out'
       }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
-      <span style={{ fontSize: 16 }}>{icon}</span>
-      <span style={{ fontSize: 10, color: '#555' }}>{label}</span>
-    </button>
+      {menuItems.map((item) => (
+        <button
+          key={item.id}
+          onClick={item.onClick}
+          onMouseEnter={() => setHoveredItem(item.id)}
+          onMouseLeave={() => setHoveredItem(null)}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '6px 8px',
+            border: 'none',
+            borderRadius: 6,
+            backgroundColor: hoveredItem === item.id ? '#f0f0f0' : 'transparent',
+            cursor: 'pointer',
+            gap: 2,
+            minWidth: 44,
+            transition: 'background-color 120ms ease'
+          }}
+        >
+          <span style={{ fontSize: 16 }}>{item.icon}</span>
+          <span style={{ fontSize: 10, color: '#555' }}>{item.label}</span>
+        </button>
+      ))}
+    </div>
   )
 }

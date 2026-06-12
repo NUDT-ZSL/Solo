@@ -1,80 +1,41 @@
 import Matter from 'matter-js'
 import type { StickerObject } from './types'
 
-const { Engine, Render, Runner, Bodies, Body, Composite, Events, Mouse, MouseConstraint } = Matter
+const { Engine, Runner, Bodies, Body, Composite, Events, Vector } = Matter
 
-export interface CollisionEvent {
-  ids: [string, string]
-  relativeVelocity: number
-}
-
-export interface StickerPhysicsOptions {
-  width: number
-  height: number
+export interface StickerPhysicsCallbacks {
   onPositionUpdate: (id: string, x: number, y: number, rotation: number) => void
-  onCollision: (event: CollisionEvent) => void
-  onSquash: (id: string) => void
+  onSquashStart: (id: string) => void
   onCanvasShake: () => void
-  hasDraggingSticker: () => boolean
+  onCollisionSound: () => void
 }
 
 export class StickerPhysics {
   engine: Matter.Engine
   runner: Matter.Runner
-  render?: Matter.Render
-  canvas: HTMLCanvasElement
   bodies: Map<string, Matter.Body> = new Map()
-  stickers: Map<string, StickerObject> = new Map()
   frameCount = 0
   audioContext?: AudioContext
   gravity = 1.0
-  private options: StickerPhysicsOptions
+  private callbacks: StickerPhysicsCallbacks
+  private hasDraggingSticker = false
+  private squashTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  private shakeCooldown = false
 
-  constructor(canvasContainer: HTMLElement, options: StickerPhysicsOptions) {
-    this.options = options
-    this.canvas = document.createElement('canvas')
-    this.canvas.style.display = 'none'
-    canvasContainer.appendChild(this.canvas)
+  constructor(callbacks: StickerPhysicsCallbacks) {
+    this.callbacks = callbacks
 
     this.engine = Engine.create()
     this.engine.gravity.y = this.gravity
-    this.engine.positionIterations = 6
-    this.engine.velocityIterations = 4
+    this.engine.positionIterations = 8
+    this.engine.velocityIterations = 6
 
     this.runner = Runner.create()
 
-    this.createBoundaries(options.width, options.height)
     this.setupCollisionEvents()
-    this.setupRenderLoop()
+    this.setupGameLoop()
 
     Runner.run(this.runner, this.engine)
-  }
-
-  private createBoundaries(width: number, height: number) {
-    const wallThickness = 100
-    const walls = [
-      Bodies.rectangle(width / 2, height + wallThickness / 2, width * 2, wallThickness, {
-        isStatic: true,
-        restitution: 0.4,
-        label: 'wall-bottom'
-      }),
-      Bodies.rectangle(-wallThickness / 2, height / 2, wallThickness, height * 2, {
-        isStatic: true,
-        restitution: 0.4,
-        label: 'wall-left'
-      }),
-      Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 2, {
-        isStatic: true,
-        restitution: 0.4,
-        label: 'wall-right'
-      }),
-      Bodies.rectangle(width / 2, -wallThickness / 2, width * 2, wallThickness, {
-        isStatic: true,
-        restitution: 0.4,
-        label: 'wall-top'
-      })
-    ]
-    Composite.add(this.engine.world, walls)
   }
 
   private setupCollisionEvents() {
@@ -83,71 +44,132 @@ export class StickerPhysics {
       for (const pair of pairs) {
         const { bodyA, bodyB } = pair
 
-        const stickerA = this.bodiesToStickerId(bodyA)
-        const stickerB = this.bodiesToStickerId(bodyB)
+        const stickerA = this.bodyToStickerId(bodyA)
+        const stickerB = this.bodyToStickerId(bodyB)
 
-        if (!stickerA || !stickerB) continue
+        const stickerIds: string[] = []
+        if (stickerA) stickerIds.push(stickerA)
+        if (stickerB) stickerIds.push(stickerB)
+
+        if (stickerIds.length === 0) continue
 
         const velocityA = bodyA.velocity
         const velocityB = bodyB.velocity
-        const relativeVelocity = Math.sqrt(
-          Math.pow(velocityA.x - velocityB.x, 2) + Math.pow(velocityA.y - velocityB.y, 2)
-        )
+        const relativeVelocity = Vector.magnitude(Vector.sub(velocityA, velocityB))
 
-        this.options.onCollision({
-          ids: [stickerA, stickerB],
-          relativeVelocity
-        })
+        for (const id of stickerIds) {
+          this.triggerSquash(id)
+        }
 
-        this.options.onSquash(stickerA)
-        this.options.onSquash(stickerB)
-
-        if (relativeVelocity > 1.5) {
-          this.options.onCanvasShake()
+        if (stickerIds.length === 2 && relativeVelocity > 1.5) {
+          if (!this.shakeCooldown) {
+            this.shakeCooldown = true
+            this.callbacks.onCanvasShake()
+            this.callbacks.onCollisionSound()
+            setTimeout(() => {
+              this.shakeCooldown = false
+            }, 200)
+          }
         }
       }
     })
   }
 
-  private bodiesToStickerId(body: Matter.Body): string | null {
-    const entry = Array.from(this.bodies.entries()).find(([, b]) => b.id === body.id)
-    return entry ? entry[0] : null
+  private bodyToStickerId(body: Matter.Body): string | null {
+    const label = body.label
+    if (label.startsWith('sticker-')) {
+      return label.slice('sticker-'.length)
+    }
+    return null
   }
 
-  private setupRenderLoop() {
-    Events.on(this.engine, 'afterUpdate', () => {
+  private triggerSquash(id: string) {
+    if (this.squashTimers.has(id)) {
+      clearTimeout(this.squashTimers.get(id)!)
+    }
+    this.callbacks.onSquashStart(id)
+    const timer = setTimeout(() => {
+      this.squashTimers.delete(id)
+    }, 150)
+    this.squashTimers.set(id, timer)
+  }
+
+  private setupGameLoop() {
+    Events.on(this.runner, 'tick', () => {
       this.frameCount++
 
       const stickerCount = this.bodies.size
-      const shouldSkipCollisionCheck =
-        stickerCount > 80 && !this.options.hasDraggingSticker() && this.frameCount % 2 !== 0
+      const shouldDowngrade =
+        stickerCount > 80 && !this.hasDraggingSticker
 
-      if (shouldSkipCollisionCheck) return
+      if (shouldDowngrade && this.frameCount % 2 !== 0) {
+        return
+      }
 
       for (const [id, body] of this.bodies) {
-        const sticker = this.stickers.get(id)
-        if (sticker && !sticker.isDragging) {
-          this.options.onPositionUpdate(id, body.position.x, body.position.y, body.angle)
-        }
+        this.callbacks.onPositionUpdate(id, body.position.x, body.position.y, body.angle)
       }
     })
+  }
+
+  setBounds(width: number, height: number) {
+    const walls = Composite.allBodies(this.engine.world).filter(
+      (b) => b.label.startsWith('wall-')
+    )
+    for (const wall of walls) {
+      Composite.remove(this.engine.world, wall)
+    }
+
+    const wallThickness = 200
+    const newWalls = [
+      Bodies.rectangle(width / 2, height + wallThickness / 2, width * 2, wallThickness, {
+        isStatic: true,
+        restitution: 0.4,
+        friction: 0.5,
+        label: 'wall-bottom'
+      }),
+      Bodies.rectangle(-wallThickness / 2, height / 2, wallThickness, height * 3, {
+        isStatic: true,
+        restitution: 0.4,
+        friction: 0.5,
+        label: 'wall-left'
+      }),
+      Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 3, {
+        isStatic: true,
+        restitution: 0.4,
+        friction: 0.5,
+        label: 'wall-right'
+      }),
+      Bodies.rectangle(width / 2, -wallThickness / 2, width * 2, wallThickness, {
+        isStatic: true,
+        restitution: 0.4,
+        friction: 0.5,
+        label: 'wall-top'
+      })
+    ]
+    Composite.add(this.engine.world, newWalls)
   }
 
   addSticker(sticker: StickerObject) {
     if (this.bodies.size >= 100) return false
 
+    const existing = this.bodies.get(sticker.id)
+    if (existing) {
+      Composite.remove(this.engine.world, existing)
+      this.bodies.delete(sticker.id)
+    }
+
     const body = Bodies.rectangle(sticker.x, sticker.y, sticker.width, sticker.height, {
       restitution: sticker.restitution,
       density: sticker.density / 1000,
       friction: sticker.friction,
-      frictionAir: 0.01,
+      frictionAir: 0.02,
       label: `sticker-${sticker.id}`
     })
 
     Body.setAngle(body, sticker.rotation)
     Composite.add(this.engine.world, body)
     this.bodies.set(sticker.id, body)
-    this.stickers.set(sticker.id, sticker)
 
     return true
   }
@@ -157,7 +179,11 @@ export class StickerPhysics {
     if (body) {
       Composite.remove(this.engine.world, body)
       this.bodies.delete(id)
-      this.stickers.delete(id)
+    }
+    const timer = this.squashTimers.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      this.squashTimers.delete(id)
     }
   }
 
@@ -177,13 +203,24 @@ export class StickerPhysics {
 
   setStickerDragging(id: string, isDragging: boolean) {
     const body = this.bodies.get(id)
-    const sticker = this.stickers.get(id)
-    if (body && sticker) {
-      sticker.isDragging = isDragging
+    if (body) {
       Body.setStatic(body, isDragging)
-      if (!isDragging) {
+      if (isDragging) {
         Body.setVelocity(body, { x: 0, y: 0 })
+        Body.setAngularVelocity(body, 0)
       }
+    }
+    if (isDragging) {
+      this.hasDraggingSticker = true
+    } else {
+      let anyDragging = false
+      for (const [bid, b] of this.bodies) {
+        if (bid !== id && b.isStatic) {
+          anyDragging = true
+          break
+        }
+      }
+      this.hasDraggingSticker = anyDragging
     }
   }
 
@@ -192,19 +229,22 @@ export class StickerPhysics {
     this.engine.gravity.y = value
   }
 
-  playCollisionSound() {
+  playGravitySound() {
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
     }
     const ctx = this.audioContext
-    const frequency = 400 + (this.gravity - 0.5) * (200 / 2.5)
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+    }
+    const frequency = 400 + ((this.gravity - 0.5) / 2.5) * 200
     const oscillator = ctx.createOscillator()
     const gainNode = ctx.createGain()
 
     oscillator.type = 'sine'
     oscillator.frequency.setValueAtTime(frequency, ctx.currentTime)
 
-    gainNode.gain.setValueAtTime(0.1, ctx.currentTime)
+    gainNode.gain.setValueAtTime(0.08, ctx.currentTime)
     gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08)
 
     oscillator.connect(gainNode)
@@ -214,23 +254,26 @@ export class StickerPhysics {
     oscillator.stop(ctx.currentTime + 0.08)
   }
 
-  resize(width: number, height: number) {
-    Composite.clear(this.engine.world, false, true)
-    this.bodies.clear()
-    this.stickers.clear()
-    this.createBoundaries(width, height)
-  }
-
   clearAll() {
     for (const id of Array.from(this.bodies.keys())) {
       this.removeSticker(id)
     }
   }
 
+  getStickerCount() {
+    return this.bodies.size
+  }
+
   destroy() {
     Runner.stop(this.runner)
-    if (this.canvas.parentNode) {
-      this.canvas.parentNode.removeChild(this.canvas)
+    Composite.clear(this.engine.world)
+    Engine.clear(this.engine)
+    for (const timer of this.squashTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.squashTimers.clear()
+    if (this.audioContext) {
+      this.audioContext.close()
     }
   }
 }
