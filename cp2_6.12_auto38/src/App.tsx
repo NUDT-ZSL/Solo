@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import StaffEditor from './components/StaffEditor';
@@ -94,7 +94,22 @@ const EditorPage: React.FC = () => {
   const [userIndex] = useState(() => Math.floor(Math.random() * 5));
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
-  const [recentRemoteActions, setRecentRemoteActions] = useState<Map<string, { type: string; time: number }>>(new Map());
+  const [recentRemoteActions, setRecentRemoteActions] = useState<Map<string, { type: string; time: number; prev?: Note }>>(new Map());
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  const playbackSpeedRef = useRef(playbackSpeed);
+  const isPlayingRef = useRef(isPlaying);
+  const notesRef = useRef(notes);
+
+  useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { notesRef.current = notes; }, [notes]);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const myInfo = useMemo(() => ({
     id: userId,
@@ -102,6 +117,21 @@ const EditorPage: React.FC = () => {
     color: USER_COLORS[userIndex],
     avatar: USER_NAMES[userIndex].slice(-1),
   }), [userId, userIndex]);
+
+  const addRemoteAction = useCallback((noteId: string, type: string, prev?: Note) => {
+    setRecentRemoteActions(prevMap => {
+      const m = new Map(prevMap);
+      m.set(noteId, { type, time: Date.now(), prev });
+      return m;
+    });
+    setTimeout(() => {
+      setRecentRemoteActions(prevMap => {
+        const m = new Map(prevMap);
+        m.delete(noteId);
+        return m;
+      });
+    }, 300);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -121,41 +151,28 @@ const EditorPage: React.FC = () => {
     });
 
     s.on('note:add', ({ note, userId: uid }: { note: Note; userId: string }) => {
-      setNotes(prev => [...prev, note]);
       if (uid !== userId) {
-        setRecentRemoteActions(prev => {
-          const m = new Map(prev);
-          m.set(note.id, { type: 'add', time: Date.now() });
-          return m;
-        });
-        setTimeout(() => {
-          setRecentRemoteActions(prev => {
-            const m = new Map(prev);
-            m.delete(note.id);
-            return m;
-          });
-        }, 300);
+        addRemoteAction(note.id, 'add');
+        setNotes(prev => [...prev, note]);
       }
     });
 
     s.on('note:update', ({ noteId, changes, userId: uid }: { noteId: string; changes: Partial<Note>; userId: string }) => {
-      setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...changes } : n));
+      if (uid !== userId) {
+        const prevNote = notesRef.current.find(n => n.id === noteId);
+        if (prevNote) {
+          addRemoteAction(noteId, 'update', { ...prevNote });
+        }
+        setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...changes } : n));
+      }
     });
 
     s.on('note:delete', ({ noteId, userId: uid }: { noteId: string; userId: string }) => {
       if (uid !== userId) {
-        setRecentRemoteActions(prev => {
-          const m = new Map(prev);
-          m.set(noteId, { type: 'delete', time: Date.now() });
-          return m;
-        });
+        const prevNote = notesRef.current.find(n => n.id === noteId);
+        addRemoteAction(noteId, 'delete', prevNote);
         setTimeout(() => {
           setNotes(prev => prev.filter(n => n.id !== noteId));
-          setRecentRemoteActions(prev => {
-            const m = new Map(prev);
-            m.delete(noteId);
-            return m;
-          });
         }, 300);
       } else {
         setNotes(prev => prev.filter(n => n.id !== noteId));
@@ -163,8 +180,16 @@ const EditorPage: React.FC = () => {
       setSelectedNoteId(prev => prev === noteId ? null : prev);
     });
 
+    s.on('cursor:update', ({ userId: uid, x, y, noteId }: { userId: string; x: number; y: number; noteId: string | null }) => {
+      setCollaborators(prev => prev.map(c =>
+        c.id === uid
+          ? { ...c, cursorX: x, cursorY: y, selectedNoteId: noteId }
+          : c
+      ));
+    });
+
     return () => { s.disconnect(); };
-  }, [id, userId, myInfo]);
+  }, [id, userId, myInfo, addRemoteAction]);
 
   const addNote = (note: Note) => {
     if (!socket) return;
@@ -218,28 +243,33 @@ const EditorPage: React.FC = () => {
       audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     } catch { return; }
 
-    const sorted = [...notes].sort((a, b) => a.x - b.x);
-    const baseMs = 500 / playbackSpeed;
+    const currentNotes = [...notesRef.current].sort((a, b) => a.x - b.x);
+    const speed = playbackSpeedRef.current;
+    const baseMs = 500;
+    const highlightMs = 200;
 
-    for (let i = 0; i < sorted.length; i++) {
+    for (let i = 0; i < currentNotes.length; i++) {
       if (!isPlayingRef.current) break;
-      const note = sorted[i];
-      setPlayingNoteId(note.id);
-      playTone(audioCtx, note.pitch, DURATION_VALUES[note.duration] * baseMs / 1000);
+      const note = currentNotes[i];
+      const durationMultiplier = DURATION_VALUES[note.duration];
+      const noteDurationMs = durationMultiplier * baseMs / speed;
+      const audioDurationSec = noteDurationMs / 1000;
 
-      const delay = DURATION_VALUES[note.duration] * baseMs;
-      await new Promise(r => setTimeout(r, delay));
+      setPlayingNoteId(note.id);
+      playTone(audioCtx, note.pitch, audioDurationSec);
+
+      await new Promise(r => setTimeout(r, highlightMs));
       setPlayingNoteId(null);
-      // small gap between notes
-      await new Promise(r => setTimeout(r, 30));
+
+      const remainingDelay = noteDurationMs - highlightMs + 30;
+      if (remainingDelay > 0) {
+        await new Promise(r => setTimeout(r, remainingDelay));
+      }
     }
     setIsPlaying(false);
     setPlayingNoteId(null);
     audioCtx.close();
   };
-
-  const isPlayingRef = React.useRef(isPlaying);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
   const playTone = (ctx: AudioContext, pitch: number, duration: number) => {
     const osc = ctx.createOscillator();
@@ -247,12 +277,12 @@ const EditorPage: React.FC = () => {
     osc.type = 'sine';
     osc.frequency.value = midiToFreq(pitch);
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+    gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + duration);
+    osc.stop(ctx.currentTime + duration + 0.02);
   };
 
   return (
@@ -280,19 +310,21 @@ const EditorPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="mobile-toolbar">
-        <button
-          className={`panel-toggle ${mobileLeftOpen ? 'active' : ''}`}
-          onClick={() => { setMobileLeftOpen(o => !o); setMobileRightOpen(false); }}
-        >🎵 音符属性</button>
-        <button
-          className={`panel-toggle ${mobileRightOpen ? 'active' : ''}`}
-          onClick={() => { setMobileRightOpen(o => !o); setMobileLeftOpen(false); }}
-        >👥 协作者 ({collaborators.length})</button>
-      </div>
+      {isMobile && (
+        <div className="mobile-toolbar">
+          <button
+            className={`panel-toggle ${mobileLeftOpen ? 'active' : ''}`}
+            onClick={() => { setMobileLeftOpen(o => !o); setMobileRightOpen(false); }}
+          >🎵 音符属性</button>
+          <button
+            className={`panel-toggle ${mobileRightOpen ? 'active' : ''}`}
+            onClick={() => { setMobileRightOpen(o => !o); setMobileLeftOpen(false); }}
+          >👥 协作者 ({collaborators.length})</button>
+        </div>
+      )}
 
       <div className="editor-main">
-        <div className={`side-panel ${mobileLeftOpen ? 'open' : ''}`}>
+        <div className={`side-panel ${!isMobile || mobileLeftOpen ? 'open' : ''}`}>
           <NoteToolbar
             selectedNote={selectedNote}
             onUpdateNote={updateNote}
@@ -314,7 +346,7 @@ const EditorPage: React.FC = () => {
           />
         </div>
 
-        <div className={`side-panel right ${mobileRightOpen ? 'open' : ''}`}>
+        <div className={`side-panel right ${!isMobile || mobileRightOpen ? 'open' : ''}`}>
           <CollaboratorPanel
             me={myInfo}
             collaborators={collaborators}

@@ -473,7 +473,7 @@
 /* 音符 */
 .note {
   cursor: grab;
-  transition: filter 0.2s ease;
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 .note:active {
   cursor: grabbing;
@@ -484,12 +484,20 @@
 }
 .note.playing .note-head {
   fill: var(--highlight-gold);
-  filter: drop-shadow(0 0 12px var(--highlight-gold));
+  animation: playingPulse 0.2s ease-out;
+  filter: drop-shadow(0 0 12px var(--highlight-gold)) drop-shadow(0 0 8px var(--highlight-gold));
+}
+@keyframes playingPulse {
+  0% { r: 8; }
+  50% { r: 11; }
+  100% { r: 8; }
 }
 
 .note-head {
   fill: var(--note-color);
-  transition: fill 0.2s ease, stroke 0.2s ease, filter 0.2s ease, r 0.2s ease;
+  stroke: transparent;
+  stroke-width: 0;
+  transition: fill 0.15s ease, stroke 0.15s ease, filter 0.15s ease;
 }
 
 /* 动画：添加时弹性落下 */
@@ -513,26 +521,74 @@
   100% { transform: scale(0); opacity: 0; }
 }
 
-/* 动画：回放（半透明） */
+/* 动画：回放（半透明）- 远程用户操作 */
 .remote-note-action {
-  animation: remotePlayback 0.3s ease-out;
+  animation: remotePlayback 0.3s ease-out forwards;
   pointer-events: none;
 }
 @keyframes remotePlayback {
-  0% { opacity: 0.7; }
-  100% { opacity: 0; }
+  0% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 
-/* 拖拽辅助线 */
+.remote-note-action .note-head {
+  animation: remoteHeadPulse 0.3s ease-out forwards;
+}
+@keyframes remoteHeadPulse {
+  0% {
+    fill: rgba(255, 215, 0, 0.8);
+    filter: drop-shadow(0 0 10px var(--highlight-gold));
+    transform: scale(1.2);
+  }
+  50% {
+    fill: rgba(255, 215, 0, 0.4);
+    filter: drop-shadow(0 0 5px var(--highlight-gold));
+  }
+  100% {
+    fill: var(--note-color);
+    filter: none;
+    transform: scale(1);
+  }
+}
+
+/* 拖拽辅助线 - 金色虚线 */
 .drop-guide {
   stroke: var(--highlight-gold);
-  stroke-width: 2;
-  stroke-dasharray: 6 4;
-  animation: guidePulse 0.6s ease-in-out infinite;
+  stroke-width: 2.5;
+  stroke-dasharray: 8 5;
+  stroke-linecap: round;
+  animation: guidePulse 0.8s ease-in-out infinite;
+  pointer-events: none;
 }
 @keyframes guidePulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+  0%, 100% {
+    opacity: 0.6;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    opacity: 1;
+    stroke-dashoffset: 13;
+  }
+}
+
+/* 音符添加动画增强 */
+.note-enter .note-head {
+  animation: noteHeadBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes noteHeadBounce {
+  0% { r: 0; opacity: 0; }
+  60% { r: 10; opacity: 1; }
+  80% { r: 7.5; }
+  100% { r: 8; }
+}
+
+/* 音符删除动画 */
+.note-exit .note-head {
+  animation: noteDisappearHead 0.3s ease-in forwards;
+}
+@keyframes noteDisappearHead {
+  0% { r: 8; opacity: 1; transform: scale(1); }
+  100% { r: 0; opacity: 0; transform: scale(0.3); }
 }
 
 /* 远程光标 */
@@ -562,53 +618,97 @@
 }
 
 /* ===== 响应式 ===== */
-@media (max-width: 768px) {
+.mobile-toolbar {
+  display: none;
+}
+
+.side-panel {
+  width: 260px;
+  max-height: none !important;
+  padding: 20px !important;
+}
+
+@media (max-width: 767.98px) {
   .score-list-page {
     padding: 20px;
   }
-  
-  .editor-main {
-    flex-direction: column;
-  }
-  
-  .side-panel {
-    width: 100%;
-    max-height: 0;
-    padding: 0 20px;
-    border: none;
-    border-bottom: 1px solid var(--border-color);
-    overflow: hidden;
-  }
-  .side-panel.open {
-    max-height: 400px;
-    padding: 20px;
-  }
-  .side-panel.right {
-    border-left: none;
-    border-bottom: 1px solid var(--border-color);
-  }
-  
-  .mobile-toolbar {
-    display: flex;
-  }
-  
+
   .editor-header {
     padding: 12px 16px;
     flex-wrap: wrap;
     gap: 10px;
   }
-  
+
   .score-title-display {
     display: none;
   }
-  
-  .staff-container {
-    padding: 16px;
+
+  .header-right {
+    gap: 8px;
   }
-  
+
+  .mobile-toolbar {
+    display: flex;
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .editor-main {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .side-panel {
+    width: 100% !important;
+    max-height: 0 !important;
+    padding: 0 20px !important;
+    border: none !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease !important;
+  }
+
+  .side-panel.right {
+    border-left: none !important;
+  }
+
+  .side-panel.open {
+    max-height: 500px !important;
+    padding: 20px !important;
+    border-bottom: 1px solid var(--border-color) !important;
+  }
+
+  .side-panel.right.open {
+    border-left: none !important;
+  }
+
+  .staff-container {
+    padding: 12px;
+    overflow-x: auto;
+  }
+
   .staff-wrapper {
-    padding: 24px 20px;
+    padding: 20px 16px;
     border-radius: 12px;
+    margin: 0 auto;
+  }
+
+  .staff-svg {
+    min-width: 600px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .side-panel {
+    width: 220px;
+    padding: 16px !important;
+  }
+
+  .staff-container {
+    padding: 20px;
   }
 }
 

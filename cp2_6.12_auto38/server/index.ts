@@ -26,19 +26,19 @@ const scores = new Map<string, Score>();
 const rooms = new Map<string, RoomState>();
 
 const sampleNotes: Note[] = [
-  { id: 'n_demo1', pitch: 64, duration: 'quarter', x: 90, y: 7 },
-  { id: 'n_demo2', pitch: 62, duration: 'quarter', x: 150, y: 6 },
-  { id: 'n_demo3', pitch: 60, duration: 'quarter', x: 210, y: 5 },
-  { id: 'n_demo4', pitch: 62, duration: 'quarter', x: 270, y: 6 },
-  { id: 'n_demo5', pitch: 64, duration: 'quarter', x: 330, y: 7 },
-  { id: 'n_demo6', pitch: 64, duration: 'quarter', x: 390, y: 7 },
-  { id: 'n_demo7', pitch: 64, duration: 'half', x: 450, y: 7 },
-  { id: 'n_demo8', pitch: 62, duration: 'quarter', x: 540, y: 6 },
-  { id: 'n_demo9', pitch: 62, duration: 'quarter', x: 600, y: 6 },
-  { id: 'n_demo10', pitch: 62, duration: 'half', x: 660, y: 6 },
-  { id: 'n_demo11', pitch: 64, duration: 'quarter', x: 750, y: 7 },
-  { id: 'n_demo12', pitch: 67, duration: 'quarter', x: 810, y: 9 },
-  { id: 'n_demo13', pitch: 67, duration: 'half', x: 870, y: 9 },
+  { id: 'n_demo1', pitch: 64, duration: 'quarter', x: 90, y: 4 },
+  { id: 'n_demo2', pitch: 62, duration: 'quarter', x: 150, y: 2 },
+  { id: 'n_demo3', pitch: 60, duration: 'quarter', x: 210, y: 0 },
+  { id: 'n_demo4', pitch: 62, duration: 'quarter', x: 270, y: 2 },
+  { id: 'n_demo5', pitch: 64, duration: 'quarter', x: 330, y: 4 },
+  { id: 'n_demo6', pitch: 64, duration: 'quarter', x: 390, y: 4 },
+  { id: 'n_demo7', pitch: 64, duration: 'half', x: 450, y: 4 },
+  { id: 'n_demo8', pitch: 62, duration: 'quarter', x: 540, y: 2 },
+  { id: 'n_demo9', pitch: 62, duration: 'quarter', x: 600, y: 2 },
+  { id: 'n_demo10', pitch: 62, duration: 'half', x: 660, y: 2 },
+  { id: 'n_demo11', pitch: 64, duration: 'quarter', x: 750, y: 4 },
+  { id: 'n_demo12', pitch: 67, duration: 'quarter', x: 810, y: 7 },
+  { id: 'n_demo13', pitch: 67, duration: 'half', x: 870, y: 7 },
 ];
 
 const demoScore: Score = {

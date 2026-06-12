@@ -106,19 +106,19 @@ const NoteToolbar: React.FC<Props> = ({ selectedNote, onUpdateNote, onDeleteNote
         <input
           type="range"
           min={-2}
-          max={11}
+          max={13}
           value={selectedNote.y}
           onChange={e => {
             const y = Number(e.target.value);
             onUpdateNote(selectedNote.id, {
               y,
-              pitch: 60 + (y - 4),
+              pitch: 60 + y,
             });
           }}
           style={{ width: '100%', accentColor: 'var(--accent)' }}
         />
         <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right', marginTop: 2 }}>
-          位置 {selectedNote.y}
+          位置 {selectedNote.y} · 下加一线(y=0) 到 上加二间(y=13)
         </div>
       </div>
 
