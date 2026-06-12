@@ -6,64 +6,283 @@ interface EditorProps {
   selectedNode: FunctionNode | null
 }
 
-const KEYWORDS = new Set([
-  'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for',
-  'while', 'do', 'switch', 'case', 'break', 'continue', 'new', 'this',
-  'class', 'extends', 'import', 'export', 'default', 'from', 'async',
-  'await', 'try', 'catch', 'finally', 'throw', 'typeof', 'instanceof',
-  'in', 'of', 'true', 'false', 'null', 'undefined', 'void', 'delete',
-  'yield', 'static', 'super', 'constructor',
-])
+type TokenType =
+  | 'keyword'
+  | 'identifier'
+  | 'string'
+  | 'comment'
+  | 'number'
+  | 'operator'
+  | 'punctuation'
+  | 'regex'
+  | 'function'
+  | 'text'
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+interface Token {
+  type: TokenType
+  value: string
 }
 
-function highlightLine(line: string): string {
-  const tokens: string[] = []
-  let i = 0
-  const src = line
+const KEYWORDS = new Set([
+  'const',
+  'let',
+  'var',
+  'function',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'do',
+  'switch',
+  'case',
+  'break',
+  'continue',
+  'new',
+  'this',
+  'class',
+  'extends',
+  'import',
+  'export',
+  'default',
+  'from',
+  'async',
+  'await',
+  'try',
+  'catch',
+  'finally',
+  'throw',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'void',
+  'delete',
+  'yield',
+  'static',
+  'super',
+  'constructor',
+  'as',
+  'type',
+  'interface',
+  'implements',
+  'private',
+  'protected',
+  'public',
+  'readonly',
+])
 
-  while (i < src.length) {
+type LexerState =
+  | 'normal'
+  | 'single-string'
+  | 'double-string'
+  | 'template-string'
+  | 'single-line-comment'
+  | 'multi-line-comment'
+  | 'regex-literal'
+
+function tokenizeLine(
+  line: string,
+  startState: LexerState
+): { tokens: Token[]; endState: LexerState } {
+  const tokens: Token[] = []
+  let i = 0
+  let state: LexerState = startState
+  const src = line
+  const len = src.length
+
+  function pushToken(type: TokenType, value: string) {
+    if (value.length > 0) tokens.push({ type, value })
+  }
+
+  function consumeEscape(stateChar: string): number {
+    let j = i + 1
+    while (j < len) {
+      if (src[j] === '\\') {
+        j++
+      } else if (src[j] === stateChar) {
+        return j - i + 1
+      }
+      j++
+    }
+    return len - i
+  }
+
+  while (i < len) {
+    if (state === 'single-line-comment') {
+      pushToken('comment', src.slice(i))
+      i = len
+      state = 'normal'
+      continue
+    }
+
+    if (state === 'multi-line-comment') {
+      const endIdx = src.indexOf('*/', i)
+      if (endIdx !== -1) {
+        pushToken('comment', src.slice(i, endIdx + 2))
+        i = endIdx + 2
+        state = 'normal'
+      } else {
+        pushToken('comment', src.slice(i))
+        i = len
+      }
+      continue
+    }
+
+    if (state === 'single-string') {
+      const consumed = consumeEscape("'")
+      pushToken('string', src.slice(i, i + consumed))
+      i += consumed
+      state = 'normal'
+      continue
+    }
+
+    if (state === 'double-string') {
+      const consumed = consumeEscape('"')
+      pushToken('string', src.slice(i, i + consumed))
+      i += consumed
+      state = 'normal'
+      continue
+    }
+
+    if (state === 'template-string') {
+      let j = i
+      while (j < len) {
+        if (src[j] === '`') {
+          j++
+          pushToken('string', src.slice(i, j))
+          i = j
+          state = 'normal'
+          break
+        } else if (src[j] === '\\') {
+          j += 2
+        } else {
+          j++
+        }
+      }
+      if (state === 'template-string') {
+        pushToken('string', src.slice(i))
+        i = len
+      }
+      continue
+    }
+
+    if (state === 'regex-literal') {
+      const consumed = consumeEscape('/')
+      pushToken('regex', src.slice(i, i + consumed))
+      i += consumed
+      let flags = ''
+      while (i < len && /[a-zA-Z]/.test(src[i])) {
+        flags += src[i]
+        i++
+      }
+      if (flags.length > 0) pushToken('regex', flags)
+      state = 'normal'
+      continue
+    }
+
     if (src[i] === '/' && src[i + 1] === '/') {
-      tokens.push(`<span class="tok-comment">${escapeHtml(src.slice(i))}</span>`)
-      break
+      pushToken('comment', src.slice(i))
+      i = len
+      continue
     }
 
     if (src[i] === '/' && src[i + 1] === '*') {
-      const end = src.indexOf('*/', i + 2)
-      const commentEnd = end === -1 ? src.length : end + 2
-      tokens.push(`<span class="tok-comment">${escapeHtml(src.slice(i, commentEnd))}</span>`)
-      i = commentEnd
+      const endIdx = src.indexOf('*/', i + 2)
+      if (endIdx !== -1) {
+        pushToken('comment', src.slice(i, endIdx + 2))
+        i = endIdx + 2
+        state = 'normal'
+      } else {
+        pushToken('comment', src.slice(i))
+        i = len
+        state = 'multi-line-comment'
+      }
       continue
     }
 
-    if (src[i] === '"' || src[i] === "'" || src[i] === '`') {
-      const quote = src[i]
-      let j = i + 1
-      while (j < src.length && src[j] !== quote) {
-        if (src[j] === '\\') j++
-        j++
-      }
-      j = Math.min(j + 1, src.length)
-      tokens.push(`<span class="tok-string">${escapeHtml(src.slice(i, j))}</span>`)
-      i = j
+    if (src[i] === "'") {
+      const consumed = consumeEscape("'")
+      pushToken('string', src.slice(i, i + consumed))
+      i += consumed
       continue
+    }
+
+    if (src[i] === '"') {
+      const consumed = consumeEscape('"')
+      pushToken('string', src.slice(i, i + consumed))
+      i += consumed
+      continue
+    }
+
+    if (src[i] === '`') {
+      let j = i + 1
+      while (j < len) {
+        if (src[j] === '`') {
+          j++
+          pushToken('string', src.slice(i, j))
+          i = j
+          break
+        } else if (src[j] === '\\') {
+          j += 2
+        } else {
+          j++
+        }
+      }
+      if (j >= len) {
+        pushToken('string', src.slice(i))
+        i = len
+        state = 'template-string'
+      }
+      continue
+    }
+
+    const lastTok = tokens.length > 0 ? tokens[tokens.length - 1] : null
+    if (src[i] === '/') {
+      const lastNonWs = lastTok
+      const canStartRegex =
+        !lastNonWs ||
+        (lastNonWs.type === 'operator' ||
+          lastNonWs.type === 'punctuation' ||
+          lastNonWs.type === 'keyword' ||
+          lastNonWs.value === ';' ||
+          lastNonWs.value === '{' ||
+          lastNonWs.value === '(' ||
+          lastNonWs.value === ',' ||
+          lastNonWs.value === '=')
+
+      if (canStartRegex) {
+        const consumed = consumeEscape('/')
+        pushToken('regex', src.slice(i, i + consumed))
+        i += consumed
+        let flags = ''
+        while (i < len && /[a-zA-Z]/.test(src[i])) {
+          flags += src[i]
+          i++
+        }
+        if (flags.length > 0) pushToken('regex', flags)
+        continue
+      } else {
+        pushToken('operator', '/')
+        i++
+        continue
+      }
     }
 
     if (/[a-zA-Z_$]/.test(src[i])) {
       let j = i
-      while (j < src.length && /[a-zA-Z0-9_$]/.test(src[j])) j++
+      while (j < len && /[a-zA-Z0-9_$]/.test(src[j])) j++
       const word = src.slice(i, j)
       if (KEYWORDS.has(word)) {
-        tokens.push(`<span class="tok-keyword">${word}</span>`)
-      } else if (j < src.length && src[j] === '(') {
-        tokens.push(`<span class="tok-function">${escapeHtml(word)}</span>`)
+        pushToken('keyword', word)
+      } else if (j < len && src[j] === '(') {
+        pushToken('function', word)
       } else {
-        tokens.push(escapeHtml(word))
+        pushToken('identifier', word)
       }
       i = j
       continue
@@ -71,17 +290,81 @@ function highlightLine(line: string): string {
 
     if (/[0-9]/.test(src[i])) {
       let j = i
-      while (j < src.length && /[0-9.xXa-fA-F_]/.test(src[j])) j++
-      tokens.push(`<span class="tok-number">${escapeHtml(src.slice(i, j))}</span>`)
+      while (
+        j < len &&
+        (/[0-9.xXa-fA-F_]/.test(src[j]) || /[eEpP][+\-]/.test(src.slice(j, j + 2)))
+      ) {
+        if (/[eEpP][+\-]/.test(src.slice(j, j + 2))) j += 2
+        else j++
+      }
+      pushToken('number', src.slice(i, j))
       i = j
       continue
     }
 
-    tokens.push(escapeHtml(src[i]))
+    if (/[+\-*/%=<>!&|^~?:]/.test(src[i])) {
+      let op = src[i]
+      if (/[<>=!+\-*/%&|^]/.test(src[i]) && src[i + 1] === '=') {
+        op += '='
+        i++
+      } else if (
+        (src[i] === '+' && src[i + 1] === '+') ||
+        (src[i] === '-' && src[i + 1] === '-') ||
+        (src[i] === '&' && src[i + 1] === '&') ||
+        (src[i] === '|' && src[i + 1] === '|') ||
+        (src[i] === '<' && src[i + 1] === '<') ||
+        (src[i] === '>' && src[i + 1] === '>') ||
+        (src[i] === '*' && src[i + 1] === '*')
+      ) {
+        op += src[i + 1]
+        i++
+      }
+      pushToken('operator', op)
+      i++
+      continue
+    }
+
+    if (/[(){}[\],;.]/.test(src[i])) {
+      pushToken('punctuation', src[i])
+      i++
+      continue
+    }
+
+    pushToken('text', src[i])
     i++
   }
 
-  return tokens.join('')
+  return { tokens, endState: state }
+}
+
+function renderTokens(tokens: Token[]): string {
+  const cssClass: Record<TokenType, string> = {
+    keyword: 'tok-keyword',
+    identifier: 'tok-identifier',
+    string: 'tok-string',
+    comment: 'tok-comment',
+    number: 'tok-number',
+    operator: 'tok-operator',
+    punctuation: 'tok-punctuation',
+    regex: 'tok-regex',
+    function: 'tok-function',
+    text: 'tok-text',
+  }
+
+  return tokens
+    .map((t) =>
+      t.type === 'text'
+        ? escapeHtml(t.value)
+        : `<span class="${cssClass[t.type]}">${escapeHtml(t.value)}</span>`
+    )
+    .join('')
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 export function Editor({ sourceLines, selectedNode }: EditorProps) {
@@ -92,6 +375,17 @@ export function Editor({ sourceLines, selectedNode }: EditorProps) {
     if (!selectedNode) return null
     return { start: selectedNode.startLine, end: selectedNode.endLine }
   }, [selectedNode])
+
+  const renderedLines = useMemo(() => {
+    const results: string[] = []
+    let state: LexerState = 'normal'
+    for (const line of sourceLines) {
+      const { tokens, endState } = tokenizeLine(line, state)
+      state = endState
+      results.push(renderTokens(tokens))
+    }
+    return results
+  }, [sourceLines])
 
   useEffect(() => {
     if (!highlightRange || !containerRef.current) return
@@ -126,12 +420,14 @@ export function Editor({ sourceLines, selectedNode }: EditorProps) {
               ref={(el) => {
                 if (el) lineRefs.current.set(lineNum, el)
               }}
-              className={`editor-line${isHighlighted ? ' editor-line-highlighted' : ''}`}
+              className={`editor-line${
+                isHighlighted ? ' editor-line-highlighted' : ''
+              }`}
             >
               <span className="editor-linenum">{lineNum}</span>
               <span
                 className="editor-code"
-                dangerouslySetInnerHTML={{ __html: highlightLine(line) }}
+                dangerouslySetInnerHTML={{ __html: renderedLines[idx] }}
               />
             </div>
           )

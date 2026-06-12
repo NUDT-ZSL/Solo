@@ -323,6 +323,11 @@ html, body, #root {
 .tok-comment { color: var(--text-overlay); font-style: italic; }
 .tok-number { color: var(--peach); }
 .tok-function { color: var(--blue); }
+.tok-identifier { color: var(--text); }
+.tok-operator { color: var(--sky, #89b4fa); }
+.tok-punctuation { color: var(--text-subtext); }
+.tok-regex { color: var(--teal); }
+.tok-text { color: var(--text); }
 
 .editor-empty {
   display: flex;

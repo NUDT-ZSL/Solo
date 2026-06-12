@@ -1,6 +1,7 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import * as d3 from 'd3'
 import { graphviz } from 'd3-graphviz'
+import { Graphviz as HPCCGraphviz } from '@hpcc-js/wasm'
 import type { FunctionNode, CallEdge } from './store'
 
 interface GraphProps {
@@ -23,30 +24,60 @@ function findCallChain(
   edges: CallEdge[],
   nodes: FunctionNode[]
 ): Set<string> {
+  const inDegree = new Map<string, number>()
+  for (const n of nodes) inDegree.set(n.id, 0)
+  for (const e of edges) {
+    inDegree.set(e.to, (inDegree.get(e.to) || 0) + 1)
+  }
+  const entryPoints = nodes
+    .filter((n) => (inDegree.get(n.id) || 0) === 0)
+    .map((n) => n.id)
+
   const adj = new Map<string, string[]>()
   for (const e of edges) {
-    if (!adj.has(e.to)) adj.set(e.to, [])
-    adj.get(e.to)!.push(e.from)
+    if (!adj.has(e.from)) adj.set(e.from, [])
+    adj.get(e.from)!.push(e.to)
   }
 
-  const path = new Set<string>()
-  const visited = new Set<string>()
-  const queue = [targetId]
-  visited.add(targetId)
-
+  const reachableFromEntries = new Set<string>()
+  const queue = [...entryPoints]
+  for (const ep of entryPoints) reachableFromEntries.add(ep)
   while (queue.length > 0) {
     const cur = queue.shift()!
-    path.add(cur)
-    const callers = adj.get(cur) || []
-    for (const c of callers) {
-      if (!visited.has(c)) {
-        visited.add(c)
-        queue.push(c)
+    const next = adj.get(cur) || []
+    for (const n of next) {
+      if (!reachableFromEntries.has(n)) {
+        reachableFromEntries.add(n)
+        queue.push(n)
       }
     }
   }
 
-  return path
+  if (!reachableFromEntries.has(targetId)) {
+    return new Set<string>()
+  }
+
+  const reverseAdj = new Map<string, string[]>()
+  for (const e of edges) {
+    if (!reverseAdj.has(e.to)) reverseAdj.set(e.to, [])
+    reverseAdj.get(e.to)!.push(e.from)
+  }
+
+  const allCallers = new Set<string>()
+  const rqueue = [targetId]
+  allCallers.add(targetId)
+  while (rqueue.length > 0) {
+    const cur = rqueue.shift()!
+    const callers = reverseAdj.get(cur) || []
+    for (const c of callers) {
+      if (!allCallers.has(c) && reachableFromEntries.has(c)) {
+        allCallers.add(c)
+        rqueue.push(c)
+      }
+    }
+  }
+
+  return allCallers
 }
 
 function generateDot(
@@ -54,66 +85,33 @@ function generateDot(
   edges: CallEdge[],
   selectedNodeId: string | null,
   filterEntryPoint: boolean,
-  filterRecursive: boolean
+  filterRecursive: boolean,
+  callChainNodeIds: Set<string>,
+  callChainEdgeKeys: Set<string>,
+  entryFilterVisibleIds: Set<string>
 ): string {
-  let filteredNodes = [...nodes]
-  let filteredEdges = [...edges]
-
-  if (filterEntryPoint) {
-    const entryIds = new Set(filteredNodes.filter((n) => n.isEntryPoint).map((n) => n.id))
-    const reachable = new Set<string>()
-    const queue = [...entryIds]
-    for (const eid of entryIds) reachable.add(eid)
-    while (queue.length > 0) {
-      const cur = queue.shift()!
-      const next = filteredEdges.filter((e) => e.from === cur).map((e) => e.to)
-      for (const n of next) {
-        if (!reachable.has(n)) {
-          reachable.add(n)
-          queue.push(n)
-        }
-      }
-    }
-    filteredNodes = filteredNodes.filter((n) => reachable.has(n.id))
-    filteredEdges = filteredEdges.filter(
-      (e) => reachable.has(e.from) && reachable.has(e.to)
-    )
-    const entryIdSet = new Set(entryIds)
-    filteredNodes = filteredNodes.filter(
-      (n) => entryIdSet.has(n.id) || filteredEdges.some((e) => e.to === n.id)
-    )
-  }
-
-  const callChainNodeIds = selectedNodeId
-    ? findCallChain(selectedNodeId, edges, nodes)
-    : new Set<string>()
-
-  const callChainEdgeKeys = new Set<string>()
-  if (selectedNodeId) {
-    const chainArr = Array.from(callChainNodeIds)
-    for (const e of edges) {
-      if (chainArr.includes(e.from) && chainArr.includes(e.to)) {
-        callChainEdgeKeys.add(`${e.from}->${e.to}`)
-      }
-    }
-  }
-
   const lines: string[] = ['digraph G {']
   lines.push('  rankdir=TB;')
   lines.push('  bgcolor="transparent";')
-  lines.push('  node [shape=box, style="filled,rounded", fontname="JetBrains Mono", fontsize=12, penwidth=1.5, margin="0.2,0.1"];')
-  lines.push('  edge [arrowsize=0.7, color="#585b70", fontname="JetBrains Mono", fontsize=10];')
+  lines.push(
+    '  node [shape=box, style="filled,rounded", fontname="JetBrains Mono", fontsize=12, penwidth=1.5, margin="0.2,0.1"];'
+  )
+  lines.push(
+    '  edge [arrowsize=0.7, color="#585b70", fontname="JetBrains Mono", fontsize=10];'
+  )
   lines.push('')
 
-  const nodeIds = new Set(filteredNodes.map((n) => n.id))
+  const nodeIdSet = new Set(nodes.map((n) => n.id))
 
-  for (const n of filteredNodes) {
+  for (const n of nodes) {
     const color = COMPLEXITY_COLORS[n.complexity]
     let style = 'filled,rounded'
     let penwidth = 1.5
     let nodeColor = '#585b70'
     let fontColor = '#1e1e2e'
     let opacity = 1
+
+    const safeId = n.id.replace(/@/g, '_at_')
 
     if (selectedNodeId) {
       if (n.id === selectedNodeId) {
@@ -134,16 +132,23 @@ function generateDot(
       penwidth = 2.5
     }
 
-    const safeId = n.id.replace(/@/g, '_at_')
+    let classes = `node-g node-${safeId}`
+    if (filterEntryPoint && !entryFilterVisibleIds.has(n.id)) {
+      classes += ' node-hidden'
+    }
+    if (filterRecursive && !n.isRecursive) {
+      classes += ' node-dim'
+    }
+
     lines.push(
-      `  ${safeId} [label="${n.name}\\n(L${n.startLine}, ${n.statementCount} stmts)", fillcolor="${color}", fontcolor="${fontColor}", color="${nodeColor}", penwidth=${penwidth}, style="${style}"${opacity < 1 ? `, opacity=${opacity}` : ''}];`
+      `  ${safeId} [label="${n.name}\\n(L${n.startLine}, ${n.statementCount} stmts)", fillcolor="${color}", fontcolor="${fontColor}", color="${nodeColor}", penwidth=${penwidth}, style="${style}"${opacity < 1 ? `, opacity=${opacity}` : ''}, class="${classes}"];`
     )
   }
 
   lines.push('')
 
-  for (const e of filteredEdges) {
-    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue
+  for (const e of edges) {
+    if (!nodeIdSet.has(e.from) || !nodeIdSet.has(e.to)) continue
     const safeFrom = e.from.replace(/@/g, '_at_')
     const safeTo = e.to.replace(/@/g, '_at_')
     const edgeKey = `${e.from}->${e.to}`
@@ -151,6 +156,16 @@ function generateDot(
     let edgePenwidth = 1
     let edgeStyle = ''
     let edgeOpacity = 1
+
+    const edgeClass = `edge-g edge-${safeFrom}-${safeTo}`
+    let finalEdgeClass = edgeClass
+    if (filterEntryPoint) {
+      const fromOk = entryFilterVisibleIds.has(e.from)
+      const toOk = entryFilterVisibleIds.has(e.to)
+      if (!fromOk || !toOk) {
+        finalEdgeClass += ' edge-hidden'
+      }
+    }
 
     if (selectedNodeId) {
       if (callChainEdgeKeys.has(edgeKey)) {
@@ -168,7 +183,7 @@ function generateDot(
     }
 
     lines.push(
-      `  ${safeFrom} -> ${safeTo} [color="${edgeColor}", penwidth=${edgePenwidth}${edgeStyle ? `, ${edgeStyle}` : ''}${edgeOpacity < 1 ? `, opacity=${edgeOpacity}` : ''}];`
+      `  ${safeFrom} -> ${safeTo} [color="${edgeColor}", penwidth=${edgePenwidth}${edgeStyle ? `, ${edgeStyle}` : ''}${edgeOpacity < 1 ? `, opacity=${edgeOpacity}` : ''}, class="${finalEdgeClass}"];`
     )
   }
 
@@ -186,19 +201,92 @@ export function Graph({
 }: GraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const gvRef = useRef<any>(null)
+  const wasmLoadedRef = useRef(false)
+  const hasRenderedRef = useRef(false)
+
   const onNodeClickRef = useRef(onNodeClick)
   onNodeClickRef.current = onNodeClick
 
   useEffect(() => {
-    if (!containerRef.current) return
+    ;(async () => {
+      if (!wasmLoadedRef.current) {
+        try {
+          await HPCCGraphviz.load()
+          wasmLoadedRef.current = true
+        } catch {
+          // silently fail
+        }
+      }
+    })()
+  }, [])
+
+  const { dot, callChainEdgeKeys } = useMemo(() => {
+    const callChainNodeIds = selectedNodeId
+      ? findCallChain(selectedNodeId, edges, nodes)
+      : new Set<string>()
+
+    const callChainEdgeKeys = new Set<string>()
+    if (selectedNodeId) {
+      const chainArr = Array.from(callChainNodeIds)
+      for (const e of edges) {
+        if (chainArr.includes(e.from) && chainArr.includes(e.to)) {
+          callChainEdgeKeys.add(`${e.from}->${e.to}`)
+        }
+      }
+    }
+
+    const entryFilterVisibleIds = new Set<string>()
+    if (nodes.length > 0) {
+      const inDegree = new Map<string, number>()
+      for (const n of nodes) inDegree.set(n.id, 0)
+      for (const e of edges) {
+        inDegree.set(e.to, (inDegree.get(e.to) || 0) + 1)
+      }
+      const entryPoints = nodes
+        .filter((n) => (inDegree.get(n.id) || 0) === 0)
+        .map((n) => n.id)
+      const adj = new Map<string, string[]>()
+      for (const e of edges) {
+        if (!adj.has(e.from)) adj.set(e.from, [])
+        adj.get(e.from)!.push(e.to)
+      }
+      const queue = [...entryPoints]
+      for (const ep of entryPoints) entryFilterVisibleIds.add(ep)
+      while (queue.length > 0) {
+        const cur = queue.shift()!
+        const next = adj.get(cur) || []
+        for (const n of next) {
+          if (!entryFilterVisibleIds.has(n)) {
+            entryFilterVisibleIds.add(n)
+            queue.push(n)
+          }
+        }
+      }
+    }
+
+    const dot = generateDot(
+      nodes,
+      edges,
+      selectedNodeId,
+      filterEntryPoint,
+      filterRecursive,
+      callChainNodeIds,
+      callChainEdgeKeys,
+      entryFilterVisibleIds
+    )
+
+    return { dot, callChainEdgeKeys }
+  }, [nodes, edges, selectedNodeId, filterEntryPoint, filterRecursive])
+
+  useEffect(() => {
+    if (!containerRef.current || !wasmLoadedRef.current) return
     if (nodes.length === 0) {
       if (containerRef.current) {
         containerRef.current.innerHTML = ''
       }
+      hasRenderedRef.current = false
       return
     }
-
-    const dot = generateDot(nodes, edges, selectedNodeId, filterEntryPoint, filterRecursive)
 
     try {
       if (!gvRef.current) {
@@ -209,6 +297,7 @@ export function Graph({
             return d3.transition().duration(400).ease(d3.easeCubicInOut) as any
           })
           .renderDot(dot)
+        hasRenderedRef.current = true
       } else {
         gvRef.current
           .transition(function () {
@@ -219,15 +308,17 @@ export function Graph({
     } catch {
       try {
         gvRef.current = null
+        hasRenderedRef.current = false
         if (containerRef.current) containerRef.current.innerHTML = ''
         gvRef.current = graphviz(containerRef.current, {
           useWorker: false,
         }).renderDot(dot)
+        hasRenderedRef.current = true
       } catch {
         // silently fail
       }
     }
-  }, [nodes, edges, selectedNodeId, filterEntryPoint, filterRecursive])
+  }, [dot, nodes, wasmLoadedRef.current])
 
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0) return
@@ -247,7 +338,38 @@ export function Graph({
       svg.addEventListener('click', handleClick)
       return () => svg.removeEventListener('click', handleClick)
     }
-  }, [nodes, edges, selectedNodeId, filterEntryPoint, filterRecursive])
+  }, [nodes, dot, selectedNodeId, filterEntryPoint, filterRecursive])
+
+  useEffect(() => {
+    if (!containerRef.current || !hasRenderedRef.current) return
+    const svg = containerRef.current.querySelector('svg')
+    if (!svg) return
+
+    const nodeEls = svg.querySelectorAll('.node')
+    nodeEls.forEach((el) => {
+      const titleEl = el.querySelector('title')
+      if (!titleEl) return
+      const rawId = titleEl.textContent || ''
+      const nodeId = rawId.replace(/_at_/g, '@')
+      const safeId = nodeId.replace(/@/g, '_at_')
+
+      el.classList.remove('node-hover-target')
+      el.classList.add(`node-id-${safeId}`)
+    })
+
+    const style = document.getElementById('graph-dyn-style') || document.createElement('style')
+    style.id = 'graph-dyn-style'
+    document.head.appendChild(style)
+
+    const css: string[] = []
+    css.push('.node-hidden { opacity: 0.05 !important; pointer-events: none; }')
+    css.push('.edge-hidden { opacity: 0.05 !important; pointer-events: none; }')
+    css.push('.node-dim { opacity: 0.6; }')
+    css.push(
+      `.node-g:hover { transform: scale(1.2); transform-origin: center; cursor: pointer; transition: transform 0.15s ease; }`
+    )
+    style.textContent = css.join('\n')
+  }, [hasRenderedRef.current, filterEntryPoint, filterRecursive])
 
   return (
     <div className="graph-wrapper">
