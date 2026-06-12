@@ -51,39 +51,27 @@ export interface GridCellInfo {
   pathCount: number;
 }
 
-export const FURNITURE_PRESETS: FurniturePreset[] = [
-  {
-    type: 'sofa',
-    name: '沙发',
-    size: { width: 2.0, depth: 0.9, height: 0.8 },
-    color: '#a8c0c0',
-  },
-  {
-    type: 'coffeeTable',
-    name: '茶几',
-    size: { width: 1.2, depth: 0.6, height: 0.4 },
-    color: '#c9b99a',
-  },
-  {
-    type: 'bookshelf',
-    name: '书架',
-    size: { width: 1.0, depth: 0.4, height: 2.0 },
-    color: '#8b7d70',
-  },
-];
+export interface FurnitureInstanceData {
+  id: string;
+  type: FurnitureType;
+  position: { x: number; y: number; z: number };
+  rotationY: number;
+  size: { width: number; depth: number; height: number };
+}
 
-export const ROOM_WIDTH = 6;
-export const ROOM_DEPTH = 5;
-export const ROOM_HEIGHT = 3;
+export interface FurnitureChangeCallback {
+  (instances: FurnitureInstanceData[]): void;
+}
 
-export const WINDOW_WIDTH = 1.2;
-export const WINDOW_HEIGHT = 2.2;
-
-export const GRID_COLS = 50;
-export const GRID_ROWS = 50;
-
-export const DISPLAY_GRID_COLS = 20;
-export const DISPLAY_GRID_ROWS = 20;
-
-export const MAX_ILLUMINANCE = 1000;
-export const MAX_PATH_COUNT = 20;
+export declare const FURNITURE_PRESETS: FurniturePreset[];
+export declare const ROOM_WIDTH: number;
+export declare const ROOM_DEPTH: number;
+export declare const ROOM_HEIGHT: number;
+export declare const WINDOW_WIDTH: number;
+export declare const WINDOW_HEIGHT: number;
+export declare const GRID_COLS: number;
+export declare const GRID_ROWS: number;
+export declare const DISPLAY_GRID_COLS: number;
+export declare const DISPLAY_GRID_ROWS: number;
+export declare const MAX_ILLUMINANCE: number;
+export declare const MAX_PATH_COUNT: number;

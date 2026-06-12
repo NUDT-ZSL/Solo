@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import {
-  type WorkerSceneData,
-  type WorkerResult,
   type Occluder,
   type WindowDef,
+  type WorkerSceneData,
+  type WorkerResult,
   type GridCellInfo,
   ROOM_WIDTH,
   ROOM_DEPTH,
@@ -16,7 +16,7 @@ import {
   DISPLAY_GRID_COLS,
   DISPLAY_GRID_ROWS,
   MAX_ILLUMINANCE,
-} from '../../types';
+} from '../../constants';
 
 const HEATMAP_VERT = `
 varying vec2 vUv;
@@ -33,14 +33,13 @@ uniform float uTransition;
 uniform float uOpacity;
 varying vec2 vUv;
 
-vec3 illuminanceToColor(float t) {
+vec3 heatColor(float t) {
   t = clamp(t, 0.0, 1.0);
   vec3 c0 = vec3(0.0, 0.102, 0.302);
   vec3 c1 = vec3(0.0, 0.333, 0.8);
   vec3 c2 = vec3(0.0, 0.8, 0.8);
   vec3 c3 = vec3(1.0, 1.0, 0.0);
   vec3 c4 = vec3(1.0, 0.98, 0.804);
-
   if (t < 0.25) return mix(c0, c1, t / 0.25);
   if (t < 0.5) return mix(c1, c2, (t - 0.25) / 0.25);
   if (t < 0.75) return mix(c2, c3, (t - 0.5) / 0.25);
@@ -48,12 +47,12 @@ vec3 illuminanceToColor(float t) {
 }
 
 void main() {
-  vec4 fromVal = texture2D(uTextureFrom, vUv);
-  vec4 toVal = texture2D(uTextureTo, vUv);
-  vec4 blended = mix(fromVal, toVal, uTransition);
-  float illuminance = blended.r;
-  vec3 color = illuminanceToColor(illuminance / 1000.0);
-  gl_FragColor = vec4(color, uOpacity);
+  vec4 f = texture2D(uTextureFrom, vUv);
+  vec4 to = texture2D(uTextureTo, vUv);
+  vec4 b = mix(f, to, uTransition);
+  float ill = b.r;
+  vec3 col = heatColor(ill / 1000.0);
+  gl_FragColor = vec4(col, uOpacity);
 }
 `;
 
@@ -61,27 +60,29 @@ export class GridRenderer {
   private scene: THREE.Scene;
   private heatmapMesh: THREE.Mesh | null = null;
   private gridLines: THREE.Group | null = null;
+  private cellHitPlanes: THREE.Group | null = null;
   private textureFrom: THREE.DataTexture;
   private textureTo: THREE.DataTexture;
   private shaderMaterial: THREE.ShaderMaterial;
   private worker: Worker;
-  private pendingCompute = false;
-  private lastComputeTime = 0;
-  private computeInterval = 66;
+  private pending = false;
+  private lastCompute = 0;
+  private minInterval = 66;
   private currentSamples: Float32Array;
   private targetSamples: Float32Array;
-  private transitionTween: gsap.core.Tween | null = null;
+  private tween: gsap.core.Tween | null = null;
   private infoCard: HTMLElement | null = null;
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
+  private pendingOccluders: Occluder[] = [];
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.currentSamples = new Float32Array(GRID_COLS * GRID_ROWS * 2);
     this.targetSamples = new Float32Array(GRID_COLS * GRID_ROWS * 2);
 
-    this.textureFrom = this.createDataTexture(this.currentSamples);
-    this.textureTo = this.createDataTexture(this.targetSamples);
+    this.textureFrom = this.makeTex(this.currentSamples);
+    this.textureTo = this.makeTex(this.targetSamples);
 
     this.shaderMaterial = new THREE.ShaderMaterial({
       vertexShader: HEATMAP_VERT,
@@ -89,91 +90,115 @@ export class GridRenderer {
       uniforms: {
         uTextureFrom: { value: this.textureFrom },
         uTextureTo: { value: this.textureTo },
-        uTransition: { value: 1.0 },
-        uOpacity: { value: 0.75 },
+        uTransition: { value: 1 },
+        uOpacity: { value: 0.72 },
       },
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
 
-    this.createHeatmapMesh();
-    this.createGridLines();
-    this.createInfoCard();
+    this.createMeshes();
+    this.createCard();
 
     this.worker = new Worker(
       new URL('../worker/rayTracing.worker.ts', import.meta.url),
       { type: 'module' }
     );
-    this.worker.onmessage = this.handleWorkerResult.bind(this);
+    this.worker.onmessage = this.onWorkerDone.bind(this);
 
-    this.triggerRecalculation([]);
+    this.scheduleCompute([]);
   }
 
-  private createDataTexture(data: Float32Array): THREE.DataTexture {
-    const texture = new THREE.DataTexture(
-      data,
+  private makeTex(data: Float32Array): THREE.DataTexture {
+    const arr = new Float32Array(GRID_COLS * GRID_ROWS * 4);
+    for (let i = 0; i < GRID_COLS * GRID_ROWS; i++) {
+      arr[i * 4] = data[i * 2];
+      arr[i * 4 + 1] = data[i * 2 + 1];
+      arr[i * 4 + 2] = 0;
+      arr[i * 4 + 3] = 1;
+    }
+    const tex = new THREE.DataTexture(
+      arr,
       GRID_COLS,
       GRID_ROWS,
       THREE.RGBAFormat,
       THREE.FloatType
     );
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.needsUpdate = true;
-    return texture;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    return tex;
   }
 
-  private createHeatmapMesh(): void {
+  private syncTex(tex: THREE.DataTexture, data: Float32Array): void {
+    const arr = tex.image.data as Float32Array;
+    for (let i = 0; i < GRID_COLS * GRID_ROWS; i++) {
+      arr[i * 4] = data[i * 2];
+      arr[i * 4 + 1] = data[i * 2 + 1];
+    }
+    tex.needsUpdate = true;
+  }
+
+  private createMeshes(): void {
     const geo = new THREE.PlaneGeometry(ROOM_WIDTH, ROOM_DEPTH, 1, 1);
     geo.rotateX(-Math.PI / 2);
+    const uvs = geo.attributes.uv;
+    for (let i = 0; i < uvs.count; i++) {
+      const x = uvs.getX(i);
+      const y = uvs.getY(i);
+      uvs.setXY(i, x, 1 - y);
+    }
     this.heatmapMesh = new THREE.Mesh(geo, this.shaderMaterial);
     this.heatmapMesh.position.set(ROOM_WIDTH / 2, 0.015, ROOM_DEPTH / 2);
-    this.heatmapMesh.renderOrder = 1;
+    this.heatmapMesh.renderOrder = 2;
     this.scene.add(this.heatmapMesh);
-  }
 
-  private createGridLines(): void {
     this.gridLines = new THREE.Group();
-    const lineMaterial = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.12,
-    });
-
+    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1 });
     for (let i = 0; i <= DISPLAY_GRID_COLS; i++) {
       const x = (i / DISPLAY_GRID_COLS) * ROOM_WIDTH;
-      const points = [
-        new THREE.Vector3(x, 0.02, 0),
-        new THREE.Vector3(x, 0.02, ROOM_DEPTH),
-      ];
-      const geo = new THREE.BufferGeometry().setFromPoints(points);
-      this.gridLines.add(new THREE.Line(geo, lineMaterial));
+      const pts = [new THREE.Vector3(x, 0.018, 0), new THREE.Vector3(x, 0.018, ROOM_DEPTH)];
+      this.gridLines.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
     }
-
     for (let j = 0; j <= DISPLAY_GRID_ROWS; j++) {
       const z = (j / DISPLAY_GRID_ROWS) * ROOM_DEPTH;
-      const points = [
-        new THREE.Vector3(0, 0.02, z),
-        new THREE.Vector3(ROOM_WIDTH, 0.02, z),
-      ];
-      const geo = new THREE.BufferGeometry().setFromPoints(points);
-      this.gridLines.add(new THREE.Line(geo, lineMaterial));
+      const pts = [new THREE.Vector3(0, 0.018, z), new THREE.Vector3(ROOM_WIDTH, 0.018, z)];
+      this.gridLines.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
     }
-
     this.scene.add(this.gridLines);
+
+    this.cellHitPlanes = new THREE.Group();
+    const cellW = ROOM_WIDTH / DISPLAY_GRID_COLS;
+    const cellD = ROOM_DEPTH / DISPLAY_GRID_ROWS;
+    const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    for (let r = 0; r < DISPLAY_GRID_ROWS; r++) {
+      for (let c = 0; c < DISPLAY_GRID_COLS; c++) {
+        const cellGeo = new THREE.PlaneGeometry(cellW, cellD);
+        cellGeo.rotateX(-Math.PI / 2);
+        const cell = new THREE.Mesh(cellGeo, hitMat);
+        cell.position.set(
+          (c + 0.5) * cellW,
+          0.022,
+          (r + 0.5) * cellD
+        );
+        cell.userData = { gridCol: c, gridRow: r };
+        cell.renderOrder = 1;
+        this.cellHitPlanes.add(cell);
+      }
+    }
+    this.scene.add(this.cellHitPlanes);
   }
 
-  private createInfoCard(): void {
+  private createCard(): void {
     this.infoCard = document.createElement('div');
     this.infoCard.className = 'info-card';
     this.infoCard.innerHTML = `
-      <div class="info-card-content">
+      <div class="info-card-inner">
+        <div class="info-card-title">采光分析</div>
         <div class="info-card-row">
           <span class="info-card-label">照度</span>
-          <span class="info-card-value" id="info-illuminance">0</span>
+          <span class="info-card-value" id="info-illum">0</span>
           <span class="info-card-unit">lux</span>
         </div>
         <div class="info-card-row">
@@ -188,162 +213,109 @@ export class GridRenderer {
   }
 
   updateOccluders(occluders: Occluder[]): void {
+    this.pendingOccluders = occluders;
     const now = performance.now();
-    if (now - this.lastComputeTime < this.computeInterval && this.pendingCompute) {
+    if (this.pending) return;
+    if (now - this.lastCompute < this.minInterval) {
+      setTimeout(() => this.scheduleCompute(this.pendingOccluders), this.minInterval - (now - this.lastCompute));
       return;
     }
-    this.triggerRecalculation(occluders);
+    this.scheduleCompute(occluders);
   }
 
-  private triggerRecalculation(occluders: Occluder[]): void {
-    this.lastComputeTime = performance.now();
-    this.pendingCompute = true;
-
+  private scheduleCompute(occluders: Occluder[]): void {
+    if (this.pending) return;
+    this.pending = true;
+    this.lastCompute = performance.now();
     const windows: WindowDef[] = [
-      {
-        centerX: 0,
-        centerY: 1.4,
-        centerZ: 1.25,
-        width: WINDOW_WIDTH,
-        height: WINDOW_HEIGHT,
-        normalX: 1,
-        normalY: 0,
-        normalZ: 0,
-      },
-      {
-        centerX: 0,
-        centerY: 1.4,
-        centerZ: 3.75,
-        width: WINDOW_WIDTH,
-        height: WINDOW_HEIGHT,
-        normalX: 1,
-        normalY: 0,
-        normalZ: 0,
-      },
+      { centerX: 0, centerY: 1.4, centerZ: 1.25, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, normalX: 1, normalY: 0, normalZ: 0 },
+      { centerX: 0, centerY: 1.4, centerZ: 3.75, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, normalX: 1, normalY: 0, normalZ: 0 },
     ];
-
-    const sceneData: WorkerSceneData = {
+    const data: WorkerSceneData = {
       roomWidth: ROOM_WIDTH,
       roomDepth: ROOM_DEPTH,
       roomHeight: ROOM_HEIGHT,
       windows,
-      sunDirectionX: 1,
-      sunDirectionY: -0.3,
-      sunDirectionZ: 0,
+      sunDirectionX: 0.85,
+      sunDirectionY: -0.45,
+      sunDirectionZ: 0.25,
       sunIntensity: 1.5,
       occluders,
       gridCols: GRID_COLS,
       gridRows: GRID_ROWS,
     };
-
-    this.worker.postMessage(sceneData);
+    this.worker.postMessage(data);
   }
 
-  private handleWorkerResult(e: MessageEvent): void {
-    const result: WorkerResult = e.data;
-    this.pendingCompute = false;
-
-    const newSamples = result.samples;
+  private onWorkerDone(e: MessageEvent): void {
+    const r: WorkerResult = e.data;
+    this.pending = false;
 
     this.currentSamples = new Float32Array(this.targetSamples);
-    this.targetSamples = new Float32Array(newSamples);
+    this.targetSamples = new Float32Array(r.samples);
+    this.syncTex(this.textureFrom, this.currentSamples);
+    this.syncTex(this.textureTo, this.targetSamples);
 
-    this.updateTextureData(this.textureFrom, this.currentSamples);
-    this.updateTextureData(this.textureTo, this.targetSamples);
-
-    if (this.transitionTween) {
-      this.transitionTween.kill();
-    }
-
+    if (this.tween) this.tween.kill();
     this.shaderMaterial.uniforms.uTransition.value = 0;
-    this.transitionTween = gsap.to(this.shaderMaterial.uniforms.uTransition, {
+    this.tween = gsap.to(this.shaderMaterial.uniforms.uTransition, {
       value: 1,
       duration: 0.8,
       ease: 'power2.inOut',
     });
   }
 
-  private updateTextureData(texture: THREE.DataTexture, data: Float32Array): void {
-    const imgData = texture.image.data;
-    const len = GRID_COLS * GRID_ROWS;
-    for (let i = 0; i < len; i++) {
-      imgData[i * 4] = data[i * 2];
-      imgData[i * 4 + 1] = data[i * 2 + 1];
-      imgData[i * 4 + 2] = 0;
-      imgData[i * 4 + 3] = 1;
-    }
-    texture.needsUpdate = true;
-  }
-
-  handleClick(event: MouseEvent, camera: THREE.Camera, renderer: THREE.WebGLRenderer): boolean {
-    if (!this.heatmapMesh) return false;
-
+  handleClick(ev: MouseEvent, camera: THREE.Camera, renderer: THREE.WebGLRenderer): boolean {
+    if (!this.cellHitPlanes) return false;
     const rect = renderer.domElement.getBoundingClientRect();
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
+    this.mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.mouse, camera);
-    const intersects = this.raycaster.intersectObject(this.heatmapMesh);
-
-    if (intersects.length > 0) {
-      const point = intersects[0].point;
-      const info = this.getGridCellInfo(point.x, point.z);
-      this.showInfoCard(event.clientX, event.clientY, info);
+    const hits = this.raycaster.intersectObjects(this.cellHitPlanes.children, false);
+    if (hits.length > 0) {
+      const { gridCol, gridRow } = hits[0].object.userData as { gridCol: number; gridRow: number };
+      const info = this.cellInfo(gridCol, gridRow);
+      this.showCard(ev.clientX, ev.clientY, info);
       return true;
     }
-
-    this.hideInfoCard();
+    this.hideCard();
     return false;
   }
 
-  private getGridCellInfo(worldX: number, worldZ: number): GridCellInfo {
-    const displayCol = Math.floor((worldX / ROOM_WIDTH) * DISPLAY_GRID_COLS);
-    const displayRow = Math.floor((worldZ / ROOM_DEPTH) * DISPLAY_GRID_ROWS);
-
-    const clampedCol = Math.max(0, Math.min(DISPLAY_GRID_COLS - 1, displayCol));
-    const clampedRow = Math.max(0, Math.min(DISPLAY_GRID_ROWS - 1, displayRow));
-
-    const colStart = Math.floor((clampedCol / DISPLAY_GRID_COLS) * GRID_COLS);
-    const colEnd = Math.floor(((clampedCol + 1) / DISPLAY_GRID_COLS) * GRID_COLS);
-    const rowStart = Math.floor((clampedRow / DISPLAY_GRID_ROWS) * GRID_ROWS);
-    const rowEnd = Math.floor(((clampedRow + 1) / DISPLAY_GRID_ROWS) * GRID_ROWS);
-
-    let totalIllum = 0;
-    let totalPaths = 0;
-    let count = 0;
-
-    for (let r = rowStart; r < rowEnd; r++) {
-      for (let c = colStart; c < colEnd; c++) {
-        const idx = (r * GRID_COLS + c) * 2;
-        totalIllum += this.targetSamples[idx];
-        totalPaths += this.targetSamples[idx + 1];
-        count++;
+  private cellInfo(col: number, row: number): GridCellInfo {
+    const gc = Math.floor(GRID_COLS / DISPLAY_GRID_COLS);
+    const gr = Math.floor(GRID_ROWS / DISPLAY_GRID_ROWS);
+    const cs = col * gc;
+    const ce = Math.min(GRID_COLS, (col + 1) * gc);
+    const rs = row * gr;
+    const re = Math.min(GRID_ROWS, (row + 1) * gr);
+    let sI = 0, sP = 0, n = 0;
+    for (let r = rs; r < re; r++) {
+      for (let c = cs; c < ce; c++) {
+        const i = (r * GRID_COLS + c) * 2;
+        sI += this.targetSamples[i];
+        sP += this.targetSamples[i + 1];
+        n++;
       }
     }
-
-    if (count === 0) count = 1;
-
+    if (n === 0) n = 1;
     return {
-      illuminance: Math.round(Math.min(MAX_ILLUMINANCE, totalIllum / count)),
-      pathCount: Math.round(Math.min(20, totalPaths / count)),
+      illuminance: Math.round(Math.min(MAX_ILLUMINANCE, sI / n)),
+      pathCount: Math.round(Math.min(20, sP / n)),
     };
   }
 
-  private showInfoCard(x: number, y: number, info: GridCellInfo): void {
+  private showCard(x: number, y: number, info: GridCellInfo): void {
     if (!this.infoCard) return;
+    const iEl = this.infoCard.querySelector('#info-illum');
+    const pEl = this.infoCard.querySelector('#info-paths');
+    if (iEl) iEl.textContent = String(info.illuminance);
+    if (pEl) pEl.textContent = String(info.pathCount);
 
-    const illumEl = this.infoCard.querySelector('#info-illuminance');
-    const pathsEl = this.infoCard.querySelector('#info-paths');
-    if (illumEl) illumEl.textContent = String(info.illuminance);
-    if (pathsEl) pathsEl.textContent = String(info.pathCount);
-
-    const cardWidth = 180;
-    const cardHeight = 90;
-    let left = x + 15;
-    let top = y - cardHeight - 15;
-
-    if (left + cardWidth > window.innerWidth) left = x - cardWidth - 15;
-    if (top < 10) top = y + 15;
+    let left = x + 16;
+    let top = y - 110;
+    if (left + 200 > window.innerWidth) left = x - 216;
+    if (top < 8) top = y + 16;
 
     this.infoCard.style.left = `${left}px`;
     this.infoCard.style.top = `${top}px`;
@@ -352,35 +324,26 @@ export class GridRenderer {
     this.infoCard.classList.add('info-card-visible');
   }
 
-  hideInfoCard(): void {
+  hideCard(): void {
     if (!this.infoCard || this.infoCard.style.display === 'none') return;
     this.infoCard.classList.remove('info-card-visible');
     this.infoCard.classList.add('info-card-hidden');
-    setTimeout(() => {
-      if (this.infoCard) {
-        this.infoCard.style.display = 'none';
-      }
-    }, 300);
+    setTimeout(() => { if (this.infoCard) this.infoCard.style.display = 'none'; }, 300);
   }
 
-  forceRecalculation(occluders: Occluder[]): void {
-    this.triggerRecalculation(occluders);
+  forceUpdate(occluders: Occluder[]): void {
+    this.pending = false;
+    this.scheduleCompute(occluders);
   }
 
   dispose(): void {
     this.worker.terminate();
-    if (this.heatmapMesh) {
-      this.scene.remove(this.heatmapMesh);
-      this.heatmapMesh.geometry.dispose();
-    }
-    if (this.gridLines) {
-      this.scene.remove(this.gridLines);
-    }
+    if (this.heatmapMesh) { this.scene.remove(this.heatmapMesh); this.heatmapMesh.geometry.dispose(); }
+    if (this.gridLines) this.scene.remove(this.gridLines);
+    if (this.cellHitPlanes) this.scene.remove(this.cellHitPlanes);
     this.textureFrom.dispose();
     this.textureTo.dispose();
     this.shaderMaterial.dispose();
-    if (this.infoCard && this.infoCard.parentNode) {
-      this.infoCard.parentNode.removeChild(this.infoCard);
-    }
+    if (this.infoCard && this.infoCard.parentNode) this.infoCard.parentNode.removeChild(this.infoCard);
   }
 }
