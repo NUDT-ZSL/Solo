@@ -43,8 +43,16 @@ export class SpellManager {
       const j = Math.floor(Math.random() * (i + 1));
       [result[i], result[j]] = [result[j], result[i]];
     }
-    if (result.join('') === this.currentWord) {
-      return this.shuffle(arr);
+    const original = arr.join('');
+    if (result.join('') === original && result.length > 1) {
+      const allSame = result.every(c => c === result[0]);
+      if (!allSame) {
+        let swapIdx = 1;
+        while (swapIdx < result.length && result[swapIdx] === result[0]) {
+          swapIdx++;
+        }
+        [result[0], result[swapIdx]] = [result[swapIdx], result[0]];
+      }
     }
     return result;
   }
