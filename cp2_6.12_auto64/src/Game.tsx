@@ -63,13 +63,6 @@ interface Bullet {
   active: boolean;
 }
 
-interface Explosion {
-  x: number;
-  y: number;
-  particles: Particle[];
-  active: boolean;
-}
-
 interface ShipDebris {
   x: number;
   y: number;
@@ -100,7 +93,6 @@ const Game: React.FC = () => {
     targets: [] as Target[],
     bullets: [] as Bullet[],
     particles: [] as Particle[],
-    explosions: [] as Explosion[],
     shipDebris: [] as ShipDebris[],
     stars: [] as Star[],
     keys: {} as Record<string, boolean>,
@@ -112,7 +104,6 @@ const Game: React.FC = () => {
     lives: 3,
     gameOver: false,
     audioContext: null as AudioContext | null,
-    rhythmPhase: 0,
     canShoot: true,
     lastShotTime: 0,
     shipInvincible: false,
@@ -183,12 +174,22 @@ const Game: React.FC = () => {
 
   const createExplosion = useCallback((x: number, y: number, color: string, count: number, life: number) => {
     const state = gameStateRef.current;
-    const particles: Particle[] = [];
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count;
       const speed = 2 + Math.random() * 3;
-      if (state.particles.length < MAX_OBJECTS) {
-        const p: Particle = {
+      const inactive = state.particles.find(p => !p.active);
+      if (inactive) {
+        inactive.x = x;
+        inactive.y = y;
+        inactive.vx = Math.cos(angle) * speed;
+        inactive.vy = Math.sin(angle) * speed;
+        inactive.life = life;
+        inactive.maxLife = life;
+        inactive.color = color;
+        inactive.size = 3 + Math.random() * 2;
+        inactive.active = true;
+      } else if (state.particles.length < MAX_OBJECTS) {
+        state.particles.push({
           x,
           y,
           vx: Math.cos(angle) * speed,
@@ -198,12 +199,9 @@ const Game: React.FC = () => {
           color,
           size: 3 + Math.random() * 2,
           active: true,
-        };
-        state.particles.push(p);
-        particles.push(p);
+        });
       }
     }
-    return particles;
   }, []);
 
   const createShipExplosion = useCallback((x: number, y: number) => {
@@ -227,22 +225,16 @@ const Game: React.FC = () => {
 
   const spawnObstacle = useCallback(() => {
     const state = gameStateRef.current;
-    const totalObjects = state.obstacles.filter(o => o.active).length + 
+    const totalObjects = state.obstacles.filter(o => o.active).length +
                          state.targets.filter(t => t.active).length +
                          state.bullets.filter(b => b.active).length;
     if (totalObjects >= MAX_OBJECTS) return;
 
-    let obstacle: Obstacle | null = state.obstacles.find(o => !o.active) || null;
+    let obstacle = state.obstacles.find(o => !o.active);
     if (!obstacle) {
       obstacle = {
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        color: '',
-        speed: 0,
-        pulsePhase: 0,
-        active: false,
+        x: 0, y: 0, width: 0, height: 0, color: '',
+        speed: 0, pulsePhase: 0, active: false,
       };
       state.obstacles.push(obstacle);
     }
@@ -262,20 +254,16 @@ const Game: React.FC = () => {
 
   const spawnTarget = useCallback(() => {
     const state = gameStateRef.current;
-    const totalObjects = state.obstacles.filter(o => o.active).length + 
+    const totalObjects = state.obstacles.filter(o => o.active).length +
                          state.targets.filter(t => t.active).length +
                          state.bullets.filter(b => b.active).length;
     if (totalObjects >= MAX_OBJECTS) return;
 
-    let target: Target | null = state.targets.find(t => !t.active) || null;
+    let target = state.targets.find(t => !t.active);
     if (!target) {
       target = {
-        x: 0,
-        y: 0,
-        baseRadius: 15,
-        speed: 0,
-        breathePhase: 0,
-        active: false,
+        x: 0, y: 0, baseRadius: 15, speed: 0,
+        breathePhase: 0, active: false,
       };
       state.targets.push(target);
     }
@@ -293,20 +281,15 @@ const Game: React.FC = () => {
     if (now - state.lastShotTime < 150) return;
     state.lastShotTime = now;
 
-    const totalObjects = state.obstacles.filter(o => o.active).length + 
+    const totalObjects = state.obstacles.filter(o => o.active).length +
                          state.targets.filter(t => t.active).length +
                          state.bullets.filter(b => b.active).length;
     if (totalObjects >= MAX_OBJECTS) return;
 
-    let bullet: Bullet | null = state.bullets.find(b => !b.active) || null;
+    let bullet = state.bullets.find(b => !b.active);
     if (!bullet) {
       bullet = {
-        x: 0,
-        y: 0,
-        vx: 6,
-        vy: 0,
-        radius: 4,
-        active: false,
+        x: 0, y: 0, vx: 6, vy: 0, radius: 4, active: false,
       };
       state.bullets.push(bullet);
     }
@@ -395,17 +378,15 @@ const Game: React.FC = () => {
   const update = useCallback((deltaTime: number) => {
     const state = gameStateRef.current;
     if (state.gameOver) {
-      const debrisToRemove: number[] = [];
-      state.shipDebris.forEach((debris, idx) => {
+      state.shipDebris.forEach((debris) => {
         debris.x += debris.vx;
         debris.y += debris.vy;
         debris.vy += 0.1;
         debris.rotation += debris.rotationSpeed;
         debris.life -= deltaTime;
-        if (debris.life <= 0) debrisToRemove.push(idx);
       });
-      debrisToRemove.reverse().forEach(idx => state.shipDebris.splice(idx, 1));
-      
+      state.shipDebris = state.shipDebris.filter(d => d.life > 0);
+
       state.particles.forEach(p => {
         if (!p.active) return;
         p.x += p.vx;
@@ -443,9 +424,20 @@ const Game: React.FC = () => {
       fireBullet();
     }
 
+    const tailColors = ['#ff6b35', '#ffaa00', '#ff4500'];
     for (let i = 0; i < 2; i++) {
-      if (state.particles.length < MAX_OBJECTS) {
-        const tailColors = ['#ff6b35', '#ffaa00', '#ff4500'];
+      const inactive = state.particles.find(p => !p.active);
+      if (inactive) {
+        inactive.x = state.ship.x - state.ship.size;
+        inactive.y = state.ship.y + (Math.random() - 0.5) * 8;
+        inactive.vx = -2 - Math.random() * 2;
+        inactive.vy = (Math.random() - 0.5) * 2;
+        inactive.life = 300;
+        inactive.maxLife = 300;
+        inactive.color = tailColors[Math.floor(Math.random() * tailColors.length)];
+        inactive.size = 3 + Math.random() * 2;
+        inactive.active = true;
+      } else if (state.particles.length < MAX_OBJECTS) {
         state.particles.push({
           x: state.ship.x - state.ship.size,
           y: state.ship.y + (Math.random() - 0.5) * 8,
@@ -531,7 +523,7 @@ const Game: React.FC = () => {
       const h = obs.height * pulseScale;
       const x = obs.x - (w - obs.width) / 2;
       const y = obs.y - (h - obs.height) / 2;
-      
+
       ctx.fillStyle = obs.color;
       ctx.shadowColor = obs.color;
       ctx.shadowBlur = 10;
@@ -545,7 +537,7 @@ const Game: React.FC = () => {
     state.targets.forEach(tgt => {
       if (!tgt.active) return;
       const currentRadius = tgt.baseRadius + Math.sin(tgt.breathePhase) * 3;
-      
+
       ctx.fillStyle = '#ffd700';
       ctx.shadowColor = '#ffd700';
       ctx.shadowBlur = 20;
@@ -553,7 +545,7 @@ const Game: React.FC = () => {
       ctx.arc(tgt.x, tgt.y, currentRadius, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-      
+
       ctx.fillStyle = '#fffacd';
       ctx.beginPath();
       ctx.arc(tgt.x - currentRadius * 0.3, tgt.y - currentRadius * 0.3, currentRadius * 0.3, 0, Math.PI * 2);
@@ -589,7 +581,7 @@ const Game: React.FC = () => {
       }
       ctx.save();
       ctx.translate(ship.x, ship.y);
-      
+
       ctx.fillStyle = '#4fc3f7';
       ctx.shadowColor = '#4fc3f7';
       ctx.shadowBlur = 15;
@@ -601,7 +593,7 @@ const Game: React.FC = () => {
       ctx.closePath();
       ctx.fill();
       ctx.shadowBlur = 0;
-      
+
       ctx.fillStyle = '#81d4fa';
       ctx.beginPath();
       ctx.moveTo(ship.size * 0.6, 0);
@@ -610,7 +602,7 @@ const Game: React.FC = () => {
       ctx.lineTo(-ship.size * 0.3, ship.size * 0.35);
       ctx.closePath();
       ctx.fill();
-      
+
       ctx.restore();
       ctx.globalAlpha = 1;
     }
@@ -721,37 +713,292 @@ const Game: React.FC = () => {
     }
   };
 
+  const containerStyle: React.CSSProperties = {
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #0a0a2e 0%, #1a1a4e 100%)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: '20px',
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    boxSizing: 'border-box',
+  };
+
+  const wrapperStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '20px',
+  };
+
+  const headerStyle: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: CANVAS_WIDTH,
+    maxWidth: '100%',
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: '36px',
+    fontWeight: 'bold',
+    color: '#ffd700',
+    textShadow: '0 0 20px rgba(255, 215, 0, 0.5)',
+    margin: 0,
+  };
+
+  const leaderboardBtnStyle: React.CSSProperties = {
+    padding: '10px 20px',
+    background: 'linear-gradient(135deg, #3b2066 0%, #1a1a4e 100%)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: 'bold',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+  };
+
+  const gameContainerStyle: React.CSSProperties = {
+    position: 'relative',
+    display: 'inline-block',
+  };
+
+  const hudTopStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: '10px',
+    left: 0,
+    right: 0,
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '0 20px',
+    zIndex: 10,
+    pointerEvents: 'none',
+  };
+
+  const scoreBoxStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  };
+
+  const scoreLabelStyle: React.CSSProperties = {
+    fontSize: '14px',
+    color: '#aaa',
+    textShadow: '0 0 10px rgba(0,0,0,0.8)',
+  };
+
+  const scoreValueStyle: React.CSSProperties = {
+    fontSize: '24px',
+    fontWeight: 'bold',
+    color: '#fff',
+    textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
+  };
+
+  const livesBoxStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: '5px',
+  };
+
+  const canvasStyle: React.CSSProperties = {
+    display: 'block',
+    borderRadius: '8px',
+    boxShadow: '0 0 40px rgba(59, 32, 102, 0.6)',
+    border: '2px solid #3b2066',
+    maxWidth: '100%',
+    height: 'auto',
+  };
+
+  const rhythmBarContainerStyle: React.CSSProperties = {
+    position: 'absolute',
+    bottom: '15px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '220px',
+    height: '10px',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+  };
+
+  const rhythmBarStyle: React.CSSProperties = {
+    height: '8px',
+    borderRadius: '4px',
+    transition: 'width 0.2s ease',
+    boxShadow: '0 0 15px rgba(0, 255, 136, 0.6)',
+  };
+
+  const gameOverOverlayStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(10, 10, 46, 0.85)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: '8px',
+    zIndex: 20,
+  };
+
+  const gameOverPanelStyle: React.CSSProperties = {
+    background: 'linear-gradient(135deg, #3b2066 0%, #1a1a4e 100%)',
+    padding: '40px 50px',
+    borderRadius: '16px',
+    textAlign: 'center',
+    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
+    border: '2px solid rgba(255, 215, 0, 0.3)',
+  };
+
+  const gameOverTitleStyle: React.CSSProperties = {
+    fontSize: '36px',
+    color: '#ff4757',
+    margin: '0 0 20px 0',
+    textShadow: '0 0 20px rgba(255, 71, 87, 0.5)',
+  };
+
+  const finalScoreTextStyle: React.CSSProperties = {
+    fontSize: '18px',
+    color: '#aaa',
+    margin: '0 0 5px 0',
+  };
+
+  const finalScoreValueStyle: React.CSSProperties = {
+    fontSize: '48px',
+    fontWeight: 'bold',
+    color: '#ffd700',
+    margin: '0 0 30px 0',
+    textShadow: '0 0 20px rgba(255, 215, 0, 0.5)',
+  };
+
+  const submitSectionStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '15px',
+    marginBottom: '20px',
+  };
+
+  const nameInputStyle: React.CSSProperties = {
+    padding: '12px 16px',
+    fontSize: '16px',
+    borderRadius: '8px',
+    border: '2px solid #6a5acd',
+    background: 'rgba(255, 255, 255, 0.1)',
+    color: '#fff',
+    outline: 'none',
+    textAlign: 'center',
+    transition: 'border-color 0.2s',
+  };
+
+  const submitBtnStyle: React.CSSProperties = {
+    padding: '12px 24px',
+    background: 'linear-gradient(135deg, #3b2066 0%, #1a1a4e 100%)',
+    color: '#ffd700',
+    border: '2px solid #ffd700',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: 'bold',
+    transition: 'all 0.2s ease',
+  };
+
+  const successTextStyle: React.CSSProperties = {
+    color: '#00ff66',
+    fontSize: '18px',
+    marginBottom: '20px',
+  };
+
+  const restartBtnStyle: React.CSSProperties = {
+    padding: '14px 32px',
+    background: 'linear-gradient(135deg, #2c5282 0%, #1a365d 100%)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '18px',
+    fontWeight: 'bold',
+    transition: 'all 0.2s ease',
+    width: '100%',
+  };
+
+  const controlsPanelStyle: React.CSSProperties = {
+    background: 'linear-gradient(135deg, rgba(59, 32, 102, 0.6) 0%, rgba(26, 26, 78, 0.6) 100%)',
+    padding: '15px 30px',
+    borderRadius: '10px',
+    textAlign: 'center',
+    border: '1px solid rgba(255, 215, 0, 0.2)',
+  };
+
+  const controlTextStyle: React.CSSProperties = {
+    color: '#ddd',
+    margin: '5px 0',
+    fontSize: '14px',
+  };
+
+  const controlHintStyle: React.CSSProperties = {
+    color: '#ffd700',
+    margin: '8px 0 0 0',
+    fontSize: '13px',
+  };
+
+  const mediaStyle = `
+    @media (max-width: 768px) {
+      .game-wrapper {
+        width: 100%;
+      }
+      .game-header {
+        width: 100% !important;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .controls-panel {
+        width: 100%;
+        box-sizing: border-box;
+      }
+    }
+  `;
+
   return (
-    <div style={styles.container}>
-      <div style={styles.wrapper}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>节奏空间</h1>
+    <div style={containerStyle}>
+      <style>{mediaStyle}</style>
+      <div style={wrapperStyle} className="game-wrapper">
+        <div style={headerStyle} className="game-header">
+          <h1 style={titleStyle}>节奏空间</h1>
           <button
             onClick={() => navigate('/leaderboard')}
-            style={styles.leaderboardBtn}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg, #4a3caf 0%, #6a5acd 100%)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg, #3b2066 0%, #1a1a4e 100%)')}
+            style={leaderboardBtnStyle}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #4a3caf 0%, #6a5acd 100%)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #3b2066 0%, #1a1a4e 100%)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
           >
             🏆 排行榜
           </button>
         </div>
 
-        <div style={styles.gameContainer}>
-          <div style={styles.hudTop}>
-            <div style={styles.scoreBox}>
-              <span style={styles.scoreLabel}>得分</span>
-              <span style={styles.scoreValue}>{score}</span>
+        <div style={gameContainerStyle}>
+          <div style={hudTopStyle}>
+            <div style={scoreBoxStyle}>
+              <span style={scoreLabelStyle}>得分</span>
+              <span style={scoreValueStyle}>{score}</span>
             </div>
-            <div style={styles.livesBox}>
+            <div style={livesBoxStyle}>
               {[...Array(3)].map((_, i) => (
                 <span
                   key={i}
                   style={{
-                    ...styles.heart,
+                    fontSize: '24px',
                     opacity: i < lives ? 1 : 0.2,
                     transform: lifeFlash && i === lives ? 'scale(0.7)' : 'scale(1)',
                     transition: 'all 0.5s ease',
                     color: lifeFlash && i === lives ? '#ff0000' : '#ff4757',
+                    textShadow: lifeFlash && i === lives ? '0 0 10px #ff0000' : 'none',
                   }}
                 >
                   ❤
@@ -764,55 +1011,67 @@ const Game: React.FC = () => {
             ref={canvasRef}
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
-            style={styles.canvas}
+            style={canvasStyle}
           />
 
-          <div style={styles.rhythmBarContainer}>
+          <div style={rhythmBarContainerStyle}>
             <div
               style={{
-                ...styles.rhythmBar,
+                ...rhythmBarStyle,
                 width: rhythmPulse ? '220px' : '200px',
                 background: `linear-gradient(90deg, #00ff88 ${50 + Math.sin(Date.now() * 0.005) * 50}%, #4488ff 100%)`,
-                transition: 'width 0.2s ease',
               }}
             />
           </div>
 
           {gameOver && (
-            <div style={styles.gameOverOverlay}>
-              <div style={styles.gameOverPanel}>
-                <h2 style={styles.gameOverTitle}>游戏结束</h2>
-                <p style={styles.finalScoreText}>最终得分</p>
-                <p style={styles.finalScoreValue}>{finalScore}</p>
+            <div style={gameOverOverlayStyle}>
+              <div style={gameOverPanelStyle}>
+                <h2 style={gameOverTitleStyle}>游戏结束</h2>
+                <p style={finalScoreTextStyle}>最终得分</p>
+                <p style={finalScoreValueStyle}>{finalScore}</p>
 
                 {!submitSuccess ? (
-                  <div style={styles.submitSection}>
+                  <div style={submitSectionStyle}>
                     <input
                       type="text"
                       value={playerName}
                       onChange={(e) => setPlayerName(e.target.value.slice(0, 8))}
                       placeholder="输入昵称 (最多8字符)"
-                      style={styles.nameInput}
+                      style={nameInputStyle}
                       maxLength={8}
+                      onFocus={(e) => { e.target.style.borderColor = '#ffd700'; }}
+                      onBlur={(e) => { e.target.style.borderColor = '#6a5acd'; }}
                     />
                     <button
                       onClick={submitScore}
                       disabled={submitting || !playerName.trim()}
                       style={{
-                        ...styles.submitBtn,
+                        ...submitBtnStyle,
                         opacity: submitting || !playerName.trim() ? 0.5 : 1,
+                        cursor: submitting || !playerName.trim() ? 'not-allowed' : 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!submitting && playerName.trim()) {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #4a3caf 0%, #6a5acd 100%)';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'linear-gradient(135deg, #3b2066 0%, #1a1a4e 100%)';
+                        e.currentTarget.style.transform = 'translateY(0)';
                       }}
                     >
                       {submitting ? '提交中...' : '提交分数'}
                     </button>
                   </div>
                 ) : (
-                  <p style={styles.successText}>✓ 提交成功！即将跳转到排行榜...</p>
+                  <p style={successTextStyle}>✓ 提交成功！即将跳转到排行榜...</p>
                 )}
 
                 <button
                   onClick={resetGame}
-                  style={styles.restartBtn}
+                  style={restartBtnStyle}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'linear-gradient(135deg, #4a90d9 0%, #6ab0ff 100%)';
                     e.currentTarget.style.transform = 'translateY(-2px)';
@@ -829,42 +1088,14 @@ const Game: React.FC = () => {
           )}
         </div>
 
-        <div style={styles.controlsPanel}>
-          <p style={styles.controlText}>⬆⬇⬅➡ 方向键移动飞船</p>
-          <p style={styles.controlText}>⎵ 空格键发射子弹</p>
-          <p style={styles.controlHint}>避开红橙黄障碍物，射击金色目标得分！</p>
+        <div style={controlsPanelStyle} className="controls-panel">
+          <p style={controlTextStyle}>⬆⬇⬅➡ 方向键移动飞船</p>
+          <p style={controlTextStyle}>⎵ 空格键发射子弹</p>
+          <p style={controlHintStyle}>避开红橙黄障碍物，射击金色目标得分！</p>
         </div>
       </div>
     </div>
   );
 };
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #0a0a2e 0%, #1a1a4e 100%)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: '20px',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-  },
-  wrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '20px',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: CANVAS_WIDTH,
-    maxWidth: '100%',
-  },
-  title: {
-    fontSize: '36px',
-    fontWeight: 'bold',
-    color: '#ffd700',
-    textShadow: '0 0 20px rgba(255, 215, 0, 0.5)',
-    margin:
+export default Game;
