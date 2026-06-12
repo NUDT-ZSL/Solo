@@ -53,11 +53,11 @@ function loadPalettesFromStorage(): Palette[] {
 }
 
 function App() {
-  const [palettes, setPalettes] = useState<Palette[]>(() => loadPalettesFromStorage());
-  const [selectedId, setSelectedId] = useState<string | null>(() => {
-    const loaded = loadPalettesFromStorage();
-    return loaded.length > 0 ? loaded[0].id : null;
-  });
+  const initialPalettes = loadPalettesFromStorage();
+  const [palettes, setPalettes] = useState<Palette[]>(initialPalettes);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialPalettes.length > 0 ? initialPalettes[0].id : null
+  );
   const [toast, setToast] = useState({ visible: false, message: '' });
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
