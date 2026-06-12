@@ -5,21 +5,31 @@ import {
   ButtonProps,
   CardProps,
   InputProps,
-  snapToGrid,
   ComponentType,
   getComponentLabel,
   MAX_COMPONENTS,
 } from './types';
 
+const GRID_SIZE = 20;
+
+function snap(pos: number): number {
+  return Math.round(pos / GRID_SIZE) * GRID_SIZE;
+}
+
 interface CanvasProps {
   onDrop: (type: ComponentType, x: number, y: number) => void;
 }
+
+const COMPONENT_DEFAULT_SIZE: Record<ComponentType, { width: number; height: number }> = {
+  button: { width: 160, height: 48 },
+  card: { width: 280, height: 220 },
+  input: { width: 300, height: 44 },
+};
 
 const ButtonRenderer: React.FC<{ data: ComponentData }> = React.memo(({ data }) => {
   const props = data.props as ButtonProps;
   return (
     <div
-      className="component-transition"
       style={{
         width: props.width,
         height: props.height,
@@ -35,6 +45,7 @@ const ButtonRenderer: React.FC<{ data: ComponentData }> = React.memo(({ data }) 
           ? `0 ${props.shadowDepth / 2}px ${props.shadowDepth}px rgba(0,0,0,0.15)`
           : 'none',
         whiteSpace: 'nowrap',
+        transition: 'all 0.2s ease',
       }}
     >
       {getComponentLabel('button')}
@@ -47,7 +58,6 @@ const CardRenderer: React.FC<{ data: ComponentData }> = React.memo(({ data }) =>
   const props = data.props as CardProps;
   return (
     <div
-      className="component-transition"
       style={{
         width: props.width,
         height: props.height,
@@ -60,6 +70,7 @@ const CardRenderer: React.FC<{ data: ComponentData }> = React.memo(({ data }) =>
         display: 'flex',
         flexDirection: 'column',
         padding: 16,
+        transition: 'all 0.2s ease',
       }}
     >
       <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>
@@ -77,7 +88,6 @@ const InputRenderer: React.FC<{ data: ComponentData }> = React.memo(({ data }) =
   const props = data.props as InputProps;
   return (
     <div
-      className="component-transition"
       style={{
         width: props.width,
         height: props.height,
@@ -88,6 +98,7 @@ const InputRenderer: React.FC<{ data: ComponentData }> = React.memo(({ data }) =
         paddingLeft: props.padding,
         paddingRight: props.padding,
         background: '#ffffff',
+        transition: 'all 0.2s ease',
       }}
     >
       <span style={{ fontSize: 13, color: props.placeholderColor }}>请输入内容...</span>
@@ -104,14 +115,13 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
     deletingIds,
     selectComponent,
     updateComponentPosition,
-    deleteComponent,
     bringToFront,
   } = useStore();
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [zDraggingId, setZDraggingId] = useState<string | null>(null);
-  const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
+  const [animateInIds, setAnimateInIds] = useState<Set<string>>(new Set());
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const lastZRef = useRef<number>(0);
 
@@ -130,12 +140,11 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const defaultProps = { button: { width: 160, height: 48 }, card: { width: 280, height: 220 }, input: { width: 300, height: 44 } };
-      const dims = defaultProps[type];
+      const dims = COMPONENT_DEFAULT_SIZE[type];
       const rawX = e.clientX - rect.left - dims.width / 2;
       const rawY = e.clientY - rect.top - dims.height / 2;
-      const x = snapToGrid(Math.max(0, rawX));
-      const y = snapToGrid(Math.max(0, rawY));
+      const x = snap(Math.max(0, rawX));
+      const y = snap(Math.max(0, rawY));
 
       onDrop(type, x, y);
     },
@@ -181,13 +190,9 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (zDraggingId) {
-        const comp = components.find((c) => c.id === zDraggingId);
-        if (!comp) return;
         const deltaY = e.movementY;
-        const newZ = lastZRef.current + Math.round(deltaY / 5);
-        if (newZ >= 1) {
-          useStore.getState().updateComponentZIndex(zDraggingId, newZ);
-        }
+        const newZ = Math.max(1, lastZRef.current + Math.round(deltaY / 5));
+        useStore.getState().updateComponentZIndex(zDraggingId, newZ);
         return;
       }
 
@@ -195,47 +200,44 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const comp = components.find((c) => c.id === draggingId);
-      if (!comp) return;
-
       const rawX = e.clientX - rect.left - dragOffsetRef.current.x;
       const rawY = e.clientY - rect.top - dragOffsetRef.current.y;
-      const x = snapToGrid(Math.max(0, rawX));
-      const y = snapToGrid(Math.max(0, rawY));
+      const x = snap(Math.max(0, rawX));
+      const y = snap(Math.max(0, rawY));
 
       updateComponentPosition(draggingId, x, y);
     },
-    [draggingId, zDraggingId, components, updateComponentPosition]
+    [draggingId, zDraggingId, updateComponentPosition]
   );
 
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (zDraggingId) {
-        setZDraggingId(null);
-        return;
-      }
-      if (draggingId) {
-        setNewlyAddedId(draggingId);
-        setTimeout(() => setNewlyAddedId(null), 300);
-        setDraggingId(null);
-      }
-    },
-    [draggingId, zDraggingId]
-  );
+  const handlePointerUp = useCallback(() => {
+    if (zDraggingId) {
+      setZDraggingId(null);
+      return;
+    }
+    if (draggingId) {
+      setAnimateInIds((prev) => {
+        const next = new Set(prev);
+        next.add(draggingId);
+        return next;
+      });
+      setTimeout(() => {
+        setAnimateInIds((prev) => {
+          const next = new Set(prev);
+          next.delete(draggingId);
+          return next;
+        });
+      }, 300);
+      setDraggingId(null);
+    }
+  }, [draggingId, zDraggingId]);
 
   const renderComponent = (comp: ComponentData) => {
     const isSelected = comp.id === selectedId;
     const isDeleting = deletingIds.has(comp.id);
     const isDragging = comp.id === draggingId;
     const isZDragging = comp.id === zDraggingId;
-    const isNew = comp.id === newlyAddedId;
-
-    let className = 'canvas-component';
-    if (isSelected && !isZDragging) className += ' selected';
-    if (isZDragging) className += ' z-dragging';
-    if (isDragging) className += ' dragging';
-    if (isDeleting) className += ' animate-fade-out';
-    if (isNew && !isDragging) className += ' animate-drop-in';
+    const isAnimateIn = animateInIds.has(comp.id);
 
     const renderer = (() => {
       switch (comp.type) {
@@ -245,15 +247,38 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
       }
     })();
 
+    const wrapperStyle: React.CSSProperties = {
+      position: 'absolute',
+      left: comp.x,
+      top: comp.y,
+      zIndex: isDragging ? 9999 : comp.zIndex,
+      cursor: 'move',
+      userSelect: 'none',
+      transition: isDragging ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
+      outline: isSelected && !isZDragging
+        ? '3px solid #3b82f6'
+        : isZDragging
+          ? '3px solid #f97316'
+          : 'none',
+      outlineOffset: '2px',
+      borderRadius: 2,
+      opacity: isDeleting ? 0 : isDragging ? 0.6 : 1,
+      transform: isDeleting
+        ? 'scale(0.5)'
+        : isDragging
+          ? 'rotate(3deg)'
+          : 'scale(1) rotate(0deg)',
+      animation: isAnimateIn && !isDragging
+        ? 'dropIn 0.3s ease-out forwards'
+        : isDeleting
+          ? 'fadeOut 0.25s ease-out forwards'
+          : undefined,
+    };
+
     return (
       <div
         key={comp.id}
-        className={className}
-        style={{
-          left: comp.x,
-          top: comp.y,
-          zIndex: isDragging ? 9999 : comp.zIndex,
-        }}
+        style={wrapperStyle}
         onPointerDown={(e) => handleComponentPointerDown(e, comp)}
       >
         {renderer}
@@ -281,7 +306,7 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
           linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
           linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px)
         `,
-        backgroundSize: '20px 20px',
+        backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
         cursor: 'default',
       }}
     >
