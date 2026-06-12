@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D分子结构与化学反应模拟</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <button id="toggle-left" class="panel-toggle left-toggle" title="分子列表">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+        <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+      </svg>
+    </button>
+    <button id="toggle-right" class="panel-toggle right-toggle" title="信息面板">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+      </svg>
+    </button>
+
+    <aside id="left-panel" class="side-panel left-panel">
+      <div class="panel-header">
+        <h2>分子库</h2>
+      </div>
+      <div class="molecule-list" id="molecule-list">
+      </div>
+    </aside>
+
+    <main id="scene-container">
+      <canvas id="molecule-canvas"></canvas>
+    </main>
+
+    <aside id="right-panel" class="side-panel right-panel">
+      <div class="panel-header">
+        <h2>分子信息</h2>
+      </div>
+      <div class="info-content">
+        <div class="info-item">
+          <span class="info-label">名称</span>
+          <span class="info-value" id="info-name">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">分子式</span>
+          <span class="info-value" id="info-formula">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">原子数</span>
+          <span class="info-value" id="info-atoms">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">键数</span>
+          <span class="info-value" id="info-bonds">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">分子量</span>
+          <span class="info-value" id="info-mass">-</span>
+        </div>
+      </div>
+      <div class="reaction-section">
+        <h3>化学反应</h3>
+        <select id="reaction-select" class="reaction-select">
+          <option value="">选择反应...</option>
+        </select>
+        <div class="reaction-info" id="reaction-info">
+          <p class="reaction-equation" id="reaction-equation">-</p>
+        </div>
+        <div class="reaction-controls">
+          <button id="start-reaction" class="btn btn-primary btn-start">
+            <span class="btn-text">开始反应</span>
+            <span class="btn-ripple"></span>
+          </button>
+          <button id="pause-reaction" class="btn btn-secondary" disabled>
+            <span class="btn-text">暂停</span>
+          </button>
+          <button id="reset-reaction" class="btn btn-secondary">
+            <span class="btn-text">重置</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
