@@ -2,7 +2,7 @@
 
 export default {
   darkMode: "class",
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  content: ["./index.html", "./src/client/**/*.{js,ts,jsx,tsx}"],
   theme: {
     container: {
       center: true,
@@ -17,11 +17,13 @@ export default {
         'secondary-light': '#3A7AB5',
         'secondary-dark': '#1E4462',
       },
+      backdropBlur: {
+        xs: '2px',
+      },
       animation: {
         'shimmer': 'shimmer 1.5s infinite linear',
         'pulse-orange': 'pulseOrange 2s infinite',
         'glow-green': 'glowGreen 2s infinite',
-        'fill-ring': 'fillRing 1s ease-out forwards',
       },
       keyframes: {
         shimmer: {
@@ -35,10 +37,6 @@ export default {
         glowGreen: {
           '0%, 100%': { boxShadow: '0 0 4px rgba(34,197,94,0.4)' },
           '50%': { boxShadow: '0 0 12px rgba(34,197,94,0.7)' },
-        },
-        fillRing: {
-          '0%': { strokeDashoffset: '283' },
-          '100%': { strokeDashoffset: '0' },
         },
       },
     },
