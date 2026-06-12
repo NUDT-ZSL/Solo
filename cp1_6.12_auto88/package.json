@@ -1,0 +1,21 @@
+{
+  "name": "light-path-analyzer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "交互式3D采光路径与家具布局影响分析应用",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "gsap": "^3.12.5"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
