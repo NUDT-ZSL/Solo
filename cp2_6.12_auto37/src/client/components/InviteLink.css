@@ -1,0 +1,152 @@
+.invite-link-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+.invite-link-content {
+  background: var(--background-color);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  margin: 20px;
+  overflow: hidden;
+  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.invite-header {
+  padding: 30px 24px 20px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+}
+
+.invite-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  animation: bounce 0.6s ease;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.invite-header h3 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.invite-activity-name {
+  font-size: 15px;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.invite-body {
+  padding: 24px;
+}
+
+.invite-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 20px 0;
+}
+
+.link-container {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.link-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 13px;
+  background: white;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-btn {
+  padding: 10px 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.copy-btn:hover {
+  background: var(--secondary-color);
+  transform: scale(0.98);
+}
+
+.copy-toast {
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.copy-toast span {
+  display: inline-block;
+  padding: 6px 16px;
+  background: rgba(76, 175, 80, 0.15);
+  color: #4CAF50;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.invite-footer {
+  padding: 0 24px 24px;
+}
+
+.done-btn {
+  width: 100%;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.done-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
