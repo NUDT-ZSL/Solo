@@ -21,6 +21,8 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
   useEffect(() => {
     if (isOpen && habit) {
       setNote('');
+      setStreak(0);
+      setWeeklyCheckins([]);
       fetchHabitStats(habit._id);
     }
   }, [isOpen, habit]);
@@ -33,30 +35,23 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
         fetch(`/api/habits/${habitId}/weekly-checkins`)
       ]);
       
-      if (!statsRes.ok) {
-        throw new Error('获取统计数据失败');
-      }
-      if (!weeklyRes.ok) {
-        throw new Error('获取周打卡数据失败');
-      }
+      if (!statsRes.ok) throw new Error('获取统计数据失败');
+      if (!weeklyRes.ok) throw new Error('获取周打卡数据失败');
       
       const statsData = await statsRes.json();
       const weeklyData = await weeklyRes.json();
-      setStreak(statsData.streak || 0);
-      setWeeklyCheckins(weeklyData || []);
+      setStreak(typeof statsData.streak === 'number' ? statsData.streak : 0);
+      setWeeklyCheckins(Array.isArray(weeklyData) ? weeklyData : []);
     } catch (error) {
       console.error('Failed to fetch habit stats:', error);
-      if (onError) {
-        onError('加载数据失败，请稍后重试');
-      }
+      if (onError) onError('加载数据失败，请稍后重试');
     } finally {
       setLoading(false);
     }
   }, [onError]);
 
   const handleConfirm = async () => {
-    if (!habit || submitting) return;
-    if (habit.isCheckedToday) return;
+    if (!habit || submitting || habit.isCheckedToday) return;
     
     setSubmitting(true);
     try {
@@ -64,9 +59,7 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
       onClose();
     } catch (error) {
       console.error('Failed to check in:', error);
-      if (onError) {
-        onError('打卡失败，请稍后重试');
-      }
+      if (onError) onError('打卡失败，请稍后重试');
     } finally {
       setSubmitting(false);
     }
@@ -79,15 +72,19 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
   };
 
   const getDayLabel = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return format(date, 'EEE', { locale: zhCN });
+    try {
+      const date = new Date(dateStr);
+      return format(date, 'EEE', { locale: zhCN });
+    } catch {
+      return '';
+    }
   };
 
   if (!isOpen || !habit) return null;
 
   return (
     <div style={styles.overlay} onClick={handleOverlayClick}>
-      <div style={styles.modal}>
+      <div style={styles.modal} className="habit-modal-box">
         <h2 style={styles.title}>{habit.name}</h2>
         
         {loading ? (
@@ -112,7 +109,7 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
                   <div key={index} style={styles.dayContainer}>
                     <div
                       style={{
-                        ...styles.dot,
+                        ...styles.weekDot,
                         backgroundColor: day.checked ? '#28a745' : '#dee2e6',
                       }}
                     />
@@ -128,6 +125,7 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
           <label style={styles.inputLabel}>今日备注（可选）</label>
           <textarea
             style={styles.textarea}
+            className="habit-modal-textarea"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="记录今天的感受..."
@@ -141,6 +139,7 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
             style={styles.cancelButton} 
             onClick={onClose} 
             disabled={submitting}
+            className="habit-modal-btn habit-modal-btn-cancel"
           >
             取消
           </button>
@@ -152,6 +151,7 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
             }}
             onClick={handleConfirm}
             disabled={habit.isCheckedToday || submitting}
+            className="habit-modal-btn habit-modal-btn-confirm"
           >
             {submitting ? '提交中...' : habit.isCheckedToday ? '今日已打卡' : '确认打卡'}
           </button>
@@ -160,6 +160,13 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
     </div>
   );
 };
+
+const MODAL_WIDTH = 320;
+const MODAL_RADIUS = 16;
+const TEXTAREA_WIDTH = 280;
+const TEXTAREA_RADIUS = 8;
+const BTN_RADIUS = 8;
+const WEEK_DOT_SIZE = 12;
 
 const styles: Record<string, React.CSSProperties> = {
   overlay: {
@@ -173,18 +180,19 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
-    animation: 'fadeIn 0.2s ease',
+    animation: 'modalFadeIn 0.2s ease',
+    padding: '20px',
   },
   modal: {
-    width: '320px',
-    minWidth: '320px',
-    maxWidth: '320px',
+    width: `${MODAL_WIDTH}px`,
+    minWidth: `${MODAL_WIDTH}px`,
+    maxWidth: `${MODAL_WIDTH}px`,
     backgroundColor: '#ffffff',
-    borderRadius: '16px',
+    borderRadius: `${MODAL_RADIUS}px`,
     padding: '24px',
     boxSizing: 'border-box',
     boxShadow: '0 10px 40px rgba(0, 0, 0, 0.15)',
-    animation: 'slideUp 0.3s ease',
+    animation: 'modalSlideUp 0.3s ease',
   },
   title: {
     fontSize: '20px',
@@ -238,9 +246,9 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '6px',
   },
-  dot: {
-    width: '12px',
-    height: '12px',
+  weekDot: {
+    width: `${WEEK_DOT_SIZE}px`,
+    height: `${WEEK_DOT_SIZE}px`,
     borderRadius: '50%',
   },
   dayLabel: {
@@ -257,12 +265,12 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '8px',
   },
   textarea: {
-    width: '280px',
-    maxWidth: '280px',
-    minWidth: '280px',
+    width: `${TEXTAREA_WIDTH}px`,
+    maxWidth: `${TEXTAREA_WIDTH}px`,
+    minWidth: `${TEXTAREA_WIDTH}px`,
     minHeight: '80px',
     padding: '12px',
-    borderRadius: '8px',
+    borderRadius: `${TEXTAREA_RADIUS}px`,
     border: '1px solid #dee2e6',
     fontSize: '14px',
     fontFamily: 'inherit',
@@ -278,7 +286,7 @@ const styles: Record<string, React.CSSProperties> = {
   cancelButton: {
     flex: 1,
     padding: '12px',
-    borderRadius: '8px',
+    borderRadius: `${BTN_RADIUS}px`,
     border: '1px solid #dee2e6',
     backgroundColor: '#ffffff',
     color: '#6c757d',
@@ -290,7 +298,7 @@ const styles: Record<string, React.CSSProperties> = {
   confirmButton: {
     flex: 1,
     padding: '12px',
-    borderRadius: '8px',
+    borderRadius: `${BTN_RADIUS}px`,
     border: 'none',
     backgroundColor: '#28a745',
     color: '#ffffff',
@@ -300,17 +308,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-const styleSheetId = 'habit-modal-styles';
-if (!document.getElementById(styleSheetId)) {
+const STYLE_ID = 'habit-modal-keyframes';
+if (!document.getElementById(STYLE_ID)) {
   const styleSheet = document.createElement('style');
-  styleSheet.id = styleSheetId;
+  styleSheet.id = STYLE_ID;
   styleSheet.textContent = `
-    @keyframes fadeIn {
+    @keyframes modalFadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
     }
     
-    @keyframes slideUp {
+    @keyframes modalSlideUp {
       from {
         opacity: 0;
         transform: translateY(20px);
@@ -320,17 +328,35 @@ if (!document.getElementById(styleSheetId)) {
         transform: translateY(0);
       }
     }
+
+    .habit-modal-box {
+      width: ${MODAL_WIDTH}px !important;
+      border-radius: ${MODAL_RADIUS}px !important;
+    }
     
-    textarea:focus {
+    .habit-modal-textarea {
+      width: ${TEXTAREA_WIDTH}px !important;
+      border-radius: ${TEXTAREA_RADIUS}px !important;
+    }
+
+    .habit-modal-textarea:focus {
       border-color: #28a745 !important;
     }
     
-    button:hover:not(:disabled) {
+    .habit-modal-btn:hover:not(:disabled) {
       transform: translateY(-1px);
     }
     
-    button:active:not(:disabled) {
+    .habit-modal-btn:active:not(:disabled) {
       transform: translateY(0);
+    }
+
+    .habit-modal-btn-cancel:hover:not(:disabled) {
+      background-color: #f8f9fa;
+    }
+
+    .habit-modal-btn-confirm:hover:not(:disabled) {
+      background-color: #218838;
     }
   `;
   document.head.appendChild(styleSheet);

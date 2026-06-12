@@ -17,17 +17,15 @@ app.use(express.json());
 const dataDir = join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
-  console.log('Created data directory:', dataDir);
+  console.log('[Server] Created data directory:', dataDir);
 }
 
-const habitsDb = Datastore.create({
-  filename: join(dataDir, 'habits.db'),
-  autoload: true,
-});
-const checkinsDb = Datastore.create({
-  filename: join(dataDir, 'checkins.db'),
-  autoload: true,
-});
+const habitsDbPath = join(dataDir, 'habits.db');
+const checkinsDbPath = join(dataDir, 'checkins.db');
+
+console.log('[Server] Initializing databases...');
+const habitsDb = Datastore.create(habitsDbPath);
+const checkinsDb = Datastore.create(checkinsDbPath);
 
 const defaultHabits = [
   { _id: uuidv4(), name: '晨间阅读', targetFrequency: 7, createdAt: new Date().toISOString() },
@@ -36,24 +34,44 @@ const defaultHabits = [
   { _id: uuidv4(), name: '健康饮食', targetFrequency: 7, createdAt: new Date().toISOString() }
 ];
 
-habitsDb.on('load', async () => {
-  console.log('Habits database loaded');
+async function initializeDefaultHabits() {
   try {
     const count = await habitsDb.count({});
-    console.log('Current habits count:', count);
-    if (count === 0) {
-      console.log('Initializing default habits...');
-      const inserted = await habitsDb.insert(defaultHabits);
-      console.log('Initialized default habits data:', inserted.length, 'habits added');
-    }
-  } catch (err) {
-    console.error('Error during data initialization:', err);
-  }
-});
+    console.log(`[Server] Current habits count in DB: ${count}`);
 
-checkinsDb.on('load', () => {
-  console.log('Checkins database loaded');
-});
+    if (count === 0) {
+      console.log('[Server] No habits found. Inserting default habits...');
+      const inserted = await habitsDb.insert(defaultHabits);
+      console.log(`[Server] Successfully inserted ${inserted.length} default habits.`);
+
+      const verifyCount = await habitsDb.count({});
+      console.log(`[Server] Verification - habits count after insert: ${verifyCount}`);
+      
+      if (verifyCount !== defaultHabits.length) {
+        console.error('[Server] WARNING: Inserted count does not match expected!');
+      }
+    } else {
+      console.log('[Server] Using existing habits data.');
+      const allHabits = await habitsDb.find({});
+      allHabits.forEach(h => console.log(`  - ${h.name}`));
+    }
+    return true;
+  } catch (err) {
+    console.error('[Server] Error during data initialization:', err);
+    return false;
+  }
+}
+
+async function ensureCheckinsDbReady() {
+  try {
+    const count = await checkinsDb.count({});
+    console.log(`[Server] Checkins count in DB: ${count}`);
+    return true;
+  } catch (err) {
+    console.error('[Server] Error verifying checkins DB:', err);
+    return false;
+  }
+}
 
 app.get('/api/habits', async (req, res) => {
   try {
@@ -73,9 +91,10 @@ app.get('/api/habits', async (req, res) => {
       })
     );
     
+    console.log(`[GET /api/habits] Returning ${habitsWithStatus.length} habits`);
     res.json(habitsWithStatus);
   } catch (error) {
-    console.error('GET /api/habits error:', error);
+    console.error('[GET /api/habits] error:', error);
     res.status(500).json({ error: 'Failed to fetch habits' });
   }
 });
@@ -109,10 +128,10 @@ app.post('/api/habits/:id/checkin', async (req, res) => {
     };
     
     const result = await checkinsDb.insert(checkin);
-    console.log('Checkin successful:', result._id);
+    console.log(`[POST /api/habits/:id/checkin] Checkin successful: ${result._id} for habit ${habit.name}`);
     res.json(result);
   } catch (error) {
-    console.error('POST /api/habits/:id/checkin error:', error);
+    console.error('[POST /api/habits/:id/checkin] error:', error);
     res.status(500).json({ error: 'Failed to check in' });
   }
 });
@@ -142,7 +161,7 @@ app.get('/api/habits/:id/stats', async (req, res) => {
     
     res.json({ checkins, streak });
   } catch (error) {
-    console.error('GET /api/habits/:id/stats error:', error);
+    console.error('[GET /api/habits/:id/stats] error:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
@@ -172,7 +191,7 @@ app.get('/api/stats/weekly', async (req, res) => {
     
     res.json(dailyStats);
   } catch (error) {
-    console.error('GET /api/stats/weekly error:', error);
+    console.error('[GET /api/stats/weekly] error:', error);
     res.status(500).json({ error: 'Failed to fetch weekly stats' });
   }
 });
@@ -200,11 +219,49 @@ app.get('/api/habits/:id/weekly-checkins', async (req, res) => {
     
     res.json(weeklyStatus);
   } catch (error) {
-    console.error('GET /api/habits/:id/weekly-checkins error:', error);
+    console.error('[GET /api/habits/:id/weekly-checkins] error:', error);
     res.status(500).json({ error: 'Failed to fetch weekly checkins' });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+async function startServer() {
+  console.log('[Server] Waiting for databases to load...');
+  
+  try {
+    await new Promise((resolve) => {
+      habitsDb.on('load', () => {
+        console.log('[Server] Habits database loaded successfully.');
+        resolve(null);
+      });
+    });
+
+    await new Promise((resolve) => {
+      checkinsDb.on('load', () => {
+        console.log('[Server] Checkins database loaded successfully.');
+        resolve(null);
+      });
+    });
+  } catch (e) {
+    console.error('[Server] Error waiting for DB load events:', e);
+  }
+
+  await initializeDefaultHabits();
+  await ensureCheckinsDbReady();
+
+  app.listen(PORT, () => {
+    console.log(`\n[Server] ===== HabitFlow API Server =====`);
+    console.log(`[Server] Running on http://localhost:${PORT}`);
+    console.log(`[Server] Health check: http://localhost:${PORT}/api/health`);
+    console.log(`[Server] Habits API:   http://localhost:${PORT}/api/habits`);
+    console.log(`[Server] =================================\n`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('[Server] FATAL ERROR during startup:', err);
+  process.exit(1);
 });
