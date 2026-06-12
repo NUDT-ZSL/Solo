@@ -5,6 +5,7 @@
  *   1. 渲染可拖拽时间轴滑块、播放/暂停按钮、速度调节器(0.5x/1x/2x/4x)
  *   2. 显示转折点金色圆点标记
  *   3. 用户交互后通过回调通知 App，App 再驱动 DataEngine 状态机更新
+ *   4. 进度条、手柄、标记点全部使用 left 属性定位，同一 cubic-bezier 缓动，视觉同步
  *
  * 【输入（Props）】
  *   - data: SalesData           - 完整销售数据（用于读取 months 和 turningPoints）
@@ -18,10 +19,10 @@
  * 【输出】无返回值，通过回调触发外部状态更新
  *
  * 【被依赖】src/App.tsx → 渲染 <TimelinePanel />
- * 【依赖】仅依赖 React Hooks（useRef, useEffect, useCallback）
+ * 【依赖】仅依赖 React Hooks（useRef, useEffect, useCallback, useMemo, memo）
  */
 
-import React, { useRef, useEffect, useCallback, memo } from 'react'
+import React, { useRef, useEffect, useCallback, useMemo, memo } from 'react'
 import type { SalesData } from '../DataEngine'
 
 interface TimelinePanelProps {
@@ -35,7 +36,8 @@ interface TimelinePanelProps {
 }
 
 const speedOptions = [0.5, 1, 2, 4]
-const cubicEase = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+const CUBIC_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+const TRANSITION_DURATION = '300ms'
 
 const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
   data,
@@ -52,6 +54,14 @@ const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
   const totalMonths = data.months.length
   const percentage = totalMonths > 1 ? (currentIndex / (totalMonths - 1)) * 100 : 0
 
+  const transitionStyle = useMemo(
+    () =>
+      isDragging.current
+        ? { transition: 'none' }
+        : { transition: `left ${TRANSITION_DURATION} ${CUBIC_EASE}, width ${TRANSITION_DURATION} ${CUBIC_EASE}` },
+    [isDragging.current]
+  )
+
   const getIndexFromPosition = useCallback(
     (clientX: number): number => {
       if (!sliderRef.current) return 0
@@ -63,11 +73,14 @@ const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
     [totalMonths]
   )
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    isDragging.current = true
-    const index = getIndexFromPosition(e.clientX)
-    onIndexChange(index)
-  }
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      isDragging.current = true
+      const index = getIndexFromPosition(e.clientX)
+      onIndexChange(index)
+    },
+    [getIndexFromPosition, onIndexChange]
+  )
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -89,13 +102,13 @@ const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
     }
   }, [getIndexFromPosition, onIndexChange])
 
-  const turningPointIndices = data.turningPoints
-    .map((month) => data.months.indexOf(month))
-    .filter((idx) => idx >= 0)
-
-  const sliderTransitionStyle = {
-    transition: isDragging.current ? 'none' : `all 300ms ${cubicEase}`,
-  }
+  const turningPointIndices = useMemo(
+    () =>
+      data.turningPoints
+        .map((month) => data.months.indexOf(month))
+        .filter((idx) => idx >= 0),
+    [data.turningPoints, data.months]
+  )
 
   return (
     <div className="timeline-panel">
@@ -143,8 +156,9 @@ const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
           <div
             className="slider-progress"
             style={{
+              left: 0,
               width: `${percentage}%`,
-              ...sliderTransitionStyle,
+              ...transitionStyle,
             }}
           />
         </div>
@@ -157,7 +171,7 @@ const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
               className="turning-point-marker"
               style={{
                 left: `${pos}%`,
-                ...sliderTransitionStyle,
+                ...transitionStyle,
               }}
               title={`${data.months[idx]} - 转折点`}
             />
@@ -167,8 +181,8 @@ const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
         <div
           className="slider-thumb"
           style={{
-            left: `calc(${percentage}% - 14px)`,
-            ...sliderTransitionStyle,
+            left: `${percentage}%`,
+            ...transitionStyle,
           }}
         />
 
@@ -181,10 +195,7 @@ const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
               <span
                 key={idx}
                 className="slider-label"
-                style={{
-                  left: `${pos}%`,
-                  ...sliderTransitionStyle,
-                }}
+                style={{ left: `${pos}%` }}
               >
                 {month}
               </span>

@@ -36,9 +36,10 @@ export interface TimelineState {
   speed: number
 }
 
-export type SortType = 'value-desc' | 'name-asc'
+export type SortType = 'value-desc' | 'value-asc' | 'name-asc'
 
 const TURNING_POINT_THRESHOLD = 0.2
+const YEAR_MONTH_COUNT = 12
 
 export function parseCSV(csvText: string): SalesData {
   const lines = csvText.trim().split(/\r?\n/)
@@ -99,8 +100,13 @@ export function parseCSV(csvText: string): SalesData {
 }
 
 /**
- * 检测转折点：遍历每个月份，只要任一产品线环比变化 >= 20%
- * 即将该月份标记为转折点
+ * 检测转折点：
+ * 1. 月环比：比较相邻月份（monthIdx vs monthIdx-1）
+ * 2. 跨年环比：当 monthIdx >= 12 时，与上一年同月比较（monthIdx vs monthIdx-12）
+ * 边界处理：
+ *   - 前值为0：若当前值非0则视为100%变化，标记为转折点
+ *   - 前值为负：取绝对值计算变化率
+ *   - 当前值和前值同号且前值非0：标准环比公式
  */
 function detectTurningPoints(
   months: string[],
@@ -110,13 +116,11 @@ function detectTurningPoints(
 
   for (let monthIdx = 1; monthIdx < months.length; monthIdx++) {
     for (const s of series) {
-      const prevValue = s.values[monthIdx - 1]
-      const currValue = s.values[monthIdx]
-
-      if (prevValue === 0) continue
-
-      const changeRate = Math.abs((currValue - prevValue) / prevValue)
-      if (changeRate >= TURNING_POINT_THRESHOLD) {
+      if (checkMomChange(s.values, monthIdx, 1)) {
+        turningPointSet.add(months[monthIdx])
+        break
+      }
+      if (monthIdx >= YEAR_MONTH_COUNT && checkMomChange(s.values, monthIdx, YEAR_MONTH_COUNT)) {
         turningPointSet.add(months[monthIdx])
         break
       }
@@ -124,6 +128,31 @@ function detectTurningPoints(
   }
 
   return Array.from(turningPointSet)
+}
+
+function checkMomChange(
+  values: number[],
+  currentIdx: number,
+  offset: number
+): boolean {
+  const prevIdx = currentIdx - offset
+  if (prevIdx < 0) return false
+
+  const currValue = values[currentIdx]
+  const prevValue = values[prevIdx]
+
+  if (prevValue === 0) {
+    return currValue !== 0
+  }
+
+  const absPrev = Math.abs(prevValue)
+  const absCurr = Math.abs(currValue)
+
+  if (prevValue < 0 && currValue >= 0) return true
+  if (prevValue >= 0 && currValue < 0) return true
+
+  const changeRate = Math.abs((currValue - prevValue) / absPrev)
+  return changeRate >= TURNING_POINT_THRESHOLD
 }
 
 export function getMonthData(data: SalesData, monthIndex: number): {
@@ -259,6 +288,8 @@ export function sortSeries(
 
   if (sortType === 'value-desc') {
     sorted.sort((a, b) => (b.values[monthIndex] || 0) - (a.values[monthIndex] || 0))
+  } else if (sortType === 'value-asc') {
+    sorted.sort((a, b) => (a.values[monthIndex] || 0) - (b.values[monthIndex] || 0))
   } else if (sortType === 'name-asc') {
     sorted.sort((a, b) => a.product.localeCompare(b.product))
   }
@@ -296,11 +327,8 @@ export function isProductTurningPoint(
   const series = data.series.find((s) => s.product === product)
   if (!series) return false
 
-  const prevValue = series.values[monthIndex - 1]
-  const currValue = series.values[monthIndex]
+  if (checkMomChange(series.values, monthIndex, 1)) return true
+  if (monthIndex >= YEAR_MONTH_COUNT && checkMomChange(series.values, monthIndex, YEAR_MONTH_COUNT)) return true
 
-  if (prevValue === 0) return false
-
-  const changeRate = Math.abs((currValue - prevValue) / prevValue)
-  return changeRate >= TURNING_POINT_THRESHOLD
+  return false
 }

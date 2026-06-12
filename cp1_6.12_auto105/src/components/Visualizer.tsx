@@ -7,6 +7,7 @@
  *      - 环形图（PieChart）：当月各产品线销售占比，hover放大阴影
  *      - 折线图（LineChart）：截至当前月份的累计销售额趋势，带星形转折点闪烁
  *   2. 内部通过 useMemo 缓存图表数据计算结果，通过 React.memo 避免无关重渲染
+ *   3. 窄屏(<768px)下图表垂直堆叠，顺序固定：柱状图(1)→环形图(2)→折线图(3)
  *
  * 【输入（Props）】
  *   - data: SalesData          - 来自 App 按 sortType + selectedProducts 过滤排序后的数据
@@ -22,7 +23,7 @@
  *   - recharts: BarChart, LineChart, PieChart 等图表组件
  */
 
-import React, { useMemo, memo } from 'react'
+import React, { useMemo, useCallback, memo } from 'react'
 import {
   BarChart,
   Bar,
@@ -189,11 +190,25 @@ const VisualizerInner: React.FC<VisualizerProps> = ({
     return set
   }, [filteredSeries, currentMonthIndex, data])
 
-  const chartStyle = { animationDuration: 500, animationEasing: 'ease-out' }
+  const renderDot = useCallback(
+    (s: { product: string }) => (dotProps: any) => (
+      <CustomDot
+        {...dotProps}
+        stroke={productColors[s.product]}
+        isTurning={turningPointSet.has(s.product) && dotProps.index === currentMonthIndex}
+      />
+    ),
+    [productColors, turningPointSet, currentMonthIndex]
+  )
+
+  const chartStyle = useMemo(
+    () => ({ animationDuration: 500, animationEasing: 'ease-out' as const }),
+    []
+  )
 
   return (
     <div className="visualizer-container">
-      <div className="chart-card bar-chart-card" style={{ order: 1 }}>
+      <div className="chart-card bar-chart-card">
         <h3 className="chart-title">当月销售额</h3>
         <ResponsiveContainer width="100%" height="85%">
           <BarChart data={barData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
@@ -225,7 +240,7 @@ const VisualizerInner: React.FC<VisualizerProps> = ({
         </ResponsiveContainer>
       </div>
 
-      <div className="chart-card pie-chart-card" style={{ order: 2 }}>
+      <div className="chart-card pie-chart-card">
         <h3 className="chart-title">销售占比</h3>
         <ResponsiveContainer width="100%" height="85%">
           <PieChart>
@@ -259,7 +274,7 @@ const VisualizerInner: React.FC<VisualizerProps> = ({
         </ResponsiveContainer>
       </div>
 
-      <div className="chart-card line-chart-card" style={{ order: 3 }}>
+      <div className="chart-card line-chart-card">
         <h3 className="chart-title">累计趋势</h3>
         <ResponsiveContainer width="100%" height="85%">
           <LineChart data={lineData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
@@ -284,13 +299,7 @@ const VisualizerInner: React.FC<VisualizerProps> = ({
                 dataKey={s.product}
                 stroke={productColors[s.product]}
                 strokeWidth={2}
-                dot={(dotProps: any) => (
-                  <CustomDot
-                    {...dotProps}
-                    stroke={productColors[s.product]}
-                    isTurning={turningPointSet.has(s.product) && dotProps.index === currentMonthIndex}
-                  />
-                )}
+                dot={renderDot(s)}
                 activeDot={{ r: 6, strokeWidth: 2 }}
                 {...chartStyle}
               />
@@ -310,9 +319,11 @@ const arePropsEqual = (prev: VisualizerProps, next: VisualizerProps): boolean =>
   for (let i = 0; i < prev.selectedProducts.length; i++) {
     if (prev.selectedProducts[i] !== next.selectedProducts[i]) return false
   }
-  const prevKeys = Object.keys(prev.productColors)
-  const nextKeys = Object.keys(next.productColors)
-  if (prevKeys.length !== nextKeys.length) return false
+  if (prev.productColors !== next.productColors) return false
+  for (let i = 0; i < prev.data.series.length; i++) {
+    if (prev.data.series[i].product !== next.data.series[i].product) return false
+    if (prev.data.series[i].values[prev.currentMonthIndex] !== next.data.series[i].values[next.currentMonthIndex]) return false
+  }
   return true
 }
 
