@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../App';
@@ -12,9 +12,11 @@ const LONG_PRESS_MS = 1500;
 const getCapsuleColor = (unlockTimeIso: string): string => {
   const now = Date.now();
   const unlock = new Date(unlockTimeIso).getTime();
-  const diffHours = (unlock - now) / (1000 * 60 * 60);
+  const diffMs = unlock - now;
+  const diffHours = diffMs / (1000 * 60 * 60);
   if (diffHours <= 1) return '#ff4757';
-  if (diffHours <= 24 * 30) return '#ffa502';
+  if (diffHours > 1 && diffHours <= 24 * 7) return '#ff6b3a';
+  if (diffHours > 24 * 7 && diffHours <= 24 * 30) return '#ffa502';
   return '#3742fa';
 };
 
@@ -23,52 +25,60 @@ const formatUnlockTime = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-const DARK_TILE_URL =
-  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
-interface PointerEventExt {
-  latlng: L.LatLng;
-  originalEvent: PointerEvent;
-}
+const MapRefCapture: React.FC<{
+  onMapReady: (map: L.Map) => void;
+}> = ({ onMapReady }) => {
+  const map = useMap();
+  useEffect(() => {
+    onMapReady(map);
+  }, [map, onMapReady]);
+  return null;
+};
 
-const MapHandler: React.FC<{
+const LongPressHandler: React.FC<{
+  mapRef: React.MutableRefObject<L.Map | null>;
   onLongPress: (lat: number, lng: number) => void;
-}> = ({ onLongPress }) => {
+}> = ({ mapRef, onLongPress }) => {
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressedPos = useRef<[number, number] | null>(null);
   const triggered = useRef(false);
-  const map = useMap();
-
-  const clearTimer = useCallback(() => {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-    pressedPos.current = null;
-  }, []);
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
 
   useEffect(() => {
-    const el = map.getContainer();
+    const el = document.querySelector('.leaflet-container') as HTMLElement;
+    if (!el) return;
 
     const handlePointerDown = (ev: PointerEvent) => {
+      const map = mapRef.current;
+      if (!map) return;
       if (ev.button !== 0 && ev.pointerType === 'mouse') return;
       const point = map.mouseEventToLatLng(ev as unknown as MouseEvent);
       pressedPos.current = [point.lat, point.lng];
       triggered.current = false;
       pressTimer.current = setTimeout(() => {
-        if (pressedPos.current) {
+        if (pressedPos.current && !triggered.current) {
           triggered.current = true;
-          onLongPress(pressedPos.current[0], pressedPos.current[1]);
+          onLongPressRef.current(pressedPos.current[0], pressedPos.current[1]);
         }
       }, LONG_PRESS_MS);
+    };
+
+    const clearTimer = () => {
+      if (pressTimer.current) {
+        clearTimeout(pressTimer.current);
+        pressTimer.current = null;
+      }
+      pressedPos.current = null;
     };
 
     const handlePointerUp = () => clearTimer();
     const handlePointerLeave = () => clearTimer();
     const handlePointerMove = (ev: PointerEvent) => {
       if (pressTimer.current && !triggered.current) {
-        const threshold = 8;
-        if (ev.movementX && ev.movementY && (Math.abs(ev.movementX) > threshold || Math.abs(ev.movementY) > threshold)) {
+        if (ev.movementX !== undefined && (Math.abs(ev.movementX) > 8 || Math.abs(ev.movementY) > 8)) {
           clearTimer();
         }
       }
@@ -91,7 +101,7 @@ const MapHandler: React.FC<{
       el.removeEventListener('contextmenu', handleContextMenu);
       clearTimer();
     };
-  }, [map, onLongPress, clearTimer]);
+  }, [mapRef]);
 
   return null;
 };
@@ -111,11 +121,9 @@ const BubbleOverlay: React.FC<{
       setPos({ x: p.x, y: p.y });
     };
     update();
-    map.on('move', update);
-    map.on('zoom', update);
+    map.on('move zoom', update);
     return () => {
-      map.off('move', update);
-      map.off('zoom', update);
+      map.off('move zoom', update);
     };
   }, [map, lat, lng]);
 
@@ -126,10 +134,10 @@ const BubbleOverlay: React.FC<{
       style={{
         position: 'absolute',
         left: pos.x,
-        top: pos.y,
-        transform: 'translate(-50%, -100%) translateY(-12px)',
+        top: pos.y - 12,
+        transform: 'translate(-50%, -100%)',
         pointerEvents: 'auto',
-        zIndex: 600,
+        zIndex: 1000,
       }}
     >
       <motion.div
@@ -144,22 +152,8 @@ const BubbleOverlay: React.FC<{
         <button onClick={onBury} style={buryBtnStyle}>
           在此埋下时间胶囊
         </button>
-        <button onClick={onClose} style={bubbleCloseStyle} aria-label="关闭">
-          ×
-        </button>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: -8,
-            left: '50%',
-            transform: 'translateX(-50%) rotate(45deg)',
-            width: 14,
-            height: 14,
-            backgroundColor: 'rgba(26,26,46,0.92)',
-            borderRight: '1px solid rgba(255,255,255,0.08)',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-          }}
-        />
+        <button onClick={onClose} style={bubbleCloseStyle} aria-label="关闭">×</button>
+        <div style={bubbleArrowStyle} />
       </motion.div>
     </div>
   );
@@ -231,21 +225,21 @@ const useAggregatedMarkers = (capsules: Capsule[], zoom: number) => {
       return { singles: capsules, clusters: [] as { lat: number; lng: number; count: number }[] };
     }
     const gridSize = zoom < 10 ? 3 : zoom < 12 ? 1.5 : 0.6;
-    const map = new Map<string, { lat: number; lng: number; count: number; capsules: Capsule[] }>();
+    const gridMap = new Map<string, { lat: number; lng: number; count: number; capsules: Capsule[] }>();
     capsules.forEach((c) => {
       const key = `${Math.floor(c.lat / gridSize)}_${Math.floor(c.lng / gridSize)}`;
-      const existing = map.get(key);
+      const existing = gridMap.get(key);
       if (existing) {
         existing.count += 1;
         existing.lat = (existing.lat * (existing.count - 1) + c.lat) / existing.count;
         existing.lng = (existing.lng * (existing.count - 1) + c.lng) / existing.count;
       } else {
-        map.set(key, { lat: c.lat, lng: c.lng, count: 1, capsules: [c] });
+        gridMap.set(key, { lat: c.lat, lng: c.lng, count: 1, capsules: [c] });
       }
     });
     const singles: Capsule[] = [];
     const clusters: { lat: number; lng: number; count: number }[] = [];
-    map.forEach((v) => {
+    gridMap.forEach((v) => {
       if (v.count === 1) singles.push(v.capsules[0]);
       else clusters.push({ lat: v.lat, lng: v.lng, count: v.count });
     });
@@ -264,10 +258,6 @@ const ZoomListener: React.FC<{ onZoom: (z: number) => void }> = ({ onZoom }) => 
   return null;
 };
 
-const CoordinateOverlay: React.FC = () => {
-  return null;
-};
-
 const CapsuleMap: React.FC = () => {
   const { userPosition, capsules } = useAppContext();
   const [zoom, setZoom] = useState(13);
@@ -275,8 +265,13 @@ const CapsuleMap: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [formPos, setFormPos] = useState<[number, number] | null>(null);
   const [selectedCapsule, setSelectedCapsule] = useState<Capsule | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
 
   const { singles, clusters } = useAggregatedMarkers(capsules, zoom);
+
+  const handleMapReady = useCallback((map: L.Map) => {
+    mapRef.current = map;
+  }, []);
 
   const handleLongPress = useCallback((lat: number, lng: number) => {
     setLongPressPos([lat, lng]);
@@ -306,16 +301,20 @@ const CapsuleMap: React.FC = () => {
         style={{ width: '100%', height: '100%', background: '#1a1a2e' }}
         zoomControl={true}
         attributionControl={false}
-        worldCopyJump={true}
         preferCanvas={true}
       >
-        <TileLayer
-          url={DARK_TILE_URL}
-          attribution=''
-          className='dark-tile-layer'
-        />
+        <TileLayer url={DARK_TILE_URL} attribution="" />
+        <MapRefCapture onMapReady={handleMapReady} />
         <ZoomListener onZoom={setZoom} />
-        <MapHandler onLongPress={handleLongPress} />
+
+        {longPressPos && (
+          <BubbleOverlay
+            lat={longPressPos[0]}
+            lng={longPressPos[1]}
+            onBury={handleBury}
+            onClose={() => setLongPressPos(null)}
+          />
+        )}
 
         {singles.map((c) => (
           <CircleMarker
@@ -347,18 +346,12 @@ const CapsuleMap: React.FC = () => {
         ))}
       </MapContainer>
 
-      {longPressPos && (
-        <BubbleOverlay
-          lat={longPressPos[0]}
-          lng={longPressPos[1]}
-          onBury={handleBury}
-          onClose={() => setLongPressPos(null)}
-        />
-      )}
+      <LongPressHandler mapRef={mapRef} onLongPress={handleLongPress} />
 
       <AnimatePresence>
         {selectedCapsule && (
           <motion.div
+            key="capsule-card-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -366,7 +359,7 @@ const CapsuleMap: React.FC = () => {
             style={{
               position: 'absolute',
               inset: 0,
-              backgroundColor: 'rgba(0,0,0,0.35)',
+              backgroundColor: 'rgba(0,0,0,0.4)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -389,32 +382,22 @@ const CapsuleMap: React.FC = () => {
       <style>{`
         .leaflet-container {
           background: #1a1a2e !important;
-          outline: none;
           font-family: inherit;
         }
         .leaflet-control-zoom a {
-          background: rgba(22,33,62,0.95) !important;
+          background: rgba(22,33,62,0.92) !important;
           color: #e0e0e0 !important;
           border: 1px solid rgba(255,255,255,0.1) !important;
         }
         .leaflet-control-zoom a:hover {
-          background: rgba(55,66,250,0.9) !important;
+          background: rgba(55,66,250,0.85) !important;
           color: #fff !important;
         }
-        .dark-tile-layer {
+        .leaflet-tile-pane img {
           filter:
-            hue-rotate(-5deg)
-            saturate(0.85)
-            brightness(0.92)
-            contrast(1.05);
-        }
-        .dark-tile-layer + .leaflet-tile-container img,
-        .leaflet-tile {
-          filter:
-            hue-rotate(-5deg)
-            saturate(0.85)
-            brightness(0.92)
-            contrast(1.05) !important;
+            brightness(0.93)
+            saturate(0.82)
+            contrast(1.08);
         }
         .custom-cluster {
           background: transparent !important;
@@ -423,6 +406,10 @@ const CapsuleMap: React.FC = () => {
         .leaflet-interactive {
           cursor: pointer;
         }
+        @keyframes pulse-ring {
+          0% { transform: scale(1); opacity: 0.6; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
       `}</style>
     </div>
   );
@@ -430,13 +417,26 @@ const CapsuleMap: React.FC = () => {
 
 const bubbleStyle: React.CSSProperties = {
   position: 'relative',
-  backgroundColor: 'rgba(26,26,46,0.92)',
-  backdropFilter: 'blur(10px)',
+  backgroundColor: 'rgba(26,26,46,0.94)',
+  backdropFilter: 'blur(12px)',
   borderRadius: 12,
-  padding: '14px 16px 14px',
-  boxShadow: '0 6px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06)',
+  padding: '14px 16px',
+  boxShadow: '0 6px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)',
   minWidth: 210,
-  border: '1px solid rgba(255,255,255,0.08)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  color: '#e0e0e0',
+};
+
+const bubbleArrowStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: -7,
+  left: '50%',
+  transform: 'translateX(-50%) rotate(45deg)',
+  width: 14,
+  height: 14,
+  backgroundColor: 'rgba(26,26,46,0.94)',
+  borderRight: '1px solid rgba(255,255,255,0.1)',
+  borderBottom: '1px solid rgba(255,255,255,0.1)',
 };
 
 const buryBtnStyle: React.CSSProperties = {
@@ -479,7 +479,7 @@ const cardStyle: React.CSSProperties = {
   backgroundColor: '#fff',
   borderRadius: 14,
   padding: '22px 20px 16px',
-  boxShadow: '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.05)',
+  boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
   position: 'relative',
   maxHeight: '75vh',
   overflowY: 'auto',
