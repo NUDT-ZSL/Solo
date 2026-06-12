@@ -40,6 +40,7 @@ db.exec(`
     activity TEXT NOT NULL,
     budget REAL NOT NULL DEFAULT 0,
     expense_type TEXT DEFAULT 'split',
+    is_personal INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
     FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
@@ -53,6 +54,7 @@ db.exec(`
     amount REAL NOT NULL,
     description TEXT,
     expense_type TEXT NOT NULL DEFAULT 'split',
+    split_type TEXT DEFAULT 'even',
     date TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
@@ -89,6 +91,7 @@ export interface Schedule {
   activity: string;
   budget: number;
   expense_type: string;
+  is_personal: number;
   created_at: string;
 }
 
@@ -100,6 +103,7 @@ export interface Expense {
   amount: number;
   description?: string;
   expense_type: string;
+  split_type: string;
   date: string;
   created_at: string;
 }
@@ -140,12 +144,12 @@ export const dbQueries = {
   `),
 
   addSchedule: db.prepare(`
-    INSERT INTO schedules (id, plan_id, member_id, date, time, location, activity, budget, expense_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO schedules (id, plan_id, member_id, date, time, location, activity, budget, expense_type, is_personal)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   updateSchedule: db.prepare(`
-    UPDATE schedules SET date = ?, time = ?, location = ?, activity = ?, budget = ?, expense_type = ?
+    UPDATE schedules SET date = ?, time = ?, location = ?, activity = ?, budget = ?, expense_type = ?, is_personal = ?
     WHERE id = ? AND plan_id = ?
   `),
 
@@ -162,8 +166,8 @@ export const dbQueries = {
   `),
 
   addExpense: db.prepare(`
-    INSERT INTO expenses (id, plan_id, member_id, schedule_id, amount, description, expense_type, date)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO expenses (id, plan_id, member_id, schedule_id, amount, description, expense_type, split_type, date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   getExpensesByPlanId: db.prepare(`

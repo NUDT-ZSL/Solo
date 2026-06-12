@@ -27,6 +27,20 @@ export interface Schedule {
   activity: string;
   budget: number;
   expense_type: string;
+  is_personal: number;
+  created_at?: string;
+}
+
+export interface Expense {
+  id: string;
+  plan_id: string;
+  member_id: string;
+  schedule_id?: string;
+  amount: number;
+  description?: string;
+  expense_type: string;
+  split_type: string;
+  date: string;
   created_at?: string;
 }
 

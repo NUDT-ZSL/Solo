@@ -118,6 +118,7 @@ app.post('/api/plans', (req, res) => {
       planId,
       memberId,
       inviteCode,
+      shareLink: `/?plan=${planId}&mode=view`,
       plan: {
         id: planId,
         name,
