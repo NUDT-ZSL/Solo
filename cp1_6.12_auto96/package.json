@@ -2,10 +2,10 @@
   "name": "design-lab",
   "version": "1.0.0",
   "description": "团队设计稿版本管理与评审打点应用",
-  "main": "server/index.ts",
+  "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "ts-node server/index.ts",
+    "server": "node server/index.js",
     "client": "vite"
   },
   "dependencies": {
@@ -26,8 +26,6 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/react-beautiful-dnd": "^13.1.4",
-    "@types/lowdb": "^1.0.11",
-    "ts-node": "^10.9.1",
     "concurrently": "^8.2.0"
   }
 }
