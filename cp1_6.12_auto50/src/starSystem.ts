@@ -4,7 +4,8 @@ export interface PlanetData {
   name: string;
   color: number;
   radius: number;
-  orbitRadius: number;
+  orbitA: number;
+  orbitB: number;
   inclination: number;
   period: number;
   angle: number;
@@ -13,6 +14,7 @@ export interface PlanetData {
   orbitLine: THREE.Line;
   highlightRing: THREE.Mesh;
   selected: boolean;
+  inclMatrix: THREE.Matrix4;
 }
 
 export interface StarSystem {
@@ -24,21 +26,24 @@ export interface StarSystem {
 }
 
 const PLANET_CONFIGS = [
-  { name: 'Mercury', color: 0x4488ff, orbitRadius: 5, inclination: 0, period: 10, size: 0.6 },
-  { name: 'Venus', color: 0x44cc44, orbitRadius: 8, inclination: 15, period: 18, size: 0.8 },
-  { name: 'Mars', color: 0xff4444, orbitRadius: 12, inclination: 30, period: 30, size: 0.7 }
+  { name: 'Mercury', color: 0x4488ff, a: 5, b: 4.2, inclination: 0,  period: 10, size: 0.6 },
+  { name: 'Venus',   color: 0x44cc44, a: 8, b: 7.0, inclination: 15, period: 18, size: 0.8 },
+  { name: 'Mars',    color: 0xff4444, a: 12, b: 10.5, inclination: 30, period: 30, size: 0.7 }
 ];
 
-function createOrbitLine(radius: number, inclination: number): THREE.Line {
+function createOrbitLine(a: number, b: number, inclRad: number): THREE.Line {
   const points: THREE.Vector3[] = [];
-  const segments = 128;
+  const segments = 256;
+  const m = new THREE.Matrix4().makeRotationX(inclRad);
   for (let i = 0; i <= segments; i++) {
     const theta = (i / segments) * Math.PI * 2;
-    points.push(new THREE.Vector3(
-      Math.cos(theta) * radius,
+    const v = new THREE.Vector3(
+      Math.cos(theta) * a,
       0,
-      Math.sin(theta) * radius
-    ));
+      Math.sin(theta) * b
+    );
+    v.applyMatrix4(m);
+    points.push(v);
   }
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
@@ -46,21 +51,22 @@ function createOrbitLine(radius: number, inclination: number): THREE.Line {
     transparent: true,
     opacity: 0.2
   });
-  const line = new THREE.Line(geometry, material);
-  line.rotation.x = THREE.MathUtils.degToRad(inclination);
-  return line;
+  return new THREE.Line(geometry, material);
 }
 
 function createHighlightRing(_color: number, size: number): THREE.Mesh {
-  const geometry = new THREE.RingGeometry(size * 1.3, size * 1.8, 32);
+  const geometry = new THREE.RingGeometry(size * 1.0, size * 1.05, 64);
   const material = new THREE.MeshBasicMaterial({
     color: 0x66aaff,
     transparent: true,
     opacity: 0,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
   });
   const ring = new THREE.Mesh(geometry, material);
   ring.rotation.x = -Math.PI / 2;
+  (ring.userData as { baseSize: number }).baseSize = size;
   return ring;
 }
 
@@ -84,20 +90,30 @@ export function createStarSystem(): StarSystem {
   const planets: PlanetData[] = [];
 
   PLANET_CONFIGS.forEach((config) => {
-    const planetGroup = new THREE.Group();
-    planetGroup.rotation.x = THREE.MathUtils.degToRad(config.inclination);
+    const inclRad = THREE.MathUtils.degToRad(config.inclination);
+    const inclMatrix = new THREE.Matrix4().makeRotationX(inclRad);
 
-    const orbitLine = createOrbitLine(config.orbitRadius, 0);
+    const planetGroup = new THREE.Group();
+
+    const orbitLine = createOrbitLine(config.a, config.b, inclRad);
     planetGroup.add(orbitLine);
 
-    const planetGeometry = new THREE.SphereGeometry(config.size, 24, 24);
+    const planetGeometry = new THREE.SphereGeometry(config.size, 32, 32);
     const planetMaterial = new THREE.MeshStandardMaterial({
       color: config.color,
       metalness: 0.3,
       roughness: 0.6
     });
     const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
-    planetMesh.position.x = config.orbitRadius;
+
+    const initialAngle = Math.random() * Math.PI * 2;
+    const initPos = new THREE.Vector3(
+      Math.cos(initialAngle) * config.a,
+      0,
+      Math.sin(initialAngle) * config.b
+    );
+    initPos.applyMatrix4(inclMatrix);
+    planetMesh.position.copy(initPos);
     planetMesh.userData = { planetIndex: planets.length };
     planetGroup.add(planetMesh);
 
@@ -110,15 +126,17 @@ export function createStarSystem(): StarSystem {
       name: config.name,
       color: config.color,
       radius: config.size,
-      orbitRadius: config.orbitRadius,
+      orbitA: config.a,
+      orbitB: config.b,
       inclination: config.inclination,
       period: config.period,
-      angle: Math.random() * Math.PI * 2,
+      angle: initialAngle,
       mesh: planetMesh,
       group: planetGroup,
       orbitLine,
       highlightRing,
-      selected: false
+      selected: false,
+      inclMatrix
     });
   });
 
@@ -130,7 +148,7 @@ export function createStarSystem(): StarSystem {
     const radius = 200 + Math.random() * 300;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
-    positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+    positions[i3]     = radius * Math.sin(phi) * Math.cos(theta);
     positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
     positions[i3 + 2] = radius * Math.cos(phi);
   }
@@ -149,10 +167,21 @@ export function createStarSystem(): StarSystem {
     planets.forEach((planet) => {
       const angularVelocity = (Math.PI * 2) / planet.period;
       planet.angle += angularVelocity * deltaTime * speedMultiplier;
-      planet.mesh.position.x = Math.cos(planet.angle) * planet.orbitRadius;
-      planet.mesh.position.z = Math.sin(planet.angle) * planet.orbitRadius;
-      planet.mesh.position.y = 0;
+
+      const localPos = new THREE.Vector3(
+        Math.cos(planet.angle) * planet.orbitA,
+        0,
+        Math.sin(planet.angle) * planet.orbitB
+      );
+      localPos.applyMatrix4(planet.inclMatrix);
+      planet.mesh.position.copy(localPos);
+
       planet.mesh.rotation.y += deltaTime * 0.5;
+
+      const baseSize = (planet.highlightRing.userData as { baseSize: number }).baseSize;
+      planet.highlightRing.scale.setScalar(1);
+      planet.highlightRing.position.set(0, 0, 0);
+      void baseSize;
     });
 
     star.rotation.y += deltaTime * 0.1;

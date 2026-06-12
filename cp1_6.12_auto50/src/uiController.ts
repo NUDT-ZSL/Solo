@@ -7,6 +7,12 @@ export interface UICallbacks {
   onResetView: () => void;
 }
 
+const MOBILE_BREAKPOINT = 768;
+
+function isMobileViewport(): boolean {
+  return window.innerWidth < MOBILE_BREAKPOINT;
+}
+
 export function createUIController(planets: PlanetData[], callbacks: UICallbacks): {
   updatePlanetDropdown: () => void;
 } {
@@ -32,6 +38,8 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
       font-family: monospace;
       z-index: 10;
       border: 1px solid rgba(100, 150, 255, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 10, 30, 0.4);
+      transition: transform 0.3s ease, opacity 0.3s ease;
     }
     .control-panel h2 {
       font-size: 16px;
@@ -43,6 +51,9 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
     }
     .control-group {
       margin-bottom: 16px;
+    }
+    .control-group:last-child {
+      margin-bottom: 0;
     }
     .control-group label {
       display: block;
@@ -60,6 +71,7 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
       font-family: monospace;
       font-size: 13px;
       outline: none;
+      box-sizing: border-box;
     }
     .control-group select:focus,
     .control-group input[type="range"]:focus {
@@ -85,6 +97,10 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
       background: #66aaff;
       cursor: pointer;
       box-shadow: 0 0 8px rgba(100, 150, 255, 0.6);
+      transition: transform 0.2s ease;
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
     }
     .control-group input[type="range"]::-moz-range-thumb {
       width: 16px;
@@ -109,6 +125,7 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
       cursor: pointer;
       border: 1px solid rgba(100, 150, 255, 0.3);
       transition: background 0.3s ease;
+      flex-shrink: 0;
     }
     .toggle-switch.active {
       background: rgba(100, 150, 255, 0.4);
@@ -145,11 +162,16 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
       background: rgba(80, 130, 220, 0.6);
       border-color: rgba(100, 150, 255, 0.7);
       box-shadow: 0 0 12px rgba(100, 150, 255, 0.3);
+      transform: translateY(-1px);
+    }
+    .btn:active {
+      transform: translateY(0);
     }
     .speed-value {
       display: inline-block;
       color: #66ff66;
       margin-left: 8px;
+      font-weight: bold;
     }
     .drawer-toggle {
       display: none;
@@ -158,8 +180,9 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
       left: 0;
       right: 0;
       height: 50px;
-      background: rgba(10, 10, 30, 0.9);
+      background: rgba(10, 10, 30, 0.92);
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border-top: 1px solid rgba(100, 150, 255, 0.3);
       color: #88ccff;
       font-family: monospace;
@@ -169,24 +192,74 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
       border-radius: 12px 12px 0 0;
       align-items: center;
       justify-content: center;
+      user-select: none;
+      transition: background 0.3s ease;
     }
+    .drawer-toggle:hover {
+      background: rgba(30, 40, 80, 0.92);
+    }
+    .drawer-toggle::before {
+      content: '';
+      position: absolute;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(136, 204, 255, 0.4);
+    }
+
     @media (max-width: 768px) {
       .control-panel {
         position: fixed;
         top: auto;
-        bottom: 50px;
-        right: 10px;
-        left: 10px;
-        width: auto;
-        max-height: 60vh;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        max-height: 65vh;
         overflow-y: auto;
         display: none;
+        border-radius: 16px 16px 0 0;
+        border: none;
+        border-top: 1px solid rgba(100, 150, 255, 0.3);
+        padding: 20px 20px 80px 20px;
+        box-sizing: border-box;
+        animation: slideUp 0.3s ease;
       }
-      .control-panel.open {
+      .control-panel.mobile-open {
         display: block;
+        bottom: 0;
       }
       .drawer-toggle {
         display: flex;
+        bottom: 0;
+      }
+      .drawer-toggle.drawer-open {
+        border-radius: 0;
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      .btn:hover {
+        transform: none;
+        background: rgba(60, 100, 180, 0.4);
+        box-shadow: none;
+      }
+      .control-group input[type="range"]::-webkit-slider-thumb:hover {
+        transform: none;
       }
     }
   `;
@@ -210,7 +283,7 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
     <div class="control-group">
       <div class="toggle-container">
         <label for="trails-toggle" style="margin:0;">✨ Show Trails</label>
-        <div class="toggle-switch active" id="trails-toggle"></div>
+        <div class="toggle-switch active" id="trails-toggle" role="switch" aria-checked="true" tabindex="0"></div>
       </div>
     </div>
     <div class="control-group">
@@ -231,6 +304,30 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
   const resetBtn = panel.querySelector('#reset-view') as HTMLButtonElement;
 
   let trailsVisible = true;
+  let panelOpen = false;
+
+  const applyMobileState = () => {
+    if (isMobileViewport()) {
+      panel.classList.toggle('mobile-open', panelOpen);
+      drawerToggle.classList.toggle('drawer-open', panelOpen);
+    } else {
+      panel.classList.remove('mobile-open');
+      drawerToggle.classList.remove('drawer-open');
+    }
+  };
+
+  const togglePanel = () => {
+    if (!isMobileViewport()) return;
+    panelOpen = !panelOpen;
+    drawerToggle.textContent = panelOpen ? '▼ Close Controls' : '☰ Open Controls';
+    applyMobileState();
+  };
+
+  applyMobileState();
+
+  window.addEventListener('resize', () => {
+    applyMobileState();
+  });
 
   planetSelect.addEventListener('change', (e) => {
     const value = parseInt((e.target as HTMLSelectElement).value, 10);
@@ -243,10 +340,19 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
     callbacks.onSpeedChange(value);
   });
 
-  trailsToggle.addEventListener('click', () => {
+  const toggleTrails = () => {
     trailsVisible = !trailsVisible;
     trailsToggle.classList.toggle('active', trailsVisible);
+    trailsToggle.setAttribute('aria-checked', String(trailsVisible));
     callbacks.onTrailsToggle(trailsVisible);
+  };
+
+  trailsToggle.addEventListener('click', toggleTrails);
+  trailsToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleTrails();
+    }
   });
 
   resetBtn.addEventListener('click', () => {
@@ -254,9 +360,31 @@ export function createUIController(planets: PlanetData[], callbacks: UICallbacks
     callbacks.onResetView();
   });
 
-  drawerToggle.addEventListener('click', () => {
-    panel.classList.toggle('open');
-    drawerToggle.textContent = panel.classList.contains('open') ? '▼ Close Controls' : '☰ Open Controls';
+  drawerToggle.addEventListener('click', togglePanel);
+
+  let touchStartY = 0;
+  let touchCurrentY = 0;
+
+  drawerToggle.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+    touchCurrentY = touchStartY;
+  }, { passive: true });
+
+  drawerToggle.addEventListener('touchmove', (e) => {
+    touchCurrentY = e.touches[0].clientY;
+  }, { passive: true });
+
+  drawerToggle.addEventListener('touchend', () => {
+    const delta = touchStartY - touchCurrentY;
+    if (Math.abs(delta) > 30) {
+      if (delta > 0 && !panelOpen) {
+        togglePanel();
+      } else if (delta < 0 && panelOpen) {
+        togglePanel();
+      }
+    }
+    touchStartY = 0;
+    touchCurrentY = 0;
   });
 
   const updatePlanetDropdown = () => {

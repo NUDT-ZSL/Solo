@@ -8,6 +8,12 @@ const MIN_CAMERA_DISTANCE = 3;
 const MAX_CAMERA_DISTANCE = 50;
 const DEFAULT_CAMERA_POSITION = new THREE.Vector3(20, 15, 25);
 const LOOK_AT_CENTER = new THREE.Vector3(0, 0, 0);
+const FPS_SAMPLE_WINDOW = 500;
+
+interface HoverAnimState {
+  time: number;
+  running: boolean;
+}
 
 class StarDanceApp {
   private scene: THREE.Scene;
@@ -22,6 +28,7 @@ class StarDanceApp {
   private speedMultiplier = 1;
   private selectedPlanet: PlanetData | null = null;
   private hoveredPlanet: PlanetData | null = null;
+  private hoverAnim: HoverAnimState = { time: 0, running: false };
 
   private isDragging = false;
   private isRightDragging = false;
@@ -36,15 +43,18 @@ class StarDanceApp {
 
   private fpsCounter: HTMLDivElement;
   private performanceWarning: HTMLDivElement;
-  private frameCount = 0;
-  private lastFpsTime = 0;
-  private lowFpsFrames = 0;
+  private frameCountWindow = 0;
+  private lastWindowStart = 0;
+  private smoothedFps = 60;
+  private lowFpsCount = 0;
   private performanceReduced = false;
 
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
 
   private flashMeshes: THREE.Mesh[] = [];
+
+  private cameraAnimating = false;
 
   constructor() {
     const container = document.getElementById('app');
@@ -74,6 +84,7 @@ class StarDanceApp {
     this.clock = new THREE.Clock();
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
+    this.lastWindowStart = performance.now();
 
     this.starSystem = createStarSystem();
     this.scene.add(this.starSystem.group);
@@ -101,13 +112,13 @@ class StarDanceApp {
 
     dom.addEventListener('mousedown', this.onMouseDown.bind(this));
     dom.addEventListener('mousemove', this.onMouseMove.bind(this));
-    dom.addEventListener('mouseup', this.onMouseUp.bind(this));
+    window.addEventListener('mouseup', this.onMouseUp.bind(this));
     dom.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
     dom.addEventListener('contextmenu', (e) => e.preventDefault());
 
     dom.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: true });
     dom.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: true });
-    dom.addEventListener('touchend', this.onTouchEnd.bind(this));
+    window.addEventListener('touchend', this.onTouchEnd.bind(this));
 
     dom.addEventListener('click', this.onClick.bind(this));
 
@@ -138,7 +149,7 @@ class StarDanceApp {
       this.cameraPhi = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraPhi - deltaY * 0.005));
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
-      this.updateCameraFromSpherical();
+      this.updateCameraPositionImmediate();
     } else if (this.isRightDragging) {
       const deltaX = e.clientX - this.lastMouseX;
       const deltaY = e.clientY - this.lastMouseY;
@@ -151,7 +162,7 @@ class StarDanceApp {
       this.panOffset.add(up.multiplyScalar(deltaY * 0.02));
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
-      this.updateCameraFromSpherical();
+      this.updateCameraPositionImmediate();
     } else {
       this.checkHover();
     }
@@ -169,7 +180,7 @@ class StarDanceApp {
       MIN_CAMERA_DISTANCE,
       Math.min(MAX_CAMERA_DISTANCE, this.cameraDistance * zoomFactor)
     );
-    this.updateCameraFromSpherical();
+    this.updateCameraPositionImmediate();
   }
 
   private onTouchStart(e: TouchEvent): void {
@@ -188,7 +199,7 @@ class StarDanceApp {
       this.cameraPhi = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraPhi - deltaY * 0.005));
       this.lastMouseX = e.touches[0].clientX;
       this.lastMouseY = e.touches[0].clientY;
-      this.updateCameraFromSpherical();
+      this.updateCameraPositionImmediate();
     }
   }
 
@@ -218,27 +229,28 @@ class StarDanceApp {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
-  private updateCameraFromSpherical(): void {
+  private computeCameraPosition(): THREE.Vector3 {
     const x = this.cameraDistance * Math.sin(this.cameraPhi) * Math.sin(this.cameraTheta);
     const y = this.cameraDistance * Math.cos(this.cameraPhi);
     const z = this.cameraDistance * Math.sin(this.cameraPhi) * Math.cos(this.cameraTheta);
     const target = LOOK_AT_CENTER.clone().add(this.panOffset);
-    const newPos = new THREE.Vector3(x, y, z).add(target);
+    return new THREE.Vector3(x, y, z).add(target);
+  }
 
-    gsap.killTweensOf(this.camera.position);
-    gsap.to(this.camera.position, {
-      x: newPos.x,
-      y: newPos.y,
-      z: newPos.z,
-      duration: 0.5,
-      ease: 'power2.out',
-      onUpdate: () => {
-        const currentTarget = this.selectedPlanet
-          ? this.selectedPlanet.mesh.getWorldPosition(new THREE.Vector3())
-          : target;
-        this.camera.lookAt(currentTarget);
-      }
-    });
+  private getLookAtTarget(): THREE.Vector3 {
+    if (this.selectedPlanet) {
+      const wp = new THREE.Vector3();
+      this.selectedPlanet.mesh.getWorldPosition(wp);
+      return wp;
+    }
+    return LOOK_AT_CENTER.clone().add(this.panOffset);
+  }
+
+  private updateCameraPositionImmediate(): void {
+    if (this.cameraAnimating) return;
+    const newPos = this.computeCameraPosition();
+    this.camera.position.copy(newPos);
+    this.camera.lookAt(this.getLookAtTarget());
   }
 
   private checkHover(): void {
@@ -254,6 +266,7 @@ class StarDanceApp {
         if (this.hoveredPlanet !== planet) {
           this.clearHover();
           this.hoveredPlanet = planet;
+          this.hoverAnim = { time: 0, running: !planet.selected };
           document.body.style.cursor = 'pointer';
         }
       }
@@ -264,21 +277,39 @@ class StarDanceApp {
 
   private clearHover(): void {
     if (this.hoveredPlanet && !this.hoveredPlanet.selected) {
-      gsap.killTweensOf((this.hoveredPlanet.highlightRing.material as THREE.MeshBasicMaterial));
-      gsap.to((this.hoveredPlanet.highlightRing.material as THREE.MeshBasicMaterial), {
-        opacity: 0,
-        duration: 0.3
-      });
+      const mat = this.hoveredPlanet.highlightRing.material as THREE.MeshBasicMaterial;
+      gsap.killTweensOf(mat);
+      gsap.to(mat, { opacity: 0, duration: 0.25 });
       gsap.killTweensOf(this.hoveredPlanet.highlightRing.scale);
       gsap.to(this.hoveredPlanet.highlightRing.scale, {
-        x: 1,
-        y: 1,
-        z: 1,
-        duration: 0.3
+        x: 1, y: 1, z: 1, duration: 0.25
       });
     }
     this.hoveredPlanet = null;
+    this.hoverAnim.running = false;
+    this.hoverAnim.time = 0;
     document.body.style.cursor = 'default';
+  }
+
+  private updateHoverRing(delta: number): void {
+    if (!this.hoveredPlanet || this.hoveredPlanet.selected) return;
+
+    this.hoverAnim.time += delta;
+    const cyclePeriod = 2;
+    const t = (this.hoverAnim.time % cyclePeriod) / cyclePeriod;
+
+    const baseSize = (this.hoveredPlanet.highlightRing.userData as { baseSize: number }).baseSize;
+    const innerFactor = 1.0 + t * 0.8;
+    const outerFactor = 1.05 + t * 2.0;
+    const ringMat = this.hoveredPlanet.highlightRing.material as THREE.MeshBasicMaterial;
+
+    const opacity = Math.sin(t * Math.PI) * 0.7;
+    ringMat.opacity = opacity;
+
+    const newScale = 1 + t * 1.5;
+    this.hoveredPlanet.highlightRing.scale.set(newScale, newScale, newScale);
+
+    void innerFactor; void outerFactor; void baseSize;
   }
 
   private animateHighlightRing(planet: PlanetData, selected: boolean): void {
@@ -286,31 +317,15 @@ class StarDanceApp {
     gsap.killTweensOf(planet.highlightRing.scale);
 
     if (selected) {
-      gsap.to((planet.highlightRing.material as THREE.MeshBasicMaterial), {
-        opacity: 0.6,
-        duration: 0.3,
-        repeat: -1,
-        yoyo: true
-      });
+      const mat = planet.highlightRing.material as THREE.MeshBasicMaterial;
+      gsap.to(mat, { opacity: 0.5, duration: 0.3, repeat: -1, yoyo: true });
       gsap.to(planet.highlightRing.scale, {
-        x: 1.5,
-        y: 1.5,
-        z: 1.5,
-        duration: 2,
-        repeat: -1,
-        ease: 'power1.out'
+        x: 2, y: 2, z: 2, duration: 2, repeat: -1, ease: 'power1.out', yoyo: true
       });
     } else {
-      gsap.to((planet.highlightRing.material as THREE.MeshBasicMaterial), {
-        opacity: 0,
-        duration: 0.3
-      });
-      gsap.to(planet.highlightRing.scale, {
-        x: 1,
-        y: 1,
-        z: 1,
-        duration: 0.3
-      });
+      const mat = planet.highlightRing.material as THREE.MeshBasicMaterial;
+      gsap.to(mat, { opacity: 0, duration: 0.3 });
+      gsap.to(planet.highlightRing.scale, { x: 1, y: 1, z: 1, duration: 0.3 });
     }
   }
 
@@ -374,6 +389,7 @@ class StarDanceApp {
     const targetPos = worldPos.clone().sub(direction.multiplyScalar(planet.radius * 8));
     targetPos.y += planet.radius * 3;
 
+    this.cameraAnimating = true;
     gsap.killTweensOf(this.camera.position);
     gsap.to(this.camera.position, {
       x: targetPos.x,
@@ -385,10 +401,17 @@ class StarDanceApp {
         const wp = new THREE.Vector3();
         planet.mesh.getWorldPosition(wp);
         this.camera.lookAt(wp);
+      },
+      onComplete: () => {
+        this.cameraAnimating = false;
+        const toCenter = new THREE.Vector3().subVectors(targetPos, worldPos);
+        this.cameraDistance = toCenter.length();
+        this.cameraTheta = Math.atan2(toCenter.x, toCenter.z);
+        this.cameraPhi = Math.acos(THREE.MathUtils.clamp(toCenter.y / this.cameraDistance, -1, 1));
+        this.panOffset.copy(worldPos);
       }
     });
 
-    this.cameraDistance = targetPos.distanceTo(worldPos);
     this.uiController.updatePlanetDropdown();
   }
 
@@ -410,6 +433,7 @@ class StarDanceApp {
     this.selectedPlanet = null;
     this.clearHover();
 
+    this.cameraAnimating = true;
     gsap.killTweensOf(this.camera.position);
     gsap.to(this.camera.position, {
       x: DEFAULT_CAMERA_POSITION.x,
@@ -419,6 +443,9 @@ class StarDanceApp {
       ease: 'power2.inOut',
       onUpdate: () => {
         this.camera.lookAt(LOOK_AT_CENTER);
+      },
+      onComplete: () => {
+        this.cameraAnimating = false;
       }
     });
 
@@ -440,37 +467,40 @@ class StarDanceApp {
     const right = new THREE.Vector3();
     right.crossVectors(forward, this.camera.up).normalize();
 
-    if (this.keys['w']) this.panOffset.add(forward.multiplyScalar(moveSpeed));
-    if (this.keys['s']) this.panOffset.add(forward.multiplyScalar(-moveSpeed));
-    if (this.keys['a']) this.panOffset.add(right.multiplyScalar(-moveSpeed));
-    if (this.keys['d']) this.panOffset.add(right.multiplyScalar(moveSpeed));
+    let moved = false;
+    if (this.keys['w']) { this.panOffset.add(forward.multiplyScalar(moveSpeed)); moved = true; }
+    if (this.keys['s']) { this.panOffset.add(forward.multiplyScalar(-moveSpeed)); moved = true; }
+    if (this.keys['a']) { this.panOffset.add(right.multiplyScalar(-moveSpeed)); moved = true; }
+    if (this.keys['d']) { this.panOffset.add(right.multiplyScalar(moveSpeed)); moved = true; }
 
-    if (this.keys['w'] || this.keys['s'] || this.keys['a'] || this.keys['d']) {
-      this.updateCameraFromSpherical();
+    if (moved && !this.cameraAnimating) {
+      this.updateCameraPositionImmediate();
     }
   }
 
   private updateFPS(now: number): void {
-    this.frameCount++;
-    if (now - this.lastFpsTime >= 1000) {
-      const fps = this.frameCount;
-      this.fpsCounter.textContent = `FPS: ${fps}`;
+    this.frameCountWindow++;
+    const elapsed = now - this.lastWindowStart;
 
-      if (fps < 40) {
-        this.lowFpsFrames++;
-        if (this.lowFpsFrames >= 3 && !this.performanceReduced) {
-          this.orbitParticles.reduceParticles();
+    if (elapsed >= FPS_SAMPLE_WINDOW) {
+      const instFps = (this.frameCountWindow * 1000) / elapsed;
+      this.smoothedFps = this.smoothedFps * 0.6 + instFps * 0.4;
+      const displayFps = Math.round(this.smoothedFps);
+      this.fpsCounter.textContent = `FPS: ${displayFps}`;
+
+      if (this.smoothedFps < 40) {
+        this.lowFpsCount++;
+        if (this.lowFpsCount >= 3 && !this.performanceReduced) {
+          this.orbitParticles.setParticleCount(50);
           this.performanceWarning.style.display = 'block';
           this.performanceReduced = true;
         }
-      } else if (fps > 55 && this.performanceReduced) {
-        this.lowFpsFrames = Math.max(0, this.lowFpsFrames - 1);
       } else {
-        this.lowFpsFrames = Math.max(0, this.lowFpsFrames - 1);
+        this.lowFpsCount = Math.max(0, this.lowFpsCount - 1);
       }
 
-      this.frameCount = 0;
-      this.lastFpsTime = now;
+      this.frameCountWindow = 0;
+      this.lastWindowStart = now;
     }
   }
 
@@ -482,21 +512,10 @@ class StarDanceApp {
     this.starSystem.update(delta, this.speedMultiplier);
     this.orbitParticles.update(this.starSystem.planets);
     this.handleKeyboardMovement(delta);
+    this.updateHoverRing(delta);
 
-    if (this.selectedPlanet) {
-      const wp = new THREE.Vector3();
-      this.selectedPlanet.mesh.getWorldPosition(wp);
-      this.camera.lookAt(wp);
-    }
-
-    if (this.hoveredPlanet && !this.hoveredPlanet.selected) {
-      const ringMat = this.hoveredPlanet.highlightRing.material as THREE.MeshBasicMaterial;
-      if (ringMat.opacity < 0.4) {
-        gsap.to(ringMat, { opacity: 0.4, duration: 0.2 });
-        gsap.to(this.hoveredPlanet.highlightRing.scale, {
-          x: 1.3, y: 1.3, z: 1.3, duration: 2, repeat: -1, yoyo: true, ease: 'power1.inOut'
-        });
-      }
+    if (!this.cameraAnimating) {
+      this.camera.lookAt(this.getLookAtTarget());
     }
 
     this.renderer.render(this.scene, this.camera);
