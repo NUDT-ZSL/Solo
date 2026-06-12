@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, 'snippets.db');
 
-let db: Database;
+let db: Database | null = null;
 
 function saveDb() {
   if (!db) return;
@@ -32,7 +32,7 @@ export async function initDb(): Promise<Database> {
       language TEXT NOT NULL,
       code TEXT NOT NULL,
       tags TEXT NOT NULL DEFAULT '[]',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
   `);
 
@@ -42,7 +42,7 @@ export async function initDb(): Promise<Database> {
       snippet_id TEXT NOT NULL,
       username TEXT NOT NULL DEFAULT '匿名',
       content TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (snippet_id) REFERENCES snippets(id) ON DELETE CASCADE
     );
   `);
@@ -52,6 +52,7 @@ export async function initDb(): Promise<Database> {
 }
 
 export function getDb(): Database {
+  if (!db) throw new Error('DB not initialized');
   return db;
 }
 

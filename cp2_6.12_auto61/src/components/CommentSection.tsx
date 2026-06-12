@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import { getComments, createComment, type Comment } from '../api/snippets';
 
 interface Props {
@@ -21,29 +22,53 @@ function relativeTime(dateStr: string): string {
   return `${days}天前`;
 }
 
-const markdownStyles = `
-  .md-content p { margin: 0; }
-  .md-content code {
-    background: #45475a;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: 'Fira Code', monospace;
-    font-size: 13px;
-    color: #f9e2af;
-  }
-  .md-content pre {
-    background: #313244;
-    padding: 12px;
-    border-radius: 4px;
-    overflow-x: auto;
-    margin: 8px 0;
-  }
-  .md-content pre code {
-    background: transparent;
-    padding: 0;
-    color: #cdd6f4;
-  }
-`;
+const components: Components = {
+  code({ inline, className, children, ...props }: any) {
+    const match = /language-(\w+)/.exec(className || '');
+    return !inline ? (
+      <pre
+        style={{
+          background: '#313244',
+          padding: 12,
+          borderRadius: 4,
+          overflowX: 'auto',
+          margin: '8px 0',
+        }}
+      >
+        <code
+          className={className}
+          style={{
+            background: 'transparent',
+            padding: 0,
+            color: '#cdd6f4',
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 13,
+          }}
+          {...props}
+        >
+          {children}
+        </code>
+      </pre>
+    ) : (
+      <code
+        style={{
+          background: '#45475a',
+          padding: '2px 6px',
+          borderRadius: 4,
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 13,
+          color: '#f9e2af',
+        }}
+        {...props}
+      >
+        {children}
+      </code>
+    );
+  },
+  p({ children }) {
+    return <p style={{ margin: 0 }}>{children}</p>;
+  },
+};
 
 export default function CommentSection({ snippetId }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -76,7 +101,6 @@ export default function CommentSection({ snippetId }: Props) {
 
   return (
     <div style={{ marginTop: 32 }}>
-      <style>{markdownStyles}</style>
       <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, color: '#cdd6f4' }}>评论</h3>
 
       <form onSubmit={handleSubmit} style={{ marginBottom: 24 }}>
@@ -161,8 +185,8 @@ export default function CommentSection({ snippetId }: Props) {
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#89b4fa' }}>{comment.username}</span>
                 <span style={{ fontSize: 12, color: '#6c7086' }}>{relativeTime(comment.created_at)}</span>
               </div>
-              <div className="md-content" style={{ fontSize: 14, color: '#bac2de', lineHeight: 1.6 }}>
-                <ReactMarkdown>{comment.content}</ReactMarkdown>
+              <div style={{ fontSize: 14, color: '#bac2de', lineHeight: 1.6 }}>
+                <ReactMarkdown components={components}>{comment.content}</ReactMarkdown>
               </div>
             </motion.div>
           ))}
