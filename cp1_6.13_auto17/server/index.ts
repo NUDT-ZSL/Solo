@@ -3,7 +3,7 @@ import cors from 'cors';
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
-import { initDb, db, User, Skill, ExchangeRequest, Message } from './models';
+import { initDb, db, type User, type Skill, type ExchangeRequest, type Message, type MessageType } from './models';
 
 const app = express();
 const server = http.createServer(app);
@@ -22,14 +22,13 @@ interface WsMessage {
   fromUserId?: string;
   toUserId?: string;
   content?: string;
+  messageType?: MessageType;
   userId?: string;
 }
 
 const connections = new Map<string, WebSocketWithUserId>();
 
 wss.on('connection', (ws: WebSocketWithUserId) => {
-  console.log('New WebSocket connection');
-
   ws.on('message', async (data) => {
     try {
       const msg: WsMessage = JSON.parse(data.toString());
@@ -37,7 +36,6 @@ wss.on('connection', (ws: WebSocketWithUserId) => {
       if (msg.type === 'auth' && msg.userId) {
         ws.userId = msg.userId;
         connections.set(msg.userId, ws);
-        console.log(`User ${msg.userId} authenticated`);
         return;
       }
 
@@ -48,6 +46,7 @@ wss.on('connection', (ws: WebSocketWithUserId) => {
           fromUserId: msg.fromUserId,
           toUserId: msg.toUserId,
           content: msg.content,
+          type: msg.messageType || 'text',
           read: false,
           createdAt: Date.now(),
         };
@@ -61,11 +60,6 @@ wss.on('connection', (ws: WebSocketWithUserId) => {
         if (targetWs && targetWs.readyState === WebSocket.OPEN) {
           targetWs.send(broadcastMsg);
         }
-
-        const fromWs = connections.get(msg.fromUserId);
-        if (fromWs && fromWs !== ws && fromWs.readyState === WebSocket.OPEN) {
-          fromWs.send(broadcastMsg);
-        }
       }
 
       if (msg.type === 'mark_read' && msg.exchangeId && msg.userId) {
@@ -74,17 +68,6 @@ wss.on('connection', (ws: WebSocketWithUserId) => {
           { $set: { read: true } },
           { multi: true }
         );
-
-        const notification = JSON.stringify({
-          type: 'read_update',
-          exchangeId: msg.exchangeId,
-          userId: msg.userId,
-        });
-
-        const otherWs = connections.get(msg.fromUserId || '');
-        if (otherWs && otherWs.readyState === WebSocket.OPEN) {
-          otherWs.send(notification);
-        }
       }
     } catch (err) {
       console.error('WebSocket message error:', err);
@@ -95,7 +78,6 @@ wss.on('connection', (ws: WebSocketWithUserId) => {
     for (const [userId, conn] of connections.entries()) {
       if (conn === ws) {
         connections.delete(userId);
-        console.log(`User ${userId} disconnected`);
         break;
       }
     }
@@ -115,7 +97,7 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: '请输入有效的邮箱地址' });
     }
 
-    let user = await db.users.findOne({ email });
+    let user = await db.users.findOne({ email }) as User | null;
 
     if (!user) {
       user = {
@@ -127,7 +109,7 @@ app.post('/api/users', async (req, res) => {
       await db.users.insert(user);
     } else {
       await db.users.update({ _id: user._id }, { $set: { nickname } });
-      user = await db.users.findOne({ _id: user._id });
+      user = await db.users.findOne({ _id: user._id }) as User;
     }
 
     res.json(user);
@@ -139,7 +121,7 @@ app.post('/api/users', async (req, res) => {
 
 app.get('/api/users/:id', async (req, res) => {
   try {
-    const user = await db.users.findOne({ _id: req.params.id });
+    const user = await db.users.findOne({ _id: req.params.id }) as User | null;
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
@@ -155,10 +137,8 @@ app.get('/api/skills', async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 12;
     const skip = (page - 1) * limit;
 
-    const [skills, total] = await Promise.all([
-      db.skills.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      db.skills.count({}),
-    ]);
+    const skills = await db.skills.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit) as Skill[];
+    const total = await db.skills.count({});
 
     res.json({ skills, total, page, limit });
   } catch (err) {
@@ -169,7 +149,7 @@ app.get('/api/skills', async (req, res) => {
 
 app.get('/api/skills/user/:userId', async (req, res) => {
   try {
-    const skills = await db.skills.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+    const skills = await db.skills.find({ userId: req.params.userId }).sort({ createdAt: -1 }) as Skill[];
     res.json(skills);
   } catch (err) {
     res.status(500).json({ error: '获取用户技能失败' });
@@ -184,7 +164,7 @@ app.post('/api/skills', async (req, res) => {
       return res.status(400).json({ error: '请填写完整的技能信息' });
     }
 
-    const user = await db.users.findOne({ _id: userId });
+    const user = await db.users.findOne({ _id: userId }) as User | null;
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
@@ -216,9 +196,9 @@ app.post('/api/exchanges', async (req, res) => {
     }
 
     const [fromUserSkills, toUserSkills, skill] = await Promise.all([
-      db.skills.find({ userId: fromUserId }),
-      db.skills.find({ userId: toUserId }),
-      db.skills.findOne({ _id: skillId }),
+      db.skills.find({ userId: fromUserId }) as Promise<Skill[]>,
+      db.skills.find({ userId: toUserId }) as Promise<Skill[]>,
+      db.skills.findOne({ _id: skillId }) as Promise<Skill | null>,
     ]);
 
     if (fromUserSkills.length === 0 || toUserSkills.length === 0) {
@@ -251,6 +231,20 @@ app.post('/api/exchanges', async (req, res) => {
     };
 
     await db.exchanges.insert(exchange);
+
+    const fromUser = await db.users.findOne({ _id: fromUserId }) as User | null;
+    const systemMessage: Message = {
+      _id: uuidv4(),
+      exchangeId: exchange._id,
+      fromUserId: 'system',
+      toUserId: toUserId,
+      content: `${fromUser?.nickname || '用户'}想用技能交换你的"${skill.name}"，快去看看吧！`,
+      type: 'system',
+      read: false,
+      createdAt: Date.now(),
+    };
+    await db.messages.insert(systemMessage);
+
     res.json(exchange);
   } catch (err) {
     console.error('Create exchange error:', err);
@@ -267,14 +261,14 @@ app.get('/api/exchanges', async (req, res) => {
 
     const exchanges = await db.exchanges.find({
       $or: [{ fromUserId: userId }, { toUserId: userId }],
-    }).sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 }) as ExchangeRequest[];
 
     const exchangesWithUsers = await Promise.all(
       exchanges.map(async (exchange) => {
         const [fromUser, toUser, skill] = await Promise.all([
-          db.users.findOne({ _id: exchange.fromUserId }),
-          db.users.findOne({ _id: exchange.toUserId }),
-          db.skills.findOne({ _id: exchange.skillId }),
+          db.users.findOne({ _id: exchange.fromUserId }) as Promise<User | null>,
+          db.users.findOne({ _id: exchange.toUserId }) as Promise<User | null>,
+          db.skills.findOne({ _id: exchange.skillId }) as Promise<Skill | null>,
         ]);
         return {
           ...exchange,
@@ -300,7 +294,7 @@ app.patch('/api/exchanges/:id', async (req, res) => {
     }
 
     await db.exchanges.update({ _id: req.params.id }, { $set: { status } });
-    const exchange = await db.exchanges.findOne({ _id: req.params.id });
+    const exchange = await db.exchanges.findOne({ _id: req.params.id }) as ExchangeRequest;
     res.json(exchange);
   } catch (err) {
     res.status(500).json({ error: '更新交换状态失败' });
@@ -314,7 +308,7 @@ app.get('/api/messages', async (req, res) => {
       return res.status(400).json({ error: '缺少exchangeId参数' });
     }
 
-    const messages = await db.messages.find({ exchangeId }).sort({ createdAt: 1 });
+    const messages = await db.messages.find({ exchangeId }).sort({ createdAt: 1 }) as Message[];
     res.json(messages);
   } catch (err) {
     console.error('Get messages error:', err);
@@ -325,8 +319,8 @@ app.get('/api/messages', async (req, res) => {
 app.get('/api/messages/unread/:userId', async (req, res) => {
   try {
     const userId = req.params.userId;
-    const messages = await db.messages.find({ toUserId: userId, read: false });
-    res.json({ count: messages.length });
+    const count = await db.messages.count({ toUserId: userId, read: false });
+    res.json({ count });
   } catch (err) {
     res.status(500).json({ error: '获取未读消息数失败' });
   }

@@ -29,12 +29,15 @@ export interface ExchangeRequest {
   createdAt: number;
 }
 
+export type MessageType = 'text' | 'image' | 'system';
+
 export interface Message {
   _id: string;
   exchangeId: string;
   fromUserId: string;
   toUserId: string;
   content: string;
+  type: MessageType;
   read: boolean;
   createdAt: number;
 }
@@ -42,10 +45,10 @@ export interface Message {
 const dataDir = './data';
 
 export const db = {
-  users: Datastore.create({ filename: `${dataDir}/users.db`, autoload: true }),
-  skills: Datastore.create({ filename: `${dataDir}/skills.db`, autoload: true }),
-  exchanges: Datastore.create({ filename: `${dataDir}/exchanges.db`, autoload: true }),
-  messages: Datastore.create({ filename: `${dataDir}/messages.db`, autoload: true }),
+  users: Datastore.create({ filename: `${dataDir}/users.db`, autoload: true }) as Datastore<User>,
+  skills: Datastore.create({ filename: `${dataDir}/skills.db`, autoload: true }) as Datastore<Skill>,
+  exchanges: Datastore.create({ filename: `${dataDir}/exchanges.db`, autoload: true }) as Datastore<ExchangeRequest>,
+  messages: Datastore.create({ filename: `${dataDir}/messages.db`, autoload: true }) as Datastore<Message>,
 };
 
 async function initIndexes() {
@@ -87,7 +90,7 @@ async function seedData() {
       await db.users.insert(newUser);
       createdUsers.push(newUser);
     } catch (e) {
-      const existing = await db.users.findOne({ email: user.email });
+      const existing = await db.users.findOne({ email: user.email }) as User | null;
       if (existing) createdUsers.push(existing);
     }
   }

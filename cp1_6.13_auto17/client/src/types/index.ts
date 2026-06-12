@@ -29,14 +29,24 @@ export interface ExchangeRequest {
   skill?: Skill;
 }
 
+export type MessageType = 'text' | 'image' | 'system';
+
 export interface Message {
   _id: string;
   exchangeId: string;
   fromUserId: string;
   toUserId: string;
   content: string;
+  type: MessageType;
   read: boolean;
   createdAt: number;
+}
+
+export interface SkillsResponse {
+  skills: Skill[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface AppContextType {

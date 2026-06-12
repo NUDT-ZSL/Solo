@@ -38,9 +38,29 @@ export default function Modal({ isOpen, onClose, width = 480, children }: ModalP
   if (!isOpen) return null;
 
   return (
-    <div className={`modal-overlay ${isClosing ? 'closing' : ''}`} onClick={handleClose}>
+    <div
+      className={`modal-overlay ${isClosing ? 'closing' : ''}`}
+      onClick={handleClose}
+    >
       <div
-        className={`bg-white p-6 relative animate-scaleIn ${isClosing ? 'animate-scaleIn closing' : ''}`}
+        className="bg-white p-6 relative animate-scaleIn"
         style={{
           width: `${width}px`,
-          maxWidth: 'calc(
+          maxWidth: 'calc(100vw - 48px)',
+          borderRadius: '16px',
+          maxHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+        >
+          <FaTimes />
+        </button>
+        {children}
+      </div>
+    </div>
+  );
+}
