@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Contract, Attachment } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -7,13 +7,21 @@ interface ContractDetailProps {
   autoOpenRenew?: boolean;
   onBack: () => void;
   onUpdate: (contract: Contract) => void;
+  isMobile: boolean;
 }
 
-const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew, onBack, onUpdate }) => {
+const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew, onBack, onUpdate, isMobile }) => {
   const [showRenewModal, setShowRenewModal] = useState<boolean>(!!autoOpenRenew);
   const [renewDuration, setRenewDuration] = useState<string>('6');
   const [renewAmount, setRenewAmount] = useState<string>(contract.amount.toString());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoOpenRenew) {
+      setShowRenewModal(true);
+      setRenewAmount(contract.amount.toString());
+    }
+  }, [autoOpenRenew, contract.amount]);
 
   const totalPaid = contract.payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentProgress = contract.amount > 0 ? (totalPaid / contract.amount) * 100 : 0;
@@ -71,8 +79,8 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
   };
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
+    <div style={{ padding: isMobile ? '16px' : '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <button
           onClick={onBack}
           style={{
@@ -118,8 +126,17 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-        <div style={{ width: 'calc(40% - 10px)', minWidth: '300px', ...panelStyle }}>
+      <div style={{
+        display: 'flex',
+        gap: '20px',
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
+        minHeight: 'calc(100vh - 200px)'
+      }}>
+        <div style={{
+          width: isMobile ? '100%' : '40%',
+          ...panelStyle,
+          overflow: 'auto'
+        }}>
           <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: '0 0 20px 0' }}>
             合同信息
           </h3>
@@ -219,8 +236,13 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
           </div>
         </div>
 
-        <div style={{ width: 'calc(60% - 10px)', minWidth: '400px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ height: 'calc(58% - 10px)', ...panelStyle, overflow: 'auto' }}>
+        <div style={{
+          width: isMobile ? '100%' : '60%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px'
+        }}>
+          <div style={{ height: '35vh', ...panelStyle, overflow: 'auto' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: '0 0 20px 0' }}>
               甘特图 - 里程碑时间线
             </h3>
@@ -241,7 +263,7 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(maxDate).toISOString().split('T')[0]}</span>
                 </div>
 
-                {contract.milestones.map((m, i) => {
+                {contract.milestones.map((m) => {
                   const left = ((new Date(m.date).getTime() - minDate) / dateRange) * 100;
                   return (
                     <div key={m.id} style={{ position: 'relative', height: '48px' }}>
@@ -286,7 +308,7 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
             </div>
           </div>
 
-          <div style={{ height: 'calc(42% - 10px)', ...panelStyle }}>
+          <div style={{ height: '25vh', ...panelStyle, overflow: 'auto' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: '0 0 20px 0' }}>
               收款进度
             </h3>
@@ -315,7 +337,7 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
               <div style={{
                 height: '100%',
                 width: `${Math.min(paymentProgress, 100)}%`,
-                background: 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%)',
+                backgroundImage: 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%)',
                 borderRadius: '12px',
                 transition: 'width 0.5s ease-out'
               }}></div>
@@ -385,6 +407,7 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
               backgroundColor: '#ffffff',
               borderRadius: '16px',
               padding: '32px',
+              boxSizing: 'border-box',
               boxShadow: '0 20px 50px rgba(0,0,0,0.15)'
             }}
           >
@@ -411,7 +434,8 @@ const ContractDetail: React.FC<ContractDetailProps> = ({ contract, autoOpenRenew
                   color: '#1e293b',
                   outline: 'none',
                   cursor: 'pointer',
-                  backgroundColor: '#ffffff'
+                  backgroundColor: '#ffffff',
+                  boxSizing: 'border-box'
                 }}
               >
                 <option value="3">3 个月</option>

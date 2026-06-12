@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Contract } from './types';
 import { getAllContracts, updateContract } from './db';
 import Dashboard from './dashboard';
@@ -13,7 +13,8 @@ const App: React.FC = () => {
   const [autoOpenRenew, setAutoOpenRenew] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [fadeIn, setFadeIn] = useState<boolean>(true);
 
   useEffect(() => {
     const load = async () => {
@@ -31,28 +32,37 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const navigateTo = useCallback((page: Page, contractId?: string, renew?: boolean) => {
+    setFadeIn(false);
+    setTimeout(() => {
+      setCurrentPage(page);
+      setSelectedContractId(contractId ?? null);
+      setAutoOpenRenew(!!renew);
+      setMobileMenuOpen(false);
+      setFadeIn(true);
+    }, 150);
+  }, []);
+
   const handleContractClick = (id: string) => {
-    setSelectedContractId(id);
-    setAutoOpenRenew(false);
-    setCurrentPage('detail');
+    navigateTo('detail', id, false);
   };
 
   const handleRenewClick = (id: string) => {
-    setSelectedContractId(id);
-    setAutoOpenRenew(true);
-    setCurrentPage('detail');
+    navigateTo('detail', id, true);
   };
 
   const handleBack = () => {
-    setCurrentPage('dashboard');
-    setSelectedContractId(null);
-    setAutoOpenRenew(false);
+    navigateTo('dashboard');
   };
 
   const handleUpdateContract = async (updated: Contract) => {
     await updateContract(updated);
     setContracts(prev => prev.map(c => c.id === updated.id ? updated : c));
   };
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   const selectedContract = contracts.find(c => c.id === selectedContractId);
 
@@ -66,7 +76,8 @@ const App: React.FC = () => {
     color: '#cbd5e1',
     fontSize: '14px',
     fontWeight: 500,
-    marginBottom: '4px'
+    marginBottom: '4px',
+    transition: 'background-color 0.15s'
   };
 
   const activeNavStyle: React.CSSProperties = {
@@ -74,8 +85,6 @@ const App: React.FC = () => {
     backgroundColor: 'rgba(59, 130, 246, 0.15)',
     color: '#60a5fa'
   };
-
-  const sidebarWidth = isMobile ? '100%' : '240px';
 
   const SidebarContent = () => (
     <>
@@ -85,7 +94,7 @@ const App: React.FC = () => {
             width: '36px',
             height: '36px',
             borderRadius: '10px',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+            backgroundImage: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
@@ -176,7 +185,7 @@ const App: React.FC = () => {
           height: '48px',
           borderRadius: '50%',
           border: '2px solid #1e40af',
-          background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+          backgroundImage: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -199,63 +208,201 @@ const App: React.FC = () => {
     </>
   );
 
+  const renderMobileSidebar = () => (
+    <div style={{
+      height: '60px',
+      backgroundColor: '#1e293b',
+      padding: '0 16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      flexShrink: 0
+    }}>
+      <button
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          color: '#cbd5e1',
+          padding: '8px',
+          display: 'flex',
+          alignItems: 'center'
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+      <div style={{ color: '#ffffff', fontSize: '15px', fontWeight: 600 }}>合同管家</div>
+      <div style={{ marginLeft: 'auto', position: 'relative', width: '200px' }}>
+        <svg
+          style={{
+            position: 'absolute',
+            left: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            pointerEvents: 'none'
+          }}
+          width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        >
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          type="text"
+          placeholder="搜索合同或里程碑..."
+          value={searchQuery}
+          onChange={e => handleSearch(e.target.value)}
+          style={{
+            width: '100%',
+            height: '32px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: '#ffffff',
+            paddingLeft: '36px',
+            paddingRight: '12px',
+            fontSize: '13px',
+            color: '#1e293b',
+            outline: 'none',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  const renderMobileMenu = () => {
+    if (!mobileMenuOpen) return null;
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        top: '60px',
+        zIndex: 999,
+        backgroundColor: 'rgba(0,0,0,0.5)'
+      }} onClick={() => setMobileMenuOpen(false)}>
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            width: '240px',
+            backgroundColor: '#1e293b',
+            padding: '24px',
+            height: 'calc(100vh - 60px)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <SidebarContent />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       {!isMobile && (
         <div style={{
-          width: sidebarWidth,
+          width: '240px',
           backgroundColor: '#1e293b',
           padding: '24px',
           display: 'flex',
           flexDirection: 'column',
-          flexShrink: 0
+          flexShrink: 0,
+          position: 'sticky',
+          top: 0,
+          height: '100vh'
         }}>
           <SidebarContent />
         </div>
       )}
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{
-          height: '52px',
-          background: 'linear-gradient(90deg, #1e293b 0%, #0f172a 100%)',
-          padding: isMobile ? '0 16px' : '0 24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          flexShrink: 0
-        }}>
-          {isMobile && (
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                color: '#cbd5e1',
-                padding: '8px'
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-              </svg>
-            </button>
-          )}
+        {isMobile && renderMobileSidebar()}
+        {isMobile && renderMobileMenu()}
 
-          {isMobile && (
-            <div style={{ color: '#ffffff', fontSize: '15px', fontWeight: 600 }}>合同管家</div>
-          )}
-
+        {!isMobile && (
           <div style={{
-            marginLeft: isMobile ? 'auto' : 'auto',
-            position: 'relative',
-            width: isMobile ? 'calc(100% - 100px)' : '320px',
-            maxWidth: '320px'
+            height: '52px',
+            backgroundImage: 'linear-gradient(90deg, #1e293b 0%, #0f172a 100%)',
+            padding: '0 24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            flexShrink: 0
           }}>
-            <svg
-              style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-5
+            <div style={{ marginLeft: 'auto', position: 'relative', width: '320px' }}>
+              <svg
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none'
+                }}
+                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="text"
+                placeholder="搜索合同客户名或里程碑名称..."
+                value={searchQuery}
+                onChange={e => handleSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '36px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#ffffff',
+                  paddingLeft: '36px',
+                  paddingRight: '12px',
+                  fontSize: '14px',
+                  color: '#1e293b',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div style={{
+          flex: 1,
+          backgroundColor: '#f8fafc',
+          opacity: fadeIn ? 1 : 0,
+          transition: 'opacity 0.3s ease-in-out'
+        }}>
+          {currentPage === 'dashboard' && (
+            <Dashboard
+              contracts={contracts}
+              searchQuery={searchQuery}
+              onContractClick={handleContractClick}
+              onRenewClick={handleRenewClick}
+              isMobile={isMobile}
+            />
+          )}
+          {currentPage === 'detail' && selectedContract && (
+            <ContractDetail
+              contract={selectedContract}
+              autoOpenRenew={autoOpenRenew}
+              onBack={handleBack}
+              onUpdate={handleUpdateContract}
+              isMobile={isMobile}
+            />
+          )}
+          {currentPage === 'detail' && !selectedContract && (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+              合同未找到，请返回仪表板
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;

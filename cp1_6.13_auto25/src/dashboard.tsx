@@ -6,6 +6,7 @@ interface DashboardProps {
   searchQuery: string;
   onContractClick: (id: string) => void;
   onRenewClick: (id: string) => void;
+  isMobile: boolean;
 }
 
 const stageLabels: Record<ContractStage, string> = {
@@ -58,7 +59,7 @@ function getDaysUntilExpiry(contract: Contract): number {
   return Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ contracts, searchQuery, onContractClick, onRenewClick }) => {
+const Dashboard: React.FC<DashboardProps> = ({ contracts, searchQuery, onContractClick, onRenewClick, isMobile }) => {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [expiringContracts, setExpiringContracts] = useState<Contract[]>([]);
 
@@ -85,7 +86,8 @@ const Dashboard: React.FC<DashboardProps> = ({ contracts, searchQuery, onContrac
     cursor: 'pointer',
     boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
     transition: 'transform 0.2s ease-out, box-shadow 0.2s ease-out',
-    color: '#1e293b'
+    color: '#1e293b',
+    backgroundColor: 'transparent'
   };
 
   return (
@@ -115,7 +117,7 @@ const Dashboard: React.FC<DashboardProps> = ({ contracts, searchQuery, onContrac
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={() => onRenewClick(contract.id)}
+              onClick={(e) => { e.stopPropagation(); onRenewClick(contract.id); }}
               style={{
                 backgroundColor: '#22c55e',
                 color: 'white',
@@ -130,7 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ contracts, searchQuery, onContrac
               续签
             </button>
             <button
-              onClick={() => handleDismiss(contract.id)}
+              onClick={(e) => { e.stopPropagation(); handleDismiss(contract.id); }}
               style={{
                 backgroundColor: '#9ca3af',
                 color: 'white',
@@ -155,7 +157,7 @@ const Dashboard: React.FC<DashboardProps> = ({ contracts, searchQuery, onContrac
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
           gap: '20px'
         }}
       >
@@ -165,7 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ contracts, searchQuery, onContrac
             onClick={() => onContractClick(contract.id)}
             style={{
               ...cardStyle,
-              background: stageGradients[contract.stage]
+              backgroundImage: stageGradients[contract.stage]
             }}
             onMouseEnter={e => {
               e.currentTarget.style.transform = 'translateY(-6px)';
