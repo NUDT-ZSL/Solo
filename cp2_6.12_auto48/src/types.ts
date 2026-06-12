@@ -53,6 +53,9 @@ export const MAX_PLAYERS = 6;
 export const MAX_GEMS = 10;
 export const INTERP_FACTOR = 0.2;
 export const SERVER_TICK_INTERVAL = 0.05;
+export const INTERP_MIN = 0.1;
+export const INTERP_MAX = 1.0;
+export const INTERP_TIME_BASE = 0.05;
 
 export const PLAYER_COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
