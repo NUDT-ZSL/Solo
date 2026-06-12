@@ -1,4 +1,6 @@
-export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
+import type { Rarity } from '../types';
+
+export type { Rarity };
 
 export interface CharacterTemplate {
   id: string;
@@ -78,7 +80,7 @@ export function getRandomFragment(): CardFragment | null {
   const template = templates[Math.floor(Math.random() * templates.length)];
 
   return {
-    id: `frag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `frag_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
     characterId: template.id,
     characterName: template.name,
     rarity,
@@ -99,11 +101,11 @@ export function addFragment(state: CardSystemState, fragment: CardFragment): { s
   const hasEnoughFragments = newFragments[fragment.characterId] >= template.fragmentsRequired;
 
   let unlocked: Character | undefined;
-  let newCharacters = [...state.characters];
+  const newCharacters = [...state.characters];
 
   if (!alreadyUnlocked && hasEnoughFragments) {
     unlocked = {
-      id: `char_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `char_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       templateId: template.id,
       name: template.name,
       rarity: template.rarity,
@@ -176,8 +178,8 @@ export function calculateTeamPower(characters: Character[]): number {
   return characters.reduce((sum, c) => sum + c.power, 0);
 }
 
-export function getCharacterTemplate(characterId: string): CharacterTemplate | undefined {
-  return CHARACTER_TEMPLATES.find(t => t.id === characterId);
+export function getCharacterTemplate(templateId: string): CharacterTemplate | undefined {
+  return CHARACTER_TEMPLATES.find(t => t.id === templateId);
 }
 
 export function createInitialCardState(): CardSystemState {

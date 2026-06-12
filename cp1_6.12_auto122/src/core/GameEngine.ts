@@ -1,4 +1,6 @@
-export type CellState = 'hidden' | 'revealed' | 'flagged' | 'questioned';
+import type { CellState } from '../types';
+
+export type { CellState };
 
 export interface Cell {
   isMine: boolean;
@@ -40,7 +42,6 @@ export function createEmptyGrid(rows: number, cols: number): Cell[][] {
 export function placeMines(grid: Cell[][], mineCount: number, excludeRow?: number, excludeCol?: number): void {
   const rows = grid.length;
   const cols = grid[0].length;
-  const totalCells = rows * cols;
   const available: [number, number][] = [];
 
   for (let r = 0; r < rows; r++) {
