@@ -212,7 +212,10 @@ export default function CommentBox({ pollId }: CommentBoxProps) {
                 className={`comment-bubble bg-[#f0f0f0] rounded-xl px-4 py-3 ${
                   isNew ? 'slide-in-up' : ''
                 }`}
-                style={isNew ? { animationDelay: delay } : undefined}
+                style={{
+                  ...(isNew ? { animationDelay: delay } : {}),
+                  transition: 'opacity 0.3s ease, transform 0.3s ease',
+                }}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-semibold text-sm text-gray-800">

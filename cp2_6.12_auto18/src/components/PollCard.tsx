@@ -53,11 +53,12 @@ function formatCountdown(remaining: number): string {
 }
 
 export default function PollCard({ poll, detailed = false }: PollCardProps) {
-  const { favorites, toggleFavorite, vote, isLoggedIn, setShowLoginModal, socket } =
+  const { favorites, toggleFavorite, vote, isLoggedIn, setShowLoginModal, closePoll } =
     useStore();
   const [votedPolls, setVotedPolls] = useState<Set<string>>(getVotedPolls());
   const [countdown, setCountdown] = useState<string>('');
   const [remaining, setRemaining] = useState<number>(0);
+  const [hasCalledClose, setHasCalledClose] = useState(false);
 
   const totalVotes = poll.votes.reduce((a, b) => a + b, 0);
   const hasVoted = votedPolls.has(poll.id);
@@ -70,15 +71,18 @@ export default function PollCard({ poll, detailed = false }: PollCardProps) {
       setRemaining(rem);
       setCountdown(formatCountdown(rem));
 
-      if (rem <= 0 && !poll.closed && socket) {
-        socket.emit('pollClosed', { pollId: poll.id });
+      if (rem <= 0 && !poll.closed && !hasCalledClose) {
+        setHasCalledClose(true);
+        closePoll(poll.id);
       }
     };
 
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [poll.createdAt, poll.duration, poll.closed, poll.id, socket]);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [poll.createdAt, poll.duration, poll.closed, poll.id, poll.createdBy, closePoll, hasCalledClose]);
 
   const handleVote = (optionIndex: number) => {
     if (!isLoggedIn) {

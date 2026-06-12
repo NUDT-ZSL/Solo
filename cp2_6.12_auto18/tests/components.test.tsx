@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, renderHook } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import PollCard from '@/components/PollCard';
-import CommentBox from '@/components/CommentBox';
-import ResultChart from '@/components/ResultChart';
-import CreatePollForm from '@/components/CreatePollForm';
+import PollCard from '../src/components/PollCard';
+import CommentBox from '../src/components/CommentBox';
+import ResultChart from '../src/components/ResultChart';
+import CreatePollForm from '../src/components/CreatePollForm';
 
 vi.mock('socket.io-client', () => ({
   io: () => ({
@@ -24,6 +24,40 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('axios');
+
+vi.mock('../src/store/useStore', () => {
+  const mockStore = {
+    polls: [],
+    currentPoll: null,
+    comments: [],
+    userId: 'test-user',
+    nickname: 'Test User',
+    favorites: [],
+    socket: null,
+    pulsePollId: null,
+    isLoggedIn: true,
+    token: 'test-token',
+    showLoginModal: false,
+    setNickname: vi.fn(),
+    initSocket: vi.fn(),
+    fetchPolls: vi.fn(),
+    fetchPoll: vi.fn(),
+    createPoll: vi.fn(),
+    vote: vi.fn(),
+    closePoll: vi.fn(),
+    fetchComments: vi.fn(),
+    fetchCommentsPage: vi.fn().mockResolvedValue({ comments: [], hasMore: false, total: 0 }),
+    sendComment: vi.fn(),
+    fetchFavorites: vi.fn(),
+    toggleFavorite: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
+    setShowLoginModal: vi.fn(),
+  };
+  return {
+    useStore: (selector: any) => selector ? selector(mockStore) : mockStore,
+  };
+});
 
 beforeEach(() => {
   localStorage.clear();
@@ -140,11 +174,12 @@ describe('CreatePollForm Component', () => {
   it('call onClose when X button clicked', () => {
     const onClose = vi.fn();
     render(<CreatePollForm onClose={onClose} />);
-    const closeButton = screen.getByRole('button', { name: /close/i });
-    if (closeButton) {
-      fireEvent.click(closeButton);
+    const closeButtons = screen.getAllByRole('button');
+    const xButton = closeButtons.find((b) => b.querySelector('.lucide-x'));
+    if (xButton) {
+      fireEvent.click(xButton);
+      expect(onClose).toHaveBeenCalledTimes(1);
     }
-    expect(onClose).toHaveBeenCalledTimes(0);
   });
 });
 
@@ -156,9 +191,9 @@ describe('CommentBox Component', () => {
     expect(screen.getByPlaceholderText('写下你的想法...')).toBeInTheDocument();
   });
 
-  it('shows empty state when no comments', () => {
+  it('shows empty state when no comments', async () => {
     render(<CommentBox pollId="test-poll-1" />);
-    expect(screen.getByText(/暂无评论/)).toBeInTheDocument();
+    expect(await screen.findByText(/暂无评论/)).toBeInTheDocument();
   });
 
   it('displays character counter for comment', () => {

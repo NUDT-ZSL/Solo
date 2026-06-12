@@ -1,137 +1,38 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
-
-const createTestApp = async () => {
-  const { createServer } = await import('http');
-  const { Server } = await import('socket.io');
-  const { v4 } = await import('uuid');
-  const express = await import('express');
-
-  const app = express.default();
-  app.use((await import('cors')).default());
-  app.use(express.json());
-
-  const polls = new Map<string, any>();
-  const comments = new Map<string, any[]>();
-  const favorites = new Map<string, Set<string>>();
-
-  app.set('polls', polls);
-  app.set('comments', comments);
-  app.set('favorites', favorites);
-
-  const samplePollId = v4();
-  polls.set(samplePollId, {
-    id: samplePollId,
-    title: 'Test Poll',
-    description: 'Test description',
-    options: ['A', 'B', 'C'],
-    votes: [10, 20, 30],
-    createdBy: 'system',
-    createdAt: Date.now() - 1000,
-    duration: 7,
-    closed: false,
-  });
-
-  app.get('/api/polls', (req: any, res: any) => {
-    const polls: Map<string, any> = app.get('polls');
-    res.json(Array.from(polls.values()));
-  });
-
-  app.get('/api/polls/:id', (req: any, res: any) => {
-    const polls: Map<string, any> = app.get('polls');
-    const poll = polls.get(req.params.id);
-    if (!poll) return res.status(404).json({ error: 'Not found' });
-    res.json(poll);
-  });
-
-  app.post('/api/polls', (req: any, res: any) => {
-    const polls: Map<string, any> = app.get('polls');
-    const { title, description, options, createdBy, duration } = req.body;
-    if (!title || !options || !Array.isArray(options) || options.length < 2) {
-      return res.status(400).json({ error: 'Title and options are required' });
-    }
-    const newPoll = {
-      id: v4(),
-      title,
-      description: description || '',
-      options,
-      votes: new Array(options.length).fill(0),
-      createdBy: createdBy || 'anonymous',
-      createdAt: Date.now(),
-      duration: duration || 1,
-      closed: false,
-    };
-    polls.set(newPoll.id, newPoll);
-    res.status(201).json(newPoll);
-  });
-
-  app.post('/api/polls/:id/close', (req: any, res: any) => {
-    const polls: Map<string, any> = app.get('polls');
-    const poll = polls.get(req.params.id);
-    if (!poll) return res.status(404).json({ error: 'Not found' });
-    poll.closed = true;
-    res.json(poll);
-  });
-
-  app.get('/api/polls/:id/comments', (req: any, res: any) => {
-    const comments: Map<string, any[]> = app.get('comments');
-    const all = comments.get(req.params.id) || [];
-    const offset = Number(req.query.offset) || 0;
-    const limit = Number(req.query.limit) || 20;
-    const paginated = all.slice(offset, offset + limit);
-    res.json({
-      comments: paginated,
-      hasMore: offset + limit < all.length,
-      total: all.length,
-    });
-  });
-
-  app.get('/api/favorites/:userId', (req: any, res: any) => {
-    const polls: Map<string, any> = app.get('polls');
-    const favorites: Map<string, Set<string>> = app.get('favorites');
-    const userFavs = favorites.get(req.params.userId);
-    if (!userFavs) return res.json([]);
-    const favPolls = Array.from(userFavs)
-      .map((id) => polls.get(id))
-      .filter(Boolean);
-    res.json(favPolls);
-  });
-
-  app.post('/api/favorites', (req: any, res: any) => {
-    const favorites: Map<string, Set<string>> = app.get('favorites');
-    const { userId, pollId } = req.body;
-    if (!userId || !pollId) return res.status(400).json({ error: 'Missing params' });
-    if (!favorites.has(userId)) favorites.set(userId, new Set());
-    favorites.get(userId)!.add(pollId);
-    res.json({ success: true });
-  });
-
-  app.delete('/api/favorites', (req: any, res: any) => {
-    const favorites: Map<string, Set<string>> = app.get('favorites');
-    const { userId, pollId } = req.body;
-    if (!userId || !pollId) return res.status(400).json({ error: 'Missing params' });
-    favorites.get(userId)?.delete(pollId);
-    res.json({ success: true });
-  });
-
-  app.get('/api/health', (req: any, res: any) => {
-    res.json({ success: true, message: 'ok' });
-  });
-
-  return { app, polls, comments, favorites, samplePollId };
-};
+import { v4 } from 'uuid';
+import app from '../api/app.js';
 
 describe('REST API Tests', () => {
-  let app: any;
   let samplePollId: string;
-  let polls: Map<string, any>;
-  let server: any;
 
   beforeAll(async () => {
-    const testSetup = await createTestApp();
-    app = testSetup.app;
-    samplePollId = testSetup.samplePollId;
-    polls = testSetup.polls;
+    const polls = new Map<string, any>();
+    const comments = new Map<string, any[]>();
+    const favorites = new Map<string, Set<string>>();
+    const votedUsers = new Map<string, Set<string>>();
+
+    samplePollId = v4();
+    polls.set(samplePollId, {
+      id: samplePollId,
+      title: 'Test Poll',
+      description: 'Test description',
+      options: ['A', 'B', 'C'],
+      votes: [10, 20, 30],
+      createdBy: 'system',
+      createdAt: Date.now() - 1000,
+      duration: 7,
+      closed: false,
+    });
+    votedUsers.set(samplePollId, new Set());
+
+    app.set('polls', polls);
+    app.set('comments', comments);
+    app.set('favorites', favorites);
+    app.set('votedUsers', votedUsers);
+    app.set('io', {
+      emit: vi.fn(),
+    });
   });
 
   describe('Polls API', () => {
@@ -205,6 +106,103 @@ describe('REST API Tests', () => {
       expect(res.status).toBe(400);
     });
 
+    it('POST /api/polls should return 400 for empty title', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: '   ', options: ['A', 'B'] });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('标题不能为空');
+    });
+
+    it('POST /api/polls should return 400 for title exceeding 100 chars', async () => {
+      const longTitle = 'A'.repeat(101);
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: longTitle, options: ['A', 'B'] });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('100字');
+    });
+
+    it('POST /api/polls should return 400 for description exceeding 500 chars', async () => {
+      const longDesc = 'D'.repeat(501);
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'Valid Title', description: longDesc, options: ['A', 'B'] });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('500字');
+    });
+
+    it('POST /api/polls should return 400 for more than 6 options', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'Valid Title', options: ['1', '2', '3', '4', '5', '6', '7'] });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('6个');
+    });
+
+    it('POST /api/polls should return 400 for empty option strings', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'Valid Title', options: ['Valid', '   ', '  '] });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('2个');
+    });
+
+    it('POST /api/polls should trim title and description', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: '  Trimmed Title  ', description: '  Trimmed desc  ', options: ['  A  ', '  B  '] });
+      expect(res.status).toBe(201);
+      expect(res.body.title).toBe('Trimmed Title');
+      expect(res.body.description).toBe('Trimmed desc');
+      expect(res.body.options).toEqual(['A', 'B']);
+    });
+
+    it('POST /api/polls should use uuid v4 for id', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'UUID Test', options: ['A', 'B'] });
+      expect(res.status).toBe(201);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      expect(res.body.id).toMatch(uuidRegex);
+    });
+
+    it('POST /api/polls should store correct createdAt timestamp', async () => {
+      const before = Date.now();
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'Timestamp Test', options: ['A', 'B'] });
+      const after = Date.now();
+      expect(res.status).toBe(201);
+      expect(res.body.createdAt).toBeGreaterThanOrEqual(before);
+      expect(res.body.createdAt).toBeLessThanOrEqual(after);
+    });
+
+    it('POST /api/polls should default duration to 1 day', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'Duration Test', options: ['A', 'B'] });
+      expect(res.status).toBe(201);
+      expect(res.body.duration).toBe(1);
+    });
+
+    it('POST /api/polls should clamp invalid duration to 1 day', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'Duration Test', options: ['A', 'B'], duration: 999 });
+      expect(res.status).toBe(201);
+      expect(res.body.duration).toBe(1);
+    });
+
+    it('POST /api/polls should initialize votes array with zeros', async () => {
+      const res = await request(app)
+        .post('/api/polls')
+        .send({ title: 'Votes Init Test', options: ['A', 'B', 'C', 'D'] });
+      expect(res.status).toBe(201);
+      expect(res.body.votes).toEqual([0, 0, 0, 0]);
+      expect(res.body.closed).toBe(false);
+    });
+
     it('POST /api/polls/:id/close should close the poll', async () => {
       const res = await request(app)
         .post(`/api/polls/${samplePollId}/close`);
@@ -256,9 +254,16 @@ describe('REST API Tests', () => {
   });
 
   describe('Favorites API', () => {
-    it('POST /api/favorites should add favorite', async () => {
+    const generateToken = (username: string) => {
+      return btoa(username + ':' + Date.now() + ':' + Math.random().toString(36).slice(2, 10));
+    };
+    const authToken = generateToken('testuser');
+    const authHeader = `Bearer ${authToken}`;
+
+    it('POST /api/favorites should add favorite (with auth)', async () => {
       const res = await request(app)
         .post('/api/favorites')
+        .set('Authorization', authHeader)
         .send({ userId: 'user1', pollId: samplePollId });
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -275,9 +280,10 @@ describe('REST API Tests', () => {
       expect(res.body[0].id).toBe(samplePollId);
     });
 
-    it('DELETE /api/favorites should remove favorite', async () => {
+    it('DELETE /api/favorites should remove favorite (with auth)', async () => {
       const res = await request(app)
         .delete('/api/favorites')
+        .set('Authorization', authHeader)
         .send({ userId: 'user1', pollId: samplePollId });
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -286,9 +292,24 @@ describe('REST API Tests', () => {
       expect(favorites.get('user1')?.has(samplePollId)).toBe(false);
     });
 
+    it('POST /api/favorites should return 401 without auth', async () => {
+      const res = await request(app)
+        .post('/api/favorites')
+        .send({ userId: 'user1', pollId: samplePollId });
+      expect(res.status).toBe(401);
+    });
+
+    it('DELETE /api/favorites should return 401 without auth', async () => {
+      const res = await request(app)
+        .delete('/api/favorites')
+        .send({ userId: 'user1', pollId: samplePollId });
+      expect(res.status).toBe(401);
+    });
+
     it('POST /api/favorites should return 400 for missing params', async () => {
       const res = await request(app)
         .post('/api/favorites')
+        .set('Authorization', authHeader)
         .send({ userId: 'user1' });
       expect(res.status).toBe(400);
     });
@@ -296,7 +317,7 @@ describe('REST API Tests', () => {
 });
 
 describe('Vote Batching Logic', () => {
-  it('Should correctly apply votes within batch window', async () => {
+  it('Should correctly apply votes within batch window', () => {
     const pendingVotes = new Map<string, Map<number, number>>();
 
     const applyPendingVotes = (pollId: string, poll: any) => {
@@ -347,6 +368,41 @@ describe('Vote Batching Logic', () => {
 
     expect(pendingVotes.get(pollId)!.get(0)).toBe(3);
     expect(pendingVotes.get(pollId)!.get(1)).toBe(1);
+  });
+
+  it('Should prevent duplicate user votes within batch window', () => {
+    const votedUsers = new Map<string, Set<string>>();
+    const pendingVoteUsers = new Map<string, Set<string>>();
+    const pollId = 'dup-test';
+    const userId1 = 'user-1';
+    const userId2 = 'user-2';
+
+    const checkAndRecordVote = (pid: string, uid: string): boolean => {
+      if (!votedUsers.has(pid)) {
+        votedUsers.set(pid, new Set());
+      }
+      if (votedUsers.get(pid)!.has(uid)) {
+        return false;
+      }
+      if (!pendingVoteUsers.has(pid)) {
+        pendingVoteUsers.set(pid, new Set());
+      }
+      if (pendingVoteUsers.get(pid)!.has(uid)) {
+        return false;
+      }
+      pendingVoteUsers.get(pid)!.add(uid);
+      votedUsers.get(pid)!.add(uid);
+      return true;
+    };
+
+    expect(checkAndRecordVote(pollId, userId1)).toBe(true);
+    expect(checkAndRecordVote(pollId, userId1)).toBe(false);
+    expect(checkAndRecordVote(pollId, userId2)).toBe(true);
+    expect(checkAndRecordVote(pollId, userId2)).toBe(false);
+    expect(checkAndRecordVote(pollId, userId1)).toBe(false);
+
+    expect(votedUsers.get(pollId)!.size).toBe(2);
+    expect(pendingVoteUsers.get(pollId)!.size).toBe(2);
   });
 });
 
@@ -452,5 +508,65 @@ describe('Data Model Validation', () => {
     });
 
     expect(validComment.content.length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe('Auth Middleware', () => {
+  it('Should decode valid token and attach user to request', async () => {
+    const express = await import('express');
+    const app = express.default();
+    app.use(express.json());
+
+    app.use((req: any, res: any, next: any) => {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (token) {
+        try {
+          const decoded = Buffer.from(token, 'base64').toString();
+          const [username] = decoded.split(':');
+          if (username) req.user = { username, token };
+        } catch {}
+      }
+      next();
+    });
+
+    app.get('/test-auth', (req: any, res: any) => {
+      res.json({ hasUser: !!req.user, username: req.user?.username });
+    });
+
+    const username = 'testuser';
+    const token = Buffer.from(username + ':' + Date.now() + ':random').toString('base64');
+    const authHeader = `Bearer ${token}`;
+
+    const res = await request(app)
+      .get('/test-auth')
+      .set('Authorization', authHeader);
+
+    expect(res.body.hasUser).toBe(true);
+    expect(res.body.username).toBe(username);
+  });
+
+  it('Should handle missing token gracefully', async () => {
+    const express = await import('express');
+    const app = express.default();
+    app.use(express.json());
+
+    app.use((req: any, res: any, next: any) => {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (token) {
+        try {
+          const decoded = Buffer.from(token, 'base64').toString();
+          const [username] = decoded.split(':');
+          if (username) req.user = { username, token };
+        } catch {}
+      }
+      next();
+    });
+
+    app.get('/test-no-auth', (req: any, res: any) => {
+      res.json({ hasUser: !!req.user });
+    });
+
+    const res = await request(app).get('/test-no-auth');
+    expect(res.body.hasUser).toBe(false);
   });
 });

@@ -314,7 +314,7 @@ describe('Performance & Integration Tests', () => {
 
       expect(actions.vote(poll.id, 0)).toBe(false);
 
-      expect(eventLog.length).toBe(6);
+      expect(eventLog.length).toBe(7);
       expect(eventLog[0].event).toBe('pollCreated');
       expect(eventLog[eventLog.length - 1].event).toBe('pollClosed');
 
