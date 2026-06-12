@@ -20,6 +20,23 @@ import {
 } from './types';
 
 const DEFAULT_ROOM = 'default-room';
+const VOTE_STORAGE_KEY = 'cc_vote_history';
+
+function loadVoteHistory(): Record<string, 1 | -1> {
+  try {
+    const raw = localStorage.getItem(VOTE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveVoteHistory(history: Record<string, 1 | -1>) {
+  try {
+    localStorage.setItem(VOTE_STORAGE_KEY, JSON.stringify(history));
+  } catch {
+  }
+}
 
 function generateRandomUser(): User {
   const color = COLORS[Math.floor(Math.random() * COLORS.length)];
@@ -49,6 +66,7 @@ function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const prevNotePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const noteAnimFrameRef = useRef<number | null>(null);
+  const voteHistoryRef = useRef<Record<string, 1 | -1>>(loadVoteHistory());
 
   const [user, setUser] = useState<User>(() => generateRandomUser());
   const [tool, setTool] = useState<ToolType>('brush');
@@ -65,6 +83,7 @@ function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [notePositions, setNotePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
   const [animatingNoteId, setAnimatingNoteId] = useState<string | null>(null);
+  const [voteHistory, setVoteHistory] = useState<Record<string, 1 | -1>>(voteHistoryRef.current);
 
   const [, setTick] = useState(0);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
@@ -98,53 +117,46 @@ function App() {
     const canvasRect = canvasRef.current?.getBoundingClientRect();
     if (!canvasRect) return;
 
-    const newPositions = new Map<string, { x: number; y: number }>();
     const NOTE_WIDTH = 240;
     const NOTE_GAP = 20;
     const COLS = Math.max(1, Math.floor((canvasRect.width - 80) / (NOTE_WIDTH + NOTE_GAP)));
     const startX = 40;
     const startY = 40;
 
+    const targetPositions = new Map<string, { x: number; y: number }>();
     sortedNotes.forEach((note, idx) => {
       const col = idx % COLS;
       const row = Math.floor(idx / COLS);
-      const screenX = startX + col * (NOTE_WIDTH + NOTE_GAP);
-      const screenY = startY + row * 200;
+      targetPositions.set(note.id, {
+        x: startX + col * (NOTE_WIDTH + NOTE_GAP),
+        y: startY + row * 200
+      });
+    });
 
-      const canvasState = canvasRendererRef.current?.getState() || { scale: 1, offsetX: 0, offsetY: 0 };
-      const worldX = (screenX - canvasState.offsetX) / canvasState.scale;
-      const worldY = (screenY - canvasState.offsetY) / canvasState.scale;
-
-      const prev = prevNotePositionsRef.current.get(note.id);
-      if (prev) {
-        newPositions.set(note.id, { x: prev.x, y: prev.y });
+    const currentPositions = new Map<string, { x: number; y: number }>();
+    sortedNotes.forEach((note) => {
+      const existing = notePositions.get(note.id);
+      if (existing) {
+        currentPositions.set(note.id, { x: existing.x, y: existing.y });
       } else {
         const renderer = canvasRendererRef.current;
         if (renderer) {
           const screenPos = renderer.worldToScreen(note.x, note.y);
-          newPositions.set(note.id, { x: screenPos.x, y: screenPos.y });
+          currentPositions.set(note.id, { x: screenPos.x, y: screenPos.y });
         } else {
-          newPositions.set(note.id, { x: screenX, y: screenY });
+          currentPositions.set(note.id, targetPositions.get(note.id)!);
         }
       }
     });
 
-    setNotePositions(newPositions);
+    setNotePositions(currentPositions);
+    prevNotePositionsRef.current = currentPositions;
 
     requestAnimationFrame(() => {
-      const targetPositions = new Map<string, { x: number; y: number }>();
-      sortedNotes.forEach((note, idx) => {
-        const col = idx % COLS;
-        const row = Math.floor(idx / COLS);
-        targetPositions.set(note.id, {
-          x: startX + col * (NOTE_WIDTH + NOTE_GAP),
-          y: startY + row * 200
-        });
-      });
       setNotePositions(targetPositions);
       prevNotePositionsRef.current = targetPositions;
     });
-  }, [sortedNotes, sortMode]);
+  }, [sortMode, notes.length]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -247,7 +259,14 @@ function App() {
         if (canvasRendererRef.current) {
           canvasRendererRef.current.setStrokes(strokes || []);
         }
-        setNotes(syncNotes || []);
+        const mergedNotes = (syncNotes || []).map((n: StickyNote) => {
+          const localVote = voteHistoryRef.current[n.id];
+          if (localVote !== undefined && (!n.votes || n.votes[user.id] === undefined)) {
+            return { ...n, votes: { ...(n.votes || {}), [user.id]: localVote } };
+          }
+          return n;
+        });
+        setNotes(mergedNotes);
         setOnlineCount(count || 0);
         break;
       }
@@ -256,6 +275,9 @@ function App() {
         break;
       }
       case 'clear': {
+        voteHistoryRef.current = {};
+        setVoteHistory({});
+        saveVoteHistory({});
         canvasRendererRef.current?.clearAll();
         setNotes([]);
         setSelectedNoteId(null);
@@ -289,9 +311,14 @@ function App() {
   };
 
   const handleVote = (noteId: string, vote: 1 | -1) => {
+    if (voteHistoryRef.current[noteId] !== undefined) return;
     const note = notes.find(n => n.id === noteId);
     if (!note) return;
     if (note.votes && note.votes[user.id] !== undefined) return;
+
+    voteHistoryRef.current[noteId] = vote;
+    setVoteHistory({ ...voteHistoryRef.current });
+    saveVoteHistory(voteHistoryRef.current);
 
     const payload: VotePayload = { noteId, userId: user.id, vote };
     const msg: WsMessage = { type: 'vote', payload };
@@ -301,6 +328,10 @@ function App() {
   };
 
   const handleClearCanvas = () => {
+    voteHistoryRef.current = {};
+    setVoteHistory({});
+    saveVoteHistory({});
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'clear', payload: { roomId: DEFAULT_ROOM } } as WsMessage));
     }
@@ -328,7 +359,7 @@ function App() {
 
   return (
     <div style={styles.app}>
-      <div style={styles.onlineBadge}>
+      <div className="cc-online-badge" style={styles.onlineBadge}>
         <span style={styles.onlineDot} />
         <span style={styles.onlineText}>{onlineCount} 在线</span>
       </div>
@@ -361,6 +392,7 @@ function App() {
             ].map(opt => (
               <div
                 key={opt.key}
+                className="sortOption"
                 style={{
                   ...styles.sortOption,
                   background: sortMode === opt.key ? '#f1f5f9' : 'transparent',
@@ -381,11 +413,11 @@ function App() {
 
       <canvas ref={canvasRef} style={styles.canvas} />
 
-      <div style={{
+      <div className={isMobile ? 'cc-toolbar cc-toolbar-mobile' : 'cc-toolbar cc-toolbar-desktop'} style={{
         ...styles.toolbar,
         ...(isMobile ? styles.toolbarMobile : styles.toolbarDesktop)
       }}>
-        <div style={{
+        <div className="cc-toolbar-inner" style={{
           ...styles.toolbarInner,
           flexDirection: isMobile ? 'row' : 'column',
           gap: isMobile ? 8 : 6
@@ -407,6 +439,7 @@ function App() {
             <>
               <div style={styles.colorWrapper}>
                 <div
+                  className="colorSwatch"
                   style={{ ...styles.colorSwatch, background: brushColor }}
                   onClick={() => { setColorPickerOpen(v => !v); setWidthPickerOpen(false); }}
                 />
@@ -421,6 +454,7 @@ function App() {
                       {COLORS.map(c => (
                         <div
                           key={c}
+                          className="colorOption"
                           style={{
                             ...styles.colorOption,
                             background: c,
@@ -437,6 +471,7 @@ function App() {
 
               <div style={styles.widthWrapper}>
                 <div
+                  className="widthTrigger"
                   style={styles.widthTrigger}
                   onClick={() => { setWidthPickerOpen(v => !v); setColorPickerOpen(false); }}
                 >
@@ -492,7 +527,7 @@ function App() {
             </svg>
           </ToolButton>
 
-          <div style={{
+          <div className="cc-divider" style={{
             ...styles.divider,
             width: isMobile ? 1 : 32,
             height: isMobile ? 28 : 1,
@@ -519,7 +554,7 @@ function App() {
         const pos = layoutPos || originalPos;
         const isSelected = selectedNoteId === note.id;
         const score = getNoteScore(note);
-        const hasVoted = note.votes?.[user.id] !== undefined;
+        const hasVoted = voteHistoryRef.current[note.id] !== undefined || note.votes?.[user.id] !== undefined;
         const noteWidth = 240 * canvasState.scale;
 
         return (
@@ -975,10 +1010,26 @@ styleSheet.textContent = `
   }
   @keyframes votePress {
     0% { transform: scale(1); }
-    40% { transform: scale(0.9); }
+    30% { transform: scale(0.9); }
+    60% { transform: scale(1.05); }
     100% { transform: scale(1); }
   }
-  .cc-vote-btn:active {
+  @keyframes notePop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.23); }
+    100% { transform: scale(1.2); }
+  }
+  @keyframes buttonLift {
+    from { transform: translateY(0); }
+    to { transform: translateY(-2px); }
+  }
+  .cc-note {
+    transition: transform 0.2s ease-out, left 0.5s ease, top 0.5s ease, box-shadow 0.2s ease !important;
+  }
+  .cc-note-selected {
+    animation: notePop 0.2s ease-out forwards !important;
+  }
+  .cc-vote-btn:not(.cc-vote-btn-disabled):active {
     animation: votePress 0.3s ease !important;
   }
   .cc-vote-btn-disabled {
@@ -999,12 +1050,70 @@ styleSheet.textContent = `
   .sortOption:hover {
     background: #f1f5f9 !important;
   }
+  button {
+    transition: all 0.2s ease !important;
+  }
+  button:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+  }
+  button:active:not(:disabled) {
+    transform: translateY(0) !important;
+  }
   textarea::-webkit-scrollbar {
     width: 4px;
   }
   textarea::-webkit-scrollbar-thumb {
     background: rgba(0,0,0,0.2);
     border-radius: 2px;
+  }
+  @media (max-width: 1023px) {
+    .cc-toolbar-desktop {
+      display: none !important;
+    }
+    .cc-toolbar-mobile {
+      position: fixed !important;
+      left: 50% !important;
+      bottom: 16px !important;
+      transform: translateX(-50%) !important;
+      height: 60px !important;
+      flex-direction: row !important;
+      width: auto !important;
+      padding: 8px 16px !important;
+      border-radius: 12px !important;
+    }
+    .cc-toolbar-mobile > .cc-toolbar-inner {
+      flex-direction: row !important;
+      gap: 8px !important;
+    }
+    .cc-toolbar-mobile .cc-divider {
+      width: 1px !important;
+      height: 28px !important;
+      margin: 0 4px !important;
+    }
+    .cc-online-badge {
+      margin-left: 0 !important;
+    }
+  }
+  @media (min-width: 1024px) {
+    .cc-toolbar-desktop {
+      position: fixed !important;
+      left: 16px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      width: 60px !important;
+      padding: 12px 8px !important;
+      flex-direction: column !important;
+      border-radius: 8px !important;
+    }
+    .cc-toolbar-desktop > .cc-toolbar-inner {
+      flex-direction: column !important;
+      gap: 6px !important;
+    }
+    .cc-toolbar-desktop .cc-divider {
+      width: 32px !important;
+      height: 1px !important;
+      margin: 4px 0 !important;
+    }
   }
 `;
 document.head.appendChild(styleSheet);

@@ -323,36 +323,26 @@ export class CanvasRenderer {
       return;
     }
 
-    if (pts.length === 2) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(pts[0].x, pts[0].y);
-      const mx = (pts[0].x + pts[1].x) / 2;
-      const my = (pts[0].y + pts[1].y) / 2;
-      this.ctx.quadraticCurveTo(pts[0].x, pts[0].y, mx, my);
-      this.ctx.quadraticCurveTo(pts[1].x, pts[1].y, pts[1].x, pts[1].y);
-      this.ctx.stroke();
-      this.ctx.globalCompositeOperation = 'source-over';
-      return;
-    }
-
     this.ctx.beginPath();
     this.ctx.moveTo(pts[0].x, pts[0].y);
 
-    const firstMidX = (pts[0].x + pts[1].x) / 2;
-    const firstMidY = (pts[0].y + pts[1].y) / 2;
-    this.ctx.quadraticCurveTo(pts[0].x, pts[0].y, firstMidX, firstMidY);
-
-    for (let i = 1; i < pts.length - 1; i++) {
-      const xc = (pts[i].x + pts[i + 1].x) / 2;
-      const yc = (pts[i].y + pts[i + 1].y) / 2;
-      this.ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+    if (pts.length === 2) {
+      const midX = (pts[0].x + pts[1].x) / 2;
+      const midY = (pts[0].y + pts[1].y) / 2;
+      this.ctx.quadraticCurveTo(pts[0].x, pts[0].y, midX, midY);
+      this.ctx.quadraticCurveTo(pts[1].x, pts[1].y, pts[1].x, pts[1].y);
+    } else {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const xc = (pts[i].x + pts[i + 1].x) / 2;
+        const yc = (pts[i].y + pts[i + 1].y) / 2;
+        this.ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+      }
+      const lastIdx = pts.length - 1;
+      this.ctx.quadraticCurveTo(
+        pts[lastIdx - 1].x, pts[lastIdx - 1].y,
+        pts[lastIdx].x, pts[lastIdx].y
+      );
     }
-
-    const lastIdx = pts.length - 1;
-    this.ctx.quadraticCurveTo(
-      pts[lastIdx].x, pts[lastIdx].y,
-      pts[lastIdx].x, pts[lastIdx].y
-    );
 
     this.ctx.stroke();
     this.ctx.globalCompositeOperation = 'source-over';
