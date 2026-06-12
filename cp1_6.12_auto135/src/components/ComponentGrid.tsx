@@ -1,4 +1,40 @@
-import { useState, useMemo } from 'react'
+/**
+ * ============================================================
+ *  ComponentGrid.tsx - 组件看板 / 预览网格
+ * ============================================================
+ *
+ * 【职责】
+ *    - 按主题数量使用 CSS Grid 精确排列：
+ *        2 主题 → 2 列 1 行（cols-2）
+ *        3-4 主题 → 4 列 1 行（cols-4）
+ *        5-6 主题 → 2 列 3 行（cols-2-rows-3，纵向流动）
+ *    - 每一列渲染一个完整的组件预览集合：
+ *        按钮（主要 / 次要 / 文字）、卡片、输入框（默认/成功/错误）、开关
+ *    - 所有组件形状、配色精确跟随当前主题
+ *    - 通过 React.memo + useMemo + useCallback 保证 60FPS 无延迟刷新
+ *
+ * 【被调用位置】
+ *    - src/components/App.tsx → <ComponentGrid themes={themes} template={template} gridCols={gridClass} />
+ *
+ * 【依赖的数据流向】
+ *    App.themes (不可变数组)
+ *        → props.themes 传入
+ *        → 每列 ThemeColumn 通过 React.memo 浅比较跳过未变更的列
+ *        → 列内组件 useMemo 计算 style，仅当 colors/template 引用改变时重算
+ *
+ * 【内部组件层级】
+ *    ComponentGrid（memo）
+ *       └─ ThemeColumn (memo) × N 列
+ *            ├─ ThemedButton × 3 变体
+ *            ├─ ThemedCard
+ *            ├─ ThemedInput × 3 状态
+ *            └─ ThemedToggle
+ *
+ * 【导出功能关联】
+ *    ExportButton 通过 id="component-grid" 获取本组件 DOM 节点进行 html2canvas 截图
+ * ============================================================
+ */
+import { memo, useState, useMemo, useCallback } from 'react'
 import type { ThemeScheme, ComponentTemplate, ThemeColors } from '../types'
 
 interface ComponentGridProps {
@@ -7,20 +43,12 @@ interface ComponentGridProps {
   gridCols: string
 }
 
+/* ========== 颜色工具函数（纯函数，便于编译器内联） ========== */
 function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16)
   const g = parseInt(hex.slice(3, 5), 16)
   const b = parseInt(hex.slice(5, 7), 16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-function lightenColor(hex: string, percent: number): string {
-  const num = parseInt(hex.replace('#', ''), 16)
-  const amt = Math.round(2.55 * percent)
-  const R = Math.min(255, (num >> 16) + amt)
-  const G = Math.min(255, ((num >> 8) & 0x00ff) + amt)
-  const B = Math.min(255, (num & 0x0000ff) + amt)
-  return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`
 }
 
 function darkenColor(hex: string, percent: number): string {
@@ -32,6 +60,7 @@ function darkenColor(hex: string, percent: number): string {
   return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`
 }
 
+/* ========== 按钮组件 ========== */
 interface ThemedButtonProps {
   colors: ThemeColors
   variant: 'primary' | 'secondary' | 'text'
@@ -39,35 +68,39 @@ interface ThemedButtonProps {
   children: React.ReactNode
 }
 
-function ThemedButton({ colors, variant, template, children }: ThemedButtonProps) {
-  const style = useMemo(() => {
+const ThemedButton = memo(function ThemedButton({
+  colors,
+  variant,
+  template,
+  children,
+}: ThemedButtonProps) {
+  const baseStyle = useMemo<React.CSSProperties>(() => {
     const base: React.CSSProperties = {
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
       fontWeight: 500,
       cursor: 'pointer',
-      transition: 'all 0.2s ease',
       position: 'relative',
       overflow: 'hidden',
+      border: 'none',
     }
 
     if (template === 'material') {
       base.borderRadius = '4px'
       base.textTransform = 'uppercase'
-      base.fontSize = '14px'
+      base.fontSize = '13px'
       base.letterSpacing = '0.5px'
-      base.padding = variant === 'text' ? '8px 16px' : '10px 24px'
+      base.padding = variant === 'text' ? '6px 14px' : '8px 20px'
     } else {
       base.borderRadius = '6px'
       base.fontSize = '14px'
-      base.padding = variant === 'text' ? '8px 16px' : '10px 20px'
+      base.padding = variant === 'text' ? '6px 14px' : '8px 18px'
     }
 
     if (variant === 'primary') {
       base.backgroundColor = colors.primary
       base.color = '#ffffff'
-      base.border = 'none'
     } else if (variant === 'secondary') {
       base.backgroundColor = 'transparent'
       base.color = colors.primary
@@ -75,7 +108,6 @@ function ThemedButton({ colors, variant, template, children }: ThemedButtonProps
     } else {
       base.backgroundColor = 'transparent'
       base.color = colors.primary
-      base.border = 'none'
     }
 
     return base
@@ -83,42 +115,42 @@ function ThemedButton({ colors, variant, template, children }: ThemedButtonProps
 
   const [isHovered, setIsHovered] = useState(false)
 
-  const hoverStyle = useMemo(() => {
+  const hoverStyle = useMemo<React.CSSProperties>(() => {
     if (!isHovered) return {}
     if (variant === 'primary') {
       return { backgroundColor: darkenColor(colors.primary, 10) }
     }
-    if (variant === 'secondary') {
-      return { backgroundColor: hexToRgba(colors.primary, 0.08) }
-    }
     return { backgroundColor: hexToRgba(colors.primary, 0.08) }
   }, [isHovered, colors.primary, variant])
+
+  const handleEnter = useCallback(() => setIsHovered(true), [])
+  const handleLeave = useCallback(() => setIsHovered(false), [])
 
   return (
     <button
       className="themed-button"
-      style={{ ...style, ...hoverStyle }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      style={{ ...baseStyle, ...hoverStyle }}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
     >
       {isHovered && <span className="button-shimmer" />}
       {children}
     </button>
   )
-}
+})
 
+/* ========== 卡片组件 ========== */
 interface ThemedCardProps {
   colors: ThemeColors
   template: ComponentTemplate
 }
 
-function ThemedCard({ colors, template }: ThemedCardProps) {
+const ThemedCard = memo(function ThemedCard({ colors, template }: ThemedCardProps) {
   const cardStyle = useMemo<React.CSSProperties>(() => {
     const base: React.CSSProperties = {
       backgroundColor: colors.background,
       color: colors.text,
       overflow: 'hidden',
-      transition: 'box-shadow 0.3s ease, transform 0.3s ease',
     }
 
     if (template === 'material') {
@@ -126,28 +158,27 @@ function ThemedCard({ colors, template }: ThemedCardProps) {
       base.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
     } else {
       base.borderRadius = '12px'
-      base.border = `1px solid ${hexToRgba(colors.text, 0.1)}`
+      base.border = `1px solid ${hexToRgba(colors.text, 0.12)}`
     }
 
     return base
   }, [colors, template])
 
+  const titleStyle = useMemo(() => ({ color: colors.text }), [colors.text])
+  const descStyle = useMemo(
+    () => ({ color: hexToRgba(colors.text, 0.7) }),
+    [colors.text]
+  )
+
   return (
     <div className="themed-card" style={cardStyle}>
-      <div
-        className="card-image"
-        style={{ backgroundColor: colors.secondary }}
-      >
+      <div className="card-image" style={{ backgroundColor: colors.secondary }}>
         <svg
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.5"
-          style={{
-            width: '48px',
-            height: '48px',
-            color: hexToRgba('#ffffff', 0.6),
-          }}
+          style={{ width: '48px', height: '48px', color: hexToRgba('#ffffff', 0.6) }}
         >
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <circle cx="8.5" cy="8.5" r="1.5" />
@@ -155,31 +186,35 @@ function ThemedCard({ colors, template }: ThemedCardProps) {
         </svg>
       </div>
       <div className="card-content">
-        <h3 className="card-title" style={{ color: colors.text }}>
+        <h3 className="card-title" style={titleStyle}>
           组件卡片标题
         </h3>
-        <p className="card-description" style={{ color: hexToRgba(colors.text, 0.7) }}>
+        <p className="card-description" style={descStyle}>
           这是一段描述文字，展示卡片组件在当前主题配色下的效果。
         </p>
       </div>
     </div>
   )
-}
+})
 
+/* ========== 输入框组件 ========== */
 interface ThemedInputProps {
   colors: ThemeColors
   template: ComponentTemplate
   state: 'default' | 'success' | 'error'
 }
 
-function ThemedInput({ colors, template, state }: ThemedInputProps) {
+const ThemedInput = memo(function ThemedInput({
+  colors,
+  template,
+  state,
+}: ThemedInputProps) {
   const inputStyle = useMemo<React.CSSProperties>(() => {
     const base: React.CSSProperties = {
       width: '100%',
       fontSize: '14px',
       color: colors.text,
       backgroundColor: colors.background,
-      transition: 'all 0.2s ease',
       boxSizing: 'border-box',
     }
 
@@ -190,11 +225,11 @@ function ThemedInput({ colors, template, state }: ThemedInputProps) {
     if (template === 'material') {
       base.border = 'none'
       base.borderBottom = `2px solid ${borderColor}`
-      base.padding = '8px 0'
+      base.padding = '6px 0'
       base.borderRadius = '0'
     } else {
       base.border = `1px solid ${borderColor}`
-      base.padding = '10px 12px'
+      base.padding = '8px 12px'
       base.borderRadius = '6px'
     }
 
@@ -202,8 +237,10 @@ function ThemedInput({ colors, template, state }: ThemedInputProps) {
   }, [colors, template, state])
 
   const labelText = state === 'default' ? '标签文字' : state === 'success' ? '输入成功' : '输入错误'
-  const helperText = state === 'default' ? '请输入内容...' : state === 'success' ? '验证通过' : '请检查输入内容'
-  const helperColor = state === 'success' ? '#4caf50' : state === 'error' ? '#f44336' : hexToRgba(colors.text, 0.5)
+  const helperText =
+    state === 'default' ? '请输入内容...' : state === 'success' ? '验证通过' : '请检查输入内容'
+  const helperColor =
+    state === 'success' ? '#4caf50' : state === 'error' ? '#f44336' : hexToRgba(colors.text, 0.5)
 
   return (
     <div className="themed-input-wrapper">
@@ -215,90 +252,98 @@ function ThemedInput({ colors, template, state }: ThemedInputProps) {
         style={inputStyle}
         placeholder="请输入..."
         className="themed-input"
+        readOnly
       />
       <span className="input-helper" style={{ color: helperColor }}>
         {helperText}
       </span>
     </div>
   )
-}
+})
 
+/* ========== 开关组件 ========== */
 interface ThemedToggleProps {
   colors: ThemeColors
   template: ComponentTemplate
 }
 
-function ThemedToggle({ colors, template }: ThemedToggleProps) {
+const ThemedToggle = memo(function ThemedToggle({
+  colors,
+  template,
+}: ThemedToggleProps) {
   const [checked, setChecked] = useState(false)
+  const toggle = useCallback(() => setChecked(v => !v), [])
 
   const trackStyle = useMemo<React.CSSProperties>(() => {
-    const base: React.CSSProperties = {
-      width: template === 'material' ? '36px' : '48px',
-      height: template === 'material' ? '14px' : '24px',
-      borderRadius: template === 'material' ? '7px' : '12px',
-      backgroundColor: checked ? hexToRgba(colors.primary, 0.5) : hexToRgba(colors.text, 0.3),
+    return {
+      width: template === 'material' ? '36px' : '44px',
+      height: template === 'material' ? '14px' : '22px',
+      borderRadius: template === 'material' ? '7px' : '11px',
+      backgroundColor: checked
+        ? hexToRgba(colors.primary, 0.5)
+        : hexToRgba(colors.text, 0.3),
       position: 'relative',
       cursor: 'pointer',
-      transition: 'background-color 0.2s ease',
+      display: 'inline-block',
     }
-    return base
   }, [checked, colors.primary, colors.text, template])
 
   const thumbStyle = useMemo<React.CSSProperties>(() => {
-    const size = template === 'material' ? '20px' : '20px'
-    const base: React.CSSProperties = {
+    const size = template === 'material' ? 20 : 18
+    const travel = template === 'material' ? 16 : 26
+    return {
       width: size,
       height: size,
       borderRadius: '50%',
       backgroundColor: checked ? colors.primary : '#ffffff',
       position: 'absolute',
       top: '50%',
-      transform: `translateY(-50%) translateX(${checked ? (template === 'material' ? '16px' : '28px') : '2px'})`,
+      transform: `translateY(-50%) translateX(${checked ? travel : 2}px)`,
       boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-      transition: 'all 0.2s ease',
+      transition: 'transform 0.2s ease, background-color 0.2s ease',
     }
-    return base
   }, [checked, colors.primary, template])
 
   return (
-    <div
-      className="themed-toggle"
-      style={trackStyle}
-      onClick={() => setChecked(!checked)}
-    >
+    <div className="themed-toggle" style={trackStyle} onClick={toggle}>
       <div style={thumbStyle} />
     </div>
   )
-}
+})
 
+/* ========== 单列主题预览 ========== */
 interface ThemeColumnProps {
   theme: ThemeScheme
   template: ComponentTemplate
 }
 
-function ThemeColumn({ theme, template }: ThemeColumnProps) {
+const ThemeColumn = memo(function ThemeColumn({ theme, template }: ThemeColumnProps) {
+  const columnStyle = useMemo<React.CSSProperties>(
+    () => ({
+      backgroundColor: theme.colors.background,
+      borderRadius: '12px',
+      padding: '20px',
+      minHeight: '100%',
+    }),
+    [theme.colors.background]
+  )
+
+  const titleStyle = useMemo(
+    () => ({ color: theme.colors.text }),
+    [theme.colors.text]
+  )
+
   return (
-    <div
-      className="theme-column"
-      style={{
-        backgroundColor: theme.colors.background,
-        borderRadius: '12px',
-        padding: '24px',
-        minHeight: '100%',
-      }}
-    >
+    <div className="theme-column" style={columnStyle}>
       <div className="theme-column-header">
-        <h3
-          className="theme-column-title"
-          style={{ color: theme.colors.text }}
-        >
+        <h3 className="theme-column-title" style={titleStyle}>
           {theme.name}
         </h3>
       </div>
 
       <div className="component-row">
         <div className="component-group">
-          <h4 className="component-group-title" style={{ color: theme.colors.text }}>
+          <h4 className="component-group-title" style={titleStyle}>
             按钮 Button
           </h4>
           <div className="button-variants">
@@ -317,7 +362,7 @@ function ThemeColumn({ theme, template }: ThemeColumnProps) {
 
       <div className="component-row">
         <div className="component-group">
-          <h4 className="component-group-title" style={{ color: theme.colors.text }}>
+          <h4 className="component-group-title" style={titleStyle}>
             卡片 Card
           </h4>
           <ThemedCard colors={theme.colors} template={template} />
@@ -326,7 +371,7 @@ function ThemeColumn({ theme, template }: ThemeColumnProps) {
 
       <div className="component-row">
         <div className="component-group">
-          <h4 className="component-group-title" style={{ color: theme.colors.text }}>
+          <h4 className="component-group-title" style={titleStyle}>
             输入框 Input
           </h4>
           <div className="input-variants">
@@ -339,12 +384,12 @@ function ThemeColumn({ theme, template }: ThemeColumnProps) {
 
       <div className="component-row">
         <div className="component-group">
-          <h4 className="component-group-title" style={{ color: theme.colors.text }}>
+          <h4 className="component-group-title" style={titleStyle}>
             开关 Toggle
           </h4>
           <div className="toggle-wrapper">
             <ThemedToggle colors={theme.colors} template={template} />
-            <span className="toggle-label" style={{ color: theme.colors.text }}>
+            <span className="toggle-label" style={titleStyle}>
               启用功能
             </span>
           </div>
@@ -352,14 +397,13 @@ function ThemeColumn({ theme, template }: ThemeColumnProps) {
       </div>
     </div>
   )
-}
+})
 
+/* ========== 看板主组件 ========== */
 function ComponentGrid({ themes, template, gridCols }: ComponentGridProps) {
-  const gridClass = themes.length <= 2 ? 'cols-2' : themes.length <= 4 ? 'cols-4' : 'cols-2-rows-3'
-
   return (
     <div className="component-grid-wrapper" id="component-grid">
-      <div className={`component-grid ${gridClass}`}>
+      <div className={`component-grid ${gridCols}`}>
         {themes.map(theme => (
           <ThemeColumn key={theme.id} theme={theme} template={template} />
         ))}
@@ -368,4 +412,4 @@ function ComponentGrid({ themes, template, gridCols }: ComponentGridProps) {
   )
 }
 
-export default ComponentGrid
+export default memo(ComponentGrid)

@@ -1,4 +1,40 @@
-import { useState, useCallback } from 'react'
+/**
+ * ============================================================
+ *  App.tsx - 应用主组件 / Root Container
+ * ============================================================
+ *
+ * 【职责】
+ *    - 应用级全局状态管理：主题方案列表(themes)、当前组件模板(template)
+ *    - 聚合并编排子组件：ThemePanel、ComponentGrid、ExportButton
+ *    - 事件总线：将调色板产生的颜色变更分发给看板
+ *
+ * 【被调用位置】
+ *    - src/main.tsx → ReactDOM.createRoot().render(<App />)
+ *
+ * 【向下调用子组件】
+ *    - <ComponentGrid themes={themes} template={template} />  :  左侧组件看板
+ *    - <ThemePanel theme={theme} onColorChange={...} />      :  右侧调色板（渲染N份）
+ *    - <ExportButton />                                       :  顶部导出按钮
+ *
+ * 【数据流向】
+ *    用户交互
+ *       ↓
+ *    ThemePanel 触发 onColorChange / onNameChange / onToggleCollapse / onDelete
+ *       ↓
+ *    App.setState 更新 themes 数组（不可变更新，触发 React 重渲染）
+ *       ↓
+ *    新 themes 通过 props 传入 ComponentGrid → 各子组件 useMemo 计算样式
+ *       ↓
+ *    DOM 以 60FPS 流畅刷新
+ *
+ * 【删除主题动画流程】
+ *    handleDeleteTheme(themeId)
+ *       → 设置 themes[i].deleting = true（触发 CSS .deleting 类）
+ *       → 等待 200ms (ease-out)
+ *       → 真正从数组中 splice 掉该条目
+ * ============================================================
+ */
+import { useState, useCallback, useMemo } from 'react'
 import ThemePanel from './ThemePanel'
 import ComponentGrid from './ComponentGrid'
 import ExportButton from './ExportButton'
@@ -35,15 +71,18 @@ function App() {
   const [themes, setThemes] = useState<ThemeScheme[]>(initialThemes)
   const [template, setTemplate] = useState<ComponentTemplate>('material')
 
-  const handleColorChange = useCallback((themeId: string, colorKey: ColorKey, value: string) => {
-    setThemes(prev =>
-      prev.map(theme =>
-        theme.id === themeId
-          ? { ...theme, colors: { ...theme.colors, [colorKey]: value } }
-          : theme
+  const handleColorChange = useCallback(
+    (themeId: string, colorKey: ColorKey, value: string) => {
+      setThemes(prev =>
+        prev.map(theme =>
+          theme.id === themeId
+            ? { ...theme, colors: { ...theme.colors, [colorKey]: value } }
+            : theme
+        )
       )
-    )
-  }, [])
+    },
+    []
+  )
 
   const handleNameChange = useCallback((themeId: string, name: string) => {
     const trimmedName = name.slice(0, 8)
@@ -63,32 +102,43 @@ function App() {
   }, [])
 
   const handleAddTheme = useCallback(() => {
-    if (themes.length >= 6) return
-    const newTheme: ThemeScheme = {
-      id: generateId(),
-      name: `主题${themes.length + 1}`,
-      colors: {
-        primary: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
-        secondary: '#999999',
-        background: '#ffffff',
-        text: '#333333',
-      },
-      collapsed: false,
-    }
-    setThemes(prev => [...prev, newTheme])
-  }, [themes.length])
+    setThemes(prev => {
+      if (prev.length >= 6) return prev
+      const newTheme: ThemeScheme = {
+        id: generateId(),
+        name: `主题${prev.length + 1}`,
+        colors: {
+          primary: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
+          secondary: '#999999',
+          background: '#ffffff',
+          text: '#333333',
+        },
+        collapsed: false,
+      }
+      return [...prev, newTheme]
+    })
+  }, [])
 
-  const handleDeleteTheme = useCallback((themeId: string) => {
-    if (themes.length <= 1) return
-    setThemes(prev => prev.filter(theme => theme.id !== themeId))
-  }, [themes.length])
+  const handleRequestDeleteTheme = useCallback((themeId: string) => {
+    setThemes(prev => {
+      if (prev.length <= 1) return prev
+      return prev.map(t =>
+        t.id === themeId ? { ...t, deleting: true } : t
+      ) as ThemeScheme[]
+    })
+    window.setTimeout(() => {
+      setThemes(prev => prev.filter(t => t.id !== themeId))
+    }, 200)
+  }, [])
 
-  const getGridCols = (): string => {
+  const gridClass = useMemo(() => {
     const count = themes.length
-    if (count <= 2) return 'grid-cols-2'
-    if (count <= 4) return 'grid-cols-4'
-    return 'grid-cols-2 grid-rows-3'
-  }
+    if (count <= 2) return 'cols-2'
+    if (count <= 4) return 'cols-4'
+    return 'cols-2-rows-3'
+  }, [themes.length])
+
+  const canAdd = themes.length < 6
 
   return (
     <div className="app-container">
@@ -115,7 +165,7 @@ function App() {
 
       <main className="app-main">
         <section className="grid-section">
-          <ComponentGrid themes={themes} template={template} gridCols={getGridCols()} />
+          <ComponentGrid themes={themes} template={template} gridCols={gridClass} />
         </section>
 
         <aside className="panel-section">
@@ -124,7 +174,7 @@ function App() {
             <button
               className="add-theme-btn"
               onClick={handleAddTheme}
-              disabled={themes.length >= 6}
+              disabled={!canAdd}
             >
               + 添加主题
             </button>
@@ -137,12 +187,12 @@ function App() {
                 onColorChange={handleColorChange}
                 onNameChange={handleNameChange}
                 onToggleCollapse={handleToggleCollapse}
-                onDelete={handleDeleteTheme}
+                onDelete={handleRequestDeleteTheme}
                 canDelete={themes.length > 1}
               />
             ))}
           </div>
-          {themes.length >= 6 && (
+          {!canAdd && (
             <p className="theme-limit-tip">最多支持6个主题方案同时对比</p>
           )}
         </aside>

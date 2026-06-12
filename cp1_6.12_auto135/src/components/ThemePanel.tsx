@@ -1,4 +1,30 @@
-import { useState, useRef, useEffect } from 'react'
+/**
+ * ============================================================
+ *  ThemePanel.tsx - 单个主题调色板卡片
+ * ============================================================
+ *
+ * 【职责】
+ *    - 渲染 4 个颜色选择器（主色 / 辅色 / 背景色 / 文字色）
+ *    - 每个选择器包含：吸色器圆形按钮（悬停放大 1.2x + tooltip）+ HEX 输入框
+ *    - 支持折叠/展开（高度缩放动画 300ms cubic-bezier）
+ *    - 支持主题名称编辑（8字限制）与删除（触发 200ms 缩小动画）
+ *
+ * 【被调用位置】
+ *    - src/components/App.tsx → 在 themes.map 循环中渲染 N 份
+ *
+ * 【向上回调 → App】
+ *    - onColorChange(themeId, colorKey, value)   :  某颜色值变更
+ *    - onNameChange(themeId, name)               :  主题名称变更
+ *    - onToggleCollapse(themeId)                 :  折叠/展开切换
+ *    - onDelete(themeId)                         :  请求删除（由 App 驱动 deleting → CSS 动画 → splice）
+ *
+ * 【数据流向】
+ *    用户点击圆形吸色器 → 触发隐藏的 <input type=color> → onChange → onColorChange
+ *    用户修改 HEX 输入框 → 校验合法 HEX → onChange → onColorChange
+ *    （保证颜色变更在 <16ms 内通过 useCallback + 不可变更新传递到看板）
+ * ============================================================
+ */
+import { memo, useState, useRef, useEffect, useCallback } from 'react'
 import type { ThemeScheme, ColorKey } from '../types'
 
 interface ThemePanelProps {
@@ -17,51 +43,61 @@ const colorLabels: Record<ColorKey, string> = {
   text: '文字色',
 }
 
+const colorKeys: ColorKey[] = ['primary', 'secondary', 'background', 'text']
+
 function isValidHex(color: string): boolean {
   return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(color)
 }
 
-function ColorPicker({
-  label,
-  colorKey,
-  color,
-  onChange,
-}: {
+/* ============== ColorPicker 子组件 ============== */
+interface ColorPickerProps {
   label: string
   colorKey: ColorKey
   color: string
   onChange: (key: ColorKey, value: string) => void
-}) {
+}
+
+const ColorPicker = memo(function ColorPicker({
+  label,
+  colorKey,
+  color,
+  onChange,
+}: ColorPickerProps) {
   const [inputValue, setInputValue] = useState(color)
   const [showTooltip, setShowTooltip] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const nativeInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setInputValue(color)
   }, [color])
 
-  const handleColorInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    onChange(colorKey, value)
-  }
+  const handleColorInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange(colorKey, e.target.value)
+    },
+    [colorKey, onChange]
+  )
 
-  const handleTextInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setInputValue(value)
-    if (isValidHex(value)) {
-      onChange(colorKey, value)
-    }
-  }
+  const handleTextInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      setInputValue(value)
+      if (isValidHex(value)) {
+        onChange(colorKey, value)
+      }
+    },
+    [colorKey, onChange]
+  )
 
-  const handleTextBlur = () => {
+  const handleTextBlur = useCallback(() => {
     if (!isValidHex(inputValue)) {
       setInputValue(color)
     }
-  }
+  }, [inputValue, color])
 
-  const handlePickerClick = () => {
-    inputRef.current?.click()
-  }
+  const handlePickerClick = useCallback(() => {
+    nativeInputRef.current?.click()
+  }, [])
 
   return (
     <div className="color-picker-row">
@@ -73,6 +109,11 @@ function ColorPicker({
           onClick={handlePickerClick}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') handlePickerClick()
+          }}
         >
           <svg
             className="color-picker-icon"
@@ -90,11 +131,12 @@ function ColorPicker({
           )}
         </div>
         <input
-          ref={inputRef}
+          ref={nativeInputRef}
           type="color"
           value={color}
           onChange={handleColorInput}
           className="color-picker-native"
+          aria-label={`选择${label}`}
         />
         <input
           type="text"
@@ -103,12 +145,15 @@ function ColorPicker({
           onBlur={handleTextBlur}
           className="color-hex-input"
           maxLength={7}
+          spellCheck={false}
+          aria-label={`${label}HEX值`}
         />
       </div>
     </div>
   )
-}
+})
 
+/* ============== ThemePanel 主组件 ============== */
 function ThemePanel({
   theme,
   onColorChange,
@@ -117,26 +162,32 @@ function ThemePanel({
   onDelete,
   canDelete,
 }: ThemePanelProps) {
-  const [isDeleting, setIsDeleting] = useState(false)
+  const handleColorChange = useCallback(
+    (key: ColorKey, value: string) => {
+      onColorChange(theme.id, key, value)
+    },
+    [theme.id, onColorChange]
+  )
 
-  const handleDelete = () => {
-    if (!canDelete) return
-    setIsDeleting(true)
-    setTimeout(() => {
-      onDelete(theme.id)
-    }, 200)
-  }
+  const handleNameInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onNameChange(theme.id, e.target.value)
+    },
+    [theme.id, onNameChange]
+  )
 
-  const handleColorChange = (key: ColorKey, value: string) => {
-    onColorChange(theme.id, key, value)
-  }
+  const handleCollapse = useCallback(() => {
+    onToggleCollapse(theme.id)
+  }, [theme.id, onToggleCollapse])
 
-  const colorKeys: ColorKey[] = ['primary', 'secondary', 'background', 'text']
+  const handleDelete = useCallback(() => {
+    if (canDelete) onDelete(theme.id)
+  }, [canDelete, theme.id, onDelete])
 
   return (
     <div
       className={`theme-card ${theme.collapsed ? 'collapsed' : ''} ${
-        isDeleting ? 'deleting' : ''
+        theme.deleting ? 'deleting' : ''
       }`}
     >
       <div className="theme-card-header">
@@ -144,9 +195,10 @@ function ThemePanel({
           <input
             type="text"
             value={theme.name}
-            onChange={e => onNameChange(theme.id, e.target.value)}
+            onChange={handleNameInput}
             className="theme-name-input"
             maxLength={8}
+            aria-label="主题名称"
           />
           <div className="color-dots">
             {colorKeys.map(key => (
@@ -162,8 +214,9 @@ function ThemePanel({
         <div className="theme-header-actions">
           <button
             className="collapse-btn"
-            onClick={() => onToggleCollapse(theme.id)}
+            onClick={handleCollapse}
             title={theme.collapsed ? '展开' : '折叠'}
+            aria-label={theme.collapsed ? '展开主题面板' : '折叠主题面板'}
           >
             <svg
               className={`collapse-icon ${theme.collapsed ? 'rotated' : ''}`}
@@ -182,6 +235,7 @@ function ThemePanel({
               className="delete-btn"
               onClick={handleDelete}
               title="删除主题"
+              aria-label="删除当前主题"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -214,4 +268,4 @@ function ThemePanel({
   )
 }
 
-export default ThemePanel
+export default memo(ThemePanel)
