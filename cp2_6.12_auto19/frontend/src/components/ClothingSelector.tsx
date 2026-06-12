@@ -13,40 +13,17 @@ const categoryIcons: Record<Category, typeof Shirt> = {
 
 const categoryOrder: Category[] = ['top', 'bottom', 'shoes', 'accessory']
 
-function RippleButton({
-  children,
-  className = '',
-  onClick,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode }) {
-  const btnRef = useRef<HTMLButtonElement>(null)
-
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const btn = btnRef.current
-    if (btn) {
-      const rect = btn.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-      const ripple = document.createElement('span')
-      ripple.className = 'ripple-effect'
-      ripple.style.left = `${x}px`
-      ripple.style.top = `${y}px`
-      btn.appendChild(ripple)
-      setTimeout(() => ripple.remove(), 600)
-    }
-    onClick?.(e)
-  }
-
-  return (
-    <button
-      ref={btnRef}
-      className={`ripple-btn ${className}`}
-      onClick={handleClick}
-      {...props}
-    >
-      {children}
-    </button>
-  )
+function createRipple(e: React.MouseEvent<HTMLElement>) {
+  const el = e.currentTarget
+  const rect = el.getBoundingClientRect()
+  const x = e.clientX - rect.left
+  const y = e.clientY - rect.top
+  const ripple = document.createElement('span')
+  ripple.className = 'ripple-effect'
+  ripple.style.left = `${x}px`
+  ripple.style.top = `${y}px`
+  el.appendChild(ripple)
+  setTimeout(() => ripple.remove(), 600)
 }
 
 interface ClothingCardProps {
@@ -60,8 +37,10 @@ interface ClothingCardProps {
 function ClothingCard({ style, isSelected, selectedColor, onSelect, onDeselect }: ClothingCardProps) {
   const [hoveredColor, setHoveredColor] = useState<string | null>(null)
   const displayColor = hoveredColor || selectedColor || style.colors[0]
+  const cardRef = useRef<HTMLDivElement>(null)
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    createRipple(e as any)
     if (isSelected) {
       onDeselect()
     } else {
@@ -76,7 +55,8 @@ function ClothingCard({ style, isSelected, selectedColor, onSelect, onDeselect }
 
   return (
     <div
-      className={`clothing-card ripple-btn relative p-3 rounded-lg border-2 cursor-pointer bg-white ${
+      ref={cardRef}
+      className={`clothing-card ripple-btn relative p-3 rounded-lg border-2 cursor-pointer bg-white color-transition ${
         isSelected ? 'selected-card' : 'border-transparent hover:border-gray-200'
       }`}
       style={{ boxShadow: isSelected ? undefined : '0 2px 8px rgba(0,0,0,0.06)' }}
@@ -96,7 +76,7 @@ function ClothingCard({ style, isSelected, selectedColor, onSelect, onDeselect }
         {style.colors.map((color, idx) => (
           <button
             key={idx}
-            className={`w-6 h-6 rounded-full border-2 transition-all duration-300 hover:scale-110 ${
+            className={`ripple-btn w-6 h-6 rounded-full border-2 transition-all duration-300 hover:scale-110 ${
               (selectedColor === color && isSelected) ? 'border-gray-800 scale-110' : 'border-white'
             }`}
             style={{ backgroundColor: color, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}
@@ -159,12 +139,15 @@ export default function ClothingSelector() {
           const isActive = activeCategory === category
           const hasSelection = selection[category] !== null
           return (
-            <RippleButton
+            <button
               key={category}
-              className={`flex-1 py-3 px-2 text-sm font-medium transition-all duration-300 relative bg-transparent border-none outline-none ${
+              className={`ripple-btn flex-1 py-3 px-2 text-sm font-medium transition-all duration-300 relative bg-transparent border-none outline-none cursor-pointer ${
                 isActive ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'
               }`}
-              onClick={() => handleTabChange(category)}
+              onClick={(e) => {
+                createRipple(e as any)
+                handleTabChange(category)
+              }}
             >
               <div className="flex flex-col items-center gap-1">
                 <Icon size={18} />
@@ -176,7 +159,7 @@ export default function ClothingSelector() {
               {isActive && (
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#39ff14] rounded-full transition-all duration-300" />
               )}
-            </RippleButton>
+            </button>
           )
         })}
       </div>
@@ -188,18 +171,17 @@ export default function ClothingSelector() {
           const selectedStyle = selected ? getStyleById(selected.styleId) : null
           const isActive = activeCategory === category
 
+          let slideClass = 'tab-slide-hidden'
+          if (isActive) {
+            slideClass = 'tab-slide-active'
+          } else if (isSliding) {
+            slideClass = slideDirection === 'left' ? 'tab-slide-exit-left' : 'tab-slide-exit-right'
+          }
+
           return (
             <div
               key={category}
-              className={`tab-slide h-full ${
-                isActive
-                  ? 'tab-slide-active'
-                  : isSliding
-                    ? slideDirection === 'left'
-                      ? 'tab-slide-exit-left'
-                      : 'tab-slide-exit-right'
-                    : 'tab-slide-hidden'
-              }`}
+              className={`tab-slide h-full ${slideClass}`}
             >
               <div className="p-4 h-full overflow-y-auto scrollbar-custom">
                 <div className="grid grid-cols-2 gap-3">

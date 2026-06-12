@@ -6,7 +6,7 @@ import { OutfitSelection, SelectedClothing } from '@/types'
 import { getStyleById } from '@/data/wardrobe'
 
 const COLOR_LERP_SPEED = 2.0
-const FADE_IN_SPEED = 3.0
+const FADE_IN_SPEED = 3.5
 const FADE_OUT_SPEED = 5.0
 
 function MannequinBody() {
@@ -52,7 +52,6 @@ interface ClothingMeshProps {
 
 function ClothingMesh({ selected, category }: ClothingMeshProps) {
   const groupRef = useRef<THREE.Group>(null!)
-  const matRef = useRef<THREE.MeshStandardMaterial>(null!)
   const targetOpacity = useRef(selected ? 1 : 0)
   const targetColor = useRef(new THREE.Color(selected?.color || '#ffffff'))
   const currentOpacity = useRef(selected ? 1 : 0)
@@ -60,6 +59,34 @@ function ClothingMesh({ selected, category }: ClothingMeshProps) {
   const [visible, setVisible] = useState(!!selected)
 
   const style = selected ? getStyleById(selected.styleId) : null
+
+  const mainMat = useMemo(() => {
+    const mat = new THREE.MeshStandardMaterial({
+      color: selected?.color || '#ffffff',
+      roughness: 0.55,
+      metalness: 0.08,
+      transparent: true,
+      opacity: selected ? 1 : 0,
+      side: THREE.DoubleSide
+    })
+    return mat
+  }, [])
+
+  const accentMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: '#ffffff',
+    roughness: 0.7,
+    metalness: 0.05,
+    transparent: true,
+    opacity: selected ? 1 : 0
+  }), [])
+
+  const detailMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: '#2d2d2d',
+    roughness: 0.8,
+    metalness: 0.05,
+    transparent: true,
+    opacity: selected ? 1 : 0
+  }), [])
 
   useEffect(() => {
     const prev = prevSelectedRef.current
@@ -76,7 +103,7 @@ function ClothingMesh({ selected, category }: ClothingMeshProps) {
         targetColor.current.set(selected.color)
         targetOpacity.current = 1
         setVisible(true)
-      }, 250)
+      }, 200)
       return () => clearTimeout(timer)
     } else if (selected && prev && selected.color !== prev.color) {
       targetColor.current.set(selected.color)
@@ -85,8 +112,6 @@ function ClothingMesh({ selected, category }: ClothingMeshProps) {
   }, [selected])
 
   useFrame((_, delta) => {
-    if (!matRef.current) return
-
     const diff = targetOpacity.current - currentOpacity.current
     if (Math.abs(diff) > 0.001) {
       const speed = diff > 0 ? FADE_IN_SPEED : FADE_OUT_SPEED
@@ -95,17 +120,20 @@ function ClothingMesh({ selected, category }: ClothingMeshProps) {
       currentOpacity.current = targetOpacity.current
     }
 
-    matRef.current.opacity = currentOpacity.current
-    matRef.current.visible = currentOpacity.current > 0.01
+    const opacity = currentOpacity.current
+    mainMat.opacity = opacity
+    mainMat.visible = opacity > 0.01
+    accentMat.opacity = opacity
+    accentMat.visible = opacity > 0.01
+    detailMat.opacity = opacity
+    detailMat.visible = opacity > 0.01
 
-    if (currentOpacity.current <= 0.01 && targetOpacity.current <= 0) {
+    if (opacity <= 0.01 && targetOpacity.current <= 0) {
       setVisible(false)
     }
 
-    matRef.current.color.lerp(targetColor.current, Math.min(COLOR_LERP_SPEED * delta, 1))
+    mainMat.color.lerp(targetColor.current, Math.min(COLOR_LERP_SPEED * delta, 1))
   })
-
-  const accentMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, metalness: 0.05 }), [])
 
   const renderShape = () => {
     if (!style) return null
@@ -113,316 +141,547 @@ function ClothingMesh({ selected, category }: ClothingMeshProps) {
     const s = style.scale
 
     switch (style.shape) {
-      case 'tshirt':
+      case 'tshirt': {
+        const bodyShape = new THREE.Shape()
+        bodyShape.moveTo(-0.32, -0.35)
+        bodyShape.lineTo(-0.32, 0.15)
+        bodyShape.lineTo(-0.42, 0.1)
+        bodyShape.lineTo(-0.48, 0.35)
+        bodyShape.lineTo(-0.28, 0.3)
+        bodyShape.quadraticCurveTo(-0.15, 0.35, 0, 0.35)
+        bodyShape.quadraticCurveTo(0.15, 0.35, 0.28, 0.3)
+        bodyShape.lineTo(0.48, 0.35)
+        bodyShape.lineTo(0.42, 0.1)
+        bodyShape.lineTo(0.32, 0.15)
+        bodyShape.lineTo(0.32, -0.35)
+        bodyShape.lineTo(-0.32, -0.35)
+        const extrudeSettings = { depth: 0.12, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 3 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.03]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.32, 0.36, 0.65, 24]} />
+          <group position={[0, y, -0.06]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[bodyShape, extrudeSettings]} />
             </mesh>
-            <mesh position={[0, 0.33, 0.04]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.12, 0.03, 8, 24, Math.PI]} />
-            </mesh>
-            <mesh position={[0.38, 0.05, 0.02]} rotation={[0, 0, -0.3]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.08, 0.07, 0.45, 12]} />
-            </mesh>
-            <mesh position={[-0.38, 0.05, 0.02]} rotation={[0, 0, 0.3]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.08, 0.07, 0.45, 12]} />
+            <mesh position={[0, 0.33, 0.02]} material={mainMat} castShadow>
+              <torusGeometry args={[0.14, 0.025, 8, 24, Math.PI]} />
             </mesh>
           </group>
         )
-      case 'shirt':
+      }
+      case 'shirt': {
+        const bodyShape = new THREE.Shape()
+        bodyShape.moveTo(-0.3, -0.35)
+        bodyShape.lineTo(-0.3, 0.15)
+        bodyShape.lineTo(-0.38, 0.08)
+        bodyShape.lineTo(-0.45, 0.38)
+        bodyShape.lineTo(-0.22, 0.32)
+        bodyShape.lineTo(-0.12, 0.38)
+        bodyShape.lineTo(0, 0.4)
+        bodyShape.lineTo(0.12, 0.38)
+        bodyShape.lineTo(0.22, 0.32)
+        bodyShape.lineTo(0.45, 0.38)
+        bodyShape.lineTo(0.38, 0.08)
+        bodyShape.lineTo(0.3, 0.15)
+        bodyShape.lineTo(0.3, -0.35)
+        bodyShape.lineTo(-0.3, -0.35)
+        const ext = { depth: 0.1, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.04]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.3, 0.35, 0.7, 24]} />
+          <group position={[0, y, -0.05]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[bodyShape, ext]} />
             </mesh>
-            <mesh position={[0.4, 0, 0.03]} rotation={[0, 0, -0.25]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.07, 0.065, 0.55, 12]} />
+            <mesh position={[0.05, 0.35, 0.06]} material={detailMat} castShadow>
+              <boxGeometry args={[0.015, 0.25, 0.01]} />
             </mesh>
-            <mesh position={[-0.4, 0, 0.03]} rotation={[0, 0, 0.25]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.07, 0.065, 0.55, 12]} />
-            </mesh>
-            <mesh position={[0.06, 0.35, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.04, 0.4, 0.02]} />
-            </mesh>
-            <mesh position={[-0.06, 0.35, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.04, 0.4, 0.02]} />
-            </mesh>
-            <mesh position={[0, 0.38, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.2, 0.08, 0.03]} />
+            <mesh position={[-0.05, 0.35, 0.06]} material={detailMat} castShadow>
+              <boxGeometry args={[0.015, 0.25, 0.01]} />
             </mesh>
           </group>
         )
-      case 'sweater':
+      }
+      case 'sweater': {
+        const bodyShape = new THREE.Shape()
+        bodyShape.moveTo(-0.35, -0.36)
+        bodyShape.lineTo(-0.35, 0.1)
+        bodyShape.lineTo(-0.44, 0.05)
+        bodyShape.lineTo(-0.5, 0.35)
+        bodyShape.lineTo(-0.3, 0.3)
+        bodyShape.quadraticCurveTo(-0.12, 0.36, 0, 0.36)
+        bodyShape.quadraticCurveTo(0.12, 0.36, 0.3, 0.3)
+        bodyShape.lineTo(0.5, 0.35)
+        bodyShape.lineTo(0.44, 0.05)
+        bodyShape.lineTo(0.35, 0.1)
+        bodyShape.lineTo(0.35, -0.36)
+        bodyShape.lineTo(-0.35, -0.36)
+        const ext = { depth: 0.14, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.012, bevelSegments: 3 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.05]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.35, 0.38, 0.72, 24]} />
+          <group position={[0, y, -0.07]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[bodyShape, ext]} />
             </mesh>
-            <mesh position={[0.42, -0.02, 0.04]} rotation={[0, 0, -0.25]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.09, 0.08, 0.6, 12]} />
+            <mesh position={[0, 0.36, 0.03]} material={mainMat} castShadow>
+              <torusGeometry args={[0.15, 0.035, 8, 24, Math.PI]} />
             </mesh>
-            <mesh position={[-0.42, -0.02, 0.04]} rotation={[0, 0, 0.25]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.09, 0.08, 0.6, 12]} />
+            <mesh position={[0.44, -0.1, 0.04]} material={mainMat} castShadow>
+              <torusGeometry args={[0.07, 0.018, 8, 16]} />
             </mesh>
-            <mesh position={[0, 0.36, 0.07]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.14, 0.04, 8, 24, Math.PI]} />
+            <mesh position={[-0.44, -0.1, 0.04]} material={mainMat} castShadow>
+              <torusGeometry args={[0.07, 0.018, 8, 16]} />
             </mesh>
-            <mesh position={[0.42, -0.32, 0.04]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.07, 0.015, 8, 16]} />
-            </mesh>
-            <mesh position={[-0.42, -0.32, 0.04]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.07, 0.015, 8, 16]} />
+            <mesh position={[0, -0.36, 0.03]} material={mainMat} castShadow>
+              <torusGeometry args={[0.34, 0.018, 8, 24]} />
             </mesh>
           </group>
         )
-      case 'jacket':
+      }
+      case 'jacket': {
+        const leftPanel = new THREE.Shape()
+        leftPanel.moveTo(-0.33, -0.38)
+        leftPanel.lineTo(-0.33, 0.1)
+        leftPanel.lineTo(-0.45, 0.05)
+        leftPanel.lineTo(-0.52, 0.38)
+        leftPanel.lineTo(-0.3, 0.32)
+        leftPanel.lineTo(-0.08, 0.38)
+        leftPanel.lineTo(-0.02, 0.35)
+        leftPanel.lineTo(-0.02, -0.38)
+        leftPanel.lineTo(-0.33, -0.38)
+        const rightPanel = new THREE.Shape()
+        rightPanel.moveTo(0.33, -0.38)
+        rightPanel.lineTo(0.33, 0.1)
+        rightPanel.lineTo(0.45, 0.05)
+        rightPanel.lineTo(0.52, 0.38)
+        rightPanel.lineTo(0.3, 0.32)
+        rightPanel.lineTo(0.08, 0.38)
+        rightPanel.lineTo(0.02, 0.35)
+        rightPanel.lineTo(0.02, -0.38)
+        rightPanel.lineTo(0.33, -0.38)
+        const ext = { depth: 0.12, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.06, -0.02, 0.06]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.33, 0.37, 0.75, 24, 1, false, 0, Math.PI * 1.7]} />
+          <group position={[0, y, -0.06]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[leftPanel, ext]} />
             </mesh>
-            <mesh position={[-0.06, -0.02, 0.06]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.33, 0.37, 0.75, 24, 1, false, Math.PI * 0.3, Math.PI * 1.7]} />
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[rightPanel, ext]} />
             </mesh>
-            <mesh position={[0.44, -0.05, 0.04]} rotation={[0, 0, -0.2]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.085, 0.075, 0.6, 12]} />
+            <mesh position={[0.04, 0.15, 0.12]} material={detailMat} castShadow>
+              <boxGeometry args={[0.02, 0.4, 0.01]} />
             </mesh>
-            <mesh position={[-0.44, -0.05, 0.04]} rotation={[0, 0, 0.2]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.085, 0.075, 0.6, 12]} />
+            <mesh position={[-0.04, 0.15, 0.12]} material={detailMat} castShadow>
+              <boxGeometry args={[0.02, 0.4, 0.01]} />
             </mesh>
-            <mesh position={[0.06, 0.3, 0.12]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.04, 0.5, 0.02]} />
-            </mesh>
-            <mesh position={[-0.06, 0.3, 0.12]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.04, 0.5, 0.02]} />
-            </mesh>
-            <mesh position={[0, 0.38, 0.09]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.28, 0.12, 0.04]} />
+            <mesh position={[0, 0.38, 0.08]} material={mainMat} castShadow>
+              <boxGeometry args={[0.18, 0.04, 0.03]} />
             </mesh>
           </group>
         )
-      case 'coat':
+      }
+      case 'coat': {
+        const bodyShape = new THREE.Shape()
+        bodyShape.moveTo(-0.34, -0.8)
+        bodyShape.lineTo(-0.34, 0.1)
+        bodyShape.lineTo(-0.46, 0.0)
+        bodyShape.lineTo(-0.55, 0.42)
+        bodyShape.lineTo(-0.32, 0.35)
+        bodyShape.lineTo(-0.1, 0.42)
+        bodyShape.lineTo(0, 0.44)
+        bodyShape.lineTo(0.1, 0.42)
+        bodyShape.lineTo(0.32, 0.35)
+        bodyShape.lineTo(0.55, 0.42)
+        bodyShape.lineTo(0.46, 0.0)
+        bodyShape.lineTo(0.34, 0.1)
+        bodyShape.lineTo(0.34, -0.8)
+        bodyShape.lineTo(-0.34, -0.8)
+        const ext = { depth: 0.14, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 3 }
         return (
-          <group position={[0, y - 0.3, 0]} scale={s}>
-            <mesh position={[0, 0, 0.07]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.34, 0.42, 1.6, 24]} />
+          <group position={[0, y - 0.1, -0.07]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[bodyShape, ext]} />
             </mesh>
-            <mesh position={[0.46, -0.1, 0.05]} rotation={[0, 0, -0.15]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.09, 0.08, 0.8, 12]} />
+            <mesh position={[0.04, 0.2, 0.14]} material={detailMat} castShadow>
+              <boxGeometry args={[0.02, 0.8, 0.01]} />
             </mesh>
-            <mesh position={[-0.46, -0.1, 0.05]} rotation={[0, 0, 0.15]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.09, 0.08, 0.8, 12]} />
+            <mesh position={[-0.04, 0.2, 0.14]} material={detailMat} castShadow>
+              <boxGeometry args={[0.02, 0.8, 0.01]} />
             </mesh>
-            <mesh position={[0.08, 0.6, 0.14]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.04, 0.9, 0.02]} />
-            </mesh>
-            <mesh position={[-0.08, 0.6, 0.14]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.04, 0.9, 0.02]} />
-            </mesh>
-            <mesh position={[0, 0.8, 0.1]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.35, 0.15, 0.06]} />
-            </mesh>
-            <mesh position={[0, -0.7, 0.09]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.3, 0.02, 8, 24, Math.PI]} />
+            <mesh position={[0, 0.44, 0.09]} material={mainMat} castShadow>
+              <boxGeometry args={[0.22, 0.06, 0.04]} />
             </mesh>
           </group>
         )
-      case 'pants':
+      }
+      case 'pants': {
+        const leftLeg = new THREE.Shape()
+        leftLeg.moveTo(-0.3, 0.15)
+        leftLeg.lineTo(-0.3, -0.05)
+        leftLeg.lineTo(-0.04, -0.05)
+        leftLeg.lineTo(-0.04, -0.78)
+        leftLeg.lineTo(-0.16, -0.78)
+        leftLeg.lineTo(-0.22, -0.78)
+        leftLeg.lineTo(-0.22, -0.05)
+        leftLeg.lineTo(-0.3, -0.05)
+        const rightLeg = new THREE.Shape()
+        rightLeg.moveTo(0.3, 0.15)
+        rightLeg.lineTo(0.3, -0.05)
+        rightLeg.lineTo(0.04, -0.05)
+        rightLeg.lineTo(0.04, -0.78)
+        rightLeg.lineTo(0.16, -0.78)
+        rightLeg.lineTo(0.22, -0.78)
+        rightLeg.lineTo(0.22, -0.05)
+        rightLeg.lineTo(0.3, -0.05)
+        const waistShape = new THREE.Shape()
+        waistShape.moveTo(-0.3, 0.15)
+        waistShape.lineTo(-0.3, -0.05)
+        waistShape.lineTo(0.3, -0.05)
+        waistShape.lineTo(0.3, 0.15)
+        waistShape.lineTo(-0.3, 0.15)
+        const legExt = { depth: 0.14, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2 }
+        const waistExt = { depth: 0.14, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.008, bevelSegments: 2 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0.12, 0.03]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.3, 0.32, 0.2, 24]} />
+          <group position={[0, y, -0.07]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[waistShape, waistExt]} />
             </mesh>
-            <mesh position={[0.12, -0.35, 0.02]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.13, 0.1, 0.8, 16]} />
+            <mesh position={[-0.13, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[leftLeg, legExt]} />
             </mesh>
-            <mesh position={[-0.12, -0.35, 0.02]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.13, 0.1, 0.8, 16]} />
+            <mesh position={[0.13, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[rightLeg, legExt]} />
             </mesh>
           </group>
         )
-      case 'skirt':
+      }
+      case 'skirt': {
+        const skirtShape = new THREE.Shape()
+        skirtShape.moveTo(-0.2, 0.2)
+        skirtShape.lineTo(-0.2, 0.05)
+        skirtShape.lineTo(-0.38, -0.35)
+        skirtShape.quadraticCurveTo(-0.35, -0.4, -0.28, -0.38)
+        skirtShape.lineTo(0.28, -0.38)
+        skirtShape.quadraticCurveTo(0.35, -0.4, 0.38, -0.35)
+        skirtShape.lineTo(0.2, 0.05)
+        skirtShape.lineTo(0.2, 0.2)
+        skirtShape.lineTo(-0.2, 0.2)
+        const ext = { depth: 0.16, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 3 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.03]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.2, 0.38, 0.55, 32]} />
+          <group position={[0, y, -0.08]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[skirtShape, ext]} />
             </mesh>
-            <mesh position={[0, 0.28, 0.04]} material={matRef.current} castShadow>
+            <mesh position={[0, 0.2, 0.03]} material={mainMat} castShadow>
               <torusGeometry args={[0.2, 0.02, 8, 24]} />
             </mesh>
           </group>
         )
-      case 'shorts':
+      }
+      case 'shorts': {
+        const leftLeg = new THREE.Shape()
+        leftLeg.moveTo(-0.28, 0.12)
+        leftLeg.lineTo(-0.28, -0.05)
+        leftLeg.lineTo(-0.04, -0.05)
+        leftLeg.lineTo(-0.04, -0.3)
+        leftLeg.lineTo(-0.2, -0.3)
+        leftLeg.lineTo(-0.2, -0.05)
+        leftLeg.lineTo(-0.28, -0.05)
+        const rightLeg = new THREE.Shape()
+        rightLeg.moveTo(0.28, 0.12)
+        rightLeg.lineTo(0.28, -0.05)
+        rightLeg.lineTo(0.04, -0.05)
+        rightLeg.lineTo(0.04, -0.3)
+        rightLeg.lineTo(0.2, -0.3)
+        rightLeg.lineTo(0.2, -0.05)
+        rightLeg.lineTo(0.28, -0.05)
+        const waistShape = new THREE.Shape()
+        waistShape.moveTo(-0.28, 0.12)
+        waistShape.lineTo(-0.28, -0.05)
+        waistShape.lineTo(0.28, -0.05)
+        waistShape.lineTo(0.28, 0.12)
+        waistShape.lineTo(-0.28, 0.12)
+        const ext = { depth: 0.12, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0.12, 0.03]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.3, 0.32, 0.2, 24]} />
+          <group position={[0, y, -0.06]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <extrudeGeometry args={[waistShape, ext]} />
             </mesh>
-            <mesh position={[0.12, -0.05, 0.02]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.13, 0.11, 0.35, 16]} />
+            <mesh position={[-0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[leftLeg, ext]} />
             </mesh>
-            <mesh position={[-0.12, -0.05, 0.02]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.13, 0.11, 0.35, 16]} />
+            <mesh position={[0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[rightLeg, ext]} />
             </mesh>
           </group>
         )
-      case 'sneakers':
+      }
+      case 'sneakers': {
+        const shoeShape = new THREE.Shape()
+        shoeShape.moveTo(-0.08, 0.04)
+        shoeShape.lineTo(-0.08, 0)
+        shoeShape.lineTo(-0.1, -0.02)
+        shoeShape.lineTo(-0.1, -0.04)
+        shoeShape.lineTo(0.1, -0.04)
+        shoeShape.lineTo(0.12, -0.02)
+        shoeShape.quadraticCurveTo(0.14, 0.02, 0.12, 0.04)
+        shoeShape.lineTo(-0.08, 0.04)
+        const soleShape = new THREE.Shape()
+        soleShape.moveTo(-0.1, -0.02)
+        soleShape.lineTo(-0.1, -0.06)
+        soleShape.lineTo(0.12, -0.06)
+        soleShape.lineTo(0.12, -0.02)
+        soleShape.lineTo(-0.1, -0.02)
+        const shoeExt = { depth: 0.12, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 2 }
+        const soleExt = { depth: 0.14, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.12, 0.02, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.16, 0.1, 0.28]} />
+          <group position={[0, y, -0.06]} scale={s}>
+            <mesh position={[-0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[shoeShape, shoeExt]} />
             </mesh>
-            <mesh position={[-0.12, 0.02, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.16, 0.1, 0.28]} />
+            <mesh position={[0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[shoeShape, shoeExt]} />
             </mesh>
-            <mesh position={[0.12, -0.05, 0.06]} material={accentMat} castShadow>
-              <boxGeometry args={[0.18, 0.04, 0.3]} />
+            <mesh position={[-0.12, -0.03, 0]} material={accentMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
-            <mesh position={[-0.12, -0.05, 0.06]} material={accentMat} castShadow>
-              <boxGeometry args={[0.18, 0.04, 0.3]} />
-            </mesh>
-            <mesh position={[0.12, 0.05, 0.18]} material={matRef.current} castShadow>
-              <sphereGeometry args={[0.06, 12, 12]} />
-            </mesh>
-            <mesh position={[-0.12, 0.05, 0.18]} material={matRef.current} castShadow>
-              <sphereGeometry args={[0.06, 12, 12]} />
+            <mesh position={[0.12, -0.03, 0]} material={accentMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
           </group>
         )
-      case 'boots':
+      }
+      case 'boots': {
+        const bootShape = new THREE.Shape()
+        bootShape.moveTo(-0.08, 0.2)
+        bootShape.lineTo(-0.08, 0)
+        bootShape.lineTo(-0.1, -0.02)
+        bootShape.lineTo(-0.1, -0.04)
+        bootShape.lineTo(0.1, -0.04)
+        bootShape.lineTo(0.12, -0.02)
+        bootShape.quadraticCurveTo(0.14, 0.02, 0.12, 0.04)
+        bootShape.lineTo(0.08, 0.04)
+        bootShape.lineTo(0.08, 0.2)
+        bootShape.lineTo(-0.08, 0.2)
+        const soleShape = new THREE.Shape()
+        soleShape.moveTo(-0.1, -0.02)
+        soleShape.lineTo(-0.1, -0.06)
+        soleShape.lineTo(0.12, -0.06)
+        soleShape.lineTo(0.12, -0.02)
+        soleShape.lineTo(-0.1, -0.02)
+        const heelShape = new THREE.Shape()
+        heelShape.moveTo(-0.03, -0.04)
+        heelShape.lineTo(-0.03, -0.12)
+        heelShape.lineTo(0.03, -0.12)
+        heelShape.lineTo(0.03, -0.04)
+        heelShape.lineTo(-0.03, -0.04)
+        const bootExt = { depth: 0.1, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 2 }
+        const soleExt = { depth: 0.12, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2 }
+        const heelExt = { depth: 0.04, bevelEnabled: false }
         return (
-          <group position={[0, y + 0.05, 0]} scale={s}>
-            <mesh position={[0.12, 0.12, 0.06]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.08, 0.09, 0.4, 12]} />
+          <group position={[0, y + 0.08, -0.05]} scale={s}>
+            <mesh position={[-0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[bootShape, bootExt]} />
             </mesh>
-            <mesh position={[-0.12, 0.12, 0.06]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.08, 0.09, 0.4, 12]} />
+            <mesh position={[0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[bootShape, bootExt]} />
             </mesh>
-            <mesh position={[0.12, -0.1, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.16, 0.06, 0.28]} />
+            <mesh position={[-0.12, -0.03, 0]} material={detailMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
-            <mesh position={[-0.12, -0.1, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.16, 0.06, 0.28]} />
+            <mesh position={[0.12, -0.03, 0]} material={detailMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
-            <mesh position={[0.12, -0.14, 0.14]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.17, 0.04, 0.06]} />
+            <mesh position={[-0.08, -0.06, 0.04]} material={detailMat} castShadow>
+              <extrudeGeometry args={[heelShape, heelExt]} />
             </mesh>
-            <mesh position={[-0.12, -0.14, 0.14]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.17, 0.04, 0.06]} />
+            <mesh position={[0.16, -0.06, 0.04]} material={detailMat} castShadow>
+              <extrudeGeometry args={[heelShape, heelExt]} />
             </mesh>
           </group>
         )
-      case 'heels':
+      }
+      case 'heels': {
+        const upperShape = new THREE.Shape()
+        upperShape.moveTo(-0.06, 0.04)
+        upperShape.lineTo(-0.06, 0)
+        upperShape.lineTo(-0.07, -0.02)
+        upperShape.lineTo(0.07, -0.02)
+        upperShape.quadraticCurveTo(0.1, 0.01, 0.08, 0.04)
+        upperShape.lineTo(-0.06, 0.04)
+        const soleShape = new THREE.Shape()
+        soleShape.moveTo(-0.07, -0.01)
+        soleShape.lineTo(-0.07, -0.03)
+        soleShape.lineTo(0.09, -0.03)
+        soleShape.lineTo(0.09, -0.01)
+        soleShape.lineTo(-0.07, -0.01)
+        const heelShape = new THREE.Shape()
+        heelShape.moveTo(-0.015, -0.02)
+        heelShape.lineTo(-0.015, -0.12)
+        heelShape.lineTo(0.015, -0.12)
+        heelShape.lineTo(0.015, -0.02)
+        heelShape.lineTo(-0.015, -0.02)
+        const upperExt = { depth: 0.08, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2 }
+        const soleExt = { depth: 0.09, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 2 }
+        const heelExt = { depth: 0.02, bevelEnabled: false }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.12, 0, 0.08]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.12, 0.06, 0.22]} />
+          <group position={[0, y + 0.02, -0.04]} scale={s}>
+            <mesh position={[-0.1, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[upperShape, upperExt]} />
             </mesh>
-            <mesh position={[-0.12, 0, 0.08]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.12, 0.06, 0.22]} />
+            <mesh position={[0.1, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[upperShape, upperExt]} />
             </mesh>
-            <mesh position={[0.12, 0.02, 0.16]} rotation={[-0.2, 0, 0]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.11, 0.04, 0.1]} />
+            <mesh position={[-0.1, -0.01, 0]} material={detailMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
-            <mesh position={[-0.12, 0.02, 0.16]} rotation={[-0.2, 0, 0]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.11, 0.04, 0.1]} />
+            <mesh position={[0.1, -0.01, 0]} material={detailMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
-            <mesh position={[0.12, -0.08, 0.14]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.015, 0.015, 0.1, 8]} />
+            <mesh position={[-0.06, -0.05, 0.035]} material={mainMat} castShadow>
+              <extrudeGeometry args={[heelShape, heelExt]} />
             </mesh>
-            <mesh position={[-0.12, -0.08, 0.14]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.015, 0.015, 0.1, 8]} />
+            <mesh position={[0.14, -0.05, 0.035]} material={mainMat} castShadow>
+              <extrudeGeometry args={[heelShape, heelExt]} />
             </mesh>
           </group>
         )
-      case 'loafers':
+      }
+      case 'loafers': {
+        const shoeShape = new THREE.Shape()
+        shoeShape.moveTo(-0.07, 0.03)
+        shoeShape.lineTo(-0.07, -0.01)
+        shoeShape.lineTo(-0.08, -0.03)
+        shoeShape.lineTo(0.08, -0.03)
+        shoeShape.quadraticCurveTo(0.12, 0.01, 0.09, 0.03)
+        shoeShape.lineTo(-0.07, 0.03)
+        const soleShape = new THREE.Shape()
+        soleShape.moveTo(-0.08, -0.01)
+        soleShape.lineTo(-0.08, -0.05)
+        soleShape.lineTo(0.09, -0.05)
+        soleShape.lineTo(0.09, -0.01)
+        soleShape.lineTo(-0.08, -0.01)
+        const shoeExt = { depth: 0.1, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 2 }
+        const soleExt = { depth: 0.11, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 2 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0.12, -0.02, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.14, 0.07, 0.26]} />
+          <group position={[0, y, -0.05]} scale={s}>
+            <mesh position={[-0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[shoeShape, shoeExt]} />
             </mesh>
-            <mesh position={[-0.12, -0.02, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.14, 0.07, 0.26]} />
+            <mesh position={[0.12, 0, 0]} material={mainMat} castShadow>
+              <extrudeGeometry args={[shoeShape, shoeExt]} />
             </mesh>
-            <mesh position={[0.12, 0.01, 0.14]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.1, 0.03, 0.1]} />
+            <mesh position={[-0.12, -0.02, 0]} material={detailMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
-            <mesh position={[-0.12, 0.01, 0.14]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.1, 0.03, 0.1]} />
+            <mesh position={[0.12, -0.02, 0]} material={detailMat} castShadow>
+              <extrudeGeometry args={[soleShape, soleExt]} />
             </mesh>
-            <mesh position={[0.12, -0.06, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.15, 0.03, 0.28]} />
+            <mesh position={[-0.12, 0.025, 0.04]} material={mainMat} castShadow>
+              <boxGeometry args={[0.06, 0.01, 0.04]} />
             </mesh>
-            <mesh position={[-0.12, -0.06, 0.06]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.15, 0.03, 0.28]} />
+            <mesh position={[0.12, 0.025, 0.04]} material={mainMat} castShadow>
+              <boxGeometry args={[0.06, 0.01, 0.04]} />
             </mesh>
           </group>
         )
-      case 'hat':
+      }
+      case 'hat': {
+        const brimShape = new THREE.Shape()
+        brimShape.absarc(0, 0, 0.38, 0, Math.PI * 2, false)
+        const holePath = new THREE.Path()
+        holePath.absarc(0, 0, 0.22, 0, Math.PI * 2, true)
+        brimShape.holes.push(holePath)
+        const crownShape = new THREE.Shape()
+        crownShape.absarc(0, 0, 0.22, 0, Math.PI * 2, false)
+        const brimExt = { depth: 0.04, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 2 }
+        const crownExt = { depth: 0.18, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3 }
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.22, 0.22, 0.18, 24]} />
+          <group position={[0, y - 0.06, 0]} scale={s}>
+            <mesh material={mainMat} castShadow rotation={[-Math.PI / 2, 0, 0]}>
+              <extrudeGeometry args={[brimShape, brimExt]} />
             </mesh>
-            <mesh position={[0, -0.06, 0]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.35, 0.36, 0.04, 24]} />
-            </mesh>
-            <mesh position={[0, 0.09, 0]} material={matRef.current} castShadow>
-              <sphereGeometry args={[0.22, 24, 12, 0, Math.PI * 2, 0, Math.PI / 3]} />
+            <mesh position={[0, 0.02, 0]} material={mainMat} castShadow rotation={[-Math.PI / 2, 0, 0]}>
+              <extrudeGeometry args={[crownShape, crownExt]} />
             </mesh>
           </group>
         )
-      case 'bag':
+      }
+      case 'bag': {
+        const bagShape = new THREE.Shape()
+        bagShape.moveTo(-0.12, -0.1)
+        bagShape.lineTo(-0.12, 0.1)
+        bagShape.quadraticCurveTo(-0.12, 0.12, -0.1, 0.12)
+        bagShape.lineTo(0.1, 0.12)
+        bagShape.quadraticCurveTo(0.12, 0.12, 0.12, 0.1)
+        bagShape.lineTo(0.12, -0.1)
+        bagShape.quadraticCurveTo(0.12, -0.12, 0.1, -0.12)
+        bagShape.lineTo(-0.1, -0.12)
+        bagShape.quadraticCurveTo(-0.12, -0.12, -0.12, -0.1)
+        const ext = { depth: 0.08, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.005, bevelSegments: 3 }
         return (
-          <group position={[0.5, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.08]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.26, 0.2, 0.1]} />
+          <group position={[0.52, y, 0]} scale={s}>
+            <mesh position={[0, 0, 0.04]} material={mainMat} castShadow>
+              <extrudeGeometry args={[bagShape, ext]} />
             </mesh>
-            <mesh position={[0, 0.15, 0.08]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.08, 0.015, 8, 16, Math.PI]} />
+            <mesh position={[0, 0.15, 0.06]} material={mainMat} castShadow>
+              <torusGeometry args={[0.07, 0.012, 8, 16, Math.PI]} />
             </mesh>
-            <mesh position={[0, 0.1, 0.13]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.08, 0.02, 0.02]} />
+            <mesh position={[0, 0.08, 0.09]} material={detailMat} castShadow>
+              <boxGeometry args={[0.06, 0.015, 0.015]} />
             </mesh>
           </group>
         )
-      case 'necklace':
+      }
+      case 'necklace': {
+        const chainPoints: THREE.Vector3[] = []
+        for (let i = 0; i <= 48; i++) {
+          const angle = (i / 48) * Math.PI
+          chainPoints.push(new THREE.Vector3(Math.cos(angle) * 0.18, -Math.sin(angle) * 0.12, 0))
+        }
+        const chainCurve = new THREE.CatmullRomCurve3(chainPoints)
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.2]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.16, 0.01, 8, 48, Math.PI]} />
+          <group position={[0, y - 0.1, 0.22]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <tubeGeometry args={[chainCurve, 48, 0.008, 8, false]} />
             </mesh>
-            <mesh position={[0, -0.14, 0.22]} material={matRef.current} castShadow>
-              <octahedronGeometry args={[0.03, 0]} />
+            <mesh position={[0, -0.12, 0]} material={mainMat} castShadow>
+              <octahedronGeometry args={[0.035, 1]} />
             </mesh>
-            <mesh position={[0, -0.1, 0.21]} material={matRef.current} castShadow>
-              <cylinderGeometry args={[0.003, 0.003, 0.06, 6]} />
+            <mesh position={[0, -0.08, 0]} material={mainMat} castShadow>
+              <cylinderGeometry args={[0.005, 0.005, 0.06, 6]} />
             </mesh>
           </group>
         )
-      case 'bracelet':
+      }
+      case 'bracelet': {
         return (
-          <group position={[0.5, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0]} rotation={[0.3, 0, 0]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.06, 0.012, 8, 32]} />
+          <group position={[0.52, y, 0.05]} scale={s}>
+            <mesh material={mainMat} castShadow rotation={[0.3, 0, 0]}>
+              <torusGeometry args={[0.065, 0.015, 12, 32]} />
+            </mesh>
+            <mesh position={[0.065, 0, 0]} material={mainMat} castShadow>
+              <sphereGeometry args={[0.018, 12, 12]} />
             </mesh>
           </group>
         )
-      case 'scarf':
+      }
+      case 'scarf': {
+        const wrapPoints: THREE.Vector3[] = []
+        for (let i = 0; i <= 40; i++) {
+          const angle = (i / 40) * Math.PI * 1.5 - Math.PI * 0.25
+          wrapPoints.push(new THREE.Vector3(Math.cos(angle) * 0.2, Math.sin(angle) * 0.06, 0))
+        }
+        const wrapCurve = new THREE.CatmullRomCurve3(wrapPoints)
         return (
-          <group position={[0, y, 0]} scale={s}>
-            <mesh position={[0, 0, 0.14]} material={matRef.current} castShadow>
-              <torusGeometry args={[0.17, 0.04, 8, 24, Math.PI * 1.6]} />
+          <group position={[0, y - 0.15, 0.18]} scale={s}>
+            <mesh material={mainMat} castShadow>
+              <tubeGeometry args={[wrapCurve, 40, 0.04, 12, false]} />
             </mesh>
-            <mesh position={[0.12, -0.15, 0.1]} rotation={[0.2, 0, 0.3]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.1, 0.3, 0.025]} />
+            <mesh position={[0.15, -0.18, -0.08]} rotation={[0.2, 0, 0.3]} material={mainMat} castShadow>
+              <boxGeometry args={[0.08, 0.28, 0.02]} />
             </mesh>
-            <mesh position={[-0.1, -0.12, 0.08]} rotation={[0.15, 0, -0.2]} material={matRef.current} castShadow>
-              <boxGeometry args={[0.1, 0.25, 0.025]} />
+            <mesh position={[-0.1, -0.14, -0.06]} rotation={[0.15, 0, -0.2]} material={mainMat} castShadow>
+              <boxGeometry args={[0.08, 0.22, 0.02]} />
             </mesh>
           </group>
         )
+      }
       default:
         return null
     }
@@ -430,15 +689,6 @@ function ClothingMesh({ selected, category }: ClothingMeshProps) {
 
   return (
     <group ref={groupRef} visible={visible || currentOpacity.current > 0.01}>
-      <meshStandardMaterial
-        ref={matRef}
-        color={selected?.color || '#ffffff'}
-        roughness={0.55}
-        metalness={0.08}
-        transparent
-        opacity={currentOpacity.current}
-        side={THREE.DoubleSide}
-      />
       {renderShape()}
     </group>
   )

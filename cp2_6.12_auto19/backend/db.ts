@@ -95,7 +95,15 @@ function queryAll<T>(sql: string, params: any[] = []): T[] {
   stmt.bind(params)
   const results: T[] = []
   while (stmt.step()) {
-    results.push(stmt.getAsObject() as T)
+    const row = stmt.getAsObject() as Record<string, any>
+    const fixed: Record<string, any> = {}
+    for (const key of Object.keys(row)) {
+      fixed[key] = row[key]
+    }
+    if ('likes' in fixed && typeof fixed.likes === 'string') {
+      fixed.likes = parseInt(fixed.likes, 10) || 0
+    }
+    results.push(fixed as T)
   }
   stmt.free()
   return results
@@ -124,12 +132,13 @@ export const insertOutfit = (
   accessoryColor: string | null,
   thumbnail: string | null
 ): OutfitRecord => {
+  const now = new Date().toISOString()
   run(
     `INSERT INTO outfits (
       id, name, top_style, top_color, bottom_style, bottom_color,
-      shoes_style, shoes_color, accessory_style, accessory_color, thumbnail
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, name, topStyle, topColor, bottomStyle, bottomColor, shoesStyle, shoesColor, accessoryStyle, accessoryColor, thumbnail]
+      shoes_style, shoes_color, accessory_style, accessory_color, thumbnail, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, topStyle, topColor, bottomStyle, bottomColor, shoesStyle, shoesColor, accessoryStyle, accessoryColor, thumbnail, now]
   )
   return getOutfitById(id)!
 }
@@ -171,7 +180,7 @@ export const toggleLike = (
     const outfit = getOutfitById(outfitId)!
     return { likes: outfit.likes, isLiked: false }
   } else {
-    run('INSERT INTO likes (id, outfit_id, user_id) VALUES (?, ?, ?)', [likeId, outfitId, userId])
+    run('INSERT INTO likes (id, outfit_id, user_id, created_at) VALUES (?, ?, ?, ?)', [likeId, outfitId, userId, new Date().toISOString()])
     run('UPDATE outfits SET likes = likes + 1 WHERE id = ?', [outfitId])
     const outfit = getOutfitById(outfitId)!
     return { likes: outfit.likes, isLiked: true }

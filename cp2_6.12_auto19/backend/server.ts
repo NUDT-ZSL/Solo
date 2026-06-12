@@ -83,7 +83,11 @@ app.post('/api/outfits', (req, res) => {
 
 app.get('/api/outfits', (_req, res) => {
   try {
-    const outfits = getOutfits(20)
+    const rawOutfits = getOutfits(20)
+    const outfits = rawOutfits.map(o => ({
+      ...o,
+      created_at: o.created_at || new Date().toISOString()
+    }))
     res.json({
       success: true,
       data: outfits
@@ -109,9 +113,23 @@ app.get('/api/outfits/:id', (req, res) => {
       })
     }
 
+    const responseData = {
+      ...outfit,
+      created_at: outfit.created_at || new Date().toISOString(),
+      top_style: outfit.top_style || '',
+      top_color: outfit.top_color || '',
+      bottom_style: outfit.bottom_style || '',
+      bottom_color: outfit.bottom_color || '',
+      shoes_style: outfit.shoes_style || '',
+      shoes_color: outfit.shoes_color || '',
+      accessory_style: outfit.accessory_style || null,
+      accessory_color: outfit.accessory_color || null,
+      thumbnail: outfit.thumbnail || null
+    }
+
     res.json({
       success: true,
-      data: outfit
+      data: responseData
     })
   } catch (error) {
     console.error('获取搭配详情失败:', error)
@@ -204,8 +222,11 @@ app.get('/api/outfits/:id/likes', (req, res) => {
 app.get('/api/likes/:userId', (req, res) => {
   try {
     const { userId } = req.params
-    const outfits = getLikedOutfits(userId)
-
+    const rawOutfits = getLikedOutfits(userId)
+    const outfits = rawOutfits.map(o => ({
+      ...o,
+      created_at: o.created_at || new Date().toISOString()
+    }))
     res.json({
       success: true,
       data: outfits
