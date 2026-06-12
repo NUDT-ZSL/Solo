@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { tasksDB, Task } from '../models/db.js';
+import { tasksDB, Task } from '../models/db.ts';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';

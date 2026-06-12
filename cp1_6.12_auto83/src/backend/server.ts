@@ -2,8 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import goalsRouter from './routes/goals.js';
-import tasksRouter from './routes/tasks.js';
+import goalsRouter from './routes/goals.ts';
+import tasksRouter from './routes/tasks.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

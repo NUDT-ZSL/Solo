@@ -214,7 +214,7 @@ export default function GoalTree({ tree, members, highlightTaskId, completedTask
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, rect.width, rect.height);
 
-      const branchesRef.current.forEach((b) => {
+      branchesRef.current.forEach((b) => {
         const thickness = Math.max(2, 9 - b.level * 2);
 
         ctx.beginPath();
@@ -304,7 +304,7 @@ export default function GoalTree({ tree, members, highlightTaskId, completedTask
                 .split('')
                 .reduce((acc, c) => acc + c.charCodeAt(0).toString(16), '')
                 .padEnd(6, 'f')
-                .slice(0, 6);
+                .slice(0, 6));
             ctx.fill();
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 8px sans-serif';
@@ -357,7 +357,7 @@ export default function GoalTree({ tree, members, highlightTaskId, completedTask
     };
     animRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animRef.current);
-  }, [memberMap, highlightTaskId]);
+  }, [tree, memberMap, highlightTaskId]);
 
   return (
     <canvas

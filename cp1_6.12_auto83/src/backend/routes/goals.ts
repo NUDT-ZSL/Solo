@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { goalsDB, tasksDB, membersDB, usersDB, generateInviteCode, Goal, Task, Member } from '../models/db.js';
+import { goalsDB, tasksDB, membersDB, usersDB, generateInviteCode, Goal, Task, Member } from '../models/db.ts';
 
 const router = Router();
 
