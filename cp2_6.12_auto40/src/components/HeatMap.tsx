@@ -42,8 +42,7 @@ export default function HeatMap({ data, range }: HeatMapProps) {
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
-  const { weeks, startDate } = useMemo(() => {
-    const dates = [...new Set(data.map((d) => d.date))].sort();
+  const { weeks } = useMemo(() => {
     let start: Date;
     let totalWeeks: number;
 
@@ -74,12 +73,12 @@ export default function HeatMap({ data, range }: HeatMapProps) {
       }
       weeksArr.push(week);
     }
-    void dates;
     return { weeks: weeksArr, startDate: start };
   }, [data, range]);
 
   useEffect(() => {
-    if (!svgRef.current || data.length === 0) return;
+    if (!svgRef.current) return;
+    if (!data || data.length === 0) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
@@ -90,9 +89,6 @@ export default function HeatMap({ data, range }: HeatMapProps) {
     const labelWidth = 90;
     const topPadding = 30;
     const leftPadding = 10;
-
-    const totalCells = weeks.length * 7;
-    void totalCells;
 
     const maxCount = Math.max(1, ...data.map((d) => d.count));
 
@@ -152,7 +148,10 @@ export default function HeatMap({ data, range }: HeatMapProps) {
             .attr('rx', 4)
             .attr('fill', count === 0 ? 'rgba(255,255,255,0.04)' : colorScale(count))
             .attr('stroke', 'rgba(255,255,255,0.05)')
-            .attr('stroke-width', 0.5);
+            .attr('stroke-width', 0.5)
+            .attr('data-date', date)
+            .attr('data-slot', TIME_SLOTS[t].label)
+            .attr('data-count', count);
 
           cell
             .on('mouseenter', function (event) {
@@ -162,7 +161,7 @@ export default function HeatMap({ data, range }: HeatMapProps) {
                 visible: true,
                 x: x + 12,
                 y: y - 10,
-                date: date,
+                date,
                 timeOfDay: TIME_SLOTS[t].label,
                 count
               });
@@ -189,10 +188,26 @@ export default function HeatMap({ data, range }: HeatMapProps) {
 
   const svgHeight = TIME_SLOTS.length * 27 + 60;
 
-  const maxCount = Math.max(1, ...data.map((d) => d.count));
+  const maxCount = data.length > 0 ? Math.max(1, ...data.map((d) => d.count)) : 1;
   const legendSteps = [0, 0.25, 0.5, 0.75, 1].map((t) =>
     d3.interpolateRgbBasis(['#1e3a5f', '#2a5298', '#4a90d9', '#64b5f6', '#90caf9'])(t)
   );
+
+  if (!data || data.length === 0) {
+    return (
+      <div ref={containerRef} style={{ position: 'relative' }}>
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          color: 'var(--text-secondary)'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+          <h3 style={{ marginBottom: '8px' }}>暂无打卡数据</h3>
+          <p>开始打卡后，热力图将展示你的习惯分布</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
@@ -212,7 +227,7 @@ export default function HeatMap({ data, range }: HeatMapProps) {
               key={i}
               className="heatmap-legend-step"
               style={{ background: color }}
-              title={String(Math.round(maxCount * (i / (legendSteps.length - 1))))}
+              data-tooltip={String(Math.round(maxCount * (i / (legendSteps.length - 1))))}
             />
           ))}
         </div>

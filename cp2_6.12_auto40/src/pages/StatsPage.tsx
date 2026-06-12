@@ -1,21 +1,78 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Component } from 'react';
 import HeatMap from '../components/HeatMap';
 import { getStats } from '../api/habits';
 import type { TimeRange, StatsDataPoint } from '../types';
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class StatsErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          background: 'var(--bg-card)',
+          borderRadius: '20px',
+          border: '1px solid var(--border)'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <h3 style={{ marginBottom: '8px' }}>统计图表渲染出错</h3>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+            {this.state.error?.message || '未知错误'}
+          </p>
+          <button
+            className="add-habit-btn"
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ margin: '0 auto' }}
+          >
+            重新尝试
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function StatsPage() {
   const [range, setRange] = useState<TimeRange>('weekly');
   const [data, setData] = useState<StatsDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
+      setError(null);
       try {
         const res = await getStats(range);
-        setData(res[range] || []);
+        if (!res || !res[range]) {
+          setError('服务器返回了无效数据');
+          setData([]);
+          return;
+        }
+        setData(res[range]);
       } catch (err) {
-        console.error('加载统计数据失败:', err);
+        const message = err instanceof Error ? err.message : '网络错误，请检查后端服务是否启动';
+        setError(message);
+        setData([]);
       } finally {
         setLoading(false);
       }
@@ -72,12 +129,32 @@ export default function StatsPage() {
         <h3 className="heatmap-title">
           {range === 'weekly' ? '本周' : range === 'monthly' ? '本月' : '本季度'} · 打卡热力图
         </h3>
+
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-secondary)' }}>
             加载中...
           </div>
+        ) : error ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '60px 20px',
+            color: 'var(--text-secondary)'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+            <h3 style={{ marginBottom: '8px' }}>加载失败</h3>
+            <p style={{ marginBottom: '16px' }}>{error}</p>
+            <button
+              className="add-habit-btn"
+              onClick={() => setRange(range)}
+              style={{ margin: '0 auto' }}
+            >
+              重试
+            </button>
+          </div>
         ) : (
-          <HeatMap data={data} range={range} />
+          <StatsErrorBoundary>
+            <HeatMap data={data} range={range} />
+          </StatsErrorBoundary>
         )}
       </div>
     </div>

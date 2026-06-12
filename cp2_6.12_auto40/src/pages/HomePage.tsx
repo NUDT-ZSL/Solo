@@ -10,6 +10,7 @@ interface HomePageProps {
 export default function HomePage({ onAddClick }: HomePageProps) {
   const [habits, setHabits] = useState<HabitProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dataReady, setDataReady] = useState(false);
   const [newHabitIds, setNewHabitIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -17,6 +18,7 @@ export default function HomePage({ onAddClick }: HomePageProps) {
     try {
       const data = await fetchHabits();
       setHabits(data);
+      setDataReady(true);
     } catch (err) {
       console.error('加载习惯失败:', err);
     } finally {
@@ -151,6 +153,7 @@ export default function HomePage({ onAddClick }: HomePageProps) {
                 data={h}
                 index={i}
                 isNew={newHabitIds.has(h.habit.id)}
+                dataReady={dataReady}
                 onCheckedIn={handleCheckedIn}
               />
             ))}

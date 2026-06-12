@@ -33,20 +33,44 @@ const DB_PATH = path.join(DATA_DIR, 'habit-tracker.db');
 
 let db: Database;
 
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
 const saveDbToFile = () => {
   try {
+    if (!db) return;
     const data = db.export();
     const buffer = Buffer.from(data);
-    fs.writeFileSync(DB_PATH, buffer);
+    const tmpPath = DB_PATH + '.tmp';
+    fs.writeFileSync(tmpPath, buffer);
+    fs.renameSync(tmpPath, DB_PATH);
   } catch (err) {
     console.error('保存数据库失败:', err);
   }
 };
 
-setInterval(saveDbToFile, 30000);
-process.on('SIGINT', () => {
+const scheduleSave = () => {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveDbToFile();
+    saveTimer = null;
+  }, 500);
+};
+
+const gracefulShutdown = () => {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
   saveDbToFile();
+  console.log('💾 数据库已持久化保存');
   process.exit(0);
+};
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGHUP', gracefulShutdown);
+process.on('beforeExit', () => {
+  saveDbToFile();
 });
 
 const initDatabase = async () => {
@@ -57,7 +81,16 @@ const initDatabase = async () => {
 
   let buffer: Buffer | null = null;
   if (fs.existsSync(DB_PATH)) {
-    buffer = fs.readFileSync(DB_PATH);
+    try {
+      const raw = fs.readFileSync(DB_PATH);
+      if (raw.length > 0) {
+        buffer = raw;
+        console.log(`📂 从磁盘加载数据库: ${DB_PATH} (${raw.length} bytes)`);
+      }
+    } catch (err) {
+      console.error('读取数据库文件失败，将创建新数据库:', err);
+      buffer = null;
+    }
   }
 
   db = buffer ? new SQL.Database(buffer) : new SQL.Database();
@@ -87,7 +120,11 @@ const initDatabase = async () => {
   try {
     db.exec('CREATE INDEX IF NOT EXISTS idx_checkins_habit_date ON checkins(habitId, date)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_checkins_date_time ON checkins(date, timeOfDay)');
-  } catch (e) {}
+  } catch (_e) {}
+
+  setInterval(() => {
+    saveDbToFile();
+  }, 30000);
 };
 
 const execQuery = <T = any>(sql: string, params: any[] = []): T[] => {
@@ -241,7 +278,7 @@ const seedSampleData = () => {
   });
 
   saveDbToFile();
-  console.log('✅ 已生成示例数据');
+  console.log('✅ 已生成示例数据并持久化到磁盘');
 };
 
 app.get('/api/habits', (_req, res) => {
@@ -307,7 +344,7 @@ app.post('/api/habits', (req, res) => {
       ]
     );
 
-    saveDbToFile();
+    scheduleSave();
 
     const habit: Habit = {
       id,
@@ -336,7 +373,7 @@ app.delete('/api/habits/:id', (req, res) => {
     }
     runSql('DELETE FROM checkins WHERE habitId = ?', [id]);
     runSql('DELETE FROM habits WHERE id = ?', [id]);
-    saveDbToFile();
+    scheduleSave();
     res.status(204).send();
   } catch (err) {
     console.error(err);
@@ -368,7 +405,7 @@ app.post('/api/habits/:id/checkin', (req, res) => {
       [checkIn.id, checkIn.habitId, checkIn.date, checkIn.value, checkIn.timeOfDay, checkIn.completedAt]
     );
 
-    saveDbToFile();
+    scheduleSave();
     res.status(201).json(checkIn);
   } catch (err) {
     console.error(err);
