@@ -43,4 +43,5 @@ export interface WorksResponse {
   total: number;
   page: number;
   pageSize: number;
+  limit: number;
 }

@@ -6,10 +6,10 @@ const router = express.Router();
 router.get('/works', async (req, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const pageSize = parseInt(req.query.pageSize as string) || 8;
+    const limit = parseInt(req.query.limit as string) || 8;
     const category = req.query.category as string | undefined;
 
-    const result = await getWorks(page, pageSize, category);
+    const result = await getWorks(page, limit, category);
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: '获取作品列表失败' });

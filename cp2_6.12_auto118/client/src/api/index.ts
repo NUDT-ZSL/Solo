@@ -7,8 +7,8 @@ const api = axios.create({
 });
 
 export const worksApi = {
-  getWorks: (page: number = 1, pageSize: number = 8, category?: string) => {
-    const params: Record<string, string | number> = { page, pageSize };
+  getWorks: (page: number = 1, limit: number = 8, category?: string) => {
+    const params: Record<string, string | number> = { page, limit };
     if (category && category !== '全部') params.category = category;
     return api.get<ApiResponse<WorksResponse>>('/works', { params });
   },

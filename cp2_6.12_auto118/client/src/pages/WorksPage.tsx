@@ -17,7 +17,7 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
   const [category, setCategory] = useState<typeof categories[number]>('全部');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [flyingCart, setFlyingCart] = useState<{ id: string; startX: number; startY: number } | null>(null);
+  const [flyingItem, setFlyingItem] = useState<{ id: string; x: number; y: number } | null>(null);
   const [filterKey, setFilterKey] = useState(0);
 
   const loadWorks = useCallback(async () => {
@@ -44,20 +44,19 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
     loadWorks();
   }, [loadWorks]);
 
-  const handleAddToCart = (work: Work, event: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setFlyingCart({
-      id: work.id + Date.now(),
-      startX: rect.left + rect.width / 2,
-      startY: rect.top + rect.height / 2
+  const handleAddToCart = (work: Work, e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setFlyingItem({
+      id: `${work.id}-${Date.now()}`,
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
     });
     onAddToCart(work);
-
-    setTimeout(() => setFlyingCart(null), 500);
+    setTimeout(() => setFlyingItem(null), 500);
   };
 
   const isInCart = (workId: string) => cartItems.some(item => item.work.id === workId);
-  const cartTotalCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="page-container" style={{ paddingTop: 32, paddingBottom: 80 }}>
@@ -86,7 +85,9 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
               fontWeight: category === cat ? 600 : 500,
               backgroundColor: category === cat ? '#8B5E3C' : 'white',
               color: category === cat ? 'white' : '#4a3728',
-              boxShadow: category === cat ? '0 2px 8px rgba(139, 94, 60, 0.3)' : '0 1px 3px rgba(0,0,0,0.08)'
+              boxShadow: category === cat ? '0 2px 8px rgba(139, 94, 60, 0.3)' : '0 1px 3px rgba(0,0,0,0.08)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
             }}
           >
             {cat}
@@ -106,7 +107,7 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => (
               <motion.div
-                key={`skeleton-${filterKey}-${i}`}
+                key={`sk-${filterKey}-${i}`}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -128,16 +129,16 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
                 color: '#999'
               }}
             >
-              <p>暂无该分类作品</p>
+              暂无该分类作品
             </div>
           ) : (
-            works.map((work, index) => (
+            works.map((work, idx) => (
               <WorkCard
                 key={`${filterKey}-${work.id}`}
                 work={work}
-                index={index}
+                index={idx}
                 inCart={isInCart(work.id)}
-                onAddToCart={handleAddToCart}
+                onAdd={handleAddToCart}
               />
             ))
           )}
@@ -165,31 +166,38 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
               color: page === 1 ? '#ccc' : '#4a3728',
               fontWeight: 600,
               fontSize: 14,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              cursor: page === 1 ? 'not-allowed' : 'pointer'
             }}
           >
             ‹
           </button>
-          {Array.from({ length: totalPages }).map((_, i) => (
-            <button
-              key={i + 1}
-              onClick={() => setPage(i + 1)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                backgroundColor: page === i + 1 ? '#4a3728' : 'white',
-                color: page === i + 1 ? 'white' : '#4a3728',
-                fontWeight: 600,
-                fontSize: 14,
-                boxShadow: page === i + 1
-                  ? '0 2px 8px rgba(74, 55, 40, 0.3)'
-                  : '0 1px 3px rgba(0,0,0,0.08)'
-              }}
-            >
-              {i + 1}
-            </button>
-          ))}
+          {Array.from({ length: totalPages }).map((_, i) => {
+            const pageNum = i + 1;
+            const isActive = page === pageNum;
+            return (
+              <button
+                key={pageNum}
+                onClick={() => setPage(pageNum)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  backgroundColor: isActive ? '#4a3728' : 'white',
+                  color: isActive ? 'white' : '#4a3728',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  boxShadow: isActive
+                    ? '0 2px 8px rgba(74, 55, 40, 0.3)'
+                    : '0 1px 3px rgba(0,0,0,0.08)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
           <button
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
@@ -201,7 +209,8 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
               color: page === totalPages ? '#ccc' : '#4a3728',
               fontWeight: 600,
               fontSize: 14,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              cursor: page === totalPages ? 'not-allowed' : 'pointer'
             }}
           >
             ›
@@ -210,24 +219,26 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
       )}
 
       <AnimatePresence>
-        {flyingCart && (
+        {flyingItem && (
           <motion.div
-            key={flyingCart.id}
+            key={flyingItem.id}
             initial={{
-              x: flyingCart.startX - 16,
-              y: flyingCart.startY - 16,
-              opacity: 1,
-              scale: 1
+              x: flyingItem.x - 16,
+              y: flyingItem.y - 16,
+              scale: 1,
+              opacity: 1
             }}
             animate={{
-              x: typeof window !== 'undefined' ? window.innerWidth - 60 : 0,
+              x: typeof window !== 'undefined' ? window.innerWidth - 58 : 0,
               y: 44,
-              opacity: 0,
-              scale: 0.3
+              scale: 0.3,
+              opacity: 0
             }}
             transition={{ duration: 0.5, ease: [0.5, 0, 0.75, 0] }}
             style={{
               position: 'fixed',
+              left: 0,
+              top: 0,
               width: 32,
               height: 32,
               borderRadius: '50%',
@@ -235,10 +246,8 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              zIndex: 9999,
               pointerEvents: 'none',
-              left: 0,
-              top: 0
+              zIndex: 9999
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -250,7 +259,7 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
         )}
       </AnimatePresence>
 
-      {cartTotalCount > 0 && (
+      {cartTotal > 0 && (
         <motion.div
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -294,7 +303,7 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
               justifyContent: 'center'
             }}
           >
-            {cartTotalCount > 99 ? '99+' : cartTotalCount}
+            {cartTotal > 99 ? '99+' : cartTotal}
           </span>
         </motion.div>
       )}
@@ -334,44 +343,42 @@ interface WorkCardProps {
   work: Work;
   index: number;
   inCart: boolean;
-  onAddToCart: (work: Work, e: React.MouseEvent<HTMLButtonElement>) => void;
+  onAdd: (work: Work, e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
-const WorkCard = ({ work, index, inCart, onAddToCart }: WorkCardProps) => {
+const WorkCard = ({ work, index, inCart, onAdd }: WorkCardProps) => {
   const imgRef = useRef<HTMLImageElement>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!imgRef.current) return;
+    const img = imgRef.current;
 
     if ('IntersectionObserver' in window) {
       const observer = new IntersectionObserver(
         entries => {
           entries.forEach(entry => {
-            if (entry.isIntersecting && imgRef.current) {
-              const src = imgRef.current.dataset.src;
-              if (src) {
-                imgRef.current.src = src;
-                imgRef.current.removeAttribute('data-src');
+            if (entry.isIntersecting) {
+              const dataSrc = img.getAttribute('data-src');
+              if (dataSrc && img.src !== dataSrc) {
+                img.src = dataSrc;
               }
-              observer.unobserve(imgRef.current);
+              observer.unobserve(img);
             }
           });
         },
         { rootMargin: '200px 0px' }
       );
-      observer.observe(imgRef.current);
+      observer.observe(img);
       return () => observer.disconnect();
     } else {
-      if (imgRef.current?.dataset.src) {
-        imgRef.current.src = imgRef.current.dataset.src;
-      }
+      const dataSrc = img.getAttribute('data-src');
+      if (dataSrc) img.src = dataSrc;
     }
   }, [work.image]);
 
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
@@ -382,18 +389,17 @@ const WorkCard = ({ work, index, inCart, onAddToCart }: WorkCardProps) => {
         borderRadius: 12,
         backgroundColor: 'white',
         overflow: 'hidden',
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.06)',
         position: 'relative',
         cursor: 'pointer',
-        willChange: 'transform',
-        contain: 'content',
-        transition: 'box-shadow 0.3s ease'
+        willChange: 'transform, box-shadow',
+        contain: 'content'
       }}
       onMouseEnter={e => {
         (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.14)';
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.06)';
       }}
     >
       <div
@@ -436,6 +442,7 @@ const WorkCard = ({ work, index, inCart, onAddToCart }: WorkCardProps) => {
           }}
         />
       </div>
+
       <div style={{ padding: 16 }}>
         <div
           style={{
@@ -490,7 +497,7 @@ const WorkCard = ({ work, index, inCart, onAddToCart }: WorkCardProps) => {
           <button
             onClick={e => {
               e.stopPropagation();
-              onAddToCart(work, e);
+              onAdd(work, e);
             }}
             style={{
               padding: '8px 14px',
@@ -501,7 +508,9 @@ const WorkCard = ({ work, index, inCart, onAddToCart }: WorkCardProps) => {
               color: 'white',
               display: 'flex',
               alignItems: 'center',
-              gap: 4
+              gap: 4,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
