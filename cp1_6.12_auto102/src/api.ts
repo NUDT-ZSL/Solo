@@ -43,7 +43,7 @@ const api = axios.create({
 });
 
 export async function importOrders(csvContent: string): Promise<ImportResult> {
-  const res = await api.post('/orders/import', { csvContent });
+  const res = await api.post('/import', { csvContent });
   return res.data;
 }
 

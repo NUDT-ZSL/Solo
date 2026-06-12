@@ -122,6 +122,58 @@ function parseCSVLine(line: string): string[] {
   return result.map((f) => f.replace(/^"|"$/g, '').trim());
 }
 
+app.post('/api/import', (req, res) => {
+  try {
+    const { csvContent } = req.body;
+    if (!csvContent || typeof csvContent !== 'string') {
+      return res.status(400).json({ error: '缺少 csvContent 参数' });
+    }
+
+    const rows = parseCSV(csvContent);
+    if (rows.length === 0) {
+      return res.json({ success: 0, failed: 0, message: '没有可导入的数据' });
+    }
+
+    const insertOrder = db.prepare(
+      'INSERT OR IGNORE INTO orders (order_id, customer_name) VALUES (?, ?)'
+    );
+    const insertItem = db.prepare(
+      'INSERT INTO items (order_id, item_name, qty, picked_qty) VALUES (?, ?, ?, 0)'
+    );
+    const checkOrderExists = db.prepare(
+      'SELECT order_id FROM orders WHERE order_id = ?'
+    );
+
+    const tx = db.transaction((parsedRows: ParsedCSVRow[]) => {
+      let success = 0;
+      let failed = 0;
+      for (const row of parsedRows) {
+        try {
+          const existing = checkOrderExists.get(row.order_id) as
+            | { order_id: string }
+            | undefined;
+          if (!existing) {
+            insertOrder.run(row.order_id, row.customer_name);
+          }
+          for (const item of row.items) {
+            insertItem.run(row.order_id, item.name, item.qty);
+          }
+          success++;
+        } catch {
+          failed++;
+        }
+      }
+      return { success, failed };
+    });
+
+    const result = tx(rows);
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '导入失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 app.post('/api/orders/import', (req, res) => {
   try {
     const { csvContent } = req.body;
