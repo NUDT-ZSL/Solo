@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import EditorCanvas from './EditorCanvas';
 import PreviewRunner from './PreviewRunner';
 import Panel from './components/Panel';
@@ -14,6 +14,7 @@ const App: React.FC = () => {
   const [levelListRefresh, setLevelListRefresh] = useState(0);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [draggingType, setDraggingType] = useState<ElementType | null>(null);
 
   const isNarrow = windowWidth < 1400;
   const canvasScale = isNarrow ? 0.6 : 1;
@@ -71,8 +72,13 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleDragStart = useCallback((_type: ElementType) => {
+  const handleDragStart = useCallback((type: ElementType) => {
+    setDraggingType(type);
     setIsPreviewRunning(false);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingType(null);
   }, []);
 
   const handleTogglePreview = useCallback(() => {
@@ -226,130 +232,4 @@ const App: React.FC = () => {
           ) : (
             <>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="8,5 19,12 8,19" />
-              </svg>
-              开始预览
-            </>
-          )}
-        </button>
-
-        <div style={{ flex: 1 }} />
-
-        {saveMessage && (
-          <span
-            style={{
-              color: saveMessage.includes('成功') ? '#22c55e' : '#ef4444',
-              fontSize: 13,
-              fontWeight: 500,
-              animation: 'fadeIn 0.2s ease',
-            }}
-          >
-            {saveMessage}
-          </span>
-        )}
-
-        <input
-          type="text"
-          value={levelName}
-          onChange={(e) => setLevelName(e.target.value)}
-          placeholder="关卡名称"
-          style={{
-            width: 200,
-            padding: '8px 12px',
-            background: '#1a1a1e',
-            color: '#ffffff',
-            border: '2px solid #3b82f6',
-            borderRadius: 8,
-            fontSize: 13,
-            outline: 'none',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = '#60a5fa';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = '#3b82f6';
-          }}
-        />
-
-        <span
-          style={{
-            color: '#6b7280',
-            fontSize: 12,
-          }}
-        >
-          元素: {elements.length}
-        </span>
-      </div>
-
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ width: panelWidth, flexShrink: 0, borderRight: '1px solid #2e2e32' }}>
-          <Panel onDragStart={handleDragStart} />
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-            overflow: 'auto',
-            background: '#16161a',
-          }}
-        >
-          <EditorCanvas
-            elements={elements}
-            onElementsChange={setElements}
-            scale={canvasScale}
-          />
-        </div>
-
-        <div style={{ width: listWidth, flexShrink: 0 }}>
-          <LevelList
-            onLoadLevel={handleLoadLevel}
-            currentLevelId={currentLevelId}
-            refreshTrigger={levelListRefresh}
-          />
-        </div>
-
-        <div style={{ flexShrink: 0 }}>
-          <PreviewRunner
-            elements={elements}
-            isRunning={isPreviewRunning}
-            onStop={handleStopPreview}
-            width={previewWidth}
-          />
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        ::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-          background: #1a1a1e;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #3a3a3e;
-          border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #4a4a4e;
-        }
-      `}</style>
-    </div>
-  );
-};
-
-export default App;
+                <pol
