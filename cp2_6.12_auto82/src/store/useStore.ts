@@ -8,6 +8,8 @@ export interface ArtworkItem {
   rotation: [number, number, number];
   scale: number;
   color?: string;
+  isNew?: boolean;
+  importStartPos?: [number, number, number];
 }
 
 export interface LightItem {
@@ -36,8 +38,12 @@ interface GalleryState {
   showDeleteConfirm: boolean;
   importProgress: number;
   isImporting: boolean;
+  isPickingLightTarget: boolean;
+  pickingLightId: string | null;
+  dragTrail: [number, number, number][];
+  introAnimationDone: boolean;
 
-  addArtwork: (artwork: Omit<ArtworkItem, 'id'>) => void;
+  addArtwork: (artwork: Omit<ArtworkItem, 'id'>) => string;
   removeArtwork: (id: string) => void;
   updateArtwork: (id: string, updates: Partial<ArtworkItem>) => void;
   selectArtwork: (id: string | null) => void;
@@ -49,11 +55,19 @@ interface GalleryState {
   updateLight: (id: string, updates: Partial<LightItem>) => void;
   setImportProgress: (progress: number) => void;
   setIsImporting: (importing: boolean) => void;
+  setIsPickingLightTarget: (picking: boolean, lightId?: string | null) => void;
+  setDragTrail: (trail: [number, number, number][]) => void;
+  setIntroAnimationDone: (done: boolean) => void;
   importGallery: (data: { artworks: ArtworkItem[]; lights: LightItem[] }) => void;
   exportGallery: () => { artworks: ArtworkItem[]; lights: LightItem[] };
+  clearNewFlags: () => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11);
+
+const ROOM_WIDTH = 20;
+const ROOM_DEPTH = 15;
+const ROOM_HEIGHT = 6;
 
 const defaultLights: LightItem[] = [
   {
@@ -125,11 +139,18 @@ export const useStore = create<GalleryState>((set, get) => ({
   showDeleteConfirm: false,
   importProgress: 0,
   isImporting: false,
+  isPickingLightTarget: false,
+  pickingLightId: null,
+  dragTrail: [],
+  introAnimationDone: false,
 
-  addArtwork: (artwork) =>
+  addArtwork: (artwork) => {
+    const id = generateId();
     set((state) => ({
-      artworks: [...state.artworks, { ...artwork, id: generateId() }],
-    })),
+      artworks: [...state.artworks, { ...artwork, id, isNew: true }],
+    }));
+    return id;
+  },
 
   removeArtwork: (id) =>
     set((state) => ({
@@ -171,17 +192,52 @@ export const useStore = create<GalleryState>((set, get) => ({
 
   setIsImporting: (importing) => set({ isImporting: importing }),
 
-  importGallery: (data) =>
+  setIsPickingLightTarget: (picking, lightId = null) =>
+    set({ isPickingLightTarget: picking, pickingLightId: lightId }),
+
+  setDragTrail: (trail) => set({ dragTrail: trail }),
+
+  setIntroAnimationDone: (done) => set({ introAnimationDone: done }),
+
+  importGallery: (data) => {
+    const scatteredArtworks = data.artworks.map((a, i) => {
+      const angle = (i / data.artworks.length) * Math.PI * 2;
+      const radius = 8;
+      return {
+        ...a,
+        id: generateId(),
+        isNew: true,
+        importStartPos: [
+          Math.cos(angle) * radius,
+          0.5,
+          Math.sin(angle) * radius,
+        ] as [number, number, number],
+        position: [
+            Math.cos(angle) * radius,
+            0.5,
+            Math.sin(angle) * radius,
+          ] as [number, number, number],
+      };
+    });
+
     set({
-      artworks: data.artworks.map((a) => ({ ...a, id: generateId() })),
-      lights: data.lights.map((l, i) => ({ ...l, id: `light-${i + 1}` })),
-    }),
+      artworks: scatteredArtworks,
+      lights: data.lights.map((l, i) => ({ ...l, id: `light-${i + 1}` }),
+    });
+  },
 
   exportGallery: () => {
     const state = get();
     return {
-      artworks: state.artworks,
+      artworks: state.artworks.map(({ id, isNew, importStartPos, ...rest }) => rest as ArtworkItem),
       lights: state.lights,
     };
   },
+
+  clearNewFlags: () =>
+    set((state) => ({
+      artworks: state.artworks.map((a) => ({ ...a, isNew: false }),
+    })),
 }));
+
+export { ROOM_WIDTH, ROOM_DEPTH, ROOM_HEIGHT };
