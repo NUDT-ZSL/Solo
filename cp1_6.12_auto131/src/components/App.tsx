@@ -9,15 +9,15 @@ type Page = 'menu' | 'game' | 'upgrade' | 'leaderboard' | 'replay';
 
 const API_BASE = '/api';
 
-interface LeaderboardEntry {
+export interface LeaderboardEntry {
   _id: string;
-  rank: number;
   date: string;
   score: number;
   stars: number;
   items: string[];
   completed: boolean;
   replayId: string;
+  replayInputs?: ReplayInput[];
 }
 
 const App: React.FC = () => {
@@ -27,20 +27,15 @@ const App: React.FC = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [replayInputs, setReplayInputs] = useState<ReplayInput[]>([]);
   const [replayId, setReplayId] = useState<string>('');
-  const [lastStars, setLastStars] = useState(0);
 
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/user`);
       const data = await res.json();
-      if (data.upgrade) {
+      if (data && data.upgrade) {
         setUpgradeData(data.upgrade);
       } else {
         const defaultUpgrade: UpgradeData = {
-          angleRange: 45,
-          aimLineLength: 33,
-          bottomStep: 1,
-          initialRows: 4,
           stars: 0,
           levels: { angleRange: 0, aimLineLength: 0, bottomStep: 0, initialRows: 0 },
         };
@@ -48,10 +43,6 @@ const App: React.FC = () => {
       }
     } catch {
       const defaultUpgrade: UpgradeData = {
-        angleRange: 45,
-        aimLineLength: 33,
-        bottomStep: 1,
-        initialRows: 4,
         stars: 0,
         levels: { angleRange: 0, aimLineLength: 0, bottomStep: 0, initialRows: 0 },
       };
@@ -63,7 +54,13 @@ const App: React.FC = () => {
     try {
       const res = await fetch(`${API_BASE}/leaderboard`);
       const data = await res.json();
-      setLeaderboard(data);
+      if (Array.isArray(data)) {
+        const sorted = [...data]
+          .sort((a, b) => b.stars - a.stars)
+          .slice(0, 10)
+          .map((e, i) => ({ ...e, rank: i + 1 }));
+        setLeaderboard(sorted);
+      }
     } catch {
       setLeaderboard([]);
     }
@@ -83,8 +80,6 @@ const App: React.FC = () => {
 
   const handleGameOver = async (eng: GameEngine) => {
     const stars = eng.calculateStars();
-    setLastStars(stars);
-
     const inputs = eng.getReplayInputs();
     const record = {
       date: new Date().toISOString(),
@@ -117,10 +112,16 @@ const App: React.FC = () => {
     fetchLeaderboard();
   };
 
-  const handleReplay = (id: string, inputs: ReplayInput[]) => {
-    setReplayInputs(inputs);
-    setReplayId(id);
-    setPage('replay');
+  const handleReplay = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/replay/${id}`);
+      const data = await res.json();
+      if (data && Array.isArray(data.replayInputs)) {
+        setReplayInputs(data.replayInputs);
+        setReplayId(id);
+        setPage('replay');
+      }
+    } catch { }
   };
 
   const handleUpgrade = async (newData: UpgradeData) => {
@@ -134,6 +135,13 @@ const App: React.FC = () => {
     } catch { }
   };
 
+  const handleClearLeaderboard = async () => {
+    try {
+      await fetch(`${API_BASE}/leaderboard`, { method: 'DELETE' });
+      fetchLeaderboard();
+    } catch { }
+  };
+
   const menuStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -143,32 +151,29 @@ const App: React.FC = () => {
     background: 'linear-gradient(180deg, #0b0b1a 0%, #1a1a3a 100%)',
     color: 'white',
     fontFamily: "'Segoe UI', sans-serif",
+    position: 'relative',
+    overflow: 'hidden',
   };
 
   const btnStyle: React.CSSProperties = {
     display: 'block',
-    width: 240,
+    width: 260,
     padding: '14px 0',
     margin: '8px 0',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 600,
     border: 'none',
     borderRadius: 12,
     cursor: 'pointer',
     color: 'white',
-    transition: 'transform 0.15s, box-shadow 0.15s',
+    transition: 'transform 0.15s ease, box-shadow 0.15s ease',
   };
 
-  const handleBtnHover = (e: React.MouseEvent<HTMLButtonElement>, color: string) => {
-    const el = e.currentTarget;
-    el.style.transform = 'scale(1.04)';
-    el.style.boxShadow = `0 0 20px ${color}66`;
+  const btnEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.transform = 'scale(1.04)';
   };
-
-  const handleBtnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const el = e.currentTarget;
-    el.style.transform = 'scale(1)';
-    el.style.boxShadow = 'none';
+  const btnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.transform = 'scale(1)';
   };
 
   if (page === 'game' && engine) {
@@ -182,10 +187,10 @@ const App: React.FC = () => {
     );
   }
 
-  if (page === 'upgrade') {
+  if (page === 'upgrade' && upgradeData) {
     return (
       <UpgradePanel
-        data={upgradeData!}
+        data={upgradeData}
         onUpgrade={handleUpgrade}
         onBack={() => setPage('menu')}
       />
@@ -199,6 +204,7 @@ const App: React.FC = () => {
         onReplay={handleReplay}
         onBack={() => setPage('menu')}
         onRefresh={fetchLeaderboard}
+        onClearAll={handleClearLeaderboard}
       />
     );
   }
@@ -216,42 +222,53 @@ const App: React.FC = () => {
 
   return (
     <div style={menuStyle}>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse at 50% 30%, rgba(170,68,255,0.15), transparent 60%)',
+          pointerEvents: 'none',
+        }}
+      />
       <h1 style={{
-        fontSize: 42,
-        marginBottom: 8,
+        fontSize: 48,
+        marginBottom: 6,
         background: 'linear-gradient(90deg, #ff4466, #aa44ff, #4488ff)',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
+        fontWeight: 800,
+        letterSpacing: 2,
       }}>
-        Bubble Rogue
+        BUBBLE ROGUE
       </h1>
-      <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 36, fontSize: 15 }}>
-        Roguelike × Bubble Shooter
+      <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 36, fontSize: 14, letterSpacing: 3 }}>
+        ROGUELIKE × BUBBLE SHOOTER
       </p>
       <button
         style={{ ...btnStyle, background: 'linear-gradient(135deg, #ff4466, #aa44ff)' }}
         onClick={handleStartGame}
-        onMouseEnter={e => handleBtnHover(e, '#ff4466')}
-        onMouseLeave={handleBtnLeave}
+        onMouseEnter={btnEnter}
+        onMouseLeave={btnLeave}
       >
         🎮 开始游戏
       </button>
       <button
         style={{ ...btnStyle, background: 'linear-gradient(135deg, #44dd66, #22aa88)' }}
         onClick={() => setPage('upgrade')}
-        onMouseEnter={e => handleBtnHover(e, '#44dd66')}
-        onMouseLeave={handleBtnLeave}
+        onMouseEnter={btnEnter}
+        onMouseLeave={btnLeave}
       >
         ⬆️ 永久升级 {upgradeData ? `(⭐${upgradeData.stars})` : ''}
       </button>
       <button
         style={{ ...btnStyle, background: 'linear-gradient(135deg, #4488ff, #2266cc)' }}
         onClick={() => { fetchLeaderboard(); setPage('leaderboard'); }}
-        onMouseEnter={e => handleBtnHover(e, '#4488ff')}
-        onMouseLeave={handleBtnLeave}
+        onMouseEnter={btnEnter}
+        onMouseLeave={btnLeave}
       >
         🏆 排行榜
       </button>
+      <style>{`button:active { transform: scale(0.95) !important; }`}</style>
     </div>
   );
 };
