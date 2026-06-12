@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow: hidden;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+.note-card {
+  transition: all 0.2s ease;
+}
+
+.note-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.note-action:hover {
+  opacity: 0.8;
+}
+
+@media (max-width: 767px) {
+  .sidebar {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 56px;
+    flex-direction: row !important;
+    align-items: center;
+    padding: 0 10px !important;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-bottom: 1px solid #334155;
+  }
+
+  .sidebar > div {
+    border: none !important;
+    padding: 6px 8px !important;
+    flex-shrink: 0;
+  }
+
+  .sidebar > div:nth-child(2) {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    padding: 6px 4px !important;
+  }
+
+  .sidebar > div:nth-child(2) > div {
+    font-size: 9px !important;
+    margin-bottom: 0 !important;
+  }
+
+  .sidebar > div:last-child {
+    padding: 4px 8px !important;
+    flex-shrink: 0;
+  }
+
+  .sidebar > div:last-child > button {
+    padding: 4px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .note-card {
+    transform: scale(0.7);
+    transform-origin: top left;
+  }
+
+  .board-bottom-bar {
+    height: 26px !important;
+    padding: 0 6px !important;
+    gap: 4px !important;
+  }
+
+  .board-bottom-bar button {
+    padding: 2px 8px !important;
+    font-size: 10px !important;
+  }
+
+  .board-bottom-bar span {
+    font-size: 9px !important;
+  }
+
+  .board-area {
+    background-size: 14px 14px !important;
+  }
+
+  .ranking-panel {
+    min-width: 140px !important;
+    padding: 10px !important;
+    font-size: 10px !important;
+  }
+
+  .ranking-panel h3 {
+    font-size: 11px !important;
+  }
+
+  #root > div {
+    flex-direction: column !important;
+  }
+}
