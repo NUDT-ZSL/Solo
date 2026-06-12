@@ -39,7 +39,9 @@
 }
 
 .layout-block.dragging {
-  opacity: 0.9;
+  opacity: 0.7;
+  transform: rotate(3deg);
+  transition: opacity 0.2s ease-in-out;
 }
 
 .resize-handle {

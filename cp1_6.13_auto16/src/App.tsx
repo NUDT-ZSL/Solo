@@ -45,8 +45,12 @@ function App() {
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [draggingPreset, setDraggingPreset] = useState<BlockType | null>(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [schemeName, setSchemeName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const maxZRef = useRef<number>(1);
+  const saveNameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     localStorage.setItem('blog-layout-schemes', JSON.stringify(schemes));
@@ -61,19 +65,22 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    if (showSaveDialog && saveNameInputRef.current) {
+      saveNameInputRef.current.focus();
+      saveNameInputRef.current.select();
+    }
+  }, [showSaveDialog]);
+
   const pushHistory = useCallback(
     (newBlocks: LayoutBlock[]) => {
       const newHistory = history.slice(0, historyIndex + 1);
       newHistory.push(newBlocks);
       if (newHistory.length > 50) {
         newHistory.shift();
-      } else {
-        setHistoryIndex(historyIndex + 1);
       }
       setHistory(newHistory);
-      if (newHistory.length <= 50) {
-        setHistoryIndex(newHistory.length - 1);
-      }
+      setHistoryIndex(Math.min(historyIndex + 1, newHistory.length - 1));
     },
     [history, historyIndex]
   );
@@ -216,18 +223,90 @@ function App() {
 
   const selectedBlock = blocks.find((b) => b.id === selectedBlockId) || null;
 
-  const handleSaveScheme = useCallback(
-    async (name: string, thumbnail: string) => {
+  const generateThumbnail = useCallback(async (): Promise<string> => {
+    if (!canvasRef.current) return '';
+    try {
+      const canvas = await html2canvas(canvasRef.current, {
+        backgroundColor: '#f3f4f6',
+        scale: 0.3,
+        useCORS: true,
+        logging: false,
+      });
+      return canvas.toDataURL('image/png');
+    } catch (error) {
+      console.error('生成缩略图失败:', error);
+      return generateFallbackThumbnail();
+    }
+  }, []);
+
+  const generateFallbackThumbnail = (): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 96;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, 128, 96);
+
+    const scaleX = 128 / CANVAS_WIDTH;
+    const scaleY = 96 / CANVAS_HEIGHT;
+
+    blocks.forEach((block) => {
+      ctx.fillStyle = block.fillColor;
+      ctx.strokeStyle = block.borderColor;
+      ctx.lineWidth = 1;
+      const x = block.position.x * scaleX;
+      const y = block.position.y * scaleY;
+      const w = block.size.width * scaleX;
+      const h = block.size.height * scaleY;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+    });
+
+    return canvas.toDataURL('image/png');
+  };
+
+  const handleSaveClick = useCallback(() => {
+    if (blocks.length === 0) return;
+    const date = new Date();
+    const defaultName = `方案 ${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+    setSchemeName(defaultName);
+    setShowSaveDialog(true);
+  }, [blocks.length]);
+
+  const handleConfirmSave = useCallback(async () => {
+    if (!schemeName.trim() || blocks.length === 0) return;
+
+    setIsSaving(true);
+    try {
+      const thumbnail = await generateThumbnail();
       const scheme: Scheme = {
         id: generateId(),
-        name,
+        name: schemeName.trim(),
         blocks: JSON.parse(JSON.stringify(blocks)),
         thumbnail,
         createdAt: Date.now(),
       };
       setSchemes((prev) => [scheme, ...prev]);
+      setShowSaveDialog(false);
+      setSchemeName('');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [schemeName, blocks, generateThumbnail]);
+
+  const handleCancelSave = useCallback(() => {
+    setShowSaveDialog(false);
+    setSchemeName('');
+  }, []);
+
+  const handleSaveKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleConfirmSave();
+      if (e.key === 'Escape') handleCancelSave();
     },
-    [blocks]
+    [handleConfirmSave, handleCancelSave]
   );
 
   const handleLoadScheme = useCallback((scheme: Scheme) => {
@@ -335,8 +414,48 @@ function App() {
         <div className="workspace">
           <div className="canvas-section">
             <div className="canvas-toolbar">
-              <span className="canvas-title">画布预览</span>
-              <span className="canvas-size">{CANVAS_WIDTH} × {CANVAS_HEIGHT}</span>
+              <div className="canvas-toolbar-left">
+                <span className="canvas-title">画布预览</span>
+                <span className="canvas-size">{CANVAS_WIDTH} × {CANVAS_HEIGHT}</span>
+              </div>
+              <div className="canvas-toolbar-right">
+                {showSaveDialog ? (
+                  <div className="save-dialog">
+                    <input
+                      ref={saveNameInputRef}
+                      type="text"
+                      value={schemeName}
+                      onChange={(e) => setSchemeName(e.target.value)}
+                      onKeyDown={handleSaveKeyDown}
+                      className="save-name-input"
+                      placeholder="方案名称"
+                    />
+                    <button
+                      className="save-dialog-btn confirm"
+                      onClick={handleConfirmSave}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? '保存中...' : '确认'}
+                    </button>
+                    <button
+                      className="save-dialog-btn cancel"
+                      onClick={handleCancelSave}
+                      disabled={isSaving}
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="save-layout-btn"
+                    onClick={handleSaveClick}
+                    disabled={blocks.length === 0}
+                  >
+                    <Save size={16} />
+                    <span>保存布局</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="canvas-area">
@@ -403,9 +522,6 @@ function App() {
             />
             <SchemeManager
               schemes={schemes}
-              canvasRef={canvasRef}
-              blocks={blocks}
-              onSave={handleSaveScheme}
               onLoad={handleLoadScheme}
               onDelete={handleDeleteScheme}
             />

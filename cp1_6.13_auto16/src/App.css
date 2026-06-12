@@ -259,6 +259,18 @@ button {
   flex-shrink: 0;
 }
 
+.canvas-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.canvas-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .canvas-title {
   font-size: 15px;
   font-weight: 600;
@@ -274,6 +286,104 @@ button {
   border-radius: 6px;
 }
 
+.save-layout-btn {
+  height: 36px;
+  padding: 0 16px;
+  background: #3b82f6;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition);
+}
+
+.save-layout-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.save-layout-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.save-dialog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.save-name-input {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-size: 14px;
+  width: 200px;
+  transition: var(--transition);
+}
+
+.save-name-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.save-name-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.save-dialog-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.save-dialog-btn.confirm {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.save-dialog-btn.confirm:hover:not(:disabled) {
+  background: #059669;
+}
+
+.save-dialog-btn.cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: #d1d5db;
+}
+
+.save-dialog-btn.cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.save-dialog-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .canvas-area {
   flex: 1;
   position: relative;
@@ -281,7 +391,7 @@ button {
   align-items: flex-start;
   justify-content: center;
   overflow: auto;
-  padding: 0;
+  padding: 20px;
   background: #f9fafb;
   border-radius: 12px;
   min-height: 0;
