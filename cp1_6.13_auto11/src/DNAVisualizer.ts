@@ -6,7 +6,6 @@ const SPHERE_WIDTH_SEGMENTS = 12
 const SPHERE_HEIGHT_SEGMENTS = 8
 const BACKBONE_RADIUS = 0.05
 const BACKBONE_RADIAL_SEGMENTS = 8
-const HBOND_LINE_WIDTH = 1
 const INITIAL_CAMERA_Z = 8
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 3.0
@@ -15,6 +14,22 @@ const RESET_DURATION = 0.8
 const HELIX_RADIUS = 1.0
 const BASES_PER_TURN = 10
 const STEP_Z = 0.34
+
+const BATCH_SIZE = 200
+const FRAME_TIME_BUDGET_MS = 10
+
+export type RenderProgressCallback = (
+  progress: number,
+  stage: string,
+  etaMs: number,
+) => void
+
+interface BuildTask {
+  type: 'spheres' | 'backbone' | 'hbonds'
+  data: BasePairData[]
+  startTime: number
+  totalBases: number
+}
 
 export class DNAVisualizer {
   private container: HTMLElement
@@ -38,9 +53,27 @@ export class DNAVisualizer {
   private resetStartX = 0
   private resetStartY = 0
   private resetStartZoom = 0
+  private resetTargetX = 0
+  private resetTargetY = 0
+  private resetTargetZoom = 1
 
   private animationId: number | null = null
   private onWindowResize: () => void
+  private buildTask: BuildTask | null = null
+  private buildFrameId: number | null = null
+  private sphereCursor = 0
+  private backboneCursor = 0
+  private sphereInstancedMeshes: Map<number, THREE.InstancedMesh> = new Map()
+  private sphereDummy = new THREE.Object3D()
+  private backboneInstancedMesh: THREE.InstancedMesh | null = null
+  private backboneDummy = new THREE.Object3D()
+  private upVector = new THREE.Vector3(0, 1, 0)
+  private helixRisePerBase = 0
+  private sphereGeometry: THREE.SphereGeometry | null = null
+  private cylinderGeometry: THREE.CylinderGeometry | null = null
+  private basePairCount = 0
+
+  private disposed = false
 
   constructor(container: HTMLElement) {
     this.container = container
@@ -95,7 +128,7 @@ export class DNAVisualizer {
       this.isDragging = true
       this.lastMouseX = e.clientX
       this.lastMouseY = e.clientY
-      this.isResetting = false
+      this.interruptReset()
     })
 
     window.addEventListener('mouseup', () => {
@@ -133,14 +166,33 @@ export class DNAVisualizer {
   }
 
   public resetCamera(): void {
-    this.isResetting = true
-    this.resetStartTime = performance.now()
-    this.resetStartX = this.currentRotationX
-    this.resetStartY = this.currentRotationY
-    this.resetStartZoom = this.currentZoom
+    if (this.isResetting) {
+      this.resetStartX = this.currentRotationX
+      this.resetStartY = this.currentRotationY
+      this.resetStartZoom = this.currentZoom
+      this.resetStartTime = performance.now()
+    } else {
+      this.isResetting = true
+      this.resetStartX = this.currentRotationX
+      this.resetStartY = this.currentRotationY
+      this.resetStartZoom = this.currentZoom
+      this.resetStartTime = performance.now()
+    }
     this.targetRotationX = 0
     this.targetRotationY = 0
     this.targetZoom = 1
+    this.resetTargetX = 0
+    this.resetTargetY = 0
+    this.resetTargetZoom = 1
+  }
+
+  private interruptReset(): void {
+    if (this.isResetting) {
+      this.isResetting = false
+      this.targetRotationX = this.currentRotationX
+      this.targetRotationY = this.currentRotationY
+      this.targetZoom = this.currentZoom
+    }
   }
 
   private easeInOutCubic(t: number): number {
@@ -156,6 +208,12 @@ export class DNAVisualizer {
   }
 
   public clearDNA(): void {
+    if (this.buildFrameId !== null) {
+      cancelAnimationFrame(this.buildFrameId)
+      this.buildFrameId = null
+      this.buildTask = null
+    }
+
     if (this.dnaGroup) {
       this.scene.remove(this.dnaGroup)
       this.dnaGroup.traverse((obj) => {
@@ -177,165 +235,297 @@ export class DNAVisualizer {
       })
       this.dnaGroup = null
     }
+
+    this.sphereInstancedMeshes.clear()
+    this.backboneInstancedMesh = null
+    this.sphereCursor = 0
+    this.backboneCursor = 0
+
+    if (this.sphereGeometry) {
+      this.sphereGeometry.dispose()
+      this.sphereGeometry = null
+    }
+    if (this.cylinderGeometry) {
+      this.cylinderGeometry.dispose()
+      this.cylinderGeometry = null
+    }
   }
 
-  public renderDNA(data: ParsedDNAData): void {
+  public async renderDNA(
+    data: ParsedDNAData,
+    onProgress?: RenderProgressCallback,
+  ): Promise<void> {
     this.clearDNA()
 
     if (data.basePairs.length === 0) {
       return
     }
 
+    this.basePairCount = data.basePairs.length
     this.dnaGroup = new THREE.Group()
     this.scene.add(this.dnaGroup)
 
-    this.createBaseSpheres(data.basePairs)
-    this.createBackbone(data.basePairs)
-    this.createHydrogenBonds(data.basePairs)
-  }
-
-  private createBaseSpheres(basePairs: BasePairData[]): void {
-    const sphereGeometry = new THREE.SphereGeometry(
-      BASE_SPHERE_RADIUS,
-      SPHERE_WIDTH_SEGMENTS,
-      SPHERE_HEIGHT_SEGMENTS,
+    this.helixRisePerBase = Math.sqrt(
+      (2 * HELIX_RADIUS * Math.sin(Math.PI / BASES_PER_TURN)) ** 2 +
+        STEP_Z * STEP_Z,
     )
 
-    const colorMap = new Map<string, number>()
-    basePairs.forEach((bp) => {
-      colorMap.set(bp.base1.color, new THREE.Color(bp.base1.color).getHex())
-      colorMap.set(bp.base2.color, new THREE.Color(bp.base2.color).getHex())
-    })
+    return new Promise((resolve) => {
+      this.buildTask = {
+        type: 'spheres',
+        data: data.basePairs,
+        startTime: performance.now(),
+        totalBases: data.basePairs.length,
+      }
+      this.sphereCursor = 0
+      this.backboneCursor = 0
 
-    const colorGroups = new Map<number, { positions: THREE.Vector3[] }>()
-    basePairs.forEach((bp) => {
+      const tick = () => {
+        if (this.disposed || !this.buildTask) {
+          resolve()
+          return
+        }
+
+        const frameStart = performance.now()
+        let worked = true
+
+        while (worked && performance.now() - frameStart < FRAME_TIME_BUDGET_MS) {
+          worked = this.buildStep()
+        }
+
+        const elapsed = performance.now() - this.buildTask.startTime
+        const progress = this.getProgress()
+        const stage = this.getStageName()
+        const etaMs = progress > 0.02
+          ? (elapsed / progress) * (1 - progress)
+          : -1
+
+        onProgress?.(progress, stage, etaMs)
+
+        if (!worked || this.buildTask.type === 'done') {
+          this.buildTask = null
+          this.buildFrameId = null
+          resolve()
+        } else {
+          this.buildFrameId = requestAnimationFrame(tick)
+        }
+      }
+
+      this.buildFrameId = requestAnimationFrame(tick)
+    })
+  }
+
+  private getProgress(): number {
+    if (!this.buildTask) return 1
+    const total = this.buildTask.totalBases
+    if (total === 0) return 1
+
+    switch (this.buildTask.type) {
+      case 'spheres':
+        return (this.sphereCursor / total) * 0.6
+      case 'backbone':
+        return 0.6 + (this.backboneCursor / Math.max(total - 1, 1)) * 0.3
+      case 'hbonds':
+        return 0.95
+      default:
+        return 1
+    }
+  }
+
+  private getStageName(): string {
+    if (!this.buildTask) return '完成'
+    switch (this.buildTask.type) {
+      case 'spheres': return '生成碱基球体'
+      case 'backbone': return '生成螺旋骨架'
+      case 'hbonds': return '生成氢键连线'
+      default: return '渲染中...'
+    }
+  }
+
+  private buildStep(): boolean {
+    if (!this.buildTask || !this.dnaGroup) return false
+
+    const { type, data } = this.buildTask
+
+    if (type === 'spheres') {
+      return this.buildSpheresStep(data)
+    } else if (type === 'backbone') {
+      return this.buildBackboneStep(data)
+    } else if (type === 'hbonds') {
+      this.buildHydrogenBonds(data)
+      this.buildTask.type = 'done' as any
+      return false
+    }
+
+    return false
+  }
+
+  private buildSpheresStep(data: BasePairData[]): boolean {
+    if (this.sphereCursor >= data.length) {
+      this.sphereInstancedMeshes.forEach((mesh) => {
+        mesh.instanceMatrix.needsUpdate = true
+        this.dnaGroup!.add(mesh)
+      })
+      this.buildTask!.type = 'backbone'
+      return true
+    }
+
+    if (!this.sphereGeometry) {
+      this.sphereGeometry = new THREE.SphereGeometry(
+        BASE_SPHERE_RADIUS,
+        SPHERE_WIDTH_SEGMENTS,
+        SPHERE_HEIGHT_SEGMENTS,
+      )
+    }
+
+    const end = Math.min(this.sphereCursor + BATCH_SIZE, data.length)
+
+    for (let i = this.sphereCursor; i < end; i++) {
+      const bp = data[i]
       const c1 = new THREE.Color(bp.base1.color).getHex()
       const c2 = new THREE.Color(bp.base2.color).getHex()
 
-      if (!colorGroups.has(c1)) {
-        colorGroups.set(c1, { positions: [] })
-      }
-      colorGroups.get(c1)!.positions.push(
-        new THREE.Vector3(bp.base1.x, bp.base1.y, bp.base1.z),
-      )
+      this.addSphereInstance(c1, bp.base1.x, bp.base1.y, bp.base1.z, i * 2)
+      this.addSphereInstance(c2, bp.base2.x, bp.base2.y, bp.base2.z, i * 2 + 1)
+    }
 
-      if (!colorGroups.has(c2)) {
-        colorGroups.set(c2, { positions: [] })
-      }
-      colorGroups.get(c2)!.positions.push(
-        new THREE.Vector3(bp.base2.x, bp.base2.y, bp.base2.z),
-      )
-    })
+    this.sphereCursor = end
+    return end < data.length
+  }
 
-    colorGroups.forEach(({ positions }, colorHex) => {
+  private addSphereInstance(
+    colorHex: number,
+    x: number,
+    y: number,
+    z: number,
+    globalIndex: number,
+  ): void {
+    let mesh = this.sphereInstancedMeshes.get(colorHex)
+    if (!mesh) {
       const material = new THREE.MeshStandardMaterial({
         color: colorHex,
         roughness: 0.4,
         metalness: 0.1,
       })
-
-      const instancedMesh = new THREE.InstancedMesh(
-        sphereGeometry,
+      mesh = new THREE.InstancedMesh(
+        this.sphereGeometry!,
         material,
-        positions.length,
+        this.basePairCount * 2,
       )
+      mesh.count = 0
+      this.sphereInstancedMeshes.set(colorHex, mesh)
+    }
 
-      const dummy = new THREE.Object3D()
-      positions.forEach((pos, i) => {
-        dummy.position.copy(pos)
-        dummy.updateMatrix()
-        instancedMesh.setMatrixAt(i, dummy.matrix)
-      })
-
-      instancedMesh.instanceMatrix.needsUpdate = true
-      this.dnaGroup!.add(instancedMesh)
-    })
+    this.sphereDummy.position.set(x, y, z)
+    this.sphereDummy.updateMatrix()
+    mesh.setMatrixAt(mesh.count, this.sphereDummy.matrix)
+    mesh.count++
   }
 
-  private createBackbone(basePairs: BasePairData[]): void {
-    if (basePairs.length < 2) return
+  private buildBackboneStep(data: BasePairData[]): boolean {
+    if (this.backboneCursor >= data.length - 1) {
+      if (this.backboneInstancedMesh) {
+        this.backboneInstancedMesh.instanceMatrix.needsUpdate = true
+        this.dnaGroup!.add(this.backboneInstancedMesh)
+      }
+      this.buildTask!.type = 'hbonds'
+      return false
+    }
 
-    const segmentCount = (basePairs.length - 1) * 2
-    const avgStep = STEP_Z
-    const helixRisePerBase = Math.sqrt(
-      (2 * HELIX_RADIUS * Math.sin(Math.PI / BASES_PER_TURN)) ** 2 +
-        avgStep * avgStep,
+    const totalSegments = Math.max(data.length - 1, 0) * 2
+
+    if (!this.cylinderGeometry) {
+      this.cylinderGeometry = new THREE.CylinderGeometry(
+        BACKBONE_RADIUS,
+        BACKBONE_RADIUS,
+        1,
+        BACKBONE_RADIAL_SEGMENTS,
+        1,
+      )
+    }
+
+    if (!this.backboneInstancedMesh) {
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x8899aa,
+        transparent: true,
+        opacity: 0.55,
+        roughness: 0.5,
+        metalness: 0.2,
+      })
+      this.backboneInstancedMesh = new THREE.InstancedMesh(
+        this.cylinderGeometry,
+        material,
+        Math.max(totalSegments, 1),
+      )
+      this.backboneInstancedMesh.count = 0
+    }
+
+    const end = Math.min(
+      this.backboneCursor + BATCH_SIZE,
+      data.length - 1,
     )
 
-    const cylinderGeometry = new THREE.CylinderGeometry(
-      BACKBONE_RADIUS,
-      BACKBONE_RADIUS,
-      1,
-      BACKBONE_RADIAL_SEGMENTS,
-      1,
-    )
-
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x8899aa,
-      transparent: true,
-      opacity: 0.55,
-      roughness: 0.5,
-      metalness: 0.2,
-    })
-
-    const instancedMesh = new THREE.InstancedMesh(
-      cylinderGeometry,
-      material,
-      segmentCount,
-    )
-
-    const dummy = new THREE.Object3D()
-    const upVector = new THREE.Vector3(0, 1, 0)
-    let instanceIndex = 0
-
-    for (let strand = 0; strand < 2; strand++) {
-      for (let i = 0; i < basePairs.length - 1; i++) {
+    for (let i = this.backboneCursor; i < end; i++) {
+      for (let strand = 0; strand < 2; strand++) {
         const curr =
-          strand === 0 ? basePairs[i].base1 : basePairs[i].base2
+          strand === 0 ? data[i].base1 : data[i].base2
         const next =
-          strand === 0 ? basePairs[i + 1].base1 : basePairs[i + 1].base2
+          strand === 0 ? data[i + 1].base1 : data[i + 1].base2
 
-        const start = new THREE.Vector3(curr.x, curr.y, curr.z)
-        const end = new THREE.Vector3(next.x, next.y, next.z)
+        const dirX = next.x - curr.x
+        const dirY = next.y - curr.y
+        const dirZ = next.z - curr.z
+        const len = Math.sqrt(
+          dirX * dirX + dirY * dirY + dirZ * dirZ,
+        ) || this.helixRisePerBase
 
-        const dir = new THREE.Vector3().subVectors(end, start)
-        const len = dir.length() || helixRisePerBase
-
-        dummy.position.copy(start.clone().add(end).multiplyScalar(0.5))
-        dummy.scale.set(1, len, 1)
-        dummy.quaternion.setFromUnitVectors(
-          upVector,
-          dir.length() > 0 ? dir.clone().normalize() : upVector,
+        this.backboneDummy.position.set(
+          (curr.x + next.x) / 2,
+          (curr.y + next.y) / 2,
+          (curr.z + next.z) / 2,
         )
-        dummy.updateMatrix()
-        instancedMesh.setMatrixAt(instanceIndex, dummy.matrix)
-        instanceIndex++
+        this.backboneDummy.scale.set(1, len, 1)
+
+        const dir = new THREE.Vector3(dirX, dirY, dirZ)
+        if (dir.lengthSq() > 0.0001) {
+          dir.normalize()
+          this.backboneDummy.quaternion.setFromUnitVectors(
+            this.upVector,
+            dir,
+          )
+        }
+        this.backboneDummy.updateMatrix()
+
+        this.backboneInstancedMesh!.setMatrixAt(
+          this.backboneInstancedMesh!.count,
+          this.backboneDummy.matrix,
+        )
+        this.backboneInstancedMesh!.count++
       }
     }
 
-    instancedMesh.instanceMatrix.needsUpdate = true
-    this.dnaGroup!.add(instancedMesh)
+    this.backboneCursor = end
+    return end < data.length - 1
   }
 
-  private createHydrogenBonds(basePairs: BasePairData[]): void {
-    const positions: number[] = []
+  private buildHydrogenBonds(basePairs: BasePairData[]): void {
+    if (!this.dnaGroup) return
 
-    basePairs.forEach((bp) => {
-      positions.push(
-        bp.base1.x,
-        bp.base1.y,
-        bp.base1.z,
-        bp.base2.x,
-        bp.base2.y,
-        bp.base2.z,
-      )
-    })
+    const positions = new Float32Array(basePairs.length * 6)
+
+    for (let i = 0; i < basePairs.length; i++) {
+      const bp = basePairs[i]
+      const idx = i * 6
+      positions[idx] = bp.base1.x
+      positions[idx + 1] = bp.base1.y
+      positions[idx + 2] = bp.base1.z
+      positions[idx + 3] = bp.base2.x
+      positions[idx + 4] = bp.base2.y
+      positions[idx + 5] = bp.base2.z
+    }
 
     const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(positions, 3),
-    )
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
 
     const material = new THREE.LineBasicMaterial({
       color: 0xcccccc,
@@ -344,7 +534,7 @@ export class DNAVisualizer {
     })
 
     const lines = new THREE.LineSegments(geometry, material)
-    this.dnaGroup!.add(lines)
+    this.dnaGroup.add(lines)
   }
 
   private animate(): void {
@@ -358,14 +548,17 @@ export class DNAVisualizer {
       const eased = this.easeInOutCubic(t)
 
       this.currentRotationX =
-        this.resetStartX + (0 - this.resetStartX) * eased
+        this.resetStartX + (this.resetTargetX - this.resetStartX) * eased
       this.currentRotationY =
-        this.resetStartY + (0 - this.resetStartY) * eased
+        this.resetStartY + (this.resetTargetY - this.resetStartY) * eased
       this.currentZoom =
-        this.resetStartZoom + (1 - this.resetStartZoom) * eased
+        this.resetStartZoom + (this.resetTargetZoom - this.resetStartZoom) * eased
 
       if (t >= 1) {
         this.isResetting = false
+        this.targetRotationX = this.resetTargetX
+        this.targetRotationY = this.resetTargetY
+        this.targetZoom = this.resetTargetZoom
       }
     } else {
       this.currentRotationX +=
@@ -387,8 +580,14 @@ export class DNAVisualizer {
   }
 
   public dispose(): void {
+    this.disposed = true
+    if (this.buildFrameId !== null) {
+      cancelAnimationFrame(this.buildFrameId)
+      this.buildFrameId = null
+    }
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId)
+      this.animationId = null
     }
     window.removeEventListener('resize', this.onWindowResize)
     this.clearDNA()
