@@ -59,6 +59,9 @@ const Canvas: React.FC<CanvasProps> = ({
   const lastPointerPressureRef = useRef(0.5)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
   const [dpr, setDpr] = useState(() => (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1))
+  const safeBrushSize = typeof brushSize === 'number' && isFinite(brushSize) && brushSize > 0
+    ? brushSize
+    : 60
 
   useEffect(() => {
     const onDprChange = () => setDpr(window.devicePixelRatio || 1)
@@ -66,6 +69,8 @@ const Canvas: React.FC<CanvasProps> = ({
     mq.addEventListener ? mq.addEventListener('change', onDprChange) : mq.addListener(onDprChange)
     return () => { mq.removeEventListener ? mq.removeEventListener('change', onDprChange) : mq.removeListener(onDprChange) }
   }, [dpr])
+
+  const updateDimensionsRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -84,13 +89,22 @@ const Canvas: React.FC<CanvasProps> = ({
       }
       setDimensions({ width: Math.round(w), height: Math.round(h) })
     }
-    updateDimensions()
-    const ro = new ResizeObserver(updateDimensions)
+    updateDimensionsRef.current = updateDimensions
+
+    let ro: ResizeObserver | null = null
+    const onResize = () => updateDimensionsRef.current?.()
+
+    ro = new ResizeObserver(onResize)
     if (containerRef.current) ro.observe(containerRef.current)
-    window.addEventListener('resize', updateDimensions)
+    window.addEventListener('resize', onResize)
+
     return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', updateDimensions)
+      if (ro) {
+        ro.disconnect()
+        ro = null
+      }
+      window.removeEventListener('resize', onResize)
+      updateDimensionsRef.current = null
     }
   }, [])
 
@@ -114,8 +128,14 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [])
 
   const calcPulseScale = useCallback((pulseStart: number, now: number): number => {
-    const t = Math.min(1, (now - pulseStart) / PULSE_DURATION)
-    const easeInOut = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+    const t = Math.min(1, Math.max(0, (now - pulseStart) / PULSE_DURATION))
+    let easeInOut: number
+    if (t < 0.5) {
+      easeInOut = 2 * t * t
+    } else {
+      const term = -2 * t + 2
+      easeInOut = 1 - Math.pow(term, 2) / 2
+    }
     if (t < 0.5) {
       return 1 + easeInOut * 0.1
     } else {
@@ -315,14 +335,14 @@ const Canvas: React.FC<CanvasProps> = ({
     if (!ctx) return false
 
     const rect = canvas.getBoundingClientRect()
-    const px = Math.round((clientX - rect.left) * (canvas.width / rect.width))
-    const py = Math.round((clientY - rect.top) * (canvas.height / rect.height))
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const rawPx = (clientX - rect.left) * scaleX
+    const rawPy = (clientY - rect.top) * scaleY
+    const px = Math.max(0, Math.min(canvas.width - 1, Math.round(rawPx)))
+    const py = Math.max(0, Math.min(canvas.height - 1, Math.round(rawPy)))
     try {
-      const pixel = ctx.getImageData(
-        Math.max(0, Math.min(canvas.width - 1, px)),
-        Math.max(0, Math.min(canvas.height - 1, py)),
-        1, 1
-      ).data
+      const pixel = ctx.getImageData(px, py, 1, 1).data
       const hsl = rgbToHsl(pixel[0], pixel[1], pixel[2])
       onCanvasColorPick(hsl)
       return true
@@ -345,8 +365,9 @@ const Canvas: React.FC<CanvasProps> = ({
 
     const { x, y } = getCanvasCoords(e.clientX, e.clientY)
     const pressure = e.pressure > 0 ? e.pressure : lastPointerPressureRef.current
-    const pressureFactor = 0.6 + pressure * 0.9
-    const size = brushSize * pressureFactor * (0.88 + Math.random() * 0.24)
+    const safePressure = Math.max(0, Math.min(1, pressure))
+    const pressureFactor = 0.5 + safePressure * 0.5
+    const size = safeBrushSize * pressureFactor * (0.88 + Math.random() * 0.24)
 
     let color: HSLColor
     if (currentColor) {
