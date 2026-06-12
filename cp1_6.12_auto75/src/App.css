@@ -1,0 +1,166 @@
+.app-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a2e;
+  color: #e5e7eb;
+}
+
+.app-header {
+  height: 60px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background: #16213e;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.1);
+  gap: 16px;
+}
+
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.title-icon {
+  font-size: 24px;
+}
+
+.title-sub {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(229, 231, 235, 0.6);
+  margin-left: 8px;
+}
+
+.app-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.left-panel {
+  height: 100%;
+  overflow: hidden;
+  background: #16213e;
+  border-right: 1px solid rgba(229, 231, 235, 0.08);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.left-panel.drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  height: 100%;
+  transform: translateX(-100%);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.left-panel.drawer-open {
+  transform: translateX(0);
+}
+
+.drawer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.resizer {
+  width: 6px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  position: relative;
+  background: transparent;
+  transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resizer:hover {
+  background: rgba(52, 152, 219, 0.2);
+}
+
+.resizer:hover .resizer-handle,
+.resizer.resizing .resizer-handle {
+  background: #3498db;
+}
+
+.resizer.resizing {
+  background: rgba(52, 152, 219, 0.3);
+}
+
+.resizer-handle {
+  width: 3px;
+  height: 40px;
+  background: rgba(229, 231, 235, 0.2);
+  border-radius: 2px;
+  transition: background 0.2s ease;
+}
+
+.right-panel {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .hamburger-btn {
+    display: flex;
+  }
+
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .title-sub {
+    display: none;
+  }
+}
