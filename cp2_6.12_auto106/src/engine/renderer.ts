@@ -1,57 +1,9 @@
-export interface Building {
-  id: string;
-  type: 'residential' | 'commercial' | 'industrial' | 'road';
-  x: number;
-  y: number;
-  level: number;
-  height: number;
-  isBuilding: boolean;
-  buildProgress: number;
-  isRepairing: boolean;
-  isRuined: boolean;
-  windows: { x: number; y: number; lit: boolean }[];
-  congestion: number;
-}
-
-export interface Vehicle {
-  id: string;
-  x: number;
-  y: number;
-  color: string;
-  speed: number;
-  direction: number;
-}
-
-export interface GameStats {
-  timeOfDay: number;
-  day: number;
-  population: number;
-  money: number;
-}
-
-export interface Particle {
-  x: number;
-  y: number;
-  z: number;
-  vx: number;
-  vy: number;
-  vz: number;
-  life: number;
-  maxLife: number;
-  color: string;
-  size: number;
-  type: 'build' | 'firework' | 'explosion';
-}
-
-export interface Camera {
-  offsetX: number;
-  offsetY: number;
-  zoom: number;
-}
+import type { Building, Vehicle, GameStats, Particle, Camera } from './types';
 
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
-const GRID_SIZE = 30;
+const SHADOW_COEFFICIENT = 0.8;
+const MAX_PARTICLES_PER_BUILDING = 50;
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
@@ -63,7 +15,10 @@ export class Renderer {
   private shakeTime: number = 0;
   private shakeIntensity: number = 0;
   private time: number = 0;
+  private lastTime: number = 0;
   private engine: any = null;
+  private previewBuilding: { x: number; y: number; type: string } | null = null;
+  private buildingParticleCounts: Map<string, number> = new Map();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -71,10 +26,15 @@ export class Renderer {
     if (!ctx) throw new Error('Cannot get 2D context');
     this.ctx = ctx;
     this.resize(canvas.width, canvas.height);
+    this.lastTime = performance.now();
   }
 
   setEngine(engine: any): void {
     this.engine = engine;
+  }
+
+  setPreview(building: { x: number; y: number; type: string } | null): void {
+    this.previewBuilding = building;
   }
 
   resize(width: number, height: number): void {
@@ -93,49 +53,58 @@ export class Renderer {
   }
 
   screenToGrid(screenX: number, screenY: number): { x: number; y: number } {
-    const x = ((screenX - this.camera.offsetX) / (TILE_WIDTH / 2) / this.camera.zoom +
-               (screenY - this.camera.offsetY) / (TILE_HEIGHT / 2) / this.camera.zoom) / 2;
-    const y = ((screenY - this.camera.offsetY) / (TILE_HEIGHT / 2) / this.camera.zoom -
-               (screenX - this.camera.offsetX) / (TILE_WIDTH / 2) / this.camera.zoom) / 2;
+    const adjustedX = screenX - this.camera.offsetX;
+    const adjustedY = screenY - this.camera.offsetY;
+    const halfTileW = (TILE_WIDTH / 2) * this.camera.zoom;
+    const halfTileH = (TILE_HEIGHT / 2) * this.camera.zoom;
+    const x = (adjustedX / halfTileW + adjustedY / halfTileH) / 2;
+    const y = (adjustedY / halfTileH - adjustedX / halfTileW) / 2;
     return { x: Math.floor(x), y: Math.floor(y) };
   }
 
   addParticles(x: number, y: number, type: 'build' | 'firework', count: number): void {
-    for (let i = 0; i < count; i++) {
-      if (this.particles.length >= 500) break;
-      
+    const key = `${x},${y}`;
+    const currentCount = this.buildingParticleCounts.get(key) || 0;
+    const availableSlots = MAX_PARTICLES_PER_BUILDING - currentCount;
+    const actualCount = Math.min(count, availableSlots);
+
+    for (let i = 0; i < actualCount; i++) {
+      if (this.particles.length >= 1000) break;
+
       if (type === 'build') {
         this.particles.push({
-          x: x + (Math.random() - 0.5) * 0.5,
-          y: y + (Math.random() - 0.5) * 0.5,
+          x: x + (Math.random() - 0.5) * 0.6,
+          y: y + (Math.random() - 0.5) * 0.6,
           z: 0,
-          vx: (Math.random() - 0.5) * 0.02,
-          vy: (Math.random() - 0.5) * 0.02,
-          vz: 0.05 + Math.random() * 0.05,
-          life: 1,
-          maxLife: 1,
+          vx: (Math.random() - 0.5) * 0.03,
+          vy: (Math.random() - 0.5) * 0.03,
+          vz: 0.08 + Math.random() * 0.08,
+          life: 1.5,
+          maxLife: 1.5,
           color: '#ffffff',
-          size: 2 + Math.random() * 2,
+          size: 2 + Math.random() * 3,
           type: 'build'
         });
       } else if (type === 'firework') {
         const angle = Math.random() * Math.PI * 2;
-        const speed = 0.1 + Math.random() * 0.1;
+        const speed = 0.08 + Math.random() * 0.12;
         this.particles.push({
           x,
           y,
-          z: 2 + Math.random() * 2,
+          z: 3 + Math.random() * 3,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
-          vz: 0.15 + Math.random() * 0.1,
-          life: 1,
-          maxLife: 1,
+          vz: 0.12 + Math.random() * 0.15,
+          life: 2,
+          maxLife: 2,
           color: `hsl(${Math.random() * 360}, 100%, 60%)`,
-          size: 3 + Math.random() * 3,
+          size: 3 + Math.random() * 4,
           type: 'firework'
         });
       }
     }
+
+    this.buildingParticleCounts.set(key, currentCount + actualCount);
   }
 
   shakeScreen(duration: number, intensity: number): void {
@@ -144,13 +113,17 @@ export class Renderer {
   }
 
   render(): void {
-    this.time += 1 / 60;
+    const now = performance.now();
+    const deltaTime = Math.min((now - this.lastTime) / 1000, 0.1);
+    this.lastTime = now;
+    this.time += deltaTime;
+
+    this.ctx.save();
 
     if (this.shakeTime > 0) {
-      this.shakeTime -= 1 / 60;
+      this.shakeTime -= deltaTime;
       const shakeX = (Math.random() - 0.5) * this.shakeIntensity;
       const shakeY = (Math.random() - 0.5) * this.shakeIntensity;
-      this.ctx.save();
       this.ctx.translate(shakeX, shakeY);
     }
 
@@ -158,55 +131,119 @@ export class Renderer {
     this.drawGround();
 
     if (this.engine) {
-      const buildings: Building[] = this.engine.buildings || [];
-      const vehicles: Vehicle[] = this.engine.vehicles || [];
-      const stats: GameStats = this.engine.stats || { timeOfDay: 0.5, day: 1, population: 0, money: 0 };
+      const grid: Building[][] = this.engine.getGrid() || [];
+      const vehicles: Vehicle[] = this.engine.getVehicles() || [];
+      const sunAngle: number = this.engine.getSunAngle() || 0;
+      const timeHours: number = this.engine.getTimeOfDay() || 12;
+      const congestedRoads = this.engine.getCongestedRoads() || [];
+
+      const congestedSet = new Set(congestedRoads.map((r: { x: number; y: number }) => `${r.x},${r.y}`));
+
+      const buildings: Building[] = [];
+      for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[y].length; x++) {
+          const building = grid[y][x];
+          if (building.type !== 'empty') {
+            buildings.push(building);
+          }
+        }
+      }
 
       const sortedBuildings = [...buildings].sort((a, b) => (a.x + a.y) - (b.x + b.y));
 
       for (const building of sortedBuildings) {
-        this.drawBuildingShadow(building, stats.timeOfDay);
+        this.drawBuildingShadow(building, sunAngle);
       }
 
       for (const building of sortedBuildings) {
-        this.drawBuilding(building, stats.timeOfDay);
+        this.drawBuilding(building, sunAngle, timeHours);
+      }
+
+      for (const building of sortedBuildings) {
+        if (building.type !== 'road' && building.state === 'normal') {
+          const neighbors = this.getNeighboringRoads(building, grid);
+          for (const neighbor of neighbors) {
+            if (congestedSet.has(`${neighbor.x},${neighbor.y}`)) {
+              this.drawCongestionGlow(building);
+              break;
+            }
+          }
+        }
       }
 
       for (const vehicle of vehicles) {
         this.drawVehicle(vehicle);
       }
+    }
 
-      if (this.engine.previewBuilding) {
-        this.drawPreview(this.engine.previewBuilding);
+    if (this.previewBuilding) {
+      this.drawPreview();
+    }
+
+    this.updateParticles(deltaTime);
+    this.drawParticles();
+
+    this.ctx.restore();
+  }
+
+  private getNeighboringRoads(building: Building, grid: Building[][]): { x: number; y: number }[] {
+    const directions = [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: 0 },
+    ];
+    const roads: { x: number; y: number }[] = [];
+    for (const dir of directions) {
+      const nx = building.x + dir.dx;
+      const ny = building.y + dir.dy;
+      if (nx >= 0 && ny >= 0 && ny < grid.length && nx < grid[0].length) {
+        if (grid[ny][nx].type === 'road') {
+          roads.push({ x: nx, y: ny });
+        }
       }
     }
-
-    this.updateAndDrawParticles();
-
-    if (this.shakeTime > 0) {
-      this.ctx.restore();
-    }
+    return roads;
   }
 
   private drawSky(): void {
-    const stats = this.engine?.stats || { timeOfDay: 0.5 };
-    const t = stats.timeOfDay;
+    const timeHours = this.engine?.getTimeOfDay?.() ?? 12;
+    const isDay = timeHours >= 6 && timeHours < 18;
 
     let topColor: string;
     let bottomColor: string;
 
-    if (t < 0.25) {
-      topColor = this.lerpColor('#0a0a1a', '#1a1a3a', t * 4);
-      bottomColor = this.lerpColor('#000005', '#1a1a2e', t * 4);
-    } else if (t < 0.5) {
-      topColor = this.lerpColor('#1a1a3a', '#87CEEB', (t - 0.25) * 4);
-      bottomColor = this.lerpColor('#1a1a2e', '#FFE4B5', (t - 0.25) * 4);
-    } else if (t < 0.75) {
-      topColor = this.lerpColor('#87CEEB', '#FF8C69', (t - 0.5) * 4);
-      bottomColor = this.lerpColor('#FFE4B5', '#FFD700', (t - 0.5) * 4);
+    if (isDay) {
+      const dayProgress = (timeHours - 6) / 12;
+      if (dayProgress < 0.25) {
+        const t = dayProgress / 0.25;
+        topColor = this.lerpColor('#4a90c2', '#87CEEB', t);
+        bottomColor = this.lerpColor('#ff8c42', '#ffe4b5', t);
+      } else if (dayProgress < 0.75) {
+        const t = (dayProgress - 0.25) / 0.5;
+        topColor = this.lerpColor('#87CEEB', '#6bb3d9', t);
+        bottomColor = this.lerpColor('#ffe4b5', '#b0e0e6', t);
+      } else {
+        const t = (dayProgress - 0.75) / 0.25;
+        topColor = this.lerpColor('#6bb3d9', '#4a90c2', t);
+        bottomColor = this.lerpColor('#b0e0e6', '#ff8c42', t);
+      }
     } else {
-      topColor = this.lerpColor('#FF8C69', '#0a0a1a', (t - 0.75) * 4);
-      bottomColor = this.lerpColor('#FFD700', '#000005', (t - 0.75) * 4);
+      let nightProgress: number;
+      if (timeHours >= 18) {
+        nightProgress = (timeHours - 18) / 12;
+      } else {
+        nightProgress = (timeHours + 6) / 12;
+      }
+      if (nightProgress < 0.5) {
+        const t = nightProgress / 0.5;
+        topColor = this.lerpColor('#1a237e', '#0a0a1a', t);
+        bottomColor = this.lerpColor('#3f51b5', '#000005', t);
+      } else {
+        const t = (nightProgress - 0.5) / 0.5;
+        topColor = this.lerpColor('#0a0a1a', '#1a237e', t);
+        bottomColor = this.lerpColor('#000005', '#3f51b5', t);
+      }
     }
 
     const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
@@ -215,46 +252,51 @@ export class Renderer {
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(0, 0, this.width, this.height);
 
-    if (t > 0.8 || t < 0.2) {
+    if (!isDay) {
       this.ctx.fillStyle = '#ffffff';
-      for (let i = 0; i < 50; i++) {
-        const sx = (i * 137.5) % this.width;
-        const sy = (i * 97.3) % (this.height * 0.6);
-        const twinkle = Math.sin(this.time * 2 + i) * 0.5 + 0.5;
-        this.ctx.globalAlpha = twinkle * 0.8;
+      for (let i = 0; i < 80; i++) {
+        const sx = (i * 137.508) % this.width;
+        const sy = (i * 97.314) % (this.height * 0.7);
+        const twinkle = Math.sin(this.time * 3 + i * 0.7) * 0.5 + 0.5;
+        this.ctx.globalAlpha = twinkle * 0.9;
         this.ctx.beginPath();
-        this.ctx.arc(sx, sy, 1, 0, Math.PI * 2);
+        this.ctx.arc(sx, sy, 1 + twinkle * 0.5, 0, Math.PI * 2);
         this.ctx.fill();
       }
       this.ctx.globalAlpha = 1;
     }
-  }
 
-  private lerpColor(color1: string, color2: string, t: number): string {
-    const r1 = parseInt(color1.slice(1, 3), 16);
-    const g1 = parseInt(color1.slice(3, 5), 16);
-    const b1 = parseInt(color1.slice(5, 7), 16);
-    const r2 = parseInt(color2.slice(1, 3), 16);
-    const g2 = parseInt(color2.slice(3, 5), 16);
-    const b2 = parseInt(color2.slice(5, 7), 16);
+    if (isDay) {
+      const sunAngle = this.engine?.getSunAngle?.() ?? Math.PI / 2;
+      const sunX = this.width * 0.2 + Math.cos(sunAngle - Math.PI / 2) * this.width * 0.6;
+      const sunY = this.height * 0.1 + (1 - Math.sin(sunAngle)) * this.height * 0.5;
+      const sunRadius = 30 + Math.sin(sunAngle) * 10;
 
-    const r = Math.round(r1 + (r2 - r1) * t);
-    const g = Math.round(g1 + (g2 - g1) * t);
-    const b = Math.round(b1 + (b2 - b1) * t);
+      const sunGlow = this.ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunRadius * 3);
+      sunGlow.addColorStop(0, 'rgba(255, 236, 179, 0.8)');
+      sunGlow.addColorStop(0.5, 'rgba(255, 193, 7, 0.3)');
+      sunGlow.addColorStop(1, 'rgba(255, 193, 7, 0)');
+      this.ctx.fillStyle = sunGlow;
+      this.ctx.fillRect(sunX - sunRadius * 3, sunY - sunRadius * 3, sunRadius * 6, sunRadius * 6);
 
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+      this.ctx.fillStyle = '#FFD700';
+      this.ctx.beginPath();
+      this.ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
   }
 
   private drawGround(): void {
-    const stats = this.engine?.stats || { timeOfDay: 0.5 };
-    const isNight = stats.timeOfDay > 0.8 || stats.timeOfDay < 0.2;
+    const timeHours = this.engine?.getTimeOfDay?.() ?? 12;
+    const isNight = timeHours < 6 || timeHours >= 18;
+    const grid = this.engine?.getGrid?.() || [];
 
     const groundColor = isNight ? '#1a3d1a' : '#3d8b3d';
 
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < (grid[y]?.length || 0); x++) {
         const { screenX, screenY } = this.gridToScreen(x, y);
-        
+
         this.ctx.beginPath();
         this.ctx.moveTo(screenX, screenY);
         this.ctx.lineTo(screenX + TILE_WIDTH / 2 * this.camera.zoom, screenY + TILE_HEIGHT / 2 * this.camera.zoom);
@@ -262,7 +304,7 @@ export class Renderer {
         this.ctx.lineTo(screenX - TILE_WIDTH / 2 * this.camera.zoom, screenY + TILE_HEIGHT / 2 * this.camera.zoom);
         this.ctx.closePath();
 
-        const shade = ((x + y) % 2 === 0) ? 0 : -10;
+        const shade = ((x + y) % 2 === 0) ? 0 : -15;
         this.ctx.fillStyle = this.adjustColor(groundColor, shade);
         this.ctx.fill();
         this.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
@@ -272,59 +314,106 @@ export class Renderer {
     }
   }
 
-  private adjustColor(color: string, amount: number): string {
-    const r = Math.max(0, Math.min(255, parseInt(color.slice(1, 3), 16) + amount));
-    const g = Math.max(0, Math.min(255, parseInt(color.slice(3, 5), 16) + amount));
-    const b = Math.max(0, Math.min(255, parseInt(color.slice(5, 7), 16) + amount));
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-  }
-
-  private drawBuildingShadow(building: Building, timeOfDay: number): void {
+  private drawBuildingShadow(building: Building, sunAngle: number): void {
     if (building.type === 'road') return;
-    if (building.isRuined) return;
-
-    const shadowAngle = timeOfDay * Math.PI * 2 - Math.PI / 2;
-    const shadowLength = Math.abs(Math.sin(timeOfDay * Math.PI)) * 3 + 0.5;
+    if (building.state === 'ruin') {
+      this.drawRuinsShadow(building, sunAngle);
+      return;
+    }
 
     const { screenX, screenY } = this.gridToScreen(building.x, building.y);
-    const height = building.height * TILE_HEIGHT * this.camera.zoom;
+    let height = building.height * TILE_HEIGHT * this.camera.zoom;
 
-    const shadowOffsetX = Math.cos(shadowAngle) * shadowLength * 20;
-    const shadowOffsetY = Math.sin(shadowAngle) * shadowLength * 10;
+    if (building.state === 'constructing') {
+      height = height * building.constructProgress;
+    }
 
-    this.ctx.save();
-    this.ctx.globalAlpha = 0.3;
-    this.ctx.fillStyle = '#000000';
+    const shadowLength = Math.max(0, building.height * Math.sin(sunAngle)) * SHADOW_COEFFICIENT * this.camera.zoom;
+    const shadowDirX = Math.cos(sunAngle - Math.PI / 2) * shadowLength;
+    const shadowDirY = Math.sin(sunAngle - Math.PI / 2) * shadowLength * 0.5;
 
     const w = TILE_WIDTH / 2 * this.camera.zoom;
     const h = TILE_HEIGHT / 2 * this.camera.zoom;
 
+    this.ctx.save();
+    this.ctx.globalAlpha = 0.35;
+    this.ctx.fillStyle = '#000000';
+
     this.ctx.beginPath();
-    this.ctx.moveTo(screenX + shadowOffsetX, screenY - height + shadowOffsetY);
-    this.ctx.lineTo(screenX + w + shadowOffsetX, screenY + h - height + shadowOffsetY);
-    this.ctx.lineTo(screenX + w + shadowOffsetX, screenY + h + shadowOffsetY);
-    this.ctx.lineTo(screenX + shadowOffsetX, screenY + shadowOffsetY);
+    this.ctx.moveTo(screenX + w, screenY + h);
+    this.ctx.lineTo(screenX + w + shadowDirX, screenY + h + shadowDirY);
+    this.ctx.lineTo(screenX + w + shadowDirX, screenY + h - height + shadowDirY);
+    this.ctx.lineTo(screenX + w, screenY + h - height);
     this.ctx.closePath();
     this.ctx.fill();
 
     this.ctx.beginPath();
-    this.ctx.moveTo(screenX + shadowOffsetX, screenY - height + shadowOffsetY);
-    this.ctx.lineTo(screenX - w + shadowOffsetX, screenY + h - height + shadowOffsetY);
-    this.ctx.lineTo(screenX - w + shadowOffsetX, screenY + h + shadowOffsetY);
-    this.ctx.lineTo(screenX + shadowOffsetX, screenY + shadowOffsetY);
+    this.ctx.moveTo(screenX - w, screenY + h);
+    this.ctx.lineTo(screenX - w + shadowDirX, screenY + h + shadowDirY);
+    this.ctx.lineTo(screenX - w + shadowDirX, screenY + h - height + shadowDirY);
+    this.ctx.lineTo(screenX - w, screenY + h - height);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(screenX + w, screenY + h - height);
+    this.ctx.lineTo(screenX + w + shadowDirX, screenY + h - height + shadowDirY);
+    this.ctx.lineTo(screenX + shadowDirX, screenY - height + shadowDirY);
+    this.ctx.lineTo(screenX, screenY - height);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(screenX - w, screenY + h - height);
+    this.ctx.lineTo(screenX - w + shadowDirX, screenY + h - height + shadowDirY);
+    this.ctx.lineTo(screenX + shadowDirX, screenY - height + shadowDirY);
+    this.ctx.lineTo(screenX, screenY - height);
     this.ctx.closePath();
     this.ctx.fill();
 
     this.ctx.restore();
   }
 
-  private drawBuilding(building: Building, timeOfDay: number): void {
+  private drawRuinsShadow(building: Building, sunAngle: number): void {
+    const { screenX, screenY } = this.gridToScreen(building.x, building.y);
+    const height = building.height * TILE_HEIGHT * this.camera.zoom * 0.4;
+    const shadowLength = Math.max(0, building.height * 0.4 * Math.sin(sunAngle)) * SHADOW_COEFFICIENT * this.camera.zoom;
+    const shadowDirX = Math.cos(sunAngle - Math.PI / 2) * shadowLength;
+    const shadowDirY = Math.sin(sunAngle - Math.PI / 2) * shadowLength * 0.5;
+
+    const w = TILE_WIDTH / 2 * this.camera.zoom;
+    const h = TILE_HEIGHT / 2 * this.camera.zoom;
+
+    this.ctx.save();
+    this.ctx.globalAlpha = 0.25;
+    this.ctx.fillStyle = '#000000';
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(screenX + w, screenY + h);
+    this.ctx.lineTo(screenX + w + shadowDirX, screenY + h + shadowDirY);
+    this.ctx.lineTo(screenX + w + shadowDirX, screenY + h - height + shadowDirY);
+    this.ctx.lineTo(screenX + w, screenY + h - height);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(screenX - w, screenY + h);
+    this.ctx.lineTo(screenX - w + shadowDirX, screenY + h + shadowDirY);
+    this.ctx.lineTo(screenX - w + shadowDirX, screenY + h - height + shadowDirY);
+    this.ctx.lineTo(screenX - w, screenY + h - height);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.restore();
+  }
+
+  private drawBuilding(building: Building, sunAngle: number, timeHours: number): void {
     if (building.type === 'road') {
       this.drawRoad(building);
       return;
     }
 
-    if (building.isRuined) {
+    if (building.state === 'ruin') {
       this.drawRuins(building);
       return;
     }
@@ -333,45 +422,54 @@ export class Renderer {
     const baseHeight = building.height * TILE_HEIGHT * this.camera.zoom;
     let height = baseHeight;
 
-    if (building.isBuilding) {
-      height = baseHeight * building.buildProgress;
+    if (building.state === 'constructing') {
+      height = baseHeight * building.constructProgress;
     }
 
     const w = TILE_WIDTH / 2 * this.camera.zoom;
     const h = TILE_HEIGHT / 2 * this.camera.zoom;
 
-    const colors = this.getBuildingColors(building.type);
+    const colors = this.getBuildingColors(building.type, building.level);
 
-    if (building.isRepairing) {
+    if (building.state === 'repairing') {
       const flash = Math.sin(this.time * Math.PI * 2) * 0.3 + 0.7;
       this.ctx.globalAlpha = flash * 0.6;
     }
 
-    if (building.isBuilding) {
-      this.drawBuildingSkeleton(building, screenX, screenY, height, w, h, colors);
+    if (building.state === 'constructing') {
+      this.drawConstructingBuilding(building, screenX, screenY, baseHeight, w, h, colors);
     } else {
       this.drawBuildingBody(building, screenX, screenY, height, w, h, colors);
     }
 
-    if (!building.isBuilding && !building.isRuined) {
-      this.drawWindows(building, screenX, screenY, height, w, h, timeOfDay);
-    }
-
-    if (building.type === 'commercial' && building.congestion > 0.5) {
-      this.drawCongestionGlow(building, screenX, screenY, height);
+    if (building.state !== 'constructing' && building.state !== 'ruin') {
+      this.drawWindows(building, timeHours < 6 || timeHours >= 18);
     }
 
     this.ctx.globalAlpha = 1;
   }
 
-  private getBuildingColors(type: string): { top: string; left: string; right: string } {
+  private getBuildingColors(type: string, level: number): { top: string; left: string; right: string } {
+    const levelAdjust = (level - 1) * 8;
     switch (type) {
       case 'residential':
-        return { top: '#FFD700', left: '#DAA520', right: '#B8860B' };
+        return {
+          top: this.adjustColor('#FFD700', levelAdjust),
+          left: this.adjustColor('#DAA520', levelAdjust),
+          right: this.adjustColor('#B8860B', levelAdjust)
+        };
       case 'commercial':
-        return { top: '#87CEEB', left: '#5F9EA0', right: '#4682B4' };
+        return {
+          top: this.adjustColor('#87CEEB', levelAdjust),
+          left: this.adjustColor('#5F9EA0', levelAdjust),
+          right: this.adjustColor('#4682B4', levelAdjust)
+        };
       case 'industrial':
-        return { top: '#696969', left: '#505050', right: '#383838' };
+        return {
+          top: this.adjustColor('#808080', levelAdjust),
+          left: this.adjustColor('#696969', levelAdjust),
+          right: this.adjustColor('#505050', levelAdjust)
+        };
       default:
         return { top: '#888888', left: '#666666', right: '#444444' };
     }
@@ -418,27 +516,30 @@ export class Renderer {
     this.ctx.stroke();
   }
 
-  private drawBuildingSkeleton(
+  private drawConstructingBuilding(
     building: Building,
     screenX: number,
     screenY: number,
-    height: number,
+    baseHeight: number,
     w: number,
     h: number,
     colors: { top: string; left: string; right: string }
   ): void {
-    const floors = Math.floor(building.buildProgress * building.level);
+    const progress = building.constructProgress;
+    const floors = building.height;
+    const floorHeight = baseHeight / floors;
+    const completedFloors = Math.floor(progress * floors);
+    const currentFloorProgress = (progress * floors) - completedFloors;
 
-    for (let i = 0; i < floors; i++) {
-      const floorHeight = (i + 1) * (baseHeight / building.level);
-      const y = screenY - floorHeight;
-      const prevY = screenY - i * (baseHeight / building.level);
+    for (let i = 0; i < completedFloors; i++) {
+      const floorY = screenY - (i + 1) * floorHeight;
+      const prevY = screenY - i * floorHeight;
 
-      this.ctx.globalAlpha = 0.8;
+      this.ctx.globalAlpha = 0.85;
 
       this.ctx.beginPath();
-      this.ctx.moveTo(screenX, y);
-      this.ctx.lineTo(screenX + w, y + h);
+      this.ctx.moveTo(screenX, floorY);
+      this.ctx.lineTo(screenX + w, floorY + h);
       this.ctx.lineTo(screenX + w, prevY + h);
       this.ctx.lineTo(screenX, prevY);
       this.ctx.closePath();
@@ -446,8 +547,8 @@ export class Renderer {
       this.ctx.fill();
 
       this.ctx.beginPath();
-      this.ctx.moveTo(screenX, y);
-      this.ctx.lineTo(screenX - w, y + h);
+      this.ctx.moveTo(screenX, floorY);
+      this.ctx.lineTo(screenX - w, floorY + h);
       this.ctx.lineTo(screenX - w, prevY + h);
       this.ctx.lineTo(screenX, prevY);
       this.ctx.closePath();
@@ -455,29 +556,107 @@ export class Renderer {
       this.ctx.fill();
 
       this.ctx.beginPath();
-      this.ctx.moveTo(screenX, y);
-      this.ctx.lineTo(screenX + w, y + h);
-      this.ctx.lineTo(screenX, y + TILE_HEIGHT * this.camera.zoom);
-      this.ctx.lineTo(screenX - w, y + h);
+      this.ctx.moveTo(screenX, floorY);
+      this.ctx.lineTo(screenX + w, floorY + h);
+      this.ctx.lineTo(screenX, floorY + TILE_HEIGHT * this.camera.zoom);
+      this.ctx.lineTo(screenX - w, floorY + h);
       this.ctx.closePath();
       this.ctx.fillStyle = colors.top;
+      this.ctx.fill();
+    }
+
+    if (currentFloorProgress > 0 && completedFloors < floors) {
+      const currentHeight = floorHeight * currentFloorProgress;
+      const floorY = screenY - completedFloors * floorHeight - currentHeight;
+      const prevY = screenY - completedFloors * floorHeight;
+
+      this.ctx.globalAlpha = 0.6;
+
+      this.ctx.beginPath();
+      this.ctx.moveTo(screenX, floorY);
+      this.ctx.lineTo(screenX + w, floorY + h * currentFloorProgress);
+      this.ctx.lineTo(screenX + w, prevY + h);
+      this.ctx.lineTo(screenX, prevY);
+      this.ctx.closePath();
+      this.ctx.fillStyle = colors.right;
+      this.ctx.fill();
+
+      this.ctx.beginPath();
+      this.ctx.moveTo(screenX, floorY);
+      this.ctx.lineTo(screenX - w, floorY + h * currentFloorProgress);
+      this.ctx.lineTo(screenX - w, prevY + h);
+      this.ctx.lineTo(screenX, prevY);
+      this.ctx.closePath();
+      this.ctx.fillStyle = colors.left;
       this.ctx.fill();
     }
 
     this.ctx.globalAlpha = 1;
   }
 
-  private drawWindows(
-    building: Building,
-    screenX: number,
-    screenY: number,
-    height: number,
-    w: number,
-    h: number,
-    timeOfDay: number
-  ): void {
-    const isNight = timeOfDay > 0.8 || timeOfDay < 0.2;
-    if (!isNight) return;
+  private drawWindows(building: Building, isNight: boolean): void {
+    if (!isNight || !building.windowsLit) return;
 
-    const windowRows = Math.max(1, Math.floor(building.height / 10));
-    const
+    const { screenX, screenY } = this.gridToScreen(building.x, building.y);
+    const height = building.height * TILE_HEIGHT * this.camera.zoom;
+    const w = TILE_WIDTH / 2 * this.camera.zoom;
+    const h = TILE_HEIGHT / 2 * this.camera.zoom;
+
+    const windowRows = Math.max(1, Math.floor(building.height));
+    const windowCols = 2;
+    const windowWidth = w * 0.25;
+    const windowHeight = h * 0.3;
+
+    this.ctx.fillStyle = '#FFE66D';
+    this.ctx.shadowColor = '#FFE66D';
+    this.ctx.shadowBlur = 5;
+
+    for (let row = 0; row < windowRows; row++) {
+      for (let col = 0; col < windowCols; col++) {
+        const windowY = screenY - (row + 1) * (height / windowRows) + (height / windowRows) * 0.3;
+        const windowXRight = screenX + w * 0.3 + col * w * 0.35;
+        const windowXLeft = screenX - w * 0.55 + col * w * 0.35;
+
+        this.ctx.fillRect(windowXRight - windowWidth / 2, windowY - windowHeight / 2, windowWidth, windowHeight);
+        this.ctx.fillRect(windowXLeft - windowWidth / 2, windowY - windowHeight / 2, windowWidth, windowHeight);
+      }
+    }
+
+    this.ctx.shadowBlur = 0;
+  }
+
+  private drawRoad(building: Building): void {
+    const { screenX, screenY } = this.gridToScreen(building.x, building.y);
+    const w = TILE_WIDTH / 2 * this.camera.zoom;
+    const h = TILE_HEIGHT / 2 * this.camera.zoom;
+
+    const roadColor = building.level >= 2 ? '#4a4a4a' : '#666666';
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(screenX, screenY);
+    this.ctx.lineTo(screenX + w, screenY + h);
+    this.ctx.lineTo(screenX, screenY + TILE_HEIGHT * this.camera.zoom);
+    this.ctx.lineTo(screenX - w, screenY + h);
+    this.ctx.closePath();
+    this.ctx.fillStyle = roadColor;
+    this.ctx.fill();
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    this.ctx.lineWidth = 0.5;
+    this.ctx.stroke();
+
+    if (building.level >= 2) {
+      this.ctx.strokeStyle = '#FFD700';
+      this.ctx.lineWidth = 1;
+      this.ctx.setLineDash([3, 3]);
+      this.ctx.beginPath();
+      this.ctx.moveTo(screenX - w * 0.5, screenY + h * 0.5);
+      this.ctx.lineTo(screenX + w * 0.5, screenY + h * 0.5);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+    }
+  }
+
+  private drawRuins(building: Building): void {
+    const { screenX, screenY } = this.gridToScreen(building.x, building.y);
+    const height = building.height * TILE_HEIGHT * this.camera.zoom * 0.4;
+    const w = T

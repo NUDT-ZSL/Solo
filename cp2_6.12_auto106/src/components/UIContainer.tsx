@@ -1,34 +1,25 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-
-interface Building {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  type: string;
-  isRuins?: boolean;
-  level?: number;
-}
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Building, BuildingType, GameStats } from '../engine/types';
 
 interface CityEngine {
-  buildings: Building[];
-  triggerEvent: (eventType: string, payload?: any) => void;
-  destroyBuilding: (buildingId: string) => void;
-  repairBuilding: (buildingId: string) => void;
+  getGrid: () => Building[][];
+  getVehicles: () => any[];
+  getStats: () => GameStats;
+  getTimeOfDay: () => number;
+  getSunAngle: () => number;
+  getCongestedRoads: () => { x: number; y: number; count: number }[];
+  getRuinBuildings: () => Building[];
+  buildAt: (x: number, y: number, type: BuildingType) => boolean;
+  upgradeRoad: (x: number, y: number) => boolean;
+  repairBuilding: (x: number, y: number) => boolean;
+  triggerEvent: (type: string) => void;
+  getBuildingAt: (x: number, y: number) => Building | undefined;
+  getGridSize: () => number;
+  getPreviewBuilding: () => { x: number; y: number; type: string } | null;
+  setPreviewBuilding: (p: { x: number; y: number; type: string } | null) => void;
+  isEnergyOverloaded: () => boolean;
+  setTaxMultiplier: (m: number, d: number) => void;
   getTaxMultiplier: () => number;
-  setTaxMultiplier: (multiplier: number, duration: number) => void;
-}
-
-interface GameStats {
-  population: number;
-  tax: number;
-  satisfaction: number;
-  energyConsumption: number;
-  energyCapacity: number;
-  safety: number;
-  greenery: number;
-  traffic: number;
 }
 
 interface SelectedCell {
@@ -44,7 +35,7 @@ interface Ripple {
 
 interface UIContainerProps {
   engine: CityEngine;
-  onBuild: (x: number, y: number, type: string) => void;
+  onBuild: (x: number, y: number, type: BuildingType) => void;
   onUpgrade: (x: number, y: number) => void;
   onRepair: (x: number, y: number) => void;
   onTriggerEvent: (type: string) => void;
@@ -52,9 +43,10 @@ interface UIContainerProps {
   timeOfDay: number;
   selectedCell: SelectedCell | null;
   onSelectCell: (x: number | null, y: number | null) => void;
+  renderer: any;
 }
 
-const BUILDING_TYPES = [
+const BUILDING_TYPES: { id: BuildingType; name: string; icon: string; color: string }[] = [
   { id: 'residential', name: '住宅', icon: '🏠', color: '#3498db' },
   { id: 'commercial', name: '商业', icon: '🏪', color: '#f39c12' },
   { id: 'industrial', name: '工业', icon: '🏭', color: '#e74c3c' },
@@ -67,6 +59,8 @@ const EVENTS = [
   { id: 'prosperity', name: '经济繁荣', icon: '📈', color: '#2ecc71' },
 ];
 
+const CELL_SIZE = 60;
+
 const UIContainer: React.FC<UIContainerProps> = ({
   engine,
   onBuild,
@@ -77,21 +71,20 @@ const UIContainer: React.FC<UIContainerProps> = ({
   timeOfDay,
   selectedCell,
   onSelectCell,
+  renderer,
 }) => {
   const [showBuildMenu, setShowBuildMenu] = useState(false);
-  const [selectedBuildingType, setSelectedBuildingType] = useState<string | null>(null);
+  const [selectedBuildingType, setSelectedBuildingType] = useState<BuildingType | null>(null);
   const [showEventPanel, setShowEventPanel] = useState(false);
   const [showSatisfactionDetail, setShowSatisfactionDetail] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [activeNavTab, setActiveNavTab] = useState('stats');
-  const [ripples, setRipples] = useState<Ripple[]>((
-    []
-  ));
+  const [ripples, setRipples] = useState<Ripple[]>([]);
   const rippleIdRef = useRef(0);
   const [showRoadUpgrade, setShowRoadUpgrade] = useState(false);
   const [selectedRoadCell, setSelectedRoadCell] = useState<SelectedCell | null>(null);
   const [energyOverload, setEnergyOverload] = useState(false);
-  const [flickerBuildings, setFlickerBuildings] = useState<string[]>([]);
+  const [flickerBuildings, setFlickerBuildings] = useState<{ x: number; y: number }[]>([]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -103,9 +96,8 @@ const UIContainer: React.FC<UIContainerProps> = ({
   }, []);
 
   useEffect(() => {
-    const overload = stats.energyConsumption > stats.energyCapacity;
-    setEnergyOverload(overload);
-  }, [stats.energyConsumption, stats.energyCapacity]);
+    setEnergyOverload(engine.isEnergyOverloaded());
+  }, [engine, stats.energy, stats.maxEnergy]);
 
   useEffect(() => {
     if (!energyOverload) {
@@ -114,15 +106,23 @@ const UIContainer: React.FC<UIContainerProps> = ({
     }
 
     const interval = setInterval(() => {
-      const buildings = engine.buildings.filter((b) => !b.isRuins);
+      const grid = engine.getGrid();
+      const buildings: { x: number; y: number }[] = [];
+      for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[y].length; x++) {
+          const b = grid[y][x];
+          if (b.type !== 'empty' && b.state !== 'ruin') {
+            buildings.push({ x, y });
+          }
+        }
+      }
       const count = Math.floor(Math.random() * 3) + 1;
       const shuffled = [...buildings].sort(() => Math.random() - 0.5);
-      const flickering = shuffled.slice(0, Math.min(count, buildings.length)).map((b) => b.id);
-      setFlickerBuildings(flickering);
+      setFlickerBuildings(shuffled.slice(0, Math.min(count, buildings.length)));
     }, 500);
 
     return () => clearInterval(interval);
-  }, [energyOverload, engine.buildings]);
+  }, [energyOverload, engine]);
 
   const createRipple = useCallback((e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -148,41 +148,38 @@ const UIContainer: React.FC<UIContainerProps> = ({
   };
 
   const getTimeGlowColor = () => {
-    const t = timeOfDay % 1;
-    if (t < 0.25) {
-      const ratio = t / 0.25;
-      return `rgba(255, ${Math.floor(255 * ratio)}, ${Math.floor(200 * ratio)}, 0.6)`;
-    } else if (t < 0.5) {
-      const ratio = (t - 0.25) / 0.25;
-      return `rgba(255, 215, ${Math.floor(0 * ratio)}, 0.8)`;
-    } else if (t < 0.75) {
-      const ratio = (t - 0.5) / 0.25;
-      return `rgba(${Math.floor(100 + 155 * ratio)}, ${Math.floor(215 - 115 * ratio)}, 255, 0.7)`;
+    if (timeOfDay >= 6 && timeOfDay < 18) {
+      const ratio = (timeOfDay - 6) / 12;
+      const r = 255;
+      const g = Math.floor(255 - ratio * 40);
+      const b = Math.floor(255 - ratio * 200);
+      return `rgba(${r}, ${g}, ${b}, 0.6)`;
     } else {
-      const ratio = (t - 0.75) / 0.25;
-      return `rgba(${Math.floor(255 - 155 * ratio)}, 100, 255, 0.5)`;
+      return 'rgba(100, 100, 255, 0.7)';
     }
   };
 
   const formatTime = () => {
-    const hours = Math.floor(timeOfDay * 24) % 24;
-    const minutes = Math.floor((timeOfDay * 24 * 60) % 60);
+    const hours = Math.floor(timeOfDay) % 24;
+    const minutes = Math.floor((timeOfDay % 1) * 60);
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
-  const handleCellClick = (x: number, y: number) => {
-    const building = engine.buildings.find(
-      (b) => x >= b.x && x < b.x + b.width && y >= b.y && y < b.y + b.height
-    );
+  const getClockRotation = () => {
+    return ((timeOfDay % 12) / 12) * 360;
+  };
 
-    if (building) {
-      if (building.isRuins) {
-        onRepair(building.x, building.y);
+  const handleCellClick = (x: number, y: number) => {
+    const building = engine.getBuildingAt(x, y);
+
+    if (building && building.type !== 'empty') {
+      if (building.state === 'ruin') {
+        onRepair(x, y);
       } else if (building.type === 'road') {
-        setSelectedRoadCell({ x: building.x, y: building.y });
+        setSelectedRoadCell({ x, y });
         setShowRoadUpgrade(true);
       }
-      onSelectCell(building.x, building.y);
+      onSelectCell(x, y);
     } else {
       onSelectCell(x, y);
       setSelectedBuildingType(null);
@@ -190,8 +187,11 @@ const UIContainer: React.FC<UIContainerProps> = ({
     }
   };
 
-  const handleBuildingTypeSelect = (type: string) => {
+  const handleBuildingTypeSelect = (type: BuildingType) => {
     setSelectedBuildingType(type);
+    if (selectedCell) {
+      engine.setPreviewBuilding({ x: selectedCell.x, y: selectedCell.y, type });
+    }
   };
 
   const handleConfirmBuild = () => {
@@ -199,6 +199,7 @@ const UIContainer: React.FC<UIContainerProps> = ({
       onBuild(selectedCell.x, selectedCell.y, selectedBuildingType);
       setShowBuildMenu(false);
       setSelectedBuildingType(null);
+      engine.setPreviewBuilding(null);
       onSelectCell(null, null);
     }
   };
@@ -230,10 +231,21 @@ const UIContainer: React.FC<UIContainerProps> = ({
   };
 
   const getEnergyPercentage = () => {
-    return Math.min(100, Math.round((stats.energyConsumption / stats.energyCapacity) * 100));
+    if (stats.maxEnergy === 0) return 0;
+    return Math.min(100, Math.round((stats.energy / stats.maxEnergy) * 100));
   };
 
-  const ruinBuildings = engine.buildings.filter((b) => b.isRuins);
+  const ruinBuildings = engine.getRuinBuildings();
+
+  const gridToScreen = (x: number, y: number) => {
+    if (renderer && typeof renderer.gridToScreen === 'function') {
+      return renderer.gridToScreen(x, y);
+    }
+    return {
+      screenX: (x - y) * 32 + window.innerWidth / 2,
+      screenY: (x + y) * 16 + window.innerHeight * 0.3,
+    };
+  };
 
   return (
     <div
@@ -264,7 +276,7 @@ const UIContainer: React.FC<UIContainerProps> = ({
         @keyframes bounceUp {
           0% {
             opacity: 0;
-            transform: translate(-50%, 0) scale(0.8);
+            transform: translate(-50%, 20px) scale(0.8);
           }
           60% {
             transform: translate(-50%, -10px) scale(1.05);
@@ -287,10 +299,6 @@ const UIContainer: React.FC<UIContainerProps> = ({
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
         }
         @keyframes glow {
           0%, 100% { box-shadow: 0 0 20px currentColor; }
@@ -318,19 +326,18 @@ const UIContainer: React.FC<UIContainerProps> = ({
         }
       `}</style>
 
-      {flickerBuildings.map((id) => {
-        const building = engine.buildings.find((b) => b.id === id);
-        if (!building) return null;
+      {flickerBuildings.map((pos, idx) => {
+        const { screenX, screenY } = gridToScreen(pos.x, pos.y);
         return (
           <div
-            key={`flicker-${id}`}
+            key={`flicker-${idx}`}
             className="flicker"
             style={{
               position: 'absolute',
-              left: building.x,
-              top: building.y,
-              width: building.width,
-              height: building.height,
+              left: screenX - 30,
+              top: screenY - 30,
+              width: CELL_SIZE,
+              height: CELL_SIZE,
               backgroundColor: 'rgba(255, 200, 0, 0.3)',
               border: '2px solid #f39c12',
               borderRadius: '4px',
@@ -341,44 +348,68 @@ const UIContainer: React.FC<UIContainerProps> = ({
         );
       })}
 
-      {ruinBuildings.map((building) => (
-        <button
-          key={`repair-${building.id}`}
-          onClick={(e) => {
-            createRipple(e);
-            onRepair(building.x, building.y);
-          }}
+      {energyOverload && (
+        <div
           style={{
-            ...glassStyle,
             position: 'absolute',
-            left: building.x + building.width / 2 - 30,
-            top: building.y - 35,
-            width: '60px',
-            height: '30px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            color: '#3498db',
-            fontSize: '12px',
+            top: '100px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            ...glassStyle,
+            padding: '12px 24px',
+            color: '#e74c3c',
+            fontSize: '16px',
             fontWeight: 'bold',
+            zIndex: 300,
             pointerEvents: 'auto',
-            zIndex: 200,
-            ...hoverButtonStyle,
+            animation: 'pulse 1s infinite',
           }}
-          className="hover-scale"
         >
-          <span>🔧</span>
-          <span>修复</span>
-          {ripples.map((ripple) => (
-            <span
-              key={ripple.id}
-              className="ripple"
-              style={{ left: ripple.x, top: ripple.y }}
-            />
-          ))}
-        </button>
-      ))}
+          ⚠️ 能源超载！部分建筑供电不足
+        </div>
+      )}
+
+      {ruinBuildings.map((building, idx) => {
+        const { screenX, screenY } = gridToScreen(building.x, building.y);
+        return (
+          <button
+            key={`repair-${idx}`}
+            onClick={(e) => {
+              createRipple(e);
+              onRepair(building.x, building.y);
+            }}
+            style={{
+              ...glassStyle,
+              position: 'absolute',
+              left: screenX - 30,
+              top: screenY - 65,
+              width: '60px',
+              height: '30px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              color: '#3498db',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              pointerEvents: 'auto',
+              zIndex: 200,
+              ...hoverButtonStyle,
+            }}
+            className="hover-scale"
+          >
+            <span>🔧</span>
+            <span>修复</span>
+            {ripples.map((ripple) => (
+              <span
+                key={ripple.id}
+                className="ripple"
+                style={{ left: ripple.x, top: ripple.y }}
+              />
+            ))}
+          </button>
+        );
+      })}
 
       <div
         style={{
@@ -418,7 +449,7 @@ const UIContainer: React.FC<UIContainerProps> = ({
                 left: '50%',
                 top: '10px',
                 marginLeft: '-1px',
-                transform: `rotate(${(timeOfDay % 1) * 360}deg)`,
+                transform: `rotate(${getClockRotation()}deg)`,
                 transformOrigin: 'bottom center',
               }}
             />
@@ -431,7 +462,7 @@ const UIContainer: React.FC<UIContainerProps> = ({
                 top: '15px',
                 marginLeft: '-0.75px',
                 backgroundColor: 'rgba(0, 212, 255, 0.6)',
-                transform: `rotate(${((timeOfDay * 12) % 1) * 360}deg)`,
+                transform: `rotate(${((timeOfDay % 1) * 360)}deg)`,
                 transformOrigin: 'bottom center',
               }}
             />
@@ -512,7 +543,7 @@ const UIContainer: React.FC<UIContainerProps> = ({
                     fontWeight: 'bold',
                   }}
                 >
-                  {stats.tax.toLocaleString()}
+                  {Math.floor(stats.tax).toLocaleString()}
                 </div>
               </div>
             </div>
@@ -724,89 +755,152 @@ const UIContainer: React.FC<UIContainerProps> = ({
         )}
       </div>
 
-      {selectedCell && showBuildMenu && (
-        <div
-          style={{
-            position: 'absolute',
-            left: selectedCell.x + 30,
-            top: selectedCell.y - 20,
-            transform: 'translateX(-50%)',
-            pointerEvents: 'auto',
-            zIndex: 250,
-            animation: 'bounceUp 0.2s ease-out',
-          }}
-        >
+      {selectedCell && showBuildMenu && (() => {
+        const { screenX, screenY } = gridToScreen(selectedCell.x, selectedCell.y);
+        return (
           <div
             style={{
-              ...glassStyle,
-              padding: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              width: '160px',
+              position: 'absolute',
+              left: screenX,
+              top: screenY - 40,
+              transform: 'translateX(-50%)',
+              pointerEvents: 'auto',
+              zIndex: 250,
+              animation: 'bounceUp 0.2s ease-out',
             }}
           >
             <div
               style={{
-                color: '#00d4ff',
-                fontSize: '12px',
-                fontWeight: 'bold',
-                textAlign: 'center',
-                marginBottom: '4px',
+                ...glassStyle,
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                width: '160px',
               }}
             >
-              选择建筑类型
-            </div>
-            {BUILDING_TYPES.map((type) => (
-              <button
-                key={type.id}
-                onClick={() => handleBuildingTypeSelect(type.id)}
+              <div
                 style={{
-                  ...glassStyle,
-                  padding: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  border: selectedBuildingType === type.id
-                    ? `2px solid ${type.color}`
-                    : '1px solid rgba(255, 255, 255, 0.2)',
-                  backgroundColor: selectedBuildingType === type.id
-                    ? `${type.color}20`
-                    : 'rgba(255, 255, 255, 0.05)',
-                  color: '#fff',
-                  fontSize: '13px',
-                  ...hoverButtonStyle,
+                  color: '#00d4ff',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  marginBottom: '4px',
                 }}
-                className="hover-scale"
               >
-                <span style={{ fontSize: '18px' }}>{type.icon}</span>
-                <span style={{ color: type.color, fontWeight: 500 }}>{type.name}</span>
-              </button>
-            ))}
-            {selectedBuildingType && (
+                选择建筑类型
+              </div>
+              {BUILDING_TYPES.map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => handleBuildingTypeSelect(type.id)}
+                  style={{
+                    ...glassStyle,
+                    padding: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    border: selectedBuildingType === type.id
+                      ? `2px solid ${type.color}`
+                      : '1px solid rgba(255, 255, 255, 0.2)',
+                    backgroundColor: selectedBuildingType === type.id
+                      ? `${type.color}20`
+                      : 'rgba(255, 255, 255, 0.05)',
+                    color: '#fff',
+                    fontSize: '13px',
+                    ...hoverButtonStyle,
+                  }}
+                  className="hover-scale"
+                >
+                  <span style={{ fontSize: '18px' }}>{type.icon}</span>
+                  <span style={{ color: type.color, fontWeight: 500 }}>{type.name}</span>
+                </button>
+              ))}
+              {selectedBuildingType && (
+                <button
+                  onClick={(e) => {
+                    createRipple(e);
+                    handleConfirmBuild();
+                  }}
+                  style={{
+                    marginTop: '4px',
+                    padding: '10px',
+                    backgroundColor: '#00d4ff',
+                    color: '#001',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    ...hoverButtonStyle,
+                    boxShadow: '0 0 15px rgba(0, 212, 255, 0.5)',
+                  }}
+                  className="hover-scale"
+                >
+                  ✔️ 确认建造
+                  {ripples.map((ripple) => (
+                    <span
+                      key={ripple.id}
+                      className="ripple"
+                      style={{ left: ripple.x, top: ripple.y }}
+                    />
+                  ))}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {showRoadUpgrade && selectedRoadCell && (() => {
+        const { screenX, screenY } = gridToScreen(selectedRoadCell.x, selectedRoadCell.y);
+        return (
+          <div
+            style={{
+              position: 'absolute',
+              left: screenX,
+              top: screenY - 30,
+              transform: 'translateX(-50%)',
+              pointerEvents: 'auto',
+              zIndex: 250,
+              animation: 'bounceUp 0.2s ease-out',
+            }}
+          >
+            <div
+              style={{
+                ...glassStyle,
+                padding: '12px',
+                width: '140px',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ color: '#95a5a6', fontSize: '13px', fontWeight: 'bold', marginBottom: '10px' }}>
+                🛣️ 道路升级
+              </div>
               <button
                 onClick={(e) => {
                   createRipple(e);
-                  handleConfirmBuild();
+                  handleUpgradeRoad();
                 }}
                 style={{
-                  marginTop: '4px',
-                  padding: '10px',
-                  backgroundColor: '#00d4ff',
-                  color: '#001',
+                  width: '100%',
+                  padding: '8px',
+                  backgroundColor: '#95a5a6',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   fontWeight: 'bold',
                   cursor: 'pointer',
                   position: 'relative',
                   overflow: 'hidden',
                   ...hoverButtonStyle,
-                  boxShadow: '0 0 15px rgba(0, 212, 255, 0.5)',
                 }}
                 className="hover-scale"
               >
-                ✔️ 确认建造
+                ⬆️ 升级道路
                 {ripples.map((ripple) => (
                   <span
                     key={ripple.id}
@@ -815,103 +909,28 @@ const UIContainer: React.FC<UIContainerProps> = ({
                   />
                 ))}
               </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {selectedCell && selectedBuildingType && (
-        <div
-          style={{
-            position: 'absolute',
-            left: selectedCell.x,
-            top: selectedCell.y,
-            width: '60px',
-            height: '60px',
-            backgroundColor: 'rgba(52, 152, 219, 0.3)',
-            border: '2px dashed rgba(52, 152, 219, 0.8)',
-            borderRadius: '4px',
-            pointerEvents: 'none',
-            zIndex: 150,
-            animation: 'pulse 1.5s ease-in-out infinite',
-          }}
-        />
-      )}
-
-      {showRoadUpgrade && selectedRoadCell && (
-        <div
-          style={{
-            position: 'absolute',
-            left: selectedRoadCell.x + 30,
-            top: selectedRoadCell.y - 10,
-            transform: 'translateX(-50%)',
-            pointerEvents: 'auto',
-            zIndex: 250,
-            animation: 'bounceUp 0.2s ease-out',
-          }}
-        >
-          <div
-            style={{
-              ...glassStyle,
-              padding: '12px',
-              width: '140px',
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ color: '#95a5a6', fontSize: '13px', fontWeight: 'bold', marginBottom: '10px' }}>
-              🛣️ 道路升级
+              <button
+                onClick={() => {
+                  setShowRoadUpgrade(false);
+                  setSelectedRoadCell(null);
+                }}
+                style={{
+                  width: '100%',
+                  marginTop: '6px',
+                  padding: '6px',
+                  backgroundColor: 'transparent',
+                  color: 'rgba(255,255,255,0.6)',
+                  border: 'none',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
             </div>
-            <button
-              onClick={(e) => {
-                createRipple(e);
-                handleUpgradeRoad();
-              }}
-              style={{
-                width: '100%',
-                padding: '8px',
-                backgroundColor: '#95a5a6',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden',
-                ...hoverButtonStyle,
-              }}
-              className="hover-scale"
-            >
-              ⬆️ 升级道路
-              {ripples.map((ripple) => (
-                <span
-                  key={ripple.id}
-                  className="ripple"
-                  style={{ left: ripple.x, top: ripple.y }}
-                />
-              ))}
-            </button>
-            <button
-              onClick={() => {
-                setShowRoadUpgrade(false);
-                setSelectedRoadCell(null);
-              }}
-              style={{
-                width: '100%',
-                marginTop: '6px',
-                padding: '6px',
-                backgroundColor: 'transparent',
-                color: 'rgba(255,255,255,0.6)',
-                border: 'none',
-                fontSize: '11px',
-                cursor: 'pointer',
-              }}
-            >
-              取消
-            </button>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {isMobile && (
         <div
@@ -1038,7 +1057,7 @@ const UIContainer: React.FC<UIContainerProps> = ({
               <div>
                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>税收</div>
                 <div style={{ color: '#ffd700', fontSize: '14px', fontWeight: 'bold' }}>
-                  {stats.tax.toLocaleString()}
+                  {Math.floor(stats.tax).toLocaleString()}
                 </div>
               </div>
             </div>

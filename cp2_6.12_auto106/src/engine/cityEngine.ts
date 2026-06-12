@@ -1,43 +1,4 @@
-export type BuildingType = 'empty' | 'residential' | 'commercial' | 'industrial' | 'road';
-
-export type BuildingState = 'normal' | 'ruin' | 'repairing' | 'constructing';
-
-export type EventType = 'earthquake' | 'celebration' | 'prosperity';
-
-export interface Building {
-  type: BuildingType;
-  state: BuildingState;
-  level: number;
-  constructProgress: number;
-  repairProgress: number;
-  x: number;
-  y: number;
-  height: number;
-  windowsLit: boolean;
-}
-
-export interface Vehicle {
-  id: number;
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  color: string;
-  speed: number;
-  path: { x: number; y: number }[];
-  pathIndex: number;
-}
-
-export interface GameStats {
-  population: number;
-  tax: number;
-  satisfaction: number;
-  energy: number;
-  maxEnergy: number;
-}
-
-type SaveCallback = (data: unknown) => void;
-type LoadCallback = (data: unknown) => void;
+import { BuildingType, BuildingState, EventType, Building, Vehicle, GameStats, SaveData, SaveCallback, LoadCallback } from './types';
 
 const GRID_SIZE = 30;
 const DAY_CYCLE_SECONDS = 30;
@@ -53,6 +14,9 @@ export class CityEngine {
     satisfaction: 70,
     energy: 100,
     maxEnergy: 100,
+    safety: 80,
+    greenery: 60,
+    traffic: 90,
   };
   private timeOfDay = 6;
   private vehicleIdCounter = 0;
@@ -63,6 +27,9 @@ export class CityEngine {
   private loadCallback: LoadCallback | null = null;
   private eventActive: EventType | null = null;
   private eventTimer = 0;
+  private taxMultiplier: number = 1;
+  private taxMultiplierTimer: number = 0;
+  private previewBuilding: { x: number; y: number; type: BuildingType } | null = null;
 
   constructor() {
     this.initGrid();
@@ -90,6 +57,7 @@ export class CityEngine {
       y,
       height: 0,
       windowsLit: false,
+      congestionGlow: 0,
     };
   }
 
@@ -107,6 +75,7 @@ export class CityEngine {
       y,
       height: this.getBuildingHeight(type),
       windowsLit: false,
+      congestionGlow: 0,
     };
     this.grid[y][x] = building;
     return true;
@@ -147,14 +116,28 @@ export class CityEngine {
     this.updateDayNightCycle(deltaTime);
     this.updateBuildings(deltaTime);
     this.updateVehicles(deltaTime);
+    this.updateCongestionEffects(deltaTime);
     this.updateStats(deltaTime);
     this.updateEvent(deltaTime);
     this.updateWindowsLit();
+    this.updateTaxMultiplier(deltaTime);
   }
 
   private updateDayNightCycle(deltaTime: number): void {
     const hoursPerSecond = 24 / DAY_CYCLE_SECONDS;
     this.timeOfDay = (this.timeOfDay + deltaTime * hoursPerSecond) % 24;
+  }
+
+  isDaytime(): boolean {
+    return this.timeOfDay >= 6 && this.timeOfDay < 18;
+  }
+
+  getSunAngle(): number {
+    if (this.isDaytime()) {
+      const normalizedTime = (this.timeOfDay - 6) / 12;
+      return normalizedTime * Math.PI;
+    }
+    return 0;
   }
 
   private updateBuildings(deltaTime: number): void {
@@ -282,9 +265,15 @@ export class CityEngine {
   private moveVehicles(): void {
     for (const vehicle of this.vehicles) {
       if (vehicle.pathIndex < vehicle.path.length - 1) {
-        vehicle.pathIndex++;
-        vehicle.x = vehicle.path[vehicle.pathIndex].x;
-        vehicle.y = vehicle.path[vehicle.pathIndex].y;
+        const nextPos = vehicle.path[vehicle.pathIndex + 1];
+        const road = this.grid[nextPos.y][nextPos.x];
+        const speedMultiplier = road.level === 2 ? 1.5 : 1;
+        
+        if (Math.random() < speedMultiplier) {
+          vehicle.pathIndex++;
+          vehicle.x = vehicle.path[vehicle.pathIndex].x;
+          vehicle.y = vehicle.path[vehicle.pathIndex].y;
+        }
       }
     }
   }
@@ -309,11 +298,42 @@ export class CityEngine {
     return Array.from(roadCounts.values()).filter((r) => r.count > 5);
   }
 
+  private updateCongestionEffects(deltaTime: number): void {
+    const congestedRoads = this.getCongestedRoads();
+
+    for (const road of congestedRoads) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = road.x + dx;
+          const ny = road.y + dy;
+          if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+            const building = this.grid[ny][nx];
+            if (building.type === 'commercial') {
+              building.congestionGlow = 1;
+            }
+          }
+        }
+      }
+    }
+
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const building = this.grid[y][x];
+        if (building.congestionGlow > 0) {
+          building.congestionGlow = Math.max(0, building.congestionGlow - 0.03 * deltaTime * 60);
+        }
+      }
+    }
+  }
+
   private updateStats(deltaTime: number): void {
     const residentialCount = this.countBuildingType('residential', 'normal');
     const commercialCount = this.countBuildingType('commercial', 'normal');
     const industrialCount = this.countBuildingType('industrial', 'normal');
-    const totalBuildings = residentialCount + commercialCount + industrialCount;
+    const emptyCount = this.countBuildingType('empty', 'normal');
+    const totalBuildings = GRID_SIZE * GRID_SIZE;
+    const totalNonEmpty = residentialCount + commercialCount + industrialCount;
 
     this.populationAccumulator += deltaTime;
     if (this.populationAccumulator >= 1) {
@@ -327,7 +347,7 @@ export class CityEngine {
     this.taxAccumulator += deltaTime;
     if (this.taxAccumulator >= 1) {
       this.taxAccumulator -= 1;
-      this.stats.tax += residentialCount * 0.1;
+      this.stats.tax += residentialCount * 0.1 * this.taxMultiplier;
     }
 
     const energyConsumption = industrialCount * 2 + commercialCount * 1 + residentialCount * 0.5;
@@ -337,13 +357,17 @@ export class CityEngine {
 
     const congestedRoads = this.getCongestedRoads().length;
     const trafficPenalty = congestedRoads * 2;
-    const residentialRatio = totalBuildings > 0 ? residentialCount / totalBuildings : 0;
+    const residentialRatio = totalNonEmpty > 0 ? residentialCount / totalNonEmpty : 0;
     const satisfactionBonus = residentialRatio * 20;
     const randomFactor = (Math.random() - 0.5) * 5;
 
+    this.stats.safety = totalNonEmpty > 0 ? Math.max(0, 100 - (industrialCount / totalNonEmpty) * 100) : 80;
+    this.stats.greenery = (emptyCount / totalBuildings) * 50 + residentialRatio * 50;
+    this.stats.traffic = Math.max(0, 100 - congestedRoads * 5);
+
     this.stats.satisfaction = Math.max(
       0,
-      Math.min(100, 70 - trafficPenalty + satisfactionBonus + randomFactor)
+      Math.min(100, 70 - trafficPenalty + satisfactionBonus + randomFactor + (this.stats.safety - 50) * 0.2 + (this.stats.greenery - 50) * 0.2)
     );
   }
 
@@ -412,6 +436,34 @@ export class CityEngine {
     }
   }
 
+  getRuinBuildings(): Building[] {
+    const ruins: Building[] = [];
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const building = this.grid[y][x];
+        if (building.state === 'ruin') {
+          ruins.push(building);
+        }
+      }
+    }
+    return ruins;
+  }
+
+  setTaxMultiplier(multiplier: number, durationMs: number): void {
+    this.taxMultiplier = multiplier;
+    this.taxMultiplierTimer = durationMs / 1000;
+  }
+
+  private updateTaxMultiplier(deltaTime: number): void {
+    if (this.taxMultiplierTimer > 0) {
+      this.taxMultiplierTimer -= deltaTime;
+      if (this.taxMultiplierTimer <= 0) {
+        this.taxMultiplier = 1;
+        this.taxMultiplierTimer = 0;
+      }
+    }
+  }
+
   private triggerCelebration(): void {
     this.stats.satisfaction = Math.min(100, this.stats.satisfaction + 15);
   }
@@ -422,7 +474,7 @@ export class CityEngine {
   }
 
   private updateWindowsLit(): void {
-    const isNight = this.timeOfDay < 6 || this.timeOfDay >= 18;
+    const isNight = !this.isDaytime();
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const building = this.grid[y][x];
@@ -439,6 +491,16 @@ export class CityEngine {
     return this.grid;
   }
 
+  getBuildingsList(): Building[] {
+    const buildings: Building[] = [];
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        buildings.push(this.grid[y][x]);
+      }
+    }
+    return buildings;
+  }
+
   getVehicles(): Vehicle[] {
     return this.vehicles;
   }
@@ -449,12 +511,6 @@ export class CityEngine {
 
   getTimeOfDay(): number {
     return this.timeOfDay;
-  }
-
-  getSunAngle(): number {
-    const normalizedTime = (this.timeOfDay - 6) / 12;
-    const angle = normalizedTime * Math.PI;
-    return Math.max(0, Math.min(Math.PI, angle));
   }
 
   getCurrentEvent(): EventType | null {
@@ -469,22 +525,21 @@ export class CityEngine {
     this.loadCallback = callback;
   }
 
-  save(): void {
-    if (!this.saveCallback) return;
-
-    const data = {
+  save(): SaveData {
+    const data: SaveData = {
       grid: this.grid,
       stats: this.stats,
       timeOfDay: this.timeOfDay,
       vehicles: this.vehicles,
       vehicleIdCounter: this.vehicleIdCounter,
     };
-    this.saveCallback(data);
+    if (this.saveCallback) {
+      this.saveCallback(data);
+    }
+    return data;
   }
 
-  load(data: unknown): void {
-    if (!this.loadCallback) return;
-
+  load(data: SaveData): void {
     if (this.isSaveData(data)) {
       this.grid = data.grid;
       this.stats = data.stats;
@@ -492,16 +547,12 @@ export class CityEngine {
       this.vehicles = data.vehicles;
       this.vehicleIdCounter = data.vehicleIdCounter;
     }
-    this.loadCallback(data);
+    if (this.loadCallback) {
+      this.loadCallback(data);
+    }
   }
 
-  private isSaveData(data: unknown): data is {
-    grid: Building[][];
-    stats: GameStats;
-    timeOfDay: number;
-    vehicles: Vehicle[];
-    vehicleIdCounter: number;
-  } {
+  private isSaveData(data: unknown): data is SaveData {
     if (typeof data !== 'object' || data === null) return false;
     const d = data as Record<string, unknown>;
     return (
@@ -516,5 +567,22 @@ export class CityEngine {
 
   getGridSize(): number {
     return GRID_SIZE;
+  }
+
+  getBuildingAt(x: number, y: number): Building | undefined {
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return undefined;
+    return this.grid[y][x];
+  }
+
+  getPreviewBuilding(): { x: number; y: number; type: BuildingType } | null {
+    return this.previewBuilding;
+  }
+
+  setPreviewBuilding(preview: { x: number; y: number; type: BuildingType } | null): void {
+    this.previewBuilding = preview;
+  }
+
+  isEnergyOverloaded(): boolean {
+    return this.stats.energy <= 0;
   }
 }
