@@ -1,5 +1,11 @@
 import * as THREE from 'three'
 
+// 顶点数上限校验说明：
+// - 性能预算：MAX_VERTICES = 3000，用于保证 60FPS 渲染流畅度
+// - 当前配置：GRID_SEGMENTS_W = 44，GRID_SEGMENTS_D = 44
+// - 实际顶点数 = (segW + 1) * (segD + 1) = 45 * 45 = 2025
+// - 余量约 33%，预留给脉冲放大、波纹扩散等特效的额外顶点偏移计算开销
+// - 若调整分段数，请务必确保 (segW + 1) * (segD + 1) <= MAX_VERTICES
 const MAX_VERTICES = 3000
 const GRID_SEGMENTS_W = 44
 const GRID_SEGMENTS_D = 44

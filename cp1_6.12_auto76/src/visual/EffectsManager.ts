@@ -3,7 +3,8 @@ import gsap from 'gsap'
 
 interface Ripple {
   mesh: THREE.Mesh
-  origin: THREE.Vector3
+  uFrac: number
+  vFrac: number
   startTime: number
   duration: number
   maxRadius: number
@@ -11,11 +12,12 @@ interface Ripple {
 
 interface PulseData {
   id: number
-  position: THREE.Vector3
+  uFrac: number
+  vFrac: number
   targetHeight: number
   startTime: number
   duration: number
-  radius: number
+  radiusWorld: number
   completed: boolean
 }
 
@@ -27,6 +29,8 @@ export class EffectsManager {
   private pulseIdCounter: number = 0
   private cellSizeX: number = 0.45
   private cellSizeZ: number = 0.9
+  private gridW: number = 20
+  private gridD: number = 40
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
@@ -37,14 +41,21 @@ export class EffectsManager {
     this.cellSizeZ = z
   }
 
-  triggerPulse(worldPosition: THREE.Vector3, intensity: number): void {
+  setGridSize(width: number, depth: number): void {
+    this.gridW = width
+    this.gridD = depth
+  }
+
+  triggerPulse(uFrac: number, vFrac: number, intensity: number): void {
+    const radiusWorld = this.cellSizeZ * 3
     const pulse: PulseData = {
       id: this.pulseIdCounter++,
-      position: worldPosition.clone(),
+      uFrac,
+      vFrac,
       targetHeight: intensity * 0.3,
       startTime: performance.now(),
       duration: 150,
-      radius: 2.5,
+      radiusWorld,
       completed: false,
     }
     this.pulses.push(pulse)
@@ -64,34 +75,43 @@ export class EffectsManager {
     segW: number,
     segD: number,
     gridW: number,
-    gridD: number
+    gridD: number,
+    flowOffset: number
   ): void {
     if (this.pulses.length === 0) return
 
     const vertexCountX = segW + 1
-    const halfW = gridW / 2
-    const halfD = gridD / 2
 
     const activePulses = this.pulses.filter(p => !p.completed)
 
-    for (let i = activePulses.length - 1; i >= 0; i--) {
-      const pulse = activePulses[i]
+    for (let pi = activePulses.length - 1; pi >= 0; pi--) {
+      const pulse = activePulses[pi]
+
+      const flowedVFrac = (pulse.vFrac + flowOffset) % 1
+      const pulseWorldX = (pulse.uFrac - 0.5) * gridW
+      const pulseWorldZ = (flowedVFrac - 0.5) * gridD
+      const radiusSq = pulse.radiusWorld * pulse.radiusWorld
 
       for (let zi = 0; zi <= segD; zi++) {
+        const v = zi / segD
+        const vz = (v - 0.5) * gridD
+        const dz = vz - pulseWorldZ
+        const dzSq = dz * dz
+        if (dzSq > radiusSq) continue
+
         for (let xi = 0; xi <= segW; xi++) {
-          const idx = zi * vertexCountX + xi
-          const posIdx = idx * 3
+          const u = xi / segW
+          const vx = (u - 0.5) * gridW
+          const dx = vx - pulseWorldX
+          const dxSq = dx * dx
+          const distSq = dxSq + dzSq
 
-          const vx = (xi / segW - 0.5) * gridW
-          const vz = (zi / segD - 0.5) * gridD
-
-          const dx = vx - pulse.position.x
-          const dz = vz - pulse.position.z
-          const dist = Math.sqrt(dx * dx + dz * dz)
-
-          if (dist < pulse.radius) {
-            const falloff = 1 - dist / pulse.radius
+          if (distSq < radiusSq) {
+            const dist = Math.sqrt(distSq)
+            const falloff = 1 - dist / pulse.radiusWorld
             const heightOffset = pulse.targetHeight * falloff * falloff
+            const idx = zi * vertexCountX + xi
+            const posIdx = idx * 3
             positions[posIdx + 1] += heightOffset
           }
         }
@@ -101,14 +121,17 @@ export class EffectsManager {
     this.pulses = this.pulses.filter(p => !p.completed)
   }
 
-  addRipple(origin: THREE.Vector3): void {
+  addRipple(uFrac: number, vFrac: number): void {
     const ripple = this.createRipple()
-    ripple.origin.copy(origin)
+    ripple.uFrac = uFrac
+    ripple.vFrac = vFrac
     ripple.startTime = performance.now()
     ripple.duration = 400
-    ripple.maxRadius = 4
-    ripple.mesh.position.copy(origin)
-    ripple.mesh.position.y += 0.05
+
+    const maxRadius = this.cellSizeZ * 5
+    ripple.maxRadius = maxRadius
+
+    this.updateRippleWorldPosition(ripple, 0)
     ripple.mesh.scale.setScalar(0)
     ripple.mesh.visible = true
 
@@ -134,6 +157,31 @@ export class EffectsManager {
     })
   }
 
+  updateRipples(flowOffset: number): void {
+    for (const ripple of this.ripples) {
+      const elapsed = performance.now() - ripple.startTime
+      const t = Math.min(1, elapsed / ripple.duration)
+      this.updateRippleWorldPosition(ripple, t, flowOffset)
+    }
+  }
+
+  private updateRippleWorldPosition(
+    ripple: Ripple,
+    _t: number,
+    flowOffset: number = 0
+  ): void {
+    const flowedVFrac = (ripple.vFrac + flowOffset) % 1
+    const worldX = (ripple.uFrac - 0.5) * this.gridW
+    const worldZ = (flowedVFrac - 0.5) * this.gridD
+    ripple.mesh.position.set(worldX, 0.05, worldZ)
+  }
+
+  private computeRippleSegments(): number {
+    const minCellSize = Math.min(this.cellSizeX, this.cellSizeZ)
+    const baseSegments = Math.ceil((2 * Math.PI) / (minCellSize / 3))
+    return Math.max(32, Math.min(96, baseSegments))
+  }
+
   private createRipple(): Ripple {
     if (this.ripplePool.length > 0) {
       const r = this.ripplePool.pop()!
@@ -144,7 +192,14 @@ export class EffectsManager {
       return r
     }
 
-    const ringGeometry = new THREE.RingGeometry(0.95, 1, 48)
+    const thetaSegments = this.computeRippleSegments()
+    const innerRadius = 0.95
+    const outerRadius = 1
+    const ringGeometry = new THREE.RingGeometry(
+      innerRadius,
+      outerRadius,
+      thetaSegments
+    )
     ringGeometry.rotateX(-Math.PI / 2)
 
     const material = new THREE.MeshBasicMaterial({
@@ -161,10 +216,11 @@ export class EffectsManager {
 
     return {
       mesh,
-      origin: new THREE.Vector3(),
+      uFrac: 0.5,
+      vFrac: 0.5,
       startTime: 0,
       duration: 400,
-      maxRadius: 4,
+      maxRadius: this.cellSizeZ * 5,
     }
   }
 
@@ -179,9 +235,9 @@ export class EffectsManager {
     }
   }
 
-  update(_delta: number): void {
-    // 波纹动画由 gsap 驱动，此处无需手动更新
-    // 预留接口用于未来添加更多基于帧的特效
+  update(delta: number, flowOffset: number = 0): void {
+    this.updateRipples(flowOffset)
+    void delta
   }
 
   getActivePulseCount(): number {
