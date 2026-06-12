@@ -36,6 +36,8 @@ export class ParticleSystem {
 
   private activeCount: number = 0;
 
+  private static readonly SMOOTH_RATE = 5.0;
+
   constructor() {
     this.initPool(6000);
     this.initStars(200);
@@ -102,13 +104,14 @@ export class ParticleSystem {
     const maxLife = 3 + Math.random() * 4;
     const tailLen = 40 + Math.random() * 40;
 
-    p.reset(x, y, z, vx, vy, vz, radius, maxLife, tailLen * (this.tailLength / 60), this.speed);
+    p.reset(x, y, z, vx, vy, vz, radius, maxLife, tailLen, this.tailLength / 60);
   }
 
   public update(deltaTime: number, time: number): void {
-    this.speed += (this.targetSpeed - this.speed) * Math.min(1, deltaTime * 5);
-    this.tailLength += (this.targetTailLength - this.tailLength) * Math.min(1, deltaTime * 5);
-    this.density += (this.targetDensity - this.density) * Math.min(1, deltaTime * 3);
+    const t = 1 - Math.exp(-ParticleSystem.SMOOTH_RATE * deltaTime);
+    this.speed += (this.targetSpeed - this.speed) * t;
+    this.tailLength += (this.targetTailLength - this.tailLength) * t;
+    this.density += (this.targetDensity - this.density) * t;
 
     const spawnRate = this.density / 3.5;
     this.spawnAccumulator += spawnRate * deltaTime;
@@ -118,9 +121,11 @@ export class ParticleSystem {
       this.spawnAccumulator -= 1;
     }
 
+    const tailScale = this.tailLength / 60;
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      const alive = p.update(deltaTime, this.gravity);
+      const alive = p.update(deltaTime, this.gravity, this.speed);
+      p.tailLength = p.baseTailLength * tailScale;
 
       if (!alive || p.y < this.worldBounds.minY) {
         this.recycleParticle(p);
@@ -152,9 +157,6 @@ export class ParticleSystem {
 
   public setTailLength(value: number): void {
     this.targetTailLength = Math.max(20, Math.min(100, value));
-    for (const p of this.particles) {
-      p.tailLength = this.targetTailLength * (p.tailLength / 60 > 0 ? (p.baseRadius / 3) : 1);
-    }
   }
 
   public setSpeed(value: number): void {
@@ -179,7 +181,7 @@ export class ParticleSystem {
 
   public pickParticle(screenX: number, screenY: number, project: (p: Vector3) => { x: number; y: number; scale: number }): Particle | null {
     let closest: Particle | null = null;
-    let minDist = 20;
+    let minDist = 25;
 
     for (const p of this.particles) {
       if (!p.active) continue;
@@ -189,7 +191,7 @@ export class ParticleSystem {
       const dx = screenX - proj.x;
       const dy = screenY - proj.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const hitRadius = p.radius * proj.scale * 2 + 10;
+      const hitRadius = Math.max(12, p.radius * proj.scale * 3);
 
       if (dist < hitRadius && dist < minDist) {
         minDist = dist;

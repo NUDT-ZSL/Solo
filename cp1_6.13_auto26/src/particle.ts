@@ -4,11 +4,6 @@ export interface Vector3 {
   z: number;
 }
 
-export interface ParticleParams {
-  tailLength: number;
-  speed: number;
-}
-
 export class Particle {
   public x: number = 0;
   public y: number = 0;
@@ -21,19 +16,9 @@ export class Particle {
   public life: number = 0;
   public maxLife: number = 0;
   public active: boolean = false;
+  public baseTailLength: number = 60;
   public tailLength: number = 60;
-  public speed: number = 1.0;
   public baseRadius: number = 2;
-
-  public tailPoints: Vector3[] = [];
-  private _maxTailPoints: number = 20;
-
-  constructor() {
-    this.tailPoints = [];
-    for (let i = 0; i < this._maxTailPoints; i++) {
-      this.tailPoints.push({ x: 0, y: 0, z: 0 });
-    }
-  }
 
   public reset(
     x: number,
@@ -45,7 +30,7 @@ export class Particle {
     radius: number,
     maxLife: number,
     tailLength: number,
-    speed: number
+    globalTailScale: number
   ): void {
     this.x = x;
     this.y = y;
@@ -59,35 +44,14 @@ export class Particle {
     this.life = 0;
     this.maxLife = maxLife;
     this.active = true;
-    this.tailLength = tailLength;
-    this.speed = speed;
-
-    const tailCount = Math.min(this._maxTailPoints, Math.max(3, Math.floor(tailLength / 4)));
-    for (let i = 0; i < tailCount; i++) {
-      this.tailPoints[i].x = x;
-      this.tailPoints[i].y = y;
-      this.tailPoints[i].z = z;
-    }
-    for (let i = tailCount; i < this._maxTailPoints; i++) {
-      this.tailPoints[i].x = x;
-      this.tailPoints[i].y = y;
-      this.tailPoints[i].z = z;
-    }
+    this.baseTailLength = tailLength;
+    this.tailLength = tailLength * globalTailScale;
   }
 
-  public update(deltaTime: number, gravity: number): boolean {
+  public update(deltaTime: number, gravity: number, speedMultiplier: number): boolean {
     if (!this.active) return false;
 
-    const dt = deltaTime * this.speed;
-
-    for (let i = this._maxTailPoints - 1; i > 0; i--) {
-      this.tailPoints[i].x = this.tailPoints[i - 1].x;
-      this.tailPoints[i].y = this.tailPoints[i - 1].y;
-      this.tailPoints[i].z = this.tailPoints[i - 1].z;
-    }
-    this.tailPoints[0].x = this.x;
-    this.tailPoints[0].y = this.y;
-    this.tailPoints[0].z = this.z;
+    const dt = deltaTime * speedMultiplier;
 
     this.vy += gravity * dt;
     this.x += this.vx * dt;
@@ -96,18 +60,12 @@ export class Particle {
 
     this.life += deltaTime;
 
-    if (this.life >= this.maxLife) {
-      const fadeStart = this.maxLife * 0.7;
-      if (this.life > fadeStart) {
-        this.opacity = 0.8 * (1 - (this.life - fadeStart) / (this.maxLife - fadeStart));
-      }
+    const fadeStart = this.maxLife * 0.7;
+    if (this.life > fadeStart) {
+      this.opacity = 0.8 * (1 - (this.life - fadeStart) / (this.maxLife - fadeStart));
     }
 
     return this.life < this.maxLife;
-  }
-
-  public getTailPointCount(): number {
-    return Math.min(this._maxTailPoints, Math.max(3, Math.floor(this.tailLength / 4)));
   }
 
   public getVelocity(): number {

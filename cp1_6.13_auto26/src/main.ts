@@ -1,6 +1,6 @@
 import { ParticleSystem, Star } from './particleSystem';
 import { ControlPanel } from './controlPanel';
-import { Particle, Vector3 } from './particle';
+import { Particle } from './particle';
 
 interface Camera {
   yaw: number;
@@ -43,6 +43,9 @@ class ParticleCanvas {
   private isDragging: boolean = false;
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
+  private dragStartX: number = 0;
+  private dragStartY: number = 0;
+  private dragDistance: number = 0;
 
   private rotationSpeed: number = 0.005;
   private damping: number = 0.95;
@@ -60,7 +63,6 @@ class ParticleCanvas {
 
   private projectedParticles: Array<{ particle: Particle; proj: ProjectedPoint }> = [];
   private projectedStars: Array<{ star: Star; proj: ProjectedPoint }> = [];
-  private projectedTail: ProjectedPoint[] = [];
 
   private sinYaw: number = 0;
   private cosYaw: number = 1;
@@ -111,9 +113,6 @@ class ParticleCanvas {
         proj: { x: 0, y: 0, scale: 0, z: 0 }
       });
     }
-    for (let i = 0; i < 20; i++) {
-      this.projectedTail.push({ x: 0, y: 0, scale: 0, z: 0 });
-    }
   }
 
   private resize = (): void => {
@@ -137,8 +136,6 @@ class ParticleCanvas {
 
     this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
 
-    this.canvas.addEventListener('click', this.onClick);
-
     this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
     this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
     this.canvas.addEventListener('touchend', this.onTouchEnd);
@@ -149,6 +146,9 @@ class ParticleCanvas {
     this.isDragging = true;
     this.lastMouseX = e.clientX;
     this.lastMouseY = e.clientY;
+    this.dragStartX = e.clientX;
+    this.dragStartY = e.clientY;
+    this.dragDistance = 0;
     this.camera.velocityYaw = 0;
     this.camera.velocityPitch = 0;
   };
@@ -161,6 +161,7 @@ class ParticleCanvas {
 
     const dx = e.clientX - this.lastMouseX;
     const dy = e.clientY - this.lastMouseY;
+    this.dragDistance += Math.abs(dx) + Math.abs(dy);
 
     this.camera.velocityYaw = dx * this.rotationSpeed;
     this.camera.velocityPitch = dy * this.rotationSpeed;
@@ -174,7 +175,10 @@ class ParticleCanvas {
     this.lastMouseY = e.clientY;
   };
 
-  private onMouseUp = (): void => {
+  private onMouseUp = (e: MouseEvent): void => {
+    if (this.isDragging && this.dragDistance < 6) {
+      this.handleParticleClick(e.clientX, e.clientY);
+    }
     this.isDragging = false;
   };
 
@@ -184,25 +188,6 @@ class ParticleCanvas {
     this.camera.targetZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.camera.targetZoom * (1 + delta)));
   };
 
-  private onClick = (e: MouseEvent): void => {
-    if (Math.abs(this.camera.velocityYaw) > 0.001 || Math.abs(this.camera.velocityPitch) > 0.001) {
-      return;
-    }
-
-    const particle = this.particleSystem.pickParticle(e.clientX, e.clientY, (p) => {
-      const proj = this.project(p.x, p.y, p.z);
-      return { x: proj.x, y: proj.y, scale: proj.scale };
-    });
-
-    if (particle) {
-      this.selectedParticle = particle;
-      this.showTooltip(particle);
-    } else {
-      this.selectedParticle = null;
-      this.hideTooltip();
-    }
-  };
-
   private onTouchStart = (e: TouchEvent): void => {
     if (e.touches.length !== 1) return;
     e.preventDefault();
@@ -210,6 +195,9 @@ class ParticleCanvas {
     this.isDragging = true;
     this.lastMouseX = touch.clientX;
     this.lastMouseY = touch.clientY;
+    this.dragStartX = touch.clientX;
+    this.dragStartY = touch.clientY;
+    this.dragDistance = 0;
     this.camera.velocityYaw = 0;
     this.camera.velocityPitch = 0;
   };
@@ -221,6 +209,7 @@ class ParticleCanvas {
 
     const dx = touch.clientX - this.lastMouseX;
     const dy = touch.clientY - this.lastMouseY;
+    this.dragDistance += Math.abs(dx) + Math.abs(dy);
 
     this.camera.velocityYaw = dx * this.rotationSpeed;
     this.camera.velocityPitch = dy * this.rotationSpeed;
@@ -235,17 +224,38 @@ class ParticleCanvas {
     this.mouseY = touch.clientY;
   };
 
-  private onTouchEnd = (): void => {
+  private onTouchEnd = (e: TouchEvent): void => {
+    if (this.isDragging && this.dragDistance < 15) {
+      this.handleParticleClick(this.lastMouseX, this.lastMouseY);
+    }
     this.isDragging = false;
   };
 
+  private handleParticleClick(screenX: number, screenY: number): void {
+    const particle = this.particleSystem.pickParticle(screenX, screenY, (p) => {
+      const proj = this.project(p.x, p.y, p.z);
+      return { x: proj.x, y: proj.y, scale: proj.scale };
+    });
+
+    if (particle) {
+      this.selectedParticle = particle;
+      this.mouseX = screenX;
+      this.mouseY = screenY;
+      this.showTooltip(particle);
+    } else {
+      this.selectedParticle = null;
+      this.hideTooltip();
+    }
+  }
+
   private showTooltip(particle: Particle): void {
-    const velocity = particle.getVelocity().toFixed(2);
-    const remainingLife = particle.getRemainingLife().toFixed(2);
-    this.tooltip.innerHTML = `
-      <div><strong>速度:</strong> ${velocity} u/s</div>
-      <div><strong>剩余生命:</strong> ${remainingLife}s</div>
-    `;
+    const velocity = (particle.getVelocity() * this.particleSystem.getSpeed()).toFixed(2);
+    const remainingLife = particle.getRemainingLife().toFixed(1);
+    this.tooltip.innerHTML =
+      '<div style="font-size:12px;line-height:1.6;color:#1a1a3e;">' +
+      '<div><b>速度:</b> ' + velocity + ' u/s</div>' +
+      '<div><b>剩余生命:</b> ' + remainingLife + 's</div>' +
+      '</div>';
     this.tooltip.style.display = 'block';
     this.updateTooltipPosition();
   }
@@ -287,6 +297,17 @@ class ParticleCanvas {
     const screenY = this.height / 2 - y2 * scale;
 
     return { x: screenX, y: screenY, scale, z: zCam };
+  }
+
+  private projectVelocityDir(vx: number, vy: number, vz: number): { dx: number; dy: number } {
+    const x1 = vx * this.cosYaw - vz * this.sinYaw;
+    const z1 = vx * this.sinYaw + vz * this.cosYaw;
+
+    const y2 = vy * this.cosPitch - z1 * this.sinPitch;
+
+    const len = Math.sqrt(x1 * x1 + y2 * y2);
+    if (len < 0.0001) return { dx: 0, dy: -1 };
+    return { dx: x1 / len, dy: -y2 / len };
   }
 
   private updateCamera(deltaTime: number): void {
@@ -376,7 +397,7 @@ class ParticleCanvas {
 
     for (let i = 0; i < visibleCount; i++) {
       const entry = projArr[i];
-      this.drawParticleTail(entry.particle);
+      this.drawParticleTail(entry.particle, entry.proj);
     }
 
     for (let i = 0; i < visibleCount; i++) {
@@ -397,52 +418,38 @@ class ParticleCanvas {
     }
   }
 
-  private drawParticleTail(particle: Particle): void {
+  private drawParticleTail(particle: Particle, proj: ProjectedPoint): void {
     const ctx = this.ctx;
-    const tailPoints = particle.tailPoints;
-    const tailCount = particle.getTailPointCount();
+    const tailLen = particle.tailLength * proj.scale;
+    if (tailLen < 2) return;
 
-    if (tailCount < 2) return;
+    const dir = this.projectVelocityDir(particle.vx, particle.vy, particle.vz);
 
-    const projTail = this.projectedTail;
-    let validCount = 0;
+    const tailEndX = proj.x - dir.dx * tailLen;
+    const tailEndY = proj.y - dir.dy * tailLen;
 
-    for (let i = 0; i < tailCount; i++) {
-      const point = tailPoints[i];
-      const proj = this.project(point.x, point.y, point.z);
-      projTail[i].x = proj.x;
-      projTail[i].y = proj.y;
-      projTail[i].scale = proj.scale;
-      projTail[i].z = proj.z;
-      if (proj.scale > 0 && proj.z > 0) {
-        validCount++;
-      }
-    }
+    const gradient = ctx.createLinearGradient(proj.x, proj.y, tailEndX, tailEndY);
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${particle.opacity * 0.8})`);
+    gradient.addColorStop(0.4, `rgba(255, 255, 255, ${particle.opacity * 0.4})`);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-    if (validCount < 2) return;
+    const r = Math.max(1, particle.radius * proj.scale);
 
-    for (let i = 0; i < tailCount - 1; i++) {
-      const p1 = projTail[i];
-      const p2 = projTail[i + 1];
+    ctx.beginPath();
+    ctx.moveTo(proj.x + dir.dy * r * 0.5, proj.y - dir.dx * r * 0.5);
+    ctx.lineTo(tailEndX, tailEndY);
+    ctx.lineTo(proj.x - dir.dy * r * 0.5, proj.y + dir.dx * r * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
 
-      if (p1.scale <= 0 || p2.scale <= 0) continue;
-
-      const t = i / (tailCount - 1);
-      const opacity = particle.opacity * (1 - t) * 0.6;
-      const width = Math.max(1, particle.radius * p1.scale * 0.8 * (1 - t * 0.5));
-
-      const gradient = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${opacity})`);
-      gradient.addColorStop(1, `rgba(136, 170, 255, ${opacity * 0.3})`);
-
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = width;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.moveTo(proj.x, proj.y);
+    ctx.lineTo(tailEndX, tailEndY);
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = Math.max(1, r * 0.6);
+    ctx.lineCap = 'round';
+    ctx.stroke();
   }
 
   private drawParticleHead(particle: Particle, proj: ProjectedPoint): void {
@@ -451,9 +458,9 @@ class ParticleCanvas {
 
     const gradient = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, r * 2.5);
     gradient.addColorStop(0, `rgba(255, 255, 255, ${particle.opacity})`);
-    gradient.addColorStop(0.3, `rgba(200, 220, 255, ${particle.opacity * 0.7})`);
-    gradient.addColorStop(0.6, `rgba(136, 170, 255, ${particle.opacity * 0.3})`);
-    gradient.addColorStop(1, 'rgba(136, 170, 255, 0)');
+    gradient.addColorStop(0.3, `rgba(220, 230, 255, ${particle.opacity * 0.6})`);
+    gradient.addColorStop(0.7, `rgba(200, 220, 255, ${particle.opacity * 0.2})`);
+    gradient.addColorStop(1, 'rgba(200, 220, 255, 0)');
 
     ctx.beginPath();
     ctx.arc(proj.x, proj.y, r * 2.5, 0, Math.PI * 2);
@@ -461,19 +468,20 @@ class ParticleCanvas {
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, r * 0.6, 0, Math.PI * 2);
+    ctx.arc(proj.x, proj.y, r * 0.5, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(255, 255, 255, ${particle.opacity})`;
     ctx.fill();
   }
 
   private updateTooltipIfNeeded(): void {
     if (this.selectedParticle && this.selectedParticle.active) {
-      const velocity = this.selectedParticle.getVelocity().toFixed(2);
-      const remainingLife = this.selectedParticle.getRemainingLife().toFixed(2);
-      this.tooltip.innerHTML = `
-        <div><strong>速度:</strong> ${velocity} u/s</div>
-        <div><strong>剩余生命:</strong> ${remainingLife}s</div>
-      `;
+      const velocity = (this.selectedParticle.getVelocity() * this.particleSystem.getSpeed()).toFixed(2);
+      const remainingLife = this.selectedParticle.getRemainingLife().toFixed(1);
+      this.tooltip.innerHTML =
+        '<div style="font-size:12px;line-height:1.6;color:#1a1a3e;">' +
+        '<div><b>速度:</b> ' + velocity + ' u/s</div>' +
+        '<div><b>剩余生命:</b> ' + remainingLife + 's</div>' +
+        '</div>';
       this.updateTooltipPosition();
     } else if (this.selectedParticle && !this.selectedParticle.active) {
       this.selectedParticle = null;
