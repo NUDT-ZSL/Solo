@@ -76,25 +76,27 @@ function parseConfigToVisualization(config) {
     const connections = [];
 
     for (let j = 0; j < fromLayer.neurons; j++) {
-      const neuronConnections = [];
-      for (let k = 0; k < toLayer.neurons; k++) {
-        let weight = Math.random() * 2 - 1;
-        if (config.connections && config.connections[i]) {
-          const conn = config.connections[i].find(
-            c => c.from === j && c.to === k
-          );
-          if (conn && typeof conn.weight === 'number') {
-            weight = conn.weight;
+        const neuronConnections = [];
+        for (let k = 0; k < toLayer.neurons; k++) {
+          let weight = Math.random() * 2 - 1;
+          if (config.connections && config.connections[i]) {
+            const conn = config.connections[i].find(
+              c => c.from === j && c.to === k
+            );
+            if (conn && typeof conn.weight === 'number') {
+              weight = conn.weight;
+            }
           }
+          neuronConnections.push({
+            fromLayer: i,
+            toLayer: i + 1,
+            fromNeuron: j,
+            toNeuron: k,
+            weight: weight
+          });
         }
-        neuronConnections.push({
-          fromNeuron: j,
-          toNeuron: k,
-          weight: weight
-        });
+        connections.push(neuronConnections);
       }
-      connections.push(neuronConnections);
-    }
     connectionMatrix.push(connections);
   }
 

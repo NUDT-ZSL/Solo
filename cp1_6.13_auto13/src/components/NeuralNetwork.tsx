@@ -6,6 +6,7 @@ import {
   fadeInAnimation,
   highlightNeuron,
   updateLabelsVisibility,
+  disposeNetwork,
   type NetworkObjects
 } from '../utils/networkBuilder';
 
@@ -227,7 +228,7 @@ export default function NeuralNetwork({
   }, [handleMouseDown, handleMouseMove, handleMouseUp, handleWheel, handleClick]);
 
   useEffect(() => {
-    if (!sceneRef.current || !data) return;
+    if (!sceneRef.current) return;
 
     if (fadeInCleanupRef.current) {
       fadeInCleanupRef.current();
@@ -235,9 +236,13 @@ export default function NeuralNetwork({
     }
 
     if (networkObjectsRef.current) {
+      disposeNetwork(networkObjectsRef.current);
       sceneRef.current.remove(networkObjectsRef.current.scene);
       networkObjectsRef.current = null;
+      networkGroupRef.current = null;
     }
+
+    if (!data) return;
 
     const { objects } = buildNetwork(data);
     networkObjectsRef.current = objects;
@@ -275,6 +280,9 @@ export default function NeuralNetwork({
       if (fadeInCleanupRef.current) {
         fadeInCleanupRef.current();
         fadeInCleanupRef.current = null;
+      }
+      if (networkObjectsRef.current) {
+        disposeNetwork(networkObjectsRef.current);
       }
     };
   }, []);

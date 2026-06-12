@@ -26,6 +26,8 @@ export interface Layer {
 }
 
 export interface WeightConnection {
+  fromLayer: number;
+  toLayer: number;
   fromNeuron: number;
   toNeuron: number;
   weight: number;
@@ -56,6 +58,8 @@ export interface ConnectionLine {
   id: string;
   fromNeuronId: string;
   toNeuronId: string;
+  fromLayerIndex: number;
+  toLayerIndex: number;
   weight: number;
   weightNormalized: number;
 }

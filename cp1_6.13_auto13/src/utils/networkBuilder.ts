@@ -10,7 +10,7 @@ const LAYER_SPACING = 12;
 const ROW_SPACING = 3;
 const COL_SPACING = 3.5;
 
-const NEURON_RADIUS = {
+const NEURON_RADIUS: Record<string, number> = {
   input: 1.2,
   hidden: 1.0,
   output: 0.8
@@ -24,6 +24,10 @@ const LAYER_COLORS: Record<string, number> = {
 
 const COLOR_START = '#cccccc';
 const COLOR_END = '#ff8800';
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -41,15 +45,16 @@ function lerpColor(
   color2: { r: number; g: number; b: number },
   t: number
 ): THREE.Color {
+  const clampedT = clamp(t, 0, 1);
   return new THREE.Color(
-    color1.r + (color2.r - color1.r) * t,
-    color1.g + (color2.g - color1.g) * t,
-    color1.b + (color2.b - color1.b) * t
+    color1.r + (color2.r - color1.r) * clampedT,
+    color1.g + (color2.g - color1.g) * clampedT,
+    color1.b + (color2.b - color1.b) * clampedT
   );
 }
 
 function getWeightColor(weight: number, maxWeight: number): THREE.Color {
-  const normalized = Math.min(Math.abs(weight) / maxWeight, 1);
+  const normalized = clamp(Math.abs(weight) / Math.max(maxWeight, 0.001), 0, 1);
   const color1 = hexToRgb(COLOR_START);
   const color2 = hexToRgb(COLOR_END);
   return lerpColor(color1, color2, normalized);
@@ -74,8 +79,6 @@ function calculateGridPosition(
     z: layerZ
   };
 }
-
-type MaterialType = 'neuron' | 'connection' | 'layerLabel' | 'connectionLabel';
 
 export interface NetworkObjects {
   scene: THREE.Group;
@@ -119,7 +122,7 @@ export function buildNetwork(
       });
     });
   });
-  const maxWeight = Math.max(...allWeights, 1);
+  const maxWeight = Math.max(...allWeights, 0.001);
 
   data.layers.forEach((layer: Layer, layerIndex: number) => {
     const layerGroup = new THREE.Group();
@@ -141,7 +144,7 @@ export function buildNetwork(
         transparent: true,
         opacity: 0
       });
-      (material as any)._materialType = 'neuron' as MaterialType;
+      (material as any)._materialType = 'neuron';
       (material as any)._layerId = layer.id;
 
       const sphere = new THREE.Mesh(geometry, material);
@@ -207,7 +210,7 @@ export function buildNetwork(
       opacity: 0,
       depthTest: false
     });
-    (labelMaterial as any)._materialType = 'layerLabel' as MaterialType;
+    (labelMaterial as any)._materialType = 'layerLabel';
     (labelMaterial as any)._layerId = layer.id;
 
     const labelSprite = new THREE.Sprite(labelMaterial);
@@ -248,7 +251,7 @@ export function buildNetwork(
           transparent: true,
           opacity: 0
         });
-        (material as any)._materialType = 'connection' as MaterialType;
+        (material as any)._materialType = 'connection';
         (material as any)._layerId = fromLayer.id;
         (material as any)._baseOpacity = 0.3;
 
@@ -259,8 +262,10 @@ export function buildNetwork(
           id: connectionId,
           fromNeuronId,
           toNeuronId,
+          fromLayerIndex: layerIndex,
+          toLayerIndex: layerIndex + 1,
           weight: conn.weight,
-          weightNormalized: Math.min(Math.abs(conn.weight) / maxWeight, 1)
+          weightNormalized: clamp(Math.abs(conn.weight) / maxWeight, 0, 1)
         };
 
         connections.set(connectionId, line);
@@ -287,7 +292,7 @@ export function buildNetwork(
           opacity: 0,
           depthTest: false
         });
-        (connLabelMaterial as any)._materialType = 'connectionLabel' as MaterialType;
+        (connLabelMaterial as any)._materialType = 'connectionLabel';
         (connLabelMaterial as any)._layerId = fromLayer.id;
 
         const connLabelSprite = new THREE.Sprite(connLabelMaterial);
@@ -325,37 +330,36 @@ export function fadeInAnimation(
   onComplete?: () => void
 ): () => void {
   const startTime = performance.now();
-  const totalDuration = 30000;
   const layerDelay = 300;
   let animationId: number;
   let isCancelled = false;
 
-  const neuronMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
-  const connectionMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
-  const layerLabelMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
-  const connectionLabelMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
+  const neuronMaterials: Array<{ mat: THREE.MeshStandardMaterial; layerId: string; initialOpacity: number }> = [];
+  const connectionMaterials: Array<{ mat: THREE.LineBasicMaterial; layerId: string; initialOpacity: number }> = [];
+  const layerLabelMaterials: Array<{ mat: THREE.SpriteMaterial; layerId: string; initialOpacity: number }> = [];
+  const connectionLabelMaterials: Array<{ mat: THREE.SpriteMaterial; layerId: string; initialOpacity: number }> = [];
 
   objects.layerGroups.forEach((group, layerId) => {
     group.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
         const mats = Array.isArray(child.material) ? child.material : [child.material];
         mats.forEach(m => {
-          (m as any)._layerId = layerId;
-          neuronMaterials.push({ mat: m, layerId });
+          const mat = m as THREE.MeshStandardMaterial;
+          neuronMaterials.push({ mat, layerId, initialOpacity: mat.opacity });
         });
       } else if (child instanceof THREE.Line && child.material) {
         const mats = Array.isArray(child.material) ? child.material : [child.material];
         mats.forEach(m => {
-          (m as any)._layerId = layerId;
-          connectionMaterials.push({ mat: m, layerId });
+          const mat = m as THREE.LineBasicMaterial;
+          connectionMaterials.push({ mat, layerId, initialOpacity: mat.opacity });
         });
       } else if (child instanceof THREE.Sprite && child.material) {
-        (child.material as any)._layerId = layerId;
-        const matType = (child.material as any)._materialType;
+        const mat = child.material as THREE.SpriteMaterial;
+        const matType = (mat as any)._materialType;
         if (matType === 'layerLabel') {
-          layerLabelMaterials.push({ mat: child.material, layerId });
+          layerLabelMaterials.push({ mat, layerId, initialOpacity: mat.opacity });
         } else if (matType === 'connectionLabel') {
-          connectionLabelMaterials.push({ mat: child.material, layerId });
+          connectionLabelMaterials.push({ mat, layerId, initialOpacity: mat.opacity });
         }
       }
     });
@@ -378,7 +382,7 @@ export function fadeInAnimation(
       const layerDuration = 2000;
       const progress = Math.min(layerElapsed / layerDuration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      (mat as THREE.MeshStandardMaterial).opacity = eased;
+      mat.opacity = eased;
       if (progress < 1) allComplete = false;
     });
 
@@ -389,7 +393,7 @@ export function fadeInAnimation(
       const layerDuration = 2000;
       const progress = Math.min(layerElapsed / layerDuration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      (mat as THREE.LineBasicMaterial).opacity = eased * 0.3;
+      mat.opacity = eased * 0.3;
       if (progress < 1) allComplete = false;
     });
 
@@ -400,11 +404,11 @@ export function fadeInAnimation(
       const layerDuration = 2000;
       const progress = Math.min(layerElapsed / layerDuration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      (mat as THREE.SpriteMaterial).opacity = eased;
+      mat.opacity = eased;
       if (progress < 1) allComplete = false;
     });
 
-    if (elapsed < totalDuration && !allComplete) {
+    if (!allComplete) {
       animationId = requestAnimationFrame(animate);
     } else {
       if (onComplete && !isCancelled) {
@@ -418,6 +422,18 @@ export function fadeInAnimation(
   return () => {
     isCancelled = true;
     cancelAnimationFrame(animationId);
+    neuronMaterials.forEach(({ mat, initialOpacity }) => {
+      mat.opacity = initialOpacity;
+    });
+    connectionMaterials.forEach(({ mat, initialOpacity }) => {
+      mat.opacity = initialOpacity;
+    });
+    layerLabelMaterials.forEach(({ mat, initialOpacity }) => {
+      mat.opacity = initialOpacity;
+    });
+    connectionLabelMaterials.forEach(({ mat, initialOpacity }) => {
+      mat.opacity = initialOpacity;
+    });
   };
 }
 
@@ -521,6 +537,44 @@ export function updateLabelsVisibility(
       mat.opacity = showConnectionLabels ? 1 : 0;
     }
   });
+}
+
+export function disposeNetwork(objects: NetworkObjects) {
+  objects.neurons.forEach((neuron) => {
+    neuron.geometry.dispose();
+    if (Array.isArray(neuron.material)) {
+      neuron.material.forEach(m => m.dispose());
+    } else {
+      neuron.material.dispose();
+    }
+  });
+
+  objects.connections.forEach((conn) => {
+    conn.geometry.dispose();
+    if (Array.isArray(conn.material)) {
+      conn.material.forEach(m => m.dispose());
+    } else {
+      conn.material.dispose();
+    }
+  });
+
+  objects.layerLabels.forEach((label) => {
+    const material = label.material as THREE.SpriteMaterial;
+    if (material.map) {
+      material.map.dispose();
+    }
+    material.dispose();
+  });
+
+  objects.connectionLabels.forEach((label) => {
+    const material = label.material as THREE.SpriteMaterial;
+    if (material.map) {
+      material.map.dispose();
+    }
+    material.dispose();
+  });
+
+  objects.scene.clear();
 }
 
 export { LAYER_COLORS };
