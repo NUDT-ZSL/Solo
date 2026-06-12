@@ -96,7 +96,7 @@ h1, h2, h3, h4, h5, h6 {
   transform: rotate(-45deg);
   box-shadow: var(--shadow-md);
   cursor: pointer;
-  transition: var(--transition-normal);
+  transition: transform 300ms ease, box-shadow 300ms ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -118,14 +118,45 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--shadow-lg);
 }
 
-.memory-pin.active {
-  animation: pulse-blink 1s ease-in-out 2;
-  transform: rotate(-45deg) scale(1.3);
+.custom-marker.blink-twice .memory-pin {
+  animation: blink-twice 1.2s ease-in-out;
 }
 
-@keyframes pulse-blink {
-  0%, 100% { opacity: 1; transform: rotate(-45deg) scale(1.3); }
-  50% { opacity: 0.6; transform: rotate(-45deg) scale(1.4); }
+@keyframes blink-twice {
+  0% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1);
+  }
+  10% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1.4);
+    box-shadow: 0 0 0 6px rgba(255, 179, 71, 0.35), var(--shadow-md);
+  }
+  25% {
+    opacity: 0.55;
+    transform: rotate(-45deg) scale(1.2);
+    box-shadow: 0 0 0 3px rgba(255, 179, 71, 0.5), var(--shadow-md);
+  }
+  40% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1.4);
+    box-shadow: 0 0 0 6px rgba(255, 179, 71, 0.35), var(--shadow-md);
+  }
+  55% {
+    opacity: 0.6;
+    transform: rotate(-45deg) scale(1.25);
+    box-shadow: 0 0 0 3px rgba(255, 179, 71, 0.45), var(--shadow-md);
+  }
+  70% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1.35);
+    box-shadow: 0 0 0 5px rgba(255, 179, 71, 0.4), var(--shadow-md);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1);
+    box-shadow: var(--shadow-md);
+  }
 }
 
 .timeline-container {

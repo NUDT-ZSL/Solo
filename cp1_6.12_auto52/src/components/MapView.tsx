@@ -23,34 +23,23 @@ function createCustomIcon(color: string): L.DivIcon {
 
 function MapController({ 
   center, 
-  zoom, 
-  onFlyEnd 
+  zoom 
 }: { 
   center: [number, number]; 
   zoom: number;
-  onFlyEnd?: () => void;
 }) {
   const map = useMap();
   
   useEffect(() => {
     map.flyTo(center, zoom, { duration: 0.5 });
-    
-    const handleMoveEnd = () => {
-      onFlyEnd?.();
-    };
-    
-    map.once('moveend', handleMoveEnd);
-    return () => {
-      map.off('moveend', handleMoveEnd);
-    };
-  }, [center, zoom, map, onFlyEnd]);
+  }, [center, zoom, map]);
   
   return null;
 }
 
 function MemoryMarker({ 
   memory, 
-  isHighlighted, 
+  isHighlighted,
   isSelected,
   onClick 
 }: { 
@@ -60,68 +49,34 @@ function MemoryMarker({
   onClick: () => void;
 }) {
   const markerRef = useRef<L.Marker>(null);
-  const hasAnimatedRef = useRef(false);
+  const triggerRef = useRef(0);
 
   useEffect(() => {
-    if (isHighlighted && markerRef.current && !hasAnimatedRef.current) {
-      hasAnimatedRef.current = true;
-      const marker = markerRef.current;
-      const color = MOOD_COLOR[memory.mood];
-      const originalHtml = `<div class="memory-pin" style="background-color: ${color};"></div>`;
-      const activeHtml = `<div class="memory-pin active" style="background-color: ${color};"></div>`;
-      const originalOptions = {
-        className: 'custom-marker',
-        iconSize: [32, 32] as L.PointExpression,
-        iconAnchor: [16, 32] as L.PointExpression,
-        popupAnchor: [0, -32] as L.PointExpression
-      };
-      
-      const timeout1 = setTimeout(() => {
+    if (!isHighlighted || !markerRef.current) return;
+
+    triggerRef.current += 1;
+    const marker = markerRef.current;
+    const el = marker.getElement();
+
+    if (el) {
+      el.classList.remove('blink-twice');
+      void el.offsetWidth;
+      el.classList.add('blink-twice');
+
+      const cleanupTimeout = window.setTimeout(() => {
         if (markerRef.current) {
-          markerRef.current.setIcon(L.divIcon({
-            ...originalOptions,
-            html: activeHtml
-          }));
+          const currentEl = markerRef.current.getElement();
+          if (currentEl) {
+            currentEl.classList.remove('blink-twice');
+          }
         }
-      }, 100);
-      
-      const timeout2 = setTimeout(() => {
-        if (markerRef.current) {
-          markerRef.current.setIcon(L.divIcon({
-            ...originalOptions,
-            html: originalHtml
-          }));
-        }
-      }, 600);
-      
-      const timeout3 = setTimeout(() => {
-        if (markerRef.current) {
-          markerRef.current.setIcon(L.divIcon({
-            ...originalOptions,
-            html: activeHtml
-          }));
-        }
-      }, 700);
-      
-      const timeout4 = setTimeout(() => {
-        if (markerRef.current) {
-          markerRef.current.setIcon(L.divIcon({
-            ...originalOptions,
-            html: originalHtml
-          }));
-        }
-        hasAnimatedRef.current = false;
-      }, 1200);
-      
+      }, 1300);
+
       return () => {
-        clearTimeout(timeout1);
-        clearTimeout(timeout2);
-        clearTimeout(timeout3);
-        clearTimeout(timeout4);
-        hasAnimatedRef.current = false;
+        clearTimeout(cleanupTimeout);
       };
     }
-  }, [isHighlighted, memory.mood]);
+  }, [isHighlighted, triggerRef.current]);
 
   return (
     <Marker
@@ -139,7 +94,9 @@ function MemoryMarker({
               {memory.title}
             </h3>
             <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#6D4C41' }}>
-              {memory.description.substring(0, 60)}...
+              {memory.description.length > 60 
+                ? memory.description.substring(0, 60) + '...' 
+                : memory.description}
             </p>
             <span style={{ fontSize: '20px' }}>{MOOD_EMOJI[memory.mood]}</span>
           </div>
@@ -155,7 +112,6 @@ export default function MapView({ memories, selectedMemory, onMemorySelect, high
   const [isClosing, setIsClosing] = useState(false);
   const [flyTrigger, setFlyTrigger] = useState(0);
   const popupTimeoutRef = useRef<number | null>(null);
-  const highlightTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if ('geolocation' in navigator) {
