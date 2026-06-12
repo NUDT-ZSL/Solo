@@ -193,7 +193,26 @@ const Board: React.FC<BoardProps> = ({
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [editingColumn, setEditingColumn] = useState<TaskStatus | null>(null);
   const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
+  const rawMousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const rafId = useRef<number | null>(null);
+  const lastFpsCheck = useRef<number>(0);
+  const frameCount = useRef<number>(0);
   const boardRef = useRef<HTMLDivElement>(null);
+
+  const updateGhostPos = useCallback(() => {
+    rafId.current = null;
+    setGhostPos({ x: rawMousePos.current.x, y: rawMousePos.current.y });
+    frameCount.current++;
+    const now = performance.now();
+    if (now - lastFpsCheck.current > 1000) {
+      const fps = Math.round((frameCount.current * 1000) / (now - lastFpsCheck.current));
+      if (fps < 50) {
+        console.warn(`[Drag FPS] Low FPS detected: ${fps}`);
+      }
+      frameCount.current = 0;
+      lastFpsCheck.current = now;
+    }
+  }, []);
 
   const tasksByColumn = useMemo(() => {
     const map = new Map<TaskStatus, Task[]>();
@@ -207,6 +226,8 @@ const Board: React.FC<BoardProps> = ({
 
   const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
     setDraggingId(id);
+    lastFpsCheck.current = performance.now();
+    frameCount.current = 0;
     try {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', id);
@@ -214,17 +235,27 @@ const Board: React.FC<BoardProps> = ({
       img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
       e.dataTransfer.setDragImage(img, 0, 0);
     } catch {}
+    rawMousePos.current = { x: e.clientX, y: e.clientY };
     setGhostPos({ x: e.clientX, y: e.clientY });
   }, []);
 
   useEffect(() => {
     if (!draggingId) return;
     const onMove = (e: MouseEvent) => {
-      setGhostPos({ x: e.clientX, y: e.clientY });
+      rawMousePos.current = { x: e.clientX, y: e.clientY };
+      if (rafId.current === null) {
+        rafId.current = requestAnimationFrame(updateGhostPos);
+      }
     };
     window.addEventListener('mousemove', onMove, { passive: true });
-    return () => window.removeEventListener('mousemove', onMove);
-  }, [draggingId]);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
+    };
+  }, [draggingId, updateGhostPos]);
 
   const handleDragEnd = useCallback(() => {
     setDraggingId(null);
@@ -307,15 +338,18 @@ const Board: React.FC<BoardProps> = ({
               maxWidth: isMobile ? 280 : 400,
               display: 'flex',
               flexDirection: 'column',
-              background: colors.bg,
+              background: isDragOver ? 'rgba(59,130,246,0.08)' : colors.bg,
               border: isDragOver
                 ? `2px dashed #3b82f6`
                 : `1px solid ${colors.border}`,
               borderRadius: 14,
-              transition: 'all 0.15s',
-              boxShadow: isDragOver ? '0 0 0 4px rgba(59,130,246,0.1), 0 8px 24px rgba(59,130,246,0.15)' : 'none',
+              transition: 'all 0.12s ease-out',
+              boxShadow: isDragOver
+                ? '0 0 0 4px rgba(59,130,246,0.12), 0 12px 32px rgba(59,130,246,0.2), inset 0 0 0 1px rgba(59,130,246,0.3)'
+                : '0 1px 2px rgba(0,0,0,0.1)',
               minHeight: 0,
               position: 'relative',
+              transform: isDragOver ? 'translateY(-1px)' : 'none',
             }}
           >
             <div
@@ -415,24 +449,34 @@ const Board: React.FC<BoardProps> = ({
         <div
           style={{
             position: 'fixed',
-            left: ghostPos.x + 16,
-            top: ghostPos.y + 16,
+            left: ghostPos.x + 18,
+            top: ghostPos.y + 18,
             width: 260,
             pointerEvents: 'none',
             zIndex: 9999,
-            opacity: 0.85,
-            transform: 'rotate(2deg)',
+            opacity: 0.88,
+            transform: 'rotate(3deg)',
+            filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.4)) drop-shadow(0 8px 16px rgba(59,130,246,0.3))',
+            willChange: 'transform, left, top',
           }}
         >
-          <TaskCard
-            task={draggingTask}
-            users={users}
-            userMap={userMap}
-            onUpdate={() => {}}
-            onDelete={() => {}}
-            draggable={false}
-            ghost
-          />
+          <div style={{
+            background: 'rgba(30,41,59,0.95)',
+            borderRadius: 14,
+            border: '1px solid rgba(59,130,246,0.4)',
+            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05)',
+            backdropFilter: 'blur(8px)',
+          }}>
+            <TaskCard
+              task={draggingTask}
+              users={users}
+              userMap={userMap}
+              onUpdate={() => {}}
+              onDelete={() => {}}
+              draggable={false}
+              ghost
+            />
+          </div>
         </div>
       )}
     </div>

@@ -42,6 +42,8 @@ export interface TimeLog {
   user_id: string;
   log_date: string;
   hours: number;
+  estimated_hours: number;
+  overdue_status: number;
   created_at: string;
 }
 
@@ -85,6 +87,8 @@ db.exec(`
     user_id TEXT NOT NULL,
     log_date TEXT NOT NULL,
     hours INTEGER NOT NULL DEFAULT 0,
+    estimated_hours INTEGER NOT NULL DEFAULT 0,
+    overdue_status INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -109,7 +113,7 @@ function seedData() {
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   );
   const insertTimeLog = db.prepare(
-    'INSERT INTO time_logs (id, task_id, user_id, log_date, hours) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO time_logs (id, task_id, user_id, log_date, hours, estimated_hours, overdue_status) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
 
   const members = [
@@ -160,7 +164,8 @@ function seedData() {
         const logDate = fmtDate(addDays(today, t.days - (logDays - j)));
         if (logDate < fmtDate(today)) {
           const hours = Math.floor(Math.random() * 4) + 1;
-          insertTimeLog.run(uuidv4(), taskId, member.id, logDate, hours);
+          const isOverdue = logDate > due && t.status !== 'done' ? 1 : 0;
+          insertTimeLog.run(uuidv4(), taskId, member.id, logDate, hours, t.est, isOverdue);
         }
       }
     });
