@@ -1,13 +1,32 @@
-import { Maze, MAZE_WIDTH, MAZE_HEIGHT } from './maze';
+import { Maze, MAZE_WIDTH, MAZE_HEIGHT, IMaze } from './maze';
 import { Player } from './player';
-import { UI } from './ui';
+import {
+  UIState,
+  createInitialUIState,
+  updateUIStateSize,
+  updateUIStatus,
+  updateUIFragments,
+  togglePause,
+  triggerVictory,
+  resetUIState,
+  drawStatusPanel,
+  drawButtons,
+  drawExit,
+  drawFragments,
+  drawMazeWalls,
+  drawPauseOverlay,
+  drawVictory,
+  drawInstructions,
+  isPauseButtonClicked,
+  isResetButtonClicked,
+} from './ui';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
-let maze: Maze;
+let maze: IMaze;
 let player: Player;
-let ui: UI;
+let uiState: UIState;
 let lastTime: number = 0;
 let cameraX: number = 0;
 let cameraY: number = 0;
@@ -15,16 +34,25 @@ let mouseX: number = 0;
 let mouseY: number = 0;
 const keys: Set<string> = new Set();
 
+const TOTAL_FRAGMENTS = 10;
+
 function resizeCanvas(): void {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  if (ui) ui.updateSize(canvas.width, canvas.height);
+  if (uiState) {
+    uiState = updateUIStateSize(uiState, canvas.width, canvas.height);
+  }
 }
 
 function init(): void {
   maze = new Maze();
-  player = new Player();
-  ui = new UI(canvas.width, canvas.height);
+  player = new Player(TOTAL_FRAGMENTS);
+  uiState = createInitialUIState(canvas.width, canvas.height, TOTAL_FRAGMENTS);
+
+  player.onFragmentCollected = (count: number, total: number) => {
+    uiState = updateUIFragments(uiState, count, total);
+  };
+
   lastTime = performance.now();
 }
 
@@ -51,27 +79,28 @@ function updateCamera(): void {
 function gameLoop(now: number): void {
   requestAnimationFrame(gameLoop);
 
-  const dt = now - lastTime;
+  const dt = Math.min(50, now - lastTime);
   lastTime = now;
 
-  if (ui.showVictory) {
+  if (uiState.showVictory) {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ui.drawVictory(ctx, player, now);
+    drawVictory(ctx, uiState, now);
     return;
   }
 
-  if (ui.paused) {
+  if (uiState.paused) {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
-    ui.drawMazeWalls(ctx, maze);
-    ui.drawExit(ctx, maze, now);
-    ui.drawFragments(ctx, maze, now);
+    drawMazeWalls(ctx, maze);
+    drawExit(ctx, maze, now);
+    drawFragments(ctx, maze, now);
     player.draw(ctx, now);
     ctx.restore();
-    ui.drawPauseOverlay(ctx);
+    drawPauseOverlay(ctx, uiState);
+    drawButtons(ctx, uiState, mouseX, mouseY);
     return;
   }
 
@@ -79,9 +108,10 @@ function gameLoop(now: number): void {
   player.update(maze, now, dt);
   updateCamera();
 
+  uiState = updateUIStatus(uiState, player.getStatus());
+
   if (maze.isAtExit(player.x, player.y)) {
-    ui.showVictory = true;
-    ui.victoryTime = now;
+    uiState = triggerVictory(uiState, now);
   }
 
   ctx.fillStyle = '#000000';
@@ -90,91 +120,85 @@ function gameLoop(now: number): void {
   ctx.save();
   ctx.translate(-cameraX, -cameraY);
 
-  drawAmbientLight(ctx);
-
-  ui.drawMazeWalls(ctx, maze);
-  ui.drawExit(ctx, maze, now);
-  ui.drawFragments(ctx, maze, now);
+  drawMazeWalls(ctx, maze);
+  drawExit(ctx, maze, now);
+  drawFragments(ctx, maze, now);
   player.draw(ctx, now);
 
-  drawFogOfWar(ctx);
+  drawFogOfWar(ctx, now);
 
   ctx.restore();
 
-  ui.drawStatusPanel(ctx, player);
-  ui.drawButtons(ctx, mouseX, mouseY);
-  ui.drawInstructions(ctx, now);
+  drawStatusPanel(ctx, uiState);
+  drawButtons(ctx, uiState, mouseX, mouseY);
+  drawInstructions(ctx, uiState, now);
 }
 
-function drawAmbientLight(ctx: CanvasRenderingContext2D): void {
-  const gradient = ctx.createRadialGradient(
-    player.x, player.y, 0,
-    player.x, player.y, 60
-  );
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.04)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(
-    player.x - 60, player.y - 60,
-    120, 120
-  );
-}
-
-function drawFogOfWar(ctx: CanvasRenderingContext2D): void {
-  const ambientRadius = 50;
+function drawFogOfWar(ctx: CanvasRenderingContext2D, now: number): void {
+  const ambientRadius = 55;
 
   ctx.save();
   ctx.globalCompositeOperation = 'destination-in';
 
-  const gradient = ctx.createRadialGradient(
+  const ambientGrad = ctx.createRadialGradient(
     player.x, player.y, 0,
     player.x, player.y, ambientRadius
   );
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
-  gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.2)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ambientGrad.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
+  ambientGrad.addColorStop(0.65, 'rgba(255, 255, 255, 0.25)');
+  ambientGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-  ctx.fillStyle = gradient;
-  ctx.fillRect(player.x - ambientRadius, player.y - ambientRadius, ambientRadius * 2, ambientRadius * 2);
+  ctx.fillStyle = ambientGrad;
+  ctx.fillRect(
+    player.x - ambientRadius - 10,
+    player.y - ambientRadius - 10,
+    (ambientRadius + 10) * 2,
+    (ambientRadius + 10) * 2
+  );
 
   for (const pulse of player.pulses) {
     if (!pulse.active) continue;
-    const elapsed = performance.now() - pulse.startTime;
+    const elapsed = now - pulse.startTime;
     const progress = Math.min(elapsed / pulse.duration, 1);
     const currentRadius = progress * pulse.maxRadius;
-    const fadeOpacity = pulse.opacity * (1 - progress);
+    const fadeOpacity = pulse.baseOpacity * (1 - progress);
 
     if (fadeOpacity <= 0 || currentRadius <= 0) continue;
 
+    const shellThickness = 22;
+    const innerRadius = Math.max(0, currentRadius - shellThickness);
+
     const pg = ctx.createRadialGradient(
-      pulse.x, pulse.y, Math.max(0, currentRadius - 15),
+      pulse.x, pulse.y, innerRadius,
       pulse.x, pulse.y, currentRadius
     );
-    pg.addColorStop(0, `rgba(255, 255, 255, 0)`);
-    pg.addColorStop(0.5, `rgba(255, 255, 255, ${fadeOpacity * 0.4})`);
-    pg.addColorStop(1, `rgba(255, 255, 255, 0)`);
+    pg.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    pg.addColorStop(0.5, `rgba(255, 255, 255, ${fadeOpacity * 0.5})`);
+    pg.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
     ctx.fillStyle = pg;
     ctx.fillRect(
-      pulse.x - currentRadius, pulse.y - currentRadius,
-      currentRadius * 2, currentRadius * 2
+      pulse.x - currentRadius - 5,
+      pulse.y - currentRadius - 5,
+      (currentRadius + 5) * 2,
+      (currentRadius + 5) * 2
     );
   }
 
   for (const hw of player.highlightWalls) {
-    const elapsed = performance.now() - hw.startTime;
+    const elapsed = now - hw.startTime;
     const progress = elapsed / hw.duration;
-    const alpha = hw.opacity * (1 - progress);
+    const alpha = hw.baseOpacity * (1 - progress);
     if (alpha <= 0) continue;
 
     const cx = (hw.x1 + hw.x2) / 2;
     const cy = (hw.y1 + hw.y2) / 2;
     const halfLen = Math.hypot(hw.x2 - hw.x1, hw.y2 - hw.y1) / 2;
-    const revealR = halfLen + 10;
+    const revealR = Math.max(halfLen + 14, 22);
 
     const hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, revealR);
-    hg.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.6})`);
+    hg.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.7})`);
+    hg.addColorStop(0.7, `rgba(255, 255, 255, ${alpha * 0.3})`);
     hg.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
     ctx.fillStyle = hg;
@@ -201,15 +225,13 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
 
   if (e.key === ' ' || e.key === 'Spacebar') {
     e.preventDefault();
-    if (!ui.paused && !ui.showVictory) {
+    if (!uiState.paused && !uiState.showVictory) {
       player.emitPulse();
     }
   }
 
   if (e.key === 'p' || e.key === 'P') {
-    if (!ui.showVictory) {
-      ui.paused = !ui.paused;
-    }
+    uiState = togglePause(uiState);
   }
 
   if (e.key === 'r' || e.key === 'R') {
@@ -227,28 +249,23 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
 });
 
 canvas.addEventListener('click', (e: MouseEvent) => {
-  const btnSize = 40;
-  const padding = 16;
-  const pauseX = canvas.width - btnSize - padding * 2 - btnSize;
-  const resetX = canvas.width - btnSize - padding;
-  const btnY = padding;
-
-  if (ui.isInRect(e.clientX, e.clientY, pauseX, btnY, btnSize, btnSize)) {
-    if (!ui.showVictory) {
-      ui.paused = !ui.paused;
-    }
+  if (isPauseButtonClicked(uiState, e.clientX, e.clientY)) {
+    uiState = togglePause(uiState);
   }
 
-  if (ui.isInRect(e.clientX, e.clientY, resetX, btnY, btnSize, btnSize)) {
+  if (isResetButtonClicked(uiState, e.clientX, e.clientY)) {
     resetGame();
   }
 });
 
 function resetGame(): void {
   maze = new Maze();
-  player.reset();
-  ui.paused = false;
-  ui.showVictory = false;
+  player.reset(TOTAL_FRAGMENTS);
+  uiState = resetUIState(uiState, TOTAL_FRAGMENTS);
+
+  player.onFragmentCollected = (count: number, total: number) => {
+    uiState = updateUIFragments(uiState, count, total);
+  };
 }
 
 window.addEventListener('resize', resizeCanvas);
