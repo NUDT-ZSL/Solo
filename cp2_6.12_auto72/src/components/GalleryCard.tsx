@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Artwork, ToolType } from '@/types'
 
 interface GalleryCardProps {
   artwork: Artwork
   index: number
   onClick: () => void
-  customStyle?: React.CSSProperties
+  onImageLoad?: (height: number) => void
 }
 
 const toolLabels: Record<ToolType, string> = {
@@ -14,13 +14,21 @@ const toolLabels: Record<ToolType, string> = {
   pencil: '铅笔'
 }
 
-const GalleryCard = ({ artwork, index, onClick, customStyle }: GalleryCardProps) => {
+const GalleryCard = ({ artwork, index, onClick, onImageLoad }: GalleryCardProps) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [visible, setVisible] = useState(false)
+  const imgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
     setVisible(true)
   }, [])
+
+  const handleImageLoad = () => {
+    setImageLoaded(true)
+    if (imgRef.current && onImageLoad) {
+      onImageLoad(imgRef.current.offsetHeight)
+    }
+  }
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -36,20 +44,21 @@ const GalleryCard = ({ artwork, index, onClick, customStyle }: GalleryCardProps)
       className="gallery-card"
       onClick={onClick}
       style={{
-        ...customStyle,
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(20px)',
         transition: 'opacity 0.3s ease-out, transform 0.3s ease-out'
       }}
     >
       <img
+        ref={imgRef}
         src={artwork.thumbnailUrl}
         alt={artwork.title}
         loading="lazy"
-        onLoad={() => setImageLoaded(true)}
+        onLoad={handleImageLoad}
         style={{
           width: '100%',
-          height: '100%',
+          height: 'auto',
+          display: 'block',
           objectFit: 'cover',
           opacity: imageLoaded ? 1 : 0,
           transition: 'opacity 0.3s ease, transform 0.3s ease'
