@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAtomColor, getAtomRadius, lerp, easeOutCubic, easeOutBounce, clamp } from './utils';
+import { getAtomColor, getAtomRadius, easeOutCubic, clamp } from './utils';
 import { MoleculeData, AtomData, BondData, calculateMolecularWeight } from './moleculeManager';
 
 export interface SceneRendererCallbacks {
@@ -17,13 +17,8 @@ export interface MoleculeInfo {
 export interface AtomMesh extends THREE.Mesh {
   userData: {
     targetPosition: THREE.Vector3;
-    startPosition: THREE.Vector3;
     element: string;
     glowIntensity: number;
-    velocity?: THREE.Vector3;
-    trail?: THREE.Points;
-    trailPositions?: Float32Array;
-    bouncePhase?: 'idle' | 'bouncing';
   };
 }
 
@@ -44,9 +39,10 @@ interface Particle {
   maxLife: number;
 }
 
-interface LoadingAnimation {
+interface LoadingAtomState {
   atom: AtomMesh;
   startTime: number;
+  delay: number;
   fadeDuration: number;
   spreadDuration: number;
   bounceDuration: number;
@@ -78,13 +74,14 @@ export class SceneRenderer {
   private maxZoom = 5;
 
   private animationFrameId: number | null = null;
-  private loadingAnimations: LoadingAnimation[] = [];
+  private loadingAtoms: LoadingAtomState[] = [];
+  private bondsFadeStartTime = 0;
 
   private callbacks: SceneRendererCallbacks;
   private currentMolecule: MoleculeData | null = null;
 
   private glowTargets: AtomMesh[] = [];
-  private envMap: THREE.CubeTexture | null = null;
+  private envTexture: THREE.Texture | null = null;
 
   constructor(containerId: string, canvasId: string, callbacks: SceneRendererCallbacks = {}) {
     this.container = document.getElementById(containerId) || document.body;
@@ -104,7 +101,6 @@ export class SceneRenderer {
   }
 
   private init(): void {
-    this.setupScene();
     this.setupEnvironment();
     this.setupLighting();
     this.setupCamera();
@@ -114,88 +110,125 @@ export class SceneRenderer {
     this.handleResize();
   }
 
-  private setupScene(): void {
-    this.scene.add(this.moleculeGroup);
-    this.scene.fog = new THREE.FogExp2(0x0a0a2e, 0.05);
-  }
-
   private setupEnvironment(): void {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1024;
-    const ctx = canvas.getContext('2d')!;
+    this.scene.add(this.moleculeGroup);
+    this.scene.fog = new THREE.FogExp2(0x0a0a2e, 0.035);
 
-    const gradient = ctx.createRadialGradient(
-      512, 512, 0,
-      512, 512, 512
-    );
-    gradient.addColorStop(0, '#1a1a4e');
+    const envCanvas = document.createElement('canvas');
+    envCanvas.width = 2048;
+    envCanvas.height = 1024;
+    const ctx = envCanvas.getContext('2d')!;
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, envCanvas.height);
+    gradient.addColorStop(0, '#1a1a5e');
+    gradient.addColorStop(0.3, '#0f0f3a');
     gradient.addColorStop(0.5, '#0a0a2e');
-    gradient.addColorStop(1, '#050515');
+    gradient.addColorStop(0.7, '#0f0f3a');
+    gradient.addColorStop(1, '#1a1a5e');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 1024, 1024);
+    ctx.fillRect(0, 0, envCanvas.width, envCanvas.height);
 
-    for (let i = 0; i < 200; i++) {
-      const x = Math.random() * 1024;
-      const y = Math.random() * 1024;
-      const size = Math.random() * 2 + 0.5;
-      const brightness = Math.random() * 0.5 + 0.5;
+    for (let i = 0; i < 500; i++) {
+      const x = Math.random() * envCanvas.width;
+      const y = Math.random() * envCanvas.height;
+      const size = Math.random() * 1.5 + 0.3;
+      const brightness = Math.random() * 0.6 + 0.4;
 
       ctx.beginPath();
       ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 255, 255, ${brightness * 0.8})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
       ctx.fill();
     }
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.mapping = THREE.EquirectangularReflectionMapping;
-    this.scene.environment = texture;
+    const nebulaColors = [
+      { x: 0.2, y: 0.3, color: 'rgba(123, 47, 247, 0.15)', radius: 200 },
+      { x: 0.7, y: 0.6, color: 'rgba(0, 212, 255, 0.12)', radius: 250 },
+      { x: 0.5, y: 0.8, color: 'rgba(255, 100, 200, 0.08)', radius: 180 },
+    ];
+
+    nebulaColors.forEach(nebula => {
+      const nebulaGradient = ctx.createRadialGradient(
+        nebula.x * envCanvas.width,
+        nebula.y * envCanvas.height,
+        0,
+        nebula.x * envCanvas.width,
+        nebula.y * envCanvas.height,
+        nebula.radius
+      );
+      nebulaGradient.addColorStop(0, nebula.color);
+      nebulaGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = nebulaGradient;
+      ctx.fillRect(0, 0, envCanvas.width, envCanvas.height);
+    });
+
+    const envMap = new THREE.CanvasTexture(envCanvas);
+    envMap.mapping = THREE.EquirectangularReflectionMapping;
+    envMap.colorSpace = THREE.SRGBColorSpace;
+    this.scene.environment = envMap;
+    this.envTexture = envMap;
 
     const bgCanvas = document.createElement('canvas');
-    bgCanvas.width = window.innerWidth;
-    bgCanvas.height = window.innerHeight;
+    bgCanvas.width = 1920;
+    bgCanvas.height = 1080;
     const bgCtx = bgCanvas.getContext('2d')!;
+
     const bgGradient = bgCtx.createRadialGradient(
       bgCanvas.width / 2, bgCanvas.height / 2, 0,
-      bgCanvas.width / 2, bgCanvas.height / 2, Math.max(bgCanvas.width, bgCanvas.height) / 2
+      bgCanvas.width / 2, bgCanvas.height / 2, Math.max(bgCanvas.width, bgCanvas.height) * 0.7
     );
     bgGradient.addColorStop(0, '#0f0f3a');
-    bgGradient.addColorStop(0.5, '#0a0a2e');
-    bgGradient.addColorStop(1, '#000000');
+    bgGradient.addColorStop(0.4, '#0a0a2e');
+    bgGradient.addColorStop(1, '#000005');
     bgCtx.fillStyle = bgGradient;
     bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
 
+    for (let i = 0; i < 300; i++) {
+      const x = Math.random() * bgCanvas.width;
+      const y = Math.random() * bgCanvas.height;
+      const size = Math.random() * 1.2 + 0.3;
+      const brightness = Math.random() * 0.7 + 0.3;
+
+      bgCtx.beginPath();
+      bgCtx.arc(x, y, size, 0, Math.PI * 2);
+      bgCtx.fillStyle = `rgba(255, 255, 255, ${brightness * 0.6})`;
+      bgCtx.fill();
+    }
+
     const bgTexture = new THREE.CanvasTexture(bgCanvas);
+    bgTexture.colorSpace = THREE.SRGBColorSpace;
     this.scene.background = bgTexture;
   }
 
   private setupLighting(): void {
-    const ambientLight = new THREE.AmbientLight(0x404080, 0.4);
+    const ambientLight = new THREE.AmbientLight(0x6060a0, 0.5);
     this.scene.add(ambientLight);
 
-    const hemisphereLight = new THREE.HemisphereLight(0x00d4ff, 0x7b2ff7, 0.3);
+    const hemisphereLight = new THREE.HemisphereLight(0x00d4ff, 0x7b2ff7, 0.4);
     this.scene.add(hemisphereLight);
 
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
     mainLight.position.set(5, 5, 5);
-    mainLight.castShadow = true;
     this.scene.add(mainLight);
 
-    const fillLight = new THREE.DirectionalLight(0x00d4ff, 0.5);
-    fillLight.position.set(-5, 2, 3);
+    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.6);
+    fillLight.position.set(-4, 2, 3);
     this.scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0x7b2ff7, 0.4);
+    const rimLight = new THREE.DirectionalLight(0xff88ff, 0.4);
     rimLight.position.set(0, -3, -5);
     this.scene.add(rimLight);
 
-    const pointLight1 = new THREE.PointLight(0x00d4ff, 0.5, 15);
+    const pointLight1 = new THREE.PointLight(0x00d4ff, 0.6, 20, 2);
     pointLight1.position.set(3, 2, 3);
     this.scene.add(pointLight1);
 
-    const pointLight2 = new THREE.PointLight(0x7b2ff7, 0.5, 15);
+    const pointLight2 = new THREE.PointLight(0x7b2ff7, 0.6, 20, 2);
     pointLight2.position.set(-3, -2, -3);
     this.scene.add(pointLight2);
+
+    const pointLight3 = new THREE.PointLight(0xff88cc, 0.3, 15, 2);
+    pointLight3.position.set(0, 3, -2);
+    this.scene.add(pointLight3);
   }
 
   private setupCamera(): void {
@@ -298,25 +331,6 @@ export class SceneRenderer {
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(width, height);
-
-    if (this.scene.background instanceof THREE.CanvasTexture) {
-      const bgCanvas = this.scene.background.image as HTMLCanvasElement;
-      if (bgCanvas) {
-        bgCanvas.width = width;
-        bgCanvas.height = height;
-        const ctx = bgCanvas.getContext('2d')!;
-        const gradient = ctx.createRadialGradient(
-          width / 2, height / 2, 0,
-          width / 2, height / 2, Math.max(width, height) / 2
-        );
-        gradient.addColorStop(0, '#0f0f3a');
-        gradient.addColorStop(0.5, '#0a0a2e');
-        gradient.addColorStop(1, '#000000');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-        this.scene.background.needsUpdate = true;
-      }
-    }
   }
 
   public loadMolecule(molecule: MoleculeData, animated: boolean = true): void {
@@ -333,12 +347,13 @@ export class SceneRenderer {
       if (animated) {
         const startPos = new THREE.Vector3(0, 0, 0);
 
-        this.loadingAnimations.push({
+        this.loadingAtoms.push({
           atom: atomMesh,
-          startTime: performance.now() + index * 40,
+          startTime: performance.now(),
+          delay: index * 40,
           fadeDuration: 500,
           spreadDuration: 500,
-          bounceDuration: 300,
+          bounceDuration: 400,
           startPos: startPos
         });
 
@@ -373,6 +388,21 @@ export class SceneRenderer {
       }
     });
 
+    if (animated) {
+      this.bondsFadeStartTime = performance.now() + 300;
+      this.targetZoom = 0.6;
+      this.currentZoom = 0.6;
+      setTimeout(() => {
+        this.targetZoom = 1;
+      }, 50);
+    } else {
+      this.targetZoom = 1;
+      this.currentZoom = 1;
+    }
+
+    this.targetRotation = { x: 0.3, y: 0.5 };
+    this.currentRotation = { x: 0.3, y: 0.5 };
+
     if (this.callbacks.onInfoUpdate) {
       this.callbacks.onInfoUpdate({
         name: molecule.name,
@@ -382,20 +412,6 @@ export class SceneRenderer {
         molecularWeight: calculateMolecularWeight(molecule)
       });
     }
-
-    if (animated) {
-      this.targetZoom = 0.5;
-      this.currentZoom = 0.5;
-      setTimeout(() => {
-        this.targetZoom = 1;
-      }, 100);
-    } else {
-      this.targetZoom = 1;
-      this.currentZoom = 1;
-    }
-
-    this.targetRotation = { x: 0.3, y: 0.5 };
-    this.currentRotation = { x: 0.3, y: 0.5 };
   }
 
   private calculateCenterOffset(atoms: AtomData[]): THREE.Vector3 {
@@ -419,14 +435,14 @@ export class SceneRenderer {
     const radius = getAtomRadius(atom.element);
     const color = getAtomColor(atom.element);
 
-    const geometry = new THREE.SphereGeometry(radius, 48, 48);
+    const geometry = new THREE.SphereGeometry(radius, 64, 64);
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      metalness: 0.85,
-      roughness: 0.15,
+      metalness: 0.9,
+      roughness: 0.1,
       emissive: color,
       emissiveIntensity: 0.05,
-      envMapIntensity: 1.2
+      envMapIntensity: 1.5
     });
 
     const mesh = new THREE.Mesh(geometry, material) as AtomMesh;
@@ -439,10 +455,8 @@ export class SceneRenderer {
     mesh.position.copy(targetPos);
     mesh.userData = {
       targetPosition: targetPos,
-      startPosition: targetPos.clone(),
       element: atom.element,
-      glowIntensity: 0,
-      bouncePhase: 'idle'
+      glowIntensity: 0
     };
 
     return mesh;
@@ -456,13 +470,13 @@ export class SceneRenderer {
       .addVectors(fromAtom.position, toAtom.position)
       .multiplyScalar(0.5);
 
-    const bondRadius = 0.07;
-    const geometry = new THREE.CylinderGeometry(bondRadius, bondRadius, length, 24);
+    const bondRadius = 0.06;
+    const geometry = new THREE.CylinderGeometry(bondRadius, bondRadius, length, 32);
     const material = new THREE.MeshStandardMaterial({
-      color: 0xcccccc,
-      metalness: 0.9,
-      roughness: 0.1,
-      envMapIntensity: 1.5
+      color: 0xd0d0d0,
+      metalness: 0.95,
+      roughness: 0.08,
+      envMapIntensity: 2
     });
 
     const mesh = new THREE.Mesh(geometry, material) as BondMesh;
@@ -495,7 +509,7 @@ export class SceneRenderer {
     });
     this.particles = [];
 
-    this.loadingAnimations = [];
+    this.loadingAtoms = [];
     this.glowTargets = [];
   }
 
@@ -515,67 +529,77 @@ export class SceneRenderer {
   private updateLoadingAnimations(): void {
     const now = performance.now();
 
-    this.loadingAnimations = this.loadingAnimations.filter(anim => {
-      const elapsed = now - anim.startTime;
+    this.loadingAtoms = this.loadingAtoms.filter(state => {
+      const effectiveStart = state.startTime + state.delay;
+      const elapsed = now - effectiveStart;
+
       if (elapsed < 0) return true;
 
-      const totalDuration = anim.fadeDuration + anim.bounceDuration;
+      const totalDuration = state.spreadDuration + state.bounceDuration;
 
       if (elapsed >= totalDuration) {
-        anim.atom.position.copy(anim.atom.userData.targetPosition);
-        const material = anim.atom.material as THREE.MeshStandardMaterial;
+        state.atom.position.copy(state.atom.userData.targetPosition);
+        const material = state.atom.material as THREE.MeshStandardMaterial;
         material.opacity = 1;
         material.transparent = false;
         return false;
       }
 
-      if (elapsed < anim.fadeDuration) {
-        const t = elapsed / anim.fadeDuration;
+      if (elapsed < state.spreadDuration) {
+        const t = elapsed / state.spreadDuration;
         const spreadT = easeOutCubic(t);
 
-        anim.atom.position.lerpVectors(
-          anim.startPos,
-          anim.atom.userData.targetPosition,
+        state.atom.position.lerpVectors(
+          state.startPos,
+          state.atom.userData.targetPosition,
           spreadT
         );
 
-        const material = anim.atom.material as THREE.MeshStandardMaterial;
-        material.opacity = t;
+        const material = state.atom.material as THREE.MeshStandardMaterial;
+        material.opacity = Math.min(t * 1.5, 1);
       } else {
-        const bounceElapsed = elapsed - anim.fadeDuration;
-        const bounceT = bounceElapsed / anim.bounceDuration;
+        const bounceElapsed = elapsed - state.spreadDuration;
+        const bounceT = bounceElapsed / state.bounceDuration;
 
-        const bounceOffset = this.calculateBounceOffset(bounceT, 0.1);
+        const bounceOffset = this.calculateBounce(bounceT, 0.12);
 
         const direction = new THREE.Vector3()
-          .subVectors(anim.atom.userData.targetPosition, anim.startPos)
+          .subVectors(state.atom.userData.targetPosition, state.startPos)
           .normalize();
 
-        anim.atom.position.copy(anim.atom.userData.targetPosition);
-        anim.atom.position.add(direction.multiplyScalar(bounceOffset));
+        state.atom.position.copy(state.atom.userData.targetPosition);
+        state.atom.position.add(direction.multiplyScalar(bounceOffset));
 
-        const material = anim.atom.material as THREE.MeshStandardMaterial;
+        const material = state.atom.material as THREE.MeshStandardMaterial;
         material.opacity = 1;
       }
 
       return true;
     });
 
-    const maxAnimEndTime = Math.max(...this.loadingAnimations.map(a => a.startTime + a.fadeDuration + a.bounceDuration), 0);
-    const bondsFadeProgress = clamp((now - (performance.now() - 200)) / 500, 0, 1);
+    if (this.bondsFadeStartTime > 0 && now > this.bondsFadeStartTime) {
+      const bondsElapsed = now - this.bondsFadeStartTime;
+      const bondsDuration = 400;
+      const bondsT = Math.min(bondsElapsed / bondsDuration, 1);
+      const bondsFadeT = easeOutCubic(bondsT);
 
-    this.bonds.forEach(bond => {
-      const material = bond.material as THREE.MeshStandardMaterial;
-      if (material.transparent) {
-        material.opacity = Math.min(material.opacity + 0.03, 1);
-        if (material.opacity >= 1) {
-          material.transparent = false;
+      this.bonds.forEach(bond => {
+        const material = bond.material as THREE.MeshStandardMaterial;
+        if (material.transparent) {
+          material.opacity = bondsFadeT;
+          if (bondsFadeT >= 1) {
+            material.transparent = false;
+          }
         }
+      });
+
+      if (bondsT >= 1) {
+        this.bondsFadeStartTime = 0;
       }
-    });
+    }
   }
 
-  private calculateBounceOffset(t: number, amplitude: number): number {
+  private calculateBounce(t: number, amplitude: number): number {
     const n1 = 7.5625;
     const d1 = 2.75;
 
@@ -602,10 +626,10 @@ export class SceneRenderer {
       this.targetRotation.x += this.rotationVelocity.x;
       this.targetRotation.x = clamp(this.targetRotation.x, -Math.PI / 2, Math.PI / 2);
 
-      this.targetRotation.y += 0.002;
+      this.targetRotation.y += 0.0015;
     }
 
-    const lerpFactor = 0.08;
+    const lerpFactor = 0.06;
     this.currentRotation.x += (this.targetRotation.x - this.currentRotation.x) * lerpFactor;
     this.currentRotation.y += (this.targetRotation.y - this.currentRotation.y) * lerpFactor;
 
@@ -630,8 +654,7 @@ export class SceneRenderer {
       }
 
       p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
-      p.velocity.multiplyScalar(0.96);
-      p.velocity.y -= 2 * delta;
+      p.velocity.multiplyScalar(0.95);
 
       const material = p.mesh.material as THREE.MeshBasicMaterial;
       material.opacity = p.life / p.maxLife;
@@ -646,7 +669,7 @@ export class SceneRenderer {
   private updateGlowEffect(): void {
     this.glowTargets.forEach(atom => {
       const material = atom.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = 0.05 + atom.userData.glowIntensity * 0.95;
+      material.emissiveIntensity = 0.05 + atom.userData.glowIntensity;
     });
   }
 
@@ -686,12 +709,12 @@ export class SceneRenderer {
     });
   }
 
-  public createSparkParticles(position: THREE.Vector3, count: number = 15): void {
+  public createSparkParticles(position: THREE.Vector3, count: number = 20): void {
     for (let i = 0; i < count; i++) {
-      const size = 0.02 + Math.random() * 0.03;
-      const geometry = new THREE.SphereGeometry(size, 8, 8);
+      const size = 0.02 + Math.random() * 0.04;
+      const geometry = new THREE.SphereGeometry(size, 6, 6);
 
-      const colors = [0x00d4ff, 0x7b2ff7, 0xffffff, 0xffff88];
+      const colors = [0x00d4ff, 0x7b2ff7, 0xffffff, 0xffff88, 0xff8844];
       const color = colors[Math.floor(Math.random() * colors.length)];
 
       const material = new THREE.MeshBasicMaterial({
@@ -703,14 +726,14 @@ export class SceneRenderer {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.copy(position);
 
-      const speed = 2 + Math.random() * 4;
+      const speed = 2 + Math.random() * 5;
       const velocity = new THREE.Vector3(
         (Math.random() - 0.5) * speed,
         (Math.random() - 0.5) * speed,
         (Math.random() - 0.5) * speed
       );
 
-      const life = 0.4 + Math.random() * 0.3;
+      const life = 0.3 + Math.random() * 0.4;
 
       this.moleculeGroup.add(mesh);
       this.particles.push({

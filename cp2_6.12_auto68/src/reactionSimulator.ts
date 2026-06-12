@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SceneRenderer, AtomMesh } from './sceneRenderer';
+import { SceneRenderer } from './sceneRenderer';
 import {
   ReactionData,
   getMoleculeById
@@ -30,11 +30,12 @@ interface ReactionBond {
   reactantIndex: number;
 }
 
-interface MoleculeGroup {
+interface ReactantGroup {
   atoms: number[];
   bonds: number[];
-  position: THREE.Vector3;
-  rotation: number;
+  center: THREE.Vector3;
+  rotationY: number;
+  baseRotation: number;
 }
 
 export class ReactionSimulator {
@@ -51,15 +52,12 @@ export class ReactionSimulator {
 
   private reactionAtoms: ReactionAtom[] = [];
   private reactionBonds: ReactionBond[] = [];
-  private reactantGroups: MoleculeGroup[] = [];
+  private reactantGroups: ReactantGroup[] = [];
 
   private animationFrameId: number | null = null;
   private onCompleteCallback: (() => void) | null = null;
   private onPhaseChangeCallback: ((phase: ReactionPhase) => void) | null = null;
   private onPauseChangeCallback: ((paused: boolean) => void) | null = null;
-
-  private sparkTimers: Set<number> = new Set();
-  private baseRotation: { x: number; y: number } = { x: 0, y: 0 };
 
   constructor(sceneRenderer: SceneRenderer) {
     this.sceneRenderer = sceneRenderer;
@@ -96,7 +94,6 @@ export class ReactionSimulator {
     this.currentPhaseElapsed = 0;
 
     this.phase = 'glow';
-    this.baseRotation = { x: 0, y: 0 };
 
     if (this.onPhaseChangeCallback) {
       this.onPhaseChangeCallback(this.phase);
@@ -125,7 +122,9 @@ export class ReactionSimulator {
   public resumeReaction(): void {
     if (!this.isPaused) return;
 
-    this.accumulatedPauseTime += performance.now() - this.pauseTime;
+    const pauseDuration = performance.now() - this.pauseTime;
+    this.accumulatedPauseTime += pauseDuration;
+    this.phaseStartTime += pauseDuration;
     this.isPaused = false;
 
     if (this.onPauseChangeCallback) {
@@ -153,9 +152,6 @@ export class ReactionSimulator {
     this.phaseStartTime = 0;
     this.currentPhaseElapsed = 0;
 
-    this.sparkTimers.forEach(id => clearTimeout(id));
-    this.sparkTimers.clear();
-
     this.clearReactionAtoms();
 
     if (this.animationFrameId) {
@@ -174,7 +170,9 @@ export class ReactionSimulator {
 
   public replayReaction(): void {
     this.resetReaction();
-    setTimeout(() => this.startReaction(), 100);
+    setTimeout(() => {
+      this.startReaction();
+    }, 200);
   }
 
   private setupReaction(): void {
@@ -185,7 +183,6 @@ export class ReactionSimulator {
     const moleculeGroup = this.sceneRenderer.getMoleculeGroup();
 
     let atomOffset = 0;
-    let bondOffset = 0;
 
     this.currentReaction.reactants.forEach((reactant, reactantIndex) => {
       const molecule = getMoleculeById(reactant.moleculeId);
@@ -211,7 +208,7 @@ export class ReactionSimulator {
           startPosition: position.clone(),
           driftPosition: new THREE.Vector3(),
           endPosition: position.clone(),
-          originalIndex: this.reactionAtoms.length,
+          originalIndex: this.reactionAtoms.length - 1,
           trail: null,
           trailPositions: null,
           reactantIndex,
@@ -219,7 +216,7 @@ export class ReactionSimulator {
         });
 
         moleculeGroup.add(atomMesh);
-        atomIndices.push(atomOffset + this.reactionAtoms.length - 1 - atomOffset);
+        atomIndices.push(atomOffset + atomIndices.length);
       });
 
       molecule.bonds.forEach(bond => {
@@ -241,19 +238,19 @@ export class ReactionSimulator {
           });
 
           moleculeGroup.add(bondMesh);
-          bondIndices.push(bondOffset + this.reactionBonds.length - 1 - bondOffset);
+          bondIndices.push(this.reactionBonds.length - 1);
         }
       });
 
       this.reactantGroups.push({
         atoms: atomIndices,
         bonds: bondIndices,
-        position: offsetVec.clone(),
-        rotation: 0
+        center: offsetVec.clone(),
+        rotationY: 0,
+        baseRotation: reactantIndex * Math.PI * 0.3
       });
 
       atomOffset += molecule.atoms.length;
-      bondOffset += molecule.bonds.length;
     });
 
     this.calculateProductPositions();
@@ -269,11 +266,11 @@ export class ReactionSimulator {
     const geometry = new THREE.SphereGeometry(radius, 48, 48);
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      metalness: 0.85,
-      roughness: 0.15,
+      metalness: 0.9,
+      roughness: 0.1,
       emissive: color,
       emissiveIntensity: 0.05,
-      envMapIntensity: 1.2,
+      envMapIntensity: 1.5,
       transparent: true,
       opacity: 1
     });
@@ -289,13 +286,13 @@ export class ReactionSimulator {
       .subVectors(toAtom.position, fromAtom.position);
     const length = direction.length();
 
-    const bondRadius = 0.07;
+    const bondRadius = 0.06;
     const geometry = new THREE.CylinderGeometry(bondRadius, bondRadius, length, 24);
     const material = new THREE.MeshStandardMaterial({
-      color: 0xcccccc,
-      metalness: 0.9,
-      roughness: 0.1,
-      envMapIntensity: 1.5,
+      color: 0xd0d0d0,
+      metalness: 0.95,
+      roughness: 0.08,
+      envMapIntensity: 2,
       transparent: true,
       opacity: 1
     });
@@ -411,7 +408,7 @@ export class ReactionSimulator {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const now = performance.now();
-    const phaseElapsed = now - this.phaseStartTime - this.accumulatedPauseTime;
+    const phaseElapsed = now - this.phaseStartTime;
     this.currentPhaseElapsed = phaseElapsed;
 
     const durations = this.currentReaction.durations;
@@ -458,7 +455,6 @@ export class ReactionSimulator {
     if (currentIndex < phases.length - 1) {
       this.phase = phases[currentIndex + 1];
       this.phaseStartTime = performance.now();
-      this.accumulatedPauseTime = 0;
       this.currentPhaseElapsed = 0;
 
       if (this.phase === 'complete') {
@@ -480,30 +476,33 @@ export class ReactionSimulator {
 
   private updateGlowPhase(elapsed: number, duration: number): void {
     const t = elapsed / duration;
-    const glowIntensity = Math.sin(t * Math.PI) * 0.8;
+    const glowIntensity = Math.sin(t * Math.PI) * 0.9;
 
     this.reactionAtoms.forEach(atom => {
       const material = atom.mesh.material as THREE.MeshStandardMaterial;
       material.emissiveIntensity = 0.05 + glowIntensity;
     });
 
-    const totalRotation = Math.PI * 4;
-    const rotationProgress = t;
+    const rotations = 2;
+    const totalRotation = Math.PI * 2 * rotations;
+    const rotationProgress = easeInOutCubic(t);
 
     this.reactantGroups.forEach((group, groupIndex) => {
-      const groupCenter = group.position.clone();
+      const direction = groupIndex % 2 === 0 ? 1 : -1;
+      const currentRotation = totalRotation * rotationProgress * direction;
+      group.rotationY = currentRotation;
 
       group.atoms.forEach(atomIdx => {
         const atom = this.reactionAtoms[atomIdx];
         if (!atom) return;
 
         const relativePos = new THREE.Vector3()
-          .subVectors(atom.startPosition, groupCenter);
+          .subVectors(atom.startPosition, group.center);
 
-        const angle = totalRotation * rotationProgress * (groupIndex % 2 === 0 ? 1 : -1);
-        const rotatedPos = relativePos.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+        const rotatedPos = relativePos.clone()
+          .applyAxisAngle(new THREE.Vector3(0, 1, 0), currentRotation);
 
-        const newPos = new THREE.Vector3().addVectors(groupCenter, rotatedPos);
+        const newPos = new THREE.Vector3().addVectors(group.center, rotatedPos);
         atom.mesh.position.copy(newPos);
         atom.currentPosition.copy(newPos);
       });
@@ -520,12 +519,9 @@ export class ReactionSimulator {
       const material = bond.mesh.material as THREE.MeshStandardMaterial;
       material.opacity = 1 - progress;
 
-      if (progress > 0.2 && progress < 0.8) {
-        const sparkChance = 0.15;
-        if (Math.random() < sparkChance) {
-          const bondPos = bond.mesh.position.clone();
-          this.sceneRenderer.createSparkParticles(bondPos, 8);
-        }
+      if (progress > 0.15 && progress < 0.85 && Math.random() < 0.12) {
+        const bondPos = bond.mesh.position.clone();
+        this.sceneRenderer.createSparkParticles(bondPos, 6);
       }
 
       if (progress >= 1) {
@@ -534,9 +530,25 @@ export class ReactionSimulator {
       }
     });
 
-    this.reactionAtoms.forEach(atom => {
-      const material = atom.mesh.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = 0.05 + (1 - progress) * 0.3;
+    this.reactantGroups.forEach((group, groupIndex) => {
+      const fadeProgress = Math.min(t * 2, 1);
+      group.rotationY *= (1 - fadeProgress * 0.5);
+
+      group.atoms.forEach(atomIdx => {
+        const atom = this.reactionAtoms[atomIdx];
+        if (!atom) return;
+
+        const material = atom.mesh.material as THREE.MeshStandardMaterial;
+        material.emissiveIntensity = 0.05 + (1 - progress) * 0.4;
+
+        const spreadOffset = progress * 0.3;
+        const direction = new THREE.Vector3()
+          .subVectors(atom.startPosition, group.center)
+          .normalize();
+
+        atom.mesh.position.add(direction.multiplyScalar(spreadOffset * 0.02));
+        atom.currentPosition.copy(atom.mesh.position);
+      });
     });
   }
 
@@ -569,24 +581,27 @@ export class ReactionSimulator {
       );
       atom.currentPosition.copy(atom.mesh.position);
 
-      this.updateAtomTrail(atom, progress);
+      this.updateAtomTrail(atom, t);
     });
 
-    if (progress > 0.7) {
+    if (t > 0.6) {
+      const bondFadeProgress = (t - 0.6) / 0.4;
       this.reactionBonds.forEach(bond => {
-        if (bond.reactantIndex === 0) {
-          const fromAtom = this.reactionAtoms[bond.fromAtomIndex];
-          const toAtom = this.reactionAtoms[bond.toAtomIndex];
-          if (fromAtom && toAtom) {
-            const dist = fromAtom.mesh.position.distanceTo(toAtom.mesh.position);
-            if (dist < 1.5) {
-              bond.visible = true;
-              bond.mesh.visible = true;
-              const bondProgress = (1.5 - dist) / 1.5;
-              const material = bond.mesh.material as THREE.MeshStandardMaterial;
-              material.opacity = bondProgress;
-            }
+        const fromAtom = this.reactionAtoms[bond.fromAtomIndex];
+        const toAtom = this.reactionAtoms[bond.toAtomIndex];
+        if (!fromAtom || !toAtom) return;
+
+        const dist = fromAtom.mesh.position.distanceTo(toAtom.mesh.position);
+        const threshold = getAtomRadius(fromAtom.element) + getAtomRadius(toAtom.element) + 0.5;
+
+        if (dist < threshold) {
+          if (!bond.visible) {
+            bond.visible = true;
+            bond.mesh.visible = true;
           }
+          const bondOpacity = Math.min(bondFadeProgress * 2, 1);
+          const material = bond.mesh.material as THREE.MeshStandardMaterial;
+          material.opacity = bondOpacity;
         }
       });
     }
@@ -594,32 +609,34 @@ export class ReactionSimulator {
 
   private updateAtomTrail(atom: ReactionAtom, progress: number): void {
     if (!atom.trail) {
-      const trailLength = 15;
+      const trailLength = 20;
       const geometry = new THREE.BufferGeometry();
       const positions = new Float32Array(trailLength * 3);
-      const colors = new Float32Array(trailLength * 3);
+      const sizes = new Float32Array(trailLength);
 
       const elementColor = new THREE.Color(getAtomColor(atom.element));
+      const colors = new Float32Array(trailLength * 3);
 
       for (let i = 0; i < trailLength; i++) {
         positions[i * 3] = atom.mesh.position.x;
         positions[i * 3 + 1] = atom.mesh.position.y;
         positions[i * 3 + 2] = atom.mesh.position.z;
 
-        const colorT = i / trailLength;
-        colors[i * 3] = elementColor.r * (1 - colorT * 0.5) + 0.5;
-        colors[i * 3 + 1] = elementColor.g * (1 - colorT * 0.5) + 0.5;
-        colors[i * 3 + 2] = elementColor.b * (1 - colorT * 0.5) + 0.5;
+        colors[i * 3] = elementColor.r;
+        colors[i * 3 + 1] = elementColor.g;
+        colors[i * 3 + 2] = elementColor.b;
+
+        sizes[i] = (1 - i / trailLength) * 0.15;
       }
 
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
       const material = new THREE.PointsMaterial({
-        size: 0.12,
+        size: 0.1,
         vertexColors: true,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.8,
         sizeAttenuation: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false
@@ -647,7 +664,11 @@ export class ReactionSimulator {
 
     const material = atom.trail!.material as THREE.PointsMaterial;
     const trailOpacity = Math.sin(progress * Math.PI);
-    material.opacity = 0.7 * trailOpacity;
+    material.opacity = 0.8 * trailOpacity;
+
+    if (progress > 0.85) {
+      material.opacity *= (1 - (progress - 0.85) / 0.15);
+    }
   }
 
   private updateBonds(): void {
@@ -712,9 +733,6 @@ export class ReactionSimulator {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
-
-    this.sparkTimers.forEach(id => clearTimeout(id));
-    this.sparkTimers.clear();
 
     this.clearReactionAtoms();
   }
