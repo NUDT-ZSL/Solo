@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rhythm Roguelike - 节拍地牢</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: 'Courier New', monospace;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #startScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      color: #fff;
+    }
+    #startScreen h1 {
+      font-size: 48px;
+      color: #ffd700;
+      text-shadow: 4px 4px 0 #ff6b6b, 8px 8px 0 #4ecdc4;
+      margin-bottom: 20px;
+      letter-spacing: 4px;
+    }
+    #startScreen p {
+      font-size: 18px;
+      color: #aaa;
+      margin-bottom: 10px;
+      text-align: center;
+      max-width: 600px;
+      line-height: 1.8;
+    }
+    #startScreen .controls {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      border: 1px solid #444;
+    }
+    #startScreen .controls h3 {
+      color: #4ecdc4;
+      margin-bottom: 15px;
+      font-size: 20px;
+    }
+    #startScreen .key {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #3a3a4a;
+      border: 2px solid #5a5a6a;
+      border-radius: 4px;
+      margin: 0 4px;
+      color: #fff;
+      font-weight: bold;
+    }
+    #startBtn {
+      margin-top: 40px;
+      padding: 16px 48px;
+      font-size: 24px;
+      background: linear-gradient(135deg, #ffd700 0%, #ff6b6b 100%);
+      border: none;
+      border-radius: 8px;
+      color: #1a1a2e;
+      font-weight: bold;
+      cursor: pointer;
+      letter-spacing: 2px;
+      transition: transform 0.1s, box-shadow 0.2s;
+      font-family: inherit;
+    }
+    #startBtn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+    }
+    #startBtn:active {
+      transform: scale(0.98);
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h1>节拍地牢</h1>
+    <p>跟随节奏，探索地牢，击败敌人，收集宝藏！</p>
+    <p>在节拍点上攻击可造成双倍伤害，偏离节拍伤害减半</p>
+    <div class="controls">
+      <h3>操作说明</h3>
+      <p><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 移动（跟随节拍）</p>
+      <p><span class="key">空格</span> 或 <span class="key">鼠标左键</span> 攻击</p>
+      <p><span class="key">1</span> 节拍护盾 &nbsp; <span class="key">2</span> 节拍炸弹 &nbsp; <span class="key">Q</span> 切换道具</p>
+    </div>
+    <button id="startBtn">开始游戏</button>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
