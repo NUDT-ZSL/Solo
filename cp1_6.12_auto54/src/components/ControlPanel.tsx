@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { ColorTheme, COLOR_THEMES } from './CloudCanvas';
 
 interface ControlPanelProps {
@@ -29,6 +29,69 @@ export default function ControlPanel({
   onVideoSelect,
 }: ControlPanelProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const [displayPrimary, setDisplayPrimary] = useState(colorTheme.primary);
+  const [_displayAccent, setDisplayAccent] = useState(colorTheme.accent);
+  const [displayShadow, setDisplayShadow] = useState(colorTheme.shadow);
+  const [displayG0, setDisplayG0] = useState(colorTheme.gradient[0]);
+  const [displayG1, setDisplayG1] = useState(colorTheme.gradient[1]);
+
+  const prevThemeRef = useRef<ColorTheme>(colorTheme);
+  const transStartRef = useRef<number>(0);
+  const transRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (prevThemeRef.current.name === colorTheme.name) return;
+
+    const from = { ...prevThemeRef.current };
+    const to = colorTheme;
+    prevThemeRef.current = colorTheme;
+    transStartRef.current = performance.now();
+
+    const hexToRgb = (hex: string): [number, number, number] => {
+      const h = hex.replace('#', '');
+      return [parseInt(h.substring(0, 2), 16), parseInt(h.substring(2, 4), 16), parseInt(h.substring(4, 6), 16)];
+    };
+    const lerpC = (c1: string, c2: string, t: number): string => {
+      const [r1, g1, b1] = hexToRgb(c1);
+      const [r2, g2, b2] = hexToRgb(c2);
+      return 'rgb(' + Math.round(r1 + (r2 - r1) * t) + ',' + Math.round(g1 + (g2 - g1) * t) + ',' + Math.round(b1 + (b2 - b1) * t) + ')';
+    };
+    const lerpS = (s1: string, s2: string, t: number): string => {
+      const p = /rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/;
+      const m1 = s1.match(p);
+      const m2 = s2.match(p);
+      if (!m1 || !m2) return s1;
+      const r = Math.round(+m1[1] + (+m2[1] - +m1[1]) * t);
+      const g = Math.round(+m1[2] + (+m2[2] - +m1[2]) * t);
+      const b = Math.round(+m1[3] + (+m2[3] - +m1[3]) * t);
+      const a = (+ (m1[4] ?? '1') + (+(m2[4] ?? '1') - +(m1[4] ?? '1')) * t).toFixed(2);
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+    };
+
+    const duration = 500;
+    const animate = (now: number) => {
+      const elapsed = now - transStartRef.current;
+      const prog = Math.min(1, elapsed / duration);
+      const eased = prog < 0.5 ? 2 * prog * prog : 1 - Math.pow(-2 * prog + 2, 2) / 2;
+
+      setDisplayPrimary(lerpC(from.primary, to.primary, eased));
+      setDisplayAccent(lerpC(from.accent, to.accent, eased));
+      setDisplayShadow(lerpS(from.shadow, to.shadow, eased));
+      setDisplayG0(lerpC(from.gradient[0], to.gradient[0], eased));
+      setDisplayG1(lerpC(from.gradient[1], to.gradient[1], eased));
+
+      if (prog < 1) {
+        transRafRef.current = requestAnimationFrame(animate);
+      }
+    };
+    if (transRafRef.current) cancelAnimationFrame(transRafRef.current);
+    transRafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (transRafRef.current) cancelAnimationFrame(transRafRef.current);
+    };
+  }, [colorTheme]);
 
   const panelBase: React.CSSProperties = {
     position: 'fixed',
@@ -80,11 +143,11 @@ export default function ControlPanel({
     cursor: 'pointer',
   };
 
-  const gradient0 = colorTheme.gradient[0];
-  const gradient1 = colorTheme.gradient[1];
-
   const speedPct = ((speedLevel - 1) / 9) * 100;
   const fontSizePct = ((maxFontSize - 20) / 40) * 100;
+
+  const speedBg = 'linear-gradient(90deg, ' + displayG0 + ' 0%, ' + displayG1 + ' ' + speedPct + '%, rgba(255,255,255,0.1) ' + speedPct + '%, rgba(255,255,255,0.1) 100%)';
+  const fontBg = 'linear-gradient(90deg, ' + displayG0 + ' 0%, ' + displayG1 + ' ' + fontSizePct + '%, rgba(255,255,255,0.1) ' + fontSizePct + '%, rgba(255,255,255,0.1) 100%)';
 
   return (
     <div style={panelBase}>
@@ -112,22 +175,23 @@ export default function ControlPanel({
         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
       >
-        {collapsed ? '»' : '«'}
+        {collapsed ? '\u00BB' : '\u00AB'}
       </button>
 
       {!collapsed && (
         <div style={{ paddingTop: '28px' }}>
-          <div style={{ fontSize: '13px', color: 'rgba(230,235,255,0.55)', marginBottom: '4px'}}>
-            {isListening ? '● 正在识别语音...' : '语音已停止'}
+          <div style={{ fontSize: '13px', color: 'rgba(230,235,255,0.55)', marginBottom: '4px' }}>
+            {isListening ? '\u25CF 正在识别语音...' : '语音已停止'}
           </div>
           <div style={{
             fontSize: '20px',
             fontWeight: 900,
             fontFamily: '"ZCOOL KuaiLe","Noto Sans SC", sans-serif',
             letterSpacing: '0.05em',
-            background: 'linear-gradient(90deg, ' + gradient0 + ', ' + gradient1 + ')',
+            background: 'linear-gradient(90deg, ' + displayG0 + ', ' + displayG1 + ')',
             WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
+            WebkitTextFillColor: 'transparent',
+            transition: 'background 0.5s ease',
           }}>
             Voice Cloud
           </div>
@@ -136,7 +200,7 @@ export default function ControlPanel({
 
       {!collapsed && (
         <div style={card}>
-          <span style={label}>调色板 · 颜色主题</span>
+          <span style={label}>{'\u8C03\u8272\u677F \u00B7 \u989C\u8272\u4E3B\u9898'} ({COLOR_THEMES.length}\u79CD)</span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px' }}>
             {COLOR_THEMES.map((t) => {
               const active = t.name === colorTheme.name;
@@ -157,7 +221,7 @@ export default function ControlPanel({
                     transition: 'transform .18s ease, box-shadow .18s ease, border-color .2s ease',
                     transform: active ? 'scale(1.06)' : 'scale(1)',
                     boxShadow: active
-                      ? '0 0 0 3px rgba(255,255,255,0.22), 0 8px 22px ' + t.shadow + ')'
+                      ? '0 0 0 3px rgba(255,255,255,0.22), 0 8px 22px ' + t.shadow
                       : 'inset 0 1px 0 rgba(255,255,255,0.3)',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
@@ -171,13 +235,13 @@ export default function ControlPanel({
 
       {!collapsed && (
         <div style={card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline'}}>
-            <span style={label}>文字消失速度</span>
-            <span style={{ fontSize: '20px', fontWeight: 800, color: colorTheme.primary, fontFamily: '"ZCOOL KuaiLe", sans-serif'}}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={label}>{'\u6587\u5B57\u6D88\u5931\u901F\u5EA6'}</span>
+            <span style={{ fontSize: '20px', fontWeight: 800, color: displayPrimary, fontFamily: '"ZCOOL KuaiLe", sans-serif', transition: 'color 0.5s ease' }}>
               Lv.{speedLevel}
             </span>
           </div>
-          <div style={{ padding: '6px 0 0'}}>
+          <div style={{ padding: '6px 0 0' }}>
             <input
               type="range"
               min={1}
@@ -185,14 +249,11 @@ export default function ControlPanel({
               step={1}
               value={speedLevel}
               onChange={(e) => onSpeedChange(parseInt(e.target.value, 10))}
-              style={{
-                ...sliderTrackStyle,
-                background: 'linear-gradient(90deg, ' + gradient0 + ' 0%, ' + gradient1 + ' ' + speedPct + '%, rgba(255,255,255,0.1) ' + speedPct + '%, rgba(255,255,255,0.1) 100%)',
-              }}
-              className={'wc-slider'}
+              style={{ ...sliderTrackStyle, background: speedBg }}
+              className="wc-slider"
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(230,235,255,0.45)', marginTop: '6px'}}>
-              <span>慢</span><span>快</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(230,235,255,0.45)', marginTop: '6px' }}>
+              <span>{'\u6162'}</span><span>{'\u5FEB'}</span>
             </div>
           </div>
         </div>
@@ -200,13 +261,13 @@ export default function ControlPanel({
 
       {!collapsed && (
         <div style={card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline'}}>
-            <span style={label}>最大字号</span>
-            <span style={{ fontSize: '20px', fontWeight: 800, color: colorTheme.primary, fontFamily: '"ZCOOL KuaiLe", sans-serif'}}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={label}>{'\u6700\u5927\u5B57\u53F7'}</span>
+            <span style={{ fontSize: '20px', fontWeight: 800, color: displayPrimary, fontFamily: '"ZCOOL KuaiLe", sans-serif', transition: 'color 0.5s ease' }}>
               {maxFontSize}px
             </span>
           </div>
-          <div style={{ padding: '6px 0 0'}}>
+          <div style={{ padding: '6px 0 0' }}>
             <input
               type="range"
               min={20}
@@ -214,13 +275,10 @@ export default function ControlPanel({
               step={1}
               value={maxFontSize}
               onChange={(e) => onFontSizeChange(parseInt(e.target.value, 10))}
-              style={{
-                ...sliderTrackStyle,
-                background: 'linear-gradient(90deg, ' + gradient0 + ' 0%, ' + gradient1 + ' ' + fontSizePct + '%, rgba(255,255,255,0.1) ' + fontSizePct + '%, rgba(255,255,255,0.1) 100%)',
-              }}
-              className={'wc-slider'}
+              style={{ ...sliderTrackStyle, background: fontBg }}
+              className="wc-slider"
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(230,235,255,0.45)', marginTop: '6px'}}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(230,235,255,0.45)', marginTop: '6px' }}>
               <span>20</span><span>60</span>
             </div>
           </div>
@@ -236,7 +294,7 @@ export default function ControlPanel({
       }}>
         <button
           onClick={onToggleListening}
-          title="启动/停止语音识别"
+          title={isListening ? '\u505C\u6B62\u8BC6\u522B' : '\u5F00\u59CB\u8BC6\u522B'}
           style={{
             flex: collapsed ? undefined : 1,
             height: collapsed ? '48px' : '44px',
@@ -249,11 +307,11 @@ export default function ControlPanel({
             color: isListening ? '#fff' : '#1a1d2b',
             background: isListening
               ? 'linear-gradient(135deg,#ff5d6a,#ff3b5c)'
-              : 'linear-gradient(135deg, ' + gradient0 + ', ' + gradient1 + ')',
+              : 'linear-gradient(135deg, ' + displayG0 + ', ' + displayG1 + ')',
             boxShadow: isListening
-              ? '0 10px 28px rgba(255,80,100,0.55), 0 0 0 0 rgba(255,80,100,0.7)'
-              : '0 8px 22px ' + colorTheme.shadow + ', 0 0 0 0 ' + colorTheme.primary + '55)',
-            transition: 'transform .15s ease, box-shadow .15s ease',
+              ? '0 10px 28px rgba(255,80,100,0.55)'
+              : '0 8px 22px ' + displayShadow,
+            transition: 'transform .15s ease, box-shadow .15s ease, background 0.5s ease',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -262,12 +320,12 @@ export default function ControlPanel({
           onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
         >
-          {collapsed ? (isListening ? '⏹' : '🎙') : (isListening ? '⏹ 停止识别' : '🎙 开始识别')}
+          {collapsed ? (isListening ? '\u23F9' : '\uD83C\uDFA4') : (isListening ? '\u23F9 \u505C\u6B62\u8BC6\u522B' : '\uD83C\uDFA4 \u5F00\u59CB\u8BC6\u522B')}
         </button>
         {!collapsed && (
           <button
             onClick={() => fileRef.current?.click()}
-            title="选择背景视频"
+            title={'\u9009\u62E9\u80CC\u666F\u89C6\u9891'}
             style={{
               flex: 1,
               height: '44px',
@@ -288,13 +346,13 @@ export default function ControlPanel({
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
           >
-            <span>🎬</span>视频
+            <span>{'\uD83C\uDFAC'}</span>{'\u89C6\u9891'}
           </button>
         )}
         {collapsed && (
           <button
             onClick={() => fileRef.current?.click()}
-            title="选择背景视频"
+            title={'\u9009\u62E9\u80CC\u666F\u89C6\u9891'}
             style={{
               width: '36px',
               height: '36px',
@@ -307,7 +365,7 @@ export default function ControlPanel({
               fontSize: '16px',
             }}
           >
-            🎬
+            {'\uD83C\uDFAC'}
           </button>
         )}
       </div>
@@ -318,7 +376,7 @@ export default function ControlPanel({
         accept="video/mp4,video/quicktime,video/*"
         style={{ display: 'none' }}
         onChange={(e) => {
-          const f = e.target.files?.[0];
+          const f = e.target.files && e.target.files[0];
           if (f) onVideoSelect(f);
           e.target.value = '';
         }}
