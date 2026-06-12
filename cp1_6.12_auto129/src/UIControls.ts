@@ -1,9 +1,8 @@
-import type { EpicycleConfig, PlaybackSpeed } from './types';
-import { EpicycleSystem } from './EpicycleSystem';
+import type { EpicycleConfig, PlaybackSpeed, EpicycleSystemAPI } from './types';
 
 export class UIControls {
   private container: HTMLElement;
-  private system: EpicycleSystem;
+  private system: EpicycleSystemAPI;
   private epicycles: EpicycleConfig[] = [];
   private panel: HTMLDivElement;
   private epicycleList: HTMLDivElement;
@@ -14,10 +13,14 @@ export class UIControls {
   private speedUpBtn: HTMLButtonElement;
   private exportBtn: HTMLButtonElement;
 
-  private onEpicycleChange?: (configs: EpicycleConfig[]) => void;
   private onExport?: () => void;
 
-  constructor(container: HTMLElement, system: EpicycleSystem) {
+  private epicycleRowMap: Map<string, HTMLElement> = new Map();
+  private inputRefs: Map<string, { slider: HTMLInputElement; number: HTMLInputElement }> = new Map();
+
+  private isRemoving: Set<string> = new Set();
+
+  constructor(container: HTMLElement, system: EpicycleSystemAPI) {
     this.container = container;
     this.system = system;
 
@@ -33,11 +36,7 @@ export class UIControls {
     this.buildPanel();
     this.setupStyles();
     this.setupEventListeners();
-    this.addDefaultEpicycles();
-  }
-
-  setOnEpicycleChange(callback: (configs: EpicycleConfig[]) => void) {
-    this.onEpicycleChange = callback;
+    this.initDefaultEpicycles();
   }
 
   setOnExport(callback: () => void) {
@@ -200,16 +199,21 @@ export class UIControls {
         border-radius: 12px;
         padding: 12px;
         border: 1px solid rgba(255, 255, 255, 0.06);
-        transition: opacity 300ms ease, transform 300ms ease;
+        transition: opacity 300ms ease, transform 300ms ease, max-height 300ms ease, padding 300ms ease, margin 300ms ease, border-width 300ms ease;
+        max-height: 200px;
         overflow: hidden;
+        opacity: 1;
+        transform: translateX(0);
       }
 
       .epicycle-row.fade-out {
         opacity: 0;
         transform: translateX(-20px);
-        height: 0;
-        padding: 0 12px;
-        margin: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        margin-top: 0;
+        margin-bottom: 0;
         border-width: 0;
       }
 
@@ -251,6 +255,11 @@ export class UIControls {
         color: #ff006e;
       }
 
+      .delete-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
       .control-group {
         margin-bottom: 8px;
       }
@@ -275,15 +284,28 @@ export class UIControls {
         padding: 2px 8px;
         font-size: 11px;
         color: rgba(255, 255, 255, 0.8);
-        width: 60px;
+        width: 65px;
         text-align: center;
         outline: none;
         transition: all 150ms ease;
+        font-family: inherit;
+        -moz-appearance: textfield;
+      }
+
+      .control-value::-webkit-outer-spin-button,
+      .control-value::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      .control-value:hover {
+        border-color: #6c757d;
+        box-shadow: 0 0 0 1px rgba(73, 80, 87, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
       }
 
       .control-value:focus {
         border-color: #00f5d4;
-        box-shadow: 0 0 0 2px rgba(0, 245, 212, 0.2);
+        box-shadow: 0 0 0 2px rgba(0, 245, 212, 0.2), inset 0 0 0 1px rgba(0, 245, 212, 0.1);
       }
 
       input[type="range"] {
@@ -297,6 +319,11 @@ export class UIControls {
         cursor: pointer;
       }
 
+      input[type="range"]:hover::-webkit-slider-thumb {
+        transform: scale(1.15);
+        box-shadow: 0 0 16px rgba(0, 245, 212, 0.6);
+      }
+
       input[type="range"]::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
@@ -307,11 +334,6 @@ export class UIControls {
         cursor: pointer;
         box-shadow: 0 0 10px rgba(0, 245, 212, 0.4);
         transition: all 150ms ease;
-      }
-
-      input[type="range"]::-webkit-slider-thumb:hover {
-        transform: scale(1.15);
-        box-shadow: 0 0 16px rgba(0, 245, 212, 0.6);
       }
 
       input[type="range"]::-moz-range-thumb {
@@ -335,6 +357,7 @@ export class UIControls {
         font-weight: 500;
         cursor: pointer;
         transition: all 200ms ease;
+        font-family: inherit;
       }
 
       .add-btn:hover {
@@ -463,6 +486,30 @@ export class UIControls {
       .export-btn:hover .tooltip {
         opacity: 1;
       }
+
+      .perf-stats {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 11px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        color: rgba(255, 255, 255, 0.6);
+        z-index: 100;
+        line-height: 1.6;
+      }
+
+      .perf-stats .fps {
+        color: #06d6a0;
+        font-weight: 600;
+      }
+
+      .perf-stats .draw {
+        color: #4cc9f0;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -478,8 +525,8 @@ export class UIControls {
     });
   }
 
-  private addDefaultEpicycles() {
-    const colors = this.system.getEpicycleColors();
+  private initDefaultEpicycles() {
+    const colors = this.getEpicycleColors();
 
     this.epicycles = [
       { id: 'epi-1', radius: 80, angularVelocity: 1, phase: 0, color: colors[0] },
@@ -487,151 +534,120 @@ export class UIControls {
       { id: 'epi-3', radius: 30, angularVelocity: 3, phase: 0, color: colors[2] },
     ];
 
-    this.renderEpicycleList();
-    this.notifyChange();
+    this.renderAllEpicycles();
+    this.syncSystemConfig();
   }
 
-  private addEpicycle() {
-    if (this.epicycles.length >= 8) return;
-
-    const colors = this.system.getEpicycleColors();
-    const newEpicycle: EpicycleConfig = {
-      id: `epi-${Date.now()}`,
-      radius: 40,
-      angularVelocity: 1,
-      phase: 0,
-      color: colors[this.epicycles.length % colors.length],
-    };
-
-    this.epicycles.push(newEpicycle);
-    this.renderEpicycleList();
-    this.notifyChange();
+  private getEpicycleColors(): string[] {
+    return ['#00f5d4', '#f72585', '#4cc9f0', '#ffbe0b', '#90e0ef', '#b5179e', '#06d6a0', '#ff006e'];
   }
 
-  private removeEpicycle(id: string) {
-    if (this.epicycles.length <= 1) return;
-
-    const row = document.querySelector(`[data-id="${id}"]`) as HTMLElement;
-    if (row) {
-      row.classList.add('fade-out');
-      setTimeout(() => {
-        this.epicycles = this.epicycles.filter((e) => e.id !== id);
-        this.renderEpicycleList();
-        this.notifyChange();
-      }, 300);
-    }
+  private syncSystemConfig() {
+    this.system.setConfig(this.epicycles.map((e) => ({ ...e })));
   }
 
-  private updateEpicycle(id: string, updates: Partial<EpicycleConfig>) {
-    const epicycle = this.epicycles.find((e) => e.id === id);
-    if (epicycle) {
-      Object.assign(epicycle, updates);
-      this.notifyChange();
-    }
-  }
-
-  private renderEpicycleList() {
+  private renderAllEpicycles() {
     this.epicycleList.innerHTML = '';
+    this.epicycleRowMap.clear();
+    this.inputRefs.clear();
 
     this.epicycles.forEach((epicycle, index) => {
-      const row = document.createElement('div');
-      row.className = 'epicycle-row';
-      row.setAttribute('data-id', epicycle.id);
-
-      const header = document.createElement('div');
-      header.className = 'epicycle-header';
-
-      const title = document.createElement('div');
-      title.className = 'epicycle-title';
-      const dot = document.createElement('span');
-      dot.className = 'epicycle-dot';
-      dot.style.background = epicycle.color;
-      title.appendChild(dot);
-      title.appendChild(document.createTextNode(`本轮 ${index + 1}`));
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.innerHTML = '×';
-      deleteBtn.disabled = this.epicycles.length <= 1;
-      deleteBtn.addEventListener('click', () => this.removeEpicycle(epicycle.id));
-
-      header.appendChild(title);
-      header.appendChild(deleteBtn);
-      row.appendChild(header);
-
-      const radiusGroup = this.createControlGroup(
-        '半径',
-        epicycle.radius,
-        10,
-        150,
-        1,
-        'px',
-        (value) => this.updateEpicycle(epicycle.id, { radius: value })
-      );
-      row.appendChild(radiusGroup);
-
-      const velocityGroup = this.createControlGroup(
-        '角速度',
-        epicycle.angularVelocity,
-        -3,
-        3,
-        0.1,
-        'rad/s',
-        (value) => this.updateEpicycle(epicycle.id, { angularVelocity: value })
-      );
-      row.appendChild(velocityGroup);
-
-      const phaseGroup = this.createControlGroup(
-        '相位',
-        epicycle.phase,
-        0,
-        Math.PI * 2,
-        0.01,
-        'rad',
-        (value) => this.updateEpicycle(epicycle.id, { phase: value })
-      );
-      row.appendChild(phaseGroup);
-
+      const row = this.createEpicycleRow(epicycle, index);
       this.epicycleList.appendChild(row);
+      this.epicycleRowMap.set(epicycle.id, row);
     });
 
-    this.addButton.disabled = this.epicycles.length >= 8;
-    this.addButton.textContent = this.epicycles.length >= 8 ? '已达上限 (8个)' : '+ 添加本轮';
+    this.updateAddButtonState();
+  }
+
+  private createEpicycleRow(epicycle: EpicycleConfig, index: number): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'epicycle-row';
+    row.setAttribute('data-id', epicycle.id);
+
+    const header = document.createElement('div');
+    header.className = 'epicycle-header';
+
+    const title = document.createElement('div');
+    title.className = 'epicycle-title';
+    const dot = document.createElement('span');
+    dot.className = 'epicycle-dot';
+    dot.style.background = epicycle.color;
+    title.appendChild(dot);
+    title.appendChild(document.createTextNode(`本轮 ${index + 1}`));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.innerHTML = '×';
+    deleteBtn.disabled = this.epicycles.length <= 1;
+    deleteBtn.addEventListener('click', () => this.removeEpicycle(epicycle.id));
+
+    header.appendChild(title);
+    header.appendChild(deleteBtn);
+    row.appendChild(header);
+
+    const radiusGroup = this.createControlGroup(
+      epicycle.id,
+      'radius',
+      '半径',
+      epicycle.radius,
+      10,
+      150,
+      1
+    );
+    row.appendChild(radiusGroup);
+
+    const velocityGroup = this.createControlGroup(
+      epicycle.id,
+      'angularVelocity',
+      '角速度',
+      epicycle.angularVelocity,
+      -3,
+      3,
+      0.1
+    );
+    row.appendChild(velocityGroup);
+
+    const phaseGroup = this.createControlGroup(
+      epicycle.id,
+      'phase',
+      '相位',
+      epicycle.phase,
+      0,
+      Math.PI * 2,
+      0.01
+    );
+    row.appendChild(phaseGroup);
+
+    return row;
   }
 
   private createControlGroup(
+    epicycleId: string,
+    field: keyof EpicycleConfig,
     label: string,
     value: number,
     min: number,
     max: number,
-    step: number,
-    unit: string,
-    onChange: (value: number) => void
+    step: number
   ): HTMLElement {
     const group = document.createElement('div');
     group.className = 'control-group';
 
     const labelDiv = document.createElement('div');
     labelDiv.className = 'control-label';
-    labelDiv.innerHTML = `<span>${label}</span>`;
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = label;
 
     const valueInput = document.createElement('input');
     valueInput.type = 'number';
     valueInput.className = 'control-value';
-    valueInput.value = value.toFixed(step < 1 ? 2 : 0);
+    valueInput.value = this.formatValue(value, step);
     valueInput.min = min.toString();
     valueInput.max = max.toString();
     valueInput.step = step.toString();
-    valueInput.addEventListener('change', (e) => {
-      const val = parseFloat((e.target as HTMLInputElement).value);
-      if (!isNaN(val)) {
-        const clamped = Math.max(min, Math.min(max, val));
-        onChange(clamped);
-        slider.value = clamped.toString();
-        valueInput.value = clamped.toFixed(step < 1 ? 2 : 0);
-      }
-    });
 
+    labelDiv.appendChild(labelSpan);
     labelDiv.appendChild(valueInput);
     group.appendChild(labelDiv);
 
@@ -641,14 +657,125 @@ export class UIControls {
     slider.max = max.toString();
     slider.step = step.toString();
     slider.value = value.toString();
-    slider.addEventListener('input', (e) => {
-      const val = parseFloat((e.target as HTMLInputElement).value);
-      onChange(val);
-      valueInput.value = val.toFixed(step < 1 ? 2 : 0);
-    });
     group.appendChild(slider);
 
+    const inputKey = `${epicycleId}-${field}`;
+    this.inputRefs.set(inputKey, { slider, number: valueInput });
+
+    const handleValueChange = (newValue: number) => {
+      const clamped = Math.max(min, Math.min(max, newValue));
+
+      slider.value = clamped.toString();
+      valueInput.value = this.formatValue(clamped, step);
+
+      const epicycle = this.epicycles.find((e) => e.id === epicycleId);
+      if (epicycle) {
+        (epicycle as any)[field] = clamped;
+        this.syncSystemConfig();
+      }
+    };
+
+    slider.addEventListener('input', (e) => {
+      const val = parseFloat((e.target as HTMLInputElement).value);
+      handleValueChange(val);
+    });
+
+    valueInput.addEventListener('input', (e) => {
+      const val = parseFloat((e.target as HTMLInputElement).value);
+      if (!isNaN(val)) {
+        handleValueChange(val);
+      }
+    });
+
+    valueInput.addEventListener('blur', (e) => {
+      const val = parseFloat((e.target as HTMLInputElement).value);
+      if (!isNaN(val)) {
+        handleValueChange(val);
+      } else {
+        const epicycle = this.epicycles.find((e) => e.id === epicycleId);
+        if (epicycle) {
+          valueInput.value = this.formatValue((epicycle as any)[field], step);
+        }
+      }
+    });
+
     return group;
+  }
+
+  private formatValue(value: number, step: number): string {
+    if (step >= 1) {
+      return Math.round(value).toString();
+    }
+    const decimals = step < 0.1 ? 2 : 2;
+    return value.toFixed(decimals);
+  }
+
+  private addEpicycle() {
+    if (this.epicycles.length >= 8) return;
+
+    const colors = this.getEpicycleColors();
+    const newEpicycle: EpicycleConfig = {
+      id: `epi-${Date.now()}`,
+      radius: 40,
+      angularVelocity: 1,
+      phase: 0,
+      color: colors[this.epicycles.length % colors.length],
+    };
+
+    this.epicycles.push(newEpicycle);
+
+    const row = this.createEpicycleRow(newEpicycle, this.epicycles.length - 1);
+    this.epicycleList.appendChild(row);
+    this.epicycleRowMap.set(newEpicycle.id, row);
+
+    this.updateAddButtonState();
+    this.updateDeleteButtons();
+    this.syncSystemConfig();
+  }
+
+  private removeEpicycle(id: string) {
+    if (this.epicycles.length <= 1) return;
+    if (this.isRemoving.has(id)) return;
+
+    this.isRemoving.add(id);
+
+    const row = this.epicycleRowMap.get(id);
+    if (row) {
+      row.classList.add('fade-out');
+
+      setTimeout(() => {
+        this.epicycles = this.epicycles.filter((e) => e.id !== id);
+        this.isRemoving.delete(id);
+        this.epicycleRowMap.delete(id);
+
+        const keysToDelete: string[] = [];
+        this.inputRefs.forEach((_, key) => {
+          if (key.startsWith(`${id}-`)) {
+            keysToDelete.push(key);
+          }
+        });
+        keysToDelete.forEach((k) => this.inputRefs.delete(k));
+
+        this.renderAllEpicycles();
+        this.syncSystemConfig();
+      }, 300);
+    }
+  }
+
+  private updateAddButtonState() {
+    const count = this.epicycles.length;
+    this.addButton.disabled = count >= 8;
+    this.addButton.textContent = count >= 8 ? '已达上限 (8个)' : '+ 添加本轮';
+  }
+
+  private updateDeleteButtons() {
+    const rows = this.epicycleList.querySelectorAll('.epicycle-row');
+    rows.forEach((row) => {
+      const deleteBtn = row.querySelector('.delete-btn') as HTMLButtonElement;
+      if (deleteBtn) {
+        deleteBtn.disabled = this.epicycles.length <= 1;
+      }
+    });
   }
 
   private togglePlay() {
@@ -661,6 +788,8 @@ export class UIControls {
   private reset() {
     this.system.resetView();
     this.setSpeed(1);
+    this.playPauseBtn.innerHTML = '⏸ 暂停';
+    this.playPauseBtn.classList.remove('paused');
   }
 
   private setSpeed(speed: PlaybackSpeed) {
@@ -669,14 +798,7 @@ export class UIControls {
     this.speedDownBtn.classList.toggle('active', speed === 0.5);
   }
 
-  private notifyChange() {
-    this.system.setEpicycles(this.epicycles);
-    if (this.onEpicycleChange) {
-      this.onEpicycleChange(this.epicycles);
-    }
-  }
-
   getEpicycles(): EpicycleConfig[] {
-    return this.epicycles;
+    return this.epicycles.map((e) => ({ ...e }));
   }
 }

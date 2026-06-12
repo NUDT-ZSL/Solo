@@ -13,6 +13,28 @@ function init() {
   const system = new EpicycleSystem(canvas);
   const ui = new UIControls(root, system);
 
+  const perfStats = document.createElement('div');
+  perfStats.className = 'perf-stats';
+  perfStats.innerHTML = `
+    <div>FPS: <span class="fps">--</span></div>
+    <div>Draw: <span class="draw">--</span>ms</div>
+    <div>Points: <span class="points">0</span></div>
+  `;
+  root.appendChild(perfStats);
+
+  const fpsSpan = perfStats.querySelector('.fps') as HTMLElement;
+  const drawSpan = perfStats.querySelector('.draw') as HTMLElement;
+  const pointsSpan = perfStats.querySelector('.points') as HTMLElement;
+
+  function updatePerfDisplay() {
+    const metrics = system.getPerformanceMetrics();
+    fpsSpan.textContent = metrics.fps.toString();
+    drawSpan.textContent = metrics.drawTime.toFixed(1);
+    pointsSpan.textContent = system.getTracePoints().length.toString();
+    requestAnimationFrame(updatePerfDisplay);
+  }
+  updatePerfDisplay();
+
   ui.setOnExport(() => {
     const svgContent = system.exportSVG();
     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
@@ -33,21 +55,12 @@ function init() {
 
   system.start();
 
-  let fps = 0;
-  let lastFpsTime = performance.now();
-  let frameCount = 0;
-
-  function updateFps() {
-    frameCount++;
-    const now = performance.now();
-    if (now - lastFpsTime >= 1000) {
-      fps = frameCount;
-      frameCount = 0;
-      lastFpsTime = now;
-    }
-    requestAnimationFrame(updateFps);
-  }
-  updateFps();
+  let lastRedrawTime = 0;
+  system.onZoomChange(() => {
+    const start = performance.now();
+    lastRedrawTime = performance.now() - start;
+    console.log(`Zoom change redraw time: ${lastRedrawTime.toFixed(2)}ms`);
+  });
 }
 
 if (document.readyState === 'loading') {
