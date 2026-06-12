@@ -287,6 +287,7 @@ const App: React.FC = () => {
                 ...styles.uploadArea,
                 ...(isDragging ? styles.uploadAreaDragging : {}),
               }}
+              className="upload-area"
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
