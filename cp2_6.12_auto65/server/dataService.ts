@@ -4,8 +4,10 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   initDatabase,
   getAllScenes,
+  getRandomScenes,
   insertScore,
   getRadarData,
+  isDbHealthy,
   type ScoreRecord
 } from './db.js';
 
@@ -16,19 +18,30 @@ app.use(cors());
 app.use(express.json());
 
 initDatabase();
-console.log('[SERVER] SQLite database initialized');
+console.log('[SERVER] SQLite database initialized, healthy:', isDbHealthy());
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({ status: 'ok', timestamp: Date.now(), dbHealthy: isDbHealthy() });
 });
 
-app.get('/api/scenes', (_req, res) => {
+app.get('/api/scenes', (req, res) => {
   try {
-    const scenes = getAllScenes();
+    const count = req.query.count ? parseInt(String(req.query.count), 10) : undefined;
+    const category = req.query.category ? String(req.query.category) : undefined;
+    const random = req.query.random === 'true' || req.query.random === '1';
+
+    let scenes;
+    if (random || typeof count === 'number' || category) {
+      scenes = getRandomScenes(count, category);
+    } else {
+      scenes = getAllScenes();
+    }
+
     res.json({
       success: true,
       data: scenes,
-      count: scenes.length
+      count: scenes.length,
+      total: getAllScenes().length
     });
   } catch (error) {
     console.error('[GET /api/scenes] error:', error);

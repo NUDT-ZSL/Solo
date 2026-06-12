@@ -52,7 +52,9 @@ export interface ErrorDetail {
   timestamp: number;
 }
 
-let db: Database.Database;
+let db: Database.Database | null = null;
+let dbFallbackMode = false;
+const inMemoryScores: ScoreRecord[] = [];
 
 const SCENES_DATA: Omit<Scene, 'id'>[] = [
   {
@@ -328,37 +330,49 @@ const SCENES_DATA: Omit<Scene, 'id'>[] = [
 ];
 
 export function initDatabase(): void {
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
+  try {
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS scores (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      sceneId TEXT NOT NULL,
-      selectedOptionId TEXT NOT NULL,
-      correctOptionId TEXT NOT NULL,
-      semanticScore REAL NOT NULL,
-      speedScore REAL NOT NULL,
-      totalScore REAL NOT NULL,
-      responseTime REAL NOT NULL,
-      isCorrect INTEGER NOT NULL,
-      timestamp INTEGER NOT NULL
-    );
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS scores (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        sceneId TEXT NOT NULL,
+        selectedOptionId TEXT NOT NULL,
+        correctOptionId TEXT NOT NULL,
+        semanticScore REAL NOT NULL,
+        speedScore REAL NOT NULL,
+        totalScore REAL NOT NULL,
+        responseTime REAL NOT NULL,
+        isCorrect INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL
+      );
 
-    CREATE INDEX IF NOT EXISTS idx_scores_userId ON scores(userId);
-    CREATE INDEX IF NOT EXISTS idx_scores_timestamp ON scores(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_scores_userId ON scores(userId);
+      CREATE INDEX IF NOT EXISTS idx_scores_timestamp ON scores(timestamp);
 
-    CREATE TABLE IF NOT EXISTS radar_cache (
-      userId TEXT PRIMARY KEY,
-      semanticUnderstanding REAL NOT NULL DEFAULT 0,
-      reactionSpeed REAL NOT NULL DEFAULT 0,
-      logicalCoherence REAL NOT NULL DEFAULT 0,
-      emotionalPerception REAL NOT NULL DEFAULT 0,
-      vocabularyRichness REAL NOT NULL DEFAULT 0,
-      updatedAt INTEGER NOT NULL
-    );
-  `);
+      CREATE TABLE IF NOT EXISTS radar_cache (
+        userId TEXT PRIMARY KEY,
+        semanticUnderstanding REAL NOT NULL DEFAULT 0,
+        reactionSpeed REAL NOT NULL DEFAULT 0,
+        logicalCoherence REAL NOT NULL DEFAULT 0,
+        emotionalPerception REAL NOT NULL DEFAULT 0,
+        vocabularyRichness REAL NOT NULL DEFAULT 0,
+        updatedAt INTEGER NOT NULL
+      );
+    `);
+    dbFallbackMode = false;
+    console.log('[DB] SQLite initialized successfully at', DB_PATH);
+  } catch (err) {
+    console.error('[DB] Failed to initialize SQLite, falling back to in-memory mode:', err);
+    dbFallbackMode = true;
+    db = null;
+  }
+}
+
+export function isDbHealthy(): boolean {
+  return db !== null && !dbFallbackMode;
 }
 
 export function getAllScenes(): Scene[] {
@@ -378,8 +392,31 @@ export function getSceneById(id: string): Scene | undefined {
   return getAllScenes().find(s => s.id === id);
 }
 
+export function getRandomScenes(count?: number, category?: string): Scene[] {
+  let pool = getAllScenes();
+  if (category) {
+    pool = pool.filter(s => s.category === category);
+  }
+  if (typeof count === 'number' && count > 0 && count < pool.length) {
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+  }
+  return pool;
+}
+
 export function insertScore(record: Omit<ScoreRecord, 'id'> & { id?: string }): boolean {
   const id = record.id || crypto.randomUUID();
+  const fullRecord: ScoreRecord = {
+    ...record,
+    id,
+    isCorrect: record.isCorrect ? 1 : 0
+  } as ScoreRecord;
+
+  if (!db || dbFallbackMode) {
+    inMemoryScores.push(fullRecord);
+    return true;
+  }
+
   try {
     const stmt = db.prepare(`
       INSERT INTO scores (id, userId, sceneId, selectedOptionId, correctOptionId,
@@ -387,28 +424,40 @@ export function insertScore(record: Omit<ScoreRecord, 'id'> & { id?: string }): 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
-      id,
-      record.userId,
-      record.sceneId,
-      record.selectedOptionId,
-      record.correctOptionId,
-      record.semanticScore,
-      record.speedScore,
-      record.totalScore,
-      record.responseTime,
-      record.isCorrect,
-      record.timestamp
+      fullRecord.id,
+      fullRecord.userId,
+      fullRecord.sceneId,
+      fullRecord.selectedOptionId,
+      fullRecord.correctOptionId,
+      fullRecord.semanticScore,
+      fullRecord.speedScore,
+      fullRecord.totalScore,
+      fullRecord.responseTime,
+      fullRecord.isCorrect,
+      fullRecord.timestamp
     );
     return true;
   } catch (e) {
-    console.error('insertScore error:', e);
-    return false;
+    console.error('[DB] insertScore error, fallback to memory:', e);
+    inMemoryScores.push(fullRecord);
+    dbFallbackMode = true;
+    return true;
   }
 }
 
 export function getUserScores(userId: string): ScoreRecord[] {
-  const stmt = db.prepare('SELECT * FROM scores WHERE userId = ? ORDER BY timestamp DESC');
-  return stmt.all(userId) as ScoreRecord[];
+  if (!db || dbFallbackMode) {
+    return inMemoryScores
+      .filter(r => r.userId === userId)
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }
+  try {
+    const stmt = db.prepare('SELECT * FROM scores WHERE userId = ? ORDER BY timestamp DESC');
+    return stmt.all(userId) as ScoreRecord[];
+  } catch (e) {
+    console.error('[DB] getUserScores error:', e);
+    return [];
+  }
 }
 
 function calculateRadar(userId: string): RadarData {
@@ -450,17 +499,29 @@ function calculateRadar(userId: string): RadarData {
 
 export function getRadarData(userId: string): { radar: RadarData; recentErrors: ErrorDetail[] } {
   const radar = calculateRadar(userId);
-
   const scenes = getAllScenes();
   const sceneMap = new Map(scenes.map(s => [s.id, s]));
 
-  const errorStmt = db.prepare(`
-    SELECT * FROM scores
-    WHERE userId = ? AND isCorrect = 0
-    ORDER BY timestamp DESC
-    LIMIT 5
-  `);
-  const errorRecords = errorStmt.all(userId) as ScoreRecord[];
+  let errorRecords: ScoreRecord[] = [];
+
+  if (!db || dbFallbackMode) {
+    errorRecords = inMemoryScores
+      .filter(r => r.userId === userId && r.isCorrect === 0)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5);
+  } else {
+    try {
+      const errorStmt = db.prepare(`
+        SELECT * FROM scores
+        WHERE userId = ? AND isCorrect = 0
+        ORDER BY timestamp DESC
+        LIMIT 5
+      `);
+      errorRecords = errorStmt.all(userId) as ScoreRecord[];
+    } catch (e) {
+      console.error('[DB] getRadarData error records failed:', e);
+    }
+  }
 
   const recentErrors: ErrorDetail[] = errorRecords.map(rec => {
     const scene = sceneMap.get(rec.sceneId);
@@ -476,31 +537,37 @@ export function getRadarData(userId: string): { radar: RadarData; recentErrors: 
     };
   });
 
-  const now = Date.now();
-  db.prepare(`
-    INSERT INTO radar_cache (userId, semanticUnderstanding, reactionSpeed, logicalCoherence, emotionalPerception, vocabularyRichness, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(userId) DO UPDATE SET
-      semanticUnderstanding = excluded.semanticUnderstanding,
-      reactionSpeed = excluded.reactionSpeed,
-      logicalCoherence = excluded.logicalCoherence,
-      emotionalPerception = excluded.emotionalPerception,
-      vocabularyRichness = excluded.vocabularyRichness,
-      updatedAt = excluded.updatedAt
-  `).run(
-    userId,
-    radar.semanticUnderstanding,
-    radar.reactionSpeed,
-    radar.logicalCoherence,
-    radar.emotionalPerception,
-    radar.vocabularyRichness,
-    now
-  );
+  if (db && !dbFallbackMode) {
+    try {
+      const now = Date.now();
+      db.prepare(`
+        INSERT INTO radar_cache (userId, semanticUnderstanding, reactionSpeed, logicalCoherence, emotionalPerception, vocabularyRichness, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(userId) DO UPDATE SET
+          semanticUnderstanding = excluded.semanticUnderstanding,
+          reactionSpeed = excluded.reactionSpeed,
+          logicalCoherence = excluded.logicalCoherence,
+          emotionalPerception = excluded.emotionalPerception,
+          vocabularyRichness = excluded.vocabularyRichness,
+          updatedAt = excluded.updatedAt
+      `).run(
+        userId,
+        radar.semanticUnderstanding,
+        radar.reactionSpeed,
+        radar.logicalCoherence,
+        radar.emotionalPerception,
+        radar.vocabularyRichness,
+        now
+      );
+    } catch (e) {
+      console.error('[DB] radar_cache update failed:', e);
+    }
+  }
 
   return { radar, recentErrors };
 }
 
-export function getDb(): Database.Database {
+export function getDb(): Database.Database | null {
   return db;
 }
 

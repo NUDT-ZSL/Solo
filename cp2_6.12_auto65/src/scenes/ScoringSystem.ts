@@ -49,6 +49,64 @@ const TOTAL_DURATION_MS = 5000;
 const COMBO_TRIGGER_COUNT = 3;
 const COOLDOWN_WRONG_THRESHOLD = 3;
 
+function levenshteinDistance(a: string, b: string): number {
+  const s1 = a.toLowerCase().trim();
+  const s2 = b.toLowerCase().trim();
+  if (s1 === s2) return 0;
+  if (s1.length === 0) return s2.length;
+  if (s2.length === 0) return s1.length;
+
+  const dp: number[][] = Array.from({ length: s1.length + 1 }, () => new Array(s2.length + 1).fill(0));
+  for (let i = 0; i <= s1.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= s2.length; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= s1.length; i++) {
+    for (let j = 1; j <= s2.length; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return dp[s1.length][s2.length];
+}
+
+function normalizedSimilarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  const distance = levenshteinDistance(a, b);
+  return Math.max(0, 1 - distance / maxLen);
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 0)
+  );
+}
+
+function jaccardSimilarity(a: string, b: string): number {
+  const s1 = tokenize(a);
+  const s2 = tokenize(b);
+  if (s1.size === 0 && s2.size === 0) return 1;
+  if (s1.size === 0 || s2.size === 0) return 0;
+  let intersect = 0;
+  s1.forEach(token => { if (s2.has(token)) intersect++; });
+  const union = s1.size + s2.size - intersect;
+  return intersect / union;
+}
+
+function computeSemanticSimilarity(selectedText: string, correctText: string): number {
+  const editSim = normalizedSimilarity(selectedText, correctText);
+  const jaccardSim = jaccardSimilarity(selectedText, correctText);
+  return Math.round((editSim * 0.4 + jaccardSim * 0.6) * 100);
+}
+
 export class ScoringSystem {
   private comboCount: number = 0;
   private wrongStreak: number = 0;
@@ -76,7 +134,10 @@ export class ScoringSystem {
 
     if (selectedOption && correctOption) {
       isCorrect = selectedOption.id === correctOption.id;
-      semanticScore = Math.min(100, Math.max(0, selectedOption.matchScore));
+      const presetScore = Math.min(100, Math.max(0, selectedOption.matchScore));
+      const textSimScore = computeSemanticSimilarity(selectedOption.text, correctOption.text);
+      semanticScore = Math.round(presetScore * 0.55 + textSimScore * 0.45);
+      semanticScore = Math.min(100, Math.max(0, semanticScore));
     }
 
     const speedScore = Math.round(Math.max(0, Math.min(100, remainingTimeRatio * 100)));
