@@ -1,12 +1,12 @@
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = path.join(__dirname, 'memories.db');
-const db = new sqlite3.Database(dbPath);
+const db = new Database(path.join(__dirname, 'memories.db'));
 
 export interface Memory {
   id: string;
@@ -19,35 +19,8 @@ export interface Memory {
   created_at: string;
 }
 
-function runQuery(sql: string, params: any[] = []): Promise<void> {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-
-function getQuery<T>(sql: string, params: any[] = []): Promise<T> {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row as T);
-    });
-  });
-}
-
-function allQuery<T>(sql: string, params: any[] = []): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows as T[]);
-    });
-  });
-}
-
-export async function initDatabase(): Promise<void> {
-  await runQuery(`
+export function initDatabase(): void {
+  db.exec(`
     CREATE TABLE IF NOT EXISTS memories (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -57,15 +30,20 @@ export async function initDatabase(): Promise<void> {
       latitude REAL NOT NULL,
       longitude REAL NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
+    CREATE INDEX IF NOT EXISTS idx_memories_mood ON memories(mood);
   `);
 
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_memories_mood ON memories(mood)');
-
-  const countRow = await getQuery<{ count: number }>('SELECT COUNT(*) as count FROM memories');
+  const countRow = db.prepare('SELECT COUNT(*) as count FROM memories').get() as { count: number };
   
   if (countRow.count === 0) {
+    const insert = db.prepare(`
+      INSERT INTO memories (id, title, description, image_url, mood, latitude, longitude, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
     const sampleData: Omit<Memory, 'id' | 'created_at'> & { id: string; created_at: string }[] = [
       {
         id: '1',
@@ -129,57 +107,48 @@ export async function initDatabase(): Promise<void> {
       }
     ];
 
-    const stmt = db.prepare('INSERT INTO memories (id, title, description, image_url, mood, latitude, longitude, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    
-    for (const m of sampleData) {
-      await new Promise<void>((resolve, reject) => {
-        stmt.run(m.id, m.title, m.description, m.image_url, m.mood, m.latitude, m.longitude, m.created_at, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    }
-    
-    await new Promise<void>((resolve, reject) => {
-      stmt.finalize((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
+    const insertMany = db.transaction((memories) => {
+      for (const m of memories) {
+        insert.run(m.id, m.title, m.description, m.image_url, m.mood, m.latitude, m.longitude, m.created_at);
+      }
     });
+
+    insertMany(sampleData);
   }
 }
 
-export async function getAllMemories(): Promise<Memory[]> {
-  return allQuery<Memory>('SELECT * FROM memories ORDER BY created_at DESC');
+export function getAllMemories(): Memory[] {
+  return db.prepare('SELECT * FROM memories ORDER BY created_at DESC').all() as Memory[];
 }
 
-export async function getMemoriesByYear(year: number): Promise<Memory[]> {
-  return allQuery<Memory>(
-    "SELECT * FROM memories WHERE strftime('%Y', created_at) = ? ORDER BY created_at DESC",
-    [year.toString()]
-  );
+export function getMemoriesByYear(year: number): Memory[] {
+  return db.prepare(`
+    SELECT * FROM memories 
+    WHERE strftime('%Y', created_at) = ?
+    ORDER BY created_at DESC
+  `).all(year.toString()) as Memory[];
 }
 
-export async function addMemory(memory: Omit<Memory, 'id' | 'created_at'>): Promise<Memory> {
-  const id = crypto.randomUUID();
+export function addMemory(memory: Omit<Memory, 'id' | 'created_at'>): Memory {
+  const id = uuidv4();
   const now = new Date().toISOString();
   
-  await runQuery(
-    'INSERT INTO memories (id, title, description, image_url, mood, latitude, longitude, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, memory.title, memory.description, memory.image_url, memory.mood, memory.latitude, memory.longitude, now]
-  );
+  db.prepare(`
+    INSERT INTO memories (id, title, description, image_url, mood, latitude, longitude, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, memory.title, memory.description, memory.image_url, memory.mood, memory.latitude, memory.longitude, now);
 
   return { ...memory, id, created_at: now };
 }
 
-export async function updateMemory(id: string, memory: Partial<Omit<Memory, 'id' | 'created_at'>>): Promise<void> {
+export function updateMemory(id: string, memory: Partial<Omit<Memory, 'id' | 'created_at'>>): void {
   const fields = Object.keys(memory).map(key => `${key} = ?`).join(', ');
   const values = Object.values(memory);
   values.push(id);
   
-  await runQuery(`UPDATE memories SET ${fields} WHERE id = ?`, values);
+  db.prepare(`UPDATE memories SET ${fields} WHERE id = ?`).run(...values);
 }
 
-export async function deleteMemory(id: string): Promise<void> {
-  await runQuery('DELETE FROM memories WHERE id = ?', [id]);
+export function deleteMemory(id: string): void {
+  db.prepare('DELETE FROM memories WHERE id = ?').run(id);
 }

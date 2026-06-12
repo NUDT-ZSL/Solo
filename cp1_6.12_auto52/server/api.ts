@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { initDatabase, getAllMemories, getMemoriesByYear, addMemory, Memory } from './database';
+import { initDatabase, getAllMemories, getMemoriesByYear, addMemory, type Memory } from './database';
 
 const app = express();
 const PORT = 3001;
@@ -8,11 +8,9 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-initDatabase().catch(err => {
-  console.error('Failed to initialize database:', err);
-});
+initDatabase();
 
-app.get('/api/memories', async (req: Request, res: Response) => {
+app.get('/api/memories', (req: Request, res: Response) => {
   try {
     const { year } = req.query;
     let memories: Memory[];
@@ -22,9 +20,9 @@ app.get('/api/memories', async (req: Request, res: Response) => {
       if (isNaN(yearNum)) {
         return res.status(400).json({ success: false, error: 'Invalid year parameter' });
       }
-      memories = await getMemoriesByYear(yearNum);
+      memories = getMemoriesByYear(yearNum);
     } else {
-      memories = await getAllMemories();
+      memories = getAllMemories();
     }
 
     res.json({ success: true, data: memories });
@@ -34,7 +32,7 @@ app.get('/api/memories', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/memories', async (req: Request, res: Response) => {
+app.post('/api/memories', (req: Request, res: Response) => {
   try {
     const { title, description, image_url, mood, latitude, longitude } = req.body;
 
@@ -47,7 +45,7 @@ app.post('/api/memories', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Invalid mood value' });
     }
 
-    const newMemory = await addMemory({ title, description, image_url, mood, latitude, longitude });
+    const newMemory = addMemory({ title, description, image_url, mood, latitude, longitude });
     res.status(201).json({ success: true, data: newMemory });
   } catch (error) {
     console.error('Error adding memory:', error);
