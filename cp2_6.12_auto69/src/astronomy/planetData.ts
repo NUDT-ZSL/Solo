@@ -3,6 +3,7 @@ export interface PlanetData {
   name: string;
   nameCN: string;
   orbitRadius: number;
+  eccentricity: number;
   orbitPeriod: number;
   rotationPeriod: number;
   radius: number;
