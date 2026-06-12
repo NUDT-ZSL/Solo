@@ -117,61 +117,76 @@ export class GameGrid {
   }
 
   checkAndClearMatches(): RuneActivateEvent[] {
-    const events: RuneActivateEvent[] = [];
-    const toRemove = new Set<string>();
+    const allEvents: RuneActivateEvent[] = [];
+    let hasMatches = true;
+    let iterations = 0;
+    const maxIterations = 10;
 
-    for (let y = 0; y < this.rows; y++) {
-      for (let x = 0; x < this.cols - 2; x++) {
-        const f1 = this.cells[y][x].fragment;
-        const f2 = this.cells[y][x + 1].fragment;
-        const f3 = this.cells[y][x + 2].fragment;
-        if (f1 && f2 && f3 && f1.type === f2.type && f2.type === f3.type) {
-          toRemove.add(`${x},${y}`);
-          toRemove.add(`${x + 1},${y}`);
-          toRemove.add(`${x + 2},${y}`);
-          const cells = [
-            { x, y },
-            { x: x + 1, y },
-            { x: x + 2, y }
-          ];
-          events.push({ type: f1.type, cells, timestamp: Date.now() });
+    while (hasMatches && iterations < maxIterations) {
+      hasMatches = false;
+      iterations++;
+
+      const events: RuneActivateEvent[] = [];
+      const toRemove = new Set<string>();
+
+      for (let y = 0; y < this.rows; y++) {
+        for (let x = 0; x < this.cols - 2; x++) {
+          const f1 = this.cells[y][x].fragment;
+          const f2 = this.cells[y][x + 1].fragment;
+          const f3 = this.cells[y][x + 2].fragment;
+          if (f1 && f2 && f3 && f1.type === f2.type && f2.type === f3.type) {
+            toRemove.add(`${x},${y}`);
+            toRemove.add(`${x + 1},${y}`);
+            toRemove.add(`${x + 2},${y}`);
+            const cells = [
+              { x, y },
+              { x: x + 1, y },
+              { x: x + 2, y }
+            ];
+            events.push({ type: f1.type, cells, timestamp: Date.now() });
+          }
+        }
+      }
+
+      for (let x = 0; x < this.cols; x++) {
+        for (let y = 0; y < this.rows - 2; y++) {
+          const f1 = this.cells[y][x].fragment;
+          const f2 = this.cells[y + 1][x].fragment;
+          const f3 = this.cells[y + 2][x].fragment;
+          if (f1 && f2 && f3 && f1.type === f2.type && f2.type === f3.type) {
+            toRemove.add(`${x},${y}`);
+            toRemove.add(`${x},${y + 1}`);
+            toRemove.add(`${x},${y + 2}`);
+            const cells = [
+              { x, y },
+              { x, y: y + 1 },
+              { x, y: y + 2 }
+            ];
+            events.push({ type: f1.type, cells, timestamp: Date.now() });
+          }
+        }
+      }
+
+      if (toRemove.size > 0) {
+        hasMatches = true;
+
+        for (const key of toRemove) {
+          const [xs, ys] = key.split(',');
+          const cx = parseInt(xs);
+          const cy = parseInt(ys);
+          this.cells[cy][cx].fragment = null;
+        }
+
+        this.applyGravity();
+
+        for (const event of events) {
+          allEvents.push(event);
+          this.emitRuneActivate(event);
         }
       }
     }
 
-    for (let x = 0; x < this.cols; x++) {
-      for (let y = 0; y < this.rows - 2; y++) {
-        const f1 = this.cells[y][x].fragment;
-        const f2 = this.cells[y + 1][x].fragment;
-        const f3 = this.cells[y + 2][x].fragment;
-        if (f1 && f2 && f3 && f1.type === f2.type && f2.type === f3.type) {
-          toRemove.add(`${x},${y}`);
-          toRemove.add(`${x},${y + 1}`);
-          toRemove.add(`${x},${y + 2}`);
-          const cells = [
-            { x, y },
-            { x, y: y + 1 },
-            { x, y: y + 2 }
-          ];
-          events.push({ type: f1.type, cells, timestamp: Date.now() });
-        }
-      }
-    }
-
-    for (const key of toRemove) {
-      const [xs, ys] = key.split(',');
-      const cx = parseInt(xs);
-      const cy = parseInt(ys);
-      this.cells[cy][cx].fragment = null;
-    }
-
-    this.applyGravity();
-
-    for (const event of events) {
-      this.emitRuneActivate(event);
-    }
-
-    return events;
+    return allEvents;
   }
 
   applyGravity(): void {

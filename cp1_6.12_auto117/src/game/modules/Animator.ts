@@ -44,7 +44,31 @@ export interface HitSpark {
   color: string;
 }
 
-export class Animator {
+export interface IAnimator {
+  particles: Particle[];
+  screenShake: ScreenShake | null;
+  landingBounces: LandingBounce[];
+  runeActivations: RuneActivationFx[];
+  hitSparks: HitSpark[];
+  update(deltaTime: number): void;
+  getShakeOffset(): { x: number; y: number };
+  getLandingOffset(bounce: LandingBounce): number;
+  getConnectionProgress(): number;
+  getLavaOffset(canvasWidth: number): number;
+  getWarningFlashAlpha(): number;
+  triggerLandingBounce(x: number, y: number, type: FragmentType): void;
+  triggerShake(magnitude: number, duration: number): void;
+  triggerRuneActivation(event: RuneActivateEvent): void;
+  triggerMonsterHit(event: MonsterDamageEvent): void;
+  triggerWaveWarning(): void;
+  handleRuneActivate(event: RuneActivateEvent): void;
+  handleMonsterDamage(event: MonsterDamageEvent): void;
+  handleWaveStart(): void;
+  spawnFastMonsterTrail(gridX: number, gridY: number): void;
+  spawnBurningParticle(gridX: number, gridY: number): void;
+}
+
+export class Animator implements IAnimator {
   particles: Particle[] = [];
   readonly maxParticles = 500;
   screenShake: ScreenShake | null = null;
@@ -224,9 +248,14 @@ export class Animator {
 
   getLandingOffset(bounce: LandingBounce): number {
     const t = bounce.timer / bounce.duration;
-    const bouncePhase = t * bounce.maxBounces * Math.PI;
-    const amplitude = Math.sin(bouncePhase) * (1 - t) * 0.3;
-    return Math.abs(amplitude);
+    const bounceHeights = [0.6, 0.3];
+    const currentBounce = Math.min(bounce.bounces, bounceHeights.length - 1);
+    const bounceDuration = bounce.duration / bounce.maxBounces;
+    const timeInBounce = bounce.timer % bounceDuration;
+    const bounceProgress = timeInBounce / bounceDuration;
+    const baseHeight = bounceHeights[currentBounce];
+    const parabola = Math.sin(bounceProgress * Math.PI) * baseHeight;
+    return parabola * (1 - t * 0.2);
   }
 
   getConnectionProgress(): number {

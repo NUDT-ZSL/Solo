@@ -276,8 +276,9 @@ export class GameEngine {
 
     this.monsterManager.update(deltaTime);
 
-    if (this.monsterManager.checkGameOver()) {
-      this.state.defense -= deltaTime * 10;
+    const drainPerSecond = this.monsterManager.getDefenseDrainPerSecond();
+    if (drainPerSecond > 0) {
+      this.state.defense -= deltaTime * drainPerSecond;
       if (this.state.defense <= 0) {
         this.state.defense = 0;
         this.gameOver();

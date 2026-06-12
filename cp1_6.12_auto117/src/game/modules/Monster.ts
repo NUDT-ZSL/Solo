@@ -87,18 +87,61 @@ export class MonsterManager {
     this.waveCount++;
     const waveSize = this.baseWaveSize + (this.waveCount - 1) * this.waveIncrement;
     this.spawnQueue = [];
+
+    const weights = this.getMonsterTypeWeights();
+    const totalWeight = weights.normal + weights.heavy + weights.fast;
+
     for (let i = 0; i < waveSize; i++) {
-      const r = Math.random();
-      if (this.waveCount >= 3 && r < 0.2) {
-        this.spawnQueue.push('heavy');
-      } else if (this.waveCount >= 2 && r < 0.5) {
-        this.spawnQueue.push('fast');
-      } else {
+      const r = Math.random() * totalWeight;
+      if (r < weights.normal) {
         this.spawnQueue.push('normal');
+      } else if (r < weights.normal + weights.heavy) {
+        this.spawnQueue.push('heavy');
+      } else {
+        this.spawnQueue.push('fast');
       }
     }
     this.waveIncoming = true;
     this.waveWarningTimer = 1.5;
+  }
+
+  private getMonsterTypeWeights(): { normal: number; heavy: number; fast: number } {
+    const wave = this.waveCount;
+
+    let normalWeight = 10;
+    let heavyWeight = 0;
+    let fastWeight = 0;
+
+    if (wave >= 2) {
+      fastWeight = 3;
+      normalWeight = 8;
+    }
+    if (wave >= 3) {
+      heavyWeight = 2;
+      normalWeight = 7;
+    }
+    if (wave >= 4) {
+      heavyWeight = 3;
+      fastWeight = 4;
+      normalWeight = 6;
+    }
+    if (wave >= 5) {
+      heavyWeight = 5;
+      fastWeight = 6;
+      normalWeight = 4;
+    }
+    if (wave >= 7) {
+      heavyWeight = 7;
+      fastWeight = 8;
+      normalWeight = 3;
+    }
+    if (wave >= 10) {
+      heavyWeight = 10;
+      fastWeight = 10;
+      normalWeight = 2;
+    }
+
+    return { normal: normalWeight, heavy: heavyWeight, fast: fastWeight };
   }
 
   private spawnMonster(type: MonsterType): Monster | null {
@@ -262,6 +305,12 @@ export class MonsterManager {
 
   checkGameOver(): boolean {
     return this.monsters.some(m => m.y <= 0);
+  }
+
+  getDefenseDrainPerSecond(): number {
+    const topMonsters = this.monsters.filter(m => m.y <= 0).length;
+    if (topMonsters <= 0) return 0;
+    return 8 + topMonsters * 4;
   }
 
   getWaveNumber(): number {
