@@ -17,7 +17,7 @@ function Leaderboard() {
 
   const fetchScores = async () => {
     try {
-      const response = await fetch('/api/scores');
+      const response = await fetch('http://localhost:3001/api/scores');
       const data = await response.json();
       setScores(data);
     } catch (e) {

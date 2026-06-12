@@ -52,10 +52,11 @@ function GameCanvas({}: GameCanvasProps) {
     const timeSeconds = car.totalTime / 1000;
     
     try {
-      await fetch('/api/scores', {
+      await fetch('http://localhost:3001/api/scores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: playerName.trim(),
           playerName: playerName.trim(),
           time: timeSeconds
         })

@@ -7,6 +7,16 @@ const PORT = 3001;
 
 app.use(express.json());
 
+app.use((req: Request, res: Response, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 interface Room {
   id: string;
   player1: string | null;
@@ -126,17 +136,20 @@ app.get('/api/scores', async (req: Request, res: Response) => {
 
 app.post('/api/scores', async (req: Request, res: Response) => {
   try {
-    const { playerName, time } = req.body;
+    const { playerName, name, time } = req.body;
     
-    if (!playerName || typeof time !== 'number') {
-      return res.status(400).json({ error: 'playerName and time are required' });
+    const finalName = name || playerName;
+    
+    if (!finalName || typeof time !== 'number') {
+      return res.status(400).json({ error: 'name (or playerName) and time are required' });
     }
     
-    const score = await addScore(playerName, time);
+    const score = await addScore(finalName, time);
     
     res.status(201).json({
       _id: score._id,
       playerName: score.playerName,
+      name: score.playerName,
       time: score.time,
       createdAt: score.createdAt
     });

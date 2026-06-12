@@ -1,5 +1,6 @@
 import Datastore from 'nedb-promises';
 import path from 'path';
+import fs from 'fs';
 
 export interface ScoreRecord {
   _id?: string;
@@ -8,8 +9,21 @@ export interface ScoreRecord {
   createdAt: Date;
 }
 
-const dbPath = path.join(__dirname, '..', '..', 'data', 'scores.db');
+const dataDir = path.resolve(process.cwd(), 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const dbPath = path.join(dataDir, 'scores.db');
 const db = Datastore.create(dbPath);
+
+db.on('load', () => {
+  console.log(`Database loaded: ${dbPath}`);
+});
+
+db.on('error', (err: Error) => {
+  console.error('Database error:', err);
+});
 
 export async function addScore(playerName: string, time: number): Promise<ScoreRecord> {
   const record: ScoreRecord = {

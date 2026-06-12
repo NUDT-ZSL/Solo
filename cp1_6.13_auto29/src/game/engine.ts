@@ -22,6 +22,8 @@ export interface Car {
   flashTimer: number;
   totalTime: number;
   finished: boolean;
+  lastStartSide: number;
+  lastTrackIndex: number;
 }
 
 export interface InputState {
@@ -61,6 +63,7 @@ export interface Track {
   startLine: Point;
   startAngle: number;
   checkpoints: Point[];
+  startLineNormal: Point;
 }
 
 const CANVAS_WIDTH = 800;
@@ -68,6 +71,49 @@ const CANVAS_HEIGHT = 600;
 const TRACK_WIDTH = 80;
 const GUARD_RAIL_HEIGHT = 8;
 const GUARD_RAIL_LENGTH = 20;
+const GRID_CELL_SIZE = 40;
+const CAR_RADIUS = 10;
+
+function segmentsIntersect(
+  a1: Point, a2: Point,
+  b1: Point, b2: Point,
+  ignoreEndpoints: boolean = true
+): boolean {
+  const d1x = a2.x - a1.x;
+  const d1y = a2.y - a1.y;
+  const d2x = b2.x - b1.x;
+  const d2y = b2.y - b1.y;
+  
+  const denom = d1x * d2y - d1y * d2x;
+  
+  if (Math.abs(denom) < 0.0001) {
+    return false;
+  }
+  
+  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / denom;
+  const s = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / denom;
+  
+  if (ignoreEndpoints) {
+    return t > 0.01 && t < 0.99 && s > 0.01 && s < 0.99;
+  } else {
+    return t >= 0 && t <= 1 && s >= 0 && s <= 1;
+  }
+}
+
+function checkSelfIntersection(points: Point[], newPointIdx: number): boolean {
+  if (newPointIdx < 2) return false;
+  
+  const newStart = points[newPointIdx - 1];
+  const newEnd = points[newPointIdx];
+  
+  for (let i = 0; i < newPointIdx - 2; i++) {
+    if (segmentsIntersect(newStart, newEnd, points[i], points[i + 1])) {
+      return true;
+    }
+  }
+  
+  return false;
+}
 
 export function generateTrack(): Track {
   const centerX = CANVAS_WIDTH / 2;
@@ -77,18 +123,40 @@ export function generateTrack(): Track {
   const baseRadiusX = 280;
   const baseRadiusY = 200;
   
-  const points: Point[] = [];
-  const angleStep = (Math.PI * 2) / numPoints;
+  let points: Point[] = [];
+  let attempts = 0;
+  const maxAttempts = 100;
   
-  for (let i = 0; i < numPoints; i++) {
-    const angle = i * angleStep;
-    const radiusVariation = 0.7 + Math.random() * 0.6;
-    const rx = baseRadiusX * radiusVariation;
-    const ry = baseRadiusY * radiusVariation;
+  while (attempts < maxAttempts) {
+    points = [];
+    let valid = true;
+    const angleStep = (Math.PI * 2) / numPoints;
     
-    const x = centerX + Math.cos(angle) * rx + (Math.random() - 0.5) * 40;
-    const y = centerY + Math.sin(angle) * ry + (Math.random() - 0.5) * 30;
-    points.push({ x, y });
+    for (let i = 0; i < numPoints; i++) {
+      const angle = i * angleStep;
+      const radiusVariation = 0.7 + Math.random() * 0.6;
+      const rx = baseRadiusX * radiusVariation;
+      const ry = baseRadiusY * radiusVariation;
+      
+      const x = centerX + Math.cos(angle) * rx + (Math.random() - 0.5) * 40;
+      const y = centerY + Math.sin(angle) * ry + (Math.random() - 0.5) * 30;
+      
+      points.push({ x, y });
+      
+      if (i >= 2 && checkSelfIntersection(points, i)) {
+        valid = false;
+        break;
+      }
+    }
+    
+    if (valid) {
+      const lastIdx = points.length - 1;
+      if (!segmentsIntersect(points[lastIdx], points[0], points[1], points[lastIdx - 1])) {
+        break;
+      }
+    }
+    
+    attempts++;
   }
   
   const centerline = smoothPoints(points, 3);
@@ -112,6 +180,11 @@ export function generateTrack(): Track {
     centerline[1].x - centerline[0].x
   );
   
+  const startLineNormal = {
+    x: -Math.sin(startAngle),
+    y: Math.cos(startAngle)
+  };
+  
   const checkpoints = centerline.filter((_, i) => i % 3 === 0);
   
   return {
@@ -123,7 +196,8 @@ export function generateTrack(): Track {
     guardRails,
     startLine,
     startAngle,
-    checkpoints
+    checkpoints,
+    startLineNormal
   };
 }
 
@@ -270,7 +344,9 @@ export function createCar(id: number, x: number, y: number, angle: number, isPla
     color,
     flashTimer: 0,
     totalTime: 0,
-    finished: false
+    finished: false,
+    lastStartSide: 0,
+    lastTrackIndex: 0
   };
 }
 
@@ -278,13 +354,17 @@ export class SpatialHashGrid {
   cellSize: number;
   grid: Map<string, GuardRail[]>;
   
-  constructor(cellSize: number) {
+  constructor(cellSize: number = GRID_CELL_SIZE) {
     this.cellSize = cellSize;
     this.grid = new Map();
   }
   
   clear() {
     this.grid.clear();
+  }
+  
+  private getKey(gx: number, gy: number): string {
+    return `${gx},${gy}`;
   }
   
   insert(guardRail: GuardRail) {
@@ -295,7 +375,7 @@ export class SpatialHashGrid {
     
     for (let gx = minX; gx <= maxX; gx++) {
       for (let gy = minY; gy <= maxY; gy++) {
-        const key = `${gx},${gy}`;
+        const key = this.getKey(gx, gy);
         if (!this.grid.has(key)) {
           this.grid.set(key, []);
         }
@@ -304,22 +384,20 @@ export class SpatialHashGrid {
     }
   }
   
-  query(x: number, y: number, radius: number): GuardRail[] {
-    const minX = Math.floor((x - radius) / this.cellSize);
-    const maxX = Math.floor((x + radius) / this.cellSize);
-    const minY = Math.floor((y - radius) / this.cellSize);
-    const maxY = Math.floor((y + radius) / this.cellSize);
+  queryNeighbors(x: number, y: number): GuardRail[] {
+    const gx = Math.floor(x / this.cellSize);
+    const gy = Math.floor(y / this.cellSize);
     
     const result: GuardRail[] = [];
     const seen = new Set<number>();
     
-    for (let gx = minX; gx <= maxX; gx++) {
-      for (let gy = minY; gy <= maxY; gy++) {
-        const key = `${gx},${gy}`;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const key = this.getKey(gx + dx, gy + dy);
         const cell = this.grid.get(key);
         if (cell) {
           for (const rail of cell) {
-            const hash = rail.x * 10000 + rail.y;
+            const hash = Math.floor(rail.x * 100 + rail.y);
             if (!seen.has(hash)) {
               seen.add(hash);
               result.push(rail);
@@ -333,7 +411,7 @@ export class SpatialHashGrid {
   }
 }
 
-export function buildSpatialGrid(guardRails: GuardRail[], cellSize: number): SpatialHashGrid {
+export function buildSpatialGrid(guardRails: GuardRail[], cellSize: number = GRID_CELL_SIZE): SpatialHashGrid {
   const grid = new SpatialHashGrid(cellSize);
   for (const rail of guardRails) {
     grid.insert(rail);
@@ -341,42 +419,11 @@ export function buildSpatialGrid(guardRails: GuardRail[], cellSize: number): Spa
   return grid;
 }
 
-export function checkCarGuardRailCollision(car: Car, grid: SpatialHashGrid, carRadius: number = 10): boolean {
-  const nearbyRails = grid.query(car.x, car.y, carRadius + 15);
-  
-  for (const rail of nearbyRails) {
-    const dx = car.x - rail.x;
-    const dy = car.y - rail.y;
-    
-    const cos = Math.cos(-rail.angle);
-    const sin = Math.sin(-rail.angle);
-    
-    const localX = dx * cos - dy * sin;
-    const localY = dx * sin + dy * cos;
-    
-    const halfW = rail.width / 2;
-    const halfH = rail.height / 2;
-    
-    const closestX = Math.max(-halfW, Math.min(halfW, localX));
-    const closestY = Math.max(-halfH, Math.min(halfH, localY));
-    
-    const distX = localX - closestX;
-    const distY = localY - closestY;
-    const dist = Math.hypot(distX, distY);
-    
-    if (dist < carRadius) {
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-export function getCollisionNormal(car: Car, grid: SpatialHashGrid, carRadius: number = 10): Point | null {
+function getCollisionInfo(car: Car, grid: SpatialHashGrid): { normal: Point; penetration: number; closestPoint: Point } | null {
   let minDist = Infinity;
   let closestPoint: Point | null = null;
   
-  const nearbyRails = grid.query(car.x, car.y, carRadius + 15);
+  const nearbyRails = grid.queryNeighbors(car.x, car.y);
   
   for (const rail of nearbyRails) {
     const dx = car.x - rail.x;
@@ -408,16 +455,35 @@ export function getCollisionNormal(car: Car, grid: SpatialHashGrid, carRadius: n
     }
   }
   
-  if (closestPoint && minDist < carRadius) {
-    const nx = car.x - closestPoint.x;
-    const ny = car.y - closestPoint.y;
+  if (closestPoint && minDist < CAR_RADIUS) {
+    let nx = car.x - closestPoint.x;
+    let ny = car.y - closestPoint.y;
     const len = Math.hypot(nx, ny);
+    
     if (len > 0) {
-      return { x: nx / len, y: ny / len };
+      nx /= len;
+      ny /= len;
+    } else {
+      nx = 0;
+      ny = -1;
     }
+    
+    return {
+      normal: { x: nx, y: ny },
+      penetration: CAR_RADIUS - minDist,
+      closestPoint
+    };
   }
   
   return null;
+}
+
+function reflectVelocity(vx: number, vy: number, nx: number, ny: number, bounce: number = 0.5): { vx: number; vy: number } {
+  const dot = vx * nx + vy * ny;
+  return {
+    vx: vx - 2 * bounce * dot * nx,
+    vy: vy - 2 * bounce * dot * ny
+  };
 }
 
 export class GameEngine {
@@ -432,7 +498,7 @@ export class GameEngine {
   constructor() {
     this.track = generateTrack();
     this.cars = [];
-    this.grid = buildSpatialGrid(this.track.guardRails, 40);
+    this.grid = buildSpatialGrid(this.track.guardRails);
     this.startTime = 0;
     this.gameState = 'waiting';
     this.winner = null;
@@ -451,12 +517,17 @@ export class GameEngine {
     const car1 = createCar(0, startX - perpX * 20, startY - perpY * 20, angle, true, '#fbbf24');
     const car2 = createCar(1, startX + perpX * 20, startY + perpY * 20, angle, true, '#38bdf8');
     
+    for (const car of [car1, car2]) {
+      car.lastStartSide = this.getStartLineSide(car);
+      car.lastTrackIndex = 0;
+    }
+    
     this.cars = [car1, car2];
   }
   
   resetGame() {
     this.track = generateTrack();
-    this.grid = buildSpatialGrid(this.track.guardRails, 40);
+    this.grid = buildSpatialGrid(this.track.guardRails);
     this.initCars();
     this.startTime = 0;
     this.gameState = 'waiting';
@@ -470,7 +541,16 @@ export class GameEngine {
     const now = Date.now();
     for (const car of this.cars) {
       car.lastCheckpointTime = now;
+      car.lastStartSide = this.getStartLineSide(car);
+      car.lastTrackIndex = 0;
     }
+  }
+  
+  private getStartLineSide(car: Car): number {
+    const dx = car.x - this.track.startLine.x;
+    const dy = car.y - this.track.startLine.y;
+    const dot = dx * this.track.startLineNormal.x + dy * this.track.startLineNormal.y;
+    return dot >= 0 ? 1 : -1;
   }
   
   update(inputs: InputState[], deltaTime: number = 1) {
@@ -507,22 +587,28 @@ export class GameEngine {
         car.angle += turnRate * (absSpeed > 0.5 ? 1 : 0.3);
       }
       
-      const oldX = car.x;
-      const oldY = car.y;
+      const vx = Math.cos(car.angle) * car.speed;
+      const vy = Math.sin(car.angle) * car.speed;
       
-      car.x += Math.cos(car.angle) * car.speed * deltaTime;
-      car.y += Math.sin(car.angle) * car.speed * deltaTime;
+      car.x += vx * deltaTime;
+      car.y += vy * deltaTime;
       
-      const normal = getCollisionNormal(car, this.grid, 10);
-      if (normal) {
-        car.speed *= -0.5;
+      const collision = getCollisionInfo(car, this.grid);
+      if (collision) {
+        const { normal, penetration } = collision;
+        
+        car.x += normal.x * (penetration + 0.5);
+        car.y += normal.y * (penetration + 0.5);
+        
+        const reflected = reflectVelocity(vx, vy, normal.x, normal.y, 0.5);
+        car.speed = Math.hypot(reflected.vx, reflected.vy);
+        if (car.speed > 0.1) {
+          car.angle = Math.atan2(reflected.vy, reflected.vx);
+        } else {
+          car.speed = 0;
+        }
+        
         car.flashTimer = 200;
-        
-        car.x = oldX;
-        car.y = oldY;
-        
-        car.x += normal.x * 3;
-        car.y += normal.y * 3;
       }
       
       if (car.flashTimer > 0) {
@@ -541,21 +627,28 @@ export class GameEngine {
   }
   
   checkCheckpoint(car: Car, now: number) {
-    const startDist = Math.hypot(car.x - this.track.startLine.x, car.y - this.track.startLine.y);
+    const currentSide = this.getStartLineSide(car);
     
-    if (startDist < 40 && car.checkpointIndex >= this.track.checkpoints.length) {
-      car.checkpointIndex = 0;
-      car.lap++;
+    if (car.lastStartSide < 0 && currentSide >= 0 && car.checkpointIndex >= this.track.checkpoints.length) {
+      const forwardDot = Math.cos(car.angle) * Math.cos(this.track.startAngle) + 
+                       Math.sin(car.angle) * Math.sin(this.track.startAngle);
       
-      const lapTime = now - car.lastCheckpointTime;
-      car.lapTimes.push(lapTime);
-      car.lastCheckpointTime = now;
-      
-      if (car.lap >= this.maxLaps) {
-        car.finished = true;
-        car.totalTime = car.lapTimes.reduce((a, b) => a + b, 0);
+      if (forwardDot > 0.5) {
+        car.checkpointIndex = 0;
+        car.lap++;
+        
+        const lapTime = now - car.lastCheckpointTime;
+        car.lapTimes.push(lapTime);
+        car.lastCheckpointTime = now;
+        
+        if (car.lap >= this.maxLaps) {
+          car.finished = true;
+          car.totalTime = car.lapTimes.reduce((a, b) => a + b, 0);
+        }
       }
     }
+    
+    car.lastStartSide = currentSide;
     
     if (car.checkpointIndex < this.track.checkpoints.length) {
       const checkpoint = this.track.checkpoints[car.checkpointIndex];
