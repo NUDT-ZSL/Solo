@@ -1,3 +1,24 @@
+/*
+ * eventsData.ts — 纯数据与工具函数模块（无副作用）
+ *
+ * 【调用关系 / 被依赖方】
+ *   → TimelineBar.tsx   导入: EventType / TimelineEvent / EVENT_TYPE_COLORS
+ *                        EVENT_TYPE_LABELS / DEFAULT_TOTAL_DURATION / sortEventsByTime
+ *   → StagePlayer.tsx   导入: TimelineEvent / EVENT_TYPE_COLORS
+ *   → App.tsx           导入: TimelineEvent / mockEvents / DEFAULT_TOTAL_DURATION
+ *                        sortEventsByTime / calculateTotalDuration / calculateAverageDuration
+ *                        getLongestEvent / getShortestEvent / getDurationPercentage
+ *                        EVENT_TYPE_COLORS / EVENT_TYPE_LABELS
+ *
+ * 【数据输出流向】
+ *   mockEvents → App.tsx state (初始化)
+ *   工具函数(sortByTime/calcDuration...) → App.tsx 派生数据计算 (useMemo)
+ *   类型接口 → 所有子组件 props 定义
+ *
+ * 【设计原则】
+ *   - 纯函数，无 React 依赖
+ *   - 所有修改都返回新数组/新对象，保持不可变数据风格
+ */
 export type EventType = 'page' | 'voice' | 'quiz';
 
 export interface TimelineEvent {
