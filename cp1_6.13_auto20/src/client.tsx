@@ -35,10 +35,20 @@ function getNoteScore(note: StickyNote): number {
   return Object.values(note.votes || {}).reduce((sum, v) => sum + v, 0);
 }
 
+interface NoteLayout {
+  id: string;
+  screenX: number;
+  screenY: number;
+  worldX: number;
+  worldY: number;
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRendererRef = useRef<CanvasRenderer | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const prevNotePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const noteAnimFrameRef = useRef<number | null>(null);
 
   const [user, setUser] = useState<User>(() => generateRandomUser());
   const [tool, setTool] = useState<ToolType>('brush');
@@ -53,7 +63,8 @@ function App() {
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [widthPickerOpen, setWidthPickerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-  const forceRerender = useRef(0);
+  const [notePositions, setNotePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
+  const [animatingNoteId, setAnimatingNoteId] = useState<string | null>(null);
 
   const [, setTick] = useState(0);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
@@ -82,6 +93,58 @@ function App() {
     }
     return arr;
   }, [notes, sortMode]);
+
+  useEffect(() => {
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    if (!canvasRect) return;
+
+    const newPositions = new Map<string, { x: number; y: number }>();
+    const NOTE_WIDTH = 240;
+    const NOTE_GAP = 20;
+    const COLS = Math.max(1, Math.floor((canvasRect.width - 80) / (NOTE_WIDTH + NOTE_GAP)));
+    const startX = 40;
+    const startY = 40;
+
+    sortedNotes.forEach((note, idx) => {
+      const col = idx % COLS;
+      const row = Math.floor(idx / COLS);
+      const screenX = startX + col * (NOTE_WIDTH + NOTE_GAP);
+      const screenY = startY + row * 200;
+
+      const canvasState = canvasRendererRef.current?.getState() || { scale: 1, offsetX: 0, offsetY: 0 };
+      const worldX = (screenX - canvasState.offsetX) / canvasState.scale;
+      const worldY = (screenY - canvasState.offsetY) / canvasState.scale;
+
+      const prev = prevNotePositionsRef.current.get(note.id);
+      if (prev) {
+        newPositions.set(note.id, { x: prev.x, y: prev.y });
+      } else {
+        const renderer = canvasRendererRef.current;
+        if (renderer) {
+          const screenPos = renderer.worldToScreen(note.x, note.y);
+          newPositions.set(note.id, { x: screenPos.x, y: screenPos.y });
+        } else {
+          newPositions.set(note.id, { x: screenX, y: screenY });
+        }
+      }
+    });
+
+    setNotePositions(newPositions);
+
+    requestAnimationFrame(() => {
+      const targetPositions = new Map<string, { x: number; y: number }>();
+      sortedNotes.forEach((note, idx) => {
+        const col = idx % COLS;
+        const row = Math.floor(idx / COLS);
+        targetPositions.set(note.id, {
+          x: startX + col * (NOTE_WIDTH + NOTE_GAP),
+          y: startY + row * 200
+        });
+      });
+      setNotePositions(targetPositions);
+      prevNotePositionsRef.current = targetPositions;
+    });
+  }, [sortedNotes, sortMode]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -196,6 +259,7 @@ function App() {
         canvasRendererRef.current?.clearAll();
         setNotes([]);
         setSelectedNoteId(null);
+        prevNotePositionsRef.current = new Map();
         break;
       }
       case 'sticky-add': {
@@ -225,6 +289,10 @@ function App() {
   };
 
   const handleVote = (noteId: string, vote: 1 | -1) => {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    if (note.votes && note.votes[user.id] !== undefined) return;
+
     const payload: VotePayload = { noteId, userId: user.id, vote };
     const msg: WsMessage = { type: 'vote', payload };
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -317,7 +385,11 @@ function App() {
         ...styles.toolbar,
         ...(isMobile ? styles.toolbarMobile : styles.toolbarDesktop)
       }}>
-        <div style={styles.toolbarInner}>
+        <div style={{
+          ...styles.toolbarInner,
+          flexDirection: isMobile ? 'row' : 'column',
+          gap: isMobile ? 8 : 6
+        }}>
           <ToolButton
             active={tool === 'brush'}
             onClick={() => { setTool('brush'); setColorPickerOpen(false); setWidthPickerOpen(false); }}
@@ -420,7 +492,12 @@ function App() {
             </svg>
           </ToolButton>
 
-          <div style={styles.divider} />
+          <div style={{
+            ...styles.divider,
+            width: isMobile ? 1 : 32,
+            height: isMobile ? 28 : 1,
+            margin: isMobile ? '0 4px' : '4px 0'
+          }} />
 
           <ToolButton
             onClick={() => { setShowClearConfirm(true); setColorPickerOpen(false); setWidthPickerOpen(false); }}
@@ -436,18 +513,26 @@ function App() {
       </div>
 
       {sortedNotes.map((note, idx) => {
-        const pos = canvasRendererRef.current?.worldToScreen(note.x, note.y) || { x: note.x, y: note.y };
+        const layoutPos = notePositions.get(note.id);
+        const renderer = canvasRendererRef.current;
+        const originalPos = renderer ? renderer.worldToScreen(note.x, note.y) : { x: note.x, y: note.y };
+        const pos = layoutPos || originalPos;
         const isSelected = selectedNoteId === note.id;
         const score = getNoteScore(note);
-        const hasVoted = note.votes?.[user.id];
+        const hasVoted = note.votes?.[user.id] !== undefined;
         const noteWidth = 240 * canvasState.scale;
 
         return (
           <div
             key={note.id}
+            className="cc-note"
             onClick={(e) => {
               e.stopPropagation();
               setSelectedNoteId(isSelected ? null : note.id);
+              if (!isSelected) {
+                setAnimatingNoteId(note.id);
+                setTimeout(() => setAnimatingNoteId(null), 250);
+              }
             }}
             style={{
               ...styles.note,
@@ -458,7 +543,7 @@ function App() {
               background: note.bgColor,
               transform: isSelected ? 'scale(1.2)' : 'scale(1)',
               zIndex: isSelected ? 100 : 10 + idx,
-              transition: 'transform 0.2s ease-out, left 0.5s ease, top 0.5s ease'
+              transition: 'transform 0.2s ease-out, left 0.5s ease, top 0.5s ease, box-shadow 0.2s ease'
             }}
           >
             <div style={styles.noteHeader}>
@@ -486,30 +571,32 @@ function App() {
             {isSelected && (
               <div style={styles.voteArea}>
                 <button
+                  className={hasVoted ? 'cc-vote-btn-disabled' : 'cc-vote-btn'}
+                  disabled={hasVoted}
                   style={{
                     ...styles.voteButton,
                     background: '#22c55e',
-                    border: hasVoted === 1 ? '3px solid #fff' : 'none'
+                    opacity: hasVoted ? 0.5 : 1,
+                    cursor: hasVoted ? 'not-allowed' : 'pointer',
+                    border: note.votes?.[user.id] === 1 ? '3px solid #fff' : 'none'
                   }}
                   onClick={(e) => { e.stopPropagation(); handleVote(note.id, 1); }}
-                  onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
-                  onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
-                  <span style={{ color: '#fff', fontSize: 20, fontWeight: 700, lineHeight: 1 }}>+1</span>
+                  <span style={{ color: '#fff', fontSize: 18, fontWeight: 700, lineHeight: 1 }}>+1</span>
                 </button>
                 <button
+                  className={hasVoted ? 'cc-vote-btn-disabled' : 'cc-vote-btn'}
+                  disabled={hasVoted}
                   style={{
                     ...styles.voteButton,
                     background: '#ef4444',
-                    border: hasVoted === -1 ? '3px solid #fff' : 'none'
+                    opacity: hasVoted ? 0.5 : 1,
+                    cursor: hasVoted ? 'not-allowed' : 'pointer',
+                    border: note.votes?.[user.id] === -1 ? '3px solid #fff' : 'none'
                   }}
                   onClick={(e) => { e.stopPropagation(); handleVote(note.id, -1); }}
-                  onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
-                  onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
-                  <span style={{ color: '#fff', fontSize: 20, fontWeight: 700, lineHeight: 1 }}>-1</span>
+                  <span style={{ color: '#fff', fontSize: 18, fontWeight: 700, lineHeight: 1 }}>-1</span>
                 </button>
               </div>
             )}
@@ -549,14 +636,21 @@ interface ToolButtonProps {
 }
 
 function ToolButton({ active, danger, onClick, title, children }: ToolButtonProps) {
+  const [hovered, setHovered] = useState(false);
   return (
     <button
       title={title}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         ...styles.toolButton,
         color: danger ? '#ef4444' : active ? '#fff' : '#94a3b8',
-        background: active ? (danger ? '#7f1d1d' : '#334155') : 'transparent'
+        background: active
+          ? (danger ? '#7f1d1d' : '#334155')
+          : hovered ? 'rgba(51,65,85,0.6)' : 'transparent',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: 'all 0.2s ease'
       }}
     >
       {children}
@@ -583,7 +677,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'fixed',
     zIndex: 200,
     background: '#1e293b',
-    borderRadius: 12,
+    borderRadius: 8,
     boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
     border: '1px solid #334155'
   },
@@ -618,14 +712,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s ease',
     background: 'transparent'
   },
   divider: {
-    width: 32,
-    height: 1,
-    background: '#334155',
-    margin: '4px 0'
+    background: '#334155'
   },
   colorWrapper: {
     position: 'relative',
@@ -806,7 +896,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-    transition: 'transform 0.15s ease',
     padding: 0
   },
   modalOverlay: {
@@ -884,14 +973,19 @@ styleSheet.textContent = `
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
   }
-  button:hover {
-    transform: translateY(-2px);
+  @keyframes votePress {
+    0% { transform: scale(1); }
+    40% { transform: scale(0.9); }
+    100% { transform: scale(1); }
   }
-  button:active {
-    transform: translateY(0);
+  .cc-vote-btn:active {
+    animation: votePress 0.3s ease !important;
   }
-  .toolButton:hover {
-    background: rgba(51, 65, 85, 0.6) !important;
+  .cc-vote-btn-disabled {
+    pointer-events: none;
+  }
+  .cc-note:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22) !important;
   }
   .colorSwatch:hover {
     transform: scale(1.1);
@@ -911,12 +1005,6 @@ styleSheet.textContent = `
   textarea::-webkit-scrollbar-thumb {
     background: rgba(0,0,0,0.2);
     border-radius: 2px;
-  }
-  @media (max-width: 1023px) {
-    .toolbarInner {
-      flex-direction: row !important;
-      gap: 8px !important;
-    }
   }
 `;
 document.head.appendChild(styleSheet);

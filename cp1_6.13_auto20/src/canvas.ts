@@ -296,14 +296,8 @@ export class CanvasRenderer {
   }
 
   private drawStroke(stroke: DrawStroke) {
-    if (stroke.points.length < 2) {
-      if (stroke.color === 'transparent') return;
-      this.ctx.fillStyle = stroke.color;
-      this.ctx.beginPath();
-      this.ctx.arc(stroke.points[0].x, stroke.points[0].y, stroke.width / 2, 0, Math.PI * 2);
-      this.ctx.fill();
-      return;
-    }
+    const pts = stroke.points;
+    if (pts.length === 0) return;
 
     if (stroke.color === 'transparent') {
       this.ctx.globalCompositeOperation = 'destination-out';
@@ -312,23 +306,55 @@ export class CanvasRenderer {
     }
 
     this.ctx.strokeStyle = stroke.color === 'transparent' ? '#ffffff' : stroke.color;
+    this.ctx.fillStyle = stroke.color === 'transparent' ? '#ffffff' : stroke.color;
     this.ctx.lineWidth = stroke.width;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-
-    for (let i = 1; i < stroke.points.length - 1; i++) {
-      const xc = (stroke.points[i].x + stroke.points[i + 1].x) / 2;
-      const yc = (stroke.points[i].y + stroke.points[i + 1].y) / 2;
-      this.ctx.quadraticCurveTo(stroke.points[i].x, stroke.points[i].y, xc, yc);
+    if (pts.length === 1) {
+      if (stroke.color === 'transparent') {
+        this.ctx.globalCompositeOperation = 'source-over';
+        return;
+      }
+      this.ctx.beginPath();
+      this.ctx.arc(pts[0].x, pts[0].y, stroke.width / 2, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.globalCompositeOperation = 'source-over';
+      return;
     }
 
-    const lastIdx = stroke.points.length - 1;
-    this.ctx.lineTo(stroke.points[lastIdx].x, stroke.points[lastIdx].y);
-    this.ctx.stroke();
+    if (pts.length === 2) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(pts[0].x, pts[0].y);
+      const mx = (pts[0].x + pts[1].x) / 2;
+      const my = (pts[0].y + pts[1].y) / 2;
+      this.ctx.quadraticCurveTo(pts[0].x, pts[0].y, mx, my);
+      this.ctx.quadraticCurveTo(pts[1].x, pts[1].y, pts[1].x, pts[1].y);
+      this.ctx.stroke();
+      this.ctx.globalCompositeOperation = 'source-over';
+      return;
+    }
 
+    this.ctx.beginPath();
+    this.ctx.moveTo(pts[0].x, pts[0].y);
+
+    const firstMidX = (pts[0].x + pts[1].x) / 2;
+    const firstMidY = (pts[0].y + pts[1].y) / 2;
+    this.ctx.quadraticCurveTo(pts[0].x, pts[0].y, firstMidX, firstMidY);
+
+    for (let i = 1; i < pts.length - 1; i++) {
+      const xc = (pts[i].x + pts[i + 1].x) / 2;
+      const yc = (pts[i].y + pts[i + 1].y) / 2;
+      this.ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+    }
+
+    const lastIdx = pts.length - 1;
+    this.ctx.quadraticCurveTo(
+      pts[lastIdx].x, pts[lastIdx].y,
+      pts[lastIdx].x, pts[lastIdx].y
+    );
+
+    this.ctx.stroke();
     this.ctx.globalCompositeOperation = 'source-over';
   }
 }

@@ -23,6 +23,7 @@ app.use(express.json());
 const DEFAULT_ROOM = 'default-room';
 const clients: Map<string, { ws: WebSocket; userId: string; roomId: string }> = new Map();
 const roomOnlineCount: Map<string, Set<string>> = new Map();
+const noteVoters: Map<string, Set<string>> = new Map();
 
 function broadcastToRoom(roomId: string, message: WsMessage, excludeClientId?: string) {
   const data = JSON.stringify(message);
@@ -84,6 +85,11 @@ wss.on('connection', (ws) => {
           try {
             const strokes = await strokesDb.find({ roomId }).sort({ timestamp: 1 });
             const notes = await notesDb.find({ roomId }).sort({ timestamp: 1 });
+            for (const note of notes) {
+              if (!noteVoters.has(note.id)) {
+                noteVoters.set(note.id, new Set(Object.keys(note.votes || {})));
+              }
+            }
             ws.send(JSON.stringify({
               type: 'sync',
               payload: { strokes, notes, onlineCount: getOnlineCount(roomId) }
@@ -114,6 +120,10 @@ wss.on('connection', (ws) => {
 
         case 'clear': {
           try {
+            const notesToDelete = await notesDb.find({ roomId });
+            for (const n of notesToDelete) {
+              noteVoters.delete(n.id);
+            }
             await strokesDb.remove({ roomId }, { multi: true });
             await notesDb.remove({ roomId }, { multi: true });
           } catch (err) {
@@ -154,14 +164,26 @@ wss.on('connection', (ws) => {
         case 'vote': {
           const { noteId, userId: voterId, vote } = msg.payload as VotePayload;
           try {
+            if (!noteVoters.has(noteId)) {
+              noteVoters.set(noteId, new Set());
+            }
+            const voters = noteVoters.get(noteId)!;
+            if (voters.has(voterId)) {
+              const existing = await notesDb.findOne({ id: noteId, roomId }) as StickyNote | null;
+              if (existing) {
+                ws.send(JSON.stringify({
+                  type: 'vote',
+                  payload: existing
+                } as WsMessage));
+              }
+              break;
+            }
+
             const existing = await notesDb.findOne({ id: noteId, roomId }) as StickyNote | null;
             if (existing) {
               const newVotes = { ...(existing.votes || {}) };
-              if (newVotes[voterId] === vote) {
-                delete newVotes[voterId];
-              } else {
-                newVotes[voterId] = vote;
-              }
+              newVotes[voterId] = vote;
+              voters.add(voterId);
               await notesDb.update({ id: noteId, roomId }, { $set: { votes: newVotes } });
               const updated = { ...existing, votes: newVotes };
               broadcastToRoom(roomId, { type: 'vote', payload: updated });
