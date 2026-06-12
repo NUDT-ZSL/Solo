@@ -1,0 +1,14 @@
+{
+  "name": "echo-echo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0"
+  }
+}
