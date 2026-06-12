@@ -12,7 +12,6 @@ import {
   EasingType,
   EASING_MAP,
   sortKeyframes,
-  PROPERTY_DEFAULTS,
 } from '../utils/animationEngine';
 
 interface TimelineProps {
@@ -51,43 +50,48 @@ const PROPERTY_OPTIONS: PropertyChange['property'][] = [
   'opacity',
 ];
 
-interface DraggingState {
+interface DragRuntime {
   id: string;
+  pendingPercent: number;
+  isProcessing: boolean;
+  rafId: number | null;
   startClientX: number;
   startPercent: number;
-  currentPercent: number;
-  rafId: number | null;
-  pendingPercent: number;
+  lastCommittedPercent: number;
+  totalDistance: number;
 }
 
 const KeyframeDot = memo(function KeyframeDot({
   kf,
   isSelected,
+  isDragging,
+  draggingPercent,
+  registerRef,
   onPointerDown,
   onContextMenu,
   onClick,
-  dragPercent,
-  isDragging,
 }: {
   kf: KeyframeNode;
   isSelected: boolean;
+  isDragging: boolean;
+  draggingPercent: number | null;
+  registerRef: (id: string, el: HTMLDivElement | null) => void;
   onPointerDown: (e: React.PointerEvent, kf: KeyframeNode) => void;
   onContextMenu: (e: React.MouseEvent, kf: KeyframeNode) => void;
   onClick: (e: React.MouseEvent, kf: KeyframeNode) => void;
-  dragPercent: number | null;
-  isDragging: boolean;
 }) {
-  const percent = isDragging && dragPercent != null ? dragPercent : kf.timePercent;
+  const visiblePercent = isDragging && draggingPercent != null ? draggingPercent : kf.timePercent;
 
   return (
     <div
+      ref={(el) => registerRef(kf.id, el)}
       data-keyframe-id={kf.id}
       onPointerDown={(e) => onPointerDown(e, kf)}
       onContextMenu={(e) => onContextMenu(e, kf)}
       onClick={(e) => onClick(e, kf)}
       style={{
         position: 'absolute',
-        left: `${percent}%`,
+        left: `${visiblePercent}%`,
         top: '50%',
         width: 12,
         height: 12,
@@ -110,6 +114,7 @@ const KeyframeDot = memo(function KeyframeDot({
     >
       {isDragging && (
         <div
+          data-kf-tooltip
           style={{
             position: 'absolute',
             top: -28,
@@ -126,7 +131,7 @@ const KeyframeDot = memo(function KeyframeDot({
             boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
           }}
         >
-          {percent.toFixed(1)}%
+          {visiblePercent.toFixed(1)}%
         </div>
       )}
     </div>
@@ -147,6 +152,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   onRemoveProperty,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
+  const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
     x: 0,
@@ -155,100 +162,136 @@ export const Timeline: React.FC<TimelineProps> = ({
   });
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
-  const draggingRef = useRef<DraggingState | null>(null);
-  const [, forceRender] = useState(0);
+  const dragRef = useRef<DragRuntime | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragPercentForId, setDragPercentForId] = useState<number | null>(null);
+  const [dragSnapshotPercent, setDragSnapshotPercent] = useState<number | null>(null);
 
   const sortedKeyframes = useMemo(() => sortKeyframes(keyframes), [keyframes]);
+
+  const registerRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) {
+      nodeRefs.current.set(id, el);
+    } else {
+      nodeRefs.current.delete(id);
+    }
+  }, []);
 
   const getPercentFromClientX = useCallback((clientX: number): number => {
     const el = trackRef.current;
     if (!el) return 0;
     const rect = el.getBoundingClientRect();
+    if (rect.width === 0) return 0;
     const ratio = (clientX - rect.left) / rect.width;
     return Math.max(0, Math.min(100, ratio * 100));
   }, []);
 
-  const commitDrag = useCallback(() => {
-    const drag = draggingRef.current;
-    if (!drag) return;
-    const finalPct = Math.round(drag.pendingPercent * 10) / 10;
-    onUpdateKeyframe(drag.id, { timePercent: finalPct });
-    drag.rafId = null;
-    draggingRef.current = null;
-    setDraggingId(null);
-    setDragPercentForId(null);
-  }, [onUpdateKeyframe]);
+  const applyPercentToDOM = useCallback((id: string, percent: number) => {
+    const el = nodeRefs.current.get(id);
+    if (!el) return;
+    el.style.left = `${percent}%`;
+    const tipEl = el.querySelector('[data-kf-tooltip]') as HTMLElement | null;
+    if (tipEl) {
+      tipEl.textContent = `${percent.toFixed(1)}%`;
+    }
+  }, []);
+
+  const runRafFrame = useCallback(() => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.isProcessing = false;
+    d.lastCommittedPercent = d.pendingPercent;
+    applyPercentToDOM(d.id, d.pendingPercent);
+    d.rafId = null;
+  }, [applyPercentToDOM]);
 
   const scheduleRafUpdate = useCallback(() => {
-    const drag = draggingRef.current;
-    if (!drag || drag.rafId !== null) return;
-    drag.rafId = requestAnimationFrame(() => {
-      const d = draggingRef.current;
-      if (!d) return;
-      d.currentPercent = d.pendingPercent;
-      setDragPercentForId(d.pendingPercent);
-      forceRender((n) => n + 1);
+    const d = dragRef.current;
+    if (!d) return;
+    if (d.isProcessing) return;
+    if (d.rafId !== null) return;
+    d.isProcessing = true;
+    d.rafId = requestAnimationFrame(runRafFrame);
+  }, [runRafFrame]);
+
+  const commitDrag = useCallback(() => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (d.rafId !== null) {
+      cancelAnimationFrame(d.rafId);
       d.rafId = null;
-    });
-  }, []);
+    }
+    const finalPct = Math.round(d.pendingPercent * 10) / 10;
+    const hadMovement = Math.abs(finalPct - d.startPercent) > 0.05 || d.totalDistance > 2;
+    d.isProcessing = false;
+    dragRef.current = null;
+    setDraggingId(null);
+    setDragSnapshotPercent(null);
+    onUpdateKeyframe(d.id, { timePercent: finalPct });
+    return hadMovement;
+  }, [onUpdateKeyframe]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, kf: KeyframeNode) => {
       if (e.button === 2) return;
       e.preventDefault();
       e.stopPropagation();
-      (e.target as Element).setPointerCapture?.(e.pointerId);
+      const target = e.currentTarget as Element;
+      target.setPointerCapture?.(e.pointerId);
 
       onSelectKeyframe(kf.id);
 
       const startPct = kf.timePercent;
-      draggingRef.current = {
+      dragRef.current = {
         id: kf.id,
         startClientX: e.clientX,
         startPercent: startPct,
-        currentPercent: startPct,
         pendingPercent: startPct,
+        lastCommittedPercent: startPct,
+        isProcessing: false,
         rafId: null,
+        totalDistance: 0,
       };
       setDraggingId(kf.id);
-      setDragPercentForId(startPct);
+      setDragSnapshotPercent(startPct);
     },
     [onSelectKeyframe]
   );
 
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
-      const drag = draggingRef.current;
-      if (!drag) return;
+      const d = dragRef.current;
+      if (!d) return;
       const newPct = getPercentFromClientX(e.clientX);
-      drag.pendingPercent = newPct;
+      d.totalDistance += Math.abs(e.clientX - d.startClientX);
+      d.pendingPercent = newPct;
       scheduleRafUpdate();
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      const drag = draggingRef.current;
-      if (!drag) return;
+      const d = dragRef.current;
+      if (!d) return;
       try {
-        (e.target as Element).releasePointerCapture?.(e.pointerId);
-      } catch {}
-      if (drag.rafId !== null) {
-        cancelAnimationFrame(drag.rafId);
-        drag.rafId = null;
+        const target = e.target as Element;
+        if (target && typeof target.releasePointerCapture === 'function') {
+          target.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        /* noop */
       }
       commitDrag();
     };
 
-    const handlePointerCancel = (e: PointerEvent) => {
-      const drag = draggingRef.current;
-      if (!drag) return;
-      if (drag.rafId !== null) {
-        cancelAnimationFrame(drag.rafId);
+    const handlePointerCancel = (_e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      if (d.rafId !== null) {
+        cancelAnimationFrame(d.rafId);
+        d.rafId = null;
       }
-      draggingRef.current = null;
+      d.isProcessing = false;
+      dragRef.current = null;
       setDraggingId(null);
-      setDragPercentForId(null);
+      setDragSnapshotPercent(null);
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
@@ -280,7 +323,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   const handleClickDot = useCallback(
     (e: React.MouseEvent, kf: KeyframeNode) => {
       e.stopPropagation();
-      if (!draggingRef.current) {
+      if (!dragRef.current) {
         onSelectKeyframe(kf.id);
       }
     },
@@ -299,15 +342,22 @@ export const Timeline: React.FC<TimelineProps> = ({
         closeContextMenu();
       }
     };
+    const onTouchStart = (e: TouchEvent) => {
+      const menuEl = contextMenuRef.current;
+      const tgt = e.target as Node;
+      if (menuEl && tgt && !menuEl.contains(tgt)) {
+        closeContextMenu();
+      }
+    };
     const onDocKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeContextMenu();
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
-    document.addEventListener('touchstart', onDocMouseDown as any, true);
+    document.addEventListener('touchstart', onTouchStart, { passive: true, capture: true } as any);
     document.addEventListener('keydown', onDocKeyDown, true);
     return () => {
       document.removeEventListener('mousedown', onDocMouseDown, true);
-      document.removeEventListener('touchstart', onDocMouseDown as any, true);
+      document.removeEventListener('touchstart', onTouchStart as any, true);
       document.removeEventListener('keydown', onDocKeyDown, true);
     };
   }, [contextMenu.visible, closeContextMenu]);
@@ -424,7 +474,8 @@ export const Timeline: React.FC<TimelineProps> = ({
             kf={kf}
             isSelected={kf.id === selectedKeyframeId}
             isDragging={draggingId === kf.id}
-            dragPercent={draggingId === kf.id ? dragPercentForId : null}
+            draggingPercent={draggingId === kf.id ? dragSnapshotPercent : null}
+            registerRef={registerRef}
             onPointerDown={handlePointerDown}
             onContextMenu={handleContextMenu}
             onClick={handleClickDot}
@@ -447,6 +498,8 @@ export const Timeline: React.FC<TimelineProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               marginBottom: 12,
+              flexWrap: 'wrap',
+              gap: 10,
             }}
           >
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -609,6 +662,8 @@ const MenuItem: React.FC<{ onClick: () => void; label: string; danger?: boolean 
       color: danger ? '#FF6584' : '#E0E0E0',
       fontSize: 13,
       fontWeight: 500,
+      background: 'transparent',
+      userSelect: 'none',
     }}
     onMouseEnter={(e) => (e.currentTarget.style.background = '#2C2C54')}
     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}

@@ -26,6 +26,15 @@ import cssLang from 'highlight.js/lib/languages/css';
 
 hljs.registerLanguage('css', cssLang);
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 interface ExportState {
   open: boolean;
   css: string;
@@ -195,14 +204,27 @@ const App: React.FC = () => {
   const highlightedCSS = useMemo(() => {
     if (!exportState.css) return '';
     try {
-      const res = hljs.highlight(exportState.css, { language: 'css' });
-      return res.value;
-    } catch {
-      return exportState.css;
+      const escaped = escapeHtml(exportState.css);
+      const res = hljs.highlight(exportState.css, { language: 'css', ignoreIllegals: true });
+      return `<code class="hljs language-css">${res.value || escaped}</code>`;
+    } catch (err) {
+      return `<code class="hljs language-css">${escapeHtml(exportState.css)}</code>`;
     }
   }, [exportState.css]);
 
   const codePanelRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (!exportState.open || !codePanelRef.current) return;
+    const codeEl = codePanelRef.current.querySelector('code');
+    if (codeEl && typeof (hljs as any).highlightElement === 'function') {
+      try {
+        (hljs as any).highlightElement(codeEl);
+      } catch {
+        /* noop */
+      }
+    }
+  }, [exportState.open, exportState.css]);
 
   return (
     <div
@@ -627,12 +649,13 @@ const App: React.FC = () => {
             <div style={{ padding: 16, overflow: 'auto' }}>
               <pre
                 ref={codePanelRef}
+                className="hljs"
                 dangerouslySetInnerHTML={{ __html: highlightedCSS }}
                 style={{
                   margin: 0,
                   width: '100%',
                   height: 200,
-                  background: '#1E1E1E',
+                  background: '#1E1E1E !important' as any,
                   color: '#E0E0E0',
                   fontFamily: '"Consolas", "Fira Code", "Courier New", monospace',
                   fontSize: 14,

@@ -115,10 +115,10 @@ export function formatPropertyValue(prop: PropertyChange): string {
 
 function groupTransformProperties(props: PropertyChange[]): {
   transformParts: string[];
-  otherParts: string[];
+  otherDeclarations: { prop: string; value: string }[];
 } {
   const transformParts: string[] = [];
-  const otherParts: string[] = [];
+  const otherDeclarations: { prop: string; value: string }[] = [];
 
   for (const p of props) {
     const val = formatPropertyValue(p);
@@ -142,11 +142,11 @@ function groupTransformProperties(props: PropertyChange[]): {
         transformParts.push(`scaleY(${val})`);
         break;
       case 'opacity':
-        otherParts.push(`  opacity: ${val};`);
+        otherDeclarations.push({ prop: 'opacity', value: val });
         break;
     }
   }
-  return { transformParts, otherParts };
+  return { transformParts, otherDeclarations };
 }
 
 interface PercentageGroup {
@@ -196,7 +196,7 @@ export function keyframesToCSS(
       }
     }
 
-    const { transformParts, otherParts } = groupTransformProperties(allProperties);
+    const { transformParts, otherDeclarations } = groupTransformProperties(allProperties);
 
     output += `  ${percentLabel} {\n`;
 
@@ -204,8 +204,8 @@ export function keyframesToCSS(
       output += `    transform: ${transformParts.join(' ')};\n`;
     }
 
-    for (const line of otherParts) {
-      output += `  ${line}\n`;
+    for (const decl of otherDeclarations) {
+      output += `    ${decl.prop}: ${decl.value};\n`;
     }
 
     if (easingForBlock !== 'linear') {

@@ -130,10 +130,6 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
       const rawPct = startPct + (elapsed / adjustedDuration) * 100;
       const wrapPct = ((rawPct % 100) + 100) % 100;
 
-      if (Math.abs(wrapPct - (startPercentRef.current + elapsed / adjustedDuration * 100)) < 0.01) {
-        // still in first pass, propagate as wrapPct
-      }
-
       onTimeChange(wrapPct);
       forceRender((n) => (n + 1) % 1_000_000);
       rafRef.current = requestAnimationFrame(tick);
@@ -198,7 +194,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
         </h3>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ color: '#8A8FBD', fontSize: 12 }}>
-            Duration: {durationMs}ms × {speed.toFixed(2)}x = {adjustedDuration}ms
+            Base {durationMs}ms · {speed.toFixed(2)}x speed → {adjustedDuration}ms
           </span>
         </div>
       </div>
@@ -318,10 +314,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
               value={speed}
               onChange={(e) => {
                 const newSpeed = parseFloat(e.target.value);
-                const playingAtPercent = currentTimePercent;
+                if (isNaN(newSpeed) || newSpeed <= 0) return;
                 onSpeedChange(newSpeed);
-                startTimeRef.current = performance.now();
-                startPercentRef.current = playingAtPercent;
               }}
               style={{
                 flex: 1,

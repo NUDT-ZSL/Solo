@@ -89,7 +89,7 @@ describe('animationEngine', () => {
   });
 
   describe('keyframesToCSS - merged percentage rules', () => {
-    it('merges multiple properties at same percent into one rule block', () => {
+    it('merges multiple properties at same percent into ONE rule block (no duplicated selectors)', () => {
       const kfs = [
         kfAt(50, [
           { property: 'translateX', value: 100, unit: 'px' },
@@ -97,11 +97,25 @@ describe('animationEngine', () => {
         ]),
       ];
       const css = keyframesToCSS(kfs, 'test');
-      expect(css).toContain('50% {');
+      const matches50 = (css.match(/50% \{/g) || []).length;
+      expect(matches50).toBe(1);
       expect(css).toContain('transform: translateX(100px);');
       expect(css).toContain('opacity: 0.50;');
-      const matches50 = css.match(/50% \{/g) || [];
-      expect(matches50).toHaveLength(1);
+      const indentOfOpacity = /\n(\s+)opacity/.exec(css);
+      expect(indentOfOpacity).toBeTruthy();
+      expect(indentOfOpacity![1].length).toBe(4);
+    });
+
+    it('produces one single selector block for multiple keyframes at identical percent', () => {
+      const kfs = [
+        kfAt(50, [{ property: 'translateX', value: 100, unit: 'px' }]),
+        kfAt(50, [{ property: 'opacity', value: 0.5 }]),
+      ];
+      const css = keyframesToCSS(kfs, 'dup');
+      const count = (css.match(/\b50% \{/g) || []).length;
+      expect(count).toBe(1);
+      expect(css).toContain('transform: translateX(100px);');
+      expect(css).toContain('opacity: 0.50;');
     });
 
     it('includes 0% and 100% boundary keyframes', () => {
