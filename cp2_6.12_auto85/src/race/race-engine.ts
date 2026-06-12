@@ -7,7 +7,8 @@ import {
   TrailsPoint,
   MODE_MAX_SPEED,
   MODE_COLORS,
-  PHYSICS
+  PHYSICS,
+  drawRoundRect
 } from '../types';
 
 export class RaceEngine {
@@ -566,8 +567,7 @@ export class RaceEngine {
     const bodyLength = 1.2 * this.scale;
 
     ctx.fillStyle = this.carColor;
-    ctx.beginPath();
-    ctx.roundRect(-bodyLength / 2, -bodyWidth / 2, bodyLength, bodyWidth, 0.15 * this.scale);
+    drawRoundRect(ctx, -bodyLength / 2, -bodyWidth / 2, bodyLength, bodyWidth, 0.15 * this.scale);
     ctx.fill();
 
     ctx.strokeStyle = 'rgba(0,0,0,0.3)';
