@@ -41,15 +41,21 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
     
     reader.onprogress = (e) => {
       if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 50)
+        const percent = Math.round((e.loaded / e.total) * 40)
         setProgress(percent)
       }
     }
 
     reader.onload = (e) => {
+      setProgress(45)
       const result = e.target?.result as string
       setImageUrl(result)
-      setProgress(50)
+    }
+
+    reader.onerror = () => {
+      alert('文件读取失败')
+      setIsExtracting(false)
+      setProgress(0)
     }
 
     reader.readAsDataURL(file)
@@ -60,11 +66,14 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
 
     setProgress(60)
 
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       try {
+        setProgress(70)
         const colorThief = new ColorThief()
         const palette = colorThief.getPalette(imgRef.current, 5)
         
+        setProgress(85)
+
         const colorValues: ColorValue[] = palette.map(([r, g, b]) => {
           const hex = rgbToHex(r, g, b)
           const hsl = rgbToHsl(r, g, b)
@@ -75,23 +84,22 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
           }
         })
 
+        setProgress(95)
         setColors(colorValues)
-        
-        let currentProgress = 60
-        const interval = setInterval(() => {
-          currentProgress += 5
-          setProgress(Math.min(currentProgress, 100))
-          if (currentProgress >= 100) {
-            clearInterval(interval)
+
+        requestAnimationFrame(() => {
+          setProgress(100)
+          setTimeout(() => {
             setIsExtracting(false)
-          }
-        }, 50)
+          }, 150)
+        })
       } catch (error) {
         console.error('Error extracting colors:', error)
         alert('提取色值失败，请重试')
         setIsExtracting(false)
+        setProgress(0)
       }
-    }, 200)
+    })
   }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
