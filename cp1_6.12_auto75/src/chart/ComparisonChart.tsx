@@ -45,7 +45,6 @@ function formatTimeLabel(isoString: string): string {
 }
 
 const ANIMATION_DURATION = 800;
-const DASH_ARRAY_LENGTH = 100000;
 
 function ComparisonChart({
   chartSessions,
@@ -57,6 +56,7 @@ function ComparisonChart({
 }: ComparisonChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartWrapperRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [selectionResult, setSelectionResult] = useState<{
     startIndex: number;
@@ -64,53 +64,71 @@ function ComparisonChart({
     conversions: { name: string; rate: number; color: string }[];
   } | null>(null);
   const [dragOverChart, setDragOverChart] = useState(false);
-  const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
+  const [animatedSessions, setAnimatedSessions] = useState<Set<string>>(new Set());
   const [draggedLegendIndex, setDraggedLegendIndex] = useState<number | null>(null);
   const [dragOverLegendIndex, setDragOverLegendIndex] = useState<number | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const animationStartTimeRef = useRef<Map<string, number>>(new Map());
 
   const visibleSessions = chartSessions.filter((s) => s.visible);
 
   useEffect(() => {
+    const styleId = 'flash-analytics-line-animations';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+
     chartSessions.forEach((cs) => {
-      if (!animationStartTimeRef.current.has(cs.session.id)) {
-        animationStartTimeRef.current.set(cs.session.id, performance.now());
+      if (!animatedSessions.has(cs.session.id)) {
+        const timer = setTimeout(() => {
+          if (!svgRef.current) {
+            const svg = chartWrapperRef.current?.querySelector('svg');
+            if (svg) svgRef.current = svg as SVGSVGElement;
+          }
+          if (svgRef.current) {
+            const paths = svgRef.current.querySelectorAll<SVGPathElement>(
+              `path.recharts-curve.recharts-line-curve`
+            );
+            const sessionIndex = chartSessions.findIndex(
+              (s) => s.session.id === cs.session.id
+            );
+            const visibleIndex = visibleSessions.findIndex(
+              (s) => s.session.id === cs.session.id
+            );
+            const pathIndex = visibleIndex >= 0 ? visibleIndex : sessionIndex;
+            const path = paths[pathIndex];
+            if (path) {
+              try {
+                const totalLength = path.getTotalLength();
+                const animName = `drawLine_${cs.session.id.replace(/-/g, '_')}`;
+                if (styleEl && !styleEl.textContent?.includes(animName)) {
+                  styleEl.textContent += `
+                    @keyframes ${animName} {
+                      from { stroke-dashoffset: ${totalLength}; }
+                      to { stroke-dashoffset: 0; }
+                    }
+                  `;
+                }
+                path.style.strokeDasharray = String(totalLength);
+                path.style.strokeDashoffset = String(totalLength);
+                path.style.animation = `${animName} ${ANIMATION_DURATION}ms ease-out forwards`;
+                setAnimatedSessions((prev) => new Set(prev).add(cs.session.id));
+              } catch (err) {
+                console.warn('获取路径长度失败:', err);
+                setAnimatedSessions((prev) => new Set(prev).add(cs.session.id));
+              }
+            } else {
+              setAnimatedSessions((prev) => new Set(prev).add(cs.session.id));
+            }
+          } else {
+            setAnimatedSessions((prev) => new Set(prev).add(cs.session.id));
+          }
+        }, 50);
+        return () => clearTimeout(timer);
       }
     });
-
-    const animate = () => {
-      const now = performance.now();
-      const newProgress = new Map(animationProgress);
-      let allDone = true;
-
-      chartSessions.forEach((cs) => {
-        const startTime = animationStartTimeRef.current.get(cs.session.id);
-        if (startTime !== undefined) {
-          const elapsed = now - startTime;
-          const progress = Math.min(1, elapsed / ANIMATION_DURATION);
-          newProgress.set(cs.session.id, progress);
-          if (progress < 1) {
-            allDone = false;
-          }
-        }
-      });
-
-      setAnimationProgress(newProgress);
-
-      if (!allDone) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      }
-    };
-
-    animationFrameRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [chartSessions.map((s) => s.session.id).join(',')]);
+  }, [chartSessions, animatedSessions, visibleSessions]);
 
   const maxTimePoints = useMemo(() => {
     if (visibleSessions.length === 0) return 480;
@@ -185,44 +203,54 @@ function ComparisonChart({
     const chartLeft = 70;
     const chartRight = rect.width - 40;
     const chartWidth = chartRight - chartLeft;
-    return { rect, chartLeft, chartRight, chartWidth };
+    const chartTop = 50;
+    const chartBottom = rect.height - 30;
+    return { rect, chartLeft, chartRight, chartWidth, chartTop, chartBottom };
   }, []);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!chartWrapperRef.current || chartSessions.length === 0) return;
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (!chartWrapperRef.current || chartSessions.length === 0) return;
+      if (e.button !== 0) return;
 
-    const area = getChartArea();
-    if (!area) return;
+      const area = getChartArea();
+      if (!area) return;
 
-    const x = e.clientX - area.rect.left - area.chartLeft;
+      const x = e.clientX - area.rect.left - area.chartLeft;
+      const y = e.clientY - area.rect.top - area.chartTop;
 
-    if (x < 0 || x > area.chartWidth) return;
+      if (x < 0 || x > area.chartWidth || y < 0 || y > area.chartBottom - area.chartTop) return;
 
-    const timeIndex = Math.round((x / area.chartWidth) * (maxTimePoints - 1));
+      const timeIndex = Math.round((x / area.chartWidth) * (maxTimePoints - 1));
 
-    setSelection({
-      startIndex: timeIndex,
-      endIndex: timeIndex,
-      startX: x,
-      currentX: x,
-      isSelecting: true,
-    });
-    setSelectionResult(null);
-  };
+      setSelection({
+        startIndex: timeIndex,
+        endIndex: timeIndex,
+        startX: x,
+        currentX: x,
+        isSelecting: true,
+      });
+      setSelectionResult(null);
+    },
+    [chartSessions.length, getChartArea, maxTimePoints]
+  );
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!selection?.isSelecting || !chartWrapperRef.current) return;
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!selection?.isSelecting || !chartWrapperRef.current) return;
 
-    const area = getChartArea();
-    if (!area) return;
+      const area = getChartArea();
+      if (!area) return;
 
-    const x = Math.max(0, Math.min(area.chartWidth, e.clientX - area.rect.left - area.chartLeft));
-    const timeIndex = Math.round((x / area.chartWidth) * (maxTimePoints - 1));
+      const x = Math.max(0, Math.min(area.chartWidth, e.clientX - area.rect.left - area.chartLeft));
+      const timeIndex = Math.round((x / area.chartWidth) * (maxTimePoints - 1));
 
-    setSelection((prev) =>
-      prev ? { ...prev, currentX: x, endIndex: timeIndex } : prev
-    );
-  };
+      setSelection((prev) =>
+        prev ? { ...prev, currentX: x, endIndex: timeIndex } : prev
+      );
+    },
+    [selection, getChartArea, maxTimePoints]
+  );
 
   const handleMouseUp = useCallback(() => {
     if (!selection?.isSelecting) return;
@@ -303,11 +331,6 @@ function ComparisonChart({
     }
     return ticks;
   }, [maxTimePoints]);
-
-  const getStrokeDashoffset = (sessionId: string): number => {
-    const progress = animationProgress.get(sessionId) ?? 1;
-    return DASH_ARRAY_LENGTH * (1 - progress);
-  };
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -460,8 +483,6 @@ function ComparisonChart({
                     activeDot={{ r: 4, strokeWidth: 2 }}
                     isAnimationActive={false}
                     strokeOpacity={cs.visible ? 1 : 0.2}
-                    strokeDasharray={DASH_ARRAY_LENGTH}
-                    strokeDashoffset={getStrokeDashoffset(cs.session.id)}
                   />
                 ))}
 
@@ -483,6 +504,8 @@ function ComparisonChart({
                 style={{
                   left: `${70 + Math.min(selection.startX, selection.currentX)}px`,
                   width: `${Math.abs(selection.currentX - selection.startX)}px`,
+                  top: `${50}px`,
+                  bottom: `${30}px`,
                 }}
               />
             )}

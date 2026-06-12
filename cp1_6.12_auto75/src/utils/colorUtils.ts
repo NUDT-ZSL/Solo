@@ -52,7 +52,15 @@ export function getConversionRateBgColor(
 ): string {
   const baseColor = getConversionRateColor(rate, minRate, maxRate);
   const rgb = hexToRgb(baseColor);
-  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)`;
+}
+
+export function getCardBackground(
+  rate: number,
+  minRate = 0.01,
+  maxRate = 0.06
+): string {
+  return getConversionRateBgColor(rate, minRate, maxRate);
 }
 
 export const CHART_COLORS = [

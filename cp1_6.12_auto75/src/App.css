@@ -125,16 +125,22 @@
 }
 
 .resizer:hover {
-  background: rgba(52, 152, 219, 0.2);
+  background: rgba(52, 152, 219, 0.4);
 }
 
 .resizer:hover .resizer-handle,
 .resizer.resizing .resizer-handle {
-  background: #3498db;
+  background: #5dade2;
+  box-shadow: 0 0 8px rgba(93, 173, 226, 0.6);
 }
 
 .resizer.resizing {
-  background: rgba(52, 152, 219, 0.3);
+  background: rgba(52, 152, 219, 0.5);
+  cursor: col-resize;
+}
+
+.resizer.resizing .resizer-handle {
+  background: #3498db;
 }
 
 .resizer-handle {
@@ -142,7 +148,7 @@
   height: 40px;
   background: rgba(229, 231, 235, 0.2);
   border-radius: 2px;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .right-panel {

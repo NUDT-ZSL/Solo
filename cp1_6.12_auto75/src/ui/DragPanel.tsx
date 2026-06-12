@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { SessionSummary } from '../types';
-import { getConversionRateColor, getConversionRateBgColor } from '../utils/colorUtils';
+import { getConversionRateColor, getCardBackground } from '../utils/colorUtils';
 import './DragPanel.css';
 
 interface DragPanelProps {
@@ -113,7 +113,7 @@ function DragPanel({
             const isAdded = addedSessionIds.includes(session.id);
             const isLoading = loadingSessionId === session.id;
             const rateColor = getConversionRateColor(session.conversionRate);
-            const bgColor = getConversionRateBgColor(session.conversionRate);
+            const bgColor = getCardBackground(session.conversionRate);
 
             return (
               <div
