@@ -97,25 +97,45 @@ export class LevelManager {
   }
 
   async init(): Promise<void> {
-    await this.db.read()
+    try {
+      await this.db.read()
+    } catch (e) {
+      console.error('Failed to read database, initializing with defaults:', e)
+      this.db.data = { levels: defaultLevels, scores: [] }
+    }
+
     if (!this.db.data || !this.db.data.levels || this.db.data.levels.length === 0) {
       this.db.data = { levels: defaultLevels, scores: [] }
-      await this.db.write()
     }
     if (!this.db.data.scores) {
       this.db.data.scores = []
+    }
+
+    try {
       await this.db.write()
+    } catch (e) {
+      console.error('Failed to write database during init:', e)
     }
   }
 
   async getLevels(): Promise<Level[]> {
-    await this.db.read()
-    return this.db.data.levels
+    try {
+      await this.db.read()
+      return this.db.data.levels || defaultLevels
+    } catch (e) {
+      console.error('Failed to read levels:', e)
+      return defaultLevels
+    }
   }
 
   async getLevelById(id: string): Promise<Level | undefined> {
-    await this.db.read()
-    return this.db.data.levels.find((l) => l.id === id)
+    try {
+      await this.db.read()
+      return this.db.data.levels.find((l) => l.id === id)
+    } catch (e) {
+      console.error('Failed to read level by id:', e)
+      return defaultLevels.find((l) => l.id === id)
+    }
   }
 
   async addScore(
@@ -126,7 +146,15 @@ export class LevelManager {
     maxCombo: number,
     obstaclesCleared: number
   ): Promise<ScoreEntry> {
-    await this.db.read()
+    try {
+      await this.db.read()
+    } catch (e) {
+      console.error('Failed to read database before adding score:', e)
+      if (!this.db.data) {
+        this.db.data = { levels: defaultLevels, scores: [] }
+      }
+    }
+
     const entry: ScoreEntry = {
       id: uuidv4(),
       playerName,
@@ -137,29 +165,65 @@ export class LevelManager {
       obstaclesCleared,
       timestamp: Date.now()
     }
+
     this.db.data.scores.push(entry)
-    await this.db.write()
+
+    try {
+      await this.db.write()
+    } catch (e) {
+      console.error('Failed to write score to database:', e)
+    }
+
     return entry
   }
 
   async getTopScores(limit: number = 10, levelId?: string): Promise<ScoreEntry[]> {
-    await this.db.read()
-    let scores = [...this.db.data.scores]
+    try {
+      await this.db.read()
+    } catch (e) {
+      console.error('Failed to read database for top scores:', e)
+      return []
+    }
+
+    let scores = [...(this.db.data.scores || [])]
+
     if (levelId) {
       scores = scores.filter((s) => s.levelId === levelId)
     }
-    scores.sort((a, b) => b.score - a.score)
-    return scores.slice(0, limit)
+
+    scores.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return a.timestamp - b.timestamp
+    })
+
+    return scores.slice(0, Math.min(limit, 10))
   }
 
   async checkRank(score: number, levelId?: string): Promise<number> {
-    await this.db.read()
-    let scores = [...this.db.data.scores]
+    try {
+      await this.db.read()
+    } catch (e) {
+      console.error('Failed to read database for rank check:', e)
+      return 1
+    }
+
+    let scores = [...(this.db.data.scores || [])]
+
     if (levelId) {
       scores = scores.filter((s) => s.levelId === levelId)
     }
-    scores.sort((a, b) => b.score - a.score)
+
+    scores.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return a.timestamp - b.timestamp
+    })
+
     const rank = scores.findIndex((s) => score > s.score)
     return rank === -1 ? scores.length + 1 : rank + 1
+  }
+
+  async isTop10(score: number, levelId?: string): Promise<boolean> {
+    const rank = await this.checkRank(score, levelId)
+    return rank <= 10
   }
 }

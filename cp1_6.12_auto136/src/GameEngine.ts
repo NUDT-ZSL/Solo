@@ -12,10 +12,26 @@ import {
   PERFECT_WINDOW,
   GOOD_WINDOW,
   HIT_Z,
-  SPAWN_Z
+  SPAWN_Z,
+  NOTE_RADIUS,
+  NOTE_GLOW_RADIUS,
+  LANE_WIDTH
 } from './types'
 import { NoteGenerator } from './NoteGenerator'
 import { v4 as uuidv4 } from 'uuid'
+
+interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+interface Circle {
+  x: number
+  y: number
+  radius: number
+}
 
 export class GameEngine {
   private levelConfig: LevelConfig
@@ -63,6 +79,9 @@ export class GameEngine {
   private beatIntensity: number = 0
   private currentBeat: number = 0
   private screenFlash: number = 0
+  private screenFlashOpacity: number = 0
+  private screenFlashStartTime: number = 0
+  private screenFlashDuration: number = 300
 
   private lastFrameTime: number = 0
   private animationFrameId: number | null = null
@@ -74,6 +93,14 @@ export class GameEngine {
 
   private audioContext: AudioContext | null = null
 
+  private playerCircle: Circle = { x: 0, y: 0, radius: 20 }
+
+  private canvasWidth: number = 1920
+  private canvasHeight: number = 1080
+  private vanishPointX: number = 960
+  private vanishPointY: number = 270
+  private playerZoneY: number = 810
+
   constructor(levelConfig: LevelConfig, callbacks: GameCallbacks) {
     this.levelConfig = levelConfig
     this.noteGenerator = new NoteGenerator(levelConfig)
@@ -81,6 +108,93 @@ export class GameEngine {
     this.beatInterval = this.noteGenerator.getBeatInterval()
     this.game.levelId = levelConfig.id
     this.game.levelName = levelConfig.name
+  }
+
+  setCanvasSize(width: number, height: number): void {
+    this.canvasWidth = width
+    this.canvasHeight = height
+    this.vanishPointX = width / 2
+    this.vanishPointY = height * 0.25
+    this.playerZoneY = height * 0.75
+  }
+
+  private rectIntersectsRect(a: Rect, b: Rect): boolean {
+    return (
+      a.x < b.x + b.width &&
+      a.x + a.width > b.x &&
+      a.y < b.y + b.height &&
+      a.y + a.height > b.y
+    )
+  }
+
+  private circleIntersectsRect(circle: Circle, rect: Rect): boolean {
+    const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.width))
+    const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.height))
+    const dx = circle.x - closestX
+    const dy = circle.y - closestY
+    return dx * dx + dy * dy < circle.radius * circle.radius
+  }
+
+  private circleIntersectsCircle(a: Circle, b: Circle): boolean {
+    const dx = a.x - b.x
+    const dy = a.y - b.y
+    const distSq = dx * dx + dy * dy
+    const radiusSum = a.radius + b.radius
+    return distSq < radiusSum * radiusSum
+  }
+
+  private getLaneScreenX(lane: number): number {
+    const centerX = this.canvasWidth / 2
+    const totalWidth = LANE_WIDTH * LANES
+    const startX = centerX - totalWidth / 2
+    return startX + lane * LANE_WIDTH + LANE_WIDTH / 2
+  }
+
+  private getPlayerRect(): Rect {
+    const x = this.getLaneScreenX(this.player.lane)
+    const y = this.playerZoneY
+    const size = 30
+    return {
+      x: x - size / 2,
+      y: y - size / 2,
+      width: size,
+      height: size
+    }
+  }
+
+  private getPlayerCircle(): Circle {
+    return {
+      x: this.getLaneScreenX(this.player.lane),
+      y: this.playerZoneY,
+      radius: 20
+    }
+  }
+
+  private getObstacleScreenRect(obstacle: Obstacle): Rect {
+    const t = 1 - obstacle.z / SPAWN_Z
+    const screenY = this.vanishPointY + (this.playerZoneY - this.vanishPointY) * t
+    const scale = 0.1 + t * 0.9
+    const screenX = this.getLaneScreenX(obstacle.lane)
+    const baseSize = 40 * scale
+    return {
+      x: screenX - baseSize / 2,
+      y: screenY - baseSize / 2,
+      width: baseSize,
+      height: baseSize
+    }
+  }
+
+  private getNoteScreenCircle(note: Note & { z?: number }): Circle {
+    const z = (note as any).z ?? SPAWN_Z
+    const t = 1 - z / SPAWN_Z
+    const screenY = this.vanishPointY + (this.playerZoneY - this.vanishPointY) * t
+    const scale = 0.1 + t * 0.9
+    const screenX = this.getLaneScreenX(note.lane)
+    return {
+      x: screenX,
+      y: screenY,
+      radius: NOTE_RADIUS * scale
+    }
   }
 
   init(): void {
@@ -95,6 +209,8 @@ export class GameEngine {
     this.currentBeat = 0
     this.lastBeatTime = 0
     this.travelDuration = 2000 / this.levelConfig.baseSpeed
+    this.screenFlash = 0
+    this.screenFlashOpacity = 0
 
     this.player = {
       lane: 1,
@@ -139,13 +255,14 @@ export class GameEngine {
 
     for (let beat = 4; beat < totalBeats - 4; beat++) {
       const time = beat * this.beatInterval
+      const density = this.levelConfig.obstacleDensity
 
-      for (let i = 0; i < this.levelConfig.obstacleDensity; i++) {
+      for (let i = 0; i < density; i++) {
         const lane = Math.floor(Math.random() * 3)
         const type = types[Math.floor(Math.random() * types.length)]
 
         const existingAtTime = this.obstacles.filter(
-          (o) => Math.abs(o.time - time) < 50 && o.lane === lane
+          (o) => Math.abs(o.time - time) < this.beatInterval * 0.4 && o.lane === lane
         )
 
         if (existingAtTime.length === 0) {
@@ -203,23 +320,39 @@ export class GameEngine {
     if (!this.game.isPlaying || this.game.isPaused || this.game.isGameOver) return
 
     const currentTime = this.game.currentTime
-    const collectWindow = GOOD_WINDOW
+    const playerCircle = this.getPlayerCircle()
 
-    const noteToCollect = this.activeNotes.find(
-      (note) =>
-        !note.collected &&
-        note.lane === this.player.targetLane &&
-        Math.abs(note.time - currentTime) <= collectWindow
-    )
+    let bestNote: Note | null = null
+    let bestDiff = Infinity
 
-    if (noteToCollect) {
-      const timeDiff = Math.abs(noteToCollect.time - currentTime)
-      const isPerfect = timeDiff <= PERFECT_WINDOW
+    for (const note of this.activeNotes) {
+      if (note.collected) continue
 
-      noteToCollect.collected = true
-      noteToCollect.perfect = isPerfect
+      const timeDiff = Math.abs(note.time - currentTime)
 
-      const baseScore = noteToCollect.type === 'bonus' ? 100 : 50
+      if (timeDiff > GOOD_WINDOW) continue
+
+      const noteCircle = this.getNoteScreenCircle(note)
+      if (!this.circleIntersectsCircle(playerCircle, {
+        ...noteCircle,
+        radius: noteCircle.radius + NOTE_GLOW_RADIUS
+      })) continue
+
+      if (note.lane !== this.player.targetLane) continue
+
+      if (timeDiff < bestDiff) {
+        bestDiff = timeDiff
+        bestNote = note
+      }
+    }
+
+    if (bestNote) {
+      const isPerfect = bestDiff <= PERFECT_WINDOW
+
+      bestNote.collected = true
+      bestNote.perfect = isPerfect
+
+      const baseScore = bestNote.type === 'bonus' ? 100 : 50
       const comboMultiplier = 1 + Math.floor(this.game.combo / 10) * 0.1
       const perfectBonus = isPerfect ? 1.5 : 1
 
@@ -231,7 +364,7 @@ export class GameEngine {
       if (isPerfect) {
         this.game.perfectStreak++
         this.game.missStreak = 0
-        this.screenFlash = 1
+        this.triggerScreenFlash()
         this.callbacks.onPerfect()
         this.playPerfectSound()
 
@@ -254,18 +387,42 @@ export class GameEngine {
     }
   }
 
+  private triggerScreenFlash(): void {
+    this.screenFlash = 1
+    this.screenFlashOpacity = 0.7
+    this.screenFlashStartTime = performance.now()
+  }
+
+  private updateScreenFlash(deltaTime: number): void {
+    if (this.screenFlash > 0) {
+      const elapsed = performance.now() - this.screenFlashStartTime
+      if (elapsed >= this.screenFlashDuration) {
+        this.screenFlash = 0
+        this.screenFlashOpacity = 0
+      } else {
+        const progress = elapsed / this.screenFlashDuration
+        this.screenFlashOpacity = 0.7 * (1 - progress)
+        this.screenFlash = 1 - progress
+      }
+    }
+  }
+
   private triggerSpeedBoost(): void {
     this.game.speedMultiplier = 1.2
     this.game.speedBoostTimer = 8000
+    this.game.speedReductionTimer = 0
     this.callbacks.onSpeedChange(1.2, true)
-    this.spawnSpeedParticles('#00f0ff')
+    this.spawnSpeedChangeParticles('#00f0ff', true)
+    this.spawnEdgeFlashParticles('#00f0ff')
   }
 
   private triggerSpeedReduction(): void {
     this.game.speedMultiplier = 0.9
     this.game.speedReductionTimer = 5000
+    this.game.speedBoostTimer = 0
     this.callbacks.onSpeedChange(0.9, false)
-    this.spawnSpeedParticles('#ff6b9d')
+    this.spawnSpeedChangeParticles('#ff6b9d', false)
+    this.spawnEdgeFlashParticles('#ff6b9d')
   }
 
   private checkBeat(currentTime: number): void {
@@ -280,24 +437,32 @@ export class GameEngine {
   }
 
   private checkCollisions(): void {
+    const playerCircle = this.getPlayerCircle()
+
     for (const obstacle of this.activeObstacles) {
       if (obstacle.passed) continue
 
-      const hitTime = obstacle.time
-      const currentTime = this.game.currentTime
-      const timeDiff = currentTime - hitTime
+      const z = obstacle.z
+      if (z > HIT_Z + 0.5 || z < HIT_Z - 0.8) continue
 
-      if (timeDiff >= -50 && timeDiff <= 100) {
-        if (obstacle.lane === this.player.targetLane && !this.player.isInvincible) {
-          this.playerHit()
-          obstacle.passed = true
-        } else if (timeDiff > 50 && !obstacle.passed) {
-          obstacle.passed = true
-          if (obstacle.lane !== this.player.targetLane) {
-            this.game.obstaclesCleared++
-            this.game.score += 10
-            this.callbacks.onScoreUpdate(this.game.score)
+      const obstacleRect = this.getObstacleScreenRect(obstacle)
+
+      if (obstacle.lane === this.player.targetLane) {
+        if (this.circleIntersectsRect(playerCircle, obstacleRect)) {
+          if (!this.player.isInvincible) {
+            this.playerHit()
+            obstacle.passed = true
+            continue
           }
+        }
+      }
+
+      if (z <= HIT_Z - 0.3 && !obstacle.passed) {
+        obstacle.passed = true
+        if (obstacle.lane !== this.player.targetLane) {
+          this.game.obstaclesCleared++
+          this.game.score += 10
+          this.callbacks.onScoreUpdate(this.game.score)
         }
       }
     }
@@ -318,7 +483,7 @@ export class GameEngine {
     this.spawnHitParticles()
     this.playHitSound()
 
-    if (this.game.missStreak >= 3) {
+    if (this.game.missStreak >= 3 && this.game.speedReductionTimer <= 0) {
       this.triggerSpeedReduction()
     }
 
@@ -330,6 +495,10 @@ export class GameEngine {
   private gameOver(): void {
     this.game.isGameOver = true
     this.game.isPlaying = false
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId)
+      this.animationFrameId = null
+    }
     this.callbacks.onGameOver({
       score: this.game.score,
       maxCombo: this.game.maxCombo,
@@ -339,40 +508,40 @@ export class GameEngine {
   }
 
   private spawnCollectParticles(isPerfect: boolean): void {
-    const colors = isPerfect ? ['#ffd93d', '#fff', '#00f0ff'] : ['#ffd93d', '#ffa500']
-    const centerX = window.innerWidth / 2
-    const centerY = window.innerHeight * 0.7
+    const colors = isPerfect ? ['#ffd93d', '#ffffff', '#00f0ff'] : ['#ffd93d', '#ffa500']
+    const playerCircle = this.getPlayerCircle()
+    const count = isPerfect ? 16 : 10
 
-    for (let i = 0; i < 12; i++) {
-      const angle = (Math.PI * 2 * i) / 12
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count
+      const speed = isPerfect ? 5 + Math.random() * 4 : 3 + Math.random() * 3
       this.particles.push({
         id: uuidv4(),
-        x: centerX,
-        y: centerY,
-        vx: Math.cos(angle) * (3 + Math.random() * 3),
-        vy: Math.sin(angle) * (3 + Math.random() * 3),
+        x: playerCircle.x,
+        y: playerCircle.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 2,
         color: colors[Math.floor(Math.random() * colors.length)],
         life: 1,
         maxLife: 1,
-        size: 4 + Math.random() * 4
+        size: isPerfect ? 5 + Math.random() * 5 : 3 + Math.random() * 4
       })
     }
   }
 
   private spawnHitParticles(): void {
-    const centerX = window.innerWidth / 2
-    const centerY = window.innerHeight * 0.7
+    const playerCircle = this.getPlayerCircle()
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 24; i++) {
       const angle = Math.random() * Math.PI * 2
-      const speed = 2 + Math.random() * 4
+      const speed = 3 + Math.random() * 5
       this.particles.push({
         id: uuidv4(),
-        x: centerX,
-        y: centerY,
+        x: playerCircle.x,
+        y: playerCircle.y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        color: '#ff4444',
+        color: i % 3 === 0 ? '#ff4444' : '#ff6b6b',
         life: 1,
         maxLife: 1,
         size: 3 + Math.random() * 5
@@ -380,49 +549,136 @@ export class GameEngine {
     }
   }
 
-  private spawnSpeedParticles(color: string): void {
-    for (let i = 0; i < 30; i++) {
-      const side = Math.random() > 0.5 ? 0 : window.innerWidth
+  private spawnSpeedChangeParticles(color: string, isBoost: boolean): void {
+    const count = 40
+    for (let i = 0; i < count; i++) {
+      const isLeft = Math.random() > 0.5
+      const baseX = isLeft ? 0 : this.canvasWidth
       this.particles.push({
         id: uuidv4(),
-        x: side,
-        y: Math.random() * window.innerHeight,
-        vx: (side === 0 ? 1 : -1) * (5 + Math.random() * 5),
-        vy: (Math.random() - 0.5) * 2,
+        x: baseX,
+        y: Math.random() * this.canvasHeight,
+        vx: (isLeft ? 1 : -1) * (4 + Math.random() * 6),
+        vy: (Math.random() - 0.5) * 3,
         color,
-        life: 1,
-        maxLife: 1,
-        size: 2 + Math.random() * 4
+        life: 1.5,
+        maxLife: 1.5,
+        size: 2 + Math.random() * 5
+      })
+    }
+  }
+
+  private spawnEdgeFlashParticles(color: string): void {
+    const edgeCount = 20
+    for (let i = 0; i < edgeCount; i++) {
+      const side = Math.floor(Math.random() * 4)
+      let x: number, y: number, vx: number, vy: number
+      switch (side) {
+        case 0:
+          x = Math.random() * this.canvasWidth
+          y = 0
+          vx = (Math.random() - 0.5) * 3
+          vy = 2 + Math.random() * 3
+          break
+        case 1:
+          x = Math.random() * this.canvasWidth
+          y = this.canvasHeight
+          vx = (Math.random() - 0.5) * 3
+          vy = -(2 + Math.random() * 3)
+          break
+        case 2:
+          x = 0
+          y = Math.random() * this.canvasHeight
+          vx = 2 + Math.random() * 3
+          vy = (Math.random() - 0.5) * 3
+          break
+        default:
+          x = this.canvasWidth
+          y = Math.random() * this.canvasHeight
+          vx = -(2 + Math.random() * 3)
+          vy = (Math.random() - 0.5) * 3
+          break
+      }
+      this.particles.push({
+        id: uuidv4(),
+        x,
+        y,
+        vx,
+        vy,
+        color,
+        life: 1.2,
+        maxLife: 1.2,
+        size: 3 + Math.random() * 4
       })
     }
   }
 
   private playPerfectSound(): void {
     if (!this.audioContext) return
-    const osc = this.audioContext.createOscillator()
-    const gain = this.audioContext.createGain()
-    osc.connect(gain)
-    gain.connect(this.audioContext.destination)
-    osc.frequency.value = 880
-    osc.type = 'sine'
-    gain.gain.setValueAtTime(0.3, this.audioContext.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15)
-    osc.start()
-    osc.stop(this.audioContext.currentTime + 0.15)
+    try {
+      const osc = this.audioContext.createOscillator()
+      const gain = this.audioContext.createGain()
+      osc.connect(gain)
+      gain.connect(this.audioContext.destination)
+      osc.frequency.value = 880
+      osc.type = 'sine'
+      const now = this.audioContext.currentTime
+      gain.gain.setValueAtTime(0.3, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+      osc.start(now)
+      osc.stop(now + 0.15)
+
+      const osc2 = this.audioContext.createOscillator()
+      const gain2 = this.audioContext.createGain()
+      osc2.connect(gain2)
+      gain2.connect(this.audioContext.destination)
+      osc2.frequency.value = 1320
+      osc2.type = 'sine'
+      gain2.gain.setValueAtTime(0.15, now)
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
+      osc2.start(now)
+      osc2.stop(now + 0.1)
+    } catch (e) {
+      // audio error silent
+    }
   }
 
   private playHitSound(): void {
     if (!this.audioContext) return
-    const osc = this.audioContext.createOscillator()
-    const gain = this.audioContext.createGain()
-    osc.connect(gain)
-    gain.connect(this.audioContext.destination)
-    osc.frequency.value = 150
-    osc.type = 'sawtooth'
-    gain.gain.setValueAtTime(0.2, this.audioContext.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.2)
-    osc.start()
-    osc.stop(this.audioContext.currentTime + 0.2)
+    try {
+      const osc = this.audioContext.createOscillator()
+      const gain = this.audioContext.createGain()
+      osc.connect(gain)
+      gain.connect(this.audioContext.destination)
+      osc.frequency.value = 150
+      osc.type = 'sawtooth'
+      const now = this.audioContext.currentTime
+      gain.gain.setValueAtTime(0.2, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
+      osc.start(now)
+      osc.stop(now + 0.2)
+    } catch (e) {
+      // audio error silent
+    }
+  }
+
+  private playBeatSound(): void {
+    if (!this.audioContext) return
+    try {
+      const osc = this.audioContext.createOscillator()
+      const gain = this.audioContext.createGain()
+      osc.connect(gain)
+      gain.connect(this.audioContext.destination)
+      osc.frequency.value = 440
+      osc.type = 'sine'
+      const now = this.audioContext.currentTime
+      gain.gain.setValueAtTime(0.08, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05)
+      osc.start(now)
+      osc.stop(now + 0.05)
+    } catch (e) {
+      // audio error silent
+    }
   }
 
   private updateActiveObjects(currentTime: number): void {
@@ -448,11 +704,11 @@ export class GameEngine {
     }
 
     this.activeNotes = this.activeNotes.filter(
-      (n) => !n.collected && currentTime - n.time < GOOD_WINDOW * 2
+      (n) => !n.collected && currentTime - n.time < GOOD_WINDOW * 3
     )
 
     this.activeObstacles = this.activeObstacles.filter(
-      (o) => currentTime - o.time < 500
+      (o) => !o.passed || currentTime - o.time < 300
     )
 
     this.particles = this.particles.filter((p) => p.life > 0)
@@ -461,6 +717,7 @@ export class GameEngine {
   private calculateZ(time: number, currentTime: number): number {
     const timeDiff = time - currentTime
     const lookAhead = this.travelDuration / this.game.speedMultiplier
+    if (timeDiff <= 0) return Math.max(0, (timeDiff / (lookAhead * 0.3)) * HIT_Z)
     return Math.max(0, (timeDiff / lookAhead) * SPAWN_Z)
   }
 
@@ -476,7 +733,7 @@ export class GameEngine {
 
     if (this.player.targetLane !== this.player.lane) {
       const laneDiff = this.player.targetLane - this.player.lane
-      const moveSpeed = 8 * deltaTime / 16
+      const moveSpeed = 10 * deltaTime / 16
       if (Math.abs(laneDiff) < moveSpeed) {
         this.player.lane = this.player.targetLane
       } else {
@@ -495,6 +752,7 @@ export class GameEngine {
       this.game.speedBoostTimer -= deltaTime
       if (this.game.speedBoostTimer <= 0) {
         this.game.speedMultiplier = 1
+        this.game.speedBoostTimer = 0
       }
     }
 
@@ -502,23 +760,23 @@ export class GameEngine {
       this.game.speedReductionTimer -= deltaTime
       if (this.game.speedReductionTimer <= 0) {
         this.game.speedMultiplier = 1
+        this.game.speedReductionTimer = 0
       }
     }
 
     this.beatFlash = Math.max(0, this.beatFlash - deltaTime / 200)
     this.beatIntensity = Math.max(0, this.beatIntensity - deltaTime / 300)
-    this.screenFlash = Math.max(0, this.screenFlash - deltaTime / 300)
+    this.updateScreenFlash(deltaTime)
 
     for (const particle of this.particles) {
       particle.x += particle.vx
       particle.y += particle.vy
-      particle.vy += 0.1
+      particle.vy += 0.08
       particle.life -= deltaTime / 1000
     }
 
     this.checkBeat(this.game.currentTime)
     this.updateActiveObjects(this.game.currentTime)
-    this.checkCollisions()
 
     for (const note of this.activeNotes) {
       const z = this.calculateZ(note.time, this.game.currentTime)
@@ -528,13 +786,15 @@ export class GameEngine {
     for (const obstacle of this.activeObstacles) {
       obstacle.z = this.calculateZ(obstacle.time, this.game.currentTime)
     }
+
+    this.checkCollisions()
   }
 
   private gameLoop = (): void => {
     if (!this.game.isPlaying) return
 
     const now = performance.now()
-    const deltaTime = now - this.lastFrameTime
+    const deltaTime = Math.min(now - this.lastFrameTime, 50)
     this.lastFrameTime = now
 
     this.update(deltaTime)
@@ -564,12 +824,16 @@ export class GameEngine {
     return { ...this.levelConfig }
   }
 
+  getScreenFlashOpacity(): number {
+    return this.screenFlashOpacity
+  }
+
   getNoteAccuracy(time: number): BeatAccuracy | null {
     const currentTime = this.game.currentTime
     const diff = Math.abs(time - currentTime)
 
     if (diff <= PERFECT_WINDOW) return 'perfect'
     if (diff <= GOOD_WINDOW) return 'good'
-    return null
+    return 'miss'
   }
 }
