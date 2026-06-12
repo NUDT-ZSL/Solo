@@ -1,63 +1,118 @@
 import { AudioManager } from './audio';
-import { BEAT_INTERVAL, Particle, TILE_SIZE } from './entities';
+import {
+  Particle,
+  TILE_SIZE,
+  BEAT_WINDOW_PERFECT,
+  BEAT_WINDOW_GOOD,
+  BeatAccuracy
+} from './entities';
 
-export type AttackResult = 'perfect' | 'good' | 'miss';
-
-export interface BeatEvent {
+export interface RhythmBeatEvent {
   beatIndex: number;
-  time: number;
+  audioTime: number;
   progress: number;
 }
 
+type BeatEventListener = (event: RhythmBeatEvent) => void;
+type AttackEvaluator = (result: BeatAccuracy, damageMultiplier: number) => void;
+
 export class RhythmManager {
   private audio: AudioManager;
-  private perfectWindow: number = 80;
-  private goodWindow: number = 180;
-  private perfectCombo: number = 0;
-  private maxCombo: number = 0;
-  private totalAttacks: number = 0;
-  private perfectHits: number = 0;
-  private goodHits: number = 0;
-  private beatCount: number = 0;
-  private lastBeatIndex: number = -1;
+  private unregisterAudioCallback: (() => void) | null = null;
+
+  private beatEventListeners: BeatEventListener[] = [];
+  private attackListeners: AttackEvaluator[] = [];
+  private currentBeatIndex: number = -1;
   private beatProgress: number = 0;
-  private onBeatListeners: Array<(e: BeatEvent) => void> = [];
+
   private particles: Particle[] = [];
-  private screenShake: number = 0;
-  private screenShakeDuration: number = 0;
+  private screenShakeX: number = 0;
+  private screenShakeY: number = 0;
+  private screenShakeTime: number = 0;
+  private screenShakeIntensity: number = 0;
+
   private flashColor: string | null = null;
   private flashAlpha: number = 0;
-  private flashDuration: number = 0;
+  private flashTotal: number = 0;
+  private flashTime: number = 0;
+
+  private comboBarFlash: boolean = false;
+  private comboBarFlashTime: number = 0;
+  private comboBarFlashDuration: number = 300;
+  private lastFlashComboCount: number = -1;
 
   constructor(audio: AudioManager) {
     this.audio = audio;
-    this.audio.onBeat((idx, time) => this.handleBeat(idx, time));
   }
 
-  private handleBeat(beatIndex: number, time: number): void {
-    this.beatCount = beatIndex;
-    this.lastBeatIndex = beatIndex;
-    const event: BeatEvent = {
+  start(): void {
+    this.stop();
+    this.unregisterAudioCallback = this.audio.registerBeatCallback(
+      (beatIndex, audioTime) => this.handleAudioBeat(beatIndex, audioTime)
+    );
+  }
+
+  stop(): void {
+    if (this.unregisterAudioCallback) {
+      this.unregisterAudioCallback();
+      this.unregisterAudioCallback = null;
+    }
+    this.currentBeatIndex = -1;
+    this.particles = [];
+    this.screenShakeTime = 0;
+    this.flashTime = 0;
+    this.comboBarFlash = false;
+    this.comboBarFlashTime = 0;
+    this.lastFlashComboCount = -1;
+  }
+
+  resetForNewGame(): void {
+    this.currentBeatIndex = -1;
+    this.particles = [];
+    this.screenShakeTime = 0;
+    this.flashTime = 0;
+    this.comboBarFlash = false;
+    this.comboBarFlashTime = 0;
+    this.lastFlashComboCount = -1;
+  }
+
+  private handleAudioBeat(beatIndex: number, audioTime: number): void {
+    this.currentBeatIndex = beatIndex;
+
+    const event: RhythmBeatEvent = {
       beatIndex,
-      time,
+      audioTime,
       progress: 0
     };
-    for (const listener of this.onBeatListeners) {
+    for (const listener of this.beatEventListeners) {
       try {
         listener(event);
       } catch (e) {
-        console.error('Beat listener error:', e);
+        console.error('Rhythm beat listener error:', e);
       }
     }
   }
 
-  onBeatEvent(callback: (e: BeatEvent) => void): void {
-    this.onBeatListeners.push(callback);
+  addBeatListener(listener: BeatEventListener): () => void {
+    if (this.beatEventListeners.indexOf(listener) === -1) {
+      this.beatEventListeners.push(listener);
+    }
+    return () => this.removeBeatListener(listener);
   }
 
-  offBeatEvent(callback: (e: BeatEvent) => void): void {
-    const idx = this.onBeatListeners.indexOf(callback);
-    if (idx >= 0) this.onBeatListeners.splice(idx, 1);
+  removeBeatListener(listener: BeatEventListener): void {
+    const idx = this.beatEventListeners.indexOf(listener);
+    if (idx >= 0) this.beatEventListeners.splice(idx, 1);
+  }
+
+  addAttackListener(listener: AttackEvaluator): () => void {
+    if (this.attackListeners.indexOf(listener) === -1) {
+      this.attackListeners.push(listener);
+    }
+    return () => {
+      const idx = this.attackListeners.indexOf(listener);
+      if (idx >= 0) this.attackListeners.splice(idx, 1);
+    };
   }
 
   update(dt: number): void {
@@ -65,234 +120,232 @@ export class RhythmManager {
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vy += 0.2 * dt;
+      p.x += p.vx * (dt / 16);
+      p.y += p.vy * (dt / 16);
+      p.vy += 0.12 * (dt / 16);
+      p.vx *= 0.99;
       p.life -= dt;
       if (p.life <= 0) {
         this.particles.splice(i, 1);
       }
     }
 
-    if (this.screenShakeDuration > 0) {
-      this.screenShakeDuration -= dt;
-      if (this.screenShakeDuration <= 0) {
-        this.screenShake = 0;
+    if (this.screenShakeTime > 0) {
+      this.screenShakeTime -= dt;
+      const t = this.screenShakeTime > 0 ? this.screenShakeTime / this.flashTotal : 0;
+      const mag = this.screenShakeIntensity * t;
+      this.screenShakeX = (Math.random() * 2 - 1) * mag;
+      this.screenShakeY = (Math.random() * 2 - 1) * mag;
+      if (this.screenShakeTime <= 0) {
+        this.screenShakeX = 0;
+        this.screenShakeY = 0;
       }
     }
 
-    if (this.flashDuration > 0) {
-      this.flashDuration -= dt;
-      if (this.flashDuration <= 0) {
+    if (this.flashTime > 0) {
+      this.flashTime -= dt;
+      if (this.flashTime <= 0) {
         this.flashColor = null;
         this.flashAlpha = 0;
       } else {
-        this.flashAlpha = this.flashDuration / 200;
+        this.flashAlpha = Math.max(0, this.flashTime / this.flashTotal);
       }
     }
   }
 
-  evaluateAttack(): { result: AttackResult; damageMultiplier: number } {
-    this.totalAttacks++;
-    const timeFromLast = this.audio.getTimeFromLastBeat();
-    const timeToNext = this.audio.getTimeToNextBeat();
-    const offset = Math.min(timeFromLast, timeToNext);
+  evaluateAttack(shieldActive: boolean): { result: BeatAccuracy; multiplier: number } {
+    let result: BeatAccuracy;
+    let multiplier: number;
 
-    if (this.audio.activeShield && offset > this.goodWindow) {
-      return { result: 'perfect', damageMultiplier: 2 };
-    }
+    const offset = this.audio.getBeatOffsetMs();
+    const absOffset = Math.abs(offset);
 
-    if (offset <= this.perfectWindow) {
-      this.perfectHits++;
-      this.perfectCombo++;
-      this.maxCombo = Math.max(this.maxCombo, this.perfectCombo);
-      return { result: 'perfect', damageMultiplier: 2 };
-    } else if (offset <= this.goodWindow) {
-      this.goodHits++;
-      this.perfectCombo = 0;
-      return { result: 'good', damageMultiplier: 1 };
+    if (shieldActive && absOffset > BEAT_WINDOW_GOOD) {
+      result = 'perfect';
+      multiplier = 2;
+    } else if (absOffset <= BEAT_WINDOW_PERFECT) {
+      result = 'perfect';
+      multiplier = 2;
+    } else if (absOffset <= BEAT_WINDOW_GOOD) {
+      result = 'good';
+      multiplier = 1;
     } else {
-      this.perfectCombo = 0;
-      return { result: 'miss', damageMultiplier: 0.5 };
+      result = 'miss';
+      multiplier = 0.5;
+    }
+
+    for (const listener of this.attackListeners) {
+      try {
+        listener(result, multiplier);
+      } catch (e) {
+        console.error('Attack listener error:', e);
+      }
+    }
+
+    return { result, multiplier };
+  }
+
+  updateComboBarState(perfectStreak: number): void {
+    const currentThreshold = Math.floor(perfectStreak / 5);
+    if (perfectStreak > 0 &&
+        perfectStreak % 5 === 0 &&
+        currentThreshold !== this.lastFlashComboCount) {
+      this.comboBarFlash = true;
+      this.comboBarFlashTime = this.comboBarFlashDuration;
+      this.lastFlashComboCount = currentThreshold;
+    }
+
+    if (this.comboBarFlashTime > 0) {
+      this.comboBarFlashTime -= 16;
+      if (this.comboBarFlashTime <= 0) {
+        this.comboBarFlash = false;
+      }
     }
   }
 
-  evaluateMove(): { result: AttackResult; canMove: boolean } {
-    const timeFromLast = this.audio.getTimeFromLastBeat();
-    const timeToNext = this.audio.getTimeToNextBeat();
-    const offset = Math.min(timeFromLast, timeToNext);
-
-    if (offset <= this.goodWindow) {
-      if (offset <= this.perfectWindow) {
-        return { result: 'perfect', canMove: true };
-      }
-      return { result: 'good', canMove: true };
+  getComboBarState(): { flash: boolean; flashAlpha: number } {
+    if (!this.comboBarFlash) {
+      return { flash: false, flashAlpha: 0 };
     }
-
-    const beatProg = this.audio.getBeatProgress();
-    if (beatProg > 0.7 || beatProg < 0.1) {
-      return { result: 'good', canMove: true };
-    }
-
-    return { result: 'miss', canMove: false };
+    const alpha = this.comboBarFlashTime > 0
+      ? Math.sin((1 - this.comboBarFlashTime / this.comboBarFlashDuration) * Math.PI)
+      : 0;
+    return { flash: true, flashAlpha: alpha };
   }
 
   createNoteParticles(x: number, y: number, isPerfect: boolean): void {
     const colors = isPerfect
-      ? ['#ff6b6b', '#ffd700', '#4ecdc4', '#ff9ff3', '#54a0ff', '#5f27cd']
-      : ['#aaa', '#888', '#ccc'];
-    const count = isPerfect ? 20 : 8;
+      ? ['#ff6b6b', '#ffd700', '#4ecdc4', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3']
+      : ['#c8d6e5', '#8395a7', '#a4b0be'];
+    const count = isPerfect ? 24 : 10;
 
     for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
-      const speed = 2 + Math.random() * 4;
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
+      const speed = (isPerfect ? 3 : 1.8) + Math.random() * 3;
       this.particles.push({
-        x,
-        y,
+        x: x + (Math.random() - 0.5) * 8,
+        y: y + (Math.random() - 0.5) * 8,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 2,
-        life: 600 + Math.random() * 400,
-        maxLife: 1000,
+        vy: Math.sin(angle) * speed - (isPerfect ? 2 : 1),
+        life: 500 + Math.random() * 600,
+        maxLife: 1100,
         color: colors[Math.floor(Math.random() * colors.length)],
-        size: isPerfect ? 4 + Math.random() * 4 : 2 + Math.random() * 2
+        size: isPerfect ? 3 + Math.random() * 4 : 2 + Math.random() * 2
       });
     }
   }
 
-  createHitParticles(x: number, y: number, color: string = '#ff6b6b'): void {
-    for (let i = 0; i < 12; i++) {
+  createHitParticles(x: number, y: number, color: string = '#ff6b6b', count: number = 14): void {
+    for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1 + Math.random() * 3;
+      const speed = 1 + Math.random() * 4;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        life: 300 + Math.random() * 200,
+        life: 250 + Math.random() * 250,
         maxLife: 500,
         color,
-        size: 3 + Math.random() * 3
+        size: 2 + Math.random() * 3
       });
     }
   }
 
   createDeathParticles(x: number, y: number): void {
-    for (let i = 0; i < 30; i++) {
+    const colors = ['#ff6b6b', '#ffd700', '#4ecdc4', '#ff9ff3'];
+    for (let i = 0; i < 36; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1 + Math.random() * 5;
+      const speed = 1.5 + Math.random() * 6;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1,
-        life: 400 + Math.random() * 200,
+        vy: Math.sin(angle) * speed - 1.5,
+        life: 350 + Math.random() * 250,
         maxLife: 600,
-        color: i % 3 === 0 ? '#ffd700' : i % 3 === 1 ? '#4ecdc4' : '#ff6b6b',
+        color: colors[Math.floor(Math.random() * colors.length)],
         size: 3 + Math.random() * 5
       });
     }
   }
 
   createExplosionParticles(x: number, y: number): void {
-    for (let i = 0; i < 50; i++) {
+    const colors = ['#ff6b6b', '#ffa502', '#ffd700', '#ff4757', '#ff6348'];
+    for (let i = 0; i < 60; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 3 + Math.random() * 8;
+      const speed = 3 + Math.random() * 9;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        life: 500 + Math.random() * 300,
-        maxLife: 800,
-        color: ['#ff6b6b', '#ffa502', '#ffd700', '#ff4757'][Math.floor(Math.random() * 4)],
+        life: 500 + Math.random() * 400,
+        maxLife: 900,
+        color: colors[Math.floor(Math.random() * colors.length)],
         size: 4 + Math.random() * 8
       });
     }
   }
 
+  createChestParticles(x: number, y: number): void {
+    const colors = ['#ffd700', '#feca57', '#ff9ff3', '#48dbfb'];
+    for (let i = 0; i < 18; i++) {
+      const angle = (Math.PI * 2 * i) / 18 + Math.random() * 0.3;
+      const speed = 2 + Math.random() * 3;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 2,
+        life: 400 + Math.random() * 300,
+        maxLife: 700,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 3 + Math.random() * 3
+      });
+    }
+  }
+
   triggerScreenShake(intensity: number, duration: number): void {
-    this.screenShake = intensity;
-    this.screenShakeDuration = duration;
+    this.screenShakeIntensity = intensity;
+    this.screenShakeTime = duration;
+    this.flashTotal = duration;
   }
 
   triggerFlash(color: string, duration: number = 200): void {
     this.flashColor = color;
-    this.flashDuration = duration;
+    this.flashTotal = duration;
+    this.flashTime = duration;
     this.flashAlpha = 1;
   }
 
-  getBeatPulse(): number {
-    const prog = this.beatProgress;
-    return Math.pow(Math.sin(prog * Math.PI), 0.5);
+  getBeatIndex(): number {
+    return this.currentBeatIndex;
+  }
+
+  getBeatProgress(): number {
+    return this.beatProgress;
   }
 
   getBreathScale(): number {
-    return 1 + this.getBeatPulse() * 0.02;
+    return 1 + Math.pow(Math.sin(this.beatProgress * Math.PI), 0.5) * 0.02;
   }
 
-  getChestRotationOffset(): number {
-    return this.beatProgress * 5;
+  getScreenShake(): { x: number; y: number } {
+    return { x: this.screenShakeX, y: this.screenShakeY };
   }
 
-  getComboFillRatio(): number {
-    const capped = Math.min(this.perfectCombo, 5);
-    return capped / 5;
-  }
-
-  isComboMaxed(): boolean {
-    return this.perfectCombo > 0 && this.perfectCombo % 5 === 0;
-  }
-
-  getComboFlashAlpha(): number {
-    if (!this.isComboMaxed()) return 0;
-    const t = this.beatProgress;
-    return Math.pow(Math.sin(t * Math.PI), 2) * 0.8;
+  getFlash(): { color: string; alpha: number } | null {
+    if (!this.flashColor || this.flashAlpha <= 0) return null;
+    return { color: this.flashColor, alpha: Math.min(1, this.flashAlpha) };
   }
 
   getParticles(): Particle[] {
     return this.particles;
   }
 
-  getScreenShake(): { x: number; y: number } {
-    if (this.screenShakeDuration <= 0 || this.screenShake <= 0) {
-      return { x: 0, y: 0 };
-    }
-    const t = this.screenShakeDuration / 200;
-    const mag = this.screenShake * t;
-    return {
-      x: (Math.random() - 0.5) * mag * 2,
-      y: (Math.random() - 0.5) * mag * 2
-    };
-  }
-
-  getFlash(): { color: string; alpha: number } | null {
-    if (!this.flashColor || this.flashAlpha <= 0) return null;
-    return { color: this.flashColor, alpha: this.flashAlpha };
-  }
-
-  getPerfectCombo(): number {
-    return this.perfectCombo;
-  }
-
-  resetCombo(): void {
-    this.perfectCombo = 0;
-  }
-
-  getStats(): {
-    total: number;
-    perfect: number;
-    good: number;
-    maxCombo: number;
-    accuracy: number;
-  } {
-    const total = this.totalAttacks || 1;
-    return {
-      total: this.totalAttacks,
-      perfect: this.perfectHits,
-      good: this.goodHits,
-      maxCombo: this.maxCombo,
-      accuracy: ((this.perfectHits + this.goodHits * 0.5) / total) * 100
-    };
+  getParticlesSorted(): Particle[] {
+    return [...this.particles].sort((a, b) => a.life - b.life);
   }
 
   clearParticles(): void {

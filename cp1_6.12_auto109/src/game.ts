@@ -8,30 +8,24 @@ import {
   TILE_SIZE,
   ROOM_SIZE,
   BEAT_INTERVAL,
+  BEAT_WINDOW_PERFECT,
+  BEAT_WINDOW_GOOD,
   ItemType,
-  EnemyType
+  EnemyType,
+  BeatAccuracy,
+  Vec2
 } from './entities';
 import { AudioManager } from './audio';
-import { RhythmManager, AttackResult } from './rhythm';
+import { RhythmManager, RhythmBeatEvent } from './rhythm';
 
-export interface GameState {
-  player: Player;
-  enemies: Enemy[];
-  bullets: Bullet[];
-  chests: Chest[];
-  bombs: Bomb[];
-  portal: Portal | null;
+export interface GameStateData {
   level: number;
   score: number;
-  roundTime: number;
-  roundDuration: number;
-  paused: boolean;
   gameOver: boolean;
   victory: boolean;
-  enemiesDefeated: number;
-  totalEnemies: number;
-  chestsCollected: number;
-  totalChests: number;
+  allEnemiesKilled: boolean;
+  allChestsOpened: boolean;
+  roomCenter: Vec2;
 }
 
 type InputState = {
@@ -46,137 +40,128 @@ type InputState = {
 };
 
 export class Game {
-  state: GameState;
+  player: Player;
+  enemies: Enemy[];
+  bullets: Bullet[];
+  chests: Chest[];
+  bombs: Bomb[];
+  portal: Portal | null;
+
   audio: AudioManager;
   rhythm: RhythmManager;
+  private unregisterBeatListener: (() => void) | null = null;
+
   private input: InputState;
-  private lastAttackPressed: boolean;
-  private lastItem1Pressed: boolean;
-  private lastItem2Pressed: boolean;
-  private lastCyclePressed: boolean;
-  private nextEnemyId: number;
-  private nextBulletId: number;
-  private nextChestId: number;
-  private nextBombId: number;
-  private levelTransition: boolean;
-  private levelTransitionTimer: number;
-  private displayMessage: string | null;
-  private displayMessageTimer: number;
-  private lastBeatProcessed: number;
+  private lastAttackPressed: boolean = false;
+  private lastItem1Pressed: boolean = false;
+  private lastItem2Pressed: boolean = false;
+  private lastCyclePressed: boolean = false;
+
+  private nextEnemyId: number = 1;
+  private nextBulletId: number = 1;
+  private nextChestId: number = 1;
+  private nextBombId: number = 1;
+
+  private state: GameStateData;
+  private roundTime: number = 0;
+  private readonly ROUND_DURATION: number = 60000;
+
+  private levelTransition: boolean = false;
+  private levelTransitionTime: number = 0;
+  private readonly LEVEL_TRANSITION_DURATION: number = 1000;
+
+  private displayMessage: string | null = null;
+  private displayMessageTime: number = 0;
+  private readonly MESSAGE_DURATION: number = 1500;
+
+  private lastBeatIndexProcessed: number = -1;
+  private enemyOccupied: Set<string> = new Set();
+
+  private cameraX: number = 0;
+  private cameraY: number = 0;
+  private cameraTargetX: number = 0;
+  private cameraTargetY: number = 0;
+  private readonly CAMERA_LERP: number = 0.15;
 
   constructor(audio: AudioManager, rhythm: RhythmManager) {
     this.audio = audio;
     this.rhythm = rhythm;
+
+    this.player = new Player(2, 4);
+    this.enemies = [];
+    this.bullets = [];
+    this.chests = [];
+    this.bombs = [];
+    this.portal = null;
+
     this.input = {
-      up: false,
-      down: false,
-      left: false,
-      right: false,
-      attack: false,
-      item1: false,
-      item2: false,
-      cycle: false
+      up: false, down: false, left: false, right: false,
+      attack: false, item1: false, item2: false, cycle: false
     };
-    this.lastAttackPressed = false;
-    this.lastItem1Pressed = false;
-    this.lastItem2Pressed = false;
-    this.lastCyclePressed = false;
-    this.nextEnemyId = 1;
-    this.nextBulletId = 1;
-    this.nextChestId = 1;
-    this.nextBombId = 1;
-    this.levelTransition = false;
-    this.levelTransitionTimer = 0;
-    this.displayMessage = null;
-    this.displayMessageTimer = 0;
-    this.lastBeatProcessed = -1;
 
-    this.state = this.createInitialState();
-  }
-
-  private createInitialState(): GameState {
-    return {
-      player: new Player(2, 4),
-      enemies: [],
-      bullets: [],
-      chests: [],
-      bombs: [],
-      portal: null,
+    this.state = {
       level: 1,
       score: 0,
-      roundTime: 0,
-      roundDuration: 60000,
-      paused: false,
       gameOver: false,
       victory: false,
-      enemiesDefeated: 0,
-      totalEnemies: 0,
-      chestsCollected: 0,
-      totalChests: 0
+      allEnemiesKilled: false,
+      allChestsOpened: false,
+      roomCenter: { x: ROOM_SIZE * TILE_SIZE / 2, y: ROOM_SIZE * TILE_SIZE / 2 }
     };
   }
 
   start(): void {
-    this.state = this.createInitialState();
+    this.stop();
+    this.player = new Player(2, 4);
+    this.enemies = [];
+    this.bullets = [];
+    this.chests = [];
+    this.bombs = [];
+    this.portal = null;
     this.nextEnemyId = 1;
     this.nextBulletId = 1;
     this.nextChestId = 1;
     this.nextBombId = 1;
     this.levelTransition = false;
+    this.levelTransitionTime = 0;
+    this.displayMessage = null;
+    this.roundTime = 0;
+    this.lastBeatIndexProcessed = -1;
+
+    this.state = {
+      level: 1,
+      score: 0,
+      gameOver: false,
+      victory: false,
+      allEnemiesKilled: false,
+      allChestsOpened: false,
+      roomCenter: { x: ROOM_SIZE * TILE_SIZE / 2, y: ROOM_SIZE * TILE_SIZE / 2 }
+    };
+
+    this.rhythm.resetForNewGame();
+    this.unregisterBeatListener = this.rhythm.addBeatListener((e) => this.onBeatEvent(e));
     this.generateRoom();
+    this.updateCameraTarget();
+    this.cameraX = this.cameraTargetX;
+    this.cameraY = this.cameraTargetY;
   }
 
-  private generateRoom(): void {
-    this.state.enemies = [];
-    this.state.bullets = [];
-    this.state.chests = [];
-    this.state.bombs = [];
-    this.state.portal = null;
-    this.state.roundTime = 0;
-    this.state.enemiesDefeated = 0;
-    this.state.chestsCollected = 0;
-
-    const occupiedPositions = new Set<string>();
-    occupiedPositions.add(`${this.state.player.targetX},${this.state.player.targetY}`);
-
-    const enemyCount = 3 + Math.floor(Math.random() * 3) + Math.floor(this.state.level / 3);
-    this.state.totalEnemies = enemyCount;
-
-    for (let i = 0; i < enemyCount; i++) {
-      let x: number, y: number;
-      let attempts = 0;
-      do {
-        x = Math.floor(Math.random() * ROOM_SIZE);
-        y = Math.floor(Math.random() * (ROOM_SIZE - 1));
-        attempts++;
-      } while (occupiedPositions.has(`${x},${y}`) && attempts < 50);
-
-      if (attempts < 50) {
-        occupiedPositions.add(`${x},${y}`);
-        const type: EnemyType = Math.random() < 0.5 ? 'slime' : 'bat';
-        const enemy = new Enemy(this.nextEnemyId++, type, x, y);
-        enemy.hp = Math.floor(enemy.hp * (1 + this.state.level * 0.15));
-        enemy.maxHp = enemy.hp;
-        enemy.displayHp = enemy.hp;
-        this.state.enemies.push(enemy);
-      }
+  stop(): void {
+    if (this.unregisterBeatListener) {
+      this.unregisterBeatListener();
+      this.unregisterBeatListener = null;
     }
+  }
 
-    const chestCount = 1 + Math.floor(Math.random() * 2);
-    this.state.totalChests = chestCount;
+  private onBeatEvent(event: RhythmBeatEvent): void {
+    const beat = event.beatIndex;
+    if (beat === this.lastBeatIndexProcessed) return;
+    this.lastBeatIndexProcessed = beat;
 
-    for (let i = 0; i < chestCount; i++) {
-      let x: number, y: number;
-      let attempts = 0;
-      do {
-        x = Math.floor(Math.random() * ROOM_SIZE);
-        y = Math.floor(Math.random() * (ROOM_SIZE - 1));
-        attempts++;
-      } while (occupiedPositions.has(`${x},${y}`) && attempts < 50);
-
-      if (attempts < 50) {
-        occupiedPositions.add(`${x},${y}`);
-        this.state.chests.push(new Chest(this.nextChestId++, x, y));
+    for (const enemy of this.enemies) {
+      if (enemy.dying) continue;
+      if (enemy.type === 'slime' && beat % 2 === 0) {
+        this.fireSlimeBullet(enemy);
       }
     }
   }
@@ -185,134 +170,203 @@ export class Game {
     this.input[key] = pressed;
   }
 
-  update(dt: number): void {
-    if (this.state.paused || this.state.gameOver) return;
+  getState(): GameStateData {
+    return { ...this.state };
+  }
 
-    if (this.levelTransition) {
-      this.levelTransitionTimer -= dt;
-      if (this.levelTransitionTimer <= 0) {
-        this.levelTransition = false;
-        this.state.level++;
-        this.state.player.targetX = 2;
-        this.state.player.targetY = 4;
-        this.state.player.x = 2;
-        this.state.player.y = 4;
-        this.state.player.fromX = 2;
-        this.state.player.fromY = 4;
-        this.state.player.isMoving = false;
-        this.state.player.moveProgress = 1;
-        this.generateRoom();
-        this.showMessage(`第 ${this.state.level} 层`);
-      }
-      return;
+  getCamera(): { x: number; y: number } {
+    return { x: this.cameraX, y: this.cameraY };
+  }
+
+  getMessage(): { text: string; alpha: number } | null {
+    if (!this.displayMessage) return null;
+    const t = this.displayMessageTime / this.MESSAGE_DURATION;
+    let alpha = 1;
+    if (t < 0.1) alpha = t / 0.1;
+    else if (t > 0.8) alpha = Math.max(0, (1 - t) / 0.2);
+    return { text: this.displayMessage, alpha: Math.min(1, Math.max(0, alpha)) };
+  }
+
+  getLevelTransitionProgress(): number {
+    if (!this.levelTransition) return 0;
+    return 1 - this.levelTransitionTime / this.LEVEL_TRANSITION_DURATION;
+  }
+
+  isLevelTransitioning(): boolean {
+    return this.levelTransition;
+  }
+
+  private showMessage(text: string): void {
+    this.displayMessage = text;
+    this.displayMessageTime = this.MESSAGE_DURATION;
+  }
+
+  private generateRoom(): void {
+    this.enemies = [];
+    this.bullets = [];
+    this.chests = [];
+    this.bombs = [];
+    this.portal = null;
+    this.enemyOccupied.clear();
+    this.roundTime = 0;
+    this.state.allEnemiesKilled = false;
+    this.state.allChestsOpened = false;
+    this.lastBeatIndexProcessed = -1;
+
+    const occupied = new Set<string>();
+    const startKey = `${this.player.targetX},${this.player.targetY}`;
+    occupied.add(startKey);
+
+    const enemyCount = 3 + Math.floor(Math.random() * 3);
+    const maxEnemies = Math.min(enemyCount, 5);
+
+    for (let i = 0; i < maxEnemies; i++) {
+      const pos = this.findRandomPosition(occupied);
+      if (!pos) break;
+
+      occupied.add(`${pos.x},${pos.y}`);
+      this.enemyOccupied.add(`${pos.x},${pos.y}`);
+
+      const type: EnemyType = Math.random() < 0.5 ? 'slime' : 'bat';
+      const enemy = new Enemy(this.nextEnemyId++, type, pos.x, pos.y);
+
+      const levelMult = 1 + this.state.level * 0.12;
+      enemy.hp = Math.floor(enemy.hp * levelMult);
+      enemy.maxHp = enemy.hp;
+      enemy.displayHp = enemy.hp;
+
+      this.enemies.push(enemy);
     }
 
-    if (this.displayMessage) {
-      this.displayMessageTimer -= dt;
-      if (this.displayMessageTimer <= 0) {
+    const chestCount = 1 + Math.floor(Math.random() * 2);
+
+    for (let i = 0; i < chestCount; i++) {
+      const pos = this.findRandomPosition(occupied);
+      if (!pos) break;
+      occupied.add(`${pos.x},${pos.y}`);
+      this.chests.push(new Chest(this.nextChestId++, pos.x, pos.y));
+    }
+  }
+
+  private findRandomPosition(occupied: Set<string>): { x: number; y: number } | null {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const x = Math.floor(Math.random() * ROOM_SIZE);
+      const y = Math.floor(Math.random() * (ROOM_SIZE - 1));
+      const key = `${x},${y}`;
+      if (!occupied.has(key)) {
+        return { x, y };
+      }
+    }
+    return null;
+  }
+
+  private updateCameraTarget(): void {
+    this.cameraTargetX = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    this.cameraTargetY = this.player.y * TILE_SIZE + TILE_SIZE / 2;
+  }
+
+  update(dt: number): void {
+    if (this.state.gameOver) return;
+
+    if (this.displayMessageTime > 0) {
+      this.displayMessageTime -= dt;
+      if (this.displayMessageTime <= 0) {
         this.displayMessage = null;
       }
     }
 
-    this.state.roundTime += dt;
-    if (this.state.roundTime >= this.state.roundDuration) {
-      this.state.roundTime = 0;
-    }
-
-    const currentBeat = this.audio.getBeatIndex();
-    if (currentBeat !== this.lastBeatProcessed && currentBeat >= 0) {
-      this.lastBeatProcessed = currentBeat;
-    }
-
-    this.handleInput(dt);
-    this.state.player.update(dt);
-
-    for (const enemy of this.state.enemies) {
-      enemy.update(dt, this.state.player);
-      if (enemy.type === 'slime' && !enemy.dying && enemy.shouldFire()) {
-        this.fireEnemyBullet(enemy);
+    if (this.levelTransition) {
+      this.levelTransitionTime -= dt;
+      if (this.levelTransitionTime <= 0) {
+        this.completeLevelTransition();
       }
-      if (enemy.isDiving && enemy.type === 'bat') {
-        this.checkDiveCollision(enemy);
-      }
+      return;
     }
 
-    this.state.enemies = this.state.enemies.filter(e => {
+    this.roundTime += dt;
+    if (this.roundTime >= this.ROUND_DURATION) {
+      this.roundTime = 0;
+    }
+
+    this.rhythm.update(dt);
+    this.player.update(dt);
+    this.rhythm.updateComboBarState(this.player.rhythm.perfectStreak);
+
+    const beatIdx = this.audio.getCurrentBeat();
+    const beatProg = this.audio.getBeatProgress();
+
+    for (const enemy of this.enemies) {
+      enemy.update(dt, this.player, beatIdx, beatProg);
+    }
+
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
       if (e.dying && e.deathTimer <= 0) {
-        this.state.enemiesDefeated++;
-        const expGain = e.type === 'slime' ? 80 : 50;
-        const scoreGain = e.type === 'slime' ? 100 : 75;
-        if (this.state.player.gainExp(expGain)) {
-          this.audio.playLevelUpSound();
-          this.rhythm.triggerFlash('#ffd700', 400);
-          this.showMessage(`升级! Lv.${this.state.player.level}`);
-        }
-        this.state.score += scoreGain;
-        this.checkRoomCleared();
-        return false;
+        this.onEnemyKilled(e);
+        this.enemies.splice(i, 1);
       }
-      return true;
-    });
+    }
 
-    for (let i = this.state.bullets.length - 1; i >= 0; i--) {
-      const bullet = this.state.bullets[i];
-      const playerPx = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-      const playerPy = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
-      bullet.update(dt, playerPx, playerPy);
+    const playerPx = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    const playerPy = this.player.y * TILE_SIZE + TILE_SIZE / 2;
 
-      if (bullet.isEnemy) {
-        const dx = bullet.x - playerPx;
-        const dy = bullet.y - playerPy;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < (bullet.radius + 18) * (bullet.radius + 18)) {
-          if (this.state.player.takeDamage(bullet.damage)) {
-            this.audio.playPlayerHurtSound();
-            this.rhythm.createHitParticles(playerPx, playerPy, '#ff4757');
-            this.rhythm.triggerFlash('#ff0000', 150);
-            this.rhythm.resetCombo();
-            if (this.state.player.hp <= 0) {
-              this.state.gameOver = true;
-              this.audio.stopBGM();
-            }
-          }
-          this.state.bullets.splice(i, 1);
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      const b = this.bullets[i];
+      b.update(dt, playerPx, playerPy, beatProg);
+
+      if (b.isEnemy) {
+        const dx = b.x - playerPx;
+        const dy = b.y - playerPy;
+        const collideR = b.radius + 20;
+        if (dx * dx + dy * dy < collideR * collideR) {
+          this.onPlayerHit(b.damage);
+          this.bullets.splice(i, 1);
           continue;
         }
       }
 
-      const roomPx = ROOM_SIZE * TILE_SIZE / 2;
-      const bx = bullet.x - roomPx;
-      const by = bullet.y - roomPx;
-      const maxDist = roomPx + 100;
-      if (Math.abs(bx) > maxDist || Math.abs(by) > maxDist || bullet.isExpired()) {
-        this.state.bullets.splice(i, 1);
+      if (b.isExpired()) {
+        this.bullets.splice(i, 1);
+        continue;
+      }
+
+      const maxX = ROOM_SIZE * TILE_SIZE + 100;
+      const maxY = ROOM_SIZE * TILE_SIZE + 100;
+      if (b.x < -100 || b.x > maxX || b.y < -100 || b.y > maxY) {
+        this.bullets.splice(i, 1);
       }
     }
 
-    const beatProgress = this.audio.getBeatProgress();
-    for (const chest of this.state.chests) {
-      chest.update(dt, beatProgress);
+    for (const chest of this.chests) {
+      chest.update(dt, beatProg);
     }
 
-    if (this.state.portal) {
-      this.state.portal.update(dt, beatProgress);
-      this.checkPortalEntry();
-    }
-
-    for (let i = this.state.bombs.length - 1; i >= 0; i--) {
-      const bomb = this.state.bombs[i];
-      bomb.update(dt);
+    for (let i = this.bombs.length - 1; i >= 0; i--) {
+      const bomb = this.bombs[i];
+      bomb.update(dt, beatProg);
       if (bomb.exploded) {
-        this.triggerBombExplosion(bomb);
-        this.state.bombs.splice(i, 1);
+        this.onBombExplode(bomb);
+        this.bombs.splice(i, 1);
       }
     }
 
-    this.checkChestCollection();
-    this.checkEnemyCollision();
+    if (this.portal) {
+      this.portal.update(dt, beatProg);
+    }
+
+    this.handleInput();
+    this.checkChestPickup();
+    this.checkMeleeEnemyDamage();
+    this.checkBatDiveDamage();
+    this.checkPortalEntry();
+    this.checkRoomCleared();
+
+    this.updateCameraTarget();
+    this.cameraX += (this.cameraTargetX - this.cameraX) * this.CAMERA_LERP;
+    this.cameraY += (this.cameraTargetY - this.cameraY) * this.CAMERA_LERP;
   }
 
-  private handleInput(dt: number): void {
+  private handleInput(): void {
     const attackJustPressed = this.input.attack && !this.lastAttackPressed;
     const item1JustPressed = this.input.item1 && !this.lastItem1Pressed;
     const item2JustPressed = this.input.item2 && !this.lastItem2Pressed;
@@ -323,218 +377,311 @@ export class Game {
     this.lastItem2Pressed = this.input.item2;
     this.lastCyclePressed = this.input.cycle;
 
-    if (!this.levelTransition && !this.state.player.isMoving) {
-      let dx = 0, dy = 0;
-      if (this.input.up) dy = -1;
-      else if (this.input.down) dy = 1;
-      else if (this.input.left) dx = -1;
-      else if (this.input.right) dx = 1;
+    if (this.player.canMove()) {
+      const dx = (this.input.right ? 1 : 0) - (this.input.left ? 1 : 0);
+      const dy = (this.input.down ? 1 : 0) - (this.input.up ? 1 : 0);
 
       if (dx !== 0 || dy !== 0) {
-        const moveResult = this.rhythm.evaluateMove();
-        if (moveResult.canMove) {
-          if (this.state.player.startMove(dx, dy)) {
-            this.state.player.moveCooldown = BEAT_INTERVAL * 0.4;
-            if (moveResult.result === 'miss') {
-              if (!this.state.player.activeShield) {
-                this.rhythm.resetCombo();
-              }
-            }
-          }
+        const result = this.tryMoveWithRhythm(dx, dy);
+        if (result) {
+          this.player.moveCooldown = BEAT_INTERVAL * 0.45;
+        } else {
+          this.player.moveCooldown = 50;
         }
       }
     }
 
-    if (attackJustPressed && !this.state.player.isAttacking) {
-      this.handleAttack();
+    if (attackJustPressed && !this.player.isAttacking) {
+      this.handlePlayerAttack();
     }
 
     if (item1JustPressed) {
-      this.useItem('rhythm_shield');
+      this.tryUseItem('rhythm_shield');
     }
     if (item2JustPressed) {
-      this.useItem('rhythm_bomb');
+      this.tryUseItem('rhythm_bomb');
     }
     if (cycleJustPressed) {
       this.cycleSelectedItem();
     }
   }
 
-  private handleAttack(): void {
-    const evaluation = this.rhythm.evaluateAttack();
-    const damage = this.state.player.attack * evaluation.damageMultiplier;
-    this.state.player.startAttack();
+  private tryMoveWithRhythm(dx: number, dy: number): boolean {
+    const targetX = this.player.targetX + dx;
+    const targetY = this.player.targetY + dy;
 
-    const isPerfect = evaluation.result === 'perfect';
+    if (targetX < 0 || targetX >= ROOM_SIZE || targetY < 0 || targetY >= ROOM_SIZE) {
+      return false;
+    }
+
+    for (const enemy of this.enemies) {
+      if (!enemy.dying && enemy.gridX === targetX && enemy.gridY === targetY) {
+        return false;
+      }
+    }
+
+    const offset = this.audio.getBeatOffsetMs();
+    const absOffset = Math.abs(offset);
+    const beatProg = this.audio.getBeatProgress();
+
+    const inWindow = absOffset <= BEAT_WINDOW_GOOD;
+    const nearEdge = beatProg > 0.75 || beatProg < 0.1;
+    const shieldOverride = this.player.rhythm.shieldImmuneActive;
+
+    if (inWindow || nearEdge || shieldOverride) {
+      const moved = this.player.startMove(dx, dy);
+      if (moved && inWindow && absOffset <= BEAT_WINDOW_PERFECT) {
+        this.player.rhythm.lastMoveBeat = this.audio.getCurrentBeat();
+      } else if (moved && shieldOverride) {
+        this.player.rhythm.lastMoveBeat = this.audio.getCurrentBeat();
+      }
+      return moved;
+    }
+    return false;
+  }
+
+  private handlePlayerAttack(): void {
+    this.player.startAttack();
+    this.player.rhythm.lastAttackBeat = this.audio.getCurrentBeat();
+
+    const evalResult = this.rhythm.evaluateAttack(this.player.rhythm.shieldImmuneActive);
+    const damage = this.player.registerAttack(evalResult.result);
+
+    const isPerfect = evalResult.result === 'perfect';
     this.audio.playAttackSound(isPerfect);
 
-    const hitbox = this.state.player.getAttackHitbox();
-    const playerPx = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-    const playerPy = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
+    const playerPx = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    const playerPy = this.player.y * TILE_SIZE + TILE_SIZE / 2;
+    this.rhythm.createNoteParticles(playerPx, playerPy, isPerfect);
 
-    if (isPerfect) {
-      this.rhythm.createNoteParticles(playerPx, playerPy, true);
-    } else if (evaluation.result === 'good') {
-      this.rhythm.createNoteParticles(playerPx, playerPy - 10, false);
+    if (evalResult.result === 'miss') {
+      this.audio.playMissSound();
     }
 
-    for (const enemy of this.state.enemies) {
-      if (enemy.dying) continue;
-      const eCenter = enemy.getCenter();
-      const enemySize = 24;
+    const hitbox = this.player.getAttackHitbox();
 
-      if (
-        eCenter.x + enemySize > hitbox.x &&
-        eCenter.x - enemySize < hitbox.x + hitbox.w &&
-        eCenter.y + enemySize > hitbox.y &&
-        eCenter.y - enemySize < hitbox.y + hitbox.h
-      ) {
-        if (enemy.takeDamage(damage)) {
-          this.audio.playHitSound();
-          this.rhythm.createHitParticles(eCenter.x, eCenter.y, isPerfect ? '#ffd700' : '#ff6b6b');
-          if (enemy.dying) {
-            this.rhythm.createDeathParticles(eCenter.x, eCenter.y);
-          }
-        } else {
-          this.audio.playHitSound();
-          this.rhythm.createHitParticles(eCenter.x, eCenter.y, '#ff6b6b');
+    for (const enemy of this.enemies) {
+      if (enemy.dying) continue;
+      const c = enemy.getCenter();
+      const r = 28;
+      const within =
+        c.x + r > hitbox.x &&
+        c.x - r < hitbox.x + hitbox.w &&
+        c.y + r > hitbox.y &&
+        c.y - r < hitbox.y + hitbox.h;
+
+      if (within) {
+        const killed = enemy.takeDamage(damage);
+        this.audio.playHitSound();
+        const color = isPerfect ? '#ffd700' : '#ff6b6b';
+        this.rhythm.createHitParticles(c.x, c.y, color, 10);
+
+        if (killed) {
+          this.rhythm.createDeathParticles(c.x, c.y);
         }
       }
     }
   }
 
-  private fireEnemyBullet(enemy: Enemy): void {
+  private fireSlimeBullet(enemy: Enemy): void {
+    if (enemy.type !== 'slime' || enemy.dying) return;
     const center = enemy.getCenter();
     const bullet = new Bullet(this.nextBulletId++, center.x, center.y, true);
-    const playerPx = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-    const playerPy = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
-    bullet.setTarget(playerPx, playerPy);
+    const targetX = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    const targetY = this.player.y * TILE_SIZE + TILE_SIZE / 2;
+    bullet.setTarget(targetX, targetY);
     bullet.damage = 8 + this.state.level * 2;
-    this.state.bullets.push(bullet);
+    this.bullets.push(bullet);
   }
 
-  private checkDiveCollision(enemy: Enemy): void {
-    const eCenter = enemy.getCenter();
-    const playerPx = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-    const playerPy = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
-    const dx = eCenter.x - playerPx;
-    const dy = eCenter.y - playerPy;
-    const distSq = dx * dx + dy * dy;
-    const collisionDist = 32;
+  private onPlayerHit(damage: number): void {
+    if (this.player.takeDamage(damage)) {
+      this.audio.playPlayerHurtSound();
+      const px = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+      const py = this.player.y * TILE_SIZE + TILE_SIZE / 2;
+      this.rhythm.createHitParticles(px, py, '#ff4757', 12);
+      this.rhythm.triggerFlash('#ff0000', 120);
+      this.player.rhythm.perfectStreak = 0;
+      this.player.rhythm.shieldImmuneActive = false;
+      this.player.rhythm.shieldImmuneTimer = 0;
 
-    if (distSq < collisionDist * collisionDist) {
-      if (this.state.player.takeDamage(6 + this.state.level)) {
-        this.audio.playPlayerHurtSound();
-        this.rhythm.createHitParticles(playerPx, playerPy, '#ff4757');
-        this.rhythm.triggerFlash('#ff0000', 120);
-        this.rhythm.resetCombo();
-        if (this.state.player.hp <= 0) {
-          this.state.gameOver = true;
-          this.audio.stopBGM();
+      if (this.player.hp <= 0) {
+        this.state.gameOver = true;
+        this.audio.stopBGM();
+      }
+    }
+  }
+
+  private onEnemyKilled(enemy: Enemy): void {
+    const exp = enemy.type === 'slime' ? 80 : 50;
+    const score = enemy.type === 'slime' ? 100 : 75;
+
+    if (this.player.gainExp(exp)) {
+      this.audio.playLevelUpSound();
+      this.rhythm.triggerFlash('#ffd700', 350);
+      this.showMessage(`升级! Lv.${this.player.level}`);
+    }
+    this.state.score += score;
+
+    if (this.enemies.filter(e => !e.dying).length <= 1) {
+      this.state.allEnemiesKilled = true;
+    }
+  }
+
+  private checkChestPickup(): void {
+    if (this.player.isMoving) return;
+    const px = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    const py = this.player.y * TILE_SIZE + TILE_SIZE / 2;
+
+    for (const chest of this.chests) {
+      if (chest.opened) continue;
+      const cx = chest.x * TILE_SIZE + TILE_SIZE / 2;
+      const cy = chest.y * TILE_SIZE + TILE_SIZE / 2;
+      const dx = cx - px;
+      const dy = cy - py;
+      const r = 44;
+      if (dx * dx + dy * dy < r * r) {
+        chest.opened = true;
+        this.player.addItem(chest.contents, 1);
+        this.state.score += 50;
+        this.audio.playPickupSound();
+        this.rhythm.createChestParticles(cx, cy);
+        this.showMessage(`获得: ${this.itemName(chest.contents)}`);
+
+        if (this.chests.every(c => c.opened)) {
+          this.state.allChestsOpened = true;
         }
       }
     }
   }
 
-  private checkEnemyCollision(): void {
-    if (this.state.player.invincible || this.state.player.isMoving) return;
-    const playerPx = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-    const playerPy = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
+  private checkMeleeEnemyDamage(): void {
+    if (this.player.invincible || this.player.isMoving) return;
+    const px = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    const py = this.player.y * TILE_SIZE + TILE_SIZE / 2;
 
-    for (const enemy of this.state.enemies) {
-      if (enemy.dying) continue;
-      const eCenter = enemy.getCenter();
-      const dx = eCenter.x - playerPx;
-      const dy = eCenter.y - playerPy;
-      const distSq = dx * dx + dy * dy;
-      const collisionDist = 40;
-
-      if (distSq < collisionDist * collisionDist) {
-        if (this.state.player.takeDamage(5)) {
-          this.audio.playPlayerHurtSound();
-          this.rhythm.createHitParticles(playerPx, playerPy, '#ff4757');
-          this.rhythm.triggerFlash('#ff0000', 100);
-          this.rhythm.resetCombo();
-          if (this.state.player.hp <= 0) {
-            this.state.gameOver = true;
-            this.audio.stopBGM();
-          }
-        }
+    for (const enemy of this.enemies) {
+      if (enemy.dying || enemy.isDiving) continue;
+      const c = enemy.getCenter();
+      const dx = c.x - px;
+      const dy = c.y - py;
+      const r = 38;
+      if (dx * dx + dy * dy < r * r) {
+        this.onPlayerHit(4 + this.state.level);
         break;
       }
     }
   }
 
-  private checkChestCollection(): void {
-    if (this.state.player.isMoving) return;
-    const playerPx = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-    const playerPy = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
+  private checkBatDiveDamage(): void {
+    if (this.player.invincible) return;
+    const px = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    const py = this.player.y * TILE_SIZE + TILE_SIZE / 2;
 
-    for (let i = this.state.chests.length - 1; i >= 0; i--) {
-      const chest = this.state.chests[i];
-      if (chest.opened) continue;
-      const cx = chest.x * TILE_SIZE + TILE_SIZE / 2;
-      const cy = chest.y * TILE_SIZE + TILE_SIZE / 2;
-      const dx = cx - playerPx;
-      const dy = cy - playerPy;
-      const distSq = dx * dx + dy * dy;
-      if (distSq < 48 * 48) {
-        chest.opened = true;
-        this.state.player.addItem(chest.contents, 1);
-        this.state.chestsCollected++;
-        this.state.score += 50;
-        this.audio.playPickupSound();
-        this.rhythm.createHitParticles(cx, cy, '#ffd700');
-        this.showMessage(this.getItemName(chest.contents));
-        this.checkRoomCleared();
+    for (const enemy of this.enemies) {
+      if (enemy.type !== 'bat' || enemy.dying || !enemy.isDiving) continue;
+      const c = enemy.getCenter();
+      const dx = c.x - px;
+      const dy = c.y - py;
+      const r = 34;
+      if (dx * dx + dy * dy < r * r) {
+        this.onPlayerHit(7 + this.state.level);
+        break;
       }
     }
   }
 
-  private getItemName(type: ItemType): string {
-    switch (type) {
-      case 'rhythm_shield': return '节拍护盾!';
-      case 'speed_boots': return '速度鞋!';
-      case 'rhythm_bomb': return '节拍炸弹!';
+  private checkRoomCleared(): void {
+    if (this.portal) return;
+
+    const livingEnemies = this.enemies.filter(e => !e.dying).length;
+    const openChests = this.chests.filter(c => !c.opened).length;
+
+    if (livingEnemies === 0 && openChests === 0) {
+      this.state.allEnemiesKilled = true;
+      this.state.allChestsOpened = true;
+      this.portal = new Portal(Math.floor(ROOM_SIZE / 2), Math.floor(ROOM_SIZE / 2));
+      this.audio.playPortalSound();
+      this.showMessage('传送门开启!');
     }
   }
 
-  private useItem(type: ItemType): boolean {
-    const count = this.state.player.inventory.get(type) || 0;
-    if (count <= 0) return false;
+  private checkPortalEntry(): void {
+    if (!this.portal || this.levelTransition || this.player.isMoving) return;
+
+    const px = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+    const py = this.player.y * TILE_SIZE + TILE_SIZE / 2;
+    const portalX = this.portal.x * TILE_SIZE + TILE_SIZE / 2;
+    const portalY = this.portal.y * TILE_SIZE + TILE_SIZE / 2;
+    const dx = portalX - px;
+    const dy = portalY - py;
+    const r = 40;
+
+    if (dx * dx + dy * dy < r * r) {
+      this.levelTransition = true;
+      this.levelTransitionTime = this.LEVEL_TRANSITION_DURATION;
+      this.audio.playPortalSound();
+      this.rhythm.triggerFlash('#5f27cd', 700);
+    }
+  }
+
+  private completeLevelTransition(): void {
+    this.levelTransition = false;
+    this.state.level++;
+
+    this.player.targetX = 2;
+    this.player.targetY = 4;
+    this.player.x = 2;
+    this.player.y = 4;
+    this.player.fromX = 2;
+    this.player.fromY = 4;
+    this.player.isMoving = false;
+    this.player.moveProgress = 1;
+
+    this.generateRoom();
+    this.updateCameraTarget();
+    this.cameraX = this.cameraTargetX;
+    this.cameraY = this.cameraTargetY;
+
+    this.showMessage(`第 ${this.state.level} 层`);
+  }
+
+  private tryUseItem(type: ItemType): boolean {
+    const count = this.player.inventory.get(type) || 0;
+    if (count <= 0) {
+      return false;
+    }
 
     switch (type) {
       case 'rhythm_shield':
-        if (this.state.player.shieldCooldown > 0) {
+        if (this.player.shieldCooldown > 0) {
           this.showMessage('护盾冷却中...');
           return false;
         }
-        if (this.state.player.useItem(type)) {
+        if (this.player.useItem(type)) {
           this.audio.playShieldSound();
-          this.rhythm.triggerFlash('#4ecdc4', 300);
+          this.rhythm.triggerFlash('#4ecdc4', 280);
           this.showMessage('节拍护盾激活!');
           return true;
         }
         return false;
 
       case 'speed_boots':
-        if (this.state.player.useItem(type)) {
+        if (this.player.useItem(type)) {
           this.audio.playPickupSound();
-          this.rhythm.triggerFlash('#54a0ff', 250);
-          this.showMessage('移速永久+15%!');
+          this.rhythm.triggerFlash('#54a0ff', 240);
+          this.showMessage('移速永久 +15%!');
           return true;
         }
         return false;
 
       case 'rhythm_bomb':
-        if (this.state.player.useItem(type)) {
-          const bomb = new Bomb(
-            this.nextBombId++,
-            this.state.player.x * TILE_SIZE + TILE_SIZE / 2,
-            this.state.player.y * TILE_SIZE + TILE_SIZE / 2
-          );
-          this.state.bombs.push(bomb);
-          this.showMessage('炸弹已投出!');
+        if (this.player.useItem(type)) {
+          const x = this.player.x * TILE_SIZE + TILE_SIZE / 2;
+          const y = this.player.y * TILE_SIZE + TILE_SIZE / 2;
+          const bomb = new Bomb(this.nextBombId++, x, y);
+          this.bombs.push(bomb);
+          this.showMessage('炸弹投出!');
           return true;
         }
         return false;
@@ -543,102 +690,43 @@ export class Game {
   }
 
   private cycleSelectedItem(): void {
-    const items: ItemType[] = ['rhythm_shield', 'speed_boots', 'rhythm_bomb'];
-    const available = items.filter(i => (this.state.player.inventory.get(i) || 0) > 0);
+    const allItems: ItemType[] = ['rhythm_shield', 'rhythm_bomb', 'speed_boots'];
+    const available = allItems.filter(t => (this.player.inventory.get(t) || 0) > 0);
     if (available.length === 0) return;
 
-    const current = this.state.player.selectedItem;
-    const currentIdx = current ? available.indexOf(current) : -1;
-    const nextIdx = (currentIdx + 1) % available.length;
-    this.state.player.selectedItem = available[nextIdx];
+    const current = this.player.selectedItem;
+    const idx = current ? available.indexOf(current) : -1;
+    const next = (idx + 1) % available.length;
+    this.player.selectedItem = available[next];
   }
 
-  private triggerBombExplosion(bomb: Bomb): void {
+  private onBombExplode(bomb: Bomb): void {
     this.audio.playExplosionSound();
-    this.rhythm.triggerScreenShake(12, bomb.shakeTime);
+    this.rhythm.triggerScreenShake(14, bomb.shakeTime);
     this.rhythm.createExplosionParticles(bomb.x, bomb.y);
-    this.rhythm.triggerFlash('#ffa502', 200);
+    this.rhythm.triggerFlash('#ffa502', 220);
 
-    for (const enemy of this.state.enemies) {
+    for (const enemy of this.enemies) {
       if (enemy.dying) continue;
-      const eCenter = enemy.getCenter();
-      const dx = eCenter.x - bomb.x;
-      const dy = eCenter.y - bomb.y;
-      const distSq = dx * dx + dy * dy;
-      if (distSq < bomb.explosionRadius * bomb.explosionRadius) {
-        if (enemy.takeDamage(bomb.damage)) {
-          if (enemy.dying) {
-            this.rhythm.createDeathParticles(eCenter.x, eCenter.y);
-          }
+      const c = enemy.getCenter();
+      const dx = c.x - bomb.x;
+      const dy = c.y - bomb.y;
+      if (dx * dx + dy * dy < bomb.explosionRadius * bomb.explosionRadius) {
+        const killed = enemy.takeDamage(bomb.damage);
+        if (killed) {
+          this.rhythm.createDeathParticles(c.x, c.y);
+        } else {
+          this.rhythm.createHitParticles(c.x, c.y, '#ffa502', 8);
         }
       }
     }
   }
 
-  private checkRoomCleared(): void {
-    const allEnemiesDead = this.state.enemiesDefeated >= this.state.totalEnemies;
-    const allChestsCollected = this.state.chestsCollected >= this.state.totalChests;
-
-    if (allEnemiesDead && allChestsCollected && !this.state.portal) {
-      this.state.portal = new Portal(
-        Math.floor(ROOM_SIZE / 2),
-        Math.floor(ROOM_SIZE / 2) - 1
-      );
-      this.audio.playPortalSound();
-      this.showMessage('传送门已开启!');
+  private itemName(type: ItemType): string {
+    switch (type) {
+      case 'rhythm_shield': return '节拍护盾';
+      case 'speed_boots': return '速度鞋';
+      case 'rhythm_bomb': return '节拍炸弹';
     }
-  }
-
-  private checkPortalEntry(): void {
-    if (!this.state.portal || this.levelTransition || this.state.player.isMoving) return;
-
-    const playerPx = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-    const playerPy = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
-    const portalPx = this.state.portal.x * TILE_SIZE + TILE_SIZE / 2;
-    const portalPy = this.state.portal.y * TILE_SIZE + TILE_SIZE / 2;
-
-    const dx = portalPx - playerPx;
-    const dy = portalPy - playerPy;
-    const distSq = dx * dx + dy * dy;
-
-    if (distSq < 40 * 40) {
-      this.levelTransition = true;
-      this.levelTransitionTimer = 1000;
-      this.audio.playPortalSound();
-      this.rhythm.triggerFlash('#5f27cd', 800);
-    }
-  }
-
-  private showMessage(msg: string): void {
-    this.displayMessage = msg;
-    this.displayMessageTimer = 1500;
-  }
-
-  getMessage(): { text: string; alpha: number } | null {
-    if (!this.displayMessage) return null;
-    const t = this.displayMessageTimer / 1500;
-    const alpha = t < 0.1 ? t / 0.1 : t > 0.8 ? (1 - t) / 0.2 : 1;
-    return { text: this.displayMessage, alpha: Math.max(0, Math.min(1, alpha)) };
-  }
-
-  getLevelTransitionProgress(): number {
-    if (!this.levelTransition) return 0;
-    return 1 - this.levelTransitionTimer / 1000;
-  }
-
-  getCameraTarget(): { x: number; y: number } {
-    const centerX = this.state.player.x * TILE_SIZE + TILE_SIZE / 2;
-    const centerY = this.state.player.y * TILE_SIZE + TILE_SIZE / 2;
-    return { x: centerX, y: centerY };
-  }
-
-  getActiveShieldTimer(): number {
-    return this.state.player.activeShield ? this.state.player.shieldTimer : 0;
-  }
-
-  getShieldCooldown(): number {
-    return !this.state.player.activeShield && this.state.player.shieldCooldown > 0
-      ? this.state.player.shieldCooldown
-      : 0;
   }
 }

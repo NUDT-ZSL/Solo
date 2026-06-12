@@ -17,21 +17,21 @@ export class AudioManager {
   private isPlaying: boolean = false;
   private isPaused: boolean = false;
   private bgmStartTime: number = 0;
-  private pauseTime: number = 0;
-  private totalPausedTime: number = 0;
-  private beatOffset: number = 0;
+  private pauseElapsedTime: number = 0;
+  private pauseStartAudioTime: number = 0;
+  private manualBeatOffset: number = 0;
 
   private beatCallbacks: BeatCallback[] = [];
   private scheduledBeats: ScheduledBeat[] = [];
   private lastFiredBeatIndex: number = -1;
-  private scheduleLookahead: number = 100;
-  private scheduleInterval: number = 25;
+  private scheduleLookahead: number = 120;
+  private scheduleIntervalMs: number = 25;
   private schedulerTimer: number | null = null;
 
   private bgmOscillators: OscillatorNode[] = [];
   private bgmGains: GainNode[] = [];
   private bgmDuration: number = 0;
-  private bgmLoopStart: number = 0;
+  private bgmScheduledEndTime: number = 0;
 
   constructor() {}
 
@@ -47,7 +47,7 @@ export class AudioManager {
     this.masterGain.connect(this.ctx.destination);
 
     this.bgmGain = this.ctx.createGain();
-    this.bgmGain.gain.value = 0.3;
+    this.bgmGain.gain.value = 0.32;
     this.bgmGain.connect(this.masterGain);
 
     this.sfxGain = this.ctx.createGain();
@@ -60,11 +60,10 @@ export class AudioManager {
   }
 
   registerBeatCallback(callback: BeatCallback): () => void {
-    this.beatCallbacks.push(callback);
-    return () => {
-      const idx = this.beatCallbacks.indexOf(callback);
-      if (idx >= 0) this.beatCallbacks.splice(idx, 1);
-    };
+    if (this.beatCallbacks.indexOf(callback) === -1) {
+      this.beatCallbacks.push(callback);
+    }
+    return () => this.unregisterBeatCallback(callback);
   }
 
   unregisterBeatCallback(callback: BeatCallback): void {
@@ -88,17 +87,18 @@ export class AudioManager {
     this.isPlaying = true;
     this.isPaused = false;
     this.bgmStartTime = this.ctx.currentTime;
-    this.totalPausedTime = 0;
+    this.pauseElapsedTime = 0;
     this.lastFiredBeatIndex = -1;
     this.scheduledBeats = [];
 
-    this.generate8BitBGM();
+    this.scheduleBGM();
     this.startBeatScheduler();
   }
 
   stopBGM(): void {
     this.isPlaying = false;
     this.isPaused = false;
+    this.pauseElapsedTime = 0;
 
     if (this.schedulerTimer !== null) {
       clearInterval(this.schedulerTimer);
@@ -116,126 +116,149 @@ export class AudioManager {
   pauseBGM(): void {
     if (!this.ctx || !this.isPlaying || this.isPaused) return;
     this.isPaused = true;
-    this.pauseTime = this.ctx.currentTime;
+    this.pauseStartAudioTime = this.ctx.currentTime;
+    this.pauseElapsedTime = this.getElapsedAudioSeconds();
 
     if (this.schedulerTimer !== null) {
       clearInterval(this.schedulerTimer);
       this.schedulerTimer = null;
     }
+
+    const suspendRemaining = this.bgmScheduledEndTime - this.ctx.currentTime;
+    for (const osc of this.bgmOscillators) {
+      try { osc.stop(); } catch (e) {}
+    }
+    this.bgmOscillators = [];
+    this.bgmGains = [];
   }
 
   resumeBGM(): void {
     if (!this.ctx || !this.isPlaying || !this.isPaused) return;
-    const now = this.ctx.currentTime;
-    this.totalPausedTime += now - this.pauseTime;
     this.isPaused = false;
+    this.bgmStartTime = this.ctx.currentTime - this.pauseElapsedTime;
+
+    this.scheduleBGM();
     this.startBeatScheduler();
   }
 
-  setBeatOffset(offsetMs: number): void {
-    this.beatOffset = offsetMs;
+  setManualBeatOffset(offsetMs: number): void {
+    this.manualBeatOffset = offsetMs;
   }
 
-  getBeatOffset(): number {
-    return this.beatOffset;
+  getManualBeatOffset(): number {
+    return this.manualBeatOffset;
   }
 
-  getCurrentTime(): number {
+  private getElapsedAudioSeconds(): number {
     if (!this.ctx) return 0;
-    return this.ctx.currentTime * 1000;
+    if (this.isPaused) {
+      return this.pauseElapsedTime;
+    }
+    return this.ctx.currentTime - this.bgmStartTime;
   }
 
-  getPlaybackTime(): number {
-    if (!this.ctx || !this.isPlaying) return 0;
-    if (this.isPaused) {
-      return (this.pauseTime - this.bgmStartTime - this.totalPausedTime) * 1000 + this.beatOffset;
-    }
-    return (this.ctx.currentTime - this.bgmStartTime - this.totalPausedTime) * 1000 + this.beatOffset;
+  getElapsedMs(): number {
+    return this.getElapsedAudioSeconds() * 1000 + this.manualBeatOffset;
   }
 
   getCurrentBeat(): number {
-    const playback = this.getPlaybackTime();
-    return Math.floor(playback / BEAT_INTERVAL);
-  }
-
-  getBeatProgress(): number {
-    const playback = this.getPlaybackTime();
-    return (playback % BEAT_INTERVAL) / BEAT_INTERVAL;
+    const elapsed = this.getElapsedMs();
+    if (elapsed < 0) return -1;
+    return Math.floor(elapsed / BEAT_INTERVAL);
   }
 
   getBeatIndex(): number {
     return this.getCurrentBeat();
   }
 
-  getTimeToNextBeat(): number {
-    const playback = this.getPlaybackTime();
-    return BEAT_INTERVAL - (playback % BEAT_INTERVAL);
+  getBeatProgress(): number {
+    const elapsed = this.getElapsedMs();
+    if (elapsed < 0) return 0;
+    return (elapsed % BEAT_INTERVAL) / BEAT_INTERVAL;
   }
 
   getTimeFromLastBeat(): number {
-    const playback = this.getPlaybackTime();
-    return playback % BEAT_INTERVAL;
+    const elapsed = this.getElapsedMs();
+    if (elapsed < 0) return elapsed + BEAT_INTERVAL;
+    return elapsed % BEAT_INTERVAL;
   }
 
-  getBeatTimeOf(beatIndex: number): number {
-    return beatIndex * BEAT_INTERVAL - this.beatOffset;
+  getTimeToNextBeat(): number {
+    return BEAT_INTERVAL - this.getTimeFromLastBeat();
+  }
+
+  getAbsoluteTimeOfBeat(beatIndex: number): number {
+    return beatIndex * BEAT_INTERVAL - this.manualBeatOffset;
+  }
+
+  isNearBeat(toleranceMs: number = 100): boolean {
+    const offset = this.getTimeFromLastBeat();
+    const fromNext = BEAT_INTERVAL - offset;
+    return Math.min(offset, fromNext) <= toleranceMs;
+  }
+
+  getBeatOffsetMs(): number {
+    const offset = this.getTimeFromLastBeat();
+    const fromNext = BEAT_INTERVAL - offset;
+    return Math.min(offset, fromNext) * (offset < BEAT_INTERVAL / 2 ? 1 : -1);
   }
 
   private startBeatScheduler(): void {
     if (this.schedulerTimer !== null) {
       clearInterval(this.schedulerTimer);
     }
-
     this.schedulerTimer = window.setInterval(() => {
-      this.scheduleBeats();
-      this.checkScheduledBeats();
-    }, this.scheduleInterval);
+      this.scheduleBeatsAhead();
+      this.processDueBeats();
+    }, this.scheduleIntervalMs);
   }
 
-  private scheduleBeats(): void {
+  private scheduleBeatsAhead(): void {
     if (!this.ctx || !this.isPlaying || this.isPaused) return;
 
-    const now = this.getPlaybackTime();
-    const horizon = now + this.scheduleLookahead;
+    const nowMs = this.getElapsedMs();
+    const horizonMs = nowMs + this.scheduleLookahead;
 
-    while (this.scheduledBeats.length === 0 ||
-           this.scheduledBeats[this.scheduledBeats.length - 1].audioTime < horizon) {
-      const lastBeat = this.scheduledBeats.length > 0
-        ? this.scheduledBeats[this.scheduledBeats.length - 1].index
-        : this.lastFiredBeatIndex;
+    while (true) {
+      const nextIndex = this.scheduledBeats.length > 0
+        ? this.scheduledBeats[this.scheduledBeats.length - 1].index + 1
+        : this.lastFiredBeatIndex + 1;
 
-      const nextBeatIndex = lastBeat + 1;
-      const nextBeatTime = nextBeatIndex * BEAT_INTERVAL - this.beatOffset;
+      const nextBeatTimeMs = nextIndex * BEAT_INTERVAL - this.manualBeatOffset;
+
+      if (nextBeatTimeMs > horizonMs) break;
 
       this.scheduledBeats.push({
-        index: nextBeatIndex,
-        audioTime: nextBeatTime,
+        index: nextIndex,
+        audioTime: nextBeatTimeMs,
         fired: false
       });
     }
   }
 
-  private checkScheduledBeats(): void {
-    if (!this.ctx || !this.isPlaying || this.isPaused) return;
+  private processDueBeats(): void {
+    if (!this.isPlaying || this.isPaused) return;
 
-    const now = this.getPlaybackTime();
+    const nowMs = this.getElapsedMs();
 
     for (const beat of this.scheduledBeats) {
-      if (!beat.fired && now >= beat.audioTime) {
+      if (!beat.fired && nowMs >= beat.audioTime) {
         beat.fired = true;
-        this.lastFiredBeatIndex = beat.index;
+        if (beat.index > this.lastFiredBeatIndex) {
+          this.lastFiredBeatIndex = beat.index;
+        }
         this.fireBeatCallbacks(beat.index, beat.audioTime);
       }
     }
 
     while (this.scheduledBeats.length > 0 &&
            this.scheduledBeats[0].fired &&
-           now - this.scheduledBeats[0].audioTime > 500) {
+           nowMs - this.scheduledBeats[0].audioTime > 600) {
       this.scheduledBeats.shift();
     }
   }
 
-  private generate8BitBGM(): void {
+  private scheduleBGM(): void {
     if (!this.ctx || !this.bgmGain) return;
 
     const beatDur = BEAT_INTERVAL / 1000;
@@ -243,7 +266,9 @@ export class AudioManager {
     const beatsPerBar = 4;
     const totalBeats = barsPerLoop * beatsPerBar;
     this.bgmDuration = totalBeats * beatDur;
-    this.bgmLoopStart = 0;
+
+    const startOffset = this.pauseElapsedTime;
+    const loopStartAudioTime = this.ctx.currentTime - startOffset;
 
     const melody = [
       523.25, 659.25, 783.99, 659.25,
@@ -267,13 +292,14 @@ export class AudioManager {
       164.81, 0, 164.81, 0
     ];
 
-    const startT = this.bgmStartTime + this.totalPausedTime;
+    const totalLoopCount = 4;
+    this.bgmScheduledEndTime = loopStartAudioTime + totalLoopCount * this.bgmDuration;
 
-    for (let loop = 0; loop < 4; loop++) {
-      const loopOffset = loop * this.bgmDuration;
-
+    for (let loop = 0; loop < totalLoopCount; loop++) {
+      const loopStart = loopStartAudioTime + loop * this.bgmDuration;
       for (let i = 0; i < totalBeats; i++) {
-        const t = startT + loopOffset + i * beatDur;
+        const t = loopStart + i * beatDur;
+        if (t < this.ctx!.currentTime - 0.01) continue;
 
         if (melody[i] > 0) {
           const osc = this.ctx.createOscillator();
@@ -529,5 +555,23 @@ export class AudioManager {
 
   isBGMRunning(): boolean {
     return this.isPlaying && !this.isPaused;
+  }
+
+  debugGetState(): {
+    isPlaying: boolean;
+    isPaused: boolean;
+    elapsed: number;
+    beat: number;
+    progress: number;
+    offset: number;
+  } {
+    return {
+      isPlaying: this.isPlaying,
+      isPaused: this.isPaused,
+      elapsed: this.getElapsedMs(),
+      beat: this.getCurrentBeat(),
+      progress: this.getBeatProgress(),
+      offset: this.manualBeatOffset
+    };
   }
 }
