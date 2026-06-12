@@ -419,14 +419,13 @@ export class UIManager {
 
     const { width, height } = this.scene.scale;
     const centerX = width / 2;
-    const baseY = height - 65;
+    const baseY = height - 100;
     const count = hand.length;
     if (count === 0) return;
 
     const cardW = 110;
-    const cardSpacing = cardW + 15;
-    const arcAngle = 35;
-    const arcRadius = 800;
+    const arcAngle = 30;
+    const arcRadius = 500;
 
     hand.forEach((card, index) => {
       const normalizedPos = count === 1 ? 0 : (index / (count - 1)) * 2 - 1;
