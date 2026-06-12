@@ -1,0 +1,167 @@
+{
+  "users": [
+    {
+      "id": "user-1",
+      "username": "demo",
+      "password": "123456"
+    }
+  ],
+  "boards": [
+    {
+      "id": "board-1",
+      "userId": "user-1",
+      "name": "北欧风格客厅",
+      "coverImage": "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&q=80",
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "board-2",
+      "userId": "user-1",
+      "name": "温馨卧室",
+      "coverImage": "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=800&q=80",
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "board-3",
+      "userId": "user-1",
+      "name": "简约厨房",
+      "coverImage": "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&q=80",
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "board-4",
+      "userId": "user-1",
+      "name": "工业风书房",
+      "coverImage": "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=800&q=80",
+      "createdAt": 1781231063052
+    }
+  ],
+  "images": [
+    {
+      "id": "img-1",
+      "boardId": "board-1",
+      "imageUrl": "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=600&q=80",
+      "tags": [
+        "北欧",
+        "客厅",
+        "简约"
+      ],
+      "note": "非常喜欢这种简约北欧风格，米色沙发搭配绿植很温馨",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-2",
+      "boardId": "board-1",
+      "imageUrl": "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&q=80",
+      "tags": [
+        "北欧",
+        "沙发",
+        "暖色"
+      ],
+      "note": "这个沙发的颜色很温暖，适合冬天",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-3",
+      "boardId": "board-1",
+      "imageUrl": "https://images.unsplash.com/photo-1600210492493-0946911123ea?w=600&q=80",
+      "tags": [
+        "客厅",
+        "现代",
+        "落地窗"
+      ],
+      "note": "大落地窗采光真好，配上浅色窗帘很美",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-4",
+      "boardId": "board-1",
+      "imageUrl": "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?w=600&q=80",
+      "tags": [
+        "北欧",
+        "餐桌",
+        "餐厅"
+      ],
+      "note": "木质餐桌很有质感，搭配蜡烛很有情调",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-5",
+      "boardId": "board-1",
+      "imageUrl": "https://images.unsplash.com/photo-1567016526105-22da7c13161a?w=600&q=80",
+      "tags": [
+        "绿植",
+        "客厅",
+        "自然"
+      ],
+      "note": "绿植点缀让空间更有生气",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-6",
+      "boardId": "board-2",
+      "imageUrl": "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=600&q=80",
+      "tags": [
+        "卧室",
+        "温馨",
+        "床品"
+      ],
+      "note": "柔软的床品和暖色灯光，让人放松",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-7",
+      "boardId": "board-2",
+      "imageUrl": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=600&q=80",
+      "tags": [
+        "卧室",
+        "简约",
+        "白色"
+      ],
+      "note": "纯白色调很干净，早晨醒来心情好",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-8",
+      "boardId": "board-3",
+      "imageUrl": "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80",
+      "tags": [
+        "厨房",
+        "简约",
+        "木质"
+      ],
+      "note": "开放式厨房设计，岛台很实用",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    },
+    {
+      "id": "img-9",
+      "boardId": "board-4",
+      "imageUrl": "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=600&q=80",
+      "tags": [
+        "书房",
+        "工业风",
+        "书架"
+      ],
+      "note": "整面墙的书架，是读书人的梦想",
+      "likes": 0,
+      "mood": null,
+      "createdAt": 1781231063052
+    }
+  ]
+}

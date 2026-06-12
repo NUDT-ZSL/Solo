@@ -91,3 +91,38 @@ body {
 .fade-out {
   animation: fade-out 0.3s ease-out forwards;
 }
+
+.tag-filter {
+  position: relative;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  user-select: none;
+  background-color: #e2e8f0;
+  color: #475569;
+}
+
+.tag-filter::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 10%;
+  width: 80%;
+  height: 3px;
+  background-color: #1e3a8a;
+  border-radius: 2px;
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.tag-filter--active {
+  background-color: #1e3a8a;
+  color: #ffffff;
+}
+
+.tag-filter--active::after {
+  transform: scaleX(1);
+}
