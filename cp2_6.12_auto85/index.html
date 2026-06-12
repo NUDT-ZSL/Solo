@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>漂移追踪器</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="driftDisplay" class="drift-display hidden">
+      <div class="drift-item">
+        <span class="label">漂移角度</span>
+        <span class="value mono" id="driftAngle">0.0°</span>
+      </div>
+      <div class="drift-item">
+        <span class="label">持续时间</span>
+        <span class="value mono" id="driftDuration">0.00s</span>
+      </div>
+      <div class="drift-item">
+        <span class="label">累积积分</span>
+        <span class="value mono" id="driftScore">0</span>
+      </div>
+    </div>
+
+    <div id="modePanel" class="mode-panel hidden">
+      <div class="mode-options">
+        <button class="mode-btn" data-mode="novice">
+          <span class="mode-name">新手模式</span>
+          <span class="mode-desc">自动辅助转向 · 极速60</span>
+        </button>
+        <button class="mode-btn" data-mode="advanced">
+          <span class="mode-name">进阶模式</span>
+          <span class="mode-desc">手动全控 · 极速100</span>
+        </button>
+        <button class="mode-btn" data-mode="expert">
+          <span class="mode-name">高手模式</span>
+          <span class="mode-desc">轮胎磨损 · 极速100</span>
+        </button>
+      </div>
+      <div class="mode-indicator"></div>
+    </div>
+
+    <div id="replayControls" class="replay-controls hidden">
+      <button class="replay-btn" id="playPauseBtn">⏸</button>
+      <div class="replay-slider-container">
+        <div class="replay-progress" id="replayProgress"></div>
+        <input type="range" class="replay-slider" id="replaySlider" min="0" max="100" value="0">
+      </div>
+      <span class="replay-time mono" id="replayTime">0.00 / 0.00s</span>
+      <button class="replay-btn" id="exitReplayBtn">✕</button>
+    </div>
+
+    <div id="replayData" class="replay-data hidden">
+      <div class="data-item"><span class="label">位置</span><span class="value mono" id="dataPos">0, 0</span></div>
+      <div class="data-item"><span class="label">速度</span><span class="value mono" id="dataSpeed">0</span></div>
+      <div class="data-item"><span class="label">漂移角度</span><span class="value mono" id="dataAngle">0.0°</span></div>
+      <div class="data-item"><span class="label">累计积分</span><span class="value mono" id="dataScore">0</span></div>
+    </div>
+
+    <button id="historyBtn" class="history-btn">📊 历史记录</button>
+    <button id="modeToggleBtn" class="mode-toggle-btn">🎮 切换模式</button>
+
+    <div id="historyPanel" class="history-panel hidden">
+      <div class="panel-header">
+        <h2>历史最佳记录</h2>
+        <button class="close-btn" id="closeHistoryBtn">✕</button>
+      </div>
+      <div class="records-list" id="recordsList"></div>
+    </div>
+
+    <div id="scorePopups"></div>
+
+    <div class="controls-hint">
+      <div class="hint-item"><kbd>↑</kbd> 加速</div>
+      <div class="hint-item"><kbd>↓</kbd> 刹车</div>
+      <div class="hint-item"><kbd>←</kbd><kbd>→</kbd> 转向</div>
+      <div class="hint-item"><kbd>空格</kbd> 漂移</div>
+    </div>
+
+    <div id="lapInfo" class="lap-info hidden">
+      <span class="mono" id="lapTime">圈速: 0.00s</span>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
