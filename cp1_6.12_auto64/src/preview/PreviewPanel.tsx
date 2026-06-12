@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import type { ParsedAnimation } from '../editor/animationParser';
 import { injectStylesheet, removeStylesheet } from '../editor/animationParser';
 import './PreviewPanel.css';
@@ -13,6 +13,12 @@ export interface PreviewPanelProps {
 
 const STYLE_ID = 'dynamic-animation-styles';
 const REVERSE_STYLE_ID = 'dynamic-reverse-styles';
+const TRANSITION_MS = 500;
+
+interface FrozenState {
+  transform: string;
+  opacity: string;
+}
 
 export function PreviewPanel({
   parsedAnimation,
@@ -24,6 +30,8 @@ export function PreviewPanel({
   const boxRef = useRef<HTMLDivElement>(null);
   const [playKey, setPlayKey] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [frozenState, setFrozenState] = useState<FrozenState | null>(null);
+  const transitionTimerRef = useRef<number | null>(null);
 
   const animationName = useMemo(() => {
     if (!parsedAnimation) return 'none';
@@ -48,34 +56,74 @@ export function PreviewPanel({
     };
   }, [reverseCss]);
 
+  const captureCurrentState = useCallback((): FrozenState | null => {
+    if (!boxRef.current) return null;
+    const computed = window.getComputedStyle(boxRef.current);
+    return {
+      transform: computed.transform !== 'none' ? computed.transform : 'matrix(1, 0, 0, 1, 0, 0)',
+      opacity: computed.opacity,
+    };
+  }, []);
+
   useEffect(() => {
-    if (isReverse) {
+    if (!parsedAnimation) {
+      setPlayKey((k) => k + 1);
+      return;
+    }
+
+    if (isTransitioning) return;
+
+    const currentState = captureCurrentState();
+
+    if (currentState) {
+      setFrozenState(currentState);
       setIsTransitioning(true);
-      const timer = setTimeout(() => {
+
+      if (transitionTimerRef.current) {
+        window.clearTimeout(transitionTimerRef.current);
+      }
+
+      transitionTimerRef.current = window.setTimeout(() => {
+        setFrozenState(null);
         setIsTransitioning(false);
         setPlayKey((k) => k + 1);
-      }, 500);
-      return () => clearTimeout(timer);
+        transitionTimerRef.current = null;
+      }, TRANSITION_MS);
     } else {
       setPlayKey((k) => k + 1);
     }
-  }, [isReverse, animationName]);
+
+    return () => {
+      if (transitionTimerRef.current) {
+        window.clearTimeout(transitionTimerRef.current);
+      }
+    };
+  }, [isReverse, animationName, parsedAnimation, captureCurrentState]);
 
   useEffect(() => {
     if (!isTransitioning) {
-      const timer = setTimeout(() => setPlayKey((k) => k + 1), 10);
-      return () => clearTimeout(timer);
+      const timer = window.setTimeout(() => setPlayKey((k) => k + 1), 10);
+      return () => window.clearTimeout(timer);
     }
-  }, [rawCss]);
+  }, [rawCss, isTransitioning]);
 
-  const boxStyle: React.CSSProperties = {
-    animation: parsedAnimation
-      ? `${animationName} ${animationDuration}ms ease-in-out infinite both`
-      : 'none',
-    opacity: isTransitioning ? 0.5 : 1,
-    transform: isTransitioning ? 'scale(0.9)' : 'scale(1)',
-    transition: 'opacity 0.5s ease, transform 0.5s ease',
-  };
+  const baseAnimation = parsedAnimation
+    ? `${animationName} ${animationDuration}ms ease-in-out infinite both`
+    : 'none';
+
+  const boxStyle: React.CSSProperties = frozenState
+    ? {
+        animation: 'none',
+        transform: frozenState.transform,
+        opacity: parseFloat(frozenState.opacity),
+        transition: `transform ${TRANSITION_MS}ms ease-in-out, opacity ${TRANSITION_MS}ms ease-in-out, filter ${TRANSITION_MS}ms ease-in-out`,
+      }
+    : {
+        animation: baseAnimation,
+        transform: undefined,
+        opacity: undefined,
+        transition: 'none',
+      };
 
   return (
     <div className="preview-panel">
@@ -85,9 +133,7 @@ export function PreviewPanel({
           <span className={`status-dot ${parsedAnimation ? 'active' : 'idle'}`} />
           <span className="status-text">
             {parsedAnimation
-              ? isReverse
-                ? `播放: ${animationName}`
-                : `播放: ${animationName}`
+              ? `播放: ${animationName}${isTransitioning ? ' (过渡中)' : ''}`
               : '等待输入动画...'}
           </span>
         </div>
@@ -95,10 +141,11 @@ export function PreviewPanel({
       <div className="preview-canvas">
         <div className="canvas-inner">
           <div className="grid-overlay" />
+          <div className="shadow-floor" />
           <div
             key={playKey}
             ref={boxRef}
-            className="animated-box"
+            className={`animated-box ${frozenState ? 'is-transitioning' : ''}`}
             style={boxStyle}
           />
         </div>
@@ -118,6 +165,12 @@ export function PreviewPanel({
           <span className="info-label">关键帧</span>
           <span className="info-value">
             {parsedAnimation ? parsedAnimation.keyframes.length : 0}
+          </span>
+        </div>
+        <div className="info-card">
+          <span className="info-label">过渡</span>
+          <span className={`info-value ${isTransitioning ? 'mode-reverse' : 'mode-normal'}`}>
+            {isTransitioning ? `${TRANSITION_MS}ms` : '空闲'}
           </span>
         </div>
       </div>
