@@ -1,0 +1,139 @@
+.gallery {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: var(--panel-bg);
+  transition: background-color 0.3s;
+  overflow-y: auto;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, #4A90D9, #52c41a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.componentList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.componentCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  height: 60px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 0.5px solid transparent;
+  box-sizing: border-box;
+}
+
+.componentCard:hover {
+  background-color: #e6f0ff;
+  transform: translateX(4px);
+}
+
+.selected {
+  background-color: #4A90D9;
+  border-color: #4A90D9;
+}
+
+.selected .componentName {
+  color: white;
+}
+
+.selected .componentCategory {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.selected:hover {
+  background-color: #3a7bc8;
+}
+
+.cardPreview {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.selected .cardPreview {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.componentIcon {
+  font-size: 20px;
+}
+
+.cardInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.componentName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
+}
+
+.componentCategory {
+  font-size: 11px;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .gallery {
+    flex-direction: column;
+    height: auto;
+    width: 100%;
+  }
+
+  .componentList {
+    flex-direction: row;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .componentCard {
+    min-width: 120px;
+    flex-direction: column;
+    height: auto;
+    padding: 16px 12px;
+    gap: 8px;
+  }
+
+  .componentCard:hover {
+    transform: translateY(-4px);
+  }
+}

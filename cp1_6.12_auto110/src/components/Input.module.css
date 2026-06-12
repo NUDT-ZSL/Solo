@@ -1,0 +1,72 @@
+.inputWrapper {
+  width: 280px;
+  transition: all 200ms ease;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  box-sizing: border-box;
+  transition: all 200ms ease;
+  outline: none;
+}
+
+.input:focus {
+  border-color: #4A90D9;
+  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.15);
+}
+
+.input::placeholder {
+  color: var(--text-secondary, #999);
+}
+
+.loading {
+}
+
+.skeletonInput {
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--bg-secondary, #f0f0f0) 25%, var(--bg-tertiary, #e0e0e0) 50%, var(--bg-secondary, #f0f0f0) 75%);
+  background-size: 200% 100%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.emptyInput {
+  background-color: var(--bg-secondary, #f5f5f5);
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.errorWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.errorInput {
+  border-color: #ff4d4f;
+}
+
+.errorInput:focus {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 0 3px rgba(255, 77, 79, 0.15);
+}
+
+.errorMessage {
+  font-size: 12px;
+  color: #ff4d4f;
+}
+
+@keyframes pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
