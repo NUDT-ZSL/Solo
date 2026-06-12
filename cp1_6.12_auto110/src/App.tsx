@@ -2,10 +2,10 @@ import React, { memo, useMemo, useState, useCallback } from 'react';
 import {
   AppContext,
   initialAppState,
-  useAppState,
   DataState,
   AppState,
 } from './lib/stateManager';
+import { useAppState } from './lib/useAppState';
 import { getComponentById, themeVariables } from './lib/componentRegistry';
 import ComponentGallery from './components/ComponentGallery';
 import TestHarness from './components/TestHarness';

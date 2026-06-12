@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { componentRegistry } from '../lib/componentRegistry';
-import { useAppState } from '../lib/stateManager';
+import { useAppState } from '../lib/useAppState';
 import styles from './ComponentGallery.module.css';
 
 const ComponentGallery: React.FC = memo(() => {

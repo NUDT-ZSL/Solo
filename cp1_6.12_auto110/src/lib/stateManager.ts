@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext } from 'react';
 import type { ReactNode } from 'react';
 
 export type ThemeMode = 'light' | 'dark';
@@ -23,13 +23,5 @@ export const initialAppState: AppState = {
   theme: 'light',
   dataState: 'normal',
 };
-
-export function useAppState(): AppContextType {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useAppState must be used within an AppProvider');
-  }
-  return context;
-}
 
 export type { ReactNode };
