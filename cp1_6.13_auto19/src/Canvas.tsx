@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useMemo } from 'react';
 import { useStore } from './store';
 import {
   ComponentData,
@@ -12,8 +12,8 @@ import {
 
 const GRID_SIZE = 20;
 
-function snap(pos: number): number {
-  return Math.round(pos / GRID_SIZE) * GRID_SIZE;
+function snapToGrid(value: number): number {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
 }
 
 interface CanvasProps {
@@ -116,12 +116,14 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
     selectComponent,
     updateComponentPosition,
     bringToFront,
+    deleteComponent,
   } = useStore();
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [zDraggingId, setZDraggingId] = useState<string | null>(null);
-  const [animateInIds, setAnimateInIds] = useState<Set<string>>(new Set());
+  const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const lastZRef = useRef<number>(0);
 
@@ -143,8 +145,8 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
       const dims = COMPONENT_DEFAULT_SIZE[type];
       const rawX = e.clientX - rect.left - dims.width / 2;
       const rawY = e.clientY - rect.top - dims.height / 2;
-      const x = snap(Math.max(0, rawX));
-      const y = snap(Math.max(0, rawY));
+      const x = snapToGrid(Math.max(0, rawX));
+      const y = snapToGrid(Math.max(0, rawY));
 
       onDrop(type, x, y);
     },
@@ -160,6 +162,23 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
     [selectComponent]
   );
 
+  const handleDelete = useCallback((id: string) => {
+    if (removingIds.has(id) || deletingIds.has(id)) return;
+    setRemovingIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setTimeout(() => {
+      deleteComponent(id);
+      setRemovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 250);
+  }, [removingIds, deletingIds, deleteComponent]);
+
   const handleComponentPointerDown = useCallback(
     (e: React.PointerEvent, comp: ComponentData) => {
       e.stopPropagation();
@@ -168,7 +187,7 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
         setZDraggingId(comp.id);
         lastZRef.current = comp.zIndex;
         selectComponent(comp.id);
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         return;
       }
       if (e.button !== 0) return;
@@ -182,7 +201,7 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
         y: e.clientY - rect.top - comp.y,
       };
       setDraggingId(comp.id);
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
     [selectComponent, bringToFront]
   );
@@ -202,8 +221,8 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
 
       const rawX = e.clientX - rect.left - dragOffsetRef.current.x;
       const rawY = e.clientY - rect.top - dragOffsetRef.current.y;
-      const x = snap(Math.max(0, rawX));
-      const y = snap(Math.max(0, rawY));
+      const x = snapToGrid(Math.max(0, rawX));
+      const y = snapToGrid(Math.max(0, rawY));
 
       updateComponentPosition(draggingId, x, y);
     },
@@ -216,13 +235,13 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
       return;
     }
     if (draggingId) {
-      setAnimateInIds((prev) => {
+      setNewlyAddedIds((prev) => {
         const next = new Set(prev);
         next.add(draggingId);
         return next;
       });
       setTimeout(() => {
-        setAnimateInIds((prev) => {
+        setNewlyAddedIds((prev) => {
           const next = new Set(prev);
           next.delete(draggingId);
           return next;
@@ -232,18 +251,34 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
     }
   }, [draggingId, zDraggingId]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedId) {
+        e.preventDefault();
+        handleDelete(selectedId);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedId, handleDelete]);
+
+  const displayedComponents = useMemo(() => {
+    return components.filter((c) => !deletingIds.has(c.id));
+  }, [components, deletingIds]);
+
   const renderComponent = (comp: ComponentData) => {
     const isSelected = comp.id === selectedId;
-    const isDeleting = deletingIds.has(comp.id);
+    const isRemoving = removingIds.has(comp.id) || deletingIds.has(comp.id);
     const isDragging = comp.id === draggingId;
     const isZDragging = comp.id === zDraggingId;
-    const isAnimateIn = animateInIds.has(comp.id);
+    const isNew = newlyAddedIds.has(comp.id) && !isDragging;
 
     const renderer = (() => {
       switch (comp.type) {
         case 'button': return <ButtonRenderer data={comp} />;
         case 'card': return <CardRenderer data={comp} />;
         case 'input': return <InputRenderer data={comp} />;
+        default: return <ButtonRenderer data={comp} />;
       }
     })();
 
@@ -252,9 +287,8 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
       left: comp.x,
       top: comp.y,
       zIndex: isDragging ? 9999 : comp.zIndex,
-      cursor: 'move',
+      cursor: isRemoving ? 'default' : 'move',
       userSelect: 'none',
-      transition: isDragging ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
       outline: isSelected && !isZDragging
         ? '3px solid #3b82f6'
         : isZDragging
@@ -262,17 +296,21 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
           : 'none',
       outlineOffset: '2px',
       borderRadius: 2,
-      opacity: isDeleting ? 0 : isDragging ? 0.6 : 1,
-      transform: isDeleting
+      opacity: isRemoving ? 0 : isDragging ? 0.6 : 1,
+      transform: isRemoving
         ? 'scale(0.5)'
         : isDragging
           ? 'rotate(3deg)'
-          : 'scale(1) rotate(0deg)',
-      animation: isAnimateIn && !isDragging
+          : isNew
+            ? undefined
+            : 'scale(1) rotate(0deg)',
+      transition: isDragging
+        ? 'none'
+        : 'opacity 0.25s ease-out, transform 0.25s ease-out',
+      animation: isNew
         ? 'dropIn 0.3s ease-out forwards'
-        : isDeleting
-          ? 'fadeOut 0.25s ease-out forwards'
-          : undefined,
+        : undefined,
+      pointerEvents: isRemoving ? 'none' : 'auto',
     };
 
     return (
@@ -310,7 +348,7 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
         cursor: 'default',
       }}
     >
-      {components.length === 0 && (
+      {displayedComponents.length === 0 && (
         <div
           style={{
             position: 'absolute',
@@ -336,7 +374,7 @@ const Canvas: React.FC<CanvasProps> = ({ onDrop }) => {
           </div>
         </div>
       )}
-      {components.map(renderComponent)}
+      {displayedComponents.map(renderComponent)}
     </div>
   );
 };

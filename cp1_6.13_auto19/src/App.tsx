@@ -8,7 +8,7 @@ import ExportModal from './ExportModal';
 import { Download, ChevronDown, Paintbrush } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { canvasBg, setCanvasBg, showExport, setShowExport, selectedId, deleteComponent } = useStore();
+  const { canvasBg, setCanvasBg, showExport, setShowExport } = useStore();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [themeOpen, setThemeOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -18,16 +18,6 @@ const App: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' && selectedId) {
-        deleteComponent(selectedId);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, deleteComponent]);
 
   const isCompact = windowWidth < 1024;
   const sidebarWidth = isCompact ? 200 : 260;

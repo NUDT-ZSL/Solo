@@ -59,33 +59,59 @@ function collectInputProps(comp: ComponentData): CSSProperty[] {
   ];
 }
 
+function collectUnknownProps(comp: ComponentData): CSSProperty[] {
+  const p = comp.props as Record<string, any>;
+  const list: CSSProperty[] = [];
+  if (p.width !== undefined) list.push({ name: 'width', value: `${p.width}px` });
+  if (p.height !== undefined) list.push({ name: 'height', value: `${p.height}px` });
+  if (p.backgroundColor !== undefined) list.push({ name: 'background-color', value: p.backgroundColor });
+  if (p.borderRadius !== undefined) list.push({ name: 'border-radius', value: `${p.borderRadius}px` });
+  if (p.borderColor !== undefined && p.borderWidth !== undefined) {
+    list.push({ name: 'border', value: `${p.borderWidth}px solid ${p.borderColor}` });
+  } else if (p.borderColor !== undefined) {
+    list.push({ name: 'border-color', value: p.borderColor });
+  }
+  if (p.shadowDepth !== undefined && p.shadowDepth > 0) {
+    list.push({
+      name: 'box-shadow',
+      value: `0 ${p.shadowDepth / 2}px ${p.shadowDepth}px rgba(0, 0, 0, 0.1)`,
+    });
+  }
+  if (p.fontSize !== undefined) list.push({ name: 'font-size', value: `${p.fontSize}px` });
+  if (p.textColor !== undefined) list.push({ name: 'color', value: p.textColor });
+  if (p.padding !== undefined) list.push({ name: 'padding', value: `0 ${p.padding}px` });
+  if (p.placeholderColor !== undefined) list.push({ name: 'color', value: p.placeholderColor });
+  return list;
+}
+
 function collectPropsByType(comp: ComponentData): CSSProperty[] {
   switch (comp.type) {
     case 'button': return collectButtonProps(comp);
     case 'card': return collectCardProps(comp);
     case 'input': return collectInputProps(comp);
+    default: return collectUnknownProps(comp);
   }
 }
 
-function groupByType(components: ComponentData[]): Record<ComponentType, ComponentData[]> {
-  const groups: Record<ComponentType, ComponentData[]> = {
-    button: [],
-    card: [],
-    input: [],
-  };
-  components.forEach((c) => groups[c.type].push(c));
+function groupByType(components: ComponentData[]): Record<string, ComponentData[]> {
+  const groups: Record<string, ComponentData[]> = {};
+  components.forEach((c) => {
+    if (!groups[c.type]) groups[c.type] = [];
+    groups[c.type].push(c);
+  });
   return groups;
 }
 
 function generatePlainCSS(components: ComponentData[]): string {
   const groups = groupByType(components);
   const lines: string[] = [];
+  const allTypes = Array.from(new Set([...TYPE_ORDER, ...Object.keys(groups)] as ComponentType[]])) as string[];
 
-  TYPE_ORDER.forEach((type) => {
+  allTypes.forEach((type) => {
     const comps = groups[type];
-    if (comps.length === 0) return;
+    if (!comps || comps.length === 0) return;
 
-    lines.push(`/* ========== ${getComponentLabel(type)} ========== */`);
+    lines.push(`/* ========== ${getComponentLabel(type as ComponentType) || type} ========== */`);
     lines.push('');
 
     comps.forEach((comp, idx) => {
@@ -127,14 +153,16 @@ function renderHighlighted(components: ComponentData[]): React.ReactNode {
   const groups = groupByType(components);
   const nodes: React.ReactNode[] = [];
   let keyCounter = 0;
+  const allTypes = Array.from(new Set([...TYPE_ORDER, ...Object.keys(groups)])) as string[];
 
-  TYPE_ORDER.forEach((type) => {
+  allTypes.forEach((type) => {
     const comps = groups[type];
-    if (comps.length === 0) return;
+    if (!comps || comps.length === 0) return;
 
+    const typeLabel = getComponentLabel(type as ComponentType) || type;
     nodes.push(
       <SyntaxLine key={keyCounter++}>
-        <Comment>{`/* ========== ${getComponentLabel(type)} ========== */`}</Comment>
+        <Comment>{`/* ========== ${typeLabel} ========== */`}</Comment>
       </SyntaxLine>
     );
     nodes.push(<SyntaxLine key={keyCounter++}>&nbsp;</SyntaxLine>);
