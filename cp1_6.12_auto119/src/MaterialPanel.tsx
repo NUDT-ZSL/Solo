@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { useMaterialStore } from './store/materialStore';
 import {
   WALL_MATERIALS,
@@ -10,12 +10,18 @@ import {
 interface MaterialGroupProps {
   title: string;
   accentColor: string;
-  materials: MaterialPreset[];
+  materials: readonly MaterialPreset[];
   selectedName: string;
   onSelect: (preset: MaterialPreset) => void;
 }
 
-function MaterialGroup({ title, accentColor, materials, selectedName, onSelect }: MaterialGroupProps) {
+const MaterialGroup = memo(function MaterialGroup({
+  title,
+  accentColor,
+  materials,
+  selectedName,
+  onSelect,
+}: MaterialGroupProps) {
   return (
     <div
       style={{
@@ -69,12 +75,13 @@ function MaterialGroup({ title, accentColor, materials, selectedName, onSelect }
                 padding: '0 12px',
                 cursor: 'pointer',
                 position: 'relative',
-                transition: 'all 0.2s ease-out',
+                transition: 'background 0.2s ease-out, box-shadow 0.2s ease-out',
                 boxShadow: isSelected
                   ? `0 0 0 0 ${accentColor}, 0 2px 8px rgba(0,0,0,0.2)`
                   : '0 1px 3px rgba(0,0,0,0.15)',
                 animation: isSelected ? 'materialPulse 1.5s ease-in-out infinite' : 'none',
                 overflow: 'hidden',
+                textAlign: 'left',
               }}
               onMouseEnter={(e) => {
                 if (!isSelected) {
@@ -129,9 +136,11 @@ function MaterialGroup({ title, accentColor, materials, selectedName, onSelect }
       </div>
     </div>
   );
-}
+});
 
-export default function MaterialPanel() {
+MaterialGroup.displayName = 'MaterialGroup';
+
+function MaterialPanelInner() {
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const currentMaterials = useMaterialStore((s) => s.currentMaterials);
   const selectMaterial = useMaterialStore((s) => s.selectMaterial);
@@ -142,12 +151,16 @@ export default function MaterialPanel() {
 
   const canUndo = historyIndex > 0;
 
+  const handleSelectWall = useCallback((m: MaterialPreset) => selectMaterial('wall', m), [selectMaterial]);
+  const handleSelectRoof = useCallback((m: MaterialPreset) => selectMaterial('roof', m), [selectMaterial]);
+  const handleSelectWindow = useCallback((m: MaterialPreset) => selectMaterial('window', m), [selectMaterial]);
+
   return (
     <>
       <style>{`
         @keyframes materialPulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(79, 195, 247, 0); }
-          50% { box-shadow: 0 0 12px 2px rgba(79, 195, 247, 0.35); }
+          50% { box-shadow: 0 0 14px 2px rgba(79, 195, 247, 0.35); }
         }
         @keyframes fadeInOut {
           0% { opacity: 0; transform: translateY(10px); }
@@ -200,7 +213,7 @@ export default function MaterialPanel() {
           accentColor="#4FC3F7"
           materials={WALL_MATERIALS}
           selectedName={currentMaterials.wall.name}
-          onSelect={(m) => selectMaterial('wall', m)}
+          onSelect={handleSelectWall}
         />
 
         <MaterialGroup
@@ -208,7 +221,7 @@ export default function MaterialPanel() {
           accentColor="#81C784"
           materials={ROOF_MATERIALS}
           selectedName={currentMaterials.roof.name}
-          onSelect={(m) => selectMaterial('roof', m)}
+          onSelect={handleSelectRoof}
         />
 
         <MaterialGroup
@@ -216,7 +229,7 @@ export default function MaterialPanel() {
           accentColor="#FFB74D"
           materials={WINDOW_MATERIALS}
           selectedName={currentMaterials.window.name}
-          onSelect={(m) => selectMaterial('window', m)}
+          onSelect={handleSelectWindow}
         />
 
         <button
@@ -274,7 +287,10 @@ export default function MaterialPanel() {
         )}
       </div>
 
-      <div className="material-panel-mobile" style={{ display: 'none', width: '100%', background: '#2C2C2C', zIndex: 100 }}>
+      <div
+        className="material-panel-mobile"
+        style={{ display: 'none', width: '100%', background: '#2C2C2C', zIndex: 100 }}
+      >
         <div
           onClick={() => setIsMobileExpanded(!isMobileExpanded)}
           style={{
@@ -286,10 +302,28 @@ export default function MaterialPanel() {
             borderBottom: isMobileExpanded ? '1px solid rgba(255,255,255,0.1)' : 'none',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FFFFFF', fontWeight: 700, fontFamily: "'Noto Sans SC', sans-serif" }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontFamily: "'Noto Sans SC', sans-serif",
+            }}
+          >
             <span>🏗️</span> 材质面板
           </div>
-          <span style={{ color: '#BDBDBD', fontSize: 18, transition: 'transform 0.2s', transform: isMobileExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+          <span
+            style={{
+              color: '#BDBDBD',
+              fontSize: 18,
+              transition: 'transform 0.2s',
+              transform: isMobileExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            }}
+          >
+            ▼
+          </span>
         </div>
 
         {isMobileExpanded && (
@@ -299,21 +333,21 @@ export default function MaterialPanel() {
               accentColor="#4FC3F7"
               materials={WALL_MATERIALS}
               selectedName={currentMaterials.wall.name}
-              onSelect={(m) => selectMaterial('wall', m)}
+              onSelect={handleSelectWall}
             />
             <MaterialGroup
               title="屋顶材质"
               accentColor="#81C784"
               materials={ROOF_MATERIALS}
               selectedName={currentMaterials.roof.name}
-              onSelect={(m) => selectMaterial('roof', m)}
+              onSelect={handleSelectRoof}
             />
             <MaterialGroup
               title="窗框材质"
               accentColor="#FFB74D"
               materials={WINDOW_MATERIALS}
               selectedName={currentMaterials.window.name}
-              onSelect={(m) => selectMaterial('window', m)}
+              onSelect={handleSelectWindow}
             />
             <button
               onClick={undo}
@@ -344,3 +378,8 @@ export default function MaterialPanel() {
     </>
   );
 }
+
+const MaterialPanel = memo(MaterialPanelInner);
+MaterialPanel.displayName = 'MaterialPanel';
+
+export default MaterialPanel;

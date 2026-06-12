@@ -10,6 +10,12 @@ export interface MaterialPreset {
   opacity?: number;
 }
 
+export interface MaterialSelection {
+  wall: MaterialPreset;
+  roof: MaterialPreset;
+  window: MaterialPreset;
+}
+
 export const WALL_MATERIALS: MaterialPreset[] = [
   { name: '玻璃幕墙', type: 'wall', color: '#87CEEB', roughness: 0.05, metalness: 0.9, transparent: true, opacity: 0.6 },
   { name: '浅色石材', type: 'wall', color: '#E8E4D9', roughness: 0.85, metalness: 0.0 },
