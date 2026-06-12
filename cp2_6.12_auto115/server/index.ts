@@ -9,6 +9,18 @@ app.use(cors());
 app.use(compression());
 app.use(express.json());
 
+type RoofType = 'flat' | 'gable' | 'hip' | 'dome' | 'traditional';
+
+interface GreenDensityRange {
+  min: number;
+  max: number;
+}
+
+interface SunAngle {
+  azimuth: number;
+  elevation: number;
+}
+
 interface Building {
   id: string;
   position: [number, number, number];
@@ -16,19 +28,25 @@ interface Building {
   depth: number;
   height: number;
   color: string;
-  roofType: 'flat' | 'slant' | 'dome' | 'traditional';
+  roofType: RoofType;
+  roofColor?: string;
+  windowCount?: number;
 }
 
 interface Tree {
   id: string;
   position: [number, number, number];
   scale: number;
+  trunkColor?: string;
+  foliageColor?: string;
 }
 
 interface StreetLight {
   id: string;
   position: [number, number, number];
   height: number;
+  intensity?: number;
+  color?: string;
 }
 
 interface StreetData {
@@ -41,6 +59,12 @@ interface StreetData {
   groundColor: string;
   streetWidth: number;
   streetLength: number;
+  greeneryDensity: number;
+  greenDensity: GreenDensityRange;
+  lightAngle: number;
+  sunAngle: SunAngle;
+  skyColor: string;
+  ambientIntensity: number;
 }
 
 interface BuildingDiff {
@@ -50,7 +74,9 @@ interface BuildingDiff {
   depth?: number;
   height?: number;
   color?: string;
-  roofType?: 'flat' | 'slant' | 'dome' | 'traditional';
+  roofType?: RoofType;
+  roofColor?: string;
+  windowCount?: number;
 }
 
 interface StreetDiff {
@@ -64,6 +90,12 @@ interface StreetDiff {
   addedStreetLights: StreetLight[];
   removedStreetLightIds: string[];
   groundColor?: string;
+  greeneryDensityDelta?: number;
+  greenDensity?: GreenDensityRange;
+  lightAngleDelta?: number;
+  sunAngleDelta?: Partial<SunAngle>;
+  skyColor?: string;
+  ambientIntensityDelta?: number;
 }
 
 const streetTypes = ['hutong', 'shikumen', 'qilou', 'tulou'];
@@ -88,28 +120,33 @@ function generateBuildings(type: string, startId: number): { buildings: Building
     
     let height = 3 + Math.random() * 4;
     let color = '#8B4513';
-    let roofType: 'flat' | 'slant' | 'dome' | 'traditional' = 'slant';
+    let roofType: RoofType = 'gable';
+    let roofColor = '#654321';
 
     switch (type) {
       case 'hutong':
         height = 2 + Math.random() * 2;
         color = ['#8B4513', '#A0522D', '#CD853F'][Math.floor(Math.random() * 3)];
         roofType = 'traditional';
+        roofColor = '#8B0000';
         break;
       case 'shikumen':
         height = 3 + Math.random() * 3;
         color = ['#B22222', '#800000', '#A52A2A'][Math.floor(Math.random() * 3)];
         roofType = 'flat';
+        roofColor = '#4A4A4A';
         break;
       case 'qilou':
         height = 4 + Math.random() * 3;
         color = ['#F5F5DC', '#FAEBD7', '#FFEFD5'][Math.floor(Math.random() * 3)];
-        roofType = 'slant';
+        roofType = 'hip';
+        roofColor = '#2F4F4F';
         break;
       case 'tulou':
         height = 5 + Math.random() * 4;
         color = ['#D2B48C', '#DEB887', '#F5DEB3'][Math.floor(Math.random() * 3)];
         roofType = 'dome';
+        roofColor = '#8B4513';
         break;
     }
 
@@ -121,6 +158,8 @@ function generateBuildings(type: string, startId: number): { buildings: Building
       height,
       color,
       roofType,
+      roofColor,
+      windowCount: Math.floor(height),
     });
     id++;
   }
@@ -142,6 +181,8 @@ function generateTrees(startId: number): { trees: Tree[]; nextId: number } {
       id: `tree-${id}`,
       position: [x, 0, z],
       scale: 0.8 + Math.random() * 0.4,
+      trunkColor: '#8B4513',
+      foliageColor: ['#228B22', '#32CD32', '#006400'][Math.floor(Math.random() * 3)],
     });
     id++;
   }
@@ -163,6 +204,8 @@ function generateStreetLights(startId: number): { streetLights: StreetLight[]; n
       id: `light-${id}`,
       position: [x, 0, z],
       height: 4 + Math.random() * 1,
+      intensity: 1.0,
+      color: '#FFFACD',
     });
     id++;
   }
@@ -197,6 +240,12 @@ function generateStreetData(type: string): StreetData {
     groundColor,
     streetWidth: 30,
     streetLength: 80,
+    greeneryDensity: 35,
+    greenDensity: { min: 0, max: 100 },
+    lightAngle: 0,
+    sunAngle: { azimuth: 45, elevation: 60 },
+    skyColor: '#87CEEB',
+    ambientIntensity: 0.5,
   };
 }
 
@@ -204,11 +253,14 @@ function generateStreetDiff(original: StreetData): StreetDiff {
   const buildingDiffs: BuildingDiff[] = original.buildings.map((b, idx) => {
     const newHeight = b.height * (1.2 + Math.random() * 0.3);
     const colors = ['#F5F5DC', '#FFD700', '#E6E6FA', '#D4AF37'];
+    const roofTypes: RoofType[] = ['flat', 'gable', 'hip'];
     return {
       id: b.id,
       height: newHeight,
       position: [b.position[0], newHeight / 2, b.position[2]],
       color: colors[idx % colors.length],
+      roofType: roofTypes[idx % roofTypes.length],
+      roofColor: '#708090',
     };
   });
 
@@ -226,6 +278,8 @@ function generateStreetDiff(original: StreetData): StreetDiff {
       height,
       color: '#E6E6FA',
       roofType: 'flat',
+      roofColor: '#4A4A4A',
+      windowCount: Math.floor(height),
     });
   }
 
@@ -238,6 +292,8 @@ function generateStreetDiff(original: StreetData): StreetDiff {
       id: `tree-new-${i}`,
       position: [x, 0, z],
       scale: 0.9 + Math.random() * 0.3,
+      trunkColor: '#654321',
+      foliageColor: '#32CD32',
     });
   }
 
@@ -250,6 +306,8 @@ function generateStreetDiff(original: StreetData): StreetDiff {
       id: `light-new-${i}`,
       position: [x, 0, z],
       height: 5,
+      intensity: 1.2,
+      color: '#FFD700',
     });
   }
 
@@ -264,6 +322,12 @@ function generateStreetDiff(original: StreetData): StreetDiff {
     addedStreetLights,
     removedStreetLightIds: original.streetLights.filter((_, i) => i % 4 === 0).map(l => l.id),
     groundColor: '#6B8E23',
+    greeneryDensityDelta: 40,
+    greenDensity: { min: 0, max: 100 },
+    lightAngleDelta: 30,
+    sunAngleDelta: { azimuth: 90, elevation: 45 },
+    skyColor: '#E6E6FA',
+    ambientIntensityDelta: 0.2,
   };
 }
 
@@ -304,6 +368,16 @@ app.get('/api/streets/:id/diff', (req, res) => {
   }
 });
 
+app.get('/api/street-diff/:id', (req, res) => {
+  const id = req.params.id;
+  const diff = streetDiffCache[id];
+  if (diff) {
+    res.json(diff);
+  } else {
+    res.status(404).json({ error: 'Street diff not found' });
+  }
+});
+
 app.post('/api/streets/:id/params', (req, res) => {
   const id = req.params.id;
   const { buildingColor, greeneryDensity, lightAngle } = req.body;
@@ -313,6 +387,14 @@ app.post('/api/streets/:id/params', (req, res) => {
       streetDataCache[id].buildings.forEach(b => {
         b.color = buildingColor;
       });
+    }
+    if (typeof greeneryDensity === 'number') {
+      streetDataCache[id].greeneryDensity = Math.max(0, Math.min(100, greeneryDensity));
+    }
+    if (typeof lightAngle === 'number') {
+      streetDataCache[id].lightAngle = Math.max(-90, Math.min(90, lightAngle));
+      const radians = (lightAngle * Math.PI) / 180;
+      streetDataCache[id].sunAngle.azimuth = lightAngle + 45;
     }
     res.json({ success: true, id, buildingColor, greeneryDensity, lightAngle });
   } else {

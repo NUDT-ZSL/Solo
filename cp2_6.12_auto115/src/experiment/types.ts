@@ -1,4 +1,14 @@
-export type RoofType = 'flat' | 'slant' | 'dome' | 'traditional';
+export type RoofType = 'flat' | 'gable' | 'hip' | 'dome' | 'traditional';
+
+export interface GreenDensityRange {
+  min: number;
+  max: number;
+}
+
+export interface SunAngle {
+  azimuth: number;
+  elevation: number;
+}
 
 export interface Building {
   id: string;
@@ -39,7 +49,9 @@ export interface StreetData {
   streetWidth: number;
   streetLength: number;
   greeneryDensity: number;
+  greenDensity: GreenDensityRange;
   lightAngle: number;
+  sunAngle: SunAngle;
   skyColor: string;
   ambientIntensity: number;
 }
@@ -68,7 +80,9 @@ export interface StreetDiff {
   removedStreetLightIds: string[];
   groundColor?: string;
   greeneryDensityDelta?: number;
+  greenDensity?: GreenDensityRange;
   lightAngleDelta?: number;
+  sunAngleDelta?: Partial<SunAngle>;
   skyColor?: string;
   ambientIntensityDelta?: number;
 }

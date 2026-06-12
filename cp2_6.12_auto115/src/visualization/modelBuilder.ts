@@ -4,7 +4,7 @@ import type { Building, Tree, StreetLight, RoofType } from '../experiment/types'
 export function createBuildingMesh(building: Building): THREE.Group {
   const group = new THREE.Group();
   group.name = `building-${building.id}`;
-  group.userData = { buildingId: building.id };
+  group.userData = { buildingId: building.id, originalData: building };
 
   const wallGeometry = new THREE.BoxGeometry(building.width, building.height, building.depth);
   const wallMaterial = new THREE.MeshStandardMaterial({
@@ -41,10 +41,10 @@ function createRoof(type: RoofType, width: number, depth: number, color: string)
       const geo = new THREE.BoxGeometry(width * 1.05, 0.2, depth * 1.05);
       return new THREE.Mesh(geo, material);
     }
-    case 'slant': {
+    case 'gable': {
       const shape = new THREE.Shape();
       shape.moveTo(-width / 2, 0);
-      shape.lineTo(0, 1.5);
+      shape.lineTo(0, heightForRoof(width, depth));
       shape.lineTo(width / 2, 0);
       shape.lineTo(-width / 2, 0);
 
@@ -53,16 +53,48 @@ function createRoof(type: RoofType, width: number, depth: number, color: string)
       geo.translate(0, 0, -depth * 1.05 / 2);
       return new THREE.Mesh(geo, material);
     }
+    case 'hip': {
+      const group = new THREE.Group() as unknown as THREE.Mesh;
+      const hipHeight = heightForRoof(width, depth) * 0.7;
+
+      const frontShape = new THREE.Shape();
+      frontShape.moveTo(-width / 2, 0);
+      frontShape.lineTo(-width * 0.3, hipHeight);
+      frontShape.lineTo(width * 0.3, hipHeight);
+      frontShape.lineTo(width / 2, 0);
+      frontShape.lineTo(-width / 2, 0);
+
+      const frontExtrude = { depth: depth * 0.45, bevelEnabled: false };
+      const frontGeo = new THREE.ExtrudeGeometry(frontShape, frontExtrude);
+      frontGeo.translate(0, 0, -depth * 0.45 / 2);
+      const front = new THREE.Mesh(frontGeo, material);
+      (group as unknown as THREE.Group).add(front);
+
+      const sideShape = new THREE.Shape();
+      sideShape.moveTo(-depth / 2, 0);
+      sideShape.lineTo(0, hipHeight);
+      sideShape.lineTo(depth / 2, 0);
+      sideShape.lineTo(-depth / 2, 0);
+
+      const sideExtrude = { depth: width * 0.6, bevelEnabled: false };
+      const sideGeo = new THREE.ExtrudeGeometry(sideShape, sideExtrude);
+      sideGeo.rotateY(Math.PI / 2);
+      sideGeo.translate(0, 0, -width * 0.6 / 2);
+      const side = new THREE.Mesh(sideGeo, material);
+      (group as unknown as THREE.Group).add(side);
+
+      return group;
+    }
     case 'dome': {
       const geo = new THREE.SphereGeometry(Math.min(width, depth) * 0.55, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
       return new THREE.Mesh(geo, material);
     }
     case 'traditional': {
-      const group = new THREE.Group();
+      const group = new THREE.Group() as unknown as THREE.Mesh;
 
       const baseGeo = new THREE.BoxGeometry(width * 1.15, 0.3, depth * 1.15);
       const base = new THREE.Mesh(baseGeo, material);
-      group.add(base);
+      (group as unknown as THREE.Group).add(base);
 
       const topShape = new THREE.Shape();
       topShape.moveTo(-width * 0.55, 0);
@@ -75,17 +107,21 @@ function createRoof(type: RoofType, width: number, depth: number, color: string)
       const topGeo = new THREE.ExtrudeGeometry(topShape, topExtrude);
       topGeo.translate(0, 0.15, -depth * 0.95 / 2);
       const top = new THREE.Mesh(topGeo, material);
-      group.add(top);
+      (group as unknown as THREE.Group).add(top);
 
-      return group as unknown as THREE.Mesh;
+      return group;
     }
   }
+}
+
+function heightForRoof(width: number, depth: number): number {
+  return Math.min(width, depth) * 0.35 + 0.5;
 }
 
 export function createTreeMesh(tree: Tree): THREE.Group {
   const group = new THREE.Group();
   group.name = `tree-${tree.id}`;
-  group.userData = { treeId: tree.id, baseScale: tree.scale };
+  group.userData = { treeId: tree.id, baseScale: tree.scale, targetScale: tree.scale };
 
   const trunkHeight = 2 * tree.scale;
   const trunkGeo = new THREE.CylinderGeometry(0.15 * tree.scale, 0.2 * tree.scale, trunkHeight, 8);
@@ -138,4 +174,111 @@ export function createStreetLightMesh(light: StreetLight): THREE.Group {
   arm.name = 'arm';
   group.add(arm);
 
-  const
+  const lampGeo = new THREE.SphereGeometry(0.15, 8, 8);
+  const lampMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(light.color || '#FFFACD'),
+    emissive: new THREE.Color(light.color || '#FFFACD'),
+    emissiveIntensity: 0.5,
+  });
+  const lamp = new THREE.Mesh(lampGeo, lampMat);
+  lamp.position.set(1, light.height - 0.3, 0);
+  lamp.name = 'lamp';
+  group.add(lamp);
+
+  const pointLight = new THREE.PointLight(
+    new THREE.Color(light.color || '#FFFACD'),
+    light.intensity || 1.0,
+    15
+  );
+  pointLight.position.set(1, light.height - 0.3, 0);
+  pointLight.castShadow = true;
+  pointLight.shadow.mapSize.width = 512;
+  pointLight.shadow.mapSize.height = 512;
+  pointLight.name = 'pointLight';
+  group.add(pointLight);
+
+  group.position.set(...light.position);
+  return group;
+}
+
+export function createGround(width: number, length: number, color: string): THREE.Mesh {
+  const geometry = new THREE.PlaneGeometry(width, length);
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color),
+    roughness: 0.9,
+    metalness: 0.0,
+  });
+  const ground = new THREE.Mesh(geometry, material);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  ground.name = 'ground';
+  return ground;
+}
+
+export function createStreetGrid(width: number, length: number): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'streetGrid';
+
+  const material = new THREE.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.3 });
+
+  const halfW = width / 2;
+  const halfL = length / 2;
+
+  for (let i = -halfW; i <= halfW; i += 5) {
+    const points = [new THREE.Vector3(i, 0.01, -halfL), new THREE.Vector3(i, 0.01, halfL)];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    group.add(line);
+  }
+
+  for (let i = -halfL; i <= halfL; i += 5) {
+    const points = [new THREE.Vector3(-halfW, 0.01, i), new THREE.Vector3(halfW, 0.01, i)];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    group.add(line);
+  }
+
+  return group;
+}
+
+export function createStreetSceneGroup(
+  buildings: Building[],
+  trees: Tree[],
+  lights: StreetLight[],
+  groundWidth: number,
+  groundLength: number,
+  groundColor: string
+): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'streetScene';
+
+  const ground = createGround(groundWidth, groundLength, groundColor);
+  group.add(ground);
+
+  const grid = createStreetGrid(groundWidth, groundLength);
+  group.add(grid);
+
+  const buildingsGroup = new THREE.Group();
+  buildingsGroup.name = 'buildings';
+  buildings.forEach(b => buildingsGroup.add(createBuildingMesh(b)));
+  group.add(buildingsGroup);
+
+  const treesGroup = new THREE.Group();
+  treesGroup.name = 'trees';
+  trees.forEach(t => treesGroup.add(createTreeMesh(t)));
+  group.add(treesGroup);
+
+  const lightsGroup = new THREE.Group();
+  lightsGroup.name = 'streetLights';
+  lights.forEach(l => lightsGroup.add(createStreetLightMesh(l)));
+  group.add(lightsGroup);
+
+  return group;
+}
+
+export function lerpColor(colorA: string, colorB: string, t: number): string {
+  const a = new THREE.Color(colorA);
+  const b = new THREE.Color(colorB);
+  const result = new THREE.Color().lerpColors(a, b, Math.max(0, Math.min(1, t)));
+  return '#' + result.getHexString();
+}
