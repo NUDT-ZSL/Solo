@@ -14,6 +14,11 @@ const FinalItinerary: React.FC<FinalItineraryProps> = ({ room }) => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dragCityId, setDragCityId] = useState<string | null>(null);
+  const dragDataRef = useRef<{ index: number | null; cityId: string | null; overIndex: number | null }>({
+    index: null,
+    cityId: null,
+    overIndex: null,
+  });
   const galleryRef = useRef<HTMLDivElement>(null);
 
   const finalCities = room.finalCities || [];
@@ -28,32 +33,44 @@ const FinalItinerary: React.FC<FinalItineraryProps> = ({ room }) => {
   const handleDragStart = useCallback((e: React.DragEvent, index: number, cityId: string) => {
     setDraggedIndex(index);
     setDragCityId(cityId);
+    setDragOverIndex(null);
+    dragDataRef.current = { index, cityId, overIndex: null };
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `${cityId}-${index}`);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    if (dragOverIndex !== index) {
+    if (dragDataRef.current.overIndex !== index) {
+      dragDataRef.current.overIndex = index;
       setDragOverIndex(index);
     }
-  }, [dragOverIndex]);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, dropIndex: number, cityId: string) => {
+    e.preventDefault();
+    const { index: dragIndex, cityId: dragCity } = dragDataRef.current;
+    if (dragIndex === null || dragCity !== cityId || dragIndex === dropIndex) {
+      return;
+    }
+
+    const city = finalCities.find((c) => c.id === cityId);
+    if (city) {
+      const newOrder = [...city.attractions];
+      const [removed] = newOrder.splice(dragIndex, 1);
+      newOrder.splice(dropIndex, 0, removed);
+      const attractionIds = newOrder.map((a) => a.id);
+      reorderAttractions(city.id, attractionIds);
+    }
+  }, [finalCities]);
 
   const handleDragEnd = useCallback(() => {
-    if (draggedIndex !== null && dragOverIndex !== null && dragCityId && draggedIndex !== dragOverIndex) {
-      const city = finalCities.find((c) => c.id === dragCityId);
-      if (city) {
-        const newOrder = [...city.attractions];
-        const [removed] = newOrder.splice(draggedIndex, 1);
-        newOrder.splice(dragOverIndex, 0, removed);
-        const attractionIds = newOrder.map((a) => a.id);
-        reorderAttractions(city.id, attractionIds);
-      }
-    }
     setDraggedIndex(null);
     setDragOverIndex(null);
     setDragCityId(null);
-  }, [draggedIndex, dragOverIndex, dragCityId, finalCities]);
+    dragDataRef.current = { index: null, cityId: null, overIndex: null };
+  }, []);
 
   const scrollToCard = useCallback((index: number) => {
     if (galleryRef.current) {
@@ -108,7 +125,7 @@ const FinalItinerary: React.FC<FinalItineraryProps> = ({ room }) => {
     <div className="final-itinerary">
       <div className="final-header">
         <h2>最终行程清单</h2>
-        <p>共 {finalCities.length} 个城市通过投票</p>
+        <p>共 {finalCities.length} 个城市通过投票 · 拖拽手柄可调整景点顺序</p>
       </div>
 
       <div className="gallery-dots">
@@ -148,17 +165,33 @@ const FinalItinerary: React.FC<FinalItineraryProps> = ({ room }) => {
                   {city.attractions.map((attraction: Attraction, idx: number) => (
                     <div
                       key={attraction.id}
-                      className={`attraction-item ${expandedAttractions[attraction.id] ? 'expanded' : ''} ${draggedIndex === idx && dragCityId === city.id ? 'dragging' : ''} ${dragOverIndex === idx && dragCityId === city.id ? 'drag-over' : ''}`}
+                      className={`attraction-item ${expandedAttractions[attraction.id] ? 'expanded' : ''} ${draggedIndex === idx && dragCityId === city.id ? 'dragging' : ''} ${dragOverIndex === idx && dragCityId === city.id && draggedIndex !== idx ? 'drag-over' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, idx, city.id)}
                       onDragOver={(e) => handleDragOver(e, idx)}
+                      onDrop={(e) => handleDrop(e, idx, city.id)}
                       onDragEnd={handleDragEnd}
-                      onClick={() => toggleAttraction(attraction.id)}
                     >
-                      <div className="attraction-header" style={{ height: '44px' }}>
+                      <div
+                        className="attraction-header"
+                        style={{ height: '44px' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAttraction(attraction.id);
+                        }}
+                      >
                         <span className="attraction-pin">📌</span>
                         <span className="attraction-name">{attraction.name}</span>
-                        <span className="attraction-drag-handle">⋮⋮</span>
+                        <span
+                          className="attraction-drag-handle"
+                          title="拖拽调整顺序"
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
+                          <span></span><span></span><span></span>
+                          <span></span><span></span><span></span>
+                        </span>
                       </div>
 
                       <div className="attraction-detail">

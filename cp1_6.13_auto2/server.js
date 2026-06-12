@@ -185,8 +185,8 @@ function saveRoom(room) {
 
 app.get('/api/cities/search', (req, res) => {
   const { q } = req.query;
-  if (!q || typeof q !== 'string') {
-    return res.json([]);
+  if (!q || typeof q !== 'string' || q.trim() === '') {
+    return res.json(db.data.cities.slice(0, 6));
   }
   const query = q.toLowerCase();
   const results = db.data.cities.filter(

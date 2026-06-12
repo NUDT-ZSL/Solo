@@ -186,7 +186,9 @@
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: all 250ms ease-out;
+  position: relative;
+  user-select: none;
 }
 
 .attraction-item:hover {
@@ -194,12 +196,27 @@
 }
 
 .attraction-item.dragging {
-  opacity: 0.5;
-  transform: scale(1.02);
+  opacity: 0.4;
+  transform: scale(0.98);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 .attraction-item.drag-over {
-  border-top: 2px solid var(--accent-primary);
+  border-top: 3px solid var(--accent-primary);
+  transform: translateY(2px);
+}
+
+.attraction-item.drag-over::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--accent-primary);
 }
 
 .attraction-header {
@@ -226,16 +243,31 @@
 }
 
 .attraction-drag-handle {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 3px);
+  grid-template-rows: repeat(2, 3px);
+  gap: 2px;
   cursor: grab;
   user-select: none;
   flex-shrink: 0;
-  letter-spacing: -2px;
+  padding: 6px;
+  border-radius: 4px;
+  transition: background-color var(--transition-fast);
+}
+
+.attraction-drag-handle:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .attraction-drag-handle:active {
   cursor: grabbing;
+}
+
+.attraction-drag-handle span {
+  width: 3px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
 }
 
 .attraction-detail {
