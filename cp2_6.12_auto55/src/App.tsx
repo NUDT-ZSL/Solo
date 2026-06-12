@@ -6,10 +6,11 @@ import { LegendPanel } from './components/LegendPanel';
 import { useAppStore } from './store/useAppStore';
 
 function AnimationLoop() {
-  const { isPlaying, playSpeed, currentTime, endTime, startTime, advanceTime } = useAppStore();
-  const lastTimeRef = useRef(performance.now());
+  const { isPlaying, advanceTime, updateFrame } = useAppStore();
 
   useFrame((state, delta) => {
+    updateFrame(delta);
+
     if (isPlaying) {
       advanceTime(delta);
     }

@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import { City, WeatherData, WeatherPoint, fetchCities, fetchWeather, fetchWeatherBatch, lerpWeatherData } from '../services/dataService';
+import {
+  City,
+  WeatherData,
+  WeatherPoint,
+  fetchCities,
+  fetchWeather,
+  fetchWeatherBatch,
+  lerpWeatherData,
+} from '../services/dataService';
 
 interface AppState {
   cities: City[];
@@ -17,6 +25,8 @@ interface AppState {
   showWind: boolean;
   showPrecipitation: boolean;
   legendPanelCollapsed: boolean;
+  lastApiFetchTime: number;
+  lastFrameUpdateTime: number;
 
   setCurrentCity: (city: City) => void;
   setCurrentTime: (time: Date) => void;
@@ -28,7 +38,9 @@ interface AppState {
   toggleLegendPanel: () => void;
   loadCities: () => Promise<void>;
   loadWeatherData: (cityId: string, time: Date) => Promise<void>;
+  fetchNextWeatherBatch: (cityId: string, time: Date) => Promise<void>;
   updateInterpolation: (delta: number) => void;
+  updateFrame: (delta: number) => void;
   advanceTime: (deltaSeconds: number) => void;
 }
 
@@ -48,14 +60,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   showWind: true,
   showPrecipitation: true,
   legendPanelCollapsed: false,
+  lastApiFetchTime: 0,
+  lastFrameUpdateTime: 0,
 
   setCurrentCity: (city) => {
-    set({ currentCity: city });
+    set({
+      currentCity: city,
+      weatherData: null,
+      nextWeatherData: null,
+      interpolatedPoints: [],
+      interpolationProgress: 1,
+    });
     get().loadWeatherData(city.id, get().currentTime);
   },
 
   setCurrentTime: (time) => {
-    set({ currentTime: time });
+    set({
+      currentTime: time,
+      weatherData: null,
+      nextWeatherData: null,
+      interpolatedPoints: [],
+      interpolationProgress: 1,
+    });
     const { currentCity } = get();
     if (currentCity) {
       get().loadWeatherData(currentCity.id, time);
@@ -84,7 +110,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         weatherData,
         interpolatedPoints: weatherData.points,
-        interpolationProgress: 1,
+        interpolationProgress: 0,
+        lastApiFetchTime: performance.now(),
       });
 
       const nextTime = new Date(time.getTime() + 3 * 60 * 60 * 1000);
@@ -92,6 +119,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ nextWeatherData });
     } catch (error) {
       console.error('Failed to load weather data:', error);
+    }
+  },
+
+  fetchNextWeatherBatch: async (cityId, time) => {
+    try {
+      const dataList = await fetchWeatherBatch(cityId, time.toISOString(), 3, 3);
+      if (dataList.length >= 2) {
+        set({
+          weatherData: dataList[0],
+          nextWeatherData: dataList[1],
+          interpolatedPoints: dataList[0].points,
+          interpolationProgress: 0,
+          lastApiFetchTime: performance.now(),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch weather batch:', error);
     }
   },
 
@@ -107,16 +151,52 @@ export const useAppStore = create<AppState>((set, get) => ({
         weatherData: nextWeatherData,
         interpolationProgress: 0,
         nextWeatherData: null,
+        interpolatedPoints: nextWeatherData.points,
       });
       return;
     }
 
-    const t = newProgress;
-    const interpolatedPoints = lerpWeatherData(weatherData, nextWeatherData, t);
+    const interpolatedPoints = lerpWeatherData(weatherData, nextWeatherData, newProgress);
     set({
       interpolationProgress: newProgress,
       interpolatedPoints,
     });
+  },
+
+  updateFrame: (delta) => {
+    const {
+      isPlaying,
+      currentCity,
+      currentTime,
+      weatherData,
+      nextWeatherData,
+      lastApiFetchTime,
+      lastFrameUpdateTime,
+    } = get();
+
+    const now = performance.now();
+    const frameInterval = 1000;
+
+    if (now - lastFrameUpdateTime >= frameInterval) {
+      if (!nextWeatherData && weatherData) {
+        const nextTime = new Date(weatherData.time);
+        nextTime.setHours(nextTime.getHours() + 3);
+        fetchWeather(currentCity!.id, nextTime.toISOString())
+          .then((data) => {
+            set({ nextWeatherData: data });
+          })
+          .catch(console.error);
+      }
+
+      get().updateInterpolation(delta);
+      set({ lastFrameUpdateTime: now });
+    }
+
+    const apiInterval = 3000;
+    if (now - lastApiFetchTime >= apiInterval && currentCity && isPlaying) {
+      const nextBatchTime = new Date(currentTime.getTime() + 3 * 60 * 60 * 1000);
+      get().fetchNextWeatherBatch(currentCity.id, nextBatchTime);
+    }
   },
 
   advanceTime: (deltaSeconds) => {
@@ -124,7 +204,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!isPlaying) return;
 
     const speedMultiplier = playSpeed;
-    const msPerSecond = 1000;
     const gameMsPerRealSecond = 60 * 60 * 1000;
     const deltaMs = deltaSeconds * gameMsPerRealSecond * speedMultiplier;
 
@@ -134,5 +213,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     set({ currentTime: newTime });
+
+    const { weatherData } = get();
+    if (weatherData) {
+      const dataTime = new Date(weatherData.time);
+      const diff = Math.abs(newTime.getTime() - dataTime.getTime());
+      if (diff > 1.5 * 60 * 60 * 1000) {
+        const { currentCity } = get();
+        if (currentCity) {
+          get().loadWeatherData(currentCity.id, newTime);
+        }
+      }
+    }
   },
 }));
