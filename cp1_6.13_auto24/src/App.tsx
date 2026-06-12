@@ -1,35 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { CodeSnippet, LANGUAGES } from './types';
 import { getAllSnippets, getSnippetById, addSnippet, updateSnippet, deleteSnippet, searchSnippets } from './store/db';
 import Editor, { HighlightedCode } from './components/Editor';
 import CardList from './components/CardList';
+import { MarkdownRenderer, formatRelativeTime } from './utils';
 
-type Page = 'home' | 'create' | 'detail';
-
-function renderMarkdown(md: string): string {
-  if (!md) return '';
-  let html = md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) => {
-    return `<pre style="background:#1e293b;color:#e2e8f0;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.5;margin:8px 0"><code>${code}</code></pre>`;
-  });
-  html = html.replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;color:#7c3aed">$1</code>');
-  html = html.replace(/^### (.+)$/gm, '<h3 style="font-size:16px;font-weight:600;margin:12px 0 6px;color:#1e293b">$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2 style="font-size:18px;font-weight:600;margin:14px 0 8px;color:#1e293b">$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1 style="font-size:22px;font-weight:700;margin:16px 0 8px;color:#1e293b">$1</h1>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/^[-*] (.+)$/gm, '<li style="margin-left:20px;list-style:disc;color:#475569">$1</li>');
-  html = html.replace(/^\d+\. (.+)$/gm, '<li style="margin-left:20px;list-style:decimal;color:#475569">$1</li>');
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote style="border-left:3px solid #3b82f6;padding-left:12px;color:#64748b;margin:8px 0">$1</blockquote>');
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#3b82f6;text-decoration:underline" target="_blank">$1</a>');
-  html = html.replace(/\n/g, '<br/>');
-  return html;
-}
+type Page = 'home' | 'create' | 'detail' | 'share';
 
 function Toast({ message, visible }: { message: string; visible: boolean }) {
   return (
@@ -55,16 +32,39 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
   );
 }
 
-function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+const MAX_TITLE_LENGTH = 50;
+const MAX_TAG_COUNT = 5;
+
+function TagInput({
+  tags,
+  onChange,
+  onError,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  onError?: (msg: string) => void;
+}) {
   const [input, setInput] = useState('');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
       e.preventDefault();
       const newTag = input.trim().replace(/,$/, '');
-      if (newTag && tags.length < 5 && !tags.includes(newTag)) {
-        onChange([...tags, newTag]);
+      if (!newTag) {
+        setInput('');
+        return;
       }
+      if (tags.length >= MAX_TAG_COUNT) {
+        onError?.(`标签最多${MAX_TAG_COUNT}个`);
+        setInput('');
+        return;
+      }
+      if (tags.includes(newTag)) {
+        onError?.('标签已存在');
+        setInput('');
+        return;
+      }
+      onChange([...tags, newTag]);
       setInput('');
     }
     if (e.key === 'Backspace' && !input && tags.length > 0) {
@@ -109,7 +109,7 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[
           </span>
         </span>
       ))}
-      {tags.length < 5 && (
+      {tags.length < MAX_TAG_COUNT && (
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -134,26 +134,49 @@ function SnippetForm({
   initial,
   onSave,
   onCancel,
+  formError,
+  setFormError,
 }: {
   initial?: CodeSnippet;
   onSave: (snippet: CodeSnippet) => void;
   onCancel: () => void;
+  formError: string;
+  setFormError: (msg: string) => void;
 }) {
-  const [title, setTitle] = useState(initial?.title || '');
+  const [title, setTitle] = useState((initial?.title || '').slice(0, MAX_TITLE_LENGTH));
   const [language, setLanguage] = useState(initial?.language || LANGUAGES[0]);
-  const [tags, setTags] = useState<string[]>(initial?.tags || []);
+  const [tags, setTags] = useState<string[]>((initial?.tags || []).slice(0, MAX_TAG_COUNT));
   const [code, setCode] = useState(initial?.code || '');
   const [comment, setComment] = useState(initial?.comment || '');
-  const [showPreview, setShowPreview] = useState(false);
+
+  const isTitleInvalid = title.length > MAX_TITLE_LENGTH || (title.trim().length === 0);
+  const isTagsInvalid = tags.length > MAX_TAG_COUNT;
+  const isFormValid = title.trim().length > 0 && code.trim().length > 0 && !isTagsInvalid;
 
   const handleSubmit = () => {
-    if (!title.trim() || !code.trim()) return;
+    if (title.trim().length === 0) {
+      setFormError('标题不能为空');
+      return;
+    }
+    if (title.trim().length > MAX_TITLE_LENGTH) {
+      setFormError(`标题不能超过${MAX_TITLE_LENGTH}字符`);
+      return;
+    }
+    if (tags.length > MAX_TAG_COUNT) {
+      setFormError(`标签最多${MAX_TAG_COUNT}个`);
+      return;
+    }
+    if (code.trim().length === 0) {
+      setFormError('代码不能为空');
+      return;
+    }
+
     const snippet: CodeSnippet = {
       id: initial?.id || uuidv4(),
-      title: title.trim().slice(0, 50),
+      title: title.trim().slice(0, MAX_TITLE_LENGTH),
       code,
       language,
-      tags,
+      tags: tags.slice(0, MAX_TAG_COUNT),
       comment,
       createdAt: initial?.createdAt || Date.now(),
     };
@@ -162,18 +185,32 @@ function SnippetForm({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {formError && (
+        <div style={{
+          padding: '10px 14px',
+          background: '#fef2f2',
+          color: '#dc2626',
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 500,
+          border: '1px solid #fecaca',
+        }}>
+          {formError}
+        </div>
+      )}
       <div>
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-          标题 <span style={{ color: '#94a3b8', fontWeight: 400 }}>(最多50字符)</span>
+          标题 <span style={{ color: '#94a3b8', fontWeight: 400 }}>(最多{MAX_TITLE_LENGTH}字符，当前 {title.length}/{MAX_TITLE_LENGTH})</span>
         </label>
         <input
           value={title}
-          onChange={(e) => setTitle(e.target.value.slice(0, 50))}
+          onChange={(e) => setTitle(e.target.value.slice(0, MAX_TITLE_LENGTH))}
           placeholder="输入代码片段标题..."
+          maxLength={MAX_TITLE_LENGTH}
           style={{
             width: '100%',
             padding: '10px 12px',
-            border: '1px solid #e2e8f0',
+            border: `1px solid ${isTitleInvalid && title.length > 0 ? '#fca5a5' : '#e2e8f0'}`,
             borderRadius: 8,
             fontSize: 14,
             outline: 'none',
@@ -182,7 +219,7 @@ function SnippetForm({
             transition: 'border-color 0.2s',
           }}
           onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = '#3b82f6'; }}
-          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#e2e8f0'; }}
+          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = isTitleInvalid && title.length > 0 ? '#fca5a5' : '#e2e8f0'; }}
         />
       </div>
       <div>
@@ -211,9 +248,13 @@ function SnippetForm({
       </div>
       <div>
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-          标签 <span style={{ color: '#94a3b8', fontWeight: 400 }}>(最多5个)</span>
+          标签 <span style={{ color: '#94a3b8', fontWeight: 400 }}>(最多{MAX_TAG_COUNT}个，当前 {tags.length}/{MAX_TAG_COUNT})</span>
         </label>
-        <TagInput tags={tags} onChange={setTags} />
+        <TagInput
+          tags={tags}
+          onChange={(t) => { setTags(t.slice(0, MAX_TAG_COUNT)); setFormError(''); }}
+          onError={(msg) => setFormError(msg)}
+        />
       </div>
       <div>
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
@@ -222,48 +263,21 @@ function SnippetForm({
         <Editor code={code} onChange={setCode} language={language} />
       </div>
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>
-            Markdown 注释 <span style={{ color: '#94a3b8', fontWeight: 400 }}>(可选)</span>
-          </label>
-          <button
-            onClick={() => setShowPreview(!showPreview)}
-            style={{
-              border: 'none',
-              background: 'none',
-              fontSize: 12,
-              color: '#3b82f6',
-              cursor: 'pointer',
-              padding: '2px 8px',
-              borderRadius: 4,
-              fontWeight: 500,
-            }}
-          >
-            {showPreview ? '编辑' : '预览'}
-          </button>
-        </div>
-        {showPreview ? (
-          <div
-            style={{
-              minHeight: 100,
-              padding: 12,
-              border: '1px solid #e2e8f0',
-              borderRadius: 8,
-              background: '#ffffff',
-              fontSize: 14,
-              lineHeight: 1.6,
-              color: '#475569',
-            }}
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(comment) }}
-          />
-        ) : (
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+          Markdown 注释 <span style={{ color: '#94a3b8', fontWeight: 400 }}>(可选，左侧编辑，右侧实时预览)</span>
+        </label>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 12,
+        }}>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="添加 Markdown 格式的注释..."
+            placeholder="添加 Markdown 格式的注释...&#10;&#10;支持：&#10;# 标题&#10;**加粗** *斜体*&#10;- 列表项&#10;```代码块```&#10;`行内代码`&#10;> 引用"
             style={{
               width: '100%',
-              minHeight: 100,
+              height: 260,
               padding: 12,
               border: '1px solid #e2e8f0',
               borderRadius: 8,
@@ -273,12 +287,34 @@ function SnippetForm({
               resize: 'vertical',
               color: '#1e293b',
               boxSizing: 'border-box',
-              fontFamily: 'inherit',
+              fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+              whiteSpace: 'pre-wrap',
+              overflow: 'auto',
             }}
           />
-        )}
+          <div
+            style={{
+              height: 260,
+              padding: 12,
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+              background: comment.trim() ? '#ffffff' : '#f8fafc',
+              overflow: 'auto',
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: '#475569',
+              boxSizing: 'border-box',
+            }}
+          >
+            {comment.trim() ? (
+              <MarkdownRenderer text={comment} />
+            ) : (
+              <div style={{ color: '#94a3b8', fontSize: 13 }}>Markdown 预览区域</div>
+            )}
+          </div>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 4 }}>
         <button
           onClick={onCancel}
           style={{
@@ -290,30 +326,190 @@ function SnippetForm({
             fontSize: 14,
             fontWeight: 500,
             cursor: 'pointer',
-            transition: 'background 0.2s',
+            transition: 'background 0.2s, transform 0.2s',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#ffffff'; }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc';
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = '#ffffff';
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+          }}
         >
           取消
         </button>
         <button
           onClick={handleSubmit}
-          disabled={!title.trim() || !code.trim()}
+          disabled={!isFormValid}
           style={{
             padding: '10px 24px',
             border: 'none',
             borderRadius: 8,
-            background: (!title.trim() || !code.trim()) ? '#94a3b8' : '#3b82f6',
+            background: !isFormValid ? '#94a3b8' : '#3b82f6',
             color: '#ffffff',
             fontSize: 14,
             fontWeight: 500,
-            cursor: (!title.trim() || !code.trim()) ? 'not-allowed' : 'pointer',
-            transition: 'background 0.2s',
+            cursor: !isFormValid ? 'not-allowed' : 'pointer',
+            transition: 'background 0.2s, transform 0.2s',
+            transform: 'translateY(0)',
+          }}
+          onMouseEnter={(e) => {
+            if (isFormValid) {
+              (e.currentTarget as HTMLButtonElement).style.background = '#2563eb';
+              (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (isFormValid) {
+              (e.currentTarget as HTMLButtonElement).style.background = '#3b82f6';
+            }
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
           }}
         >
           {initial ? '保存修改' : '创建片段'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+interface SharePageProps {
+  snippet: CodeSnippet | null;
+  navigateTo: (hash: string) => void;
+}
+
+function SharePage({ snippet, navigateTo }: SharePageProps) {
+  if (!snippet) {
+    return (
+      <div style={{
+        textAlign: 'center',
+        padding: '80px 20px',
+        color: '#94a3b8',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
+        <div style={{ fontSize: 16, fontWeight: 500 }}>未找到该代码片段</div>
+        <div style={{ fontSize: 14, marginTop: 4 }}>该分享链接已失效或片段已被删除</div>
+        <button
+          onClick={() => navigateTo('#/')}
+          style={{
+            marginTop: 16,
+            padding: '8px 20px',
+            border: 'none',
+            borderRadius: 8,
+            background: '#3b82f6',
+            color: '#ffffff',
+            fontSize: 14,
+            cursor: 'pointer',
+          }}
+        >
+          返回首页
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <button
+        onClick={() => navigateTo('#/')}
+        style={{
+          border: 'none',
+          background: 'none',
+          color: '#3b82f6',
+          fontSize: 14,
+          cursor: 'pointer',
+          padding: '4px 0',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          fontWeight: 500,
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        返回列表
+      </button>
+      <div style={{
+        background: '#ffffff',
+        borderRadius: 12,
+        padding: 28,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div style={{
+            padding: '3px 10px',
+            borderRadius: 4,
+            background: '#a855f7',
+            color: '#ffffff',
+            fontSize: 11,
+            fontWeight: 600,
+          }}>
+            分享片段
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ flex: 1 }}>
+            <h1 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700, color: '#1e293b' }}>
+              {snippet.title}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontSize: 12,
+                fontWeight: 600,
+                padding: '3px 10px',
+                borderRadius: 4,
+                background: '#3b82f6',
+                color: '#ffffff',
+              }}>
+                {snippet.language}
+              </span>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                {formatRelativeTime(snippet.createdAt)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {snippet.tags.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+            {snippet.tags.map((tag) => (
+              <span key={tag} style={{
+                padding: '3px 12px',
+                borderRadius: 999,
+                background: '#e2e8f0',
+                color: '#334155',
+                fontSize: 12,
+                fontWeight: 500,
+              }}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <HighlightedCode code={snippet.code} language={snippet.language} />
+
+        {snippet.comment && (
+          <div style={{ marginTop: 20 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#475569', marginBottom: 8 }}>注释</h3>
+            <div
+              style={{
+                padding: 16,
+                background: '#f8fafc',
+                borderRadius: 8,
+                border: '1px solid #e2e8f0',
+                fontSize: 14,
+                lineHeight: 1.7,
+                color: '#475569',
+              }}
+            >
+              <MarkdownRenderer text={snippet.comment} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -324,10 +520,13 @@ const App: React.FC = () => {
   const [snippets, setSnippets] = useState<CodeSnippet[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedSnippet, setSelectedSnippet] = useState<CodeSnippet | null>(null);
+  const [shareId, setShareId] = useState<string | null>(null);
+  const [shareSnippet, setShareSnippet] = useState<CodeSnippet | null>(null);
   const [filterLang, setFilterLang] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState({ message: '', visible: false });
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [formError, setFormError] = useState('');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -345,18 +544,26 @@ const App: React.FC = () => {
   }, [loadSnippets]);
 
   useEffect(() => {
-    const handleRoute = () => {
+    const handleRoute = async () => {
       const hash = window.location.hash;
+      setEditModalOpen(false);
+      setSelectedSnippet(null);
+      setShareSnippet(null);
+
       if (hash.startsWith('#/share/')) {
         const id = hash.replace('#/share/', '');
-        setSelectedId(id);
-        setPage('detail');
+        setShareId(id);
+        setPage('share');
+        const s = await getSnippetById(id);
+        setShareSnippet(s || null);
       } else if (hash === '#/create') {
         setPage('create');
       } else if (hash.startsWith('#/detail/')) {
         const id = hash.replace('#/detail/', '');
         setSelectedId(id);
         setPage('detail');
+        const s = await getSnippetById(id);
+        setSelectedSnippet(s || null);
       } else {
         setPage('home');
       }
@@ -365,12 +572,6 @@ const App: React.FC = () => {
     window.addEventListener('hashchange', handleRoute);
     return () => window.removeEventListener('hashchange', handleRoute);
   }, []);
-
-  useEffect(() => {
-    if (page === 'detail' && selectedId) {
-      getSnippetById(selectedId).then((s) => setSelectedSnippet(s || null));
-    }
-  }, [page, selectedId]);
 
   const handleSearch = (value: string) => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -382,6 +583,7 @@ const App: React.FC = () => {
   const handleCreate = async (snippet: CodeSnippet) => {
     await addSnippet(snippet);
     window.location.hash = '#/';
+    setFormError('');
     showToast('代码片段创建成功！');
   };
 
@@ -389,6 +591,7 @@ const App: React.FC = () => {
     await updateSnippet(snippet);
     setEditModalOpen(false);
     setSelectedSnippet(snippet);
+    setFormError('');
     loadSnippets();
     showToast('代码片段已更新！');
   };
@@ -417,6 +620,8 @@ const App: React.FC = () => {
   const navigateTo = (hash: string) => {
     window.location.hash = hash;
   };
+
+  const showNavLangButtons = page === 'home';
 
   return (
     <div style={{
@@ -457,7 +662,7 @@ const App: React.FC = () => {
             </svg>
             CodeFlow
           </div>
-          {page === 'home' && (
+          {showNavLangButtons && (
             <div style={{ display: 'flex', gap: 6 }}>
               {['All', ...LANGUAGES].map((lang) => (
                 <button
@@ -472,7 +677,20 @@ const App: React.FC = () => {
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: 'pointer',
-                    transition: 'background 0.2s, color 0.2s',
+                    transition: 'background 0.2s, color 0.2s, transform 0.2s',
+                    transform: 'translateY(0)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (filterLang !== lang) {
+                      (e.currentTarget as HTMLButtonElement).style.background = '#e2e8f0';
+                    }
+                    (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (filterLang !== lang) {
+                      (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9';
+                    }
+                    (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
                   }}
                 >
                   {lang === 'All' ? '全部' : lang}
@@ -482,7 +700,7 @@ const App: React.FC = () => {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {page === 'home' && (
+          {showNavLangButtons && (
             <input
               placeholder="搜索标题或标签..."
               onChange={(e) => handleSearch(e.target.value)}
@@ -501,7 +719,7 @@ const App: React.FC = () => {
               onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#e2e8f0'; }}
             />
           )}
-          {page === 'home' && (
+          {showNavLangButtons && (
             <button
               onClick={() => navigateTo('#/create')}
               style={{
@@ -548,7 +766,7 @@ const App: React.FC = () => {
 
         {page === 'create' && (
           <div style={{
-            maxWidth: 720,
+            maxWidth: 920,
             margin: '0 auto',
             background: '#ffffff',
             borderRadius: 12,
@@ -561,6 +779,8 @@ const App: React.FC = () => {
             <SnippetForm
               onSave={handleCreate}
               onCancel={() => navigateTo('#/')}
+              formError={formError}
+              setFormError={setFormError}
             />
           </div>
         )}
@@ -611,7 +831,7 @@ const App: React.FC = () => {
                       {selectedSnippet.language}
                     </span>
                     <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                      {new Date(selectedSnippet.createdAt).toLocaleString('zh-CN')}
+                      {formatRelativeTime(selectedSnippet.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -651,7 +871,7 @@ const App: React.FC = () => {
                     分享
                   </button>
                   <button
-                    onClick={() => setEditModalOpen(true)}
+                    onClick={() => { setEditModalOpen(true); setFormError(''); }}
                     style={{
                       padding: '8px 16px',
                       border: '1px solid #e2e8f0',
@@ -751,8 +971,9 @@ const App: React.FC = () => {
                       lineHeight: 1.7,
                       color: '#475569',
                     }}
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedSnippet.comment) }}
-                  />
+                  >
+                    <MarkdownRenderer text={selectedSnippet.comment} />
+                  </div>
                 </div>
               )}
             </div>
@@ -785,6 +1006,10 @@ const App: React.FC = () => {
             </button>
           </div>
         )}
+
+        {page === 'share' && (
+          <SharePage snippet={shareSnippet} navigateTo={navigateTo} />
+        )}
       </main>
 
       {editModalOpen && selectedSnippet && (
@@ -806,7 +1031,7 @@ const App: React.FC = () => {
           }}
         >
           <div style={{
-            width: 700,
+            width: 920,
             maxWidth: '90vw',
             maxHeight: '90vh',
             overflow: 'auto',
@@ -820,7 +1045,9 @@ const App: React.FC = () => {
             <SnippetForm
               initial={selectedSnippet}
               onSave={handleUpdate}
-              onCancel={() => setEditModalOpen(false)}
+              onCancel={() => { setEditModalOpen(false); setFormError(''); }}
+              formError={formError}
+              setFormError={setFormError}
             />
           </div>
         </div>
