@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { worksApi } from '../api';
 import type { Work, CartItem } from '../types';
@@ -18,9 +18,9 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [flyingCart, setFlyingCart] = useState<{ id: string; startX: number; startY: number } | null>(null);
-  const cartButtonRef = useRef<HTMLDivElement>(null);
+  const [filterKey, setFilterKey] = useState(0);
 
-  const loadWorks = async () => {
+  const loadWorks = useCallback(async () => {
     setLoading(true);
     try {
       const res = await worksApi.getWorks(page, 8, category);
@@ -33,15 +33,16 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, category]);
 
   useEffect(() => {
     setPage(1);
+    setFilterKey(k => k + 1);
   }, [category]);
 
   useEffect(() => {
     loadWorks();
-  }, [page, category]);
+  }, [loadWorks]);
 
   const handleAddToCart = (work: Work, event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -56,9 +57,10 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
   };
 
   const isInCart = (workId: string) => cartItems.some(item => item.work.id === workId);
+  const cartTotalCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="page-container" style={{ paddingTop: 32, paddingBottom: 60 }}>
+    <div className="page-container" style={{ paddingTop: 32, paddingBottom: 80 }}>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <h1 style={{ fontSize: 32, fontWeight: 700, color: '#4a3728', marginBottom: 8 }}>匠心之作</h1>
         <p style={{ fontSize: 15, color: '#8B5E3C' }}>每一件都是纯手工缝制，独一无二</p>
@@ -95,23 +97,25 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 20
+          gridTemplateColumns: 'repeat(4, 280px)',
+          gap: 24,
+          justifyContent: 'center'
         }}
       >
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="wait">
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => (
               <motion.div
-                key={`skeleton-${i}`}
+                key={`skeleton-${filterKey}-${i}`}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={{ delay: i * 0.05 }}
                 style={{
-                  width: '100%',
+                  width: 280,
                   borderRadius: 12,
                   backgroundColor: '#f0f0f0',
-                  aspectRatio: '1 / 1.2'
+                  aspectRatio: '1 / 1.3'
                 }}
               />
             ))
@@ -128,99 +132,13 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
             </div>
           ) : (
             works.map((work, index) => (
-              <motion.div
-                key={work.id}
-                layout
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                whileHover={{ y: -4, boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)' }}
-                style={{
-                  width: '100%',
-                  borderRadius: 12,
-                  backgroundColor: 'white',
-                  overflow: 'hidden',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
-                  position: 'relative',
-                  cursor: 'pointer'
-                }}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    aspectRatio: '1 / 1',
-                    overflow: 'hidden',
-                    backgroundColor: '#fafafa'
-                  }}
-                >
-                  <img
-                    src={work.image}
-                    alt={work.name}
-                    loading="lazy"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      transition: 'transform 0.3s ease'
-                    }}
-                    onMouseEnter={e => {
-                      (e.target as HTMLImageElement).style.transform = 'scale(1.05)';
-                    }}
-                    onMouseLeave={e => {
-                      (e.target as HTMLImageElement).style.transform = 'scale(1)';
-                    }}
-                  />
-                </div>
-                <div style={{ padding: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 600, color: '#4a3728', flex: 1, marginRight: 8 }}>
-                      {work.name}
-                    </h3>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        padding: '2px 8px',
-                        borderRadius: 4,
-                        backgroundColor: '#FFF8F0',
-                        color: '#8B5E3C',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {work.category}
-                    </span>
-                  </div>
-                  <p style={{ fontSize: 13, color: '#999', marginBottom: 12, height: 36, overflow: 'hidden' }}>
-                    {work.description}
-                  </p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: '#D4A574' }}>
-                      ¥{work.price}
-                    </span>
-                    <button
-                      onClick={(e) => handleAddToCart(work, e)}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: 8,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        backgroundColor: isInCart(work.id) ? '#4a3728' : '#8B5E3C',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="9" cy="21" r="1" />
-                        <circle cx="20" cy="21" r="1" />
-                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-                      </svg>
-                      {isInCart(work.id) ? '已加入' : '加入'}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
+              <WorkCard
+                key={`${filterKey}-${work.id}`}
+                work={work}
+                index={index}
+                inCart={isInCart(work.id)}
+                onAddToCart={handleAddToCart}
+              />
             ))
           )}
         </AnimatePresence>
@@ -232,7 +150,8 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
             display: 'flex',
             justifyContent: 'center',
             gap: 8,
-            marginTop: 40
+            marginTop: 48,
+            alignItems: 'center'
           }}
         >
           <button
@@ -263,7 +182,9 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
                 color: page === i + 1 ? 'white' : '#4a3728',
                 fontWeight: 600,
                 fontSize: 14,
-                boxShadow: page === i + 1 ? '0 2px 8px rgba(74, 55, 40, 0.3)' : '0 1px 3px rgba(0,0,0,0.08)'
+                boxShadow: page === i + 1
+                  ? '0 2px 8px rgba(74, 55, 40, 0.3)'
+                  : '0 1px 3px rgba(0,0,0,0.08)'
               }}
             >
               {i + 1}
@@ -293,18 +214,18 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
           <motion.div
             key={flyingCart.id}
             initial={{
-              x: flyingCart.startX,
-              y: flyingCart.startY,
+              x: flyingCart.startX - 16,
+              y: flyingCart.startY - 16,
               opacity: 1,
               scale: 1
             }}
             animate={{
-              x: typeof window !== 'undefined' ? window.innerWidth - 40 : 0,
-              y: 30,
+              x: typeof window !== 'undefined' ? window.innerWidth - 60 : 0,
+              y: 44,
               opacity: 0,
               scale: 0.3
             }}
-            transition={{ duration: 0.5, ease: 'easeIn' }}
+            transition={{ duration: 0.5, ease: [0.5, 0, 0.75, 0] }}
             style={{
               position: 'fixed',
               width: 32,
@@ -315,7 +236,9 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 9999,
-              pointerEvents: 'none'
+              pointerEvents: 'none',
+              left: 0,
+              top: 0
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -327,11 +250,10 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
         )}
       </AnimatePresence>
 
-      {cartItems.length > 0 && (
+      {cartTotalCount > 0 && (
         <motion.div
-          ref={cartButtonRef}
-          initial={{ y: 100 }}
-          animate={{ y: 0 }}
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
           whileHover={{ scale: 1.05 }}
           onClick={onOpenCart}
           style={{
@@ -372,15 +294,30 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
               justifyContent: 'center'
             }}
           >
-            {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+            {cartTotalCount > 99 ? '99+' : cartTotalCount}
           </span>
         </motion.div>
       )}
 
       <style>{`
+        @media (max-width: 1200px) {
+          .page-container > div:nth-child(3) {
+            grid-template-columns: repeat(3, 280px) !important;
+          }
+        }
+        @media (max-width: 960px) {
+          .page-container > div:nth-child(3) {
+            grid-template-columns: repeat(2, 280px) !important;
+          }
+        }
         @media (max-width: 768px) {
           .page-container > div:nth-child(3) {
             grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .page-container > div:nth-child(3) > div {
+            width: auto !important;
+            max-width: 320px;
+            justify-self: center;
           }
         }
         @media (max-width: 480px) {
@@ -390,6 +327,200 @@ const WorksPage = ({ cartItems, onAddToCart, onOpenCart }: WorksPageProps) => {
         }
       `}</style>
     </div>
+  );
+};
+
+interface WorkCardProps {
+  work: Work;
+  index: number;
+  inCart: boolean;
+  onAddToCart: (work: Work, e: React.MouseEvent<HTMLButtonElement>) => void;
+}
+
+const WorkCard = ({ work, index, inCart, onAddToCart }: WorkCardProps) => {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!imgRef.current) return;
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(
+        entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting && imgRef.current) {
+              const src = imgRef.current.dataset.src;
+              if (src) {
+                imgRef.current.src = src;
+                imgRef.current.removeAttribute('data-src');
+              }
+              observer.unobserve(imgRef.current);
+            }
+          });
+        },
+        { rootMargin: '200px 0px' }
+      );
+      observer.observe(imgRef.current);
+      return () => observer.disconnect();
+    } else {
+      if (imgRef.current?.dataset.src) {
+        imgRef.current.src = imgRef.current.dataset.src;
+      }
+    }
+  }, [work.image]);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.4, delay: index * 0.05, ease: 'easeOut' }}
+      whileHover={{ y: -4 }}
+      style={{
+        width: 280,
+        borderRadius: 12,
+        backgroundColor: 'white',
+        overflow: 'hidden',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+        position: 'relative',
+        cursor: 'pointer',
+        willChange: 'transform',
+        contain: 'content',
+        transition: 'box-shadow 0.3s ease'
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.14)';
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          aspectRatio: '1 / 1',
+          overflow: 'hidden',
+          backgroundColor: '#fafafa',
+          position: 'relative'
+        }}
+      >
+        {!loaded && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.5s infinite'
+            }}
+          />
+        )}
+        <img
+          ref={imgRef}
+          data-src={work.image}
+          alt={work.name}
+          onLoad={() => setLoaded(true)}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            opacity: loaded ? 1 : 0,
+            transition: 'opacity 0.3s ease, transform 0.3s ease'
+          }}
+          onMouseEnter={e => {
+            if (loaded) (e.target as HTMLImageElement).style.transform = 'scale(1.05)';
+          }}
+          onMouseLeave={e => {
+            if (loaded) (e.target as HTMLImageElement).style.transform = 'scale(1)';
+          }}
+        />
+      </div>
+      <div style={{ padding: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            marginBottom: 8
+          }}
+        >
+          <h3
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: '#4a3728',
+              flex: 1,
+              marginRight: 8,
+              lineHeight: 1.4
+            }}
+          >
+            {work.name}
+          </h3>
+          <span
+            style={{
+              fontSize: 11,
+              padding: '2px 8px',
+              borderRadius: 4,
+              backgroundColor: '#FFF8F0',
+              color: '#8B5E3C',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            {work.category}
+          </span>
+        </div>
+        <p
+          style={{
+            fontSize: 13,
+            color: '#999',
+            marginBottom: 12,
+            height: 36,
+            overflow: 'hidden',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
+          }}
+        >
+          {work.description}
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 18, fontWeight: 700, color: '#D4A574' }}>¥{work.price}</span>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              onAddToCart(work, e);
+            }}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              backgroundColor: inCart ? '#4a3728' : '#8B5E3C',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="9" cy="21" r="1" />
+              <circle cx="20" cy="21" r="1" />
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+            </svg>
+            {inCart ? '已加入' : '加入'}
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+    </motion.div>
   );
 };
 

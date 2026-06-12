@@ -85,10 +85,10 @@ const Cart = ({ isOpen, onClose, items, onUpdateQuantity, onClear, totalPrice }:
               }}
             />
             <motion.div
-              initial={{ x: 350 }}
-              animate={{ x: 0 }}
-              exit={{ x: 350 }}
-              transition={{ type: 'tween', duration: 0.3 }}
+              initial={{ x: 350, opacity: 0.9 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 350, opacity: 0.9 }}
+              transition={{ type: 'tween', duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 position: 'fixed',
                 top: 0,
@@ -96,7 +96,7 @@ const Cart = ({ isOpen, onClose, items, onUpdateQuantity, onClear, totalPrice }:
                 width: 350,
                 height: '100vh',
                 backgroundColor: 'white',
-                boxShadow: '-4px 0 20px rgba(0, 0, 0, 0.1)',
+                boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.12)',
                 zIndex: 2001,
                 display: 'flex',
                 flexDirection: 'column'

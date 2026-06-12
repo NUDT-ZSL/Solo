@@ -18,6 +18,7 @@ const CoursesPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [datesWithSlots, setDatesWithSlots] = useState<Set<string>>(new Set());
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [showSlotPanel, setShowSlotPanel] = useState(false);
 
   useEffect(() => {
     loadCourses();
@@ -48,9 +49,10 @@ const CoursesPage = () => {
     try {
       const res = await coursesApi.getCourseSlots(selectedCourse.id);
       if (res.data.success && res.data.data) {
-        const dates = new Set(res.data.data
-          .filter(s => s.booked_count < s.max_capacity)
-          .map(s => s.date)
+        const dates = new Set(
+          res.data.data
+            .filter(s => s.booked_count < s.max_capacity && !bookedSlots.has(s.id))
+            .map(s => s.date)
         );
         setDatesWithSlots(dates);
       }
@@ -80,8 +82,17 @@ const CoursesPage = () => {
     if (datesWithSlots.has(dateStr)) {
       setSelectedDate(dateStr);
       setSelectedSlot(null);
+      setShowSlotPanel(true);
       loadSlotsForDate(dateStr);
     }
+  };
+
+  const closeSlotPanel = () => {
+    setShowSlotPanel(false);
+    setTimeout(() => {
+      setSelectedDate(null);
+      setSelectedSlot(null);
+    }, 300);
   };
 
   const handleSubmitBooking = async () => {
@@ -106,16 +117,19 @@ const CoursesPage = () => {
         phone
       });
 
-      setBookedSlots(prev => new Set([...prev, selectedSlot.id]));
+      const newBooked = new Set(bookedSlots);
+      newBooked.add(selectedSlot.id);
+      setBookedSlots(newBooked);
       setShowSuccess(true);
       setCustomerName('');
       setPhone('');
 
       setTimeout(() => {
         setShowSuccess(false);
-        setSelectedSlot(null);
-        setSelectedDate(null);
         loadSlotsForMonth();
+        if (selectedDate) {
+          loadSlotsForDate(selectedDate);
+        }
       }, 2000);
     } catch (err: unknown) {
       const errorData = (err as { response?: { data?: { error?: string } } }).response?.data;
@@ -276,7 +290,7 @@ const CoursesPage = () => {
   };
 
   return (
-    <div className="page-container" style={{ paddingTop: 32, paddingBottom: 60 }}>
+    <div className="page-container" style={{ paddingTop: 32, paddingBottom: 80 }}>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <h1 style={{ fontSize: 32, fontWeight: 700, color: '#4a3728', marginBottom: 8 }}>体验课程</h1>
         <p style={{ fontSize: 15, color: '#8B5E3C' }}>亲手制作一件属于自己的皮具作品</p>
@@ -300,6 +314,7 @@ const CoursesPage = () => {
                 setSelectedDate(null);
                 setSelectedSlot(null);
                 setSlots([]);
+                setShowSlotPanel(false);
               }}
               style={{
                 padding: '12px 24px',
@@ -330,10 +345,7 @@ const CoursesPage = () => {
       {selectedCourse && (
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 32,
-            maxWidth: 900,
+            maxWidth: 600,
             margin: '0 auto'
           }}
         >
@@ -347,29 +359,118 @@ const CoursesPage = () => {
           >
             {renderCalendar()}
           </div>
+        </div>
+      )}
 
-          <div
-            style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
-              padding: 24,
-              boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
-          >
-            <h4 style={{ fontSize: 16, fontWeight: 600, color: '#4a3728', marginBottom: 16 }}>
-              {selectedDate
-                ? `${selectedDate} 可选时段`
-                : '请先在左侧选择日期'}
-            </h4>
+      <AnimatePresence>
+        {showSlotPanel && selectedDate && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeSlotPanel}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                backgroundColor: 'rgba(74, 55, 40, 0.5)',
+                backdropFilter: 'blur(2px)',
+                zIndex: 1500
+              }}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              style={{
+                position: 'fixed',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1600,
+                maxHeight: '75vh',
+                backgroundColor: 'white',
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                boxShadow: '0 -4px 24px rgba(0, 0, 0, 0.12)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: '#ddd',
+                  margin: '10px auto 0',
+                  flexShrink: 0
+                }}
+              />
+              <div
+                style={{
+                  padding: '20px 24px 24px',
+                  overflowY: 'auto',
+                  flex: 1
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 16
+                  }}
+                >
+                  <h4 style={{ fontSize: 18, fontWeight: 700, color: '#4a3728' }}>
+                    {selectedDate} 可选时段
+                  </h4>
+                  <button
+                    onClick={closeSlotPanel}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      backgroundColor: '#f5f5f5',
+                      color: '#666',
+                      fontSize: 18,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
 
-            {selectedDate && (
-              <>
+                {selectedCourse && (
+                  <div
+                    style={{
+                      padding: 12,
+                      backgroundColor: '#FFF8F0',
+                      borderRadius: 10,
+                      marginBottom: 16,
+                      fontSize: 13,
+                      color: '#4a3728',
+                      lineHeight: 1.8
+                    }}
+                  >
+                    <p><strong>课程：</strong>{selectedCourse.name}</p>
+                    <p><strong>时长：</strong>{selectedCourse.duration} · <strong>费用：</strong>¥{selectedCourse.price}</p>
+                    <p><strong>介绍：</strong>{selectedCourse.description}</p>
+                  </div>
+                )}
+
                 {loadingSlots ? (
-                  <div style={{ color: '#999', fontSize: 14 }}>加载中...</div>
+                  <div style={{ color: '#999', fontSize: 14, textAlign: 'center', padding: 20 }}>
+                    加载中...
+                  </div>
                 ) : slots.length === 0 ? (
-                  <div style={{ color: '#999', fontSize: 14 }}>该日期暂无可预约时段</div>
+                  <div style={{ color: '#999', fontSize: 14, textAlign: 'center', padding: 20 }}>
+                    该日期暂无可预约时段
+                  </div>
                 ) : (
                   <div
                     style={{
@@ -383,10 +484,12 @@ const CoursesPage = () => {
                       const isBooked = bookedSlots.has(slot.id);
                       const isFull = slot.booked_count >= slot.max_capacity;
                       const isDisabled = isBooked || isFull;
+                      const isSelected = selectedSlot?.id === slot.id;
 
                       return (
-                        <button
+                        <motion.button
                           key={slot.id}
+                          whileTap={!isDisabled ? { scale: 0.95 } : undefined}
                           onClick={() => !isDisabled && setSelectedSlot(slot)}
                           disabled={isDisabled}
                           style={{
@@ -397,23 +500,25 @@ const CoursesPage = () => {
                             fontWeight: 600,
                             backgroundColor: isBooked
                               ? '#d1d5db'
-                              : selectedSlot?.id === slot.id
+                              : isSelected
                               ? '#8B5E3C'
                               : isFull
                               ? '#f3f4f6'
                               : '#FFF8F0',
                             color: isBooked
                               ? '#9ca3af'
-                              : selectedSlot?.id === slot.id
+                              : isSelected
                               ? 'white'
                               : isFull
                               ? '#9ca3af'
                               : '#8B5E3C',
+                            cursor: isDisabled ? 'not-allowed' : 'pointer',
                             position: 'relative',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: 4
+                            gap: 4,
+                            border: isSelected ? 'none' : '1px solid rgba(139, 94, 60, 0.15)'
                           }}
                         >
                           {isBooked && (
@@ -427,101 +532,94 @@ const CoursesPage = () => {
                               ({slot.max_capacity - slot.booked_count})
                             </span>
                           )}
-                        </button>
+                        </motion.button>
                       );
                     })}
                   </div>
                 )}
-              </>
-            )}
 
-            {selectedSlot && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}
-              >
-                <div
-                  style={{
-                    padding: 12,
-                    backgroundColor: '#FFF8F0',
-                    borderRadius: 8,
-                    fontSize: 13,
-                    color: '#4a3728'
-                  }}
-                >
-                  <p>课程：{selectedCourse.name}</p>
-                  <p>时间：{selectedDate} {selectedSlot.time}</p>
-                  <p>费用：¥{selectedCourse.price}</p>
-                </div>
-                <input
-                  type="text"
-                  placeholder="请输入您的姓名"
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 8,
-                    fontSize: 14
-                  }}
-                />
-                <input
-                  type="tel"
-                  placeholder="请输入手机号"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 8,
-                    fontSize: 14
-                  }}
-                />
-                {error && (
-                  <p style={{ fontSize: 12, color: '#ef4444' }}>{error}</p>
+                <AnimatePresence>
+                  {selectedSlot && !bookedSlots.has(selectedSlot.id) && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                      animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
+                      exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="请输入您的姓名"
+                        value={customerName}
+                        onChange={e => setCustomerName(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: 10,
+                          fontSize: 14
+                        }}
+                      />
+                      <input
+                        type="tel"
+                        placeholder="请输入手机号"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: 10,
+                          fontSize: 14
+                        }}
+                      />
+                      {error && (
+                        <p style={{ fontSize: 13, color: '#ef4444', margin: 0 }}>{error}</p>
+                      )}
+                      <button
+                        onClick={handleSubmitBooking}
+                        disabled={isSubmitting}
+                        style={{
+                          width: '100%',
+                          padding: '14px',
+                          backgroundColor: '#8B5E3C',
+                          color: 'white',
+                          borderRadius: 10,
+                          fontSize: 16,
+                          fontWeight: 600,
+                          marginTop: 4
+                        }}
+                      >
+                        {isSubmitting ? '预约中...' : '确认预约'}
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {selectedSlot && bookedSlots.has(selectedSlot.id) && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: 12,
+                      backgroundColor: '#dcfce7',
+                      borderRadius: 8,
+                      color: '#166534',
+                      fontSize: 13,
+                      textAlign: 'center',
+                      fontWeight: 600
+                    }}
+                  >
+                    ✓ 该时段已预约成功
+                  </div>
                 )}
-                <button
-                  onClick={handleSubmitBooking}
-                  disabled={isSubmitting}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: '#8B5E3C',
-                    color: 'white',
-                    borderRadius: 8,
-                    fontSize: 15,
-                    fontWeight: 600
-                  }}
-                >
-                  {isSubmitting ? '预约中...' : '确认预约'}
-                </button>
-              </motion.div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <AnimatePresence>
-        {selectedDate && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => {
-              setSelectedDate(null);
-              setSelectedSlot(null);
-            }}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              zIndex: 1500,
-              display: 'none'
-            }}
-          />
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -555,14 +653,6 @@ const CoursesPage = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .page-container > div:nth-child(4) {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </div>
   );
 };
