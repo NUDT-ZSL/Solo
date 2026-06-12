@@ -1,16 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { reverseGeocode, EMOJI_PRESETS } from '../utils/geoUtils';
+import type { NodeSavePayload } from '../types';
 
 interface ModalProps {
   lat: number;
   lng: number;
-  onSave: (data: {
-    photoUrl: string;
-    description: string;
-    address: string;
-    date: string;
-    emojiTags: string[];
-  }) => void;
+  onSave: (data: NodeSavePayload) => void;
   onClose: () => void;
 }
 
@@ -49,7 +44,7 @@ const Modal: React.FC<ModalProps> = ({ lat, lng, onSave, onClose }) => {
     };
     reader.onload = () => {
       setUploadProgress(100);
-      setUploading(false);
+      setTimeout(() => setUploading(false), 300);
       setPhotoUrl(reader.result as string);
     };
     reader.readAsDataURL(file);
@@ -68,7 +63,13 @@ const Modal: React.FC<ModalProps> = ({ lat, lng, onSave, onClose }) => {
       alert('请输入描述');
       return;
     }
-    onSave({ photoUrl, description: description.trim(), address, date, emojiTags: selectedEmojis });
+    onSave({
+      photoUrl,
+      description: description.trim(),
+      address,
+      date,
+      emojiTags: selectedEmojis,
+    });
   };
 
   return (
@@ -101,7 +102,9 @@ const Modal: React.FC<ModalProps> = ({ lat, lng, onSave, onClose }) => {
                     <span style={styles.progressText}>{uploadProgress}%</span>
                   </div>
                 ) : (
-                  <span style={styles.uploadHint}>点击上传照片 (JPG/PNG, ≤10MB)</span>
+                  <span style={styles.uploadHint}>
+                    点击上传照片 (JPG/PNG, ≤10MB)
+                  </span>
                 )}
               </div>
             )}
@@ -150,7 +153,9 @@ const Modal: React.FC<ModalProps> = ({ lat, lng, onSave, onClose }) => {
                   key={emoji}
                   style={{
                     ...styles.emojiBtn,
-                    ...(selectedEmojis.includes(emoji) ? styles.emojiBtnActive : {}),
+                    ...(selectedEmojis.includes(emoji)
+                      ? styles.emojiBtnActive
+                      : {}),
                   }}
                   onClick={() => toggleEmoji(emoji)}
                 >
@@ -173,22 +178,25 @@ const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0,0,0,0.6)',
+    background: 'rgba(0,0,0,0.5)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
     backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
   },
   modal: {
     borderRadius: 16,
-    background: 'rgba(42,59,76,0.85)',
+    background: 'rgba(42, 59, 76, 0.75)',
     backdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255,255,255,0.15)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(255, 255, 255, 0.5)',
     width: 420,
     maxHeight: '90vh',
     overflow: 'auto',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+    color: '#eee',
   },
   header: {
     display: 'flex',
@@ -206,9 +214,12 @@ const styles: Record<string, React.CSSProperties> = {
   closeBtn: {
     background: 'none',
     border: 'none',
-    color: '#aaa',
+    color: '#ccc',
     fontSize: 18,
     cursor: 'pointer',
+    padding: '2px 8px',
+    borderRadius: 6,
+    transition: 'background 200ms, color 200ms',
   },
   body: {
     padding: 20,
@@ -225,65 +236,69 @@ const styles: Record<string, React.CSSProperties> = {
   uploadArea: {
     width: '100%',
     height: 120,
-    border: '2px dashed rgba(255,255,255,0.2)',
+    border: '2px dashed rgba(255,255,255,0.25)',
     borderRadius: 12,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    transition: 'border-color 200ms',
+    transition: 'border-color 200ms, background 200ms',
+    background: 'rgba(30,30,36,0.3)',
   },
   uploadHint: {
-    color: '#888',
+    color: '#bbb',
     fontSize: 13,
   },
   progressContainer: {
     width: '80%',
     position: 'relative',
+    textAlign: 'center',
   },
   progressBar: {
     height: 8,
     background: 'linear-gradient(90deg, #1a3a5c, #2dd4a8)',
     borderRadius: 4,
-    transition: 'width 200ms',
+    transition: 'width 100ms linear',
   },
   progressText: {
     display: 'block',
-    textAlign: 'center',
     color: '#f0c27a',
     fontSize: 12,
     marginTop: 6,
+    fontWeight: 500,
   },
   field: {
     marginBottom: 14,
   },
   label: {
     display: 'block',
-    color: '#ccc',
+    color: '#ddd',
     fontSize: 12,
-    marginBottom: 4,
+    marginBottom: 5,
   },
   input: {
     width: '100%',
     padding: '8px 12px',
     background: 'rgba(30,30,36,0.6)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: 8,
     color: '#eee',
     fontSize: 13,
     boxSizing: 'border-box',
+    outline: 'none',
   },
   textarea: {
     width: '100%',
     padding: '8px 12px',
     background: 'rgba(30,30,36,0.6)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: 8,
     color: '#eee',
     fontSize: 13,
     resize: 'vertical',
     boxSizing: 'border-box',
     fontFamily: 'inherit',
+    outline: 'none',
   },
   emojiGrid: {
     display: 'flex',
@@ -294,7 +309,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 36,
     height: 36,
     borderRadius: '50%',
-    border: '2px solid rgba(255,255,255,0.1)',
+    border: '2px solid rgba(255,255,255,0.15)',
     background: 'rgba(30,30,36,0.5)',
     cursor: 'pointer',
     fontSize: 16,
@@ -305,7 +320,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   emojiBtnActive: {
     borderColor: '#f0c27a',
-    background: 'rgba(240,194,122,0.2)',
+    background: 'rgba(240,194,122,0.25)',
     transform: 'scale(1.1)',
   },
   saveBtn: {
@@ -319,6 +334,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     cursor: 'pointer',
     transition: 'transform 200ms, box-shadow 200ms',
+    marginTop: 8,
   },
 };
 

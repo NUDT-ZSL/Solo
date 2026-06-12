@@ -1,15 +1,5 @@
 import axios from 'axios';
-
-export interface TravelNode {
-  id: string;
-  lat: number;
-  lng: number;
-  date: string;
-  description: string;
-  address: string;
-  photoUrl: string;
-  emojiTags: string[];
-}
+import type { TravelNode } from '../types';
 
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
@@ -19,6 +9,9 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
         lon: lng,
         format: 'json',
         'accept-language': 'zh',
+      },
+      headers: {
+        'User-Agent': 'TravelogueCanvas/1.0',
       },
     });
     return res.data?.display_name || '未知地点';
@@ -30,16 +23,19 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
 export function generateBezierPath(
   start: { lat: number; lng: number },
   end: { lat: number; lng: number },
-  segments: number = 30
+  segments: number = 40
 ): { lat: number; lng: number }[] {
   const midLat = (start.lat + end.lat) / 2;
   const midLng = (start.lng + end.lng) / 2;
   const dx = end.lng - start.lng;
   const dy = end.lat - start.lat;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  const offset = dist * 0.2;
-  const ctrlLat = midLat + offset;
-  const ctrlLng = midLng - offset * 0.5;
+  const offset = dist * 0.25;
+
+  const perpX = -dy / (dist || 1);
+  const perpY = dx / (dist || 1);
+  const ctrlLat = midLat + perpY * offset;
+  const ctrlLng = midLng + perpX * offset;
 
   const points: { lat: number; lng: number }[] = [];
   for (let i = 0; i <= segments; i++) {

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { TravelNode, formatDate } from '../utils/geoUtils';
+import type { TravelNode as TravelNodeType } from '../types';
 
 interface SidebarProps {
-  nodes: TravelNode[];
+  nodes: TravelNodeType[];
   activeNodeId: string | null;
-  onNodeClick: (node: TravelNode) => void;
+  onNodeClick: (node: TravelNodeType) => void;
   onDeleteNode: (id: string) => void;
 }
 
@@ -37,12 +38,40 @@ const Sidebar: React.FC<SidebarProps> = ({
                 ...styles.card,
                 ...(isActive ? styles.cardActive : {}),
               }}
-              className={isActive ? 'node-card-active' : ''}
+              className={isActive ? 'node-card-highlight' : ''}
             >
               <div style={styles.cardTop}>
-                {node.photoUrl && (
-                  <img src={node.photoUrl} alt="" style={styles.thumbnail} />
-                )}
+                <div style={styles.thumbnailWrap}>
+                  {node.photoUrl ? (
+                    <img
+                      src={node.photoUrl}
+                      alt=""
+                      style={styles.thumbnail}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        const parent = (e.target as HTMLImageElement)
+                          .parentElement as HTMLElement;
+                        if (parent) {
+                          const placeholder = document.createElement('div');
+                          placeholder.textContent = '🖼️';
+                          placeholder.style.cssText = `
+                            width: 100%;
+                            height: 100%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            background: rgba(30,30,36,0.6);
+                            font-size: 20px;
+                            border-radius: 8px;
+                          `;
+                          parent.appendChild(placeholder);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div style={styles.thumbnailPlaceholder}>🖼️</div>
+                  )}
+                </div>
                 <div style={styles.cardInfo}>
                   <span
                     style={styles.dateTag}
@@ -50,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   >
                     {formatDate(node.date)}
                   </span>
-                  <span style={styles.placeName}>
+                  <span style={styles.placeName} title={node.address}>
                     {node.address.split(',')[0]}
                   </span>
                 </div>
@@ -79,11 +108,25 @@ const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
         {nodes.length === 0 && (
-          <div style={styles.empty}>
-            点击地图添加你的第一个旅行节点
-          </div>
+          <div style={styles.empty}>点击地图添加你的第一个旅行节点</div>
         )}
       </div>
+      <style>{`
+        @keyframes nodeCardFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+        }
+        .node-card-highlight {
+          animation: nodeCardFloat 1.2s ease-in-out;
+        }
+        @keyframes fadeInCard {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .node-card-fade-in {
+          animation: fadeInCard 400ms ease;
+        }
+      `}</style>
     </div>
   );
 };
@@ -130,26 +173,44 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     padding: 12,
     boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-    transition: 'transform 200ms, box-shadow 200ms',
+    transition: 'transform 200ms, box-shadow 200ms, border-left-color 200ms',
     cursor: 'default',
     position: 'relative',
+    borderLeft: '3px solid transparent',
     animation: 'fadeInCard 400ms ease',
   },
   cardActive: {
     boxShadow: '0 4px 20px rgba(240,194,122,0.3)',
-    borderLeft: '3px solid #f0c27a',
+    borderLeftColor: '#f0c27a',
   },
   cardTop: {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
   },
-  thumbnail: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    objectFit: 'cover',
+  thumbnailWrap: {
+    width: 48,
+    height: 48,
     flexShrink: 0,
+    borderRadius: 8,
+    overflow: 'hidden',
+    background: 'rgba(30,30,36,0.6)',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    borderRadius: 8,
+    display: 'block',
+  },
+  thumbnailPlaceholder: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 20,
+    background: 'rgba(30,30,36,0.6)',
   },
   cardInfo: {
     flex: 1,
@@ -164,6 +225,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: 'pointer',
     transition: 'opacity 200ms',
+    display: 'inline-block',
   },
   placeName: {
     color: '#aaa',
@@ -215,7 +277,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontSize: 12,
     opacity: 0.4,
-    transition: 'opacity 200ms',
+    transition: 'opacity 200ms, transform 200ms',
     padding: 4,
   },
   empty: {
@@ -223,6 +285,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     textAlign: 'center',
     marginTop: 40,
+    lineHeight: 1.6,
   },
 };
 
