@@ -21,6 +21,8 @@ interface CameraAnimation {
   startTime: number;
   duration: number;
   startPosition: THREE.Vector3;
+  controlPoint1: THREE.Vector3;
+  controlPoint2: THREE.Vector3;
   endPosition: THREE.Vector3;
   startTarget: THREE.Vector3;
   endTarget: THREE.Vector3;
@@ -48,7 +50,7 @@ export class SceneManager {
   private cameraAnimation: CameraAnimation | null = null;
   private animationFrameId: number = 0;
   private stars: THREE.Points | null = null;
-  private clock: THREE.Clock;
+  private lastFrameTime: number = 0;
 
   public onBodyClick?: (bodyId: string) => void;
 
@@ -86,7 +88,7 @@ export class SceneManager {
 
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
-    this.clock = new THREE.Clock();
+    this.lastFrameTime = performance.now();
 
     this.setupLights();
     this.createStarfield();
@@ -243,25 +245,61 @@ export class SceneManager {
     const targetPos = new THREE.Vector3().copy(bodyWorldPos).add(offset);
     targetPos.y += body.originalScale * 2;
 
+    const startPos = this.camera.position.clone();
+    const endPos = targetPos;
+
+    const cp1 = new THREE.Vector3(
+      startPos.x + (endPos.x - startPos.x) * 0.33,
+      Math.max(startPos.y, endPos.y) + 8,
+      startPos.z + (endPos.z - startPos.z) * 0.33
+    );
+    const cp2 = new THREE.Vector3(
+      startPos.x + (endPos.x - startPos.x) * 0.66,
+      Math.max(startPos.y, endPos.y) + 6,
+      startPos.z + (endPos.z - startPos.z) * 0.66
+    );
+
     this.cameraAnimation = {
       active: true,
-      startTime: this.clock.getElapsedTime(),
-      duration: 0.8,
-      startPosition: this.camera.position.clone(),
-      endPosition: targetPos,
+      startTime: performance.now(),
+      duration: 800,
+      startPosition: startPos,
+      controlPoint1: cp1,
+      controlPoint2: cp2,
+      endPosition: endPos,
       startTarget: this.controls.target.clone(),
       endTarget: bodyWorldPos,
     };
   }
 
-  private easeInOutCubic(t: number): number {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  private cubicBezier(
+    t: number,
+    p0: THREE.Vector3,
+    p1: THREE.Vector3,
+    p2: THREE.Vector3,
+    p3: THREE.Vector3
+  ): THREE.Vector3 {
+    const oneMinusT = 1 - t;
+    const result = new THREE.Vector3();
+    result.x = oneMinusT * oneMinusT * oneMinusT * p0.x
+      + 3 * oneMinusT * oneMinusT * t * p1.x
+      + 3 * oneMinusT * t * t * p2.x
+      + t * t * t * p3.x;
+    result.y = oneMinusT * oneMinusT * oneMinusT * p0.y
+      + 3 * oneMinusT * oneMinusT * t * p1.y
+      + 3 * oneMinusT * t * t * p2.y
+      + t * t * t * p3.y;
+    result.z = oneMinusT * oneMinusT * oneMinusT * p0.z
+      + 3 * oneMinusT * oneMinusT * t * p1.z
+      + 3 * oneMinusT * t * t * p2.z
+      + t * t * t * p3.z;
+    return result;
   }
 
   private updateCameraAnimation(): void {
     if (!this.cameraAnimation || !this.cameraAnimation.active) return;
 
-    const elapsed = this.clock.getElapsedTime() - this.cameraAnimation.startTime;
+    const elapsed = performance.now() - this.cameraAnimation.startTime;
     let t = elapsed / this.cameraAnimation.duration;
 
     if (t >= 1) {
@@ -275,23 +313,14 @@ export class SceneManager {
 
     const easedT = this.easeInOutCubic(t);
 
-    const startPos = this.cameraAnimation.startPosition;
-    const endPos = this.cameraAnimation.endPosition;
-    const midHeight = Math.max(startPos.y, endPos.y) + 5;
-    const midPos = new THREE.Vector3(
-      (startPos.x + endPos.x) / 2,
-      midHeight,
-      (startPos.z + endPos.z) / 2
+    const bezierPos = this.cubicBezier(
+      easedT,
+      this.cameraAnimation.startPosition,
+      this.cameraAnimation.controlPoint1,
+      this.cameraAnimation.controlPoint2,
+      this.cameraAnimation.endPosition
     );
-
-    const p0 = startPos;
-    const p1 = midPos;
-    const p2 = endPos;
-    const oneMinusT = 1 - easedT;
-
-    this.camera.position.x = oneMinusT * oneMinusT * p0.x + 2 * oneMinusT * easedT * p1.x + easedT * easedT * p2.x;
-    this.camera.position.y = oneMinusT * oneMinusT * p0.y + 2 * oneMinusT * easedT * p1.y + easedT * easedT * p2.y;
-    this.camera.position.z = oneMinusT * oneMinusT * p0.z + 2 * oneMinusT * easedT * p1.z + easedT * easedT * p2.z;
+    this.camera.position.copy(bezierPos);
 
     this.controls.target.lerpVectors(
       this.cameraAnimation.startTarget,
@@ -523,7 +552,10 @@ export class SceneManager {
   private animate = (): void => {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
-    const delta = Math.min(this.clock.getDelta(), 0.1);
+    const now = performance.now();
+    const rawDelta = (now - this.lastFrameTime) / 1000;
+    const delta = Math.min(rawDelta, 0.1);
+    this.lastFrameTime = now;
 
     for (const body of this.bodies.values()) {
       body.angle += body.orbitSpeed * delta * 60;
