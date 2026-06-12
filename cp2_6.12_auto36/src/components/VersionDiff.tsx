@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { diffWords, diffLines, type Change } from 'diff';
 import { Columns2, Rows3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,8 +26,17 @@ interface LineData {
   wordDiffs: WordDiff[];
 }
 
-const CONTEXT_LINES = 3;
-const LARGE_CONTENT_THRESHOLD = 10000;
+function getContextLines(contentLength: number): { contextLines: number; showAll: boolean } {
+  if (contentLength < 2000) {
+    return { contextLines: 0, showAll: true };
+  } else if (contentLength < 5000) {
+    return { contextLines: 5, showAll: false };
+  } else if (contentLength < 10000) {
+    return { contextLines: 3, showAll: false };
+  } else {
+    return { contextLines: 2, showAll: false };
+  }
+}
 
 function splitIntoLines(text: string): string[] {
   if (!text) return [];
@@ -50,7 +59,8 @@ function buildLineData(
   lineChanges: Change[],
   oldLines: string[],
   newLines: string[],
-  largeContent: boolean
+  contextLines: number,
+  showAll: boolean
 ): { lines: LineData[]; visibleIndices: Set<number> } {
   const lines: LineData[] = [];
   let oldNum = 0;
@@ -118,9 +128,9 @@ function buildLineData(
   }
 
   const visibleIndices = new Set<number>();
-  if (largeContent && changeIndices.length > 0) {
+  if (!showAll && changeIndices.length > 0) {
     changeIndices.forEach((ci) => {
-      for (let offset = -CONTEXT_LINES; offset <= CONTEXT_LINES; offset++) {
+      for (let offset = -contextLines; offset <= contextLines; offset++) {
         const idx = ci + offset;
         if (idx >= 0 && idx < lines.length) {
           visibleIndices.add(idx);
@@ -262,25 +272,86 @@ export default function VersionDiff({
 }: VersionDiffProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
   const [isAnimating, setIsAnimating] = useState(false);
+  const prevViewMode = useRef<ViewMode>('side-by-side');
+  const slideDirection = useRef<1 | -1>(1);
 
   const { allLines, visibleIndices, sideBySide } = useMemo(() => {
-    const largeContent =
-      oldContent.length > LARGE_CONTENT_THRESHOLD || newContent.length > LARGE_CONTENT_THRESHOLD;
+    const maxLength = Math.max(oldContent.length, newContent.length);
+    const { contextLines, showAll } = getContextLines(maxLength);
     const oldLines = splitIntoLines(oldContent);
     const newLines = splitIntoLines(newContent);
     const lineChanges = diffLines(oldContent, newContent);
-    const { lines, visibleIndices } = buildLineData(lineChanges, oldLines, newLines, largeContent);
+    const { lines, visibleIndices } = buildLineData(lineChanges, oldLines, newLines, contextLines, showAll);
     const sideBySide = buildSideBySideData(lines);
     return { allLines: lines, visibleIndices, sideBySide };
   }, [oldContent, newContent]);
 
   const handleViewChange = (mode: ViewMode) => {
-    if (mode === viewMode) return;
+    if (mode === viewMode || isAnimating) return;
+    slideDirection.current = mode === 'unified' ? 1 : -1;
+    prevViewMode.current = viewMode;
     setIsAnimating(true);
+    setViewMode(mode);
     setTimeout(() => {
-      setViewMode(mode);
-      setTimeout(() => setIsAnimating(false), 10);
-    }, 150);
+      setIsAnimating(false);
+    }, 300);
+  };
+
+  const renderView = (mode: ViewMode) => {
+    if (mode === 'side-by-side') {
+      return (
+        <>
+          <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-200">
+            <div className="sticky top-0 z-10 px-3 py-1.5 bg-slate-100 text-xs font-medium text-slate-500 border-b border-slate-200 shrink-0">
+              {oldLabel}
+            </div>
+            <div className="flex-1 overflow-auto">
+              {sideBySide.leftLines.map((line, i) => (
+                <div key={i} className="flex">
+                  <LineNumber num={line?.oldLineNum ?? null} />
+                  <div className="flex-1 min-w-0">
+                    <LineContent line={line} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="sticky top-0 z-10 px-3 py-1.5 bg-slate-100 text-xs font-medium text-slate-500 border-b border-slate-200 shrink-0">
+              {newLabel}
+            </div>
+            <div className="flex-1 overflow-auto">
+              {sideBySide.rightLines.map((line, i) => (
+                <div key={i} className="flex">
+                  <LineNumber num={line?.newLineNum ?? null} />
+                  <div className="flex-1 min-w-0">
+                    <LineContent line={line} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <div className="flex-1 overflow-auto">
+        <div className="flex-1">
+          {allLines.map((line, i) =>
+            visibleIndices.has(i) ? (
+              <div key={i} className="flex">
+                <LineNumber num={line.oldLineNum} />
+                <LineNumber num={line.newLineNum} />
+                <div className="flex-1 min-w-0">
+                  <UnifiedLineContent line={line} />
+                </div>
+              </div>
+            ) : null
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -328,71 +399,43 @@ export default function VersionDiff({
       </div>
 
       <div className="flex-1 relative overflow-hidden">
-        <div
-          className={cn(
-            'absolute inset-0 flex transition-all duration-300 ease',
-            isAnimating ? 'opacity-0' : 'opacity-100'
-          )}
-          style={{
-            transform: isAnimating
-              ? viewMode === 'side-by-side'
-                ? 'translateX(20px)'
-                : 'translateX(-20px)'
-              : 'translateX(0)',
-          }}
-        >
-          {viewMode === 'side-by-side' ? (
-            <>
-              <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-200">
-                <div className="sticky top-0 z-10 px-3 py-1.5 bg-slate-100 text-xs font-medium text-slate-500 border-b border-slate-200 shrink-0">
-                  {oldLabel}
-                </div>
-                <div className="flex-1 overflow-auto">
-                  {sideBySide.leftLines.map((line, i) => (
-                    <div key={i} className="flex">
-                      <LineNumber num={line?.oldLineNum ?? null} />
-                      <div className="flex-1 min-w-0">
-                        <LineContent line={line} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="sticky top-0 z-10 px-3 py-1.5 bg-slate-100 text-xs font-medium text-slate-500 border-b border-slate-200 shrink-0">
-                  {newLabel}
-                </div>
-                <div className="flex-1 overflow-auto">
-                  {sideBySide.rightLines.map((line, i) => (
-                    <div key={i} className="flex">
-                      <LineNumber num={line?.newLineNum ?? null} />
-                      <div className="flex-1 min-w-0">
-                        <LineContent line={line} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 overflow-auto">
-              <div className="flex-1">
-                {allLines.map((line, i) =>
-                  visibleIndices.has(i) ? (
-                    <div key={i} className="flex">
-                      <LineNumber num={line.oldLineNum} />
-                      <LineNumber num={line.newLineNum} />
-                      <div className="flex-1 min-w-0">
-                        <UnifiedLineContent line={line} />
-                      </div>
-                    </div>
-                  ) : null
-                )}
-              </div>
+        {isAnimating ? (
+          <>
+            <div
+              className="absolute inset-0 flex transition-transform duration-300 ease-out"
+              style={{
+                transform: `translateX(${slideDirection.current * -100}%)`,
+              }}
+            >
+              {renderView(prevViewMode.current)}
             </div>
-          )}
-        </div>
+            <div
+              className="absolute inset-0 flex transition-transform duration-300 ease-out"
+              style={{
+                transform: 'translateX(0)',
+                animation: `slideIn${slideDirection.current > 0 ? 'Right' : 'Left'} 0.3s ease-out`,
+              }}
+            >
+              {renderView(viewMode)}
+            </div>
+          </>
+        ) : (
+          <div className="absolute inset-0 flex">
+            {renderView(viewMode)}
+          </div>
+        )}
       </div>
+
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        @keyframes slideInLeft {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
+      `}</style>
     </div>
   );
 }

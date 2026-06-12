@@ -119,8 +119,8 @@ export default function Sidebar() {
                 <button
                   onClick={() => handleKBClick(kb)}
                   className={cn(
-                    'w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors text-left',
-                    collapsedIconOnly ? 'justify-center px-0' : '',
+                    'w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors text-left min-h-[40px]',
+                    collapsedIconOnly ? 'justify-center items-center px-0' : '',
                     kb.id === kbId
                       ? 'bg-blue-50 text-primary border-l-2 border-l-primary'
                       : 'text-text hover:bg-slate-50 border-l-2 border-l-transparent'
@@ -193,8 +193,8 @@ export default function Sidebar() {
             <button
               onClick={() => navigate('/')}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:text-primary hover:bg-blue-50 rounded-md transition-colors',
-                collapsedIconOnly ? 'justify-center px-0' : ''
+                'w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:text-primary hover:bg-blue-50 rounded-md transition-colors min-h-[40px]',
+                collapsedIconOnly ? 'justify-center items-center px-0' : ''
               )}
               title={collapsedIconOnly ? '新建知识库' : undefined}
             >

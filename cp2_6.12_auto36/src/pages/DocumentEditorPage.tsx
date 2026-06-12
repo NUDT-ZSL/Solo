@@ -15,6 +15,7 @@ import { useKnowledgeStore } from '@/stores/knowledgeStore';
 import { cn } from '@/lib/utils';
 import VersionDiff from '@/components/VersionDiff';
 import AnnotationBubble from '@/components/AnnotationBubble';
+import MarkdownEditor from '@/components/MarkdownEditor';
 import type { Annotation } from '@/types';
 
 interface LocationState {
@@ -113,6 +114,10 @@ export default function DocumentEditorPage() {
     }
   };
 
+  const renderPreview = (_previewRef: React.RefObject<HTMLDivElement>, _value: string) => {
+    return renderMarkdownWithAnnotations();
+  };
+
   const handleSelectVersion = async (versionId: string) => {
     if (!docId) return;
     setSelectedVersionId(versionId);
@@ -194,7 +199,7 @@ export default function DocumentEditorPage() {
 
           setTimeout(() => {
             cleanupHighlight();
-          }, 6000);
+          }, 2000);
 
           return;
         }
@@ -334,7 +339,7 @@ export default function DocumentEditorPage() {
             type="text"
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
-            className="font-bold text-text bg-transparent outline-none focus:bg-slate-50 focus:border-b focus:border-primary rounded px-1 py-0.5 min-w-0"
+            className="doc-title font-bold text-text bg-transparent outline-none focus:bg-slate-50 focus:border-b focus:border-primary rounded px-1 py-0.5 min-w-0"
             style={{ fontSize: '24px' }}
           />
         </div>
@@ -381,37 +386,16 @@ export default function DocumentEditorPage() {
             versionPanelOpen ? 'flex-[2]' : 'flex-1'
           )}
         >
-          <div className="flex-1 flex flex-col border-r border-slate-200 min-w-0">
-            <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50">
-              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">编辑</span>
-            </div>
-            <textarea
-              ref={editorRef}
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              onScroll={handleEditorScroll}
-              onKeyDown={handleKeyDown}
-              className={cn(
-                'flex-1 p-4 resize-none outline-none text-text',
-                'text-base leading-[1.8] font-mono',
-                'bg-white'
-              )}
-              placeholder="开始编写 Markdown 文档..."
-              spellCheck={false}
-            />
-          </div>
-
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50">
-              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">预览</span>
-            </div>
-            <div
-              ref={previewRef}
-              className="flex-1 overflow-y-auto p-6 bg-white"
-            >
-              {renderMarkdownWithAnnotations()}
-            </div>
-          </div>
+          <MarkdownEditor
+            value={editContent}
+            onChange={setEditContent}
+            onSave={handleSave}
+            editorRef={editorRef}
+            previewRef={previewRef}
+            onEditorScroll={handleEditorScroll}
+            onKeyDown={handleKeyDown}
+            renderPreview={renderPreview}
+          />
         </div>
 
         {versionPanelOpen && (

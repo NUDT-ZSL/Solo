@@ -26,9 +26,11 @@ export default function SearchBar() {
     // 防抖延迟 150ms，<200ms 满足性能要求
     timerRef.current = setTimeout(async () => {
       setIsLoading(true);
+      console.time('search');
       try {
         await search(value);
       } finally {
+        console.timeEnd('search');
         setIsLoading(false);
       }
     }, 150);

@@ -17,6 +17,9 @@ const DOC_CACHE_TTL = 5000;
 const searchCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
 const SEARCH_CACHE_TTL = 3000;
 
+const versionCache = new Map<string, { content: string; timestamp: number }>();
+const VERSION_CACHE_TTL = 30000;
+
 const mapAnnotation = (a: any): Annotation => ({
   id: a.id,
   documentId: a.documentId,
@@ -182,16 +185,19 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   },
 
   fetchDocument: async (docId) => {
+    console.time('docLoad');
     const now = Date.now();
     const cached = docCache.get(docId);
     if (cached && now - cached.timestamp < DOC_CACHE_TTL) {
       set({ currentDocument: cached.doc });
+      console.timeEnd('docLoad');
       return;
     }
     const res = await api.get(`/documents/${docId}`);
     const doc = res.data;
     docCache.set(docId, { doc, timestamp: now });
     set({ currentDocument: doc });
+    console.timeEnd('docLoad');
   },
 
   createDocument: async (catId, title) => {
@@ -204,6 +210,9 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   updateDocument: async (id, title, content) => {
     const res = await api.put(`/documents/${id}`, { title, content });
     docCache.delete(id);
+    versionCache.forEach((_, key) => {
+      if (key.startsWith(`${id}-`)) versionCache.delete(key);
+    });
     set((s) => ({
       documents: s.documents.map((d) => (d.id === id ? res.data : d)),
       currentDocument: s.currentDocument?.id === id ? res.data : s.currentDocument,
@@ -214,6 +223,9 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   deleteDocument: async (id) => {
     await api.delete(`/documents/${id}`);
     docCache.delete(id);
+    versionCache.forEach((_, key) => {
+      if (key.startsWith(`${id}-`)) versionCache.delete(key);
+    });
     set((s) => ({
       documents: s.documents.filter((d) => d.id !== id),
       currentDocument: s.currentDocument?.id === id ? null : s.currentDocument,
@@ -227,7 +239,14 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   },
 
   fetchVersion: async (docId, versionId) => {
+    const cacheKey = `${docId}-${versionId}`;
+    const now = Date.now();
+    const cached = versionCache.get(cacheKey);
+    if (cached && now - cached.timestamp < VERSION_CACHE_TTL) {
+      return { id: versionId, documentId: docId, content: cached.content } as DocumentVersion;
+    }
     const res = await api.get(`/documents/${docId}/versions/${versionId}`);
+    versionCache.set(cacheKey, { content: res.data.content, timestamp: now });
     return res.data;
   },
 
