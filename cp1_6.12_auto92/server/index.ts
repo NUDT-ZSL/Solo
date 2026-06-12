@@ -3,6 +3,7 @@ import Datastore from 'nedb-promises';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import PDFDocument from 'pdfkit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -238,6 +239,169 @@ app.delete('/api/annotation/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: '删除批注失败' });
+  }
+});
+
+/* ============== 后端直接生成 PDF 文件流 ============== */
+const STATUS_LABELS: Record<string, string> = {
+  pending: '未处理',
+  confirmed: '待确认',
+  approved: '已通过',
+  rejected: '需修改',
+};
+
+const STATUS_SORT = ['pending', 'confirmed', 'rejected', 'approved'];
+
+app.post('/api/contract/:id/export', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const {
+      contractName = '未命名合同',
+      oldVersion = '-',
+      newVersion = '-',
+      submitterOld = '-',
+      submitterNew = '-',
+      diffSummary = { added: 0, removed: 0, modified: 0 },
+      annotations = [],
+    } = body;
+
+    const contract = await contractsDB.findOne({ _id: req.params.id });
+    const finalName = contract?.name || contractName;
+
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50,
+      info: {
+        Title: `ContractFlow-${finalName}-审核报告`,
+        Author: 'ContractFlow',
+        Producer: 'ContractFlow',
+        Creator: 'ContractFlow',
+      },
+    });
+
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    doc.on('end', () => {
+      const buf = Buffer.concat(chunks);
+      const filename = `ContractFlow_${encodeURIComponent(finalName)}_${oldVersion}_vs_${newVersion}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', String(buf.length));
+      res.status(200).end(buf);
+    });
+
+    const pageWidth = doc.page.width - 100;
+    const leftX = 50;
+
+    // ---- 封面 ----
+    doc.rect(0, 0, doc.page.width, 180).fill('#1a2332');
+    doc.fill('#ffffff');
+    doc.fontSize(24).font('Helvetica-Bold').text('ContractFlow', leftX, 50);
+    doc.fontSize(14).font('Helvetica').text('合同版本审核追踪报告', leftX, 85);
+    doc.moveTo(leftX, 115).lineTo(leftX + 200, 115).stroke('#3b82f6').lineWidth(2);
+    doc.fontSize(11).fill('#94a3b8').text(`生成时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`, leftX, 140);
+
+    let y = 220;
+    doc.fill('#1a2332');
+    doc.fontSize(16).font('Helvetica-Bold').text(finalName, leftX, y);
+    y += 32;
+
+    // ---- 合同元信息 ----
+    doc.fontSize(10).fill('#6b7280').font('Helvetica');
+    doc.text('合同编号 / 标识', leftX, y);
+    doc.fontSize(12).fill('#1a2332').font('Helvetica-Bold').text(req.params.id, leftX + 110, y);
+    y += 22;
+    doc.fontSize(10).fill('#6b7280').font('Helvetica').text('对比版本', leftX, y);
+    doc.fontSize(12).fill('#1a2332').font('Helvetica-Bold').text(`${oldVersion}  →  ${newVersion}`, leftX + 110, y);
+    y += 22;
+    doc.fontSize(10).fill('#6b7280').font('Helvetica').text('提交者', leftX, y);
+    doc.fontSize(12).fill('#1a2332').font('Helvetica-Bold').text(`${submitterOld}  →  ${submitterNew}`, leftX + 110, y);
+    y += 30;
+
+    // ---- 差异摘要 ----
+    doc.fontSize(13).font('Helvetica-Bold').fill('#1a2332').text('📊  差异摘要', leftX, y);
+    y += 20;
+    doc.moveTo(leftX, y).lineTo(leftX + pageWidth, y).stroke('#e5e7eb').lineWidth(0.5);
+    y += 12;
+
+    const summaries = [
+      { label: '新增行数', count: diffSummary.added ?? 0, color: '#22c55e', bg: '#dcfce7', fg: '#15803d' },
+      { label: '删除行数', count: diffSummary.removed ?? 0, color: '#ef4444', bg: '#fee2e2', fg: '#b91c1c' },
+      { label: '修改行数', count: diffSummary.modified ?? 0, color: '#eab308', bg: '#fef9c3', fg: '#a16207' },
+    ];
+
+    let sx = leftX;
+    const boxW = (pageWidth - 32) / 3;
+    for (const s of summaries) {
+      doc.roundedRect(sx, y, boxW, 58, 8).fillAndStroke(s.bg, s.color);
+      doc.fill(s.fg).fontSize(20).font('Helvetica-Bold').text(String(s.count), sx + 16, y + 14, { width: boxW - 32, align: 'right' });
+      doc.fill(s.fg).fontSize(10).font('Helvetica').text(s.label, sx + 16, y + 38, { width: boxW - 32, align: 'right' });
+      sx += boxW + 16;
+    }
+    y += 84;
+
+    // ---- 批注列表 ----
+    doc.addPage();
+    y = 60;
+    doc.fontSize(13).font('Helvetica-Bold').fill('#1a2332').text('💬  批注列表', leftX, y);
+    y += 20;
+    doc.moveTo(leftX, y).lineTo(leftX + pageWidth, y).stroke('#e5e7eb').lineWidth(0.5);
+    y += 14;
+
+    if (!Array.isArray(annotations) || annotations.length === 0) {
+      doc.fontSize(11).fill('#9ca3af').font('Helvetica').text('当前版本对比暂无批注。', leftX + 10, y);
+    } else {
+      const sorted = [...annotations].sort((a: any, b: any) => {
+        const sa = STATUS_SORT.indexOf(a.status);
+        const sb = STATUS_SORT.indexOf(b.status);
+        if (sa !== sb) return (sa === -1 ? 99 : sa) - (sb === -1 ? 99 : sb);
+        return (a.lineNumber ?? 0) - (b.lineNumber ?? 0) || (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      });
+
+      let idx = 0;
+      for (const ann of sorted) {
+        if (y > 760) { doc.addPage(); y = 60; }
+        idx++;
+        const label = STATUS_LABELS[ann.status] || ann.status || '未处理';
+        const lineNum = ann.lineNumber ?? '-';
+        const versionTag = ann.version || '-';
+        const author = ann.author || '匿名';
+        const createdAt = ann.createdAt ? new Date(ann.createdAt).toLocaleString('zh-CN', { hour12: false }) : '-';
+        const content = ann.content || '';
+
+        doc.roundedRect(leftX, y, pageWidth, 8, 4).fillAndStroke('#f3f4f6', '#e5e7eb');
+        doc.fill('#1a2332').fontSize(10).font('Helvetica-Bold').text(
+          `#${idx}  [${versionTag}]  行 ${lineNum}  ·  ${label}  ·  ${author}  ·  ${createdAt}`,
+          leftX + 10, y - 2,
+          { width: pageWidth - 20, align: 'left' }
+        );
+        y += 16;
+
+        doc.fill('#374151').fontSize(10).font('Helvetica');
+        const lines = doc.heightOfString(content, { width: pageWidth - 24 });
+        doc.text(content || '(空)', leftX + 12, y, { width: pageWidth - 24 });
+        y += lines + 16;
+      }
+    }
+
+    // ---- 页脚 ----
+    const pages = doc.bufferedPageRange ? (doc.bufferedPageRange().count ?? 1) : 1;
+    const finalPages = (doc as any)._pageBuffer ? (doc as any)._pageBuffer.length : pages;
+    doc.on('pageAdded', () => {});
+    for (let i = 0; i < finalPages; i++) {
+      doc.switchToPage(i);
+      doc.fontSize(8).fill('#9ca3af').font('Helvetica').text(
+        `ContractFlow · ${finalName} · ${new Date().toLocaleDateString('zh-CN')}    第 ${i + 1} 页`,
+        50,
+        doc.page.height - 36,
+        { width: doc.page.width - 100, align: 'center' }
+      );
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('导出PDF失败:', error);
+    res.status(500).json({ error: '导出PDF失败' });
   }
 });
 

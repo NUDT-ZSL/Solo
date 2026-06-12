@@ -104,19 +104,37 @@ export interface ExportPayload {
   }>;
 }
 
-export const exportReport = async (contractId: string, payload: ExportPayload): Promise<{ url: string; filename: string }> => {
+export const exportReport = async (contractId: string, payload: ExportPayload): Promise<void> => {
   const response = await fetch(`${API_BASE}/contract/${contractId}/export`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/pdf' },
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    throw new Error(`导出失败 (HTTP ${response.status})`);
   }
   const blob = await response.blob();
   const disposition = response.headers.get('Content-Disposition') || '';
-  const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
-  const filename = filenameMatch ? filenameMatch[1] : `ContractFlow_${payload.contractName}.pdf`;
+  const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+  let filename = filenameMatch ? filenameMatch[1] : `ContractFlow_${payload.contractName}.pdf`;
+  try { filename = decodeURIComponent(filename); } catch (_) { /* ignore */ }
+
   const url = URL.createObjectURL(blob);
-  return { url, filename };
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    // 兼容某些浏览器需要短暂停留
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 300);
+  } catch (e) {
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
 };
