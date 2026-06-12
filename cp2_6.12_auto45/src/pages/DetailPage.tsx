@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getPhotoDetail, addComment } from '../api';
 import type { PhotoDetail, Comment } from '../types';
+import type { DrawResult, FaceBoxDrawData } from '../workers/faceBox.worker';
 
 interface DetailPageProps {
   onUpdate: (photo: PhotoDetail) => void;
@@ -18,6 +19,9 @@ export default function DetailPage({ onUpdate }: DetailPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const workerRef = useRef<Worker | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const drawDataRef = useRef<DrawResult | null>(null);
 
   useEffect(() => {
     if (id) {
