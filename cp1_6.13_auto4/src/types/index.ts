@@ -46,11 +46,12 @@ export const GRAVITY = 1;
 export const FRICTION = 0.8;
 export const RESTITUTION = 0.2;
 
+export const STABLE_SPEED_THRESHOLD = 0.01;
 export const STABLE_FRAME_THRESHOLD = 100;
-export const STABLE_TIMESTAMP_DELTA = 0.1;
 
 export const PARTICLES_PER_COLLISION = 10;
 export const PARTICLE_LIFETIME = 300;
+export const MAX_PARTICLES = 500;
 
 export const MAX_HISTORY_SIZE = 20;
 

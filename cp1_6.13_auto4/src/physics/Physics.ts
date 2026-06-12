@@ -1,18 +1,18 @@
 import Matter from 'matter-js';
-import type { BlockData, BlockMaterial, Particle } from '../types';
+import type { BlockData, Particle } from '../types';
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   CELL_SIZE,
   GRAVITY,
   MATERIAL_CONFIGS,
+  STABLE_SPEED_THRESHOLD,
   STABLE_FRAME_THRESHOLD,
-  STABLE_TIMESTAMP_DELTA,
   PARTICLES_PER_COLLISION,
   PARTICLE_LIFETIME,
 } from '../types';
 
-const { Engine, World, Bodies, Body, Events } = Matter;
+const { Engine, World, Bodies, Body, Events, Composite } = Matter;
 
 export interface PhysicsCallbacks {
   onPositionUpdate: (blocks: Map<string, { x: number; y: number; angle: number }>) => void;
@@ -26,9 +26,10 @@ export class PhysicsEngine {
   private bodies: Map<string, Matter.Body> = new Map();
   private callbacks: PhysicsCallbacks;
   private animationFrameId: number | null = null;
-  private lastTimestamp: number = 0;
   private stableFrameCount: number = 0;
   private isRunning: boolean = false;
+  private hasActiveCollisions: boolean = false;
+  private occupiedPositions: Set<string> = new Set();
 
   constructor(callbacks: PhysicsCallbacks) {
     this.engine = Engine.create();
@@ -36,7 +37,7 @@ export class PhysicsEngine {
     this.engine.gravity.y = GRAVITY;
     this.callbacks = callbacks;
     this.createBoundaries();
-    this.setupCollisionListener();
+    this.setupCollisionListeners();
   }
 
   private createBoundaries(): void {
@@ -58,10 +59,12 @@ export class PhysicsEngine {
     World.add(this.world, boundaries);
   }
 
-  private setupCollisionListener(): void {
+  private setupCollisionListeners(): void {
     Events.on(this.engine, 'collisionStart', (event) => {
       const particles: Particle[] = [];
       const now = performance.now();
+
+      this.hasActiveCollisions = true;
 
       for (const pair of event.pairs) {
         const { bodyA, bodyB } = pair;
@@ -76,7 +79,7 @@ export class PhysicsEngine {
           const angle = Math.random() * Math.PI * 2;
           const speed = Math.random() * 3 + 1;
           particles.push({
-            id: `particle-${now}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `particle-${now}-${Math.random().toString(36).substring(2, 11)}`,
             x: contactPoint.x,
             y: contactPoint.y,
             vx: Math.cos(angle) * speed,
@@ -92,9 +95,22 @@ export class PhysicsEngine {
         this.callbacks.onCollision(particles);
       }
     });
+
+    Events.on(this.engine, 'collisionEnd', () => {
+      this.hasActiveCollisions = false;
+    });
   }
 
-  public addBlock(block: BlockData): void {
+  public addBlock(block: BlockData): boolean {
+    const posKey = `${block.gridX},${block.gridY}`;
+    if (this.occupiedPositions.has(posKey)) {
+      return false;
+    }
+
+    if (this.bodies.has(block.id)) {
+      return false;
+    }
+
     const config = MATERIAL_CONFIGS[block.material];
     const body = Bodies.rectangle(block.x, block.y, CELL_SIZE, CELL_SIZE, {
       density: config.density,
@@ -104,15 +120,47 @@ export class PhysicsEngine {
     });
     body.label = block.id;
     this.bodies.set(block.id, body);
+    this.occupiedPositions.add(posKey);
     World.add(this.world, body);
+    return true;
   }
 
-  public removeBlock(blockId: string): void {
+  public removeBlock(blockId: string): string | null {
     const body = this.bodies.get(blockId);
     if (body) {
       World.remove(this.world, body);
       this.bodies.delete(blockId);
+      const allBodies = Composite.allBodies(this.world);
+      for (const b of allBodies) {
+        if (!b.isStatic && b.label === blockId) {
+          const gridX = Math.round((b.position.x - CELL_SIZE / 2) / CELL_SIZE);
+          const gridY = Math.round((b.position.y - CELL_SIZE / 2) / CELL_SIZE);
+          this.occupiedPositions.delete(`${gridX},${gridY}`);
+          break;
+        }
+      }
+      return blockId;
     }
+    return null;
+  }
+
+  public removeBlockByPosition(gridX: number, gridY: number): string | null {
+    const posKey = `${gridX},${gridY}`;
+    if (!this.occupiedPositions.has(posKey)) {
+      return null;
+    }
+
+    for (const [id, body] of this.bodies) {
+      const bGridX = Math.round((body.position.x - CELL_SIZE / 2) / CELL_SIZE);
+      const bGridY = Math.round((body.position.y - CELL_SIZE / 2) / CELL_SIZE);
+      if (bGridX === gridX && bGridY === gridY) {
+        World.remove(this.world, body);
+        this.bodies.delete(id);
+        this.occupiedPositions.delete(posKey);
+        return id;
+      }
+    }
+    return null;
   }
 
   public setBlocksDynamic(): void {
@@ -127,14 +175,15 @@ export class PhysicsEngine {
       World.remove(this.world, body);
     }
     this.bodies.clear();
+    this.occupiedPositions.clear();
     this.stableFrameCount = 0;
-    this.lastTimestamp = 0;
+    this.hasActiveCollisions = false;
     Engine.clear(this.engine);
     this.engine = Engine.create();
     this.world = this.engine.world;
     this.engine.gravity.y = GRAVITY;
     this.createBoundaries();
-    this.setupCollisionListener();
+    this.setupCollisionListeners();
   }
 
   public start(): void {
@@ -142,7 +191,7 @@ export class PhysicsEngine {
     this.isRunning = true;
     this.setBlocksDynamic();
     this.stableFrameCount = 0;
-    this.lastTimestamp = this.engine.timing.timestamp;
+    this.hasActiveCollisions = false;
     this.simulate();
   }
 
@@ -152,6 +201,19 @@ export class PhysicsEngine {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+  }
+
+  private checkStability(): boolean {
+    if (this.hasActiveCollisions) return false;
+
+    for (const body of this.bodies.values()) {
+      const speed = Math.sqrt(
+        body.velocity.x * body.velocity.x + body.velocity.y * body.velocity.y
+      );
+      if (speed >= STABLE_SPEED_THRESHOLD) return false;
+    }
+
+    return true;
   }
 
   private simulate = (): void => {
@@ -169,13 +231,11 @@ export class PhysicsEngine {
     }
     this.callbacks.onPositionUpdate(positions);
 
-    const timestampDelta = Math.abs(this.engine.timing.timestamp - this.lastTimestamp);
-    if (timestampDelta < STABLE_TIMESTAMP_DELTA) {
+    if (this.checkStability()) {
       this.stableFrameCount++;
     } else {
       this.stableFrameCount = 0;
     }
-    this.lastTimestamp = this.engine.timing.timestamp;
 
     if (this.stableFrameCount >= STABLE_FRAME_THRESHOLD) {
       this.stop();
