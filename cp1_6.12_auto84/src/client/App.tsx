@@ -438,6 +438,7 @@ function App() {
   const [isSearching, setIsSearching] = useState(false);
 
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -495,10 +496,14 @@ function App() {
   };
 
   const handleSidebarScroll = useCallback(() => {
+    if (throttleTimerRef.current) return;
     if (!sidebarRef.current || isLoadingFavorites || !hasMoreFavorites) return;
     const { scrollTop, scrollHeight, clientHeight } = sidebarRef.current;
     if (scrollTop + clientHeight >= scrollHeight - 50) {
       loadFavorites(favoritesPage + 1);
+      throttleTimerRef.current = setTimeout(() => {
+        throttleTimerRef.current = null;
+      }, 300);
     }
   }, [favoritesPage, hasMoreFavorites, isLoadingFavorites, loadFavorites]);
 
