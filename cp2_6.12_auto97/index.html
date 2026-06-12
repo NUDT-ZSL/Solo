@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>分子结构浏览器</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
   <style>
     * {
       margin: 0;
@@ -47,6 +55,7 @@
       flex-direction: column;
       transition: width 0.3s ease;
       overflow: hidden;
+      z-index: 10;
     }
 
     .molecule-list-panel.collapsed {
@@ -59,6 +68,7 @@
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
     }
 
     .panel-title {
@@ -100,6 +110,7 @@
       font-size: 13px;
       outline: none;
       transition: border-color 0.2s, background 0.2s;
+      flex-shrink: 0;
     }
 
     .search-box::placeholder {
@@ -169,6 +180,7 @@
       opacity: 0;
       transition: opacity 0.2s;
       min-width: 160px;
+      z-index: 10;
     }
 
     .info-tooltip.visible {
@@ -205,6 +217,7 @@
       border: 1px solid rgba(255, 255, 255, 0.25);
       border-radius: 16px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      z-index: 10;
     }
 
     .toolbar-btn {
@@ -219,6 +232,7 @@
       justify-content: center;
       font-size: 18px;
       transition: background 0.2s, transform 0.1s;
+      color: #333;
     }
 
     .toolbar-btn:hover {
@@ -244,12 +258,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      z-index: 10;
     }
 
     .slider-track {
       width: 100%;
       height: 100%;
-      background: linear-gradient(to bottom, #0066ff, #ffff88);
+      background: linear-gradient(to bottom, #ffff88, #0066ff);
       border-radius: 10px;
       position: relative;
       cursor: pointer;
@@ -258,4 +273,76 @@
 
     .slider-thumb {
       position: absolute;
-      left:
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 28px;
+      height: 14px;
+      background: #fff;
+      border: 2px solid #666;
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+      transition: box-shadow 0.1s;
+    }
+
+    .slider-thumb:hover {
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    }
+
+    .slider-label {
+      color: #fff;
+      font-size: 10px;
+      margin-top: 6px;
+      opacity: 0.8;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="molecule-canvas"></canvas>
+
+    <div class="panel molecule-list-panel">
+      <div class="panel-header">
+        <span class="panel-title">分子库</span>
+        <button class="collapse-btn">←</button>
+      </div>
+      <input type="text" class="search-box" placeholder="搜索分子..." />
+      <div class="molecule-list"></div>
+    </div>
+
+    <div class="info-tooltip">
+      <div class="element-symbol">C</div>
+      <div class="info-row">
+        <span class="label">原子</span>
+        <span class="atom-name">C1</span>
+      </div>
+      <div class="info-row">
+        <span class="label">原子序数</span>
+        <span class="atomic-number">6</span>
+      </div>
+      <div class="info-row">
+        <span class="label">坐标</span>
+        <span class="coordinates">(0, 0, 0)</span>
+      </div>
+    </div>
+
+    <div class="bottom-toolbar">
+      <button class="toolbar-btn" id="btn-rotate" title="自动旋转">⟳</button>
+      <button class="toolbar-btn" id="btn-vibrate" title="振动模式">〰</button>
+      <button class="toolbar-btn" id="btn-reset" title="重置视角">⌂</button>
+      <button class="toolbar-btn" id="btn-fullscreen" title="全屏">⛶</button>
+    </div>
+
+    <div class="color-temp-slider">
+      <div class="slider-track">
+        <div class="slider-thumb"></div>
+      </div>
+      <span class="slider-label">色温</span>
+    </div>
+  </div>
+
+  <script type="module" src="./dist/main.js"></script>
+</body>
+</html>

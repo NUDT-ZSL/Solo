@@ -4,9 +4,12 @@
   "description": "3D分子结构浏览器与交互动画演示",
   "type": "module",
   "scripts": {
-    "dev": "npx serve ."
+    "dev": "tsc && npx serve . -l 3000",
+    "build": "tsc",
+    "watch": "tsc --watch"
   },
   "devDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@types/three": "^0.160.0"
   }
 }
