@@ -1,110 +1,101 @@
 import type { Contour, NestedNode } from './types'
 
-function isInside(child: Contour, parent: Contour, padding = 4): boolean {
+function rectangleContains(
+  outer: Contour,
+  inner: Contour,
+  tolerance: number = 2
+): boolean {
+  const innerLeft = inner.x
+  const innerTop = inner.y
+  const innerRight = inner.x + inner.width
+  const innerBottom = inner.y + inner.height
+
+  const outerLeft = outer.x - tolerance
+  const outerTop = outer.y - tolerance
+  const outerRight = outer.x + outer.width + tolerance
+  const outerBottom = outer.y + outer.height + tolerance
+
   return (
-    child.x >= parent.x - padding &&
-    child.y >= parent.y - padding &&
-    child.x + child.width <= parent.x + parent.width + padding &&
-    child.y + child.height <= parent.y + parent.height + padding
+    innerLeft >= outerLeft &&
+    innerTop >= outerTop &&
+    innerRight <= outerRight &&
+    innerBottom <= outerBottom
   )
 }
 
 export function buildNestingTree(contours: Contour[]): NestedNode[] {
-  const sorted = [...contours].sort((a, b) => {
-    const areaA = a.width * a.height
-    const areaB = b.width * b.height
-    return areaB - areaA
-  })
+  if (contours.length === 0) return []
 
-  const assigned = new Set<string>()
-  const roots: NestedNode[] = []
-
-  function findParent(child: Contour, candidates: Contour[]): Contour | null {
-    let directParent: Contour | null = null
-    let smallestArea = Infinity
-
-    for (const parent of candidates) {
-      if (parent.id === child.id) continue
-      if (!isInside(child, parent)) continue
-      const area = parent.width * parent.height
-      if (area < smallestArea) {
-        smallestArea = area
-        directParent = parent
-      }
-    }
-
-    return directParent
-  }
-
-  function addToTree(node: NestedNode, tree: NestedNode[]): boolean {
-    for (const root of tree) {
-      if (isInside(node.contour, root.contour)) {
-        if (addToTree(node, root.children)) {
-          return true
-        }
-        root.children.push(node)
-        node.contour.parentId = root.contour.id
-        node.contour.depth = root.contour.depth + 1
-        return true
-      }
-    }
-    return false
-  }
-
-  const allNodes: Map<string, NestedNode> = new Map()
-  for (const c of sorted) {
-    allNodes.set(c.id, { contour: c, children: [] })
+  const byId = new Map<string, NestedNode>()
+  for (const c of contours) {
     c.parentId = null
     c.depth = 0
+    byId.set(c.id, { contour: c, children: [] })
   }
 
-  for (const contour of sorted) {
-    if (assigned.has(contour.id)) continue
+  const sorted = [...contours].sort(
+    (a, b) => b.width * b.height - a.width * a.height
+  )
 
-    const node = allNodes.get(contour.id)!
-    const otherContours = sorted.filter(
-      (c) => c.id !== contour.id && assigned.has(c.id)
-    )
+  for (let i = 0; i < sorted.length; i++) {
+    const child = sorted[i]
+    let directParent: Contour | null = null
+    let directParentArea = Infinity
 
-    const parent = findParent(contour, otherContours.map((c) => c))
+    for (let j = 0; j < i; j++) {
+      const candidateParent = sorted[j]
+      if (candidateParent.id === child.id) continue
+      if (!rectangleContains(candidateParent, child)) continue
 
-    if (parent) {
-      const parentNode = allNodes.get(parent.id)!
-      let currentParent: NestedNode | null = parentNode
-      let deepestParent: NestedNode = parentNode
-
-      while (currentParent) {
-        let foundInChild = false
-        for (const child of currentParent.children) {
-          if (isInside(contour, child.contour)) {
-            deepestParent = child
-            currentParent = child
-            foundInChild = true
-            break
-          }
-        }
-        if (!foundInChild) break
-      }
-
-      deepestParent.children.push(node)
-      node.contour.parentId = deepestParent.contour.id
-      node.contour.depth = deepestParent.contour.depth + 1
-    } else {
-      if (!addToTree(node, roots)) {
-        roots.push(node)
+      const parentArea = candidateParent.width * candidateParent.height
+      if (parentArea < directParentArea) {
+        directParent = candidateParent
+        directParentArea = parentArea
       }
     }
 
-    assigned.add(contour.id)
+    if (directParent) {
+      child.parentId = directParent.id
+      const parentNode = byId.get(directParent.id)!
+      const childNode = byId.get(child.id)!
+      parentNode.children.push(childNode)
+    }
   }
 
-  function updateDepths(nodes: NestedNode[], depth: number) {
+  const roots: NestedNode[] = []
+  for (const c of sorted) {
+    if (c.parentId === null) {
+      roots.push(byId.get(c.id)!)
+    }
+  }
+
+  function assignDepths(nodes: NestedNode[], currentDepth: number): void {
+    for (const node of nodes) {
+      node.contour.depth = currentDepth
+      assignDepths(node.children, currentDepth + 1)
+    }
+  }
+  assignDepths(roots, 0)
+
+  roots.sort((a, b) => {
+    const ay = a.contour.y
+    const by = b.contour.y
+    if (Math.abs(ay - by) > 20) return ay - by
+    return a.contour.x - b.contour.x
+  })
+
+  function sortChildren(nodes: NestedNode[]): void {
     for (const n of nodes) {
-      n.contour.depth = depth
-      updateDepths(n.children, depth + 1)
+      n.children.sort((a, b) => {
+        const ay = a.contour.y - n.contour.y
+        const by = b.contour.y - n.contour.y
+        if (Math.abs(ay - by) > 20) return ay - by
+        return (a.contour.x - n.contour.x) - (b.contour.x - n.contour.x)
+      })
+      sortChildren(n.children)
     }
   }
-  updateDepths(roots, 0)
+  sortChildren(roots)
 
   return roots
 }
@@ -113,19 +104,25 @@ function indent(level: number): string {
   return '  '.repeat(level)
 }
 
-function generateClassName(contour: Contour, index: number): string {
-  if (contour.depth === 0) {
-    return `container-${index + 1}`
+function generateClassName(contour: Contour, globalIndex: number): string {
+  const depth = contour.depth
+  if (depth === 0) {
+    return `container-${globalIndex}`
   }
-  const prefix = contour.depth === 1 ? 'box' : `child-${contour.depth}`
-  return `${prefix}-${index + 1}`
+  if (depth === 1) {
+    return `section-${globalIndex}`
+  }
+  if (depth === 2) {
+    return `block-${globalIndex}`
+  }
+  return `l${depth}-el-${globalIndex}`
 }
 
 function round(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-interface GeneratedCode {
+export interface GeneratedCode {
   html: string
   css: string
   combined: string
@@ -133,22 +130,35 @@ interface GeneratedCode {
 
 export function generateCode(contours: Contour[]): GeneratedCode {
   if (contours.length === 0) {
-    return { html: '<!-- 暂无元素 -->', css: '/* 暂无样式 */', combined: '<!-- 暂无元素 -->' }
+    return {
+      html: '<!-- 暂无元素，先在画布上确认轮廓 -->',
+      css: '/* 暂无样式 */',
+      combined: '<!-- 暂无元素，先在画布上确认轮廓 -->'
+    }
   }
 
   const tree = buildNestingTree(contours)
 
-  let htmlLines: string[] = []
-  let cssLines: string[] = []
-  let elementIndex = 0
+  const htmlLines: string[] = []
+  const cssLines: string[] = []
+  let globalCounter = 0
 
-  cssLines.push('/* Generated by Design to Code */')
+  cssLines.push('/* ====================================')
+  cssLines.push(' * Generated by Design to Code Converter')
+  cssLines.push(' * Contours: ' + contours.length + ' elements')
+  cssLines.push(' * Max depth: L' + Math.max(...contours.map((c) => c.depth)))
+  cssLines.push(' * ==================================== */')
+  cssLines.push('')
   cssLines.push('* { box-sizing: border-box; margin: 0; padding: 0; }')
   cssLines.push('')
 
-  function generateFromNode(node: NestedNode, level: number, parentNode?: NestedNode) {
-    elementIndex++
-    const className = generateClassName(node.contour, elementIndex)
+  function generateFromNode(
+    node: NestedNode,
+    indentLevel: number,
+    parentNode?: NestedNode
+  ) {
+    globalCounter++
+    const className = generateClassName(node.contour, globalCounter)
 
     const relX = parentNode
       ? round(node.contour.x - parentNode.contour.x)
@@ -157,59 +167,87 @@ export function generateCode(contours: Contour[]): GeneratedCode {
       ? round(node.contour.y - parentNode.contour.y)
       : round(node.contour.y)
 
-    htmlLines.push(
-      `${indent(level)}<div class="${className}">`
-    )
-
+    const cssIndent = indent(1)
     cssLines.push(`.${className} {`)
-    cssLines.push(`  position: ${parentNode ? 'absolute' : 'relative'};`)
+    cssLines.push(`${cssIndent}/* depth: L${node.contour.depth} */`)
+    cssLines.push(
+      `${cssIndent}position: ${parentNode ? 'absolute' : 'relative'};`
+    )
     if (parentNode) {
-      cssLines.push(`  left: ${relX}px;`)
-      cssLines.push(`  top: ${relY}px;`)
+      cssLines.push(`${cssIndent}left: ${relX}px;`)
+      cssLines.push(`${cssIndent}top: ${relY}px;`)
     }
-    cssLines.push(`  width: ${round(node.contour.width)}px;`)
-    cssLines.push(`  height: ${round(node.contour.height)}px;`)
-    cssLines.push(`  border: 1px dashed rgba(108, 99, 255, 0.5);`)
-    cssLines.push(`  background: rgba(108, 99, 255, ${0.05 + node.contour.depth * 0.03});`)
+    cssLines.push(`${cssIndent}width: ${round(node.contour.width)}px;`)
+    cssLines.push(`${cssIndent}height: ${round(node.contour.height)}px;`)
+    const alpha = 0.06 + node.contour.depth * 0.04
+    cssLines.push(
+      `${cssIndent}background: rgba(108, 99, 255, ${alpha.toFixed(2)});`
+    )
+    cssLines.push(`${cssIndent}border: 1px dashed rgba(108, 99, 255, 0.5);`)
+    cssLines.push(`${cssIndent}border-radius: 4px;`)
     cssLines.push('}')
     cssLines.push('')
 
     if (node.children.length > 0) {
-      for (const child of node.children) {
-        generateFromNode(child, level + 1, node)
+      cssLines.push(`/* Nested children of .${className} */`)
+      for (let i = 0; i < node.contour.depth + 1 && i < 3; i++) {
+        cssLines.push(`.${className} { /* nesting depth visual */ }`)
       }
+      cssLines.push('')
     }
 
-    htmlLines.push(`${indent(level)}</div>`)
+    const openTag = `${indent(indentLevel)}<div class="${className}">`
+    htmlLines.push(openTag)
+
+    if (node.children.length > 0) {
+      for (const child of node.children) {
+        generateFromNode(child, indentLevel + 1, node)
+      }
+    } else {
+      htmlLines.push(
+        `${indent(indentLevel + 1)}<!-- L${node.contour.depth} leaf: ${Math.round(
+          node.contour.width
+        )}×${Math.round(node.contour.height)} -->`
+      )
+    }
+
+    htmlLines.push(`${indent(indentLevel)}</div>`)
   }
 
-  htmlLines.push('<div class="design-root">')
+  const maxRight = Math.max(...contours.map((c) => c.x + c.width))
+  const maxBottom = Math.max(...contours.map((c) => c.y + c.height))
+  const rootPad = 16
+
   cssLines.push('.design-root {')
-  cssLines.push('  position: relative;')
-  if (contours.length > 0) {
-    const maxRight = Math.max(...contours.map((c) => c.x + c.width))
-    const maxBottom = Math.max(...contours.map((c) => c.y + c.height))
-    cssLines.push(`  width: ${round(maxRight + 20)}px;`)
-    cssLines.push(`  height: ${round(maxBottom + 20)}px;`)
-  }
-  cssLines.push('  margin: 20px;')
+  cssLines.push(`${indent(1)}position: relative;`)
+  cssLines.push(`${indent(1)}width: ${round(maxRight + rootPad * 2)}px;`)
+  cssLines.push(`${indent(1)}height: ${round(maxBottom + rootPad * 2)}px;`)
+  cssLines.push(`${indent(1)}padding: ${rootPad}px;`)
+  cssLines.push(`${indent(1)}background: #f7f7fb;`)
+  cssLines.push(`${indent(1)}font-family: sans-serif;`)
   cssLines.push('}')
   cssLines.push('')
 
+  htmlLines.push('<div class="design-root">')
   for (const root of tree) {
     generateFromNode(root, 1)
   }
-
   htmlLines.push('</div>')
 
   const htmlStr = htmlLines.join('\n')
   const cssStr = cssLines.join('\n')
-  const combined = `${cssStr}\n\n<!-- HTML -->\n${htmlStr}`
+  const combined = `${cssStr}\n\n<!-- ================= HTML ================= -->\n${htmlStr}`
 
   return { html: htmlStr, css: cssStr, combined }
 }
 
-export function highlightCode(code: string): string {
+export function highlightCode(rawCode: string): string {
+  const code = rawCode
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+
   let result = code
 
   result = result.replace(
@@ -217,32 +255,35 @@ export function highlightCode(code: string): string {
     '<span class="comment">$1</span>'
   )
   result = result.replace(
-    /(<!--[\s\S]*?-->)/g,
+    /(&lt;!--[\s\S]*?--&gt;)/g,
     '<span class="comment">$1</span>'
   )
 
   result = result.replace(
     /(&lt;\/?)([a-zA-Z0-9-]+)/g,
-    (_, prefix, tag) => `${prefix}<span class="tag">${tag}</span>`
-  )
-  result = result.replace(
-    /(&lt;[a-zA-Z0-9-]+)(\s+)([a-zA-Z-]+)(=)(&quot;)(.*?)(&quot;)/g,
-    (_, openTag, space, attr, eq, q1, val, q2) =>
-      `${openTag}${space}<span class="attr-name">${attr}</span>${eq}<span class="attr-value">${q1}${val}${q2}</span>`
+    (_m, prefix: string, tag: string) =>
+      `${prefix}<span class="tag">${tag}</span>`
   )
 
   result = result.replace(
-    /^(\s*\.[a-zA-Z0-9_-]+)(\s*\{)/gm,
-    (_, sel, brace) => `<span class="selector">${sel}</span>${brace}`
+    /(&lt;[a-zA-Z0-9-]+\s+)([a-zA-Z-]+)(=)(&quot;)(.*?)(&quot;)/g,
+    (_m, prefix: string, name: string, eq: string, q1: string, val: string, q2: string) =>
+      `${prefix}<span class="attr-name">${name}</span>${eq}<span class="attr-value">${q1}${val}${q2}</span>`
+  )
+
+  result = result.replace(
+    /^( *)(\.[a-zA-Z0-9_-]+)(\s*\{)/gm,
+    (_m, space: string, sel: string, brace: string) =>
+      `${space}<span class="selector">${sel}</span>${brace}`
   )
   result = result.replace(
-    /^(\s+)([a-z-]+)(:)/gm,
-    (_, space, prop, colon) =>
+    /^( +)([a-z-]+)(:)/gm,
+    (_m, space: string, prop: string, colon: string) =>
       `${space}<span class="property">${prop}</span>${colon}`
   )
   result = result.replace(
     /(:\s*)([^;\n}]+?)(;|$)/gm,
-    (_, colon, val, end) =>
+    (_m, colon: string, val: string, end: string) =>
       `${colon}<span class="property-value">${val}</span>${end}`
   )
 

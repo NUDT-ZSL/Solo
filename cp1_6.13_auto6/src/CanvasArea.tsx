@@ -12,6 +12,20 @@ interface CanvasAreaProps {
 }
 
 const HANDLE_SIZE = 10
+const MAX_FPS_INTERVAL = 16
+
+function rectContainsRect(
+  outer: Contour,
+  inner: Contour,
+  tolerance: number = 2
+): boolean {
+  return (
+    inner.x >= outer.x - tolerance &&
+    inner.y >= outer.y - tolerance &&
+    inner.x + inner.width <= outer.x + outer.width + tolerance &&
+    inner.y + inner.height <= outer.y + outer.height + tolerance
+  )
+}
 
 export default function CanvasArea({
   imageSrc,
@@ -29,6 +43,11 @@ export default function CanvasArea({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [isDetecting, setIsDetecting] = useState(false)
+  const [contourAppearAt, setContourAppearAt] = useState<number>(0)
+
+  const rAFRef = useRef<number | null>(null)
+  const lastFrameAt = useRef<number>(0)
+  const pendingContoursRef = useRef<Contour[]>(contours)
 
   const dragState = useRef<{
     mode: DragMode
@@ -36,12 +55,14 @@ export default function CanvasArea({
     startX: number
     startY: number
     startContour: Contour | null
+    lastContours: Contour[]
   }>({
     mode: null,
     contourId: '',
     startX: 0,
     startY: 0,
-    startContour: null
+    startContour: null,
+    lastContours: []
   })
 
   const imageToCanvas = useCallback(
@@ -84,7 +105,7 @@ export default function CanvasArea({
       }
 
       const edges = new Uint8ClampedArray(w * h)
-      const threshold = 32
+      const threshold = 30
 
       for (let y = 1; y < h - 1; y++) {
         for (let x = 1; x < w - 1; x++) {
@@ -163,9 +184,8 @@ export default function CanvasArea({
           if (bw < minW || bh < minH) continue
           if (area < minArea || area > maxArea) continue
 
-          let coverage = 0
           let edgePoints = 0
-          const perim = 2 * (bw + bh)
+          const perim = Math.max(2 * (bw + bh), 1)
           for (const [px, py] of component) {
             const onEdge =
               Math.abs(px - minX) < 3 ||
@@ -173,15 +193,14 @@ export default function CanvasArea({
               Math.abs(py - minY) < 3 ||
               Math.abs(py - maxY) < 3
             if (onEdge) edgePoints++
-            coverage++
           }
-          const coverageRatio = coverage / (bw * bh)
-          const edgeRatio = edgePoints / Math.max(perim, 1)
+          const coverageRatio = component.length / Math.max(bw * bh, 1)
+          const edgeRatio = edgePoints / perim
 
           if (coverageRatio > 0.4) continue
           if (edgeRatio < 0.25) continue
 
-          const aspect = bw / bh
+          const aspect = bw / Math.max(bh, 1)
           if (aspect > 50 || aspect < 0.02) continue
 
           const overlapThreshold = 0.7
@@ -258,10 +277,12 @@ export default function CanvasArea({
 
       setTimeout(() => {
         const detected = detectRectangles(img)
+        pendingContoursRef.current = detected
         onContoursChange(detected)
+        setContourAppearAt(performance.now())
         setIsDetecting(false)
         onDetectComplete?.(detected.length)
-      }, 30)
+      }, 20)
     }
     img.onerror = () => {
       setIsDetecting(false)
@@ -273,6 +294,10 @@ export default function CanvasArea({
   useEffect(() => {
     loadAndDetect()
   }, [loadAndDetect])
+
+  useEffect(() => {
+    pendingContoursRef.current = contours
+  }, [contours])
 
   useEffect(() => {
     if (!imageRef.current || !containerRef.current) return
@@ -298,15 +323,20 @@ export default function CanvasArea({
     return () => ro.disconnect()
   }, [isImageLoaded])
 
-  useEffect(() => {
+  const render = useCallback(() => {
     const canvas = canvasRef.current
     const img = imageRef.current
     if (!canvas || !img || canvasSize.width === 0) return
 
     const ctx = canvas.getContext('2d')!
     const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.round(canvasSize.width * dpr)
-    canvas.height = Math.round(canvasSize.height * dpr)
+    if (
+      canvas.width !== Math.round(canvasSize.width * dpr) ||
+      canvas.height !== Math.round(canvasSize.height * dpr)
+    ) {
+      canvas.width = Math.round(canvasSize.width * dpr)
+      canvas.height = Math.round(canvasSize.height * dpr)
+    }
     canvas.style.width = `${canvasSize.width}px`
     canvas.style.height = `${canvasSize.height}px`
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -315,25 +345,35 @@ export default function CanvasArea({
     ctx.imageSmoothingEnabled = true
     ctx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height)
 
-    const sortedContours = [...contours].sort(
+    const now = performance.now()
+    const elapsed = now - contourAppearAt
+    const appearProgress = contourAppearAt === 0 ? 1 : Math.min(1, elapsed / 200)
+    const appearEase = 1 - Math.pow(1 - appearProgress, 3)
+
+    const activeContours = pendingContoursRef.current
+    const sorted = [...activeContours].sort(
       (a, b) => (a.depth || 0) - (b.depth || 0)
     )
-    for (const contour of sortedContours) {
+
+    for (const contour of sorted) {
       if (contour.id === selectedId) continue
       const p = imageToCanvas(contour.x, contour.y)
       const w = contour.width * scale
       const h = contour.height * scale
+      const alpha = 0.45 * appearEase
+
       ctx.save()
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.75)'
+      ctx.strokeStyle = `rgba(59, 130, 246, ${alpha + 0.25})`
       ctx.lineWidth = 1.5
       ctx.setLineDash([6, 4])
+      ctx.lineDashOffset = -(elapsed / 40) % 20
       ctx.strokeRect(
         Math.round(p.x) + 0.5,
         Math.round(p.y) + 0.5,
         Math.round(w),
         Math.round(h)
       )
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.08)'
+      ctx.fillStyle = `rgba(59, 130, 246, ${0.08 * appearEase})`
       ctx.fillRect(
         Math.round(p.x) + 0.5,
         Math.round(p.y) + 0.5,
@@ -343,7 +383,7 @@ export default function CanvasArea({
       ctx.restore()
     }
 
-    const selected = contours.find((c) => c.id === selectedId)
+    const selected = activeContours.find((c) => c.id === selectedId)
     if (selected) {
       const p = imageToCanvas(selected.x, selected.y)
       const w = selected.width * scale
@@ -353,7 +393,7 @@ export default function CanvasArea({
       ctx.strokeStyle = '#f97316'
       ctx.lineWidth = 2.5
       ctx.setLineDash([])
-      ctx.shadowColor = 'rgba(249, 115, 22, 0.6)'
+      ctx.shadowColor = 'rgba(249, 115, 22, 0.5)'
       ctx.shadowBlur = 8
       ctx.strokeRect(
         Math.round(p.x) + 0.5,
@@ -393,21 +433,36 @@ export default function CanvasArea({
       const labelY = p.y - labelH - 6 < 4 ? p.y + h + 6 : p.y - labelH - 6
       ctx.fillStyle = 'rgba(249, 115, 22, 0.95)'
       ctx.beginPath()
-      ctx.roundRect(labelX, labelY, labelW, labelH, 4)
+      ;(ctx as any).roundRect(labelX, labelY, labelW, labelH, 4)
       ctx.fill()
       ctx.fillStyle = '#ffffff'
       ctx.textBaseline = 'middle'
       ctx.fillText(label, labelX + labelPadX, labelY + labelH / 2)
       ctx.restore()
     }
-  }, [contours, selectedId, scale, canvasSize, imageToCanvas])
+  }, [selectedId, scale, canvasSize, imageToCanvas, contourAppearAt])
 
-  const getMousePos = (e: React.MouseEvent | MouseEvent) => {
+  useEffect(() => {
+    let mounted = true
+
+    function frame(ts: number) {
+      if (!mounted) return
+      render()
+      rAFRef.current = requestAnimationFrame(frame)
+    }
+    rAFRef.current = requestAnimationFrame(frame)
+    return () => {
+      mounted = false
+      if (rAFRef.current) cancelAnimationFrame(rAFRef.current)
+    }
+  }, [render])
+
+  const getMousePos = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current!
     const rect = canvas.getBoundingClientRect()
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: clientX - rect.left,
+      y: clientY - rect.top
     }
   }
 
@@ -418,10 +473,10 @@ export default function CanvasArea({
     const hx = p.x + w - HANDLE_SIZE
     const hy = p.y + h - HANDLE_SIZE
     return (
-      mouseX >= hx - 2 &&
-      mouseX <= hx + HANDLE_SIZE + 2 &&
-      mouseY >= hy - 2 &&
-      mouseY <= hy + HANDLE_SIZE + 2
+      mouseX >= hx - 3 &&
+      mouseX <= hx + HANDLE_SIZE + 3 &&
+      mouseY >= hy - 3 &&
+      mouseY <= hy + HANDLE_SIZE + 3
     )
   }
 
@@ -429,11 +484,13 @@ export default function CanvasArea({
     const p = imageToCanvas(contour.x, contour.y)
     const w = contour.width * scale
     const h = contour.height * scale
-    return mouseX >= p.x && mouseX <= p.x + w && mouseY >= p.y && mouseY <= p.y + h
+    return (
+      mouseX >= p.x && mouseX <= p.x + w && mouseY >= p.y && mouseY <= p.y + h
+    )
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    const pos = getMousePos(e)
+    const pos = getMousePos(e.clientX, e.clientY)
 
     const selected = contours.find((c) => c.id === selectedId)
     if (selected && hitTestHandle(pos.x, pos.y, selected)) {
@@ -442,21 +499,21 @@ export default function CanvasArea({
         contourId: selected.id,
         startX: pos.x,
         startY: pos.y,
-        startContour: { ...selected }
+        startContour: { ...selected },
+        lastContours: contours
       }
       e.preventDefault()
       return
     }
 
     const hitOrder = [...contours].sort((a, b) => {
-      const aInside = contours.some(
-        (c) => c.id !== a.id && isInside(a, c)
-      )
-      const bInside = contours.some(
-        (c) => c.id !== b.id && isInside(b, c)
-      )
-      const depthDiff = (bInside ? 1 : 0) - (aInside ? 1 : 0)
-      if (depthDiff !== 0) return depthDiff
+      const aDepth = contours.filter(
+        (c) => c.id !== a.id && rectContainsRect(c, a)
+      ).length
+      const bDepth = contours.filter(
+        (c) => c.id !== b.id && rectContainsRect(c, b)
+      ).length
+      if (bDepth - aDepth !== 0) return bDepth - aDepth
       return a.width * a.height - b.width * b.height
     })
 
@@ -467,7 +524,8 @@ export default function CanvasArea({
           contourId: c.id,
           startX: pos.x,
           startY: pos.y,
-          startContour: { ...c }
+          startContour: { ...c },
+          lastContours: contours
         }
         onSelect(c.id)
         e.preventDefault()
@@ -478,55 +536,56 @@ export default function CanvasArea({
     onSelect(null)
   }
 
-  function isInside(a: Contour, b: Contour): boolean {
-    return (
-      a.x >= b.x &&
-      a.y >= b.y &&
-      a.x + a.width <= b.x + b.width &&
-      a.y + a.height <= b.y + b.height
-    )
-  }
-
-  const handleMouseMove = useCallback(
+  const throttleApply = useCallback(
     (e: MouseEvent) => {
       if (!dragState.current.mode || !dragState.current.startContour) return
 
-      const pos = (() => {
-        const canvas = canvasRef.current!
-        const rect = canvas.getBoundingClientRect()
-        return { x: e.clientX - rect.left, y: e.clientY - rect.top }
-      })()
+      const now = performance.now()
+      if (now - lastFrameAt.current < MAX_FPS_INTERVAL) return
+      lastFrameAt.current = now
+
+      const pos = getMousePos(e.clientX, e.clientY)
 
       const dxCanvas = pos.x - dragState.current.startX
       const dyCanvas = pos.y - dragState.current.startY
-      const start = dragState.current.startContour
+      const start = dragState.current.startContour!
       const id = dragState.current.contourId
+      const currentContours = dragState.current.lastContours
 
+      let next: Contour[]
       if (dragState.current.mode === 'move') {
         const { x: dxImg, y: dyImg } = canvasToImage(dxCanvas, dyCanvas)
-        onContoursChange(
-          contours.map((c) =>
-            c.id === id
-              ? {
-                  ...c,
-                  x: Math.max(0, Math.round((start.x + dxImg) * 10) / 10),
-                  y: Math.max(0, Math.round((start.y + dyImg) * 10) / 10)
-                }
-              : c
-          )
+        next = currentContours.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                x: Math.max(0, Math.round((start.x + dxImg) * 10) / 10),
+                y: Math.max(0, Math.round((start.y + dyImg) * 10) / 10)
+              }
+            : c
         )
       } else if (dragState.current.mode === 'resize') {
         const { x: dxImg, y: dyImg } = canvasToImage(dxCanvas, dyCanvas)
         const newW = Math.max(10, Math.round((start.width + dxImg) * 10) / 10)
         const newH = Math.max(10, Math.round((start.height + dyImg) * 10) / 10)
-        onContoursChange(
-          contours.map((c) =>
-            c.id === id ? { ...c, width: newW, height: newH } : c
-          )
+        next = currentContours.map((c) =>
+          c.id === id ? { ...c, width: newW, height: newH } : c
         )
+      } else {
+        return
       }
+
+      pendingContoursRef.current = next
+      onContoursChange(next)
     },
-    [contours, onContoursChange, canvasToImage]
+    [canvasToImage, onContoursChange]
+  )
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      throttleApply(e)
+    },
+    [throttleApply]
   )
 
   const handleMouseUp = useCallback(() => {
@@ -555,7 +614,9 @@ export default function CanvasArea({
         ) {
           return
         }
-        onContoursChange(contours.filter((c) => c.id !== selectedId))
+        const next = contours.filter((c) => c.id !== selectedId)
+        pendingContoursRef.current = next
+        onContoursChange(next)
         onSelect(null)
         e.preventDefault()
       }
@@ -571,7 +632,7 @@ export default function CanvasArea({
           检测到 {contours.length} 个矩形轮廓 ·
           {selectedId
             ? ` 已选中 (拖拽移动 / 右下角缩放 / Delete删除)`
-            : ' 点击轮廓进行选择'}
+            : ' 点击轮廓进行选择（重叠区域优先选中较小的）'}
         </span>
       </div>
       <div className="canvas-stage" ref={containerRef}>
@@ -585,7 +646,8 @@ export default function CanvasArea({
               ? dragState.current.mode === 'resize'
                 ? 'nwse-resize'
                 : 'move'
-              : 'default'
+              : 'default',
+            transition: 'none'
           }}
         />
         {isDetecting && (
