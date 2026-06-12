@@ -62,30 +62,17 @@ function ExportButton() {
     try {
       const canvas = await html2canvas(gridElement, {
         scale: SCALE,
+        width: TARGET_WIDTH,
+        windowWidth: TARGET_WIDTH,
         backgroundColor: null,
         useCORS: true,
         logging: false,
-        windowWidth: gridElement.scrollWidth,
-        windowHeight: gridElement.scrollHeight,
+        imageTimeout: 5000,
       })
-
-      const targetWidth = TARGET_WIDTH
-      const scaleFactor = targetWidth / canvas.width
-      const targetHeight = Math.round(canvas.height * scaleFactor)
-
-      const resizedCanvas = document.createElement('canvas')
-      resizedCanvas.width = targetWidth
-      resizedCanvas.height = targetHeight
-      const ctx = resizedCanvas.getContext('2d')
-      if (ctx) {
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight)
-      }
 
       const link = document.createElement('a')
       link.download = `ThemeGrid-${Date.now()}.png`
-      link.href = resizedCanvas.toDataURL('image/png', 0.95)
+      link.href = canvas.toDataURL('image/png', 0.95)
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

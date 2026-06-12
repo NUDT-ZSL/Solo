@@ -206,7 +206,14 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   overflow: hidden;
-  transition: all 0.3s ease, transform 200ms ease-out, opacity 200ms ease-out;
+  transition: box-shadow 0.3s ease,
+              transform 200ms ease-out,
+              opacity 200ms ease-out,
+              max-height 200ms ease-out,
+              margin 200ms ease-out,
+              padding 200ms ease-out;
+  transform-origin: center top;
+  max-height: 1000px;
 }
 
 .theme-card:hover {
@@ -215,11 +222,13 @@ body {
 }
 
 .theme-card.deleting {
-  transform: scale(0);
+  transform: scale(0.8);
   opacity: 0;
-  height: 0;
-  margin: 0;
-  padding: 0;
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .theme-card-header {
@@ -394,14 +403,15 @@ body {
 .color-picker-icon {
   width: 16px;
   height: 16px;
-  color: rgba(255, 255, 255, 0.9);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
-  opacity: 0;
-  transition: opacity 0.2s ease;
+  color: rgba(255, 255, 255, 0.85);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  opacity: 0.9;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .color-picker-btn:hover .color-picker-icon {
   opacity: 1;
+  transform: scale(1.1);
 }
 
 .color-tooltip {
@@ -489,8 +499,8 @@ body {
 
 .component-grid.cols-2-rows-3 {
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  grid-auto-flow: column;
+  grid-template-rows: repeat(3, auto);
+  grid-auto-flow: row;
 }
 
 .theme-column {
