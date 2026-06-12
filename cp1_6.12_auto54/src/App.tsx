@@ -18,6 +18,7 @@ export default function App() {
   });
   const [isTablet, setIsTablet] = useState<boolean>(false);
   const [recentTexts, setRecentTexts] = useState<TextHistoryItem[]>([]);
+  const [hasBackdropFilter, setHasBackdropFilter] = useState<boolean>(true);
 
   const cloudRef = useRef<CloudCanvasHandle | null>(null);
   const voiceRef = useRef<VoiceHandler | null>(null);
@@ -33,7 +34,23 @@ export default function App() {
     };
     onResize();
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    const vv = window.visualViewport;
+    if (vv) vv.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+      if (vv) vv.removeEventListener('resize', onResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const ok = CSS.supports('backdrop-filter', 'blur(1px)') || CSS.supports('-webkit-backdrop-filter', 'blur(1px)');
+      setHasBackdropFilter(!!ok);
+    } catch {
+      setHasBackdropFilter(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -240,9 +257,11 @@ export default function App() {
           padding: '0 20px',
           display: 'flex',
           alignItems: 'center',
-          background: 'linear-gradient(180deg, rgba(8,10,18,0.72) 0%, rgba(8,10,18,0.35) 70%, rgba(8,10,18,0) 100%)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
+          background: hasBackdropFilter
+            ? 'linear-gradient(180deg, rgba(8,10,18,0.72) 0%, rgba(8,10,18,0.35) 70%, rgba(8,10,18,0) 100%)'
+            : 'rgba(8,10,18,0.88)',
+          backdropFilter: hasBackdropFilter ? 'blur(10px)' : undefined,
+          WebkitBackdropFilter: hasBackdropFilter ? 'blur(10px)' : undefined,
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           overflow: 'hidden',
           transition: 'right .35s cubic-bezier(.22,1,.36,1)',
@@ -315,9 +334,11 @@ export default function App() {
             zIndex: 30,
             maxHeight: '55vh',
             overflowY: 'auto',
-            background: 'linear-gradient(150deg, rgba(20,22,32,0.92), rgba(12,14,22,0.96))',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
+            background: hasBackdropFilter
+              ? 'linear-gradient(150deg, rgba(20,22,32,0.92), rgba(12,14,22,0.96))'
+              : 'rgba(16,18,28,0.96)',
+            backdropFilter: hasBackdropFilter ? 'blur(16px)' : undefined,
+            WebkitBackdropFilter: hasBackdropFilter ? 'blur(16px)' : undefined,
             borderTop: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '22px 22px 0 0',
             boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',

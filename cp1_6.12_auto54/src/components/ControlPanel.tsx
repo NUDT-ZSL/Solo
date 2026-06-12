@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { ColorTheme, COLOR_THEMES } from './CloudCanvas';
+import { easeInOutQuad } from '../utils/easing';
 
 interface ControlPanelProps {
   colorTheme: ColorTheme;
@@ -39,6 +40,13 @@ export default function ControlPanel({
   const prevThemeRef = useRef<ColorTheme>(colorTheme);
   const transStartRef = useRef<number>(0);
   const transRafRef = useRef<number | null>(null);
+  const lastDisplayRef = useRef({
+    primary: colorTheme.primary,
+    accent: colorTheme.accent,
+    shadow: colorTheme.shadow,
+    g0: colorTheme.gradient[0],
+    g1: colorTheme.gradient[1],
+  });
 
   useEffect(() => {
     if (prevThemeRef.current.name === colorTheme.name) return;
@@ -70,16 +78,23 @@ export default function ControlPanel({
     };
 
     const duration = 500;
+    const ld = lastDisplayRef.current;
     const animate = (now: number) => {
       const elapsed = now - transStartRef.current;
       const prog = Math.min(1, elapsed / duration);
-      const eased = prog < 0.5 ? 2 * prog * prog : 1 - Math.pow(-2 * prog + 2, 2) / 2;
+      const eased = easeInOutQuad(prog);
 
-      setDisplayPrimary(lerpC(from.primary, to.primary, eased));
-      setDisplayAccent(lerpC(from.accent, to.accent, eased));
-      setDisplayShadow(lerpS(from.shadow, to.shadow, eased));
-      setDisplayG0(lerpC(from.gradient[0], to.gradient[0], eased));
-      setDisplayG1(lerpC(from.gradient[1], to.gradient[1], eased));
+      const newPrimary = lerpC(from.primary, to.primary, eased);
+      const newAccent = lerpC(from.accent, to.accent, eased);
+      const newShadow = lerpS(from.shadow, to.shadow, eased);
+      const newG0 = lerpC(from.gradient[0], to.gradient[0], eased);
+      const newG1 = lerpC(from.gradient[1], to.gradient[1], eased);
+
+      if (newPrimary !== ld.primary) { ld.primary = newPrimary; setDisplayPrimary(newPrimary); }
+      if (newAccent !== ld.accent) { ld.accent = newAccent; setDisplayAccent(newAccent); }
+      if (newShadow !== ld.shadow) { ld.shadow = newShadow; setDisplayShadow(newShadow); }
+      if (newG0 !== ld.g0) { ld.g0 = newG0; setDisplayG0(newG0); }
+      if (newG1 !== ld.g1) { ld.g1 = newG1; setDisplayG1(newG1); }
 
       if (prog < 1) {
         transRafRef.current = requestAnimationFrame(animate);

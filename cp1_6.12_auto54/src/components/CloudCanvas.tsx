@@ -144,7 +144,7 @@ const CloudCanvas = forwardRef<CloudCanvasHandle, CloudCanvasProps>(function Clo
       const now = performance.now();
       for (let i = 0; i < arr.length; i++) {
         const remain = arr[i].lifetime - (now - arr[i].birthTime);
-        if (remain < minRemain) {
+        if (remain < minRemain || (remain === minRemain && arr[i].birthTime < arr[minIdx].birthTime)) {
           minRemain = remain;
           minIdx = i;
         }
@@ -202,6 +202,28 @@ const CloudCanvas = forwardRef<CloudCanvasHandle, CloudCanvasProps>(function Clo
       rafRef.current = requestAnimationFrame(loop);
     };
 
+    const buildCorners = (p: Keyword, c: number, s: number): [number, number][] => {
+      const hw = p.halfW * p.scale;
+      const hh = p.halfH * p.scale;
+      return [
+        [p.x + (-hw * c + hh * s), p.y + (-hw * s - hh * c)],
+        [p.x + (hw * c + hh * s), p.y + (hw * s - hh * c)],
+        [p.x + (hw * c - hh * s), p.y + (hw * s + hh * c)],
+        [p.x + (-hw * c - hh * s), p.y + (-hw * s + hh * c)],
+      ];
+    };
+
+    const projectOnAxis = (corners: [number, number][], ax: number, ay: number): [number, number] => {
+      let min = Infinity;
+      let max = -Infinity;
+      for (let k = 0; k < 4; k++) {
+        const d = corners[k][0] * ax + corners[k][1] * ay;
+        if (d < min) min = d;
+        if (d > max) max = d;
+      }
+      return [min, max];
+    };
+
     const stepParticles = (now: number, dt: number) => {
       const parts = particlesRef.current;
       const { w, h } = dimsRef.current;
@@ -237,41 +259,77 @@ const CloudCanvas = forwardRef<CloudCanvasHandle, CloudCanvasProps>(function Clo
         }
       }
 
+      const cosArr = new Float64Array(parts.length);
+      const sinArr = new Float64Array(parts.length);
+      const cornersArr: [number, number][][] = new Array(parts.length);
+      for (let k = 0; k < parts.length; k++) {
+        const p = parts[k];
+        const c = Math.cos(p.rotation);
+        const s = Math.sin(p.rotation);
+        cosArr[k] = c;
+        sinArr[k] = s;
+        cornersArr[k] = buildCorners(p, c, s);
+      }
+
       for (let i = 0; i < parts.length; i++) {
         const pi = parts[i];
-        const si = pi.scale;
-        const hwi = pi.halfW * si;
-        const hhi = pi.halfH * si;
+        const ci = cornersArr[i];
+        const cosI = cosArr[i];
+        const sinI = sinArr[i];
 
         for (let j = i + 1; j < parts.length; j++) {
           const pj = parts[j];
-          const sj = pj.scale;
-          const hwj = pj.halfW * sj;
-          const hhj = pj.halfH * sj;
-
           const dx = pj.x - pi.x;
           const dy = pj.y - pi.y;
+          const spanI = Math.max(pi.halfW, pi.halfH) * pi.scale;
+          const spanJ = Math.max(pj.halfW, pj.halfH) * pj.scale;
+          if (Math.abs(dx) > (spanI + spanJ) * 2.2 || Math.abs(dy) > (spanI + spanJ) * 2.2) continue;
 
-          const overlapX = hwi + hwj - Math.abs(dx);
-          if (overlapX <= 0) continue;
+          const cj = cornersArr[j];
+          const cosJ = cosArr[j];
+          const sinJ = sinArr[j];
 
-          const overlapY = hhi + hhj - Math.abs(dy);
-          if (overlapY <= 0) continue;
+          const axesX0 = cosI;
+          const axesY0 = sinI;
+          const axesX1 = -sinI;
+          const axesY1 = cosI;
+          const axesX2 = cosJ;
+          const axesY2 = sinJ;
+          const axesX3 = -sinJ;
+          const axesY3 = cosJ;
 
-          const d2 = dx * dx + dy * dy + 0.01;
-          const dist = Math.sqrt(d2);
+          let colliding = true;
+          const ovs = [0, 0, 0, 0];
+          for (let k = 0; k < 4; k++) {
+            const ax = k === 0 ? axesX0 : k === 1 ? axesX1 : k === 2 ? axesX2 : axesX3;
+            const ay = k === 0 ? axesY0 : k === 1 ? axesY1 : k === 2 ? axesY2 : axesY3;
+            const [minAI, maxAI] = projectOnAxis(ci, ax, ay);
+            const [minBJ, maxBJ] = projectOnAxis(cj, ax, ay);
+            const ov = Math.min(maxAI - minBJ, maxBJ - minAI);
+            if (ov <= 0) { colliding = false; break; }
+            ovs[k] = ov;
+          }
+          if (!colliding) continue;
 
-          const overlapRatioX = overlapX / (hwi + hwj);
-          const overlapRatioY = overlapY / (hhi + hhj);
-          const overlapSeverity = Math.min(overlapRatioX, overlapRatioY);
+          const dotX = dx * cosI + dy * sinI;
+          const dotY = -dx * sinI + dy * cosI;
+          const pushLocalX = ovs[0] * (dotX >= 0 ? 1 : -1);
+          const pushLocalY = ovs[1] * (dotY >= 0 ? 1 : -1);
+          const pushWX = pushLocalX * cosI - pushLocalY * sinI;
+          const pushWY = pushLocalX * sinI + pushLocalY * cosI;
 
-          const pushStrength = 0.8 * overlapSeverity * (1 + overlapSeverity * 2);
+          const pushMag = Math.hypot(pushWX, pushWY);
+          if (pushMag < 0.001) continue;
 
-          const nx = dist > 0.5 ? dx / dist : (Math.random() - 0.5);
-          const ny = dist > 0.5 ? dy / dist : (Math.random() - 0.5);
+          const sumDim = Math.max(1, pi.halfW * pi.scale + pj.halfW * pj.scale)
+                       + Math.max(1, pi.halfH * pi.scale + pj.halfH * pj.scale);
+          const severity = pushMag / sumDim;
+          const strength = 0.8 * severity * (1 + severity * 2);
 
-          const fx = pushStrength * nx;
-          const fy = pushStrength * ny;
+          const nx = pushWX / pushMag;
+          const ny = pushWY / pushMag;
+          const fx = strength * nx;
+          const fy = strength * ny;
 
           pi.vx -= fx * 0.5;
           pi.vy -= fy * 0.5;

@@ -83,34 +83,12 @@ function tokenizeChinese(text: string): string[] {
 }
 
 function segmentChinese(text: string): string[] {
-  if (text.length <= 1) return [text];
-  if (text.length === 2) return [text];
-  if (text.length === 3) {
-    if (STOP_WORDS_ZH.has(text[0]) && STOP_WORDS_ZH.has(text[1])) {
-      const last = text[2];
-      return isStopWord(last) ? [] : [last];
-    }
-    if (STOP_WORDS_ZH.has(text[0])) {
-      const rest = text.slice(1);
-      return isStopWord(rest) ? [] : [rest];
-    }
-    if (STOP_WORDS_ZH.has(text[2])) {
-      const first = text.slice(0, 2);
-      return isStopWord(first) ? [] : [first];
-    }
-    return [text.slice(0, 2), text[2]].filter(w => !isStopWord(w));
-  }
-  if (text.length === 4) {
-    if (STOP_WORDS_ZH.has(text[0])) {
-      return segmentChinese(text.slice(1));
-    }
-    return [text.slice(0, 2), text.slice(2)].filter(w => !isStopWord(w));
-  }
+  if (text.length === 0) return [];
   const results: string[] = [];
   let i = 0;
   while (i < text.length) {
     let matched = false;
-    for (let len = Math.min(4, text.length - i); len >= 2; len--) {
+    for (let len = Math.min(6, text.length - i); len >= 1; len--) {
       const candidate = text.slice(i, i + len);
       if (!isStopWord(candidate)) {
         results.push(candidate);
@@ -120,9 +98,6 @@ function segmentChinese(text: string): string[] {
       }
     }
     if (!matched) {
-      if (!isStopWord(text[i])) {
-        results.push(text[i]);
-      }
       i++;
     }
   }
@@ -139,7 +114,17 @@ function extractEnglishTokens(text: string, results: string[]): void {
 function splitKeywords(text: string): string[] {
   if (!text) return [];
   const cleaned = text.replace(/[，。！？；：""''、（）【】《》…—\-.!?,;:'"()\[\]{}<>\/\\@#$%^&*+=~`|]/g, ' ');
-  return tokenizeChinese(cleaned);
+  const raw = tokenizeChinese(cleaned);
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const kw of raw) {
+    const key = kw.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(kw);
+    }
+  }
+  return result;
 }
 
 export interface VoiceHandlerOptions {
