@@ -1,5 +1,11 @@
-import React, { memo, useMemo } from 'react';
-import { AppProvider, useAppState, DataState } from './lib/stateManager';
+import React, { memo, useMemo, useState, useCallback } from 'react';
+import {
+  AppContext,
+  initialAppState,
+  useAppState,
+  DataState,
+  AppState,
+} from './lib/stateManager';
 import { getComponentById, themeVariables } from './lib/componentRegistry';
 import ComponentGallery from './components/ComponentGallery';
 import TestHarness from './components/TestHarness';
@@ -12,6 +18,42 @@ const dataStates: { key: DataState; label: string }[] = [
   { key: 'normal', label: 'Normal' },
 ];
 
+interface AppProviderProps {
+  children: React.ReactNode;
+}
+
+const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
+  const [state, setState] = useState<AppState>(initialAppState);
+
+  const setSelectedComponentId = useCallback((id: string) => {
+    setState(prev => ({ ...prev, selectedComponentId: id }));
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      theme: prev.theme === 'light' ? 'dark' : 'light',
+    }));
+  }, []);
+
+  const setDataState = useCallback((dataState: DataState) => {
+    setState(prev => ({ ...prev, dataState }));
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    ...state,
+    setSelectedComponentId,
+    toggleTheme,
+    setDataState,
+  }), [state, setSelectedComponentId, toggleTheme, setDataState]);
+
+  return (
+    <AppContext.Provider value={contextValue}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
 const AppContent: React.FC = memo(() => {
   const { selectedComponentId, theme, dataState, toggleTheme, setDataState } = useAppState();
 
@@ -19,12 +61,12 @@ const AppContent: React.FC = memo(() => {
     return getComponentById(selectedComponentId);
   }, [selectedComponentId]);
 
-  const themeStyle = useMemo(() => {
+  const globalThemeStyle = useMemo(() => {
     const vars = themeVariables[theme];
     const style: React.CSSProperties = {};
-    Object.entries(vars).forEach(([key, value]) => {
-      style[key as any] = value;
-    });
+    for (const [key, value] of Object.entries(vars)) {
+      (style as any)[key] = value;
+    }
     return style;
   }, [theme]);
 
@@ -32,12 +74,16 @@ const AppContent: React.FC = memo(() => {
     return dataStates.findIndex((s) => s.key === dataState);
   }, [dataState]);
 
+  const handleTabClick = useCallback((key: DataState) => {
+    setDataState(key);
+  }, [setDataState]);
+
   return (
-    <div className={`app ${theme}`} style={themeStyle}>
-      <div className="sidebar">
+    <div className={`app ${theme}`} style={globalThemeStyle}>
+      <aside className="sidebar">
         <ComponentGallery />
-      </div>
-      <div className="mainContent">
+      </aside>
+      <main className="mainContent">
         <div className="topBar">
           <div className="componentInfo">
             {currentComponent && (
@@ -47,17 +93,23 @@ const AppContent: React.FC = memo(() => {
               </>
             )}
           </div>
-          <button className="themeToggle" onClick={toggleTheme} aria-label="Toggle theme">
+          <button
+            className="themeToggle"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+          >
             <span className="themeIcon">{theme === 'light' ? '🌙' : '☀️'}</span>
           </button>
         </div>
         <div className="tabsContainer">
-          <div className="tabs">
+          <div className="tabs" role="tablist">
             {dataStates.map((tab) => (
               <button
                 key={tab.key}
+                role="tab"
+                aria-selected={dataState === tab.key}
                 className={`tab ${dataState === tab.key ? 'active' : ''}`}
-                onClick={() => setDataState(tab.key)}
+                onClick={() => handleTabClick(tab.key)}
               >
                 {tab.label}
               </button>
@@ -78,7 +130,7 @@ const AppContent: React.FC = memo(() => {
             />
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 });

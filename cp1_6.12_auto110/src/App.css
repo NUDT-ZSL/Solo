@@ -1,3 +1,17 @@
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #e0e0e0;
+  --bg-card: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #e0e0e0;
+  --panel-bg: #f0f0f0;
+  --accent-color: #4A90D9;
+  --success-color: #52c41a;
+  --error-color: #ff4d4f;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -14,13 +28,16 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .app {
   display: flex;
   width: 100%;
   height: 100%;
-  transition: background-color 0.3s, color 0.3s;
+  transition: background-color 0.3s ease, color 0.3s ease;
   background-color: var(--bg-primary);
   color: var(--text-primary);
 }
@@ -31,6 +48,7 @@ body {
   height: 100%;
   border-right: 0.5px solid var(--border-color);
   transition: all 0.3s ease;
+  background-color: var(--panel-bg);
 }
 
 .mainContent {
@@ -39,6 +57,8 @@ body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  transition: background-color 0.3s ease;
+  background-color: var(--bg-primary);
 }
 
 .topBar {
@@ -47,7 +67,7 @@ body {
   justify-content: space-between;
   padding: 20px 32px;
   border-bottom: 0.5px solid var(--border-color);
-  transition: background-color 0.3s, border-color 0.3s;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
   background-color: var(--bg-primary);
 }
 
@@ -61,13 +81,13 @@ body {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
-  transition: color 0.3s;
+  transition: color 0.3s ease;
 }
 
 .currentComponentDesc {
   font-size: 13px;
   color: var(--text-secondary);
-  transition: color 0.3s;
+  transition: color 0.3s ease;
 }
 
 .themeToggle {
@@ -76,6 +96,7 @@ body {
   border-radius: 50%;
   border: 0.5px solid var(--border-color);
   background-color: var(--bg-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -95,7 +116,7 @@ body {
 .tabsContainer {
   padding: 16px 32px 0;
   background-color: var(--bg-primary);
-  transition: background-color 0.3s;
+  transition: background-color 0.3s ease;
 }
 
 .tabs {
@@ -104,6 +125,7 @@ body {
   background-color: var(--bg-secondary);
   border-radius: 8px;
   padding: 2px;
+  transition: background-color 0.3s ease;
 }
 
 .tab {
@@ -117,8 +139,9 @@ body {
   cursor: pointer;
   position: relative;
   z-index: 1;
-  transition: color 0.3s;
+  transition: color 0.3s ease;
   border-radius: 6px;
+  font-family: inherit;
 }
 
 .tab:hover {
@@ -126,7 +149,7 @@ body {
 }
 
 .tab.active {
-  color: #4A90D9;
+  color: var(--accent-color);
 }
 
 .tabIndicator {
@@ -135,7 +158,7 @@ body {
   left: 2px;
   width: calc(25% - 4px);
   height: 2px;
-  background-color: #4A90D9;
+  background-color: var(--accent-color);
   transition: transform 0.3s ease;
   border-radius: 1px;
 }
@@ -144,25 +167,29 @@ body {
   flex: 1;
   padding: 32px;
   overflow: auto;
-  transition: background-color 0.3s;
-}
-
-.light {
-}
-
-.dark {
+  transition: background-color 0.3s ease;
+  background-color: var(--bg-primary);
 }
 
 @media (max-width: 768px) {
   .app {
     flex-direction: column;
+    height: 100%;
   }
 
   .sidebar {
     width: 100%;
     height: auto;
+    max-height: 140px;
     border-right: none;
     border-bottom: 0.5px solid var(--border-color);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .mainContent {
+    flex: 1;
+    height: calc(100% - 140px);
   }
 
   .topBar {
