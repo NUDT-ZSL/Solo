@@ -1,0 +1,99 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary: #1e1e2e;
+  --bg-editor: #1a1a2e;
+  --bg-graph: #16213e;
+  --color-function: #00a8ff;
+  --color-variable: #ff6b6b;
+  --color-module: #9b59b6;
+  --color-edge: #00a8ff50;
+  --color-accent: #00a8ff;
+  --color-accent-hover: #0077b6;
+  --color-text: #e0e0e0;
+  --color-text-dim: #888;
+  --color-highlight-line: #ffff0040;
+  --divider-highlight: #4A90D9;
+  --font-code: 'Fira Code', 'Consolas', 'Monaco', monospace;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --transition: all 0.3s ease-in-out;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+::selection {
+  background: #00a8ff40;
+  color: #fff;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes copiedPulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+@keyframes highlightLine {
+  0% { background-color: #ffff0020; }
+  20% { background-color: #ffff0040; }
+  100% { background-color: transparent; }
+}
