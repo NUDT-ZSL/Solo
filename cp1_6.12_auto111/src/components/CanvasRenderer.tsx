@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import type { Dialog } from '../types';
 
 interface CanvasRendererProps {
@@ -7,7 +7,9 @@ interface CanvasRendererProps {
   gridCols: number;
   gridRows: number;
   dialogs: Dialog[];
+  showGrid?: boolean;
   onDoubleClick: (x: number, y: number) => void;
+  onResize?: (scale: number) => void;
 }
 
 export default function CanvasRenderer({
@@ -16,30 +18,78 @@ export default function CanvasRenderer({
   gridCols,
   gridRows,
   dialogs,
-  onDoubleClick
+  showGrid = true,
+  onDoubleClick,
+  onResize
 }: CanvasRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const [scale, setScale] = useState(1);
   const renderStateRef = useRef({
     needsRender: false,
     width,
     height,
     gridCols,
     gridRows,
-    dialogs
+    dialogs,
+    showGrid,
+    scale: 1,
+    dpr: window.devicePixelRatio || 1
   });
+
+  const updateScale = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const containerWidth = container.clientWidth;
+    const newScale = Math.min(1, containerWidth / width);
+    setScale(newScale);
+    renderStateRef.current.scale = newScale;
+    renderStateRef.current.dpr = window.devicePixelRatio || 1;
+    renderStateRef.current.needsRender = true;
+    requestRender();
+    onResize?.(newScale);
+  }, [width, onResize]);
+
+  useEffect(() => {
+    updateScale();
+
+    const handleWindowResize = () => {
+      updateScale();
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+
+    if (containerRef.current && 'ResizeObserver' in window) {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        updateScale();
+      });
+      resizeObserverRef.current.observe(containerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleWindowResize);
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
+  }, [updateScale]);
 
   useEffect(() => {
     renderStateRef.current = {
+      ...renderStateRef.current,
       needsRender: true,
       width,
       height,
       gridCols,
       gridRows,
-      dialogs
+      dialogs,
+      showGrid
     };
     requestRender();
-  }, [width, height, gridCols, gridRows, dialogs]);
+  }, [width, height, gridCols, gridRows, dialogs, showGrid]);
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -48,57 +98,70 @@ export default function CanvasRenderer({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const state = renderStateRef.current;
-    const dpr = window.devicePixelRatio || 1;
+    console.time('canvas_render');
 
-    canvas.width = state.width * dpr;
-    canvas.height = state.height * dpr;
-    canvas.style.width = `${state.width}px`;
-    canvas.style.height = `${state.height}px`;
-    ctx.scale(dpr, dpr);
+    const state = renderStateRef.current;
+    const { dpr, scale } = state;
+
+    const displayWidth = state.width * scale;
+    const displayHeight = state.height * scale;
+
+    canvas.width = displayWidth * dpr;
+    canvas.height = displayHeight * dpr;
+    canvas.style.width = `${displayWidth}px`;
+    canvas.style.height = `${displayHeight}px`;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr * scale, dpr * scale);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     ctx.fillStyle = '#F5E8E1';
     ctx.fillRect(0, 0, state.width, state.height);
 
-    const cellWidth = state.width / state.gridCols;
-    const cellHeight = state.height / state.gridRows;
+    if (state.showGrid) {
+      const cellWidth = state.width / state.gridCols;
+      const cellHeight = state.height / state.gridRows;
 
-    ctx.strokeStyle = '#D6CCC2';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = '#D6CCC2';
+      ctx.lineWidth = 1 / scale;
+      ctx.setLineDash([5 / scale, 5 / scale]);
 
-    for (let i = 1; i < state.gridCols; i++) {
-      const x = i * cellWidth;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, state.height);
-      ctx.stroke();
-    }
+      for (let i = 1; i < state.gridCols; i++) {
+        const x = i * cellWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, state.height);
+        ctx.stroke();
+      }
 
-    for (let j = 1; j < state.gridRows; j++) {
-      const y = j * cellHeight;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(state.width, y);
-      ctx.stroke();
-    }
+      for (let j = 1; j < state.gridRows; j++) {
+        const y = j * cellHeight;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(state.width, y);
+        ctx.stroke();
+      }
 
-    ctx.setLineDash([]);
-    ctx.strokeStyle = '#D6CCC2';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, state.width, state.height);
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#D6CCC2';
+      ctx.lineWidth = 2 / scale;
+      ctx.strokeRect(0, 0, state.width, state.height);
 
-    for (let row = 0; row < state.gridRows; row++) {
-      for (let col = 0; col < state.gridCols; col++) {
-        const x = col * cellWidth;
-        const y = row * cellHeight;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`${row + 1}-${col + 1}`, x + 8, y + 20);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+      ctx.font = `${12 / scale}px sans-serif`;
+      for (let row = 0; row < state.gridRows; row++) {
+        for (let col = 0; col < state.gridCols; col++) {
+          const x = col * cellWidth;
+          const y = row * cellHeight;
+          ctx.fillText(`${row + 1}-${col + 1}`, x + 8 / scale, y + 20 / scale);
+        }
       }
     }
 
     renderStateRef.current.needsRender = false;
+
+    console.timeEnd('canvas_render');
   }, []);
 
   const requestRender = useCallback(() => {
@@ -135,22 +198,23 @@ export default function CanvasRenderer({
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX - rect.left) / scale;
+    const y = (e.clientY - rect.top) / scale;
     onDoubleClick(x, y);
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      onDoubleClick={handleDoubleClick}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        cursor: 'crosshair',
-        borderRadius: 8
-      }}
-    />
+    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      <canvas
+        ref={canvasRef}
+        onDoubleClick={handleDoubleClick}
+        style={{
+          position: 'relative',
+          cursor: 'crosshair',
+          borderRadius: 8,
+          display: 'block'
+        }}
+      />
+    </div>
   );
 }

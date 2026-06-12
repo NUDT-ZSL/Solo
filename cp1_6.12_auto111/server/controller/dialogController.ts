@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { dialogModel, historyModel } from '../model/dialogModel.js';
+import { dialogModel, historyModel } from '../model/dialogModel.ts';
 
 export const dialogController = {
   async getDialogsByPanel(req: Request, res: Response) {

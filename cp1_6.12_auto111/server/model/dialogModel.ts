@@ -1,4 +1,4 @@
-import { dialogDB, historyDB } from '../db.js';
+import { dialogDB, historyDB } from '../db.ts';
 
 export interface Dialog {
   _id?: string;
