@@ -1,4 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
+import { create } from 'zustand';
+import { applyPresetToGeometries } from '@/utils/sculpturePresets';
 
 export type GeometryType = 'cube' | 'sphere' | 'cylinder' | 'cone' | 'torus';
 
@@ -18,12 +20,21 @@ export interface SculptureState {
   geometries: GeometryItem[];
   selectedId: string | null;
   preset: PresetId;
-  addGeometry: (type: GeometryType) => void;
+  fadeInIds: string[];
+  removingIds: string[];
+  presetHighlight: boolean;
+  importing: boolean;
+  addGeometry: (type: GeometryType) => string;
   removeGeometry: (id: string) => void;
+  startRemoving: (id: string) => void;
+  completeRemoving: (id: string) => void;
   updateGeometry: (id: string, updates: Partial<GeometryItem>) => void;
   selectGeometry: (id: string | null) => void;
   applyPreset: (preset: PresetId) => void;
   importConfig: (geometries: GeometryItem[], preset: PresetId) => void;
+  completeFadeIn: (id: string) => void;
+  clearPresetHighlight: () => void;
+  setImporting: (v: boolean) => void;
 }
 
 const TYPE_NAMES: Record<GeometryType, string> = {
@@ -34,10 +45,13 @@ const TYPE_NAMES: Record<GeometryType, string> = {
   torus: '环面',
 };
 
-const DEFAULT_COLORS = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#a29bfe', '#fd79a8', '#00cec9'];
+const DEFAULT_COLORS = [
+  '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24',
+  '#6c5ce7', '#a29bfe', '#fd79a8', '#00cec9',
+];
 
 function getTypeCount(geometries: GeometryItem[], type: GeometryType): number {
-  return geometries.filter(g => g.type === type).length + 1;
+  return geometries.filter((g) => g.type === type).length + 1;
 }
 
 export const DEFAULT_GEOMETRIES: GeometryItem[] = [
@@ -88,25 +102,27 @@ export const DEFAULT_GEOMETRIES: GeometryItem[] = [
   },
 ];
 
-import { create } from 'zustand';
-import { applyPresetToGeometries } from '@/utils/sculpturePresets';
-
 export const useSculptureStore = create<SculptureState>((set) => ({
   geometries: DEFAULT_GEOMETRIES,
   selectedId: null,
   preset: null,
+  fadeInIds: [],
+  removingIds: [],
+  presetHighlight: false,
+  importing: false,
 
   addGeometry: (type: GeometryType) => {
     const id = uuidv4();
     const count = getTypeCount(useSculptureStore.getState().geometries, type);
-    const colorIndex = useSculptureStore.getState().geometries.length % DEFAULT_COLORS.length;
+    const colorIndex =
+      useSculptureStore.getState().geometries.length % DEFAULT_COLORS.length;
     const newGeo: GeometryItem = {
       id,
       type,
       name: `${TYPE_NAMES[type]}-${count}`,
       position: {
         x: Math.round((Math.random() * 6 - 3) * 10) / 10,
-        y: Math.round((Math.random() * 3) * 10) / 10,
+        y: Math.round(Math.random() * 3 * 10) / 10,
         z: Math.round((Math.random() * 6 - 3) * 10) / 10,
       },
       rotation: { x: 0, y: 0, z: 0 },
@@ -117,14 +133,29 @@ export const useSculptureStore = create<SculptureState>((set) => ({
       geometries: [...state.geometries, newGeo],
       selectedId: id,
       preset: null,
+      fadeInIds: [...state.fadeInIds, id],
+    }));
+    return id;
+  },
+
+  startRemoving: (id: string) => {
+    set((state) => ({
+      removingIds: [...state.removingIds, id],
+    }));
+  },
+
+  completeRemoving: (id: string) => {
+    set((state) => ({
+      geometries: state.geometries.filter((g) => g.id !== id),
+      removingIds: state.removingIds.filter((rid) => rid !== id),
+      selectedId: state.selectedId === id ? null : state.selectedId,
+      preset: null,
     }));
   },
 
   removeGeometry: (id: string) => {
     set((state) => ({
-      geometries: state.geometries.filter((g) => g.id !== id),
-      selectedId: state.selectedId === id ? null : state.selectedId,
-      preset: null,
+      removingIds: [...state.removingIds, id],
     }));
   },
 
@@ -145,10 +176,34 @@ export const useSculptureStore = create<SculptureState>((set) => ({
     set((state) => ({
       geometries: applyPresetToGeometries(state.geometries, preset),
       preset,
+      presetHighlight: true,
     }));
+    setTimeout(() => {
+      useSculptureStore.getState().clearPresetHighlight();
+    }, 1500);
   },
 
   importConfig: (geometries: GeometryItem[], preset: PresetId) => {
-    set({ geometries, selectedId: null, preset });
+    set({
+      geometries,
+      selectedId: null,
+      preset,
+      fadeInIds: geometries.map((g) => g.id),
+      importing: false,
+    });
+  },
+
+  completeFadeIn: (id: string) => {
+    set((state) => ({
+      fadeInIds: state.fadeInIds.filter((fid) => fid !== id),
+    }));
+  },
+
+  clearPresetHighlight: () => {
+    set({ presetHighlight: false });
+  },
+
+  setImporting: (v: boolean) => {
+    set({ importing: v });
   },
 }));
