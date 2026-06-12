@@ -1,0 +1,117 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background-color: #f9fafb;
+  color: #1f2937;
+  min-width: 800px;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  outline: none;
+}
+
+.comment-textarea:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  background-color: #ffffff !important;
+}
+
+.score-input:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.student-table tbody tr:hover {
+  background-color: #f0f4f8 !important;
+}
+
+.btn-secondary:hover {
+  background-color: #e5e7eb !important;
+}
+
+.btn-download:hover:not(:disabled) {
+  background-color: #059669 !important;
+}
+
+.btn-edit:hover {
+  background-color: #e0e7ff !important;
+}
+
+.btn-edit-active:hover {
+  background-color: #4f46e5 !important;
+}
+
+.btn-save:hover:not(:disabled) {
+  background-color: #4f46e5 !important;
+}
+
+.btn-back:hover {
+  background-color: #e5e7eb !important;
+}
+
+.upload-area:hover {
+  background-color: #fafbff;
+  border-color: #4f46e5;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes flyIn {
+  0% {
+    transform: translateY(-30px) scale(0.8);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(5px) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes progressShine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
