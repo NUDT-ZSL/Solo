@@ -1,3 +1,5 @@
+import { AudioEventBus } from './EventBus';
+
 export interface AudioEngineCallbacks {
   onPlaybackUpdate?: (currentTime: number, duration: number) => void;
   onWaveformData?: (data: Float32Array) => void;
@@ -12,15 +14,17 @@ export class AudioEngine {
   private gainNode: GainNode | null = null;
   private startTime: number = 0;
   private pausedAt: number = 0;
-  private isPlaying: boolean = false;
+  private isPlayingFlag: boolean = false;
   private animationFrameId: number | null = null;
   private callbacks: AudioEngineCallbacks = {};
   private duration: number = 0;
   private fileName: string = '';
   private waveformData: Float32Array | null = null;
+  public readonly eventBus: AudioEventBus;
 
   constructor(callbacks: AudioEngineCallbacks = {}) {
     this.callbacks = callbacks;
+    this.eventBus = new AudioEventBus();
   }
 
   setCallbacks(callbacks: AudioEngineCallbacks) {
@@ -44,16 +48,20 @@ export class AudioEngine {
     this.duration = this.audioBuffer.duration;
     this.fileName = file.name;
     this.pausedAt = 0;
-    this.isPlaying = false;
+    this.isPlayingFlag = false;
     this.extractWaveformData();
+
     this.callbacks.onAudioLoaded?.(this.duration, this.audioBuffer.sampleRate);
+    this.eventBus.emit('audioLoaded', { duration: this.duration, sampleRate: this.audioBuffer.sampleRate });
+
     this.callbacks.onWaveformData?.(this.waveformData!);
+    this.eventBus.emit('waveformData', { data: this.waveformData! });
   }
 
   private extractWaveformData(): void {
     if (!this.audioBuffer) return;
     const channelData = this.audioBuffer.getChannelData(0);
-    const samples = 2000;
+    const samples = 4000;
     const blockSize = Math.floor(channelData.length / samples);
     const filteredData = new Float32Array(samples);
 
@@ -88,14 +96,14 @@ export class AudioEngine {
   }
 
   getCurrentTime(): number {
-    if (!this.isPlaying || !this.audioContext) {
+    if (!this.isPlayingFlag || !this.audioContext) {
       return this.pausedAt;
     }
     return this.audioContext.currentTime - this.startTime;
   }
 
   isPlayingState(): boolean {
-    return this.isPlaying;
+    return this.isPlayingFlag;
   }
 
   async play(startTime?: number): Promise<void> {
@@ -104,8 +112,8 @@ export class AudioEngine {
 
     this.stopSource();
 
-    const startPos = startTime !== undefined ? startTime : this.pausedAt;
-    if (startPos >= this.duration) {
+    const offset = startTime !== undefined ? startTime : this.pausedAt;
+    if (offset >= this.duration) {
       this.pausedAt = 0;
     }
 
@@ -119,44 +127,47 @@ export class AudioEngine {
     this.gainNode.connect(ctx.destination);
 
     this.sourceNode.onended = () => {
-      if (this.isPlaying) {
-        this.isPlaying = false;
+      if (this.isPlayingFlag) {
+        this.isPlayingFlag = false;
         this.pausedAt = 0;
         this.callbacks.onPlaybackEnd?.();
+        this.eventBus.emit('playbackEnd');
         this.stopAnimationLoop();
       }
     };
 
-    const offset = startTime !== undefined ? startTime : this.pausedAt;
-    this.sourceNode.start(0, offset);
-    this.startTime = ctx.currentTime - offset;
-    this.isPlaying = true;
+    const playOffset = startTime !== undefined ? startTime : this.pausedAt;
+    this.sourceNode.start(0, playOffset);
+    this.startTime = ctx.currentTime - playOffset;
+    this.isPlayingFlag = true;
     this.startAnimationLoop();
   }
 
   pause(): void {
-    if (!this.isPlaying || !this.audioContext) return;
+    if (!this.isPlayingFlag || !this.audioContext) return;
     this.pausedAt = this.audioContext.currentTime - this.startTime;
-    this.isPlaying = false;
+    this.isPlayingFlag = false;
     this.stopSource();
     this.stopAnimationLoop();
   }
 
   stop(): void {
-    this.isPlaying = false;
+    this.isPlayingFlag = false;
     this.pausedAt = 0;
     this.stopSource();
     this.stopAnimationLoop();
     this.callbacks.onPlaybackUpdate?.(0, this.duration);
+    this.eventBus.emit('playbackUpdate', { currentTime: 0, duration: this.duration });
   }
 
   seek(time: number): void {
     const clampedTime = Math.max(0, Math.min(time, this.duration));
     this.pausedAt = clampedTime;
-    if (this.isPlaying) {
+    if (this.isPlayingFlag) {
       this.play(clampedTime);
     } else {
       this.callbacks.onPlaybackUpdate?.(clampedTime, this.duration);
+      this.eventBus.emit('playbackUpdate', { currentTime: clampedTime, duration: this.duration });
     }
   }
 
@@ -176,9 +187,10 @@ export class AudioEngine {
 
   private startAnimationLoop(): void {
     const loop = () => {
-      if (!this.isPlaying || !this.audioContext) return;
+      if (!this.isPlayingFlag || !this.audioContext) return;
       const currentTime = this.audioContext.currentTime - this.startTime;
       this.callbacks.onPlaybackUpdate?.(currentTime, this.duration);
+      this.eventBus.emit('playbackUpdate', { currentTime, duration: this.duration });
       this.animationFrameId = requestAnimationFrame(loop);
     };
     this.animationFrameId = requestAnimationFrame(loop);
@@ -192,7 +204,10 @@ export class AudioEngine {
   }
 
   playBeatSound(frequency: number = 440, duration: number = 0.1, volume: number = 0.3): void {
-    if (!this.audioContext) return;
+    if (!this.audioContext) {
+      this.ensureAudioContext().then(() => this.playBeatSound(frequency, duration, volume));
+      return;
+    }
     const ctx = this.audioContext;
 
     const oscillator = ctx.createOscillator();

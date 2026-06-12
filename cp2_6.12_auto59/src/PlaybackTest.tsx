@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AudioEngine } from './AudioEngine';
-import { MarkerManager, Marker } from './MarkerManager';
+import { Marker } from './MarkerManager';
 
 interface PulseRing {
   id: number;
@@ -9,55 +8,54 @@ interface PulseRing {
 }
 
 interface PlaybackTestProps {
-  audioEngine: AudioEngine | null;
-  markerManager: MarkerManager | null;
+  markers: Marker[];
   currentTime: number;
   isPlaying: boolean;
+  markerColor: string;
+  onPlayBeatSound: () => void;
+  getCurrentTime: () => number;
 }
 
 export const PlaybackTest: React.FC<PlaybackTestProps> = ({
-  audioEngine,
-  markerManager,
+  markers,
   currentTime,
   isPlaying,
+  markerColor,
+  onPlayBeatSound,
+  getCurrentTime,
 }) => {
   const [pulseRings, setPulseRings] = useState<PulseRing[]>([]);
   const lastTriggeredRef = useRef<Set<string>>(new Set());
   const ringIdRef = useRef(0);
   const animationRef = useRef<number>(0);
 
-  const triggerPulse = useCallback((marker: Marker) => {
+  const triggerPulse = useCallback((color: string) => {
     const id = ringIdRef.current++;
     setPulseRings((prev) => [
       ...prev,
-      { id, startTime: performance.now(), color: '#ffa500' },
+      { id, startTime: performance.now(), color },
     ]);
 
-    if (audioEngine) {
-      audioEngine.playBeatSound(440, 0.1, 0.3);
-    }
+    onPlayBeatSound();
 
     setTimeout(() => {
       setPulseRings((prev) => prev.filter((r) => r.id !== id));
     }, 300);
-  }, [audioEngine]);
+  }, [onPlayBeatSound]);
 
   useEffect(() => {
-    if (!isPlaying || !markerManager || !audioEngine) {
+    if (!isPlaying || markers.length === 0) {
       return;
     }
 
-    const markers = markerManager.getMarkers();
-    if (markers.length === 0) return;
-
     const checkMarkers = () => {
-      const time = audioEngine.getCurrentTime();
+      const time = getCurrentTime();
 
       for (const marker of markers) {
         const diff = Math.abs(marker.time - time);
         if (diff < 0.03 && !lastTriggeredRef.current.has(marker.id)) {
           lastTriggeredRef.current.add(marker.id);
-          triggerPulse(marker);
+          triggerPulse(markerColor);
         }
       }
 
@@ -71,7 +69,7 @@ export const PlaybackTest: React.FC<PlaybackTestProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isPlaying, markerManager, audioEngine, triggerPulse]);
+  }, [isPlaying, markers, markerColor, triggerPulse, getCurrentTime]);
 
   useEffect(() => {
     if (!isPlaying) {
