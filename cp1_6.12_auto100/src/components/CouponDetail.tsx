@@ -206,7 +206,7 @@ export default function CouponDetail({ couponId, onBack }: CouponDetailProps) {
                 step="0.01"
               />
               {touched.order_amount && errors.order_amount && (
-                <div className="error-message">{errors.order_amount}</div>
+                <div className="error-message" style={{ color: '#EF4444', fontSize: '12px' }}>{errors.order_amount}</div>
               )}
             </div>
             <div className="form-group">
@@ -221,7 +221,7 @@ export default function CouponDetail({ couponId, onBack }: CouponDetailProps) {
               />
               <div className="char-count">{form.note.length}/50</div>
               {touched.note && errors.note && (
-                <div className="error-message">{errors.note}</div>
+                <div className="error-message" style={{ color: '#EF4444', fontSize: '12px' }}>{errors.note}</div>
               )}
             </div>
             <button

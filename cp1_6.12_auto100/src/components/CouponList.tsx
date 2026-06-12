@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { VariableSizeGrid as Grid } from 'react-window';
 import type { Coupon, FilterStatus } from '../types';
 
 interface CouponListProps {
@@ -12,8 +13,8 @@ interface CouponListProps {
   onClaim: (id: string) => void;
 }
 
-const CARD_HEIGHT = 240;
 const CARD_GAP = 20;
+const BASE_CARD_HEIGHT = 240;
 const BUFFER_ROWS = 2;
 
 function getGridColumns(width: number): number {
@@ -31,6 +32,12 @@ function getStatusText(status: string, todayRemaining: number): string {
   if (status === 'sold_out') return '已用罄';
   if (todayRemaining <= 0) return '今日已领完';
   return '进行中';
+}
+
+function estimateCardHeight(coupon: Coupon): number {
+  const base = 200;
+  const nameLines = Math.ceil(coupon.name.length / 18);
+  return base + Math.max(0, (nameLines - 1) * 24);
 }
 
 function SkeletonCard() {
@@ -80,6 +87,7 @@ function CouponCardItem({
     <div
       className={`coupon-card ${isExpired ? 'expired' : ''}`}
       onClick={() => !isExpired && onSelect()}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
     >
       <div className="coupon-header">
         <div className="coupon-amount">
@@ -92,7 +100,7 @@ function CouponCardItem({
       <div className="coupon-dates">
         有效期：{formatDateRange(coupon.start_date, coupon.end_date)}
       </div>
-      <div className="coupon-footer">
+      <div className="coupon-footer" style={{ marginTop: 'auto' }}>
         <div className="coupon-remaining">
           今日剩余 {coupon.today_remaining} / {coupon.daily_limit} 张
         </div>
@@ -119,31 +127,65 @@ export default function CouponList({
   onClaim,
 }: CouponListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+  const gridRef = useRef<any>(null);
   const [containerWidth, setContainerWidth] = useState(1200);
+  const [containerHeight, setContainerHeight] = useState(600);
   const [claimedIds, setClaimedIds] = useState<Set<string>>(new Set());
 
   const columns = useMemo(() => getGridColumns(containerWidth), [containerWidth]);
-  const rowHeight = CARD_HEIGHT + CARD_GAP;
   const totalRows = Math.ceil(coupons.length / columns);
-  const totalHeight = totalRows * rowHeight - CARD_GAP;
+
+  const rowHeights = useMemo(() => {
+    const heights: number[] = [];
+    for (let r = 0; r < totalRows; r++) {
+      let maxH = BASE_CARD_HEIGHT;
+      for (let c = 0; c < columns; c++) {
+        const idx = r * columns + c;
+        if (idx < coupons.length) {
+          maxH = Math.max(maxH, estimateCardHeight(coupons[idx]));
+        }
+      }
+      heights.push(maxH + CARD_GAP);
+    }
+    return heights;
+  }, [coupons, columns, totalRows]);
+
+  const columnWidths = useMemo(() => {
+    const widths: number[] = [];
+    for (let c = 0; c < columns; c++) {
+      widths.push((containerWidth - (columns - 1) * CARD_GAP) / columns);
+    }
+    return widths;
+  }, [containerWidth, columns]);
+
+  const getRowHeight = useCallback((index: number) => rowHeights[index] || BASE_CARD_HEIGHT + CARD_GAP, [rowHeights]);
+  const getColumnWidth = useCallback((index: number) => columnWidths[index] || 300, [columnWidths]);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const el = containerRef.current.parentElement || containerRef.current;
-    const update = () => {
-      const w = containerRef.current?.clientWidth || 1200;
-      setContainerWidth(w);
+    const updateSize = () => {
+      if (containerRef.current) {
+        const w = containerRef.current.clientWidth;
+        const h = Math.min(window.innerHeight - 240, 800);
+        setContainerWidth(w);
+        setContainerHeight(h);
+      }
     };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(containerRef.current);
+    window.addEventListener('resize', updateSize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
   }, []);
 
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  }, []);
+  useEffect(() => {
+    if (gridRef.current) {
+      gridRef.current.resetAfterIndices({ columnIndex: 0, rowIndex: 0 });
+    }
+  }, [rowHeights, columnWidths]);
 
   const handleClaimed = useCallback((id: string) => {
     setClaimedIds(prev => {
@@ -153,19 +195,31 @@ export default function CouponList({
     });
   }, []);
 
-  const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - BUFFER_ROWS);
-  const visibleRows = Math.ceil((containerRef.current?.clientHeight || 600) / rowHeight) + BUFFER_ROWS * 2;
-  const endRow = Math.min(totalRows, startRow + visibleRows);
+  const Cell = ({ columnIndex, rowIndex, style }: { columnIndex: number; rowIndex: number; style: React.CSSProperties }) => {
+    const idx = rowIndex * columns + columnIndex;
+    if (idx >= coupons.length) return null;
+    const coupon = coupons[idx];
 
-  const visibleCoupons: { coupon: Coupon; index: number; row: number; col: number }[] = [];
-  for (let r = startRow; r < endRow; r++) {
-    for (let c = 0; c < columns; c++) {
-      const idx = r * columns + c;
-      if (idx < coupons.length) {
-        visibleCoupons.push({ coupon: coupons[idx], index: idx, row: r, col: c });
-      }
-    }
-  }
+    const adjustedStyle = {
+      ...style,
+      left: typeof style.left === 'number' ? style.left + columnIndex * CARD_GAP : style.left,
+      top: typeof style.top === 'number' ? style.top + rowIndex * CARD_GAP : style.top,
+      width: typeof style.width === 'number' ? style.width : style.width,
+      height: typeof style.height === 'number' ? style.height - CARD_GAP : style.height,
+    };
+
+    return (
+      <div style={adjustedStyle}>
+        <CouponCardItem
+          coupon={coupon}
+          onSelect={() => onSelectCoupon(coupon.id)}
+          onClaim={onClaim}
+          claimed={claimedIds.has(coupon.id)}
+          onClaimed={() => handleClaimed(coupon.id)}
+        />
+      </div>
+    );
+  };
 
   const skeletonCount = loading ? 6 : 0;
 
@@ -216,36 +270,28 @@ export default function CouponList({
       ) : (
         <div
           ref={containerRef}
-          className="virtual-list-container"
-          onScroll={handleScroll}
-          style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}
+          style={{
+            width: '100%',
+            maxHeight: 'calc(100vh - 220px)',
+            minHeight: 400,
+          }}
         >
-          <div className="virtual-list-padding" style={{ height: totalHeight, position: 'relative' }}>
-            {visibleCoupons.map(({ coupon, row, col }) => {
-              const cardWidth = columns === 1 ? '100%' : `calc((100% - ${(columns - 1) * CARD_GAP}px) / ${columns})`;
-              const left = columns === 1 ? 0 : col * (`calc((100% - ${(columns - 1) * CARD_GAP}px) / ${columns})`);
-              return (
-                <div
-                  key={coupon.id}
-                  style={{
-                    position: 'absolute',
-                    top: row * rowHeight,
-                    left: typeof left === 'number' ? `${left}px` : left,
-                    width: cardWidth,
-                    height: CARD_HEIGHT,
-                  }}
-                >
-                  <CouponCardItem
-                    coupon={coupon}
-                    onSelect={() => onSelectCoupon(coupon.id)}
-                    onClaim={onClaim}
-                    claimed={claimedIds.has(coupon.id)}
-                    onClaimed={() => handleClaimed(coupon.id)}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <Grid
+            ref={gridRef}
+            columnCount={columns}
+            rowCount={totalRows}
+            columnWidth={getColumnWidth}
+            rowHeight={getRowHeight}
+            width={containerWidth}
+            height={containerHeight}
+            overscanRowCount={BUFFER_ROWS}
+            itemKey={({ rowIndex, columnIndex }) => {
+              const idx = rowIndex * columns + columnIndex;
+              return coupons[idx]?.id || `empty-${rowIndex}-${columnIndex}`;
+            }}
+          >
+            {Cell}
+          </Grid>
         </div>
       )}
     </div>
