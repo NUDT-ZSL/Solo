@@ -5,269 +5,510 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database(path.join(__dirname, 'improv_trainer.db'));
-db.pragma('journal_mode = WAL');
+const DB_PATH = path.join(__dirname, '..', 'improv-trainer.db');
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS scores (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL,
-    sceneId TEXT NOT NULL,
-    selectedOptionId TEXT NOT NULL,
-    correctOptionId TEXT NOT NULL,
-    semanticScore REAL NOT NULL,
-    speedScore REAL NOT NULL,
-    totalScore REAL NOT NULL,
-    responseTime REAL NOT NULL,
-    isCorrect INTEGER NOT NULL,
-    timestamp INTEGER NOT NULL
-  );
+export interface SceneOption {
+  id: string;
+  text: string;
+  isCorrect: boolean;
+  matchScore: number;
+}
 
-  CREATE INDEX IF NOT EXISTS idx_scores_userId ON scores(userId);
-  CREATE INDEX IF NOT EXISTS idx_scores_timestamp ON scores(timestamp);
+export interface Scene {
+  id: string;
+  description: string;
+  options: SceneOption[];
+  category: string;
+}
 
-  CREATE TABLE IF NOT EXISTS radar_cache (
-    userId TEXT PRIMARY KEY,
-    semanticUnderstanding REAL NOT NULL DEFAULT 0,
-    reactionSpeed REAL NOT NULL DEFAULT 0,
-    logicalCoherence REAL NOT NULL DEFAULT 0,
-    emotionalPerception REAL NOT NULL DEFAULT 0,
-    vocabularyRichness REAL NOT NULL DEFAULT 0,
-    updatedAt INTEGER NOT NULL
-  );
+export interface ScoreRecord {
+  id: string;
+  userId: string;
+  sceneId: string;
+  selectedOptionId: string;
+  correctOptionId: string;
+  semanticScore: number;
+  speedScore: number;
+  totalScore: number;
+  responseTime: number;
+  isCorrect: number;
+  timestamp: number;
+}
 
-  CREATE TABLE IF NOT EXISTS scenes (
-    id TEXT PRIMARY KEY,
-    description TEXT NOT NULL,
-    category TEXT NOT NULL,
-    options TEXT NOT NULL
-  );
-`);
+export interface RadarData {
+  semanticUnderstanding: number;
+  reactionSpeed: number;
+  logicalCoherence: number;
+  emotionalPerception: number;
+  vocabularyRichness: number;
+}
 
-const scenesData = [
+export interface ErrorDetail {
+  id: string;
+  sceneDescription: string;
+  selectedOption: string;
+  correctOption: string;
+  semanticScore: number;
+  timestamp: number;
+}
+
+let db: Database.Database;
+
+const SCENES_DATA: Omit<Scene, 'id'>[] = [
   {
-    id: 'scene-001',
     category: '咖啡店',
-    description: '场景：咖啡店点单\n\n咖啡师微笑着问你："您好，今天想喝点什么？我们刚上了新品海盐焦糖拿铁。"\n\n你会怎么回应？',
+    description: '咖啡店店员问："您好，请问想喝点什么？我们今天新出了一款海盐焦糖拿铁。" 你刚刚失恋想找个安静角落坐一下午，你会怎么回复？',
     options: [
-      { id: 'opt-001-a', text: '听起来很特别！麻烦给我来一杯中杯的，热的，谢谢。', isCorrect: true, matchScore: 95 },
-      { id: 'opt-001-b', text: '我要一杯美式，不加糖。', isCorrect: false, matchScore: 60 },
-      { id: 'opt-001-c', text: '随便吧，什么都行。', isCorrect: false, matchScore: 20 }
+      { id: '', text: '一杯热的美式，大杯，多加浓缩，谢谢。另外你们这里最角落的位置可以坐吗？', isCorrect: true, matchScore: 95 },
+      { id: '', text: '好啊，那就来一杯新的焦糖拿铁吧！听起来不错。', isCorrect: false, matchScore: 60 },
+      { id: '', text: '随便来一杯吧，无所谓。', isCorrect: false, matchScore: 30 }
     ]
   },
   {
-    id: 'scene-002',
     category: '图书馆',
-    description: '场景：图书馆搭讪\n\n你在书架前找书时，旁边一位同学轻声对你说："这本书我看过，写得挺有意思的。"\n\n你会怎么回应？',
+    description: '图书馆里，坐在你对面的陌生人不小心把你的水杯碰倒了，水洒了一点在你笔记本上，对方慌张地说"对不起对不起！我帮你擦擦"，你会怎么回应？',
     options: [
-      { id: 'opt-002-a', text: '真的吗？我一直想读这本！你觉得最精彩的部分是什么？', isCorrect: true, matchScore: 92 },
-      { id: 'opt-002-b', text: '哦，好的，谢谢推荐。', isCorrect: false, matchScore: 45 },
-      { id: 'opt-002-c', text: '（点头示意，继续找书）', isCorrect: false, matchScore: 15 }
+      { id: '', text: '（微笑递上纸巾）没事没事，不是什么重要的本子，我自己来就好，你也别太在意。', isCorrect: true, matchScore: 92 },
+      { id: '', text: '你怎么回事啊，走路不看的吗？这本子很贵的！', isCorrect: false, matchScore: 25 },
+      { id: '', text: '（沉默，不理对方，自己收拾）', isCorrect: false, matchScore: 40 }
     ]
   },
   {
-    id: 'scene-003',
     category: '机场',
-    description: '场景：机场告别\n\n你的好朋友即将登机出国留学，他/她有些伤感地说："不知道什么时候才能再见面了。"\n\n你会怎么回应？',
+    description: '机场安检口，你和相恋三年的伴侣要分别去不同城市工作，至少半年才能见面。对方抱着你说："我会每天给你发消息的"，你会怎么说？',
     options: [
-      { id: 'opt-003-a', text: '现在视频通话这么方便，随时可以见面嘛！等你安顿好了我就来看你，一路平安！', isCorrect: true, matchScore: 94 },
-      { id: 'opt-003-b', text: '是啊，保重。', isCorrect: false, matchScore: 35 },
-      { id: 'opt-003-c', text: '别哭啊，又不是再也见不到了。', isCorrect: false, matchScore: 25 }
+      { id: '', text: '（轻轻抱回去）我也是，答应我每天睡前要视频。到了那边先安顿好，有任何事都第一个告诉我。', isCorrect: true, matchScore: 94 },
+      { id: '', text: '嗯，好，你注意安全。', isCorrect: false, matchScore: 50 },
+      { id: '', text: '别太想我啊，说不定我在那边认识新朋友就忘了你了（开玩笑地）', isCorrect: false, matchScore: 35 }
     ]
   },
   {
-    id: 'scene-004',
-    category: '办公室',
-    description: '场景：办公室会议\n\n开会时老板突然问你："这个项目你觉得最大的风险是什么？"\n\n你会怎么回应？',
-    options: [
-      { id: 'opt-004-a', text: '我认为主要风险在于交付时间紧张，我们可以通过优先级排序和每日站会来把控进度。', isCorrect: true, matchScore: 93 },
-      { id: 'opt-004-b', text: '我觉得没什么太大风险吧。', isCorrect: false, matchScore: 30 },
-      { id: 'opt-004-c', text: '这个问题我还没想过。', isCorrect: false, matchScore: 10 }
-    ]
-  },
-  {
-    id: 'scene-005',
-    category: '餐厅',
-    description: '场景：餐厅约会\n\n约会对象看着菜单皱起眉头："这里的菜好贵啊，随便一个主菜都要两百多。"\n\n你会怎么回应？',
-    options: [
-      { id: 'opt-005-a', text: '这家评价确实不错，不过如果你觉得不合适，我们可以换一家性价比更高的，我知道附近有家很好吃的小馆。', isCorrect: true, matchScore: 91 },
-      { id: 'opt-005-b', text: '还好吧，我请客。', isCorrect: false, matchScore: 55 },
-      { id: 'opt-005-c', text: '嫌贵那你别看了，我点什么你吃什么。', isCorrect: false, matchScore: 5 }
-    ]
-  },
-  {
-    id: 'scene-006',
-    category: '健身房',
-    description: '场景：健身房\n\n旁边锻炼的人走过来对你说："你这个动作做得不太对，容易伤到膝盖。"\n\n你会怎么回应？',
-    options: [
-      { id: 'opt-006-a', text: '谢谢提醒！我确实感觉有点别扭，可以麻烦你示范一下正确的姿势吗？', isCorrect: true, matchScore: 94 },
-      { id: 'opt-006-b', text: '没事，我一直这么练。', isCorrect: false, matchScore: 20 },
-      { id: 'opt-006-c', text: '你是教练吗？不用你管。', isCorrect: false, matchScore: 5 }
-    ]
-  },
-  {
-    id: 'scene-007',
-    category: '朋友聚会',
-    description: '场景：朋友聚会\n\n聚会上有人讲了个很冷的笑话，全场尴尬地安静了两秒。\n\n你会怎么打破僵局？',
-    options: [
-      { id: 'opt-007-a', text: '（假装冻得发抖）好冷啊，谁把空调开这么低？讲真，这个笑话够我笑一个冬天了。', isCorrect: true, matchScore: 96 },
-      { id: 'opt-007-b', text: '呵呵，挺好笑的。', isCorrect: false, matchScore: 30 },
-      { id: 'opt-007-c', text: '（低头玩手机，装作没听见）', isCorrect: false, matchScore: 10 }
-    ]
-  },
-  {
-    id: 'scene-008',
     category: '面试',
-    description: '场景：面试\n\n面试官问："你最大的缺点是什么？"\n\n你会怎么回应？',
+    description: '求职面试时，面试官问："你觉得你最大的缺点是什么？" 这是一个压力面问题，你该如何真诚又不踩雷地回答？',
     options: [
-      { id: 'opt-008-a', text: '我以前有时候会过于追求细节完美，导致进度稍慢。现在我学会了在质量和效率之间找到平衡点，用时间管理工具来确保项目按时交付。', isCorrect: true, matchScore: 95 },
-      { id: 'opt-008-b', text: '我没有什么缺点。', isCorrect: false, matchScore: 15 },
-      { id: 'opt-008-c', text: '我比较懒，喜欢摸鱼。', isCorrect: false, matchScore: 5 }
+      { id: '', text: '我以前做事会过度追求完美导致偶尔拖延，后来我学会用时间管理工具给自己设定明确的阶段性截止时间，现在已经改善很多了。', isCorrect: true, matchScore: 96 },
+      { id: '', text: '我觉得我没有什么明显的缺点，我对自己的能力还是挺有信心的。', isCorrect: false, matchScore: 30 },
+      { id: '', text: '我最大的缺点可能就是太喜欢摸鱼了，但我保证上班不会的。', isCorrect: false, matchScore: 20 }
     ]
   },
   {
-    id: 'scene-009',
-    category: '公园',
-    description: '场景：公园遛狗\n\n你带着狗狗在公园散步，一位小朋友跑过来兴奋地说："阿姨/叔叔，我可以摸摸它吗？"\n\n你会怎么回应？',
+    category: '朋友聚会',
+    description: '朋友聚会上，大家起哄让你唱歌，但你五音不全很抗拒，有个朋友说"就唱一首嘛，别扫兴"，你怎么幽默又坚定地拒绝？',
     options: [
-      { id: 'opt-009-a', text: '当然可以呀！它叫豆豆，性格特别温顺。来，你可以先伸手让它闻闻，然后轻轻摸它的头。', isCorrect: true, matchScore: 93 },
-      { id: 'opt-009-b', text: '可以，别把它弄疼了。', isCorrect: false, matchScore: 45 },
-      { id: 'opt-009-c', text: '不行，它咬人。', isCorrect: false, matchScore: 15 }
+      { id: '', text: '我唱歌那叫"沉浸式噪音艺术"，怕你们听完想把我扔出去。这样，我给大家倒酒赔罪，想听的话下次KTV我提前练三首！', isCorrect: true, matchScore: 93 },
+      { id: '', text: '我真的不会唱歌，别逼我了行不行。', isCorrect: false, matchScore: 45 },
+      { id: '', text: '（硬着头皮唱一首，全程跑调尴尬）', isCorrect: false, matchScore: 30 }
     ]
   },
   {
-    id: 'scene-010',
+    category: '餐厅',
+    description: '高级餐厅里，你点的牛排端上来发现煎过了，你要的五分熟变成了全熟，服务员过来问"请问菜品还合口味吗？"，你怎么说？',
+    options: [
+      { id: '', text: '您好，这块牛排我点的是五分熟，但看起来是全熟了，麻烦您帮我重新做一份可以吗？不急，我可以等。', isCorrect: true, matchScore: 95 },
+      { id: '', text: '这牛排全熟了啊！你们厨师是不是看错单了？把你们经理叫过来！', isCorrect: false, matchScore: 35 },
+      { id: '', text: '（虽然不满意但还是说）嗯，还行还行。', isCorrect: false, matchScore: 45 }
+    ]
+  },
+  {
+    category: '健身房',
+    description: '健身房里，一个陌生人一直盯着你看，还走过来说"你动作不标准，我教你吧"，但你不确定他是不是好心还是想搭讪，你怎么回应？',
+    options: [
+      { id: '', text: '谢谢关心！我上周刚请了私教，他特意调整过我的动作，应该没问题的。不过还是感谢你的好意！', isCorrect: true, matchScore: 92 },
+      { id: '', text: '关你什么事，我自己知道怎么练。', isCorrect: false, matchScore: 40 },
+      { id: '', text: '好啊好啊，那你教教我吧。', isCorrect: false, matchScore: 55 }
+    ]
+  },
+  {
+    category: '亲戚聚会',
+    description: '过年亲戚聚会，七大姑八大姨围着你问"工资多少啊？""谈恋爱了吗？""什么时候买房？"，你怎么得体地转移话题？',
+    options: [
+      { id: '', text: '（笑着端起茶杯）工资够吃饭，对象在找了，房子嘛慢慢攒钱。对了三姑，听说你家孙子这次期末考考了年级前十？快给我们说说怎么教的！', isCorrect: true, matchScore: 94 },
+      { id: '', text: '工资还行，没对象，买不起，你们问这么多累不累？', isCorrect: false, matchScore: 25 },
+      { id: '', text: '（沉默微笑，不回答）', isCorrect: false, matchScore: 45 }
+    ]
+  },
+  {
+    category: '地铁',
+    description: '早高峰地铁上，有人不小心踩了你一脚，对方还没道歉就被人潮挤走了，你脚特别疼，旁边一个大爷说"小伙子忍忍吧，都不容易"，你怎么回应？',
+    options: [
+      { id: '', text: '（揉脚苦笑）是都不容易，我这脚也不容易啊。不过没事，应该不是故意的，就是有点疼，缓会儿就好。', isCorrect: true, matchScore: 90 },
+      { id: '', text: '什么叫忍忍？踩的不是你你当然不疼！', isCorrect: false, matchScore: 20 },
+      { id: '', text: '（不理大爷，自己生闷气）', isCorrect: false, matchScore: 40 }
+    ]
+  },
+  {
     category: '课堂',
-    description: '场景：课堂提问\n\n老师突然点你回答问题："这位同学，你来谈谈对这个问题的看法。"\n\n你完全没听讲，不知道问的是什么问题。\n\n你会怎么回应？',
+    description: '大学课堂上，老师突然点你回答一个你完全没听懂的问题，全班都转过头看你，你怎么办？',
     options: [
-      { id: 'opt-010-a', text: '老师，这个问题我想从两个角度来分析...（同时用眼神示意同桌递小纸条）不过我想先听听其他同学的观点，可以吗？', isCorrect: true, matchScore: 85 },
-      { id: 'opt-010-b', text: '老师我不会。', isCorrect: false, matchScore: 25 },
-      { id: 'opt-010-c', text: '（沉默不语）', isCorrect: false, matchScore: 10 }
+      { id: '', text: '老师不好意思，这个问题我刚才正好在思考另一个角度，还没想清楚，要不您先点其他同学，我想好了下课找您讨论？', isCorrect: true, matchScore: 93 },
+      { id: '', text: '（随便瞎扯一个答案）', isCorrect: false, matchScore: 25 },
+      { id: '', text: '我不会。（坐下）', isCorrect: false, matchScore: 35 }
     ]
   },
   {
-    id: 'scene-011',
     category: '超市',
-    description: '场景：超市结账\n\n结账时收银员对你说："您好，一共是87.5元。"你发现手机没电了，身上只有50元现金。\n\n你会怎么回应？',
+    description: '超市结账时，收银员多扫了你一件商品，多出50块，你回家才发现小票不对，你回超市怎么说？',
     options: [
-      { id: 'opt-011-a', text: '不好意思，我手机突然没电了，现金不够。能不能先把这些东西放在这里，我回家拿充电器马上回来付款？或者您这里有充电宝吗？', isCorrect: true, matchScore: 90 },
-      { id: 'opt-011-b', text: '那我不要了。', isCorrect: false, matchScore: 35 },
-      { id: 'opt-011-c', text: '算了算了，下次再买。', isCorrect: false, matchScore: 25 }
+      { id: '', text: '您好，这是我昨天购物的小票和商品，核对后发现多扫了一件我没买的东西，麻烦您帮我处理一下退款？', isCorrect: true, matchScore: 96 },
+      { id: '', text: '你们怎么回事啊，乱扫商品骗钱是吧？我要投诉！', isCorrect: false, matchScore: 30 },
+      { id: '', text: '算了，五十块钱懒得跑了。', isCorrect: false, matchScore: 20 }
     ]
   },
   {
-    id: 'scene-012',
-    category: '公交车',
-    description: '场景：公交车上\n\n公交车急刹车，你不小心踩到了前面一位乘客的脚，他/她痛得"嘶"了一声。\n\n你会怎么回应？',
+    category: '同事',
+    description: '同事经常把他自己的工作推给你做，今天又发消息说"这个我不太会，你帮我弄一下呗，很快的"，你这次想拒绝，怎么说比较得体？',
     options: [
-      { id: 'opt-012-a', text: '哎呀真对不起！刚才刹车太急了，我没站稳。您没事吧？要不要我帮您看看？真的非常抱歉！', isCorrect: true, matchScore: 94 },
-      { id: 'opt-012-b', text: '不好意思。', isCorrect: false, matchScore: 40 },
-      { id: 'opt-012-c', text: '谁让司机刹车这么急。', isCorrect: false, matchScore: 10 }
+      { id: '', text: '我手头这两个方案今天下班前必须交，实在腾不出手。要不我把上次查的教程链接发你，你照着做，有不会的具体问题我可以帮你看一下？', isCorrect: true, matchScore: 94 },
+      { id: '', text: '你自己的工作你自己做啊，每次都找我。', isCorrect: false, matchScore: 35 },
+      { id: '', text: '（心里不爽但还是答应了）好吧好吧。', isCorrect: false, matchScore: 30 }
     ]
   },
   {
-    id: 'scene-013',
-    category: '生日派对',
-    description: '场景：生日派对\n\n朋友的生日派对上，大家都在等你切蛋糕，但你发现自己忘了买礼物。\n\n你会怎么回应？',
-    options: [
-      { id: 'opt-013-a', text: '等一下！在切蛋糕之前，我有个特别的礼物要送给你——（清嗓子开始唱）'Happy Birthday to you...' 开玩笑的啦，其实我给你准备的礼物正在快递路上，明天就能到！为了赔罪，这蛋糕我来切，第一块给你！', isCorrect: true, matchScore: 92 },
-      { id: 'opt-013-b', text: '哎呀，我忘了买礼物了。', isCorrect: false, matchScore: 20 },
-      { id: 'opt-013-c', text: '（假装不知道，赶紧切蛋糕）', isCorrect: false, matchScore: 15 }
-    ]
-  },
-  {
-    id: 'scene-014',
     category: '医院',
-    description: '场景：医院探望\n\n你去医院探望生病的朋友，他/她看起来情绪很低落："我感觉自己好不了了，天天吃药打针。"\n\n你会怎么回应？',
+    description: '医院候诊时，一个大妈直接插队站你前面，后面有人小声议论但没人出声，你怎么礼貌又坚定地提醒她？',
     options: [
-      { id: 'opt-014-a', text: '你别瞎想！医生都说了你这只是小问题，积极配合治疗很快就能出院。你看我给你带了你最爱吃的草莓，等你好了我们一起去吃火锅，好不好？', isCorrect: true, matchScore: 93 },
-      { id: 'opt-014-b', text: '别这么想，会好起来的。', isCorrect: false, matchScore: 45 },
-      { id: 'opt-014-c', text: '没事，打针吃药很正常嘛。', isCorrect: false, matchScore: 20 }
+      { id: '', text: '阿姨您好，大家都是按号排队的，您的号在前面几位的话可以叫号再过去，不然这样其他人也不太方便，您看可以吗？', isCorrect: true, matchScore: 93 },
+      { id: '', text: '排队！没看见后面这么多人吗？有没有素质！', isCorrect: false, matchScore: 30 },
+      { id: '', text: '（忍了，不说什么）', isCorrect: false, matchScore: 25 }
     ]
   },
   {
-    id: 'scene-015',
-    category: '理发店',
-    description: '场景：理发店\n\n理发师问你："想剪个什么发型？"你其实也不确定，但不想让他随便剪。\n\n你会怎么回应？',
+    category: '约会',
+    description: '第一次约会吃饭，对方全程玩手机刷短视频，偶尔抬头敷衍你两句，你觉得不太被尊重，怎么表达比较好？',
     options: [
-      { id: 'opt-015-a', text: '我想留个偏分，长度大概到耳朵下面，刘海要自然一点不要太厚。你是专业的，你觉得我脸型适合什么样的？可以给我点建议吗？', isCorrect: true, matchScore: 91 },
-      { id: 'opt-015-b', text: '你看着办吧，怎么好看怎么剪。', isCorrect: false, matchScore: 35 },
-      { id: 'opt-015-c', text: '随便修一下就行。', isCorrect: false, matchScore: 25 }
+      { id: '', text: '（轻松地）你今天是有什么要紧事吗？如果忙的话其实我们可以改时间的，我本来还挺期待和你好好聊聊的。', isCorrect: true, matchScore: 95 },
+      { id: '', text: '你能不能别玩手机了，跟你说话呢！', isCorrect: false, matchScore: 40 },
+      { id: '', text: '（也掏出自己的手机，各玩各的）', isCorrect: false, matchScore: 25 }
     ]
   },
   {
-    id: 'scene-016',
+    category: '酒店',
+    description: '你入住酒店半夜两点，隔壁房间一直在大声喧哗开派对，你打电话到前台没解决，现在直接过去敲门，怎么说最有效？',
+    options: [
+      { id: '', text: '您好打扰了，我是隔壁房间的客人，你们的声音有点大我实在睡不着。麻烦你们小声一点可以吗？大家明天都有行程，互相体谅一下。', isCorrect: true, matchScore: 94 },
+      { id: '', text: '能不能安静点！吵死了！再吵我报警了！', isCorrect: false, matchScore: 45 },
+      { id: '', text: '（敲完门直接回去，等他们自己停）', isCorrect: false, matchScore: 35 }
+    ]
+  },
+  {
     category: '网购',
-    description: '场景：网购客服\n\n你收到的衣服和图片严重不符，找客服投诉。客服说："亲，图片仅供参考哦，可能有点色差呢。"\n\n你会怎么回应？',
+    description: '网购衣服收到后发现质量和图片严重不符，你联系客服，对方说"我们图片仅供参考哦，亲"，你怎么据理力争？',
     options: [
-      { id: 'opt-016-a', text: '色差我可以理解，但这根本不是同一件衣服吧？款式和材质都完全不一样。麻烦给我一个合理的解决方案，不然我只能申请平台介入了。', isCorrect: true, matchScore: 92 },
-      { id: 'opt-016-b', text: '那我退货吧。', isCorrect: false, matchScore: 55 },
-      { id: 'opt-016-c', text: '你们这是诈骗！我要投诉你们！', isCorrect: false, matchScore: 30 }
+      { id: '', text: '商品页写了"所见即所得"，我收到的实物面料、颜色都和图片差别很大，这已经是虚假宣传了。我这边有对比图，要么全额退货运费你们出，要么我就平台介入+12315投诉，你们选一个吧。', isCorrect: true, matchScore: 96 },
+      { id: '', text: '你们这是欺骗消费者！我要给你们一万条差评！', isCorrect: false, matchScore: 40 },
+      { id: '', text: '（自认倒霉，算了）', isCorrect: false, matchScore: 20 }
     ]
   },
   {
-    id: 'scene-017',
-    category: '电梯',
-    description: '场景：电梯偶遇\n\n电梯里只有你和公司大老板，气氛有点尴尬。他突然问你："最近工作忙不忙？"\n\n你会怎么回应？',
+    category: '合租',
+    description: '合租室友经常用你的零食、日用品也不跟你说，你藏在冰箱里的蛋糕被他吃了，这次你想把话说清楚，怎么说不尴尬？',
     options: [
-      { id: 'opt-017-a', text: '谢谢张总关心！最近项目进度很顺利，团队配合得也很好。等项目上线了我给您汇报详情。您最近在忙什么呢？', isCorrect: true, matchScore: 90 },
-      { id: 'opt-017-b', text: '还行吧。', isCorrect: false, matchScore: 25 },
-      { id: 'opt-017-c', text: '挺忙的，天天加班。', isCorrect: false, matchScore: 15 }
+      { id: '', text: '我想跟你说个小事，你用我东西其实也没什么，但最好跟我说一声对吧？昨天我那蛋糕是给朋友过生日准备的，今天找不着有点急。以后我的东西我都贴个标签，咱们各自放各自区域，这样都方便。', isCorrect: true, matchScore: 94 },
+      { id: '', text: '你是不是又偷吃我东西了？你买不起不会自己买吗？', isCorrect: false, matchScore: 30 },
+      { id: '', text: '（默默把自己东西全部锁起来，什么也不说）', isCorrect: false, matchScore: 40 }
     ]
   },
   {
-    id: 'scene-018',
-    category: '电影院',
-    description: '场景：电影院\n\n你和朋友看电影，旁边有人一直在大声打电话，影响大家观影。\n\n你会怎么提醒他/她？',
+    category: '演讲',
+    description: '你正在台上做演讲，PPT突然卡住了，现场很安静，大家都在等，你怎么化解尴尬？',
     options: [
-      { id: 'opt-018-a', text: '（轻声礼貌地）您好，不好意思打扰您了。这里大家都在看电影，能不能麻烦您出去接电话？谢谢您的理解！', isCorrect: true, matchScore: 93 },
-      { id: 'opt-018-b', text: '喂，能不能别说话了？', isCorrect: false, matchScore: 40 },
-      { id: 'opt-018-c', text: '（故意咳嗽几声）', isCorrect: false, matchScore: 20 }
+      { id: '', text: '（笑着对观众）看来我的PPT也觉得这个话题值得多停两秒让大家消化一下。趁这个时间，有没有朋友对前面的内容有问题？可以先交流。（同时示意工作人员处理）', isCorrect: true, matchScore: 97 },
+      { id: '', text: '（慌乱地按鼠标）怎么回事啊，刚才还好好的...等一下啊...', isCorrect: false, matchScore: 35 },
+      { id: '', text: '（沉默站在台上，等PPT恢复）', isCorrect: false, matchScore: 30 }
     ]
   },
   {
-    id: 'scene-019',
-    category: '家庭聚餐',
-    description: '场景：家庭聚餐\n\n过年家庭聚餐，亲戚问你："什么时候带男/女朋友回来啊？月薪多少啊？什么时候买房啊？"\n\n你会怎么回应？',
+    category: '借钱',
+    description: '一个很久没联系的小学同学突然找你借5000块说急用，你不想借也不想得罪人，怎么婉拒？',
     options: [
-      { id: 'opt-019-a', text: '二姨您太关心我了！您家孩子今年考试考得怎么样啊？听说现在升学压力特别大。（巧妙转移话题）来，我敬您一杯，祝您身体健康！', isCorrect: true, matchScore: 94 },
-      { id: 'opt-019-b', text: '还在找呢，工资够用，买房再等等。', isCorrect: false, matchScore: 35 },
-      { id: 'opt-019-c', text: '关您什么事啊。', isCorrect: false, matchScore: 10 }
+      { id: '', text: '哎呀不巧，我上个月刚把存款都拿去买理财了，提前取出来手续费很高。我手头现金也就够吃饭的，帮不上你真不好意思，你问问其他人？', isCorrect: true, matchScore: 93 },
+      { id: '', text: '不借，我们又不熟。', isCorrect: false, matchScore: 35 },
+      { id: '', text: '（犹豫半天还是借了，后来果然没还）', isCorrect: false, matchScore: 20 }
     ]
   },
   {
-    id: 'scene-020',
-    category: '便利店',
-    description: '场景：便利店\n\n你在便利店买东西，收银员扫完码说："一共32元。"你付了50元，他/她只找了你8元。\n\n你会怎么提醒？',
+    category: '求婚',
+    description: '朋友的求婚现场，他要求婚的对象突然说"我还没准备好"，全场尴尬到空气凝固，你作为朋友怎么救场？',
     options: [
-      { id: 'opt-020-a', text: '您好，我刚才付的是50元，买的东西是32元，应该找我18元哦。麻烦您再核对一下，谢谢！', isCorrect: true, matchScore: 92 },
-      { id: 'opt-020-b', text: '你找错钱了吧？', isCorrect: false, matchScore: 45 },
-      { id: 'opt-020-c', text: '（默默把钱收起来，心里不爽）', isCorrect: false, matchScore: 5 }
+      { id: '', text: '（上前拍一下朋友的肩膀，笑着对两人和大家）看来这场面太突然了，那就当提前演练好不好？等你准备好我们再来一次，那时候一定更惊喜！大家先吃饭吃饭，菜都凉了！', isCorrect: true, matchScore: 96 },
+      { id: '', text: '（小声嘀咕）拒绝了还办什么求婚啊...', isCorrect: false, matchScore: 20 },
+      { id: '', text: '（假装看手机，不说话）', isCorrect: false, matchScore: 25 }
     ]
   },
   {
-    id: 'scene-021',
-    category: '校园',
-    description: '场景：校园\n\n学弟/学妹拦住你："学长/学姐，能不能加个微信？我想请教一些问题。"你不想给，但又不好意思直接拒绝。\n\n你会怎么回应？',
+    category: '客服',
+    description: '你打客服电话投诉宽带断网两天，客服一直念话术不解决问题，说"非常抱歉给您带来不便，我们会在72小时内处理"，你怎么推进度？',
     options: [
-      { id: 'opt-021-a', text: '当然可以呀！不过我平时微信消息比较多，容易漏掉。这样吧，你有什么问题现在就可以问我，或者发邮件给我，我邮箱是xxx，一定及时回复你！', isCorrect: true, matchScore: 88 },
-      { id: 'opt-021-b', text: '我很少用微信，算了吧。', isCorrect: false, matchScore: 30 },
-      { id: 'opt-021-c', text: '不用了，我没时间。', isCorrect: false, matchScore: 15 }
+      { id: '', text: '抱歉，72小时我不能接受。我已经报故障两天了，工作会议都受影响了。请你把你们主管的电话给我，或者帮我登记加急工单，今天下午之前必须上门，否则我就投诉到工信部，工号我已经记下来了。', isCorrect: true, matchScore: 95 },
+      { id: '', text: '你们什么破公司！我要投诉你！（挂电话）', isCorrect: false, matchScore: 40 },
+      { id: '', text: '好吧好吧，那就再等三天吧。', isCorrect: false, matchScore: 20 }
     ]
   },
   {
-    id: 'scene-022',
-    category: '婚礼',
-    description: '场景：婚礼抛捧花\n\n婚礼上新娘抛捧花，好巧不巧正好砸到你手里，全场都在起哄让你说两句。\n\n你会怎么回应？',
+    category: '理发店',
+    description: '理发店，你跟Tony老师说只剪两厘米修个层次，结果他剪短了十厘米还打薄了，你看着镜子快哭了，怎么处理？',
     options: [
-      { id: 'opt-022-a', text: '哇！这捧花也太准了吧！新娘你是不是瞄准了扔的？借您的好运，希望我也能早日找到我的幸福！祝你们白头偕老，早生贵子！', isCorrect: true, matchScore: 95 },
-      { id: 'opt-022-b', text: '谢谢，谢谢大家。', isCorrect: false, matchScore: 35 },
-      { id: 'opt-022-c', text: '（尴尬地笑笑，赶紧下台）', isCorrect: false, matchScore: 15 }
+      { id: '', text: '（冷静地）我刚才明确说的是只剪两厘米修层次，您这个长度差太多了，我没法接受。你们店长在吗？我想商量一下怎么处理，是接发补偿还是退款，或者有别的方案？', isCorrect: true, matchScore: 94 },
+      { id: '', text: '你会不会剪头发啊！我要的两厘米你剪这么短！你赔我头发！', isCorrect: false, matchScore: 40 },
+      { id: '', text: '（心里滴血但嘴上说）剪都剪了就这样吧。', isCorrect: false, matchScore: 25 }
     ]
   },
   {
-    id: 'scene-023',
+    category: '班级群',
+    description: '家长群里，有个家长一直发广告刷屏，老师也不说话，群消息已经100+条了，你怎么公开说又不伤和气？',
+    options: [
+      { id: '', text: '@这位家长您好，这个群是用来接收学校通知和讨论孩子学习的，您的广告信息不太合适发在这里。如果您有需要我们可以私下联系，或者您可以发到其他相关的群里，谢谢您的理解~', isCorrect: true, matchScore: 94 },
+      { id: '', text: '能不能别发广告了，烦不烦！', isCorrect: false, matchScore: 30 },
+      { id: '', text: '（默默把群设为免打扰，不说话）', isCorrect: false, matchScore: 30 }
+    ]
+  },
+  {
+    category: '外卖',
+    description: '外卖送错了，你点的海鲜炒饭变成了别人的素菜沙拉，骑手说他已经点送达了没法改，你怎么快速解决？',
+    options: [
+      { id: '', text: '师傅我理解你忙也不容易，这样，你先帮我跟商家沟通一下重新做一份，我这边也联系客服登记。如果商家那边确认重做，你顺路再帮我带过来就行，实在不行我让商家安排别的骑手，咱们都别耽误时间。', isCorrect: true, matchScore: 93 },
+      { id: '', text: '你送错餐了关我什么事，我要投诉你！', isCorrect: false, matchScore: 30 },
+      { id: '', text: '（自认倒霉，吃沙拉）', isCorrect: false, matchScore: 20 }
+    ]
+  },
+  {
     category: '加班',
-    description: '场景：加班\n\n周五晚上八点，你正准备下班，老板走过来说："辛苦一下，这个方案明天要用，今晚加个班吧。"\n\n你已经和朋友约好了聚会。\n\n你会怎么回应？',
+    description: '周五下班前10分钟，领导突然说"大家等一下，开个紧急会议"，但你早就约好和多年未见的老朋友吃饭，怎么请假？',
     options: [
-      { id:
+      { id: '', text: '领导不好意思，我上周就约了一个从国外回来的老朋友，就今晚见面明天他就走了，确实推不了。会议我不参与有影响吗？如果有重要内容我让同事录音+会后整理纪要给我，周末有问题随时找我处理。', isCorrect: true, matchScore: 95 },
+      { id: '', text: '领导我约了朋友，先走了啊。', isCorrect: false, matchScore: 40 },
+      { id: '', text: '（无奈取消约会，留下开会）', isCorrect: false, matchScore: 30 }
+    ]
+  },
+  {
+    category: '电影院',
+    description: '看电影时你后排的小孩一直踢你椅背，家长也不管，你转头提醒一次家长说"小孩子嘛没办法"，你怎么回应？',
+    options: [
+      { id: '', text: '小孩活泼确实正常，但电影我买了票也是来认真看的，您麻烦稍微管一下可以吗？实在不行我可以帮您叫工作人员换一个靠边的位置，对您对小孩对大家都方便。', isCorrect: true, matchScore: 94 },
+      { id: '', text: '小孩子不懂事你大人也不懂事？有没有素质！', isCorrect: false, matchScore: 30 },
+      { id: '', text: '（忍一整场，回家生闷气）', isCorrect: false, matchScore: 20 }
+    ]
+  },
+  {
+    category: '相亲',
+    description: '相亲饭桌上，对方聊了半小时一直在炫富吹牛逼，你实在听不下去了，饭局怎么优雅地结束？',
+    options: [
+      { id: '', text: '（看表+微笑）跟你聊天挺有意思的，但我突然想起家里还有点事要处理，今天这顿我请了。咱们加个微信，下次有机会再聊？', isCorrect: true, matchScore: 92 },
+      { id: '', text: '你别吹了行不行，真的很尴尬。', isCorrect: false, matchScore: 30 },
+      { id: '', text: '（假装接电话，找借口跑了）', isCorrect: false, matchScore: 50 }
+    ]
+  },
+  {
+    category: '电梯',
+    description: '电梯里，你戴着耳机，旁边的人对着你说话你没听见，对方突然大声说"跟你说话呢，聋了吗？"，你摘下耳机怎么回应？',
+    options: [
+      { id: '', text: '（歉意外加平静）啊抱歉抱歉，我刚才戴耳机没听到，您刚才说什么？', isCorrect: true, matchScore: 95 },
+      { id: '', text: '你说话这么冲干嘛，我戴耳机听不到很正常啊。', isCorrect: false, matchScore: 40 },
+      { id: '', text: '（翻个白眼，不说话）', isCorrect: false, matchScore: 25 }
+    ]
+  },
+  {
+    category: '宠物店',
+    description: '你去宠物店看猫，店员把猫从笼子里抱给你撸，结果猫紧张抓了你一道红印，店员说"我们家猫从来不抓人的"，你怎么回应？',
+    options: [
+      { id: '', text: '猫紧张了抓人其实挺正常的，我也不怪它。但我这个抓痕还是有点深，我担心感染，你们这边有没有消毒的？另外这个事你们最好有个记录，万一后续我有什么问题也好联系。', isCorrect: true, matchScore: 94 },
+      { id: '', text: '你们家猫抓我！我要打狂犬疫苗！你们赔钱！', isCorrect: false, matchScore: 40 },
+      { id: '', text: '（没事没事，继续撸猫）', isCorrect: false, matchScore: 25 }
+    ]
+  },
+  {
+    category: '生日',
+    description: '你生日，一群朋友给你惊喜，但你今天特别累心情也不好，脸上笑不出来，朋友们看出你不对劲问你"怎么了，不高兴吗"，你怎么说？',
+    options: [
+      { id: '', text: '（勉强笑，拉住朋友的手）没有没有！真的特别开心你们给我准备这些！就是今天上班开了一天会脑子有点懵，让我缓两分钟就好了，你们千万别多想！蛋糕在哪，快给我切！', isCorrect: true, matchScore: 95 },
+      { id: '', text: '嗯，今天有点累。（冷场）', isCorrect: false, matchScore: 40 },
+      { id: '', text: '（硬撑着假装开心，整晚强颜欢笑）', isCorrect: false, matchScore: 45 }
+    ]
+  }
+];
+
+export function initDatabase(): void {
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scores (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      sceneId TEXT NOT NULL,
+      selectedOptionId TEXT NOT NULL,
+      correctOptionId TEXT NOT NULL,
+      semanticScore REAL NOT NULL,
+      speedScore REAL NOT NULL,
+      totalScore REAL NOT NULL,
+      responseTime REAL NOT NULL,
+      isCorrect INTEGER NOT NULL,
+      timestamp INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scores_userId ON scores(userId);
+    CREATE INDEX IF NOT EXISTS idx_scores_timestamp ON scores(timestamp);
+
+    CREATE TABLE IF NOT EXISTS radar_cache (
+      userId TEXT PRIMARY KEY,
+      semanticUnderstanding REAL NOT NULL DEFAULT 0,
+      reactionSpeed REAL NOT NULL DEFAULT 0,
+      logicalCoherence REAL NOT NULL DEFAULT 0,
+      emotionalPerception REAL NOT NULL DEFAULT 0,
+      vocabularyRichness REAL NOT NULL DEFAULT 0,
+      updatedAt INTEGER NOT NULL
+    );
+  `);
+}
+
+export function getAllScenes(): Scene[] {
+  const scenes: Scene[] = SCENES_DATA.map((scene, idx) => ({
+    id: `scene_${String(idx + 1).padStart(3, '0')}`,
+    description: scene.description,
+    category: scene.category,
+    options: scene.options.map((opt, oidx) => ({
+      ...opt,
+      id: `scene_${String(idx + 1).padStart(3, '0')}_opt_${oidx}`
+    }))
+  }));
+  return scenes;
+}
+
+export function getSceneById(id: string): Scene | undefined {
+  return getAllScenes().find(s => s.id === id);
+}
+
+export function insertScore(record: Omit<ScoreRecord, 'id'> & { id?: string }): boolean {
+  const id = record.id || crypto.randomUUID();
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO scores (id, userId, sceneId, selectedOptionId, correctOptionId,
+        semanticScore, speedScore, totalScore, responseTime, isCorrect, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      id,
+      record.userId,
+      record.sceneId,
+      record.selectedOptionId,
+      record.correctOptionId,
+      record.semanticScore,
+      record.speedScore,
+      record.totalScore,
+      record.responseTime,
+      record.isCorrect,
+      record.timestamp
+    );
+    return true;
+  } catch (e) {
+    console.error('insertScore error:', e);
+    return false;
+  }
+}
+
+export function getUserScores(userId: string): ScoreRecord[] {
+  const stmt = db.prepare('SELECT * FROM scores WHERE userId = ? ORDER BY timestamp DESC');
+  return stmt.all(userId) as ScoreRecord[];
+}
+
+function calculateRadar(userId: string): RadarData {
+  const records = getUserScores(userId);
+  if (records.length === 0) {
+    return {
+      semanticUnderstanding: 0,
+      reactionSpeed: 0,
+      logicalCoherence: 0,
+      emotionalPerception: 0,
+      vocabularyRichness: 0
+    };
+  }
+
+  const correctRecords = records.filter(r => r.isCorrect === 1);
+  const correctRate = correctRecords.length / records.length;
+
+  const avgSemantic = records.reduce((s, r) => s + r.semanticScore, 0) / records.length;
+  const avgSpeed = records.reduce((s, r) => s + r.speedScore, 0) / records.length;
+  const avgTotal = records.reduce((s, r) => s + r.totalScore, 0) / records.length;
+  const avgResponseTime = records.reduce((s, r) => s + r.responseTime, 0) / records.length;
+  const recent5 = records.slice(0, Math.min(5, records.length));
+  const consistencyCorrect = recent5.filter(r => r.isCorrect === 1).length / recent5.length;
+
+  const semanticUnderstanding = Math.min(100, avgSemantic);
+  const reactionSpeed = Math.min(100, avgSpeed);
+  const logicalCoherence = Math.min(100, (avgTotal * 0.6) + (correctRate * 40));
+  const emotionalPerception = Math.min(100, (avgSemantic * 0.7) + (consistencyCorrect * 30));
+  const vocabularyRichness = Math.min(100, (avgSemantic * 0.5) + (avgResponseTime < 2 ? 50 : avgResponseTime < 3.5 ? 30 : 10) + correctRate * 20);
+
+  return {
+    semanticUnderstanding: Math.round(semanticUnderstanding),
+    reactionSpeed: Math.round(reactionSpeed),
+    logicalCoherence: Math.round(logicalCoherence),
+    emotionalPerception: Math.round(emotionalPerception),
+    vocabularyRichness: Math.round(vocabularyRichness)
+  };
+}
+
+export function getRadarData(userId: string): { radar: RadarData; recentErrors: ErrorDetail[] } {
+  const radar = calculateRadar(userId);
+
+  const scenes = getAllScenes();
+  const sceneMap = new Map(scenes.map(s => [s.id, s]));
+
+  const errorStmt = db.prepare(`
+    SELECT * FROM scores
+    WHERE userId = ? AND isCorrect = 0
+    ORDER BY timestamp DESC
+    LIMIT 5
+  `);
+  const errorRecords = errorStmt.all(userId) as ScoreRecord[];
+
+  const recentErrors: ErrorDetail[] = errorRecords.map(rec => {
+    const scene = sceneMap.get(rec.sceneId);
+    const selectedOpt = scene?.options.find(o => o.id === rec.selectedOptionId);
+    const correctOpt = scene?.options.find(o => o.id === rec.correctOptionId);
+    return {
+      id: rec.id,
+      sceneDescription: scene?.description || '场景已删除',
+      selectedOption: selectedOpt?.text || '未知选项',
+      correctOption: correctOpt?.text || '未知选项',
+      semanticScore: rec.semanticScore,
+      timestamp: rec.timestamp
+    };
+  });
+
+  const now = Date.now();
+  db.prepare(`
+    INSERT INTO radar_cache (userId, semanticUnderstanding, reactionSpeed, logicalCoherence, emotionalPerception, vocabularyRichness, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(userId) DO UPDATE SET
+      semanticUnderstanding = excluded.semanticUnderstanding,
+      reactionSpeed = excluded.reactionSpeed,
+      logicalCoherence = excluded.logicalCoherence,
+      emotionalPerception = excluded.emotionalPerception,
+      vocabularyRichness = excluded.vocabularyRichness,
+      updatedAt = excluded.updatedAt
+  `).run(
+    userId,
+    radar.semanticUnderstanding,
+    radar.reactionSpeed,
+    radar.logicalCoherence,
+    radar.emotionalPerception,
+    radar.vocabularyRichness,
+    now
+  );
+
+  return { radar, recentErrors };
+}
+
+export function getDb(): Database.Database {
+  return db;
+}
+
+export default {
+  initDatabase,
+  getAllScenes,
+  getSceneById,
+  insertScore,
+  getUserScores,
+  getRadarData
+};
