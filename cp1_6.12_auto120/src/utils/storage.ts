@@ -12,26 +12,52 @@ export interface Feedback {
   timestamp: number;
   reply: string | null;
   screenshots: string[];
+  screenshotNames: string[];
   isHandled: boolean;
   isUrgent: boolean;
 }
 
 const STORAGE_KEY = 'feedbackflow_data';
 
+export class StorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StorageError';
+  }
+}
+
 export function getFeedbacks(): Feedback[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
+    if (!data) return [];
+    const parsed = JSON.parse(data) as Feedback[];
+    return parsed.map((fb) => ({
+      ...fb,
+      screenshotNames: fb.screenshotNames || [],
+    }));
+  } catch (error) {
+    console.error('Failed to read from localStorage:', error);
     return [];
   }
 }
 
 export function saveFeedbacks(feedbacks: Feedback[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(feedbacks));
+  try {
+    const data = JSON.stringify(feedbacks);
+    localStorage.setItem(STORAGE_KEY, data);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      throw new StorageError(
+        '存储空间不足，请删除一些旧的反馈或截图后再试。localStorage容量通常约为5MB。',
+      );
+    }
+    throw new StorageError('保存数据时发生未知错误');
+  }
 }
 
-export function addFeedback(feedback: Omit<Feedback, 'id' | 'timestamp' | 'username' | 'avatarColor' | 'reply' | 'isHandled'>): Feedback {
+export function addFeedback(
+  feedback: Omit<Feedback, 'id' | 'timestamp' | 'username' | 'avatarColor' | 'reply' | 'isHandled'>,
+): Feedback {
   const feedbacks = getFeedbacks();
   const newFeedback: Feedback = {
     ...feedback,
@@ -41,37 +67,86 @@ export function addFeedback(feedback: Omit<Feedback, 'id' | 'timestamp' | 'usern
     avatarColor: generateRandomColor(),
     reply: null,
     isHandled: false,
+    screenshotNames: feedback.screenshotNames || [],
   };
   feedbacks.unshift(newFeedback);
-  saveFeedbacks(feedbacks);
+  try {
+    saveFeedbacks(feedbacks);
+  } catch (error) {
+    if (error instanceof StorageError) {
+      console.error(error.message);
+      alert(error.message);
+    }
+    throw error;
+  }
   return newFeedback;
 }
 
 export function updateFeedback(id: string, updates: Partial<Feedback>): Feedback | null {
   const feedbacks = getFeedbacks();
-  const index = feedbacks.findIndex(f => f.id === id);
+  const index = feedbacks.findIndex((f) => f.id === id);
   if (index === -1) return null;
   feedbacks[index] = { ...feedbacks[index], ...updates };
-  saveFeedbacks(feedbacks);
+  try {
+    saveFeedbacks(feedbacks);
+  } catch (error) {
+    if (error instanceof StorageError) {
+      console.error(error.message);
+      alert(error.message);
+    }
+    return null;
+  }
   return feedbacks[index];
 }
 
 export function deleteFeedback(id: string): boolean {
   const feedbacks = getFeedbacks();
-  const filtered = feedbacks.filter(f => f.id !== id);
+  const filtered = feedbacks.filter((f) => f.id !== id);
   if (filtered.length === feedbacks.length) return false;
-  saveFeedbacks(filtered);
-  return true;
+  try {
+    saveFeedbacks(filtered);
+    return true;
+  } catch (error) {
+    if (error instanceof StorageError) {
+      console.error(error.message);
+    }
+    return false;
+  }
 }
 
 function generateRandomUsername(): string {
-  const adjectives = ['快乐的', '认真的', '热情的', '细心的', '友好的', '活泼的', '沉稳的', '机智的', '勇敢的', '温柔的'];
+  const adjectives = [
+    '快乐的',
+    '认真的',
+    '热情的',
+    '细心的',
+    '友好的',
+    '活泼的',
+    '沉稳的',
+    '机智的',
+    '勇敢的',
+    '温柔的',
+  ];
   const nouns = ['小明', '小红', '小华', '小李', '小王', '小张', '小陈', '小林', '小周', '小吴'];
-  return adjectives[Math.floor(Math.random() * adjectives.length)] + nouns[Math.floor(Math.random() * nouns.length)];
+  return (
+    adjectives[Math.floor(Math.random() * adjectives.length)] +
+    nouns[Math.floor(Math.random() * nouns.length)]
+  );
 }
 
 function generateRandomColor(): string {
-  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
+  const colors = [
+    '#FF6B6B',
+    '#4ECDC4',
+    '#45B7D1',
+    '#96CEB4',
+    '#FFEAA7',
+    '#DDA0DD',
+    '#98D8C8',
+    '#F7DC6F',
+    '#BB8FCE',
+    '#85C1E9',
+  ];
   return colors[Math.floor(Math.random() * colors.length)];
 }
 

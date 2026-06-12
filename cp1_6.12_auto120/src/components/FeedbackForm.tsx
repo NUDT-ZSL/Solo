@@ -9,6 +9,7 @@ interface FeedbackFormProps {
     description: string;
     sentiment: Sentiment;
     screenshots: string[];
+    screenshotNames: string[];
     isUrgent: boolean;
   }) => void;
 }
@@ -18,6 +19,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
   const [description, setDescription] = useState('');
   const [sentiment, setSentiment] = useState<Sentiment>('neutral');
   const [screenshots, setScreenshots] = useState<string[]>([]);
+  const [screenshotNames, setScreenshotNames] = useState<string[]>([]);
   const [isUrgent, setIsUrgent] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -35,6 +37,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
     setDescription('');
     setSentiment('neutral');
     setScreenshots([]);
+    setScreenshotNames([]);
     setIsUrgent(false);
     setErrors({});
     setUploadProgress(0);
@@ -65,6 +68,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
       description: description.trim(),
       sentiment,
       screenshots,
+      screenshotNames,
       isUrgent,
     });
     handleClose();
@@ -82,10 +86,12 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
 
     let processed = 0;
     const newScreenshots: string[] = [];
+    const newScreenshotNames: string[] = [];
 
-    filesToProcess.forEach((file) => {
+    filesToProcess.forEach((file, fileIndex) => {
       if (!file.type.startsWith('image/')) {
         alert('请上传图片文件');
+        processed++;
         return;
       }
 
@@ -93,15 +99,18 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
       reader.onprogress = (event) => {
         if (event.lengthComputable) {
           const progress = Math.round((event.loaded / event.total) * 100);
-          setUploadProgress(Math.min(progress, 100));
+          const totalProgress = ((processed + progress / 100) / filesToProcess.length) * 100;
+          setUploadProgress(Math.min(Math.round(totalProgress), 100));
         }
       };
       reader.onload = (e) => {
         if (e.target?.result) {
           newScreenshots.push(e.target.result as string);
+          newScreenshotNames.push(file.name);
           processed++;
           if (processed === filesToProcess.length) {
             setScreenshots((prev) => [...prev, ...newScreenshots]);
+            setScreenshotNames((prev) => [...prev, ...newScreenshotNames]);
             setUploadProgress(0);
           }
         }
@@ -128,6 +137,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
 
   const removeScreenshot = (index: number) => {
     setScreenshots((prev) => prev.filter((_, i) => i !== index));
+    setScreenshotNames((prev) => prev.filter((_, i) => i !== index));
   };
 
   if (!isOpen) return null;
@@ -166,10 +176,11 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
             </div>
 
             <div className="form-group">
-              <label className="form-label">描述</label>
+              <label className="form-label">描述（支持Markdown）</label>
               <textarea
                 className={`form-textarea ${errors.description ? 'error' : ''}`}
-                placeholder="请详细描述反馈内容（支持Markdown，最多500字）"
+                placeholder="请详细描述反馈内容（支持Markdown格式，最多500字）
+支持：**粗体**、*斜体*、`代码`、- 列表等"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={500}
@@ -188,9 +199,9 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
                   value={sentiment}
                   onChange={(e) => setSentiment(e.target.value as Sentiment)}
                 >
-                  <option value="positive">😊 正面</option>
-                  <option value="neutral">😐 中性</option>
-                  <option value="negative">😞 负面</option>
+                  <option value="positive">😊 正面（绿色）</option>
+                  <option value="neutral">😐 中性（灰色）</option>
+                  <option value="negative">😞 负面（红色）</option>
                 </select>
               </div>
             </div>
@@ -242,13 +253,15 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ isOpen, onClose, onSubmit }
                     <div key={index} className="upload-preview-item">
                       <img
                         src={screenshot}
-                        alt={`截图 ${index + 1}`}
+                        alt={screenshotNames[index] || `截图 ${index + 1}`}
                         className="upload-preview-img"
+                        title={screenshotNames[index]}
                       />
                       <button
                         type="button"
                         className="upload-remove-btn"
                         onClick={() => removeScreenshot(index)}
+                        aria-label="删除截图"
                       >
                         ×
                       </button>

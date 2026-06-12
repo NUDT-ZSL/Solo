@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Feedback, formatRelativeTime } from '../utils/storage';
 
 interface FeedbackCardProps {
@@ -9,7 +9,7 @@ interface FeedbackCardProps {
   animationDelay: number;
 }
 
-const FeedbackCard: React.FC<FeedbackCardProps> = ({
+const FeedbackCardComponent: React.FC<FeedbackCardProps> = ({
   feedback,
   onReply,
   onHandle,
@@ -22,11 +22,7 @@ const FeedbackCard: React.FC<FeedbackCardProps> = ({
 
   const getSentimentBadge = () => {
     if (feedback.reply) {
-      return (
-        <span className="sentiment-badge sentiment-replied">
-          ✓ 已回复
-        </span>
-      );
+      return <span className="sentiment-badge sentiment-replied">✓ 已回复</span>;
     }
     const sentimentMap = {
       positive: { class: 'sentiment-positive', text: '😊 正面' },
@@ -46,17 +42,15 @@ const FeedbackCard: React.FC<FeedbackCardProps> = ({
   };
 
   const shouldTruncate = feedback.description.length > 100;
-  const displayDescription = shouldTruncate && !isExpanded
-    ? feedback.description.slice(0, 100)
-    : feedback.description;
+  const displayDescription =
+    shouldTruncate && !isExpanded
+      ? feedback.description.slice(0, 100)
+      : feedback.description;
 
   const avatarInitial = feedback.username.charAt(feedback.username.length - 1);
 
   return (
-    <div
-      className="feedback-card"
-      style={{ animationDelay: `${animationDelay}ms` }}
-    >
+    <div className="feedback-card" style={{ animationDelay: `${animationDelay}ms` }}>
       <div className="card-header">
         <div className="avatar" style={{ backgroundColor: feedback.avatarColor }}>
           {avatarInitial}
@@ -77,10 +71,7 @@ const FeedbackCard: React.FC<FeedbackCardProps> = ({
           {displayDescription}
         </span>
         {shouldTruncate && (
-          <button
-            className="expand-btn"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
+          <button className="expand-btn" onClick={() => setIsExpanded(!isExpanded)}>
             {isExpanded ? '收起' : '...展开'}
           </button>
         )}
@@ -94,8 +85,9 @@ const FeedbackCard: React.FC<FeedbackCardProps> = ({
             <img
               key={index}
               src={screenshot}
-              alt={`截图 ${index + 1}`}
+              alt={feedback.screenshotNames?.[index] || `截图 ${index + 1}`}
               className="screenshot-thumbnail"
+              title={feedback.screenshotNames?.[index]}
               onClick={() => window.open(screenshot, '_blank')}
             />
           ))}
@@ -167,4 +159,13 @@ const FeedbackCard: React.FC<FeedbackCardProps> = ({
   );
 };
 
-export default FeedbackCard;
+const arePropsEqual = (prevProps: FeedbackCardProps, nextProps: FeedbackCardProps) => {
+  return (
+    prevProps.feedback.id === nextProps.feedback.id &&
+    prevProps.feedback.reply === nextProps.feedback.reply &&
+    prevProps.feedback.isHandled === nextProps.feedback.isHandled &&
+    prevProps.animationDelay === nextProps.animationDelay
+  );
+};
+
+export default memo(FeedbackCardComponent, arePropsEqual);

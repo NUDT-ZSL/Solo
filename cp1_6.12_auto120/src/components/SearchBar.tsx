@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 
 export type FilterType = 'all' | 'pending' | 'replied' | 'urgent';
 
@@ -17,7 +17,7 @@ const filterTabs: { key: FilterType; label: string }[] = [
   { key: 'urgent', label: '紧急' },
 ];
 
-const SearchBar: React.FC<SearchBarProps> = ({
+const SearchBarComponent: React.FC<SearchBarProps> = ({
   searchQuery,
   onSearchChange,
   activeFilter,
@@ -52,51 +52,4 @@ const SearchBar: React.FC<SearchBarProps> = ({
           {filterTabs.map((tab) => (
             <button
               key={tab.key}
-              className={`filter-tab ${activeFilter === tab.key ? 'active' : ''}`}
-              onClick={() => onFilterChange(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className={`mobile-menu ${mobileMenuOpen ? 'open' : ''}`}>
-        <div className="mobile-menu-content">
-          <div className="mobile-menu-header">
-            <h3 style={{ fontSize: '18px', fontWeight: '600' }}>菜单</h3>
-            <button
-              className="mobile-menu-close"
-              onClick={() => setMobileMenuOpen(false)}
-              aria-label="关闭菜单"
-            >
-              ×
-            </button>
-          </div>
-          <div className="mobile-filter-tabs">
-            {filterTabs.map((tab) => (
-              <button
-                key={tab.key}
-                className={`filter-tab ${activeFilter === tab.key ? 'active' : ''}`}
-                onClick={() => handleFilterClick(tab.key)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <button
-            className="mobile-add-btn"
-            onClick={() => {
-              setMobileMenuOpen(false);
-              onAddClick();
-            }}
-          >
-            + 添加反馈
-          </button>
-        </div>
-      </div>
-    </>
-  );
-};
-
-export default SearchBar;
+              className={`
