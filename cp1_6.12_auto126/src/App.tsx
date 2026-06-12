@@ -247,7 +247,7 @@ function App() {
             <div style={{
               width: 40, height: 40,
               background: 'linear-gradient(135deg, #5B8DEF, #2B6CB0)',
-              borderRadius: 10,
+              borderRadius: 6,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 22
             }}>🧾</div>
@@ -261,7 +261,7 @@ function App() {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: '#F7FAFC',
-            borderRadius: 8,
+            borderRadius: 6,
             padding: 4,
             border: '1px solid #E2E8F0'
           }}>
@@ -323,7 +323,7 @@ function App() {
                 padding: '14px 18px',
                 background: '#FFF5F5',
                 border: '1px solid #FEB2B2',
-                borderRadius: 8,
+                borderRadius: 5,
                 color: '#C53030',
                 fontSize: 14,
                 display: 'flex', alignItems: 'center', gap: 10
@@ -338,7 +338,7 @@ function App() {
                 padding: '14px 18px',
                 background: '#F0FFF4',
                 border: '1px solid #9AE6B4',
-                borderRadius: 8,
+                borderRadius: 5,
                 color: '#22543D',
                 fontSize: 14,
                 display: 'flex', alignItems: 'center', gap: 10
@@ -380,28 +380,33 @@ function App() {
               </div>
             ) : receipts.length === 0 ? (
               <div className="fade-in" style={{
-                textAlign: 'center', padding: '60px 20px',
+                textAlign: 'center', padding: '70px 20px',
                 border: '2px dashed #E2E8F0',
-                borderRadius: 12
+                borderRadius: 6,
+                background: '#FAFBFC'
               }}>
-                <div style={{ fontSize: 72, marginBottom: 20, opacity: 0.7 }}>
-                  <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="25" y="10" width="50" height="80" rx="4" stroke="#5B8DEF" strokeWidth="2.5" fill="#EBF4FF" />
-                    <rect x="32" y="22" width="36" height="4" rx="2" fill="#5B8DEF" opacity="0.8" />
-                    <rect x="32" y="32" width="28" height="3" rx="1.5" fill="#2B6CB0" opacity="0.6" />
-                    <rect x="32" y="42" width="32" height="3" rx="1.5" fill="#2B6CB0" opacity="0.6" />
-                    <rect x="32" y="52" width="24" height="3" rx="1.5" fill="#2B6CB0" opacity="0.6" />
-                    <rect x="32" y="62" width="36" height="4" rx="2" fill="#5B8DEF" opacity="0.8" />
-                    <circle cx="32" cy="90" r="2" fill="#5B8DEF" />
-                    <circle cx="40" cy="90" r="2" fill="#5B8DEF" />
-                    <circle cx="48" cy="90" r="2" fill="#5B8DEF" />
-                    <circle cx="56" cy="90" r="2" fill="#5B8DEF" />
-                    <circle cx="64" cy="90" r="2" fill="#5B8DEF" />
-                    <circle cx="72" cy="90" r="2" fill="#5B8DEF" />
-                  </svg>
-                </div>
-                <p style={{ fontSize: 16, color: '#888', fontWeight: 500, margin: 0 }}>暂无小票</p>
-                <p style={{ fontSize: 13, color: '#A0AEC0', marginTop: 8, margin: 0 }}>
+                <svg width="160" height="160" viewBox="0 0 160 160" fill="none" style={{ margin: '0 auto 24px', display: 'block' }}>
+                  <rect x="40" y="16" width="80" height="120" rx="6" fill="#EBF4FF" stroke="#5B8DEF" strokeWidth="2" />
+                  <rect x="40" y="16" width="80" height="22" rx="6" fill="#5B8DEF" opacity="0.15" />
+                  <rect x="52" y="28" width="36" height="4" rx="2" fill="#5B8DEF" opacity="0.7" />
+                  <circle cx="100" cy="30" r="4" fill="#5B8DEF" opacity="0.5" />
+                  <rect x="52" y="50" width="56" height="3" rx="1.5" fill="#2B6CB0" opacity="0.35" />
+                  <rect x="52" y="58" width="40" height="3" rx="1.5" fill="#2B6CB0" opacity="0.25" />
+                  <rect x="52" y="66" width="48" height="3" rx="1.5" fill="#2B6CB0" opacity="0.35" />
+                  <line x1="52" y1="76" x2="108" y2="76" stroke="#E2E8F0" strokeWidth="1" />
+                  <rect x="52" y="82" width="56" height="3" rx="1.5" fill="#2B6CB0" opacity="0.25" />
+                  <rect x="52" y="90" width="44" height="3" rx="1.5" fill="#2B6CB0" opacity="0.35" />
+                  <line x1="52" y1="100" x2="108" y2="100" stroke="#E2E8F0" strokeWidth="1" />
+                  <rect x="52" y="108" width="24" height="4" rx="2" fill="#5B8DEF" opacity="0.5" />
+                  <rect x="84" y="106" width="28" height="6" rx="3" fill="#5B8DEF" opacity="0.7" />
+                  <path d="M48 144 L50 140 L52 144" stroke="#5B8DEF" strokeWidth="1.5" fill="none" opacity="0.4" />
+                  <path d="M108 148 L110 144 L112 148" stroke="#5B8DEF" strokeWidth="1.5" fill="none" opacity="0.4" />
+                  <circle cx="130" cy="50" r="8" fill="#5B8DEF" opacity="0.1" />
+                  <circle cx="22" cy="90" r="5" fill="#5B8DEF" opacity="0.08" />
+                  <circle cx="135" cy="120" r="4" fill="#5B8DEF" opacity="0.06" />
+                </svg>
+                <p style={{ fontSize: 16, color: '#888', fontWeight: 500, margin: '0 0 6px 0' }}>暂无小票</p>
+                <p style={{ fontSize: 13, color: '#A0AEC0', margin: 0 }}>
                   上传一张小票图片开始智能识别吧
                 </p>
               </div>
@@ -438,7 +443,7 @@ function App() {
                 style={{
                   padding: '10px 16px',
                   border: '1px solid #E2E8F0',
-                  borderRadius: 8,
+                  borderRadius: 6,
                   fontSize: 14,
                   color: '#2D3748',
                   background: '#ffffff',
@@ -514,11 +519,20 @@ function App() {
               <div className="fade-in" style={{
                 textAlign: 'center', padding: '80px 20px',
                 border: '2px dashed #E2E8F0',
-                borderRadius: 12
+                borderRadius: 6,
+                background: '#FAFBFC'
               }}>
-                <div style={{ fontSize: 72, marginBottom: 20, opacity: 0.7 }}>📊</div>
-                <p style={{ fontSize: 16, color: '#888', fontWeight: 500, margin: 0 }}>暂无消费数据</p>
-                <p style={{ fontSize: 13, color: '#A0AEC0', marginTop: 8, margin: 0 }}>
+                <svg width="140" height="140" viewBox="0 0 140 140" fill="none" style={{ margin: '0 auto 24px', display: 'block' }}>
+                  <circle cx="70" cy="70" r="50" fill="#EBF4FF" stroke="#5B8DEF" strokeWidth="2" />
+                  <circle cx="70" cy="70" r="30" fill="#ffffff" />
+                  <path d="M70 20 A50 50 0 0 1 120 70 L70 70 Z" fill="#5B8DEF" opacity="0.3" />
+                  <path d="M70 20 A50 50 0 0 0 20 70 L70 70 Z" fill="#2B6CB0" opacity="0.2" />
+                  <circle cx="70" cy="70" r="30" fill="#ffffff" />
+                  <text x="70" y="66" textAnchor="middle" fontSize="11" fill="#718096">总支出</text>
+                  <text x="70" y="82" textAnchor="middle" fontSize="14" fontWeight="700" fill="#2D3748">¥0</text>
+                </svg>
+                <p style={{ fontSize: 16, color: '#888', fontWeight: 500, margin: '0 0 6px 0' }}>暂无消费数据</p>
+                <p style={{ fontSize: 13, color: '#A0AEC0', margin: 0 }}>
                   上传小票后即可查看消费统计
                 </p>
               </div>

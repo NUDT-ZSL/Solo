@@ -195,7 +195,19 @@ function parseReceiptText(text: string): Partial<Receipt> {
   }
 }
 
-app.post('/api/receipts/parse', upload.single('image'), async (req: Request, res: Response) => {
+app.post('/api/receipts/parse', (req: Request, res: Response, next) => {
+  upload.single('image')(req, res, (err: any) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(400).json({ error: '文件大小超过 5MB 限制' })
+        return
+      }
+      res.status(400).json({ error: err.message || '文件上传失败' })
+      return
+    }
+    next()
+  })
+}, async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: '请上传图片' })
@@ -292,17 +304,22 @@ app.get('/api/receipts/summary', async (req: Request, res: Response) => {
     const { month } = req.query as { month?: string }
     let query: Record<string, any> = {}
     if (month) {
-      query.purchaseDate = { $regex: new RegExp(`^${month}`) }
+      const escaped = month.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      query.purchaseDate = { $regex: new RegExp(`^${escaped}`) }
     }
     const receipts = await db.find(query)
 
     const categoryMap = new Map<string, number>()
+    const dailyMap = new Map<string, number>()
     let totalAll = 0
 
     for (const r of receipts) {
       const cat = r.category || '其他消费'
       categoryMap.set(cat, (categoryMap.get(cat) || 0) + (r.totalAmount || 0))
       totalAll += r.totalAmount || 0
+
+      const day = r.purchaseDate ? r.purchaseDate.substring(0, 10) : '未知'
+      dailyMap.set(day, (dailyMap.get(day) || 0) + (r.totalAmount || 0))
     }
 
     const categories = Array.from(categoryMap.entries()).map(([name, amount]) => ({
@@ -311,12 +328,17 @@ app.get('/api/receipts/summary', async (req: Request, res: Response) => {
       percentage: totalAll > 0 ? Number(((amount / totalAll) * 100).toFixed(1)) : 0
     })).sort((a, b) => b.amount - a.amount)
 
+    const daily = Array.from(dailyMap.entries())
+      .map(([date, amount]) => ({ date, amount: Number(amount.toFixed(2)) }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+
     res.json({
       success: true,
       data: {
         totalCount: receipts.length,
         totalAmount: Number(totalAll.toFixed(2)),
         categories,
+        daily,
         month: month || null
       }
     })

@@ -9,8 +9,9 @@ interface UploadZoneProps {
 
 export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const [isDragEnter, setIsDragEnter] = useState(false)
+  const [dragAnimClass, setDragAnimClass] = useState('')
   const [previewUrl, setPreviewUrl] = useState('')
+  const [previewAnimClass, setPreviewAnimClass] = useState('')
   const [fileName, setFileName] = useState('')
   const [fileError, setFileError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -37,13 +38,16 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
     setFileName(file.name)
     const url = URL.createObjectURL(file)
     setPreviewUrl(url)
+    setPreviewAnimClass('fly-in')
+    setTimeout(() => setPreviewAnimClass(''), 500)
   }, [])
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
-    setIsDragEnter(false)
+    setDragAnimClass('elastic-scale')
+    setTimeout(() => setDragAnimClass(''), 450)
     const files = e.dataTransfer.files
     if (files && files.length > 0) {
       handleFile(files[0])
@@ -53,7 +57,6 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsDragEnter(true)
     setIsDragging(true)
   }
 
@@ -61,7 +64,6 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
     e.preventDefault()
     e.stopPropagation()
     if (e.currentTarget === e.target) {
-      setIsDragEnter(false)
       setIsDragging(false)
     }
   }
@@ -89,18 +91,12 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
 
   const handleParse = () => {
     if (!previewUrl || isParsing || !fileName) return
-    const dataTransfer = new DataTransfer()
-    const input = fileInputRef.current
-    if (input && input.files && input.files.length > 0) {
-      onUpload(input.files[0])
-    } else {
-      fetch(previewUrl)
-        .then(r => r.blob())
-        .then(blob => {
-          const file = new File([blob], fileName, { type: blob.type })
-          onUpload(file)
-        })
-    }
+    fetch(previewUrl)
+      .then(r => r.blob())
+      .then(blob => {
+        const file = new File([blob], fileName, { type: blob.type })
+        onUpload(file)
+      })
   }
 
   const handleClear = () => {
@@ -111,10 +107,7 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
     setPreviewUrl('')
     setFileName('')
     setFileError('')
-  }
-
-  const onUploadWrapper = (file: File) => {
-    onUpload(file)
+    setPreviewAnimClass('')
   }
 
   return (
@@ -125,15 +118,15 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
+        className={dragAnimClass}
         style={{
           position: 'relative',
           padding: previewUrl ? 24 : 48,
           border: `2px dashed ${isDragging ? '#5B8DEF' : '#cbd5e0'}`,
-          borderRadius: 12,
+          borderRadius: 6,
           background: isDragging ? '#EBF4FF' : '#FAFBFC',
           cursor: isParsing ? 'not-allowed' : 'pointer',
-          transition: 'all 280ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-          transform: isDragging ? 'scale(1.015)' : 'scale(1)',
+          transition: 'border-color 280ms ease-out, background 280ms ease-out',
           textAlign: 'center',
           opacity: isParsing ? 0.6 : 1
         }}
@@ -149,19 +142,20 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
 
         {!previewUrl ? (
           <div
+            className={isDragging ? 'elastic-scale' : ''}
             style={{
-              transition: 'all 300ms ease-out',
-              transform: isDragging ? 'translateY(-4px) scale(1.05)' : 'translateY(0) scale(1)',
+              transition: 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 300ms ease-out',
+              transform: isDragging ? 'scale(1.04)' : 'scale(1)',
               opacity: isDragging ? 1 : 0.9
             }}
           >
             <div style={{
               width: 72, height: 72, margin: '0 auto 18px',
               background: 'linear-gradient(135deg, #EBF4FF, #E2E8F0)',
-              borderRadius: 20,
+              borderRadius: 6,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 280ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-              transform: isDragging ? 'rotate(-8deg) scale(1.1)' : 'rotate(0) scale(1)'
+              transition: 'transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+              transform: isDragging ? 'scale(1.15) rotate(-6deg)' : 'scale(1) rotate(0deg)'
             }}>
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#5B8DEF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -182,12 +176,12 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
             </p>
           </div>
         ) : (
-          <div className="fade-in">
+          <div className={previewAnimClass || 'fade-in'}>
             <div style={{
               display: 'inline-block',
               padding: 8,
               background: '#ffffff',
-              borderRadius: 10,
+              borderRadius: 6,
               boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
               border: '1px solid #e8e8e8'
             }}>
@@ -199,7 +193,7 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
                   maxHeight: 300,
                   width: 'auto',
                   height: 'auto',
-                  borderRadius: 6,
+                  borderRadius: 4,
                   display: 'block',
                   objectFit: 'contain'
                 }}
@@ -233,29 +227,24 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  padding: '11px 28px',
-                  background: isParsing ? '#90b4f2' : '#5B8DEF',
+                  padding: '10px 24px',
+                  background: '#5B8DEF',
                   color: '#ffffff',
                   border: 'none',
-                  borderRadius: 6,
+                  borderRadius: 5,
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: isParsing ? 'not-allowed' : 'pointer',
-                  transition: 'background 200ms ease-out, transform 150ms',
+                  transition: 'background 200ms ease-out',
                   minWidth: 120,
-                  fontFamily: 'inherit'
+                  fontFamily: 'inherit',
+                  opacity: isParsing ? 0.8 : 1
                 }}
                 onMouseEnter={(e) => {
                   if (!isParsing) e.currentTarget.style.background = '#4A7CDC'
                 }}
                 onMouseLeave={(e) => {
-                  if (!isParsing) e.currentTarget.style.background = '#5B8DEF'
-                }}
-                onMouseDown={(e) => {
-                  if (!isParsing) e.currentTarget.style.transform = 'scale(0.97)'
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.background = '#5B8DEF'
                 }}
               >
                 {isParsing ? (
@@ -295,29 +284,24 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  padding: '11px 28px',
-                  background: isParsing ? '#bbb' : '#999999',
+                  padding: '10px 24px',
+                  background: '#999',
                   color: '#ffffff',
                   border: 'none',
-                  borderRadius: 6,
+                  borderRadius: 5,
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: isParsing ? 'not-allowed' : 'pointer',
-                  transition: 'background 200ms ease-out, transform 150ms',
+                  transition: 'background 200ms ease-out',
                   minWidth: 100,
-                  fontFamily: 'inherit'
+                  fontFamily: 'inherit',
+                  opacity: isParsing ? 0.8 : 1
                 }}
                 onMouseEnter={(e) => {
-                  if (!isParsing) e.currentTarget.style.background = '#7a7a7a'
+                  if (!isParsing) e.currentTarget.style.background = '#777'
                 }}
                 onMouseLeave={(e) => {
-                  if (!isParsing) e.currentTarget.style.background = '#999999'
-                }}
-                onMouseDown={(e) => {
-                  if (!isParsing) e.currentTarget.style.transform = 'scale(0.97)'
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.background = '#999'
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -340,7 +324,7 @@ export default function UploadZone({ onUpload, isParsing }: UploadZoneProps) {
           padding: '12px 16px',
           background: '#FFF5F5',
           border: '1px solid #FEB2B2',
-          borderRadius: 8,
+          borderRadius: 5,
           color: '#C53030',
           fontSize: 13,
           display: 'flex', alignItems: 'center', gap: 8
