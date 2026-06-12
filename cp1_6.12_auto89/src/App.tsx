@@ -44,6 +44,8 @@ export interface GameStateData {
   gameOver: boolean
   winner: string | null
   tickCount: number
+  playerVisibilityMap: Record<string, string[]>
+  fogViewRadius: number
 }
 
 type Screen = 'lobby' | 'game'

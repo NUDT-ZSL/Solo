@@ -10,36 +10,48 @@ import type {
 } from '../shared/types'
 
 const SKILLS: SkillType[] = ['speed', 'invisible', 'trap', 'laser']
-const TICK_INTERVAL = 300
-const RUNE_SPAWN_INTERVAL = 50
-const SKILL_COOLDOWN = 27
-const SPEED_BOOST_DURATION = 6
-const INVISIBLE_DURATION = 10
-const TRAP_DURATION = 100
-const LASER_DURATION = 3
-const SPEED_BOOST_SKIP_TICKS = 1
+const BASE_TICK_INTERVAL = 300
+const MIN_TICK_INTERVAL = 200
+const MAX_TICK_INTERVAL = 500
+const GRID_SIZE_REFERENCE = 16
+const RUNE_SPAWN_INTERVAL_TICKS = 50
+const MAX_RUNES = 3
+const SKILL_COOLDOWN_TICKS = 27
+const SPEED_BOOST_DURATION_TICKS = 6
+const INVISIBLE_DURATION_TICKS = 10
+const TRAP_DURATION_TICKS = 100
+const LASER_DURATION_TICKS = 3
+const FOG_VIEW_RADIUS = 5
+const TARGET_FOOD_COUNT = 5
 
 export class GameEngine {
   private state: GameState
-  private tickCallback: (state: GameState) => void
+  private tickCallback: (state: any) => void
   private gameOverCallback: (winner: string) => void
   private intervalId: NodeJS.Timeout | null = null
-  private speedBoostPlayers: Set<string> = new Set()
-  private skipNextTick: boolean = false
+  private tickInterval: number
+  private pendingDeaths: Set<string> = new Set()
 
   constructor(
     state: GameState,
-    tickCallback: (state: GameState) => void,
+    tickCallback: (state: any) => void,
     gameOverCallback: (winner: string) => void
   ) {
     this.state = state
     this.tickCallback = tickCallback
     this.gameOverCallback = gameOverCallback
+    this.tickInterval = this.calculateTickInterval(state.gridSize)
+  }
+
+  private calculateTickInterval(gridSize: number): number {
+    const ratio = gridSize / GRID_SIZE_REFERENCE
+    const interval = BASE_TICK_INTERVAL * ratio
+    return Math.max(MIN_TICK_INTERVAL, Math.min(MAX_TICK_INTERVAL, interval))
   }
 
   start() {
     if (this.intervalId) return
-    this.intervalId = setInterval(() => this.tick(), TICK_INTERVAL)
+    this.intervalId = setInterval(() => this.tick(), this.tickInterval)
   }
 
   stop() {
@@ -69,99 +81,145 @@ export class GameEngine {
     }
   }
 
-  useSkill(playerId: string) {
+  useSkill(playerId: string): boolean {
     const player = this.state.players.get(playerId)
-    if (!player || !player.alive) return
-    if (!player.skill || player.skillCooldown > 0) return
+    if (!player || !player.alive) return false
+    if (!player.skill) return false
+    if (player.skillCooldown > 0) return false
 
     const skill = player.skill
 
     switch (skill) {
       case 'speed':
-        player.speedBoost = true
-        this.speedBoostPlayers.add(playerId)
-        setTimeout(() => {
-          player.speedBoost = false
-          this.speedBoostPlayers.delete(playerId)
-        }, SPEED_BOOST_DURATION * TICK_INTERVAL)
+        this.applySpeedBoost(playerId)
         break
 
       case 'invisible':
-        player.invisible = true
-        setTimeout(() => {
-          player.invisible = false
-        }, INVISIBLE_DURATION * TICK_INTERVAL)
+        this.applyInvisible(playerId)
         break
 
       case 'trap':
-        const head = player.snake[0]
-        const tailDir = this.getTailDirection(player)
-        let trapX = head.x
-        let trapY = head.y
-        if (tailDir) {
-          trapX += tailDir.dx * 2
-          trapY += tailDir.dy * 2
-        }
-        if (trapX >= 0 && trapX < this.state.gridSize && trapY >= 0 && trapY < this.state.gridSize) {
-          this.state.traps.push({
-            x: trapX,
-            y: trapY,
-            ownerId: playerId,
-            duration: TRAP_DURATION,
-          })
-        }
+        this.placeTrap(player)
         break
 
       case 'laser':
-        const laserHead = player.snake[0]
-        const dir = player.direction
-        let dx = 0,
-          dy = 0
-        if (dir === 'up') dy = -1
-        if (dir === 'down') dy = 1
-        if (dir === 'left') dx = -1
-        if (dir === 'right') dx = 1
-
-        let length = 0
-        let lx = laserHead.x + dx
-        let ly = laserHead.y + dy
-        while (lx >= 0 && lx < this.state.gridSize && ly >= 0 && ly < this.state.gridSize) {
-          length++
-          lx += dx
-          ly += dy
-        }
-
-        this.state.lasers.push({
-          startX: laserHead.x,
-          startY: laserHead.y,
-          direction: dir,
-          length,
-          ownerId: playerId,
-          duration: LASER_DURATION,
-        })
-
-        this.checkLaserHit(playerId, laserHead.x, laserHead.y, dx, dy, length)
+        this.fireLaser(player)
         break
     }
 
     player.skill = null
-    player.skillCooldown = SKILL_COOLDOWN
+    player.skillCooldown = SKILL_COOLDOWN_TICKS
+    return true
   }
 
-  private getTailDirection(player: Player) {
-    if (player.snake.length < 2) return null
+  private applySpeedBoost(playerId: string) {
+    const player = this.state.players.get(playerId)
+    if (!player) return
+    player.speedBoost = true
+
+    const originalInterval = this.tickInterval
+    const fastInterval = Math.floor(originalInterval / 2)
+
+    this.stop()
+    this.intervalId = setInterval(() => this.tick(), fastInterval)
+
+    setTimeout(() => {
+      const p = this.state.players.get(playerId)
+      if (p) p.speedBoost = false
+      this.stop()
+      this.intervalId = setInterval(() => this.tick(), originalInterval)
+    }, SPEED_BOOST_DURATION_TICKS * originalInterval)
+  }
+
+  private applyInvisible(playerId: string) {
+    const player = this.state.players.get(playerId)
+    if (!player) return
+    player.invisible = true
+
+    setTimeout(() => {
+      const p = this.state.players.get(playerId)
+      if (p) p.invisible = false
+    }, INVISIBLE_DURATION_TICKS * this.tickInterval)
+  }
+
+  private placeTrap(player: Player) {
+    if (!player.snake || player.snake.length === 0) return
+
     const head = player.snake[0]
-    const body = player.snake[1]
-    return { dx: head.x - body.x, dy: head.y - body.y }
+    let trapX = head.x
+    let trapY = head.y
+
+    if (player.snake.length >= 2) {
+      const body = player.snake[1]
+      const dx = head.x - body.x
+      const dy = head.y - body.y
+      trapX = head.x - dx
+      trapY = head.y - dy
+    }
+
+    if (
+      trapX >= 0 &&
+      trapX < this.state.gridSize &&
+      trapY >= 0 &&
+      trapY < this.state.gridSize
+    ) {
+      this.state.traps.push({
+        x: trapX,
+        y: trapY,
+        ownerId: player.id,
+        duration: TRAP_DURATION_TICKS,
+      })
+    }
   }
 
-  private checkLaserHit(ownerId: string, startX: number, startY: number, dx: number, dy: number, length: number) {
+  private fireLaser(player: Player) {
+    if (!player.snake || player.snake.length === 0) return
+
+    const head = player.snake[0]
+    const dir = player.direction
+    let dx = 0,
+      dy = 0
+    if (dir === 'up') dy = -1
+    if (dir === 'down') dy = 1
+    if (dir === 'left') dx = -1
+    if (dir === 'right') dx = 1
+
+    let length = 0
+    let lx = head.x + dx
+    let ly = head.y + dy
+    while (lx >= 0 && lx < this.state.gridSize && ly >= 0 && ly < this.state.gridSize) {
+      length++
+      lx += dx
+      ly += dy
+    }
+
+    this.state.lasers.push({
+      startX: head.x,
+      startY: head.y,
+      direction: dir,
+      length,
+      ownerId: player.id,
+      duration: LASER_DURATION_TICKS,
+    })
+
+    this.checkLaserHit(player.id, head.x, head.y, dx, dy, length)
+  }
+
+  private checkLaserHit(
+    ownerId: string,
+    startX: number,
+    startY: number,
+    dx: number,
+    dy: number,
+    length: number
+  ) {
     let x = startX + dx
     let y = startY + dy
 
     for (let i = 0; i < length; i++) {
       for (const player of this.state.players.values()) {
         if (!player.alive || player.id === ownerId) continue
+        if (!player.snake || player.snake.length === 0) continue
 
         for (const seg of player.snake) {
           if (seg.x === x && seg.y === y) {
@@ -176,6 +234,8 @@ export class GameEngine {
   }
 
   private cutSnakeInHalf(player: Player) {
+    if (!player.snake || player.snake.length === 0) return
+
     const halfLen = Math.floor(player.snake.length / 2)
     if (halfLen < 1) {
       player.alive = false
@@ -190,92 +250,89 @@ export class GameEngine {
 
     this.state.tickCount++
 
-    if (this.skipNextTick) {
-      this.skipNextTick = false
-      this.updateCooldowns()
-      this.updateEffects()
-      this.spawnRunes()
-      this.tickCallback(this.serializeState())
-      return
-    }
-
     for (const player of this.state.players.values()) {
       if (!player.alive) continue
+      this.movePlayer(player)
+    }
 
-      if (player.speedBoost && this.speedBoostPlayers.has(player.id)) {
-        this.movePlayer(player)
-        if (this.checkPlayerDeath(player)) continue
-        this.checkFoodCollision(player)
-        this.checkRuneCollision(player)
-        this.checkTrapCollision(player)
+    this.pendingDeaths.clear()
+    for (const player of this.state.players.values()) {
+      if (!player.alive) continue
+      if (this.checkPlayerDeath(player)) {
+        this.pendingDeaths.add(player.id)
       }
     }
 
     for (const player of this.state.players.values()) {
-      if (!player.alive) continue
-      player.direction = player.nextDirection
-      this.movePlayer(player)
-    }
-
-    for (const player of this.state.players.values()) {
-      if (!player.alive) continue
-      this.checkPlayerDeath(player)
-    }
-
-    for (const player of this.state.players.values()) {
-      if (!player.alive) continue
+      if (!player.alive || this.pendingDeaths.has(player.id)) continue
       this.checkFoodCollision(player)
       this.checkRuneCollision(player)
       this.checkTrapCollision(player)
     }
 
     this.checkGameOver()
-
     this.updateCooldowns()
     this.updateEffects()
     this.spawnRunes()
     this.maintainFood()
 
-    const hasSpeedBoost = this.speedBoostPlayers.size > 0
-    if (hasSpeedBoost && !this.skipNextTick) {
-      this.skipNextTick = false
-    }
-
-    this.tickCallback(this.serializeState())
+    const serializedState = this.serializeState()
+    this.tickCallback(serializedState)
   }
 
   private movePlayer(player: Player) {
-    const head = { ...player.snake[0] }
+    if (!player.snake || player.snake.length === 0) return
+    if (!player.alive) return
 
-    switch (player.direction) {
-      case 'up':
-        head.y -= 1
-        break
-      case 'down':
-        head.y += 1
-        break
-      case 'left':
-        head.x -= 1
-        break
-      case 'right':
-        head.x += 1
-        break
+    player.direction = player.nextDirection
+
+    try {
+      const head = { ...player.snake[0] }
+
+      switch (player.direction) {
+        case 'up':
+          head.y -= 1
+          break
+        case 'down':
+          head.y += 1
+          break
+        case 'left':
+          head.x -= 1
+          break
+        case 'right':
+          head.x += 1
+          break
+      }
+
+      player.snake.unshift(head)
+      player.snake.pop()
+    } catch (e) {
+      console.error('Error moving player:', e)
     }
-
-    player.snake.unshift(head)
-    player.snake.pop()
   }
 
   private checkPlayerDeath(player: Player): boolean {
+    if (!player.snake || player.snake.length === 0) {
+      player.alive = false
+      return true
+    }
+
     const head = player.snake[0]
 
-    if (head.x < 0 || head.x >= this.state.gridSize || head.y < 0 || head.y >= this.state.gridSize) {
+    if (
+      head.x < 0 ||
+      head.x >= this.state.gridSize ||
+      head.y < 0 ||
+      head.y >= this.state.gridSize
+    ) {
       player.alive = false
       return true
     }
 
     for (const otherPlayer of this.state.players.values()) {
       if (!otherPlayer.alive) continue
+      if (!otherPlayer.snake || otherPlayer.snake.length === 0) continue
+
       const startIndex = otherPlayer.id === player.id ? 1 : 0
       for (let i = startIndex; i < otherPlayer.snake.length; i++) {
         const seg = otherPlayer.snake[i]
@@ -290,12 +347,17 @@ export class GameEngine {
   }
 
   private checkFoodCollision(player: Player) {
+    if (!player.snake || player.snake.length === 0) return
+
     const head = player.snake[0]
 
     for (let i = this.state.foods.length - 1; i >= 0; i--) {
       const food = this.state.foods[i]
       if (head.x === food.x && head.y === food.y) {
-        player.snake.push({ ...player.snake[player.snake.length - 1] })
+        const tail = player.snake[player.snake.length - 1]
+        if (tail) {
+          player.snake.push({ ...tail })
+        }
         player.score = player.snake.length
         this.state.foods.splice(i, 1)
         break
@@ -304,6 +366,8 @@ export class GameEngine {
   }
 
   private checkRuneCollision(player: Player) {
+    if (!player.snake || player.snake.length === 0) return
+
     const head = player.snake[0]
 
     for (let i = this.state.skillRunes.length - 1; i >= 0; i--) {
@@ -319,6 +383,8 @@ export class GameEngine {
   }
 
   private checkTrapCollision(player: Player) {
+    if (!player.snake || player.snake.length === 0) return
+
     const head = player.snake[0]
 
     for (let i = this.state.traps.length - 1; i >= 0; i--) {
@@ -361,8 +427,8 @@ export class GameEngine {
   }
 
   private spawnRunes() {
-    if (this.state.tickCount % RUNE_SPAWN_INTERVAL !== 0) return
-    if (this.state.skillRunes.length >= 2) return
+    if (this.state.tickCount % RUNE_SPAWN_INTERVAL_TICKS !== 0) return
+    if (this.state.skillRunes.length >= MAX_RUNES) return
 
     const rune = this.spawnRuneAtRandom()
     if (rune) {
@@ -375,6 +441,7 @@ export class GameEngine {
     const occupied = new Set<string>()
 
     for (const player of this.state.players.values()) {
+      if (!player.snake) continue
       for (const seg of player.snake) {
         occupied.add(`${seg.x},${seg.y}`)
       }
@@ -385,10 +452,13 @@ export class GameEngine {
     for (const rune of this.state.skillRunes) {
       occupied.add(`${rune.x},${rune.y}`)
     }
+    for (const trap of this.state.traps) {
+      occupied.add(`${trap.x},${trap.y}`)
+    }
 
     if (occupied.size >= gridSize * gridSize * 0.9) return null
 
-    let x, y
+    let x: number, y: number
     let attempts = 0
     do {
       x = Math.floor(Math.random() * gridSize)
@@ -403,8 +473,7 @@ export class GameEngine {
   }
 
   private maintainFood() {
-    const targetCount = 5
-    while (this.state.foods.length < targetCount) {
+    while (this.state.foods.length < TARGET_FOOD_COUNT) {
       const food = this.spawnFoodAtRandom()
       if (food) {
         this.state.foods.push(food)
@@ -419,6 +488,7 @@ export class GameEngine {
     const occupied = new Set<string>()
 
     for (const player of this.state.players.values()) {
+      if (!player.snake) continue
       for (const seg of player.snake) {
         occupied.add(`${seg.x},${seg.y}`)
       }
@@ -432,7 +502,7 @@ export class GameEngine {
 
     if (occupied.size >= gridSize * gridSize * 0.9) return null
 
-    let x, y
+    let x: number, y: number
     let attempts = 0
     do {
       x = Math.floor(Math.random() * gridSize)
@@ -462,12 +532,41 @@ export class GameEngine {
     }
   }
 
+  private calculateVisibleCells(playerId: string): string[] {
+    const player = this.state.players.get(playerId)
+    if (!player || !player.snake || player.snake.length === 0) return []
+
+    const head = player.snake[0]
+    const visible: string[] = []
+    const radius = FOG_VIEW_RADIUS
+
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        if (distance <= radius) {
+          const x = head.x + dx
+          const y = head.y + dy
+          if (x >= 0 && x < this.state.gridSize && y >= 0 && y < this.state.gridSize) {
+            visible.push(`${x},${y}`)
+          }
+        }
+      }
+    }
+
+    return visible
+  }
+
   private serializeState(): any {
+    const playerVisibilityMap: Record<string, string[]> = {}
+    for (const [playerId] of this.state.players) {
+      playerVisibilityMap[playerId] = this.calculateVisibleCells(playerId)
+    }
+
     return {
       players: Array.from(this.state.players.entries()).map(([id, player]) => ({
         id,
         nickname: player.nickname,
-        snake: player.snake,
+        snake: player.snake || [],
         direction: player.direction,
         color: player.color,
         alive: player.alive,
@@ -485,6 +584,8 @@ export class GameEngine {
       gameOver: this.state.gameOver,
       winner: this.state.winner,
       tickCount: this.state.tickCount,
+      playerVisibilityMap,
+      fogViewRadius: FOG_VIEW_RADIUS,
     }
   }
 }
