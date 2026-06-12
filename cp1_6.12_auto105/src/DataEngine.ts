@@ -1,3 +1,29 @@
+/**
+ * DataEngine.ts - 纯函数数据处理与状态机模块
+ *
+ * 【职责】
+ *   1. 解析 CSV 销售数据文本为结构化时序数据
+ *   2. 自动检测销售额环比变化超过20%的转折点月份
+ *   3. 提供时间轴回放状态机（play/pause/step/goto/speed）
+ *   4. 提供数据切片、排序、配色等工具函数
+ *
+ * 【输入】
+ *   - CSV 文本字符串（parseCSV）
+ *   - SalesData 结构化数据、月份索引、产品列表等（各工具函数）
+ *
+ * 【输出】
+ *   - SalesData: { months, series, turningPoints }
+ *   - Timeline 状态机实例（createTimelineStateMachine）
+ *   - 切片/累计/排序/配色后的衍生数据
+ *
+ * 【被依赖】
+ *   - src/App.tsx: 调用 parseCSV 解析上传文件，createTimelineStateMachine 驱动回放，
+ *     sortSeries / getProductColors 进行排序和配色
+ *   - src/components/Visualizer.tsx: 调用 isProductTurningPoint 判断转折点高亮
+ *
+ * 【依赖】无外部 React 依赖，纯 TypeScript 模块
+ */
+
 export interface SalesData {
   months: string[]
   series: { product: string; values: number[] }[]
@@ -27,7 +53,6 @@ export function parseCSV(csvText: string): SalesData {
     throw new Error('CSV文件至少需要包含1列月份和5列产品线数据')
   }
 
-  const monthColumn = headers[0]
   const productNames = headers.slice(1)
 
   if (productNames.length < 5) {
@@ -73,6 +98,10 @@ export function parseCSV(csvText: string): SalesData {
   return { months, series, turningPoints }
 }
 
+/**
+ * 检测转折点：遍历每个月份，只要任一产品线环比变化 >= 20%
+ * 即将该月份标记为转折点
+ */
 function detectTurningPoints(
   months: string[],
   series: { product: string; values: number[] }[]
@@ -128,6 +157,10 @@ export function getCumulativeData(
   return { months, series }
 }
 
+/**
+ * 创建时间轴状态机
+ * 数据流向：外部 play/pause/setSpeed 调用 → 更新内部 state → 通过 onTick 回调通知外部
+ */
 export function createTimelineStateMachine(totalMonths: number): {
   state: TimelineState
   goTo: (index: number) => void

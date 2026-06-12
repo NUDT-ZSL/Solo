@@ -1,4 +1,33 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+/**
+ * App.tsx - 主组件，负责整体布局与状态分发
+ *
+ * 【职责】
+ *   1. 整体页面布局：顶部导航、左上筛选面板(200px)、中部图表区(60%高度)、底部时间轴(120px)
+ *   2. 持有全局状态：salesData / currentIndex / isPlaying / speed / selectedProducts / sortType
+ *   3. 作为 DataEngine 与 UI 组件的协调层：
+ *      - 接收文件上传 → 调用 DataEngine.parseCSV → 生成 SalesData
+ *      - 接收 TimelinePanel 交互 → 驱动 DataEngine 状态机 → 回写 currentIndex 等状态
+ *      - 将排序/筛选后的数据切片 + productColors 传递给 Visualizer
+ *
+ * 【数据流向】
+ *   CSV 文件 → <input type="file"> → parseCSV() → salesData (state)
+ *                                                     │
+ *                                                     ├──→ sortSeries() + filter → displayData ──→ Visualizer
+ *                                                     ├──→ getProductColors() ──────────────────→ Visualizer
+ *                                                     └──→ createTimelineStateMachine()
+ *                                                              │
+ *   TimelinePanel 用户交互 → onIndexChange/onPlayToggle/onSpeedChange → stateMachine 方法
+ *                                                                          │
+ *                                                                          └──→ onTick callback → setState → re-render
+ *
+ * 【被依赖】src/main.tsx → ReactDOM.render(<App />)
+ * 【依赖】
+ *   - src/DataEngine.ts: parseCSV, createTimelineStateMachine, getProductColors, sortSeries
+ *   - src/components/Visualizer.tsx: 图表渲染
+ *   - src/components/TimelinePanel.tsx: 时间轴控制
+ */
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Visualizer from './components/Visualizer'
 import TimelinePanel from './components/TimelinePanel'
 import {
@@ -23,15 +52,17 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const stateMachineRef = useRef<ReturnType<typeof createTimelineStateMachine> | null>(null)
 
-  const productColors = salesData ? getProductColors(salesData.series.map((s) => s.product)) : {}
+  const productColors = useMemo(() => {
+    if (!salesData) return {}
+    return getProductColors(salesData.series.map((s) => s.product))
+  }, [salesData])
 
-  const sortedSeries = salesData
-    ? sortSeries(salesData.series, sortType, currentIndex)
-    : []
-
-  const displayData: SalesData | null = salesData
-    ? { ...salesData, series: sortedSeries.filter((s) => selectedProducts.includes(s.product)) }
-    : null
+  const displayData = useMemo((): SalesData | null => {
+    if (!salesData) return null
+    const sorted = sortSeries(salesData.series, sortType, currentIndex)
+    const filtered = sorted.filter((s) => selectedProducts.includes(s.product))
+    return { ...salesData, series: filtered }
+  }, [salesData, sortType, currentIndex, selectedProducts])
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -93,7 +124,10 @@ const App: React.FC = () => {
     if (stateMachineRef.current.state.isPlaying) {
       stateMachineRef.current.pause()
     } else {
-      if (stateMachineRef.current.state.currentIndex >= (salesData?.months.length || 0) - 1) {
+      if (
+        stateMachineRef.current.state.currentIndex >=
+        (salesData?.months.length || 0) - 1
+      ) {
         stateMachineRef.current.goTo(0)
       }
       stateMachineRef.current.play()
@@ -181,7 +215,7 @@ const App: React.FC = () => {
 
       {!salesData && (
         <div className="empty-state">
-          <div className="empty-state-content">
+          <div className="empty-state-content fade-in">
             <div className="empty-icon">📈</div>
             <h2>欢迎使用 TrendNavigator</h2>
             <p>上传您的销售数据 CSV 文件，开始探索数据趋势</p>
@@ -197,7 +231,7 @@ const App: React.FC = () => {
       )}
 
       {salesData && (
-        <div className="main-content">
+        <div className="main-content fade-in">
           <button
             className="filter-toggle"
             onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -235,6 +269,11 @@ const App: React.FC = () => {
                     style={{ backgroundColor: productColors[s.product] }}
                   />
                   <span className="product-name">{s.product}</span>
+                  {selectedProducts.includes(s.product) && (
+                    <svg className="product-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
                 </label>
               ))}
             </div>

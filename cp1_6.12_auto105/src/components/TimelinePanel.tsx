@@ -1,4 +1,27 @@
-import React, { useRef, useEffect, useCallback } from 'react'
+/**
+ * TimelinePanel.tsx - 时间轴控制面板组件
+ *
+ * 【职责】
+ *   1. 渲染可拖拽时间轴滑块、播放/暂停按钮、速度调节器(0.5x/1x/2x/4x)
+ *   2. 显示转折点金色圆点标记
+ *   3. 用户交互后通过回调通知 App，App 再驱动 DataEngine 状态机更新
+ *
+ * 【输入（Props）】
+ *   - data: SalesData           - 完整销售数据（用于读取 months 和 turningPoints）
+ *   - currentIndex: number      - 当前月份索引，来自 App state
+ *   - isPlaying: boolean        - 是否正在回放，来自 App state
+ *   - speed: number             - 回放速度，来自 App state
+ *   - onIndexChange(index)      - 滑块位置改变回调 → App → stateMachine.goTo
+ *   - onPlayToggle()            - 播放/暂停按钮点击 → App → stateMachine.play/pause
+ *   - onSpeedChange(speed)      - 速度切换 → App → stateMachine.setSpeed
+ *
+ * 【输出】无返回值，通过回调触发外部状态更新
+ *
+ * 【被依赖】src/App.tsx → 渲染 <TimelinePanel />
+ * 【依赖】仅依赖 React Hooks（useRef, useEffect, useCallback）
+ */
+
+import React, { useRef, useEffect, useCallback, memo } from 'react'
 import type { SalesData } from '../DataEngine'
 
 interface TimelinePanelProps {
@@ -12,8 +35,9 @@ interface TimelinePanelProps {
 }
 
 const speedOptions = [0.5, 1, 2, 4]
+const cubicEase = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
 
-const TimelinePanel: React.FC<TimelinePanelProps> = ({
+const TimelinePanelInner: React.FC<TimelinePanelProps> = ({
   data,
   currentIndex,
   isPlaying,
@@ -65,9 +89,13 @@ const TimelinePanel: React.FC<TimelinePanelProps> = ({
     }
   }, [getIndexFromPosition, onIndexChange])
 
-  const turningPointIndices = data.turningPoints.map((month) =>
-    data.months.indexOf(month)
-  ).filter((idx) => idx >= 0)
+  const turningPointIndices = data.turningPoints
+    .map((month) => data.months.indexOf(month))
+    .filter((idx) => idx >= 0)
+
+  const sliderTransitionStyle = {
+    transition: isDragging.current ? 'none' : `all 300ms ${cubicEase}`,
+  }
 
   return (
     <div className="timeline-panel">
@@ -116,7 +144,7 @@ const TimelinePanel: React.FC<TimelinePanelProps> = ({
             className="slider-progress"
             style={{
               width: `${percentage}%`,
-              transition: 'width 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+              ...sliderTransitionStyle,
             }}
           />
         </div>
@@ -127,7 +155,10 @@ const TimelinePanel: React.FC<TimelinePanelProps> = ({
             <div
               key={idx}
               className="turning-point-marker"
-              style={{ left: `${pos}%` }}
+              style={{
+                left: `${pos}%`,
+                ...sliderTransitionStyle,
+              }}
               title={`${data.months[idx]} - 转折点`}
             />
           )
@@ -137,7 +168,7 @@ const TimelinePanel: React.FC<TimelinePanelProps> = ({
           className="slider-thumb"
           style={{
             left: `calc(${percentage}% - 14px)`,
-            transition: 'left 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            ...sliderTransitionStyle,
           }}
         />
 
@@ -150,7 +181,10 @@ const TimelinePanel: React.FC<TimelinePanelProps> = ({
               <span
                 key={idx}
                 className="slider-label"
-                style={{ left: `${pos}%` }}
+                style={{
+                  left: `${pos}%`,
+                  ...sliderTransitionStyle,
+                }}
               >
                 {month}
               </span>
@@ -161,5 +195,8 @@ const TimelinePanel: React.FC<TimelinePanelProps> = ({
     </div>
   )
 }
+
+const TimelinePanel = memo(TimelinePanelInner)
+TimelinePanel.displayName = 'TimelinePanel'
 
 export default TimelinePanel
