@@ -152,8 +152,28 @@ export function useGalleryControls(options: UseGalleryControlsOptions) {
           const dz = newPos.z - cz;
           const distSq = dx * dx + dy * dy + dz * dz;
           const r = PLAYER_RADIUS;
-          if (distSq < r * r) {
-            const dist = Math.sqrt(distSq) || 0.0001;
+
+          const insideBox = newPos.x >= box.minX && newPos.x <= box.maxX && newPos.z >= box.minZ && newPos.z <= box.maxZ && newPos.y >= box.minY && newPos.y <= box.maxY;
+
+          if (insideBox || distSq < 0.0001) {
+            const penXMin = newPos.x - box.minX;
+            const penXMax = box.maxX - newPos.x;
+            const penZMin = newPos.z - box.minZ;
+            const penZMax = box.maxZ - newPos.z;
+            const minPen = Math.min(penXMin, penXMax, penZMin, penZMax);
+
+            if (minPen === penXMin) {
+              newPos.x = box.minX - r;
+            } else if (minPen === penXMax) {
+              newPos.x = box.maxX + r;
+            } else if (minPen === penZMin) {
+              newPos.z = box.minZ - r;
+            } else if (minPen === penZMax) {
+              newPos.z = box.maxZ + r;
+            }
+            collided = true;
+          } else if (distSq < r * r) {
+            const dist = Math.sqrt(distSq);
             const overlap = r - dist;
             newPos.x += (dx / dist) * overlap;
             newPos.z += (dz / dist) * overlap;

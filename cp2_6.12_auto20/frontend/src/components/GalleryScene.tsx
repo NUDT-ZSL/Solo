@@ -20,7 +20,6 @@ interface ArtworkFrameProps {
 interface SpotlightProps {
   position: [number, number, number];
   targetPosition: [number, number, number];
-  particleDensity?: number;
 }
 
 interface DoorFrameProps {
@@ -96,14 +95,13 @@ function createPlaceholderTexture(): THREE.CanvasTexture {
   return texture;
 }
 
-const PLACEHOLDER_TEXTURE = createPlaceholderTexture();
-
 function PlaceholderFallback({ transparent = false }: { transparent?: boolean }) {
+  const placeholderTexture = useMemo(() => createPlaceholderTexture(), []);
   return (
     <meshStandardMaterial
       color="#D7CCC8"
       side={THREE.FrontSide}
-      map={PLACEHOLDER_TEXTURE}
+      map={placeholderTexture}
       transparent={transparent}
       opacity={transparent ? 0.6 : 1}
     />
@@ -124,7 +122,8 @@ const DOOR_FRAME_BORDER = 0.1;
 const DOOR_FRAME_DEPTH = WALL_THICKNESS + 0.02;
 const DOOR_OPEN_THRESHOLD = 3;
 const DOOR_CLOSE_THRESHOLD = 5;
-const DOOR_MAX_STEP = 0.03;
+const DOOR_MAX_STEP = 0.08;
+const DOOR_SPEED = 3.0;
 
 export function computeDoorCollisionBox(
   position: [number, number, number],
@@ -372,9 +371,9 @@ function ParticleLayer({
 
 function Particles({ count = 30 }: { count?: number }) {
   const groupRef = useRef<THREE.Group>(null);
-  const smallCount = Math.ceil(count * 0.6);
-  const mediumCount = Math.ceil(count * 0.3);
-  const largeCount = Math.max(1, count - smallCount - mediumCount);
+  const smallCount = Math.round(count * 0.6);
+  const mediumCount = Math.round(count * 0.3);
+  const largeCount = Math.max(0, count - smallCount - mediumCount);
 
   useFrame((_, delta) => {
     if (groupRef.current) {
@@ -450,7 +449,7 @@ const DoorFrame = React.memo(function DoorFrame({
   const doorHeight = DOOR_HEIGHT;
   const frameBorderW = DOOR_FRAME_BORDER;
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     let doorWorldPos: THREE.Vector3;
     if (groupRef.current) {
       groupRef.current.updateMatrixWorld(true);
@@ -472,7 +471,8 @@ const DoorFrame = React.memo(function DoorFrame({
     lastTarget.current = targetOpenness;
 
     const rawDelta = targetOpenness - openness.current;
-    const clampedDelta = THREE.MathUtils.clamp(rawDelta, -DOOR_MAX_STEP, DOOR_MAX_STEP);
+    const maxStep = Math.min(DOOR_MAX_STEP, DOOR_SPEED * delta);
+    const clampedDelta = THREE.MathUtils.clamp(rawDelta, -maxStep, maxStep);
     openness.current += clampedDelta;
 
     if (leftDoorRef.current) {
@@ -586,7 +586,6 @@ const HallRoom = React.memo(function HallRoom({ hall, onArtworkClick }: HallRoom
   const d = hall.depth;
   const wallColor = hall.wallColor || DEFAULT_WALL_COLOR;
   const totalArtworks = (hall.artworks ?? []).length;
-  const particleDensity = 1 + totalArtworks * 0.05;
 
   const gridTexture = useMemo(() => createGridTexture(), []);
 
@@ -687,7 +686,6 @@ const HallRoom = React.memo(function HallRoom({ hall, onArtworkClick }: HallRoom
           key={s.key}
           position={s.lightPos}
           targetPosition={s.targetPos}
-          particleDensity={particleDensity}
         />
       ))}
 
@@ -901,15 +899,56 @@ function FPSCounter({ fpsRef }: { fpsRef: React.MutableRefObject<number> }) {
 
 export default function GalleryScene({ halls, activeHallId, onHallChange, onArtworkClick }: GallerySceneProps) {
   const [collisionFlash, setCollisionFlash] = useState(false);
+  const [glKey, setGlKey] = useState(0);
+  const [showContextLost, setShowContextLost] = useState(false);
   const fpsRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleCollisionFlash = useCallback((flash: boolean) => {
     setCollisionFlash(flash);
   }, []);
 
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    let canvas: HTMLCanvasElement | null = null;
+    const findCanvas = () => {
+      canvas = containerRef.current?.querySelector('canvas') || null;
+    };
+    findCanvas();
+
+    if (!canvas) {
+      const timeoutId = setTimeout(findCanvas, 100);
+      return () => clearTimeout(timeoutId);
+    }
+
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      setShowContextLost(true);
+    };
+
+    const handleContextRestored = () => {
+      setGlKey((k) => k + 1);
+      setShowContextLost(false);
+    };
+
+    canvas.addEventListener('webglcontextlost', handleContextLost);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
+    return () => {
+      canvas?.removeEventListener('webglcontextlost', handleContextLost);
+      canvas?.removeEventListener('webglcontextrestored', handleContextRestored);
+    };
+  }, [glKey]);
+
+  const handleReload = useCallback(() => {
+    window.location.reload();
+  }, []);
+
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
+        key={glKey}
         camera={{ fov: 65, near: 0.1, far: 100, position: [0, 1.6, 0] }}
         dpr={[1, 1.5]}
         gl={{ antialias: true, alpha: false }}
@@ -929,6 +968,70 @@ export default function GalleryScene({ halls, activeHallId, onHallChange, onArtw
       </Canvas>
 
       <FPSDisplay fpsRef={fpsRef} />
+
+      {showContextLost && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(15, 15, 15, 0.9)',
+            zIndex: 100,
+            gap: '16px',
+          }}
+        >
+          <div style={{ fontSize: 48, color: GOLD_COLOR }}>⚠️</div>
+          <div
+            style={{
+              fontSize: 24,
+              fontWeight: 600,
+              color: '#F5F0E8',
+              fontFamily: 'system-ui, sans-serif',
+            }}
+          >
+            3D渲染上下文已丢失
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: '#B0A898',
+              fontFamily: 'system-ui, sans-serif',
+            }}
+          >
+            请点击下方按钮重新加载页面
+          </div>
+          <button
+            onClick={handleReload}
+            style={{
+              marginTop: '12px',
+              padding: '12px 36px',
+              fontSize: 16,
+              fontWeight: 600,
+              color: '#1A1A1A',
+              background: GOLD_COLOR,
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontFamily: 'system-ui, sans-serif',
+              boxShadow: '0 4px 12px rgba(197, 165, 90, 0.3)',
+              transition: 'transform 0.1s ease, box-shadow 0.1s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.03)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(197, 165, 90, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(197, 165, 90, 0.3)';
+            }}
+          >
+            重新加载
+          </button>
+        </div>
+      )}
 
       <div
         style={{

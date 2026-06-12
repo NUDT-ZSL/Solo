@@ -50,13 +50,97 @@ function saveData() {
   }
 }
 
+type Direction = 'north' | 'south' | 'east' | 'west';
+const DIRECTIONS: Direction[] = ['north', 'south', 'east', 'west'];
+
+function validateConnection(data: unknown): HallConnection | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const c = data as Record<string, unknown>;
+  if (typeof c.targetHallId !== 'string' || c.targetHallId === '') return null;
+  if (!DIRECTIONS.includes(c.direction as Direction)) return null;
+  if (typeof c.corridorLength !== 'number' || !Number.isFinite(c.corridorLength) || c.corridorLength <= 0) return null;
+  return c as unknown as HallConnection;
+}
+
+function validateArtwork(data: unknown): Artwork | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const a = data as Record<string, unknown>;
+  if (typeof a.id !== 'string' || a.id === '') return null;
+  if (typeof a.hallId !== 'string') return null;
+  if (typeof a.title !== 'string') return null;
+  if (typeof a.artist !== 'string') return null;
+  if (typeof a.description !== 'string') return null;
+  if (typeof a.imageUrl !== 'string') return null;
+  if (typeof a.year !== 'number' || !Number.isFinite(a.year)) return null;
+  if (!DIRECTIONS.includes(a.wall as Direction)) return null;
+  if (typeof a.positionX !== 'number' || !Number.isFinite(a.positionX)) return null;
+  if (typeof a.positionY !== 'number' || !Number.isFinite(a.positionY)) return null;
+  if (typeof a.width !== 'number' || !Number.isFinite(a.width)) return null;
+  if (typeof a.height !== 'number' || !Number.isFinite(a.height)) return null;
+  return a as unknown as Artwork;
+}
+
+function validateHall(data: unknown): Hall | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const h = data as Record<string, unknown>;
+  if (typeof h.id !== 'string' || h.id === '') return null;
+  if (typeof h.name !== 'string') return null;
+  if (typeof h.width !== 'number' || !Number.isFinite(h.width) || h.width <= 0) return null;
+  if (typeof h.height !== 'number' || !Number.isFinite(h.height) || h.height <= 0) return null;
+  if (typeof h.depth !== 'number' || !Number.isFinite(h.depth) || h.depth <= 0) return null;
+  if (typeof h.wallColor !== 'string' || !h.wallColor.startsWith('#')) return null;
+  if (typeof h.floorTexture !== 'string') return null;
+  if (!Array.isArray(h.connections)) return null;
+  if (!Array.isArray(h.artworks)) return null;
+
+  const validConnections: HallConnection[] = [];
+  for (const conn of h.connections) {
+    const vc = validateConnection(conn);
+    if (vc === null) return null;
+    validConnections.push(vc);
+  }
+
+  const validArtworks: Artwork[] = [];
+  for (const art of h.artworks) {
+    const va = validateArtwork(art);
+    if (va === null) return null;
+    validArtworks.push(va);
+  }
+
+  return {
+    id: h.id,
+    name: h.name,
+    width: h.width,
+    height: h.height,
+    depth: h.depth,
+    wallColor: h.wallColor,
+    floorTexture: h.floorTexture,
+    connections: validConnections,
+    artworks: validArtworks,
+  };
+}
+
 function loadData() {
   try {
     if (!fs.existsSync(DATA_FILE)) return false;
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    const arr = JSON.parse(raw) as Hall[];
+    const data = JSON.parse(raw) as unknown;
+    if (!Array.isArray(data)) {
+      console.error('Loaded data is not an array');
+      return false;
+    }
     halls.clear();
-    for (const h of arr) halls.set(h.id, h);
+    let validCount = 0;
+    for (const item of data) {
+      const valid = validateHall(item);
+      if (valid !== null) {
+        halls.set(valid.id, valid);
+        validCount++;
+      } else {
+        console.warn('Skipping invalid hall entry:', item);
+      }
+    }
+    if (validCount === 0) return false;
     return true;
   } catch (e) {
     console.error('Failed to load data:', e);
@@ -182,23 +266,20 @@ app.post('/api/import', (req, res) => {
   if (!Array.isArray(body)) {
     return res.status(400).json({ error: 'Invalid data format' });
   }
-  for (const h of body) {
-    if (
-      typeof h !== 'object' ||
-      h === null ||
-      typeof h.id !== 'string' ||
-      typeof h.name !== 'string' ||
-      typeof h.width !== 'number' ||
-      typeof h.height !== 'number' ||
-      typeof h.depth !== 'number'
-    ) {
-      return res.status(400).json({ error: 'Invalid data format' });
+  const validHalls: Hall[] = [];
+  let skipped = 0;
+  for (const item of body) {
+    const valid = validateHall(item);
+    if (valid !== null) {
+      validHalls.push(valid);
+    } else {
+      skipped++;
     }
   }
   halls.clear();
-  for (const h of body) halls.set(h.id, h);
+  for (const h of validHalls) halls.set(h.id, h);
   saveData();
-  res.status(200).json({ imported: body.length });
+  res.status(200).json({ imported: validHalls.length, skipped });
 });
 
 function seedData() {
