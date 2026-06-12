@@ -2,34 +2,64 @@ import React, { useCallback, useRef } from 'react';
 import { useGalleryStore } from '@/store';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { RotateCw, Trash2 } from 'lucide-react';
-import type { Wall } from '@/types';
+import { snapToWalls } from '@/utils/geometry';
+import type { Wall as WallType } from '@/types';
 
 interface WallProps {
-  wall: Wall;
+  wall: WallType;
   zoom: number;
 }
 
 export const Wall: React.FC<WallProps> = ({ wall, zoom }) => {
-  const { updateWall, rotateWall, removeWall, selectElement, snapWall } = useGalleryStore();
+  const updateWall = useGalleryStore((s) => s.updateWall);
+  const rotateWall = useGalleryStore((s) => s.rotateWall);
+  const removeWall = useGalleryStore((s) => s.removeWall);
+  const selectElement = useGalleryStore((s) => s.selectElement);
   const wallRef = useRef<HTMLDivElement>(null);
-
-  const { handlePointerDown, handlePointerMove, handlePointerUp } = useDragAndDrop({
-    zoom,
-    onStart: () => {
-      selectElement({ type: 'wall', id: wall.id });
-    },
-    onMove: (delta) => {
-      const newX = wall.x + delta.x;
-      const newY = wall.y + delta.y;
-      const snapped = snapWall(wall.id, newX, newY);
-      updateWall(wall.id, { x: snapped.x, y: snapped.y });
-    },
-  });
 
   const isSelected =
     useGalleryStore(
       (s) => s.selectedElement?.type === 'wall' && s.selectedElement?.id === wall.id
     );
+
+  const handleDragMove = useCallback(
+    (delta: { x: number; y: number }) => {
+      const newX = wall.x + delta.x;
+      const newY = wall.y + delta.y;
+      const allWalls = useGalleryStore.getState().walls;
+
+      const result = snapToWalls(
+        newX,
+        newY,
+        wall.width,
+        wall.height,
+        allWalls,
+        wall.id
+      );
+
+      updateWall(wall.id, {
+        x: result.x,
+        y: result.y,
+        isSnapping: result.snapped,
+      });
+    },
+    [wall, updateWall]
+  );
+
+  const handleDragStart = useCallback(() => {
+    selectElement({ type: 'wall', id: wall.id });
+  }, [selectElement, wall.id]);
+
+  const handleDragEnd = useCallback(() => {
+    updateWall(wall.id, { isSnapping: false });
+  }, [updateWall, wall.id]);
+
+  const { handlePointerDown, handlePointerMove, handlePointerUp } = useDragAndDrop({
+    zoom,
+    onStart: handleDragStart,
+    onMove: handleDragMove,
+    onEnd: handleDragEnd,
+  });
 
   const handleRotate = useCallback(
     (e: React.MouseEvent) => {
@@ -47,10 +77,6 @@ export const Wall: React.FC<WallProps> = ({ wall, zoom }) => {
     [removeWall, wall.id]
   );
 
-  const isVertical = wall.rotation === 90 || wall.rotation === 270;
-  const displayWidth = isVertical ? wall.height : wall.width;
-  const displayHeight = isVertical ? wall.width : wall.height;
-
   return (
     <div
       ref={wallRef}
@@ -61,13 +87,13 @@ export const Wall: React.FC<WallProps> = ({ wall, zoom }) => {
         position: 'absolute',
         left: wall.x,
         top: wall.y,
-        width: displayWidth,
-        height: displayHeight,
+        width: wall.width,
+        height: wall.height,
         border: `2px solid ${wall.isSnapping ? '#3b82f6' : '#888'}`,
         backgroundColor: '#ffffff66',
         cursor: 'move',
         boxSizing: 'border-box',
-        transition: wall.isSnapping ? 'border-color 0.15s ease' : 'none',
+        transition: 'border-color 0.1s ease',
         boxShadow: isSelected
           ? '0 0 0 2px #3b82f6, 0 2px 8px rgba(0,0,0,0.12)'
           : '0 1px 3px rgba(0,0,0,0.08)',

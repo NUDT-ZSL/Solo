@@ -89,7 +89,6 @@ export const Sidebar: React.FC = () => {
             style={{
               padding: '4px 10px',
               borderRadius: 4,
-              border: 'none',
               fontSize: 12,
               cursor: 'pointer',
               backgroundColor: activeCategory === cat ? '#3b82f6' : '#fff',

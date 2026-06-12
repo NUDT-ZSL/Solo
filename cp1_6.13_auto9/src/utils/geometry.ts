@@ -1,14 +1,6 @@
 import type { SnapResult, Point, Rect, Wall, Rotation } from '@/types';
 
 export function getRotatedRect(wall: Wall): Rect {
-  if (wall.rotation === 90 || wall.rotation === 270) {
-    return {
-      x: wall.x,
-      y: wall.y,
-      width: wall.height,
-      height: wall.width,
-    };
-  }
   return {
     x: wall.x,
     y: wall.y,

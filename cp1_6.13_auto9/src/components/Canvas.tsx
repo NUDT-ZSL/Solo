@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import { useGalleryStore } from '@/store';
 import { Wall } from './Wall';
 import { Exhibit } from './Exhibit';
@@ -8,29 +8,85 @@ import { Plus, Lightbulb } from 'lucide-react';
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 const GRID_SIZE = 40;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2;
 
 export const Canvas: React.FC = () => {
   const { walls, exhibits, lights, zoom, setZoom, addWall, addLight, selectElement, addExhibit } =
     useGalleryStore();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const lastPanPos = useRef({ x: 0, y: 0 });
+
+  const centerCanvas = useCallback(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const panX = (rect.width - CANVAS_WIDTH * zoom) / 2;
+    const panY = (rect.height - CANVAS_HEIGHT * zoom) / 2;
+    setPan({ x: panX, y: panY });
+  }, [zoom]);
+
+  useEffect(() => {
+    centerCanvas();
+    const handleResize = () => centerCanvas();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [centerCanvas]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault();
+      const el = canvasRef.current;
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const contentX = (mouseX - pan.x) / zoom;
+      const contentY = (mouseY - pan.y) / zoom;
+
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom(zoom + delta);
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom + delta));
+
+      const newPanX = mouseX - contentX * newZoom;
+      const newPanY = mouseY - contentY * newZoom;
+
+      setZoom(newZoom);
+      setPan({ x: newPanX, y: newPanY });
     },
-    [zoom, setZoom]
+    [zoom, pan, setZoom]
   );
 
-  const handleCanvasClick = useCallback(
+  const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (e.target === canvasRef.current) {
+      if (e.target === canvasRef.current || (e.target as HTMLElement).tagName === 'svg') {
         selectElement(null);
+        if (e.button === 0 && e.shiftKey) {
+          setIsPanning(true);
+          lastPanPos.current = { x: e.clientX, y: e.clientY };
+        }
       }
     },
     [selectElement]
   );
+
+  const handleCanvasMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isPanning) return;
+      const dx = e.clientX - lastPanPos.current.x;
+      const dy = e.clientY - lastPanPos.current.y;
+      setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      lastPanPos.current = { x: e.clientX, y: e.clientY };
+    },
+    [isPanning]
+  );
+
+  const handleCanvasMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -43,8 +99,10 @@ export const Canvas: React.FC = () => {
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
 
-        const x = (e.clientX - rect.left) / zoom;
-        const y = (e.clientY - rect.top) / zoom;
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const x = (mouseX - pan.x) / zoom - (exhibit.physicalWidth * 2) / 2;
+        const y = (mouseY - pan.y) / zoom - (exhibit.physicalHeight * 2) / 2;
 
         addExhibit({
           exhibitId: exhibit.id,
@@ -52,14 +110,14 @@ export const Canvas: React.FC = () => {
           colorTag: exhibit.colorTag,
           physicalWidth: exhibit.physicalWidth,
           physicalHeight: exhibit.physicalHeight,
-          x: x - (exhibit.physicalWidth * 2) / 2,
-          y: y - (exhibit.physicalHeight * 2) / 2,
+          x,
+          y,
         });
       } catch {
         // ignore
       }
     },
-    [zoom, addExhibit]
+    [zoom, pan, addExhibit]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -173,34 +231,37 @@ export const Canvas: React.FC = () => {
             color: '#888',
           }}
         >
-          缩放: {Math.round(zoom * 100)}%
+          缩放: {Math.round(zoom * 100)}% (Shift+拖拽平移)
         </div>
       </div>
 
       <div
         ref={canvasRef}
         onWheel={handleWheel}
-        onClick={handleCanvasClick}
+        onMouseDown={handleCanvasMouseDown}
+        onMouseMove={handleCanvasMouseMove}
+        onMouseUp={handleCanvasMouseUp}
+        onMouseLeave={handleCanvasMouseUp}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         style={{
           flex: 1,
           overflow: 'hidden',
           backgroundColor: '#e8e8e8',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
           position: 'relative',
+          cursor: isPanning ? 'grabbing' : 'default',
         }}
       >
         <div
           style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
             backgroundColor: '#f0f0f0',
-            position: 'relative',
-            transform: `scale(${zoom})`,
-            transformOrigin: 'center center',
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: '0 0',
             boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
             overflow: 'hidden',
           }}

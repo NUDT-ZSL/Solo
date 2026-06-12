@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { Wall, PlacedExhibit, LightSource, SelectedElement, Rotation } from '@/types';
-import { snapToWalls, getRotatedRect } from '@/utils/geometry';
 
 interface GalleryStore {
   walls: Wall[];
@@ -24,8 +23,6 @@ interface GalleryStore {
 
   selectElement: (element: SelectedElement | null) => void;
   setZoom: (zoom: number) => void;
-
-  snapWall: (id: string, x: number, y: number) => { x: number; y: number; isSnapping: boolean };
 }
 
 let nextId = 1;
@@ -74,7 +71,20 @@ export const useGalleryStore = create<GalleryStore>((set, get) => ({
       walls: state.walls.map((w) => {
         if (w.id !== id) return w;
         const nextRot: Record<Rotation, Rotation> = { 0: 90, 90: 180, 180: 270, 270: 0 };
-        return { ...w, rotation: nextRot[w.rotation] };
+        const cx = w.x + w.width / 2;
+        const cy = w.y + w.height / 2;
+        const newWidth = w.height;
+        const newHeight = w.width;
+        const newX = cx - newWidth / 2;
+        const newY = cy - newHeight / 2;
+        return {
+          ...w,
+          rotation: nextRot[w.rotation],
+          width: newWidth,
+          height: newHeight,
+          x: newX,
+          y: newY,
+        };
       }),
     }));
   },
@@ -127,22 +137,5 @@ export const useGalleryStore = create<GalleryStore>((set, get) => ({
 
   setZoom: (zoom) => {
     set({ zoom: Math.max(0.5, Math.min(2, zoom)) });
-  },
-
-  snapWall: (id, x, y) => {
-    const state = get();
-    const wall = state.walls.find((w) => w.id === id);
-    if (!wall) return { x, y, isSnapping: false };
-
-    const rotated = getRotatedRect({ ...wall, x, y });
-    const result = snapToWalls(x, y, rotated.width, rotated.height, state.walls, id);
-
-    set((state) => ({
-      walls: state.walls.map((w) =>
-        w.id === id ? { ...w, isSnapping: result.snapped } : w
-      ),
-    }));
-
-    return { x: result.x, y: result.y, isSnapping: result.snapped };
   },
 }));

@@ -52,16 +52,17 @@ export const Exhibit: React.FC<ExhibitProps> = ({ exhibit, zoom }) => {
         left: exhibit.x,
         top: exhibit.y,
         width: pxWidth,
-        height: pxHeight,
+        height: pxHeight + 20,
         cursor: 'move',
         touchAction: 'none',
         zIndex: isSelected ? 10 : 2,
+        boxSizing: 'border-box',
       }}
     >
       <div
         style={{
-          width: '100%',
-          height: '100%',
+          width: pxWidth,
+          height: pxHeight,
           border: `2px solid ${isSelected ? '#3b82f6' : exhibit.colorTag}`,
           borderRadius: 4,
           backgroundColor: `${exhibit.colorTag}22`,
@@ -84,24 +85,23 @@ export const Exhibit: React.FC<ExhibitProps> = ({ exhibit, zoom }) => {
             borderRadius: '4px 4px 0 0',
           }}
         />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: -18,
-            left: 0,
-            right: 0,
-            textAlign: 'center',
-            fontSize: 12,
-            color: '#000',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          {exhibit.name}
-        </div>
+      </div>
+      <div
+        style={{
+          width: pxWidth,
+          textAlign: 'center',
+          fontSize: 12,
+          color: '#000',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          pointerEvents: 'none',
+          userSelect: 'none',
+          marginTop: 4,
+          lineHeight: 1,
+        }}
+      >
+        {exhibit.name}
       </div>
       {isSelected && (
         <button
@@ -121,6 +121,7 @@ export const Exhibit: React.FC<ExhibitProps> = ({ exhibit, zoom }) => {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 20,
+            padding: 0,
             transition: 'box-shadow 0.2s ease',
           }}
           onMouseEnter={(e) => {
