@@ -1,0 +1,12 @@
+{
+  "name": "molecule-browser",
+  "version": "1.0.0",
+  "description": "3D分子结构浏览器与交互动画演示",
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve ."
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
