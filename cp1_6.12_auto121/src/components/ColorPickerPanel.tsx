@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import tinycolor from 'tinycolor2';
 import type { GradientConfig, GradientType } from '../types';
 import { PRESET_COLORS, GRADIENT_TYPES } from '../constants/colors';
@@ -11,11 +11,14 @@ interface ColorPickerPanelProps {
 const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
   const startColorInputRef = useRef<HTMLInputElement>(null);
   const endColorInputRef = useRef<HTMLInputElement>(null);
+  const [activePicker, setActivePicker] = useState<'start' | 'end' | null>(null);
   const progress = useMemo(() => (gradient.angle / 360) * 100, [gradient.angle]);
 
   const handleColorChange = (key: 'startColor' | 'endColor', color: string) => {
     const tc = tinycolor(color);
-    onChange({ [key]: tc.toHexString() });
+    if (tc.isValid()) {
+      onChange({ [key]: tc.toHexString() });
+    }
   };
 
   const handleTypeChange = (type: GradientType) => {
@@ -26,16 +29,26 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
     onChange({ angle: Number(e.target.value) });
   };
 
-  const openColorPicker = (key: 'startColor' | 'endColor') => {
-    if (key === 'startColor' && startColorInputRef.current) {
-      startColorInputRef.current.click();
-    } else if (key === 'endColor' && endColorInputRef.current) {
-      endColorInputRef.current.click();
+  const openNativePicker = (which: 'start' | 'end') => {
+    setActivePicker(which);
+    const ref = which === 'start' ? startColorInputRef : endColorInputRef;
+    if (ref.current) {
+      ref.current.click();
     }
   };
 
-  const tickMarks = useMemo(() => {
-    const ticks = [];
+  const handlePresetClick = (color: string) => {
+    if (activePicker === 'end') {
+      handleColorChange('endColor', color);
+      setActivePicker(null);
+    } else {
+      handleColorChange('startColor', color);
+      setActivePicker('end');
+    }
+  };
+
+  const tickData = useMemo(() => {
+    const ticks: number[] = [];
     for (let i = 0; i <= 360; i += 45) {
       ticks.push(i);
     }
@@ -50,39 +63,32 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
         <div style={styles.colorPickerGroup}>
           <label style={styles.label}>起点色</label>
           <div style={styles.colorPickerWrapper} className="color-input-wrapper">
-            <button
-              onClick={() => openColorPicker('startColor')}
+            <div
               style={{
-                ...styles.colorDisplayBtn,
+                ...styles.colorDisplayBlock,
                 background: gradient.startColor,
               }}
-              className="color-display-btn"
+              className="color-display-block"
+              onClick={() => openNativePicker('start')}
             >
               <input
                 ref={startColorInputRef}
                 type="color"
                 value={gradient.startColor}
                 onChange={(e) => handleColorChange('startColor', e.target.value)}
-                style={styles.hiddenColorInput}
+                style={styles.nativeColorInput}
+                tabIndex={-1}
               />
-            </button>
+            </div>
             <div style={styles.colorInfo}>
               <span style={styles.colorValue}>{gradient.startColor}</span>
               <button
-                onClick={() => openColorPicker('startColor')}
+                onClick={() => openNativePicker('start')}
                 style={styles.pickerBtn}
                 className="picker-btn"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-                  <path d="M12 22v-4" />
-                  <path d="M12 6V2" />
-                  <path d="M4.93 4.93l2.83 2.83" />
-                  <path d="M16.24 16.24l2.83 2.83" />
-                  <path d="M2 12h4" />
-                  <path d="M18 12h4" />
-                  <path d="M4.93 19.07l2.83-2.83" />
-                  <path d="M16.24 7.76l2.83-2.83" />
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10" />
                 </svg>
                 取色
               </button>
@@ -91,7 +97,7 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
         </div>
 
         <div style={styles.arrowIcon} className="arrow-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2">
             <path d="M5 12h14M12 5l7 7-7 7" />
           </svg>
         </div>
@@ -99,39 +105,32 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
         <div style={styles.colorPickerGroup}>
           <label style={styles.label}>终点色</label>
           <div style={styles.colorPickerWrapper} className="color-input-wrapper">
-            <button
-              onClick={() => openColorPicker('endColor')}
+            <div
               style={{
-                ...styles.colorDisplayBtn,
+                ...styles.colorDisplayBlock,
                 background: gradient.endColor,
               }}
-              className="color-display-btn"
+              className="color-display-block"
+              onClick={() => openNativePicker('end')}
             >
               <input
                 ref={endColorInputRef}
                 type="color"
                 value={gradient.endColor}
                 onChange={(e) => handleColorChange('endColor', e.target.value)}
-                style={styles.hiddenColorInput}
+                style={styles.nativeColorInput}
+                tabIndex={-1}
               />
-            </button>
+            </div>
             <div style={styles.colorInfo}>
               <span style={styles.colorValue}>{gradient.endColor}</span>
               <button
-                onClick={() => openColorPicker('endColor')}
+                onClick={() => openNativePicker('end')}
                 style={styles.pickerBtn}
                 className="picker-btn"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-                  <path d="M12 22v-4" />
-                  <path d="M12 6V2" />
-                  <path d="M4.93 4.93l2.83 2.83" />
-                  <path d="M16.24 16.24l2.83 2.83" />
-                  <path d="M2 12h4" />
-                  <path d="M18 12h4" />
-                  <path d="M4.93 19.07l2.83-2.83" />
-                  <path d="M16.24 7.76l2.83-2.83" />
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10" />
                 </svg>
                 取色
               </button>
@@ -141,18 +140,17 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
       </div>
 
       <div style={styles.section}>
-        <label style={styles.label}>预设颜色（12色）</label>
+        <div style={styles.presetHeader}>
+          <label style={styles.label}>预设颜色</label>
+          <span style={styles.presetHint}>
+            {activePicker === 'end' ? '正在选择终点色' : '点击选择起点色'}
+          </span>
+        </div>
         <div style={styles.presetColors} className="preset-colors">
           {PRESET_COLORS.map((color, index) => (
             <button
               key={`${color}-${index}`}
-              onClick={() => {
-                if (!gradient.startColor || gradient.startColor === gradient.endColor) {
-                  handleColorChange('startColor', color);
-                } else {
-                  handleColorChange('endColor', color);
-                }
-              }}
+              onClick={() => handlePresetClick(color)}
               style={{
                 ...styles.presetColorBtn,
                 backgroundColor: color,
@@ -190,29 +188,30 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
             <label style={styles.label}>渐变角度</label>
             <span style={styles.angleValue}>{gradient.angle}°</span>
           </div>
-          <div style={styles.sliderContainer}>
-            <div style={styles.sliderTrack}>
+          <div style={styles.sliderWrapper}>
+            <div style={styles.sliderTrackBg}>
               <div
                 style={{
-                  ...styles.sliderFill,
+                  ...styles.sliderTrackFill,
                   width: `${progress}%`,
                 }}
               />
-              <input
-                type="range"
-                min="0"
-                max="360"
-                step="5"
-                value={gradient.angle}
-                onChange={handleAngleChange}
-                style={styles.slider}
-              />
             </div>
-            <div style={styles.tickMarksContainer}>
-              {tickMarks.map((tick) => (
-                <div key={tick} style={styles.tickMark}>
+            <input
+              type="range"
+              min="0"
+              max="360"
+              step="5"
+              value={gradient.angle}
+              onChange={handleAngleChange}
+              className="angle-slider"
+              style={styles.slider}
+            />
+            <div style={styles.tickMarksRow}>
+              {tickData.map((tick) => (
+                <div key={tick} style={styles.tickMarkItem}>
                   <div style={styles.tickLine} />
-                  <span style={styles.tickLabel}>{tick}°</span>
+                  <span style={styles.tickLabel}>{tick}</span>
                 </div>
               ))}
             </div>
@@ -249,7 +248,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   arrowIcon: {
-    paddingBottom: '20px',
+    paddingBottom: '24px',
     color: '#888',
   },
   label: {
@@ -262,37 +261,79 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
   },
-  colorInput: {
-    width: '56px',
-    height: '56px',
+  colorDisplayBlock: {
+    width: '48px',
+    height: '48px',
     borderRadius: '12px',
-    border: '2px solid #2a2a4e',
-    transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+    border: '2px solid rgba(255,255,255,0.15)',
+    position: 'relative',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    transition: 'box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease',
+    flexShrink: 0,
+  },
+  nativeColorInput: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 0,
+    cursor: 'pointer',
+    border: 'none',
+    padding: 0,
+    margin: 0,
+  },
+  colorInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
   },
   colorValue: {
     fontFamily: "'Fira Code', monospace",
-    fontSize: '14px',
+    fontSize: '13px',
     color: '#e0e0e0',
     textTransform: 'uppercase',
+  },
+  pickerBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    background: 'none',
+    border: '1px solid #2a2a4e',
+    borderRadius: '6px',
+    padding: '3px 8px',
+    color: '#888',
+    fontSize: '11px',
+    cursor: 'pointer',
+    transition: 'color 0.3s ease, border-color 0.3s ease, transform 0.3s ease',
+  },
+  presetHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  presetHint: {
+    fontSize: '11px',
+    color: '#4A90D9',
+    fontStyle: 'italic',
   },
   section: {
     marginBottom: '24px',
   },
   presetColors: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(12, 1fr)',
+    gridTemplateColumns: 'repeat(6, 1fr)',
     gap: '8px',
     marginTop: '10px',
   },
   presetColorBtn: {
     width: '100%',
-    aspectRatio: '1',
-    minWidth: '28px',
-    minHeight: '28px',
+    height: '32px',
     borderRadius: '8px',
-    border: 'none',
+    border: '2px solid transparent',
     cursor: 'pointer',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
   },
   typeButtons: {
     display: 'flex',
@@ -321,34 +362,56 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: '#4A90D9',
   },
-  sliderContainer: {
+  sliderWrapper: {
     position: 'relative',
-    padding: '10px 0 30px 0',
+    paddingTop: '10px',
+    paddingBottom: '30px',
+  },
+  sliderTrackBg: {
+    position: 'absolute',
+    top: '10px',
+    left: '10px',
+    right: '10px',
+    height: '6px',
+    backgroundColor: '#2a2a4e',
+    borderRadius: '3px',
+    overflow: 'hidden',
+  },
+  sliderTrackFill: {
+    height: '100%',
+    backgroundColor: '#4A90D9',
+    borderRadius: '3px',
+    transition: 'width 0.05s ease',
   },
   slider: {
+    position: 'relative',
     width: '100%',
-    height: '6px',
+    height: '26px',
+    margin: 0,
+    zIndex: 2,
   },
-  tickMarks: {
+  tickMarksRow: {
     display: 'flex',
     justifyContent: 'space-between',
-    padding: '0 10px',
-    marginTop: '8px',
+    paddingLeft: '10px',
+    paddingRight: '10px',
+    marginTop: '2px',
   },
-  tickMark: {
+  tickMarkItem: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '4px',
+    gap: '2px',
   },
   tickLine: {
     width: '1px',
-    height: '6px',
-    backgroundColor: '#2a2a4e',
+    height: '8px',
+    backgroundColor: '#4a4a6e',
   },
   tickLabel: {
-    fontSize: '10px',
-    color: '#666',
+    fontSize: '9px',
+    color: '#555',
+    fontFamily: "'Fira Code', monospace",
   },
 };
 

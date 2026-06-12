@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import type { GradientConfig } from '../types';
 import { generateGradientCSS, generateFullCSSCode } from '../utils/gradient';
 
@@ -10,7 +10,7 @@ interface GradientPreviewProps {
 
 const GradientPreview = ({ gradient, isFavorited, onToggleFavorite }: GradientPreviewProps) => {
   const [copied, setCopied] = useState(false);
-  const [animateHeart, setAnimateHeart] = useState(false);
+  const [heartKey, setHeartKey] = useState(0);
 
   const gradientCSS = useMemo(() => generateGradientCSS(gradient), [gradient]);
   const fullCSSCode = useMemo(() => generateFullCSSCode(gradient), [gradient]);
@@ -25,13 +25,10 @@ const GradientPreview = ({ gradient, isFavorited, onToggleFavorite }: GradientPr
     }
   };
 
-  const handleFavorite = () => {
-    if (!isFavorited) {
-      setAnimateHeart(true);
-      setTimeout(() => setAnimateHeart(false), 300);
-    }
+  const handleFavorite = useCallback(() => {
+    setHeartKey(prev => prev + 1);
     onToggleFavorite();
-  };
+  }, [onToggleFavorite]);
 
   return (
     <div style={styles.container}>
@@ -43,24 +40,27 @@ const GradientPreview = ({ gradient, isFavorited, onToggleFavorite }: GradientPr
             ...styles.favoriteBtn,
             color: isFavorited ? '#ff4757' : '#888',
           }}
-          className={`favorite-btn ${animateHeart ? 'favorite-active' : ''}`}
+          className="favorite-btn"
         >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill={isFavorited ? 'currentColor' : 'none'}
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
+          <div key={heartKey} className={heartKey > 0 ? 'favorite-pulse' : ''}>
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill={isFavorited ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          </div>
         </button>
       </div>
 
       <div
+        className="preview-area"
         style={{
           ...styles.previewArea,
           background: gradientCSS,

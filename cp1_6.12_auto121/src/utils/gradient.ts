@@ -29,7 +29,13 @@ export const generateId = (): string => {
 };
 
 export const formatTime = (timestamp: number): string => {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0) {
+    return '--:--:--';
+  }
   const date = new Date(timestamp);
+  if (isNaN(date.getTime())) {
+    return '--:--:--';
+  }
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
   const seconds = date.getSeconds().toString().padStart(2, '0');

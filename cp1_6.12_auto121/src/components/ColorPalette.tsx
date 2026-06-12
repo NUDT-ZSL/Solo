@@ -50,7 +50,7 @@ const ColorPalette = ({ palettes, history, onApply, onDelete, onClearHistory }: 
             <p style={styles.emptyHint}>点击心形图标保存喜欢的配色</p>
           </div>
         ) : (
-          <div style={styles.paletteList}>
+          <div style={styles.paletteList} className="palette-list">
             {palettes.map((palette) => (
               <div
                 key={palette.id}
@@ -120,7 +120,7 @@ const ColorPalette = ({ palettes, history, onApply, onDelete, onClearHistory }: 
             <p style={styles.emptyText}>暂无历史记录</p>
           </div>
         ) : (
-          <div style={styles.historyList}>
+          <div style={styles.historyList} className="history-list">
             {history.map((item) => (
               <button
                 key={item.id}
