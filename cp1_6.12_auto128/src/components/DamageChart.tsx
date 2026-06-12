@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { DamagePoint, DamageResult } from '../shared/RuneTypes';
 
 interface DamageChartProps {
@@ -9,25 +9,43 @@ interface DamageChartProps {
 export const DamageChart: React.FC<DamageChartProps> = ({ damageResult, comparisonResults = [] }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  const handleResize = useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setSize({ width: rect.width, height: rect.height });
+    }
+  }, []);
+
+  useEffect(() => {
+    handleResize();
+    const ro = new ResizeObserver(handleResize);
+    if (containerRef.current) ro.observe(containerRef.current);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [handleResize]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!canvas || size.width === 0 || size.height === 0) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
+    canvas.width = size.width * dpr;
+    canvas.height = size.height * dpr;
+    canvas.style.width = `${size.width}px`;
+    canvas.style.height = `${size.height}px`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
-    const W = rect.width;
-    const H = rect.height;
+    const W = size.width;
+    const H = size.height;
     const padding = { top: 30, right: 30, bottom: 40, left: 60 };
     const chartW = W - padding.left - padding.right;
     const chartH = H - padding.top - padding.bottom;
@@ -113,7 +131,9 @@ export const DamageChart: React.FC<DamageChartProps> = ({ damageResult, comparis
     const mapX = (time: number) => padding.left + (time / 10) * chartW;
     const mapY = (damage: number) => padding.top + chartH - (damage / maxDamage) * chartH;
 
-    allCurves.forEach((curve, curveIndex) => {
+    allCurves.forEach((curve) => {
+      if (curve.points.length === 0) return;
+
       const gradient = ctx.createLinearGradient(padding.left, 0, padding.left + chartW, 0);
       gradient.addColorStop(0, curve.color + 'ff');
       gradient.addColorStop(0.5, curve.color + 'aa');
@@ -170,21 +190,7 @@ export const DamageChart: React.FC<DamageChartProps> = ({ damageResult, comparis
         legendY += 16;
       });
     }
-  }, [damageResult, comparisonResults]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-      const event = new Event('resize');
-      window.dispatchEvent(event);
-    };
-
-    const ro = new ResizeObserver(handleResize);
-    if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+  }, [damageResult, comparisonResults, size]);
 
   return (
     <div className="panel">
