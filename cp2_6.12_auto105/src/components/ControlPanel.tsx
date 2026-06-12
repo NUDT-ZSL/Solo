@@ -1,3 +1,5 @@
+import React, { useState, useRef, useEffect } from 'react';
+
 export type ColorTheme = 'aurora' | 'lava' | 'galaxy' | 'neon' | 'classic';
 export type ViewMode = 'front' | 'top' | 'side' | 'free';
 
@@ -12,6 +14,7 @@ export interface VisualizerParams {
 interface ControlPanelProps {
   params: VisualizerParams;
   onChange: (key: keyof VisualizerParams, value: number | string) => void;
+  fps?: number;
 }
 
 const colorThemes: { value: ColorTheme; label: string }[] = [
@@ -40,11 +43,14 @@ const sliderStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) => {
+const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, fps = 60 }) => {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const [warningVisible, setWarningVisible] = useState(false);
+  const [autoDowngraded, setAutoDowngraded] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
+  const lowFPSFrames = useRef(0);
 
   const onMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT' || (e.target as HTMLElement).tagName === 'BUTTON') return;
@@ -69,6 +75,27 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) => {
     };
   }, [dragging]);
 
+  useEffect(() => {
+    if (fps < 30) {
+      lowFPSFrames.current++;
+      if (lowFPSFrames.current > 3) {
+        setWarningVisible(true);
+      }
+      if (fps < 25 && lowFPSFrames.current > 6 && !autoDowngraded && params.particleDensity > 1000) {
+        const newDensity = Math.max(1000, params.particleDensity - 3000);
+        const snapped = Math.round(newDensity / 500) * 500;
+        onChange('particleDensity', snapped);
+        setAutoDowngraded(true);
+        lowFPSFrames.current = 0;
+      }
+    } else {
+      lowFPSFrames.current = 0;
+      if (fps >= 45) {
+        setWarningVisible(false);
+      }
+    }
+  }, [fps, params.particleDensity, onChange, autoDowngraded]);
+
   return (
     <div
       ref={panelRef}
@@ -92,8 +119,32 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) => {
         border: '1px solid rgba(255,255,255,0.1)',
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, opacity: 0.8 }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, opacity: 0.8 }}>
         ⚙ 控制面板
+      </div>
+
+      {warningVisible && (
+        <div
+          style={{
+            background: 'rgba(255, 68, 68, 0.2)',
+            border: '1px solid rgba(255, 68, 68, 0.5)',
+            borderRadius: 6,
+            padding: '6px 8px',
+            marginBottom: 10,
+            fontSize: 11,
+            color: '#ff8888',
+          }}
+        >
+          ⚠ 性能警告：当前帧率 {fps} FPS
+          {autoDowngraded && '（已自动降低粒子密度）'}
+        </div>
+      )}
+
+      <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0.6 }}>
+        <span>当前帧率</span>
+        <span style={{ color: fps < 30 ? '#ff4444' : fps < 45 ? '#ffaa00' : '#44ff88', fontFamily: 'monospace' }}>
+          {fps} FPS
+        </span>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -222,7 +273,5 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) => {
     </div>
   );
 };
-
-import React, { useState, useRef } from 'react';
 
 export default ControlPanel;

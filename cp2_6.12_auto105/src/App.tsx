@@ -16,6 +16,7 @@ const App: React.FC = () => {
   const [audioLoaded, setAudioLoaded] = useState(false);
   const [spectrumData, setSpectrumData] = useState<SpectrumData | null>(null);
   const [params, setParams] = useState<VisualizerParams>(defaultParams);
+  const [fps, setFps] = useState(60);
   const analyzerRef = useRef<AudioAnalyzer | null>(null);
 
   const handleFileUpload = useCallback(async (file: File) => {
@@ -42,8 +43,8 @@ const App: React.FC = () => {
         <FileUploader onFileAccepted={handleFileUpload} />
       ) : (
         <>
-          <Visualizer spectrumData={spectrumData} params={params} />
-          <ControlPanel params={params} onChange={handleParamChange} />
+          <Visualizer spectrumData={spectrumData} params={params} onFPSUpdate={setFps} />
+          <ControlPanel params={params} onChange={handleParamChange} fps={fps} />
         </>
       )}
     </div>
