@@ -20,8 +20,13 @@ import {
   insertAnswer,
   getAnswersByStudent,
   getQuizStats,
+  getStudentSummary,
   clearSubtitlesByVideo,
+  isDatabaseReady,
+  getDatabaseInfo,
 } from './database.js';
+import { extractAudioAndGenerateSubtitles, type SubtitleSegment } from './subtitleGenerator.js';
+import { generateQuizFromSubtitle, type Quiz, type QuizGenerationOptions } from './quizGenerator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
@@ -33,106 +38,178 @@ const dataDir = path.join(__dirname, '..', '..', 'data');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+app.use((req, _res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    databaseReady: isDatabaseReady(),
+    database: isDatabaseReady() ? getDatabaseInfo() : null,
+    uptime: process.uptime(),
+  });
+});
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname)}`),
-});
-const upload = multer({
-  storage,
-  limits: { fileSize: 200 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ext === '.mp4') cb(null, true);
-    else cb(new Error('Only MP4 files are allowed'));
+  filename: (_req, file, cb) => {
+    const id = uuidv4();
+    cb(null, `${id}${path.extname(file.originalname)}`);
   },
 });
 
-function generateSubtitlesFromVideo(filename: string): { startTime: number; endTime: number; text: string }[] {
-  const sampleTexts = [
-    '欢迎来到本节课程，今天我们将学习数据结构的基本概念',
-    '首先让我们了解什么是数组，数组是一种线性数据结构',
-    '数组在内存中是连续存储的，可以通过索引快速访问元素',
-    '接下来我们讨论链表，链表由节点组成，每个节点包含数据和指针',
-    '与数组不同，链表不需要连续的内存空间',
-    '链表的插入和删除操作比数组更高效',
-    '现在让我们看看栈这种数据结构，栈遵循后进先出的原则',
-    '栈的典型应用包括函数调用栈和表达式求值',
-    '队列是另一种重要的数据结构，遵循先进先出的原则',
-    '队列常用于任务调度和广度优先搜索',
-    '最后我们介绍树结构，树是一种层次型的数据结构',
-    '二叉树是每个节点最多有两个子节点的树结构',
-    '二叉搜索树支持高效的查找、插入和删除操作',
-    '本节课到此结束，感谢大家的聆听',
-  ];
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 200 * 1024 * 1024,
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mimetype = file.mimetype.toLowerCase();
+    if (ext === '.mp4' || mimetype === 'video/mp4') {
+      cb(null, true);
+    } else {
+      cb(new Error('仅支持 MP4 格式的视频文件'));
+    }
+  },
+});
 
-  const subtitles: { startTime: number; endTime: number; text: string }[] = [];
-  const segmentDuration = 5;
+const uploadProgressMap = new Map<string, { progress: number; stage: string; completed: boolean; error?: string }>();
 
-  for (let i = 0; i < sampleTexts.length; i++) {
-    subtitles.push({
-      startTime: i * segmentDuration,
-      endTime: (i + 1) * segmentDuration,
-      text: sampleTexts[i],
-    });
-  }
+app.post('/api/videos/upload', (req, res) => {
+  const uploadHandler = upload.single('video');
 
-  return subtitles;
-}
-
-function generateQuizFromText(subtitleText: string): { question: string; options: string[]; correctIndex: number } {
-  const keywords = subtitleText.split(/[，、，。；]/).filter(s => s.trim().length > 2);
-  const mainPoint = keywords[0] || subtitleText.substring(0, 10);
-
-  const question = `关于"${mainPoint}"，以下哪项描述是正确的？`;
-
-  const correctOption = subtitleText.length > 20 ? subtitleText.substring(0, 20) + '...' : subtitleText;
-
-  const distractors = [
-    `与"${mainPoint}"完全相反的概念`,
-    `"${mainPoint}"的同义词但语义不同`,
-    `无关的扩展概念`,
-  ];
-
-  const options = [correctOption, ...distractors];
-  const correctIndex = 0;
-
-  for (let i = options.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    if (i === correctIndex || j === correctIndex) continue;
-    [options[i], options[j]] = [options[j], options[i]];
-  }
-
-  const newCorrectIndex = options.indexOf(correctOption);
-
-  return { question, options, correctIndex: newCorrectIndex };
-}
-
-app.post('/api/videos/upload', upload.single('video'), (req, res) => {
-  try {
-    if (!req.file) {
-      res.status(400).json({ error: 'No video file provided' });
+  uploadHandler(req, res, async (err) => {
+    if (err) {
+      console.error('Upload error:', err);
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(400).json({ error: '视频文件过大，最大支持 200MB' });
+        return;
+      }
+      res.status(400).json({ error: err.message || '上传失败' });
       return;
     }
 
-    const videoId = uuidv4();
-    const filename = req.file.originalname;
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: '未提供视频文件' });
+        return;
+      }
 
-    insertVideo(videoId, filename);
+      const fileSize = req.file.size;
+      if (fileSize > 200 * 1024 * 1024) {
+        fs.unlinkSync(req.file.path);
+        res.status(400).json({ error: '视频文件过大，最大支持 200MB' });
+        return;
+      }
 
-    const subtitles = generateSubtitlesFromVideo(filename);
+      if (fileSize < 1024) {
+        fs.unlinkSync(req.file.path);
+        res.status(400).json({ error: '视频文件过小，可能已损坏' });
+        return;
+      }
+
+      const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
+      const filename = req.file.originalname;
+
+      uploadProgressMap.set(videoId, { progress: 0.05, stage: '视频上传完成，正在准备处理', completed: false });
+
+      insertVideo(videoId, filename);
+
+      uploadProgressMap.set(videoId, { progress: 0.1, stage: '正在提取音轨并生成字幕', completed: false });
+
+      const estimatedDuration = Math.max(60, Math.min(3600, Math.floor(fileSize / 1024 / 1024 * 5)));
+
+      const { subtitles } = await extractAudioAndGenerateSubtitles(
+        req.file.path,
+        filename,
+        estimatedDuration,
+        { segmentDuration: 5 },
+        (progress, stage) => {
+          uploadProgressMap.set(videoId, { progress, stage, completed: false });
+        }
+      );
+
+      clearSubtitlesByVideo(videoId);
+      const dbSubtitles: SubtitleSegment[] = [];
+      subtitles.forEach((s, index) => {
+        insertSubtitle(videoId, s.startTime, s.endTime, s.text);
+        dbSubtitles.push({ id: index + 1, startTime: s.startTime, endTime: s.endTime, text: s.text });
+      });
+
+      uploadProgressMap.set(videoId, { progress: 1.0, stage: '完成', completed: true });
+
+      setTimeout(() => {
+        uploadProgressMap.delete(videoId);
+      }, 60000);
+
+      res.json({
+        id: videoId,
+        filename,
+        fileSize,
+        estimatedDuration,
+        subtitles: dbSubtitles,
+      });
+    } catch (err) {
+      console.error('Upload processing error:', err);
+      if (req.file && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      }
+      res.status(500).json({ error: err instanceof Error ? err.message : '视频处理失败' });
+    }
+  });
+});
+
+app.get('/api/videos/upload/:videoId/progress', (req, res) => {
+  const progress = uploadProgressMap.get(req.params.videoId);
+  if (!progress) {
+    res.status(404).json({ error: '未找到上传任务' });
+    return;
+  }
+  res.json(progress);
+});
+
+app.post('/api/videos/:id/subtitles/re-generate', async (req, res) => {
+  try {
+    const videoId = req.params.id;
+    const video = getVideo(videoId);
+    if (!video) {
+      res.status(404).json({ error: '视频不存在' });
+      return;
+    }
+
+    const { segmentDuration = 5 } = req.body as { segmentDuration?: number };
+
+    const files = fs.readdirSync(uploadsDir);
+    const videoFile = files.find(f => f.startsWith(videoId));
+    if (!videoFile) {
+      res.status(404).json({ error: '视频文件不存在' });
+      return;
+    }
+
+    const videoPath = path.join(uploadsDir, videoFile);
+    const stats = fs.statSync(videoPath);
+    const estimatedDuration = Math.max(60, Math.min(3600, Math.floor(stats.size / 1024 / 1024 * 5)));
+
+    const { subtitles } = await extractAudioAndGenerateSubtitles(
+      videoPath,
+      video.filename,
+      estimatedDuration,
+      { segmentDuration }
+    );
+
     clearSubtitlesByVideo(videoId);
     subtitles.forEach(s => insertSubtitle(videoId, s.startTime, s.endTime, s.text));
 
-    res.json({
-      id: videoId,
-      filename,
-      subtitles: subtitles.map((s, i) => ({ id: i + 1, startTime: s.startTime, endTime: s.endTime, text: s.text })),
-    });
+    res.json({ subtitles: subtitles.map((s, i) => ({ id: i + 1, startTime: s.startTime, endTime: s.endTime, text: s.text })) });
   } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ error: 'Upload failed' });
+    console.error('Regenerate subtitles error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : '字幕重新生成失败' });
   }
 });
 
@@ -156,38 +233,128 @@ app.get('/api/videos/:id/subtitles', (req, res) => {
 });
 
 app.put('/api/subtitles/:id', (req, res) => {
-  const { text } = req.body as { text: string };
-  updateSubtitleText(Number(req.params.id), text);
-  res.json({ success: true });
+  try {
+    const { text } = req.body as { text: string };
+    if (!text || text.trim().length === 0) {
+      res.status(400).json({ error: '字幕内容不能为空' });
+      return;
+    }
+    updateSubtitleText(Number(req.params.id), text);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '更新字幕失败' });
+  }
 });
 
 app.post('/api/quizzes/generate', (req, res) => {
   try {
-    const { videoId, subtitleText, timePoint } = req.body as { videoId: string; subtitleText: string; timePoint: number };
-    const quiz = generateQuizFromText(subtitleText);
+    const { videoId, subtitleText, timePoint, difficulty = 'medium' } = req.body as {
+      videoId: string;
+      subtitleText: string;
+      timePoint: number;
+      difficulty?: 'easy' | 'medium' | 'hard';
+    };
+
+    if (!subtitleText || subtitleText.trim().length < 5) {
+      res.status(400).json({ error: '字幕内容太短，无法生成题目' });
+      return;
+    }
+
+    const options: QuizGenerationOptions = { difficulty };
+    const generatedQuiz = generateQuizFromSubtitle(subtitleText, options);
     const quizId = uuidv4();
 
-    insertQuiz(quizId, videoId, timePoint, quiz.question, quiz.options, quiz.correctIndex, subtitleText);
+    insertQuiz(
+      quizId,
+      videoId,
+      timePoint,
+      generatedQuiz.question,
+      generatedQuiz.options,
+      generatedQuiz.correctIndex,
+      subtitleText
+    );
 
-    res.json({
+    const quiz: Quiz = {
       id: quizId,
       videoId,
       timePoint,
-      question: quiz.question,
-      options: quiz.options,
-      correctIndex: quiz.correctIndex,
+      question: generatedQuiz.question,
+      options: generatedQuiz.options,
+      correctIndex: generatedQuiz.correctIndex,
       subtitleText,
-    });
+    };
+
+    res.json(quiz);
   } catch (err) {
     console.error('Generate quiz error:', err);
-    res.status(500).json({ error: 'Quiz generation failed' });
+    res.status(500).json({ error: err instanceof Error ? err.message : '题目生成失败' });
+  }
+});
+
+app.post('/api/quizzes/batch-generate', (req, res) => {
+  try {
+    const { videoId, subtitleIds, difficulty = 'medium' } = req.body as {
+      videoId: string;
+      subtitleIds?: number[];
+      difficulty?: 'easy' | 'medium' | 'hard';
+    };
+
+    const subtitles = getSubtitlesByVideo(videoId);
+    const targetSubtitles = subtitleIds
+      ? subtitles.filter(s => subtitleIds.includes(s.id))
+      : subtitles;
+
+    const quizzes: Quiz[] = [];
+    const options: QuizGenerationOptions = { difficulty };
+
+    for (const sub of targetSubtitles) {
+      try {
+        const generated = generateQuizFromSubtitle(sub.text, options);
+        const quizId = uuidv4();
+        insertQuiz(quizId, videoId, sub.start_time, generated.question, generated.options, generated.correctIndex, sub.text);
+        quizzes.push({
+          id: quizId,
+          videoId,
+          timePoint: sub.start_time,
+          question: generated.question,
+          options: generated.options,
+          correctIndex: generated.correctIndex,
+          subtitleText: sub.text,
+        });
+      } catch (e) {
+        console.warn(`Failed to generate quiz for subtitle ${sub.id}:`, e);
+      }
+    }
+
+    res.json({ count: quizzes.length, quizzes });
+  } catch (err) {
+    console.error('Batch generate quiz error:', err);
+    res.status(500).json({ error: '批量生成题目失败' });
   }
 });
 
 app.put('/api/quizzes/:id', (req, res) => {
-  const { question, options, correctIndex } = req.body as { question: string; options: string[]; correctIndex: number };
-  updateQuiz(req.params.id, question, options, correctIndex);
-  res.json({ success: true });
+  try {
+    const { question, options, correctIndex } = req.body as { question: string; options: string[]; correctIndex: number };
+
+    if (!question || question.trim().length < 5) {
+      res.status(400).json({ error: '题目内容太短' });
+      return;
+    }
+    if (!options || options.length < 2) {
+      res.status(400).json({ error: '至少需要两个选项' });
+      return;
+    }
+    if (correctIndex < 0 || correctIndex >= options.length) {
+      res.status(400).json({ error: '正确答案索引无效' });
+      return;
+    }
+
+    updateQuiz(req.params.id, question, options, correctIndex);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '更新题目失败' });
+  }
 });
 
 app.get('/api/videos/:id/quizzes', (req, res) => {
@@ -213,12 +380,22 @@ app.post('/api/answers', (req, res) => {
       isCorrect: boolean;
       answerTime: number;
     };
+
+    if (!quizId || !videoId || !studentId) {
+      res.status(400).json({ error: '缺少必要参数' });
+      return;
+    }
+    if (answerTime < 0 || answerTime > 600) {
+      res.status(400).json({ error: '答题时间无效' });
+      return;
+    }
+
     const answerId = uuidv4();
     insertAnswer(answerId, quizId, videoId, studentId, selectedIndex, isCorrect, answerTime);
     res.json({ id: answerId, success: true });
   } catch (err) {
     console.error('Answer submit error:', err);
-    res.status(500).json({ error: 'Answer submission failed' });
+    res.status(500).json({ error: '答案提交失败' });
   }
 });
 
@@ -241,6 +418,25 @@ app.get('/api/videos/:id/stats', (req, res) => {
   res.json(stats);
 });
 
+app.get('/api/videos/:id/students', (req, res) => {
+  try {
+    const summaries = getStudentSummary(req.params.id);
+    res.json({
+      totalStudents: summaries.length,
+      averageCorrectRate: summaries.length > 0
+        ? summaries.reduce((sum, s) => sum + s.correctRate, 0) / summaries.length
+        : 0,
+      averageTime: summaries.length > 0
+        ? summaries.reduce((sum, s) => sum + s.totalAnswerTime, 0) / summaries.length
+        : 0,
+      students: summaries,
+    });
+  } catch (err) {
+    console.error('Get student summary error:', err);
+    res.status(500).json({ error: '获取学生汇总失败' });
+  }
+});
+
 app.get('/api/video-file/:videoId', (req, res) => {
   const video = getVideo(req.params.videoId);
   if (!video) {
@@ -250,15 +446,41 @@ app.get('/api/video-file/:videoId', (req, res) => {
   const files = fs.readdirSync(uploadsDir);
   const target = files.find(f => f.startsWith(req.params.videoId) || f.includes(req.params.videoId));
   if (target) {
-    res.sendFile(path.join(uploadsDir, target));
-  } else {
-    const anyFile = files.find(f => f.endsWith('.mp4'));
-    if (anyFile) {
-      res.sendFile(path.join(uploadsDir, anyFile));
+    const filePath = path.join(uploadsDir, target);
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(filePath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': 'video/mp4',
+      };
+      res.writeHead(206, head);
+      file.pipe(res);
     } else {
-      res.status(404).json({ error: 'Video file not found' });
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': 'video/mp4',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(filePath).pipe(res);
     }
+  } else {
+    res.status(404).json({ error: 'Video file not found' });
   }
+});
+
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: '服务器内部错误' });
 });
 
 const PORT = 3001;
@@ -267,6 +489,7 @@ async function start() {
   await initDatabase();
   app.listen(PORT, () => {
     console.log(`QuizCraft API server running on http://localhost:${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/api/health`);
   });
 }
 
