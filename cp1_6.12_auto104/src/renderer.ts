@@ -63,6 +63,22 @@ export class Renderer {
       this.drawCountdown(uiState.countdown, uiState.countdownScale);
     }
     this.drawScreenFlashes(combatState.screenFlashes);
+    this.drawControlsHint();
+  }
+
+  private drawControlsHint(): void {
+    this.ctx.save();
+    this.ctx.font = '13px sans-serif';
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'bottom';
+    this.ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+    this.ctx.fillText('Blue Mage: type letters directly', 20, this.height - 40);
+    this.ctx.textAlign = 'right';
+    this.ctx.fillText('Red Mage: hold Shift + type letters', this.width - 20, this.height - 40);
+    this.ctx.textAlign = 'center';
+    this.ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+    this.ctx.fillText('Spell the hidden word to fire magic | 3 correct streaks = Ultimate', this.width / 2, this.height - 15);
+    this.ctx.restore();
   }
 
   private drawBackground(): void {

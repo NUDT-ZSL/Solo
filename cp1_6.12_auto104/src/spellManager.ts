@@ -38,20 +38,31 @@ export class SpellManager {
   }
 
   private shuffle(arr: string[]): string[] {
-    const result = [...arr];
-    for (let i = result.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [result[i], result[j]] = [result[j], result[i]];
-    }
     const original = arr.join('');
-    if (result.join('') === original && result.length > 1) {
-      const allSame = result.every(c => c === result[0]);
-      if (!allSame) {
-        let swapIdx = 1;
-        while (swapIdx < result.length && result[swapIdx] === result[0]) {
-          swapIdx++;
-        }
-        [result[0], result[swapIdx]] = [result[swapIdx], result[0]];
+    const allSame = arr.every(c => c === arr[0]);
+
+    if (arr.length <= 1 || allSame) {
+      return [...arr];
+    }
+
+    const maxAttempts = 10;
+    let result: string[] = [];
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      result = [...arr];
+      for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      if (result.join('') !== original) {
+        return result;
+      }
+    }
+
+    for (let i = 1; i < result.length; i++) {
+      if (result[i] !== result[0]) {
+        [result[0], result[i]] = [result[i], result[0]];
+        break;
       }
     }
     return result;
