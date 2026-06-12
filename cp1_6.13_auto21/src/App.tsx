@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import ReactDOM from 'react-dom/client';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ParticleSystem, ColorTheme } from './particles';
@@ -80,16 +81,6 @@ const App: React.FC = () => {
     sceneRef.current = scene;
 
     createStars(scene);
-
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (context) {
-      const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, '#0a0a2e');
-      gradient.addColorStop(1, '#1a1a3e');
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-    }
 
     const camera = new THREE.PerspectiveCamera(
       60,
@@ -359,6 +350,30 @@ const App: React.FC = () => {
           );
         })}
 
+      {isPaused && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            padding: '12px 28px',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            borderRadius: '6px',
+            color: 'white',
+            fontSize: '18px',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fontWeight: 600,
+            zIndex: 100,
+            pointerEvents: 'none',
+            backdropFilter: 'blur(6px)',
+            letterSpacing: '2px',
+          }}
+        >
+          已暂停 - 按空格键继续
+        </div>
+      )}
+
       <Controls
         speed={speed}
         onSpeedChange={handleSpeedChange}
@@ -369,5 +384,11 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
 
 export default App;

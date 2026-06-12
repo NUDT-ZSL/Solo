@@ -9,7 +9,9 @@ interface ThemeColors {
 
 interface WindPath {
   controlPoints: THREE.Vector3[];
+  originalControlPoints: THREE.Vector3[];
   speed: number;
+  directionOffset: THREE.Vector3;
 }
 
 interface City {
@@ -98,9 +100,14 @@ function generateWindPaths(center: THREE.Vector3, count: number, spread: number)
       center.z + Math.sin(angle) * radius + spread * 0.5
     );
 
+    const controlPoints = [p0, p1, p2, p3];
+    const originalControlPoints = [p0.clone(), p1.clone(), p2.clone(), p3.clone()];
+
     paths.push({
-      controlPoints: [p0, p1, p2, p3],
+      controlPoints,
+      originalControlPoints,
       speed: 0.8 + Math.random() * 0.6,
+      directionOffset: new THREE.Vector3(0, 0, 0),
     });
   }
   return paths;
@@ -137,9 +144,9 @@ export class ParticleSystem {
   private lastFrameTime = performance.now();
   private fpsHistory: number[] = [];
   private degraded = false;
-  private directionUpdateTimer = 0;
+  private directionUpdateAccumulator = 0;
   private baseParticleCount = 2000;
-  private trailLength = 30;
+  private trailMaxPoints = 60;
   private cities: City[];
   private currentCityIndex = 0;
   private animationId: number | null = null;
@@ -217,7 +224,7 @@ export class ParticleSystem {
       sizes[i] = radius;
 
       const history: THREE.Vector3[] = [];
-      for (let j = 0; j < this.trailLength; j++) {
+      for (let j = 0; j < this.trailMaxPoints; j++) {
         history.push(pos.clone());
       }
 
@@ -254,8 +261,8 @@ export class ParticleSystem {
   private createTrails() {
     const particleCount = this.particles.length;
     this.trailGeometry = new THREE.BufferGeometry();
-    const trailPositions = new Float32Array(particleCount * this.trailLength * 2 * 3);
-    const trailColors = new Float32Array(particleCount * this.trailLength * 2 * 3);
+    const trailPositions = new Float32Array(particleCount * (this.trailMaxPoints - 1) * 2 * 3);
+    const trailColors = new Float32Array(particleCount * (this.trailMaxPoints - 1) * 2 * 3);
 
     this.trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
     this.trailGeometry.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
@@ -263,7 +270,7 @@ export class ParticleSystem {
     const trailMaterial = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.6,
+      opacity: 1.0,
       linewidth: 1,
     });
 
@@ -276,11 +283,12 @@ export class ParticleSystem {
 
     const trailPositions = this.trailGeometry.attributes.position.array as Float32Array;
     const trailColors = this.trailGeometry.attributes.color.array as Float32Array;
-    const theme = THEMES[this.currentTheme];
+    const startTheme = THEMES[this.currentTheme];
+    const endTheme = THEMES[this.targetTheme];
 
     this.particles.forEach((particle, i) => {
-      for (let j = 0; j < this.trailLength - 1; j++) {
-        const idx = (i * this.trailLength + j) * 2 * 3;
+      for (let j = 0; j < this.trailMaxPoints - 1; j++) {
+        const idx = (i * (this.trailMaxPoints - 1) + j) * 2 * 3;
         const p1 = particle.history[j];
         const p2 = particle.history[j + 1];
 
@@ -291,14 +299,19 @@ export class ParticleSystem {
         trailPositions[idx + 4] = p2.y;
         trailPositions[idx + 5] = p2.z;
 
-        const alpha = 1 - j / this.trailLength;
-        const color = theme.start.clone().lerp(theme.end, particle.colorOffset);
-        trailColors[idx] = color.r * alpha;
-        trailColors[idx + 1] = color.g * alpha;
-        trailColors[idx + 2] = color.b * alpha;
-        trailColors[idx + 3] = color.r * alpha * 0.8;
-        trailColors[idx + 4] = color.g * alpha * 0.8;
-        trailColors[idx + 5] = color.b * alpha * 0.8;
+        const alpha1 = 0.6 * (1 - j / (this.trailMaxPoints - 1));
+        const alpha2 = 0.6 * (1 - (j + 1) / (this.trailMaxPoints - 1));
+
+        const startColor = startTheme.start.clone().lerp(startTheme.end, particle.colorOffset);
+        const endColor = endTheme.start.clone().lerp(endTheme.end, particle.colorOffset);
+        const lerpedColor = startColor.clone().lerp(endColor, this.themeTransitionProgress);
+
+        trailColors[idx] = lerpedColor.r * alpha1;
+        trailColors[idx + 1] = lerpedColor.g * alpha1;
+        trailColors[idx + 2] = lerpedColor.b * alpha1;
+        trailColors[idx + 3] = lerpedColor.r * alpha2;
+        trailColors[idx + 4] = lerpedColor.g * alpha2;
+        trailColors[idx + 5] = lerpedColor.b * alpha2;
       }
     });
 
@@ -314,9 +327,9 @@ export class ParticleSystem {
     const endTheme = THEMES[this.targetTheme];
 
     this.particles.forEach((particle, i) => {
-      let startColor = startTheme.start.clone().lerp(startTheme.end, particle.colorOffset);
-      let endColor = endTheme.start.clone().lerp(endTheme.end, particle.colorOffset);
-      let finalColor = startColor.clone().lerp(endColor, this.themeTransitionProgress);
+      const startColor = startTheme.start.clone().lerp(startTheme.end, particle.colorOffset);
+      const endColor = endTheme.start.clone().lerp(endTheme.end, particle.colorOffset);
+      const finalColor = startColor.clone().lerp(endColor, this.themeTransitionProgress);
 
       colors[i * 3] = finalColor.r;
       colors[i * 3 + 1] = finalColor.g;
@@ -326,22 +339,14 @@ export class ParticleSystem {
     this.geometry.attributes.color.needsUpdate = true;
   }
 
-  private checkFPS() {
-    const now = performance.now();
-    const delta = now - this.lastFrameTime;
-    this.lastFrameTime = now;
-    const fps = 1000 / delta;
-    this.fpsHistory.push(fps);
+  private checkFrameRate() {
+    if (this.frameCount % 60 !== 0) return;
 
-    if (this.fpsHistory.length > 60) {
-      this.fpsHistory.shift();
-    }
+    if (this.fpsHistory.length < 30) return;
 
-    if (this.frameCount % 60 === 0 && this.fpsHistory.length >= 30) {
-      const avgFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
-      if (avgFPS < 25 && !this.degraded) {
-        this.degrade();
-      }
+    const avgFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+    if (avgFPS < 25 && !this.degraded) {
+      this.degrade();
     }
   }
 
@@ -349,6 +354,26 @@ export class ParticleSystem {
     this.degraded = true;
     this.clear();
     this.createParticles();
+  }
+
+  private updateDirections() {
+    const city = this.cities[this.currentCityIndex];
+    city.windPaths.forEach((path) => {
+      const newOffset = new THREE.Vector3(
+        (Math.random() - 0.5) * 1.5,
+        (Math.random() - 0.5) * 1.0,
+        (Math.random() - 0.5) * 1.5
+      );
+      path.directionOffset.copy(newOffset);
+
+      for (let idx = 0; idx < 4; idx++) {
+        if (idx > 0 && idx < 3) {
+          path.controlPoints[idx].x = path.originalControlPoints[idx].x + newOffset.x;
+          path.controlPoints[idx].y = path.originalControlPoints[idx].y + newOffset.y;
+          path.controlPoints[idx].z = path.originalControlPoints[idx].z + newOffset.z;
+        }
+      }
+    });
   }
 
   private update(deltaTime: number) {
@@ -362,22 +387,14 @@ export class ParticleSystem {
       this.updateColors();
     }
 
+    this.directionUpdateAccumulator += deltaTime;
+    if (this.directionUpdateAccumulator >= 1.0) {
+      this.directionUpdateAccumulator = 0;
+      this.updateDirections();
+    }
+
     const city = this.cities[this.currentCityIndex];
     const positions = this.geometry?.attributes.position.array as Float32Array;
-
-    this.directionUpdateTimer += deltaTime;
-    if (this.directionUpdateTimer >= 1.0) {
-      this.directionUpdateTimer = 0;
-      city.windPaths.forEach((path) => {
-        path.controlPoints.forEach((point, idx) => {
-          if (idx > 0 && idx < 3) {
-            point.x += (Math.random() - 0.5) * 0.5;
-            point.y += (Math.random() - 0.5) * 0.3;
-            point.z += (Math.random() - 0.5) * 0.5;
-          }
-        });
-      });
-    }
 
     this.particles.forEach((particle, i) => {
       const path = city.windPaths[particle.pathIndex];
@@ -400,7 +417,9 @@ export class ParticleSystem {
       positions[i * 3 + 1] = pos.y;
       positions[i * 3 + 2] = pos.z;
 
-      particle.history.pop();
+      if (particle.history.length >= this.trailMaxPoints) {
+        particle.history.pop();
+      }
       particle.history.unshift(pos.clone());
     });
 
@@ -417,17 +436,24 @@ export class ParticleSystem {
     this.animationId = requestAnimationFrame(this.animate);
 
     this.frameCount++;
-    const deltaTime = Math.min(0.1, (performance.now() - this.lastFrameTime) / 1000);
-    this.lastFrameTime = performance.now();
+    const now = performance.now();
+    const deltaTime = Math.min(0.1, (now - this.lastFrameTime) / 1000);
+    const instantFPS = 1000 / (now - this.lastFrameTime);
+    this.lastFrameTime = now;
 
-    this.checkFPS();
+    this.fpsHistory.push(instantFPS);
+    if (this.fpsHistory.length > 60) {
+      this.fpsHistory.shift();
+    }
+
+    this.checkFrameRate();
     this.update(deltaTime);
 
     if (this.isPaused && this.onWindSpeedUpdate) {
       const windSpeeds = this.cities.map((city, idx) => ({
         name: city.name,
         speed: idx === this.currentCityIndex
-          ? this.particles.reduce((sum, p) => sum + p.baseSpeed * this.speedMultiplier, 0) / this.particles.length
+          ? this.particles.reduce((sum, p) => sum + p.baseSpeed * this.speedMultiplier, 0) / Math.max(1, this.particles.length)
           : 0,
         position: city.center.clone(),
       }));
@@ -437,6 +463,7 @@ export class ParticleSystem {
 
   setCity(cityIndex: number) {
     this.currentCityIndex = cityIndex;
+    this.directionUpdateAccumulator = 0;
     this.clear();
     this.createParticles();
     this.animate();
@@ -447,7 +474,10 @@ export class ParticleSystem {
   }
 
   setTheme(theme: ColorTheme) {
-    if (theme === this.currentTheme) return;
+    if (theme === this.currentTheme && this.themeTransitionProgress >= 1.0) return;
+    if (this.themeTransitionProgress < 1.0) {
+      this.currentTheme = this.targetTheme;
+    }
     this.targetTheme = theme;
     this.themeTransitionProgress = 0;
   }
