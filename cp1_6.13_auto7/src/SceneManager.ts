@@ -523,11 +523,10 @@ export class SceneManager {
   private animate = (): void => {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
-    const delta = this.clock.getDelta();
+    const delta = Math.min(this.clock.getDelta(), 0.1);
 
     for (const body of this.bodies.values()) {
       body.angle += body.orbitSpeed * delta * 60;
-      const orbitRadius = body.group.position.length();
 
       const orbitNorm = this.getOrbitRadiusFromBody(body);
       body.group.position.x = Math.cos(body.angle) * orbitNorm;

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { PlanetDetail } from './ApiClient';
+import './UIPanel.css';
 
 interface UIPanelProps {
   planet: PlanetDetail | null;
@@ -18,6 +19,7 @@ export function UIPanel({ planet, onClose }: UIPanelProps) {
   const isResizing = useRef(false);
   const startHeight = useRef(0);
   const startY = useRef(0);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -25,7 +27,9 @@ export function UIPanel({ planet, onClose }: UIPanelProps) {
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   useEffect(() => {
@@ -39,49 +43,37 @@ export function UIPanel({ planet, onClose }: UIPanelProps) {
     }
   }, [planet]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!panelRef.current) return;
-    if ((e.target as HTMLElement).closest('.resize-handle')) return;
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (isResizing.current && isMobile) {
+      const deltaY = startY.current - e.clientY;
+      const newHeight = startHeight.current + deltaY;
+      const minHeight = window.innerHeight * 0.2;
+      const maxHeight = window.innerHeight * 0.8;
+      const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
+      setPanelHeight(`${clampedHeight}px`);
+      return;
+    }
 
-    setIsDragging(true);
-    dragStartPos.current = { x: e.clientX, y: e.clientY };
-    const rect = panelRef.current.getBoundingClientRect();
-    dragStartTop.current = rect.top;
+    if (!isDragging || isMobile) return;
 
-    e.preventDefault();
+    const deltaY = e.clientY - dragStartPos.current.y;
+    const newTop = dragStartTop.current + deltaY;
+    const maxTop = window.innerHeight - 100;
+    const clampedTop = Math.max(0, Math.min(maxTop, newTop));
+
+    setPanelStyle(prev => ({
+      ...prev,
+      top: `${clampedTop}px`,
+      bottom: 'auto',
+    }));
+  }, [isDragging, isMobile]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    isResizing.current = false;
   }, []);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isResizing.current && isMobile) {
-        const deltaY = startY.current - e.clientY;
-        const newHeight = startHeight.current + deltaY;
-        const minHeight = window.innerHeight * 0.2;
-        const maxHeight = window.innerHeight * 0.8;
-        const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
-        setPanelHeight(`${clampedHeight}px`);
-        return;
-      }
-
-      if (!isDragging || isMobile) return;
-
-      const deltaY = e.clientY - dragStartPos.current.y;
-      const newTop = dragStartTop.current + deltaY;
-      const maxTop = window.innerHeight - 100;
-      const clampedTop = Math.max(0, Math.min(maxTop, newTop));
-
-      setPanelStyle(prev => ({
-        ...prev,
-        top: `${clampedTop}px`,
-        bottom: 'auto',
-      }));
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      isResizing.current = false;
-    };
-
     if (isDragging || isResizing.current) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
@@ -91,15 +83,28 @@ export function UIPanel({ planet, onClose }: UIPanelProps) {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isMobile]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const handleResizeStart = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!panelRef.current) return;
+    if ((e.target as HTMLElement).closest('.resize-handle')) return;
+    if ((e.target as HTMLElement).closest('.close-button')) return;
+
+    setIsDragging(true);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    const rect = panelRef.current.getBoundingClientRect();
+    dragStartTop.current = rect.top;
+
+    e.preventDefault();
+  }, []);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
     if (!isMobile) return;
     isResizing.current = true;
     startY.current = e.clientY;
     startHeight.current = panelRef.current?.offsetHeight || 0;
     e.preventDefault();
-  };
+  }, [isMobile]);
 
   if (!isVisible && !planet) return null;
 
@@ -149,14 +154,6 @@ export function UIPanel({ planet, onClose }: UIPanelProps) {
       style={{
         ...baseStyle,
         ...panelStyle,
-        backgroundColor: 'rgba(30, 30, 40, 0.92)',
-        backdropFilter: 'blur(10px)',
-        color: '#fff',
-        padding: '20px',
-        zIndex: 1000,
-        overflowY: 'auto',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-        userSelect: 'none',
       }}
       onMouseDown={handleMouseDown}
     >
@@ -174,35 +171,15 @@ export function UIPanel({ planet, onClose }: UIPanelProps) {
             borderRadius: '3px',
             marginTop: '8px',
             cursor: 'row-resize',
+            zIndex: 10,
           }}
           onMouseDown={handleResizeStart}
         />
       )}
 
       <button
-        style={{
-          position: 'absolute',
-          top: '12px',
-          right: '12px',
-          background: 'none',
-          border: 'none',
-          color: '#fff',
-          fontSize: '20px',
-          cursor: 'pointer',
-          width: '28px',
-          height: '28px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: '4px',
-          transition: 'color 0.2s, background-color 0.2s',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = '#e74c3c';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = '#fff';
-        }}
+        ref={closeBtnRef}
+        className="close-button"
         onClick={onClose}
       >
         ×
@@ -210,71 +187,27 @@ export function UIPanel({ planet, onClose }: UIPanelProps) {
 
       {planet && (
         <>
-          <h2
-            style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              margin: 0,
-              marginBottom: '4px',
-              color: '#fff',
-              paddingRight: '30px',
-            }}
-          >
+          <h2 className="panel-title">
             {planet.name}
           </h2>
 
-          <p
-            style={{
-              fontSize: '14px',
-              color: '#a0a0a0',
-              margin: 0,
-              marginBottom: '12px',
-            }}
-          >
+          <p className="panel-type">
             {planet.type}
           </p>
 
-          <div
-            style={{
-              height: '1px',
-              backgroundColor: '#444',
-              marginBottom: '12px',
-            }}
-          />
+          <div className="panel-divider" />
 
-          <p
-            style={{
-              fontSize: '13px',
-              color: '#bbb',
-              lineHeight: '1.6',
-              margin: 0,
-              marginBottom: '16px',
-            }}
-          >
+          <p className="panel-description">
             {planet.description}
           </p>
 
-          <div
-            style={{
-              height: '1px',
-              backgroundColor: '#444',
-              marginBottom: '12px',
-            }}
-          />
+          <div className="panel-divider" />
 
-          <div>
-            {infoItems.map((item, index) => (
-              <div
-                key={item.label}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '14px',
-                  lineHeight: '28px',
-                }}
-              >
-                <span style={{ color: '#888' }}>{item.label}</span>
-                <span style={{ color: '#fff' }}>{item.value}</span>
+          <div className="panel-info-list">
+            {infoItems.map((item) => (
+              <div key={item.label} className="panel-info-item">
+                <span className="panel-info-label">{item.label}</span>
+                <span className="panel-info-value">{item.value}</span>
               </div>
             ))}
           </div>
