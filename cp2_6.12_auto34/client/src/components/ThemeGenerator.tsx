@@ -47,6 +47,8 @@ const ThemeGenerator: React.FC<ThemeGeneratorProps> = ({ theme, onGenerate, isLo
             width: '100%',
             height: '100%',
             transformStyle: 'preserve-3d',
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
             animation: 'cardRotateScale 0.5s cubic-bezier(0.4, 0, 0.2, 1) both',
           }}
         >
