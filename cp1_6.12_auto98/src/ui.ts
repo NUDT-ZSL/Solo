@@ -123,6 +123,9 @@ function initChart(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  const gradient = createElevationGradient(ctx, canvas.width);
+  const fillGradient = createFillGradient(ctx, canvas.height);
+
   chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
@@ -130,8 +133,8 @@ function initChart(canvas: HTMLCanvasElement): void {
       datasets: [
         {
           data: [],
-          borderColor: '#4fc3f7',
-          backgroundColor: 'rgba(33, 150, 243, 0.2)',
+          borderColor: gradient,
+          backgroundColor: fillGradient,
           fill: true,
           tension: 0.3,
           pointRadius: 0,
@@ -165,6 +168,22 @@ function initChart(canvas: HTMLCanvasElement): void {
   });
 }
 
+function createElevationGradient(ctx: CanvasRenderingContext2D, width: number): CanvasGradient {
+  const gradient = ctx.createLinearGradient(0, 0, width, 0);
+  gradient.addColorStop(0, 'rgba(0, 255, 255, 1)');
+  gradient.addColorStop(0.33, 'rgba(0, 255, 0, 1)');
+  gradient.addColorStop(0.66, 'rgba(255, 255, 0, 1)');
+  gradient.addColorStop(1, 'rgba(255, 0, 0, 1)');
+  return gradient;
+}
+
+function createFillGradient(ctx: CanvasRenderingContext2D, height: number): CanvasGradient {
+  const fillGradient = ctx.createLinearGradient(0, 0, 0, height);
+  fillGradient.addColorStop(0, 'rgba(33, 150, 243, 0.3)');
+  fillGradient.addColorStop(1, 'rgba(33, 150, 243, 0.05)');
+  return fillGradient;
+}
+
 export function updateStats(pathData: PathData): void {
   const distEl = document.getElementById('stat-distance');
   const ascentEl = document.getElementById('stat-ascent');
@@ -184,23 +203,12 @@ export function updateChart(pathData: PathData): void {
     data.push(pathData.elevations[i]);
   }
 
-  const minEle = pathData.minEle;
-  const maxEle = pathData.maxEle;
-  const eleRange = maxEle - minEle || 1;
-
   const canvas = chartInstance.canvas;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
-  gradient.addColorStop(0, 'rgba(0, 255, 255, 0.8)');
-  gradient.addColorStop(0.33, 'rgba(0, 255, 0, 0.8)');
-  gradient.addColorStop(0.66, 'rgba(255, 255, 0, 0.8)');
-  gradient.addColorStop(1, 'rgba(255, 0, 0, 0.8)');
-
-  const fillGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  fillGradient.addColorStop(0, 'rgba(33, 150, 243, 0.3)');
-  fillGradient.addColorStop(1, 'rgba(33, 150, 243, 0.05)');
+  const gradient = createElevationGradient(ctx, canvas.width);
+  const fillGradient = createFillGradient(ctx, canvas.height);
 
   chartInstance.data.labels = labels;
   chartInstance.data.datasets[0].data = data;
