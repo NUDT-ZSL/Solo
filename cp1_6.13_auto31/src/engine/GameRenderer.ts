@@ -1,7 +1,6 @@
 import { GameEngine } from './GameEngine'
 import {
   type LevelElement,
-  type EnemyEntity,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   PLAYER_SIZE,

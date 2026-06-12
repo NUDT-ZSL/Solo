@@ -49,3 +49,5 @@ export const JUMP_HEIGHT = 80
 export const PLAYER_SIZE = 24
 
 export const JUMP_VELOCITY = -Math.sqrt(2 * GRAVITY * JUMP_HEIGHT)
+
+export const DEATH_DURATION = 0.5

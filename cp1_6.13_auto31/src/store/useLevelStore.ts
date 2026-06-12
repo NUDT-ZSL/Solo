@@ -10,7 +10,6 @@ import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   PLAYER_SIZE,
-  JUMP_VELOCITY,
 } from '@/types'
 
 interface LevelStore {
@@ -73,10 +72,12 @@ export const useLevelStore = create<LevelStore>((set, get) => ({
   leftPanelCollapsed: false,
   rightPanelCollapsed: false,
 
-  addElement: (type: ElementType, x: number, y: number) => {
+  addElement: (type: ElementType, centerX: number, centerY: number) => {
     const defaults = ELEMENT_DEFAULTS[type]
-    const snappedX = snapToGrid(x)
-    const snappedY = snapToGrid(y)
+    const leftX = centerX - defaults.width / 2
+    const topY = centerY - defaults.height / 2
+    const snappedX = snapToGrid(leftX)
+    const snappedY = snapToGrid(topY)
     const id = generateId()
 
     if (type === 'slime' || type === 'dragon') {
@@ -92,7 +93,7 @@ export const useLevelStore = create<LevelStore>((set, get) => ({
         patrolInterval: 2,
         pathPoints: [
           { x: snappedX, y: snappedY },
-          { x: snappedX + 120, y: snappedY },
+          { x: snapToGrid(leftX + 120), y: snappedY },
         ],
       }
       set(state => ({ elements: [...state.elements, enemy] }))
