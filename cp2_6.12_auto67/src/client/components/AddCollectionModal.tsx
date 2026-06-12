@@ -87,9 +87,9 @@ const AddCollectionModal = ({ isOpen, onClose, onAdded }: AddCollectionModalProp
           />
 
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
+            exit={{ scale: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             style={{
               position: 'fixed',
@@ -150,9 +150,7 @@ const AddCollectionModal = ({ isOpen, onClose, onAdded }: AddCollectionModalProp
                 <div
                   style={{
                     display: 'flex',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '8px',
-                    padding: '4px',
+                    position: 'relative',
                   }}
                 >
                   {tabs.map((type) => (
@@ -161,16 +159,17 @@ const AddCollectionModal = ({ isOpen, onClose, onAdded }: AddCollectionModalProp
                       onClick={() => setActiveType(type)}
                       style={{
                         flex: 1,
-                        padding: '10px',
+                        padding: '12px',
                         border: 'none',
                         backgroundColor: 'transparent',
                         fontSize: '14px',
-                        fontWeight: 500,
+                        fontWeight: activeType === type ? 600 : 400,
                         cursor: 'pointer',
                         color: activeType === type ? 'var(--primary-purple)' : 'var(--text-gray)',
                         transition: 'color 0.2s ease',
                         position: 'relative',
                         zIndex: 1,
+                        borderBottom: '2px solid transparent',
                       }}
                     >
                       {typeInfo[type].label}
@@ -180,16 +179,15 @@ const AddCollectionModal = ({ isOpen, onClose, onAdded }: AddCollectionModalProp
                 <motion.div
                   animate={{
                     left: tabs.indexOf(activeType) * (100 / tabs.length) + '%',
-                    width: 100 / tabs.length + '%',
                   }}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   style={{
                     position: 'absolute',
-                    bottom: '4px',
-                    height: 'calc(100% - 8px)',
-                    backgroundColor: 'white',
-                    borderRadius: '6px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    bottom: 0,
+                    width: (100 / tabs.length) + '%',
+                    height: '3px',
+                    background: 'linear-gradient(90deg, var(--primary-purple), var(--primary-orange))',
+                    borderRadius: '2px',
                   }}
                 />
               </div>
