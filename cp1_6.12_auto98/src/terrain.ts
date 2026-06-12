@@ -51,8 +51,8 @@ export function buildTerrain(pathData: PathData): TerrainResult {
     const lateral = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
 
     const edgeFactor = (lateralPosition: number): number => {
-      const dist = Math.abs(lateralPosition) / TERRAIN_HALF_WIDTH;
-      return Math.max(0, 1 - dist);
+      const normalizedDist = Math.abs(lateralPosition) / TERRAIN_HALF_WIDTH;
+      return Math.max(0, 1.0 - normalizedDist);
     };
 
     for (let j = 0; j < lateralPositions.length; j++) {
@@ -102,6 +102,11 @@ export function buildTerrain(pathData: PathData): TerrainResult {
   return { mesh, contourLines: contourGroup };
 }
 
+function edgeFactorFor(lateralPosition: number): number {
+  const normalizedDist = Math.abs(lateralPosition) / TERRAIN_HALF_WIDTH;
+  return Math.max(0, 1.0 - normalizedDist);
+}
+
 function buildContourLines(pathData: PathData, lateralPositions: number[]): THREE.Group {
   const group = new THREE.Group();
   const { points, minEle, maxEle } = pathData;
@@ -126,7 +131,7 @@ function buildContourLines(pathData: PathData, lateralPositions: number[]): THRE
 
       for (let s = -halfSteps; s <= halfSteps; s++) {
         const lp = s * MESH_RESOLUTION;
-        const ef = Math.max(0, 1 - Math.abs(lp) / TERRAIN_HALF_WIDTH);
+        const ef = edgeFactorFor(lp);
         const h0 = p0.y * ef;
         const h1 = p1.y * ef;
 
@@ -141,8 +146,8 @@ function buildContourLines(pathData: PathData, lateralPositions: number[]): THRE
       for (let s = -halfSteps; s < halfSteps; s++) {
         const lp0 = s * MESH_RESOLUTION;
         const lp1 = (s + 1) * MESH_RESOLUTION;
-        const ef0 = Math.max(0, 1 - Math.abs(lp0) / TERRAIN_HALF_WIDTH);
-        const ef1 = Math.max(0, 1 - Math.abs(lp1) / TERRAIN_HALF_WIDTH);
+        const ef0 = edgeFactorFor(lp0);
+        const ef1 = edgeFactorFor(lp1);
         const h0 = p0.y * ef0;
         const h1 = p0.y * ef1;
 
