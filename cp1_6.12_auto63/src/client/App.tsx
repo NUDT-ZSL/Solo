@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import InventoryGrid from './components/InventoryGrid.js'
 import ShoppingList from './components/ShoppingList.js'
@@ -14,40 +14,54 @@ export interface InventoryItem {
 
 export interface ShoppingItem {
   id: string
+  itemId: string
   name: string
   quantity: number
   unit: string
+  checked: boolean
   currentStock: number
+  createdAt: number
 }
 
 type Page = 'inventory' | 'shopping'
+
+function useDebounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  return useCallback((...args: Parameters<T>) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => fn(...args), delay)
+  }, [fn, delay])
+}
 
 function App() {
   const [page, setPage] = useState<Page>('inventory')
   const [items, setItems] = useState<InventoryItem[]>([])
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([])
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     const res = await fetch('/api/items')
     const data: InventoryItem[] = await res.json()
     setItems(data)
-  }
+  }, [])
 
-  const fetchShoppingList = async () => {
+  const fetchShoppingList = useCallback(async () => {
     const res = await fetch('/api/shopping-list')
     const data: ShoppingItem[] = await res.json()
     setShoppingItems(data)
-  }
+  }, [])
+
+  const debouncedFetchItems = useDebounce(fetchItems, 100)
+  const debouncedFetchShopping = useDebounce(fetchShoppingList, 100)
 
   useEffect(() => {
     fetchItems()
     fetchShoppingList()
-  }, [])
+  }, [fetchItems, fetchShoppingList])
 
   useEffect(() => {
-    if (page === 'inventory') fetchItems()
-    else fetchShoppingList()
-  }, [page])
+    if (page === 'inventory') debouncedFetchItems()
+    else debouncedFetchShopping()
+  }, [page, debouncedFetchItems, debouncedFetchShopping])
 
   return (
     <div className="app">
@@ -62,6 +76,7 @@ function App() {
           height: 100%;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
             'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+          -webkit-font-smoothing: antialiased;
         }
 
         .app {
@@ -69,6 +84,7 @@ function App() {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           padding: 24px;
           color: #fff;
+          contain: layout style;
         }
 
         .nav {
@@ -82,6 +98,7 @@ function App() {
           border-radius: 16px;
           padding: 8px;
           border: 1px solid rgba(255, 255, 255, 0.2);
+          contain: layout paint;
         }
 
         .nav-btn {
@@ -94,7 +111,8 @@ function App() {
           font-weight: 500;
           border-radius: 12px;
           cursor: pointer;
-          transition: all ease-out 200ms;
+          transition: transform ease-out 200ms, background ease-out 200ms,
+            box-shadow ease-out 200ms, color ease-out 200ms;
           position: relative;
         }
 
@@ -114,6 +132,7 @@ function App() {
         .page-container {
           max-width: 1200px;
           margin: 0 auto;
+          contain: layout paint;
         }
 
         .page-title {
@@ -125,10 +144,10 @@ function App() {
 
         @keyframes pulse-red {
           0%, 100% {
-            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
           }
           50% {
-            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
           }
         }
 
@@ -147,10 +166,18 @@ function App() {
           from {
             opacity: 1;
             transform: translateX(0);
+            max-height: 200px;
+            margin-bottom: 14px;
+            padding-top: 18px;
+            padding-bottom: 18px;
           }
           to {
             opacity: 0;
             transform: translateX(20px);
+            max-height: 0;
+            margin-bottom: 0;
+            padding-top: 0;
+            padding-bottom: 0;
           }
         }
 
@@ -190,16 +217,18 @@ function App() {
         }
       `}</style>
 
-      <nav className="nav">
+      <nav className="nav" role="navigation" aria-label="主导航">
         <button
           className={`nav-btn ${page === 'inventory' ? 'active' : ''}`}
           onClick={() => setPage('inventory')}
+          aria-pressed={page === 'inventory'}
         >
           库存页
         </button>
         <button
           className={`nav-btn ${page === 'shopping' ? 'active' : ''}`}
           onClick={() => setPage('shopping')}
+          aria-pressed={page === 'shopping'}
         >
           购物清单
         </button>
@@ -210,6 +239,7 @@ function App() {
           <InventoryGrid
             items={items}
             onItemsChange={fetchItems}
+            onShoppingListChange={fetchShoppingList}
           />
         ) : (
           <ShoppingList

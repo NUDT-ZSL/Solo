@@ -1,5 +1,4 @@
-import initSqlJs, { Database } from 'sql.js'
-import fs from 'fs'
+import Database from 'better-sqlite3'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -8,60 +7,53 @@ const __dirname = path.dirname(__filename)
 
 const DB_PATH = path.join(__dirname, '..', '..', 'grocery.db')
 
-let db: Database | null = null
+export const db = new Database(DB_PATH)
 
-export async function getDb(): Promise<Database> {
-  if (db) return db
+db.pragma('journal_mode = WAL')
 
-  const SQL = await initSqlJs()
+db.exec(`
+  CREATE TABLE IF NOT EXISTS items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    unit TEXT NOT NULL DEFAULT '个',
+    expiry_date TEXT,
+    created_at INTEGER NOT NULL
+  );
 
-  if (fs.existsSync(DB_PATH)) {
-    const buf = fs.readFileSync(DB_PATH)
-    db = new SQL.Database(buf)
-  } else {
-    db = new SQL.Database()
-  }
+  CREATE INDEX IF NOT EXISTS idx_items_name ON items(name);
+  CREATE INDEX IF NOT EXISTS idx_items_quantity ON items(quantity);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS items (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      quantity INTEGER NOT NULL DEFAULT 0,
-      unit TEXT NOT NULL DEFAULT '个',
-      expiry_date TEXT,
-      created_at INTEGER NOT NULL
-    )
-  `)
+  CREATE TABLE IF NOT EXISTS shopping_list (
+    id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    unit TEXT NOT NULL DEFAULT '个',
+    checked INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+  );
 
-  const existingCheck = db.exec('SELECT COUNT(*) as cnt FROM items')
-  const count = existingCheck[0]?.values[0]?.[0] as number | undefined
+  CREATE INDEX IF NOT EXISTS idx_shopping_item_id ON shopping_list(item_id);
+  CREATE INDEX IF NOT EXISTS idx_shopping_checked ON shopping_list(checked);
+`)
 
-  if (!count || count === 0) {
-    const seedData = [
-      { id: 'seed-1', name: '牛奶', quantity: 3, unit: '盒', expiry_date: '2026-06-15', created_at: 1718000000000 },
-      { id: 'seed-2', name: '鸡蛋', quantity: 6, unit: '个', expiry_date: '2026-06-20', created_at: 1718000000001 },
-      { id: 'seed-3', name: '面包', quantity: 1, unit: '袋', expiry_date: '2026-06-13', created_at: 1718000000002 },
-      { id: 'seed-4', name: '苹果', quantity: 8, unit: '个', expiry_date: '2026-06-18', created_at: 1718000000003 },
-    ]
-    const stmt = db.prepare(
-      'INSERT INTO items (id, name, quantity, unit, expiry_date, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-    )
-    for (const s of seedData) {
-      stmt.run([s.id, s.name, s.quantity, s.unit, s.expiry_date, s.created_at])
-    }
-    stmt.free()
-    saveDb()
-  }
+const seedStmt = db.prepare(`
+  INSERT OR IGNORE INTO items (id, name, quantity, unit, expiry_date, created_at)
+  VALUES (@id, @name, @quantity, @unit, @expiry_date, @created_at)
+`)
 
-  return db
-}
+const seedTransaction = db.transaction((items: Array<{ id: string; name: string; quantity: number; unit: string; expiry_date: string; created_at: number }>) => {
+  for (const item of items) seedStmt.run(item)
+})
 
-export function saveDb() {
-  if (!db) return
-  const data = db.export()
-  const buffer = Buffer.from(data)
-  fs.writeFileSync(DB_PATH, buffer)
-}
+seedTransaction([
+  { id: 'seed-1', name: '牛奶', quantity: 3, unit: '盒', expiry_date: '2026-06-15', created_at: 1718000000000 },
+  { id: 'seed-2', name: '鸡蛋', quantity: 6, unit: '个', expiry_date: '2026-06-20', created_at: 1718000000001 },
+  { id: 'seed-3', name: '面包', quantity: 1, unit: '袋', expiry_date: '2026-06-13', created_at: 1718000000002 },
+  { id: 'seed-4', name: '苹果', quantity: 8, unit: '个', expiry_date: '2026-06-18', created_at: 1718000000003 },
+])
 
 export interface InventoryItemRow {
   id: string
@@ -72,15 +64,14 @@ export interface InventoryItemRow {
   created_at: number
 }
 
-export function rowsToItems(rows: any[][]): InventoryItemRow[] {
-  return rows.map((r) => ({
-    id: String(r[0]),
-    name: String(r[1]),
-    quantity: Number(r[2]),
-    unit: String(r[3]),
-    expiry_date: r[4] ? String(r[4]) : null,
-    created_at: Number(r[5]),
-  }))
+export interface ShoppingListRow {
+  id: string
+  item_id: string
+  name: string
+  quantity: number
+  unit: string
+  checked: number
+  created_at: number
 }
 
 export function rowToItem(row: InventoryItemRow) {
@@ -90,6 +81,19 @@ export function rowToItem(row: InventoryItemRow) {
     quantity: row.quantity,
     unit: row.unit,
     expiryDate: row.expiry_date ?? '',
+    createdAt: row.created_at,
+  }
+}
+
+export function rowToShoppingItem(row: ShoppingListRow & { current_stock?: number }) {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    name: row.name,
+    quantity: row.quantity,
+    unit: row.unit,
+    checked: row.checked === 1,
+    currentStock: row.current_stock ?? 0,
     createdAt: row.created_at,
   }
 }

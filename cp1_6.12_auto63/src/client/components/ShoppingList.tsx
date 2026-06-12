@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback, memo } from 'react'
 import type { ShoppingItem } from '../App.js'
 
 interface Props {
@@ -6,24 +6,68 @@ interface Props {
   onItemsChange: () => void
 }
 
+interface ListItemProps {
+  item: ShoppingItem
+  isRemoving: boolean
+  onCheck: (item: ShoppingItem) => void
+}
+
+const ListItem = memo(function ListItem({ item, isRemoving, onCheck }: ListItemProps) {
+  return (
+    <div
+      className={`list-item ${isRemoving ? 'checked' : ''}`}
+    >
+      <button
+        className={`checkbox ${isRemoving ? 'is-checked' : ''}`}
+        onClick={() => onCheck(item)}
+        aria-label={`标记 ${item.name} 为已购`}
+        disabled={isRemoving}
+        type="button"
+      >
+        {isRemoving && (
+          <svg className="checkbox-check" viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </button>
+      <div className="list-content">
+        <div className="list-name">{item.name}</div>
+        <div className="list-meta">
+          建议采购 {item.quantity} {item.unit} · 当前库存 {item.currentStock}
+        </div>
+      </div>
+      <span className="list-badge">待购</span>
+    </div>
+  )
+})
+
 function ShoppingList({ items, onItemsChange }: Props) {
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
 
-  const handleCheck = async (item: ShoppingItem) => {
-    if (checkedIds.has(item.id)) return
-    setCheckedIds((prev) => new Set(prev).add(item.id))
+  const handleCheck = useCallback(async (item: ShoppingItem) => {
+    if (removingIds.has(item.id)) return
+    setRemovingIds((prev) => new Set(prev).add(item.id))
 
-    await fetch(`/api/items/${item.id}/increment`, { method: 'PATCH' })
+    try {
+      await fetch(`/api/shopping-list/${item.id}/check`, { method: 'PATCH' })
+    } catch (err) {
+      setRemovingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+      return
+    }
 
     setTimeout(() => {
-      setCheckedIds((prev) => {
+      setRemovingIds((prev) => {
         const next = new Set(prev)
         next.delete(item.id)
         return next
       })
       onItemsChange()
-    }, 300)
-  }
+    }, 320)
+  }, [removingIds, onItemsChange])
 
   return (
     <div>
@@ -32,6 +76,7 @@ function ShoppingList({ items, onItemsChange }: Props) {
           display: flex;
           flex-direction: column;
           gap: 14px;
+          contain: layout paint;
         }
 
         .list-item {
@@ -44,7 +89,11 @@ function ShoppingList({ items, onItemsChange }: Props) {
           border: 1px solid rgba(255, 255, 255, 0.2);
           border-radius: 16px;
           padding: 18px 20px;
-          transition: all ease-out 200ms;
+          transition: transform ease-out 200ms, box-shadow ease-out 200ms,
+            background ease-out 200ms;
+          overflow: hidden;
+          contain: content;
+          will-change: transform, opacity;
         }
 
         .list-item:hover {
@@ -53,15 +102,15 @@ function ShoppingList({ items, onItemsChange }: Props) {
         }
 
         .list-item.checked {
-          opacity: 0;
-          transform: translateX(20px);
           animation: slideOut 300ms ease-out forwards;
+          pointer-events: none;
+          overflow: hidden;
         }
 
         .list-item.checked .list-name,
         .list-item.checked .list-meta {
           text-decoration: line-through;
-          color: rgba(255, 255, 255, 0.5) !important;
+          color: rgba(255, 255, 255, 0.45) !important;
         }
 
         .checkbox {
@@ -75,11 +124,12 @@ function ShoppingList({ items, onItemsChange }: Props) {
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: all ease-out 200ms;
+          transition: transform ease-out 200ms, background ease-out 200ms,
+            border-color ease-out 200ms, box-shadow ease-out 200ms;
           padding: 0;
         }
 
-        .checkbox:hover {
+        .checkbox:hover:not(:disabled) {
           transform: translateY(-1px);
           border-color: rgba(255, 255, 255, 0.8);
           background: rgba(255, 255, 255, 0.2);
@@ -88,7 +138,7 @@ function ShoppingList({ items, onItemsChange }: Props) {
 
         .checkbox.is-checked {
           background: rgba(34, 197, 94, 0.6);
-          border-color: rgba(34, 197, 94, 0.8);
+          border-color: rgba(34, 197, 94, 0.85);
         }
 
         .checkbox-check {
@@ -110,13 +160,14 @@ function ShoppingList({ items, onItemsChange }: Props) {
           font-size: 16px;
           font-weight: 600;
           margin-bottom: 4px;
-          transition: all ease-out 200ms;
+          transition: color ease-out 200ms;
+          word-break: break-word;
         }
 
         .list-meta {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.7);
-          transition: all ease-out 200ms;
+          color: rgba(255, 255, 255, 0.72);
+          transition: color ease-out 200ms;
         }
 
         .list-badge {
@@ -128,6 +179,7 @@ function ShoppingList({ items, onItemsChange }: Props) {
           font-weight: 500;
           color: #fef3c7;
           white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .empty {
@@ -164,39 +216,18 @@ function ShoppingList({ items, onItemsChange }: Props) {
         </div>
       ) : (
         <div className="list">
-          {items.map((item) => {
-            const isChecked = checkedIds.has(item.id)
-            return (
-              <div
-                key={item.id}
-                className={`list-item ${isChecked ? 'checked' : ''}`}
-              >
-                <button
-                  className={`checkbox ${isChecked ? 'is-checked' : ''}`}
-                  onClick={() => handleCheck(item)}
-                  aria-label={`标记 ${item.name} 为已购`}
-                  disabled={isChecked}
-                >
-                  {isChecked && (
-                    <svg className="checkbox-check" viewBox="0 0 24 24">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-                <div className="list-content">
-                  <div className="list-name">{item.name}</div>
-                  <div className="list-meta">
-                    建议采购 {item.quantity} {item.unit} · 当前库存 {item.currentStock}
-                  </div>
-                </div>
-                <span className="list-badge">待购</span>
-              </div>
-            )
-          })}
+          {items.map((item) => (
+            <ListItem
+              key={item.id}
+              item={item}
+              isRemoving={removingIds.has(item.id)}
+              onCheck={handleCheck}
+            />
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-export default ShoppingList
+export default memo(ShoppingList)

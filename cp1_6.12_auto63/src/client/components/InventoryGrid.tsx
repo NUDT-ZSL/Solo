@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback, memo } from 'react'
 import type { InventoryItem } from '../App.js'
 
 interface Props {
   items: InventoryItem[]
   onItemsChange: () => void
+  onShoppingListChange: () => void
 }
 
 function isExpiringSoon(expiryDate: string): boolean {
@@ -12,11 +13,44 @@ function isExpiringSoon(expiryDate: string): boolean {
   today.setHours(0, 0, 0, 0)
   const expiry = new Date(expiryDate)
   expiry.setHours(0, 0, 0, 0)
-  const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const diffMs = expiry.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
   return diffDays < 3
 }
 
-function InventoryGrid({ items, onItemsChange }: Props) {
+interface ItemCardProps {
+  item: InventoryItem
+  isNew: boolean
+  onDelete: (id: string) => void
+}
+
+const ItemCard = memo(function ItemCard({ item, isNew, onDelete }: ItemCardProps) {
+  const expiring = isExpiringSoon(item.expiryDate)
+  return (
+    <div
+      className={`card ${expiring ? 'expiring' : ''} ${isNew ? 'is-new' : ''}`}
+    >
+      <div className="card-name">{item.name}</div>
+      <div className="card-quantity">
+        数量：{item.quantity} {item.unit}
+      </div>
+      <div className="card-expiry">
+        {item.expiryDate
+          ? `过期日期：${item.expiryDate}`
+          : '未设置过期日期'}
+      </div>
+      <button
+        className="card-delete"
+        onClick={() => onDelete(item.id)}
+        type="button"
+      >
+        删除
+      </button>
+    </div>
+  )
+})
+
+function InventoryGrid({ items, onItemsChange, onShoppingListChange }: Props) {
   const [showModal, setShowModal] = useState(false)
   const [newItemId, setNewItemId] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -26,7 +60,7 @@ function InventoryGrid({ items, onItemsChange }: Props) {
     expiryDate: '',
   })
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) return
 
@@ -45,13 +79,15 @@ function InventoryGrid({ items, onItemsChange }: Props) {
     setForm({ name: '', quantity: 1, unit: '个', expiryDate: '' })
     setShowModal(false)
     await onItemsChange()
+    onShoppingListChange()
     setTimeout(() => setNewItemId(null), 600)
-  }
+  }, [form, onItemsChange, onShoppingListChange])
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     await fetch(`/api/items/${id}`, { method: 'DELETE' })
     onItemsChange()
-  }
+    onShoppingListChange()
+  }, [onItemsChange, onShoppingListChange])
 
   return (
     <div>
@@ -60,6 +96,7 @@ function InventoryGrid({ items, onItemsChange }: Props) {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
           gap: 20px;
+          contain: layout paint;
         }
 
         .card {
@@ -69,8 +106,11 @@ function InventoryGrid({ items, onItemsChange }: Props) {
           border: 1px solid rgba(255, 255, 255, 0.2);
           border-radius: 16px;
           padding: 20px;
-          transition: all ease-out 200ms;
+          transition: transform ease-out 200ms, box-shadow ease-out 200ms,
+            background ease-out 200ms, border-color ease-out 200ms;
           position: relative;
+          contain: content;
+          will-change: transform;
         }
 
         .card:hover {
@@ -83,9 +123,13 @@ function InventoryGrid({ items, onItemsChange }: Props) {
         }
 
         .card.expiring {
-          background: rgba(239, 68, 68, 0.25);
-          border-color: rgba(239, 68, 68, 0.5);
+          background: rgba(239, 68, 68, 0.28);
+          border-color: rgba(239, 68, 68, 0.55);
           animation: pulse-red 2.5s ease-in-out infinite;
+        }
+
+        .card.expiring:hover {
+          background: rgba(239, 68, 68, 0.38);
         }
 
         .card-name {
@@ -93,11 +137,12 @@ function InventoryGrid({ items, onItemsChange }: Props) {
           font-weight: 600;
           margin-bottom: 8px;
           word-break: break-word;
+          line-height: 1.3;
         }
 
         .card-quantity {
           font-size: 14px;
-          color: rgba(255, 255, 255, 0.85);
+          color: rgba(255, 255, 255, 0.88);
           margin-bottom: 6px;
         }
 
@@ -109,7 +154,7 @@ function InventoryGrid({ items, onItemsChange }: Props) {
 
         .card.expiring .card-expiry {
           color: #fecaca;
-          font-weight: 500;
+          font-weight: 600;
         }
 
         .card-delete {
@@ -121,7 +166,9 @@ function InventoryGrid({ items, onItemsChange }: Props) {
           font-size: 13px;
           font-weight: 500;
           cursor: pointer;
-          transition: all ease-out 200ms;
+          transition: transform ease-out 200ms, background ease-out 200ms,
+            box-shadow ease-out 200ms;
+          min-width: 56px;
         }
 
         .card-delete:hover {
@@ -146,7 +193,8 @@ function InventoryGrid({ items, onItemsChange }: Props) {
           font-weight: 300;
           line-height: 1;
           cursor: pointer;
-          transition: all ease-out 200ms;
+          transition: transform ease-out 200ms, background ease-out 200ms,
+            box-shadow ease-out 200ms;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
           border: 1px solid rgba(255, 255, 255, 0.3);
           z-index: 50;
@@ -197,7 +245,7 @@ function InventoryGrid({ items, onItemsChange }: Props) {
         .form-label {
           display: block;
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.85);
+          color: rgba(255, 255, 255, 0.88);
           margin-bottom: 6px;
           font-weight: 500;
         }
@@ -211,7 +259,8 @@ function InventoryGrid({ items, onItemsChange }: Props) {
           color: #fff;
           font-size: 15px;
           outline: none;
-          transition: all ease-out 200ms;
+          transition: border-color ease-out 200ms, background ease-out 200ms,
+            box-shadow ease-out 200ms;
         }
 
         .form-input::placeholder {
@@ -244,7 +293,9 @@ function InventoryGrid({ items, onItemsChange }: Props) {
           font-size: 15px;
           font-weight: 500;
           cursor: pointer;
-          transition: all ease-out 200ms;
+          transition: transform ease-out 200ms, background ease-out 200ms,
+            box-shadow ease-out 200ms;
+          min-height: 44px;
         }
 
         .btn-cancel {
@@ -300,51 +351,45 @@ function InventoryGrid({ items, onItemsChange }: Props) {
         }
       `}</style>
 
-      <h1 className="page-title" style={{ display: 'none' }}>库存</h1>
-
       {items.length === 0 ? (
         <div className="empty">暂无库存物品，点击右下角按钮添加</div>
       ) : (
         <div className="grid">
           {items.map((item) => (
-            <div
+            <ItemCard
               key={item.id}
-              className={`card ${isExpiringSoon(item.expiryDate) ? 'expiring' : ''} ${item.id === newItemId ? 'is-new' : ''}`}
-            >
-              <div className="card-name">{item.name}</div>
-              <div className="card-quantity">
-                数量：{item.quantity} {item.unit}
-              </div>
-              <div className="card-expiry">
-                {item.expiryDate
-                  ? `过期日期：${item.expiryDate}`
-                  : '未设置过期日期'}
-              </div>
-              <button
-                className="card-delete"
-                onClick={() => handleDelete(item.id)}
-              >
-                删除
-              </button>
-            </div>
+              item={item}
+              isNew={item.id === newItemId}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}
 
-      <button className="fab" onClick={() => setShowModal(true)} aria-label="添加物品">
+      <button
+        className="fab"
+        onClick={() => setShowModal(true)}
+        aria-label="添加物品"
+        type="button"
+      >
         +
       </button>
 
       {showModal && (
-        <div className="modal-overlay" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowModal(false)
-        }}>
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowModal(false)
+          }}
+          role="presentation"
+        >
           <form className="modal" onSubmit={handleSubmit}>
             <div className="modal-title">添加物品</div>
 
             <div className="form-group">
-              <label className="form-label">商品名称</label>
+              <label className="form-label" htmlFor="item-name">商品名称</label>
               <input
+                id="item-name"
                 className="form-input"
                 type="text"
                 placeholder="例如：牛奶"
@@ -357,8 +402,9 @@ function InventoryGrid({ items, onItemsChange }: Props) {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">数量</label>
+                <label className="form-label" htmlFor="item-quantity">数量</label>
                 <input
+                  id="item-quantity"
                   className="form-input"
                   type="number"
                   min="1"
@@ -368,8 +414,9 @@ function InventoryGrid({ items, onItemsChange }: Props) {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">单位</label>
+                <label className="form-label" htmlFor="item-unit">单位</label>
                 <input
+                  id="item-unit"
                   className="form-input"
                   type="text"
                   placeholder="个/盒/袋"
@@ -380,8 +427,9 @@ function InventoryGrid({ items, onItemsChange }: Props) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">过期日期（可选）</label>
+              <label className="form-label" htmlFor="item-expiry">过期日期（可选）</label>
               <input
+                id="item-expiry"
                 className="form-input"
                 type="date"
                 value={form.expiryDate}
@@ -408,4 +456,4 @@ function InventoryGrid({ items, onItemsChange }: Props) {
   )
 }
 
-export default InventoryGrid
+export default memo(InventoryGrid)
