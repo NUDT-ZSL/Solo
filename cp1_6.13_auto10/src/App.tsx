@@ -187,6 +187,12 @@ export default function App() {
 
   const pickEnemy = useCallback(async (e: Enemy) => {
     if (!player) return;
+    await updatePlayer({
+      hp: player.hp,
+      gold: player.gold,
+      stage: player.stage,
+      deck: player.deck,
+    });
     setSelectedEnemy(e);
     const result = runCombat(player, e);
     setCombatResult(result);

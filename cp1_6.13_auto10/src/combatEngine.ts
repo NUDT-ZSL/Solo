@@ -288,6 +288,8 @@ function statusName(type: string): string {
 }
 
 function enemyTurn(state: CombatState) {
+  snapshotFrame(state, `敌人回合开始`);
+
   const tickResult = tickStatusEffects(state.enemyStatusEffects, 'enemy', state);
   state.enemyStatusEffects = tickResult.effects;
   if (tickResult.dotDamage > 0) {
@@ -303,15 +305,33 @@ function enemyTurn(state: CombatState) {
     return;
   }
 
-  const rawDmg = state.enemyAtk;
-  applyDamageToTarget(state, 'player', rawDmg, 'enemy');
-  snapshotFrame(state, `敌人攻击造成${rawDmg}点伤害`, {
-    floatingNumber: { value: `-${rawDmg}`, position: 'player', color: '#ef4444' },
-  });
+  const roll = Math.random();
+  if (roll < 0.2) {
+    const shieldGain = Math.round(state.enemyDef * 1.5 + state.enemyAtk * 0.3 + 3);
+    state.enemyShield += shieldGain;
+    snapshotFrame(state, `敌人进入防御姿态，获得${shieldGain}点护盾`, {
+      floatingNumber: { value: `+${shieldGain}护盾`, position: 'enemy', color: '#22c55e' },
+    });
+  } else {
+    const baseDmg = state.enemyAtk;
+    const dmgVar = Math.round((Math.random() * 0.4 - 0.2) * baseDmg);
+    const rawDmg = Math.max(1, baseDmg + dmgVar);
+    applyDamageToTarget(state, 'player', rawDmg, 'enemy');
+    snapshotFrame(state, `敌人攻击造成${rawDmg}点伤害`, {
+      floatingNumber: { value: `-${rawDmg}`, position: 'player', color: '#ef4444' },
+    });
 
-  if (state.enemyEffect && ['burn', 'poison'].includes(state.enemyEffect.type)) {
-    state.playerStatusEffects = addStatusEffect(state.playerStatusEffects, state.enemyEffect);
-    snapshotFrame(state, `玩家附加${statusName(state.enemyEffect.type)}效果`);
+    if (state.enemyEffect && state.enemyEffect.type === 'lifesteal') {
+      const healAmt = Math.round(rawDmg * state.enemyEffect.value);
+      state.enemyHp = Math.min(state.enemyMaxHp, state.enemyHp + healAmt);
+      snapshotFrame(state, `敌人吸血恢复${healAmt}点生命`, {
+        floatingNumber: { value: `+${healAmt}`, position: 'enemy', color: '#10b981' },
+      });
+    }
+    if (state.enemyEffect && ['burn', 'poison'].includes(state.enemyEffect.type)) {
+      state.playerStatusEffects = addStatusEffect(state.playerStatusEffects, state.enemyEffect);
+      snapshotFrame(state, `玩家附加${statusName(state.enemyEffect.type)}效果`);
+    }
   }
 }
 

@@ -36,7 +36,7 @@ export default function CardSelectionModal({
               <button
                 key={card.uid || card.id}
                 className={`rc-card selectable rarity-${card.rarity}`}
-                style={{ borderColor, boxShadow: `0 0 14px ${border}66` }}
+                style={{ borderColor: border, boxShadow: `0 0 14px ${border}66` }}
                 onClick={() => onSelect(card)}
               >
                 <div className="rc-card-cost">
