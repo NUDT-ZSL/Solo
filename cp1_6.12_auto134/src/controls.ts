@@ -589,21 +589,21 @@ export class Controls {
 
   private bindRendererEvents(): void {
     this.renderer.setOnFpsUpdate((fps) => {
-      const fpsEl = this.statusBar.querySelector('.status-fps');
+      const fpsEl = this.statusBar.querySelector('.status-fps') as HTMLElement | null;
       if (fpsEl) {
         fpsEl.textContent = `FPS: ${fps}`;
         if (fps < 30) {
           fpsEl.style.color = '#ff6b6b';
-          (fpsEl as HTMLElement).style.animation = 'fpsBlink 1s infinite';
+          fpsEl.style.animation = 'fpsBlink 1s infinite';
         } else {
           fpsEl.style.color = '#3fb950';
-          (fpsEl as HTMLElement).style.animation = 'none';
+          fpsEl.style.animation = 'none';
         }
       }
     });
     
     this.renderer.setOnPointCountUpdate((count) => {
-      const pointsEl = this.statusBar.querySelector('.status-points');
+      const pointsEl = this.statusBar.querySelector('.status-points') as HTMLElement | null;
       if (pointsEl) {
         pointsEl.textContent = `顶点数: ${count.toLocaleString()}`;
       }

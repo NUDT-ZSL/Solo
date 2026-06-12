@@ -1,28 +1,34 @@
 import type { PointCloudRenderer } from './pointCloudRenderer';
 
-export function exportToPLY(renderer: PointCloudRenderer, filename?: string): void {
+export function exportToPLY(
+  renderer: PointCloudRenderer,
+  filename?: string
+): { success: boolean; message?: string } {
   const data = renderer.getPointData();
   if (!data || data.count === 0) {
-    showErrorToast('没有可导出的点云数据，请先上传深度图');
-    return;
+    showErrorToast('没有可导出的点云数据，请先上传并解析深度图');
+    return { success: false, message: 'no data' };
   }
 
   try {
-    const plyContent = generatePLYContent(data.positions, data.colors, data.count);
-    triggerDownload(plyContent, filename || `pointcloud_${Date.now()}.ply`);
-    showSuccessToast(`成功导出 ${data.count.toLocaleString()} 个顶点`);
+    const ply = buildPLYAscii(data.positions, data.colors, data.count);
+    downloadBlob(ply, filename || `pointcloud_${formatDate()}.ply`);
+    showSuccessToast(`成功导出 ${data.count.toLocaleString()} 个顶点 → PLY`);
+    return { success: true };
   } catch (e) {
-    console.error('PLY导出失败:', e);
-    showErrorToast('导出失败，请重试');
+    console.error('[exporter] 导出失败:', e);
+    const msg = e instanceof Error ? e.message : '未知错误';
+    showErrorToast(`导出失败：${msg}`);
+    return { success: false, message: msg };
   }
 }
 
-function generatePLYContent(
+function buildPLYAscii(
   positions: Float32Array,
   colors: Float32Array,
   count: number
 ): string {
-  const header = [
+  const header: string[] = [
     'ply',
     'format ascii 1.0',
     `element vertex ${count}`,
@@ -33,95 +39,103 @@ function generatePLYContent(
     'property uchar green',
     'property uchar blue',
     'end_header',
-    '',
-  ].join('\n');
+  ];
 
-  const vertices: string[] = [];
-  vertices.reserve = function(n: number) { this.length = n; return this; }.call(vertices, count);
-
+  const lines: string[] = new Array(count);
   for (let i = 0; i < count; i++) {
     const i3 = i * 3;
-    
-    const x = positions[i3].toFixed(6);
-    const y = positions[i3 + 1].toFixed(6);
-    const z = positions[i3 + 2].toFixed(6);
-    
-    const r = Math.round(Math.max(0, Math.min(255, colors[i3] * 255)));
-    const g = Math.round(Math.max(0, Math.min(255, colors[i3 + 1] * 255)));
-    const b = Math.round(Math.max(0, Math.min(255, colors[i3 + 2] * 255)));
-    
-    vertices[i] = `${x} ${y} ${z} ${r} ${g} ${b}`;
+    const x = positions[i3];
+    const y = positions[i3 + 1];
+    const z = positions[i3 + 2];
+
+    const rf = Math.max(0, Math.min(1, colors[i3]));
+    const gf = Math.max(0, Math.min(1, colors[i3 + 1]));
+    const bf = Math.max(0, Math.min(1, colors[i3 + 2]));
+    const r = (rf * 255 + 0.5) | 0;
+    const g = (gf * 255 + 0.5) | 0;
+    const b = (bf * 255 + 0.5) | 0;
+
+    lines[i] = `${x.toFixed(6)} ${y.toFixed(6)} ${z.toFixed(6)} ${r} ${g} ${b}`;
   }
 
-  return header + vertices.join('\n') + '\n';
+  return header.join('\n') + '\n' + lines.join('\n') + '\n';
 }
 
-function triggerDownload(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+function downloadBlob(text: string, filename: string) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.style.display = 'none';
-  
-  document.body.appendChild(link);
-  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
   try {
-    link.click();
+    a.click();
   } finally {
     setTimeout(() => {
-      document.body.removeChild(link);
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    }, 100);
+    }, 150);
   }
 }
 
-function showToast(message: string, type: 'success' | 'error'): void {
-  const existingToast = document.querySelector('.toast-notification');
-  if (existingToast) {
-    existingToast.remove();
+function formatDate(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+let toastEl: HTMLDivElement | null = null;
+let toastTimer: number | null = null;
+
+function showToast(message: string, type: 'ok' | 'err') {
+  if (toastEl) {
+    toastEl.remove();
+    toastEl = null;
+  }
+  if (toastTimer !== null) {
+    window.clearTimeout(toastTimer);
+    toastTimer = null;
   }
 
-  const toast = document.createElement('div');
-  toast.className = 'toast-notification';
-  toast.textContent = message;
-  
-  const bgColor = type === 'success' ? '#3fb950' : '#f85149';
-  
-  toast.style.cssText = `
-    position: fixed;
-    top: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(-100px);
-    padding: 12px 24px;
-    background: ${bgColor};
-    color: white;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 1000;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  const el = document.createElement('div');
+  el.textContent = message;
+  const color =
+    type === 'ok'
+      ? 'linear-gradient(135deg, #2ea043 0%, #3fb950 100%)'
+      : 'linear-gradient(135deg, #da3633 0%, #f85149 100%)';
+  el.style.cssText = `
+    position: fixed; top: 28px; left: 50%;
+    transform: translateX(-50%) translateY(-120%);
+    padding: 12px 22px; background: ${color}; color: #fff;
+    border-radius: 12px; font-size: 13px; font-weight: 600;
+    z-index: 9999; box-shadow: 0 6px 24px rgba(0,0,0,0.4);
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    pointer-events: none;
+    pointer-events: none; max-width: 92vw; text-align: center;
+    letter-spacing: 0.2px;
   `;
-  
-  document.body.appendChild(toast);
-  
+  document.body.appendChild(el);
+  toastEl = el;
+
   requestAnimationFrame(() => {
-    toast.style.transform = 'translateX(-50%) translateY(0)';
+    el.style.transform = 'translateX(-50%) translateY(0)';
   });
-  
-  setTimeout(() => {
-    toast.style.transform = 'translateX(-50%) translateY(-100px)';
-    setTimeout(() => toast.remove(), 400);
-  }, 3000);
+  toastTimer = window.setTimeout(() => {
+    el.style.transform = 'translateX(-50%) translateY(-120%)';
+    toastTimer = window.setTimeout(() => {
+      if (toastEl === el) {
+        el.remove();
+        toastEl = null;
+      }
+    }, 450);
+  }, 3200);
 }
 
-function showSuccessToast(message: string): void {
-  showToast(message, 'success');
+function showSuccessToast(msg: string) {
+  showToast(`✓ ${msg}`, 'ok');
 }
 
-function showErrorToast(message: string): void {
-  showToast(message, 'error');
+function showErrorToast(msg: string) {
+  showToast(`⚠ ${msg}`, 'err');
 }
