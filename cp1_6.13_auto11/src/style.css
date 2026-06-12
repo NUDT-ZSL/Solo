@@ -40,12 +40,12 @@ body {
   border-radius: 8px;
   background-color: #3b82f6;
   color: white;
-  border: none;
+  border: 2px solid transparent;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
   font-family: 'Inter', sans-serif;
-  transition: background-color 0.2s ease, transform 0.15s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .upload-btn:hover {
@@ -56,10 +56,13 @@ body {
   transform: scale(0.97);
 }
 
-.upload-zone-dragging {
+.upload-btn.dragging {
   border: 2px dashed #60a5fa !important;
-  background-color: rgba(59, 130, 246, 0.1) !important;
-  transform: scale(1.05);
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  transform: scale(1.08);
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.15),
+    0 0 24px rgba(96, 165, 250, 0.35);
+  color: #93c5fd;
 }
 
 .canvas-container {
@@ -89,11 +92,14 @@ body {
 
 .modal-box {
   width: 500px;
-  background-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
-  animation: scaleIn 0.3s ease;
+  animation: scaleIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modal-title {

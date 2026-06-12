@@ -150,6 +150,28 @@ function App() {
     }
   }
 
+  const handleUploadBtnDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleUploadBtnDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleUploadBtnDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) {
+      await processFile(file)
+    }
+  }
+
   return (
     <div
       onDragOver={handleDragOver}
@@ -170,14 +192,13 @@ function App() {
             </button>
           )}
           <button
-            className={`upload-btn ${isDragging ? 'upload-zone-dragging' : ''}`}
+            className={`upload-btn ${isDragging ? 'dragging' : ''}`}
             onClick={handleUploadClick}
-            style={{
-              border: isDragging ? '2px dashed #60a5fa' : 'none',
-              transition: 'all 0.2s ease',
-            }}
+            onDragOver={handleUploadBtnDragOver}
+            onDragLeave={handleUploadBtnDragLeave}
+            onDrop={handleUploadBtnDrop}
           >
-            上传 .txt 文件
+            {isDragging ? '释放以上传' : '上传 .txt 文件'}
           </button>
           <input
             ref={fileInputRef}

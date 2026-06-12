@@ -12,6 +12,9 @@ const MIN_ZOOM = 0.5
 const MAX_ZOOM = 3.0
 const ROTATION_DAMPING = 0.1
 const RESET_DURATION = 0.8
+const HELIX_RADIUS = 1.0
+const BASES_PER_TURN = 10
+const STEP_Z = 0.34
 
 export class DNAVisualizer {
   private container: HTMLElement
@@ -252,6 +255,21 @@ export class DNAVisualizer {
   private createBackbone(basePairs: BasePairData[]): void {
     if (basePairs.length < 2) return
 
+    const segmentCount = (basePairs.length - 1) * 2
+    const avgStep = STEP_Z
+    const helixRisePerBase = Math.sqrt(
+      (2 * HELIX_RADIUS * Math.sin(Math.PI / BASES_PER_TURN)) ** 2 +
+        avgStep * avgStep,
+    )
+
+    const cylinderGeometry = new THREE.CylinderGeometry(
+      BACKBONE_RADIUS,
+      BACKBONE_RADIUS,
+      1,
+      BACKBONE_RADIAL_SEGMENTS,
+      1,
+    )
+
     const material = new THREE.MeshStandardMaterial({
       color: 0x8899aa,
       transparent: true,
@@ -259,6 +277,16 @@ export class DNAVisualizer {
       roughness: 0.5,
       metalness: 0.2,
     })
+
+    const instancedMesh = new THREE.InstancedMesh(
+      cylinderGeometry,
+      material,
+      segmentCount,
+    )
+
+    const dummy = new THREE.Object3D()
+    const upVector = new THREE.Vector3(0, 1, 0)
+    let instanceIndex = 0
 
     for (let strand = 0; strand < 2; strand++) {
       for (let i = 0; i < basePairs.length - 1; i++) {
@@ -271,25 +299,22 @@ export class DNAVisualizer {
         const end = new THREE.Vector3(next.x, next.y, next.z)
 
         const dir = new THREE.Vector3().subVectors(end, start)
-        const len = dir.length()
+        const len = dir.length() || helixRisePerBase
 
-        const geometry = new THREE.CylinderGeometry(
-          BACKBONE_RADIUS,
-          BACKBONE_RADIUS,
-          len,
-          BACKBONE_RADIAL_SEGMENTS,
-          1,
+        dummy.position.copy(start.clone().add(end).multiplyScalar(0.5))
+        dummy.scale.set(1, len, 1)
+        dummy.quaternion.setFromUnitVectors(
+          upVector,
+          dir.length() > 0 ? dir.clone().normalize() : upVector,
         )
-
-        const cylinder = new THREE.Mesh(geometry, material)
-        cylinder.position.copy(start.clone().add(end).multiplyScalar(0.5))
-        cylinder.quaternion.setFromUnitVectors(
-          new THREE.Vector3(0, 1, 0),
-          dir.clone().normalize(),
-        )
-        this.dnaGroup!.add(cylinder)
+        dummy.updateMatrix()
+        instancedMesh.setMatrixAt(instanceIndex, dummy.matrix)
+        instanceIndex++
       }
     }
+
+    instancedMesh.instanceMatrix.needsUpdate = true
+    this.dnaGroup!.add(instancedMesh)
   }
 
   private createHydrogenBonds(basePairs: BasePairData[]): void {
