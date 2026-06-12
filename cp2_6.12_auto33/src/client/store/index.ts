@@ -41,7 +41,7 @@ function calculateUnreadCount(received: ExchangeRequest[]): number {
   return received.reduce((count, req) => (req.read === 0 ? count + 1 : count), 0);
 }
 
-const CURRENT_USER_ID = 'user_2';
+const CURRENT_USER_ID = import.meta.env.VITE_CURRENT_USER_ID || 'user_2';
 
 export const useAppStore = create<AppState>((set, get) => ({
   currentUser: null,
@@ -56,9 +56,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   initApp: async () => {
     set({ loading: true, initError: null });
     try {
+      const userId = CURRENT_USER_ID;
+      if (!userId) {
+        set({ loading: false, initError: '未配置当前用户' });
+        return;
+      }
       const [user, requestsResponse] = await Promise.all([
-        getUser(CURRENT_USER_ID),
-        getExchangeRequests(CURRENT_USER_ID),
+        getUser(userId),
+        getExchangeRequests(userId),
       ]);
       const merged = mergeAndSortRequests(
         requestsResponse.received,
@@ -78,8 +83,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshRequests: async () => {
+    const userId = get().currentUser?.id || CURRENT_USER_ID;
+    if (!userId) return;
     try {
-      const requestsResponse = await getExchangeRequests(CURRENT_USER_ID);
+      const requestsResponse = await getExchangeRequests(userId);
       const merged = mergeAndSortRequests(
         requestsResponse.received,
         requestsResponse.sent,
@@ -140,6 +147,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
     } catch (error) {
       console.error('全部已读失败:', error);
+      throw error;
     }
   },
 }));

@@ -214,6 +214,7 @@ export default function NotificationBell() {
   const [isActive, setIsActive] = useState(false);
   const [bounceKey, setBounceKey] = useState(0);
   const [markAllLoading, setMarkAllLoading] = useState(false);
+  const [markAllError, setMarkAllError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const prevUnreadRef = useRef(unreadCount);
 
@@ -258,8 +259,12 @@ export default function NotificationBell() {
   const handleMarkAllClick = async () => {
     if (markAllLoading) return;
     setMarkAllLoading(true);
+    setMarkAllError(false);
     try {
       await markAllAsRead();
+    } catch {
+      setMarkAllError(true);
+      setTimeout(() => setMarkAllError(false), 3000);
     } finally {
       setMarkAllLoading(false);
     }
@@ -331,6 +336,7 @@ export default function NotificationBell() {
                 style={{
                   ...styles.markAllBtn,
                   ...(markAllLoading ? styles.markAllBtnDisabled : {}),
+                  ...(markAllError ? { color: '#e53935' } : {}),
                 }}
                 onClick={handleMarkAllClick}
                 disabled={markAllLoading}
@@ -344,7 +350,7 @@ export default function NotificationBell() {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
                 }}
               >
-                {markAllLoading ? '标记中' : '全部已读'}
+                {markAllError ? '操作失败，重试' : markAllLoading ? '标记中' : '全部已读'}
               </button>
             )}
           </div>

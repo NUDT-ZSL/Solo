@@ -216,6 +216,7 @@ function HomePage() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevStatusRef = useRef<Record<string, Furniture['status']>>({});
+  const isFirstRender = useRef(true);
 
   const fetchFurniture = useCallback(
     async (category: string, keyword: string) => {
@@ -223,7 +224,8 @@ function HomePage() {
       try {
         const params: { category?: string; keyword?: string } = {};
         if (category && category !== 'all') params.category = category;
-        if (keyword) params.keyword = keyword;
+        if (keyword && keyword.trim()) params.keyword = keyword.trim();
+
         const data = await getFurniture(params);
 
         data.forEach((item) => {
@@ -249,6 +251,13 @@ function HomePage() {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
+
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      fetchFurniture(selectedCategory, searchKeyword);
+      return;
+    }
+
     debounceRef.current = setTimeout(() => {
       fetchFurniture(selectedCategory, searchKeyword);
     }, 300);

@@ -66,7 +66,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     width: '100%',
     height: '100%',
-    transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+    transition: 'transform 0.3s ease-in-out',
   },
   carouselSlide: {
     minWidth: '100%',
@@ -103,7 +103,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0 2px 12px rgba(90, 74, 58, 0.15)',
-    opacity: 0.4,
+    opacity: 0.5,
     transition: 'opacity 0.3s ease, transform 0.3s ease',
     color: '#5a4a3a',
     zIndex: 2,

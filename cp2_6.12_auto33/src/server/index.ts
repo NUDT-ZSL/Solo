@@ -524,6 +524,23 @@ app.get('/api/furniture/:id/reviews', (req, res) => {
   res.json(rows);
 });
 
+function normalizeImages(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((item): item is string => typeof item === 'string');
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === 'string');
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 app.post('/api/furniture', (req, res) => {
   const { name, category, size, years, city, timeRange, images, userId } = req.body;
 
@@ -531,9 +548,17 @@ app.post('/api/furniture', (req, res) => {
     return res.status(400).json({ error: '缺少必填字段' });
   }
 
+  const normalizedImages = normalizeImages(images);
+  if (normalizedImages.length === 0) {
+    return res.status(400).json({ error: 'images 必须为包含至少一个字符串 URL 的数组' });
+  }
+  if (normalizedImages.length > 3) {
+    return res.status(400).json({ error: 'images 最多上传 3 张图片' });
+  }
+
   const id = `fur_${uuidv4().replace(/-/g, '').slice(0, 8)}`;
   const createdAt = Date.now();
-  const imagesJson = JSON.stringify(images || []);
+  const imagesJson = JSON.stringify(normalizedImages);
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
   if (!user) {
