@@ -7,7 +7,6 @@ import {
   GRID_ROWS,
   CELL_SIZE,
   MATERIAL_CONFIGS,
-  MAX_PARTICLES,
 } from '../types';
 
 interface CanvasProps {

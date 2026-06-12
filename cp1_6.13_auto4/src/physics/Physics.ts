@@ -12,7 +12,7 @@ import {
   PARTICLE_LIFETIME,
 } from '../types';
 
-const { Engine, World, Bodies, Body, Events, Composite } = Matter;
+const { Engine, World, Bodies, Body, Events } = Matter;
 
 export interface PhysicsCallbacks {
   onPositionUpdate: (blocks: Map<string, { x: number; y: number; angle: number }>) => void;
@@ -30,6 +30,8 @@ export class PhysicsEngine {
   private isRunning: boolean = false;
   private hasActiveCollisions: boolean = false;
   private occupiedPositions: Set<string> = new Set();
+  private collisionStartHandler: ((event: Matter.IEventCollision<Matter.Engine>) => void) | null = null;
+  private collisionEndHandler: (() => void) | null = null;
 
   constructor(callbacks: PhysicsCallbacks) {
     this.engine = Engine.create();
@@ -60,7 +62,7 @@ export class PhysicsEngine {
   }
 
   private setupCollisionListeners(): void {
-    Events.on(this.engine, 'collisionStart', (event) => {
+    this.collisionStartHandler = (event: Matter.IEventCollision<Matter.Engine>) => {
       const particles: Particle[] = [];
       const now = performance.now();
 
@@ -94,11 +96,14 @@ export class PhysicsEngine {
       if (particles.length > 0) {
         this.callbacks.onCollision(particles);
       }
-    });
+    };
 
-    Events.on(this.engine, 'collisionEnd', () => {
+    this.collisionEndHandler = () => {
       this.hasActiveCollisions = false;
-    });
+    };
+
+    Events.on(this.engine, 'collisionStart', this.collisionStartHandler);
+    Events.on(this.engine, 'collisionEnd', this.collisionEndHandler);
   }
 
   public addBlock(block: BlockData): boolean {
@@ -130,15 +135,9 @@ export class PhysicsEngine {
     if (body) {
       World.remove(this.world, body);
       this.bodies.delete(blockId);
-      const allBodies = Composite.allBodies(this.world);
-      for (const b of allBodies) {
-        if (!b.isStatic && b.label === blockId) {
-          const gridX = Math.round((b.position.x - CELL_SIZE / 2) / CELL_SIZE);
-          const gridY = Math.round((b.position.y - CELL_SIZE / 2) / CELL_SIZE);
-          this.occupiedPositions.delete(`${gridX},${gridY}`);
-          break;
-        }
-      }
+      const gridX = Math.round((body.position.x - CELL_SIZE / 2) / CELL_SIZE);
+      const gridY = Math.round((body.position.y - CELL_SIZE / 2) / CELL_SIZE);
+      this.occupiedPositions.delete(`${gridX},${gridY}`);
       return blockId;
     }
     return null;
@@ -178,12 +177,27 @@ export class PhysicsEngine {
     this.occupiedPositions.clear();
     this.stableFrameCount = 0;
     this.hasActiveCollisions = false;
+  }
+
+  public destroy(): void {
+    this.stop();
+
+    if (this.collisionStartHandler) {
+      Events.off(this.engine, 'collisionStart', this.collisionStartHandler);
+      this.collisionStartHandler = null;
+    }
+    if (this.collisionEndHandler) {
+      Events.off(this.engine, 'collisionEnd', this.collisionEndHandler);
+      this.collisionEndHandler = null;
+    }
+
+    for (const body of this.bodies.values()) {
+      World.remove(this.world, body);
+    }
+    this.bodies.clear();
+    this.occupiedPositions.clear();
+
     Engine.clear(this.engine);
-    this.engine = Engine.create();
-    this.world = this.engine.world;
-    this.engine.gravity.y = GRAVITY;
-    this.createBoundaries();
-    this.setupCollisionListeners();
   }
 
   public start(): void {
