@@ -54,6 +54,11 @@ async function initIndexes() {
   await db.exchanges.ensureIndex({ fieldName: 'fromUserId' });
   await db.exchanges.ensureIndex({ fieldName: 'toUserId' });
   await db.messages.ensureIndex({ fieldName: 'exchangeId' });
+  await db.messages.ensureIndex({ fieldName: 'fromUserId' });
+  await db.messages.ensureIndex({ fieldName: 'toUserId' });
+  await db.messages.ensureIndex({ fieldName: 'createdAt' });
+  await db.exchanges.ensureIndex({ fieldName: 'createdAt' });
+  await db.skills.ensureIndex({ fieldName: 'createdAt' });
 }
 
 async function seedData() {
