@@ -4,10 +4,8 @@ import { GameRenderer } from './renderer'
 import { LayoutGenerator } from './layoutGenerator'
 import {
   GameState,
-  Star,
   Asteroid,
   TrailPoint,
-  TargetRing,
   DEFAULT_PHYSICS_CONFIG,
 } from './types'
 
@@ -221,7 +219,7 @@ export class GameEngine {
 
     const count = this.state.trails.length
     for (let i = 0; i < count; i++) {
-      this.state.trails[i].alpha = 0.8 * (i / (count - 1))
+      this.state.trails[i].alpha = 0.8 * (1 - i / Math.max(count - 1, 1))
     }
   }
 
@@ -265,4 +263,25 @@ export class GameEngine {
   }
 
   private render(time: number): void {
-    this.render
+    this.renderer.render(
+      this.state.stars,
+      this.state.asteroid,
+      this.state.trails,
+      this.state.targets,
+      this.state.fuel <= 0,
+      this.state.showScorePopup,
+      this.state.scorePopupTime,
+      time
+    )
+  }
+
+  public resize(width: number, height: number): void {
+    this.canvas.width = width
+    this.canvas.height = height
+    this.renderer.resize(width, height)
+  }
+
+  public getState(): GameState {
+    return { ...this.state }
+  }
+}

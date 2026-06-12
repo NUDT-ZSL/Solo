@@ -7,6 +7,10 @@ export class PhysicsEngine {
     this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config }
   }
 
+  private getEffectiveDistance(distance: number): number {
+    return Math.max(distance, this.config.minDistance)
+  }
+
   public calculateGravityForce(
     asteroid: Asteroid,
     stars: Star[]
@@ -17,17 +21,14 @@ export class PhysicsEngine {
     for (const star of stars) {
       const dx = star.x - asteroid.x
       const dy = star.y - asteroid.y
-      const distanceSq = dx * dx + dy * dy
-      const distance = Math.sqrt(distanceSq)
+      const distance = Math.sqrt(dx * dx + dy * dy)
 
       if (distance > star.gravityRadius) {
         continue
       }
 
-      const effectiveDistance = Math.max(distance, this.config.minDistance)
-      const effectiveDistanceSq = effectiveDistance * effectiveDistance
-
-      const acceleration = star.mass / effectiveDistanceSq
+      const effectiveDistance = this.getEffectiveDistance(distance)
+      const acceleration = star.mass / (effectiveDistance * effectiveDistance)
 
       if (distance > 0) {
         totalForceX += (dx / distance) * acceleration
