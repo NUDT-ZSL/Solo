@@ -71,3 +71,23 @@ export interface SavedConfig {
   runeIds: string[];
   createdAt: number;
 }
+
+export interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+  success: boolean;
+}
+
+export interface CalculateRequest {
+  runeIds: string[];
+}
+
+export interface SaveConfigRequest {
+  name: string;
+  runeIds: string[];
+}
+
+export interface HealthCheckResponse {
+  status: string;
+  service: string;
+}
