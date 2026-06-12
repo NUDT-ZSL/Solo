@@ -15,6 +15,7 @@ interface CanvasProps {
 
 export interface CanvasHandle {
   resetAircraft: () => void;
+  setAircraftState: (position: { x: number; y: number }, angle: number) => void;
 }
 
 interface Particle {
@@ -41,6 +42,15 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           position: { x: width / 2, y: height / 2 },
           velocity: { x: 0, y: 0 },
           angle: 0,
+          thrust: 0,
+        };
+        onAircraftStateChange(aircraftRef.current);
+      },
+      setAircraftState: (position: { x: number; y: number }, angle: number) => {
+        aircraftRef.current = {
+          position: { ...position },
+          velocity: { x: 0, y: 0 },
+          angle: angle,
           thrust: 0,
         };
         onAircraftStateChange(aircraftRef.current);
@@ -264,17 +274,22 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
           ctx.stroke();
         }
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         for (const p of particlesRef.current) {
-          for (let i = 0; i < p.trail.length; i++) {
-            const t = p.trail[i];
-            const alpha = (i / p.trail.length) * 0.6;
-            ctx.globalAlpha = alpha;
+          if (p.trail.length > 1) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 1.5;
+            ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.arc(t.x, t.y, 1.5, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(p.trail[0].x, p.trail[0].y);
+            for (let i = 1; i < p.trail.length; i++) {
+              const alpha = i / p.trail.length;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+              ctx.lineTo(p.trail[i].x, p.trail[i].y);
+            }
+            ctx.stroke();
           }
           ctx.globalAlpha = 0.9;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
           ctx.beginPath();
           ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
           ctx.fill();

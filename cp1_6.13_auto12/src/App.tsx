@@ -113,8 +113,12 @@ function App() {
   const handleLoadConfig = (config: Config) => {
     setNodes(config.nodes || []);
     setSelectedNodeId(null);
+    const startPos = config.aircraftStart || { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, angle: 0 };
     setTimeout(() => {
-      canvasRef.current?.resetAircraft();
+      canvasRef.current?.setAircraftState(
+        { x: startPos.x, y: startPos.y },
+        startPos.angle
+      );
     }, 0);
   };
 
