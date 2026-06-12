@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
-import { Draggable } from 'react-beautiful-dnd';
+import React, { useState, useEffect, useRef } from 'react';
+import { Draggable, DraggableProvided, DraggableStateSnapshot } from 'react-beautiful-dnd';
 import { LinkItem, tagColors } from '../data/sampleData';
 
 interface LinkCardProps {
   link: LinkItem;
   index: number;
-  onShare?: (link: LinkItem, type: 'copy' | 'social') => void;
+  onShare?: (link: LinkItem, type: ShareAction) => void;
   isNew?: boolean;
 }
 
-const getFaviconUrl = (url: string) => {
+type ShareAction = 'copy' | 'social';
+
+interface ShareMenuState {
+  visible: boolean;
+  closing: boolean;
+}
+
+const getFaviconUrl = (url: string): string => {
   try {
     const hostname = new URL(url).hostname;
     return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
@@ -19,8 +26,18 @@ const getFaviconUrl = (url: string) => {
 };
 
 export const LinkCard: React.FC<LinkCardProps> = ({ link, index, onShare, isNew }) => {
-  const [showMenu, setShowMenu] = useState(false);
+  const [showMenu, setShowMenu] = useState<ShareMenuState>({ visible: false, closing: false });
   const [imgError, setImgError] = useState(false);
+  const [animateIn, setAnimateIn] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isNew) {
+      requestAnimationFrame(() => {
+        setAnimateIn(true);
+      });
+    }
+  }, [isNew]);
 
   const getTagColor = (tag: string) => {
     let hash = 0;
@@ -33,28 +50,34 @@ export const LinkCard: React.FC<LinkCardProps> = ({ link, index, onShare, isNew 
   const handleShareClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setShowMenu(!showMenu);
+    if (showMenu.visible && !showMenu.closing) {
+      setShowMenu({ visible: true, closing: true });
+      setTimeout(() => setShowMenu({ visible: false, closing: false }), 200);
+    } else if (!showMenu.visible) {
+      setShowMenu({ visible: true, closing: false });
+    }
   };
 
-  const handleMenuAction = (type: 'copy' | 'social', e: React.MouseEvent) => {
+  const handleMenuAction = (type: ShareAction, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     onShare?.(link, type);
-    setShowMenu(false);
+    setShowMenu({ visible: true, closing: true });
+    setTimeout(() => setShowMenu({ visible: false, closing: false }), 200);
   };
 
   return (
     <Draggable draggableId={link.id} index={index}>
-      {(provided, snapshot) => (
+      {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className={`${isNew ? 'fade-in' : ''}`}
+          className={animateIn ? 'fade-in' : ''}
           style={{
             ...provided.draggableProps.style,
             transform: snapshot.isDragging
-              ? (provided.draggableProps.style as any)?.transform
+              ? (provided.draggableProps.style as React.CSSProperties)?.transform
               : undefined,
             transition: 'all 400ms cubic-bezier(0.4, 0, 0.2, 1)',
           }}
@@ -64,7 +87,7 @@ export const LinkCard: React.FC<LinkCardProps> = ({ link, index, onShare, isNew 
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
-              if (showMenu) {
+              if (showMenu.visible) {
                 e.preventDefault();
                 e.stopPropagation();
               }
@@ -213,7 +236,7 @@ export const LinkCard: React.FC<LinkCardProps> = ({ link, index, onShare, isNew 
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
                 </button>
-                {showMenu && (
+                {showMenu.visible && (
                   <div
                     onClick={(e) => e.stopPropagation()}
                     style={{
@@ -226,7 +249,9 @@ export const LinkCard: React.FC<LinkCardProps> = ({ link, index, onShare, isNew 
                       padding: '6px',
                       minWidth: '140px',
                       zIndex: 100,
-                      animation: 'fadeIn 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      opacity: showMenu.closing ? 0 : 1,
+                      transform: showMenu.closing ? 'translateY(4px) scale(0.96)' : 'translateY(0) scale(1)',
+                      transition: 'opacity 200ms cubic-bezier(0.4, 0, 0.2, 1), transform 200ms cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
                   >
                     <button

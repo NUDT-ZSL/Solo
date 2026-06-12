@@ -40,10 +40,10 @@ export function useCollections() {
     return links.filter(l => l.categoryId === categoryId);
   }, [links]);
 
-  const getCategoryLinkCount = useCallback((categoryId: string) => {
+  const getCategoryLinkCount = (categoryId: string): number => {
     if (categoryId === 'all') return links.length;
     return links.filter(l => l.categoryId === categoryId).length;
-  }, [links]);
+  };
 
   const reorderLinks = useCallback((
     startIndex: number,

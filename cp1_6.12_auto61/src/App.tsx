@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { DragDropContext, Droppable, DropResult } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable, DropResult, DragUpdate } from 'react-beautiful-dnd';
 import { useCollections } from './hooks/useCollections';
 import { CollectionGrid } from './components/CollectionGrid';
 import { AddLinkModal } from './components/AddLinkModal';
@@ -123,9 +123,9 @@ const App: React.FC = () => {
     }
   }, [handleMoveToCategory, handleReorder]);
 
-  const handleDragUpdate = useCallback((update: any) => {
+  const handleDragUpdate = useCallback((update: DragUpdate) => {
     const { destination } = update;
-    if (destination?.droppableId.startsWith('nav-category-')) {
+    if (destination && destination.droppableId.startsWith('nav-category-')) {
       setDragOverCategory(destination.droppableId.replace('nav-category-', ''));
     } else {
       setDragOverCategory(null);

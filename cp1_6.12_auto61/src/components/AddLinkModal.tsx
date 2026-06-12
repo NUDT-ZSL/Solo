@@ -133,6 +133,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       if (!isValidUrl(validUrl)) {
         newErrors.url = true;
         triggerShake('url');
+        setErrors(newErrors);
         return;
       }
     }
@@ -291,13 +292,19 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 ...(errors.title && shakeField === 'title' ? { borderBottomColor: '#e53935' } : {}),
               }}
               onFocus={(e) => {
-                if (!errors.title) {
+                if (errors.title) {
+                  (e.currentTarget as HTMLInputElement).style.borderColor = '#e53935';
+                  (e.currentTarget as HTMLInputElement).style.boxShadow = '0 0 0 3px rgba(229, 57, 53, 0.1)';
+                } else {
                   (e.currentTarget as HTMLInputElement).style.borderColor = '#1A237E';
                   (e.currentTarget as HTMLInputElement).style.boxShadow = '0 0 0 3px rgba(26, 35, 126, 0.08)';
                 }
               }}
               onBlur={(e) => {
-                if (!errors.title) {
+                if (errors.title) {
+                  (e.currentTarget as HTMLInputElement).style.borderColor = '#e53935';
+                  (e.currentTarget as HTMLInputElement).style.boxShadow = 'none';
+                } else {
                   (e.currentTarget as HTMLInputElement).style.borderColor = '#E0E0E0';
                   (e.currentTarget as HTMLInputElement).style.boxShadow = 'none';
                 }
@@ -344,13 +351,19 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 boxSizing: 'border-box',
               }}
               onFocus={(e) => {
-                if (!errors.url) {
+                if (errors.url) {
+                  (e.currentTarget as HTMLInputElement).style.borderColor = '#e53935';
+                  (e.currentTarget as HTMLInputElement).style.boxShadow = '0 0 0 3px rgba(229, 57, 53, 0.1)';
+                } else {
                   (e.currentTarget as HTMLInputElement).style.borderColor = '#1A237E';
                   (e.currentTarget as HTMLInputElement).style.boxShadow = '0 0 0 3px rgba(26, 35, 126, 0.08)';
                 }
               }}
               onBlur={(e) => {
-                if (!errors.url) {
+                if (errors.url) {
+                  (e.currentTarget as HTMLInputElement).style.borderColor = '#e53935';
+                  (e.currentTarget as HTMLInputElement).style.boxShadow = 'none';
+                } else {
                   (e.currentTarget as HTMLInputElement).style.borderColor = '#E0E0E0';
                   (e.currentTarget as HTMLInputElement).style.boxShadow = 'none';
                 }

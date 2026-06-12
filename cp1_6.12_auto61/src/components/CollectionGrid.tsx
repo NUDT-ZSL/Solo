@@ -1,5 +1,5 @@
 import React from 'react';
-import { Droppable } from 'react-beautiful-dnd';
+import { Droppable, DroppableProvided, DroppableStateSnapshot } from 'react-beautiful-dnd';
 import { LinkItem, Category } from '../data/sampleData';
 import { LinkCard } from './LinkCard';
 
@@ -65,28 +65,8 @@ export const CollectionGrid: React.FC<CollectionGridProps> = ({
           <Droppable
             droppableId={droppableId}
             direction="vertical"
-            renderClone={(provided, snapshot, rubric) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.draggableProps}
-                style={{
-                  ...provided.draggableProps.style,
-                  transform: (provided.draggableProps.style as any)?.transform,
-                  transition: snapshot.isDragging
-                    ? 'none'
-                    : 'transform 400ms cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <LinkCard
-                  link={links[rubric.source.index]}
-                  index={rubric.source.index}
-                  onShare={onShare}
-                  isNew={links[rubric.source.index].id === newLinkId}
-                />
-              </div>
-            )}
           >
-            {(provided, snapshot) => (
+            {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
               <div
                 ref={provided.innerRef}
                 {...provided.droppableProps}
