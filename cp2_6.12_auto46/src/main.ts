@@ -43,16 +43,14 @@ class App {
     })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(window.innerWidth, window.innerHeight)
-    this.renderer.setClearColor(0x0a0a1a, 1)
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.2
+    this.renderer.setClearColor(0x0a0a2e, 1)
 
     this.container.appendChild(this.renderer.domElement)
 
-    this.ambientLight = new THREE.AmbientLight(0x404060, 0.4)
+    this.ambientLight = new THREE.AmbientLight(0x404060, 0.5)
     this.scene.add(this.ambientLight)
 
-    this.pointLight = new THREE.PointLight(0xffffff, 1.5, 200)
+    this.pointLight = new THREE.PointLight(0xffffff, 2, 200)
     this.pointLight.position.set(0, 0, 0)
     this.scene.add(this.pointLight)
 
@@ -78,8 +76,7 @@ class App {
     const geometry = new THREE.BufferGeometry()
     const positions = new Float32Array(count * 3)
     const colors = new Float32Array(count * 3)
-    const sizes = new Float32Array(count)
-    const twinkleSpeeds = new Float32Array(count)
+    const twinkleData = new Float32Array(count * 2)
 
     for (let i = 0; i < count; i++) {
       const radius = 150 + Math.random() * 100
@@ -90,25 +87,24 @@ class App {
       positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta)
       positions[i * 3 + 2] = radius * Math.cos(phi)
 
-      const brightness = 0.5 + Math.random() * 0.5
+      const brightness = 0.6 + Math.random() * 0.4
       colors[i * 3] = brightness
       colors[i * 3 + 1] = brightness
-      colors[i * 3 + 2] = brightness * (0.9 + Math.random() * 0.2)
+      colors[i * 3 + 2] = brightness * (0.9 + Math.random() * 0.15)
 
-      sizes[i] = 0.5 + Math.random() * 1.5
-      twinkleSpeeds[i] = 0.5 + Math.random() * 2
+      twinkleData[i * 2] = 0.5 + Math.random() * 2
+      twinkleData[i * 2 + 1] = Math.random() * Math.PI * 2
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
-    geometry.setAttribute('twinkleSpeed', new THREE.BufferAttribute(twinkleSpeeds, 1))
+    geometry.setAttribute('twinkleData', new THREE.BufferAttribute(twinkleData, 2))
 
     const material = new THREE.PointsMaterial({
-      size: 1,
+      size: 1.5,
       vertexColors: true,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       sizeAttenuation: false
@@ -123,25 +119,29 @@ class App {
   private updateStarField(delta: number): void {
     const time = performance.now() * 0.001
     const geometry = this.starField.geometry
-    const sizes = geometry.attributes.size.array as Float32Array
-    const baseSizes = geometry.attributes.size.array as Float32Array
-    const twinkleSpeeds = geometry.attributes.twinkleSpeed.array as Float32Array
+    const colors = geometry.attributes.color.array as Float32Array
+    const twinkleData = geometry.attributes.twinkleData.array as Float32Array
+    const baseColors = geometry.attributes.color.array as Float32Array
 
-    for (let i = 0; i < sizes.length; i++) {
-      const twinkle = Math.sin(time * twinkleSpeeds[i] + i) * 0.3 + 0.7
-      sizes[i] = baseSizes[i] * twinkle
+    for (let i = 0; i < twinkleData.length / 2; i++) {
+      const speed = twinkleData[i * 2]
+      const offset = twinkleData[i * 2 + 1]
+      const twinkle = Math.sin(time * speed + offset) * 0.3 + 0.7
+
+      colors[i * 3] = baseColors[i * 3] * twinkle
+      colors[i * 3 + 1] = baseColors[i * 3 + 1] * twinkle
+      colors[i * 3 + 2] = baseColors[i * 3 + 2] * twinkle
     }
 
-    geometry.attributes.size.needsUpdate = true
+    geometry.attributes.color.needsUpdate = true
 
-    this.starField.rotation.y += delta * 0.005
+    this.starField.rotation.y += delta * 0.01
   }
 
   private handleResize(): void {
     this.camera.aspect = window.innerWidth / window.innerHeight
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(window.innerWidth, window.innerHeight)
-    this.interactionController.resize()
   }
 
   private animate(): void {
@@ -154,9 +154,9 @@ class App {
     const cameraDistance = this.interactionController.getCameraDistance()
     this.particleSystem.update(delta, cameraDistance)
 
-    this.interactionController.update(delta, this.scene)
+    this.interactionController.update(delta)
 
-    const lightPulse = Math.sin(performance.now() * 0.001) * 0.2 + 1.3
+    const lightPulse = Math.sin(performance.now() * 0.001) * 0.3 + 1.7
     this.pointLight.intensity = lightPulse
 
     this.renderer.render(this.scene, this.camera)

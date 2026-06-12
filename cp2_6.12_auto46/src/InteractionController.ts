@@ -2,15 +2,8 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { ParticleSystem, ParticleMode } from './ParticleSystem'
 
-interface BackgroundColor {
-  spiral: THREE.Color
-  sphere: THREE.Color
-  explosion: THREE.Color
-  random: THREE.Color
-}
-
 export class InteractionController {
-  private camera: THREE.Camera
+  private camera: THREE.PerspectiveCamera
   private renderer: THREE.WebGLRenderer
   private particleSystem: ParticleSystem
   private controls: OrbitControls
@@ -25,19 +18,24 @@ export class InteractionController {
   private frameCount = 0
   private lastFpsUpdate = 0
   private currentFps = 60
+  private scene: THREE.Scene
   private currentBackgroundColor: THREE.Color
   private targetBackgroundColor: THREE.Color
-  private backgroundColors: BackgroundColor = {
-    spiral: new THREE.Color(0x0a0a1a),
+  private backgroundColors: Record<ParticleMode, THREE.Color> = {
+    spiral: new THREE.Color(0x0a0a2e),
     sphere: new THREE.Color(0x1a0a2e),
     explosion: new THREE.Color(0x2e0a1a),
     random: new THREE.Color(0x0a1a2e)
   }
   private lastMouseMove = 0
-  private mouseMoveThrottle = 16
+  private mouseMoveThrottle = 8
+  private isDragging = false
+  private mouseDownTime = 0
+  private mouseDownPos = { x: 0, y: 0 }
+  private infoPanelVisible = false
 
   constructor(
-    camera: THREE.Camera,
+    camera: THREE.PerspectiveCamera,
     renderer: THREE.WebGLRenderer,
     particleSystem: ParticleSystem,
     scene: THREE.Scene
@@ -45,24 +43,25 @@ export class InteractionController {
     this.camera = camera
     this.renderer = renderer
     this.particleSystem = particleSystem
+    this.scene = scene
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
-    this.controls.dampingFactor = 0.95
+    this.controls.dampingFactor = 0.05
     this.controls.minDistance = 10
     this.controls.maxDistance = 100
     this.controls.enablePan = false
-    this.controls.rotateSpeed = 0.5
+    this.controls.rotateSpeed = 0.6
     this.controls.zoomSpeed = 0.8
 
     this.raycaster = new THREE.Raycaster()
-    this.raycaster.params.Points.threshold = 2
+    this.raycaster.params.Points.threshold = 1.5
 
     this.mouse = new THREE.Vector2()
 
     this.currentBackgroundColor = this.backgroundColors.spiral.clone()
     this.targetBackgroundColor = this.backgroundColors.spiral.clone()
-    scene.background = this.currentBackgroundColor
+    this.scene.background = this.currentBackgroundColor
 
     const infoPanel = document.getElementById('info-panel')
     const fpsCounter = document.getElementById('fps-counter')
@@ -84,8 +83,12 @@ export class InteractionController {
   }
 
   private setupEventListeners(): void {
-    this.renderer.domElement.addEventListener('mousemove', this.handleMouseMove.bind(this))
-    this.renderer.domElement.addEventListener('click', this.handleClick.bind(this))
+    const canvas = this.renderer.domElement
+
+    canvas.addEventListener('mousemove', this.handleMouseMove.bind(this))
+    canvas.addEventListener('mousedown', this.handleMouseDown.bind(this))
+    canvas.addEventListener('mouseup', this.handleMouseUp.bind(this))
+    canvas.addEventListener('click', this.handleClick.bind(this))
     window.addEventListener('resize', this.handleResize.bind(this))
     document.addEventListener('click', this.handleDocumentClick.bind(this))
 
@@ -93,9 +96,28 @@ export class InteractionController {
       button.addEventListener('click', (e) => {
         e.stopPropagation()
         const mode = button.getAttribute('data-mode') as ParticleMode
-        this.switchMode(mode)
+        if (mode) {
+          this.switchMode(mode)
+        }
       })
     })
+  }
+
+  private handleMouseDown(e: MouseEvent): void {
+    this.isDragging = false
+    this.mouseDownTime = performance.now()
+    this.mouseDownPos = { x: e.clientX, y: e.clientY }
+  }
+
+  private handleMouseUp(): void {
+    const elapsed = performance.now() - this.mouseDownTime
+    if (elapsed < 200) {
+      const dx = 0
+      const dy = 0
+      if (dx < 5 && dy < 5) {
+        this.isDragging = false
+      }
+    }
   }
 
   private handleMouseMove(e: MouseEvent): void {
@@ -107,7 +129,22 @@ export class InteractionController {
     this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
 
-    this.checkHover()
+    const dx = Math.abs(e.clientX - this.mouseDownPos.x)
+    const dy = Math.abs(e.clientY - this.mouseDownPos.y)
+    if (dx > 5 || dy > 5) {
+      this.isDragging = true
+    }
+
+    if (!this.isDragging) {
+      this.checkHover()
+    } else {
+      if (this.hoveredParticleIndex !== null) {
+        this.particleSystem.resetHighlight()
+        this.particleSystem.setRepelCenter(null)
+        this.hoveredParticleIndex = null
+        document.body.style.cursor = 'grabbing'
+      }
+    }
   }
 
   private checkHover(): void {
@@ -127,6 +164,9 @@ export class InteractionController {
         this.particleSystem.setRepelCenter(point)
 
         document.body.style.cursor = 'pointer'
+      } else if (index !== undefined) {
+        const point = intersects[0].point
+        this.particleSystem.setRepelCenter(point)
       }
     } else {
       if (this.hoveredParticleIndex !== null) {
@@ -139,7 +179,10 @@ export class InteractionController {
   }
 
   private handleClick(e: MouseEvent): void {
-    if (this.controls.getState() !== undefined) return
+    if (this.isDragging) {
+      this.isDragging = false
+      return
+    }
 
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
@@ -157,8 +200,21 @@ export class InteractionController {
     }
   }
 
-  private handleDocumentClick(): void {
-    if (this.selectedParticleIndex !== null) {
+  private handleDocumentClick(e: MouseEvent): void {
+    const target = e.target as HTMLElement
+    if (this.infoPanel.contains(target)) {
+      return
+    }
+    
+    let isModeButton = false
+    this.modeButtons.forEach(btn => {
+      if (btn.contains(target)) {
+        isModeButton = true
+      }
+    })
+    if (isModeButton) return
+
+    if (this.infoPanelVisible) {
       this.hideInfoPanel()
     }
   }
@@ -183,15 +239,34 @@ export class InteractionController {
       velocityElement.textContent = data.velocity.length().toFixed(4)
     }
 
-    this.infoPanel.classList.remove('hidden', 'slide-out')
+    this.infoPanel.style.transition = 'none'
+    this.infoPanel.style.transform = 'translateX(100px)'
+    this.infoPanel.style.opacity = '0'
+    this.infoPanel.classList.remove('hidden')
+    this.infoPanel.style.pointerEvents = 'auto'
+
+    requestAnimationFrame(() => {
+      this.infoPanel.style.transition = ''
+      requestAnimationFrame(() => {
+        this.infoPanel.style.transform = 'translateX(0)'
+        this.infoPanel.style.opacity = '1'
+        this.infoPanelVisible = true
+      })
+    })
   }
 
   private hideInfoPanel(): void {
-    this.infoPanel.classList.add('slide-out')
+    this.infoPanel.style.transform = 'translateX(-100px)'
+    this.infoPanel.style.opacity = '0'
+    this.infoPanel.style.pointerEvents = 'none'
+    this.infoPanelVisible = false
+
     setTimeout(() => {
-      this.infoPanel.classList.add('hidden')
-      this.infoPanel.classList.remove('slide-out')
+      if (!this.infoPanelVisible) {
+        this.infoPanel.classList.add('hidden')
+      }
     }, 300)
+
     this.selectedParticleIndex = null
   }
 
@@ -218,18 +293,18 @@ export class InteractionController {
     if (container) {
       const width = container.clientWidth
       const height = container.clientHeight
-      ;(this.camera as THREE.PerspectiveCamera).aspect = width / height
-      ;(this.camera as THREE.PerspectiveCamera).updateProjectionMatrix()
+      this.camera.aspect = width / height
+      this.camera.updateProjectionMatrix()
       this.renderer.setSize(width, height)
     }
   }
 
-  update(delta: number, scene: THREE.Scene): void {
+  update(delta: number): void {
     this.controls.update()
     this.updateFPS()
-    this.updateBackgroundColor(scene, delta)
+    this.updateBackgroundColor(delta)
 
-    if (this.hoveredParticleIndex !== null) {
+    if (this.hoveredParticleIndex !== null && !this.isDragging) {
       const data = this.particleSystem.getParticleData(this.hoveredParticleIndex)
       if (data) {
         this.particleSystem.setRepelCenter(data.position)
@@ -256,20 +331,28 @@ export class InteractionController {
     }
   }
 
-  private updateBackgroundColor(scene: THREE.Scene, delta: number): void {
-    const colorSpeed = 2
+  private updateBackgroundColor(delta: number): void {
+    const colorSpeed = 1.5
     this.currentBackgroundColor.lerp(this.targetBackgroundColor, delta * colorSpeed)
-    scene.background = this.currentBackgroundColor.clone()
+    this.scene.background = this.currentBackgroundColor.clone()
+
+    const fogColor = this.currentBackgroundColor.clone().multiplyScalar(0.5)
+    if (this.scene.fog) {
+      (this.scene.fog as THREE.FogExp2).color.copy(fogColor)
+    }
   }
 
   getCameraDistance(): number {
-    return this.camera.position.length()
+    return this.controls.getDistance()
   }
 
   dispose(): void {
     this.controls.dispose()
-    this.renderer.domElement.removeEventListener('mousemove', this.handleMouseMove.bind(this))
-    this.renderer.domElement.removeEventListener('click', this.handleClick.bind(this))
+    const canvas = this.renderer.domElement
+    canvas.removeEventListener('mousemove', this.handleMouseMove.bind(this))
+    canvas.removeEventListener('mousedown', this.handleMouseDown.bind(this))
+    canvas.removeEventListener('mouseup', this.handleMouseUp.bind(this))
+    canvas.removeEventListener('click', this.handleClick.bind(this))
     window.removeEventListener('resize', this.handleResize.bind(this))
     document.removeEventListener('click', this.handleDocumentClick.bind(this))
   }

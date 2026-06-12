@@ -15,42 +15,76 @@ interface ParticleData {
   wobbleRadius: number
 }
 
+const vertexShader = `
+  attribute float size;
+  attribute vec3 color;
+  varying vec3 vColor;
+  varying float vSize;
+
+  void main() {
+    vColor = color;
+    vSize = size;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = size * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`
+
+const fragmentShader = `
+  varying vec3 vColor;
+  varying float vSize;
+
+  void main() {
+    vec2 center = gl_PointCoord - vec2(0.5);
+    float dist = length(center);
+    if (dist > 0.5) discard;
+    
+    float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+    alpha = pow(alpha, 1.5);
+    
+    float glow = (1.0 - dist * 2.0) * 0.5;
+    vec3 finalColor = vColor + glow * vColor;
+    
+    gl_FragColor = vec4(finalColor, alpha);
+  }
+`
+
 export class ParticleSystem {
   private count: number
   private geometry: THREE.BufferGeometry
-  private material: THREE.PointsMaterial
+  private material: THREE.ShaderMaterial
   private points: THREE.Points
   private particles: ParticleData[] = []
   private mode: ParticleMode = 'spiral'
   private rotationSpeed = 0.02
   private highlightedIndex: number | null = null
-  private highlightTime = 0
   private isTransitioning = false
   private transitionProgress = 0
   private transitionDuration = 2
   private repelCenter: THREE.Vector3 | null = null
   private repelRadius = 20
   private repelStrength = 0
+  private sizeScale = 1
 
   constructor(count: number) {
     this.count = count
     this.geometry = new THREE.BufferGeometry()
-    this.material = new THREE.PointsMaterial({
-      size: 6,
-      vertexColors: true,
+
+    this.material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
       transparent: true,
-      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      sizeAttenuation: true
+      uniforms: {}
     })
+
     this.points = new THREE.Points(this.geometry, this.material)
-    this.points.frustumCulled = true
-    this.points.matrixAutoUpdate = false
+    this.points.frustumCulled = false
 
     this.initParticles()
-    this.generateSpiral()
-    this.updateGeometry()
+    this.generateMode('spiral')
+    this.commitGeometry()
   }
 
   private initParticles(): void {
@@ -61,42 +95,42 @@ export class ParticleSystem {
         targetPosition: new THREE.Vector3(),
         currentPosition: new THREE.Vector3(),
         velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * 0.1,
-          (Math.random() - 0.5) * 0.1,
-          (Math.random() - 0.5) * 0.1
+          (Math.random() - 0.5) * 0.01,
+          (Math.random() - 0.5) * 0.01,
+          (Math.random() - 0.5) * 0.01
         ),
-        baseSize: 2 + Math.random() * 4,
+        baseSize: 1,
         baseColor: new THREE.Color(),
         wobbleOffset: Math.random() * Math.PI * 2,
         wobbleSpeed: 0.5 + Math.random() * 1.5,
-        wobbleRadius: 0.2 + Math.random() * 0.5
+        wobbleRadius: 0.3 + Math.random() * 0.8
       })
     }
   }
 
   private generateSpiral(): void {
     const arms = 4
-    const armSpread = 0.5
-    const coreRadius = 5
-    const maxRadius = 40
+    const armSpread = 0.6
+    const coreRadius = 3
+    const maxRadius = 35
 
     for (let i = 0; i < this.count; i++) {
       const particle = this.particles[i]
       const t = i / this.count
       const arm = Math.floor(Math.random() * arms)
       const armAngle = (arm / arms) * Math.PI * 2
-      
-      const radiusFactor = Math.pow(t, 0.7)
+
+      const radiusFactor = Math.pow(t, 0.65)
       const radius = coreRadius + radiusFactor * (maxRadius - coreRadius)
-      const spiralAngle = radius * 0.15 + armAngle
-      
-      const spread = (1 - t) * 0.3 + armSpread * t
+      const spiralAngle = radius * 0.18 + armAngle
+
+      const spread = (1 - t) * 0.2 + armSpread * t
       const offsetAngle = (Math.random() - 0.5) * spread
-      const offsetRadius = (Math.random() - 0.5) * 2
+      const offsetRadius = (Math.random() - 0.5) * 1.5
 
       const finalRadius = radius + offsetRadius
       const finalAngle = spiralAngle + offsetAngle
-      const height = (Math.random() - 0.5) * 8 * (1 - t * 0.8)
+      const height = (Math.random() - 0.5) * 6 * (1 - t * 0.85)
 
       particle.targetPosition.set(
         Math.cos(finalAngle) * finalRadius,
@@ -109,22 +143,21 @@ export class ParticleSystem {
 
       const distanceFactor = radius / maxRadius
       particle.baseSize = 6 - distanceFactor * 4
-      particle.baseColor.setHSL(0.15 - distanceFactor * 0.25, 0.9, 0.5 + distanceFactor * 0.2)
+      particle.baseColor.setHSL(0.12 - distanceFactor * 0.22, 0.95, 0.55 + distanceFactor * 0.15)
     }
   }
 
   private generateSphere(): void {
-    const maxRadius = 35
+    const maxRadius = 30
 
     for (let i = 0; i < this.count; i++) {
       const particle = this.particles[i]
-      const t = i / this.count
-      
+
       const u = Math.random()
       const v = Math.random()
       const theta = 2 * Math.PI * u
       const phi = Math.acos(2 * v - 1)
-      
+
       const radiusFactor = Math.pow(Math.random(), 1 / 3)
       const radius = radiusFactor * maxRadius
 
@@ -138,20 +171,20 @@ export class ParticleSystem {
       particle.currentPosition.copy(particle.targetPosition)
 
       const distanceFactor = radius / maxRadius
-      particle.baseSize = 6 - distanceFactor * 4
-      particle.baseColor.setHSL(0.15 - distanceFactor * 0.25, 0.9, 0.5 + distanceFactor * 0.2)
+      particle.baseSize = 5.5 - distanceFactor * 3.5
+      particle.baseColor.setHSL(0.12 - distanceFactor * 0.22, 0.9, 0.55 + distanceFactor * 0.15)
     }
   }
 
   private generateExplosion(): void {
-    const maxRadius = 45
+    const maxRadius = 40
 
     for (let i = 0; i < this.count; i++) {
       const particle = this.particles[i]
-      
+
       const theta = Math.random() * Math.PI * 2
       const phi = Math.acos(2 * Math.random() - 1)
-      const radius = Math.random() * maxRadius
+      const radius = Math.pow(Math.random(), 0.5) * maxRadius
 
       particle.targetPosition.set(
         radius * Math.sin(phi) * Math.cos(theta),
@@ -163,20 +196,20 @@ export class ParticleSystem {
       particle.currentPosition.copy(particle.targetPosition)
 
       const distanceFactor = radius / maxRadius
-      particle.baseSize = 2 + Math.random() * 4
-      particle.baseColor.setHSL(0.05 - distanceFactor * 0.1, 0.95, 0.5 + distanceFactor * 0.15)
+      particle.baseSize = 2 + Math.random() * 3
+      particle.baseColor.setHSL(0.03 + (1 - distanceFactor) * 0.08, 1, 0.5 + distanceFactor * 0.15)
     }
   }
 
   private generateRandom(): void {
-    const range = 50
+    const range = 40
 
     for (let i = 0; i < this.count; i++) {
       const particle = this.particles[i]
 
       particle.targetPosition.set(
         (Math.random() - 0.5) * range * 2,
-        (Math.random() - 0.5) * range * 2,
+        (Math.random() - 0.5) * range * 0.6,
         (Math.random() - 0.5) * range * 2
       )
 
@@ -185,22 +218,12 @@ export class ParticleSystem {
 
       const distance = particle.targetPosition.length()
       const distanceFactor = Math.min(distance / 50, 1)
-      particle.baseSize = 6 - distanceFactor * 4
-      particle.baseColor.setHSL(Math.random() * 0.6 + 0.1, 0.85, 0.6)
+      particle.baseSize = 5 - distanceFactor * 2.5
+      particle.baseColor.setHSL(Math.random() * 0.55 + 0.05, 0.85, 0.6)
     }
   }
 
-  switchMode(mode: ParticleMode): void {
-    if (this.mode === mode) return
-    
-    this.mode = mode
-    this.isTransitioning = true
-    this.transitionProgress = 0
-
-    for (const particle of this.particles) {
-      particle.basePosition.copy(particle.currentPosition)
-    }
-
+  private generateMode(mode: ParticleMode): void {
     switch (mode) {
       case 'spiral':
         this.generateSpiral()
@@ -217,17 +240,26 @@ export class ParticleSystem {
     }
   }
 
+  switchMode(mode: ParticleMode): void {
+    if (this.mode === mode) return
+
+    this.mode = mode
+    this.isTransitioning = true
+    this.transitionProgress = 0
+
+    for (const particle of this.particles) {
+      particle.basePosition.copy(particle.currentPosition)
+    }
+
+    this.generateMode(mode)
+  }
+
   highlightParticle(index: number): void {
-    if (this.highlightedIndex === index) return
     this.highlightedIndex = index
-    this.highlightTime = 0.2
-    this.repelCenter = this.particles[index].currentPosition.clone()
-    this.repelStrength = 1
   }
 
   resetHighlight(): void {
     this.highlightedIndex = null
-    this.repelStrength = 0
   }
 
   setRepelCenter(position: THREE.Vector3 | null): void {
@@ -252,7 +284,7 @@ export class ParticleSystem {
   update(delta: number, cameraDistance: number): void {
     const time = performance.now() * 0.001
 
-    this.material.size = 40 * (cameraDistance / 50)
+    this.sizeScale = cameraDistance / 50
 
     if (this.isTransitioning) {
       this.transitionProgress += delta / this.transitionDuration
@@ -262,39 +294,34 @@ export class ParticleSystem {
       }
     }
 
-    if (this.highlightTime > 0) {
-      this.highlightTime -= delta
-      if (this.highlightTime <= 0) {
-        this.highlightedIndex = null
-      }
-    }
-
     if (this.repelStrength > 0 && !this.repelCenter) {
-      this.repelStrength = Math.max(0, this.repelStrength - delta * 3)
+      this.repelStrength = Math.max(0, this.repelStrength - delta * 2)
     }
 
-    const positions = new Float32Array(this.count * 3)
-    const colors = new Float32Array(this.count * 3)
-    const sizes = new Float32Array(this.count)
+    const positions = this.geometry.attributes.position.array as Float32Array
+    const colors = this.geometry.attributes.color.array as Float32Array
+    const sizes = this.geometry.attributes.size.array as Float32Array
 
     for (let i = 0; i < this.count; i++) {
       const particle = this.particles[i]
 
       if (this.isTransitioning) {
         const t = this.transitionProgress
-        const waveOffset = (i / this.count) * Math.PI * 4
-        const waveT = (t + waveOffset) % 1
+        const waveOffset = (i / this.count) * Math.PI * 6
+        const waveT = Math.min(1, Math.max(0, t * 1.2 - waveOffset * 0.08))
         const easeT = Math.sin(waveT * Math.PI)
+        const progress = easeT
+
         particle.currentPosition.lerpVectors(
           particle.basePosition,
           particle.targetPosition,
-          Math.min(1, Math.max(0, t + (easeT - 0.5) * 0.3))
+          progress
         )
       } else {
         const wobbleAngle = time * particle.wobbleSpeed + particle.wobbleOffset
         const wobbleX = Math.cos(wobbleAngle) * particle.wobbleRadius
-        const wobbleY = Math.sin(wobbleAngle * 0.7) * particle.wobbleRadius * 0.5
-        const wobbleZ = Math.sin(wobbleAngle * 1.3) * particle.wobbleRadius * 0.5
+        const wobbleY = Math.sin(wobbleAngle * 0.7) * particle.wobbleRadius * 0.4
+        const wobbleZ = Math.sin(wobbleAngle * 1.2) * particle.wobbleRadius * 0.4
 
         particle.currentPosition.copy(particle.targetPosition)
         particle.currentPosition.x += wobbleX
@@ -311,45 +338,48 @@ export class ParticleSystem {
       }
 
       if (this.repelCenter && this.repelStrength > 0) {
-        const diff = particle.currentPosition.clone().sub(this.repelCenter)
-        const dist = diff.length()
+        const dx = particle.currentPosition.x - this.repelCenter.x
+        const dy = particle.currentPosition.y - this.repelCenter.y
+        const dz = particle.currentPosition.z - this.repelCenter.z
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+
         if (dist < this.repelRadius && dist > 0.1) {
-          const force = (1 - dist / this.repelRadius) * this.repelStrength * 2
-          diff.normalize().multiplyScalar(force)
-          particle.currentPosition.add(diff)
+          const force = (1 - dist / this.repelRadius) * this.repelStrength * 3
+          const invDist = 1 / dist
+          particle.currentPosition.x += dx * invDist * force
+          particle.currentPosition.y += dy * invDist * force
+          particle.currentPosition.z += dz * invDist * force
         }
       }
 
-      const finalPos = particle.currentPosition
-      positions[i * 3] = finalPos.x
-      positions[i * 3 + 1] = finalPos.y
-      positions[i * 3 + 2] = finalPos.z
+      positions[i * 3] = particle.currentPosition.x
+      positions[i * 3 + 1] = particle.currentPosition.y
+      positions[i * 3 + 2] = particle.currentPosition.z
 
-      let size = particle.baseSize
-      let color = particle.baseColor
+      let size = particle.baseSize * this.sizeScale
+      let colorR = particle.baseColor.r
+      let colorG = particle.baseColor.g
+      let colorB = particle.baseColor.b
 
       if (this.highlightedIndex === i) {
-        size *= 1.5
-        color = new THREE.Color(0xffffff)
+        size *= 1.8
+        colorR = 1
+        colorG = 1
+        colorB = 1
       }
 
       sizes[i] = size
-      colors[i * 3] = color.r
-      colors[i * 3 + 1] = color.g
-      colors[i * 3 + 2] = color.b
+      colors[i * 3] = colorR
+      colors[i * 3 + 1] = colorG
+      colors[i * 3 + 2] = colorB
     }
 
-    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    this.geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
     this.geometry.attributes.position.needsUpdate = true
     this.geometry.attributes.color.needsUpdate = true
     this.geometry.attributes.size.needsUpdate = true
-
-    this.points.updateMatrix()
   }
 
-  private updateGeometry(): void {
+  private commitGeometry(): void {
     const positions = new Float32Array(this.count * 3)
     const colors = new Float32Array(this.count * 3)
     const sizes = new Float32Array(this.count)
