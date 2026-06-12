@@ -12,7 +12,11 @@ const App: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [debouncedSearchKeyword, setDebouncedSearchKeyword] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [newNote, setNewNote] = useState({ title: '', content: '', category: '学习' as '学习' | '工作' | '生活' });
+  const [newNote, setNewNote] = useState({
+    title: '',
+    content: '',
+    category: '学习' as '学习' | '工作' | '生活',
+  });
   const [isMobile, setIsMobile] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,43 +84,41 @@ const App: React.FC = () => {
     if (matchedCards.length === 0) return;
 
     const firstCard = matchedCards[0];
-    const dx = centerX - firstCard.x;
-    const dy = centerY - firstCard.y;
+    const targetX = centerX;
+    const targetY = centerY;
+    const dx = targetX - firstCard.x;
+    const dy = targetY - firstCard.y;
 
-    const animateToCenter = () => {
-      const startTime = performance.now();
-      const startX = firstCard.x;
-      const startY = firstCard.y;
-      const duration = 1000;
+    const startTime = performance.now();
+    const startX = firstCard.x;
+    const startY = firstCard.y;
+    const duration = 1000;
 
-      const animate = (timestamp: number) => {
-        const elapsed = timestamp - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easeOut = 1 - Math.pow(1 - progress, 3);
+    const animate = (timestamp: number) => {
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
 
-        const currentDx = dx * easeOut;
-        const currentDy = dy * easeOut;
+      const currentDx = dx * easeOut;
+      const currentDy = dy * easeOut;
 
-        setCards(prev => prev.map(card => {
-          if (matchedCardIds.has(card.id)) {
-            return {
-              ...card,
-              x: card.x === firstCard.x ? startX + currentDx : card.x,
-              y: card.y === firstCard.y ? startY + currentDy : card.y,
-            };
-          }
-          return card;
-        }));
-
-        if (progress < 1) {
-          requestAnimationFrame(animate);
+      setCards(prev => prev.map(card => {
+        if (matchedCardIds.has(card.id)) {
+          return {
+            ...card,
+            x: startX + currentDx,
+            y: startY + currentDy,
+          };
         }
-      };
+        return card;
+      }));
 
-      requestAnimationFrame(animate);
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
     };
 
-    animateToCenter();
+    requestAnimationFrame(animate);
   }, [matchedCardIds]);
 
   const handleScaleChange = useCallback((newScale: number, newOffset: { x: number; y: number }) => {
@@ -164,19 +166,21 @@ const App: React.FC = () => {
   };
 
   const handleCardMove = useCallback(async (cardId: string, x: number, y: number) => {
-    setCards(prev => prev.map(card =>
-      card.id === cardId ? { ...card, x, y } : card
-    ));
+    setCards(prev => {
+      const updated = prev.map(card =>
+        card.id === cardId ? { ...card, x, y } : card
+      );
 
-    const card = cards.find(c => c.id === cardId);
-    if (card && card._id) {
-      try {
-        await noteApi.update(card._id, { x, y });
-      } catch (err) {
-        console.error('Failed to update note position:', err);
+      const card = updated.find(c => c.id === cardId);
+      if (card && card._id) {
+        noteApi.update(card._id, { x, y, linkedIds: card.linkedIds }).catch(err =>
+          console.error('Failed to update note position:', err)
+        );
       }
-    }
-  }, [cards]);
+
+      return updated;
+    });
+  }, []);
 
   const handleCardsLinked = useCallback(async (cardId1: string, cardId2: string) => {
     setCards(prev => {
@@ -210,8 +214,6 @@ const App: React.FC = () => {
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
 
-    const groupMembers = getGroupMembers(cardId, cards);
-    
     setCards(prev => {
       const remaining = prev.filter(c => c.id !== cardId);
       return remaining.map(c => ({
@@ -220,6 +222,7 @@ const App: React.FC = () => {
       }));
     });
 
+    const groupMembers = getGroupMembers(cardId, cards);
     for (const member of groupMembers) {
       if (member.id !== cardId && member._id) {
         const newLinkedIds = member.linkedIds.filter(id => id !== cardId);
@@ -239,9 +242,11 @@ const App: React.FC = () => {
   }, [cards]);
 
   if (isLoading) {
-    return <div className="app-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontSize: '16px', color: '#666' }}>加载中...</div>
-    </div>;
+    return (
+      <div className="app-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: '16px', color: '#666' }}>加载中...</div>
+      </div>
+    );
   }
 
   return (
@@ -293,6 +298,7 @@ const App: React.FC = () => {
               placeholder="搜索笔记内容..."
               value={searchKeyword}
               onChange={handleSearchChange}
+              onBlur={() => isMobile && setSearchExpanded(false)}
               autoFocus={isMobile && searchExpanded}
             />
           </div>
@@ -303,7 +309,7 @@ const App: React.FC = () => {
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
           <div className="modal-content">
             <h2 className="modal-title">添加新笔记</h2>
-            
+
             <div className="form-group">
               <label className="form-label">标题</label>
               <input
@@ -318,4 +324,43 @@ const App: React.FC = () => {
             </div>
 
             <div className="form-group">
-              <label className="form-label">
+              <label className="form-label">内容</label>
+              <textarea
+                className="form-textarea"
+                maxLength={150}
+                value={newNote.content}
+                onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
+                placeholder="请输入笔记内容（150字以内）"
+              />
+              <div className="char-count">{newNote.content.length}/150</div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">类别</label>
+              <select
+                className="form-select"
+                value={newNote.category}
+                onChange={(e) => setNewNote({ ...newNote, category: e.target.value as '学习' | '工作' | '生活' })}
+              >
+                <option value="学习">📚 学习</option>
+                <option value="工作">💼 工作</option>
+                <option value="生活">🏠 生活</option>
+              </select>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn btn-cancel" onClick={() => setShowModal(false)}>
+                取消
+              </button>
+              <button className="btn btn-confirm" onClick={handleAddCard}>
+                确认
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;

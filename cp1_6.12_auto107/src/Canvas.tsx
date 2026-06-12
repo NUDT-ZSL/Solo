@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import { NoteCard, GRID_SIZE } from './types';
+import { NoteCard, GRID_SIZE, CATEGORY_COLORS } from './types';
 import Card from './Card';
 import { getGroupMembers, getBoundingBox } from './utils';
 
@@ -253,6 +253,8 @@ const Canvas: React.FC<CanvasProps> = ({
           lineHeight = Math.abs(y1 - y2);
         }
 
+        const lineColor = CATEGORY_COLORS[card.category] || '#999';
+
         lines.push(
           <div
             key={key}
@@ -262,7 +264,7 @@ const Canvas: React.FC<CanvasProps> = ({
               top: lineY,
               width: lineWidth,
               height: lineHeight,
-              background: `repeating-linear-gradient(90deg, ${card.linkedIds.includes(linkedId) ? '#4A90D9' : '#999'} 0, ${card.linkedIds.includes(linkedId) ? '#4A90D9' : '#999'} 6px, transparent 6px, transparent 10px)`,
+              background: `repeating-linear-gradient(${isHorizontal ? '90deg' : '0deg'}, ${lineColor} 0, ${lineColor} 6px, transparent 6px, transparent 10px)`,
             }}
           />
         );
