@@ -41,6 +41,11 @@ function App() {
     localStorage.setItem('museum_dark', String(newVal));
   };
 
+  const handleThemeChange = (themeName: string) => {
+    setCurrentTheme(getTheme(themeName));
+    localStorage.setItem('museum_theme', themeName);
+  };
+
   return (
     <div
       style={{
@@ -108,77 +113,48 @@ function App() {
           </Link>
 
           <nav style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <NavLink
-              to="/"
-              end
-              style={({ isActive }) => ({
-                padding: '10px 20px',
-                borderRadius: 10,
-                fontWeight: 500,
-                color: isActive ? currentTheme.textOnButton : 'var(--text-secondary)',
-                background: isActive ? currentTheme.buttonBg : 'transparent',
-                transition: 'all 0.4s ease',
-                textDecoration: 'none',
-              })}
-            >
-              探索展览
-            </NavLink>
-            <NavLink
-              to="/create"
-              style={({ isActive }) => ({
-                padding: '10px 20px',
-                borderRadius: 10,
-                fontWeight: 500,
-                color: isActive ? currentTheme.textOnButton : 'var(--text-secondary)',
-                background: isActive ? currentTheme.buttonBg : 'transparent',
-                transition: 'all 0.4s ease',
-                textDecoration: 'none',
-              })}
-            >
-              创建展览
-            </NavLink>
-            <NavLink
-              to="/profile"
-              style={({ isActive }) => ({
-                padding: '10px 20px',
-                borderRadius: 10,
-                fontWeight: 500,
-                color: isActive ? currentTheme.textOnButton : 'var(--text-secondary)',
-                background: isActive ? currentTheme.buttonBg : 'transparent',
-                transition: 'all 0.4s ease',
-                textDecoration: 'none',
-              })}
-            >
-              个人中心
-            </NavLink>
+            {[
+              { to: '/', label: '探索展览' },
+              { to: '/create', label: '创建展览' },
+              { to: '/profile', label: '个人中心' },
+            ].map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                style={({ isActive }: { isActive: boolean }) => ({
+                  padding: '10px 20px',
+                  borderRadius: 10,
+                  fontWeight: 500,
+                  color: isActive ? currentTheme.textOnButton : 'var(--text-secondary)',
+                  background: isActive ? currentTheme.buttonBg : 'transparent',
+                  transition: 'all 0.4s ease',
+                  textDecoration: 'none',
+                })}
+              >
+                {item.label}
+              </NavLink>
+            ))}
           </nav>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button
-              onClick={toggleDarkMode}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'var(--bg-tertiary)',
-                color: 'var(--text-primary)',
-                fontSize: 18,
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.08)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-              title={darkMode ? '切换到亮色模式' : '切换到暗色模式'}
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
-          </div>
+          <button
+            onClick={toggleDarkMode}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--bg-tertiary)',
+              color: 'var(--text-primary)',
+              fontSize: 18,
+              transition: 'all 0.3s ease',
+            }}
+            title={darkMode ? '切换到亮色模式' : '切换到暗色模式'}
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
         </div>
       </header>
 
@@ -195,10 +171,7 @@ function App() {
                   exit="exit"
                   transition={{ duration: 0.3, ease: 'easeOut' }}
                 >
-                  <ExhibitionList onThemeChange={(t) => {
-                    setCurrentTheme(getTheme(t));
-                    localStorage.setItem('museum_theme', t);
-                  }} />
+                  <ExhibitionList onThemeChange={handleThemeChange} />
                 </motion.div>
               }
             />
@@ -212,10 +185,7 @@ function App() {
                   exit="exit"
                   transition={{ duration: 0.3, ease: 'easeOut' }}
                 >
-                  <ExhibitionDetail onThemeChange={(t) => {
-                    setCurrentTheme(getTheme(t));
-                    localStorage.setItem('museum_theme', t);
-                  }} />
+                  <ExhibitionDetail onThemeChange={handleThemeChange} />
                 </motion.div>
               }
             />
@@ -224,3 +194,62 @@ function App() {
               element={
                 <motion.div
                   variants={pageVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  <CreateExhibition onThemeChange={handleThemeChange} />
+                </motion.div>
+              }
+            />
+            <Route
+              path="/edit/:id"
+              element={
+                <motion.div
+                  variants={pageVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  <CreateExhibition onThemeChange={handleThemeChange} editMode />
+                </motion.div>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <motion.div
+                  variants={pageVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  <Profile onThemeChange={handleThemeChange} />
+                </motion.div>
+              }
+            />
+          </Routes>
+        </AnimatePresence>
+      </main>
+
+      <footer
+        style={{
+          textAlign: 'center',
+          padding: '24px',
+          color: 'var(--text-muted)',
+          fontSize: 13,
+          borderTop: '1px solid var(--border-color)',
+          background: 'var(--bg-secondary)',
+          transition: 'all 0.5s ease',
+        }}
+      >
+        Virtual Museum © 2026 — 虚拟博物馆展览策划与导览平台
+      </footer>
+    </div>
+  );
+}
+
+export default App;
