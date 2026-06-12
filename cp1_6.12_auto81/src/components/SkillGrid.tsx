@@ -64,10 +64,21 @@ const SkillGrid: React.FC<SkillGridProps> = ({
     return map;
   }, [matchResults]);
 
+  const prevIndexMapRef = useRef<Map<string, number>>(new Map());
+  const initializedRef = useRef(false);
+
   useEffect(() => {
-    if (previousOrder.length === 0 || !containerRef.current) return;
+    if (!containerRef.current) return;
 
     const currentOrder = members.map((m) => m.id);
+
+    if (!initializedRef.current) {
+      currentOrder.forEach((id, idx) => prevIndexMapRef.current.set(id, idx));
+      initializedRef.current = true;
+      return;
+    }
+
+    if (previousOrder.length === 0) return;
     if (JSON.stringify(currentOrder) === JSON.stringify(previousOrder)) return;
 
     const container = containerRef.current;
@@ -77,8 +88,8 @@ const SkillGrid: React.FC<SkillGridProps> = ({
       const memberId = card.getAttribute('data-member-id');
       if (!memberId) return;
 
-      const prevIndex = previousOrder.indexOf(memberId);
-      if (prevIndex === -1) return;
+      const prevIndex = prevIndexMapRef.current.get(memberId);
+      if (prevIndex === undefined) return;
 
       const currIndex = currentOrder.indexOf(memberId);
       if (currIndex === prevIndex) return;
@@ -97,6 +108,8 @@ const SkillGrid: React.FC<SkillGridProps> = ({
         { x: 0, y: 0, duration: 0.4, ease: 'power2.out' }
       );
     });
+
+    currentOrder.forEach((id, idx) => prevIndexMapRef.current.set(id, idx));
   }, [members, previousOrder, columnCount, columnWidth]);
 
   const Cell = useCallback(

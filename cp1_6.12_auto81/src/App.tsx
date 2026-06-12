@@ -190,11 +190,14 @@ const App: React.FC = () => {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        height: '100vh',
+        width: '100vw',
+        overflow: 'hidden',
         background: '#1a1a2e',
         color: '#e0e0e0',
         display: 'flex',
         flexDirection: 'column',
+        position: 'relative',
       }}
     >
       <div
@@ -297,7 +300,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ flex: 1, paddingTop: 64 }}>
+      <div style={{ flex: 1, paddingTop: 64, height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
         <SkillGrid
           members={members}
           matchResults={matchResults}
