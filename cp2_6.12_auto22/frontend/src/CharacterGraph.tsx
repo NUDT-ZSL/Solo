@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
-import type { CharacterGraphData, GraphNode, GraphLink } from './types';
+import type { CharacterGraphData } from './types';
 
 interface Props {
   data: CharacterGraphData;
@@ -31,6 +31,29 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
   const [popup, setPopup] = useState<{ node: SimNode; x: number; y: number } | null>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
   const prevPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  const closePopup = useCallback(() => setPopup(null), []);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePopup();
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [closePopup]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popup) {
+        const target = e.target as HTMLElement;
+        if (!target.closest('.character-popup') && !target.closest('.graph-node')) {
+          closePopup();
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [popup, closePopup]);
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -75,12 +98,12 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
 
     const g = svg.append('g');
 
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
+    const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.5, 2])
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
       });
-    svg.call(zoom);
+    svg.call(zoomBehavior);
 
     const defs = svg.append('defs');
     data.nodes.forEach((n, i) => {
@@ -156,16 +179,24 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
 
     const drag = d3.drag<SVGGElement, SimNode>()
       .on('start', (event, d) => {
+        if (event.sourceEvent) {
+          event.sourceEvent.preventDefault();
+          event.sourceEvent.stopPropagation();
+        }
         dragStartX = event.x;
         dragStartY = event.y;
         hasDragged = false;
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
         d.fy = d.y;
-        d3.select(event.sourceEvent.target.closest('.graph-node')).classed('dragging', true);
+        const nodeEl = event.sourceEvent?.target?.closest?.('.graph-node');
+        if (nodeEl) d3.select(nodeEl).classed('dragging', true);
         nodeSel.style('cursor', 'grabbing');
       })
       .on('drag', (event, d) => {
+        if (event.sourceEvent) {
+          event.sourceEvent.preventDefault();
+        }
         const dx = Math.abs(event.x - dragStartX);
         const dy = Math.abs(event.y - dragStartY);
         if (dx > DRAG_CLICK_DISTANCE || dy > DRAG_CLICK_DISTANCE) {
@@ -175,10 +206,14 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
         d.fy = event.y;
       })
       .on('end', (event, d) => {
+        if (event.sourceEvent) {
+          event.sourceEvent.preventDefault();
+        }
         if (!event.active) simulation.alphaTarget(0);
         d.fx = null;
         d.fy = null;
-        d3.select(event.sourceEvent.target.closest('.graph-node')).classed('dragging', false);
+        const nodeEl = event.sourceEvent?.target?.closest?.('.graph-node');
+        if (nodeEl) d3.select(nodeEl).classed('dragging', false);
         nodeSel.style('cursor', 'grab');
       });
 
@@ -187,6 +222,7 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
     nodeSel.on('click', (event, d) => {
       if (hasDragged) return;
       event.stopPropagation();
+      event.preventDefault();
       const rect = container.getBoundingClientRect();
       setPopup({
         node: d,
@@ -195,7 +231,7 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
       });
     });
 
-    svg.on('click', () => setPopup(null));
+    svg.on('click', () => closePopup());
 
     simulation.alpha(1).restart();
 
@@ -203,7 +239,7 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
       prevPositionsRef.current = new Map(nodes.map(n => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]));
       simulation.stop();
     };
-  }, [data]);
+  }, [data, closePopup]);
 
   return (
     <div className="character-graph-container" ref={containerRef}>
@@ -212,6 +248,7 @@ const CharacterGraph: React.FC<Props> = ({ data }) => {
         <div
           className="character-popup"
           style={{ left: Math.min(popup.x, 200), top: popup.y + 10 }}
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="character-popup-name">{popup.node.name}</div>
           <div className="character-popup-bio">

@@ -209,46 +209,6 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
     setCharacterTags([]);
   };
 
-  const getHighlightedContent = () => {
-    if (!currentChapter) return null;
-    const content = currentChapter.content;
-    const annotations = project?.annotations.filter(
-      (a) => a.chapterId === currentChapterId && a.type === 'highlight'
-    ) || [];
-
-    if (annotations.length === 0 && conflicts.length === 0) return null;
-
-    const parts: Array<{ text: string; className?: string }> = [];
-    const markers: Array<{ pos: number; type: 'start' | 'end'; className: string }> = [];
-
-    annotations.forEach((a) => {
-      markers.push({ pos: a.start, type: 'start', className: 'highlight-range' });
-      markers.push({ pos: a.end, type: 'end', className: 'highlight-range' });
-    });
-
-    conflicts.forEach((c) => {
-      markers.push({ pos: c.start, type: 'start', className: 'conflict-range' });
-      markers.push({ pos: c.end, type: 'end', className: 'conflict-range' });
-    });
-
-    markers.sort((a, b) => a.pos - b.pos);
-
-    let cursor = 0;
-    markers.forEach((m) => {
-      if (m.pos > cursor) {
-        parts.push({ text: content.slice(cursor, m.pos) });
-      }
-      if (m.type === 'start') {
-        parts.push({ text: content.slice(m.pos, m.pos), className: m.className });
-      }
-      cursor = m.pos;
-    });
-    if (cursor < content.length) {
-      parts.push({ text: content.slice(cursor) });
-    }
-    return parts;
-  };
-
   return (
     <div className="editor-wrapper" style={{ borderTop: `2px solid ${currentUserColor}` }}>
       <div className="editor-toolbar">
@@ -272,6 +232,7 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
           />
           {currentChapterRemoteCursors.map((rc) => {
             const pos = getRemoteCursorPosition(rc);
+            const rcColor = getUserColorById(rc.userId);
             return (
               <div
                 key={rc.userId}
@@ -279,10 +240,10 @@ const EditorPanel: React.FC<{ socket: any }> = ({ socket }) => {
                 style={{
                   left: `${pos.x}px`,
                   top: `${pos.y}px`,
-                  backgroundColor: rc.color,
+                  backgroundColor: rcColor,
                 }}
               >
-                <div className="remote-cursor-label" style={{ backgroundColor: rc.color }}>
+                <div className="remote-cursor-label" style={{ backgroundColor: rcColor }}>
                   {rc.userName}
                 </div>
               </div>

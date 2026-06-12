@@ -1,9 +1,21 @@
+const PALETTE = [
+  '#4da6ff',
+  '#FFA500',
+  '#10b981',
+  '#f472b6',
+  '#a78bfa',
+  '#fbbf24',
+  '#34d399',
+  '#f87171',
+  '#60a5fa',
+  '#fb923c',
+  '#c084fc',
+  '#2dd4bf',
+];
+
 export function getUserColorById(userId: string): string {
-  if (!userId) return '#4da6ff';
-  const lastChar = userId.charAt(userId.length - 1).toLowerCase();
-  const charCode = lastChar.charCodeAt(0);
-  const num = charCode % 10;
-  return num < 5 ? '#0000FF' : '#FFA500';
+  if (!userId) return PALETTE[0];
+  return PALETTE[hashStringToIndex(userId, PALETTE.length)];
 }
 
 export function hashStringToIndex(str: string, max: number): number {

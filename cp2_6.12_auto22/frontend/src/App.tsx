@@ -66,7 +66,6 @@ const ProjectPage: React.FC = () => {
   const project = useStore((s) => s.project);
   const onlineUsers = useStore((s) => s.onlineUsers);
   const analysisPanelWidth = useStore((s) => s.analysisPanelWidth);
-  const drawerOpen = useStore((s) => s.drawerOpen);
   const currentChapterId = useStore((s) => s.currentChapterId);
   const setProject = useStore((s) => s.setProject);
   const addOnlineUser = useStore((s) => s.addOnlineUser);
@@ -75,11 +74,8 @@ const ProjectPage: React.FC = () => {
   const removeRemoteCursor = useStore((s) => s.removeRemoteCursor);
   const updateChapterContent = useStore((s) => s.updateChapterContent);
   const setAnalysisPanelWidth = useStore((s) => s.setAnalysisPanelWidth);
-  const setDrawerOpen = useStore((s) => s.setDrawerOpen);
 
   const [resizerDragging, setResizerDragging] = useState(false);
-  const [drawerDragging, setDrawerDragging] = useState(false);
-  const [drawerHeight, setDrawerHeight] = useState(300);
   const mainLayoutRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -176,21 +172,6 @@ const ProjectPage: React.FC = () => {
     };
   }, [resizerDragging]);
 
-  useEffect(() => {
-    if (!drawerDragging) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const newHeight = window.innerHeight - e.clientY;
-      setDrawerHeight(Math.max(150, Math.min(window.innerHeight * 0.7, newHeight)));
-    };
-    const handleMouseUp = () => setDrawerDragging(false);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [drawerDragging]);
-
   if (!project) {
     return (
       <div className="landing-page">
@@ -232,26 +213,6 @@ const ProjectPage: React.FC = () => {
           </div>
           <AnalysisPanel />
         </aside>
-      </div>
-
-      <div
-        className={`bottom-drawer ${drawerOpen ? 'open' : ''}`}
-        style={drawerOpen ? { height: drawerHeight, maxHeight: '70vh' } : undefined}
-      >
-        <div
-          className="drawer-handle"
-          onMouseDown={() => {
-            if (!drawerOpen) {
-              setDrawerOpen(true);
-            } else {
-              setDrawerDragging(true);
-            }
-          }}
-          onDoubleClick={() => setDrawerOpen(!drawerOpen)}
-        />
-        <div className="drawer-content">
-          <AnalysisPanel />
-        </div>
       </div>
     </div>
   );

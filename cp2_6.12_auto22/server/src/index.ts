@@ -242,17 +242,85 @@ app.post('/api/projects/:id/annotations', (req, res) => {
   res.json(annotation);
 });
 
-const POSITIVE_STRONG = ['爱', '深爱', '热爱', '狂喜', '幸福', '完美', '精彩', '伟大', '太棒了', '最美'];
-const POSITIVE_MEDIUM = ['喜欢', '开心', '快乐', '高兴', '愉快', '温柔', '温暖', '美好', '希望', '勇敢', '光明', '善良', '真诚'];
-const POSITIVE_WEAK = ['笑', '微笑', '不错', '挺好', '还行', '舒服', '轻松', '平静', '安宁', '和谐', '灯', '星', '暖'];
+const POSITIVE_STRONG = [
+  '爱', '深爱', '热爱', '狂喜', '幸福', '完美', '精彩', '伟大', '太棒了', '最美',
+  '欣慰', '感激', '荣耀', '胜利', '成功', '壮丽', '璀璨', '辉煌', '陶醉', '狂欢',
+  '珍惜', '敬仰', '崇拜', '自豪', '骄傲', '恩赐', '天赐', '奇迹', '无比', '极度',
+];
+const POSITIVE_MEDIUM = [
+  '喜欢', '开心', '快乐', '高兴', '愉快', '温柔', '温暖', '美好', '希望', '勇敢',
+  '光明', '善良', '真诚', '信任', '安心', '欣慰', '满足', '欣慰', '感动', '心动',
+  '倾心', '思念', '牵挂', '守护', '陪伴', '眷恋', '期待', '向往', '坚定', '执着',
+  '明亮', '柔和', '灿烂', '清澈', '纯真', '天真', '善良', '慈祥', '宽容', '豁达',
+];
+const POSITIVE_WEAK = [
+  '笑', '微笑', '不错', '挺好', '还行', '舒服', '轻松', '平静', '安宁', '和谐',
+  '灯', '星', '暖', '安静', '温和', '细腻', '淡然', '从容', '宁静', '悠闲',
+  '熟悉', '亲切', '自然', '随意', '寻常', '平淡', '安稳', '踏实', '朴素', '简单',
+];
 
-const NEGATIVE_STRONG = ['恨', '痛恨', '仇恨', '痛苦', '绝望', '死亡', '杀戮', '毁灭', '恐怖', '噩梦', '残忍', '恶毒'];
-const NEGATIVE_MEDIUM = ['悲伤', '难过', '愤怒', '害怕', '恐惧', '危险', '伤害', '疼痛', '哭泣', '流泪', '黑暗', '冰冷', '威胁'];
-const NEGATIVE_WEAK = ['痛', '冷', '黑', '忧愁', '烦恼', '焦虑', '担心', '不安', '紧张', '疲惫', '伤', '血', '沙哑'];
+const NEGATIVE_STRONG = [
+  '恨', '痛恨', '仇恨', '痛苦', '绝望', '死亡', '杀戮', '毁灭', '恐怖', '噩梦',
+  '残忍', '恶毒', '暴怒', '崩溃', '心碎', '撕裂', '焚烧', '吞噬', '诅咒', '折磨',
+  '窒息', '绞杀', '血腥', '惨烈', '惨绝', '灭绝', '褫夺', '凌迟', '丧尽', '万劫',
+];
+const NEGATIVE_MEDIUM = [
+  '悲伤', '难过', '愤怒', '害怕', '恐惧', '危险', '伤害', '疼痛', '哭泣', '流泪',
+  '黑暗', '冰冷', '威胁', '孤独', '寂寞', '失落', '迷茫', '彷徨', '无助', '无奈',
+  '惆怅', '哀伤', '忧伤', '凄凉', '苍凉', '荒凉', '萧瑟', '沉寂', '压抑', '窒息',
+  '惨白', '阴暗', '阴沉', '凝重', '沉重', '紧张', '威胁', '警告', '胁迫', '逼迫',
+];
+const NEGATIVE_WEAK = [
+  '痛', '冷', '黑', '忧愁', '烦恼', '焦虑', '担心', '不安', '紧张', '疲惫',
+  '伤', '血', '沙哑', '皱眉', '叹息', '沉默', '迟疑', '犹豫', '恍惚', '困倦',
+  '酸涩', '苦涩', '寡淡', '黯淡', '模糊', '褪色', '斑驳', '残破', '破碎', '支离',
+];
 
-const NEGATION_WORDS = ['不', '没', '无', '非', '否', '别', '莫'];
+const NEGATION_WORDS = ['不', '没', '没有', '无', '非', '否', '别', '莫', '勿', '未', '毫不', '绝不', '从不', '决不', '难以', '无法', '不能', '不会'];
+
+const INTENSIFIERS: Record<string, number> = {
+  '很': 1.4, '非常': 1.6, '极其': 1.8, '特别': 1.5, '格外': 1.5,
+  '十分': 1.5, '相当': 1.3, '无比': 1.7, '极度': 1.8, '万分': 1.7,
+  '太': 1.5, '真': 1.3, '好': 1.2, '最': 1.6, '更': 1.3,
+  '越': 1.3, '甚': 1.4, '颇为': 1.4, '着实': 1.4, '深深': 1.5,
+};
+
+const RHETORICAL_PATTERNS = [
+  /难道.{1,8}吗/, /岂.{1,6}能/, /怎.{1,6}能/, /何.{1,6}曾/,
+  /岂不是/, /怎么会/, /怎能/, /焉能/, /莫非/, /不是.{0,4}吗/,
+];
+
+function isRhetoricalQuestion(sentence: string): boolean {
+  return RHETORICAL_PATTERNS.some(p => p.test(sentence));
+}
+
+function countNegationsBefore(text: string, position: number): number {
+  let count = 0;
+  for (const neg of NEGATION_WORDS) {
+    let idx = text.lastIndexOf(neg, position - 1);
+    while (idx !== -1 && position - idx <= neg.length + 10) {
+      count++;
+      if (idx === 0) break;
+      idx = text.lastIndexOf(neg, idx - 1);
+    }
+  }
+  return count;
+}
+
+function findIntensifierBefore(text: string, position: number): number {
+  let maxMult = 1.0;
+  for (const [word, mult] of Object.entries(INTENSIFIERS)) {
+    const idx = text.lastIndexOf(word, position - 1);
+    if (idx !== -1 && position - idx <= word.length + 4) {
+      maxMult = Math.max(maxMult, mult);
+    }
+  }
+  return maxMult;
+}
 
 function calcSentiment(text: string): number {
+  const isRhet = isRhetoricalQuestion(text);
+
   let total = 0;
   let wordCount = 0;
 
@@ -287,33 +355,32 @@ function calcSentiment(text: string): number {
 
   found.sort((a, b) => a.pos - b.pos);
 
-  const negationPositions: number[] = [];
-  NEGATION_WORDS.forEach((neg) => {
-    let idx = text.indexOf(neg);
-    while (idx !== -1) {
-      negationPositions.push(idx);
-      idx = text.indexOf(neg, idx + 1);
-    }
-  });
-  negationPositions.sort((a, b) => a - b);
-
   const used = new Set<number>();
   found.forEach((item) => {
     if (used.has(item.pos)) return;
+    let overlaps = false;
     for (let i = item.pos; i < item.pos + item.len; i++) {
-      if (used.has(i)) return;
+      if (used.has(i)) { overlaps = true; break; }
     }
+    if (overlaps) return;
     for (let i = item.pos; i < item.pos + item.len; i++) {
       used.add(i);
     }
 
     let score = item.score;
 
-    for (const negPos of negationPositions) {
-      if (negPos < item.pos && item.pos - negPos <= 6) {
+    const negCount = countNegationsBefore(text, item.pos);
+    if (negCount > 0) {
+      if (negCount % 2 === 1) {
         score = -score;
-        break;
       }
+    }
+
+    const intensMult = findIntensifierBefore(text, item.pos);
+    score *= intensMult;
+
+    if (isRhet && score > 0) {
+      score *= -0.6;
     }
 
     total += score;
