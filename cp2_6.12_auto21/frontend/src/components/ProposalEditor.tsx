@@ -42,7 +42,7 @@ const ProposalEditor: React.FC<ProposalEditorProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isDividerHovered, setIsDividerHovered] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [isMobile, setIsMobile] = useState(window.matchMedia('(max-width: 768px)').matches);
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -53,9 +53,11 @@ const ProposalEditor: React.FC<ProposalEditorProps> = ({
   const isLocalChangeRef = useRef<boolean>(false);
 
   useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    const handleChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    setIsMobile(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
   useEffect(() => {
@@ -91,16 +93,9 @@ const ProposalEditor: React.FC<ProposalEditorProps> = ({
     const removeEnd = oldContent.length - commonSuffix;
     const insertText = newContent.substring(commonPrefix, newContent.length - commonSuffix);
 
-    textarea.focus();
-    textarea.setSelectionRange(removeStart, removeEnd);
+    const finalContent = oldContent.substring(0, removeStart) + insertText + oldContent.substring(removeEnd);
+    textarea.value = finalContent;
 
-    if (insertText.length > 0) {
-      document.execCommand('insertText', false, insertText);
-    } else if (removeStart !== removeEnd) {
-      document.execCommand('delete', false);
-    }
-
-    const finalContent = textarea.value;
     const lenDiff = newContent.length - oldContent.length;
 
     let newStart = savedStart;
@@ -214,20 +209,15 @@ const ProposalEditor: React.FC<ProposalEditorProps> = ({
   const lineCount = lines.length;
   const lineNumberWidth = String(lineCount).length * 10 + 16;
 
-  const getCursorStyle = (position: number): { top: number; left: number } => {
-    const textBeforeCursor = content.substring(0, position);
-    const lineIndex = textBeforeCursor.split('\n').length - 1;
-    const lastNewline = textBeforeCursor.lastIndexOf('\n');
-    const colIndex = position - lastNewline - 1;
+  const getCursorStyle = (cursorPosition: CursorPosition): { top: number; left: number } => {
     const lineHeight = 21;
     const charWidth = 8.4;
     return {
-      top: lineIndex * lineHeight,
-      left: colIndex * charWidth + 12,
+      top: (cursorPosition.line - 1) * lineHeight,
+      left: (cursorPosition.column - 1) * charWidth + 12,
     };
   };
 
-  const isMobile = windowWidth < 768;
   const showDividerIndicator = isDragging || isDividerHovered;
 
   const renderEditor = () => (
@@ -303,7 +293,7 @@ const ProposalEditor: React.FC<ProposalEditorProps> = ({
               }}
             >
               {Array.from(remoteCursors.entries()).map(([uid, cursor]) => {
-                const pos = getCursorStyle(cursor.position);
+                const pos = getCursorStyle(cursor.cursorPosition);
                 return (
                   <div
                     key={uid}

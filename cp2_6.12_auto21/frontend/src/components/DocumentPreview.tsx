@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 interface DocumentPreviewProps {
   content: string;
@@ -9,6 +11,7 @@ interface DocumentPreviewProps {
 function DocumentPreview({ content, onClose }: DocumentPreviewProps) {
   const [visible, setVisible] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,8 +70,73 @@ function DocumentPreview({ content, onClose }: DocumentPreviewProps) {
     }
   };
 
-  const handleDownloadPDF = () => {
-    window.print();
+  const handleDownloadPDF = async () => {
+    if (!contentRef.current) return;
+
+    setIsGenerating(true);
+
+    try {
+      const element = contentRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#fff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+      const margin = 20;
+      const contentWidth = pdfWidth - margin * 2;
+      const contentHeight = pdfHeight - margin * 2;
+
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = contentWidth / imgWidth;
+      const scaledImgHeight = imgHeight * ratio;
+
+      if (scaledImgHeight <= contentHeight) {
+        pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, scaledImgHeight);
+      } else {
+        const pageHeightPx = contentHeight / ratio;
+        let heightLeft = imgHeight;
+        let position = 0;
+        let page = 0;
+
+        while (heightLeft > 0) {
+          const srcY = page * pageHeightPx;
+          const srcHeight = Math.min(pageHeightPx, heightLeft);
+          const destHeight = srcHeight * ratio;
+
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = imgWidth;
+          tempCanvas.height = srcHeight;
+          const tempCtx = tempCanvas.getContext('2d');
+          if (tempCtx) {
+            tempCtx.fillStyle = '#fff';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.drawImage(canvas, 0, srcY, imgWidth, srcHeight, 0, 0, imgWidth, srcHeight);
+            const pageImgData = tempCanvas.toDataURL('image/png');
+
+            if (page > 0) {
+              pdf.addPage();
+            }
+            pdf.addImage(pageImgData, 'PNG', margin, margin, contentWidth, destHeight);
+          }
+
+          heightLeft -= pageHeightPx;
+          position -= contentHeight;
+          page++;
+        }
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      pdf.save(`提案_${timestamp}.pdf`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleFullscreen = () => {
@@ -189,7 +257,7 @@ function DocumentPreview({ content, onClose }: DocumentPreviewProps) {
               lineHeight: 1,
               padding: 6,
               zIndex: 10,
-              transition: 'color 0.2s',
+              transition: 'color 0.2s, background 0.2s',
               width: 32,
               height: 32,
               display: 'flex',
@@ -258,26 +326,30 @@ function DocumentPreview({ content, onClose }: DocumentPreviewProps) {
             </button>
             <button
               onClick={handleDownloadPDF}
+              disabled={isGenerating}
               style={{
                 padding: '8px 20px',
                 border: '1px solid #bdc3c7',
                 borderRadius: 6,
                 background: '#fff',
-                cursor: 'pointer',
+                cursor: isGenerating ? 'not-allowed' : 'pointer',
                 fontSize: 13,
                 color: '#2C3E50',
                 transition: 'all 0.2s',
+                opacity: isGenerating ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f8f9fa';
-                e.currentTarget.style.borderColor = '#95a5a6';
+                if (!isGenerating) {
+                  e.currentTarget.style.background = '#f8f9fa';
+                  e.currentTarget.style.borderColor = '#95a5a6';
+                }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = '#fff';
                 e.currentTarget.style.borderColor = '#bdc3c7';
               }}
             >
-              下载PDF
+              {isGenerating ? '生成中...' : '下载PDF'}
             </button>
             <button
               onClick={handleFullscreen}

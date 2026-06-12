@@ -39,6 +39,7 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
 
   const visibleVersions = allVersions.slice(0, Math.min(displayCount, MAX_VERSIONS));
   const hasMore = allVersions.length > displayCount && displayCount < MAX_VERSIONS;
+  const totalHeight = visibleVersions.length * ITEM_HEIGHT;
 
   const calculateVisibleRange = useCallback(() => {
     if (isRecalculatingRef.current) return;
@@ -150,8 +151,6 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
     setDisplayCount((prev) => Math.min(prev + BATCH_SIZE, MAX_VERSIONS));
   };
 
-  const paddingTop = startIndex * ITEM_HEIGHT;
-  const paddingBottom = Math.max(0, (visibleVersions.length - endIndex) * ITEM_HEIGHT);
   const renderedVersions = visibleVersions.slice(startIndex, endIndex);
 
   return (
@@ -165,92 +164,123 @@ function VersionHistory({ proposalId, onRestore }: VersionHistoryProps) {
           minHeight: 0,
         }}
       >
-        <div style={{ paddingTop, paddingBottom }}>
-          <div ref={topSentinelRef} style={{ height: 1 }} />
-          {renderedVersions.map((v) => {
-            const isSelected = selectedVersion === v.version;
+        <div style={{ height: totalHeight, position: 'relative' }}>
+          <div
+            ref={topSentinelRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+            }}
+          />
+          <div
+            ref={bottomSentinelRef}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+            }}
+          >
+            {renderedVersions.map((v, i) => {
+              const isSelected = selectedVersion === v.version;
+              const actualIndex = startIndex + i;
 
-            return (
-              <div
-                key={v.version}
-                style={{
-                  position: 'relative',
-                  height: ITEM_HEIGHT,
-                }}
-              >
+              return (
                 <div
-                  onClick={() => handleSelectVersion(v.version)}
+                  key={v.version}
                   style={{
+                    position: 'absolute',
+                    top: actualIndex * ITEM_HEIGHT,
+                    left: 0,
+                    right: 0,
                     height: ITEM_HEIGHT,
-                    padding: '8px 12px',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer',
-                    background: isSelected ? '#d5dbdb' : '#ECF0F1',
-                    borderBottom: '1px solid #BDC3C7',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
                   }}
                 >
-                  <div style={{ color: '#2C3E50', fontWeight: 600, fontSize: 13 }}>
-                    版本 {v.version}
-                  </div>
-                  <div style={{ color: '#7f8c8d', fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{formatTime(v.timestamp)}</span>
-                    <span>{v.editorName}</span>
-                  </div>
-                </div>
-
-                {isSelected && (
                   <div
+                    onClick={() => handleSelectVersion(v.version)}
                     style={{
-                      position: 'absolute',
-                      top: ITEM_HEIGHT,
-                      left: 0,
-                      right: 0,
-                      background: '#fff',
-                      padding: 16,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                      zIndex: 10,
-                      animation: 'slideIn 0.3s ease',
+                      height: ITEM_HEIGHT,
+                      padding: '8px 12px',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer',
+                      background: isSelected ? '#d5dbdb' : '#ECF0F1',
+                      borderBottom: '1px solid #BDC3C7',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
                     }}
                   >
+                    <div style={{ color: '#2C3E50', fontWeight: 600, fontSize: 13 }}>
+                      版本 {v.version}
+                    </div>
+                    <div style={{ color: '#7f8c8d', fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>{formatTime(v.timestamp)}</span>
+                      <span>{v.editorName}</span>
+                    </div>
+                  </div>
+
+                  {isSelected && (
                     <div
                       style={{
-                        maxHeight: 150,
-                        overflowY: 'auto',
-                        fontSize: 13,
-                        color: '#2C3E50',
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: 1.6,
+                        position: 'absolute',
+                        top: ITEM_HEIGHT,
+                        left: 0,
+                        right: 0,
+                        background: '#fff',
+                        padding: 16,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        zIndex: 10,
+                        animation: 'slideIn 0.3s ease',
                       }}
                     >
-                      {v.content || '(空内容)'}
+                      <div
+                        style={{
+                          maxHeight: 150,
+                          overflowY: 'auto',
+                          fontSize: 13,
+                          color: '#2C3E50',
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {v.content || '(空内容)'}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRestoreClick(v.version);
+                        }}
+                        style={{
+                          marginTop: 12,
+                          padding: '6px 16px',
+                          background: '#2C3E50',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 4,
+                          cursor: 'pointer',
+                          fontSize: 13,
+                        }}
+                      >
+                        恢复此版本
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRestoreClick(v.version);
-                      }}
-                      style={{
-                        marginTop: 12,
-                        padding: '6px 16px',
-                        background: '#2C3E50',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        fontSize: 13,
-                      }}
-                    >
-                      恢复此版本
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          <div ref={bottomSentinelRef} style={{ height: 1 }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
