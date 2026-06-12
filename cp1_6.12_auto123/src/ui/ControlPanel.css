@@ -1,0 +1,350 @@
+.control-panel {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 260px;
+  background: rgba(10, 14, 26, 0.85);
+  border: 1px solid #2a3a5a;
+  border-radius: 12px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  user-select: none;
+  transition: opacity 0.3s ease;
+}
+
+.control-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2a3a5a;
+}
+
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.tab-btn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms ease-out;
+}
+
+.tab-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+  transform: scale(1.05);
+}
+
+.tab-btn.active {
+  background: #00f0ff;
+  color: #0a0e1a;
+}
+
+.reset-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ff6b9d;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 150ms ease-out;
+  flex-shrink: 0;
+}
+
+.reset-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+}
+
+.reset-btn:active {
+  transform: scale(0.95);
+}
+
+.panel-content {
+  padding: 16px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.fade-in {
+  animation: fadeIn 250ms ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #334;
+  outline: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #00f0ff;
+  cursor: pointer;
+  transition: transform 150ms ease-out;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #00f0ff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+.color-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.color-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all 150ms ease-out;
+  border: 1px solid transparent;
+}
+
+.color-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.02);
+}
+
+.color-item.selected {
+  background: rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.3);
+}
+
+.color-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.color-name {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.color-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid #4a5a7a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #00f0ff;
+  flex-shrink: 0;
+}
+
+.color-item.selected .color-checkbox {
+  border-color: #00f0ff;
+  background: rgba(0, 240, 255, 0.15);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: #334;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  padding: 2px;
+  transition: background 150ms ease-out;
+}
+
+.toggle-switch.on {
+  background: #00f0ff;
+}
+
+.toggle-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: left 150ms ease-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-switch.on .toggle-knob {
+  left: 22px;
+}
+
+.toggle-switch:hover {
+  transform: scale(1.05);
+}
+
+.toggle-switch:active {
+  transform: scale(0.95);
+}
+
+.hint-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
+.mode-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #2a3a5a;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 150ms ease-out;
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.03);
+}
+
+.mode-btn.active {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: #00f0ff;
+  color: #00f0ff;
+}
+
+.bg-color-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bg-color-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 150ms ease-out;
+  padding: 0;
+}
+
+.bg-color-btn:hover {
+  transform: scale(1.1);
+}
+
+.bg-color-btn.active {
+  transform: scale(1.15);
+}
+
+.gradient-picker {
+  display: flex;
+  gap: 12px;
+}
+
+.gradient-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.gradient-item input[type="color"] {
+  width: 50px;
+  height: 32px;
+  border: 1px solid #2a3a5a;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.panel-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-content::-webkit-scrollbar-thumb {
+  background: #2a3a5a;
+  border-radius: 2px;
+}
