@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Upload, Sparkles, X, ImageIcon } from 'lucide-react';
+import { Upload, Sparkles, X, ImageIcon, GripVertical } from 'lucide-react';
 
 interface UploadedImage {
   id: string;
@@ -25,6 +25,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   mobileOpen
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragImageRef = useRef<HTMLImageElement | null>(null);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -44,13 +45,56 @@ const Toolbar: React.FC<ToolbarProps> = ({
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, imageId: string) => {
-    e.dataTransfer.setData('imageId', imageId);
+  const handleDragStart = (e: React.DragEvent, image: UploadedImage) => {
+    e.dataTransfer.setData('imageId', image.id);
     e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.dropEffect = 'copy';
+
+    if (dragImageRef.current) {
+      dragImageRef.current.src = image.thumbnailUrl;
+      e.dataTransfer.setDragImage(dragImageRef.current, 50, 50);
+    }
+
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '0.6';
+    target.style.transform = 'scale(0.95)';
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '1';
+    target.style.transform = 'scale(1)';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDropOnGallery = (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      Array.from(files).forEach((file) => {
+        if (file.type.startsWith('image/')) {
+          onUpload(file);
+        }
+      });
+    }
   };
 
   return (
     <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
+      <div ref={() => {
+        const img = document.createElement('img');
+        img.style.position = 'absolute';
+        img.style.top = '-9999px';
+        img.style.left = '-9999px';
+        img.width = 100;
+        img.height = 100;
+        dragImageRef.current = img;
+      }} />
+
       <div className="sidebar-header">
         <div className="sidebar-title">图片库</div>
         <button
@@ -75,7 +119,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </div>
       </div>
 
-      <div className="image-gallery">
+      <div
+        className="image-gallery"
+        onDragOver={handleDragOver}
+        onDrop={handleDropOnGallery}
+      >
         {images.length === 0 && (
           <div style={{
             gridColumn: '1 / -1',
@@ -87,10 +135,13 @@ const Toolbar: React.FC<ToolbarProps> = ({
             color: '#94a3b8',
             fontSize: '12px',
             textAlign: 'center',
-            gap: '8px'
+            gap: '8px',
+            border: '1px dashed rgba(0, 245, 255, 0.2)',
+            borderRadius: '8px',
+            background: 'rgba(0, 245, 255, 0.02)'
           }}>
             <ImageIcon size={28} style={{ opacity: 0.3 }} />
-            <span>拖拽图片到此处或点击上传</span>
+            <span>点击上传或拖拽图片到此处</span>
           </div>
         )}
         {images.map((img) => (
@@ -98,14 +149,35 @@ const Toolbar: React.FC<ToolbarProps> = ({
             key={img.id}
             className="thumbnail"
             draggable
-            onDragStart={(e) => handleDragStart(e, img.id)}
-            title="拖拽到画布"
+            onDragStart={(e) => handleDragStart(e, img)}
+            onDragEnd={handleDragEnd}
+            title="拖拽到画布放置"
           >
-            <img src={img.thumbnailUrl} alt="" />
+            <img src={img.thumbnailUrl} alt="" draggable={false} />
+            <div
+              style={{
+                position: 'absolute',
+                top: 4,
+                left: 4,
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.5)',
+                borderRadius: 3,
+                opacity: 0,
+                transition: 'opacity 0.2s ease'
+              }}
+              className="drag-handle"
+            >
+              <GripVertical size={12} style={{ color: 'white' }} />
+            </div>
             <button
               className="thumbnail-delete"
               onClick={(e) => {
                 e.stopPropagation();
+                e.preventDefault();
                 onDelete(img.id);
               }}
               title="删除"

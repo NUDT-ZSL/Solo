@@ -1,6 +1,7 @@
-import React from 'react';
-import { Circle, Triangle, Hexagon, Plus, Trash2, Sliders } from 'lucide-react';
+import React, { useState } from 'react';
+import { Circle, Triangle, Hexagon, Plus, Trash2, Sliders, Palette } from 'lucide-react';
 import type { ShapeType, BlendMode } from '../core/shapeRenderer';
+import ColorWheel from './ColorWheel';
 
 interface CanvasImage {
   id: string;
@@ -52,6 +53,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({
   onDeleteShape,
   mobileOpen
 }) => {
+  const [showColorWheel, setShowColorWheel] = useState(false);
   const selectedShape = shapes.find((s) => s.id === selectedShapeId) || null;
   const imageShapes = shapes;
 
@@ -245,12 +247,81 @@ const EditorPanel: React.FC<EditorPanelProps> = ({
                 </div>
 
                 <div className="field">
-                  <label className="field-label">发光颜色</label>
-                  <input
-                    type="color"
-                    value={selectedShape.glowColor}
-                    onChange={(e) => onShapeChange(selectedShape.id, { glowColor: e.target.value })}
-                  />
+                  <label className="field-label">
+                    发光颜色
+                    <span
+                      style={{
+                        float: 'right',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        fontSize: '11px',
+                        color: '#00f5ff',
+                        cursor: 'pointer',
+                        textTransform: 'none',
+                        fontWeight: 500
+                      }}
+                      onClick={() => setShowColorWheel(!showColorWheel)}
+                    >
+                      <Palette size={12} />
+                      {showColorWheel ? '收起' : '色轮'}
+                    </span>
+                  </label>
+                  {showColorWheel ? (
+                    <div style={{ marginTop: 8 }}>
+                      <ColorWheel
+                        color={selectedShape.glowColor}
+                        onChange={(color) => onShapeChange(selectedShape.id, { glowColor: color })}
+                        size={200}
+                      />
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 10px',
+                      background: 'rgba(0, 245, 255, 0.06)',
+                      border: '1px solid rgba(0, 245, 255, 0.2)',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onClick={() => setShowColorWheel(true)}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(0, 245, 255, 0.5)';
+                      (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 10px rgba(0, 245, 255, 0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(0, 245, 255, 0.2)';
+                      (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                    }}
+                    >
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          background: selectedShape.glowColor,
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          boxShadow: `0 0 8px ${selectedShape.glowColor}80`
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: 'monospace',
+                          fontSize: '13px',
+                          color: '#00f5ff',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          flex: 1
+                        }}
+                      >
+                        {selectedShape.glowColor}
+                      </span>
+                      <Palette size={14} style={{ color: '#94a3b8' }} />
+                    </div>
+                  )}
                 </div>
               </>
             )}

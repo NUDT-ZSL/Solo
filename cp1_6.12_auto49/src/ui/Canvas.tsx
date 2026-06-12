@@ -1,6 +1,13 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { MousePointer2 } from 'lucide-react';
-import { createShape, getShapePixelRegion, getAveragePixelColor, type ShapeType, type BlendMode } from '../core/shapeRenderer';
+import {
+  createShape,
+  getShapePixelRegion,
+  getAveragePixelColor,
+  applyBlendMode,
+  type ShapeType,
+  type BlendMode
+} from '../core/shapeRenderer';
 
 interface UploadedImageData {
   id: string;
@@ -42,7 +49,7 @@ interface Particle {
   vy: number;
   size: number;
   baseSize: number;
-  color: { r: number; g: number; b: number };
+  baseColor: { r: number; g: number; b: number };
   alpha: number;
   life: number;
   maxLife: number;
@@ -73,8 +80,12 @@ interface CanvasProps {
   onFadeInProgress: (id: string, progress: number) => void;
   onUpdateShapePixels: (shapeId: string) => void;
   onDropImage: (imageId: string, x: number, y: number) => void;
-  particleCountOverride?: number;
 }
+
+const BASE_PARTICLES_PER_SHAPE = 20;
+const MIN_PARTICLES_PER_SHAPE = 5;
+const MAX_PARTICLES_TOTAL = 500;
+const TARGET_FPS = 45;
 
 const Canvas: React.FC<CanvasProps> = ({
   width,
@@ -98,6 +109,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const particlesRef = useRef<Particle[]>([]);
   const animFrameRef = useRef<number>(0);
   const loadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
   const isDraggingRef = useRef<{
     type: 'pan' | 'image' | 'shape' | null;
     startX: number;
@@ -108,17 +120,19 @@ const Canvas: React.FC<CanvasProps> = ({
     origOffsetX: number;
     origOffsetY: number;
   }>({ type: null, startX: 0, startY: 0, id: null, origX: 0, origY: 0, origOffsetX: 0, origOffsetY: 0 });
-  const lastTimeRef = useRef<number>(0);
-  const particleSpawnTimerRef = useRef<Map<string, number>>(new Map());
 
-  const screenToCanvas = useCallback((sx: number, sy: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const cx = ((sx - rect.left) - canvasView.offsetX) / canvasView.scale;
-    const cy = ((sy - rect.top) - canvasView.offsetY) / canvasView.scale;
-    return { x: cx, y: cy };
-  }, [canvasView]);
+  const fpsStateRef = useRef({
+    lastFrameTime: 0,
+    frameCount: 0,
+    fps: 60,
+    fpsUpdateTime: 0,
+    particleMultiplier: 1.0
+  });
+
+  const particleSpawnTimerRef = useRef<Map<string, number>>(new Map());
+  const lastTimestampRef = useRef<number>(0);
+  const viewRef = useRef(canvasView);
+  viewRef.current = canvasView;
 
   useEffect(() => {
     uploadedImages.forEach((img) => {
@@ -130,32 +144,46 @@ const Canvas: React.FC<CanvasProps> = ({
     });
   }, [uploadedImages]);
 
-  const spawnParticles = useCallback((shape: ShapeData, count: number) => {
+  const computeTargetParticleCount = useCallback((imageCount: number, shapeCount: number) => {
+    if (shapeCount === 0) return 0;
+    const perShape = imageCount > 6 || shapeCount > 20
+      ? Math.max(MIN_PARTICLES_PER_SHAPE, Math.floor(BASE_PARTICLES_PER_SHAPE * 0.5))
+      : BASE_PARTICLES_PER_SHAPE;
+    return Math.min(MAX_PARTICLES_TOTAL, perShape * shapeCount);
+  }, []);
+
+  const spawnParticlesForShape = useCallback((shape: ShapeData, avgColor: { r: number; g: number; b: number }, count: number) => {
+    const newParticles: Particle[] = [];
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 20 + Math.random() * 40;
-      const t = Math.random();
+      const speed = 25 + Math.random() * 50;
       const r = shape.size / 2;
-      const px = shape.x + Math.cos(angle) * r * 0.5;
-      const py = shape.y + Math.sin(angle) * r * 0.5;
-      particlesRef.current.push({
-        x: px,
-        y: py,
+      const startR = Math.random() * r * 0.6;
+      newParticles.push({
+        x: shape.x + Math.cos(angle) * startR,
+        y: shape.y + Math.sin(angle) * startR,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        baseSize: 2 + Math.random() * 3,
-        size: 2 + Math.random() * 3,
-        color: {
-          r: Math.round(0 + t * 255),
-          g: Math.round(245 + t * 10),
-          b: Math.round(255 - t * 200)
-        },
-        alpha: 0.8,
+        baseSize: 2 + Math.random() * 4,
+        size: 2 + Math.random() * 4,
+        baseColor: avgColor,
+        alpha: 0.9,
         life: 0,
-        maxLife: 1500,
+        maxLife: 1200 + Math.random() * 600,
         shapeId: shape.id
       });
     }
+    return newParticles;
+  }, []);
+
+  const screenToCanvas = useCallback((sx: number, sy: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const v = viewRef.current;
+    const cx = ((sx - rect.left) - v.offsetX) / v.scale;
+    const cy = ((sy - rect.top) - v.offsetY) / v.scale;
+    return { x: cx, y: cy };
   }, []);
 
   useEffect(() => {
@@ -169,8 +197,22 @@ const Canvas: React.FC<CanvasProps> = ({
     const render = (timestamp: number) => {
       if (!running) return;
 
-      const dt = lastTimeRef.current ? Math.min(timestamp - lastTimeRef.current, 50) : 16;
-      lastTimeRef.current = timestamp;
+      const state = fpsStateRef.current;
+      const dt = state.lastFrameTime ? Math.min(timestamp - state.lastFrameTime, 60) : 16;
+      state.lastFrameTime = timestamp;
+
+      state.frameCount++;
+      if (timestamp - state.fpsUpdateTime >= 500) {
+        state.fps = Math.round((state.frameCount * 1000) / (timestamp - state.fpsUpdateTime));
+        state.frameCount = 0;
+        state.fpsUpdateTime = timestamp;
+
+        if (state.fps < TARGET_FPS && state.particleMultiplier > 0.3) {
+          state.particleMultiplier = Math.max(0.3, state.particleMultiplier - 0.1);
+        } else if (state.fps >= 58 && state.particleMultiplier < 1.0) {
+          state.particleMultiplier = Math.min(1.0, state.particleMultiplier + 0.05);
+        }
+      }
 
       canvasImages.forEach((img) => {
         if (img.fadeInProgress < 1) {
@@ -179,22 +221,43 @@ const Canvas: React.FC<CanvasProps> = ({
         }
       });
 
-      if (lightEffectsEnabled && shapes.length > 0) {
-        const imageCount = canvasImages.length;
-        const shapeCount = shapes.length;
-        const baseParticleRate = imageCount > 6 || shapeCount > 20 ? 15 : 30;
+      const targetTotal = computeTargetParticleCount(canvasImages.length, shapes.length);
+      const adjustedTarget = Math.floor(targetTotal * state.particleMultiplier);
+
+      if (lightEffectsEnabled && shapes.length > 0 && adjustedTarget > 0) {
+        const perShapeTarget = Math.max(1, Math.floor(adjustedTarget / shapes.length));
+        const spawnInterval = shapes.length * 1000 / (adjustedTarget * 0.6);
 
         shapes.forEach((shape) => {
           const current = particleSpawnTimerRef.current.get(shape.id) || 0;
           const newTimer = current + dt;
-          const spawnInterval = 1000 / (baseParticleRate / shapeCount);
           if (newTimer >= spawnInterval) {
-            particleSpawnTimerRef.current.set(shape.id, 0);
-            spawnParticles(shape, 1);
+            particleSpawnTimerRef.current.set(shape.id, newTimer - spawnInterval);
+            const cImg = canvasImages.find((ci) => ci.id === shape.canvasImageId);
+            const uImg = cImg ? uploadedImages.find((ui) => ui.id === cImg.imageId) : null;
+            if (uImg && cImg) {
+              const fillColors = getShapePixelRegion(
+                shape.type, shape.size, shape.rotation, shape.x, shape.y,
+                uImg.pixelData, cImg.x, cImg.y, cImg.width, cImg.height
+              );
+              const avgColor = getAveragePixelColor(fillColors);
+              const newParticles = spawnParticlesForShape(shape, avgColor, 1);
+              particlesRef.current.push(...newParticles);
+            }
           } else {
             particleSpawnTimerRef.current.set(shape.id, newTimer);
           }
         });
+
+        if (particlesRef.current.length > adjustedTarget) {
+          const excess = particlesRef.current.length - adjustedTarget;
+          particlesRef.current.splice(0, excess);
+        }
+      } else if (!lightEffectsEnabled) {
+        if (particlesRef.current.length > 0) {
+          particlesRef.current = [];
+        }
+        particleSpawnTimerRef.current.clear();
       }
 
       particlesRef.current = particlesRef.current.filter((p) => {
@@ -203,20 +266,18 @@ const Canvas: React.FC<CanvasProps> = ({
         const t = p.life / p.maxLife;
         p.x += (p.vx * dt) / 1000;
         p.y += (p.vy * dt) / 1000;
-        p.size = p.baseSize * (1 - t);
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        p.size = p.baseSize * (1 - t * 0.8);
         p.alpha = 0.9 * (1 - t);
         return true;
       });
-
-      if (particlesRef.current.length > 500) {
-        particlesRef.current = particlesRef.current.slice(-500);
-      }
 
       ctx.save();
       ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, width, height);
 
-      ctx.strokeStyle = 'rgba(0, 245, 255, 0.04)';
+      ctx.strokeStyle = 'rgba(0, 245, 255, 0.05)';
       ctx.lineWidth = 1;
       const gridSize = 40;
       for (let x = 0; x <= width; x += gridSize) {
@@ -235,26 +296,49 @@ const Canvas: React.FC<CanvasProps> = ({
       ctx.translate(canvasView.offsetX, canvasView.offsetY);
       ctx.scale(canvasView.scale, canvasView.scale);
 
+      const bgColor = { r: 26, g: 26, b: 46 };
+
       canvasImages.forEach((cImg) => {
         const srcImg = loadedImagesRef.current.get(cImg.imageId);
         if (!srcImg || !srcImg.complete) return;
 
         ctx.save();
-        ctx.globalAlpha = (cImg.opacity / 100) * cImg.fadeInProgress;
+        const alpha = (cImg.opacity / 100) * cImg.fadeInProgress;
 
-        if (cImg.hueShift && cImg.hueShift > 0) {
-          ctx.filter = `hue-rotate(${cImg.hueShift}deg)`;
+        if (cImg.blendMode === 'normal') {
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(srcImg, cImg.x, cImg.y, cImg.width, cImg.height);
+        } else {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = cImg.width;
+          tempCanvas.height = cImg.height;
+          const tempCtx = tempCanvas.getContext('2d')!;
+          tempCtx.drawImage(srcImg, 0, 0, cImg.width, cImg.height);
+          const imgData = tempCtx.getImageData(0, 0, cImg.width, cImg.height);
+          const data = imgData.data;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const srcR = data[i];
+            const srcG = data[i + 1];
+            const srcB = data[i + 2];
+            const result = applyBlendMode(bgColor, { r: srcR, g: srcG, b: srcB }, cImg.blendMode, 100);
+            data[i] = result.r;
+            data[i + 1] = result.g;
+            data[i + 2] = result.b;
+            data[i + 3] = Math.round(255 * alpha);
+          }
+
+          tempCtx.putImageData(imgData, 0, 0);
+          ctx.drawImage(tempCanvas, cImg.x, cImg.y, cImg.width, cImg.height);
         }
 
-        const compositeMap: Record<BlendMode, GlobalCompositeOperation> = {
-          normal: 'source-over',
-          multiply: 'multiply',
-          screen: 'screen',
-          overlay: 'overlay'
-        };
-        ctx.globalCompositeOperation = compositeMap[cImg.blendMode];
+        if (cImg.hueShift && cImg.hueShift > 0) {
+          ctx.globalCompositeOperation = 'hue';
+          ctx.globalAlpha = alpha * 0.3;
+          ctx.fillStyle = `hsl(${cImg.hueShift * 60}, 100%, 50%)`;
+          ctx.fillRect(cImg.x, cImg.y, cImg.width, cImg.height);
+        }
 
-        ctx.drawImage(srcImg, cImg.x, cImg.y, cImg.width, cImg.height);
         ctx.restore();
 
         if (selectedImageId === cImg.id) {
@@ -276,16 +360,8 @@ const Canvas: React.FC<CanvasProps> = ({
         if (!uImg) return;
 
         const fillColors = getShapePixelRegion(
-          shape.type,
-          shape.size,
-          shape.rotation,
-          shape.x,
-          shape.y,
-          uImg.pixelData,
-          cImg.x,
-          cImg.y,
-          cImg.width,
-          cImg.height
+          shape.type, shape.size, shape.rotation, shape.x, shape.y,
+          uImg.pixelData, cImg.x, cImg.y, cImg.width, cImg.height
         );
         const avgColor = getAveragePixelColor(fillColors);
         const { path } = createShape(shape.type, shape.size, shape.rotation, shape.x, shape.y);
@@ -330,13 +406,18 @@ const Canvas: React.FC<CanvasProps> = ({
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         particlesRef.current.forEach((p) => {
-          const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+          const t = 1 - p.life / p.maxLife;
+          const cr = Math.round(p.baseColor.r + (255 - p.baseColor.r) * (1 - t));
+          const cg = Math.round(p.baseColor.g + (255 - p.baseColor.g) * (1 - t));
+          const cb = Math.round(p.baseColor.b + (255 - p.baseColor.b) * (1 - t));
+
+          const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
           gradient.addColorStop(0, `rgba(255, 255, 255, ${p.alpha})`);
-          gradient.addColorStop(0.3, `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${p.alpha * 0.8})`);
-          gradient.addColorStop(1, `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, 0)`);
+          gradient.addColorStop(0.4, `rgba(${cr}, ${cg}, ${cb}, ${p.alpha * 0.7})`);
+          gradient.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
           ctx.fillStyle = gradient;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
           ctx.fill();
         });
         ctx.restore();
@@ -354,7 +435,8 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [
     width, height, uploadedImages, canvasImages, shapes,
     lightEffectsEnabled, selectedImageId, selectedShapeId,
-    canvasView, spawnParticles, onFadeInProgress
+    canvasView, spawnParticlesForShape, onFadeInProgress,
+    computeTargetParticleCount
   ]);
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -365,7 +447,7 @@ const Canvas: React.FC<CanvasProps> = ({
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    const delta = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const delta = e.deltaY < 0 ? 1.15 : 1 / 1.15;
     const newScale = Math.max(0.5, Math.min(3, canvasView.scale * delta));
 
     const ratio = newScale / canvasView.scale;
@@ -461,6 +543,10 @@ const Canvas: React.FC<CanvasProps> = ({
     e.dataTransfer.dropEffect = 'copy';
   };
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const imageId = e.dataTransfer.getData('imageId');
@@ -481,6 +567,7 @@ const Canvas: React.FC<CanvasProps> = ({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
         onDrop={handleDrop}
       />
       {canvasImages.length === 0 && (
