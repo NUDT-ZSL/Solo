@@ -51,6 +51,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, fps = 60 
   const dragStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
   const lowFPSFrames = useRef(0);
+  const highFPSFrames = useRef(0);
+  const originalDensityRef = useRef<number | null>(null);
 
   const onMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT' || (e.target as HTMLElement).tagName === 'BUTTON') return;
@@ -78,18 +80,40 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, fps = 60 
   useEffect(() => {
     if (fps < 30) {
       lowFPSFrames.current++;
+      highFPSFrames.current = 0;
       if (lowFPSFrames.current > 3) {
         setWarningVisible(true);
       }
       if (fps < 25 && lowFPSFrames.current > 6 && !autoDowngraded && params.particleDensity > 1000) {
+        if (originalDensityRef.current === null) {
+          originalDensityRef.current = params.particleDensity;
+        }
         const newDensity = Math.max(1000, params.particleDensity - 3000);
         const snapped = Math.round(newDensity / 500) * 500;
         onChange('particleDensity', snapped);
         setAutoDowngraded(true);
         lowFPSFrames.current = 0;
       }
+    } else if (fps >= 50) {
+      highFPSFrames.current++;
+      lowFPSFrames.current = 0;
+      if (autoDowngraded && originalDensityRef.current !== null && highFPSFrames.current > 8) {
+        const step = Math.min(2000, originalDensityRef.current - params.particleDensity);
+        if (step > 0) {
+          const newDensity = Math.min(originalDensityRef.current, params.particleDensity + step);
+          const snapped = Math.round(newDensity / 500) * 500;
+          onChange('particleDensity', snapped);
+          highFPSFrames.current = 0;
+          if (snapped >= originalDensityRef.current) {
+            setAutoDowngraded(false);
+            originalDensityRef.current = null;
+            setWarningVisible(false);
+          }
+        }
+      }
     } else {
       lowFPSFrames.current = 0;
+      highFPSFrames.current = 0;
       if (fps >= 45) {
         setWarningVisible(false);
       }

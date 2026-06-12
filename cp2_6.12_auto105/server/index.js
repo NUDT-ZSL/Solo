@@ -38,22 +38,13 @@ const upload = multer({
   },
 });
 
-interface AudioMeta {
-  id: string;
-  originalName: string;
-  filename: string;
-  size: number;
-  mimetype: string;
-  uploadedAt: string;
-}
-
-const metaStore: AudioMeta[] = [];
+const metaStore = [];
 
 app.post('/api/upload', upload.single('audio'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const meta: AudioMeta = {
+  const meta = {
     id: uuidv4(),
     originalName: req.file.originalname,
     filename: req.file.filename,
@@ -65,8 +56,21 @@ app.post('/api/upload', upload.single('audio'), (req, res) => {
   res.json({ success: true, data: meta });
 });
 
-app.get('/api/audio', (_req, res) => {
-  res.json({ data: metaStore });
+app.get('/api/audio', (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+  const offset = (page - 1) * limit;
+  const total = metaStore.length;
+  const items = metaStore.slice(offset, offset + limit);
+  res.json({
+    data: items,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  });
 });
 
 app.get('/api/audio/:id', (req, res) => {
@@ -94,6 +98,17 @@ app.delete('/api/audio/:id', (req, res) => {
   }
   metaStore.splice(idx, 1);
   res.json({ success: true });
+});
+
+app.use((err, _req, res, _next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: '文件大小超过 20MB 限制' });
+  }
+  if (err.message === 'Only mp3 and wav files are allowed') {
+    return res.status(400).json({ error: err.message });
+  }
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => {

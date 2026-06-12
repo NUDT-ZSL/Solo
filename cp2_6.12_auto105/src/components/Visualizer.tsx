@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect, useState } from 'react';
+import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -54,19 +54,22 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
   const basePositionsRef = useRef<Float32Array | null>(null);
   const baseDirectionsRef = useRef<Float32Array | null>(null);
   const pulsePhaseRef = useRef<Float32Array | null>(null);
+  const freqBandRef = useRef<Uint8Array | null>(null);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
   const smoothRadiusRef = useRef(20);
   const smoothLowRef = useRef(0);
   const smoothMidRef = useRef(0);
   const smoothHighRef = useRef(0);
+  const smoothedBandEnergyRef = useRef(new Float32Array(64));
 
-  const { positions, colors, sizes } = useMemo(() => {
+  const { positions, colors, sizes, freqBands } = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const col = new Float32Array(count * 3);
     const siz = new Float32Array(count);
     const dir = new Float32Array(count * 3);
     const phase = new Float32Array(count);
+    const band = new Uint8Array(count);
 
     for (let i = 0; i < count; i++) {
       const theta = Math.random() * Math.PI * 2;
@@ -86,6 +89,10 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
       dir[i * 3 + 1] = y / len;
       dir[i * 3 + 2] = z / len;
 
+      const normalizedPhi = phi / Math.PI;
+      const normalizedTheta = ((theta + Math.PI) % (Math.PI * 2)) / (Math.PI * 2);
+      band[i] = Math.min(63, Math.floor(normalizedPhi * 32 + normalizedTheta * 32) % 64);
+
       col[i * 3] = 1;
       col[i * 3 + 1] = 1;
       col[i * 3 + 2] = 1;
@@ -97,8 +104,9 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
     basePositionsRef.current = pos.slice();
     baseDirectionsRef.current = dir;
     pulsePhaseRef.current = phase;
+    freqBandRef.current = band;
 
-    return { positions: pos, colors: col, sizes: siz };
+    return { positions: pos, colors: col, sizes: siz, freqBands: band };
   }, [count]);
 
   useEffect(() => {
@@ -122,6 +130,8 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
     const basePos = basePositionsRef.current!;
     const baseDir = baseDirectionsRef.current!;
     const pulsePhase = pulsePhaseRef.current!;
+    const freqBand = freqBandRef.current!;
+    const smoothedBand = smoothedBandEnergyRef.current;
     const time = clock.getElapsedTime();
 
     frameCountRef.current++;
@@ -141,12 +151,22 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
     if (spectrumData) {
       hasAudio = true;
       const freq = spectrumData.frequencies;
+
       for (let i = 0; i < 17; i++) lowEnergy += freq[i];
       lowEnergy /= (17 * 255);
       for (let i = 17; i < 49; i++) midEnergy += freq[i];
       midEnergy /= (32 * 255);
       for (let i = 49; i < 64; i++) highEnergy += freq[i];
       highEnergy /= (15 * 255);
+
+      for (let b = 0; b < 64; b++) {
+        const raw = freq[b] / 255;
+        smoothedBand[b] += (raw - smoothedBand[b]) * 0.18;
+      }
+    } else {
+      for (let b = 0; b < 64; b++) {
+        smoothedBand[b] *= 0.9;
+      }
     }
 
     const smoothFactor = 0.15;
@@ -165,7 +185,10 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
     pointsRef.current.rotation.y = time * rotationSpeed * 0.2;
     pointsRef.current.rotation.x = Math.sin(time * rotationSpeed * 0.1) * 0.1;
 
-    const radialScale = 1 + smoothMidRef.current * 0.6;
+    const LOW_AMP = 0.8;
+    const MID_AMP = 6.0;
+    const HIGH_AMP = 0.5;
+    const PULSE_AMP = 4.0;
     const sizeBase = 0.15;
     const sizeVar = 0.42;
 
@@ -174,15 +197,43 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
       const bx = basePos[i3];
       const by = basePos[i3 + 1];
       const bz = basePos[i3 + 2];
+      const dx = baseDir[i3];
+      const dy = baseDir[i3 + 1];
+      const dz = baseDir[i3 + 2];
+
+      const band = freqBand[i];
+      const bandEnergy = smoothedBand[band];
 
       if (hasAudio) {
-        const pulse = Math.sin(time * 3 + pulsePhase[i]) * 0.5 + 0.5;
-        const radialOffset = smoothMidRef.current * pulse * 4;
-        const scale = (smoothRadiusRef.current / 20) * radialScale;
+        let radialDisplacement = 0;
 
-        pos[i3] = bx * scale + baseDir[i3] * radialOffset;
-        pos[i3 + 1] = by * scale + baseDir[i3 + 1] * radialOffset;
-        pos[i3 + 2] = bz * scale + baseDir[i3 + 2] * radialOffset;
+        if (band < 17) {
+          const normalizedLow = bandEnergy;
+          radialDisplacement = normalizedLow * LOW_AMP;
+          const scale = smoothRadiusRef.current / 20;
+          pos[i3] = bx * scale + dx * radialDisplacement;
+          pos[i3 + 1] = by * scale + dy * radialDisplacement;
+          pos[i3 + 2] = bz * scale + dz * radialDisplacement;
+        } else if (band < 49) {
+          const normalizedMid = bandEnergy;
+          const pulse = Math.sin(time * 3 + pulsePhase[i]) * 0.5 + 0.5;
+          radialDisplacement = normalizedMid * MID_AMP * pulse;
+          const scale = 1 + smoothMidRef.current * 0.3;
+          pos[i3] = bx * scale + dx * radialDisplacement;
+          pos[i3 + 1] = by * scale + dy * radialDisplacement;
+          pos[i3 + 2] = bz * scale + dz * radialDisplacement;
+        } else {
+          const normalizedHigh = bandEnergy;
+          radialDisplacement = normalizedHigh * HIGH_AMP * Math.sin(time * 5 + pulsePhase[i]);
+          pos[i3] = bx + dx * radialDisplacement;
+          pos[i3 + 1] = by + dy * radialDisplacement;
+          pos[i3 + 2] = bz + dz * radialDisplacement;
+        }
+
+        const globalPulse = smoothMidRef.current * Math.sin(time * 3 + pulsePhase[i]) * 0.5 + smoothMidRef.current * 0.5;
+        pos[i3] += dx * globalPulse * PULSE_AMP;
+        pos[i3 + 1] += dy * globalPulse * PULSE_AMP;
+        pos[i3 + 2] += dz * globalPulse * PULSE_AMP;
       } else {
         pos[i3] = bx + (Math.random() - 0.5) * 0.01;
         pos[i3 + 1] = by + (Math.random() - 0.5) * 0.01;
@@ -194,7 +245,8 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
         col[i3 + 1] = 1;
         col[i3 + 2] = 1;
       } else {
-        const particleHue = hue + (i % 20) * 0.5;
+        const bandShift = band < 17 ? 0 : band < 49 ? (band - 17) * 2.5 : (band - 49) * 3;
+        const particleHue = hue + bandShift + (i % 10) * 0.3;
         const h = ((particleHue % 360) + 360) % 360;
         const s = theme.s / 100;
         const l = theme.l / 100;
@@ -213,7 +265,11 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
         col[i3 + 2] = b + m;
       }
 
-      siz[i] = (sizeBase + smoothHighRef.current * sizeVar) * sizeMultiplier;
+      if (band >= 49) {
+        siz[i] = (sizeBase + bandEnergy * sizeVar) * sizeMultiplier;
+      } else {
+        siz[i] = (sizeBase + smoothHighRef.current * sizeVar * 0.3) * sizeMultiplier;
+      }
     }
 
     posAttr.needsUpdate = true;
@@ -244,6 +300,7 @@ interface CameraControllerProps {
 
 const CameraController: React.FC<CameraControllerProps> = ({ viewMode, controlsRef }) => {
   const { camera } = useThree();
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (viewMode === 'free') return;
@@ -266,9 +323,20 @@ const CameraController: React.FC<CameraControllerProps> = ({ viewMode, controlsR
         controlsRef.current.target.set(0, 0, 0);
         controlsRef.current.update();
       }
-      if (t < 1) requestAnimationFrame(animate);
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(animate);
+      } else {
+        rafRef.current = null;
+      }
     };
-    animate();
+    rafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, [viewMode, camera, controlsRef]);
 
   return null;
@@ -338,9 +406,14 @@ const FPSCounter: React.FC<FPSCounterProps> = ({ fps }) => {
   );
 };
 
-const Visualizer: React.FC<VisualizerProps> = ({ spectrumData, params }) => {
-  const [fps, setFps] = useState(60);
+const Visualizer: React.FC<VisualizerProps> = ({ spectrumData, params, onFPSUpdate }) => {
+  const [internalFps, setInternalFps] = useState(60);
   const controlsRef = useRef<any>(null);
+
+  const handleFPSUpdate = useCallback((fps: number) => {
+    setInternalFps(fps);
+    onFPSUpdate?.(fps);
+  }, [onFPSUpdate]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -358,7 +431,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ spectrumData, params }) => {
           colorTheme={params.colorTheme}
           sizeMultiplier={params.sizeMultiplier}
           rotationSpeed={params.rotationSpeed}
-          onFPSUpdate={setFps}
+          onFPSUpdate={handleFPSUpdate}
         />
         <OrbitControls
           ref={controlsRef}
@@ -369,7 +442,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ spectrumData, params }) => {
           dampingFactor={0.05}
         />
       </Canvas>
-      <FPSCounter fps={fps} />
+      <FPSCounter fps={internalFps} />
     </div>
   );
 };

@@ -1,24 +1,35 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 interface FileUploaderProps {
   onFileAccepted: (file: File) => void;
 }
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = ['.mp3', '.wav'];
+const ALLOWED_MIMES = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/x-wav', 'audio/mp4', ''];
 
 const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [oversized, setOversized] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   const validateFile = (file: File): string | null => {
-    const allowed = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/x-wav'];
-    if (!allowed.includes(file.type) && !file.name.match(/\.(mp3|wav)$/i)) {
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
       return '仅支持 MP3 和 WAV 格式';
     }
-    if (file.size > 20 * 1024 * 1024) {
-      return '文件大小不能超过 20MB';
+    if (!ALLOWED_MIMES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(ext)) {
+      return '仅支持 MP3 和 WAV 格式';
     }
+    if (file.size > MAX_FILE_SIZE) {
+      setOversized(true);
+      return `文件大小 ${(file.size / 1024 / 1024).toFixed(1)}MB 超过 20MB 限制`;
+    }
+    setOversized(false);
     return null;
   };
 
@@ -29,6 +40,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
       return;
     }
     setError(null);
+    setOversized(false);
     setUploading(true);
     setProgress(0);
 
@@ -37,6 +49,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
 
     try {
       const xhr = new XMLHttpRequest();
+      xhrRef.current = xhr;
       xhr.open('POST', 'http://localhost:3001/api/upload');
 
       xhr.upload.onprogress = (e) => {
@@ -47,6 +60,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
       };
 
       xhr.onload = () => {
+        xhrRef.current = null;
         if (xhr.status === 200) {
           setProgress(100);
           setTimeout(() => {
@@ -54,12 +68,19 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
             onFileAccepted(file);
           }, 500);
         } else {
-          setError('上传失败，请重试');
+          const body = xhr.responseText;
+          try {
+            const parsed = JSON.parse(body);
+            setError(parsed.error || '上传失败，请重试');
+          } catch {
+            setError('上传失败，请重试');
+          }
           setUploading(false);
         }
       };
 
       xhr.onerror = () => {
+        xhrRef.current = null;
         setError('网络错误，请重试');
         setUploading(false);
       };
@@ -73,6 +94,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) processFile(file);
@@ -80,21 +102,54 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setDragging(false);
   }, []);
 
   const handleClick = () => {
+    if (oversized || uploading) return;
     inputRef.current?.click();
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) processFile(file);
+    e.target.value = '';
   };
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file') {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            processFile(file);
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [processFile]);
+
+  useEffect(() => {
+    return () => {
+      if (xhrRef.current) {
+        xhrRef.current.abort();
+        xhrRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div
@@ -125,7 +180,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: uploading ? 'wait' : 'pointer',
+          cursor: oversized ? 'not-allowed' : uploading ? 'wait' : 'pointer',
           transition: 'all 0.3s ease',
         }}
       >
@@ -191,7 +246,18 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileAccepted }) => {
           </>
         )}
         {error && (
-          <div style={{ marginTop: 12, color: '#ff6b6b', fontSize: 13 }}>
+          <div
+            style={{
+              marginTop: 12,
+              padding: '8px 12px',
+              color: '#ff6b6b',
+              fontSize: 13,
+              background: oversized ? 'rgba(255,68,68,0.15)' : 'transparent',
+              border: oversized ? '1px solid rgba(255,68,68,0.4)' : 'none',
+              borderRadius: oversized ? 8 : 0,
+              textAlign: 'center',
+            }}
+          >
             {error}
           </div>
         )}
