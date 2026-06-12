@@ -255,38 +255,37 @@ export class ParticleSystem {
 
   private updateConnections(): void {
     const { maxDistance, maxConnections } = this.connectionConfig;
-    const { width, height } = this.camera.getViewSize
-      ? { width: 0, height: 0 }
-      : this.getViewDimensions();
+    const { width, height } = this.getViewDimensions();
 
-    const vFov = this.camera.fov * Math.PI / 180;
-    const aspect = this.camera.aspect;
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+    const screenPositions: THREE.Vector2[] = [];
+    const tempVec = new THREE.Vector3();
+
+    for (let i = 0; i < this.particles.length; i++) {
+      tempVec.copy(this.particles[i].position);
+      tempVec.project(this.camera);
+      screenPositions.push(new THREE.Vector2(
+        (tempVec.x * 0.5 + 0.5) * width,
+        (-tempVec.y * 0.5 + 0.5) * height
+      ));
+    }
 
     this.connections = [];
-    const maxDist = maxDistance;
+    const maxDistSq = maxDistance * maxDistance;
 
     for (let i = 0; i < this.particles.length; i++) {
       for (let j = i + 1; j < this.particles.length; j++) {
-        const p1 = this.particles[i];
-        const p2 = this.particles[j];
+        const sp1 = screenPositions[i];
+        const sp2 = screenPositions[j];
 
-        const dx = p1.position.x - p2.position.x;
-        const dy = p1.position.y - p2.position.y;
-        const dz = p1.position.z - p2.position.z;
-        const dist3d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const dx = sp1.x - sp2.x;
+        const dy = sp1.y - sp2.y;
+        const distSq = dx * dx + dy * dy;
 
-        const avgZ = (p1.position.z + p2.position.z) / 2;
-        const camDist = this.camera.position.z - avgZ;
-        const pixelPerUnit = (height / 2) / Math.tan(vFov / 2) / Math.abs(camDist || 1);
-
-        const screenDist = dist3d * pixelPerUnit;
-
-        if (screenDist < maxDist) {
+        if (distSq < maxDistSq) {
           this.connections.push({
             p1Index: i,
             p2Index: j,
-            distance: screenDist,
+            distance: Math.sqrt(distSq),
           });
         }
       }
@@ -295,7 +294,7 @@ export class ParticleSystem {
     this.connections.sort((a, b) => a.distance - b.distance);
 
     if (this.connections.length > maxConnections) {
-      this.connections = this.connections.slice(0, maxConnections);
+      this.connections.length = maxConnections;
     }
 
     this.connectionCount = this.connections.length;
