@@ -1,0 +1,207 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1a1a2e;
+  font-family: 'Courier New', monospace;
+  color: #e0e0ff;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.drop-zone-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(26, 26, 46, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+  border: 4px dashed #4a9eff;
+  animation: borderPulse 1s infinite;
+}
+
+.drop-zone-overlay.hidden {
+  display: none;
+}
+
+@keyframes borderPulse {
+  0%, 100% { border-color: #4a9eff; opacity: 0.6; }
+  50% { border-color: #ff8c42; opacity: 1; }
+}
+
+.drop-zone-content {
+  text-align: center;
+}
+
+.drop-zone-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.drop-zone-text {
+  font-size: 20px;
+  color: #4a9eff;
+  letter-spacing: 2px;
+}
+
+.info-panel {
+  position: fixed;
+  top: 20px;
+  right: 360px;
+  width: 240px;
+  background: rgba(30, 30, 50, 0.85);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.info-panel.hidden {
+  display: none;
+}
+
+.info-panel-header {
+  font-size: 14px;
+  font-weight: bold;
+  color: #4a9eff;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+  border-bottom: 1px solid rgba(74, 158, 255, 0.3);
+  padding-bottom: 8px;
+}
+
+.info-panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.info-panel-row .label {
+  color: #a0a0c0;
+}
+
+.info-panel-row .value {
+  color: #ff8c42;
+  font-weight: bold;
+}
+
+.info-panel-divider {
+  height: 1px;
+  background: rgba(74, 158, 255, 0.2);
+  margin: 8px 0;
+}
+
+.lil-gui {
+  --width: 320px;
+  --background-color: rgba(30, 30, 50, 0.85);
+  --widget-color: rgba(50, 50, 80, 0.9);
+  --focus-color: rgba(74, 158, 255, 0.4);
+  --hover-color: rgba(74, 158, 255, 0.2);
+  --font-family: 'Courier New', monospace;
+  --font-size: 12px;
+  --text-color: #e0e0ff;
+  --title-background-color: rgba(74, 158, 255, 0.2);
+  --title-text-color: #4a9eff;
+  backdrop-filter: blur(10px);
+  border-radius: 12px !important;
+  overflow: hidden;
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+}
+
+.lil-gui .title {
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.lil-gui .controller {
+  transition: background-color 0.15s, transform 0.1s;
+}
+
+.lil-gui .controller:hover {
+  background-color: rgba(74, 158, 255, 0.1);
+}
+
+.lil-gui .controller .name {
+  color: #a0a0c0;
+}
+
+.lil-gui .string input,
+.lil-gui .number input {
+  color: #ff8c42;
+  background: rgba(20, 20, 40, 0.8);
+  border: 1px solid rgba(74, 158, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.lil-gui .slider {
+  background: rgba(20, 20, 40, 0.8);
+  border-radius: 4px;
+}
+
+.lil-gui .slider .fill {
+  background: linear-gradient(90deg, #4a9eff, #ff8c42);
+}
+
+.lil-gui .boolean .widget {
+  border-radius: 4px;
+}
+
+.lil-gui .boolean .widget.active {
+  background: #4a9eff;
+}
+
+.lil-gui .button {
+  background: linear-gradient(135deg, #4a9eff, #2a6ecf);
+  color: white;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.lil-gui .button:hover {
+  background: linear-gradient(135deg, #5aaeff, #3a7edf);
+}
+
+.lil-gui .button:active {
+  transform: scale(0.97);
+}
+
+.lil-gui .select select {
+  background: rgba(20, 20, 40, 0.8);
+  color: #e0e0ff;
+  border: 1px solid rgba(74, 158, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
