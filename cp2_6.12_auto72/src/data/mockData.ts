@@ -6,6 +6,7 @@ export const mockArtworks: Artwork[] = [
     title: '春日漫步',
     imageUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400',
+    aspectRatio: 1.3,
     createdAt: '2023-03-15',
     year: 2023,
     tools: ['watercolor', 'pencil'],
@@ -34,6 +35,7 @@ export const mockArtworks: Artwork[] = [
     title: '城市夜景',
     imageUrl: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400',
+    aspectRatio: 0.75,
     createdAt: '2023-07-22',
     year: 2023,
     tools: ['digital'],
@@ -61,6 +63,7 @@ export const mockArtworks: Artwork[] = [
     title: '山间晨雾',
     imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+    aspectRatio: 1.5,
     createdAt: '2022-11-08',
     year: 2022,
     tools: ['watercolor'],
@@ -88,6 +91,7 @@ export const mockArtworks: Artwork[] = [
     title: '人物速写',
     imageUrl: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=400',
+    aspectRatio: 1.25,
     createdAt: '2022-05-14',
     year: 2022,
     tools: ['pencil'],
@@ -114,6 +118,7 @@ export const mockArtworks: Artwork[] = [
     title: '夏日海边',
     imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400',
+    aspectRatio: 0.85,
     createdAt: '2023-08-30',
     year: 2023,
     tools: ['digital', 'watercolor'],
@@ -142,6 +147,7 @@ export const mockArtworks: Artwork[] = [
     title: '森林秘境',
     imageUrl: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400',
+    aspectRatio: 1.4,
     createdAt: '2024-01-20',
     year: 2024,
     tools: ['digital'],
@@ -170,6 +176,7 @@ export const mockArtworks: Artwork[] = [
     title: '秋日私语',
     imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+    aspectRatio: 1.1,
     createdAt: '2024-10-15',
     year: 2024,
     tools: ['watercolor', 'pencil'],
@@ -198,6 +205,7 @@ export const mockArtworks: Artwork[] = [
     title: '星辰大海',
     imageUrl: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=400',
+    aspectRatio: 0.9,
     createdAt: '2024-06-05',
     year: 2024,
     tools: ['digital'],
@@ -226,6 +234,7 @@ export const mockArtworks: Artwork[] = [
     title: '静物花卉',
     imageUrl: 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=800',
     thumbnailUrl: 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=400',
+    aspectRatio: 1.35,
     createdAt: '2022-03-28',
     year: 2022,
     tools: ['watercolor'],
@@ -257,4 +266,56 @@ export const generateTrendData = (): TrendDataPoint[] => {
     { label: '2023', value: 52, date: '2023年' },
     { label: '2024', value: 65, date: '2024年' }
   ]
+}
+
+export const calculateStyleMetricsFromPalette = (colorPalette: { hex: string; percentage: number }[]): { warmRatio: number; coolRatio: number; saturation: number; brightness: number; contrast: number } => {
+  let warmCount = 0
+  let coolCount = 0
+  let totalSaturation = 0
+  let totalBrightness = 0
+  let minBrightness = 100
+  let maxBrightness = 0
+
+  colorPalette.forEach((color) => {
+    const rgb = hexToRgb(color.hex)
+    if (rgb) {
+      if (rgb.r > rgb.b) {
+        warmCount += color.percentage
+      } else {
+        coolCount += color.percentage
+      }
+
+      const max = Math.max(rgb.r, rgb.g, rgb.b)
+      const min = Math.min(rgb.r, rgb.g, rgb.b)
+      const l = (max + min) / 2 / 255
+      const sat = max === min ? 0 : l > 0.5 ? (max - min) / (510 - max - min) : (max - min) / (max + min)
+      totalSaturation += sat * color.percentage
+      totalBrightness += l * 100 * color.percentage
+
+      const brightnessPercent = l * 100
+      minBrightness = Math.min(minBrightness, brightnessPercent)
+      maxBrightness = Math.max(maxBrightness, brightnessPercent)
+    }
+  })
+
+  const totalPercentage = colorPalette.reduce((sum, c) => sum + c.percentage, 0)
+
+  return {
+    warmRatio: Math.round((warmCount / totalPercentage) * 100),
+    coolRatio: Math.round((coolCount / totalPercentage) * 100),
+    saturation: Math.round(totalSaturation / totalPercentage),
+    brightness: Math.round(totalBrightness / totalPercentage),
+    contrast: Math.round(maxBrightness - minBrightness)
+  }
+}
+
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+      }
+    : null
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import GalleryCard from '@/components/GalleryCard'
+import MasonryGrid from '@/components/MasonryGrid'
 import { mockArtworks } from '@/data/mockData'
 import type { ToolType } from '@/types'
 
@@ -74,16 +74,7 @@ const PortfolioPage = () => {
         </div>
 
         {filteredArtworks.length > 0 ? (
-          <div className="masonry-grid">
-            {filteredArtworks.map((artwork, index) => (
-              <GalleryCard
-                key={artwork.id}
-                artwork={artwork}
-                index={index}
-                onClick={() => handleCardClick(artwork.id)}
-              />
-            ))}
-          </div>
+          <MasonryGrid artworks={filteredArtworks} onCardClick={handleCardClick} />
         ) : (
           <div
             style={{

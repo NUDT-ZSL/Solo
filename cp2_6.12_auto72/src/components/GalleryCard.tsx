@@ -5,6 +5,7 @@ interface GalleryCardProps {
   artwork: Artwork
   index: number
   onClick: () => void
+  customStyle?: React.CSSProperties
 }
 
 const toolLabels: Record<ToolType, string> = {
@@ -13,16 +14,13 @@ const toolLabels: Record<ToolType, string> = {
   pencil: '铅笔'
 }
 
-const GalleryCard = ({ artwork, index, onClick }: GalleryCardProps) => {
+const GalleryCard = ({ artwork, index, onClick, customStyle }: GalleryCardProps) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setVisible(true)
-    }, index * 100)
-    return () => clearTimeout(timer)
-  }, [index])
+    setVisible(true)
+  }, [])
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -38,7 +36,7 @@ const GalleryCard = ({ artwork, index, onClick }: GalleryCardProps) => {
       className="gallery-card"
       onClick={onClick}
       style={{
-        animationDelay: `${index * 0.1}s`,
+        ...customStyle,
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(20px)',
         transition: 'opacity 0.3s ease-out, transform 0.3s ease-out'
@@ -50,8 +48,11 @@ const GalleryCard = ({ artwork, index, onClick }: GalleryCardProps) => {
         loading="lazy"
         onLoad={() => setImageLoaded(true)}
         style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
           opacity: imageLoaded ? 1 : 0,
-          transition: 'opacity 0.3s ease'
+          transition: 'opacity 0.3s ease, transform 0.3s ease'
         }}
       />
       <div className="gallery-card-overlay">

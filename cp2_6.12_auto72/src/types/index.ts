@@ -5,6 +5,7 @@ export interface Artwork {
   title: string
   imageUrl: string
   thumbnailUrl: string
+  aspectRatio: number
   createdAt: string
   year: number
   tools: ToolType[]

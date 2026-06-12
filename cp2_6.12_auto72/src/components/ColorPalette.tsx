@@ -16,11 +16,12 @@ const ColorPalette = ({ colors }: ColorPaletteProps) => {
       <div className="color-bars">
         {sortedColors.map((color, index) => (
           <div
-            key={color.hex}
+            key={`${color.hex}-${index}`}
             className="color-bar"
             style={{
               backgroundColor: color.hex,
-              height: `${20 + color.percentage * 0.5}px`
+              width: '30px',
+              height: '20px'
             }}
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
