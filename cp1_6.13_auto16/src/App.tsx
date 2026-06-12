@@ -8,7 +8,9 @@ import {
   Palette,
   Save,
   Menu,
+  Download,
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import Canvas from './Canvas';
 import PropertyPanel from './PropertyPanel';
 import SchemeManager from './SchemeManager';
@@ -63,8 +65,15 @@ function App() {
     (newBlocks: LayoutBlock[]) => {
       const newHistory = history.slice(0, historyIndex + 1);
       newHistory.push(newBlocks);
+      if (newHistory.length > 50) {
+        newHistory.shift();
+      } else {
+        setHistoryIndex(historyIndex + 1);
+      }
       setHistory(newHistory);
-      setHistoryIndex(newHistory.length - 1);
+      if (newHistory.length <= 50) {
+        setHistoryIndex(newHistory.length - 1);
+      }
     },
     [history, historyIndex]
   );
@@ -115,14 +124,17 @@ function App() {
 
       const rect = canvasRef.current.getBoundingClientRect();
       const preset = BLOCK_PRESETS[blockType];
-      const offsetX = blockType === 'footer' ? preset.size.width / 2 : 140;
-      const offsetY = blockType === 'footer' ? preset.size.height / 2 : 180;
+      const offsetX = preset.size.width / 2;
+      const offsetY = preset.size.height / 2;
 
       const rawX = e.clientX - rect.left - offsetX;
       const rawY = e.clientY - rect.top - offsetY;
 
-      const x = Math.max(0, Math.min(CANVAS_WIDTH - preset.size.width, snapToGrid(rawX)));
-      const y = Math.max(0, Math.min(CANVAS_HEIGHT - preset.size.height, snapToGrid(rawY)));
+      const maxX = Math.max(0, CANVAS_WIDTH - preset.size.width);
+      const maxY = Math.max(0, CANVAS_HEIGHT - preset.size.height);
+
+      const x = Math.max(0, Math.min(maxX, snapToGrid(rawX)));
+      const y = Math.max(0, Math.min(maxY, snapToGrid(rawY)));
 
       maxZRef.current += 1;
 
@@ -149,9 +161,14 @@ function App() {
 
   const handleBlockUpdate = useCallback(
     (id: string, updates: Partial<LayoutBlock>) => {
-      updateBlocks((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, ...updates } : b))
-      );
+      setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
+    },
+    []
+  );
+
+  const handleBlockUpdateEnd = useCallback(
+    (id: string, updates: Partial<LayoutBlock>) => {
+      updateBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
     },
     [updateBlocks]
   );
@@ -160,15 +177,13 @@ function App() {
     (id: string | null) => {
       if (id) {
         maxZRef.current += 1;
-        updateBlocks((prev) =>
-          prev.map((b) =>
-            b.id === id ? { ...b, zIndex: maxZRef.current } : b
-          )
+        setBlocks((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, zIndex: maxZRef.current } : b))
         );
       }
       setSelectedBlockId((prev) => (prev === id ? null : id));
     },
-    [updateBlocks]
+    []
   );
 
   const handleBlockDelete = useCallback(
@@ -219,12 +234,24 @@ function App() {
     const clonedBlocks = JSON.parse(JSON.stringify(scheme.blocks)) as LayoutBlock[];
     setBlocks(clonedBlocks);
     setSelectedBlockId(null);
-    pushHistory(clonedBlocks);
-  }, [pushHistory]);
+    setHistory((prev) => [...prev, clonedBlocks]);
+    setHistoryIndex((prev) => prev + 1);
+  }, []);
 
   const handleDeleteScheme = useCallback((id: string) => {
     setSchemes((prev) => prev.filter((s) => s.id !== id));
   }, []);
+
+  const handleExportJSON = useCallback(() => {
+    const data = JSON.stringify(blocks, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `blog-layout-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [blocks]);
 
   return (
     <div className="app-container">
@@ -232,6 +259,7 @@ function App() {
         <button
           className="hamburger-btn"
           onClick={() => setSidebarCollapsed(false)}
+          aria-label="打开侧边栏"
         >
           <Menu size={20} />
         </button>
@@ -241,7 +269,7 @@ function App() {
         {!sidebarCollapsed && (
           <>
             <div className="sidebar-header">
-              <span className="project-name">BlogLab</span>
+              <span className="project-name">B</span>
             </div>
             <nav className="sidebar-nav">
               <button className="sidebar-btn active" title="布局设计">
@@ -253,18 +281,10 @@ function App() {
               <button className="sidebar-btn" title="主题配色">
                 <Palette size={22} />
               </button>
-              <button className="sidebar-btn" title="保存方案">
-                <Save size={22} />
+              <button className="sidebar-btn" title="导出JSON" onClick={handleExportJSON}>
+                <Download size={22} />
               </button>
             </nav>
-            {window.innerWidth < 1024 && (
-              <button
-                className="sidebar-close-btn"
-                onClick={() => setSidebarCollapsed(true)}
-              >
-                <Menu size={20} />
-              </button>
-            )}
           </>
         )}
       </aside>
@@ -276,7 +296,7 @@ function App() {
               className="toolbar-btn"
               onClick={handleUndo}
               disabled={historyIndex <= 0}
-              title="撤销"
+              title="撤销 (Ctrl+Z)"
             >
               <Undo2 size={16} />
               <span>撤销</span>
@@ -285,7 +305,7 @@ function App() {
               className="toolbar-btn"
               onClick={handleRedo}
               disabled={historyIndex >= history.length - 1}
-              title="重做"
+              title="重做 (Ctrl+Y)"
             >
               <Redo2 size={16} />
               <span>重做</span>
@@ -293,7 +313,7 @@ function App() {
           </div>
           <div className="toolbar-right">
             <div className="add-dropdown">
-              <button className="toolbar-btn primary">
+              <button className="toolbar-btn">
                 <Plus size={16} />
                 <span>添加组件</span>
               </button>
@@ -313,55 +333,72 @@ function App() {
         </div>
 
         <div className="workspace">
-          <div className="canvas-area">
-            <div className="component-panel">
-              <h3 className="component-panel-title">预设组件</h3>
-              <div className="component-list">
-                {(Object.keys(BLOCK_PRESETS) as BlockType[]).map((type) => {
-                  const preset = BLOCK_PRESETS[type];
-                  return (
-                    <div
-                      key={type}
-                      className={`component-item ${draggingPreset === type ? 'dragging' : ''}`}
-                      draggable
-                      onDragStart={(e) => handlePresetDragStart(e, type)}
-                      onDragEnd={handlePresetDragEnd}
-                    >
-                      <div
-                        className="component-preview"
-                        style={{
-                          width: type === 'footer' ? '100%' : '56px',
-                          height: type === 'footer' ? '20px' : '72px',
-                          backgroundColor: preset.fillColor,
-                          border: `1px solid ${preset.borderColor}`,
-                          borderRadius: type === 'article-card' ? '8px' : '4px',
-                          boxShadow: type === 'article-card' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-                        }}
-                      />
-                      <span className="component-label">{preset.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
+          <div className="canvas-section">
+            <div className="canvas-toolbar">
+              <span className="canvas-title">画布预览</span>
+              <span className="canvas-size">{CANVAS_WIDTH} × {CANVAS_HEIGHT}</span>
             </div>
 
-            <Canvas
-              ref={canvasRef}
-              blocks={blocks}
-              selectedBlockId={selectedBlockId}
-              onBlockUpdate={handleBlockUpdate}
-              onBlockSelect={handleBlockSelect}
-              onBlockDelete={handleBlockDelete}
-              onDrop={handleCanvasDrop}
-              onDragOver={handleCanvasDragOver}
-            />
+            <div className="canvas-area">
+              <div className="component-panel">
+                <h3 className="component-panel-title">预设组件</h3>
+                <div className="component-list">
+                  {(Object.keys(BLOCK_PRESETS) as BlockType[]).map((type) => {
+                    const preset = BLOCK_PRESETS[type];
+                    return (
+                      <div
+                        key={type}
+                        className={`component-item ${draggingPreset === type ? 'dragging' : ''}`}
+                        draggable
+                        onDragStart={(e) => handlePresetDragStart(e, type)}
+                        onDragEnd={handlePresetDragEnd}
+                        title={`拖拽添加${preset.label}`}
+                      >
+                        <div className="component-preview-wrapper">
+                          <div
+                            className="component-preview"
+                            style={{
+                              width: type === 'footer' ? '100%' : '48px',
+                              height: type === 'footer' ? '16px' : '60px',
+                              backgroundColor: preset.fillColor,
+                              border: `1px solid ${preset.borderColor}`,
+                              borderRadius: type === 'article-card' ? '8px' : '3px',
+                              boxShadow: type === 'article-card' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                            }}
+                          />
+                        </div>
+                        <div className="component-info">
+                          <span className="component-label">{preset.label}</span>
+                          <span className="component-desc">
+                            {type === 'article-card' && '280 × 360'}
+                            {type === 'sidebar' && '280 × 600'}
+                            {type === 'footer' && '100% × 120'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <Canvas
+                ref={canvasRef}
+                blocks={blocks}
+                selectedBlockId={selectedBlockId}
+                onBlockUpdate={handleBlockUpdate}
+                onBlockSelect={handleBlockSelect}
+                onBlockDelete={handleBlockDelete}
+                onDrop={handleCanvasDrop}
+                onDragOver={handleCanvasDragOver}
+              />
+            </div>
           </div>
 
           <div className="right-panel">
             <PropertyPanel
               block={selectedBlock}
               onUpdate={(updates) =>
-                selectedBlock && handleBlockUpdate(selectedBlock.id, updates)
+                selectedBlock && handleBlockUpdateEnd(selectedBlock.id, updates)
               }
             />
             <SchemeManager
