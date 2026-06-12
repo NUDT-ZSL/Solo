@@ -31,7 +31,7 @@ export interface VoteResult {
 export interface Room {
   id: string;
   code: string;
-  phase: 'search' | 'voting' | 'final';
+  phase: 'search' | 'voting' | 'results' | 'final';
   selectedCities: City[];
   votes: Record<string, VoteResult>;
   finalCities: City[];
@@ -40,7 +40,7 @@ export interface Room {
   createdAt: number;
 }
 
-export type RoomPhase = 'search' | 'voting' | 'final';
+export type RoomPhase = 'search' | 'voting' | 'results' | 'final';
 
 export const MEMBER_COLORS = [
   '#ff6b6b',

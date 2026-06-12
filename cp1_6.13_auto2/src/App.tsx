@@ -201,7 +201,7 @@ const App: React.FC = () => {
               1. 收集灵感
             </span>
             <span className="phase-divider">→</span>
-            <span className={`phase-step ${room.phase === 'voting' ? 'active' : ''}`}>
+            <span className={`phase-step ${room.phase === 'voting' || room.phase === 'results' ? 'active' : ''}`}>
               2. 投票决定
             </span>
             <span className="phase-divider">→</span>
@@ -255,8 +255,8 @@ const App: React.FC = () => {
       </nav>
 
       <main className="main-content">
-        {room.phase === 'search' && <SearchPanel room={room} userId={userId} />}
-        {room.phase === 'voting' && <VotingPanel room={room} userId={userId} />}
+        {(room.phase === 'search') && <SearchPanel room={room} userId={userId} />}
+        {(room.phase === 'voting' || room.phase === 'results') && <VotingPanel room={room} userId={userId} />}
         {room.phase === 'final' && <FinalItinerary room={room} userId={userId} />}
       </main>
     </div>

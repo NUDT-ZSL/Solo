@@ -349,9 +349,18 @@ io.on('connection', (socket) => {
       ...city,
       attractions: city.attractions || [],
     }));
-    room.phase = 'final';
+    room.phase = 'results';
     saveRoom(room);
     io.to(currentRoomCode).emit('voting-ended', room);
+    io.to(currentRoomCode).emit('room-updated', room);
+  });
+
+  socket.on('go-to-final', () => {
+    const room = getRoom(currentRoomCode);
+    if (!room || room.phase !== 'results') return;
+
+    room.phase = 'final';
+    saveRoom(room);
     io.to(currentRoomCode).emit('room-updated', room);
   });
 

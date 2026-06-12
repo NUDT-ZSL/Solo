@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Room, VoteResult } from '../types';
-import { submitVote, endVoting, getSocket } from '../utils/roomManager';
+import { submitVote, endVoting, goToFinal, getSocket } from '../utils/roomManager';
 import '../styles/VotingPanel.css';
 
 interface VotingPanelProps {
@@ -14,15 +14,23 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
   const [timeLeft, setTimeLeft] = useState<number>(VOTING_DURATION);
   const [hasVoted, setHasVoted] = useState<Record<string, 'yes' | 'no' | null>>({});
   const [votes, setVotes] = useState<Record<string, VoteResult>>({});
-  const [votingEnded, setVotingEnded] = useState<boolean>(false);
   const [animatingButton, setAnimatingButton] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
+  const [localVotingEnded, setLocalVotingEnded] = useState<boolean>(false);
+
+  const isResultsPhase = room.phase === 'results';
 
   useEffect(() => {
     if (room.votes) {
       setVotes(room.votes);
     }
   }, [room.votes]);
+
+  useEffect(() => {
+    if (isResultsPhase) {
+      setLocalVotingEnded(true);
+    }
+  }, [isResultsPhase]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -34,8 +42,11 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
       }));
     };
 
-    const handleVotingEnded = () => {
-      setVotingEnded(true);
+    const handleVotingEnded = (updatedRoom: Room) => {
+      setLocalVotingEnded(true);
+      if (updatedRoom?.votes) {
+        setVotes(updatedRoom.votes);
+      }
     };
 
     socket.on('vote-updated', handleVoteUpdated);
@@ -48,20 +59,23 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
   }, []);
 
   useEffect(() => {
+    if (isResultsPhase) {
+      return;
+    }
     if (room.votingStartTime) {
       const elapsed = Math.floor((Date.now() - room.votingStartTime) / 1000);
       const remaining = Math.max(0, VOTING_DURATION - elapsed);
       setTimeLeft(remaining);
 
       if (remaining <= 0) {
-        setVotingEnded(true);
+        setLocalVotingEnded(true);
         endVoting();
       }
     }
-  }, [room.votingStartTime]);
+  }, [room.votingStartTime, isResultsPhase]);
 
   useEffect(() => {
-    if (votingEnded || timeLeft <= 0) {
+    if (isResultsPhase || localVotingEnded || timeLeft <= 0) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -72,7 +86,7 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
     timerRef.current = window.setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          setVotingEnded(true);
+          setLocalVotingEnded(true);
           endVoting();
           return 0;
         }
@@ -85,11 +99,11 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
         clearInterval(timerRef.current);
       }
     };
-  }, [votingEnded, timeLeft]);
+  }, [isResultsPhase, localVotingEnded, timeLeft]);
 
   const handleVote = useCallback(
     (cityId: string, vote: 'yes' | 'no') => {
-      if (votingEnded) return;
+      if (localVotingEnded || isResultsPhase) return;
 
       const buttonKey = `${cityId}-${vote}`;
       setAnimatingButton(buttonKey);
@@ -102,7 +116,7 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
 
       submitVote(cityId, vote);
     },
-    [votingEnded]
+    [localVotingEnded, isResultsPhase]
   );
 
   const getVotePercentage = (cityId: string): number => {
@@ -137,24 +151,39 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
+  const handleGoToFinal = () => {
+    goToFinal();
+  };
+
+  const showResults = localVotingEnded || isResultsPhase;
+
   return (
     <div className="voting-panel">
       <div className="voting-header">
-        <h2>投票决定目的地</h2>
-        <div className="countdown-container">
-          <div className="countdown-label">剩余时间</div>
-          <div className={`countdown-timer ${timeLeft <= 5 ? 'warning' : ''}`}>
-            {timeLeft}s
+        <h2>{showResults ? '投票结果' : '投票决定目的地'}</h2>
+        {!showResults && (
+          <div className="countdown-container">
+            <div className="countdown-label">剩余时间</div>
+            <div className={`countdown-timer ${timeLeft <= 5 ? 'warning' : ''}`}>
+              {timeLeft}s
+            </div>
           </div>
-        </div>
+        )}
         <p className="voting-subtitle">
-          {votingEnded ? '投票已结束，查看结果' : '点击对勾或叉号为每个城市投票'}
+          {showResults
+            ? isResultsPhase
+              ? '投票已结束，查看结果后进入最终行程'
+              : '正在统计结果...'
+            : '点击对勾或叉号为每个城市投票'}
         </p>
       </div>
 
       <div className="voting-grid">
         {room.selectedCities.map((city) => (
-          <div key={city.id} className={`voting-card ${votingEnded && isPassed(city.id) ? 'passed' : ''} ${votingEnded && !isPassed(city.id) ? 'failed' : ''}`}>
+          <div
+            key={city.id}
+            className={`voting-card ${showResults && isPassed(city.id) ? 'passed' : ''} ${showResults && !isPassed(city.id) ? 'failed' : ''}`}
+          >
             <div className="voting-card-image">
               <img src={city.image} alt={city.name} />
               <div className="voting-card-overlay"></div>
@@ -164,7 +193,7 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
               </div>
             </div>
 
-            {!votingEnded ? (
+            {!showResults ? (
               <div className="voting-actions">
                 <button
                   className={`vote-btn vote-yes ${hasVoted[city.id] === 'yes' ? 'active' : ''} ${animatingButton === `${city.id}-yes` ? 'animating' : ''}`}
@@ -186,7 +215,9 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
                     <span className="stat-icon">✓</span>
                     {getYesCount(city.id)}
                   </span>
-                  <span className="stat-percentage">{getVotePercentage(city.id).toFixed(0)}%</span>
+                  <span className="stat-percentage">
+                    {getVotePercentage(city.id).toFixed(0)}%
+                  </span>
                   <span className="stat-no">
                     <span className="stat-icon">✕</span>
                     {getNoCount(city.id)}
@@ -214,15 +245,24 @@ const VotingPanel: React.FC<VotingPanelProps> = ({ room, userId }) => {
         ))}
       </div>
 
-      {votingEnded && (
+      {showResults && (
         <div className="voting-summary">
           <p>
             共 {room.selectedCities.length} 个候选城市，
             <span className="passed-count">
-              {' '}{room.finalCities?.length || 0}{' '}
+              {' '}
+              {room.finalCities?.length || 0}{' '}
             </span>
             个城市通过投票
           </p>
+          {isResultsPhase && (room.finalCities?.length || 0) > 0 && (
+            <button className="btn-go-final" onClick={handleGoToFinal}>
+              查看最终行程 →
+            </button>
+          )}
+          {isResultsPhase && (room.finalCities?.length || 0) === 0 && (
+            <p className="no-passed-hint">没有城市通过投票，可在导航栏点击"重新开始"</p>
+          )}
         </div>
       )}
     </div>

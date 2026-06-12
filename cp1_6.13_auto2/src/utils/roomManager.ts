@@ -79,6 +79,11 @@ export function endVoting(): void {
   s.emit('end-voting');
 }
 
+export function goToFinal(): void {
+  const s = getSocket();
+  s.emit('go-to-final');
+}
+
 export function reorderAttractions(cityId: string, attractionIds: string[]): void {
   const s = getSocket();
   s.emit('reorder-attractions', { cityId, attractionIds });
