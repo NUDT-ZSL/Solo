@@ -41,6 +41,8 @@ export default function NeuralNetwork({
   const targetScaleRef = useRef(1);
   const networkGroupRef = useRef<THREE.Group | null>(null);
   const lastClickTimeRef = useRef(0);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const hasDraggedRef = useRef(false);
 
   const initScene = useCallback(() => {
     if (!containerRef.current) return;
@@ -125,7 +127,9 @@ export default function NeuralNetwork({
 
   const handleMouseDown = useCallback((e: MouseEvent) => {
     isDraggingRef.current = true;
+    hasDraggedRef.current = false;
     previousMouseRef.current = { x: e.clientX, y: e.clientY };
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -133,6 +137,12 @@ export default function NeuralNetwork({
 
     const deltaX = e.clientX - previousMouseRef.current.x;
     const deltaY = e.clientY - previousMouseRef.current.y;
+
+    const totalDeltaX = Math.abs(e.clientX - dragStartRef.current.x);
+    const totalDeltaY = Math.abs(e.clientY - dragStartRef.current.y);
+    if (totalDeltaX > 3 || totalDeltaY > 3) {
+      hasDraggedRef.current = true;
+    }
 
     targetRotationRef.current.y += deltaX * 0.003;
     targetRotationRef.current.x += deltaY * 0.003;
@@ -153,6 +163,11 @@ export default function NeuralNetwork({
   const handleClick = useCallback((e: MouseEvent) => {
     if (!containerRef.current || !cameraRef.current || !sceneRef.current || !networkObjectsRef.current) return;
 
+    if (hasDraggedRef.current) {
+      hasDraggedRef.current = false;
+      return;
+    }
+
     const now = performance.now();
     const timeSinceLastClick = now - lastClickTimeRef.current;
 
@@ -164,8 +179,6 @@ export default function NeuralNetwork({
     }
 
     lastClickTimeRef.current = now;
-
-    if (isDraggingRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
     mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -216,13 +229,14 @@ export default function NeuralNetwork({
   useEffect(() => {
     if (!sceneRef.current || !data) return;
 
-    if (networkObjectsRef.current) {
-      sceneRef.current.remove(networkObjectsRef.current.scene);
-      networkObjectsRef.current = null;
-    }
     if (fadeInCleanupRef.current) {
       fadeInCleanupRef.current();
       fadeInCleanupRef.current = null;
+    }
+
+    if (networkObjectsRef.current) {
+      sceneRef.current.remove(networkObjectsRef.current.scene);
+      networkObjectsRef.current = null;
     }
 
     const { objects } = buildNetwork(data);
@@ -234,20 +248,14 @@ export default function NeuralNetwork({
     targetScaleRef.current = 1;
 
     fadeInCleanupRef.current = fadeInAnimation(objects, data.layers, () => {
-      updateLabelsVisibility(
-        objects,
-        showConnectionLabels,
-        showLayerLabels,
-        null
-      );
-      objects.neurons.forEach((neuron) => {
-        const mat = neuron.material as THREE.MeshStandardMaterial;
-        mat.opacity = 1;
-      });
-      objects.connections.forEach((conn) => {
-        const mat = conn.material as THREE.LineBasicMaterial;
-        mat.opacity = 0.3;
-      });
+      if (networkObjectsRef.current) {
+        updateLabelsVisibility(
+          networkObjectsRef.current,
+          showConnectionLabels,
+          showLayerLabels,
+          null
+        );
+      }
     });
   }, [data, showConnectionLabels, showLayerLabels]);
 
@@ -261,6 +269,15 @@ export default function NeuralNetwork({
       );
     }
   }, [highlightedNeuronId, showConnectionLabels, showLayerLabels]);
+
+  useEffect(() => {
+    return () => {
+      if (fadeInCleanupRef.current) {
+        fadeInCleanupRef.current();
+        fadeInCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div

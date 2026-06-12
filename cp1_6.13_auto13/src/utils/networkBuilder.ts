@@ -16,11 +16,14 @@ const NEURON_RADIUS = {
   output: 0.8
 };
 
-const LAYER_COLORS = {
+const LAYER_COLORS: Record<string, number> = {
   input: 0x3b82f6,
   hidden: 0x8b5cf6,
   output: 0xf97316
 };
+
+const COLOR_START = '#cccccc';
+const COLOR_END = '#ff8800';
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -45,6 +48,13 @@ function lerpColor(
   );
 }
 
+function getWeightColor(weight: number, maxWeight: number): THREE.Color {
+  const normalized = Math.min(Math.abs(weight) / maxWeight, 1);
+  const color1 = hexToRgb(COLOR_START);
+  const color2 = hexToRgb(COLOR_END);
+  return lerpColor(color1, color2, normalized);
+}
+
 function calculateGridPosition(
   index: number,
   total: number,
@@ -64,6 +74,8 @@ function calculateGridPosition(
     z: layerZ
   };
 }
+
+type MaterialType = 'neuron' | 'connection' | 'layerLabel' | 'connectionLabel';
 
 export interface NetworkObjects {
   scene: THREE.Group;
@@ -115,7 +127,6 @@ export function buildNetwork(
     layerGroups.set(layer.id, layerGroup);
 
     const layerZ = startZ + layerIndex * LAYER_SPACING;
-    const neuronPositions: Map<number, THREE.Vector3> = new Map();
 
     for (let i = 0; i < layer.neurons; i++) {
       const position = calculateGridPosition(i, layer.neurons, layerZ);
@@ -130,6 +141,8 @@ export function buildNetwork(
         transparent: true,
         opacity: 0
       });
+      (material as any)._materialType = 'neuron' as MaterialType;
+      (material as any)._layerId = layer.id;
 
       const sphere = new THREE.Mesh(geometry, material);
       sphere.position.set(position.x, position.y, position.z);
@@ -173,7 +186,6 @@ export function buildNetwork(
       neuronData.set(neuronId, nData);
       neuronDataList.push(nData);
       layerGroup.add(sphere);
-      neuronPositions.set(i, new THREE.Vector3(position.x, position.y, position.z));
     }
 
     const labelCanvas = document.createElement('canvas');
@@ -192,11 +204,16 @@ export function buildNetwork(
     const labelMaterial = new THREE.SpriteMaterial({
       map: labelTexture,
       transparent: true,
-      opacity: 0
+      opacity: 0,
+      depthTest: false
     });
+    (labelMaterial as any)._materialType = 'layerLabel' as MaterialType;
+    (labelMaterial as any)._layerId = layer.id;
+
     const labelSprite = new THREE.Sprite(labelMaterial);
     labelSprite.position.set(0, 8, layerZ);
     labelSprite.scale.set(8, 2, 1);
+    labelSprite.renderOrder = 999;
     layerLabels.set(layer.id, labelSprite);
     layerGroup.add(labelSprite);
 
@@ -224,16 +241,16 @@ export function buildNetwork(
         ]);
         geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
-        const weightNormalized = Math.min(Math.abs(conn.weight) / maxWeight, 1);
-        const color1 = hexToRgb('#cccccc');
-        const color2 = hexToRgb('#ff8800');
-        const lineColor = lerpColor(color1, color2, weightNormalized);
+        const lineColor = getWeightColor(conn.weight, maxWeight);
 
         const material = new THREE.LineBasicMaterial({
           color: lineColor,
           transparent: true,
           opacity: 0
         });
+        (material as any)._materialType = 'connection' as MaterialType;
+        (material as any)._layerId = fromLayer.id;
+        (material as any)._baseOpacity = 0.3;
 
         const line = new THREE.Line(geometry, material);
         line.userData = { connectionId, weight: conn.weight };
@@ -243,7 +260,7 @@ export function buildNetwork(
           fromNeuronId,
           toNeuronId,
           weight: conn.weight,
-          weightNormalized
+          weightNormalized: Math.min(Math.abs(conn.weight) / maxWeight, 1)
         };
 
         connections.set(connectionId, line);
@@ -267,14 +284,19 @@ export function buildNetwork(
         const connLabelMaterial = new THREE.SpriteMaterial({
           map: connLabelTexture,
           transparent: true,
-          opacity: 0
+          opacity: 0,
+          depthTest: false
         });
+        (connLabelMaterial as any)._materialType = 'connectionLabel' as MaterialType;
+        (connLabelMaterial as any)._layerId = fromLayer.id;
+
         const connLabelSprite = new THREE.Sprite(connLabelMaterial);
         const midX = (fromPos.x + toPos.x) / 2;
         const midY = (fromPos.y + toPos.y) / 2;
         const midZ = (fromPos.z + toPos.z) / 2;
         connLabelSprite.position.set(midX, midY, midZ);
         connLabelSprite.scale.set(2, 0.5, 1);
+        connLabelSprite.renderOrder = 1000;
         connectionLabels.set(connectionId, connLabelSprite);
         fromGroup.add(connLabelSprite);
       });
@@ -306,59 +328,95 @@ export function fadeInAnimation(
   const totalDuration = 30000;
   const layerDelay = 300;
   let animationId: number;
+  let isCancelled = false;
 
-  const allMaterials: THREE.Material[] = [];
+  const neuronMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
+  const connectionMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
+  const layerLabelMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
+  const connectionLabelMaterials: Array<{ mat: THREE.Material; layerId: string }> = [];
 
   objects.layerGroups.forEach((group, layerId) => {
     group.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
         const mats = Array.isArray(child.material) ? child.material : [child.material];
         mats.forEach(m => {
-          (m as any)._initialOpacity = (m as any).opacity;
           (m as any)._layerId = layerId;
-          allMaterials.push(m);
+          neuronMaterials.push({ mat: m, layerId });
         });
       } else if (child instanceof THREE.Line && child.material) {
         const mats = Array.isArray(child.material) ? child.material : [child.material];
         mats.forEach(m => {
-          (m as any)._initialOpacity = (m as any).opacity;
           (m as any)._layerId = layerId;
-          allMaterials.push(m);
+          connectionMaterials.push({ mat: m, layerId });
         });
       } else if (child instanceof THREE.Sprite && child.material) {
-        (child.material as any)._initialOpacity = (child.material as any).opacity;
         (child.material as any)._layerId = layerId;
-        allMaterials.push(child.material);
+        const matType = (child.material as any)._materialType;
+        if (matType === 'layerLabel') {
+          layerLabelMaterials.push({ mat: child.material, layerId });
+        } else if (matType === 'connectionLabel') {
+          connectionLabelMaterials.push({ mat: child.material, layerId });
+        }
       }
     });
   });
 
-  function animate() {
-    const elapsed = performance.now() - startTime;
+  function getLayerIndex(layerId: string): number {
+    return layers.findIndex(l => l.id === layerId);
+  }
 
-    allMaterials.forEach((mat: any) => {
-      const layerIdx = layers.findIndex(l => l.id === mat._layerId);
+  function animate() {
+    if (isCancelled) return;
+    
+    const elapsed = performance.now() - startTime;
+    let allComplete = true;
+
+    neuronMaterials.forEach(({ mat, layerId }) => {
+      const layerIdx = getLayerIndex(layerId);
       const layerStart = layerIdx * layerDelay;
       const layerElapsed = Math.max(0, elapsed - layerStart);
       const layerDuration = 2000;
       const progress = Math.min(layerElapsed / layerDuration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      mat.opacity = eased * 0.3;
+      (mat as THREE.MeshStandardMaterial).opacity = eased;
+      if (progress < 1) allComplete = false;
     });
 
-    if (elapsed < totalDuration) {
+    connectionMaterials.forEach(({ mat, layerId }) => {
+      const layerIdx = getLayerIndex(layerId);
+      const layerStart = layerIdx * layerDelay;
+      const layerElapsed = Math.max(0, elapsed - layerStart);
+      const layerDuration = 2000;
+      const progress = Math.min(layerElapsed / layerDuration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      (mat as THREE.LineBasicMaterial).opacity = eased * 0.3;
+      if (progress < 1) allComplete = false;
+    });
+
+    layerLabelMaterials.forEach(({ mat, layerId }) => {
+      const layerIdx = getLayerIndex(layerId);
+      const layerStart = layerIdx * layerDelay;
+      const layerElapsed = Math.max(0, elapsed - layerStart);
+      const layerDuration = 2000;
+      const progress = Math.min(layerElapsed / layerDuration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      (mat as THREE.SpriteMaterial).opacity = eased;
+      if (progress < 1) allComplete = false;
+    });
+
+    if (elapsed < totalDuration && !allComplete) {
       animationId = requestAnimationFrame(animate);
     } else {
-      allMaterials.forEach((mat: any) => {
-        mat.opacity = 0.3;
-      });
-      if (onComplete) onComplete();
+      if (onComplete && !isCancelled) {
+        onComplete();
+      }
     }
   }
 
   animate();
 
   return () => {
+    isCancelled = true;
     cancelAnimationFrame(animationId);
   };
 }
@@ -439,8 +497,11 @@ export function updateLabelsVisibility(
 ) {
   objects.layerLabels.forEach((label) => {
     const mat = label.material as THREE.SpriteMaterial;
-    const targetOpacity = showLayerLabels ? 1 : 0;
-    mat.opacity = highlightedNeuronId ? (showLayerLabels ? 1 : 0.3) : targetOpacity;
+    if (highlightedNeuronId) {
+      mat.opacity = showLayerLabels ? 1 : 0.3;
+    } else {
+      mat.opacity = showLayerLabels ? 1 : 0;
+    }
   });
 
   const connectedConnectionIds = new Set<string>();
