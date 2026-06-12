@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Radar,
   RadarChart,
@@ -18,48 +18,33 @@ interface EmotionRadarProps {
 
 const EMOTION_ORDER: EmotionKey[] = ['joy', 'surprise', 'fear', 'anger', 'sadness'];
 
-const scoreToColor = (score: number): string => {
+const scoreToBluePurple = (score: number): string => {
   const t = Math.max(0, Math.min(1, (score - 1) / 9));
   const r = Math.round(64 + (179 - 64) * t);
   const g = Math.round(196 + (136 - 196) * t);
-  const b = Math.round(255 + (255 - 255) * t);
+  const b = 255;
   return `rgb(${r}, ${g}, ${b})`;
 };
 
-const lerpColor = (c1: string, c2: string, t: number): string => {
-  const parse = (c: string) => {
-    const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (m) return [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])];
-    const h = c.replace('#', '');
-    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-  };
-  const [r1, g1, b1] = parse(c1);
-  const [r2, g2, b2] = parse(c2);
-  const r = Math.round(r1 + (r2 - r1) * t);
-  const g = Math.round(g1 + (g2 - g1) * t);
-  const b = Math.round(b1 + (b2 - b1) * t);
-  return `rgb(${r}, ${g}, ${b})`;
-};
-
-interface CustomShapeProps {
+interface CustomRadarShapeProps {
   points: { x: number; y: number; value: number; fullMark: number }[];
 }
 
-const CustomRadarShape = ({ points }: CustomShapeProps) => {
+const CustomRadarShape = ({ points }: CustomRadarShapeProps) => {
   if (!points || points.length < 2) return null;
 
   const fillPath = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
     .join(' ') + ' Z';
 
-  const strokeElements = points.map((p, i) => {
+  const strokeLines = points.map((p, i) => {
     const nextIdx = (i + 1) % points.length;
     const next = points[nextIdx];
     const avgScore = (p.value + next.value) / 2;
-    const color = scoreToColor(avgScore);
+    const color = scoreToBluePurple(avgScore);
     return (
       <line
-        key={i}
+        key={`stroke-${i}`}
         x1={p.x}
         y1={p.y}
         x2={next.x}
@@ -67,13 +52,13 @@ const CustomRadarShape = ({ points }: CustomShapeProps) => {
         stroke={color}
         strokeWidth={3}
         strokeLinecap="round"
-        style={{ filter: 'drop-shadow(0 0 2px rgba(64,196,255,0.4))' }}
+        style={{ filter: 'drop-shadow(0 0 3px rgba(64,196,255,0.35))' }}
       />
     );
   });
 
   const dotElements = points.map((p, i) => {
-    const color = scoreToColor(p.value);
+    const color = scoreToBluePurple(p.value);
     return (
       <circle
         key={`dot-${i}`}
@@ -90,27 +75,39 @@ const CustomRadarShape = ({ points }: CustomShapeProps) => {
   return (
     <g>
       <path d={fillPath} fill="rgba(64, 196, 255, 0.4)" />
-      {strokeElements}
+      {strokeLines}
       {dotElements}
     </g>
   );
 };
 
-const createAngleTick =
+interface CustomTickProps {
+  x: number;
+  y: number;
+  cx: number;
+  cy: number;
+  payload: { value: string };
+  index: number;
+}
+
+const createCustomTick =
   (scores: Record<string, number>) =>
-  ({ x, y, cx, cy, payload, index }: any) => {
+  ({ x, y, cx, cy, payload, index }: CustomTickProps) => {
     const emotionKey = payload?.value || EMOTION_ORDER[index] || 'joy';
     const score = scores[emotionKey] ?? 0;
     const radius = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
     const angle = Math.atan2(y - cy, x - cx);
-    const labelRadius = radius + 28;
+    const labelRadius = radius + 32;
     const lx = cx + Math.cos(angle) * labelRadius;
     const ly = cy + Math.sin(angle) * labelRadius;
 
     return (
       <g
         className="emotion-label-anim"
-        style={{ animationDelay: `${index * 100 + 100}ms` }}
+        style={{
+          animationDelay: `${index * 100 + 150}ms`,
+          animationDuration: '500ms',
+        }}
       >
         <text
           x={lx}
@@ -124,12 +121,11 @@ const createAngleTick =
         </text>
         <text
           x={lx}
-          y={ly + 10}
+          y={ly + 12}
           textAnchor="middle"
-          fill="#90a4ae"
           fontSize={14}
           fontWeight={600}
-          style={{ fill: scoreToColor(score) }}
+          style={{ fill: scoreToBluePurple(score) }}
         >
           {score.toFixed(1)}
         </text>
@@ -139,11 +135,21 @@ const createAngleTick =
 
 export default function EmotionRadar({ data }: EmotionRadarProps) {
   const [visible, setVisible] = useState(false);
+  const renderStartRef = useRef(0);
+  const renderEndRef = useRef(0);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setVisible(true));
     return () => cancelAnimationFrame(t);
   }, []);
+
+  useEffect(() => {
+    renderEndRef.current = performance.now();
+    if (renderStartRef.current > 0) {
+      const duration = renderEndRef.current - renderStartRef.current;
+      console.debug(`[性能] 雷达图渲染完成: ${duration.toFixed(2)}ms`);
+    }
+  });
 
   const chartData = useMemo(() => {
     return EMOTION_ORDER.map((emo) => ({
@@ -161,7 +167,9 @@ export default function EmotionRadar({ data }: EmotionRadarProps) {
     return s;
   }, [data]);
 
-  const AngleTick = useMemo(() => createAngleTick(scores), [scores]);
+  const CustomTick = useMemo(() => createCustomTick(scores), [scores]);
+
+  renderStartRef.current = performance.now();
 
   return (
     <div
@@ -174,11 +182,16 @@ export default function EmotionRadar({ data }: EmotionRadarProps) {
       }}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart data={chartData} outerRadius="65%" innerRadius="10%">
+        <RadarChart
+          data={chartData}
+          outerRadius="65%"
+          innerRadius="10%"
+          margin={{ top: 30, right: 30, bottom: 30, left: 30 }}
+        >
           <PolarGrid stroke="rgba(64,196,255,0.15)" />
           <PolarAngleAxis
             dataKey="emotion"
-            tick={AngleTick as any}
+            tick={CustomTick as any}
             stroke="rgba(64,196,255,0.2)"
           />
           <PolarRadiusAxis
@@ -196,6 +209,7 @@ export default function EmotionRadar({ data }: EmotionRadarProps) {
             shape={CustomRadarShape as any}
             animationDuration={700}
             animationEasing="ease-out"
+            isAnimationActive={true}
           />
         </RadarChart>
       </ResponsiveContainer>
