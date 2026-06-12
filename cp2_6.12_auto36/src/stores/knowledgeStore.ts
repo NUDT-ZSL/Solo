@@ -11,6 +11,24 @@ import type {
 
 const api = axios.create({ baseURL: '/api' });
 
+const docCache = new Map<string, { doc: Document; timestamp: number }>();
+const DOC_CACHE_TTL = 5000;
+
+const searchCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
+const SEARCH_CACHE_TTL = 3000;
+
+const mapAnnotation = (a: any): Annotation => ({
+  id: a.id,
+  documentId: a.documentId,
+  paragraphIndex: a.paragraphIndex,
+  content: a.content,
+  userId: a.userId,
+  createdAt: a.createdAt,
+  isRead: typeof a.isRead === 'number' ? a.isRead === 1 : Boolean(a.isRead),
+  parentId: a.parentId ?? a.parent_id ?? null,
+  replies: a.replies ? a.replies.map(mapAnnotation) : [],
+});
+
 interface ToastItem {
   id: string;
   message: string;
@@ -164,8 +182,16 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   },
 
   fetchDocument: async (docId) => {
+    const now = Date.now();
+    const cached = docCache.get(docId);
+    if (cached && now - cached.timestamp < DOC_CACHE_TTL) {
+      set({ currentDocument: cached.doc });
+      return;
+    }
     const res = await api.get(`/documents/${docId}`);
-    set({ currentDocument: res.data });
+    const doc = res.data;
+    docCache.set(docId, { doc, timestamp: now });
+    set({ currentDocument: doc });
   },
 
   createDocument: async (catId, title) => {
@@ -177,6 +203,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
 
   updateDocument: async (id, title, content) => {
     const res = await api.put(`/documents/${id}`, { title, content });
+    docCache.delete(id);
     set((s) => ({
       documents: s.documents.map((d) => (d.id === id ? res.data : d)),
       currentDocument: s.currentDocument?.id === id ? res.data : s.currentDocument,
@@ -186,6 +213,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
 
   deleteDocument: async (id) => {
     await api.delete(`/documents/${id}`);
+    docCache.delete(id);
     set((s) => ({
       documents: s.documents.filter((d) => d.id !== id),
       currentDocument: s.currentDocument?.id === id ? null : s.currentDocument,
@@ -205,7 +233,9 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
 
   fetchAnnotations: async (docId) => {
     const res = await api.get(`/documents/${docId}/annotations`);
-    set({ annotations: res.data });
+    const data = Array.isArray(res.data) ? res.data : [];
+    const mapped = data.map(mapAnnotation);
+    set({ annotations: mapped });
   },
 
   addAnnotation: async (docId, paragraphIndex, content, parentId) => {
@@ -214,17 +244,18 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       content,
       parentId: parentId || null,
     });
-    set((s) => ({ annotations: [...s.annotations, res.data] }));
+    set((s) => ({ annotations: [...s.annotations, mapAnnotation(res.data)] }));
     get().addToast('批注添加成功', 'success');
   },
 
   updateAnnotation: async (id, data) => {
     const res = await api.put(`/annotations/${id}`, data);
+    const updated = mapAnnotation(res.data);
     set((s) => ({
       annotations: s.annotations.map((a) => {
-        if (a.id === id) return { ...a, ...res.data };
+        if (a.id === id) return { ...a, ...updated };
         if (a.replies) {
-          return { ...a, replies: a.replies.map((r) => (r.id === id ? { ...r, ...res.data } : r)) };
+          return { ...a, replies: a.replies.map((r) => (r.id === id ? { ...r, ...updated } : r)) };
         }
         return a;
       }),
@@ -246,9 +277,10 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
 
   replyToAnnotation: async (id, content) => {
     const res = await api.post(`/annotations/${id}/reply`, { content });
+    const reply = mapAnnotation(res.data);
     set((s) => ({
       annotations: s.annotations.map((a) => {
-        if (a.id === id) return { ...a, replies: [...(a.replies || []), res.data] };
+        if (a.id === id) return { ...a, replies: [...(a.replies || []), reply] };
         return a;
       }),
     }));
@@ -261,9 +293,19 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       return;
     }
     set({ searchQuery: query });
+
+    const now = Date.now();
+    const cached = searchCache.get(query);
+    if (cached && now - cached.timestamp < SEARCH_CACHE_TTL) {
+      set({ searchResults: cached.results });
+      return;
+    }
+
     try {
       const res = await api.get('/search', { params: { q: query } });
-      set({ searchResults: res.data });
+      const data = Array.isArray(res.data) ? res.data : [];
+      searchCache.set(query, { results: data, timestamp: now });
+      set({ searchResults: data });
     } catch {
       set({ searchResults: [] });
     }

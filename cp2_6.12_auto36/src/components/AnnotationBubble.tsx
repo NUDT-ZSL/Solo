@@ -40,13 +40,17 @@ export default function AnnotationBubble({ annotation, docId }: AnnotationBubble
     <div className="relative">
       <div
         className={cn(
-          'bg-annotation-bg rounded-lg p-3 shadow-sm border border-yellow-200',
-          'transition-all duration-200'
+          'rounded-lg p-3 shadow-sm border border-yellow-200 transition-colors duration-300',
+          annotation.isRead ? 'bg-annotation-bg' : 'bg-[#FEF08A]'
         )}
       >
-        {!annotation.isRead && (
-          <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
-        )}
+        <div
+          className={cn(
+            'absolute -top-1 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white',
+            'transition-all duration-200 ease annotation-dot-pulse',
+            annotation.isRead ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
+          )}
+        />
 
         <div className="flex items-start justify-between gap-2 mb-1.5">
           <div className="flex items-center gap-1.5">
@@ -82,9 +86,9 @@ export default function AnnotationBubble({ annotation, docId }: AnnotationBubble
         <p className="text-sm text-text leading-relaxed">{annotation.content}</p>
 
         {annotation.replies && annotation.replies.length > 0 && (
-          <div className="mt-2 ml-3 pl-3 border-l-2 border-yellow-300 space-y-2">
+          <div className="mt-2 ml-4 pl-3 border-l-2 border-yellow-200/60 space-y-2">
             {annotation.replies.map((reply) => (
-              <div key={reply.id} className="text-sm">
+              <div key={reply.id} className="text-xs">
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <span className="text-xs font-medium text-text">{reply.userId}</span>
                   <span className="text-xs text-slate-400">{formatTime(reply.createdAt)}</span>
