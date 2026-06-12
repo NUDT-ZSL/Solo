@@ -1,0 +1,12 @@
+{"id":"egg","name":"鸡蛋","emoji":"🥚","quantity":6,"unit":"个","expireDate":"2026-06-15T16:59:11.975Z","_id":"1xDTIVnfDjbqJugL"}
+{"id":"tomato","name":"番茄","emoji":"🍅","quantity":2,"unit":"个","expireDate":"2026-06-14T16:59:11.976Z","_id":"bhJsct5gMrdZnwtm"}
+{"id":"potato","name":"土豆","emoji":"🥔","quantity":4,"unit":"个","expireDate":"2026-06-19T16:59:11.976Z","_id":"lwfTNvExnscSmnEh"}
+{"id":"lettuce","name":"生菜","emoji":"🥬","quantity":1,"unit":"颗","expireDate":"2026-06-13T16:59:11.976Z","_id":"X7B1srMTcOIJZSFj"}
+{"id":"onion","name":"洋葱","emoji":"🧅","quantity":3,"unit":"个","expireDate":"2026-06-17T16:59:11.976Z","_id":"aq9ALx6tfv0fba0u"}
+{"id":"beef","name":"牛肉","emoji":"🥩","quantity":400,"unit":"克","expireDate":"2026-06-16T16:59:11.976Z","_id":"Kn3fDsCPY4t2L3Yu"}
+{"id":"garlic","name":"大蒜","emoji":"🧄","quantity":10,"unit":"瓣","expireDate":"2026-06-22T16:59:11.976Z","_id":"bbLJcrSxtjB5M3Yj"}
+{"id":"salt","name":"盐","emoji":"🧂","quantity":500,"unit":"克","expireDate":"2027-06-12T16:59:11.976Z","_id":"ZWlfVfc2tXK9Uufy"}
+{"id":"light-soy","name":"生抽","emoji":"🍶","quantity":500,"unit":"毫升","expireDate":"2026-12-09T16:59:11.976Z","_id":"w3gzE5KdKWh7rii3"}
+{"id":"dark-soy","name":"老抽","emoji":"🫙","quantity":500,"unit":"毫升","expireDate":"2026-12-09T16:59:11.976Z","_id":"kHuQTJVYDxyhQpYD"}
+{"id":"rock-sugar","name":"冰糖","emoji":"🍬","quantity":200,"unit":"克","expireDate":"2027-06-12T16:59:11.976Z","_id":"3iF8d7k4B8xyoIye"}
+{"id":"oyster-sauce","name":"蚝油","emoji":"🥢","quantity":300,"unit":"毫升","expireDate":"2026-09-10T16:59:11.976Z","_id":"HsKMFaUNR9evoRMf"}
