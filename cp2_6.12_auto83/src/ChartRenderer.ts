@@ -19,6 +19,8 @@ export class ChartRenderer {
   private animationProgress: number = 1;
   private animationFrameId: number | null = null;
   private currentType: ChartType = 'bar';
+  private isDestroyed: boolean = false;
+  private animationResolve: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement, data: DataPoint[], options: ChartRendererOptions = {}) {
     this.canvas = canvas;
@@ -78,13 +80,34 @@ export class ChartRenderer {
 
   animate(type: ChartType, duration: number = 800): Promise<void> {
     return new Promise((resolve) => {
-      if (this.animationFrameId) {
-        cancelAnimationFrame(this.animationFrameId);
+      if (this.isDestroyed) {
+        resolve();
+        return;
       }
       
+      if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = null;
+      }
+      
+      if (this.animationResolve) {
+        this.animationResolve();
+        this.animationResolve = null;
+      }
+      
+      this.animationResolve = resolve;
       const startTime = performance.now();
       
-      const animate = (currentTime: number) => {
+      const animateFrame = (currentTime: number) => {
+        if (this.isDestroyed) {
+          this.animationFrameId = null;
+          if (this.animationResolve) {
+            this.animationResolve();
+            this.animationResolve = null;
+          }
+          return;
+        }
+        
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const eased = this.easeOutCubic(progress);
@@ -93,15 +116,17 @@ export class ChartRenderer {
         this.render(type);
         
         if (progress < 1) {
-          this.animationFrameId = requestAnimationFrame(animate);
+          this.animationFrameId = requestAnimationFrame(animateFrame);
         } else {
           this.animationProgress = 1;
           this.animationFrameId = null;
-          resolve();
+          const res = this.animationResolve;
+          this.animationResolve = null;
+          res?.();
         }
       };
       
-      this.animationFrameId = requestAnimationFrame(animate);
+      this.animationFrameId = requestAnimationFrame(animateFrame);
     });
   }
 
@@ -363,8 +388,27 @@ export class ChartRenderer {
   }
 
   destroy(): void {
-    if (this.animationFrameId) {
+    this.isDestroyed = true;
+    if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    if (this.animationResolve) {
+      const res = this.animationResolve;
+      this.animationResolve = null;
+      res();
+    }
+  }
+
+  cancelAnimation(): void {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    if (this.animationResolve) {
+      const res = this.animationResolve;
+      this.animationResolve = null;
+      res();
     }
   }
 }

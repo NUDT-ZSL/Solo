@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Upload, FileJson } from 'lucide-react';
+import './index.css';
 
 interface FileUploadProps {
   onFileUpload: (fileContent: string, fileName: string) => void;
@@ -14,7 +15,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, onError })
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
+    if (!isDragging) {
+      setIsDragging(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -38,6 +41,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, onError })
     const files = e.target.files;
     if (files && files.length > 0) {
       handleFile(files[0]);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -65,28 +71,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, onError })
   };
 
   return (
-    <motion.div
+    <div
       onClick={handleClick}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      animate={{
-        backgroundColor: isDragging ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-        borderColor: isDragging ? '#3B82F6' : '#D1D5DB',
-      }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
-      style={{
-        border: '2px dashed #D1D5DB',
-        borderRadius: '12px',
-        padding: '48px 32px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '12px',
-      }}
-      whileHover={{ borderColor: '#9CA3AF' }}
+      className={`file-upload-container ${isDragging ? 'dragging' : ''}`}
     >
       <input
         ref={fileInputRef}
@@ -96,16 +86,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, onError })
         style={{ display: 'none' }}
       />
       
-      <motion.div
-        animate={{ y: isDragging ? -4 : 0 }}
-        transition={{ duration: 0.3 }}
-      >
+      <div className="file-upload-icon">
         {isDragging ? (
           <FileJson size={48} style={{ color: '#3B82F6' }} />
         ) : (
           <Upload size={48} style={{ color: '#9CA3AF' }} />
         )}
-      </motion.div>
+      </div>
       
       <div>
         <p style={{ fontSize: '15px', fontWeight: 500, color: '#374151', margin: '0 0 4px 0' }}>
@@ -117,9 +104,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, onError })
       </div>
       
       <p style={{ fontSize: '12px', color: '#D1D5DB', margin: '8px 0 0 0' }}>
-        支持格式：[{"date": "2024-01", "value": 100, "category": "A"}]
+        支持格式：[{'{'}"date": "2024-01", "value": 100, "category": "A"{'}'}]
       </p>
-    </motion.div>
+    </div>
   );
 };
 
