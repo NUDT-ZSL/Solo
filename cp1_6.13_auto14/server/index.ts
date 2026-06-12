@@ -23,6 +23,8 @@ const commentsDb = Datastore.create({ filename: path.join(dbDir, 'comments.db'),
 
 const OPTION_COLORS = ['#f43f5e', '#3b82f6', '#22c55e', '#f59e0b'];
 
+const PORT = parseInt(process.env.PORT || '3002', 10);
+
 let currentPollId: string | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -47,8 +49,10 @@ function broadcastComments() {
 }
 
 setInterval(() => {
-  broadcastPollUpdate();
-  broadcastComments();
+  if (currentPollId) {
+    broadcastPollUpdate();
+    broadcastComments();
+  }
 }, 1000);
 
 app.get('/api/polls', async (_req, res) => {
@@ -340,7 +344,6 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3002;
 server.listen(PORT, () => {
   console.log(`StreamVote server running on http://localhost:${PORT}`);
 });

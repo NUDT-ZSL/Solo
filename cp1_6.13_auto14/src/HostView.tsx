@@ -151,8 +151,6 @@ export default function HostView() {
 
   const totalVotes = poll?.options.reduce((sum, o) => sum + o.votes, 0) || 0;
 
-  const chartWidth = 560;
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -451,7 +449,7 @@ export default function HostView() {
                       }}
                       onMouseOver={(e) => {
                         e.currentTarget.style.transform = 'translateY(-4px)';
-                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)';
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
                         e.currentTarget.style.boxShadow = `0 8px 24px ${option.color}33`;
                       }}
                       onMouseOut={(e) => {
@@ -558,13 +556,16 @@ export default function HostView() {
               alignItems: 'center',
               justifyContent: 'center',
               minHeight: '450px',
+              width: '100%',
             }}>
               {showWordCloud ? (
                 <div style={{ animation: 'fadeInUp 0.3s ease-out' }}>
                   <WordCloud words={wordFrequencies} width={500} height={400} />
                 </div>
               ) : poll ? (
-                <BarChart options={poll.options} width={chartWidth} height={450} />
+                <div style={{ width: '100%', maxWidth: '700px' }}>
+                  <BarChart options={poll.options} height={450} />
+                </div>
               ) : (
                 <div style={{ opacity: 0.4, textAlign: 'center' }}>
                   <div style={{ fontSize: '64px', marginBottom: '16px' }}>📈</div>

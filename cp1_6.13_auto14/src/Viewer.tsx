@@ -17,6 +17,7 @@ export default function Viewer() {
   const [hasVoted, setHasVoted] = useState(false);
   const [hasSubmittedComment, setHasSubmittedComment] = useState(false);
   const [pollEnded, setPollEnded] = useState(false);
+  const [ringDisappeared, setRingDisappeared] = useState(false);
   const countdownCanvasRef = useRef<HTMLCanvasElement>(null);
   const commentsContainerRef = useRef<HTMLDivElement>(null);
   const votedPollRef = useRef<Set<string>>(new Set());
@@ -28,6 +29,7 @@ export default function Viewer() {
       setPoll(updated);
       if (updated.status === 'active') {
         setPollEnded(false);
+        setRingDisappeared(false);
         setTotalDuration(updated.duration);
         setSelectedOption(null);
         setHasVoted(false);
@@ -37,6 +39,9 @@ export default function Viewer() {
       if (updated.status === 'closed') {
         setPollEnded(true);
         setCountdown(0);
+        setTimeout(() => {
+          setRingDisappeared(true);
+        }, 500);
         setTimeout(() => {
           if (!hasSubmittedComment && votedPollRef.current.has(updated._id!)) {
             setShowCommentInput(true);
@@ -49,6 +54,7 @@ export default function Viewer() {
       setCountdown(sec);
       setTotalDuration(sec);
       setPollEnded(false);
+      setRingDisappeared(false);
     });
 
     socket.on('countdown:tick', (sec: number) => {
@@ -97,39 +103,44 @@ export default function Viewer() {
     ctx.lineWidth = RING_STROKE;
     ctx.stroke();
 
-    if (totalDuration > 0) {
+    if (totalDuration > 0 && countdown > 0) {
       const progress = Math.max(0, Math.min(1, countdown / totalDuration));
-      const t = 1 - progress;
       const startAngle = -Math.PI / 2;
-      const endAngle = startAngle + Math.PI * 2 * progress;
+      const totalArcAngle = Math.PI * 2 * progress;
+      const segments = Math.max(2, Math.ceil(progress * 60));
 
       const r1 = 34, g1 = 197, b1 = 94;
       const r2 = 244, g2 = 63, b2 = 94;
-      const r = Math.round(r1 + (r2 - r1) * t);
-      const g = Math.round(g1 + (g2 - g1) * t);
-      const b = Math.round(b1 + (b2 - b1) * t);
-      const strokeColor = `rgb(${r}, ${g}, ${b})`;
 
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-      ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = RING_STROKE;
-      ctx.lineCap = 'round';
-      ctx.stroke();
+      for (let s = 0; s < segments; s++) {
+        const segStart = startAngle + (totalArcAngle * s) / segments;
+        const segEnd = startAngle + (totalArcAngle * (s + 1)) / segments;
+        const t = s / Math.max(1, segments - 1);
+        const r = Math.round(r1 + (r2 - r1) * t);
+        const g = Math.round(g1 + (g2 - g1) * t);
+        const b = Math.round(b1 + (b2 - b1) * t);
 
-      ctx.fillStyle = countdown <= 3 && countdown > 0 ? '#f43f5e' : '#fff';
-      ctx.font = `bold ${countdown < 100 ? 26 : 22}px sans-serif`;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, segStart, segEnd + 0.005);
+        ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.lineWidth = RING_STROKE;
+        ctx.lineCap = s === 0 || s === segments - 1 ? 'round' : 'butt';
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = countdown <= 3 ? '#f43f5e' : '#fff';
+      ctx.font = `bold 26px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(String(countdown), centerX, centerY + 1);
-    } else {
+    } else if (!pollEnded) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.font = 'bold 18px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('--', centerX, centerY);
     }
-  }, [countdown, totalDuration]);
+  }, [countdown, totalDuration, pollEnded]);
 
   const handleSelectOption = useCallback(async (optionId: string) => {
     if (!poll || poll.status !== 'active' || hasVoted) return;
@@ -271,7 +282,12 @@ export default function Viewer() {
 
           <div
             style={{
-              animation: countdown === 0 && isPollClosed ? 'zoomOut 0.4s ease-in forwards' : undefined,
+              transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+              transform: pollEnded ? 'scale(0)' : 'scale(1)',
+              opacity: pollEnded ? 0 : 1,
+              display: ringDisappeared ? 'none' : 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             <canvas ref={countdownCanvasRef} />

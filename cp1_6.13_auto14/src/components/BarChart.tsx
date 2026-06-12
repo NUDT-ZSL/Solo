@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { VoteOption } from '../types';
 
 interface BarChartProps {
@@ -9,29 +9,45 @@ interface BarChartProps {
 
 export default function BarChart({ options, width = 600, height = 450 }: BarChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-  useEffect(() => {
+  const draw = useCallback((canvasWidth: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const w = canvasWidth;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
+    canvas.width = w * dpr;
     canvas.height = height * dpr;
-    canvas.style.width = `${width}px`;
+    canvas.style.width = `${w}px`;
     canvas.style.height = `${height}px`;
     ctx.scale(dpr, dpr);
 
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, w, height);
 
     const maxVotes = Math.max(...options.map((o) => o.votes), 1);
-    const padding = { top: 60, right: 40, bottom: 80, left: 60 };
-    const chartWidth = width - padding.left - padding.right;
+    const padding = { top: 50, right: 30, bottom: 80, left: 50 };
+    const chartWidth = w - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
-    const barWidth = 40;
-    const gap = (chartWidth - options.length * barWidth) / (options.length + 1);
+
+    const maxBarWidth = 40;
+    const minGap = 24;
+    const numBars = options.length;
+    let barWidth: number;
+    let gap: number;
+
+    const availableForBarsAndGaps = chartWidth - minGap * (numBars + 1);
+    if (availableForBarsAndGaps / numBars <= maxBarWidth) {
+      barWidth = Math.max(16, availableForBarsAndGaps / numBars);
+      gap = minGap;
+    } else {
+      barWidth = maxBarWidth;
+      gap = (chartWidth - numBars * barWidth) / (numBars + 1);
+    }
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.lineWidth = 1;
@@ -40,7 +56,7 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
       const y = padding.top + (chartHeight / gridLines) * i;
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
-      ctx.lineTo(width - padding.right, y);
+      ctx.lineTo(w - padding.right, y);
       ctx.stroke();
 
       const value = Math.round((maxVotes / gridLines) * (gridLines - i));
@@ -48,27 +64,31 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(value), padding.left - 12, y);
+      ctx.fillText(String(value), padding.left - 10, y);
     }
 
     options.forEach((option, index) => {
       const x = padding.left + gap + index * (barWidth + gap);
       const barHeight = (option.votes / maxVotes) * chartHeight;
-      const y = padding.top + chartHeight - barHeight;
+      const barTop = padding.top + chartHeight - barHeight;
 
-      const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+      const gradient = ctx.createLinearGradient(x, barTop, x, barTop + barHeight);
       gradient.addColorStop(0, option.color + 'dd');
       gradient.addColorStop(1, option.color + '88');
 
-      const radius = 6;
+      const radius = Math.min(6, barWidth / 4);
       ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + barWidth - radius, y);
-      ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-      ctx.lineTo(x + barWidth, y + barHeight);
-      ctx.lineTo(x, y + barHeight);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
+      if (barHeight > radius) {
+        ctx.moveTo(x + radius, barTop);
+        ctx.lineTo(x + barWidth - radius, barTop);
+        ctx.quadraticCurveTo(x + barWidth, barTop, x + barWidth, barTop + radius);
+        ctx.lineTo(x + barWidth, barTop + barHeight);
+        ctx.lineTo(x, barTop + barHeight);
+        ctx.lineTo(x, barTop + radius);
+        ctx.quadraticCurveTo(x, barTop, x + radius, barTop);
+      } else {
+        ctx.rect(x, barTop, barWidth, barHeight);
+      }
       ctx.closePath();
 
       ctx.shadowColor = option.color + '44';
@@ -83,7 +103,7 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(String(option.votes), x + barWidth / 2, y - 10);
+      ctx.fillText(String(option.votes), x + barWidth / 2, barTop - 8);
 
       const labelMaxWidth = barWidth + gap;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
@@ -94,37 +114,62 @@ export default function BarChart({ options, width = 600, height = 450 }: BarChar
       let displayText = option.text;
       let fontSize = 13;
       ctx.font = `${fontSize}px sans-serif`;
-      while (ctx.measureText(displayText).width > labelMaxWidth - 8 && fontSize > 10) {
+      while (ctx.measureText(displayText).width > labelMaxWidth - 4 && fontSize > 10) {
         fontSize -= 1;
         ctx.font = `${fontSize}px sans-serif`;
       }
-      if (ctx.measureText(displayText).width > labelMaxWidth - 8) {
-        while (ctx.measureText(displayText + '…').width > labelMaxWidth - 8 && displayText.length > 1) {
+      if (ctx.measureText(displayText).width > labelMaxWidth - 4) {
+        while (ctx.measureText(displayText + '…').width > labelMaxWidth - 4 && displayText.length > 1) {
           displayText = displayText.slice(0, -1);
         }
         displayText = displayText + '…';
       }
-      ctx.fillText(displayText, x + barWidth / 2, padding.top + chartHeight + 16);
+      ctx.fillText(displayText, x + barWidth / 2, padding.top + chartHeight + 14);
 
       const totalVotes = options.reduce((sum, o) => sum + o.votes, 0);
       const pct = totalVotes > 0 ? ((option.votes / totalVotes) * 100).toFixed(0) : '0';
       ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.font = '11px sans-serif';
-      ctx.fillText(`${pct}%`, x + barWidth / 2, padding.top + chartHeight + 36);
+      ctx.fillText(`${pct}%`, x + barWidth / 2, padding.top + chartHeight + 34);
     });
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(padding.left, padding.top + chartHeight);
-    ctx.lineTo(width - padding.right, padding.top + chartHeight);
+    ctx.lineTo(w - padding.right, padding.top + chartHeight);
     ctx.stroke();
-  }, [options, width, height]);
+  }, [options, height]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    const initialWidth = container.clientWidth || width;
+    draw(initialWidth);
+
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const newWidth = entry.contentRect.width;
+        if (newWidth > 0) {
+          draw(newWidth);
+        }
+      }
+    });
+    resizeObserverRef.current.observe(container);
+
+    return () => {
+      resizeObserverRef.current?.disconnect();
+    };
+  }, [draw, width]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
-    />
+    <div ref={containerRef} style={{ width: '100%', maxWidth: '100%' }}>
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
+      />
+    </div>
   );
 }

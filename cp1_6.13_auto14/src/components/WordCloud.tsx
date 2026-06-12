@@ -11,10 +11,14 @@ interface WordCloudProps {
   height?: number;
 }
 
-const WORD_CLOUD_COLORS = [
-  '#f43f5e', '#3b82f6', '#22c55e', '#f59e0b',
-  '#a855f7', '#06b6d4', '#ec4899', '#84cc16',
-  '#eab308', '#14b8a6',
+const WORD_CLOUD_COLORS_HIGH = [
+  '#f43f5e', '#ec4899', '#f59e0b', '#eab308',
+  '#a855f7',
+];
+
+const WORD_CLOUD_COLORS_MID = [
+  '#3b82f6', '#06b6d4', '#14b8a6', '#22c55e',
+  '#84cc16',
 ];
 
 interface PlacedWord {
@@ -100,6 +104,23 @@ function rotatedRect(x: number, y: number, w: number, h: number, angle: number):
   return { x: x + (w - newW) / 2, y: y + (h - newH) / 2, w: newW, h: newH };
 }
 
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed * 9301 + 49297) * 233280;
+  return x - Math.floor(x);
+}
+
+function pickColorByFrequency(ratio: number, index: number): string {
+  let palette: string[];
+  if (ratio > 0.7) {
+    palette = WORD_CLOUD_COLORS_HIGH;
+  } else if (ratio > 0.3) {
+    palette = [...WORD_CLOUD_COLORS_HIGH, ...WORD_CLOUD_COLORS_MID];
+  } else {
+    palette = WORD_CLOUD_COLORS_MID;
+  }
+  return palette[Math.abs(seededRandom(index * 7 + 3) * palette.length) | 0 % palette.length];
+}
+
 export default function WordCloud({ words, width = 500, height = 400 }: WordCloudProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -144,9 +165,10 @@ export default function WordCloud({ words, width = 500, height = 400 }: WordClou
       const ratio = maxCount === minCount ? 1 : (item.count - minCount) / (maxCount - minCount);
       const fontSize = Math.round(minFont + (maxFont - minFont) * ratio);
 
-      const seed = idx + item.word.length + item.count;
-      const rotation = ((seed * 37) % 61) - 30;
-      const color = WORD_CLOUD_COLORS[(idx + item.word.charCodeAt(0)) % WORD_CLOUD_COLORS.length];
+      const rotSeed = seededRandom(idx * 13 + item.word.charCodeAt(0) * 7 + item.count * 3);
+      const rotation = Math.round((rotSeed * 61) - 30);
+
+      const color = pickColorByFrequency(ratio, idx);
 
       ctx.font = `bold ${fontSize}px sans-serif`;
       const textMetrics = ctx.measureText(item.word);
@@ -162,13 +184,13 @@ export default function WordCloud({ words, width = 500, height = 400 }: WordClou
         let px: number, py: number;
 
         if (attempts < 60) {
-          const angle = (attempts * 0.4) + (seed * 0.1);
+          const angle = (attempts * 0.4) + (rotSeed * 6.28);
           const radius = attempts * 1.8;
           px = centerX + Math.cos(angle) * radius;
           py = centerY + Math.sin(angle) * radius;
         } else {
-          px = Math.random() * (width - wordWidth - 20) + 10;
-          py = Math.random() * (height - wordHeight - 20) + 10;
+          px = seededRandom(attempts * 31 + idx * 17) * (width - wordWidth - 20) + 10;
+          py = seededRandom(attempts * 47 + idx * 23) * (height - wordHeight - 20) + 10;
         }
 
         const drawX = px - wordWidth / 2;
