@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import type { BeatPad as BeatPadType, Sample, SampleCategory } from './types';
+import React, { useState, useRef, useCallback } from 'react';
+import type { BeatPad as BeatPadType, Sample } from './types';
 import { CATEGORY_COLORS, CATEGORY_NAMES } from './types';
 import audioEngine from './audioEngine';
 
@@ -10,6 +10,7 @@ interface BeatPadProps {
   onPadSelect: (padId: number) => void;
   onPadAssign: (padId: number, sampleId: string) => void;
   isResponsive: boolean;
+  isPlaying: boolean;
 }
 
 interface PadAnimationState {
@@ -23,27 +24,42 @@ const BeatPadComponent: React.FC<BeatPadProps> = ({
   selectedPadId,
   onPadSelect,
   onPadAssign,
-  isResponsive
+  isResponsive,
+  isPlaying
 }) => {
   const [animations, setAnimations] = useState<Map<number, PadAnimationState>>(new Map());
   const timeoutsRef = useRef<Map<number, { press: NodeJS.Timeout; glow: NodeJS.Timeout }>>(new Map());
+  const pendingTriggersRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
-  const getSampleById = (sampleId: string | null): Sample | undefined => {
+  const getSampleById = useCallback((sampleId: string | null): Sample | undefined => {
     if (!sampleId) return undefined;
     return samples.find(s => s.id === sampleId);
-  };
+  }, [samples]);
 
-  const getPadColor = (pad: BeatPadType): string => {
+  const getPadColor = useCallback((pad: BeatPadType): string => {
     const sample = getSampleById(pad.sampleId);
     if (!sample) return '#2a2a4a';
     return CATEGORY_COLORS[sample.category];
-  };
+  }, [getSampleById]);
 
-  const handlePadClick = (pad: BeatPadType) => {
+  const handlePadClick = useCallback((pad: BeatPadType) => {
     onPadSelect(pad.id);
 
     if (pad.sampleId) {
-      audioEngine.triggerSample(pad.sampleId, 80);
+      const existingPending = pendingTriggersRef.current.get(pad.id);
+      if (existingPending) {
+        clearTimeout(existingPending);
+        pendingTriggersRef.current.delete(pad.id);
+      }
+
+      const delay = audioEngine.triggerBeatSynced(pad.sampleId, 80);
+
+      if (delay > 0) {
+        const pendingTimeout = setTimeout(() => {
+          pendingTriggersRef.current.delete(pad.id);
+        }, delay * 1000 + 50);
+        pendingTriggersRef.current.set(pad.id, pendingTimeout);
+      }
     }
 
     setAnimations(prev => {
@@ -81,14 +97,16 @@ const BeatPadComponent: React.FC<BeatPadProps> = ({
     }, 200);
 
     timeoutsRef.current.set(pad.id, { press: pressTimeout, glow: glowTimeout });
-  };
+  }, [onPadSelect]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
   };
 
   const handleDrop = (e: React.DragEvent, padId: number) => {
     e.preventDefault();
+    e.stopPropagation();
     const sampleId = e.dataTransfer.getData('sampleId');
     if (sampleId) {
       onPadAssign(padId, sampleId);
@@ -105,7 +123,7 @@ const BeatPadComponent: React.FC<BeatPadProps> = ({
         className="beatpad-grid"
         style={{
           gridTemplateColumns: `repeat(${cols}, ${padSize}px)`,
-          gap: '12px'
+          gap: isResponsive ? '8px' : '12px'
         }}
       >
         {beatPads.map(pad => {
@@ -124,9 +142,9 @@ const BeatPadComponent: React.FC<BeatPadProps> = ({
                 borderRadius: '8px',
                 backgroundColor: pad.sampleId ? color : '#2a2a4a',
                 boxShadow: anim.glowing && pad.sampleId
-                  ? `0 0 20px ${color}, 0 0 40px ${color}80`
+                  ? `0 0 20px ${color}, 0 0 40px ${color}80, inset 0 0 10px ${color}40`
                   : isSelected
-                    ? `0 0 0 2px ${color}`
+                    ? `0 0 0 2px ${color}, 0 2px 8px rgba(0,0,0,0.3)`
                     : '0 2px 8px rgba(0,0,0,0.3)',
                 transform: anim.pressed ? 'scale(0.9)' : 'scale(1)',
                 transition: 'transform 0.08s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out'
@@ -134,16 +152,35 @@ const BeatPadComponent: React.FC<BeatPadProps> = ({
               onClick={() => handlePadClick(pad)}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, pad.id)}
-              title={sample ? `${sample.name} (${CATEGORY_NAMES[sample.category]})` : `Pad ${pad.id + 1} - 点击或拖拽采样`}
+              title={sample ? `${sample.name} (${CATEGORY_NAMES[sample.category]}) - ${sample.duration}s` : `Pad ${pad.id + 1} - 点击或拖拽采样`}
             >
               {sample ? (
                 <div className="pad-label">
-                  <span style={{ fontSize: isResponsive ? '10px' : '11px', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                  <span style={{
+                    fontSize: isResponsive ? '9px' : '11px',
+                    color: '#fff',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                    textAlign: 'center',
+                    lineHeight: 1.1,
+                    display: 'block'
+                  }}>
                     {sample.name.split(' ')[0]}
+                  </span>
+                  <span style={{
+                    fontSize: isResponsive ? '7px' : '8px',
+                    color: '#ffffffaa',
+                    display: 'block',
+                    marginTop: '2px'
+                  }}>
+                    {sample.duration}s
                   </span>
                 </div>
               ) : (
-                <div className="pad-placeholder" style={{ color: '#6a6a8a', fontSize: isResponsive ? '14px' : '18px' }}>
+                <div className="pad-placeholder" style={{
+                  color: '#6a6a8a',
+                  fontSize: isResponsive ? '14px' : '18px',
+                  fontWeight: 600
+                }}>
                   {pad.id + 1}
                 </div>
               )}
@@ -173,6 +210,7 @@ const BeatPadComponent: React.FC<BeatPadProps> = ({
         }
         .beatpad-pad {
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
           cursor: pointer;
@@ -198,9 +236,6 @@ const BeatPadComponent: React.FC<BeatPadProps> = ({
           padding: 2px;
           word-break: break-all;
           line-height: 1.1;
-        }
-        .pad-placeholder {
-          font-weight: 600;
         }
       `}</style>
     </div>
