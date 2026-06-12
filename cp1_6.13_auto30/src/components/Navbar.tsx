@@ -18,98 +18,44 @@ export default function Navbar({ navigate, currentRoute }: NavbarProps) {
   const isActive = (route: string) => currentRoute === route || (route === 'home' && currentRoute === 'search')
 
   return (
-    <nav
-      style={{
-        height: '60px',
-        backgroundColor: '#78350f',
-        color: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 24px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-      }}
-    >
-      <div
-        onClick={() => navigate('/')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          cursor: 'pointer',
-          fontSize: '20px',
-          fontWeight: 'bold',
-        }}
-      >
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-          <path d="M4 5h6a3 3 0 013 3v12a2 2 0 00-2-2H4V5z" fill="#fbbf24" />
-          <path d="M20 5h-6a3 3 0 00-3 3v12a2 2 0 012-2h7V5z" fill="#fef3c7" />
-          <text x="9" y="15" fontSize="10" fontWeight="bold" fill="#78350f">B</text>
-        </svg>
-        BookBridge
-      </div>
+    <>
+      <nav className="navbar">
+        <div
+          onClick={() => navigate('/')}
+          className="navbar-brand"
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M4 5h6a3 3 0 013 3v12a2 2 0 00-2-2H4V5z" fill="#fbbf24" />
+            <path d="M20 5h-6a3 3 0 00-3 3v12a2 2 0 012-2h7V5z" fill="#fef3c7" />
+            <text x="9" y="15" fontSize="10" fontWeight="bold" fill="#78350f">B</text>
+          </svg>
+          BookBridge
+        </div>
 
-      <div style={{ display: 'flex', gap: '24px' }} className="desktop-nav">
-        {links.map((link) => (
-          <a
-            key={link.path}
-            onClick={() => navigate(link.path)}
-            style={{
-              color: 'white',
-              cursor: 'pointer',
-              position: 'relative',
-              paddingBottom: '4px',
-              fontWeight: isActive(link.route) ? '600' : '400',
-            }}
-          >
-            {link.label}
-            {isActive(link.route) && (
-              <span
-                style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: '2px',
-                  backgroundColor: 'white',
-                  animation: 'fadeIn 0.3s ease-out',
-                }}
-              />
-            )}
-          </a>
-        ))}
-      </div>
+        <div className="desktop-nav">
+          {links.map((link) => (
+            <a
+              key={link.path}
+              onClick={() => navigate(link.path)}
+              className={`nav-link ${isActive(link.route) ? 'nav-link-active' : ''}`}
+            >
+              {link.label}
+              {isActive(link.route) && <span className="nav-underline" />}
+            </a>
+          ))}
+        </div>
 
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        style={{
-          display: 'none',
-          background: 'none',
-          border: 'none',
-          color: 'white',
-          cursor: 'pointer',
-          fontSize: '24px',
-        }}
-        className="hamburger"
-      >
-        ☰
-      </button>
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="hamburger-btn"
+          aria-label="菜单"
+        >
+          {mobileOpen ? '✕' : '☰'}
+        </button>
+      </nav>
 
       {mobileOpen && (
-        <div
-          style={{
-            display: 'none',
-            position: 'absolute',
-            top: '60px',
-            left: 0,
-            right: 0,
-            backgroundColor: '#78350f',
-            flexDirection: 'column',
-            padding: '16px',
-            gap: '16px',
-          }}
-          className="mobile-menu"
-        >
+        <div className="mobile-menu">
           {links.map((link) => (
             <a
               key={link.path}
@@ -117,7 +63,7 @@ export default function Navbar({ navigate, currentRoute }: NavbarProps) {
                 navigate(link.path)
                 setMobileOpen(false)
               }}
-              style={{ color: 'white', cursor: 'pointer' }}
+              className="mobile-menu-link"
             >
               {link.label}
             </a>
@@ -126,12 +72,86 @@ export default function Navbar({ navigate, currentRoute }: NavbarProps) {
       )}
 
       <style>{`
+        .navbar {
+          height: 60px;
+          background-color: #78350f;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 24px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          position: relative;
+        }
+        .navbar-brand {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          font-size: 20px;
+          font-weight: bold;
+        }
+        .desktop-nav {
+          display: flex;
+          gap: 24px;
+        }
+        .nav-link {
+          color: white;
+          cursor: pointer;
+          position: relative;
+          padding-bottom: 4px;
+          text-decoration: none;
+        }
+        .nav-link-active {
+          font-weight: 600;
+        }
+        .nav-underline {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background-color: white;
+          animation: fadeIn 0.3s ease-out;
+        }
+        .hamburger-btn {
+          display: none;
+          background: none;
+          border: none;
+          color: white;
+          cursor: pointer;
+          font-size: 24px;
+          padding: 4px 8px;
+        }
+        .mobile-menu {
+          position: absolute;
+          top: 60px;
+          left: 0;
+          right: 0;
+          background-color: #78350f;
+          display: flex;
+          flex-direction: column;
+          padding: 16px 24px;
+          gap: 16px;
+          z-index: 100;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .mobile-menu-link {
+          color: white;
+          cursor: pointer;
+          font-size: 16px;
+          padding: 4px 0;
+          text-decoration: none;
+        }
         @media (max-width: 768px) {
-          .desktop-nav { display: none !important; }
-          .hamburger { display: block !important; }
-          .mobile-menu { display: flex !important; }
+          .desktop-nav {
+            display: none !important;
+          }
+          .hamburger-btn {
+            display: block !important;
+          }
         }
       `}</style>
-    </nav>
+    </>
   )
 }

@@ -58,16 +58,22 @@ app.get('/api/books', async (req, res) => {
   try {
     const { keyword, category } = req.query
     let query: any = {}
-    if (keyword && typeof keyword === 'string') {
-      const regex = new RegExp(keyword, 'i')
+    if (keyword && typeof keyword === 'string' && keyword.trim()) {
+      const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(escaped, 'i')
       query.$or = [
         { title: regex },
         { author: regex },
-        { isbn: regex }
+        { isbn: regex },
+        { category: regex }
       ]
     }
     if (category && typeof category === 'string' && category !== '全部') {
-      query.category = category
+      if (query.$or) {
+        query = { $and: [query, { category }] }
+      } else {
+        query.category = category
+      }
     }
     const books = await booksDB.find(query).sort({ createdAt: -1 })
     res.json(books)

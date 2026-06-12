@@ -40,13 +40,9 @@ function CardIcon({ type, color }: { type: string; color: string }) {
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
-  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    getStats().then((data) => {
-      setStats(data)
-      setTimeout(() => setLoaded(true), 50)
-    })
+    getStats().then((data) => setStats(data))
   }, [])
 
   return (
@@ -74,6 +70,7 @@ export default function Dashboard() {
         {cards.map((card, i) => (
           <div
             key={card.key}
+            className="stat-card"
             style={{
               width: '220px',
               height: '120px',
@@ -84,9 +81,7 @@ export default function Dashboard() {
               display: 'flex',
               flexDirection: 'column',
               gap: '8px',
-              opacity: loaded ? 1 : 0,
-              transform: loaded ? 'translateY(0)' : 'translateY(10px)',
-              transition: `opacity 0.5s ease-out ${i * 0.1}s, transform 0.5s ease-out ${i * 0.1}s`,
+              animationDelay: `${i * 0.1}s`,
             }}
           >
             <CardIcon type={card.icon} color={card.color} />
@@ -99,6 +94,20 @@ export default function Dashboard() {
       </div>
 
       <style>{`
+        @keyframes cardFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .stat-card {
+          opacity: 0;
+          animation: cardFadeIn 0.5s ease-out forwards;
+        }
         @media (max-width: 768px) {
           .stats-grid { grid-template-columns: 1fr !important; max-width: 100% !important; }
         }

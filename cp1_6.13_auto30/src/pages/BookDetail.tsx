@@ -160,7 +160,10 @@ export default function BookDetail({ bookId, navigate }: BookDetailProps) {
             <StarRating rating={avgRating} size={20} />
             <span style={{ color: '#78716c' }}>({avgRating.toFixed(1)})</span>
           </div>
-          <div style={{ fontSize: '14px', color: '#78716c' }}>借阅次数：{book.borrowCount} 次</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px' }}>
+            <span style={{ color: '#78716c' }}>借阅次数：</span>
+            <span style={{ fontWeight: '600', color: '#78350f' }}>{book.borrowCount ?? 0} 次</span>
+          </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
             {book.status === '在馆' && (
@@ -176,9 +179,9 @@ export default function BookDetail({ bookId, navigate }: BookDetailProps) {
             {book.status === '已借出' && (
               <button
                 onClick={handleReturn}
-                style={btnStyle}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#9a3412')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#c2410c')}
+                style={{ ...btnStyle, backgroundColor: '#16a34a' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#15803d')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#16a34a')}
               >
                 归还
               </button>
@@ -237,8 +240,10 @@ export default function BookDetail({ bookId, navigate }: BookDetailProps) {
             </label>
             <textarea
               value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              maxLength={200}
+              onChange={(e) => {
+                const val = e.target.value
+                if (val.length <= 200) setNewComment(val)
+              }}
               rows={4}
               placeholder="分享你的阅读感受..."
               style={{
@@ -252,7 +257,7 @@ export default function BookDetail({ bookId, navigate }: BookDetailProps) {
                 fontFamily: 'inherit',
               }}
             />
-            <div style={{ textAlign: 'right', fontSize: '12px', color: '#a8a29e', marginTop: '4px' }}>
+            <div style={{ textAlign: 'right', fontSize: '12px', color: newComment.length >= 190 ? '#ef4444' : '#a8a29e', marginTop: '4px' }}>
               {newComment.length}/200
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Book, Review } from '../types'
 import { getBooks, getBookReviews } from '../api'
 import BookCard from '../components/BookCard'
@@ -17,7 +17,7 @@ export default function SearchPage({ navigate }: SearchPageProps) {
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
-  const fetchBooks = async (kw?: string, cat?: string) => {
+  const fetchBooks = useCallback(async (kw?: string, cat?: string) => {
     setLoading(true)
     try {
       const result = await getBooks(kw, cat)
@@ -33,27 +33,41 @@ export default function SearchPage({ navigate }: SearchPageProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [reviewsMap])
 
   useEffect(() => {
     fetchBooks()
   }, [])
 
-  const handleSearch = () => {
-    fetchBooks(keyword, category)
-  }
+  const debouncedSearch = useCallback((kw: string, cat: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      fetchBooks(kw, cat)
+    }, 300)
+  }, [fetchBooks])
+
+  const immediateSearch = useCallback((kw: string, cat: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    fetchBooks(kw, cat)
+  }, [fetchBooks])
 
   const handleKeywordChange = (val: string) => {
     setKeyword(val)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      fetchBooks(val, category)
-    }, 300)
+    debouncedSearch(val, category)
+  }
+
+  const handleCategoryChange = (val: string) => {
+    setCategory(val)
+    debouncedSearch(keyword, val)
+  }
+
+  const handleSearch = () => {
+    immediateSearch(keyword, category)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleSearch()
+      immediateSearch(keyword, category)
     }
   }
 
@@ -96,10 +110,7 @@ export default function SearchPage({ navigate }: SearchPageProps) {
         />
         <select
           value={category}
-          onChange={(e) => {
-            setCategory(e.target.value)
-            fetchBooks(keyword, e.target.value)
-          }}
+          onChange={(e) => handleCategoryChange(e.target.value)}
           style={{
             padding: '12px 16px',
             borderRadius: '12px',
