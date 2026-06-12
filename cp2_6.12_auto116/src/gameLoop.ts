@@ -5,11 +5,9 @@ export class GameLoop {
   private lastTime: number = 0;
   private running: boolean = false;
   private callbacks: Set<GameLoopCallback> = new Set();
-  private targetFps: number = 60;
   private frameInterval: number;
 
   constructor(targetFps: number = 60) {
-    this.targetFps = targetFps;
     this.frameInterval = 1000 / targetFps;
   }
 

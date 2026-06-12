@@ -70,7 +70,6 @@ export const WAVELENGTH_COLORS: Record<string, { color: string; refractBias: num
 };
 
 const degToRad = (d: number) => (d * Math.PI) / 180;
-const radToDeg = (r: number) => (r * 180) / Math.PI;
 
 function normalize(v: Vec2): Vec2 {
   const len = Math.hypot(v.x, v.y) || 1;
