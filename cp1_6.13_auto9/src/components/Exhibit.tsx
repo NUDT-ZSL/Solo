@@ -52,11 +52,11 @@ export const Exhibit: React.FC<ExhibitProps> = ({ exhibit, zoom }) => {
         left: exhibit.x,
         top: exhibit.y,
         width: pxWidth,
-        height: pxHeight + 20,
         cursor: 'move',
         touchAction: 'none',
         zIndex: isSelected ? 10 : 2,
         boxSizing: 'border-box',
+        userSelect: 'none',
       }}
     >
       <div
@@ -96,9 +96,9 @@ export const Exhibit: React.FC<ExhibitProps> = ({ exhibit, zoom }) => {
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           pointerEvents: 'none',
-          userSelect: 'none',
-          marginTop: 4,
-          lineHeight: 1,
+          marginTop: 2,
+          lineHeight: '14px',
+          height: 14,
         }}
       >
         {exhibit.name}
@@ -106,6 +106,7 @@ export const Exhibit: React.FC<ExhibitProps> = ({ exhibit, zoom }) => {
       {isSelected && (
         <button
           onClick={handleDelete}
+          onPointerDown={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
             top: -8,

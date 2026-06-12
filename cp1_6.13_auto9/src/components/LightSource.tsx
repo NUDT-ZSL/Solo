@@ -29,8 +29,8 @@ export const LightSourceComponent: React.FC<LightSourceProps> = ({ light, zoom }
       (s) => s.selectedElement?.type === 'light' && s.selectedElement?.id === light.id
     );
 
-  const glowRadius = 40 + light.intensity * 1.5;
-  const glowOpacity = 0.3 + (light.intensity / 100) * 0.5;
+  const glowRadius = 50 + light.intensity * 2;
+  const glowOpacity = Math.min(1, 0.2 + light.intensity / 150);
 
   return (
     <div
@@ -50,10 +50,13 @@ export const LightSourceComponent: React.FC<LightSourceProps> = ({ light, zoom }
     >
       <div
         style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
           width: '100%',
           height: '100%',
           borderRadius: '50%',
-          background: `radial-gradient(circle, rgba(255,249,196,${glowOpacity}) 0%, rgba(255,249,196,0) 70%)`,
+          background: `radial-gradient(circle at 50% 50%, rgba(255,249,196,${glowOpacity}) 0%, rgba(255,249,196,0.3) 40%, transparent 70%)`,
           pointerEvents: 'none',
         }}
       />
@@ -69,9 +72,9 @@ export const LightSourceComponent: React.FC<LightSourceProps> = ({ light, zoom }
           backgroundColor: '#fbbf24',
           border: isSelected ? '2px solid #3b82f6' : '2px solid #f59e0b',
           boxShadow: isSelected
-            ? '0 0 0 2px #3b82f6, 0 0 10px rgba(251,191,36,0.6)'
-            : '0 0 8px rgba(251,191,36,0.5)',
-          transition: 'box-shadow 0.2s ease',
+            ? '0 0 0 2px #3b82f6, 0 0 12px rgba(251,191,36,0.8)'
+            : '0 0 10px rgba(251,191,36,0.6)',
+          transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
         }}
       />
     </div>

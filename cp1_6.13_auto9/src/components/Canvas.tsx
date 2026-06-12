@@ -18,18 +18,23 @@ export const Canvas: React.FC = () => {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const lastPanPos = useRef({ x: 0, y: 0 });
+  const initialized = useRef(false);
 
   const centerCanvas = useCallback(() => {
     const el = canvasRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const panX = (rect.width - CANVAS_WIDTH * zoom) / 2;
-    const panY = (rect.height - CANVAS_HEIGHT * zoom) / 2;
+    const currentZoom = useGalleryStore.getState().zoom;
+    const panX = (rect.width - CANVAS_WIDTH * currentZoom) / 2;
+    const panY = (rect.height - CANVAS_HEIGHT * currentZoom) / 2;
     setPan({ x: panX, y: panY });
-  }, [zoom]);
+  }, []);
 
   useEffect(() => {
-    centerCanvas();
+    if (!initialized.current) {
+      initialized.current = true;
+      centerCanvas();
+    }
     const handleResize = () => centerCanvas();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -51,6 +56,8 @@ export const Canvas: React.FC = () => {
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
       const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom + delta));
 
+      if (newZoom === zoom) return;
+
       const newPanX = mouseX - contentX * newZoom;
       const newPanY = mouseY - contentY * newZoom;
 
@@ -62,7 +69,8 @@ export const Canvas: React.FC = () => {
 
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (e.target === canvasRef.current || (e.target as HTMLElement).tagName === 'svg') {
+      const target = e.target as HTMLElement;
+      if (target === canvasRef.current || target.tagName === 'svg' || target.tagName === 'line') {
         selectElement(null);
         if (e.button === 0 && e.shiftKey) {
           setIsPanning(true);

@@ -71,19 +71,16 @@ export const useGalleryStore = create<GalleryStore>((set, get) => ({
       walls: state.walls.map((w) => {
         if (w.id !== id) return w;
         const nextRot: Record<Rotation, Rotation> = { 0: 90, 90: 180, 180: 270, 270: 0 };
-        const cx = w.x + w.width / 2;
-        const cy = w.y + w.height / 2;
-        const newWidth = w.height;
-        const newHeight = w.width;
-        const newX = cx - newWidth / 2;
-        const newY = cy - newHeight / 2;
+        const offsetX = (w.width - w.height) / 2;
+        const offsetY = (w.height - w.width) / 2;
         return {
           ...w,
           rotation: nextRot[w.rotation],
-          width: newWidth,
-          height: newHeight,
-          x: newX,
-          y: newY,
+          width: w.height,
+          height: w.width,
+          x: w.x + offsetX,
+          y: w.y + offsetY,
+          isSnapping: false,
         };
       }),
     }));
