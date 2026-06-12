@@ -61,8 +61,16 @@ export class Visualizer3D {
   private theme: ThemeName = 'neon';
   private targetTheme: ThemeName = 'neon';
   private themeTransitionStart: number = 0;
-  private currentThemeData = { bottom: new THREE.Color(), top: new THREE.Color() };
-  private prevThemeData = { bottom: new THREE.Color(), top: new THREE.Color() };
+  private currentThemeData = {
+    bottom: new THREE.Color(),
+    top: new THREE.Color(),
+    background: new THREE.Color(),
+  };
+  private prevThemeData = {
+    bottom: new THREE.Color(),
+    top: new THREE.Color(),
+    background: new THREE.Color(),
+  };
 
   private isDragging: boolean = false;
   private lastMouseX: number = 0;
@@ -112,10 +120,12 @@ export class Visualizer3D {
   private applyThemeColors(): void {
     const cfg = THEMES[this.theme];
     this.scene.background = new THREE.Color(cfg.background);
-    this.prevThemeData.bottom.setHex(THEMES[this.theme].barBottom);
-    this.prevThemeData.top.setHex(THEMES[this.theme].barTop);
-    this.currentThemeData.bottom.setHex(THEMES[this.theme].barBottom);
-    this.currentThemeData.top.setHex(THEMES[this.theme].barTop);
+    this.prevThemeData.bottom.setHex(cfg.barBottom);
+    this.prevThemeData.top.setHex(cfg.barTop);
+    this.prevThemeData.background.setHex(cfg.background);
+    this.currentThemeData.bottom.setHex(cfg.barBottom);
+    this.currentThemeData.top.setHex(cfg.barTop);
+    this.currentThemeData.background.setHex(cfg.background);
   }
 
   private setupLights(): void {
@@ -294,10 +304,10 @@ export class Visualizer3D {
     if (this.theme === theme) return;
     this.prevThemeData.bottom.copy(this.currentThemeData.bottom);
     this.prevThemeData.top.copy(this.currentThemeData.top);
+    this.prevThemeData.background.copy(this.currentThemeData.background);
     this.targetTheme = theme;
     this.theme = theme;
     this.themeTransitionStart = performance.now();
-    this.scene.background = new THREE.Color(THEMES[theme].background);
   }
 
   public updateFrequencyData(data: number[]): void {
@@ -340,10 +350,17 @@ export class Visualizer3D {
     const target = THEMES[this.targetTheme];
     const targetBottom = new THREE.Color(target.barBottom);
     const targetTop = new THREE.Color(target.barTop);
+    const targetBackground = new THREE.Color(target.background);
     const t = Math.min(1, (now - this.themeTransitionStart) / (THEME_TRANSITION_DURATION * 1000));
     const eased = easeOutCubic(t);
     lerpColor(this.prevThemeData.bottom, targetBottom, eased, this.currentThemeData.bottom);
     lerpColor(this.prevThemeData.top, targetTop, eased, this.currentThemeData.top);
+    lerpColor(this.prevThemeData.background, targetBackground, eased, this.currentThemeData.background);
+    if (this.scene.background instanceof THREE.Color) {
+      this.scene.background.copy(this.currentThemeData.background);
+    } else {
+      this.scene.background = this.currentThemeData.background.clone();
+    }
   }
 
   private updateBarHeights(now: number): void {
