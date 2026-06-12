@@ -71,16 +71,16 @@ export function seedData(): void {
   
   if (productCount.count === 0) {
     const products: Omit<Product, 'id' | 'createdAt'>[] = [
-      { name: '银质耳环', category: '首饰类', price: 128, stock: 45 },
-      { name: '珍珠项链', category: '首饰类', price: 298, stock: 30 },
-      { name: '手工茶杯', category: '陶艺类', price: 88, stock: 60 },
-      { name: '陶瓷花瓶', category: '陶艺类', price: 258, stock: 25 },
-      { name: '棉麻围巾', category: '布艺类', price: 68, stock: 80 },
-      { name: '刺绣帆布袋', category: '布艺类', price: 58, stock: 100 },
-      { name: '木质书签', category: '木工类', price: 28, stock: 90 },
-      { name: '胡桃木手机支架', category: '木工类', price: 168, stock: 35 },
-      { name: '原创明信片', category: '插画类', price: 38, stock: 75 },
-      { name: '手绘海报', category: '插画类', price: 128, stock: 40 },
+      { name: '银质耳环', category: '首饰', price: 128, stock: 45 },
+      { name: '珍珠项链', category: '首饰', price: 298, stock: 30 },
+      { name: '手工茶杯', category: '陶艺', price: 88, stock: 60 },
+      { name: '陶瓷花瓶', category: '陶艺', price: 258, stock: 25 },
+      { name: '棉麻围巾', category: '布艺', price: 68, stock: 80 },
+      { name: '刺绣帆布袋', category: '布艺', price: 58, stock: 100 },
+      { name: '木质书签', category: '木工', price: 28, stock: 90 },
+      { name: '胡桃木手机支架', category: '木工', price: 168, stock: 35 },
+      { name: '原创明信片', category: '插画', price: 38, stock: 75 },
+      { name: '手绘海报', category: '插画', price: 128, stock: 40 },
     ];
 
     const insertProduct = db.prepare(

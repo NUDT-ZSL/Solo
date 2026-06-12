@@ -9,7 +9,7 @@ const PORT = 3001;
 app.use(cors());
 app.use(bodyParser.json());
 
-const CATEGORIES = ['首饰类', '陶艺类', '布艺类', '木工类', '插画类'];
+const CATEGORIES = ['首饰', '陶艺', '布艺', '木工', '插画'];
 
 interface ValidationError {
   field: string;
