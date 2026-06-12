@@ -2,11 +2,15 @@ import { useEffect, useRef, useCallback } from 'react';
 import { SimulationEngine, EnergyRippleData, SimulationParams } from '../core/SimulationEngine';
 import { useSimulationStore, Resolution } from './store';
 
+const RESOLUTION_LADDER: Resolution[] = [128, 64, 32];
+
 export function useSimulation() {
   const engineRef = useRef<SimulationEngine | null>(null);
   const heightMapRef = useRef<Float32Array | null>(null);
   const rippleDataRef = useRef<EnergyRippleData[]>([]);
-  const fpsUpdateTimerRef = useRef<number | null>(null);
+  const fpsTimerRef = useRef<number | null>(null);
+  const lowFpsCountRef = useRef(0);
+  const initDoneRef = useRef(false);
 
   const {
     waveSpeed,
@@ -16,64 +20,54 @@ export function useSimulation() {
     setResolution
   } = useSimulationStore();
 
-  const initEngine = useCallback(() => {
-    if (engineRef.current) {
-      engineRef.current.dispose();
-    }
-
+  useEffect(() => {
     const engine = new SimulationEngine({
-      resolution,
-      waveSpeed,
-      damping
+      resolution: 64,
+      waveSpeed: 1.5,
+      damping: 0.05
     });
 
-    engine.setFrameCallback((heightMap, res, ripples) => {
+    engine.setFrameCallback((heightMap, _res, ripples) => {
       heightMapRef.current = heightMap;
       rippleDataRef.current = ripples;
     });
 
     engine.start();
     engineRef.current = engine;
+    initDoneRef.current = true;
 
-    fpsUpdateTimerRef.current = window.setInterval(() => {
-      if (engineRef.current) {
-        const currentFps = engineRef.current.getFps();
-        setFps(currentFps);
+    fpsTimerRef.current = window.setInterval(() => {
+      if (!engineRef.current) return;
+      const currentFps = engineRef.current.getFps();
+      setFps(currentFps);
 
-        if (currentFps < 55) {
-          const storeResolution = useSimulationStore.getState().resolution;
-          if (storeResolution === 128) {
-            useSimulationStore.getState().setResolution(64);
-          } else if (storeResolution === 64) {
-            useSimulationStore.getState().setResolution(32);
+      if (currentFps < 55) {
+        lowFpsCountRef.current++;
+        if (lowFpsCountRef.current >= 2) {
+          const currentRes = useSimulationStore.getState().resolution;
+          const currentIdx = RESOLUTION_LADDER.indexOf(currentRes);
+          if (currentIdx < RESOLUTION_LADDER.length - 1) {
+            const nextRes = RESOLUTION_LADDER[currentIdx + 1];
+            useSimulationStore.getState().setResolution(nextRes);
           }
+          lowFpsCountRef.current = 0;
         }
+      } else {
+        lowFpsCountRef.current = 0;
       }
-    }, 2000);
-  }, [resolution, waveSpeed, damping, setFps, setResolution]);
+    }, 1000);
 
-  useEffect(() => {
-    initEngine();
     return () => {
-      if (fpsUpdateTimerRef.current) {
-        clearInterval(fpsUpdateTimerRef.current);
-      }
-      if (engineRef.current) {
-        engineRef.current.dispose();
-        engineRef.current = null;
-      }
+      if (fpsTimerRef.current) clearInterval(fpsTimerRef.current);
+      engine.dispose();
+      engineRef.current = null;
+      initDoneRef.current = false;
     };
-  }, [initEngine]);
+  }, []);
 
   useEffect(() => {
-    if (engineRef.current) {
-      const params: Partial<SimulationParams> = {
-        waveSpeed,
-        damping,
-        resolution
-      };
-      engineRef.current.setParams(params);
-    }
+    if (!initDoneRef.current || !engineRef.current) return;
+    engineRef.current.setParams({ waveSpeed, damping, resolution });
   }, [waveSpeed, damping, resolution]);
 
   const addWaveSource = useCallback((x: number, y: number) => {
@@ -99,7 +93,6 @@ export function useSimulation() {
     rippleDataRef,
     addWaveSource,
     addEnergyRipple,
-    reset,
-    getFps: () => engineRef.current?.getFps() ?? 0
+    reset
   };
 }
