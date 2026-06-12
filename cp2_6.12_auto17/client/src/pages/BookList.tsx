@@ -1,55 +1,30 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Book } from '../types';
 import BookCard from '../components/BookCard';
 
 type SortType = 'newest' | 'oldest' | 'title';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 9;
 
 const BookList: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [sort, setSort] = useState<SortType>('newest');
   const [sortAnimating, setSortAnimating] = useState(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const sortTimerRef = useRef<ReturnType<typeof setTimeout>>();
-
-  const fetchBooks = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params: Record<string, string | number> = {
-        page,
-        limit: PAGE_SIZE,
-        sort,
-      };
-      if (debouncedSearch) {
-        params.search = debouncedSearch;
-      }
-      const response = await axios.get('/api/books', { params });
-      setBooks(response.data.books);
-      setTotal(response.data.total);
-    } catch (error) {
-      console.error('Failed to fetch books:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, debouncedSearch, sort]);
-
-  useEffect(() => {
-    fetchBooks();
-  }, [fetchBooks]);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sortTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (searchTimerRef.current) {
       clearTimeout(searchTimerRef.current);
     }
     searchTimerRef.current = setTimeout(() => {
-      setDebouncedSearch(search);
+      setDebouncedSearch(searchTerm);
       setPage(1);
     }, 300);
 
@@ -58,25 +33,67 @@ const BookList: React.FC = () => {
         clearTimeout(searchTimerRef.current);
       }
     };
-  }, [search]);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const fetchBooks = async () => {
+      setLoading(true);
+      try {
+        const params: Record<string, string | number> = {
+          page,
+          limit: PAGE_SIZE,
+          sort,
+        };
+        if (debouncedSearch.trim()) {
+          params.search = debouncedSearch.trim();
+        }
+        const response = await axios.get('/api/books', { params });
+        setBooks(response.data.books);
+        setTotal(response.data.total);
+      } catch (error) {
+        console.error('Failed to fetch books:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBooks();
+  }, [page, debouncedSearch, sort]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const handleSortChange = (newSort: SortType) => {
     if (newSort === sort) return;
 
-    setSortAnimating(true);
     if (sortTimerRef.current) {
       clearTimeout(sortTimerRef.current);
     }
 
+    setSortAnimating(true);
     setPage(1);
-    setTimeout(() => {
+
+    sortTimerRef.current = setTimeout(() => {
       setSort(newSort);
-      sortTimerRef.current = setTimeout(() => {
+      setTimeout(() => {
         setSortAnimating(false);
-      }, 400);
-    }, 200);
+      }, 500);
+    }, 250);
+  };
+
+  const renderPaginationNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (page >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+      }
+    }
+    return pages;
   };
 
   return (
@@ -88,8 +105,8 @@ const BookList: React.FC = () => {
           type="text"
           className="search-input"
           placeholder="搜索书名、作者或ISBN..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
         />
         <div className="sort-buttons">
           <button
@@ -129,7 +146,7 @@ const BookList: React.FC = () => {
               <BookCard
                 key={book.id}
                 book={book}
-                animationDelay={sortAnimating ? index * 30 : index * 50}
+                animationDelay={sortAnimating ? index * 40 : index * 60}
               />
             ))}
           </div>
@@ -143,16 +160,24 @@ const BookList: React.FC = () => {
               >
                 上一页
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                <button
-                  key={pageNum}
-                  className={`page-btn ${page === pageNum ? 'active' : ''}`}
-                  onClick={() => setPage(pageNum)}
-                  disabled={loading}
-                >
-                  {pageNum}
-                </button>
-              ))}
+
+              {renderPaginationNumbers().map((pageNum, idx) =>
+                typeof pageNum === 'number' ? (
+                  <button
+                    key={idx}
+                    className={`page-btn ${page === pageNum ? 'active' : ''}`}
+                    onClick={() => setPage(pageNum)}
+                    disabled={loading}
+                  >
+                    {pageNum}
+                  </button>
+                ) : (
+                  <span key={idx} className="page-ellipsis">
+                    {pageNum}
+                  </span>
+                )
+              )}
+
               <button
                 className="page-btn"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -162,6 +187,10 @@ const BookList: React.FC = () => {
               </button>
             </div>
           )}
+
+          <div className="pagination-info" style={{ textAlign: 'center', color: '#666', marginTop: '0.75rem', fontSize: '0.9rem' }}>
+            共 {total} 本图书，当前第 {page} / {totalPages} 页
+          </div>
         </>
       )}
     </div>

@@ -58,19 +58,34 @@ const saveDatabase = () => {
 const seedSampleData = () => {
   if (!db) return;
 
+  const cover = (seed: number) => `https://picsum.photos/seed/book${seed}/300/420`;
+
   const sampleBooks = [
-    { title: '三体', author: '刘慈欣', isbn: '9787536692930', coverUrl: 'https://img3.doubanio.com/view/subject/l/public/s2996698.jpg', description: '中国科幻文学的里程碑之作', userId: 'user-1' },
-    { title: '活着', author: '余华', isbn: '9787506365437', coverUrl: 'https://img9.doubanio.com/view/subject/l/public/s29609757.jpg', description: '讲述了农村人福贵悲惨的人生遭遇', userId: 'user-1' },
-    { title: '百年孤独', author: '加西亚·马尔克斯', isbn: '9787544253994', coverUrl: 'https://img9.doubanio.com/view/subject/l/public/s29236915.jpg', description: '魔幻现实主义文学的代表作', userId: 'user-2' },
-    { title: '围城', author: '钱钟书', isbn: '9787020024759', coverUrl: 'https://img2.doubanio.com/view/subject/l/public/s1074473.jpg', description: '现代文学的经典之作', userId: 'user-2' },
-    { title: '平凡的世界', author: '路遥', isbn: '9787530212004', coverUrl: 'https://img2.doubanio.com/view/subject/l/public/s29021863.jpg', description: '一部全景式地表现中国当代城乡社会生活的长篇小说', userId: 'user-3' },
-    { title: '红楼梦', author: '曹雪芹', isbn: '9787020002207', coverUrl: 'https://img2.doubanio.com/view/subject/l/public/s1071890.jpg', description: '中国古典四大名著之首', userId: 'user-3' },
-    { title: '1984', author: '乔治·奥威尔', isbn: '9787540415457', coverUrl: 'https://img9.doubanio.com/view/subject/l/public/s28989605.jpg', description: '反乌托邦文学的经典代表作', userId: 'user-1' },
-    { title: '人类简史', author: '尤瓦尔·赫拉利', isbn: '9787508647357', coverUrl: 'https://img2.doubanio.com/view/subject/l/public/s27840371.jpg', description: '从认知革命到科学革命的人类发展历程', userId: 'user-2' },
-    { title: '小王子', author: '圣埃克苏佩里', isbn: '9787020042494', coverUrl: 'https://img2.doubanio.com/view/subject/l/public/s1102673.jpg', description: '写给成年人的童话', userId: 'user-3' },
-    { title: '白夜行', author: '东野圭吾', isbn: '9787544258609', coverUrl: 'https://img2.doubanio.com/view/subject/l/public/s4329992.jpg', description: '日本推理小说的经典之作', userId: 'user-1' },
-    { title: '嫌疑人X的献身', author: '东野圭吾', isbn: '9787544267618', coverUrl: 'https://img9.doubanio.com/view/subject/l/public/s26847472.jpg', description: '一个天才数学家的完美犯罪', userId: 'user-2' },
-    { title: '解忧杂货店', author: '东野圭吾', isbn: '9787544270878', coverUrl: 'https://img9.doubanio.com/view/subject/l/public/s28743421.jpg', description: '一个关于命运与救赎的温暖故事', userId: 'user-3' },
+    { title: '三体', author: '刘慈欣', isbn: '9787536692930', coverUrl: cover(1), description: '中国科幻文学的里程碑之作', userId: 'user-1' },
+    { title: '活着', author: '余华', isbn: '9787506365437', coverUrl: cover(2), description: '讲述了农村人福贵悲惨的人生遭遇', userId: 'user-1' },
+    { title: '百年孤独', author: '加西亚·马尔克斯', isbn: '9787544253994', coverUrl: cover(3), description: '魔幻现实主义文学的代表作', userId: 'user-2' },
+    { title: '围城', author: '钱钟书', isbn: '9787020024759', coverUrl: cover(4), description: '现代文学的经典之作', userId: 'user-2' },
+    { title: '平凡的世界', author: '路遥', isbn: '9787530212004', coverUrl: cover(5), description: '一部全景式地表现中国当代城乡社会生活的长篇小说', userId: 'user-3' },
+    { title: '红楼梦', author: '曹雪芹', isbn: '9787020002207', coverUrl: cover(6), description: '中国古典四大名著之首', userId: 'user-3' },
+    { title: '1984', author: '乔治·奥威尔', isbn: '9787540415457', coverUrl: cover(7), description: '反乌托邦文学的经典代表作', userId: 'user-1' },
+    { title: '人类简史', author: '尤瓦尔·赫拉利', isbn: '9787508647357', coverUrl: cover(8), description: '从认知革命到科学革命的人类发展历程', userId: 'user-2' },
+    { title: '小王子', author: '圣埃克苏佩里', isbn: '9787020042494', coverUrl: cover(9), description: '写给成年人的童话', userId: 'user-3' },
+    { title: '白夜行', author: '东野圭吾', isbn: '9787544258609', coverUrl: cover(10), description: '日本推理小说的经典之作', userId: 'user-1' },
+    { title: '嫌疑人X的献身', author: '东野圭吾', isbn: '9787544267618', coverUrl: cover(11), description: '一个天才数学家的完美犯罪', userId: 'user-2' },
+    { title: '解忧杂货店', author: '东野圭吾', isbn: '9787544270878', coverUrl: cover(12), description: '一个关于命运与救赎的温暖故事', userId: 'user-3' },
+    { title: '挪威的森林', author: '村上春树', isbn: '9787544282765', coverUrl: cover(13), description: '青春与爱情的经典之作', userId: 'user-1' },
+    { title: '追风筝的人', author: '卡勒德·胡赛尼', isbn: '9787208061644', coverUrl: cover(14), description: '关于友谊、背叛与救赎的感人故事', userId: 'user-2' },
+    { title: '月亮与六便士', author: '毛姆', isbn: '9787540484743', coverUrl: cover(15), description: '理想与现实的永恒对话', userId: 'user-3' },
+    { title: '刀锋', author: '毛姆', isbn: '9787540469672', coverUrl: cover(16), description: '关于人生意义的追寻之旅', userId: 'user-1' },
+    { title: '了不起的盖茨比', author: '菲茨杰拉德', isbn: '9787544725743', coverUrl: cover(17), description: '美国梦的缩影与幻灭', userId: 'user-2' },
+    { title: '老人与海', author: '海明威', isbn: '9787544726832', coverUrl: cover(18), description: '人的灵魂的尊严与不屈', userId: 'user-3' },
+    { title: '基督山伯爵', author: '大仲马', isbn: '9787020000790', coverUrl: cover(19), description: '关于复仇与宽恕的史诗巨著', userId: 'user-1' },
+    { title: '傲慢与偏见', author: '简·奥斯汀', isbn: '9787020002214', coverUrl: cover(20), description: '英国乡村的爱情喜剧', userId: 'user-2' },
+    { title: '简爱', author: '夏洛蒂·勃朗特', isbn: '9787020001965', coverUrl: cover(21), description: '女性独立精神的宣言', userId: 'user-3' },
+    { title: '呼啸山庄', author: '艾米莉·勃朗特', isbn: '9787020001972', coverUrl: cover(22), description: '荒原上的爱恨情仇', userId: 'user-1' },
+    { title: '瓦尔登湖', author: '梭罗', isbn: '9787540450779', coverUrl: cover(23), description: '自然生活的实验与思考', userId: 'user-2' },
+    { title: '查拉图斯特拉如是说', author: '尼采', isbn: '9787100078344', coverUrl: cover(24), description: '超人哲学的诗意表达', userId: 'user-3' },
+    { title: '存在与时间', author: '海德格尔', isbn: '9787108017864', coverUrl: cover(25), description: '二十世纪存在主义的奠基之作', userId: 'user-1' },
   ];
 
   const now = Date.now();

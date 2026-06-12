@@ -17,17 +17,57 @@ html {
 
 .page-wrapper {
   min-height: 100vh;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  position: relative;
+  will-change: transform, opacity;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease;
+  transform: translateX(0);
+  opacity: 1;
 }
 
 .page-wrapper.slide-right {
-  transform: translateX(100px);
-  opacity: 0;
+  animation: user-slide-out-left 0.35s cubic-bezier(0.47, 0, 0.745, 0.715) forwards;
 }
 
 .page-wrapper.slide-left {
-  transform: translateX(-100px);
-  opacity: 0;
+  animation: user-slide-out-right 0.35s cubic-bezier(0.47, 0, 0.745, 0.715) forwards;
+}
+
+@keyframes user-slide-out-left {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-80px) scale(0.98);
+    opacity: 0.3;
+  }
+  51% {
+    transform: translateX(80px) scale(0.98);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes user-slide-out-right {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(80px) scale(0.98);
+    opacity: 0.3;
+  }
+  51% {
+    transform: translateX(-80px) scale(0.98);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
 }
 
 .navbar {
@@ -216,26 +256,36 @@ html {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.3s ease;
 }
 
 .books-grid.sorting {
-  opacity: 0.5;
+  opacity: 0.35;
+  filter: blur(0.5px);
 }
 
 .books-grid.sorting .book-card {
-  animation: shuffleCard 0.4s ease forwards;
+  animation: shuffleCard 0.55s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
 @keyframes shuffleCard {
   0% {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(25px) scale(0.92) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.01);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0) scale(1) rotate(0deg);
   }
+}
+
+.page-ellipsis {
+  padding: 0.5rem 0.25rem;
+  color: #999;
+  font-weight: 600;
 }
 
 .book-card {
