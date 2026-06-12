@@ -87,6 +87,44 @@ app.get('/api/preferences', async (_req, res) => {
   }
 });
 
+app.get('/api/preferences/favorites', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 0;
+    const pageSize = parseInt(req.query.pageSize as string) || 10;
+
+    const preferences = await getPreferences();
+    const recipes = await getAllRecipes();
+
+    const allFavorites = [...preferences.favoriteRecipes].sort(
+      (a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
+    );
+
+    const start = page * pageSize;
+    const end = start + pageSize;
+    const paginatedFavorites = allFavorites.slice(start, end);
+
+    const favoritesWithDetails = paginatedFavorites.map((fav) => {
+      const recipe = recipes.find((r) => r.id === fav.recipeId);
+      return recipe
+        ? {
+            ...fav,
+            name: recipe.name
+          }
+        : fav;
+    });
+
+    res.json({
+      favorites: favoritesWithDetails,
+      total: allFavorites.length,
+      hasMore: end < allFavorites.length,
+      page,
+      pageSize
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch favorites' });
+  }
+});
+
 app.post('/api/preferences', async (req, res) => {
   try {
     const { favoriteRecipes, ratings, searchHistory } = req.body as Partial<UserPreference> & {
