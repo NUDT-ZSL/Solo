@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useVersions } from '@/hooks/useVersions';
 import { Version, Comment } from '@/types';
-import { computeDiff, htmlToText, renderDiffToHtml, DiffPart } from '@/utils/diff';
+import { computeDiff, htmlToText, renderOldVersionDiff, renderNewVersionDiff, DiffPart } from '@/utils/diff';
 
 const PRESET_COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12',
@@ -35,8 +35,9 @@ export default function VersionHistoryPage() {
   const [newComment, setNewComment] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
-  const [diffHtml, setDiffHtml] = useState('');
   const [diffParts, setDiffParts] = useState<DiffPart[]>([]);
+  const [oldDiffHtml, setOldDiffHtml] = useState<string>('');
+  const [newDiffHtml, setNewDiffHtml] = useState<string>('');
   const [oldVersionContent, setOldVersionContent] = useState<string>('');
   const [newVersionContent, setNewVersionContent] = useState<string>('');
 
@@ -96,7 +97,8 @@ export default function VersionHistoryPage() {
       const newText = htmlToText(selectedContent);
       const parts = computeDiff(oldText, newText);
       setDiffParts(parts);
-      setDiffHtml(renderDiffToHtml(parts));
+      setOldDiffHtml(renderOldVersionDiff(parts));
+      setNewDiffHtml(renderNewVersionDiff(parts));
 
       const cs = await getComments(roomId, version.version_number);
       setComments(cs);
@@ -125,7 +127,8 @@ export default function VersionHistoryPage() {
       const newText = htmlToText(selectedContent);
       const parts = computeDiff(oldText, newText);
       setDiffParts(parts);
-      setDiffHtml(renderDiffToHtml(parts));
+      setOldDiffHtml(renderOldVersionDiff(parts));
+      setNewDiffHtml(renderNewVersionDiff(parts));
     } catch (error) {
       console.error('加载对比版本失败:', error);
     } finally {
@@ -152,7 +155,8 @@ export default function VersionHistoryPage() {
       const newText = htmlToText(selectedContent);
       const parts = computeDiff(oldText, newText);
       setDiffParts(parts);
-      setDiffHtml(renderDiffToHtml(parts));
+      setOldDiffHtml(renderOldVersionDiff(parts));
+      setNewDiffHtml(renderNewVersionDiff(parts));
     } catch (error) {
       console.error('加载当前内容失败:', error);
     } finally {
@@ -316,16 +320,13 @@ export default function VersionHistoryPage() {
                         >
                           {oldVersionContent ? (
                             <div
-                              dangerouslySetInnerHTML={{
-                                __html: diffHtml
-                                  .split('diff-add')
-                                  .join('diff-add opacity-0 hidden-style')
-                              }}
+                              dangerouslySetInnerHTML={{ __html: oldDiffHtml }}
                               style={{
                                 lineHeight: 1.8,
                                 fontSize: '14px',
                                 color: '#333',
-                                wordBreak: 'break-word'
+                                wordBreak: 'break-word',
+                                whiteSpace: 'pre-wrap'
                               }}
                             />
                           ) : (
@@ -353,12 +354,13 @@ export default function VersionHistoryPage() {
                         >
                           {newVersionContent ? (
                             <div
-                              dangerouslySetInnerHTML={{ __html: diffHtml }}
+                              dangerouslySetInnerHTML={{ __html: newDiffHtml }}
                               style={{
                                 lineHeight: 1.8,
                                 fontSize: '14px',
                                 color: '#333',
-                                wordBreak: 'break-word'
+                                wordBreak: 'break-word',
+                                whiteSpace: 'pre-wrap'
                               }}
                             />
                           ) : (

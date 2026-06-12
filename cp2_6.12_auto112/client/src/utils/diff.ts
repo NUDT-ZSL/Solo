@@ -67,9 +67,35 @@ export function renderDiffToHtml(diff: DiffPart[]): string {
   return diff.map(part => {
     const text = escapeHtml(part.text);
     if (part.added) {
-      return `<span class="diff-add" style="background-color: rgba(46, 204, 113, 0.3); padding: 2px 4px; border-radius: 2px;">${text}</span>`;
+      return `<span class="diff-add" style="background-color: rgba(46, 204, 113, 0.35); padding: 2px 4px; border-radius: 2px;">${text}</span>`;
     } else if (part.removed) {
-      return `<span class="diff-remove" style="background-color: rgba(231, 76, 60, 0.3); padding: 2px 4px; border-radius: 2px; text-decoration: line-through;">${text}</span>`;
+      return `<span class="diff-remove" style="background-color: rgba(231, 76, 60, 0.35); padding: 2px 4px; border-radius: 2px; text-decoration: line-through;">${text}</span>`;
+    } else {
+      return text;
+    }
+  }).join('');
+}
+
+export function renderOldVersionDiff(diff: DiffPart[]): string {
+  return diff.map(part => {
+    const text = escapeHtml(part.text);
+    if (part.added) {
+      return '';
+    } else if (part.removed) {
+      return `<span class="diff-remove" style="background-color: rgba(231, 76, 60, 0.35); padding: 2px 4px; border-radius: 2px; text-decoration: line-through;">${text}</span>`;
+    } else {
+      return text;
+    }
+  }).join('');
+}
+
+export function renderNewVersionDiff(diff: DiffPart[]): string {
+  return diff.map(part => {
+    const text = escapeHtml(part.text);
+    if (part.added) {
+      return `<span class="diff-add" style="background-color: rgba(46, 204, 113, 0.35); padding: 2px 4px; border-radius: 2px;">${text}</span>`;
+    } else if (part.removed) {
+      return '';
     } else {
       return text;
     }

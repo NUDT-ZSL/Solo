@@ -35,6 +35,8 @@ export default function EditorPage() {
   const isRemoteEditRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const successHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     isConnected,
@@ -54,7 +56,10 @@ export default function EditorPage() {
       isRemoteEditRef.current = true;
       setIsContentUpdating(true);
       setContent(newContent);
-      setTimeout(() => {
+      if (contentUpdateTimerRef.current) {
+        clearTimeout(contentUpdateTimerRef.current);
+      }
+      contentUpdateTimerRef.current = setTimeout(() => {
         isRemoteEditRef.current = false;
         setIsContentUpdating(false);
       }, 300);
@@ -66,6 +71,15 @@ export default function EditorPage() {
       setContent(getLatestContent());
     }
   }, [getLatestContent, content]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (saveSpinnerTimerRef.current) clearTimeout(saveSpinnerTimerRef.current);
+      if (successHideTimerRef.current) clearTimeout(successHideTimerRef.current);
+      if (contentUpdateTimerRef.current) clearTimeout(contentUpdateTimerRef.current);
+    };
+  }, []);
 
   const handleChange = (value: string) => {
     setContent(value);
@@ -110,7 +124,10 @@ export default function EditorPage() {
       ]);
       setSavedVersion(result.versionNumber);
       setShowSaveSuccess(true);
-      setTimeout(() => {
+      if (successHideTimerRef.current) {
+        clearTimeout(successHideTimerRef.current);
+      }
+      successHideTimerRef.current = setTimeout(() => {
         setShowSaveSuccess(false);
       }, 2000);
     } catch (error) {

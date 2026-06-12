@@ -20,15 +20,63 @@ app.use(express.json({ limit: '10mb' }));
 const DB_PATH = path.join(__dirname, 'resume.db');
 let db = null;
 
+async function initDatabaseWithRetry(maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await initDatabase();
+    } catch (error) {
+      console.error(`数据库初始化失败 (尝试 ${attempt}/${maxRetries}):`, error.message);
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+
 async function initDatabase() {
-  const SQL = await initSqlJs();
+  const sqlJsOptions = {};
+
+  try {
+    const possiblePaths = [
+      path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+      path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+      path.resolve(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm')
+    ];
+
+    for (const wasmPath of possiblePaths) {
+      if (fs.existsSync(wasmPath)) {
+        console.log('找到 wasm 文件:', wasmPath);
+        sqlJsOptions.locateFile = () => wasmPath;
+        break;
+      }
+    }
+  } catch (e) {
+    console.warn('查找 wasm 文件时出错，使用默认路径:', e.message);
+  }
+
+  let SQL;
+  try {
+    SQL = await initSqlJs(sqlJsOptions);
+  } catch (error) {
+    console.warn('使用 locateFile 初始化失败，尝试默认方式:', error.message);
+    SQL = await initSqlJs();
+  }
 
   let fileBuffer = null;
   if (fs.existsSync(DB_PATH)) {
-    fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
+    try {
+      fileBuffer = fs.readFileSync(DB_PATH);
+      db = new SQL.Database(fileBuffer);
+      console.log('从文件加载数据库成功');
+    } catch (error) {
+      console.warn('加载数据库文件失败，创建新数据库:', error.message);
+      db = new SQL.Database();
+    }
   } else {
     db = new SQL.Database();
+    console.log('创建新数据库');
   }
 
   db.run(`
@@ -65,6 +113,7 @@ async function initDatabase() {
   `);
 
   saveDatabase();
+  console.log('数据库初始化完成');
 }
 
 function saveDatabase() {
@@ -256,7 +305,7 @@ const getRoomContent = (roomId) => {
   return result[0]?.current_content || '';
 };
 
-initDatabase().then(() => {
+initDatabaseWithRetry(3).then(() => {
   setupSocket(server, { updateRoomContent, getRoomContent });
 
   const PORT = process.env.PORT || 3001;
@@ -264,5 +313,6 @@ initDatabase().then(() => {
     console.log(`服务器运行在 http://localhost:${PORT}`);
   });
 }).catch(err => {
-  console.error('数据库初始化失败:', err);
+  console.error('数据库初始化彻底失败:', err);
+  process.exit(1);
 });
