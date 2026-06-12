@@ -1,18 +1,24 @@
-import React, { useRef, useMemo, useEffect } from 'react'
+import React, { useRef, useMemo, useEffect, useCallback } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { useVoxelStore } from './store'
-import { generateVoxelData, VoxelGeometryData } from './voxelEngine'
+import { generateVoxelData, applyClipPlaneToGeometry, VoxelGeometryData } from './voxelEngine'
 
 const VoxelPointCloud: React.FC = () => {
   const pointsRef = useRef<THREE.Points>(null)
-  const { slices, sliceSpacing, opacity, clipPlaneEnabled, clipPlaneZ, setVoxelCount, setBoundingBox } =
-    useVoxelStore()
+  const {
+    slices,
+    sliceSpacing,
+    opacity,
+    clipPlaneEnabled,
+    clipPlaneZ,
+    setVoxelCount,
+    setBoundingBox,
+  } = useVoxelStore()
 
   const voxelData = useMemo<VoxelGeometryData>(() => {
-    const data = generateVoxelData(slices, sliceSpacing, opacity)
-    return data
+    return generateVoxelData(slices, sliceSpacing, opacity)
   }, [slices, sliceSpacing, opacity])
 
   useEffect(() => {
@@ -27,20 +33,23 @@ const VoxelPointCloud: React.FC = () => {
     return geo
   }, [voxelData])
 
-  const clipPlane = useMemo(() => {
-    return new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
-  }, [])
-
   useEffect(() => {
     if (!pointsRef.current) return
 
-    const halfD = (slices.length * sliceSpacing) / 2
-    const clipWorldZ = clipPlaneZ * sliceSpacing - halfD
-    clipPlane.constant = -clipWorldZ
-  }, [clipPlaneZ, sliceSpacing, slices.length, clipPlane])
+    const geo = pointsRef.current.geometry
+
+    if (clipPlaneEnabled && slices.length > 0) {
+      applyClipPlaneToGeometry(geo, clipPlaneZ, sliceSpacing, slices.length)
+    } else {
+      geo.setIndex(null)
+      geo.drawRange.start = 0
+      geo.drawRange.count = Infinity
+      geo.attributes.position.needsUpdate = true
+    }
+  }, [clipPlaneEnabled, clipPlaneZ, sliceSpacing, slices.length, geometry])
 
   const material = useMemo(() => {
-    const mat = new THREE.PointsMaterial({
+    return new THREE.PointsMaterial({
       size: 1.2,
       vertexColors: true,
       transparent: true,
@@ -49,22 +58,10 @@ const VoxelPointCloud: React.FC = () => {
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     })
-    return mat
   }, [opacity])
 
-  useEffect(() => {
-    if (clipPlaneEnabled) {
-      material.clippingPlanes = [clipPlane]
-      material.clipShadows = true
-    } else {
-      material.clippingPlanes = []
-    }
-    material.needsUpdate = true
-  }, [clipPlaneEnabled, clipPlane, material])
-
   return (
-    <points ref={pointsRef} geometry={geometry} material={material}>
-    </points>
+    <points ref={pointsRef} geometry={geometry} material={material} />
   )
 }
 
@@ -90,89 +87,92 @@ const ClipPlaneMesh: React.FC = () => {
   const mouse = useRef(new THREE.Vector2())
   const planeIntersector = useRef(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0))
 
-  useEffect(() => {
+  const handlePointerDown = useCallback((e: PointerEvent) => {
     if (!clipPlaneEnabled || !meshRef.current) return
+    const target = e.target as HTMLElement
+    if (target.tagName !== 'CANVAS') return
 
-    const onPointerDown = (e: PointerEvent) => {
+    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
+    mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+    mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+
+    raycaster.current.setFromCamera(mouse.current, camera)
+    const intersects = raycaster.current.intersectObject(meshRef.current)
+    if (intersects.length > 0) {
+      isDragging.current = true
+      target.setPointerCapture(e.pointerId)
+    }
+  }, [clipPlaneEnabled, camera])
+
+  const handlePointerMove = useCallback((e: PointerEvent) => {
+    if (!isDragging.current) return
+    const target = e.target as HTMLElement
+    if (target.tagName !== 'CANVAS') return
+
+    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
+    mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+    mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+
+    raycaster.current.setFromCamera(mouse.current, camera)
+    planeIntersector.current.setFromNormalAndCoplanarPoint(
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 0, zPos)
+    )
+
+    const intersectPoint = new THREE.Vector3()
+    raycaster.current.ray.intersectPlane(planeIntersector.current, intersectPoint)
+
+    if (intersectPoint) {
+      const maxZ = slices.length > 0 ? slices.length - 1 : 10
+      let newZ = (intersectPoint.z + halfD) / sliceSpacing
+      newZ = Math.max(0, Math.min(maxZ, newZ))
+      setClipPlaneZ(newZ)
+    }
+  }, [camera, zPos, sliceSpacing, slices.length, halfD, setClipPlaneZ])
+
+  const handlePointerUp = useCallback((e: PointerEvent) => {
+    if (isDragging.current) {
+      isDragging.current = false
       const target = e.target as HTMLElement
-      if (target.tagName === 'CANVAS') {
-        const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
-        mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
-        mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
-
-        raycaster.current.setFromCamera(mouse.current, camera)
-        const intersects = raycaster.current.intersectObject(meshRef.current!)
-        if (intersects.length > 0) {
-          isDragging.current = true
-          ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-        }
+      if (target.releasePointerCapture) {
+        target.releasePointerCapture(e.pointerId)
       }
     }
+  }, [])
 
-    const onPointerMove = (e: PointerEvent) => {
-      if (!isDragging.current) return
-      const target = e.target as HTMLElement
-      if (target.tagName === 'CANVAS') {
-        const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
-        mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
-        mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  useEffect(() => {
+    if (!clipPlaneEnabled) return
 
-        raycaster.current.setFromCamera(mouse.current, camera)
-        planeIntersector.current.setFromNormalAndCoplanarPoint(
-          new THREE.Vector3(0, 0, 1),
-          new THREE.Vector3(0, 0, zPos)
-        )
-
-        const intersectPoint = new THREE.Vector3()
-        raycaster.current.ray.intersectPlane(planeIntersector.current, intersectPoint)
-
-        if (intersectPoint) {
-          const maxZ = slices.length > 0 ? slices.length - 1 : 10
-          let newZ = (intersectPoint.z + halfD) / sliceSpacing
-          newZ = Math.max(0, Math.min(maxZ, newZ))
-          setClipPlaneZ(newZ)
-        }
-      }
-    }
-
-    const onPointerUp = (e: PointerEvent) => {
-      if (isDragging.current) {
-        isDragging.current = false
-        const target = e.target as HTMLElement
-        if (target.releasePointerCapture) {
-          target.releasePointerCapture(e.pointerId)
-        }
-      }
-    }
-
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
 
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [clipPlaneEnabled, camera, zPos, sliceSpacing, slices.length, halfD, setClipPlaneZ])
+  }, [clipPlaneEnabled, handlePointerDown, handlePointerMove, handlePointerUp])
 
   if (!clipPlaneEnabled) return null
 
   return (
-    <mesh ref={meshRef} position={[0, 0, zPos]} rotation={[0, 0, 0]}>
-      <planeGeometry args={[planeSize.width, planeSize.height]} />
-      <meshBasicMaterial
-        color="#FF6B35"
-        transparent
-        opacity={0.3}
-        side={THREE.DoubleSide}
-        depthWrite={false}
-      />
-      <lineSegments>
+    <group>
+      <mesh ref={meshRef} position={[0, 0, zPos]}>
+        <planeGeometry args={[planeSize.width, planeSize.height]} />
+        <meshBasicMaterial
+          color="#FF6B35"
+          transparent
+          opacity={0.25}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+      <lineSegments position={[0, 0, zPos]}>
         <edgesGeometry args={[new THREE.PlaneGeometry(planeSize.width, planeSize.height)]} />
-        <lineBasicMaterial color="#FF6B35" linewidth={2} />
+        <lineBasicMaterial color="#FF6B35" linewidth={2} transparent opacity={0.8} />
       </lineSegments>
-    </mesh>
+    </group>
   )
 }
 
@@ -219,7 +219,7 @@ export const VoxelScene: React.FC = () => {
   return (
     <Canvas
       camera={{ position: [0, 0, 100], fov: 60 }}
-      gl={{ antialias: true, alpha: false, localClippingEnabled: true }}
+      gl={{ antialias: true, alpha: false }}
       style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' }}
     >
       <CameraController />

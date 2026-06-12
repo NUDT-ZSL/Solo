@@ -22,6 +22,62 @@ const sliderStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
+const VoxelLimitWarning: React.FC = () => {
+  const { voxelLimitWarning, dismissWarning } = useVoxelStore()
+
+  if (!voxelLimitWarning) return null
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        ...glassPanelStyle,
+        background: 'rgba(40, 20, 20, 0.95)',
+        padding: '24px 28px',
+        maxWidth: '420px',
+        zIndex: 1000,
+        border: '1px solid rgba(255, 107, 53, 0.4)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+        <span style={{ fontSize: '24px' }}>⚠️</span>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#FF6B35' }}>
+          体素数量超限警告
+        </h3>
+      </div>
+      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', lineHeight: '1.6', marginBottom: '16px' }}>
+        {voxelLimitWarning}
+      </p>
+      <button
+        onClick={dismissWarning}
+        style={{
+          width: '100%',
+          padding: '10px',
+          background: 'rgba(255, 107, 53, 0.2)',
+          color: '#FF6B35',
+          border: '1px solid rgba(255, 107, 53, 0.3)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          fontWeight: 500,
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={(e) => {
+          ;(e.target as HTMLElement).style.background = 'rgba(255, 107, 53, 0.35)'
+        }}
+        onMouseLeave={(e) => {
+          ;(e.target as HTMLElement).style.background = 'rgba(255, 107, 53, 0.2)'
+        }}
+      >
+        我知道了
+      </button>
+    </div>
+  )
+}
+
 export const UploadPanel: React.FC = () => {
   const { addSlices, setLoading, setError, slices, clearSlices } = useVoxelStore()
   const [isDragging, setIsDragging] = useState(false)
@@ -232,9 +288,10 @@ export const ControlPanel: React.FC = () => {
               background: 'rgba(255, 107, 53, 0.15)',
               padding: '2px 8px',
               borderRadius: '4px',
+              fontWeight: 600,
             }}
           >
-            {sliceSpacing.toFixed(2)}
+            {sliceSpacing.toFixed(2)}mm
           </span>
         </div>
         <input
@@ -247,8 +304,8 @@ export const ControlPanel: React.FC = () => {
           style={sliderStyle}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
-          <span>0.1</span>
-          <span>2.0</span>
+          <span>0.1mm</span>
+          <span>2.0mm</span>
         </div>
       </div>
 
@@ -265,6 +322,7 @@ export const ControlPanel: React.FC = () => {
               background: 'rgba(255, 107, 53, 0.15)',
               padding: '2px 8px',
               borderRadius: '4px',
+              fontWeight: 600,
             }}
           >
             {opacity.toFixed(2)}
@@ -328,9 +386,13 @@ export const ControlPanel: React.FC = () => {
                   fontFamily: 'monospace',
                   fontSize: '12px',
                   color: '#FF6B35',
+                  background: 'rgba(255, 107, 53, 0.15)',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontWeight: 600,
                 }}
               >
-                {clipPlaneZ.toFixed(1)}
+                Z={clipPlaneZ.toFixed(1)}
               </span>
             </div>
             <input
@@ -362,6 +424,7 @@ export const InfoPanel: React.FC = () => {
         padding: '16px 20px',
         minWidth: '200px',
         zIndex: 100,
+        background: 'rgba(30, 30, 40, 0.85)',
       }}
     >
       <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600 }}>
@@ -494,10 +557,13 @@ export const VoxelControls: React.FC = () => {
           <div
             style={{
               ...glassPanelStyle,
+              background: 'rgba(40, 20, 20, 0.9)',
               padding: '12px 16px',
               color: '#ff6b6b',
               fontSize: '12px',
               borderColor: 'rgba(255, 107, 107, 0.3)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
             }}
           >
             ⚠️ {error}
@@ -505,6 +571,7 @@ export const VoxelControls: React.FC = () => {
         )}
       </div>
       <InfoPanel />
+      <VoxelLimitWarning />
     </>
   )
 }
