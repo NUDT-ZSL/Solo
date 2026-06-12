@@ -42,6 +42,11 @@ const saveDbToFile = () => {
     const buffer = Buffer.from(data);
     const tmpPath = DB_PATH + '.tmp';
     fs.writeFileSync(tmpPath, buffer);
+    try {
+      if (fs.existsSync(DB_PATH)) {
+        fs.rmSync(DB_PATH);
+      }
+    } catch (_e) {}
     fs.renameSync(tmpPath, DB_PATH);
   } catch (err) {
     console.error('保存数据库失败:', err);

@@ -5,6 +5,8 @@ import type { TimeRange, StatsDataPoint } from '../types';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
+  fallback?: React.ReactNode;
+  onReset?: () => void;
 }
 
 interface ErrorBoundaryState {
@@ -18,12 +20,24 @@ class StatsErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: Error) {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    console.error('[ErrorBoundary] 捕获到渲染错误:', error, info);
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    this.props.onReset?.();
+  };
+
   render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
       return (
         <div style={{
           textAlign: 'center',
@@ -39,7 +53,7 @@ class StatsErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
           </p>
           <button
             className="add-habit-btn"
-            onClick={() => this.setState({ hasError: false, error: null })}
+            onClick={this.handleReset}
             style={{ margin: '0 auto' }}
           >
             重新尝试
@@ -56,6 +70,7 @@ export default function StatsPage() {
   const [data, setData] = useState<StatsDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorResetKey, setErrorResetKey] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -80,8 +95,15 @@ export default function StatsPage() {
     load();
   }, [range]);
 
+  const handleErrorReset = () => {
+    setErrorResetKey((k) => k + 1);
+  };
+
   const totalCount = useMemo(() => data.reduce((sum, d) => sum + d.count, 0), [data]);
-  const activeDays = useMemo(() => new Set(data.filter((d) => d.count > 0).map((d) => d.date)).size, [data]);
+  const activeDays = useMemo(
+    () => new Set(data.filter((d) => d.count > 0).map((d) => d.date)).size,
+    [data]
+  );
 
   return (
     <div className="stats-page">
@@ -145,14 +167,17 @@ export default function StatsPage() {
             <p style={{ marginBottom: '16px' }}>{error}</p>
             <button
               className="add-habit-btn"
-              onClick={() => setRange(range)}
+              onClick={() => {
+                setRange(range);
+                setErrorResetKey((k) => k + 1);
+              }}
               style={{ margin: '0 auto' }}
             >
               重试
             </button>
           </div>
         ) : (
-          <StatsErrorBoundary>
+          <StatsErrorBoundary key={errorResetKey} onReset={handleErrorReset}>
             <HeatMap data={data} range={range} />
           </StatsErrorBoundary>
         )}

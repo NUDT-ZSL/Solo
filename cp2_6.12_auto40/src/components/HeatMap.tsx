@@ -227,7 +227,7 @@ export default function HeatMap({ data, range }: HeatMapProps) {
               key={i}
               className="heatmap-legend-step"
               style={{ background: color }}
-              data-tooltip={String(Math.round(maxCount * (i / (legendSteps.length - 1))))}
+              title={String(Math.round(maxCount * (i / (legendSteps.length - 1))))}
             />
           ))}
         </div>

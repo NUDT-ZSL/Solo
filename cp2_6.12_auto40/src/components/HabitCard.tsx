@@ -15,26 +15,47 @@ function useAnimatedOffset(targetOffset: number, duration: number = 500) {
   const rafRef = useRef<number>(0);
   const startRef = useRef<number>(0);
   const fromRef = useRef(targetOffset);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     fromRef.current = offset;
     startRef.current = 0;
-    cancelAnimationFrame(rafRef.current);
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
 
     const animate = (timestamp: number) => {
+      if (!mountedRef.current) return;
       if (!startRef.current) startRef.current = timestamp;
       const elapsed = timestamp - startRef.current;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = fromRef.current + (targetOffset - fromRef.current) * eased;
+
       setOffset(current);
-      if (progress < 1) {
+
+      if (progress < 1 && mountedRef.current) {
         rafRef.current = requestAnimationFrame(animate);
+      } else {
+        rafRef.current = 0;
       }
     };
 
     rafRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    };
   }, [targetOffset, duration]);
 
   return offset;
@@ -128,7 +149,7 @@ export default function HabitCard({ data, index, isNew, dataReady, onCheckedIn }
           <button
             className={`progress-ring-center ${completed ? 'checked' : ''}`}
             onClick={handleCheckIn}
-            data-action={completed ? 'completed' : 'checkin'}
+            title={completed ? '已完成' : '点击打卡'}
           >
             {completed ? '✓' : todayValue > 0 ? `+${Math.min(1, habit.targetValue - todayValue)}` : '+'}
           </button>
