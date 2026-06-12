@@ -6,7 +6,7 @@ interface EditPanelProps {
   exhibit: Exhibit | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (exhibit: Partial<Exhibit>) => void;
+  onSave: (exhibitData: Partial<Exhibit>) => void;
 }
 
 const EditPanel: React.FC<EditPanelProps> = ({ exhibit, isOpen, onClose, onSave }) => {
@@ -14,7 +14,6 @@ const EditPanel: React.FC<EditPanelProps> = ({ exhibit, isOpen, onClose, onSave 
   const [artist, setArtist] = useState('');
   const [year, setYear] = useState('');
   const [material, setMaterial] = useState('');
-  const [description, setDescription] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,12 +22,17 @@ const EditPanel: React.FC<EditPanelProps> = ({ exhibit, isOpen, onClose, onSave 
       setArtist(exhibit.artist);
       setYear(exhibit.year);
       setMaterial(exhibit.material);
-      setDescription(exhibit.description);
       if (editorRef.current) {
         editorRef.current.innerHTML = exhibit.description;
       }
     }
   }, [exhibit]);
+
+  useEffect(() => {
+    if (isOpen && editorRef.current) {
+      editorRef.current.innerHTML = exhibit?.description || '';
+    }
+  }, [isOpen, exhibit?.description]);
 
   const handleSave = () => {
     if (!exhibit) return;
@@ -47,101 +51,104 @@ const EditPanel: React.FC<EditPanelProps> = ({ exhibit, isOpen, onClose, onSave 
     editorRef.current?.focus();
   };
 
-  if (!exhibit) return null;
-
   return (
     <>
-      <div className={`edit-panel-backdrop ${isOpen ? 'visible' : ''}`} onClick={onClose} />
-      <div className={`edit-panel-overlay ${isOpen ? 'open' : ''}`}>
+      <div className={`edit-backdrop ${isOpen ? 'visible' : ''}`} onClick={onClose} />
+      <div className={`edit-panel ${isOpen ? 'open' : ''}`}>
         <div className="edit-panel-header">
-          <h3>展品详情</h3>
-          <button className="close-btn" onClick={onClose}>
+          <h3>展品详情编辑</h3>
+          <button className="close-button" onClick={onClose}>
             ×
           </button>
         </div>
 
         <div className="edit-panel-body">
-          <div className="form-group">
-            <label>展品名称</label>
+          <div className="form-field">
+            <label className="form-label">展品名称</label>
             <input
               type="text"
+              className="form-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="form-input"
-              placeholder="输入展品名称"
+              placeholder="请输入展品名称"
             />
           </div>
 
-          <div className="form-group">
-            <label>艺术家</label>
+          <div className="form-field">
+            <label className="form-label">艺术家</label>
             <input
               type="text"
+              className="form-input"
               value={artist}
               onChange={(e) => setArtist(e.target.value)}
-              className="form-input"
-              placeholder="输入艺术家名称"
+              placeholder="请输入艺术家姓名"
             />
           </div>
 
           <div className="form-row">
-            <div className="form-group">
-              <label>创作年份</label>
+            <div className="form-field">
+              <label className="form-label">创作年份</label>
               <input
                 type="text"
+                className="form-input"
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
-                className="form-input"
                 placeholder="如：1889"
               />
             </div>
-            <div className="form-group">
-              <label>材质尺寸</label>
+            <div className="form-field">
+              <label className="form-label">材质尺寸</label>
               <input
                 type="text"
+                className="form-input"
                 value={material}
                 onChange={(e) => setMaterial(e.target.value)}
-                className="form-input"
                 placeholder="如：布面油画"
               />
             </div>
           </div>
 
-          <div className="form-group">
-            <label>策展描述</label>
+          <div className="form-field">
+            <label className="form-label">策展描述</label>
             <div className="rich-editor-toolbar">
               <button
-                className="toolbar-btn"
+                className="tool-btn"
                 onClick={() => execCommand('bold')}
                 title="加粗"
+                type="button"
               >
                 <b>B</b>
               </button>
               <button
-                className="toolbar-btn"
+                className="tool-btn"
                 onClick={() => execCommand('italic')}
                 title="斜体"
+                type="button"
               >
                 <i>I</i>
               </button>
               <button
-                className="toolbar-btn"
+                className="tool-btn"
                 onClick={() => execCommand('underline')}
                 title="下划线"
+                type="button"
               >
                 <u>U</u>
               </button>
-              <span className="toolbar-divider" />
+              <span className="tool-divider" />
               <button
-                className="toolbar-btn"
+                className="tool-btn"
                 onClick={() => execCommand('insertUnorderedList')}
                 title="无序列表"
+                type="button"
               >
                 •
               </button>
               <button
-                className="toolbar-btn"
+                className="tool-btn"
                 onClick={() => execCommand('insertOrderedList')}
                 title="有序列表"
+                type="button"
               >
                 1.
               </button>
@@ -151,7 +158,7 @@ const EditPanel: React.FC<EditPanelProps> = ({ exhibit, isOpen, onClose, onSave 
               className="rich-editor"
               contentEditable
               suppressContentEditableWarning
-              placeholder="输入策展描述..."
+              data-placeholder="请输入策展描述..."
             />
           </div>
         </div>

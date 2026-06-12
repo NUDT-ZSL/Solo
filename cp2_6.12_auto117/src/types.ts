@@ -21,6 +21,14 @@ export interface DragState {
   startY: number;
   offsetX: number;
   offsetY: number;
+  currentX: number;
+  currentY: number;
 }
 
 export type ViewMode = 'home' | 'room';
+
+export interface RoomState {
+  roomId: string;
+  roomName: string;
+  exhibits: Exhibit[];
+}

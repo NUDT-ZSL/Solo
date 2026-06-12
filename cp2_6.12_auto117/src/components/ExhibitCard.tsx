@@ -1,77 +1,87 @@
-import React from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Exhibit } from '../types';
 import './ExhibitCard.css';
 
 interface ExhibitCardProps {
   exhibit: Exhibit;
-  onDragStart?: (e: React.MouseEvent, exhibit: Exhibit) => void;
-  onClick?: () => void;
   isDragging?: boolean;
   isOnMap?: boolean;
-  style?: React.CSSProperties;
-  showRotationControls?: boolean;
-  onRotate?: (direction: 'left' | 'right') => void;
+  showRotation?: boolean;
   showRipple?: boolean;
   rippleKey?: number;
+  onDragStart?: (e: React.MouseEvent, exhibit: Exhibit) => void;
+  onClick?: () => void;
+  onRotate?: (direction: 'left' | 'right') => void;
+  style?: React.CSSProperties;
+  className?: string;
 }
 
 const ExhibitCard: React.FC<ExhibitCardProps> = ({
   exhibit,
-  onDragStart,
-  onClick,
   isDragging = false,
   isOnMap = false,
-  style,
-  showRotationControls = false,
-  onRotate,
+  showRotation = false,
   showRipple = false,
   rippleKey = 0,
+  onDragStart,
+  onClick,
+  onRotate,
+  style,
+  className = '',
 }) => {
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
     if (onDragStart) {
       e.preventDefault();
+      e.stopPropagation();
       onDragStart(e, exhibit);
     }
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onClick) onClick();
+  };
+
   const handleRotate = (direction: 'left' | 'right', e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onRotate) {
-      onRotate(direction);
-    }
+    e.preventDefault();
+    if (onRotate) onRotate(direction);
   };
 
   return (
     <div
-      className={`exhibit-card ${isDragging ? 'dragging' : ''} ${isOnMap ? 'on-map' : ''}`}
+      className={`exhibit-card ${isDragging ? 'dragging' : ''} ${isOnMap ? 'on-map' : ''} ${className}`}
       onMouseDown={handleMouseDown}
-      onClick={onClick}
+      onClick={handleClick}
       style={{
         ...style,
         transform: `${style?.transform || ''} rotate(${exhibit.rotation}deg)`,
       }}
     >
-      <div className="exhibit-card-thumbnail">
-        <span>🖼️</span>
+      <div className="exhibit-card-thumb">
+        <span className="thumb-placeholder">🖼️</span>
       </div>
-      <div className="exhibit-card-info">
+      <div className="exhibit-card-content">
         <div className="exhibit-card-name">{exhibit.name}</div>
         <div className="exhibit-card-artist">{exhibit.artist || '未知艺术家'}</div>
       </div>
 
-      {showRotationControls && (
+      {showRotation && isOnMap && (
         <div className="rotation-controls">
           <button
-            className="rotate-btn rotate-left"
+            className="rotate-btn left"
             onClick={(e) => handleRotate('left', e)}
-            title="逆时针旋转"
+            onMouseDown={(e) => e.stopPropagation()}
+            title="逆时针旋转90°"
           >
             ↺
           </button>
           <button
-            className="rotate-btn rotate-right"
+            className="rotate-btn right"
             onClick={(e) => handleRotate('right', e)}
-            title="顺时针旋转"
+            onMouseDown={(e) => e.stopPropagation()}
+            title="顺时针旋转90°"
           >
             ↻
           </button>
@@ -79,7 +89,7 @@ const ExhibitCard: React.FC<ExhibitCardProps> = ({
       )}
 
       {showRipple && (
-        <div key={rippleKey} className="ripple-effect"></div>
+        <div key={`ripple-${rippleKey}`} className="ripple-effect" />
       )}
     </div>
   );
