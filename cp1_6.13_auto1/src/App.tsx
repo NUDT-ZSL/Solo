@@ -185,14 +185,15 @@ export default function App() {
 
   if (step === 'home') {
     return (
-      <div style={styles.homeWrap}>
-        <div style={styles.homeCard}>
-          <h1 style={styles.homeTitle}>IdeaVote</h1>
-          <p style={styles.homeSubtitle}>团队头脑风暴与投票决策</p>
+      <div style={styles.homeWrap} className="home-wrap">
+        <div style={styles.homeCard} className="home-card">
+          <h1 style={styles.homeTitle} className="home-title">IdeaVote</h1>
+          <p style={styles.homeSubtitle} className="home-subtitle">团队头脑风暴与投票决策</p>
 
-          <div style={styles.tabBar}>
+          <div style={styles.tabBar} className="tab-bar">
             <button
               onClick={() => setMode('create')}
+              className="tab-btn"
               style={{
                 ...styles.tabBtn,
                 ...(mode === 'create' ? styles.tabBtnActive : {}),
@@ -202,6 +203,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setMode('join')}
+              className="tab-btn"
               style={{
                 ...styles.tabBtn,
                 ...(mode === 'join' ? styles.tabBtnActive : {}),
@@ -211,35 +213,39 @@ export default function App() {
             </button>
           </div>
 
-          {error && <div style={styles.errorBox}>{error}</div>}
+          {error && <div style={styles.errorBox} className="error-box">{error}</div>}
 
           {mode === 'create' ? (
-            <form onSubmit={handleCreate} style={styles.form}>
-              <label style={styles.label}>会议标题 *</label>
+            <form onSubmit={handleCreate} style={styles.form} className="form-wrap">
+              <label style={styles.label} className="form-label">会议标题 *</label>
               <input
                 style={styles.input}
+                className="form-input"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="例如：Q3产品方向讨论"
                 required
               />
-              <label style={styles.label}>会议描述</label>
+              <label style={styles.label} className="form-label">会议描述</label>
               <textarea
                 style={{ ...styles.input, height: 80, resize: 'vertical' }}
+                className="form-input"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="简短描述会议的目标..."
               />
-              <label style={styles.label}>截止时间</label>
+              <label style={styles.label} className="form-label">截止时间</label>
               <input
                 type="datetime-local"
                 style={styles.input}
+                className="form-input"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
               />
-              <label style={styles.label}>你的名字 *</label>
+              <label style={styles.label} className="form-label">你的名字 *</label>
               <input
                 style={styles.input}
+                className="form-input"
                 value={hostName}
                 onChange={(e) => setHostName(e.target.value)}
                 placeholder="请输入你的名字"
@@ -248,25 +254,28 @@ export default function App() {
               <button
                 type="submit"
                 style={styles.primaryBtn}
+                className="form-primary-btn"
                 disabled={loading}
               >
                 {loading ? '创建中...' : '创建会议'}
               </button>
             </form>
           ) : (
-            <form onSubmit={handleJoin} style={styles.form}>
-              <label style={styles.label}>邀请码 *</label>
+            <form onSubmit={handleJoin} style={styles.form} className="form-wrap">
+              <label style={styles.label} className="form-label">邀请码 *</label>
               <input
                 style={{ ...styles.input, textTransform: 'uppercase', letterSpacing: 4 }}
+                className="form-input"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="例如：ABCDEF"
                 maxLength={6}
                 required
               />
-              <label style={styles.label}>你的名字 *</label>
+              <label style={styles.label} className="form-label">你的名字 *</label>
               <input
                 style={styles.input}
+                className="form-input"
                 value={joinName}
                 onChange={(e) => setJoinName(e.target.value)}
                 placeholder="请输入你的名字"
@@ -275,6 +284,7 @@ export default function App() {
               <button
                 type="submit"
                 style={styles.primaryBtn}
+                className="form-primary-btn"
                 disabled={loading}
               >
                 {loading ? '加入中...' : '加入会议'}

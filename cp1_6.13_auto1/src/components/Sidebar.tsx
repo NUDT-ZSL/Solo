@@ -116,6 +116,7 @@ export default function Sidebar({
             }}
           >
             <div
+              className="sidebar-user-avatar"
               style={{
                 width: 32,
                 height: 32,
@@ -133,6 +134,7 @@ export default function Sidebar({
               {user.name.charAt(0).toUpperCase()}
             </div>
             <span
+              className="sidebar-user-name"
               style={{
                 fontSize: 13,
                 color: user.id === currentUserId ? '#6366f1' : '#cbd5e1',

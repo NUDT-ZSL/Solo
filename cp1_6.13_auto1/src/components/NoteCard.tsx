@@ -168,9 +168,6 @@ export default function NoteCard({
   const showVoteBtn = voting && isCandidate;
   const showBadge = voting && isCandidate && note.votes.length > 0;
 
-  const transform = dragging ? 'rotateX(3deg)' : 'none';
-  const opacity = dragging ? 0.6 : 1;
-
   return (
     <div
       ref={cardRef}
@@ -180,188 +177,196 @@ export default function NoteCard({
         left: pos.x,
         top: pos.y,
         width: 200,
-        minHeight: 80,
-        background: note.color,
-        borderRadius: 8,
-        padding: 12,
-        boxShadow: dragging
-          ? '0 8px 24px rgba(0,0,0,0.15)'
-          : '0 2px 8px rgba(0,0,0,0.06)',
         cursor: dragging ? 'grabbing' : 'grab',
-        transform,
-        opacity,
-        transition: dragging ? 'box-shadow 0.2s ease, opacity 0.2s ease' : 'all 0.2s ease',
+        perspective: '600px',
+        transform: dragging ? 'translateZ(0)' : 'none',
         zIndex: dragging ? 1000 : selected ? 10 : 1,
         userSelect: 'none',
-        border: selected ? '2px solid #6366f1' : '2px solid transparent',
-        boxSizing: 'border-box',
+        transition: dragging ? 'none' : 'all 0.2s ease',
       }}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
       onClick={handleClick}
     >
-      {showBadge && (
-        <div
-          style={{
-            position: 'absolute',
-            top: -8,
-            right: -8,
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: '#ef4444',
-            color: '#fff',
-            fontSize: 12,
-            fontWeight: 700,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 4px rgba(239,68,68,0.3)',
-          }}
-        >
-          {note.votes.length}
-        </div>
-      )}
-
-      {editing ? (
-        <textarea
-          ref={textareaRef}
-          value={editContent}
-          onChange={(e) => setEditContent(e.target.value.slice(0, 200))}
-          onBlur={handleEditBlur}
-          onKeyDown={handleEditKeyDown}
-          style={{
-            width: '100%',
-            minHeight: 50,
-            border: 'none',
-            background: 'transparent',
-            resize: 'none',
-            outline: 'none',
-            fontFamily: 'inherit',
-            fontSize: 13,
-            lineHeight: 1.5,
-            color: '#1e293b',
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            fontSize: 13,
-            lineHeight: 1.5,
-            color: '#1e293b',
-            wordBreak: 'break-word',
-            whiteSpace: 'pre-wrap',
-          }}
-        >
-          {note.content}
-        </div>
-      )}
-
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginTop: 8,
+          position: 'relative',
+          width: '100%',
+          minHeight: 80,
+          background: note.color,
+          borderRadius: 8,
+          padding: 12,
+          boxShadow: dragging
+            ? '0 8px 24px rgba(0,0,0,0.15)'
+            : selected
+            ? '0 2px 12px rgba(99,102,241,0.25)'
+            : '0 2px 8px rgba(0,0,0,0.06)',
+          transform: dragging ? 'rotateX(3deg)' : 'none',
+          transformStyle: 'preserve-3d',
+          opacity: dragging ? 0.6 : 1,
+          transition: dragging
+            ? 'opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease'
+            : 'all 0.2s ease',
+          border: selected ? '2px solid #6366f1' : '2px solid transparent',
+          boxSizing: 'border-box',
         }}
       >
-        <span
-          style={{
-            fontSize: 10,
-            color: '#94a3b8',
-          }}
-        >
-          {note.authorName}
-        </span>
+        {showBadge && (
+          <div
+            style={{
+              position: 'absolute',
+              top: -8,
+              right: -8,
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 4px rgba(239,68,68,0.3)',
+            }}
+          >
+            {note.votes.length}
+          </div>
+        )}
 
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {showVoteBtn && (
-            <button
-              className="note-action"
-              onClick={handleVote}
-              title={hasVoted ? '取消投票' : '投票'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: hasVoted ? '1px solid #22c55e' : '1px solid #d1d5db',
-                background: hasVoted ? '#f0fdf4' : '#fff',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                padding: 0,
-              }}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-              >
-                <path
-                  d="M4 9V2H2v7a4 4 0 004 4h4v-2H6a2 2 0 01-2-2z"
-                  fill={hasVoted ? '#22c55e' : '#9ca3af'}
-                />
-                <path
-                  d="M10 1l3 4h-2v6h-2V5H7l3-4z"
-                  fill={hasVoted ? '#22c55e' : '#9ca3af'}
-                />
-              </svg>
-            </button>
-          )}
+        {editing ? (
+          <textarea
+            ref={textareaRef}
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value.slice(0, 200))}
+            onBlur={handleEditBlur}
+            onKeyDown={handleEditKeyDown}
+            style={{
+              width: '100%',
+              minHeight: 50,
+              border: 'none',
+              background: 'transparent',
+              resize: 'none',
+              outline: 'none',
+              fontFamily: 'inherit',
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: '#1e293b',
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: '#1e293b',
+              wordBreak: 'break-word',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {note.content}
+          </div>
+        )}
 
-          {!voting && note.authorId === currentUser.id && (
-            <button
-              className="note-action"
-              onClick={handleDelete}
-              title="删除便签"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 24,
-                height: 24,
-                borderRadius: 4,
-                border: 'none',
-                background: 'transparent',
-                color: '#94a3b8',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                padding: 0,
-                fontSize: 14,
-              }}
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
-
-      {draggingUser && draggingUser.id !== currentUser.id && (
         <div
           style={{
-            position: 'absolute',
-            bottom: -4,
-            right: -4,
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            background: draggingUser.color,
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-            border: '2px solid #fff',
+            justifyContent: 'space-between',
+            marginTop: 8,
           }}
         >
-          {draggingUser.name.charAt(0).toUpperCase()}
+          <span
+            style={{
+              fontSize: 10,
+              color: '#94a3b8',
+            }}
+          >
+            {note.authorName}
+          </span>
+
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {showVoteBtn && (
+              <button
+                className="note-action"
+                onClick={handleVote}
+                title={hasVoted ? '取消投票' : '投票'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  border: hasVoted ? '1px solid #22c55e' : '1px solid #d1d5db',
+                  background: hasVoted ? '#f0fdf4' : '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  padding: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M8 3v10M3 8h10"
+                    stroke={hasVoted ? '#22c55e' : '#9ca3af'}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            )}
+
+            {!voting && note.authorId === currentUser.id && (
+              <button
+                className="note-action"
+                onClick={handleDelete}
+                title="删除便签"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 24,
+                  height: 24,
+                  borderRadius: 4,
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  padding: 0,
+                  fontSize: 14,
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
-      )}
+
+        {draggingUser && draggingUser.id !== currentUser.id && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: -4,
+              right: -4,
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              background: draggingUser.color,
+              color: '#fff',
+              fontSize: 14,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+              border: '2px solid #fff',
+            }}
+          >
+            {draggingUser.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
