@@ -19,28 +19,28 @@ router.get('/', (req: Request, res: Response) => {
   const offset = (pageNum - 1) * pageSizeNum;
 
   const conditions: string[] = [];
-  const params: Record<string, string | number> = {};
+  const paramsList: (string | number)[] = [];
 
   if (search) {
-    conditions.push('name LIKE @search');
-    params['search'] = `%${search}%`;
+    conditions.push('name LIKE ?');
+    paramsList.push(`%${search}%`);
   }
   if (category) {
-    conditions.push('category = @category');
-    params['category'] = category as string;
+    conditions.push('category = ?');
+    paramsList.push(category as string);
   }
   if (status) {
-    conditions.push('status = @status');
-    params['status'] = status as string;
+    conditions.push('status = ?');
+    paramsList.push(status as string);
   }
 
   const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-  const countRow = db.prepare(`SELECT COUNT(*) as total FROM inventory_items ${whereClause}`).get(params) as { total: number };
+  const countRow = db.prepare(`SELECT COUNT(*) as total FROM inventory_items ${whereClause}`).get(...paramsList) as { total: number };
 
   const items = db.prepare(
-    `SELECT * FROM inventory_items ${whereClause} ORDER BY updated_at DESC LIMIT @limit OFFSET @offset`
-  ).all({ ...params, limit: pageSizeNum, offset });
+    `SELECT * FROM inventory_items ${whereClause} ORDER BY updated_at DESC LIMIT ? OFFSET ?`
+  ).all(...paramsList, pageSizeNum, offset);
 
   res.json({ data: items, total: countRow.total, page: pageNum, pageSize: pageSizeNum });
 });
