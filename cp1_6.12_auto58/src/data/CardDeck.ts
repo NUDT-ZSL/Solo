@@ -19,7 +19,6 @@ export interface SoundCard {
   duration: number;
   energyCost: number;
   value: number;
-  color: number;
   description: string;
 }
 
@@ -34,9 +33,38 @@ export interface PlayerState {
   discard: SoundCard[];
 }
 
-const CARD_DEFINITIONS: SoundCard[] = [
+export function getWaveformColor(waveform: WaveformType): number {
+  switch (waveform) {
+    case WaveformType.SINE: return 0x3b82f6;
+    case WaveformType.SQUARE: return 0xef4444;
+    case WaveformType.SAWTOOTH: return 0x22c55e;
+  }
+}
+
+export function getWaveformColorHex(waveform: WaveformType): string {
+  switch (waveform) {
+    case WaveformType.SINE: return '#3b82f6';
+    case WaveformType.SQUARE: return '#ef4444';
+    case WaveformType.SAWTOOTH: return '#22c55e';
+  }
+}
+
+export function getAICardColor(waveform: WaveformType): number {
+  switch (waveform) {
+    case WaveformType.SINE: return 0x7c3aed;
+    case WaveformType.SQUARE: return 0x9333ea;
+    case WaveformType.SAWTOOTH: return 0x6d28d9;
+  }
+}
+
+export function getFrequencyBand(frequency: number): 'low' | 'mid' | 'high' {
+  if (frequency < 400) return 'low';
+  if (frequency < 1000) return 'mid';
+  return 'high';
+}
+
+const CARD_DEFINITIONS: Omit<SoundCard, 'id'>[] = [
   {
-    id: 'low_freq_sine',
     name: '低频震荡',
     type: CardType.ATTACK,
     waveform: WaveformType.SINE,
@@ -44,11 +72,9 @@ const CARD_DEFINITIONS: SoundCard[] = [
     duration: 1.2,
     energyCost: 1,
     value: 4,
-    color: 0x3b82f6,
     description: '低频正弦波攻击，造成4点伤害'
   },
   {
-    id: 'mid_sine',
     name: '中频共鸣',
     type: CardType.ATTACK,
     waveform: WaveformType.SINE,
@@ -56,11 +82,9 @@ const CARD_DEFINITIONS: SoundCard[] = [
     duration: 0.8,
     energyCost: 2,
     value: 7,
-    color: 0x2563eb,
     description: '中频正弦波攻击，造成7点伤害'
   },
   {
-    id: 'high_square',
     name: '高频方爆',
     type: CardType.ATTACK,
     waveform: WaveformType.SQUARE,
@@ -68,11 +92,9 @@ const CARD_DEFINITIONS: SoundCard[] = [
     duration: 0.6,
     energyCost: 3,
     value: 10,
-    color: 0xef4444,
     description: '高频方波爆发，造成10点伤害'
   },
   {
-    id: 'saw_attack',
     name: '锯齿撕裂',
     type: CardType.ATTACK,
     waveform: WaveformType.SAWTOOTH,
@@ -80,11 +102,9 @@ const CARD_DEFINITIONS: SoundCard[] = [
     duration: 1.0,
     energyCost: 4,
     value: 14,
-    color: 0x22c55e,
     description: '锯齿波强力攻击，造成14点伤害'
   },
   {
-    id: 'sine_shield',
     name: '正弦护盾',
     type: CardType.DEFENSE,
     waveform: WaveformType.SINE,
@@ -92,11 +112,9 @@ const CARD_DEFINITIONS: SoundCard[] = [
     duration: 1.5,
     energyCost: 2,
     value: 6,
-    color: 0x60a5fa,
     description: '生成6点护盾值'
   },
   {
-    id: 'square_barrier',
     name: '方波壁垒',
     type: CardType.DEFENSE,
     waveform: WaveformType.SQUARE,
@@ -104,11 +122,9 @@ const CARD_DEFINITIONS: SoundCard[] = [
     duration: 2.0,
     energyCost: 3,
     value: 10,
-    color: 0xf87171,
     description: '生成10点护盾值'
   },
   {
-    id: 'saw_disrupt',
     name: '锯齿干扰',
     type: CardType.DISRUPT,
     waveform: WaveformType.SAWTOOTH,
@@ -116,19 +132,16 @@ const CARD_DEFINITIONS: SoundCard[] = [
     duration: 0.5,
     energyCost: 2,
     value: 2,
-    color: 0x4ade80,
     description: '降低对手2点能量'
   },
   {
-    id: 'high_disrupt',
     name: '高频扰乱',
     type: CardType.DISRUPT,
-    waveform: WaveformType.SQUARE,
+    waveform: WaveformType.SAWTOOTH,
     frequency: 1800,
     duration: 0.7,
     energyCost: 3,
     value: 3,
-    color: 0xfb923c,
     description: '降低对手3点能量'
   }
 ];
@@ -137,7 +150,10 @@ export class CardDeck {
   private allCards: SoundCard[] = [];
 
   constructor() {
-    this.allCards = [...CARD_DEFINITIONS];
+    this.allCards = CARD_DEFINITIONS.map((def, i) => ({
+      ...def,
+      id: `card_${i}`
+    }));
   }
 
   getCardDefinitions(): SoundCard[] {
@@ -147,8 +163,11 @@ export class CardDeck {
   createDeck(): SoundCard[] {
     const deck: SoundCard[] = [];
     for (let i = 0; i < 3; i++) {
-      CARD_DEFINITIONS.forEach(card => {
-        deck.push({ ...card, id: `${card.id}_${i}_${Math.random().toString(36).substr(2, 9)}` });
+      CARD_DEFINITIONS.forEach((def, j) => {
+        deck.push({
+          ...def,
+          id: `card_${j}_copy${i}_${Math.random().toString(36).substring(2, 11)}`
+        });
       });
     }
     return this.shuffleDeck(deck);
