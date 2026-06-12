@@ -6,12 +6,14 @@ export interface ThemeConfig {
   background: number;
   barBottom: number;
   barTop: number;
+  barOpacity: number;
+  sphereOpacity: number;
 }
 
 export const THEMES: Record<ThemeName, ThemeConfig> = {
-  neon: { background: 0x0a0a23, barBottom: 0xff00ff, barTop: 0x00ffff },
-  aurora: { background: 0x001a33, barBottom: 0x00ff88, barTop: 0xff6600 },
-  retro: { background: 0x1a0a00, barBottom: 0xff8800, barTop: 0xffcc00 },
+  neon: { background: 0x0a0a23, barBottom: 0xff00ff, barTop: 0x00ffff, barOpacity: 1, sphereOpacity: 1 },
+  aurora: { background: 0x001a33, barBottom: 0x00ff88, barTop: 0xff6600, barOpacity: 1, sphereOpacity: 1 },
+  retro: { background: 0x1a0a00, barBottom: 0xff8800, barTop: 0xffcc00, barOpacity: 1, sphereOpacity: 1 },
 };
 
 const BAR_COUNT = 64;
@@ -20,6 +22,7 @@ const BAR_WIDTH = 0.6;
 const BAR_DEPTH = 0.6;
 const BAR_BASE_HEIGHT = 0.5;
 const BAR_MAX_HEIGHT = 8;
+const BAR_BASE_Y = 0;
 const SPHERE_RADIUS = 0.15;
 const SMOOTH_DURATION = 0.15;
 const MIN_DISTANCE = 3;
@@ -32,11 +35,29 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-function lerpColor(a: THREE.Color, b: THREE.Color, t: number, out: THREE.Color): THREE.Color {
-  out.r = a.r + (b.r - a.r) * t;
-  out.g = a.g + (b.g - a.g) * t;
-  out.b = a.b + (b.b - a.b) * t;
-  return out;
+function lerpColor(
+  a: THREE.Color,
+  b: THREE.Color,
+  t: number,
+  out: THREE.Color
+): THREE.Color;
+function lerpColor(a: number, b: number, t: number): number;
+function lerpColor(
+  a: THREE.Color | number,
+  b: THREE.Color | number,
+  t: number,
+  out?: THREE.Color
+): THREE.Color | number {
+  if (typeof a === 'number' && typeof b === 'number') {
+    return a + (b - a) * t;
+  }
+  if (a instanceof THREE.Color && b instanceof THREE.Color && out) {
+    out.r = a.r + (b.r - a.r) * t;
+    out.g = a.g + (b.g - a.g) * t;
+    out.b = a.b + (b.b - a.b) * t;
+    return out;
+  }
+  throw new Error('Invalid lerpColor arguments');
 }
 
 interface BarState {
@@ -65,11 +86,15 @@ export class Visualizer3D {
     bottom: new THREE.Color(),
     top: new THREE.Color(),
     background: new THREE.Color(),
+    barOpacity: 1,
+    sphereOpacity: 1,
   };
   private prevThemeData = {
     bottom: new THREE.Color(),
     top: new THREE.Color(),
     background: new THREE.Color(),
+    barOpacity: 1,
+    sphereOpacity: 1,
   };
 
   private isDragging: boolean = false;
@@ -123,9 +148,13 @@ export class Visualizer3D {
     this.prevThemeData.bottom.setHex(cfg.barBottom);
     this.prevThemeData.top.setHex(cfg.barTop);
     this.prevThemeData.background.setHex(cfg.background);
+    this.prevThemeData.barOpacity = cfg.barOpacity;
+    this.prevThemeData.sphereOpacity = cfg.sphereOpacity;
     this.currentThemeData.bottom.setHex(cfg.barBottom);
     this.currentThemeData.top.setHex(cfg.barTop);
     this.currentThemeData.background.setHex(cfg.background);
+    this.currentThemeData.barOpacity = cfg.barOpacity;
+    this.currentThemeData.sphereOpacity = cfg.sphereOpacity;
   }
 
   private setupLights(): void {
@@ -147,7 +176,7 @@ export class Visualizer3D {
     const sphereGeometry = new THREE.SphereGeometry(SPHERE_RADIUS, 16, 16);
 
     for (let i = 0; i < BAR_COUNT; i++) {
-      const angle = (-Math.PI / 2) + (i / (BAR_COUNT - 1)) * Math.PI;
+      const angle = (i / BAR_COUNT) * Math.PI - Math.PI / 2;
       const x = Math.cos(angle) * BAR_RADIUS;
       const z = Math.sin(angle) * BAR_RADIUS;
 
@@ -155,9 +184,11 @@ export class Visualizer3D {
         color: 0x0000ff,
         roughness: 0.3,
         metalness: 0.5,
+        transparent: true,
+        opacity: 1,
       });
       const bar = new THREE.Mesh(barGeometry, barMat);
-      bar.position.set(x, BAR_BASE_HEIGHT / 2, z);
+      bar.position.set(x, BAR_BASE_Y + BAR_BASE_HEIGHT / 2, z);
       bar.rotation.y = -angle;
       bar.castShadow = true;
       bar.receiveShadow = true;
@@ -171,9 +202,11 @@ export class Visualizer3D {
         metalness: 0.5,
         emissive: 0xff0000,
         emissiveIntensity: 0.3,
+        transparent: true,
+        opacity: 1,
       });
       const sphere = new THREE.Mesh(sphereGeometry, sphereMat);
-      sphere.position.set(x, BAR_BASE_HEIGHT + SPHERE_RADIUS, z);
+      sphere.position.set(x, BAR_BASE_Y + BAR_BASE_HEIGHT + SPHERE_RADIUS, z);
       sphere.rotation.y = -angle;
       sphere.castShadow = true;
       this.scene.add(sphere);
@@ -270,8 +303,8 @@ export class Visualizer3D {
   private setupFpsDisplay(): HTMLDivElement {
     const el = document.createElement('div');
     el.style.position = 'absolute';
-    el.style.top = '60px';
-    el.style.right = '16px';
+    el.style.top = '2%';
+    el.style.right = '2%';
     el.style.fontSize = '12px';
     el.style.color = '#ffffff';
     el.style.background = 'rgba(0,0,0,0.5)';
@@ -279,6 +312,7 @@ export class Visualizer3D {
     el.style.borderRadius = '4px';
     el.style.pointerEvents = 'none';
     el.style.zIndex = '100';
+    el.style.whiteSpace = 'nowrap';
     el.textContent = 'FPS: 0';
     this.container.appendChild(el);
     return el;
@@ -305,6 +339,8 @@ export class Visualizer3D {
     this.prevThemeData.bottom.copy(this.currentThemeData.bottom);
     this.prevThemeData.top.copy(this.currentThemeData.top);
     this.prevThemeData.background.copy(this.currentThemeData.background);
+    this.prevThemeData.barOpacity = this.currentThemeData.barOpacity;
+    this.prevThemeData.sphereOpacity = this.currentThemeData.sphereOpacity;
     this.targetTheme = theme;
     this.theme = theme;
     this.themeTransitionStart = performance.now();
@@ -356,6 +392,16 @@ export class Visualizer3D {
     lerpColor(this.prevThemeData.bottom, targetBottom, eased, this.currentThemeData.bottom);
     lerpColor(this.prevThemeData.top, targetTop, eased, this.currentThemeData.top);
     lerpColor(this.prevThemeData.background, targetBackground, eased, this.currentThemeData.background);
+    this.currentThemeData.barOpacity = lerpColor(
+      this.prevThemeData.barOpacity,
+      target.barOpacity,
+      eased
+    ) as number;
+    this.currentThemeData.sphereOpacity = lerpColor(
+      this.prevThemeData.sphereOpacity,
+      target.sphereOpacity,
+      eased
+    ) as number;
     if (this.scene.background instanceof THREE.Color) {
       this.scene.background.copy(this.currentThemeData.background);
     } else {
@@ -376,11 +422,11 @@ export class Visualizer3D {
       const h = state.currentHeight;
       bar.scale.y = h / BAR_BASE_HEIGHT;
       const ratio = (h - BAR_BASE_HEIGHT) / BAR_MAX_HEIGHT;
-      const yPos = h / 2;
+      const yPos = BAR_BASE_Y + h / 2;
       bar.position.y = yPos;
 
       const sphere = this.spheres[i];
-      sphere.position.y = h + SPHERE_RADIUS;
+      sphere.position.y = BAR_BASE_Y + h + SPHERE_RADIUS;
 
       const bottom = this.currentThemeData.bottom;
       const top = this.currentThemeData.top;
@@ -389,10 +435,12 @@ export class Visualizer3D {
       this.barMaterials[i].color.copy(tmpColor);
       this.barMaterials[i].emissive.copy(tmpColor);
       this.barMaterials[i].emissiveIntensity = 0.15 + ratio * 0.25;
+      this.barMaterials[i].opacity = this.currentThemeData.barOpacity;
 
       this.sphereMaterials[i].color.copy(top);
       this.sphereMaterials[i].emissive.copy(top);
       this.sphereMaterials[i].emissiveIntensity = 0.3 + ratio * 0.5;
+      this.sphereMaterials[i].opacity = this.currentThemeData.sphereOpacity;
     }
   }
 
