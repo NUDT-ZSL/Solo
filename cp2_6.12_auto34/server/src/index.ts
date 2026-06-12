@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import initSqlJs, { Database } from 'sql.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
@@ -16,114 +17,149 @@ const dbDir = path.resolve(__dirname, '../../data');
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
+const dbPath = path.join(dbDir, 'sketches.db');
 
-interface DBTheme {
-  id: string;
-  name: string;
-  keywords: string;
-  atmosphere: string;
-  palette: string;
-  created_at: number;
-}
+let db: Database;
 
-interface DBSketch {
-  id: string;
-  image_data: string;
-  theme_id: string;
-  created_at: number;
-}
+const initDB = async () => {
+  const SQL = await initSqlJs({
+    locateFile: (file: string) =>
+      path.join(__dirname, '../../node_modules/sql.js/dist', file),
+  });
 
-interface Database {
-  themes: Record<string, DBTheme>;
-  sketches: DBSketch[];
-}
-
-const dbPath = path.join(dbDir, 'storage.json');
-
-const loadDB = (): Database => {
-  try {
-    if (fs.existsSync(dbPath)) {
-      const data = fs.readFileSync(dbPath, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    console.warn('读取存储文件失败，使用空数据库:', (e as Error).message);
+  if (fs.existsSync(dbPath)) {
+    const buffer = fs.readFileSync(dbPath);
+    db = new SQL.Database(buffer);
+  } else {
+    db = new SQL.Database();
   }
-  return { themes: {}, sketches: [] };
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS themes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      keywords TEXT NOT NULL,
+      atmosphere TEXT NOT NULL,
+      palette TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sketches (
+      id TEXT PRIMARY KEY,
+      image_data TEXT NOT NULL,
+      theme_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (theme_id) REFERENCES themes(id)
+    );
+  `);
+
+  saveDB();
 };
 
-const saveDB = (db: Database): void => {
+const saveDB = () => {
   try {
-    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf-8');
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
   } catch (e) {
-    console.error('保存存储文件失败:', (e as Error).message);
+    console.error('保存数据库失败:', (e as Error).message);
   }
 };
 
-let memoryDB: Database = loadDB();
-
-const themeTemplates = [
-  {
-    name: '迷途森林',
-    keywords: ['古老', '神秘', '绿色', '雾气'],
-    atmosphere: '浓雾笼罩的古老森林，参天古木虬结，光透过枝叶洒下斑驳光影',
-    palette: ['#2d5016', '#a3b18a', '#f5f5dc', '#8b7355'],
-  },
-  {
-    name: '深海梦境',
-    keywords: ['蔚蓝', '幽静', '珊瑚', '光迹'],
-    atmosphere: '深蓝海水中漂浮着发光的水母，珊瑚礁散发柔和光芒，鱼群如星河流动',
-    palette: ['#001f3f', '#0074b7', '#7fdbff', '#ffd166'],
-  },
-  {
-    name: '赛博夜城',
-    keywords: ['霓虹', '未来', '雨夜', '高楼'],
-    atmosphere: '未来都市的雨夜，霓虹广告牌倒映在湿漉漉的街道，飞行器划过天际',
-    palette: ['#0d0221', '#f72585', '#4cc9f0', '#ffbe0b'],
-  },
-  {
-    name: '樱落庭院',
-    keywords: ['粉色', '和风', '飘落', '静谧'],
-    atmosphere: '古老日式庭院中樱花纷飞，石灯笼静立，水面映着落花瓣',
-    palette: ['#ffc0cb', '#ff69b4', '#c71585', '#fff0f5'],
-  },
-  {
-    name: '星际孤旅',
-    keywords: ['宇宙', '孤寂', '星云', '飞船'],
-    atmosphere: '孤独的飞船穿梭于绚烂星云间，远处恒星散发着温暖光芒',
-    palette: ['#1a1a2e', '#16213e', '#e94560', '#f39c12'],
-  },
-  {
-    name: '山居秋暝',
-    keywords: ['金黄', '山居', '炊烟', '归鸟'],
-    atmosphere: '秋日黄昏的山间村落，屋顶炊烟袅袅，归鸟掠过金色稻田',
-    palette: ['#d4a373', '#ccd5ae', '#faedcd', '#e76f51'],
-  },
-  {
-    name: '冰封王座',
-    keywords: ['冰雪', '寒冷', '极光', '城堡'],
-    atmosphere: '极光下的冰雪城堡，冰晶折射出七彩光芒，寒风卷着雪花呼啸',
-    palette: ['#a8dadc', '#457b9d', '#1d3557', '#f1faee'],
-  },
-  {
-    name: '旧梦书店',
-    keywords: ['复古', '书香', '暖黄', '木色'],
-    atmosphere: '午后阳光穿过积尘的窗户，照亮堆满古书的书架，空气中弥漫着咖啡香',
-    palette: ['#6f4e37', '#d4a574', '#f4e4bc', '#8b4513'],
-  },
-  {
-    name: '龙脊梯田',
-    keywords: ['青绿', '层叠', '山水', '农耕'],
-    atmosphere: '云雾缭绕的层层梯田，从山脚盘绕至山顶，倒映着天空的色彩',
-    palette: ['#2d6a4f', '#52b788', '#d8f3dc', '#b7e4c7'],
-  },
-  {
-    name: '暮光市集',
-    keywords: ['黄昏', '喧嚣', '灯笼', '异域'],
-    atmosphere: '暮色中的异域市集，彩色灯笼次第亮起，商贩吆喝着奇珍异宝',
-    palette: ['#3c096c', '#7b2cbf', '#e0aaff', '#ffb703'],
-  },
+const themeNameParts = [
+  { prefix: ['迷途', '深海', '赛博', '樱落', '星际', '山居', '冰封', '旧梦', '龙脊', '暮光', '月下', '云端', '孤岛', '翡翠', '琥珀', '琉璃', '赤焰', '青黛', '碧落', '苍梧'],
+    suffix: ['森林', '梦境', '夜城', '庭院', '孤旅', '秋暝', '王座', '书店', '梯田', '市集', '潮汐', '之境', '秘语', '遗迹', '传说', '回响', '长歌', '画卷', '诗笺', '旧痕'] },
 ];
+
+const keywordPool = [
+  '古老', '神秘', '绿色', '雾气', '蔚蓝', '幽静', '珊瑚', '光迹', '霓虹', '未来',
+  '雨夜', '高楼', '粉色', '和风', '飘落', '静谧', '宇宙', '孤寂', '星云', '飞船',
+  '金黄', '山居', '炊烟', '归鸟', '冰雪', '寒冷', '极光', '城堡', '复古', '书香',
+  '暖黄', '木色', '青绿', '层叠', '山水', '农耕', '黄昏', '喧嚣', '灯笼', '异域',
+  '晨光', '薄雾', '涟漪', '星轨', '萤火', '苔痕', '竹影', '松涛', '稻香', '蝉鸣',
+  '落霞', '孤鹜', '长河', '落日', '古道', '西风', '残阳', '银汉', '玉盘', '清辉',
+  '琉璃', '琥珀', '翡翠', '朱砂', '丹青', '水墨', '烟雨', '梨花', '海棠', '丹桂',
+];
+
+const atmosphereTemplates = [
+  { noun: ['森林', '海洋', '城市', '庭院', '星空', '村落', '雪原', '书店', '山间', '市集', '古道', '云端', '湖畔', '废墟', '阁楼'],
+    verb: ['笼罩着', '漂浮着', '倒映着', '散落着', '闪烁着', '弥漫着', '交织着', '萦绕着', '点缀着', '镶嵌着'],
+    adj: ['古老的', '神秘的', '幽静的', '绚烂的', '静谧的', '温暖的', '遥远的', '璀璨的', '朦胧的', '寂静的'],
+    detail: ['斑驳光影透过枝叶洒落', '发光的生物在深处游弋', '霓虹广告牌闪烁着彩色光芒', '花瓣随风旋转飘落', '流星划过无垠的黑暗', '屋顶升起袅袅炊烟', '冰晶折射七彩光芒', '尘埃在光束中飞舞', '云雾缠绕层叠而上', '灯笼次第亮起'] },
+];
+
+const paletteGroups = [
+  ['#2d5016', '#a3b18a', '#f5f5dc', '#8b7355'],
+  ['#001f3f', '#0074b7', '#7fdbff', '#ffd166'],
+  ['#0d0221', '#f72585', '#4cc9f0', '#ffbe0b'],
+  ['#ffc0cb', '#ff69b4', '#c71585', '#fff0f5'],
+  ['#1a1a2e', '#16213e', '#e94560', '#f39c12'],
+  ['#d4a373', '#ccd5ae', '#faedcd', '#e76f51'],
+  ['#a8dadc', '#457b9d', '#1d3557', '#f1faee'],
+  ['#6f4e37', '#d4a574', '#f4e4bc', '#8b4513'],
+  ['#2d6a4f', '#52b788', '#d8f3dc', '#b7e4c7'],
+  ['#3c096c', '#7b2cbf', '#e0aaff', '#ffb703'],
+  ['#03071e', '#370617', '#6a040f', '#ffba08'],
+  ['#caf0f8', '#0077b6', '#023e8a', '#03045e'],
+  ['#f8f9fa', '#e9ecef', '#6c757d', '#212529'],
+  ['#fff3b0', '#e09f3e', '#9e2a2b', '#540b0e'],
+  ['#e0fbfc', '#98c1d9', '#3d5a80', '#293241'],
+  ['#ff99c8', '#fcf6bd', '#d0f4de', '#a9def9'],
+  ['#ff006e', '#8338ec', '#3a86ff', '#fb5607'],
+  ['#ffbe0b', '#fb5607', '#ff006e', '#8338ec'],
+  ['#264653', '#2a9d8f', '#e9c46a', '#e76f51'],
+  ['#006400', '#228b22', '#9acd32', '#ffff00'],
+];
+
+function pickRandom<T>(arr: T[], min: number, max: number): T[] {
+  const result: T[] = [];
+  const used = new Set<number>();
+  const count = Math.floor(Math.random() * (max - min + 1)) + min;
+  while (result.length < count && used.size < arr.length) {
+    const idx = Math.floor(Math.random() * arr.length);
+    if (!used.has(idx)) {
+      used.add(idx);
+      result.push(arr[idx]);
+    }
+  }
+  return result;
+}
+
+function pickOne<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function generateThemeName(): string {
+  const group = themeNameParts[0];
+  const p = pickOne(group.prefix);
+  const s = pickOne(group.suffix);
+  return p + s;
+}
+
+function generateAtmosphere(): string {
+  const t = atmosphereTemplates[0];
+  const noun = pickOne(t.noun);
+  const verb = pickOne(t.verb);
+  const adj = pickOne(t.adj);
+  const detail = pickOne(t.detail);
+  const structures = [
+    `${adj}${noun}中，${detail}，空气中${verb}淡淡的诗意。`,
+    `${noun}深处${verb}${adj}气息，${detail}，一切仿佛静止。`,
+    `当${detail}，${adj}的${noun}便${verb}属于它的独特故事。`,
+    `${adj}的${noun}里，${detail}，时光在此刻变得柔软而绵长。`,
+    `${detail}的${noun}中，${verb}${adj}氛围，让人不忍离去。`,
+    `走进${adj}的${noun}，${detail}，耳边${verb}远古的低语。`,
+  ];
+  return pickOne(structures);
+}
+
+function generatePalette(): string[] {
+  const basePalette = pickOne(paletteGroups);
+  const shuffled = [...basePalette].sort(() => Math.random() - 0.5);
+  return shuffled;
+}
 
 interface Theme {
   id: string;
@@ -137,41 +173,78 @@ interface Theme {
 const MAX_SKETCHES = 50;
 
 function cleanupOldSketches(): void {
-  if (memoryDB.sketches.length > MAX_SKETCHES) {
-    const excess = memoryDB.sketches.length - MAX_SKETCHES;
-    memoryDB.sketches.sort((a, b) => a.created_at - b.created_at);
-    const removed = memoryDB.sketches.splice(0, excess);
-    const usedThemeIds = new Set(memoryDB.sketches.map(s => s.theme_id));
-    for (const sketch of removed) {
-      if (!usedThemeIds.has(sketch.theme_id)) {
-        delete memoryDB.themes[sketch.theme_id];
+  try {
+    const countRow = db.exec('SELECT COUNT(*) as cnt FROM sketches');
+    if (countRow.length === 0) return;
+    const count = countRow[0].values[0][0] as number;
+
+    if (count > MAX_SKETCHES) {
+      const excess = count - MAX_SKETCHES;
+      const oldRows = db.exec(
+        `SELECT s.id, s.theme_id FROM sketches s 
+         ORDER BY s.created_at ASC 
+         LIMIT ${excess}`
+      );
+
+      if (oldRows.length > 0) {
+        const idsToDelete: string[] = [];
+        const themeIds: string[] = [];
+
+        for (const row of oldRows[0].values) {
+          idsToDelete.push(row[0] as string);
+          themeIds.push(row[1] as string);
+        }
+
+        const delSketchStmt = db.prepare('DELETE FROM sketches WHERE id = ?');
+        for (const id of idsToDelete) {
+          delSketchStmt.run([id]);
+        }
+
+        const delStmt = db.prepare(
+          'DELETE FROM themes WHERE id = ? AND id NOT IN (SELECT theme_id FROM sketches)'
+        );
+        for (const tid of themeIds) {
+          delStmt.run([tid]);
+        }
+
+        saveDB();
       }
     }
-    saveDB(memoryDB);
+  } catch (e) {
+    console.error('清理旧记录出错:', (e as Error).message);
   }
 }
 
 app.get('/api/theme', (_req, res) => {
-  const template = themeTemplates[Math.floor(Math.random() * themeTemplates.length)];
   const theme: Theme = {
     id: uuidv4(),
-    name: template.name,
-    keywords: [...template.keywords].sort(() => Math.random() - 0.5),
-    atmosphere: template.atmosphere,
-    palette: [...template.palette].sort(() => Math.random() - 0.5),
+    name: generateThemeName(),
+    keywords: pickRandom(keywordPool, 3, 5),
+    atmosphere: generateAtmosphere(),
+    palette: generatePalette(),
     created_at: Date.now(),
   };
 
-  if (!memoryDB.themes[theme.id]) {
-    memoryDB.themes[theme.id] = {
-      id: theme.id,
-      name: theme.name,
-      keywords: JSON.stringify(theme.keywords),
-      atmosphere: theme.atmosphere,
-      palette: JSON.stringify(theme.palette),
-      created_at: theme.created_at,
-    };
-    saveDB(memoryDB);
+  try {
+    const existing = db.exec(
+      `SELECT id FROM themes WHERE id = '${theme.id}'`
+    );
+    if (existing.length === 0 || existing[0].values.length === 0) {
+      const stmt = db.prepare(
+        'INSERT INTO themes (id, name, keywords, atmosphere, palette, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      );
+      stmt.run([
+        theme.id,
+        theme.name,
+        JSON.stringify(theme.keywords),
+        theme.atmosphere,
+        JSON.stringify(theme.palette),
+        theme.created_at,
+      ]);
+      saveDB();
+    }
+  } catch (e) {
+    console.error('插入主题失败:', (e as Error).message);
   }
 
   res.json(theme);
@@ -184,22 +257,23 @@ app.post('/api/sketch', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
 
-    if (!memoryDB.themes[theme_id]) {
+    const themeCheck = db.exec(
+      `SELECT id FROM themes WHERE id = '${theme_id}'`
+    );
+    if (themeCheck.length === 0 || themeCheck[0].values.length === 0) {
       return res.status(404).json({ success: false, error: '主题不存在' });
     }
 
     const sketchId = uuidv4();
     const createdAt = Date.now();
 
-    memoryDB.sketches.push({
-      id: sketchId,
-      image_data,
-      theme_id,
-      created_at: createdAt,
-    });
+    const stmt = db.prepare(
+      'INSERT INTO sketches (id, image_data, theme_id, created_at) VALUES (?, ?, ?, ?)'
+    );
+    stmt.run([sketchId, image_data, theme_id, createdAt]);
+    saveDB();
 
     cleanupOldSketches();
-    saveDB(memoryDB);
 
     res.json({ success: true, id: sketchId, created_at: createdAt });
   } catch (error) {
@@ -210,27 +284,48 @@ app.post('/api/sketch', (req, res) => {
 
 app.get('/api/sketches', (_req, res) => {
   try {
-    const sorted = [...memoryDB.sketches]
-      .sort((a, b) => b.created_at - a.created_at)
-      .slice(0, MAX_SKETCHES);
+    cleanupOldSketches();
 
-    const result = sorted
-      .filter((s) => memoryDB.themes[s.theme_id])
-      .map((row) => {
-        const t = memoryDB.themes[row.theme_id];
-        return {
-          id: row.id,
-          image_data: row.image_data,
-          created_at: row.created_at,
+    const rows = db.exec(
+      `SELECT 
+        s.id as sketch_id, 
+        s.image_data, 
+        s.created_at as sketch_created_at,
+        t.id as theme_id,
+        t.name as theme_name,
+        t.keywords,
+        t.atmosphere,
+        t.palette
+       FROM sketches s 
+       INNER JOIN themes t ON s.theme_id = t.id 
+       ORDER BY s.created_at DESC 
+       LIMIT ${MAX_SKETCHES}`
+    );
+
+    const result: Array<{
+      id: string;
+      image_data: string;
+      created_at: number;
+      theme: Theme;
+    }> = [];
+
+    if (rows.length > 0) {
+      for (const row of rows[0].values) {
+        result.push({
+          id: row[0] as string,
+          image_data: row[1] as string,
+          created_at: row[2] as number,
           theme: {
-            id: t.id,
-            name: t.name,
-            keywords: JSON.parse(t.keywords) as string[],
-            atmosphere: t.atmosphere,
-            palette: JSON.parse(t.palette) as string[],
+            id: row[3] as string,
+            name: row[4] as string,
+            keywords: JSON.parse(row[5] as string),
+            atmosphere: row[6] as string,
+            palette: JSON.parse(row[7] as string),
+            created_at: 0,
           },
-        };
-      });
+        });
+      }
+    }
 
     res.json(result);
   } catch (error) {
@@ -239,6 +334,11 @@ app.get('/api/sketches', (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`服务器运行在 http://localhost:${PORT}`);
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`服务器运行在 http://localhost:${PORT}`);
+  });
+}).catch((err) => {
+  console.error('数据库初始化失败:', err);
+  process.exit(1);
 });

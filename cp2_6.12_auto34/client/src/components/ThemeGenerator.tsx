@@ -38,9 +38,18 @@ const ThemeGenerator: React.FC<ThemeGeneratorProps> = ({ theme, onGenerate, isLo
         key={theme.id}
         style={{
           ...styles.themeCard,
-          animation: 'cardFlip 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+          perspective: '1200px',
+          transformStyle: 'preserve-3d',
         }}
       >
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            transformStyle: 'preserve-3d',
+            animation: 'cardRotateScale 0.5s cubic-bezier(0.4, 0, 0.2, 1) both',
+          }}
+        >
         <div style={styles.cardInner}>
           <div style={styles.themeNameRow}>
             <h3 style={styles.themeName}>{theme.name}</h3>
@@ -92,6 +101,7 @@ const ThemeGenerator: React.FC<ThemeGeneratorProps> = ({ theme, onGenerate, isLo
 
         <div style={styles.cardDecorTop} />
         <div style={styles.cardDecorBottom} />
+        </div>
       </div>
     </div>
   );
