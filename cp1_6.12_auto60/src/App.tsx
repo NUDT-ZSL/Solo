@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [tonePreset, setTonePreset] = useState<TonePreset>('piano')
   const [triggeredBlobIndices, setTriggeredBlobIndices] = useState<Set<number>>(new Set())
   const [statusMessage, setStatusMessage] = useState<string>('')
+  const [canvasSize, setCanvasSize] = useState({ width: 1600, height: 1200 })
 
   const musicControlsRef = useRef<MusicControls | null>(null)
   const flashTimersRef = useRef<Map<number, number>>(new Map())
@@ -71,7 +72,7 @@ const App: React.FC = () => {
         return next
       })
       flashTimersRef.current.delete(blobIndex)
-    }, 300)
+    }, 250)
 
     flashTimersRef.current.set(blobIndex, timer)
   }, [])
@@ -94,8 +95,8 @@ const App: React.FC = () => {
 
     try {
       setTimeout(async () => {
-        const canvasWidth = 1600
-        const canvasHeight = 1200
+        const canvasWidth = canvasSize.width
+        const canvasHeight = canvasSize.height
 
         const controls = generateMusic(
           blobs, canvasWidth, canvasHeight, tempo, tonePreset)
@@ -175,6 +176,7 @@ const App: React.FC = () => {
           triggeredBlobIndices={triggeredBlobIndices}
           onBlobAdd={handleBlobAdd}
           onCanvasColorPick={handleCanvasColorPick}
+          onDimensionsChange={(w, h) => setCanvasSize({ width: w, height: h })}
           isEyedropperActive={isEyedropperActive}
         />
 

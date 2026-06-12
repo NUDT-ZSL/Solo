@@ -2,13 +2,18 @@ import * as Tone from 'tone'
 import { NOTES, BASE_OCTAVE, NOTE_RANGE, MIN_DURATION, MAX_DURATION } from '../constants'
 import type { InkBlob, MusicControls, TonePreset } from '../types'
 
-const hueToNoteIndex = (h: number): number => {
-  return Math.floor((h / 360) * NOTE_RANGE)
+const MIDI_C4 = 60
+const MIDI_B5 = 83
+
+const hueToMidi = (h: number): number => {
+  const ratio = Math.max(0, Math.min(1, h / 360))
+  return Math.round(MIDI_C4 + ratio * (MIDI_B5 - MIDI_C4))
 }
 
-const noteIndexToName = (idx: number): string => {
-  const note = NOTES[idx % 12]
-  const octave = BASE_OCTAVE + Math.floor(idx / 12)
+const midiToNoteName = (midi: number): string => {
+  const clamped = Math.max(MIDI_C4, Math.min(MIDI_B5, midi))
+  const note = NOTES[clamped % 12]
+  const octave = Math.floor(clamped / 12) - 1
   return `${note}${octave}`
 }
 
@@ -66,9 +71,10 @@ export const generateMusic = (
     const sortedBlobIdx = eventIndex % blobCount
     const blob = sortedBlobs[sortedBlobIdx]
 
-    const hueOffset = Math.floor(eventIndex / blobCount) * 7
-    const noteIdx = (hueToNoteIndex(blob.color.h) + hueOffset) % NOTE_RANGE
-    const note = noteIndexToName(noteIdx)
+    const baseMidi = hueToMidi(blob.color.h)
+    const octaveOffset = Math.floor(eventIndex / blobCount) * 12
+    const midi = Math.min(MIDI_B5, Math.max(MIDI_C4, baseMidi + octaveOffset))
+    const note = midiToNoteName(midi)
 
     const velocity = saturationToVolume(blob.color.s) * (0.85 + Math.random() * 0.3)
     const pan = xToPan(blob.x, canvasWidth)
