@@ -2,11 +2,14 @@ export const TILE_SIZE = 64;
 export const ROOM_SIZE = 5;
 export const BPM = 120;
 export const BEAT_INTERVAL = 60000 / BPM;
+export const BEAT_WINDOW_PERFECT = 80;
+export const BEAT_WINDOW_GOOD = 180;
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
-
 export type EnemyType = 'slime' | 'bat';
 export type ItemType = 'rhythm_shield' | 'speed_boots' | 'rhythm_bomb';
+export type AttackPattern = 'projectile' | 'dive' | 'melee';
+export type BeatAccuracy = 'perfect' | 'good' | 'miss';
 
 export interface Vec2 {
   x: number;
@@ -24,13 +27,22 @@ export interface Particle {
   size: number;
 }
 
-export interface RhythmState {
-  beatProgress: number;
-  lastBeatTime: number;
-  isOnBeat: boolean;
-  beatWindow: number;
-  perfectCombo: number;
+export interface PlayerRhythmState {
+  lastAttackBeat: number;
+  lastMoveBeat: number;
+  perfectStreak: number;
+  maxPerfectStreak: number;
+  totalAttacks: number;
+  perfectHits: number;
+  goodHits: number;
+  shieldImmuneActive: boolean;
+  shieldImmuneTimer: number;
   rhythmAccuracy: number;
+}
+
+export interface EnemyRhythmState {
+  lastActionBeat: number;
+  beatSync: number;
 }
 
 export class Player {
@@ -41,6 +53,7 @@ export class Player {
   hp: number;
   maxHp: number;
   attack: number;
+  baseAttack: number;
   exp: number;
   expToNext: number;
   level: number;
@@ -64,6 +77,10 @@ export class Player {
   moveProgress: number;
   fromX: number;
   fromY: number;
+  rhythm: PlayerRhythmState;
+  beatScale: number;
+  attackHitResult: BeatAccuracy | null;
+  attackResultTimer: number;
 
   constructor(x: number, y: number) {
     this.x = x;
@@ -75,6 +92,7 @@ export class Player {
     this.hp = 100;
     this.maxHp = 100;
     this.displayHp = 100;
+    this.baseAttack = 10;
     this.attack = 10;
     this.exp = 0;
     this.expToNext = 200;
@@ -82,7 +100,7 @@ export class Player {
     this.direction = 'down';
     this.isAttacking = false;
     this.attackTimer = 0;
-    this.attackDuration = 200;
+    this.attackDuration = 250;
     this.baseSpeed = 1;
     this.speedMultiplier = 1;
     this.moveCooldown = 0;
@@ -96,6 +114,22 @@ export class Player {
     this.lastDamageTime = 0;
     this.isMoving = false;
     this.moveProgress = 1;
+    this.beatScale = 1;
+    this.attackHitResult = null;
+    this.attackResultTimer = 0;
+
+    this.rhythm = {
+      lastAttackBeat: -1,
+      lastMoveBeat: -1,
+      perfectStreak: 0,
+      maxPerfectStreak: 0,
+      totalAttacks: 0,
+      perfectHits: 0,
+      goodHits: 0,
+      shieldImmuneActive: false,
+      shieldImmuneTimer: 0,
+      rhythmAccuracy: 100
+    };
   }
 
   get moveDuration(): number {
@@ -107,7 +141,7 @@ export class Player {
     this.hp = Math.max(0, this.hp - amount);
     this.lastDamageTime = performance.now();
     this.invincible = true;
-    this.invincibleTimer = 500;
+    this.invincibleTimer = 800;
     return true;
   }
 
@@ -131,6 +165,7 @@ export class Player {
     this.hp = this.maxHp;
     this.displayHp = this.maxHp;
     this.attack += 5;
+    this.baseAttack += 5;
     this.expToNext = Math.floor(this.expToNext * 1.3);
   }
 
@@ -150,6 +185,8 @@ export class Player {
         if (this.shieldCooldown > 0) return false;
         this.activeShield = true;
         this.shieldTimer = 3000;
+        this.rhythm.shieldImmuneActive = true;
+        this.rhythm.shieldImmuneTimer = 3000;
         this.inventory.set(type, count - 1);
         return true;
       case 'speed_boots':
@@ -163,9 +200,32 @@ export class Player {
     return false;
   }
 
+  registerAttack(accuracy: BeatAccuracy): number {
+    this.rhythm.totalAttacks++;
+    this.attackHitResult = accuracy;
+    this.attackResultTimer = 500;
+
+    if (accuracy === 'perfect') {
+      this.rhythm.perfectHits++;
+      this.rhythm.perfectStreak++;
+      this.rhythm.maxPerfectStreak = Math.max(
+        this.rhythm.maxPerfectStreak,
+        this.rhythm.perfectStreak
+      );
+      return this.attack * 2;
+    } else if (accuracy === 'good') {
+      this.rhythm.goodHits++;
+      this.rhythm.perfectStreak = 0;
+      return this.attack;
+    } else {
+      this.rhythm.perfectStreak = 0;
+      return this.attack * 0.5;
+    }
+  }
+
   update(dt: number): void {
     if (this.displayHp > this.hp) {
-      this.displayHp = Math.max(this.hp, this.displayHp - dt * 0.05);
+      this.displayHp = Math.max(this.hp, this.displayHp - dt * 0.08);
     }
 
     if (this.isMoving) {
@@ -189,14 +249,23 @@ export class Player {
       }
     }
 
+    if (this.attackResultTimer > 0) {
+      this.attackResultTimer -= dt;
+      if (this.attackResultTimer <= 0) {
+        this.attackHitResult = null;
+      }
+    }
+
     if (this.moveCooldown > 0) {
       this.moveCooldown -= dt;
     }
 
     if (this.activeShield) {
       this.shieldTimer -= dt;
+      this.rhythm.shieldImmuneTimer -= dt;
       if (this.shieldTimer <= 0) {
         this.activeShield = false;
+        this.rhythm.shieldImmuneActive = false;
         this.shieldCooldown = 15000;
       }
     }
@@ -249,7 +318,7 @@ export class Player {
   getAttackHitbox(): { x: number; y: number; w: number; h: number } {
     const px = this.x * TILE_SIZE + TILE_SIZE / 2;
     const py = this.y * TILE_SIZE + TILE_SIZE / 2;
-    const range = TILE_SIZE * 1.2;
+    const range = TILE_SIZE * 1.3;
     let hx = px, hy = py, hw = range, hh = range * 0.6;
     switch (this.direction) {
       case 'up':
@@ -292,6 +361,8 @@ export class Enemy {
   maxHp: number;
   displayHp: number;
   direction: Direction;
+  moveSpeed: number;
+  attackPattern: AttackPattern;
   moveTimer: number;
   moveInterval: number;
   attackTimer: number;
@@ -304,6 +375,8 @@ export class Enemy {
   deathTimer: number;
   hitFlash: number;
   beatPulse: number;
+  rhythm: EnemyRhythmState;
+  lastBeatIndex: number;
 
   constructor(id: number, type: EnemyType, x: number, y: number) {
     this.id = id;
@@ -312,17 +385,24 @@ export class Enemy {
     this.y = y;
     this.targetX = x;
     this.targetY = y;
+    this.lastBeatIndex = -1;
+
     if (type === 'slime') {
       this.hp = 30;
       this.maxHp = 30;
+      this.moveSpeed = 0.5;
+      this.attackPattern = 'projectile';
       this.moveInterval = 2000;
       this.attackInterval = BEAT_INTERVAL * 2;
     } else {
       this.hp = 15;
       this.maxHp = 15;
+      this.moveSpeed = 1;
+      this.attackPattern = 'dive';
       this.moveInterval = 1000;
       this.attackInterval = BEAT_INTERVAL;
     }
+
     this.displayHp = this.hp;
     this.direction = 'down';
     this.moveTimer = Math.random() * this.moveInterval;
@@ -335,6 +415,10 @@ export class Enemy {
     this.deathTimer = 0;
     this.hitFlash = 0;
     this.beatPulse = 0;
+    this.rhythm = {
+      lastActionBeat: -1,
+      beatSync: 0
+    };
   }
 
   get gridX(): number { return Math.round(this.x); }
@@ -351,7 +435,9 @@ export class Enemy {
     return false;
   }
 
-  update(dt: number, player: Player): void {
+  update(dt: number, player: Player, beatIndex: number, beatProgress: number): void {
+    this.beatPulse = beatProgress;
+
     if (this.displayHp > this.hp) {
       this.displayHp = Math.max(this.hp, this.displayHp - dt * 0.08);
     }
@@ -363,6 +449,11 @@ export class Enemy {
     if (this.dying) {
       this.deathTimer -= dt;
       return;
+    }
+
+    if (beatIndex !== this.lastBeatIndex) {
+      this.lastBeatIndex = beatIndex;
+      this.onBeat(beatIndex, player);
     }
 
     if (this.type === 'bat' && this.isDiving) {
@@ -396,9 +487,17 @@ export class Enemy {
 
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;
-    const moveSpeed = (this.type === 'slime' ? 0.5 : 1) * dt / 1000;
-    this.x += Math.sign(dx) * Math.min(Math.abs(dx), moveSpeed);
-    this.y += Math.sign(dy) * Math.min(Math.abs(dy), moveSpeed);
+    const currentSpeed = this.isDiving ? this.moveSpeed * 3 : this.moveSpeed;
+    const moveAmount = currentSpeed * dt / 1000;
+    this.x += Math.sign(dx) * Math.min(Math.abs(dx), moveAmount);
+    this.y += Math.sign(dy) * Math.min(Math.abs(dy), moveAmount);
+  }
+
+  onBeat(beatIndex: number, player: Player): void {
+    this.rhythm.lastActionBeat = beatIndex;
+    if (this.type === 'slime' && beatIndex % 2 === 0) {
+      // Slime shoots every 2 beats - handled in game.ts
+    }
   }
 
   aiMove(player: Player): void {
@@ -410,7 +509,7 @@ export class Enemy {
     let moveX = 0, moveY = 0;
 
     if (this.type === 'slime') {
-      if (Math.random() < 0.7) {
+      if (Math.random() < 0.6) {
         if (Math.abs(dx) > Math.abs(dy)) {
           moveX = Math.sign(dx);
         } else {
@@ -423,7 +522,7 @@ export class Enemy {
         moveY = ry;
       }
     } else {
-      if (Math.random() < 0.85) {
+      if (Math.random() < 0.8) {
         if (Math.abs(dx) > Math.abs(dy)) {
           moveX = Math.sign(dx);
         } else {
@@ -456,17 +555,15 @@ export class Enemy {
     const dy = py - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > 0) {
-      const speed = 3 * dt => dt;
-      this.targetX = Math.max(0, Math.min(ROOM_SIZE - 1, this.gridX + Math.sign(dx) * 2));
-      this.targetY = Math.max(0, Math.min(ROOM_SIZE - 1, this.gridY + Math.sign(dy) * 2));
+      this.targetX = Math.max(0, Math.min(ROOM_SIZE - 1, this.gridX + Math.round(dx * 2)));
+      this.targetY = Math.max(0, Math.min(ROOM_SIZE - 1, this.gridY + Math.round(dy * 2)));
     }
   }
 
-  shouldFire(): boolean {
-    if (this.type !== 'slime') return false;
-    this.attackTimer -= 16;
-    if (this.attackTimer <= 0) {
-      this.attackTimer = this.attackInterval;
+  shouldFire(beatIndex: number): boolean {
+    if (this.type !== 'slime' || this.dying) return false;
+    if (beatIndex % 2 === 0 && beatIndex !== this.rhythm.lastActionBeat) {
+      this.rhythm.lastActionBeat = beatIndex;
       return true;
     }
     return false;
@@ -496,6 +593,7 @@ export class Bullet {
   isHoming: boolean;
   isEnemy: boolean;
   trail: Vec2[];
+  beatPulse: number;
 
   constructor(id: number, x: number, y: number, isEnemy: boolean = true) {
     this.id = id;
@@ -513,6 +611,7 @@ export class Bullet {
     this.isHoming = true;
     this.isEnemy = isEnemy;
     this.trail = [];
+    this.beatPulse = 0;
   }
 
   setTarget(tx: number, ty: number): void {
@@ -527,7 +626,8 @@ export class Bullet {
     }
   }
 
-  update(dt: number, playerX: number, playerY: number): void {
+  update(dt: number, playerX: number, playerY: number, beatProgress: number): void {
+    this.beatPulse = beatProgress;
     this.trail.unshift({ x: this.x, y: this.y });
     if (this.trail.length > 8) this.trail.pop();
 
@@ -538,8 +638,8 @@ export class Bullet {
       if (dist > 0) {
         const targetVx = (dx / dist) * this.speed;
         const targetVy = (dy / dist) * this.speed;
-        this.vx += (targetVx - this.vx) * 0.02;
-        this.vy += (targetVy - this.vy) * 0.02;
+        this.vx += (targetVx - this.vx) * 0.015;
+        this.vy += (targetVy - this.vy) * 0.015;
         const mag = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
         if (mag > 0) {
           this.vx = (this.vx / mag) * this.speed;
@@ -566,6 +666,7 @@ export class Chest {
   opened: boolean;
   contents: ItemType;
   pulsePhase: number;
+  glowIntensity: number;
 
   constructor(id: number, x: number, y: number) {
     this.id = id;
@@ -575,6 +676,7 @@ export class Chest {
     this.opened = false;
     this.contents = this.rollContents();
     this.pulsePhase = Math.random() * Math.PI * 2;
+    this.glowIntensity = 0;
   }
 
   rollContents(): ItemType {
@@ -592,6 +694,7 @@ export class Chest {
   update(dt: number, beatProgress: number): void {
     this.rotation += 5 * (dt / BEAT_INTERVAL);
     this.pulsePhase = beatProgress * Math.PI * 2;
+    this.glowIntensity = Math.sin(beatProgress * Math.PI) * 0.5 + 0.5;
   }
 }
 
@@ -601,18 +704,21 @@ export class Portal {
   rotation: number;
   active: boolean;
   pulsePhase: number;
+  glowIntensity: number;
 
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
     this.rotation = 0;
-    this.active = false;
+    this.active = true;
     this.pulsePhase = 0;
+    this.glowIntensity = 0;
   }
 
   update(dt: number, beatProgress: number): void {
     this.rotation += 360 * (dt / BEAT_INTERVAL);
     this.pulsePhase = beatProgress * Math.PI * 2;
+    this.glowIntensity = Math.sin(beatProgress * Math.PI) * 0.5 + 0.5;
   }
 }
 
@@ -626,6 +732,7 @@ export class Bomb {
   explosionRadius: number;
   damage: number;
   shakeTime: number;
+  pulsePhase: number;
 
   constructor(id: number, x: number, y: number) {
     this.id = id;
@@ -637,10 +744,12 @@ export class Bomb {
     this.explosionRadius = TILE_SIZE * 2;
     this.damage = 40;
     this.shakeTime = 200;
+    this.pulsePhase = 0;
   }
 
-  update(dt: number): void {
+  update(dt: number, beatProgress: number): void {
     this.timer -= dt;
+    this.pulsePhase = beatProgress * Math.PI * 2;
     if (this.timer <= 0 && !this.exploded) {
       this.exploded = true;
     }
