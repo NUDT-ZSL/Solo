@@ -346,7 +346,8 @@ app.get('/api/bookclubs/:id/reviews', (req, res) => {
       total,
       page,
       limit,
-      hasMore: offset + reviews.length < total
+      hasMore: offset + reviews.length < total,
+      isLoading: false
     };
 
     res.json(result);

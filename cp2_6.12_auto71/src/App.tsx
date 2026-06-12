@@ -1,13 +1,20 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Home from "@/pages/Home";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import BookClubList from './components/BookClubList';
+import BookClubDetail from './components/BookClubDetail';
 
 export default function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/other" element={<div className="text-center text-xl">Other Page - Coming Soon</div>} />
-      </Routes>
+      <div className="min-h-screen bg-cream">
+        <Navbar />
+        <main className="pt-16">
+          <Routes>
+            <Route path="/" element={<BookClubList />} />
+            <Route path="/bookclub/:id" element={<BookClubDetail />} />
+          </Routes>
+        </main>
+      </div>
     </Router>
   );
 }
