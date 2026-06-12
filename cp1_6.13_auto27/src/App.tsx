@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import ExhibitionList from './pages/ExhibitionList'
 import ExhibitionDetail from './pages/ExhibitionDetail'
 import { ExhibitionListItem } from './types'
 
 function App() {
   const navigate = useNavigate()
-  const location = useLocation()
   const [exhibitions, setExhibitions] = useState<ExhibitionListItem[]>([])
   const [showNewModal, setShowNewModal] = useState(false)
   const [newName, setNewName] = useState('')
@@ -83,15 +82,6 @@ function App() {
   }
 
   const isFormValid = newName.trim() !== '' && newStartDate !== '' && newEndDate !== '' && newZones.some(z => z.trim() !== '')
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'upcoming': return '即将开展'
-      case 'ongoing': return '进行中'
-      case 'ended': return '已结束'
-      default: return status
-    }
-  }
 
   return (
     <>
