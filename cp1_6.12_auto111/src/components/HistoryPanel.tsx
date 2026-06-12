@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { diffWords } from 'diff';
 import type { HistoryRecord } from '../types';
 
@@ -14,6 +14,12 @@ export default function HistoryPanel({
   historyRecords
 }: HistoryPanelProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedIds([]);
+    }
+  }, [isOpen]);
 
   const handleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -50,6 +56,7 @@ export default function HistoryPanel({
   return (
     <>
       <div
+        className="history-panel"
         style={{
           position: 'fixed',
           right: 0,
@@ -97,15 +104,17 @@ export default function HistoryPanel({
               backgroundColor: '#f8f9fa',
               borderBottom: '1px solid var(--border-color)',
               fontSize: 12,
-              color: '#666'
+              color: '#666',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
             }}
           >
-            已选择 {selectedIds.length}/2 条记录进行对比
+            <span>已选择 {selectedIds.length}/2 条记录</span>
             {selectedIds.length === 2 && (
               <button
                 onClick={() => setSelectedIds([])}
                 style={{
-                  marginLeft: 8,
                   padding: '2px 8px',
                   fontSize: 11,
                   borderRadius: 4,
@@ -127,13 +136,15 @@ export default function HistoryPanel({
               backgroundColor: '#f8f9fa',
               borderRadius: 8,
               fontSize: 13,
-              lineHeight: 1.6
+              lineHeight: 1.8,
+              maxHeight: 200,
+              overflowY: 'auto'
             }}
           >
-            <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 12, color: '#666' }}>
-              差异对比
+            <p style={{ fontWeight: 600, marginBottom: 12, fontSize: 12, color: '#666' }}>
+              差异对比：{formatTime(diffResult.older.modifiedAt)} → {formatTime(diffResult.newer.modifiedAt)}
             </p>
-            <div>
+            <div style={{ wordBreak: 'break-word' }}>
               {diffResult.diffs.map((part, index) => (
                 <span
                   key={index}
@@ -143,7 +154,9 @@ export default function HistoryPanel({
                       : part.removed
                       ? '#ffb3b3'
                       : 'transparent',
-                    textDecoration: part.removed ? 'line-through' : 'none'
+                    textDecoration: part.removed ? 'line-through' : 'none',
+                    padding: part.added || part.removed ? '1px 3px' : '0',
+                    borderRadius: 3
                   }}
                 >
                   {part.value}
@@ -198,7 +211,7 @@ export default function HistoryPanel({
                       marginBottom: 8
                     }}
                   >
-                    <span style={{ fontSize: 12, color: '#666' }}>
+                    <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>
                       {record.modifiedBy}
                     </span>
                     <span style={{ fontSize: 11, color: '#999' }}>
@@ -237,9 +250,13 @@ export default function HistoryPanel({
 
                   {record.oldCharacter !== record.newCharacter && (
                     <div style={{ marginTop: 6, fontSize: 12 }}>
-                      <span style={{ color: '#999' }}>角色变更：</span>
-                      <span style={{ color: 'var(--secondary-color)' }}>
-                        {record.oldCharacter} → {record.newCharacter}
+                      <span style={{ color: '#999' }}>角色：</span>
+                      <span style={{ color: '#E74C3C' }}>
+                        {record.oldCharacter}
+                      </span>
+                      <span style={{ color: '#999', margin: '0 4px' }}>→</span>
+                      <span style={{ color: '#2ECC71' }}>
+                        {record.newCharacter}
                       </span>
                     </div>
                   )}
@@ -253,6 +270,7 @@ export default function HistoryPanel({
       {isOpen && (
         <div
           onClick={onClose}
+          className="history-overlay"
           style={{
             position: 'fixed',
             left: 0,
@@ -260,11 +278,18 @@ export default function HistoryPanel({
             width: '100%',
             height: '100%',
             backgroundColor: 'rgba(0,0,0,0.3)',
-            zIndex: 170,
-            display: window.innerWidth <= 768 ? 'block' : 'none'
+            zIndex: 170
           }}
         />
       )}
+
+      <style>{`
+        @media (min-width: 769px) {
+          .history-overlay {
+            display: none !important;
+          }
+        }
+      `}</style>
     </>
   );
 }

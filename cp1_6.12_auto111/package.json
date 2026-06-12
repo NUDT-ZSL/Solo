@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:server": "node --watch server/index.ts --loader ts-node/esm",
+    "dev:server": "node --loader ts-node/esm --experimental-specifier-resolution=node server/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
