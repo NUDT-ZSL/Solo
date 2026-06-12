@@ -147,8 +147,19 @@ export class AudioAnalyzer {
     const len = this.frequencyData.length;
     const normalized = new Float32Array(len);
 
+    let maxVal = 0;
     for (let i = 0; i < len; i++) {
-      normalized[i] = this.frequencyData[i] / 255.0;
+      if (this.frequencyData[i] > maxVal) {
+        maxVal = this.frequencyData[i];
+      }
+    }
+
+    if (maxVal < 1) {
+      return normalized;
+    }
+
+    for (let i = 0; i < len; i++) {
+      normalized[i] = this.frequencyData[i] / maxVal;
     }
 
     return normalized;

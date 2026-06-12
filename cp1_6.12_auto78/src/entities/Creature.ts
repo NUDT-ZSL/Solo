@@ -109,6 +109,7 @@ export class Creature {
   private targetY: number = 0;
   private isAlive: boolean = true;
   private container: Phaser.GameObjects.Container;
+  private approachTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, type: CreatureType, spawnX: number, spawnY: number, targetX: number, targetY: number, orbitRadius: number) {
     this.scene = scene;
@@ -145,7 +146,7 @@ export class Creature {
     );
 
     const tweenObj = { t: 0 };
-    this.scene.tweens.add({
+    this.approachTween = this.scene.tweens.add({
       targets: tweenObj,
       t: 1,
       duration: 1200,
@@ -155,6 +156,7 @@ export class Creature {
         this.container.setPosition(point.x, point.y);
       },
       onComplete: () => {
+        this.approachTween = null;
         this.enterInteracting();
       },
     });
@@ -168,6 +170,14 @@ export class Creature {
 
   enterStartled(): void {
     if (this.state === CreatureState.STARTLED) return;
+
+    this.scene.tweens.killAllTweensOf(this.container);
+
+    if (this.approachTween) {
+      this.approachTween.stop();
+      this.approachTween = null;
+    }
+
     this.state = CreatureState.STARTLED;
     this.stopTrail();
 

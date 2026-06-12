@@ -23,6 +23,8 @@ export class Plant {
   private stem!: Phaser.GameObjects.Rectangle;
   private cotyledons: Phaser.GameObjects.Arc[] = [];
   private leaves: Phaser.GameObjects.Arc[] = [];
+  private leafCreationTimes: number[] = [];
+  private readonly LEAF_COLOR_TRANSITION_MS = 3000;
   private flower!: Phaser.GameObjects.Container;
   private flowerPetals: Phaser.GameObjects.Arc[] = [];
   private glowParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -124,6 +126,7 @@ export class Plant {
       leaf.setScale(0);
       leaf.setAngle(angle * 45);
       this.leaves.push(leaf);
+      this.leafCreationTimes.push(this.scene.time.now + i * this.LEAF_STAGGER + this.LEAF_SPIN_DURATION);
       this.container.add(leaf);
 
       this.scene.tweens.add({
@@ -132,14 +135,6 @@ export class Plant {
         duration: this.LEAF_SPIN_DURATION,
         delay: i * this.LEAF_STAGGER,
         ease: 'Back.easeOut',
-      });
-
-      this.scene.tweens.add({
-        targets: leaf,
-        fillColor: this.getLeafColor(1),
-        duration: 3000,
-        delay: i * this.LEAF_STAGGER + this.LEAF_SPIN_DURATION,
-        ease: 'Linear',
       });
     }
   }
@@ -223,6 +218,20 @@ export class Plant {
     const growthRate = energy * (1 + freqBonus) * 0.15;
     this.growthProgress = Math.min(100, this.growthProgress + growthRate);
     this.checkStageTransition();
+    this.updateLeafColors();
+  }
+
+  private updateLeafColors(): void {
+    const now = this.scene.time.now;
+    for (let i = 0; i < this.leaves.length; i++) {
+      const leaf = this.leaves[i];
+      const startTime = this.leafCreationTimes[i];
+      if (startTime === undefined || now < startTime) continue;
+
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / this.LEAF_COLOR_TRANSITION_MS);
+      leaf.setFillStyle(this.getLeafColor(progress));
+    }
   }
 
   private computeFreqBonus(normalizedFreq: Float32Array): number {
@@ -324,6 +333,7 @@ export class Plant {
     this.container.removeAll(true);
     this.cotyledons = [];
     this.leaves = [];
+    this.leafCreationTimes = [];
     this.flowerPetals = [];
     if (this.glowParticles) {
       this.glowParticles.stopEmitter();

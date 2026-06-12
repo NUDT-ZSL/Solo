@@ -133,16 +133,23 @@ export class HUD {
 
   private pruneOldRecords(now: number): void {
     const cutoff = now - ACTIVITY_WINDOW_MS;
-    this.activityRecords = this.activityRecords.filter(r => r.timestamp >= cutoff);
+    let writeIdx = 0;
+    for (let i = 0; i < this.activityRecords.length; i++) {
+      if (this.activityRecords[i].timestamp >= cutoff) {
+        this.activityRecords[writeIdx++] = this.activityRecords[i];
+      }
+    }
+    this.activityRecords.length = writeIdx;
   }
 
   private computeActivityCounts(): Map<CreatureType, number> {
     this.pruneOldRecords(this.scene.time.now);
     const counts = new Map<CreatureType, number>();
     Object.values(CreatureType).forEach(t => counts.set(t, 0));
-    this.activityRecords.forEach(r => {
+    for (let i = 0; i < this.activityRecords.length; i++) {
+      const r = this.activityRecords[i];
       counts.set(r.type, (counts.get(r.type) || 0) + 1);
-    });
+    }
     return counts;
   }
 
@@ -180,7 +187,7 @@ export class HUD {
 
     Object.values(CreatureType).forEach(type => {
       const count = counts.get(type) || 0;
-      const targetWidth = (count / maxCount) * BAR_MAX_WIDTH;
+      const targetWidth = count > 0 ? (count / maxCount) * BAR_MAX_WIDTH : 0;
       this.targetBarWidths.set(type, targetWidth);
     });
   }
