@@ -10,7 +10,7 @@ export interface CrystalClusterData {
   lightBand: THREE.Mesh | null;
 }
 
-const MAIN_BOTTOM_RADIUS = 0.15;
+const MAIN_BOTTOM_RADIUS = 0.2;
 const MAIN_INITIAL_HEIGHT = 0.5;
 const MAX_HEIGHT = 3.5;
 const GROWTH_PER_DAY = 0.08;
@@ -20,28 +20,25 @@ function streakToHeight(streak: number): number {
 }
 
 function streakToColor(streak: number): THREE.Color {
+  const hPurple = 270 / 360;
+  const hGold = 50 / 360 + 1;
+
   if (streak <= 0) {
     return new THREE.Color().setHSL(0, 0, 0.5);
   }
 
   if (streak <= 7) {
     const t = streak / 7;
-    const h = 270 / 360;
     const s = THREE.MathUtils.lerp(0, 1, t);
-    const l = THREE.MathUtils.lerp(0.5, 0.5, t);
-    return new THREE.Color().setHSL(h, s, l);
+    const l = 0.5;
+    return new THREE.Color().setHSL(hPurple, s, l);
   }
 
-  if (streak <= 30) {
-    const t = (streak - 7) / 23;
-    let h = 0.75 + t * ((50 + 360) / 360 - 0.75);
-    if (h >= 1) h -= 1;
-    const s = 1.0;
-    const l = THREE.MathUtils.lerp(0.5, 0.6, t);
-    return new THREE.Color().setHSL(h, s, l);
-  }
-
-  return new THREE.Color().setHSL(50 / 360, 1.0, 0.6);
+  const t = Math.min((streak - 7) / 23, 1);
+  const h = THREE.MathUtils.lerp(hPurple, hGold, t) % 1;
+  const s = 1.0;
+  const l = THREE.MathUtils.lerp(0.5, 0.6, t);
+  return new THREE.Color().setHSL(h, s, l);
 }
 
 function createCrystalMaterial(color: THREE.Color): THREE.MeshPhysicalMaterial {
@@ -142,7 +139,7 @@ export function createCrystalCluster(
   group.add(lightBand);
 
   if (animated) {
-    group.position.y = -height * 0.8;
+    group.scale.set(0.6, 0.05, 0.6);
     group.traverse((child) => {
       if (child instanceof THREE.Mesh && child.userData.part !== 'lightBand') {
         const mat = child.material as THREE.MeshPhysicalMaterial;

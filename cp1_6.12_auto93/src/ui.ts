@@ -203,18 +203,15 @@ export class UIManager {
   }
 
   private triggerRipple(btn: HTMLButtonElement, ev: Event): void {
-    const rect = btn.getBoundingClientRect();
-    const clickEv = ev as MouseEvent;
-    const cx = (clickEv.clientX ?? rect.left + rect.width / 2) - rect.left;
-    const cy = (clickEv.clientY ?? rect.top + rect.height / 2) - rect.top;
-    const size = Math.max(rect.width, rect.height);
+    void ev;
+    const size = btn.offsetWidth;
 
     const ripple = document.createElement('span');
     ripple.className = 'ripple';
     ripple.style.width = size + 'px';
     ripple.style.height = size + 'px';
-    ripple.style.left = cx - size / 2 + 'px';
-    ripple.style.top = cy - size / 2 + 'px';
+    ripple.style.left = '0px';
+    ripple.style.top = '0px';
     btn.appendChild(ripple);
 
     setTimeout(() => {

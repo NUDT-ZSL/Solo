@@ -114,16 +114,17 @@ export class GardenManager {
 
   updateParticles(): void {
     if (!this.particles) return;
-    const positions = this.particles.geometry.attributes.position;
+    const positions = this.particles.geometry.attributes.position as THREE.BufferAttribute;
     const arr = positions.array as Float32Array;
+    const vels = this.particleVelocities;
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3;
-      arr[i3] += this.particleVelocities[i3];
-      arr[i3 + 1] += this.particleVelocities[i3 + 1];
-      arr[i3 + 2] += this.particleVelocities[i3 + 2];
+      arr[i3] = arr[i3]! + vels[i3]!;
+      arr[i3 + 1] = arr[i3 + 1]! + vels[i3 + 1]!;
+      arr[i3 + 2] = arr[i3 + 2]! + vels[i3 + 2]!;
 
-      if (arr[i3 + 1] > 6) {
+      if (arr[i3 + 1]! > 6) {
         arr[i3 + 1] = 0;
         arr[i3] = (Math.random() - 0.5) * 14;
         arr[i3 + 2] = (Math.random() - 0.5) * 14;
@@ -158,8 +159,10 @@ export class GardenManager {
   private animateEmergence(cluster: CrystalClusterData): void {
     const targets: THREE.Mesh[] = [cluster.mainCrystal, ...cluster.smallCrystals];
 
-    gsap.to(cluster.group.position, {
-      y: 0,
+    gsap.to(cluster.group.scale, {
+      x: 1,
+      y: 1,
+      z: 1,
       duration: 1.2,
       ease: 'power2.out',
     });
