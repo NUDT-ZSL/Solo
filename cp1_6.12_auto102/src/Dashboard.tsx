@@ -5,6 +5,22 @@ type DashboardProps = {
   stats: Stats | null;
 };
 
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + ch;
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function generateGradient(name: string): string {
+  const hue = hashString(name) % 360;
+  const sat = 60 + (hashString(name + 'sat') % 20);
+  return `linear-gradient(90deg, hsl(${hue}, ${sat}%, 45%), hsl(${(hue + 30) % 360}, ${sat}%, 60%))`;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
   if (!stats) {
     return <div className="dashboard"><p className="dashboard-empty">暂无统计数据</p></div>;
@@ -38,6 +54,9 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
             {itemStats.map((item) => {
               const pct = item.total_qty > 0 ? (item.picked_qty / item.total_qty) * 100 : 0;
               const isComplete = pct >= 100;
+              const gradient = isComplete
+                ? 'linear-gradient(90deg, #38A169, #68D391)'
+                : generateGradient(item.item_name);
               return (
                 <li key={item.item_name} className="progress-item">
                   <div className="progress-item-header">
@@ -51,7 +70,10 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                   <div className="progress-bar-track">
                     <div
                       className="progress-bar-fill"
-                      style={{ width: `${Math.min(pct, 100)}%` }}
+                      style={{
+                        width: `${Math.min(pct, 100)}%`,
+                        background: gradient,
+                      }}
                     />
                     {isComplete && <span className="progress-check">✓</span>}
                   </div>
