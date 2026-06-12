@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { MusicManager } from '../managers/MusicManager';
+import { MusicManager, BeatState } from '../managers/MusicManager';
 import { InputManager } from '../managers/InputManager';
 import {
   GameState,
@@ -13,19 +13,50 @@ import {
 } from '../types/gameTypes';
 
 const GRAVITY = 800;
-const JUMP_MIN_FORCE = 250;
-const JUMP_MAX_FORCE = 500;
-const CHARGE_MIN_TIME = 200;
-const CHARGE_MAX_TIME = 800;
-const BASE_SCROLL_SPEED = 10;
+const JUMP_MIN_VELOCITY = -300;
+const JUMP_MAX_VELOCITY = -650;
+const CHARGE_MIN_MS = 200;
+const CHARGE_MAX_MS = 800;
+const BASE_TRACK_SPEED = 10;
 const SPEED_INCREMENT = 0.5;
-const SPEED_INCREMENT_INTERVAL = 30000;
+const SPEED_INCREMENT_INTERVAL_MS = 30000;
 const LANE_COUNT = 3;
 const LANE_WIDTH = 120;
 const INITIAL_LIVES = 5;
 const FEVER_COMBO_THRESHOLD = 10;
 const BEAT_HIT_SCORE = 10;
 const BEAT_MISS_DAMAGE = 5;
+const AIR_DODGE_ARC_HEIGHT = 40;
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  startSize: number;
+  endSize: number;
+  color: number;
+}
+
+interface PulseWave {
+  x: number;
+  y: number;
+  life: number;
+  maxLife: number;
+  maxRadius: number;
+  color: number;
+}
+
+interface AirDodgeState {
+  active: boolean;
+  startLane: number;
+  endLane: number;
+  progress: number;
+  durationMs: number;
+  startX: number;
+}
 
 export class BeatScene extends Phaser.Scene {
   private musicManager!: MusicManager;
@@ -37,15 +68,20 @@ export class BeatScene extends Phaser.Scene {
   private platforms: PlatformData[] = [];
   private platformIdCounter: number = 0;
 
-  private scrollSpeed: number = BASE_SCROLL_SPEED;
-  private speedTimer: number = 0;
-  private gameTime: number = 0;
+  private trackSpeedUnitsPerSec: number = BASE_TRACK_SPEED;
+  private speedAccumulatorMs: number = 0;
+
+  private trackTop: number = 0;
+  private trackBottom: number = 0;
+  private infoBarHeight: number = 0;
+  private trackHeight: number = 0;
 
   private trackGraphics!: Phaser.GameObjects.Graphics;
   private playerSprite!: Phaser.GameObjects.Graphics;
   private particleGraphics!: Phaser.GameObjects.Graphics;
   private pulseGraphics!: Phaser.GameObjects.Graphics;
   private uiGraphics!: Phaser.GameObjects.Graphics;
+  private particleTexture!: Phaser.Textures.CanvasTexture;
 
   private scoreText!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
@@ -53,23 +89,26 @@ export class BeatScene extends Phaser.Scene {
   private bpmText!: Phaser.GameObjects.Text;
   private feverText!: Phaser.GameObjects.Text;
 
-  private particles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: number; size: number }[] = [];
-  private pulseWaves: { x: number; y: number; radius: number; maxRadius: number; life: number; maxLife: number }[] = [];
+  private particles: Particle[] = [];
+  private pulseWaves: PulseWave[] = [];
 
-  private cameraY: number = 0;
-  private lastBeatIndex: number = -1;
-  private shakeAmount: number = 0;
-  private redFlash: number = 0;
-
-  private trackTop: number = 0;
-  private trackBottom: number = 0;
-  private infoBarHeight: number = 0;
-
-  private laneChangeTween: number = 0;
-  private isLaneChanging: boolean = false;
-
-  private beatHitPending: boolean = false;
+  private lastProcessedBeat: number = -1;
   private lastHitBeat: number = -1;
+  private redFlashAlpha: number = 0;
+
+  private airDodge: AirDodgeState = {
+    active: false,
+    startLane: 0,
+    endLane: 0,
+    progress: 0,
+    durationMs: 300,
+    startX: 0
+  };
+
+  private jumpChargeMs: number = 0;
+  private isCharging: boolean = false;
+
+  private playerLandingTween: { active: boolean; progress: number } = { active: false, progress: 0 };
 
   constructor(settings?: GameSettings) {
     super('BeatScene');
@@ -90,6 +129,7 @@ export class BeatScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#1A0A2E');
 
     this.setupLayout();
+    this.createParticleTexture();
     this.createManagers();
     this.createGameState();
     this.createGraphics();
@@ -113,6 +153,30 @@ export class BeatScene extends Phaser.Scene {
       this.trackBottom = height * 0.7;
       this.infoBarHeight = height * 0.3;
     }
+    this.trackHeight = this.trackBottom - this.trackTop;
+  }
+
+  private createParticleTexture(): void {
+    const size = 32;
+    const canvas = this.textures.createCanvas('particle-gradient', size, size);
+    if (!canvas) return;
+
+    this.particleTexture = canvas;
+    const ctx = canvas.getContext();
+
+    const gradient = ctx.createRadialGradient(
+      size / 2, size / 2, 0,
+      size / 2, size / 2, size / 2
+    );
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
+    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.3)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    canvas.refresh();
   }
 
   private createManagers(): void {
@@ -142,7 +206,7 @@ export class BeatScene extends Phaser.Scene {
     const centerX = this.scale.width / 2;
     this.player = {
       x: centerX,
-      y: this.trackBottom - 100,
+      y: this.trackBottom - 80,
       z: 0,
       velocityY: 0,
       lane: 1,
@@ -155,15 +219,14 @@ export class BeatScene extends Phaser.Scene {
       airDodgeDirection: 0
     };
 
-    this.scrollSpeed = BASE_SCROLL_SPEED * this.settings.scrollSpeed;
-    this.gameTime = 0;
-    this.speedTimer = 0;
+    this.trackSpeedUnitsPerSec = BASE_TRACK_SPEED * this.settings.scrollSpeed;
+    this.speedAccumulatorMs = 0;
   }
 
   private createGraphics(): void {
     this.trackGraphics = this.add.graphics();
-    this.particleGraphics = this.add.graphics();
     this.pulseGraphics = this.add.graphics();
+    this.particleGraphics = this.add.graphics();
     this.playerSprite = this.add.graphics();
     this.uiGraphics = this.add.graphics();
   }
@@ -178,11 +241,11 @@ export class BeatScene extends Phaser.Scene {
       color: '#00FFFF'
     }).setOrigin(1, 0).setScrollFactor(0);
 
-    this.comboText = this.add.text(width - 20, this.trackBottom + 55, 'Combo: 0', {
+    this.comboText = this.add.text(width - 20, this.trackBottom + 55, '', {
       fontFamily: '"Press Start 2P", monospace',
       fontSize: isMobile ? '12px' : '16px',
       color: '#FF00FF'
-    }).setOrigin(1, 0).setScrollFactor(0);
+    }).setOrigin(1, 0).setScrollFactor(0).setVisible(false);
 
     this.livesText = this.add.text(20, this.trackBottom + 20, '♥♥♥♥♥', {
       fontFamily: '"Press Start 2P", monospace',
@@ -212,7 +275,7 @@ export class BeatScene extends Phaser.Scene {
     this.uiGraphics.fillGradientStyle(
       0x1A0A2E, 0x1A0A2E,
       0x2A1A4E, 0x2A1A4E,
-      1
+      0.95, 0.95, 0.95, 0.95
     );
     this.uiGraphics.fillRect(0, this.trackBottom, width, this.infoBarHeight);
 
@@ -225,34 +288,46 @@ export class BeatScene extends Phaser.Scene {
 
   private generateInitialPlatforms(): void {
     this.platforms = [];
-    const beatDuration = this.musicManager.getBeatDuration();
-    const platformSpacing = (this.scrollSpeed * beatDuration) / 1000;
+    this.platformIdCounter = 0;
 
-    for (let i = 0; i < 30; i++) {
-      this.createPlatform(i, platformSpacing);
+    const beatDurationMs = this.musicManager.getBeatDurationMs();
+    const beatDurationSec = beatDurationMs / 1000;
+    const distancePerBeat = this.trackSpeedUnitsPerSec * beatDurationSec;
+    const pixelsPerUnit = 40;
+
+    for (let beatIndex = 0; beatIndex < 40; beatIndex++) {
+      this.createPlatformForBeat(beatIndex, distancePerBeat, pixelsPerUnit);
     }
   }
 
-  private createPlatform(beatIndex: number, spacing: number): void {
+  private createPlatformForBeat(
+    beatIndex: number,
+    distancePerBeat: number,
+    pixelsPerUnit: number
+  ): void {
+    if (this.platforms.some(p => p.beatIndex === beatIndex)) return;
+
     const lane = Phaser.Math.Between(0, LANE_COUNT - 1);
     const rand = Math.random();
     let type: PlatformData['type'] = 'normal';
 
-    if (beatIndex > 5) {
-      if (rand < 0.15) type = 'obstacle';
-      else if (rand < 0.25) type = 'high';
-      else if (rand < 0.30) type = 'low';
-      else if (rand < 0.35) type = 'rotate';
+    if (beatIndex > 8) {
+      if (rand < 0.12) type = 'obstacle';
+      else if (rand < 0.22) type = 'high';
+      else if (rand < 0.28) type = 'low';
+      else if (rand < 0.34) type = 'rotate';
     }
 
     const centerX = this.scale.width / 2;
     const laneOffset = (lane - 1) * LANE_WIDTH;
+    const playerY = this.trackBottom - 80;
+    const y = playerY - beatIndex * distancePerBeat * pixelsPerUnit;
 
     const platform: PlatformData = {
       id: this.platformIdCounter++,
       beatIndex,
       x: centerX + laneOffset,
-      y: this.trackBottom - 50 - beatIndex * spacing,
+      y,
       z: beatIndex,
       lane,
       type,
@@ -268,12 +343,12 @@ export class BeatScene extends Phaser.Scene {
   private setupInputCallbacks(): void {
     this.inputManager.setOnJumpCallback(() => {
       if (this.gameState.gameOver || this.gameState.isPaused) return;
-      this.startJumpCharge();
+      this.startCharging();
     });
 
     this.inputManager.setOnJumpReleaseCallback(() => {
       if (this.gameState.gameOver || this.gameState.isPaused) return;
-      this.executeJump();
+      this.releaseJump();
     });
 
     this.input.keyboard!.on('keydown-A', () => this.tryAirDodge(-1), this);
@@ -282,30 +357,33 @@ export class BeatScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-RIGHT', () => this.tryAirDodge(1), this);
   }
 
-  private startJumpCharge(): void {
+  private startCharging(): void {
     if (this.player.isGrounded && !this.player.isJumping) {
-      this.player.jumpCharge = 0;
+      this.isCharging = true;
+      this.jumpChargeMs = 0;
     }
   }
 
-  private executeJump(): void {
-    if (!this.player.isGrounded && this.player.canAirDodge) {
-      return;
+  private releaseJump(): void {
+    if (!this.isCharging) return;
+    this.isCharging = false;
+
+    if (this.player.isGrounded) {
+      this.executeJump(this.jumpChargeMs);
     }
+    this.jumpChargeMs = 0;
+  }
 
-    if (!this.player.isGrounded) return;
+  private executeJump(chargeMs: number): void {
+    const clampedCharge = Phaser.Math.Clamp(chargeMs, CHARGE_MIN_MS, CHARGE_MAX_MS);
+    const chargeRatio = (clampedCharge - CHARGE_MIN_MS) / (CHARGE_MAX_MS - CHARGE_MIN_MS);
 
-    const holdDuration = this.inputManager.getHoldDuration();
-    const chargeRatio = Phaser.Math.Clamp(
-      (holdDuration - CHARGE_MIN_TIME) / (CHARGE_MAX_TIME - CHARGE_MIN_TIME),
-      0, 1
-    );
-
-    const jumpForce = JUMP_MIN_FORCE + (JUMP_MAX_FORCE - JUMP_MIN_FORCE) * chargeRatio;
-    this.player.velocityY = -jumpForce;
+    const jumpVelocity = Phaser.Math.Linear(JUMP_MIN_VELOCITY, JUMP_MAX_VELOCITY, chargeRatio);
+    this.player.velocityY = jumpVelocity;
     this.player.isGrounded = false;
     this.player.isJumping = true;
     this.player.canAirDodge = true;
+    this.player.jumpCharge = chargeRatio;
 
     this.tweens.add({
       targets: this.player,
@@ -317,44 +395,45 @@ export class BeatScene extends Phaser.Scene {
       }
     });
 
-    const beatState = this.musicManager.getBeatState(this.time.now);
-    if (beatState.isNearBeat) {
-      this.checkBeatHit();
+    const audioTime = this.musicManager.getAudioTimeSec();
+    const beatResult = this.musicManager.checkBeatHitAtAudioTime(audioTime);
+
+    if (beatResult.hit && beatResult.beatIndex !== this.lastHitBeat) {
+      this.onBeatHit(beatResult.accuracy, beatResult.beatIndex);
+    } else if (!beatResult.hit && Math.abs(beatResult.offsetMs) < 200) {
+      if (beatResult.beatIndex !== this.lastHitBeat) {
+        this.onBeatMiss();
+        this.lastHitBeat = beatResult.beatIndex;
+      }
     }
   }
 
   private tryAirDodge(direction: number): void {
-    if (this.player.isGrounded || !this.player.canAirDodge || this.isLaneChanging) return;
+    if (this.gameState.gameOver || this.gameState.isPaused) return;
+    if (this.player.isGrounded || !this.player.canAirDodge || this.airDodge.active) return;
 
     const newLane = this.player.targetLane + direction;
     if (newLane < 0 || newLane >= LANE_COUNT) return;
 
+    this.airDodge = {
+      active: true,
+      startLane: this.player.lane,
+      endLane: newLane,
+      progress: 0,
+      durationMs: 300,
+      startX: this.player.x
+    };
+
     this.player.targetLane = newLane;
     this.player.canAirDodge = false;
-    this.isLaneChanging = true;
-    this.laneChangeTween = 0;
+    this.player.airDodgeDirection = direction;
   }
 
-  private checkBeatHit(): void {
-    const result = this.musicManager.checkBeatHit(this.time.now);
-    const nearestBeat = Math.round(
-      this.musicManager.getElapsedTime(this.time.now) / this.musicManager.getBeatDuration()
-    );
-
-    if (nearestBeat === this.lastHitBeat) return;
-
-    if (result.hit) {
-      this.onBeatHit(result.accuracy);
-      this.lastHitBeat = nearestBeat;
-    } else if (Math.abs(result.offset) < 150) {
-      this.onBeatMiss();
-      this.lastHitBeat = nearestBeat;
-    }
-  }
-
-  private onBeatHit(accuracy: number): void {
+  private onBeatHit(accuracy: number, beatIndex: number): void {
+    this.lastHitBeat = beatIndex;
     this.gameState.combo++;
     this.gameState.feverComboCount++;
+
     if (this.gameState.combo > this.gameState.maxCombo) {
       this.gameState.maxCombo = this.gameState.combo;
     }
@@ -386,7 +465,7 @@ export class BeatScene extends Phaser.Scene {
       this.exitFeverMode();
     }
 
-    this.redFlash = 1;
+    this.redFlashAlpha = 1;
     this.cameras.main.shake(200, 0.005);
     this.spawnMissParticles(this.player.x, this.player.y - 30);
 
@@ -448,127 +527,180 @@ export class BeatScene extends Phaser.Scene {
   }
 
   private spawnHitParticles(x: number, y: number): void {
-    for (let i = 0; i < 15; i++) {
-      const angle = (Math.PI * 2 * i) / 15 + Math.random() * 0.5;
-      const speed = 50 + Math.random() * 100;
+    for (let i = 0; i < 20; i++) {
+      const angle = (Math.PI * 2 * i) / 20;
+      const speed = 80 + Math.random() * 140;
       this.particles.push({
         x, y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 50,
+        vy: Math.sin(angle) * speed - 60,
         life: 1,
         maxLife: 1,
-        color: 0x00FF88,
-        size: 6 + Math.random() * 4
+        startSize: 16,
+        endSize: 2,
+        color: 0x00FF88
       });
     }
   }
 
   private spawnMissParticles(x: number, y: number): void {
-    for (let i = 0; i < 10; i++) {
-      const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.3;
-      const speed = 30 + Math.random() * 50;
+    for (let i = 0; i < 12; i++) {
+      const angle = (Math.PI * 2 * i) / 12 + (Math.random() - 0.5) * 0.4;
+      const speed = 40 + Math.random() * 70;
       this.particles.push({
         x, y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 30,
-        life: 1,
-        maxLife: 1,
-        color: 0xFF3333,
-        size: 5 + Math.random() * 3
+        vy: Math.sin(angle) * speed - 40,
+        life: 0.9,
+        maxLife: 0.9,
+        startSize: 12,
+        endSize: 2,
+        color: 0xFF3333
       });
     }
   }
 
   private spawnLandingParticles(x: number, y: number): void {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 10; i++) {
       const angle = Math.PI + (Math.random() - 0.5) * Math.PI;
-      const speed = 20 + Math.random() * 40;
+      const speed = 30 + Math.random() * 60;
       this.particles.push({
         x, y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed * 0.5,
-        life: 0.8,
-        maxLife: 0.8,
-        color: 0x888888,
-        size: 3 + Math.random() * 3
+        vy: Math.sin(angle) * speed * 0.4,
+        life: 0.6,
+        maxLife: 0.6,
+        startSize: 8,
+        endSize: 1,
+        color: 0x999999
       });
     }
   }
 
   private spawnPulseWave(x: number, y: number): void {
+    const color = this.gameState.isFeverMode ? 0xFFD700 : 0x00FFFF;
     this.pulseWaves.push({
       x, y,
-      radius: 10,
-      maxRadius: 200,
       life: 1,
-      maxLife: 1
+      maxLife: 1,
+      maxRadius: 180,
+      color
+    });
+
+    this.time.delayedCall(400, () => {
+      this.pulseWaves.push({
+        x, y,
+        life: 1,
+        maxLife: 1,
+        maxRadius: 120,
+        color
+      });
     });
   }
 
-  update(time: number, delta: number): void {
+  update(_time: number, delta: number): void {
     if (this.gameState.gameOver || this.gameState.isPaused) return;
 
     const deltaSec = delta / 1000;
-    this.gameTime += delta;
-    this.inputManager.update(time);
+    this.inputManager.update(this.time.now);
 
-    this.updateSpeed(delta);
-    this.updatePlayer(deltaSec);
+    if (this.isCharging) {
+      this.jumpChargeMs += delta;
+    }
+
+    this.updateTrackSpeed(delta);
+    this.updateAirDodge(delta);
+    this.updatePlayerPhysics(deltaSec);
     this.updatePlatforms(deltaSec);
     this.updateParticles(deltaSec);
     this.updatePulseWaves(deltaSec);
-    this.updateBeatSync(time);
-    this.updateLaneChange(deltaSec);
+    this.checkBeatSync();
     this.updateRedFlash(deltaSec);
+    this.updatePlayerLandingTween(delta);
 
     this.render();
   }
 
-  private updateSpeed(delta: number): void {
-    this.speedTimer += delta;
-    if (this.speedTimer >= SPEED_INCREMENT_INTERVAL) {
-      this.speedTimer -= SPEED_INCREMENT_INTERVAL;
-      this.scrollSpeed += SPEED_INCREMENT * this.settings.scrollSpeed;
+  private updateTrackSpeed(delta: number): void {
+    this.speedAccumulatorMs += delta;
+    while (this.speedAccumulatorMs >= SPEED_INCREMENT_INTERVAL_MS) {
+      this.speedAccumulatorMs -= SPEED_INCREMENT_INTERVAL_MS;
+      this.trackSpeedUnitsPerSec += SPEED_INCREMENT * this.settings.scrollSpeed;
     }
   }
 
-  private updatePlayer(deltaSec: number): void {
+  private updateAirDodge(delta: number): void {
+    if (!this.airDodge.active) return;
+
+    this.airDodge.progress += delta / this.airDodge.durationMs;
+    if (this.airDodge.progress >= 1) {
+      this.airDodge.progress = 1;
+      this.airDodge.active = false;
+      this.player.lane = this.airDodge.endLane;
+    }
+
+    const t = this.airDodge.progress;
+    const centerX = this.scale.width / 2;
+    const endX = centerX + (this.airDodge.endLane - 1) * LANE_WIDTH;
+
+    const linearX = Phaser.Math.Linear(this.airDodge.startX, endX, t);
+    const arcOffset = Math.sin(t * Math.PI) * AIR_DODGE_ARC_HEIGHT;
+
+    this.player.x = linearX + arcOffset * (this.airDodge.endLane > this.airDodge.startLane ? 1 : -1) * 0.3;
+  }
+
+  private updatePlayerPhysics(deltaSec: number): void {
     if (!this.player.isGrounded) {
       this.player.velocityY += GRAVITY * deltaSec;
       this.player.y += this.player.velocityY * deltaSec;
 
       if (this.player.velocityY > 0) {
-        this.checkPlatformCollision();
+        this.checkPlatformLanding();
       }
+    } else {
+      this.syncPlayerToNearestBeat();
     }
 
-    const beatDuration = this.musicManager.getBeatDuration();
-    const beatProgress = this.musicManager.getBeatState(this.time.now).beatProgress;
-
-    const targetY = this.trackBottom - 80 - beatProgress * (this.scrollSpeed * beatDuration / 1000);
-
-    if (this.player.isGrounded) {
-      this.player.y = targetY;
+    if (!this.airDodge.active && this.player.isGrounded) {
+      const centerX = this.scale.width / 2;
+      this.player.x = centerX + (this.player.lane - 1) * LANE_WIDTH;
     }
   }
 
-  private checkPlatformCollision(): void {
+  private syncPlayerToNearestBeat(): void {
+    const beatState = this.musicManager.getBeatState();
+    const beatDurationMs = this.musicManager.getBeatDurationMs();
+    const beatDurationSec = beatDurationMs / 1000;
+    const distancePerBeat = this.trackSpeedUnitsPerSec * beatDurationSec;
+    const pixelsPerUnit = 40;
+
+    const baseY = this.trackBottom - 80;
+    const offsetPixels = beatState.beatProgress * distancePerBeat * pixelsPerUnit;
+
+    this.player.y = baseY - offsetPixels;
+  }
+
+  private checkPlatformLanding(): void {
     const playerBottom = this.player.y + 15;
     const playerCenterX = this.player.x;
+    const currentLane = this.airDodge.active ? this.player.targetLane : this.player.lane;
 
     for (const platform of this.platforms) {
       if (platform.passed || platform.type === 'obstacle') continue;
+      if (platform.lane !== currentLane && !this.airDodge.active) continue;
 
       const platformTop = platform.y;
       const platformLeft = platform.x - platform.width / 2;
       const platformRight = platform.x + platform.width / 2;
 
+      const laneMatch = this.airDodge.active
+        ? Math.abs(playerCenterX - platform.x) < platform.width / 2 + 30
+        : (playerCenterX >= platformLeft && playerCenterX <= platformRight);
+
       if (this.player.velocityY > 0 &&
-          playerBottom >= platformTop - 5 &&
-          playerBottom <= platformTop + 20 &&
-          playerCenterX >= platformLeft &&
-          playerCenterX <= platformRight &&
-          this.player.lane === platform.lane) {
+          playerBottom >= platformTop - 8 &&
+          playerBottom <= platformTop + 30 &&
+          laneMatch) {
 
         this.player.y = platformTop - 15;
         this.player.velocityY = 0;
@@ -580,80 +712,71 @@ export class BeatScene extends Phaser.Scene {
         if (!platform.hit) {
           platform.hit = true;
           this.spawnLandingParticles(this.player.x, platformTop);
-          this.tweens.add({
-            targets: this.player,
-            scale: { from: 1.2, to: 1.0 },
-            duration: 100,
-            ease: 'Elastic.out'
-          });
+          this.playerLandingTween = { active: true, progress: 0 };
         }
         break;
       }
     }
   }
 
+  private updatePlayerLandingTween(delta: number): void {
+    if (!this.playerLandingTween.active) return;
+
+    this.playerLandingTween.progress += delta / 100;
+    if (this.playerLandingTween.progress >= 1) {
+      this.playerLandingTween.active = false;
+      this.playerLandingTween.progress = 0;
+      this.player.scale = 1.0;
+      return;
+    }
+
+    const t = this.playerLandingTween.progress;
+    this.player.scale = 1.0 + Math.sin(t * Math.PI) * 0.15;
+  }
+
   private updatePlatforms(deltaSec: number): void {
-    const scrollAmount = this.scrollSpeed * deltaSec * 60;
+    const beatDurationSec = this.musicManager.getBeatDurationSec();
+    const distancePerBeat = this.trackSpeedUnitsPerSec * beatDurationSec;
+    const pixelsPerUnit = 40;
+    const scrollPixelsPerSec = (this.trackSpeedUnitsPerSec * pixelsPerUnit) / beatDurationSec;
+    const scrollAmount = scrollPixelsPerSec * deltaSec;
 
     for (const platform of this.platforms) {
       platform.y += scrollAmount;
 
-      if (platform.y > this.trackBottom + 100 && !platform.passed) {
+      if (platform.y > this.trackBottom + 150 && !platform.passed) {
         platform.passed = true;
-
-        if (!platform.hit && platform.type !== 'obstacle' && platform.beatIndex > 2) {
-          const beatState = this.musicManager.getBeatState(this.time.now);
-          if (!beatState.isNearBeat && this.lastHitBeat !== platform.beatIndex) {
-            this.onBeatMiss();
-            this.lastHitBeat = platform.beatIndex;
-          }
-        }
       }
     }
 
-    this.platforms = this.platforms.filter(p => p.y < this.scale.height + 200);
+    this.platforms = this.platforms.filter(p => p.y < this.scale.height + 300);
 
-    const topPlatform = this.platforms.reduce(
-      (min, p) => p.beatIndex < min.beatIndex ? p : min,
-      this.platforms[0]
-    );
+    const beatState = this.musicManager.getBeatState();
+    const currentBeat = beatState.currentBeat;
 
-    if (topPlatform && topPlatform.beatIndex < this.lastHitBeat + 30) {
-      const beatDuration = this.musicManager.getBeatDuration();
-      const platformSpacing = (this.scrollSpeed * beatDuration) / 1000;
-
-      for (let i = 0; i < 5; i++) {
-        const newBeatIndex = topPlatform.beatIndex - 1 - i;
-        if (newBeatIndex >= 0 && !this.platforms.some(p => p.beatIndex === newBeatIndex)) {
-          const lane = Phaser.Math.Between(0, LANE_COUNT - 1);
-          const rand = Math.random();
-          let type: PlatformData['type'] = 'normal';
-
-          if (newBeatIndex > 5) {
-            if (rand < 0.15) type = 'obstacle';
-            else if (rand < 0.25) type = 'high';
-            else if (rand < 0.30) type = 'low';
-            else if (rand < 0.35) type = 'rotate';
-          }
-
-          const centerX = this.scale.width / 2;
-          const laneOffset = (lane - 1) * LANE_WIDTH;
-
-          this.platforms.push({
-            id: this.platformIdCounter++,
-            beatIndex: newBeatIndex,
-            x: centerX + laneOffset,
-            y: topPlatform.y - (i + 1) * platformSpacing,
-            z: newBeatIndex,
-            lane,
-            type,
-            width: type === 'obstacle' ? 80 : 100,
-            height: type === 'high' ? 60 : type === 'low' ? 20 : 40,
-            passed: false,
-            hit: false
-          });
-        }
+    const beatsToGenerateAhead = 40;
+    for (let bi = currentBeat - 5; bi <= currentBeat + beatsToGenerateAhead; bi++) {
+      if (bi >= 0) {
+        this.createPlatformForBeat(bi, distancePerBeat, pixelsPerUnit);
       }
+    }
+
+    this.repositionPlatformsToBeats();
+  }
+
+  private repositionPlatformsToBeats(): void {
+    const beatState = this.musicManager.getBeatState();
+    const beatDurationSec = this.musicManager.getBeatDurationSec();
+    const distancePerBeat = this.trackSpeedUnitsPerSec * beatDurationSec;
+    const pixelsPerUnit = 40;
+    const playerY = this.trackBottom - 80;
+
+    for (const platform of this.platforms) {
+      const beatDelta = platform.beatIndex - beatState.currentBeat - beatState.beatProgress;
+      platform.y = playerY - beatDelta * distancePerBeat * pixelsPerUnit;
+
+      const centerX = this.scale.width / 2;
+      platform.x = centerX + (platform.lane - 1) * LANE_WIDTH;
     }
   }
 
@@ -661,7 +784,7 @@ export class BeatScene extends Phaser.Scene {
     for (const p of this.particles) {
       p.x += p.vx * deltaSec;
       p.y += p.vy * deltaSec;
-      p.vy += 200 * deltaSec;
+      p.vy += 250 * deltaSec;
       p.life -= deltaSec;
     }
     this.particles = this.particles.filter(p => p.life > 0);
@@ -669,64 +792,43 @@ export class BeatScene extends Phaser.Scene {
 
   private updatePulseWaves(deltaSec: number): void {
     for (const wave of this.pulseWaves) {
-      const progress = 1 - wave.life / wave.maxLife;
-      wave.radius = wave.maxRadius * progress;
       wave.life -= deltaSec * 2;
     }
     this.pulseWaves = this.pulseWaves.filter(w => w.life > 0);
   }
 
-  private updateBeatSync(time: number): void {
-    const beatState = this.musicManager.getBeatState(time);
+  private checkBeatSync(): void {
+    const beatState = this.musicManager.getBeatState();
 
-    if (beatState.currentBeat !== this.lastBeatIndex) {
-      if (beatState.currentBeat > this.lastBeatIndex && this.lastBeatIndex >= 0) {
-        if (this.player.isGrounded && this.lastHitBeat !== beatState.currentBeat - 1) {
+    if (beatState.currentBeat !== this.lastProcessedBeat && this.lastProcessedBeat >= 0) {
+      if (this.player.isGrounded && this.lastHitBeat < beatState.currentBeat - 1) {
+        if (!this.isCharging) {
+          this.onBeatMiss();
+          this.lastHitBeat = beatState.currentBeat - 1;
         }
       }
-      this.lastBeatIndex = beatState.currentBeat;
-    }
-  }
-
-  private updateLaneChange(deltaSec: number): void {
-    if (!this.isLaneChanging) return;
-
-    this.laneChangeTween += deltaSec * 5;
-    if (this.laneChangeTween >= 1) {
-      this.laneChangeTween = 1;
-      this.isLaneChanging = false;
-      this.player.lane = this.player.targetLane;
     }
 
-    const startLane = this.player.lane;
-    const endLane = this.player.targetLane;
-    const t = this.laneChangeTween;
-
-    const arcHeight = 30;
-    const verticalOffset = Math.sin(t * Math.PI) * arcHeight;
-
-    const currentLane = startLane + (endLane - startLane) * t;
-    const centerX = this.scale.width / 2;
-    this.player.x = centerX + (currentLane - 1) * LANE_WIDTH;
+    this.lastProcessedBeat = beatState.currentBeat;
   }
 
   private updateRedFlash(deltaSec: number): void {
-    if (this.redFlash > 0) {
-      this.redFlash -= deltaSec * 3;
-      if (this.redFlash < 0) this.redFlash = 0;
+    if (this.redFlashAlpha > 0) {
+      this.redFlashAlpha -= deltaSec * 3;
+      if (this.redFlashAlpha < 0) this.redFlashAlpha = 0;
     }
   }
 
   private render(): void {
     this.trackGraphics.clear();
-    this.playerSprite.clear();
-    this.particleGraphics.clear();
     this.pulseGraphics.clear();
+    this.particleGraphics.clear();
+    this.playerSprite.clear();
 
     this.renderTrack();
     this.renderPlatforms();
-    this.renderParticles();
     this.renderPulseWaves();
+    this.renderParticles();
     this.renderPlayer();
     this.renderRedFlash();
   }
@@ -734,10 +836,12 @@ export class BeatScene extends Phaser.Scene {
   private renderTrack(): void {
     const { width } = this.scale;
     const centerX = width / 2;
+    const trackWidth = LANE_COUNT * LANE_WIDTH + 60;
 
-    const trackWidth = LANE_COUNT * LANE_WIDTH + 40;
+    const beatState = this.musicManager.getBeatState();
+    const beatGlow = 0.4 + Math.sin(beatState.beatProgress * Math.PI * 2) * 0.3;
 
-    this.trackGraphics.lineStyle(3, 0x00FFFF, 0.6);
+    this.trackGraphics.lineStyle(3, 0x00FFFF, 0.5);
     this.trackGraphics.strokeRect(
       centerX - trackWidth / 2,
       this.trackTop + 20,
@@ -745,7 +849,15 @@ export class BeatScene extends Phaser.Scene {
       this.trackBottom - this.trackTop - 40
     );
 
-    this.trackGraphics.lineStyle(1, 0xFF00FF, 0.3);
+    this.trackGraphics.lineStyle(5, 0x00FFFF, beatGlow * 0.4);
+    this.trackGraphics.strokeRect(
+      centerX - trackWidth / 2 - 6,
+      this.trackTop + 14,
+      trackWidth + 12,
+      this.trackBottom - this.trackTop - 28
+    );
+
+    this.trackGraphics.lineStyle(1, 0xFF00FF, 0.25);
     for (let lane = 0; lane < LANE_COUNT - 1; lane++) {
       const x = centerX - LANE_WIDTH + lane * LANE_WIDTH + LANE_WIDTH / 2;
       this.trackGraphics.beginPath();
@@ -753,62 +865,60 @@ export class BeatScene extends Phaser.Scene {
       this.trackGraphics.lineTo(x, this.trackBottom - 20);
       this.trackGraphics.strokePath();
     }
-
-    const beatState = this.musicManager.getBeatState(this.time.now);
-    const beatGlowIntensity = 0.3 + Math.sin(beatState.beatProgress * Math.PI * 2) * 0.2;
-
-    this.trackGraphics.lineStyle(4, 0x00FFFF, beatGlowIntensity);
-    this.trackGraphics.strokeRect(
-      centerX - trackWidth / 2 - 4,
-      this.trackTop + 16,
-      trackWidth + 8,
-      this.trackBottom - this.trackTop - 32
-    );
   }
 
   private renderPlatforms(): void {
     const colors = THEME_COLORS[this.gameState.currentTheme];
+    const beatState = this.musicManager.getBeatState();
 
     for (const platform of this.platforms) {
-      if (platform.y < -100 || platform.y > this.scale.height + 100) continue;
+      if (platform.y < -150 || platform.y > this.scale.height + 200) continue;
 
-      const depth = 1 - (platform.y - this.trackTop) / (this.trackBottom - this.trackTop);
-      const scale = 0.5 + depth * 0.5;
+      const beatDelta = platform.beatIndex - beatState.currentBeat;
+      const depthFactor = Phaser.Math.Clamp(1 - Math.abs(beatDelta) * 0.1, 0.3, 1);
 
       const px = platform.x;
       const py = platform.y;
-      const pw = platform.width * scale;
-      const ph = platform.height * scale * 0.3;
+      const pw = platform.width * depthFactor;
+      const ph = platform.height * depthFactor * 0.3;
 
       if (platform.type === 'obstacle') {
-        this.trackGraphics.fillStyle(0xFF3366, 0.9);
-        this.trackGraphics.fillRect(px - pw / 2, py - ph, pw, ph + 20 * scale);
-
-        this.trackGraphics.lineStyle(2, 0xFF0066, 0.8);
-        this.trackGraphics.strokeRect(px - pw / 2, py - ph, pw, ph + 20 * scale);
+        this.trackGraphics.fillStyle(0xFF3366, 0.9 * depthFactor);
+        this.trackGraphics.fillRect(px - pw / 2, py - ph - 15 * depthFactor, pw, ph + 25 * depthFactor);
+        this.trackGraphics.lineStyle(2, 0xFF0066, 0.8 * depthFactor);
+        this.trackGraphics.strokeRect(px - pw / 2, py - ph - 15 * depthFactor, pw, ph + 25 * depthFactor);
       } else if (platform.type === 'rotate') {
-        const rotationPhase = Math.sin(this.time.now / 500 + platform.beatIndex);
-        const scaleW = 1 + rotationPhase * 0.2;
+        const phase = Math.sin(this.time.now / 400 + platform.beatIndex * 0.5);
+        const scaleW = 1 + phase * 0.25;
         const actualPw = pw * scaleW;
-        this.trackGraphics.fillStyle(colors.platform, 0.8);
-        this.trackGraphics.fillRect(px - actualPw / 2, py - ph, actualPw, ph);
-        this.trackGraphics.lineStyle(2, colors.accent, 0.9);
-        this.trackGraphics.strokeRect(px - actualPw / 2, py - ph, actualPw, ph);
-        const glowAlpha = 0.3 + Math.abs(rotationPhase) * 0.3;
-        this.trackGraphics.fillStyle(colors.accent, glowAlpha);
-        this.trackGraphics.fillRect(px - actualPw / 2 + 2, py - ph + 2, actualPw - 4, 3);
-      } else {
-        const fillColor = platform.hit ? colors.glow : colors.platform;
-        const alpha = platform.hit ? 1 : 0.85;
 
-        this.trackGraphics.fillStyle(fillColor, alpha);
+        this.trackGraphics.fillStyle(colors.platform, 0.85 * depthFactor);
+        this.trackGraphics.fillRect(px - actualPw / 2, py - ph, actualPw, ph);
+        this.trackGraphics.lineStyle(2, colors.accent, 0.9 * depthFactor);
+        this.trackGraphics.strokeRect(px - actualPw / 2, py - ph, actualPw, ph);
+
+        const glowAlpha = (0.3 + Math.abs(phase) * 0.4) * depthFactor;
+        this.trackGraphics.fillStyle(colors.accent, glowAlpha);
+        this.trackGraphics.fillRect(px - actualPw / 2 + 3, py - ph + 2, actualPw - 6, 3);
+      } else {
+        const isApproaching = Math.abs(beatDelta) <= 2;
+        const fillColor = platform.hit ? colors.glow : (isApproaching ? colors.accent : colors.platform);
+        const alpha = platform.hit ? 1 : (0.85 + (isApproaching ? beatState.beatProgress * 0.15 : 0));
+
+        this.trackGraphics.fillStyle(fillColor, alpha * depthFactor);
         this.trackGraphics.fillRect(px - pw / 2, py - ph, pw, ph);
 
-        this.trackGraphics.lineStyle(2, colors.accent, 0.7);
+        this.trackGraphics.lineStyle(2, colors.accent, 0.75 * depthFactor);
         this.trackGraphics.strokeRect(px - pw / 2, py - ph, pw, ph);
 
-        this.trackGraphics.fillStyle(0xFFFFFF, 0.3);
-        this.trackGraphics.fillRect(px - pw / 2 + 4, py - ph + 2, pw - 8, 4);
+        this.trackGraphics.fillStyle(0xFFFFFF, 0.35 * depthFactor);
+        this.trackGraphics.fillRect(px - pw / 2 + 4, py - ph + 2, pw - 8, 3);
+
+        if (isApproaching && !platform.hit) {
+          const pulseAlpha = Math.sin(beatState.beatProgress * Math.PI) * 0.5;
+          this.trackGraphics.lineStyle(3, 0xFFFFFF, pulseAlpha * depthFactor);
+          this.trackGraphics.strokeRect(px - pw / 2 - 3, py - ph - 3, pw + 6, ph + 6);
+        }
       }
     }
   }
@@ -820,9 +930,12 @@ export class BeatScene extends Phaser.Scene {
     const size = 15;
 
     if (this.gameState.isFeverMode) {
-      const glowIntensity = 0.5 + Math.sin(this.time.now / 100) * 0.3;
+      const glowIntensity = 0.4 + Math.sin(this.time.now / 80) * 0.3;
       this.playerSprite.fillStyle(0xFFD700, glowIntensity * 0.3);
-      this.playerSprite.fillCircle(px, py, size * 2 * scale);
+      this.playerSprite.fillCircle(px, py, size * 2.5 * scale);
+
+      this.playerSprite.lineStyle(2, 0xFFD700, glowIntensity * 0.6);
+      this.playerSprite.strokeCircle(px, py, size * 2.2 * scale);
     }
 
     this.playerSprite.fillStyle(0x00FFFF, 1);
@@ -831,67 +944,95 @@ export class BeatScene extends Phaser.Scene {
     this.playerSprite.fillGradientStyle(
       0xFF00FF, 0xFF00FF,
       0x00FFFF, 0x00FFFF,
-      0.8, 0.8, 0.8, 0.8
+      0.7, 0.7, 0.9, 0.9
     );
-    this.playerSprite.fillCircle(px, py - size * scale * 0.3, size * scale * 0.7);
+    this.playerSprite.fillCircle(px, py - size * scale * 0.35, size * scale * 0.65);
 
-    this.playerSprite.lineStyle(2, 0xFFFFFF, 0.8);
+    this.playerSprite.lineStyle(2, 0xFFFFFF, 0.85);
     this.playerSprite.strokeCircle(px, py, size * scale);
 
-    this.playerSprite.fillStyle(0xFFFFFF, 0.6);
-    this.playerSprite.fillCircle(px - 4, py - 4, 4 * scale);
+    this.playerSprite.fillStyle(0xFFFFFF, 0.75);
+    this.playerSprite.fillCircle(px - size * 0.28, py - size * 0.28, size * scale * 0.25);
 
-    if (this.inputManager.isJumpHeld() && this.player.isGrounded) {
-      const holdDuration = this.inputManager.getHoldDuration();
+    if (this.isCharging && this.player.isGrounded) {
       const chargeRatio = Phaser.Math.Clamp(
-        (holdDuration - CHARGE_MIN_TIME) / (CHARGE_MAX_TIME - CHARGE_MIN_TIME),
+        (this.jumpChargeMs - CHARGE_MIN_MS) / (CHARGE_MAX_MS - CHARGE_MIN_MS),
         0, 1
       );
 
-      this.playerSprite.lineStyle(4, 0x00FF00, 0.8);
+      this.playerSprite.lineStyle(5, 0x00FF00, 0.9);
       this.playerSprite.beginPath();
-      this.playerSprite.arc(px, py, size * scale + 8, -Math.PI / 2, -Math.PI / 2 + chargeRatio * Math.PI * 2);
+      this.playerSprite.arc(px, py, size * scale + 12, -Math.PI / 2, -Math.PI / 2 + chargeRatio * Math.PI * 2);
       this.playerSprite.strokePath();
+
+      if (chargeRatio > 0.95) {
+        this.playerSprite.lineStyle(3, 0xFFFF00, 0.6 + Math.sin(this.time.now / 50) * 0.4);
+        this.playerSprite.strokeCircle(px, py, size * scale + 18);
+      }
+    }
+
+    if (this.airDodge.active) {
+      const trailAlpha = 1 - this.airDodge.progress;
+      this.playerSprite.fillStyle(0xFF00FF, trailAlpha * 0.3);
+      this.playerSprite.fillCircle(
+        this.airDodge.startX + (px - this.airDodge.startX) * (1 - this.airDodge.progress),
+        py,
+        size * scale * (1 + this.airDodge.progress * 0.3)
+      );
     }
   }
 
   private renderParticles(): void {
     for (const p of this.particles) {
-      const alpha = p.life / p.maxLife;
-      const size = p.size * alpha;
+      const lifeRatio = p.life / p.maxLife;
+      const currentSize = Phaser.Math.Linear(p.endSize, p.startSize, lifeRatio);
+      const alpha = lifeRatio * 0.9;
 
       this.particleGraphics.fillStyle(p.color, alpha);
-      this.particleGraphics.fillCircle(p.x, p.y, size);
+      this.particleGraphics.fillCircle(p.x, p.y, currentSize);
+
+      this.particleGraphics.fillStyle(0xFFFFFF, alpha * 0.5);
+      this.particleGraphics.fillCircle(p.x, p.y, currentSize * 0.4);
     }
   }
 
   private renderPulseWaves(): void {
     for (const wave of this.pulseWaves) {
-      const alpha = wave.life / wave.maxLife;
-      const color = this.gameState.isFeverMode ? 0xFFD700 : 0x00FFFF;
+      const lifeRatio = wave.life / wave.maxLife;
 
-      this.pulseGraphics.lineStyle(3, color, alpha * 0.6);
-      this.pulseGraphics.strokeCircle(wave.x, wave.y, wave.radius);
+      const expansionPhase = lifeRatio > 0.5 ? 1 : lifeRatio * 2;
+      const contractionPhase = lifeRatio <= 0.5 ? 0 : (lifeRatio - 0.5) * 2;
 
-      this.pulseGraphics.lineStyle(2, color, alpha * 0.3);
-      this.pulseGraphics.strokeCircle(wave.x, wave.y, wave.radius * 0.7);
+      const expandRadius = wave.maxRadius * Phaser.Math.Easing.Sine.Out(expansionPhase);
+      const currentRadius = expandRadius * (1 - contractionPhase * 0.6);
+
+      const alpha = lifeRatio * 0.7;
+      const lineWidth = 2 + (1 - lifeRatio) * 3;
+
+      this.pulseGraphics.lineStyle(lineWidth, wave.color, alpha);
+      this.pulseGraphics.strokeCircle(wave.x, wave.y, currentRadius);
+
+      this.pulseGraphics.lineStyle(lineWidth * 0.6, wave.color, alpha * 0.4);
+      this.pulseGraphics.strokeCircle(wave.x, wave.y, currentRadius * 0.65);
     }
   }
 
   private renderRedFlash(): void {
-    if (this.redFlash > 0) {
-      const { width, height } = this.scale;
-      this.playerSprite.fillStyle(0xFF0000, this.redFlash * 0.3);
-      this.playerSprite.fillRect(0, 0, width, height);
-    }
+    if (this.redFlashAlpha <= 0) return;
+    const { width, height } = this.scale;
+    this.playerSprite.fillStyle(0xFF0000, this.redFlashAlpha * 0.35);
+    this.playerSprite.fillRect(0, 0, width, height);
   }
 
   private updateUI(): void {
     this.scoreText.setText(this.gameState.score.toString());
 
-    if (this.gameState.combo > 0) {
+    if (this.gameState.combo > 1) {
       this.comboText.setText(`Combo: ${this.gameState.combo}`);
       this.comboText.setVisible(true);
+
+      const pulse = 1 + Math.sin(this.time.now / 80) * 0.1;
+      this.comboText.setScale(pulse);
     } else {
       this.comboText.setVisible(false);
     }
