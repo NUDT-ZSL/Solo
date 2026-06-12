@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Habit } from '../types';
 
 interface HabitCardProps {
@@ -9,13 +9,13 @@ interface HabitCardProps {
 const HabitCard: React.FC<HabitCardProps> = ({ habit, onClick }) => {
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     if (!habit.isCheckedToday) {
       setIsAnimating(true);
       setTimeout(() => setIsAnimating(false), 300);
     }
     onClick(habit);
-  };
+  }, [habit, onClick]);
 
   return (
     <div style={styles.container}>
@@ -23,7 +23,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, onClick }) => {
         style={{
           ...styles.button,
           ...(habit.isCheckedToday ? styles.checkedButton : styles.uncheckedButton),
-          ...(isAnimating ? styles.animating : {}),
+          animation: isAnimating ? 'bounceIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)' : undefined,
         }}
         onClick={handleClick}
         aria-label={`${habit.name} - ${habit.isCheckedToday ? '已打卡' : '未打卡'}`}
@@ -56,7 +56,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s ease',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
     padding: 0,
   },
   uncheckedButton: {
@@ -64,12 +64,9 @@ const styles: Record<string, React.CSSProperties> = {
     border: '2px solid #6c757d',
   },
   checkedButton: {
-    backgroundColor: '#ffffff',
-    color: '#28a745',
-    boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
-  },
-  animating: {
-    animation: 'bounceScale 0.3s ease',
+    backgroundColor: '#28a745',
+    color: '#ffffff',
+    boxShadow: '0 4px 12px rgba(40, 167, 69, 0.4)',
   },
   checkIcon: {
     width: '24px',
@@ -85,22 +82,28 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-  @keyframes bounceScale {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-  }
-  
-  button:hover {
-    transform: scale(1.05);
-  }
-  
-  button:active {
-    transform: scale(0.95);
-  }
-`;
-document.head.appendChild(styleSheet);
+const styleSheetId = 'habit-card-styles';
+if (!document.getElementById(styleSheetId)) {
+  const styleSheet = document.createElement('style');
+  styleSheet.id = styleSheetId;
+  styleSheet.textContent = `
+    @keyframes bounceIn {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.3); }
+      50% { transform: scale(0.9); }
+      70% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    
+    .habit-card-button:hover {
+      transform: scale(1.08) !important;
+    }
+    
+    .habit-card-button:active {
+      transform: scale(0.92) !important;
+    }
+  `;
+  document.head.appendChild(styleSheet);
+}
 
 export default HabitCard;

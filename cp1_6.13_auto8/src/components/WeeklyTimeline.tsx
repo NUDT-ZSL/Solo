@@ -1,23 +1,18 @@
-import React, { useRef, useEffect } from 'react';
-import { DailyStats } from '../types';
+import React, { useRef, useEffect, useCallback } from 'react';
+import { DailyStats, Habit } from '../types';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
 interface WeeklyTimelineProps {
-  data: DailyStats[];
-  habitStatuses: { [habitId: string]: boolean[] };
+  dailyStats: DailyStats[];
+  habits: Habit[];
+  habitWeeklyStatus: { [habitId: string]: boolean[] };
 }
 
-const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({ data, habitStatuses }) => {
+const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({ dailyStats, habits, habitWeeklyStatus }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    if (data.length > 0) {
-      drawChart();
-    }
-  }, [data]);
-
-  const drawChart = () => {
+  const drawChart = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -33,23 +28,25 @@ const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({ data, habitStatuses }) 
 
     const width = rect.width;
     const height = rect.height;
-    const padding = { top: 10, right: 10, bottom: 10, left: 10 };
+    const padding = { top: 15, right: 15, bottom: 15, left: 15 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
     ctx.clearRect(0, 0, width, height);
 
-    const values = data.map(d => d.completedHabits);
-    const maxValue = Math.max(...values, 1);
+    const values = dailyStats.map(d => d.completedHabits);
+    const maxValue = Math.max(...values, habits.length || 1);
     const minValue = 0;
 
-    const points = data.map((d, i) => ({
-      x: padding.left + (i / (data.length - 1)) * chartWidth,
-      y: padding.top + chartHeight - ((d.completedHabits - minValue) / (maxValue - minValue)) * chartHeight,
+    const points = dailyStats.map((d, i) => ({
+      x: dailyStats.length > 1 
+        ? padding.left + (i / (dailyStats.length - 1)) * chartWidth
+        : padding.left + chartWidth / 2,
+      y: padding.top + chartHeight - ((d.completedHabits - minValue) / (maxValue - minValue || 1)) * chartHeight,
     }));
 
     ctx.beginPath();
-    ctx.strokeStyle = '#d4edda';
+    ctx.strokeStyle = '#e9ecef';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 3; i++) {
       const y = padding.top + (i / 3) * chartHeight;
@@ -58,47 +55,64 @@ const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({ data, habitStatuses }) 
     }
     ctx.stroke();
 
-    ctx.beginPath();
-    ctx.strokeStyle = '#28a745';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    points.forEach((point, i) => {
-      if (i === 0) {
-        ctx.moveTo(point.x, point.y);
-      } else {
-        const prev = points[i - 1];
-        const cpx = (prev.x + point.x) / 2;
-        ctx.bezierCurveTo(cpx, prev.y, cpx, point.y, point.x, point.y);
-      }
-    });
-    ctx.stroke();
-
-    const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-    gradient.addColorStop(0, 'rgba(40, 167, 69, 0.3)');
-    gradient.addColorStop(1, 'rgba(40, 167, 69, 0.05)');
-
-    ctx.beginPath();
-    ctx.fillStyle = gradient;
-    ctx.moveTo(points[0].x, height - padding.bottom);
-    points.forEach((point) => {
-      ctx.lineTo(point.x, point.y);
-    });
-    ctx.lineTo(points[points.length - 1].x, height - padding.bottom);
-    ctx.closePath();
-    ctx.fill();
-
-    points.forEach((point) => {
+    if (points.length > 0) {
       ctx.beginPath();
-      ctx.fillStyle = '#ffffff';
-      ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
-      ctx.fill();
       ctx.strokeStyle = '#28a745';
       ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      points.forEach((point, i) => {
+        if (i === 0) {
+          ctx.moveTo(point.x, point.y);
+        } else {
+          const prev = points[i - 1];
+          const cpx1 = prev.x + (point.x - prev.x) * 0.4;
+          const cpx2 = prev.x + (point.x - prev.x) * 0.6;
+          ctx.bezierCurveTo(cpx1, prev.y, cpx2, point.y, point.x, point.y);
+        }
+      });
       ctx.stroke();
-    });
-  };
+
+      const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
+      gradient.addColorStop(0, 'rgba(40, 167, 69, 0.25)');
+      gradient.addColorStop(1, 'rgba(40, 167, 69, 0.02)');
+
+      ctx.beginPath();
+      ctx.fillStyle = gradient;
+      ctx.moveTo(points[0].x, height - padding.bottom);
+      points.forEach((point) => {
+        ctx.lineTo(point.x, point.y);
+      });
+      ctx.lineTo(points[points.length - 1].x, height - padding.bottom);
+      ctx.closePath();
+      ctx.fill();
+
+      points.forEach((point) => {
+        ctx.beginPath();
+        ctx.fillStyle = '#ffffff';
+        ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = '#28a745';
+        ctx.lineWidth = 2;
+        ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+    }
+  }, [dailyStats, habits.length]);
+
+  useEffect(() => {
+    if (dailyStats.length > 0) {
+      drawChart();
+    }
+  }, [dailyStats, drawChart]);
+
+  useEffect(() => {
+    const handleResize = () => drawChart();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [drawChart]);
 
   const getDayLabel = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -109,7 +123,9 @@ const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({ data, habitStatuses }) 
     return format(date, 'EEE', { locale: zhCN });
   };
 
-  const habitIds = Object.keys(habitStatuses);
+  const isToday = (dateStr: string) => {
+    return format(new Date(dateStr), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+  };
 
   return (
     <div style={styles.container}>
@@ -123,32 +139,38 @@ const WeeklyTimeline: React.FC<WeeklyTimelineProps> = ({ data, habitStatuses }) 
       </div>
 
       <div style={styles.timeline}>
-        {data.map((day, dayIndex) => (
+        {dailyStats.map((day, dayIndex) => (
           <div key={day.date} style={styles.dayColumn}>
-            <div style={styles.habitDots}>
-              {habitIds.map((habitId, habitIndex) => {
-                const isChecked = habitStatuses[habitId]?.[dayIndex] || false;
+            <div style={styles.habitDotsContainer}>
+              {habits.map((habit) => {
+                const isChecked = habitWeeklyStatus[habit._id]?.[dayIndex] || false;
                 return (
                   <div
-                    key={`${habitId}-${dayIndex}`}
+                    key={habit._id}
                     style={{
                       ...styles.dot,
                       backgroundColor: isChecked ? '#28a745' : '#dee2e6',
-                      marginTop: habitIndex === 0 ? 0 : '4px',
+                      boxShadow: isChecked ? '0 1px 4px rgba(40, 167, 69, 0.3)' : 'none',
                     }}
-                    title={`${isChecked ? '已打卡' : '未打卡'}`}
+                    title={`${habit.name}: ${isChecked ? '已打卡' : '未打卡'}`}
                   />
                 );
               })}
             </div>
+            
             <span style={{
               ...styles.dayLabel,
-              color: dayIndex === data.length - 1 ? '#28a745' : '#6c757d',
-              fontWeight: dayIndex === data.length - 1 ? 600 : 400,
+              color: isToday(day.date) ? '#28a745' : '#6c757d',
+              fontWeight: isToday(day.date) ? 600 : 400,
             }}>
               {getDayLabel(day.date)}
             </span>
-            <span style={styles.countLabel}>
+            
+            <span style={{
+              ...styles.countLabel,
+              backgroundColor: isToday(day.date) ? '#d4edda' : '#f8f9fa',
+              color: isToday(day.date) ? '#28a745' : '#6c757d',
+            }}>
               {day.completedHabits}/{day.totalHabits}
             </span>
           </div>
@@ -190,10 +212,38 @@ const styles: Record<string, React.CSSProperties> = {
   timeline: {
     display: 'flex',
     justifyContent: 'space-between',
+    gap: '8px',
   },
   dayColumn: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
   },
+  habitDotsContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '4px',
+    marginBottom: '8px',
+  },
+  dot: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    transition: 'transform 0.2s ease',
+  },
+  dayLabel: {
+    fontSize: '12px',
+    marginBottom: '6px',
+  },
+  countLabel: {
+    fontSize: '11px',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    fontWeight: 500,
+  },
+};
+
+export default WeeklyTimeline;

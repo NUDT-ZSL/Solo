@@ -1,9 +1,10 @@
 import express from 'express';
 import Datastore from 'nedb-promises';
 import { v4 as uuidv4 } from 'uuid';
-import { format, subDays, startOfDay, isSameDay } from 'date-fns';
+import { format, subDays, startOfDay } from 'date-fns';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -13,8 +14,20 @@ const PORT = 3001;
 
 app.use(express.json());
 
-const habitsDb = Datastore.create(join(__dirname, 'data', 'habits.db'));
-const checkinsDb = Datastore.create(join(__dirname, 'data', 'checkins.db'));
+const dataDir = join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  console.log('Created data directory:', dataDir);
+}
+
+const habitsDb = Datastore.create({
+  filename: join(dataDir, 'habits.db'),
+  autoload: true,
+});
+const checkinsDb = Datastore.create({
+  filename: join(dataDir, 'checkins.db'),
+  autoload: true,
+});
 
 const defaultHabits = [
   { _id: uuidv4(), name: '晨间阅读', targetFrequency: 7, createdAt: new Date().toISOString() },
@@ -23,15 +36,24 @@ const defaultHabits = [
   { _id: uuidv4(), name: '健康饮食', targetFrequency: 7, createdAt: new Date().toISOString() }
 ];
 
-async function initializeData() {
-  const count = await habitsDb.count({});
-  if (count === 0) {
-    await habitsDb.insert(defaultHabits);
-    console.log('Initialized default habits data');
+habitsDb.on('load', async () => {
+  console.log('Habits database loaded');
+  try {
+    const count = await habitsDb.count({});
+    console.log('Current habits count:', count);
+    if (count === 0) {
+      console.log('Initializing default habits...');
+      const inserted = await habitsDb.insert(defaultHabits);
+      console.log('Initialized default habits data:', inserted.length, 'habits added');
+    }
+  } catch (err) {
+    console.error('Error during data initialization:', err);
   }
-}
+});
 
-initializeData().catch(console.error);
+checkinsDb.on('load', () => {
+  console.log('Checkins database loaded');
+});
 
 app.get('/api/habits', async (req, res) => {
   try {
@@ -53,6 +75,7 @@ app.get('/api/habits', async (req, res) => {
     
     res.json(habitsWithStatus);
   } catch (error) {
+    console.error('GET /api/habits error:', error);
     res.status(500).json({ error: 'Failed to fetch habits' });
   }
 });
@@ -86,8 +109,10 @@ app.post('/api/habits/:id/checkin', async (req, res) => {
     };
     
     const result = await checkinsDb.insert(checkin);
+    console.log('Checkin successful:', result._id);
     res.json(result);
   } catch (error) {
+    console.error('POST /api/habits/:id/checkin error:', error);
     res.status(500).json({ error: 'Failed to check in' });
   }
 });
@@ -117,6 +142,7 @@ app.get('/api/habits/:id/stats', async (req, res) => {
     
     res.json({ checkins, streak });
   } catch (error) {
+    console.error('GET /api/habits/:id/stats error:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
@@ -146,6 +172,7 @@ app.get('/api/stats/weekly', async (req, res) => {
     
     res.json(dailyStats);
   } catch (error) {
+    console.error('GET /api/stats/weekly error:', error);
     res.status(500).json({ error: 'Failed to fetch weekly stats' });
   }
 });
@@ -173,6 +200,7 @@ app.get('/api/habits/:id/weekly-checkins', async (req, res) => {
     
     res.json(weeklyStatus);
   } catch (error) {
+    console.error('GET /api/habits/:id/weekly-checkins error:', error);
     res.status(500).json({ error: 'Failed to fetch weekly checkins' });
   }
 });

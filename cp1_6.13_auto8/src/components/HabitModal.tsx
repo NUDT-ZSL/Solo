@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Habit, WeeklyCheckIn } from '../types';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -8,9 +8,10 @@ interface HabitModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (habitId: string, note: string) => Promise<void>;
+  onError?: (message: string) => void;
 }
 
-const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfirm }) => {
+const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfirm, onError }) => {
   const [note, setNote] = useState('');
   const [streak, setStreak] = useState(0);
   const [weeklyCheckins, setWeeklyCheckins] = useState<WeeklyCheckIn[]>([]);
@@ -24,7 +25,7 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
     }
   }, [isOpen, habit]);
 
-  const fetchHabitStats = async (habitId: string) => {
+  const fetchHabitStats = useCallback(async (habitId: string) => {
     setLoading(true);
     try {
       const [statsRes, weeklyRes] = await Promise.all([
@@ -32,24 +33,30 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
         fetch(`/api/habits/${habitId}/weekly-checkins`)
       ]);
       
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStreak(statsData.streak);
+      if (!statsRes.ok) {
+        throw new Error('获取统计数据失败');
+      }
+      if (!weeklyRes.ok) {
+        throw new Error('获取周打卡数据失败');
       }
       
-      if (weeklyRes.ok) {
-        const weeklyData = await weeklyRes.json();
-        setWeeklyCheckins(weeklyData);
-      }
+      const statsData = await statsRes.json();
+      const weeklyData = await weeklyRes.json();
+      setStreak(statsData.streak || 0);
+      setWeeklyCheckins(weeklyData || []);
     } catch (error) {
       console.error('Failed to fetch habit stats:', error);
+      if (onError) {
+        onError('加载数据失败，请稍后重试');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [onError]);
 
   const handleConfirm = async () => {
     if (!habit || submitting) return;
+    if (habit.isCheckedToday) return;
     
     setSubmitting(true);
     try {
@@ -57,13 +64,16 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
       onClose();
     } catch (error) {
       console.error('Failed to check in:', error);
+      if (onError) {
+        onError('打卡失败，请稍后重试');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && !submitting) {
       onClose();
     }
   };
@@ -122,11 +132,16 @@ const HabitModal: React.FC<HabitModalProps> = ({ habit, isOpen, onClose, onConfi
             onChange={(e) => setNote(e.target.value)}
             placeholder="记录今天的感受..."
             maxLength={200}
+            disabled={submitting}
           />
         </div>
 
         <div style={styles.buttonRow}>
-          <button style={styles.cancelButton} onClick={onClose} disabled={submitting}>
+          <button 
+            style={styles.cancelButton} 
+            onClick={onClose} 
+            disabled={submitting}
+          >
             取消
           </button>
           <button 
@@ -162,9 +177,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   modal: {
     width: '320px',
+    minWidth: '320px',
+    maxWidth: '320px',
     backgroundColor: '#ffffff',
     borderRadius: '16px',
     padding: '24px',
+    boxSizing: 'border-box',
     boxShadow: '0 10px 40px rgba(0, 0, 0, 0.15)',
     animation: 'slideUp 0.3s ease',
   },
@@ -240,6 +258,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   textarea: {
     width: '280px',
+    maxWidth: '280px',
+    minWidth: '280px',
     minHeight: '80px',
     padding: '12px',
     borderRadius: '8px',
@@ -249,6 +269,7 @@ const styles: Record<string, React.CSSProperties> = {
     resize: 'vertical',
     transition: 'border-color 0.2s ease',
     outline: 'none',
+    boxSizing: 'border-box',
   },
   buttonRow: {
     display: 'flex',
@@ -279,36 +300,40 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
+const styleSheetId = 'habit-modal-styles';
+if (!document.getElementById(styleSheetId)) {
+  const styleSheet = document.createElement('style');
+  styleSheet.id = styleSheetId;
+  styleSheet.textContent = `
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
-    to {
-      opacity: 1;
+    
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    textarea:focus {
+      border-color: #28a745 !important;
+    }
+    
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+    
+    button:active:not(:disabled) {
       transform: translateY(0);
     }
-  }
-  
-  textarea:focus {
-    border-color: #28a745 !important;
-  }
-  
-  button:hover:not(:disabled) {
-    transform: translateY(-1px);
-  }
-  
-  button:active:not(:disabled) {
-    transform: translateY(0);
-  }
-`;
-document.head.appendChild(styleSheet);
+  `;
+  document.head.appendChild(styleSheet);
+}
 
 export default HabitModal;
