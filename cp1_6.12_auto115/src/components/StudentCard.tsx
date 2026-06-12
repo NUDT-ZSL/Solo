@@ -13,6 +13,7 @@ interface StudentCardProps {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (id: string) => void;
   isEditing: boolean;
+  onLongPress: (id: string) => void;
 }
 
 function getAccuracyGradient(accuracy: number): string {
@@ -124,23 +125,21 @@ const StudentCard: React.FC<StudentCardProps> = React.memo(({
   onDragOver,
   onDrop,
   isEditing,
+  onLongPress,
 }) => {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isPressed, setIsPressed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const progressPercent = totalQuestions > 0 ? Math.round((currentQuestion / totalQuestions) * 100) : 0;
   const bgColor = getAccuracyGradient(accuracy);
 
   const handlePointerDown = useCallback(() => {
-    setIsPressed(true);
     longPressTimer.current = setTimeout(() => {
-      setIsPressed(false);
+      onLongPress(id);
     }, 1000);
-  }, []);
+  }, [id, onLongPress]);
 
   const handlePointerUp = useCallback(() => {
-    setIsPressed(false);
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
@@ -148,7 +147,6 @@ const StudentCard: React.FC<StudentCardProps> = React.memo(({
   }, []);
 
   const handlePointerLeave = useCallback(() => {
-    setIsPressed(false);
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
