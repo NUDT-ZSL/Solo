@@ -46,9 +46,9 @@ export function handleVote(proposalId: string, voteType: 'up' | 'down', voterId:
       deleteStmt.free();
 
       if (voteType === 'up') {
-        upvotes--;
+        upvotes = Math.max(0, upvotes - 1);
       } else {
-        downvotes--;
+        downvotes = Math.max(0, downvotes - 1);
       }
       newUserVote = null;
     } else {
@@ -57,11 +57,11 @@ export function handleVote(proposalId: string, voteType: 'up' | 'down', voterId:
       updateStmt.free();
 
       if (voteType === 'up') {
-        upvotes++;
-        downvotes--;
+        upvotes = upvotes + 1;
+        downvotes = Math.max(0, downvotes - 1);
       } else {
-        downvotes++;
-        upvotes--;
+        downvotes = downvotes + 1;
+        upvotes = Math.max(0, upvotes - 1);
       }
     }
   } else {
@@ -73,9 +73,9 @@ export function handleVote(proposalId: string, voteType: 'up' | 'down', voterId:
     insertStmt.free();
 
     if (voteType === 'up') {
-      upvotes++;
+      upvotes = upvotes + 1;
     } else {
-      downvotes++;
+      downvotes = downvotes + 1;
     }
   }
 
@@ -87,6 +87,33 @@ export function handleVote(proposalId: string, voteType: 'up' | 'down', voterId:
     downvotes,
     userVote: newUserVote,
   };
+}
+
+export function recalculateVoteCounts(proposalId: string): { upvotes: number; downvotes: number } {
+  const db = getDb();
+
+  const stmt = db.prepare(`
+    SELECT
+      SUM(CASE WHEN voteType = 'up' THEN 1 ELSE 0 END) as upvotes,
+      SUM(CASE WHEN voteType = 'down' THEN 1 ELSE 0 END) as downvotes
+    FROM votes
+    WHERE proposalId = ?
+  `);
+  stmt.bind([proposalId]);
+
+  let upvotes = 0;
+  let downvotes = 0;
+  if (stmt.step()) {
+    const row = stmt.getAsObject() as any;
+    upvotes = row.upvotes || 0;
+    downvotes = row.downvotes || 0;
+  }
+  stmt.free();
+
+  updateVoteCount(proposalId, upvotes, downvotes);
+  saveDb();
+
+  return { upvotes, downvotes };
 }
 
 export function getVotesByProposal(proposalId: string): { upvotes: number; downvotes: number } {

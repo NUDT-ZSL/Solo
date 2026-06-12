@@ -35,7 +35,7 @@ function VotePage() {
     const totalVotes = sorted.reduce((sum, p) => sum + Math.max(p.upvotes, 0), 0);
     return sorted.slice(0, 3).map(p => ({
       ...p,
-      percentage: totalVotes > 0 ? Math.max(p.upvotes / totalVotes * 100 : 0,
+      percentage: totalVotes > 0 ? (p.upvotes / totalVotes * 100) : 0,
     }));
   };
 
@@ -86,14 +86,8 @@ function VotePage() {
   const colors = ['#2ecc71', '#3498db', '#e67e22'];
 
   return (
-    <div style={{
-      display: 'flex',
-      gap: '24px',
-      maxWidth: '1400px',
-      margin: '0 auto',
-    }}
-    >
-      <div style={{ flex: '0 0 70% }}>
+    <div className="vote-page-layout">
+      <div className="vote-page-left">
         <motion.h2 style={{
           fontSize: '28px',
           fontWeight: 700,
@@ -105,7 +99,7 @@ function VotePage() {
         <ProposalList proposals={proposals} onVoteChange={handleVoteChange} />
       </div>
 
-      <div style={{ flex: '0 0 calc(30% - 24px)' }}>
+      <div className="vote-page-right">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -233,6 +227,7 @@ function VotePage() {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsModalOpen(true)}
+        className="vote-fab-btn"
         style={{
           position: 'fixed',
           right: '30px',
@@ -479,7 +474,6 @@ function VotePage() {
                         fontSize: '16px',
                         fontWeight: 500,
                         cursor: 'pointer',
-                        transition: 'all 0.2s',
                       }}
                     >
                       取消
@@ -512,9 +506,44 @@ function VotePage() {
       </AnimatePresence>
 
       <style>{`
+        .vote-page-layout {
+          display: flex;
+          gap: 24px;
+          max-width: 1400px;
+          margin: 0 auto;
+        }
+
+        .vote-page-left {
+          flex: 0 0 70%;
+          min-width: 0;
+        }
+
+        .vote-page-right {
+          flex: 0 0 calc(30% - 24px);
+          min-width: 0;
+        }
+
         @media (max-width: 768px) {
-          div[style*="display: flex"] {
-            flex-direction: column-reverse !important;
+          .vote-page-layout {
+            flex-direction: column;
+          }
+
+          .vote-page-left,
+          .vote-page-right {
+            flex: 0 0 100%;
+            width: 100%;
+          }
+
+          .vote-page-right {
+            order: -1;
+          }
+
+          .vote-fab-btn {
+            right: 16px !important;
+            bottom: 16px !important;
+            width: 50px !important;
+            height: 50px !important;
+            font-size: 24px !important;
           }
         }
       `}</style>

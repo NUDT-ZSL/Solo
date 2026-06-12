@@ -16,12 +16,14 @@ function ResultPage() {
   const loadResults = async () => {
     try {
       const response = await axios.get('/api/results');
-      const data = response.data.map((item: any, index: number) => ({
+      const serverLocked = response.data.isLocked || false;
+      const data = (response.data.data || []).map((item: any, index: number) => ({
         ...item,
         duration: item.duration || 4,
         rank: index + 1,
       }));
       setResults(data);
+      setIsLocked(serverLocked);
       const total = data.reduce((sum: number, item: ResultItem) => sum + item.duration, 0);
       setTotalDuration(total);
     } catch (error) {
@@ -39,8 +41,19 @@ function ResultPage() {
     return () => clearInterval(interval);
   }, [isLocked]);
 
-  const handleGenerateSchedule = () => {
-    setIsLocked(true);
+  const handleGenerateSchedule = async () => {
+    try {
+      await axios.post('/api/lock-voting');
+      const sorted = [...results].sort((a, b) => b.upvotes - a.upvotes);
+      const reRanked = sorted.map((item, index) => ({
+        ...item,
+        rank: index + 1,
+      }));
+      setResults(reRanked);
+      setIsLocked(true);
+    } catch (error) {
+      console.error('生成排程失败:', error);
+    }
   };
 
   const handleDurationChange = (id: string, newDuration: number) => {
@@ -63,6 +76,14 @@ function ResultPage() {
     return `${mins}分钟`;
   };
 
+  const getScheduleTime = (rank: number) => {
+    let elapsed = 0;
+    for (let i = 0; i < rank - 1 && i < results.length; i++) {
+      elapsed += results[i].duration;
+    }
+    return `${elapsed} - ${elapsed + (results[rank - 1]?.duration || 4)} 分钟`;
+  };
+
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -79,7 +100,7 @@ function ResultPage() {
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div className="result-page-container" style={{ maxWidth: '900px', margin: '0 auto' }}>
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -104,40 +125,46 @@ function ResultPage() {
       </motion.div>
 
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
-        <motion.button
-          whileHover={!isLocked ? { scale: 1.05 } : {}}
-          whileTap={!isLocked ? { scale: 0.95 } : {}}
-          animate={!isLocked ? {
-            boxShadow: [
-              '0 0 20px rgba(233, 69, 96, 0.3)',
-              '0 0 40px rgba(233, 69, 96, 0.6)',
-              '0 0 20px rgba(233, 69, 96, 0.3)',
-            ],
-          } : {}}
-          transition={!isLocked ? {
-            boxShadow: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
-          } : {}}
-          onClick={handleGenerateSchedule}
-          disabled={isLocked}
-          style={{
-            padding: '16px 48px',
-            fontSize: '18px',
-            fontWeight: 600,
-            borderRadius: '50px',
-            border: 'none',
-            cursor: isLocked ? 'not-allowed' : 'pointer',
-            background: isLocked
-              ? '#666'
-              : 'linear-gradient(135deg, #e94560 0%, #c0392b 100%)',
-            color: 'white',
-            boxShadow: isLocked
-              ? 'none'
-              : '0 6px 20px rgba(233, 69, 96, 0.4)',
-            opacity: isLocked ? 0.7 : 1,
-          }}
-        >
-          {isLocked ? '🔒 排程已锁定' : '✨ 生成排程'}
-        </motion.button>
+        {!isLocked ? (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="pulse-glow-btn"
+            onClick={handleGenerateSchedule}
+            style={{
+              padding: '16px 48px',
+              fontSize: '18px',
+              fontWeight: 600,
+              borderRadius: '50px',
+              border: 'none',
+              cursor: 'pointer',
+              background: 'linear-gradient(135deg, #e94560 0%, #c0392b 100%)',
+              color: 'white',
+              position: 'relative',
+              overflow: 'visible',
+            }}
+          >
+            ✨ 生成排程
+          </motion.button>
+        ) : (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{
+              padding: '16px 48px',
+              fontSize: '18px',
+              fontWeight: 600,
+              borderRadius: '50px',
+              background: '#2ecc71',
+              color: 'white',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            🔒 排程已锁定
+          </motion.div>
+        )}
       </div>
 
       {results.length === 0 ? (
@@ -174,9 +201,10 @@ function ResultPage() {
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '20px',
+                gap: '16px',
                 padding: '20px',
                 position: 'relative',
+                flexWrap: 'wrap',
               }}>
                 <motion.div
                   initial={{ scale: 0 }}
@@ -200,7 +228,7 @@ function ResultPage() {
                   {song.rank}
                 </motion.div>
 
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
                   <h3 style={{
                     fontSize: '20px',
                     fontWeight: 600,
@@ -212,6 +240,11 @@ function ResultPage() {
                   <p style={{ fontSize: '14px', color: '#8899aa' }}>
                     🎤 {song.artist} · ✍️ {song.submitter}
                   </p>
+                  {isLocked && (
+                    <p style={{ fontSize: '12px', color: '#4a9eff', marginTop: '4px' }}>
+                      🕐 {getScheduleTime(song.rank)}
+                    </p>
+                  )}
                 </div>
 
                 <div style={{
@@ -227,18 +260,16 @@ function ResultPage() {
                     value={song.duration}
                     onChange={(e) => handleDurationChange(song.id, Math.max(1, parseInt(e.target.value) || 1))}
                     min="1"
-                    disabled={!isLocked}
                     style={{
                       width: '60px',
                       padding: '6px 10px',
                       borderRadius: '8px',
-                      border: `2px solid ${isLocked ? '#0f3460' : '#e94560'}`,
+                      border: '2px solid #0f3460',
                       background: '#1a1a2e',
                       color: '#e0e0e0',
                       fontSize: '14px',
                       textAlign: 'center',
                       outline: 'none',
-                      cursor: isLocked ? 'not-allowed' : 'text',
                     }}
                   />
                   <span>分钟</span>
@@ -254,8 +285,9 @@ function ResultPage() {
                   color: '#4a9eff',
                   fontWeight: 600,
                   fontSize: '14px',
+                  whiteSpace: 'nowrap',
                 }}>
-                  👍 {song.upvotes}
+                  👍 {song.upvotes} &nbsp; 👎 {song.downvotes}
                 </div>
               </div>
 
@@ -270,6 +302,31 @@ function ResultPage() {
           ))}
         </motion.div>
       )}
+
+      <style>{`
+        @keyframes pulseGlow {
+          0%, 100% {
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.3), 0 6px 20px rgba(233, 69, 96, 0.4);
+          }
+          50% {
+            box-shadow: 0 0 40px rgba(233, 69, 96, 0.6), 0 6px 30px rgba(233, 69, 96, 0.7);
+          }
+        }
+
+        .pulse-glow-btn {
+          animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        @media (max-width: 768px) {
+          .result-page-container {
+            padding: 0 8px;
+          }
+
+          .result-page-container > div:last-child > div > div > div {
+            flex-wrap: wrap;
+          }
+        }
+      `}</style>
     </div>
   );
 }

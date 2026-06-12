@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import axios from 'axios';
 
 export interface Proposal {
@@ -19,37 +19,43 @@ interface SongCardProps {
   onVoteChange?: (id: string, type: 'up' | 'down') => void;
 }
 
+const bounceTransition = {
+  duration: 0.2,
+  times: [0, 0.33, 0.66, 1],
+  ease: 'easeOut' as const,
+};
+
 function SongCard({ proposal, rank, onVoteChange }: SongCardProps) {
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(proposal.userVote || null);
   const [upvotes, setUpvotes] = useState(proposal.upvotes);
   const [downvotes, setDownvotes] = useState(proposal.downvotes);
-  const [isAnimating, setIsAnimating] = useState<'up' | 'down' | null>(null);
+  const [upAnimKey, setUpAnimKey] = useState(0);
+  const [downAnimKey, setDownAnimKey] = useState(0);
 
-  const handleVote = async (type: 'up' | 'down') => {
-    setIsAnimating(type);
-    setTimeout(() => setIsAnimating(null), 200);
-
+  const handleVote = useCallback(async (type: 'up' | 'down') => {
     const wasVoted = userVote === type;
 
     if (type === 'up') {
+      setUpAnimKey(k => k + 1);
       if (wasVoted) {
-        setUpvotes(prev => prev - 1);
+        setUpvotes(prev => Math.max(0, prev - 1));
         setUserVote(null);
       } else {
         setUpvotes(prev => prev + 1);
         if (userVote === 'down') {
-          setDownvotes(prev => prev - 1);
+          setDownvotes(prev => Math.max(0, prev - 1));
         }
         setUserVote('up');
       }
     } else {
+      setDownAnimKey(k => k + 1);
       if (wasVoted) {
-        setDownvotes(prev => prev - 1);
+        setDownvotes(prev => Math.max(0, prev - 1));
         setUserVote(null);
       } else {
         setDownvotes(prev => prev + 1);
         if (userVote === 'up') {
-          setUpvotes(prev => prev - 1);
+          setUpvotes(prev => Math.max(0, prev - 1));
         }
         setUserVote('down');
       }
@@ -69,7 +75,7 @@ function SongCard({ proposal, rank, onVoteChange }: SongCardProps) {
       setDownvotes(proposal.downvotes);
       setUserVote(proposal.userVote || null);
     }
-  };
+  }, [userVote, proposal.id, proposal.upvotes, proposal.downvotes, proposal.userVote, onVoteChange]);
 
   return (
     <motion.div
@@ -147,77 +153,53 @@ function SongCard({ proposal, rank, onVoteChange }: SongCardProps) {
         gap: '20px',
       }}>
         <motion.button
-          animate={isAnimating === 'up' ? { scale: [1, 0.8, 1.1, 1] } : {}}
-          transition={{ duration: 0.2 }}
+          key={`up-${upAnimKey}`}
+          animate={upAnimKey > 0 ? { scale: [1, 0.8, 1.1, 1] } : { scale: 1 }}
+          transition={bounceTransition}
           onClick={() => handleVote('up')}
           style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: '4px',
-            background: 'transparent',
+            background: userVote === 'up' ? 'rgba(74, 158, 255, 0.15)' : 'transparent',
             border: 'none',
             cursor: 'pointer',
-            color: userVote === 'up' ? '#4a9eff' : '#666',
             fontSize: '24px',
             padding: '8px 16px',
             borderRadius: '12px',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (userVote !== 'up') {
-              e.currentTarget.style.background = 'rgba(74, 158, 255, 0.1)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-          }}
-          onMouseDown={(e) => {
-            e.currentTarget.style.transform = 'scale(0.9)';
-          }}
-          onMouseUp={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
+            transition: 'background 0.2s ease',
           }}
         >
-          👍
-          <span style={{ fontSize: '14px', fontWeight: 600 }}>{upvotes}</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill={userVote === 'up' ? '#4a9eff' : '#666'} stroke={userVote === 'up' ? '#4a9eff' : '#666'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+          </svg>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: userVote === 'up' ? '#4a9eff' : '#666' }}>{upvotes}</span>
         </motion.button>
 
         <motion.button
-          animate={isAnimating === 'down' ? { scale: [1, 0.8, 1.1, 1] } : {}}
-          transition={{ duration: 0.2 }}
+          key={`down-${downAnimKey}`}
+          animate={downAnimKey > 0 ? { scale: [1, 0.8, 1.1, 1] } : { scale: 1 }}
+          transition={bounceTransition}
           onClick={() => handleVote('down')}
           style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: '4px',
-            background: 'transparent',
+            background: userVote === 'down' ? 'rgba(233, 69, 96, 0.15)' : 'transparent',
             border: 'none',
             cursor: 'pointer',
-            color: userVote === 'down' ? '#e94560' : '#666',
             fontSize: '24px',
             padding: '8px 16px',
             borderRadius: '12px',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (userVote !== 'down') {
-              e.currentTarget.style.background = 'rgba(233, 69, 96, 0.1)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-          }}
-          onMouseDown={(e) => {
-            e.currentTarget.style.transform = 'scale(0.9)';
-          }}
-          onMouseUp={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
+            transition: 'background 0.2s ease',
           }}
         >
-          👎
-          <span style={{ fontSize: '14px', fontWeight: 600 }}>{downvotes}</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill={userVote === 'down' ? '#e94560' : '#666'} stroke={userVote === 'down' ? '#e94560' : '#666'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+          </svg>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: userVote === 'down' ? '#e94560' : '#666' }}>{downvotes}</span>
         </motion.button>
       </div>
     </motion.div>
