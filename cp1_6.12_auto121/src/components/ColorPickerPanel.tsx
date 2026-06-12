@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import tinycolor from 'tinycolor2';
 import type { GradientConfig, GradientType } from '../types';
 import { PRESET_COLORS, GRADIENT_TYPES } from '../constants/colors';
@@ -9,6 +9,8 @@ interface ColorPickerPanelProps {
 }
 
 const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
+  const startColorInputRef = useRef<HTMLInputElement>(null);
+  const endColorInputRef = useRef<HTMLInputElement>(null);
   const progress = useMemo(() => (gradient.angle / 360) * 100, [gradient.angle]);
 
   const handleColorChange = (key: 'startColor' | 'endColor', color: string) => {
@@ -22,6 +24,14 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
 
   const handleAngleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ angle: Number(e.target.value) });
+  };
+
+  const openColorPicker = (key: 'startColor' | 'endColor') => {
+    if (key === 'startColor' && startColorInputRef.current) {
+      startColorInputRef.current.click();
+    } else if (key === 'endColor' && endColorInputRef.current) {
+      endColorInputRef.current.click();
+    }
   };
 
   const tickMarks = useMemo(() => {
@@ -40,16 +50,43 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
         <div style={styles.colorPickerGroup}>
           <label style={styles.label}>起点色</label>
           <div style={styles.colorPickerWrapper} className="color-input-wrapper">
-            <input
-              type="color"
-              value={gradient.startColor}
-              onChange={(e) => handleColorChange('startColor', e.target.value)}
+            <button
+              onClick={() => openColorPicker('startColor')}
               style={{
-                ...styles.colorInput,
+                ...styles.colorDisplayBtn,
                 background: gradient.startColor,
               }}
-            />
-            <span style={styles.colorValue}>{gradient.startColor}</span>
+              className="color-display-btn"
+            >
+              <input
+                ref={startColorInputRef}
+                type="color"
+                value={gradient.startColor}
+                onChange={(e) => handleColorChange('startColor', e.target.value)}
+                style={styles.hiddenColorInput}
+              />
+            </button>
+            <div style={styles.colorInfo}>
+              <span style={styles.colorValue}>{gradient.startColor}</span>
+              <button
+                onClick={() => openColorPicker('startColor')}
+                style={styles.pickerBtn}
+                className="picker-btn"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+                  <path d="M12 22v-4" />
+                  <path d="M12 6V2" />
+                  <path d="M4.93 4.93l2.83 2.83" />
+                  <path d="M16.24 16.24l2.83 2.83" />
+                  <path d="M2 12h4" />
+                  <path d="M18 12h4" />
+                  <path d="M4.93 19.07l2.83-2.83" />
+                  <path d="M16.24 7.76l2.83-2.83" />
+                </svg>
+                取色
+              </button>
+            </div>
           </div>
         </div>
 
@@ -62,26 +99,53 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
         <div style={styles.colorPickerGroup}>
           <label style={styles.label}>终点色</label>
           <div style={styles.colorPickerWrapper} className="color-input-wrapper">
-            <input
-              type="color"
-              value={gradient.endColor}
-              onChange={(e) => handleColorChange('endColor', e.target.value)}
+            <button
+              onClick={() => openColorPicker('endColor')}
               style={{
-                ...styles.colorInput,
+                ...styles.colorDisplayBtn,
                 background: gradient.endColor,
               }}
-            />
-            <span style={styles.colorValue}>{gradient.endColor}</span>
+              className="color-display-btn"
+            >
+              <input
+                ref={endColorInputRef}
+                type="color"
+                value={gradient.endColor}
+                onChange={(e) => handleColorChange('endColor', e.target.value)}
+                style={styles.hiddenColorInput}
+              />
+            </button>
+            <div style={styles.colorInfo}>
+              <span style={styles.colorValue}>{gradient.endColor}</span>
+              <button
+                onClick={() => openColorPicker('endColor')}
+                style={styles.pickerBtn}
+                className="picker-btn"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+                  <path d="M12 22v-4" />
+                  <path d="M12 6V2" />
+                  <path d="M4.93 4.93l2.83 2.83" />
+                  <path d="M16.24 16.24l2.83 2.83" />
+                  <path d="M2 12h4" />
+                  <path d="M18 12h4" />
+                  <path d="M4.93 19.07l2.83-2.83" />
+                  <path d="M16.24 7.76l2.83-2.83" />
+                </svg>
+                取色
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <div style={styles.section}>
-        <label style={styles.label}>预设颜色</label>
+        <label style={styles.label}>预设颜色（12色）</label>
         <div style={styles.presetColors} className="preset-colors">
-          {PRESET_COLORS.map((color) => (
+          {PRESET_COLORS.map((color, index) => (
             <button
-              key={color}
+              key={`${color}-${index}`}
               onClick={() => {
                 if (!gradient.startColor || gradient.startColor === gradient.endColor) {
                   handleColorChange('startColor', color);
@@ -127,20 +191,24 @@ const ColorPickerPanel = ({ gradient, onChange }: ColorPickerPanelProps) => {
             <span style={styles.angleValue}>{gradient.angle}°</span>
           </div>
           <div style={styles.sliderContainer}>
-            <input
-              type="range"
-              min="0"
-              max="360"
-              step="5"
-              value={gradient.angle}
-              onChange={handleAngleChange}
-              style={{
-                ...styles.slider,
-                // @ts-ignore
-                '--progress': `${progress}%`,
-              } as React.CSSProperties}
-            />
-            <div style={styles.tickMarks}>
+            <div style={styles.sliderTrack}>
+              <div
+                style={{
+                  ...styles.sliderFill,
+                  width: `${progress}%`,
+                }}
+              />
+              <input
+                type="range"
+                min="0"
+                max="360"
+                step="5"
+                value={gradient.angle}
+                onChange={handleAngleChange}
+                style={styles.slider}
+              />
+            </div>
+            <div style={styles.tickMarksContainer}>
               {tickMarks.map((tick) => (
                 <div key={tick} style={styles.tickMark}>
                   <div style={styles.tickLine} />
