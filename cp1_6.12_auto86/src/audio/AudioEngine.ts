@@ -11,13 +11,18 @@ export interface AudioData {
 
 type AudioEngineCallback = (data: AudioData) => void;
 
+const FREQ_MIN = 65.41;
+const FREQ_MAX = 1046.50;
+const BPM_MIN = 60;
+const BPM_MAX = 180;
+const FFT_SIZE = 2048;
+
 export class AudioEngine {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private mediaStream: MediaStream | null = null;
   private sourceNode: AudioBufferSourceNode | MediaStreamAudioSourceNode | null = null;
   private audioBuffer: AudioBuffer | null = null;
-  private fftSize = 2048;
   private spectrumData: Float32Array = new Float32Array(0);
   private waveformData: Float32Array = new Float32Array(0);
   private callback: AudioEngineCallback | null = null;
@@ -29,20 +34,22 @@ export class AudioEngine {
   private isBeat = false;
   private beatTimestamp = 0;
   private spectrumEnergy = 0;
-  private beatThreshold = 1.2;
-  private beatDecay = 0.98;
-  private beatAvgEnergy = 0;
-  private lastBeatTime = 0;
-  private beatIntervals: number[] = [];
   private sensitivity = 50;
   private animFrameId = 0;
   private gainNode: GainNode | null = null;
-  private startTime = 0;
   private pauseTime = 0;
 
+  private energyHistory: number[] = [];
+  private readonly ENERGY_HISTORY_SIZE = 43;
+  private beatHistory: number[] = [];
+  private readonly BEAT_HISTORY_MAX = 20;
+  private lastBeatTime = 0;
+  private beatDifferential: number[] = [];
+  private smoothedBPM = 0;
+
   constructor() {
-    this.spectrumData = new Float32Array(this.fftSize / 2);
-    this.waveformData = new Float32Array(this.fftSize);
+    this.spectrumData = new Float32Array(FFT_SIZE / 2);
+    this.waveformData = new Float32Array(FFT_SIZE);
   }
 
   setCallback(cb: AudioEngineCallback): void {
@@ -51,7 +58,26 @@ export class AudioEngine {
 
   setSensitivity(val: number): void {
     this.sensitivity = val;
-    this.beatThreshold = 1.0 + (val / 100) * 0.8;
+  }
+
+  getBPM(): number {
+    return this.bpm;
+  }
+
+  getVolume(): number {
+    return this.volume;
+  }
+
+  getWaveformData(): Float32Array {
+    return this.waveformData;
+  }
+
+  getSpectrumData(): Float32Array {
+    return this.spectrumData;
+  }
+
+  getAnalyser(): AnalyserNode | null {
+    return this.analyser;
   }
 
   async initContext(): Promise<void> {
@@ -66,6 +92,7 @@ export class AudioEngine {
   async startMicrophone(): Promise<void> {
     await this.initContext();
     this.stop();
+    this.resetAnalysisState();
 
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -77,8 +104,8 @@ export class AudioEngine {
       });
 
       this.analyser = this.audioContext!.createAnalyser();
-      this.analyser.fftSize = this.fftSize;
-      this.analyser.smoothingTimeConstant = 0.8;
+      this.analyser.fftSize = FFT_SIZE;
+      this.analyser.smoothingTimeConstant = 0.75;
       this.analyser.minDecibels = -90;
       this.analyser.maxDecibels = -10;
 
@@ -104,11 +131,17 @@ export class AudioEngine {
   async loadFile(file: File): Promise<void> {
     await this.initContext();
     this.stop();
+    this.resetAnalysisState();
+
+    if (!file.type.includes('audio') && !file.name.toLowerCase().endsWith('.mp3')) {
+      throw new Error('Please upload an audio file (MP3 format)');
+    }
 
     const arrayBuffer = await file.arrayBuffer();
     this.audioBuffer = await this.audioContext!.decodeAudioData(arrayBuffer);
 
     if (this.audioBuffer.duration > 30) {
+      this.audioBuffer = null;
       throw new Error('Audio file must be 30 seconds or less');
     }
   }
@@ -117,13 +150,18 @@ export class AudioEngine {
     if (!this.audioContext || !this.audioBuffer) return;
 
     if (this.sourceNode) {
-      (this.sourceNode as AudioBufferSourceNode).stop();
+      try {
+        (this.sourceNode as AudioBufferSourceNode).stop();
+      } catch {
+        // ignore
+      }
       (this.sourceNode as AudioBufferSourceNode).disconnect();
+      this.sourceNode = null;
     }
 
     this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = this.fftSize;
-    this.analyser.smoothingTimeConstant = 0.8;
+    this.analyser.fftSize = FFT_SIZE;
+    this.analyser.smoothingTimeConstant = 0.75;
     this.analyser.minDecibels = -90;
     this.analyser.maxDecibels = -10;
 
@@ -137,7 +175,6 @@ export class AudioEngine {
     this.analyser.connect(this.audioContext.destination);
 
     bufferSource.start(0, this.pauseTime);
-    this.startTime = this.audioContext.currentTime - this.pauseTime;
 
     bufferSource.onended = () => {
       this.isPlaying = false;
@@ -161,6 +198,10 @@ export class AudioEngine {
         if (this.sourceNode instanceof AudioBufferSourceNode) {
           this.sourceNode.stop();
         }
+      } catch {
+        // ignore
+      }
+      try {
         this.sourceNode.disconnect();
       } catch {
         // ignore
@@ -174,18 +215,29 @@ export class AudioEngine {
     }
 
     if (this.gainNode) {
-      this.gainNode.disconnect();
+      try {
+        this.gainNode.disconnect();
+      } catch {
+        // ignore
+      }
       this.gainNode = null;
     }
 
     cancelAnimationFrame(this.animFrameId);
+    this.resetAnalysisState();
+  }
+
+  private resetAnalysisState(): void {
     this.bpm = 0;
+    this.smoothedBPM = 0;
     this.pitch = 0;
     this.volume = 0;
     this.isBeat = false;
     this.spectrumEnergy = 0;
-    this.beatAvgEnergy = 0;
-    this.beatIntervals = [];
+    this.energyHistory = [];
+    this.beatHistory = [];
+    this.beatDifferential = [];
+    this.lastBeatTime = 0;
     this.pauseTime = 0;
   }
 
@@ -212,8 +264,8 @@ export class AudioEngine {
     this.analyser.getFloatTimeDomainData(this.waveformData);
 
     this.volume = this.computeVolume();
-    this.isBeat = this.detectBeat();
     this.spectrumEnergy = this.computeSpectrumEnergy();
+    this.isBeat = this.detectBeat();
     this.pitch = this.detectPitch();
 
     if (this.isBeat) {
@@ -240,7 +292,7 @@ export class AudioEngine {
       sum += this.waveformData[i] * this.waveformData[i];
     }
     const rms = Math.sqrt(sum / this.waveformData.length);
-    return Math.min(1, rms * 5);
+    return Math.min(1, rms * 4);
   }
 
   private computeSpectrumEnergy(): number {
@@ -252,80 +304,168 @@ export class AudioEngine {
     return sum / this.spectrumData.length;
   }
 
-  private detectBeat(): boolean {
-    const lowFreqEnd = Math.floor((300 / (this.audioContext?.sampleRate || 44100)) * this.spectrumData.length);
+  private computeLowBandEnergy(): number {
+    const sampleRate = this.audioContext?.sampleRate || 44100;
+    const lowFreqEnd = Math.floor((200 / sampleRate) * this.spectrumData.length);
+    const highFreqStart = Math.floor((20 / sampleRate) * this.spectrumData.length);
     let lowEnergy = 0;
-    for (let i = 0; i < lowFreqEnd; i++) {
+    let count = 0;
+    for (let i = highFreqStart; i < lowFreqEnd; i++) {
       const val = Math.pow(10, this.spectrumData[i] / 10);
       lowEnergy += val;
+      count++;
     }
-    lowEnergy /= Math.max(1, lowFreqEnd);
+    return lowEnergy / Math.max(1, count);
+  }
 
-    this.beatAvgEnergy = this.beatAvgEnergy * this.beatDecay + lowEnergy * (1 - this.beatDecay);
+  private detectBeat(): boolean {
+    const lowEnergy = this.computeLowBandEnergy();
+
+    this.energyHistory.push(lowEnergy);
+    if (this.energyHistory.length > this.ENERGY_HISTORY_SIZE) {
+      this.energyHistory.shift();
+    }
+
+    if (this.energyHistory.length < 10) {
+      return false;
+    }
+
+    let sum = 0;
+    for (const e of this.energyHistory) {
+      sum += e;
+    }
+    const avgEnergy = sum / this.energyHistory.length;
+
+    let varianceSum = 0;
+    for (const e of this.energyHistory) {
+      varianceSum += (e - avgEnergy) * (e - avgEnergy);
+    }
+    const variance = varianceSum / this.energyHistory.length;
+    const stdDev = Math.sqrt(variance);
+
+    const sensitivityFactor = 0.4 + (this.sensitivity / 100) * 1.0;
+    const dynamicThreshold = avgEnergy + stdDev * sensitivityFactor;
 
     const now = performance.now();
-    const minInterval = (60 / 180) * 1000;
+    const minInterval = (60 / BPM_MAX) * 1000;
+    const maxInterval = (60 / BPM_MIN) * 1000;
 
     if (
-      lowEnergy > this.beatAvgEnergy * this.beatThreshold &&
-      now - this.lastBeatTime > minInterval
+      lowEnergy > dynamicThreshold &&
+      now - this.lastBeatTime > minInterval &&
+      lowEnergy > avgEnergy * 1.1
     ) {
-      const interval = now - this.lastBeatTime;
-      if (this.lastBeatTime > 0 && interval < 2000) {
-        this.beatIntervals.push(interval);
-        if (this.beatIntervals.length > 16) {
-          this.beatIntervals.shift();
+      if (this.lastBeatTime > 0) {
+        const interval = now - this.lastBeatTime;
+        if (interval <= maxInterval && interval >= minInterval) {
+          this.beatDifferential.push(interval);
+          if (this.beatDifferential.length > this.BEAT_HISTORY_MAX) {
+            this.beatDifferential.shift();
+          }
+
+          const medianInterval = this.computeMedian(this.beatDifferential);
+          const instantBPM = Math.round(60000 / medianInterval);
+          const clampedBPM = Math.max(BPM_MIN, Math.min(BPM_MAX, instantBPM));
+
+          if (this.smoothedBPM === 0) {
+            this.smoothedBPM = clampedBPM;
+          } else {
+            this.smoothedBPM = this.smoothedBPM * 0.7 + clampedBPM * 0.3;
+          }
+          this.bpm = Math.round(this.smoothedBPM);
         }
-        this.bpm = Math.round(60000 / this.beatIntervals.reduce((a, b) => a + b, 0) / this.beatIntervals.length);
-        if (this.bpm < 60) this.bpm = 60;
-        if (this.bpm > 180) this.bpm = 180;
       }
       this.lastBeatTime = now;
+      this.beatHistory.push(now);
+      if (this.beatHistory.length > this.BEAT_HISTORY_MAX * 3) {
+        this.beatHistory.shift();
+      }
       return true;
     }
 
     return false;
   }
 
-  private detectPitch(): number {
-    const bufLen = this.waveformData.length;
-    let maxCorr = 0;
-    let bestOffset = -1;
+  private computeMedian(arr: number[]): number {
+    if (arr.length === 0) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+    return sorted[mid];
+  }
 
+  private detectPitch(): number {
     const rms = this.volume;
     if (rms < 0.01) return 0;
 
-    const minPeriod = Math.floor((this.audioContext?.sampleRate || 44100) / 1047);
-    const maxPeriod = Math.floor((this.audioContext?.sampleRate || 44100) / 65);
+    const sampleRate = this.audioContext?.sampleRate || 44100;
+    const bufLen = this.waveformData.length;
+
+    const minPeriod = Math.floor(sampleRate / FREQ_MAX);
+    const maxPeriod = Math.floor(sampleRate / FREQ_MIN);
+
+    let bestCorr = -Infinity;
+    let secondCorr = -Infinity;
+    let bestOffset = -1;
 
     for (let offset = minPeriod; offset <= maxPeriod; offset++) {
       let corr = 0;
+      let normA = 0;
+      let normB = 0;
       for (let i = 0; i < bufLen - offset; i++) {
-        corr += this.waveformData[i] * this.waveformData[i + offset];
+        const a = this.waveformData[i];
+        const b = this.waveformData[i + offset];
+        corr += a * b;
+        normA += a * a;
+        normB += b * b;
       }
-      if (corr > maxCorr) {
-        maxCorr = corr;
+      const norm = Math.sqrt(normA * normB);
+      if (norm > 0) {
+        corr /= norm;
+      }
+      if (corr > bestCorr) {
+        secondCorr = bestCorr;
+        bestCorr = corr;
         bestOffset = offset;
+      } else if (corr > secondCorr) {
+        secondCorr = corr;
       }
     }
 
-    if (bestOffset === -1) return 0;
+    if (bestOffset === -1 || bestCorr < 0.2) return 0;
 
-    const freq = (this.audioContext?.sampleRate || 44100) / bestOffset;
-    if (freq < 65 || freq > 1047) return 0;
+    let refined = bestOffset;
+    if (bestOffset > minPeriod && bestOffset < maxPeriod) {
+      const left = this.computeNormalizedCorrelation(bestOffset - 1);
+      const center = bestCorr;
+      const right = this.computeNormalizedCorrelation(bestOffset + 1);
+      const denom = 2 * (2 * center - left - right);
+      if (Math.abs(denom) > 1e-6) {
+        refined = bestOffset + (left - right) / denom;
+      }
+    }
+
+    const freq = sampleRate / refined;
+    if (freq < FREQ_MIN || freq > FREQ_MAX) return 0;
 
     return freq;
   }
 
-  getWaveformData(): Float32Array {
-    return this.waveformData;
-  }
-
-  getSpectrumData(): Float32Array {
-    return this.spectrumData;
-  }
-
-  getAnalyser(): AnalyserNode | null {
-    return this.analyser;
+  private computeNormalizedCorrelation(offset: number): number {
+    const bufLen = this.waveformData.length;
+    let corr = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < bufLen - offset; i++) {
+      const a = this.waveformData[i];
+      const b = this.waveformData[i + offset];
+      corr += a * b;
+      normA += a * a;
+      normB += b * b;
+    }
+    const norm = Math.sqrt(normA * normB);
+    return norm > 0 ? corr / norm : 0;
   }
 }

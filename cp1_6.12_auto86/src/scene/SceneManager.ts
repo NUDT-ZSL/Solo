@@ -5,7 +5,6 @@ import type { AudioData } from '../audio/AudioEngine';
 interface GeometryObject {
   mesh: THREE.Mesh;
   baseScale: number;
-  targetScale: number;
   currentPulse: number;
   rotSpeed: THREE.Vector3;
   baseY: number;
@@ -21,8 +20,6 @@ export class SceneManager {
   private particleSystem: THREE.Points | null = null;
   private particleMaterial: THREE.ShaderMaterial | null = null;
   private particleBasePositions: Float32Array = new Float32Array(0);
-  private raycaster = new THREE.Raycaster();
-  private mouse = new THREE.Vector2();
   private isDragging = false;
   private previousMouse = { x: 0, y: 0 };
   private cameraDistance = 10;
@@ -36,6 +33,10 @@ export class SceneManager {
   private directionalLight: THREE.DirectionalLight;
   private pointLight1: THREE.PointLight;
   private pointLight2: THREE.PointLight;
+
+  private readonly PULSE_MIN = 0.8;
+  private readonly PULSE_MAX = 1.3;
+  private readonly PULSE_DURATION = 0.2;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -84,6 +85,24 @@ export class SceneManager {
     this.updateCameraPosition();
   }
 
+  private lerpColorHSL(t: number, saturation: number, lightness: number): THREE.Color {
+    const color = new THREE.Color();
+    if (t < 0.5) {
+      const localT = t / 0.5;
+      const h1 = 0.75;
+      const h2 = 0.5;
+      const h = h1 + (h2 - h1) * localT;
+      color.setHSL(h, saturation, lightness);
+    } else {
+      const localT = (t - 0.5) / 0.5;
+      const h1 = 0.5;
+      const h2 = 0.92;
+      const h = h1 + (h2 - h1) * localT;
+      color.setHSL(h, saturation, lightness);
+    }
+    return color;
+  }
+
   private createGeometryGroup(): void {
     const geometries = [
       () => new THREE.BoxGeometry(0.6, 0.6, 0.6),
@@ -95,50 +114,49 @@ export class SceneManager {
       const geoFn = geometries[i % geometries.length];
       const geometry = geoFn();
 
-      const hue = (i / this.geometryCount) * 0.6 + 0.5;
-      const color = new THREE.Color().setHSL(hue % 1, this.saturation / 100, 0.5);
+      const t = i / Math.max(1, this.geometryCount - 1);
+      const color = this.lerpColorHSL(t, this.saturation / 100, 0.55);
 
       const material = new THREE.MeshPhongMaterial({
         color,
-        emissive: color.clone().multiplyScalar(0.15),
+        emissive: color.clone().multiplyScalar(0.2),
         shininess: 80,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.88,
       });
 
       const mesh = new THREE.Mesh(geometry, material);
 
-      const angle = (i / this.geometryCount) * Math.PI * 2;
-      const radius = 2 + Math.random() * 5;
+      const angle = (i / this.geometryCount) * Math.PI * 2 + Math.random() * 0.3;
+      const radius = 2.5 + Math.random() * 4.5;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      const y = (Math.random() - 0.5) * 6;
+      const y = (Math.random() - 0.5) * 7;
 
       mesh.position.set(x, y, z);
       mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
 
-      const baseScale = 0.5 + Math.random() * 0.8;
-      mesh.scale.setScalar(baseScale);
+      const baseScale = 0.6 + Math.random() * 0.8;
+      mesh.scale.setScalar(baseScale * this.PULSE_MIN);
 
       this.scene.add(mesh);
 
       this.geometryObjects.push({
         mesh,
         baseScale,
-        targetScale: baseScale,
-        currentPulse: 1,
+        currentPulse: this.PULSE_MIN,
         rotSpeed: new THREE.Vector3(
-          (Math.random() - 0.5) * 0.02,
-          (Math.random() - 0.5) * 0.02,
-          (Math.random() - 0.5) * 0.01
+          (Math.random() - 0.5) * 0.015,
+          (Math.random() - 0.5) * 0.015,
+          (Math.random() - 0.5) * 0.008
         ),
         baseY: y,
-        pitchBand: i / this.geometryCount,
+        pitchBand: i / Math.max(1, this.geometryCount - 1),
       });
     }
   }
 
-  private createParticleSystem(count: number): void {
+  private createParticleSystem(initialCount: number): void {
     if (this.particleSystem) {
       this.scene.remove(this.particleSystem);
       this.particleSystem.geometry.dispose();
@@ -152,9 +170,9 @@ export class SceneManager {
     this.particleBasePositions = new Float32Array(maxCount * 3);
 
     for (let i = 0; i < maxCount; i++) {
-      const x = (Math.random() - 0.5) * 20;
-      const y = (Math.random() - 0.5) * 12;
-      const z = (Math.random() - 0.5) * 20;
+      const x = (Math.random() - 0.5) * 22;
+      const y = (Math.random() - 0.5) * 14;
+      const z = (Math.random() - 0.5) * 22;
 
       positions[i * 3] = x;
       positions[i * 3 + 1] = y;
@@ -165,26 +183,19 @@ export class SceneManager {
       this.particleBasePositions[i * 3 + 2] = z;
 
       const t = i / maxCount;
-      const color = new THREE.Color();
-      if (t < 0.33) {
-        color.setHSL(0.75, 0.8, 0.5);
-      } else if (t < 0.66) {
-        color.setHSL(0.5, 0.9, 0.6);
-      } else {
-        color.setHSL(0.9, 0.8, 0.6);
-      }
+      const color = this.lerpColorHSL(t, this.saturation / 100, 0.65);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
 
-      sizes[i] = 2 + Math.random() * 4;
+      sizes[i] = 3;
     }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-    geometry.setDrawRange(0, count);
+    geometry.setDrawRange(0, Math.min(initialCount, maxCount));
 
     this.particleMaterial = new THREE.ShaderMaterial({
       uniforms: {
@@ -201,12 +212,12 @@ export class SceneManager {
         void main() {
           vColor = aColor;
           vec3 pos = position;
-          pos.x += sin(uTime * 0.5 + position.y * 0.3) * 0.3;
-          pos.y += cos(uTime * 0.4 + position.x * 0.2) * 0.2;
-          pos.z += sin(uTime * 0.3 + position.z * 0.25) * 0.25;
+          pos.x += sin(uTime * 0.5 + position.y * 0.3) * 0.4;
+          pos.y += cos(uTime * 0.4 + position.x * 0.2) * 0.3;
+          pos.z += sin(uTime * 0.3 + position.z * 0.25) * 0.35;
           vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
           gl_Position = projectionMatrix * mvPosition;
-          gl_PointSize = aSize * uPixelRatio * (8.0 / -mvPosition.z);
+          gl_PointSize = aSize * uPixelRatio * (10.0 / -mvPosition.z);
           vAlpha = smoothstep(20.0, 2.0, -mvPosition.z);
         }
       `,
@@ -216,7 +227,7 @@ export class SceneManager {
         void main() {
           float d = length(gl_PointCoord - vec2(0.5));
           if (d > 0.5) discard;
-          float alpha = smoothstep(0.5, 0.1, d) * vAlpha * 0.7;
+          float alpha = smoothstep(0.5, 0.05, d) * vAlpha * 0.8;
           gl_FragColor = vec4(vColor, alpha);
         }
       `,
@@ -319,32 +330,36 @@ export class SceneManager {
 
   private triggerBeatPulse(): void {
     for (const obj of this.geometryObjects) {
-      const targetScale = obj.baseScale * 1.3;
-      obj.currentPulse = 1.3;
+      gsap.killTweensOf(obj);
+      obj.currentPulse = this.PULSE_MAX;
+      obj.mesh.scale.setScalar(obj.baseScale * this.PULSE_MAX);
 
       gsap.to(obj, {
-        currentPulse: 1,
-        duration: 0.2,
+        currentPulse: this.PULSE_MIN,
+        duration: this.PULSE_DURATION,
         ease: 'power2.out',
         onUpdate: () => {
-          const s = obj.baseScale * obj.currentPulse;
-          obj.mesh.scale.setScalar(s);
+          obj.mesh.scale.setScalar(obj.baseScale * obj.currentPulse);
         },
       });
     }
   }
 
   private updatePitchPositions(pitch: number): void {
-    if (pitch <= 0) return;
+    const minFreq = 65.41;
+    const maxFreq = 1046.50;
 
-    const minFreq = 65;
-    const maxFreq = 1047;
-    const t = Math.log2(pitch / minFreq) / Math.log2(maxFreq / minFreq);
-    const normalizedT = Math.max(0, Math.min(1, t));
+    let normalizedT = 0.5;
+    if (pitch > 0) {
+      const t = Math.log2(pitch / minFreq) / Math.log2(maxFreq / minFreq);
+      normalizedT = Math.max(0, Math.min(1, t));
+    }
 
     for (const obj of this.geometryObjects) {
-      const targetY = (normalizedT - 0.5) * 8;
-      obj.mesh.position.y += (targetY * obj.pitchBand - obj.mesh.position.y) * 0.05;
+      const bandCenter = obj.pitchBand;
+      const bandInfluence = Math.max(0, 1 - Math.abs(normalizedT - bandCenter) * 2);
+      const targetY = obj.baseY + (normalizedT - 0.5) * 6 * bandInfluence;
+      obj.mesh.position.y += (targetY - obj.mesh.position.y) * 0.08;
     }
   }
 
@@ -352,50 +367,41 @@ export class SceneManager {
     if (!this.particleSystem || !this.particleMaterial) return;
 
     const energy = data.spectrumEnergy;
-    const normalizedEnergy = Math.min(1, energy * 50);
+    const normalizedEnergy = Math.min(1, energy * 80);
     const particleCount = Math.floor(100 + normalizedEnergy * 400);
 
     this.particleSystem.geometry.setDrawRange(0, particleCount);
 
     const positions = this.particleSystem.geometry.attributes.position.array as Float32Array;
     const colors = this.particleSystem.geometry.attributes.aColor.array as Float32Array;
+    const sizes = this.particleSystem.geometry.attributes.aSize.array as Float32Array;
 
-    for (let i = 0; i < Math.min(particleCount, 500); i++) {
+    const particleSize = 2 + normalizedEnergy * 4;
+
+    for (let i = 0; i < particleCount; i++) {
       const bx = this.particleBasePositions[i * 3];
       const by = this.particleBasePositions[i * 3 + 1];
       const bz = this.particleBasePositions[i * 3 + 2];
 
-      const expandFactor = 1 + normalizedEnergy * 0.5;
+      const expandFactor = 1 + normalizedEnergy * 0.6;
       positions[i * 3] = bx * expandFactor;
       positions[i * 3 + 1] = by * expandFactor;
       positions[i * 3 + 2] = bz * expandFactor;
 
       const t = i / 500;
-      let hue: number;
-      if (t < 0.33) {
-        hue = 0.75;
-      } else if (t < 0.66) {
-        hue = 0.5;
-      } else {
-        hue = 0.9;
-      }
       const sat = this.saturation / 100;
-      const color = new THREE.Color().setHSL(hue, sat, 0.5 + normalizedEnergy * 0.3);
+      const light = 0.55 + normalizedEnergy * 0.25;
+      const color = this.lerpColorHSL(t, sat, light);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
+
+      sizes[i] = particleSize;
     }
 
     this.particleSystem.geometry.attributes.position.needsUpdate = true;
     this.particleSystem.geometry.attributes.aColor.needsUpdate = true;
-
-    const sizes = this.particleSystem.geometry.attributes.aSize.array as Float32Array;
-    for (let i = 0; i < 500; i++) {
-      sizes[i] = 2 + normalizedEnergy * 4;
-    }
     this.particleSystem.geometry.attributes.aSize.needsUpdate = true;
-
-    this.particleMaterial.uniforms.uTime.value = this.clock.getElapsedTime();
   }
 
   private updateLighting(data: AudioData): void {
@@ -403,35 +409,51 @@ export class SceneManager {
     this.pointLight1.intensity = 0.5 + vol * 3;
     this.pointLight2.intensity = 0.5 + vol * 2;
     this.ambientLight.intensity = 0.4 + vol * 0.4;
+
+    this.pointLight1.color.setHSL(0.5 + vol * 0.1, 0.9, 0.6);
+    this.pointLight2.color.setHSL(0.9 - vol * 0.05, 0.85, 0.6);
   }
 
   setGeometryDensity(count: number): void {
-    if (count === this.geometryCount) return;
+    const clamped = Math.max(20, Math.min(50, Math.round(count)));
+    if (clamped === this.geometryCount) return;
 
     for (const obj of this.geometryObjects) {
       this.scene.remove(obj.mesh);
       obj.mesh.geometry.dispose();
       (obj.mesh.material as THREE.Material).dispose();
+      gsap.killTweensOf(obj);
     }
     this.geometryObjects = [];
 
-    this.geometryCount = count;
+    this.geometryCount = clamped;
     this.createGeometryGroup();
   }
 
   setSaturation(val: number): void {
-    this.saturation = val;
+    this.saturation = Math.max(0, Math.min(100, val));
     for (let i = 0; i < this.geometryObjects.length; i++) {
       const obj = this.geometryObjects[i];
-      const hue = (i / this.geometryObjects.length) * 0.6 + 0.5;
-      const color = new THREE.Color().setHSL(hue % 1, val / 100, 0.5);
+      const t = i / Math.max(1, this.geometryObjects.length - 1);
+      const color = this.lerpColorHSL(t, this.saturation / 100, 0.55);
       (obj.mesh.material as THREE.MeshPhongMaterial).color.copy(color);
-      (obj.mesh.material as THREE.MeshPhongMaterial).emissive.copy(color).multiplyScalar(0.15);
+      (obj.mesh.material as THREE.MeshPhongMaterial).emissive.copy(color).multiplyScalar(0.2);
+    }
+
+    if (this.particleSystem) {
+      const colors = this.particleSystem.geometry.attributes.aColor.array as Float32Array;
+      for (let i = 0; i < 500; i++) {
+        const t = i / 500;
+        const color = this.lerpColorHSL(t, this.saturation / 100, 0.65);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+      }
+      this.particleSystem.geometry.attributes.aColor.needsUpdate = true;
     }
   }
 
   update(): void {
-    const delta = this.clock.getDelta();
     const elapsed = this.clock.getElapsedTime();
 
     for (const obj of this.geometryObjects) {
@@ -440,8 +462,10 @@ export class SceneManager {
       obj.mesh.rotation.z += obj.rotSpeed.z;
 
       if (this.currentAudioData) {
-        obj.rotSpeed.x += (this.currentAudioData.volume * 0.05 - obj.rotSpeed.x) * 0.1;
-        obj.rotSpeed.y += (this.currentAudioData.volume * 0.05 - obj.rotSpeed.y) * 0.1;
+        const targetRotX = (Math.random() - 0.5) * 0.025 + this.currentAudioData.volume * 0.03;
+        const targetRotY = (Math.random() - 0.5) * 0.025 + this.currentAudioData.volume * 0.03;
+        obj.rotSpeed.x += (targetRotX - obj.rotSpeed.x) * 0.05;
+        obj.rotSpeed.y += (targetRotY - obj.rotSpeed.y) * 0.05;
       }
     }
 
@@ -466,12 +490,15 @@ export class SceneManager {
     for (const obj of this.geometryObjects) {
       obj.mesh.geometry.dispose();
       (obj.mesh.material as THREE.Material).dispose();
+      gsap.killTweensOf(obj);
     }
     if (this.particleSystem) {
       this.particleSystem.geometry.dispose();
       if (this.particleMaterial) this.particleMaterial.dispose();
     }
     this.renderer.dispose();
-    this.container.removeChild(this.renderer.domElement);
+    if (this.renderer.domElement.parentElement === this.container) {
+      this.container.removeChild(this.renderer.domElement);
+    }
   }
 }
