@@ -4,7 +4,7 @@ import {
   CrystalClusterData,
   createCrystalCluster,
   updateCrystalHeight,
-  updateCrystalColor,
+  getMainHeight,
 } from './crystal';
 
 export interface HabitData {
@@ -138,11 +138,13 @@ export class GardenManager {
     cluster.id = habit.id;
     cluster.group.userData.clusterId = habit.id;
 
-    const pos = habit.position.x !== 0 || habit.position.z !== 0
-      ? habit.position
-      : this.getNextPosition();
+    const pos =
+      habit.position.x !== 0 || habit.position.z !== 0
+        ? habit.position
+        : this.getNextPosition();
 
-    cluster.group.position.set(pos.x, 0, pos.z);
+    cluster.group.position.x = pos.x;
+    cluster.group.position.z = pos.z;
     this.scene.add(cluster.group);
 
     this.clusters.set(habit.id, cluster);
@@ -154,12 +156,10 @@ export class GardenManager {
   }
 
   private animateEmergence(cluster: CrystalClusterData): void {
-    const targets: THREE.Mesh[] = [cluster.mainBody, cluster.mainTip, ...cluster.smallCrystals];
+    const targets: THREE.Mesh[] = [cluster.mainCrystal, ...cluster.smallCrystals];
 
-    gsap.to(cluster.group.scale, {
-      x: 1,
-      y: 1,
-      z: 1,
+    gsap.to(cluster.group.position, {
+      y: 0,
       duration: 1.2,
       ease: 'power2.out',
     });
@@ -170,7 +170,7 @@ export class GardenManager {
         opacity: 0.88,
         duration: 1.2,
         ease: 'power2.out',
-        delay: index * 0.05,
+        delay: index * 0.06,
       });
     });
   }
@@ -179,12 +179,23 @@ export class GardenManager {
     const cluster = this.clusters.get(id);
     if (!cluster) return;
 
+    const targets: THREE.Mesh[] = [cluster.mainCrystal, ...cluster.smallCrystals];
+    targets.forEach((mesh) => {
+      const mat = mesh.material as THREE.MeshPhysicalMaterial;
+      gsap.to(mat, {
+        opacity: 0,
+        duration: 0.5,
+        ease: 'power2.in',
+      });
+    });
+
     gsap.to(cluster.group.scale, {
       x: 0,
       y: 0,
       z: 0,
       duration: 0.6,
       ease: 'power2.in',
+      delay: 0.2,
       onComplete: () => {
         this.scene.remove(cluster.group);
         cluster.group.traverse((child) => {
@@ -224,14 +235,11 @@ export class GardenManager {
     const band = cluster.lightBand;
     band.visible = true;
 
-    const bodyHeight = cluster.mainBody.position.y * 2;
-    const startY = 0;
-    const endY = bodyHeight + (cluster.mainTip.position.y - bodyHeight / 2);
-
-    band.position.y = startY;
+    const endY = getMainHeight(cluster);
+    band.position.y = 0;
 
     const bandMat = band.material as THREE.MeshBasicMaterial;
-    bandMat.opacity = 0.8;
+    bandMat.opacity = 0.85;
 
     gsap.to(band.position, {
       y: endY,
@@ -251,15 +259,16 @@ export class GardenManager {
   }
 
   private animateFlash(cluster: CrystalClusterData): void {
-    const meshes: THREE.Mesh[] = [cluster.mainBody, cluster.mainTip, ...cluster.smallCrystals];
+    const meshes: THREE.Mesh[] = [cluster.mainCrystal, ...cluster.smallCrystals];
 
-    meshes.forEach((mesh) => {
+    meshes.forEach((mesh, idx) => {
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
       const originalOpacity = mat.opacity;
 
       gsap.to(mat, {
         opacity: 0.7,
         duration: 0.1,
+        delay: 0.55 + idx * 0.02,
         onComplete: () => {
           gsap.to(mat, {
             opacity: originalOpacity,

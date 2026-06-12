@@ -5,17 +5,15 @@ export interface CrystalClusterData {
   streak: number;
   colorTheme: string;
   group: THREE.Group;
-  mainBody: THREE.Mesh;
-  mainTip: THREE.Mesh;
+  mainCrystal: THREE.Mesh;
   smallCrystals: THREE.Mesh[];
   lightBand: THREE.Mesh | null;
 }
 
-const MAIN_RADIUS = 0.15;
+const MAIN_BOTTOM_RADIUS = 0.15;
 const MAIN_INITIAL_HEIGHT = 0.5;
 const MAX_HEIGHT = 3.5;
 const GROWTH_PER_DAY = 0.08;
-const TIP_HEIGHT_RATIO = 0.4;
 
 function streakToHeight(streak: number): number {
   return Math.min(MAIN_INITIAL_HEIGHT + streak * GROWTH_PER_DAY, MAX_HEIGHT);
@@ -23,26 +21,27 @@ function streakToHeight(streak: number): number {
 
 function streakToColor(streak: number): THREE.Color {
   if (streak <= 0) {
-    return new THREE.Color().setHSL(0, 0, 0.45);
+    return new THREE.Color().setHSL(0, 0, 0.5);
   }
 
   if (streak <= 7) {
     const t = streak / 7;
-    const h = THREE.MathUtils.lerp(0, 0.75, t);
-    const s = THREE.MathUtils.lerp(0, 0.75, t);
-    const l = THREE.MathUtils.lerp(0.45, 0.55, t);
+    const h = 270 / 360;
+    const s = THREE.MathUtils.lerp(0, 1, t);
+    const l = THREE.MathUtils.lerp(0.5, 0.5, t);
     return new THREE.Color().setHSL(h, s, l);
   }
 
   if (streak <= 30) {
     const t = (streak - 7) / 23;
-    const h = THREE.MathUtils.lerp(0.75, 0.12, t);
-    const s = THREE.MathUtils.lerp(0.75, 0.9, t);
-    const l = THREE.MathUtils.lerp(0.55, 0.65, t);
+    let h = 0.75 + t * ((50 + 360) / 360 - 0.75);
+    if (h >= 1) h -= 1;
+    const s = 1.0;
+    const l = THREE.MathUtils.lerp(0.5, 0.6, t);
     return new THREE.Color().setHSL(h, s, l);
   }
 
-  return new THREE.Color().setHSL(0.12, 0.9, 0.7);
+  return new THREE.Color().setHSL(50 / 360, 1.0, 0.6);
 }
 
 function createCrystalMaterial(color: THREE.Color): THREE.MeshPhysicalMaterial {
@@ -80,50 +79,42 @@ export function createCrystalCluster(
   group.userData.clusterId = id;
 
   const color = streakToColor(streak);
-  const bodyHeight = streakToHeight(streak);
-  const tipHeight = bodyHeight * TIP_HEIGHT_RATIO;
+  const height = streakToHeight(streak);
 
-  const bodyGeom = new THREE.CylinderGeometry(
-    MAIN_RADIUS,
-    MAIN_RADIUS * 1.1,
-    bodyHeight,
+  const mainGeom = new THREE.CylinderGeometry(
+    0,
+    MAIN_BOTTOM_RADIUS,
+    height,
     6,
     1,
     false
   );
-  const bodyMat = createCrystalMaterial(color);
-  const mainBody = new THREE.Mesh(bodyGeom, bodyMat);
-  mainBody.position.y = bodyHeight / 2;
-  mainBody.userData.part = 'mainBody';
-  group.add(mainBody);
-
-  const tipGeom = new THREE.ConeGeometry(MAIN_RADIUS, tipHeight, 6, 1, false);
-  const tipMat = createCrystalMaterial(color.clone().offsetHSL(0, 0, 0.1));
-  const mainTip = new THREE.Mesh(tipGeom, tipMat);
-  mainTip.position.y = bodyHeight + tipHeight / 2;
-  mainTip.userData.part = 'mainTip';
-  group.add(mainTip);
+  const mainMat = createCrystalMaterial(color);
+  const mainCrystal = new THREE.Mesh(mainGeom, mainMat);
+  mainCrystal.position.y = height / 2;
+  mainCrystal.userData.part = 'mainCrystal';
+  group.add(mainCrystal);
 
   const smallCrystals: THREE.Mesh[] = [];
   const smallCount = 3 + Math.floor(Math.random() * 3);
 
   for (let i = 0; i < smallCount; i++) {
     const angle = (i / smallCount) * Math.PI * 2 + Math.random() * 0.5;
-    const dist = 0.2 + Math.random() * 0.15;
+    const dist = 0.18 + Math.random() * 0.12;
     const sHeight = 0.2 + Math.random() * 0.2;
     const sRadius = 0.05 + Math.random() * 0.04;
 
-    const sGeom = new THREE.ConeGeometry(sRadius, sHeight, 3, 1, false);
+    const sGeom = new THREE.CylinderGeometry(0, sRadius, sHeight, 3, 1, false);
     const sColor = color.clone().offsetHSL(
-      Math.random() * 0.05 - 0.025,
-      Math.random() * 0.1 - 0.05,
-      Math.random() * 0.1 - 0.05
+      Math.random() * 0.04 - 0.02,
+      Math.random() * 0.08 - 0.04,
+      Math.random() * 0.08 - 0.04
     );
     const sMat = createCrystalMaterial(sColor);
     const sMesh = new THREE.Mesh(sGeom, sMat);
 
-    const tiltX = (Math.random() - 0.5) * 0.4;
-    const tiltZ = (Math.random() - 0.5) * 0.4;
+    const tiltX = (Math.random() - 0.5) * 0.35;
+    const tiltZ = (Math.random() - 0.5) * 0.35;
     sMesh.rotation.set(tiltX, angle, tiltZ);
     sMesh.position.set(
       Math.cos(angle) * dist,
@@ -136,8 +127,8 @@ export function createCrystalCluster(
   }
 
   const bandGeom = new THREE.CylinderGeometry(
-    MAIN_RADIUS * 1.3,
-    MAIN_RADIUS * 1.3,
+    MAIN_BOTTOM_RADIUS * 1.3,
+    MAIN_BOTTOM_RADIUS * 1.3,
     0.08,
     6,
     1,
@@ -151,7 +142,7 @@ export function createCrystalCluster(
   group.add(lightBand);
 
   if (animated) {
-    group.scale.set(0.01, 0.01, 0.01);
+    group.position.y = -height * 0.8;
     group.traverse((child) => {
       if (child instanceof THREE.Mesh && child.userData.part !== 'lightBand') {
         const mat = child.material as THREE.MeshPhysicalMaterial;
@@ -165,8 +156,7 @@ export function createCrystalCluster(
     streak,
     colorTheme,
     group,
-    mainBody,
-    mainTip,
+    mainCrystal,
     smallCrystals,
     lightBand,
   };
@@ -175,28 +165,23 @@ export function createCrystalCluster(
 export function updateCrystalHeight(cluster: CrystalClusterData, streak: number): void {
   cluster.streak = streak;
   const newHeight = streakToHeight(streak);
-  const tipHeight = newHeight * TIP_HEIGHT_RATIO;
 
-  cluster.mainBody.geometry.dispose();
-  cluster.mainBody.geometry = new THREE.CylinderGeometry(
-    MAIN_RADIUS,
-    MAIN_RADIUS * 1.1,
+  cluster.mainCrystal.geometry.dispose();
+  cluster.mainCrystal.geometry = new THREE.CylinderGeometry(
+    0,
+    MAIN_BOTTOM_RADIUS,
     newHeight,
     6,
     1,
     false
   );
-  cluster.mainBody.position.y = newHeight / 2;
-
-  cluster.mainTip.geometry.dispose();
-  cluster.mainTip.geometry = new THREE.ConeGeometry(MAIN_RADIUS, tipHeight, 6, 1, false);
-  cluster.mainTip.position.y = newHeight + tipHeight / 2;
+  cluster.mainCrystal.position.y = newHeight / 2;
 
   if (cluster.lightBand) {
     cluster.lightBand.geometry.dispose();
     cluster.lightBand.geometry = new THREE.CylinderGeometry(
-      MAIN_RADIUS * 1.3,
-      MAIN_RADIUS * 1.3,
+      MAIN_BOTTOM_RADIUS * 1.3,
+      MAIN_BOTTOM_RADIUS * 1.3,
       0.08,
       6,
       1,
@@ -210,19 +195,16 @@ export function updateCrystalHeight(cluster: CrystalClusterData, streak: number)
 export function updateCrystalColor(cluster: CrystalClusterData, streak: number): void {
   const color = streakToColor(streak);
 
-  const bodyMat = cluster.mainBody.material as THREE.MeshPhysicalMaterial;
-  bodyMat.color.copy(color);
-
-  const tipMat = cluster.mainTip.material as THREE.MeshPhysicalMaterial;
-  tipMat.color.copy(color.clone().offsetHSL(0, 0, 0.1));
+  const mainMat = cluster.mainCrystal.material as THREE.MeshPhysicalMaterial;
+  mainMat.color.copy(color);
 
   cluster.smallCrystals.forEach((sc) => {
     const mat = sc.material as THREE.MeshPhysicalMaterial;
     mat.color.copy(
       color.clone().offsetHSL(
-        Math.random() * 0.05 - 0.025,
-        Math.random() * 0.1 - 0.05,
-        Math.random() * 0.1 - 0.05
+        Math.random() * 0.04 - 0.02,
+        Math.random() * 0.08 - 0.04,
+        Math.random() * 0.08 - 0.04
       )
     );
   });
@@ -231,4 +213,8 @@ export function updateCrystalColor(cluster: CrystalClusterData, streak: number):
 export function getStreakColor(streak: number): string {
   const color = streakToColor(streak);
   return '#' + color.getHexString();
+}
+
+export function getMainHeight(cluster: CrystalClusterData): number {
+  return cluster.mainCrystal.position.y * 2;
 }
