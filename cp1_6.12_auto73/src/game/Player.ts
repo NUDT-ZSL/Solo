@@ -143,14 +143,19 @@ export class Player {
       this.jumpHoldTime += dt * 1000;
       if (this.jumpHoldTime >= this.physics.maxJumpDuration) {
         this.isJumpKeyHeld = false;
+        this.state.isJumping = false;
         if (this.state.velocityY < 0) {
-          this.state.velocityY = Math.min(this.state.velocityY, -120);
+          this.state.velocityY = Math.max(this.state.velocityY, -80);
         }
       }
     }
 
     if (!this.state.isGrounded) {
-      this.state.velocityY += this.physics.gravity * dt;
+      if (this.state.isJumping && this.isJumpKeyHeld && this.state.velocityY < 0) {
+        this.state.velocityY += this.physics.gravity * 0.55 * dt;
+      } else {
+        this.state.velocityY += this.physics.gravity * dt;
+      }
       if (this.state.velocityY > this.physics.maxFallSpeed) {
         this.state.velocityY = this.physics.maxFallSpeed;
       }
