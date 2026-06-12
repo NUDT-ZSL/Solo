@@ -1,0 +1,155 @@
+.admin-page {
+  max-width: 100%;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  background: #F5E6D3;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+  width: fit-content;
+}
+
+.admin-tab {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.admin-tab:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text-primary);
+}
+
+.admin-tab.active {
+  background: white;
+  color: var(--primary-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.admin-tab-count {
+  background: var(--primary-color);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.admin-tab.active .admin-tab-count {
+  background: var(--accent-yellow);
+  color: var(--text-primary);
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-card {
+  padding: 20px;
+}
+
+.admin-card-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-book-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-emoji {
+  font-size: 32px;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #F5E6D3, #E8D5B7);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-book-info h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.admin-author {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.admin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.admin-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-meta-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.admin-meta-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.admin-meta-value.danger {
+  color: var(--danger-red);
+}
+
+.admin-meta-value.status-borrowed {
+  color: #1976D2;
+}
+
+.admin-meta-value.status-overdue {
+  color: #C62828;
+}
+
+.admin-meta-value.status-returned {
+  color: #2E7D32;
+}
+
+.admin-card-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 600px) {
+  .admin-card-content {
+    flex-direction: column;
+  }
+
+  .admin-meta {
+    gap: 12px;
+  }
+}
