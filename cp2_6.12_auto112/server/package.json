@@ -1,0 +1,17 @@
+{
+  "name": "resume-collab-server",
+  "version": "1.0.0",
+  "description": "简历协作编辑器后端服务",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "better-sqlite3": "^9.4.3",
+    "socket.io": "^4.7.4",
+    "uuid": "^9.0.1"
+  }
+}
