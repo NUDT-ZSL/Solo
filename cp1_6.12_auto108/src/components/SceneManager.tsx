@@ -18,7 +18,7 @@ interface SceneManagerProps {
 
 function LightCone({ light }: { light: LightFixture }) {
   const color = getColorFromTemperature(light.color_temp);
-  const directionRad = (light.direction * Math.PI / 180;
+  const directionRad = light.direction * Math.PI / 180;
 
   let coneAngle = Math.PI / 3;
   let coneHeight = 3;
@@ -42,7 +42,6 @@ function LightCone({ light }: { light: LightFixture }) {
             transparent
             opacity={light.is_on ? 0.15 : 0}
             side={THREE.DoubleSide}
-            transparent
           />
         </mesh>
         <mesh position={[0, -coneHeight, 0]}>
@@ -399,8 +398,8 @@ function SceneContent({
       const intersects = raycaster.current.intersectObject(planeRef.current);
       if (intersects.length > 0) {
         const point = intersects[0].point;
-        const newX = Math.max(0.5, Math.min(layout.width - 0.5, Math.round(point.x * 2) / 2);
-        const newY = Math.max(0.5, Math.min(layout.depth - 0.5, Math.round(point.z * 2) / 2);
+        const newX = Math.max(0.5, Math.min(layout.width - 0.5, Math.round(point.x * 2) / 2));
+        const newY = Math.max(0.5, Math.min(layout.depth - 0.5, Math.round(point.z * 2) / 2));
 
         if (isDraggingNew && draggingLightType) {
           const preset = LIGHT_PRESETS.find(p => p.type === draggingLightType);
@@ -478,9 +477,20 @@ function SceneContent({
   }, [draggingLight, handlePointerMove]);
 
   const handleLightDragEnd = useCallback(() => {
+    if (draggingLight) {
+      onLightsChange(
+        lights.map(l => {
+          if (l.id === draggingLight) {
+            const snappedZ = Math.round(l.z / 0.5) * 0.5;
+            return { ...l, z: Math.max(0.5, snappedZ) };
+          }
+          return l;
+        })
+      );
+    }
     setDraggingLight(null);
     setIsDraggingNew(false);
-  }, []);
+  }, [draggingLight, lights, onLightsChange]);
 
   const handleSceneClick = useCallback(() => {
     setSelectedLightId(null);
@@ -666,8 +676,8 @@ function SceneContent({
         makeDefault
         enableDamping
         dampingFactor={0.05}
-        minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI / 2}
+        minPolarAngle={0}
+        maxPolarAngle={Math.PI}
         minDistance={2}
         maxDistance={15}
         target={[layout.width / 2, 0, layout.depth / 2]}

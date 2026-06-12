@@ -158,26 +158,43 @@ export function getColorFromTemperature(temp: number): string {
   return '#D0E8FF';
 }
 
+const ILLUMINANCE_COLOR_STOPS: Array<{ lux: number; color: string }> = [
+  { lux: 0, color: '#000080' },
+  { lux: 100, color: '#0000CC' },
+  { lux: 200, color: '#0044FF' },
+  { lux: 300, color: '#0088FF' },
+  { lux: 400, color: '#00BBFF' },
+  { lux: 500, color: '#00EEFF' },
+  { lux: 600, color: '#00FFDD' },
+  { lux: 700, color: '#00FF99' },
+  { lux: 800, color: '#00FF55' },
+  { lux: 900, color: '#22FF00' },
+  { lux: 1000, color: '#77FF00' },
+  { lux: 1100, color: '#BBFF00' },
+  { lux: 1200, color: '#EEFF00' },
+  { lux: 1300, color: '#FFDD00' },
+  { lux: 1400, color: '#FFAA00' },
+  { lux: 1500, color: '#FF7700' },
+  { lux: 1600, color: '#FF4400' },
+  { lux: 1700, color: '#FF2200' },
+  { lux: 1800, color: '#FF0000' },
+  { lux: 1900, color: '#DD0000' },
+  { lux: 2000, color: '#AA0000' }
+];
+
 export function getColorFromIlluminance(illuminance: number): string {
   const clamped = Math.max(0, Math.min(2000, illuminance));
-  const ratio = clamped / 2000;
-  
-  if (ratio < 0.2) {
-    const t = ratio / 0.2;
-    return interpolateColor('#000080', '#0080FF', t);
-  } else if (ratio < 0.4) {
-    const t = (ratio - 0.2) / 0.2;
-    return interpolateColor('#0080FF', '#00FFFF', t);
-  } else if (ratio < 0.6) {
-    const t = (ratio - 0.4) / 0.2;
-    return interpolateColor('#00FFFF', '#00FF00', t);
-  } else if (ratio < 0.8) {
-    const t = (ratio - 0.6) / 0.2;
-    return interpolateColor('#00FF00', '#FFFF00', t);
-  } else {
-    const t = (ratio - 0.8) / 0.2;
-    return interpolateColor('#FFFF00', '#FF0000', t);
+
+  for (let i = 1; i < ILLUMINANCE_COLOR_STOPS.length; i++) {
+    if (clamped <= ILLUMINANCE_COLOR_STOPS[i].lux) {
+      const prev = ILLUMINANCE_COLOR_STOPS[i - 1];
+      const curr = ILLUMINANCE_COLOR_STOPS[i];
+      const t = (clamped - prev.lux) / (curr.lux - prev.lux);
+      return interpolateColor(prev.color, curr.color, t);
+    }
   }
+
+  return ILLUMINANCE_COLOR_STOPS[ILLUMINANCE_COLOR_STOPS.length - 1].color;
 }
 
 function interpolateColor(color1: string, color2: string, t: number): string {
