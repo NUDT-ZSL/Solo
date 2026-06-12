@@ -36,11 +36,13 @@ router.get('/', (req: Request, res: Response) => {
 
   const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-  const countRow = db.prepare(`SELECT COUNT(*) as total FROM inventory_items ${whereClause}`).get(...paramsList) as { total: number };
+  const countParams = [...paramsList];
+  const countRow = db.prepare(`SELECT COUNT(*) as total FROM inventory_items ${whereClause}`).get(countParams.length === 1 ? countParams[0] : countParams) as { total: number };
 
+  const dataParams = [...paramsList, pageSizeNum, offset];
   const items = db.prepare(
     `SELECT * FROM inventory_items ${whereClause} ORDER BY updated_at DESC LIMIT ? OFFSET ?`
-  ).all(...paramsList, pageSizeNum, offset);
+  ).all(dataParams.length === 1 ? dataParams[0] : dataParams);
 
   res.json({ data: items, total: countRow.total, page: pageNum, pageSize: pageSizeNum });
 });
