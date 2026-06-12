@@ -8,6 +8,8 @@ app = Flask(__name__)
 CORS(app)
 random.seed(42)
 
+_sentiment_cache = {}
+
 EVENT_START_HOUR = 18
 EVENT_DURATION_SLOTS = 10
 
@@ -174,14 +176,12 @@ def _generate_emotion_summary(comments, media):
     return emotion_summary
 
 
-@app.route('/api/initial_data', methods=['GET'])
-def get_initial_data():
+def _build_initial_data():
     timeline = _generate_timeline_data()
     comments = _generate_comments(timeline)
     media = _generate_media(comments)
     emotion_summary = _generate_emotion_summary(comments, media)
-
-    return jsonify({
+    return {
         'event_name': '夏日星空音乐节 2026',
         'event_date': '2026-06-10',
         'event_duration': f"{_format_time(0)} - {_format_time(EVENT_DURATION_SLOTS)}",
@@ -194,7 +194,18 @@ def get_initial_data():
         'comments': comments,
         'media': media,
         'emotion_summary': emotion_summary
-    })
+    }
+
+
+_initial_data_cache = _build_initial_data()
+
+
+@app.route('/api/initial_data', methods=['GET'])
+def get_initial_data():
+    global _initial_data_cache
+    if _initial_data_cache is None:
+        _initial_data_cache = _build_initial_data()
+    return jsonify(_initial_data_cache)
 
 
 @app.route('/api/sentiment_analysis', methods=['POST'])
@@ -205,7 +216,14 @@ def sentiment_analysis_endpoint():
     texts = data['texts']
     if not isinstance(texts, list):
         return jsonify({'error': 'Field texts must be a list'}), 400
+
+    cache_key = tuple(texts)
+    if cache_key in _sentiment_cache:
+        return jsonify({'results': _sentiment_cache[cache_key]})
+
     results = analyze_sentiment(texts)
+    if len(_sentiment_cache) < 1000:
+        _sentiment_cache[cache_key] = results
     return jsonify({'results': results})
 
 
