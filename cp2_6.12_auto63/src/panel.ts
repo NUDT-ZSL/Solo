@@ -15,12 +15,12 @@ export interface PanelParams {
 }
 
 const PRESETS: { name: string; params: PanelParams }[] = [
-  { name: '默认', params: { iterations: 5, trunkLength: 20, branchAngle: 30, decayFactor: 0.75, leafDensity: 0.5 } },
-  { name: '苍劲古松', params: { iterations: 7, trunkLength: 25, branchAngle: 45, decayFactor: 0.7, leafDensity: 0.8 } },
-  { name: '纤细垂柳', params: { iterations: 6, trunkLength: 28, branchAngle: 20, decayFactor: 0.85, leafDensity: 0.6 } },
-  { name: '繁茂灌木', params: { iterations: 4, trunkLength: 15, branchAngle: 55, decayFactor: 0.65, leafDensity: 0.9 } },
-  { name: '极简枯木', params: { iterations: 3, trunkLength: 22, branchAngle: 35, decayFactor: 0.8, leafDensity: 0.1 } },
-  { name: '霓虹之树', params: { iterations: 8, trunkLength: 18, branchAngle: 25, decayFactor: 0.72, leafDensity: 0.7 } },
+  { name: '毕达哥拉斯树', params: { iterations: 5, trunkLength: 20, branchAngle: 30, decayFactor: 0.75, leafDensity: 0.5 } },
+  { name: '龙形曲线', params: { iterations: 7, trunkLength: 25, branchAngle: 45, decayFactor: 0.7, leafDensity: 0.8 } },
+  { name: '科赫雪花', params: { iterations: 6, trunkLength: 28, branchAngle: 20, decayFactor: 0.85, leafDensity: 0.6 } },
+  { name: '蕨类植物', params: { iterations: 4, trunkLength: 15, branchAngle: 55, decayFactor: 0.65, leafDensity: 0.9 } },
+  { name: '灌木', params: { iterations: 3, trunkLength: 22, branchAngle: 35, decayFactor: 0.8, leafDensity: 0.1 } },
+  { name: '仙人掌', params: { iterations: 8, trunkLength: 18, branchAngle: 25, decayFactor: 0.72, leafDensity: 0.7 } },
 ];
 
 const DEFAULT_PARAMS: PanelParams = PRESETS[0].params;

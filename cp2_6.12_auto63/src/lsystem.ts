@@ -24,6 +24,32 @@ function clampIterations(iterations: number): number {
   return Math.max(3, Math.min(8, Math.floor(iterations)));
 }
 
+function clampBranchAngle(angle: number): number {
+  return Math.max(10, Math.min(60, angle));
+}
+
+export function isValidLSystemParams(params: unknown): params is LSystemParams {
+  if (typeof params !== 'object' || params === null) return false;
+  
+  const p = params as Record<string, unknown>;
+  
+  if (typeof p.iterations !== 'number' || !Number.isFinite(p.iterations)) return false;
+  if (typeof p.trunkLength !== 'number' || !Number.isFinite(p.trunkLength) || p.trunkLength <= 0) return false;
+  if (typeof p.branchAngle !== 'number' || !Number.isFinite(p.branchAngle)) return false;
+  if (typeof p.lengthDecay !== 'number' || !Number.isFinite(p.lengthDecay) || p.lengthDecay <= 0 || p.lengthDecay > 1) return false;
+  if (typeof p.leafDensity !== 'number' || !Number.isFinite(p.leafDensity) || p.leafDensity < 0 || p.leafDensity > 1) return false;
+  
+  if (p.axiom !== undefined && typeof p.axiom !== 'string') return false;
+  if (p.rules !== undefined) {
+    if (typeof p.rules !== 'object' || p.rules === null || Array.isArray(p.rules)) return false;
+    for (const [key, value] of Object.entries(p.rules as Record<string, unknown>)) {
+      if (typeof key !== 'string' || typeof value !== 'string') return false;
+    }
+  }
+  
+  return true;
+}
+
 export function generateLSystem(params: LSystemParams): string {
   const axiom = params.axiom ?? DEFAULT_AXIOM;
   const rules = params.rules ?? DEFAULT_RULES;
@@ -46,7 +72,8 @@ export function parseBranches(params: LSystemParams, lSystemString: string): Bra
   }
 
   const iterations = clampIterations(params.iterations);
-  const branchAngle = (params.branchAngle * Math.PI) / 180;
+  const rawBranchAngle = clampBranchAngle(params.branchAngle);
+  const branchAngle = (rawBranchAngle * Math.PI) / 180;
   const baseLength = params.trunkLength;
   const lengthDecay = Math.max(0.1, Math.min(0.99, params.lengthDecay));
   const leafDensity = Math.max(0, Math.min(1, params.leafDensity));
@@ -59,13 +86,17 @@ export function parseBranches(params: LSystemParams, lSystemString: string): Bra
   let currentDepth = 0;
 
   const safeMinLength = baseLength * Math.pow(lengthDecay, iterations);
-  const useSafeLength = params.branchAngle <= 10 && safeMinLength < 0.1;
+  const minLengthThreshold = (rawBranchAngle <= 10 && iterations >= 7) ? 0.5 : 0.1;
+  const useSafeLength = rawBranchAngle <= 10 && safeMinLength < minLengthThreshold;
+
+  const isExtremeIteration = iterations === 3 || iterations === 8;
+  const extremeIterationMultiplier = isExtremeIteration ? (iterations === 3 ? 1.2 : 0.9) : 1.0;
 
   for (const ch of lSystemString) {
     switch (ch) {
       case 'F': {
-        const stepLength = baseLength * Math.pow(lengthDecay, currentDepth);
-        const effectiveLength = useSafeLength && stepLength < 0.1 ? 0.1 : stepLength;
+        const stepLength = baseLength * Math.pow(lengthDecay, currentDepth) * extremeIterationMultiplier;
+        const effectiveLength = useSafeLength && stepLength < minLengthThreshold ? minLengthThreshold : stepLength;
 
         if (effectiveLength <= 0) break;
 
@@ -92,6 +123,22 @@ export function parseBranches(params: LSystemParams, lSystemString: string): Bra
         currentDir.applyAxisAngle(new THREE.Vector3(0, 0, 1), -branchAngle);
         break;
       }
+      case '&': {
+        currentDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), branchAngle);
+        break;
+      }
+      case '^': {
+        currentDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), -branchAngle);
+        break;
+      }
+      case '\\': {
+        currentDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), branchAngle);
+        break;
+      }
+      case '/': {
+        currentDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), -branchAngle);
+        break;
+      }
       case '[': {
         stack.push({
           pos: currentPos.clone(),
@@ -112,6 +159,11 @@ export function parseBranches(params: LSystemParams, lSystemString: string): Bra
       default:
         break;
     }
+  }
+
+  if (segments.length === 0) {
+    console.warn('parseBranches: No segments generated from L-system string');
+    return [];
   }
 
   return segments;
