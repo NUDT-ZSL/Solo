@@ -34,11 +34,12 @@ const io = new Server(httpServer, {
 });
 
 const players: Record<string, PlayerState> = {};
-const gems: GemState[] = {};
 const gemMap = new Map<string, GemState>();
+const gemOrder: string[] = [];
 const inputs: Record<string, PlayerInput> = {};
 let usedColors = new Set<string>();
 let usedNames = new Set<string>();
+const INPUT_TIMESTAMP_TOLERANCE_MS = 5000;
 
 function getRandomColor(): string {
   const available = PLAYER_COLORS.filter(c => !usedColors.has(c));
@@ -81,7 +82,12 @@ function createPlayer(id: string): PlayerState {
 }
 
 function spawnGem() {
-  if (gemMap.size >= MAX_GEMS) return;
+  if (gemMap.size >= MAX_GEMS) {
+    const oldestId = gemOrder.shift();
+    if (oldestId) {
+      gemMap.delete(oldestId);
+    }
+  }
   const id = uuidv4();
   const gem: GemState = {
     id,
@@ -90,6 +96,7 @@ function spawnGem() {
     spawnTime: Date.now(),
   };
   gemMap.set(id, gem);
+  gemOrder.push(id);
 }
 
 function processInputs() {
@@ -143,7 +150,9 @@ function processInputs() {
       if (dist < GEM_COLLECT_DIST) {
         player.score++;
         gemMap.delete(gemId);
-        io.emit('gemCollected', { gemId, playerId: id });
+        const idx = gemOrder.indexOf(gemId);
+        if (idx >= 0) gemOrder.splice(idx, 1);
+        io.emit('gemCollected', { gemId, playerId: id, x: gem.x, y: gem.y });
       }
     }
   }
@@ -175,10 +184,18 @@ io.on('connection', (socket) => {
   socket.emit('init', { id: socket.id, state: getFullState() });
   io.emit('playerJoined', { id: socket.id, player });
 
+  socket.on('requestFullState', () => {
+    socket.emit('init', { id: socket.id, state: getFullState() });
+  });
+
   socket.on('input', (input: PlayerInput) => {
-    if (players[socket.id]) {
-      inputs[socket.id] = input;
+    if (!players[socket.id]) return;
+    const now = Date.now();
+    const tsDiff = now - input.timestamp;
+    if (Math.abs(tsDiff) > INPUT_TIMESTAMP_TOLERANCE_MS) {
+      input.timestamp = now;
     }
+    inputs[socket.id] = input;
   });
 
   socket.on('disconnect', () => {

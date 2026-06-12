@@ -52,6 +52,7 @@ export const GEM_SPAWN_INTERVAL_MS = 5000;
 export const MAX_PLAYERS = 6;
 export const MAX_GEMS = 10;
 export const INTERP_FACTOR = 0.2;
+export const SERVER_TICK_INTERVAL = 0.05;
 
 export const PLAYER_COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',

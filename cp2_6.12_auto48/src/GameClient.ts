@@ -4,7 +4,7 @@ import {
   GemState,
   ServerState,
   PlayerInput,
-  INTERP_FACTOR,
+  SERVER_TICK_INTERVAL,
   PLAYER_SIZE,
   GROUND_Y,
   GRAVITY,
@@ -30,6 +30,7 @@ export interface RemotePlayerRender {
   isSprinting: boolean;
   facingRight: boolean;
   spawnTime: number;
+  lastUpdateTime: number;
 }
 
 export interface GemCollectEffect {
