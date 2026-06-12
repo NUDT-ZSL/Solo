@@ -8,16 +8,38 @@ interface ColorPaletteProps {
   onVersionCreated: (version: PaletteVersion) => void
 }
 
+type ProgressPhase = 'idle' | 'reading' | 'loading' | 'extracting' | 'converting' | 'done'
+
 export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
   const [colors, setColors] = useState<ColorValue[]>([])
   const [imageUrl, setImageUrl] = useState<string>('')
   const [progress, setProgress] = useState(0)
-  const [isExtracting, setIsExtracting] = useState(false)
+  const [phase, setPhase] = useState<ProgressPhase>('idle')
   const [isSaving, setIsSaving] = useState(false)
   const [versionName, setVersionName] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
+  const progressRef = useRef<number>(0)
+
+  const animateProgress = useCallback((target: number, duration: number) => {
+    const start = progressRef.current
+    const diff = target - start
+    const startTime = performance.now()
+
+    const step = (now: number) => {
+      const elapsed = now - startTime
+      const fraction = Math.min(elapsed / duration, 1)
+      const current = start + diff * fraction
+      progressRef.current = current
+      setProgress(Math.round(current))
+      if (fraction < 1) {
+        requestAnimationFrame(step)
+      }
+    }
+
+    requestAnimationFrame(step)
+  }, [])
 
   const handleFileSelect = useCallback((file: File) => {
     if (!file) return
@@ -33,47 +55,62 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
     }
 
     setColors([])
+    progressRef.current = 0
     setProgress(0)
-    setIsExtracting(true)
+    setPhase('reading')
     setVersionName(file.name.replace(/\.[^/.]+$/, ''))
 
     const reader = new FileReader()
-    
+    const readStart = performance.now()
+
     reader.onprogress = (e) => {
       if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 40)
-        setProgress(percent)
+        const filePercent = (e.loaded / e.total) * 45
+        progressRef.current = filePercent
+        setProgress(Math.round(filePercent))
       }
     }
 
     reader.onload = (e) => {
-      setProgress(45)
+      const readDuration = performance.now() - readStart
+      console.log(`[PaletteFlow] 文件读取耗时: ${readDuration.toFixed(1)}ms`)
+
       const result = e.target?.result as string
       setImageUrl(result)
+      setPhase('loading')
+      animateProgress(50, 200)
     }
 
     reader.onerror = () => {
       alert('文件读取失败')
-      setIsExtracting(false)
+      setPhase('idle')
+      progressRef.current = 0
       setProgress(0)
     }
 
     reader.readAsDataURL(file)
-  }, [])
+  }, [animateProgress])
 
   const handleImageLoad = useCallback(() => {
     if (!imgRef.current) return
 
-    setProgress(60)
+    setPhase('extracting')
+    animateProgress(55, 100)
 
     requestAnimationFrame(() => {
       try {
-        setProgress(70)
+        const extractStart = performance.now()
         const colorThief = new ColorThief()
-        const palette = colorThief.getPalette(imgRef.current, 5)
-        
-        setProgress(85)
+        const palette = colorThief.getPalette(imgRef.current!, 5)
+        const extractDuration = performance.now() - extractStart
+        console.log(`[PaletteFlow] colorthief提取耗时: ${extractDuration.toFixed(1)}ms`)
 
+        const extractProgress = Math.min(55 + (extractDuration / 1000) * 25, 80)
+        progressRef.current = extractProgress
+        setProgress(Math.round(extractProgress))
+        setPhase('converting')
+
+        const convertStart = performance.now()
         const colorValues: ColorValue[] = palette.map(([r, g, b]) => {
           const hex = rgbToHex(r, g, b)
           const hsl = rgbToHsl(r, g, b)
@@ -83,24 +120,30 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
             hsl
           }
         })
+        const convertDuration = performance.now() - convertStart
+        console.log(`[PaletteFlow] 色值转换耗时: ${convertDuration.toFixed(1)}ms`)
 
-        setProgress(95)
+        progressRef.current = 92
+        setProgress(92)
         setColors(colorValues)
 
         requestAnimationFrame(() => {
+          progressRef.current = 100
           setProgress(100)
+          setPhase('done')
           setTimeout(() => {
-            setIsExtracting(false)
-          }, 150)
+            setPhase('idle')
+          }, 300)
         })
       } catch (error) {
         console.error('Error extracting colors:', error)
         alert('提取色值失败，请重试')
-        setIsExtracting(false)
+        setPhase('idle')
+        progressRef.current = 0
         setProgress(0)
       }
     })
-  }, [])
+  }, [animateProgress])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -137,7 +180,9 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
       setColors([])
       setImageUrl('')
       setVersionName('')
+      progressRef.current = 0
       setProgress(0)
+      setPhase('idle')
     } catch (error) {
       console.error('Error saving version:', error)
       alert('保存失败，请重试')
@@ -148,6 +193,24 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
+  }
+
+  const getProgressColor = () => {
+    if (progress < 30) return '#9CA3AF'
+    if (progress < 60) return '#F59E0B'
+    if (progress < 90) return '#3B82F6'
+    return '#10B981'
+  }
+
+  const getPhaseLabel = () => {
+    switch (phase) {
+      case 'reading': return '读取文件中...'
+      case 'loading': return '加载图片中...'
+      case 'extracting': return '提取主色调中...'
+      case 'converting': return '转换色值中...'
+      case 'done': return '提取完成！'
+      default: return ''
+    }
   }
 
   return (
@@ -173,9 +236,25 @@ export default function ColorPalette({ onVersionCreated }: ColorPaletteProps) {
         <div className="upload-hint">支持PNG/JPG格式，不超过5MB</div>
       </div>
 
-      {(isExtracting || progress > 0) && (
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${progress}%` }} />
+      {phase !== 'idle' && (
+        <div style={{ marginTop: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '13px', color: getProgressColor(), fontWeight: 600 }}>
+              {getPhaseLabel()}
+            </span>
+            <span style={{ fontSize: '13px', color: getProgressColor(), fontWeight: 600 }}>
+              {progress}%
+            </span>
+          </div>
+          <div className="progress-bar">
+            <div
+              className="progress-fill"
+              style={{
+                width: `${progress}%`,
+                background: `linear-gradient(90deg, #9CA3AF, ${getProgressColor()})`
+              }}
+            />
+          </div>
         </div>
       )}
 

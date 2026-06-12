@@ -11,6 +11,16 @@ interface VersionCompareProps {
   onSelectVersion: (id: string) => void
 }
 
+function getDifferenceInfo(diff: number): { label: string; color: string } {
+  if (diff < 5) {
+    return { label: '相似', color: '#10B981' }
+  } else if (diff <= 15) {
+    return { label: '微调', color: '#F59E0B' }
+  } else {
+    return { label: '差异', color: '#EF4444' }
+  }
+}
+
 export default function VersionCompare({
   versions,
   baselineId,
@@ -83,9 +93,10 @@ export default function VersionCompare({
     setExporting(true)
     try {
       const canvas = await html2canvas(compareRef.current, {
-        backgroundColor: '#FAFAFA',
+        backgroundColor: null,
         scale: 2,
-        useCORS: true
+        useCORS: true,
+        logging: false
       })
 
       const imageDataUrl = canvas.toDataURL('image/png')
@@ -97,12 +108,12 @@ export default function VersionCompare({
 
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
       const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Export error:', error)
@@ -113,25 +124,28 @@ export default function VersionCompare({
   }
 
   const generateReportHTML = (data: ComparisonResult, screenshotUrl: string): string => {
-    const now = new Date()
-    const generateDate = now.toLocaleString('zh-CN')
+    const generateDate = new Date().toLocaleString('zh-CN')
 
-    const colorRows = data.comparisons.map((c, i) => `
+    const colorRows = data.comparisons.map((c, i) => {
+      const info = getDifferenceInfo(c.difference)
+      return `
       <tr>
         <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;">${i + 1}</td>
         <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;">
           <div style="width:60px;height:60px;border-radius:6px;margin:0 auto;background:${c.color1.hex};"></div>
         </td>
         <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-family:monospace;">${c.color1.hex.toUpperCase()}</td>
-        <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-size:13px;">RGB(${c.color1.rgb.r},${c.color1.rgb.g},${c.color1.rgb.b})</td>
+        <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-size:13px;">RGB(${c.color1.rgb.r}, ${c.color1.rgb.g}, ${c.color1.rgb.b})</td>
         <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;">
           <div style="width:60px;height:60px;border-radius:6px;margin:0 auto;background:${c.color2.hex};"></div>
         </td>
         <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-family:monospace;">${c.color2.hex.toUpperCase()}</td>
-        <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-size:13px;">RGB(${c.color2.rgb.r},${c.color2.rgb.g},${c.color2.rgb.b})</td>
-        <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-weight:600;color:${c.levelColor};">${c.difference}% (${c.level})</td>
-      </tr>
-    `).join('')
+        <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-size:13px;">RGB(${c.color2.rgb.r}, ${c.color2.rgb.g}, ${c.color2.rgb.b})</td>
+        <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-weight:600;color:${info.color};">${c.difference}% (${info.label})</td>
+      </tr>`
+    }).join('')
+
+    const overallInfo = getDifferenceInfo(data.overallDifference)
 
     return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -159,26 +173,24 @@ export default function VersionCompare({
     table { width:100%; border-collapse:collapse; background:#fff; }
     th { background:#F3F4F6; padding:14px; font-weight:600; font-size:13px; color:#374151; border:1px solid #e5e7eb; }
     footer { margin-top:48px; padding-top:24px; border-top:1px solid #e5e7eb; text-align:center; color:#9CA3AF; font-size:12px; }
-    .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:12px; color:#fff; }
+    @media print { body { padding:20px; } }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>🎨 PaletteFlow 配色方案对比报告</h1>
+    <h1>PaletteFlow 配色方案对比报告</h1>
     <p>生成日期：${generateDate}</p>
   </div>
 
   <div class="info-section">
     <div class="info-card">
-      <h3>📌 版本A（基准）</h3>
+      <h3>版本 A${baselineId === data.version1.id ? '（基准）' : ''}</h3>
       <p><strong>名称：</strong>${data.version1.name}</p>
-      <p><strong>ID：</strong>${data.version1.id}</p>
       <p><strong>创建时间：</strong>${formatDate(data.version1.createdAt)}</p>
     </div>
     <div class="info-card">
-      <h3>📌 版本B（对比）</h3>
+      <h3>版本 B${baselineId === data.version2.id ? '（基准）' : ''}</h3>
       <p><strong>名称：</strong>${data.version2.name}</p>
-      <p><strong>ID：</strong>${data.version2.id}</p>
       <p><strong>创建时间：</strong>${formatDate(data.version2.createdAt)}</p>
     </div>
   </div>
@@ -186,16 +198,16 @@ export default function VersionCompare({
   <div class="overall-summary">
     <h2>整体差异评估</h2>
     <div class="diff">${data.overallDifference}%</div>
-    <p style="font-size:18px;font-weight:600;">差异等级：${data.overallLevel}</p>
+    <p style="font-size:18px;font-weight:600;">差异等级：${overallInfo.label}</p>
   </div>
 
   <div class="screenshot-container">
-    <h2 style="font-size:20px;margin-bottom:16px;color:#1F2937;">📸 对比区域截图</h2>
+    <h2 style="font-size:20px;margin-bottom:16px;color:#1F2937;">对比区域截图</h2>
     <img src="${screenshotUrl}" alt="对比截图" />
   </div>
 
   <div class="color-table-section">
-    <h2>📊 详细色值对比表</h2>
+    <h2>详细色值对比表</h2>
     <table>
       <thead>
         <tr>
@@ -216,36 +228,11 @@ export default function VersionCompare({
   </div>
 
   <footer>
-    <p>PaletteFlow © ${new Date().getFullYear()} - 设计配色方案版本管理与对比工具</p>
-    <p>本报告可使用浏览器"打印→另存为PDF"功能导出为PDF格式</p>
+    <p>PaletteFlow - 设计配色方案版本管理与对比工具</p>
+    <p>本报告可使用浏览器"打印 → 另存为PDF"功能导出为PDF格式</p>
   </footer>
 </body>
 </html>`
-  }
-
-  const getDifferenceBadge = (diff: number, level: string, levelColor: string) => {
-    let colorClass = '#10B981'
-    let label = '相似'
-
-    if (diff < 5) {
-      colorClass = '#10B981'
-      label = '相似'
-    } else if (diff <= 15) {
-      colorClass = '#F59E0B'
-      label = '微调'
-    } else {
-      colorClass = '#EF4444'
-      label = '差异'
-    }
-
-    return (
-      <span
-        className="difference-badge"
-        style={{ backgroundColor: colorClass }}
-      >
-        {diff}% · {label}
-      </span>
-    )
   }
 
   return (
@@ -258,23 +245,19 @@ export default function VersionCompare({
             onClick={handleExport}
             disabled={exporting}
           >
-            {exporting ? '📄 导出中...' : '📄 导出报告'}
+            {exporting ? '导出中...' : '📄 导出报告'}
           </button>
         )}
       </div>
 
       <div className="compare-selectors">
         <div className="select-wrapper">
-          <div className="select-label">选择版本 A {baselineId === id1 && '（基准）'}</div>
-          <select
-            className="version-select"
-            value={id1}
-            onChange={handleVersion1Change}
-          >
+          <div className="select-label">选择版本 A {baselineId === id1 ? '（基准）' : ''}</div>
+          <select className="version-select" value={id1} onChange={handleVersion1Change}>
             <option value="">请选择版本</option>
             {versions.map(v => (
               <option key={v.id} value={v.id}>
-                {v.name} {v.id === baselineId ? '★ 基准' : ''}
+                {v.name}{v.id === baselineId ? ' ★基准' : ''}
               </option>
             ))}
           </select>
@@ -286,15 +269,11 @@ export default function VersionCompare({
 
         <div className="select-wrapper">
           <div className="select-label">选择版本 B</div>
-          <select
-            className="version-select"
-            value={id2}
-            onChange={handleVersion2Change}
-          >
+          <select className="version-select" value={id2} onChange={handleVersion2Change}>
             <option value="">请选择版本</option>
             {versions.filter(v => v.id !== id1).map(v => (
               <option key={v.id} value={v.id}>
-                {v.name} {v.id === baselineId ? '★ 基准' : ''}
+                {v.name}{v.id === baselineId ? ' ★基准' : ''}
               </option>
             ))}
           </select>
@@ -313,56 +292,62 @@ export default function VersionCompare({
           <div className="empty-state">
             <div className="empty-state-icon">🔍</div>
             <div className="empty-state-text">
-              {versions.length < 2 
-                ? '请先创建至少2个配色方案版本' 
+              {versions.length < 2
+                ? '请先创建至少2个配色方案版本'
                 : '请选择两个不同的版本进行对比'}
             </div>
           </div>
         )
       ) : result && !loading && (
-        <div ref={compareRef} style={{ background: 'var(--bg-color)', padding: '16px', borderRadius: '12px' }}>
+        <div ref={compareRef} style={{ padding: '16px', borderRadius: '12px' }}>
           <div className="compare-rows">
-            {result.comparisons.map((item) => (
-              <div key={item.index} className="compare-row">
-                <div className="compare-row-colors">
-                  <div className="color-swatch" style={{ gap: '6px' }}>
-                    <div
-                      className="color-block"
-                      style={{
-                        width: '80px',
-                        height: '80px',
-                        backgroundColor: item.color1.hex,
-                        '--glow-color': item.color1.hex + '66'
-                      } as React.CSSProperties}
-                    />
-                    <span className="color-hex">{item.color1.hex.toUpperCase()}</span>
+            {result.comparisons.map((item) => {
+              const info = getDifferenceInfo(item.difference)
+
+              return (
+                <div key={item.index} className="compare-row">
+                  <div className="compare-row-colors">
+                    <div className="color-swatch" style={{ gap: '6px' }}>
+                      <div
+                        className="color-block"
+                        style={{
+                          width: '80px',
+                          height: '80px',
+                          backgroundColor: item.color1.hex,
+                          '--glow-color': item.color1.hex + '66'
+                        } as React.CSSProperties}
+                      />
+                      <span className="color-hex">{item.color1.hex.toUpperCase()}</span>
+                    </div>
+                    <span className="vs-text">VS</span>
+                    <div className="color-swatch" style={{ gap: '6px' }}>
+                      <div
+                        className="color-block"
+                        style={{
+                          width: '80px',
+                          height: '80px',
+                          backgroundColor: item.color2.hex,
+                          '--glow-color': item.color2.hex + '66'
+                        } as React.CSSProperties}
+                      />
+                      <span className="color-hex">{item.color2.hex.toUpperCase()}</span>
+                    </div>
                   </div>
-                  <span className="vs-text">VS</span>
-                  <div className="color-swatch" style={{ gap: '6px' }}>
-                    <div
-                      className="color-block"
-                      style={{
-                        width: '80px',
-                        height: '80px',
-                        backgroundColor: item.color2.hex,
-                        '--glow-color': item.color2.hex + '66'
-                      } as React.CSSProperties}
-                    />
-                    <span className="color-hex">{item.color2.hex.toUpperCase()}</span>
-                  </div>
+                  <span
+                    className="difference-badge"
+                    style={{ backgroundColor: info.color }}
+                  >
+                    {item.difference}% · {info.label}
+                  </span>
                 </div>
-                {getDifferenceBadge(item.difference, item.level, item.levelColor)}
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className="overall-summary">
             <div className="overall-label">整体差异</div>
-            <div
-              className="overall-value"
-              style={{ color: result.overallLevelColor }}
-            >
-              {result.overallDifference}% · {result.overallLevel}
+            <div className="overall-value" style={{ color: getDifferenceInfo(result.overallDifference).color }}>
+              {result.overallDifference}% · {getDifferenceInfo(result.overallDifference).label}
             </div>
           </div>
         </div>
