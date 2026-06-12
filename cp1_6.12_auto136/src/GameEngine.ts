@@ -33,6 +33,21 @@ interface Circle {
   radius: number
 }
 
+interface CollisionResult {
+  collided: boolean
+  overlapX: number
+  overlapY: number
+  collisionNormal: { x: number; y: number }
+}
+
+interface PlayerPhysics {
+  velocityX: number
+  velocityY: number
+  prevLane: number
+  knockbackTimer: number
+  knockbackX: number
+}
+
 export class GameEngine {
   private levelConfig: LevelConfig
   private noteGenerator: NoteGenerator
@@ -52,6 +67,14 @@ export class GameEngine {
     maxHealth: 3,
     isInvincible: false,
     invincibleTimer: 0
+  }
+
+  private playerPhysics: PlayerPhysics = {
+    velocityX: 0,
+    velocityY: 0,
+    prevLane: 1,
+    knockbackTimer: 0,
+    knockbackX: 0
   }
 
   private game: GameState = {
@@ -93,8 +116,6 @@ export class GameEngine {
 
   private audioContext: AudioContext | null = null
 
-  private playerCircle: Circle = { x: 0, y: 0, radius: 20 }
-
   private canvasWidth: number = 1920
   private canvasHeight: number = 1080
   private vanishPointX: number = 960
@@ -127,20 +148,53 @@ export class GameEngine {
     )
   }
 
-  private circleIntersectsRect(circle: Circle, rect: Rect): boolean {
+  private circleIntersectsRect(circle: Circle, rect: Rect): CollisionResult {
     const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.width))
     const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.height))
     const dx = circle.x - closestX
     const dy = circle.y - closestY
-    return dx * dx + dy * dy < circle.radius * circle.radius
+    const distSq = dx * dx + dy * dy
+    const collided = distSq < circle.radius * circle.radius
+
+    if (!collided) {
+      return { collided: false, overlapX: 0, overlapY: 0, collisionNormal: { x: 0, y: 0 } }
+    }
+
+    const dist = Math.sqrt(distSq)
+    const overlap = circle.radius - dist
+    const nx = dist > 0.001 ? dx / dist : 1
+    const ny = dist > 0.001 ? dy / dist : 0
+
+    return {
+      collided: true,
+      overlapX: nx * overlap,
+      overlapY: ny * overlap,
+      collisionNormal: { x: nx, y: ny }
+    }
   }
 
-  private circleIntersectsCircle(a: Circle, b: Circle): boolean {
+  private circleIntersectsCircle(a: Circle, b: Circle): CollisionResult {
     const dx = a.x - b.x
     const dy = a.y - b.y
     const distSq = dx * dx + dy * dy
     const radiusSum = a.radius + b.radius
-    return distSq < radiusSum * radiusSum
+    const collided = distSq < radiusSum * radiusSum
+
+    if (!collided) {
+      return { collided: false, overlapX: 0, overlapY: 0, collisionNormal: { x: 0, y: 0 } }
+    }
+
+    const dist = Math.sqrt(distSq)
+    const overlap = radiusSum - dist
+    const nx = dist > 0.001 ? dx / dist : 1
+    const ny = dist > 0.001 ? dy / dist : 0
+
+    return {
+      collided: true,
+      overlapX: nx * overlap,
+      overlapY: ny * overlap,
+      collisionNormal: { x: nx, y: ny }
+    }
   }
 
   private getLaneScreenX(lane: number): number {
@@ -152,7 +206,7 @@ export class GameEngine {
 
   private getPlayerRect(): Rect {
     const x = this.getLaneScreenX(this.player.lane)
-    const y = this.playerZoneY
+    const y = this.playerZoneY + this.playerPhysics.knockbackX
     const size = 30
     return {
       x: x - size / 2,
@@ -164,7 +218,7 @@ export class GameEngine {
 
   private getPlayerCircle(): Circle {
     return {
-      x: this.getLaneScreenX(this.player.lane),
+      x: this.getLaneScreenX(this.player.lane) + this.playerPhysics.knockbackX,
       y: this.playerZoneY,
       radius: 20
     }
@@ -220,6 +274,14 @@ export class GameEngine {
       maxHealth: 3,
       isInvincible: false,
       invincibleTimer: 0
+    }
+
+    this.playerPhysics = {
+      velocityX: 0,
+      velocityY: 0,
+      prevLane: 1,
+      knockbackTimer: 0,
+      knockbackX: 0
     }
 
     this.game = {
@@ -304,14 +366,20 @@ export class GameEngine {
 
   moveLeft(): void {
     if (!this.game.isPlaying || this.game.isPaused || this.game.isGameOver) return
+    if (this.playerPhysics.knockbackTimer > 0) return
     if (this.player.targetLane > 0) {
+      this.playerPhysics.prevLane = this.player.targetLane
+      this.playerPhysics.velocityX = -1
       this.player.targetLane--
     }
   }
 
   moveRight(): void {
     if (!this.game.isPlaying || this.game.isPaused || this.game.isGameOver) return
+    if (this.playerPhysics.knockbackTimer > 0) return
     if (this.player.targetLane < LANES - 1) {
+      this.playerPhysics.prevLane = this.player.targetLane
+      this.playerPhysics.velocityX = 1
       this.player.targetLane++
     }
   }
@@ -333,10 +401,12 @@ export class GameEngine {
       if (timeDiff > GOOD_WINDOW) continue
 
       const noteCircle = this.getNoteScreenCircle(note)
-      if (!this.circleIntersectsCircle(playerCircle, {
+      const collision = this.circleIntersectsCircle(playerCircle, {
         ...noteCircle,
         radius: noteCircle.radius + NOTE_GLOW_RADIUS
-      })) continue
+      })
+
+      if (!collision.collided) continue
 
       if (note.lane !== this.player.targetLane) continue
 
@@ -368,7 +438,7 @@ export class GameEngine {
         this.callbacks.onPerfect()
         this.playPerfectSound()
 
-        if (this.game.perfectStreak >= 5) {
+        if (this.game.perfectStreak >= 5 && this.game.speedBoostTimer <= 0) {
           this.triggerSpeedBoost()
         }
       } else {
@@ -381,9 +451,11 @@ export class GameEngine {
 
       this.spawnCollectParticles(isPerfect)
     } else {
-      this.game.combo = 0
-      this.game.perfectStreak = 0
-      this.callbacks.onComboUpdate(0, this.game.maxCombo)
+      if (this.game.combo > 0) {
+        this.game.combo = 0
+        this.game.perfectStreak = 0
+        this.callbacks.onComboUpdate(0, this.game.maxCombo)
+      }
     }
   }
 
@@ -401,7 +473,7 @@ export class GameEngine {
         this.screenFlashOpacity = 0
       } else {
         const progress = elapsed / this.screenFlashDuration
-        this.screenFlashOpacity = 0.7 * (1 - progress)
+        this.screenFlashOpacity = 0.7 * Math.pow(1 - progress, 2)
         this.screenFlash = 1 - progress
       }
     }
@@ -447,10 +519,11 @@ export class GameEngine {
 
       const obstacleRect = this.getObstacleScreenRect(obstacle)
 
-      if (obstacle.lane === this.player.targetLane) {
-        if (this.circleIntersectsRect(playerCircle, obstacleRect)) {
+      if (obstacle.lane === this.player.targetLane || obstacle.lane === Math.round(this.player.lane)) {
+        const collision = this.circleIntersectsRect(playerCircle, obstacleRect)
+        if (collision.collided) {
           if (!this.player.isInvincible) {
-            this.playerHit()
+            this.playerHit(collision)
             obstacle.passed = true
             continue
           }
@@ -459,7 +532,7 @@ export class GameEngine {
 
       if (z <= HIT_Z - 0.3 && !obstacle.passed) {
         obstacle.passed = true
-        if (obstacle.lane !== this.player.targetLane) {
+        if (obstacle.lane !== this.player.targetLane && obstacle.lane !== Math.round(this.player.lane)) {
           this.game.obstaclesCleared++
           this.game.score += 10
           this.callbacks.onScoreUpdate(this.game.score)
@@ -468,7 +541,7 @@ export class GameEngine {
     }
   }
 
-  private playerHit(): void {
+  private playerHit(collision: CollisionResult): void {
     this.player.health--
     this.game.combo = 0
     this.game.perfectStreak = 0
@@ -476,11 +549,18 @@ export class GameEngine {
     this.player.isInvincible = true
     this.player.invincibleTimer = 1500
 
+    this.playerPhysics.velocityX = 0
+    this.playerPhysics.knockbackTimer = 300
+    this.playerPhysics.knockbackX = collision.collisionNormal.x * 15
+
+    this.player.lane = this.playerPhysics.prevLane
+    this.player.targetLane = this.playerPhysics.prevLane
+
     this.callbacks.onHealthUpdate(this.player.health)
     this.callbacks.onComboUpdate(0, this.game.maxCombo)
     this.callbacks.onHit()
 
-    this.spawnHitParticles()
+    this.spawnHitParticles(collision.collisionNormal)
     this.playHitSound()
 
     if (this.game.missStreak >= 3 && this.game.speedReductionTimer <= 0) {
@@ -529,11 +609,13 @@ export class GameEngine {
     }
   }
 
-  private spawnHitParticles(): void {
+  private spawnHitParticles(normal: { x: number; y: number }): void {
     const playerCircle = this.getPlayerCircle()
 
     for (let i = 0; i < 24; i++) {
-      const angle = Math.random() * Math.PI * 2
+      const baseAngle = Math.atan2(normal.y, normal.x)
+      const spread = (Math.random() - 0.5) * Math.PI
+      const angle = baseAngle + spread
       const speed = 3 + Math.random() * 5
       this.particles.push({
         id: uuidv4(),
@@ -616,28 +698,42 @@ export class GameEngine {
   private playPerfectSound(): void {
     if (!this.audioContext) return
     try {
-      const osc = this.audioContext.createOscillator()
-      const gain = this.audioContext.createGain()
-      osc.connect(gain)
-      gain.connect(this.audioContext.destination)
-      osc.frequency.value = 880
-      osc.type = 'sine'
       const now = this.audioContext.currentTime
-      gain.gain.setValueAtTime(0.3, now)
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
-      osc.start(now)
-      osc.stop(now + 0.15)
+
+      const osc1 = this.audioContext.createOscillator()
+      const gain1 = this.audioContext.createGain()
+      osc1.connect(gain1)
+      gain1.connect(this.audioContext.destination)
+      osc1.frequency.setValueAtTime(880, now)
+      osc1.frequency.exponentialRampToValueAtTime(1760, now + 0.05)
+      osc1.type = 'sine'
+      gain1.gain.setValueAtTime(0.3, now)
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+      osc1.start(now)
+      osc1.stop(now + 0.15)
 
       const osc2 = this.audioContext.createOscillator()
       const gain2 = this.audioContext.createGain()
       osc2.connect(gain2)
       gain2.connect(this.audioContext.destination)
-      osc2.frequency.value = 1320
+      osc2.frequency.setValueAtTime(1320, now)
       osc2.type = 'sine'
       gain2.gain.setValueAtTime(0.15, now)
       gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
       osc2.start(now)
       osc2.stop(now + 0.1)
+
+      const oscillator = this.audioContext.createOscillator()
+      const gainNode = this.audioContext.createGain()
+      oscillator.connect(gainNode)
+      gainNode.connect(this.audioContext.destination)
+      oscillator.type = 'triangle'
+      oscillator.frequency.setValueAtTime(523.25, now)
+      oscillator.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1)
+      gainNode.gain.setValueAtTime(0.2, now)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2)
+      oscillator.start(now)
+      oscillator.stop(now + 0.2)
     } catch (e) {
       // audio error silent
     }
@@ -646,36 +742,54 @@ export class GameEngine {
   private playHitSound(): void {
     if (!this.audioContext) return
     try {
+      const now = this.audioContext.currentTime
+
       const osc = this.audioContext.createOscillator()
       const gain = this.audioContext.createGain()
       osc.connect(gain)
       gain.connect(this.audioContext.destination)
-      osc.frequency.value = 150
+      osc.frequency.setValueAtTime(200, now)
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.2)
       osc.type = 'sawtooth'
-      const now = this.audioContext.currentTime
-      gain.gain.setValueAtTime(0.2, now)
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
+      gain.gain.setValueAtTime(0.25, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25)
       osc.start(now)
-      osc.stop(now + 0.2)
+      osc.stop(now + 0.25)
+
+      const noiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 0.15, this.audioContext.sampleRate)
+      const output = noiseBuffer.getChannelData(0)
+      for (let i = 0; i < output.length; i++) {
+        output[i] = Math.random() * 2 - 1
+      }
+      const noise = this.audioContext.createBufferSource()
+      noise.buffer = noiseBuffer
+      const noiseGain = this.audioContext.createGain()
+      noise.connect(noiseGain)
+      noiseGain.connect(this.audioContext.destination)
+      noiseGain.gain.setValueAtTime(0.15, now)
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+      noise.start(now)
+      noise.stop(now + 0.15)
     } catch (e) {
       // audio error silent
     }
   }
 
-  private playBeatSound(): void {
+  private playBeatSound(intensity: number): void {
     if (!this.audioContext) return
     try {
+      const now = this.audioContext.currentTime
+
       const osc = this.audioContext.createOscillator()
       const gain = this.audioContext.createGain()
       osc.connect(gain)
       gain.connect(this.audioContext.destination)
-      osc.frequency.value = 440
+      osc.frequency.value = 60 + intensity * 20
       osc.type = 'sine'
-      const now = this.audioContext.currentTime
-      gain.gain.setValueAtTime(0.08, now)
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05)
+      gain.gain.setValueAtTime(0.08 * intensity, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
       osc.start(now)
-      osc.stop(now + 0.05)
+      osc.stop(now + 0.08)
     } catch (e) {
       // audio error silent
     }
@@ -731,11 +845,20 @@ export class GameEngine {
       return
     }
 
+    if (this.playerPhysics.knockbackTimer > 0) {
+      this.playerPhysics.knockbackTimer -= deltaTime
+      this.playerPhysics.knockbackX *= 0.9
+      if (this.playerPhysics.knockbackTimer <= 0) {
+        this.playerPhysics.knockbackX = 0
+      }
+    }
+
     if (this.player.targetLane !== this.player.lane) {
       const laneDiff = this.player.targetLane - this.player.lane
       const moveSpeed = 10 * deltaTime / 16
       if (Math.abs(laneDiff) < moveSpeed) {
         this.player.lane = this.player.targetLane
+        this.playerPhysics.velocityX = 0
       } else {
         this.player.lane += Math.sign(laneDiff) * moveSpeed
       }
@@ -772,6 +895,7 @@ export class GameEngine {
       particle.x += particle.vx
       particle.y += particle.vy
       particle.vy += 0.08
+      particle.vx *= 0.99
       particle.life -= deltaTime / 1000
     }
 
@@ -803,8 +927,11 @@ export class GameEngine {
   }
 
   getRenderState(): RenderState {
+    const renderPlayer = { ...this.player }
+    ;(renderPlayer as any).knockbackX = this.playerPhysics.knockbackX
+
     return {
-      player: { ...this.player },
+      player: renderPlayer,
       obstacles: this.activeObstacles.map((o) => ({ ...o })),
       notes: this.activeNotes.map((n) => ({ ...n })),
       game: { ...this.game },
