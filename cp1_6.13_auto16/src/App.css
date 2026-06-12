@@ -1,0 +1,362 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: #111827;
+  background: #ffffff;
+  overflow: hidden;
+  min-width: 320px;
+}
+
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+:root {
+  --transition: all 0.3s ease-in-out;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  position: relative;
+}
+
+.hamburger-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  width: 40px;
+  height: 40px;
+  background: #111827;
+  color: #ffffff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.left-sidebar {
+  width: 80px;
+  min-width: 80px;
+  background: #111827;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+  transition: var(--transition);
+  z-index: 100;
+}
+
+.left-sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.sidebar-header {
+  padding: 0 12px 32px;
+  display: flex;
+  justify-content: center;
+}
+
+.project-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.sidebar-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: transparent;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.sidebar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.sidebar-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.sidebar-close-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  margin: 0 auto 8px;
+  background: transparent;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.sidebar-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.toolbar {
+  height: 56px;
+  min-height: 56px;
+  background: #e5e7eb;
+  border-radius: 12px;
+  margin: 16px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition);
+  font-weight: 500;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.primary {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.toolbar-btn.primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.add-dropdown {
+  position: relative;
+}
+
+.add-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  min-width: 140px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: var(--transition);
+  z-index: 50;
+}
+
+.add-dropdown:hover .add-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.add-menu-item {
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 6px;
+  color: #374151;
+  font-size: 14px;
+  transition: var(--transition);
+}
+
+.add-menu-item:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.workspace {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  padding: 0 16px 16px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.canvas-area {
+  flex: 0 0 80%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: auto;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  min-height: 0;
+}
+
+.component-panel {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 240px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+}
+
+.component-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 14px;
+}
+
+.component-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.component-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: grab;
+  transition: var(--transition);
+  border: 1px solid transparent;
+}
+
+.component-item:hover {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.component-item.dragging {
+  opacity: 0.7;
+  transform: rotate(3deg);
+}
+
+.component-item:active {
+  cursor: grabbing;
+}
+
+.component-preview {
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+
+.component-label {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.right-panel {
+  flex: 0 0 calc(20% - 16px);
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (max-width: 1024px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .left-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .workspace {
+    flex-direction: column;
+  }
+
+  .canvas-area {
+    flex: 1;
+    min-height: 500px;
+  }
+
+  .right-panel {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    max-height: 40%;
+    flex-direction: row;
+  }
+
+  .component-panel {
+    position: static;
+    width: 100%;
+    max-width: 240px;
+    margin-bottom: 16px;
+  }
+}
