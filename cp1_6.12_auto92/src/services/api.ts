@@ -85,3 +85,38 @@ export const deleteAnnotation = (annotationId: string): Promise<{ success: boole
   request<{ success: boolean }>(`/annotation/${annotationId}`, {
     method: 'DELETE',
   });
+
+export interface ExportPayload {
+  contractName: string;
+  oldVersion: string;
+  newVersion: string;
+  submitterOld: string;
+  submitterNew: string;
+  diffSummary: { added: number; removed: number; modified: number };
+  annotations: Array<{
+    id: string;
+    version: string;
+    lineNumber: number;
+    content: string;
+    status: Annotation['status'];
+    author: string;
+    createdAt: number;
+  }>;
+}
+
+export const exportReport = async (contractId: string, payload: ExportPayload): Promise<{ url: string; filename: string }> => {
+  const response = await fetch(`${API_BASE}/contract/${contractId}/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+  const filename = filenameMatch ? filenameMatch[1] : `ContractFlow_${payload.contractName}.pdf`;
+  const url = URL.createObjectURL(blob);
+  return { url, filename };
+};

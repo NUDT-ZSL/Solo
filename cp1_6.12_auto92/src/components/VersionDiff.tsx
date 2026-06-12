@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { diffLines, Change } from 'diff';
 import { ContractVersion, Annotation, DiffLine, DiffResult } from '../services/api';
 
@@ -12,15 +12,99 @@ interface VersionDiffProps {
   onAnnotationExpand: (id: string | null) => void;
 }
 
-const diffCache = new Map<string, DiffResult>();
+interface LRUNode {
+  key: string;
+  value: DiffResult;
+  prev?: LRUNode;
+  next?: LRUNode;
+}
 
-const computeDiff = (oldContent: string, newContent: string): DiffResult => {
-  const cacheKey = `${oldContent.length}-${oldContent.slice(0, 100)}-${newContent.length}-${newContent.slice(0, 100)}`;
-  if (diffCache.has(cacheKey)) {
-    return diffCache.get(cacheKey)!;
+class LRUCache {
+  private capacity: number;
+  private map: Map<string, LRUNode>;
+  private head: LRUNode | undefined;
+  private tail: LRUNode | undefined;
+
+  constructor(capacity = 100) {
+    this.capacity = capacity;
+    this.map = new Map();
   }
 
-  const changes = diffLines(oldContent, newContent);
+  private hashContent(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return String(hash) + '-' + str.length;
+  }
+
+  makeKey(oldContent: string, newContent: string): string {
+    return this.hashContent(oldContent) + ':' + this.hashContent(newContent);
+  }
+
+  get(key: string): DiffResult | undefined {
+    const node = this.map.get(key);
+    if (!node) return undefined;
+    this.moveToFront(node);
+    return node.value;
+  }
+
+  set(key: string, value: DiffResult): void {
+    const existing = this.map.get(key);
+    if (existing) {
+      existing.value = value;
+      this.moveToFront(existing);
+      return;
+    }
+    if (this.map.size >= this.capacity) {
+      this.evictLRU();
+    }
+    const node: LRUNode = { key, value };
+    this.map.set(key, node);
+    this.addToFront(node);
+  }
+
+  private addToFront(node: LRUNode): void {
+    node.next = this.head;
+    node.prev = undefined;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    if (!this.tail) this.tail = node;
+  }
+
+  private moveToFront(node: LRUNode): void {
+    if (node === this.head) return;
+    this.detach(node);
+    this.addToFront(node);
+  }
+
+  private detach(node: LRUNode): void {
+    if (node.prev) node.prev.next = node.next;
+    else this.head = node.next;
+    if (node.next) node.next.prev = node.prev;
+    else this.tail = node.prev;
+  }
+
+  private evictLRU(): void {
+    if (!this.tail) return;
+    this.map.delete(this.tail.key);
+    this.detach(this.tail);
+  }
+
+  get size(): number {
+    return this.map.size;
+  }
+}
+
+const diffCache = new LRUCache(100);
+
+const computeDiff = (oldContent: string, newContent: string): DiffResult => {
+  const cacheKey = diffCache.makeKey(oldContent, newContent);
+  const cached = diffCache.get(cacheKey);
+  if (cached) return cached;
+
+  const changes = diffLines(oldContent, newContent, { newlineIsToken: false });
   const leftLines: DiffLine[] = [];
   const rightLines: DiffLine[] = [];
   let leftLineNum = 1;
@@ -29,102 +113,149 @@ const computeDiff = (oldContent: string, newContent: string): DiffResult => {
   let removedCount = 0;
   let modifiedCount = 0;
 
-  const pendingChanges: Change[] = [];
+  const splitToLines = (value: string): string[] => {
+    const split = value.split('\n');
+    if (split.length > 1 && split[split.length - 1] === '') {
+      split.pop();
+    }
+    return split;
+  };
 
-  const flushPending = () => {
-    if (pendingChanges.length === 0) return;
-    const removed = pendingChanges.filter((c) => c.removed);
-    const added = pendingChanges.filter((c) => c.added);
-    const unchanged = pendingChanges.filter((c) => !c.added && !c.removed);
+  for (let i = 0; i < changes.length; i++) {
+    const change = changes[i];
+    const nextChange = changes[i + 1];
 
-    for (const c of unchanged) {
-      const lines = c.value.split('\n').filter((_, i, arr) => i < arr.length - 1 || arr[i] !== '');
+    if (!change.added && !change.removed) {
+      const lines = splitToLines(change.value);
       for (const line of lines) {
         leftLines.push({ type: 'unchanged', content: line, leftLineNumber: leftLineNum, rightLineNumber: rightLineNum });
         rightLines.push({ type: 'unchanged', content: line, leftLineNumber: leftLineNum, rightLineNumber: rightLineNum });
         leftLineNum++;
         rightLineNum++;
       }
+      continue;
     }
 
-    const maxLen = Math.max(removed.length, added.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (i < removed.length) {
-        const lines = removed[i].value.split('\n').filter((_, idx, arr) => idx < arr.length - 1 || arr[idx] !== '');
-        for (const line of lines) {
-          const isModified = i < added.length;
+    if (change.removed && nextChange && nextChange.added) {
+      const removedLines = splitToLines(change.value);
+      const addedLines = splitToLines(nextChange.value);
+      const maxLen = Math.max(removedLines.length, addedLines.length);
+
+      for (let j = 0; j < maxLen; j++) {
+        if (j < removedLines.length) {
           leftLines.push({
-            type: isModified ? 'modified' : 'removed',
-            content: line,
+            type: 'modified',
+            content: removedLines[j],
             leftLineNumber: leftLineNum,
             rightLineNumber: null,
           });
-          rightLines.push({
-            type: isModified ? 'modified' : 'removed',
-            content: '',
-            leftLineNumber: null,
-            rightLineNumber: null,
-          });
-          if (isModified) modifiedCount++;
-          else removedCount++;
+          removedCount++;
+          modifiedCount++;
           leftLineNum++;
-        }
-      }
-      if (i < added.length) {
-        const lines = added[i].value.split('\n').filter((_, idx, arr) => idx < arr.length - 1 || arr[idx] !== '');
-        for (const line of lines) {
-          const isModified = i < removed.length;
+        } else {
           leftLines.push({
-            type: isModified ? 'modified' : 'added',
+            type: 'modified',
             content: '',
             leftLineNumber: null,
             rightLineNumber: null,
           });
+        }
+
+        if (j < addedLines.length) {
           rightLines.push({
-            type: isModified ? 'modified' : 'added',
-            content: line,
+            type: 'modified',
+            content: addedLines[j],
             leftLineNumber: null,
             rightLineNumber: rightLineNum,
           });
-          if (!isModified) addedCount++;
+          addedCount++;
           rightLineNum++;
+        } else {
+          rightLines.push({
+            type: 'modified',
+            content: '',
+            leftLineNumber: null,
+            rightLineNumber: null,
+          });
         }
       }
+      i++;
+      continue;
     }
 
-    pendingChanges.length = 0;
-  };
+    if (change.removed) {
+      const lines = splitToLines(change.value);
+      for (const line of lines) {
+        leftLines.push({
+          type: 'removed',
+          content: line,
+          leftLineNumber: leftLineNum,
+          rightLineNumber: null,
+        });
+        rightLines.push({
+          type: 'removed',
+          content: '',
+          leftLineNumber: null,
+          rightLineNumber: null,
+        });
+        removedCount++;
+        leftLineNum++;
+      }
+      continue;
+    }
 
-  for (const change of changes) {
-    if (change.added || change.removed) {
-      pendingChanges.push(change);
-    } else {
-      flushPending();
-      pendingChanges.push(change);
-      flushPending();
+    if (change.added) {
+      const lines = splitToLines(change.value);
+      for (const line of lines) {
+        leftLines.push({
+          type: 'added',
+          content: '',
+          leftLineNumber: null,
+          rightLineNumber: null,
+        });
+        rightLines.push({
+          type: 'added',
+          content: line,
+          leftLineNumber: null,
+          rightLineNumber: rightLineNum,
+        });
+        addedCount++;
+        rightLineNum++;
+      }
+      continue;
     }
   }
-  flushPending();
 
   const result: DiffResult = { leftLines, rightLines, addedCount, removedCount, modifiedCount };
   diffCache.set(cacheKey, result);
-  if (diffCache.size > 50) {
-    const firstKey = diffCache.keys().next().value;
-    if (firstKey) diffCache.delete(firstKey);
-  }
   return result;
 };
 
-const getLineStyles = (type: DiffLine['type']): { bg: string; border: string; tagBg: string; tagColor: string; tagText: string } => {
+const getLineStyles = (type: DiffLine['type']): {
+  bg: string; border: string; tagBg: string; tagColor: string; tagText: string;
+  leftIndicator: string;
+} => {
   switch (type) {
     case 'added':
-      return { bg: '#e6ffe6', border: '#22c55e', tagBg: '#dcfce7', tagColor: '#15803d', tagText: '+' };
+      return {
+        bg: '#e6ffe6', border: '#22c55e', tagBg: '#dcfce7', tagColor: '#15803d', tagText: '+',
+        leftIndicator: '#22c55e',
+      };
     case 'removed':
-      return { bg: '#ffe6e6', border: '#ef4444', tagBg: '#fee2e2', tagColor: '#b91c1c', tagText: '-' };
+      return {
+        bg: '#ffe6e6', border: '#ef4444', tagBg: '#fee2e2', tagColor: '#b91c1c', tagText: '-',
+        leftIndicator: '#ef4444',
+      };
     case 'modified':
-      return { bg: '#ffffcc', border: '#eab308', tagBg: '#fef9c3', tagColor: '#a16207', tagText: '~' };
+      return {
+        bg: '#ffffcc', border: '#eab308', tagBg: '#fef3c7', tagColor: '#a16207', tagText: '~',
+        leftIndicator: '#eab308',
+      };
     default:
-      return { bg: '#ffffff', border: 'transparent', tagBg: 'transparent', tagColor: '#9ca3af', tagText: '' };
+      return {
+        bg: '#ffffff', border: 'transparent', tagBg: 'transparent', tagColor: '#9ca3af', tagText: '',
+        leftIndicator: 'transparent',
+      };
   }
 };
 
@@ -138,7 +269,16 @@ export default function VersionDiff({
   onAnnotationExpand,
 }: VersionDiffProps) {
   const [hoveredLine, setHoveredLine] = useState<{ side: 'left' | 'right'; index: number } | null>(null);
-  const diffResult = useMemo(() => computeDiff(oldVersion.content, newVersion.content), [oldVersion.content, newVersion.content]);
+  const computeStartRef = useRef<number>(0);
+  const perfRef = useRef<{ computed: boolean; time: number }>({ computed: false, time: 0 });
+
+  computeStartRef.current = performance.now();
+  const diffResult = useMemo(() => {
+    const start = performance.now();
+    const r = computeDiff(oldVersion.content, newVersion.content);
+    perfRef.current = { computed: true, time: performance.now() - start };
+    return r;
+  }, [oldVersion.content, newVersion.content]);
 
   const getLineAnnotations = (versionId: string, lineNumber: number | null): Annotation[] => {
     if (lineNumber === null) return [];
@@ -156,6 +296,29 @@ export default function VersionDiff({
     const lineAnns = getLineAnnotations(versionId, lineNumber);
     const isSelected = selectedLine?.versionId === versionId && selectedLine?.lineNumber === lineNumber;
     const isHovered = hoveredLine?.side === side && hoveredLine?.index === index;
+    const hasContent = line.content !== '' && line.content != null;
+
+    let actualBg = styles.bg;
+    let actualTag = styles.tagText;
+    let actualTagBg = styles.tagBg;
+    let actualTagColor = styles.tagColor;
+
+    if (line.type === 'modified') {
+      if (side === 'left' && hasContent) {
+        actualBg = '#ffe6e6';
+        actualTag = '-';
+        actualTagBg = '#fee2e2';
+        actualTagColor = '#b91c1c';
+      } else if (side === 'right' && hasContent) {
+        actualBg = '#e6ffe6';
+        actualTag = '+';
+        actualTagBg = '#dcfce7';
+        actualTagColor = '#15803d';
+      } else {
+        actualBg = '#ffffcc';
+        actualTag = '';
+      }
+    }
 
     return (
       <div
@@ -171,7 +334,7 @@ export default function VersionDiff({
           display: 'flex',
           minHeight: 26,
           lineHeight: '26px',
-          background: styles.bg,
+          background: hasContent ? actualBg : line.type === 'modified' ? '#ffffcc' : '#fafafa',
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: 13,
           cursor: lineNumber !== null ? 'pointer' : 'default',
@@ -180,28 +343,28 @@ export default function VersionDiff({
           boxShadow: isSelected ? 'inset 2px 0 0 0 #3b82f6' : isHovered ? 'inset 2px 0 0 0 rgba(59,130,246,0.3)' : 'none',
         }}
       >
-        {line.type !== 'unchanged' && (
+        {actualTag && hasContent && (
           <div
             style={{
               position: 'absolute',
               left: 44,
-              top: 2,
+              top: 4,
               width: 18,
               height: 18,
               borderRadius: 4,
-              background: styles.tagBg,
-              color: styles.tagColor,
+              background: actualTagBg,
+              color: actualTagColor,
               fontSize: 12,
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 1,
-              opacity: line.content ? 1 : 0,
               userSelect: 'none',
+              lineHeight: '18px',
             }}
           >
-            {styles.tagText}
+            {actualTag}
           </div>
         )}
         <div
@@ -214,8 +377,8 @@ export default function VersionDiff({
             fontSize: 12,
             userSelect: 'none',
             borderRight: '1px solid #f3f4f6',
-            background: line.type !== 'unchanged' ? styles.border + '10' : 'transparent',
-            borderLeft: `3px solid ${styles.border}`,
+            background: line.type !== 'unchanged' ? (line.type === 'modified' ? 'rgba(234, 179, 8, 0.08)' : styles.border + '15') : 'transparent',
+            borderLeft: `3px solid ${line.type === 'modified' ? styles.leftIndicator : styles.leftIndicator}`,
           }}
         >
           {lineNumber || ''}
@@ -223,14 +386,15 @@ export default function VersionDiff({
         <div
           style={{
             flex: 1,
-            paddingLeft: styles.tagText && line.content ? 28 : 12,
+            paddingLeft: hasContent && actualTag ? 30 : 12,
             paddingRight: 48,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-all',
-            color: line.content ? '#1a2332' : 'transparent',
+            color: hasContent ? '#1a2332' : 'transparent',
+            opacity: hasContent ? 1 : 0.3,
           }}
         >
-          {line.content || ' '}
+          {hasContent ? line.content : '　'}
         </div>
         {lineAnns.length > 0 && (
           <div
@@ -244,7 +408,7 @@ export default function VersionDiff({
               zIndex: 2,
             }}
           >
-            {lineAnns.map((ann) => {
+            {lineAnns.map((ann, idx) => {
               const isExpanded = expandedAnnotationId === ann.id;
               return (
                 <div key={ann.id} style={{ position: 'relative' }}>
@@ -267,11 +431,12 @@ export default function VersionDiff({
                       cursor: 'pointer',
                       boxShadow: '0 2px 6px rgba(59,130,246,0.35)',
                       transition: 'transform 0.15s ease',
+                      lineHeight: '22px',
                     }}
                     onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.transform = 'scale(1.1)')}
                     onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.transform = 'scale(1)')}
                   >
-                    {lineAnns.indexOf(ann) + 1}
+                    {idx + 1}
                   </div>
                   {isExpanded && (
                     <div
@@ -319,12 +484,14 @@ export default function VersionDiff({
       <div
         style={{
           display: 'flex',
+          flexWrap: 'wrap',
           gap: 16,
           padding: 16,
           background: '#fff',
           borderRadius: 12,
           boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           animation: 'fadeIn 0.3s ease',
+          alignItems: 'center',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: '#dcfce7', borderRadius: 8 }}>
@@ -340,6 +507,26 @@ export default function VersionDiff({
           <span style={{ fontSize: 13, fontWeight: 600, color: '#a16207' }}>修改 {diffResult.modifiedCount} 行</span>
         </div>
       </div>
+
+      {/* 修改说明 */}
+      {diffResult.modifiedCount > 0 && (
+        <div
+          style={{
+            padding: '10px 14px',
+            background: '#fffbeb',
+            borderLeft: '3px solid #eab308',
+            borderRadius: 6,
+            fontSize: 12,
+            color: '#92400e',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>💡</span>
+          <span>修改行：左侧显示删除内容（红色背景+黄色竖线），右侧显示新增内容（绿色背景+黄色竖线）</span>
+        </div>
+      )}
 
       {/* 版本标题 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -381,10 +568,10 @@ export default function VersionDiff({
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid #e5e7eb' }}>
           <div style={{ padding: '12px 16px', fontSize: 12, fontWeight: 600, color: '#6b7280', background: '#f9fafb', borderRight: '1px solid #e5e7eb' }}>
-            {oldVersion.version}
+            {oldVersion.version}（删除侧）
           </div>
           <div style={{ padding: '12px 16px', fontSize: 12, fontWeight: 600, color: '#6b7280', background: '#f9fafb' }}>
-            {newVersion.version}
+            {newVersion.version}（新增侧）
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', maxHeight: 'calc(100vh - 420px)', overflow: 'auto' }}>

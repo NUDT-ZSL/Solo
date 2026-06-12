@@ -17,7 +17,8 @@
     "nedb-promises": "^6.2.3",
     "diff": "^5.1.0",
     "uuid": "^9.0.0",
-    "jspdf": "^2.5.1"
+    "jspdf": "^2.5.1",
+    "pdfkit": "^0.14.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
