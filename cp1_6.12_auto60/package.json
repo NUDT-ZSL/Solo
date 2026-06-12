@@ -1,0 +1,25 @@
+{
+  "name": "moodcanvas",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "lodash": "^4.17.21",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tone": "^14.7.77",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18"
+  }
+}
