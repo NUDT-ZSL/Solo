@@ -15,12 +15,14 @@ export interface PointCloudState {
 const vertexShader = `
   attribute vec3 originalColor;
   attribute float depthValue;
+  attribute float targetSize;
   
-  uniform float pointSize;
+  uniform float pointSizeBase;
   uniform float depthOffset;
   uniform float saturation;
   uniform int renderMode;
   uniform vec3 solidColor;
+  uniform float time;
   
   varying vec3 vColor;
   varying float vDepth;
@@ -44,7 +46,9 @@ const vertexShader = `
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     
-    gl_PointSize = pointSize * (300.0 / -mvPosition.z);
+    float distanceFactor = 300.0 / -mvPosition.z;
+    float size = pointSizeBase * targetSize * distanceFactor;
+    gl_PointSize = clamp(size, 2.0, 6.0);
     
     vDepth = depthValue;
     
@@ -92,18 +96,28 @@ export class PointCloudRenderer {
   };
   
   private targetState: PointCloudState = { ...this.state };
+  private currentRenderMode: RenderMode = 'original';
+  private targetRenderMode: RenderMode = 'original';
+  
   private animationId: number | null = null;
   private lastFrameTime = 0;
   private fps = 0;
   private frameCount = 0;
   private fpsUpdateTime = 0;
+  private startTime = 0;
   
   private pointCount = 0;
+  private originalPositions: Float32Array | null = null;
+  private originalColors: Float32Array | null = null;
+  private depthValues: Float32Array | null = null;
+  private targetSizes: Float32Array | null = null;
+  
   private onFpsUpdate?: (fps: number) => void;
   private onPointCountUpdate?: (count: number) => void;
 
   constructor(container: HTMLElement) {
     this.container = container;
+    this.startTime = performance.now();
     
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0d1117);
@@ -166,56 +180,67 @@ export class PointCloudRenderer {
   }
 
   public updatePointCloud(data: ParsedPointCloud): void {
-    if (this.pointCloud) {
-      this.scene.remove(this.pointCloud);
-      this.pointCloud.geometry.dispose();
-      if (this.material) {
-        this.material.dispose();
-      }
-    }
-
     this.pointCount = data.pointCount;
     
     if (data.pointCount === 0) {
+      if (this.pointCloud) {
+        this.scene.remove(this.pointCloud);
+        this.pointCloud.geometry.dispose();
+        if (this.material) this.material.dispose();
+      }
       this.pointCloud = null;
       this.material = null;
+      this.originalPositions = null;
+      this.originalColors = null;
+      this.depthValues = null;
+      this.targetSizes = null;
       this.notifyPointCountUpdate();
       return;
     }
 
+    this.originalPositions = data.positions.slice();
+    this.originalColors = data.colors.slice();
+    this.depthValues = data.rawDepthValues.slice();
+    
+    this.targetSizes = new Float32Array(data.pointCount);
+    for (let i = 0; i < data.pointCount; i++) {
+      this.targetSizes[i] = 1.0;
+    }
+
+    if (!this.pointCloud || !this.material) {
+      this.createPointCloud(data);
+    } else {
+      this.updateGeometryAttributes(data);
+    }
+    
+    this.fitCameraToPointCloud();
+    this.notifyPointCountUpdate();
+  }
+
+  private createPointCloud(data: ParsedPointCloud): void {
+    if (this.pointCloud) {
+      this.scene.remove(this.pointCloud);
+      this.pointCloud.geometry.dispose();
+      if (this.material) this.material.dispose();
+    }
+
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
-    geometry.setAttribute('originalColor', new THREE.BufferAttribute(data.colors, 3));
-    
-    const depthValues = new Float32Array(data.pointCount);
-    const positions = data.positions;
-    let minZ = Infinity;
-    let maxZ = -Infinity;
-    
-    for (let i = 0; i < data.pointCount; i++) {
-      const z = positions[i * 3 + 2];
-      if (z < minZ) minZ = z;
-      if (z > maxZ) maxZ = z;
-    }
-    
-    const zRange = maxZ - minZ || 1;
-    for (let i = 0; i < data.pointCount; i++) {
-      const z = positions[i * 3 + 2];
-      depthValues[i] = (z - minZ) / zRange;
-    }
-    
-    geometry.setAttribute('depthValue', new THREE.BufferAttribute(depthValues, 1));
+    geometry.setAttribute('position', new THREE.BufferAttribute(data.positions.slice(), 3));
+    geometry.setAttribute('originalColor', new THREE.BufferAttribute(data.colors.slice(), 3));
+    geometry.setAttribute('depthValue', new THREE.BufferAttribute(data.rawDepthValues.slice(), 1));
+    geometry.setAttribute('targetSize', new THREE.BufferAttribute(this.targetSizes!.slice(), 1));
     geometry.computeBoundingSphere();
     
     this.material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
       uniforms: {
-        pointSize: { value: this.state.pointSize },
+        pointSizeBase: { value: this.state.pointSize },
         depthOffset: { value: this.state.depthOffset },
         saturation: { value: this.state.saturation },
-        renderMode: { value: this.getRenderModeIndex(this.state.renderMode) },
+        renderMode: { value: this.getRenderModeIndex(this.currentRenderMode) },
         solidColor: { value: new THREE.Color(this.state.solidColor) },
+        time: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
@@ -224,9 +249,41 @@ export class PointCloudRenderer {
     
     this.pointCloud = new THREE.Points(geometry, this.material);
     this.scene.add(this.pointCloud);
+  }
+
+  private updateGeometryAttributes(data: ParsedPointCloud): void {
+    if (!this.pointCloud || !this.material) return;
     
-    this.fitCameraToPointCloud();
-    this.notifyPointCountUpdate();
+    const geometry = this.pointCloud.geometry;
+    
+    const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const colorAttr = geometry.getAttribute('originalColor') as THREE.BufferAttribute;
+    const depthAttr = geometry.getAttribute('depthValue') as THREE.BufferAttribute;
+    const sizeAttr = geometry.getAttribute('targetSize') as THREE.BufferAttribute;
+    
+    if (posAttr.count !== data.pointCount) {
+      geometry.dispose();
+      this.createPointCloud(data);
+      return;
+    }
+    
+    const posArray = posAttr.array as Float32Array;
+    const colorArray = colorAttr.array as Float32Array;
+    const depthArray = depthAttr.array as Float32Array;
+    const sizeArray = sizeAttr.array as Float32Array;
+    
+    posArray.set(data.positions);
+    colorArray.set(data.colors);
+    depthArray.set(data.rawDepthValues);
+    sizeArray.set(this.targetSizes!);
+    
+    posAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
+    depthAttr.needsUpdate = true;
+    sizeAttr.needsUpdate = true;
+    
+    geometry.computeBoundingSphere();
+    geometry.boundingSphere!.needsUpdate = true;
   }
 
   private getRenderModeIndex(mode: RenderMode): number {
@@ -268,6 +325,7 @@ export class PointCloudRenderer {
   }
 
   public setRenderMode(mode: RenderMode): void {
+    this.targetRenderMode = mode;
     this.targetState.renderMode = mode;
   }
 
@@ -280,47 +338,42 @@ export class PointCloudRenderer {
   }
 
   public getPointData(): { positions: Float32Array; colors: Float32Array; count: number } | null {
-    if (!this.pointCloud || !this.material) return null;
-    
-    const geometry = this.pointCloud.geometry;
-    const positions = geometry.getAttribute('position').array as Float32Array;
-    const originalColors = geometry.getAttribute('originalColor').array as Float32Array;
-    
-    const depthOffset = this.state.depthOffset;
-    const saturation = this.state.saturation;
-    const renderMode = this.state.renderMode;
-    const solidColor = new THREE.Color(this.state.solidColor);
+    if (!this.pointCloud || !this.material || !this.originalPositions || !this.originalColors || !this.depthValues) {
+      return null;
+    }
     
     const count = this.pointCount;
     const outPositions = new Float32Array(count * 3);
     const outColors = new Float32Array(count * 3);
     
+    const depthOffset = this.state.depthOffset;
+    const saturation = this.state.saturation;
+    const renderMode = this.currentRenderMode;
+    const solidColor = new THREE.Color(this.state.solidColor);
+    
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
-      outPositions[i3] = positions[i3];
-      outPositions[i3 + 1] = positions[i3 + 1];
-      outPositions[i3 + 2] = positions[i3 + 2] + depthOffset;
+      outPositions[i3] = this.originalPositions[i3];
+      outPositions[i3 + 1] = this.originalPositions[i3 + 1];
+      outPositions[i3 + 2] = this.originalPositions[i3 + 2] + depthOffset;
       
       if (renderMode === 'solid') {
         outColors[i3] = solidColor.r;
         outColors[i3 + 1] = solidColor.g;
         outColors[i3 + 2] = solidColor.b;
       } else if (renderMode === 'depth') {
-        const depthVal = (geometry.getAttribute('depthValue').array as Float32Array)[i];
-        const t = Math.min(Math.max(depthVal, 0), 1);
-        const r = 1 - t;
-        const b = t;
-        outColors[i3] = r;
+        const t = Math.min(Math.max(this.depthValues[i], 0), 1);
+        outColors[i3] = 1 - t;
         outColors[i3 + 1] = 0;
-        outColors[i3 + 2] = b;
+        outColors[i3 + 2] = t;
       } else {
-        const r = originalColors[i3];
-        const g = originalColors[i3 + 1];
-        const b = originalColors[i3 + 2];
+        const r = this.originalColors[i3];
+        const g = this.originalColors[i3 + 1];
+        const b = this.originalColors[i3 + 2];
         const gray = r * 0.299 + g * 0.587 + b * 0.114;
-        outColors[i3] = gray + (r - gray) * saturation;
-        outColors[i3 + 1] = gray + (g - gray) * saturation;
-        outColors[i3 + 2] = gray + (b - gray) * saturation;
+        outColors[i3] = Math.max(0, Math.min(1, gray + (r - gray) * saturation));
+        outColors[i3 + 1] = Math.max(0, Math.min(1, gray + (g - gray) * saturation));
+        outColors[i3 + 2] = Math.max(0, Math.min(1, gray + (b - gray) * saturation));
       }
     }
     
@@ -346,19 +399,22 @@ export class PointCloudRenderer {
   }
 
   private updateStateAnimation(): void {
-    const factor = 0.1;
+    const factor = 0.15;
     
     this.state.pointSize = this.lerp(this.state.pointSize, this.targetState.pointSize, factor);
     this.state.depthOffset = this.lerp(this.state.depthOffset, this.targetState.depthOffset, factor);
     this.state.saturation = this.lerp(this.state.saturation, this.targetState.saturation, factor);
     
     if (this.material) {
-      this.material.uniforms.pointSize.value = this.state.pointSize;
+      this.material.uniforms.pointSizeBase.value = this.state.pointSize;
       this.material.uniforms.depthOffset.value = this.state.depthOffset;
       this.material.uniforms.saturation.value = this.state.saturation;
+      this.material.uniforms.time.value = (performance.now() - this.startTime) / 1000;
       
-      const targetModeIndex = this.getRenderModeIndex(this.targetState.renderMode);
-      this.material.uniforms.renderMode.value = targetModeIndex;
+      if (this.currentRenderMode !== this.targetRenderMode) {
+        this.currentRenderMode = this.targetRenderMode;
+        this.material.uniforms.renderMode.value = this.getRenderModeIndex(this.currentRenderMode);
+      }
     }
   }
 

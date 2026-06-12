@@ -15,7 +15,6 @@ export class Controls {
   private panel: HTMLElement;
   private uploadArea: HTMLElement;
   private statusBar: HTMLElement;
-  private mobileToggle: HTMLElement | null = null;
   
   private state: ControlState = {
     pointSize: 3,
@@ -33,6 +32,8 @@ export class Controls {
     this.renderer = renderer;
     this.onFileUpload = onFileUpload;
     
+    this.injectGlobalStyles();
+    
     this.panel = this.createPanel();
     this.uploadArea = this.createUploadArea();
     this.statusBar = this.createStatusBar();
@@ -49,6 +50,93 @@ export class Controls {
     this.bindRendererEvents();
   }
 
+  private injectGlobalStyles(): void {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes uploadBounce {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.3); }
+      }
+      @keyframes fpsBlink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      @keyframes ripple {
+        to {
+          transform: scale(4);
+          opacity: 0;
+        }
+      }
+      
+      .control-panel input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.1);
+        outline: none;
+        cursor: pointer;
+      }
+      
+      .control-panel input[type="range"]::-webkit-slider-runnable-track {
+        height: 4px;
+        border-radius: 2px;
+        background: transparent;
+      }
+      
+      .control-panel input[type="range"]::-moz-range-track {
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.1);
+      }
+      
+      .control-panel input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #5B8DEF;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(91, 141, 239, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.3);
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        margin-top: -6px;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+      
+      .control-panel input[type="range"]::-webkit-slider-thumb:hover {
+        box-shadow: 0 0 14px rgba(91, 141, 239, 0.9), inset 0 0 6px rgba(255, 255, 255, 0.4);
+        transform: scale(1.15);
+      }
+      
+      .control-panel input[type="range"]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #5B8DEF;
+        cursor: pointer;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 8px rgba(91, 141, 239, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.3);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+      
+      .control-panel input[type="range"]::-moz-range-thumb:hover {
+        box-shadow: 0 0 14px rgba(91, 141, 239, 0.9), inset 0 0 6px rgba(255, 255, 255, 0.4);
+        transform: scale(1.15);
+      }
+      
+      .control-panel input[type="range"]:focus {
+        outline: none;
+      }
+      
+      .control-panel input[type="range"]:focus::-webkit-slider-thumb {
+        box-shadow: 0 0 16px rgba(91, 141, 239, 1), inset 0 0 6px rgba(255, 255, 255, 0.4);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   private createPanel(): HTMLElement {
     const panel = document.createElement('div');
     panel.className = 'control-panel';
@@ -59,15 +147,20 @@ export class Controls {
       width: 280px;
       max-height: calc(100vh - 40px);
       overflow-y: auto;
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.1);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-radius: 16px;
       padding: 20px;
       z-index: 100;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
     `;
+    
+    panel.addEventListener('scroll', () => {
+      panel.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.35)';
+    });
+    
     return panel;
   }
 
@@ -75,8 +168,8 @@ export class Controls {
     const area = document.createElement('div');
     area.className = 'upload-area';
     area.innerHTML = `
-      <div class="upload-icon" style="font-size: 32px; margin-bottom: 8px;">📁</div>
-      <div class="upload-title" style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">拖拽深度图到此处</div>
+      <div class="upload-icon" style="font-size: 32px; margin-bottom: 8px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">📁</div>
+      <div class="upload-title" style="font-size: 14px; font-weight: 500; margin-bottom: 4px; color: #e6edf3;">拖拽深度图到此处</div>
       <div class="upload-subtitle" style="font-size: 12px; color: #8b949e;">或点击选择文件 (PNG/JPEG)</div>
     `;
     area.style.cssText = `
@@ -106,14 +199,16 @@ export class Controls {
     area.addEventListener('dragover', (e) => {
       e.preventDefault();
       area.style.transform = 'scale(1.05)';
-      area.style.borderColor = 'rgba(91, 141, 239, 0.8)';
+      area.style.borderColor = 'rgba(91, 141, 239, 0.9)';
       area.style.background = 'rgba(91, 141, 239, 0.15)';
+      area.style.boxShadow = '0 0 24px rgba(91, 141, 239, 0.2)';
     });
     
     area.addEventListener('dragleave', () => {
       area.style.transform = 'scale(1)';
       area.style.borderColor = 'rgba(91, 141, 239, 0.5)';
       area.style.background = 'rgba(91, 141, 239, 0.05)';
+      area.style.boxShadow = 'none';
     });
     
     area.addEventListener('drop', (e) => {
@@ -121,6 +216,7 @@ export class Controls {
       area.style.transform = 'scale(1)';
       area.style.borderColor = 'rgba(91, 141, 239, 0.5)';
       area.style.background = 'rgba(91, 141, 239, 0.05)';
+      area.style.boxShadow = 'none';
       
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) {
@@ -186,7 +282,7 @@ export class Controls {
     const wrapper = document.createElement('div');
     wrapper.className = 'slider-wrapper';
     wrapper.style.cssText = `
-      margin-bottom: 16px;
+      margin-bottom: 18px;
     `;
     
     const labelRow = document.createElement('div');
@@ -194,7 +290,7 @@ export class Controls {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       font-size: 13px;
     `;
     
@@ -207,12 +303,36 @@ export class Controls {
     valueEl.textContent = formatValue(defaultValue);
     valueEl.style.cssText = `
       color: #5B8DEF;
-      font-weight: 500;
+      font-weight: 600;
       font-variant-numeric: tabular-nums;
+      min-width: 48px;
+      text-align: right;
     `;
     
     labelRow.appendChild(labelEl);
     labelRow.appendChild(valueEl);
+    
+    const sliderContainer = document.createElement('div');
+    sliderContainer.style.cssText = `
+      position: relative;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.1);
+    `;
+    
+    const sliderFill = document.createElement('div');
+    const initialPercent = ((defaultValue - min) / (max - min)) * 100;
+    sliderFill.style.cssText = `
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #5B8DEF, #7aa7f5);
+      width: ${initialPercent}%;
+      transition: width 0.1s ease;
+    `;
+    sliderContainer.appendChild(sliderFill);
     
     const slider = document.createElement('input');
     slider.type = 'range';
@@ -220,56 +340,18 @@ export class Controls {
     slider.max = String(max);
     slider.step = String(step);
     slider.value = String(defaultValue);
-    
-    const sliderStyle = `
-      -webkit-appearance: none;
-      appearance: none;
+    slider.style.cssText = `
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
       width: 100%;
-      height: 4px;
-      border-radius: 2px;
-      background: linear-gradient(to right, #5B8DEF 0%, #5B8DEF ${((defaultValue - min) / (max - min)) * 100}%, rgba(255,255,255,0.1) ${((defaultValue - min) / (max - min)) * 100}%, rgba(255,255,255,0.1) 100%);
-      outline: none;
-      cursor: pointer;
+      height: 16px;
+      background: transparent;
+      margin: 0;
     `;
     
-    slider.style.cssText = sliderStyle;
-    
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = `
-      .control-panel input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #5B8DEF;
-        cursor: pointer;
-        box-shadow: 0 0 8px rgba(91, 141, 239, 0.6), inset 0 0 4px rgba(255,255,255,0.3);
-        transition: box-shadow 0.2s, transform 0.2s;
-      }
-      .control-panel input[type="range"]::-webkit-slider-thumb:hover {
-        box-shadow: 0 0 12px rgba(91, 141, 239, 0.8), inset 0 0 4px rgba(255,255,255,0.3);
-        transform: scale(1.1);
-      }
-      .control-panel input[type="range"]::-moz-range-thumb {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #5B8DEF;
-        cursor: pointer;
-        border: none;
-        box-shadow: 0 0 8px rgba(91, 141, 239, 0.6);
-      }
-      @keyframes uploadBounce {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.3); }
-      }
-      @keyframes fpsBlink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
-      }
-    `;
-    document.head.appendChild(styleSheet);
+    sliderContainer.appendChild(slider);
     
     slider.addEventListener('input', (e) => {
       const value = parseFloat((e.target as HTMLInputElement).value);
@@ -277,7 +359,7 @@ export class Controls {
       valueEl.textContent = formatValue(value);
       
       const percent = ((value - min) / (max - min)) * 100;
-      slider.style.background = `linear-gradient(to right, #5B8DEF 0%, #5B8DEF ${percent}%, rgba(255,255,255,0.1) ${percent}%, rgba(255,255,255,0.1) 100%)`;
+      sliderFill.style.width = `${percent}%`;
       
       if (key === 'pointSize') {
         this.renderer.setPointSize(value);
@@ -289,7 +371,7 @@ export class Controls {
     });
     
     wrapper.appendChild(labelRow);
-    wrapper.appendChild(slider);
+    wrapper.appendChild(sliderContainer);
     
     return wrapper;
   }
@@ -298,7 +380,7 @@ export class Controls {
     const section = document.createElement('div');
     section.className = 'render-mode-section';
     section.style.cssText = `
-      margin-bottom: 20px;
+      margin-bottom: 22px;
     `;
     
     const label = document.createElement('div');
@@ -319,9 +401,9 @@ export class Controls {
     btnGroup.style.cssText = `
       display: flex;
       gap: 4px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 8px;
-      padding: 3px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 10px;
+      padding: 4px;
     `;
     
     modes.forEach((mode) => {
@@ -330,36 +412,62 @@ export class Controls {
       btn.dataset.mode = mode.key;
       btn.style.cssText = `
         flex: 1;
-        padding: 8px 4px;
+        padding: 9px 6px;
         border: none;
-        border-radius: 6px;
+        border-radius: 8px;
         background: transparent;
         color: #8b949e;
         font-size: 12px;
+        font-weight: 500;
         cursor: pointer;
-        transition: all 0.3s;
+        transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
         font-family: inherit;
+        position: relative;
+        overflow: hidden;
       `;
       
       if (mode.key === this.state.renderMode) {
         btn.style.background = '#5B8DEF';
         btn.style.color = '#fff';
-        btn.style.boxShadow = '0 2px 8px rgba(91, 141, 239, 0.4)';
+        btn.style.boxShadow = '0 2px 10px rgba(91, 141, 239, 0.4)';
       }
       
-      btn.addEventListener('click', () => {
+      btn.addEventListener('mouseenter', () => {
+        if (mode.key !== this.state.renderMode) {
+          btn.style.background = 'rgba(91, 141, 239, 0.15)';
+          btn.style.color = '#c9d1d9';
+          btn.style.transform = 'scale(1.03)';
+        }
+      });
+      
+      btn.addEventListener('mouseleave', () => {
+        if (mode.key !== this.state.renderMode) {
+          btn.style.background = 'transparent';
+          btn.style.color = '#8b949e';
+          btn.style.transform = 'scale(1)';
+        }
+      });
+      
+      btn.addEventListener('click', (e) => {
+        this.createRipple(btn, e as MouseEvent);
+        
         this.state.renderMode = mode.key;
         this.renderer.setRenderMode(mode.key);
         
         btnGroup.querySelectorAll('button').forEach((b) => {
-          (b as HTMLElement).style.background = 'transparent';
-          (b as HTMLElement).style.color = '#8b949e';
-          (b as HTMLElement).style.boxShadow = 'none';
+          const btnEl = b as HTMLElement;
+          if (btnEl.dataset.mode !== mode.key) {
+            btnEl.style.background = 'transparent';
+            btnEl.style.color = '#8b949e';
+            btnEl.style.boxShadow = 'none';
+            btnEl.style.transform = 'scale(1)';
+          }
         });
         
         btn.style.background = '#5B8DEF';
         btn.style.color = '#fff';
-        btn.style.boxShadow = '0 2px 8px rgba(91, 141, 239, 0.4)';
+        btn.style.boxShadow = '0 2px 10px rgba(91, 141, 239, 0.4)';
+        btn.style.transform = 'scale(1)';
       });
       
       btnGroup.appendChild(btn);
@@ -375,36 +483,46 @@ export class Controls {
     const btn = document.createElement('button');
     btn.className = 'export-btn';
     btn.innerHTML = `
-      <span style="margin-right: 6px;">⬇</span>
+      <span style="margin-right: 6px; display: inline-block;">⬇</span>
       导出 PLY 文件
     `;
     btn.style.cssText = `
       width: 100%;
-      padding: 12px;
-      background: #5B8DEF;
+      padding: 13px 16px;
+      background: linear-gradient(135deg, #5B8DEF 0%, #4a7de0 100%);
       color: white;
       border: none;
-      border-radius: 10px;
+      border-radius: 12px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
       font-family: inherit;
-      box-shadow: 0 4px 12px rgba(91, 141, 239, 0.3);
+      box-shadow: 0 4px 14px rgba(91, 141, 239, 0.35);
+      position: relative;
+      overflow: hidden;
     `;
     
     btn.addEventListener('mouseenter', () => {
-      btn.style.transform = 'translateY(-2px)';
-      btn.style.boxShadow = '0 6px 20px rgba(91, 141, 239, 0.5)';
+      btn.style.transform = 'translateY(-2px) scale(1.02)';
+      btn.style.boxShadow = '0 6px 24px rgba(91, 141, 239, 0.55)';
     });
     
     btn.addEventListener('mouseleave', () => {
-      btn.style.transform = 'translateY(0)';
-      btn.style.boxShadow = '0 4px 12px rgba(91, 141, 239, 0.3)';
+      btn.style.transform = 'translateY(0) scale(1)';
+      btn.style.boxShadow = '0 4px 14px rgba(91, 141, 239, 0.35)';
     });
     
-    btn.addEventListener('click', () => {
-      this.createRipple(btn, event as MouseEvent);
+    btn.addEventListener('mousedown', () => {
+      btn.style.transform = 'translateY(0) scale(0.98)';
+    });
+    
+    btn.addEventListener('mouseup', () => {
+      btn.style.transform = 'translateY(-2px) scale(1.02)';
+    });
+    
+    btn.addEventListener('click', (e) => {
+      this.createRipple(btn, e as MouseEvent);
       this.onExportClick?.();
     });
     
@@ -424,15 +542,14 @@ export class Controls {
       height: ${size}px;
       left: ${x}px;
       top: ${y}px;
-      background: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.45);
       border-radius: 50%;
       transform: scale(0);
-      animation: ripple 0.6s ease-out;
+      animation: ripple 0.6s ease-out forwards;
       pointer-events: none;
+      z-index: 1;
     `;
     
-    element.style.position = 'relative';
-    element.style.overflow = 'hidden';
     element.appendChild(ripple);
     
     setTimeout(() => ripple.remove(), 600);
@@ -443,6 +560,7 @@ export class Controls {
     bar.className = 'status-bar';
     bar.innerHTML = `
       <span class="status-points">顶点数: 0</span>
+      <span style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></span>
       <span class="status-fps">FPS: --</span>
     `;
     bar.style.cssText = `
@@ -451,17 +569,19 @@ export class Controls {
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 24px;
+      gap: 16px;
+      align-items: center;
       padding: 10px 24px;
       background: rgba(255, 255, 255, 0.08);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      border-radius: 20px;
+      border-radius: 24px;
       font-size: 13px;
       color: #8b949e;
       z-index: 100;
       border: 1px solid rgba(255, 255, 255, 0.1);
       font-variant-numeric: tabular-nums;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     `;
     
     return bar;
@@ -497,9 +617,10 @@ export class Controls {
         this.panel.style.left = '50%';
         this.panel.style.transform = 'translateX(-50%)';
         this.panel.style.top = 'auto';
-        this.panel.style.bottom = '50px';
+        this.panel.style.bottom = '60px';
         this.panel.style.width = 'calc(100% - 32px)';
-        this.panel.style.maxHeight = '60vh';
+        this.panel.style.maxHeight = '55vh';
+        this.panel.style.padding = '16px';
       } else {
         this.panel.style.position = 'fixed';
         this.panel.style.left = '20px';
@@ -508,6 +629,7 @@ export class Controls {
         this.panel.style.width = '280px';
         this.panel.style.maxHeight = 'calc(100vh - 40px)';
         this.panel.style.bottom = 'auto';
+        this.panel.style.padding = '20px';
       }
     };
     
