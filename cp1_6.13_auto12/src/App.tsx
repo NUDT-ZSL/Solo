@@ -114,12 +114,12 @@ function App() {
     setNodes(config.nodes || []);
     setSelectedNodeId(null);
     const startPos = config.aircraftStart || { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, angle: 0 };
-    setTimeout(() => {
-      canvasRef.current?.setAircraftState(
-        { x: startPos.x, y: startPos.y },
-        startPos.angle
-      );
-    }, 0);
+    setAircraftState({
+      position: { x: startPos.x, y: startPos.y },
+      velocity: { x: 0, y: 0 },
+      angle: startPos.angle,
+      thrust: 0,
+    });
   };
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;

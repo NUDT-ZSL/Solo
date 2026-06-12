@@ -275,26 +275,23 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         }
 
         for (const p of particlesRef.current) {
-          if (p.trail.length > 1) {
+          const points = [...p.trail, { x: p.x, y: p.y }];
+          if (points.length > 1) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
             ctx.lineWidth = 1.5;
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(p.trail[0].x, p.trail[0].y);
-            for (let i = 1; i < p.trail.length; i++) {
-              const alpha = i / p.trail.length;
-              ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
-              ctx.lineTo(p.trail[i].x, p.trail[i].y);
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+              ctx.lineTo(points[i].x, points[i].y);
             }
             ctx.stroke();
           }
-          ctx.globalAlpha = 0.9;
           ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
           ctx.beginPath();
           ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
           ctx.fill();
         }
-        ctx.globalAlpha = 1;
 
         const ac = aircraftRef.current;
         ctx.save();
