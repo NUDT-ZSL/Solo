@@ -12,7 +12,7 @@ export interface Furniture {
   images: string[];
   status: FurnitureStatus;
   userId: string;
-  createdAt: string;
+  createdAt: number;
 }
 
 export interface Review {
@@ -23,7 +23,7 @@ export interface Review {
   avatar: string;
   rating: number;
   content: string;
-  createdAt: string;
+  createdAt: number;
 }
 
 export type ExchangeRequestStatus = 'pending' | 'accepted' | 'rejected';
@@ -42,7 +42,8 @@ export interface ExchangeRequest {
   phone: string;
   expectedTime: string;
   status: ExchangeRequestStatus;
-  createdAt: string;
+  read: 0 | 1;
+  createdAt: number;
 }
 
 export interface User {
@@ -61,8 +62,19 @@ export const CATEGORY_MAP: Record<FurnitureCategory, string> = {
   bed: '床',
 };
 
+export interface ExchangeRequestsResponse {
+  received: ExchangeRequest[];
+  sent: ExchangeRequest[];
+}
+
 export const STATUS_MAP: Record<FurnitureStatus, string> = {
   idle: '闲置中',
   reserved: '已预约',
   exchanged: '已交换',
+};
+
+export const STATUS_COLOR: Record<FurnitureStatus, { bg: string; text: string }> = {
+  idle: { bg: '#d1fae5', text: '#065f46' },
+  reserved: { bg: '#fed7aa', text: '#9a3412' },
+  exchanged: { bg: '#e5e7eb', text: '#374151' },
 };

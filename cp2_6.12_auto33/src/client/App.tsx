@@ -1,7 +1,8 @@
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAppStore } from './store';
 import NotificationBell from './components/NotificationBell';
-import Home from '@/pages/Home';
+import HomePage from './pages/HomePage';
+import FurnitureDetail from './pages/FurnitureDetail';
 
 const styles: Record<string, React.CSSProperties> = {
   app: {
@@ -153,13 +154,8 @@ function HomePage() {
   return <Home />;
 }
 
-function FurnitureDetail() {
-  return (
-    <div style={styles.pagePlaceholder}>
-      <h1 style={styles.pageTitle}>家具详情</h1>
-      <p style={styles.pageDesc}>这里展示家具的详细信息和交换选项。</p>
-    </div>
-  );
+function FurnitureDetailPage() {
+  return <FurnitureDetail />;
 }
 
 function Dashboard() {
@@ -319,7 +315,7 @@ export default function App() {
       <main style={styles.mainContent}>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/furniture/:id" element={<FurnitureDetail />} />
+          <Route path="/furniture/:id" element={<FurnitureDetailPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>

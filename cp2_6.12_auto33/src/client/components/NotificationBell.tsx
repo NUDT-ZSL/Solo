@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { useAppStore, type ExchangeRequest } from '../store';
+import { formatRelativeTime } from '../utils/format';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -92,6 +93,10 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     transition: 'background-color 0.15s ease',
   },
+  markAllBtnDisabled: {
+    opacity: 0.6,
+    cursor: 'not-allowed',
+  },
   listContainer: {
     overflowY: 'auto',
     flex: 1,
@@ -107,6 +112,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   requestItemUnread: {
     backgroundColor: 'rgba(255, 248, 230, 0.5)',
+  },
+  requestItemGrayed: {
+    opacity: 0.5,
   },
   requesterAvatar: {
     width: 42,
@@ -140,6 +148,17 @@ const styles: Record<string, React.CSSProperties> = {
     height: 20,
     borderRadius: 4,
     objectFit: 'cover',
+  },
+  furnitureEmoji: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 14,
+    backgroundColor: '#f5ebe0',
+    flexShrink: 0,
   },
   requestTime: {
     fontSize: 11,
@@ -194,6 +213,7 @@ export default function NotificationBell() {
   const [isHovered, setIsHovered] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [bounceKey, setBounceKey] = useState(0);
+  const [markAllLoading, setMarkAllLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const prevUnreadRef = useRef(unreadCount);
 
@@ -229,9 +249,19 @@ export default function NotificationBell() {
     setIsOpen((prev) => !prev);
   };
 
-  const handleRequestClick = (req: ExchangeRequest) => {
+  const handleRequestClick = async (req: ExchangeRequest) => {
     if (!req.read) {
-      markRequestAsRead(req.id);
+      await markRequestAsRead(req.id);
+    }
+  };
+
+  const handleMarkAllClick = async () => {
+    if (markAllLoading) return;
+    setMarkAllLoading(true);
+    try {
+      await markAllAsRead();
+    } finally {
+      setMarkAllLoading(false);
     }
   };
 
@@ -246,7 +276,29 @@ export default function NotificationBell() {
     animation: bounceKey > 0 ? 'badge-bounce 0.3s ease' : undefined,
   };
 
-  const unreadRequests = exchangeRequests.filter((r) => !r.read);
+  const pendingRequests = exchangeRequests.filter(
+    (r) => r.status === undefined || r.status === 'pending' || r.status === null
+  );
+
+  const unreadPendingRequests = pendingRequests.filter((r) => !r.read);
+
+  const getFromUserName = (req: ExchangeRequest): string =>
+    (req as any).fromUserName ?? req.requesterName ?? '未知用户';
+
+  const getFromUserAvatar = (req: ExchangeRequest): string =>
+    (req as any).fromUserAvatar ??
+    req.requesterAvatar ??
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=default';
+
+  const getCreatedAt = (req: ExchangeRequest): string | number => {
+    const createdAt = (req as any).createdAt;
+    if (createdAt !== undefined && createdAt !== null) {
+      return createdAt;
+    }
+    return req.time ?? Date.now();
+  };
+
+  const getFurnitureName = (req: ExchangeRequest): string => req.furnitureName ?? '未知家具';
 
   return (
     <div style={styles.container} ref={dropdownRef}>
@@ -274,30 +326,41 @@ export default function NotificationBell() {
         <div style={styles.dropdown}>
           <div style={styles.dropdownHeader}>
             <h3 style={styles.headerTitle}>交换请求通知</h3>
-            {unreadRequests.length > 0 && (
+            {unreadPendingRequests.length > 0 && (
               <button
-                style={styles.markAllBtn}
-                onClick={() => markAllAsRead()}
+                style={{
+                  ...styles.markAllBtn,
+                  ...(markAllLoading ? styles.markAllBtnDisabled : {}),
+                }}
+                onClick={handleMarkAllClick}
+                disabled={markAllLoading}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'rgba(139, 115, 85, 0.08)';
+                  if (!markAllLoading) {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                      'rgba(139, 115, 85, 0.08)';
+                  }
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
                 }}
               >
-                全部已读
+                {markAllLoading ? '标记中' : '全部已读'}
               </button>
             )}
           </div>
 
           <div style={styles.listContainer}>
-            {exchangeRequests.length === 0 ? (
+            {pendingRequests.length === 0 ? (
               <div style={styles.emptyState}>暂无通知</div>
             ) : (
-              exchangeRequests.map((req) => {
+              pendingRequests.map((req) => {
+                const status = (req as any).status;
+                const isPending =
+                  status === undefined || status === 'pending' || status === null;
                 const mergedItemStyle: React.CSSProperties = {
                   ...styles.requestItem,
                   ...(!req.read ? styles.requestItemUnread : {}),
+                  ...(!isPending ? styles.requestItemGrayed : {}),
                 };
                 return (
                   <div
@@ -316,24 +379,22 @@ export default function NotificationBell() {
                     }}
                   >
                     <img
-                      src={req.requesterAvatar}
-                      alt={req.requesterName}
+                      src={getFromUserAvatar(req)}
+                      alt={getFromUserName(req)}
                       style={styles.requesterAvatar}
                     />
                     <div style={styles.requestContent}>
                       <div style={styles.requestTitle}>
-                        <span style={{ fontWeight: 600 }}>{req.requesterName}</span>
+                        <span style={{ fontWeight: 600 }}>{getFromUserName(req)}</span>
                         <span> 请求交换您的家具</span>
                       </div>
                       <div style={styles.requestFurniture}>
-                        <img
-                          src={req.furnitureImage}
-                          alt={req.furnitureName}
-                          style={styles.furnitureThumb}
-                        />
-                        <span>{req.furnitureName}</span>
+                        <div style={styles.furnitureEmoji}>🪑</div>
+                        <span>{getFurnitureName(req)}</span>
                       </div>
-                      <div style={styles.requestTime}>{req.time}</div>
+                      <div style={styles.requestTime}>
+                        {formatRelativeTime(getCreatedAt(req))}
+                      </div>
                     </div>
                     {!req.read && <div style={styles.unreadDot} />}
                   </div>

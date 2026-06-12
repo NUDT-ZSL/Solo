@@ -3,6 +3,7 @@ import type {
   Furniture,
   Review,
   ExchangeRequest,
+  ExchangeRequestsResponse,
   User,
   FurnitureStatus,
   ExchangeRequestStatus,
@@ -58,7 +59,7 @@ export const uploadImage = (file: File) => {
 };
 
 export const getExchangeRequests = (userId: string) => {
-  return request.get<ExchangeRequest[], ExchangeRequest[]>(`/exchange-requests`, {
+  return request.get<ExchangeRequestsResponse, ExchangeRequestsResponse>(`/exchange-requests`, {
     params: { userId },
   });
 };
@@ -77,6 +78,16 @@ export const handleExchangeRequest = (
     `/exchange-requests/${id}/status`,
     { status },
   );
+};
+
+export const markRequestRead = (id: string) => {
+  return request.patch<void, void>(`/exchange-requests/${id}/read`);
+};
+
+export const markAllRequestsRead = (userId: string) => {
+  return request.patch<void, void>('/exchange-requests/read-all', undefined, {
+    params: { userId },
+  });
 };
 
 export const getUser = (id: string) => {

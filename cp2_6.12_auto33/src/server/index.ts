@@ -65,6 +65,7 @@ db.exec(`
     phone TEXT,
     expectedTime TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
+    "read" INTEGER NOT NULL DEFAULT 0,
     createdAt INTEGER NOT NULL,
     FOREIGN KEY(furnitureId) REFERENCES furniture(id)
   );
@@ -88,6 +89,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_requests_from ON exchange_requests(fromUserId);
   CREATE INDEX IF NOT EXISTS idx_reviews_furniture ON reviews(furnitureId);
 `);
+
+{
+  const columns = db
+    .prepare("PRAGMA table_info(exchange_requests)")
+    .all() as { name: string }[];
+  const hasReadColumn = columns.some((col) => col.name === "read");
+  if (!hasReadColumn) {
+    db.exec(
+      'ALTER TABLE exchange_requests ADD COLUMN "read" INTEGER NOT NULL DEFAULT 0'
+    );
+  }
+}
 
 const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
 if (userCount.count === 0) {
@@ -349,8 +362,8 @@ if (userCount.count === 0) {
 
   const insertRequest = db.prepare(
     `INSERT INTO exchange_requests (id, furnitureId, furnitureName, fromUserId, fromUserName, fromUserAvatar,
-       toUserId, toUserName, contact, email, phone, expectedTime, status, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       toUserId, toUserName, contact, email, phone, expectedTime, status, "read", createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
   );
 
   const requestsData = [
@@ -613,8 +626,8 @@ app.post('/api/exchange-requests', (req, res) => {
 
   db.prepare(
     `INSERT INTO exchange_requests (id, furnitureId, furnitureName, fromUserId, fromUserName, fromUserAvatar,
-       toUserId, toUserName, contact, email, phone, expectedTime, status, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`
+       toUserId, toUserName, contact, email, phone, expectedTime, status, "read", createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`
   ).run(
     id,
     furnitureId,
@@ -635,26 +648,25 @@ app.post('/api/exchange-requests', (req, res) => {
   res.status(201).json(row);
 });
 
-app.patch('/api/exchange-requests/:id', (req, res) => {
-  const { status } = req.body;
+function handleExchangeRequestStatus(id: string, status: string) {
   const validStatuses = ['accepted', 'rejected'];
 
   if (!status || !validStatuses.includes(status)) {
-    return res.status(400).json({ error: '无效的状态值，必须是 accepted/rejected' });
+    return { error: '无效的状态值，必须是 accepted/rejected', statusCode: 400 };
   }
 
-  const existing = db.prepare('SELECT * FROM exchange_requests WHERE id = ?').get(req.params.id) as any;
+  const existing = db.prepare('SELECT * FROM exchange_requests WHERE id = ?').get(id) as any;
   if (!existing) {
-    return res.status(404).json({ error: '交换请求不存在' });
+    return { error: '交换请求不存在', statusCode: 404 };
   }
 
-  db.prepare('UPDATE exchange_requests SET status = ? WHERE id = ?').run(status, req.params.id);
+  db.prepare('UPDATE exchange_requests SET status = ? WHERE id = ?').run(status, id);
 
   if (status === 'accepted') {
     db.prepare('UPDATE furniture SET status = ? WHERE id = ?').run('reserved', existing.furnitureId);
   }
 
-  const row = db.prepare('SELECT * FROM exchange_requests WHERE id = ?').get(req.params.id) as any;
+  const row = db.prepare('SELECT * FROM exchange_requests WHERE id = ?').get(id) as any;
   const result: any = { ...row };
 
   if (status === 'accepted') {
@@ -664,7 +676,56 @@ app.patch('/api/exchange-requests/:id', (req, res) => {
     result.toUserContact = { phone: toUser?.phone, email: toUser?.email };
   }
 
-  res.json(result);
+  return { data: result, statusCode: 200 };
+}
+
+app.patch('/api/exchange-requests/:id', (req, res) => {
+  const { status } = req.body;
+  const result = handleExchangeRequestStatus(req.params.id, status);
+  if (result.error) {
+    return res.status(result.statusCode!).json({ error: result.error });
+  }
+  res.json(result.data);
+});
+
+app.patch('/api/exchange-requests/:id/status', (req, res) => {
+  const { status } = req.body;
+  const result = handleExchangeRequestStatus(req.params.id, status);
+  if (result.error) {
+    return res.status(result.statusCode!).json({ error: result.error });
+  }
+  res.json(result.data);
+});
+
+app.patch('/api/exchange-requests/:id/read', (req, res) => {
+  const { id } = req.params;
+
+  const existing = db.prepare('SELECT * FROM exchange_requests WHERE id = ?').get(id) as any;
+  if (!existing) {
+    return res.status(404).json({ error: '交换请求不存在' });
+  }
+
+  db.prepare('UPDATE exchange_requests SET "read" = 1 WHERE id = ?').run(id);
+  const row = db.prepare('SELECT * FROM exchange_requests WHERE id = ?').get(id) as any;
+  res.json(row);
+});
+
+app.patch('/api/exchange-requests/read-all', (req, res) => {
+  const { userId } = req.query as { userId?: string };
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId 参数必填' });
+  }
+
+  const info = db
+    .prepare('UPDATE exchange_requests SET "read" = 1 WHERE toUserId = ? AND status = \'pending\'')
+    .run(userId);
+
+  const rows = db
+    .prepare("SELECT * FROM exchange_requests WHERE toUserId = ? AND status = 'pending' ORDER BY createdAt DESC")
+    .all(userId) as any[];
+
+  res.json({ updatedCount: info.changes, requests: rows });
 });
 
 app.get('/api/users/:id', (req, res) => {
