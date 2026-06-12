@@ -1,0 +1,369 @@
+.app-container {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.app-loading {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background-color: var(--bg-primary);
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--bg-tertiary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-landing {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    var(--gradient-hero-start) 0%,
+    var(--gradient-hero-mid) 50%,
+    var(--gradient-hero-end) 100%
+  );
+}
+
+.landing-hero {
+  text-align: center;
+  padding: 40px;
+}
+
+.landing-title {
+  font-size: 72px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16px;
+  letter-spacing: -2px;
+}
+
+.landing-subtitle {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 48px;
+  font-weight: 300;
+}
+
+.landing-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-primary {
+  padding: 14px 32px;
+  background-color: var(--accent-primary);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all var(--transition-normal);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+.btn-secondary {
+  padding: 14px 32px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  transition: all var(--transition-normal);
+}
+
+.btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-text {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  transition: all var(--transition-normal);
+}
+
+.btn-text:hover {
+  color: var(--text-primary);
+}
+
+.btn-small {
+  padding: 6px 16px;
+  background-color: var(--accent-primary);
+  color: #fff;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--bg-tertiary);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.navbar-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.member-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  border: 2px solid #fff;
+  margin-left: -8px;
+  transition: all var(--transition-normal);
+  cursor: pointer;
+}
+
+.member-avatar:first-child {
+  margin-left: 0;
+}
+
+.member-avatar:hover {
+  transform: translateY(-2px);
+  z-index: 1;
+}
+
+.navbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.phase-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  background-color: var(--bg-tertiary);
+  border-radius: 24px;
+}
+
+.phase-step {
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: all var(--transition-normal);
+}
+
+.phase-step.active {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.phase-divider {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.room-code-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: var(--bg-tertiary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.room-code-badge:hover {
+  background-color: var(--bg-secondary);
+}
+
+.room-code-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.room-code-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  letter-spacing: 2px;
+}
+
+.room-code-copy {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.user-profile {
+  position: relative;
+}
+
+.name-input-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+}
+
+.name-input {
+  padding: 8px 12px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-size: 14px;
+  width: 150px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  width: 400px;
+  padding: 32px;
+  background-color: var(--bg-secondary);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-content h3 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.modal-input {
+  width: 100%;
+  padding: 14px 16px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  font-size: 18px;
+  letter-spacing: 4px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.modal-error {
+  color: var(--accent-primary);
+  font-size: 14px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.main-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .navbar-center {
+    order: 3;
+    width: 100%;
+  }
+
+  .phase-indicator {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+
+  .phase-step {
+    font-size: 12px;
+  }
+
+  .landing-title {
+    font-size: 48px;
+  }
+
+  .landing-subtitle {
+    font-size: 16px;
+  }
+
+  .room-code-value {
+    font-size: 14px;
+  }
+}
