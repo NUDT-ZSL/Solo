@@ -1,10 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Node, NodeColor } from '@/types';
+import type { Node as KnowledgeNode, NodeColor } from '@/types';
 import { COLOR_MAP, COLOR_ORDER, MAX_DESCRIPTION_LENGTH, NODE_ANCHOR_RADIUS, ANIMATION_DURATION, PRIMARY_COLOR } from '@/utils/constants';
 
 interface NodeComponentProps {
-  node: Node;
+  node: KnowledgeNode;
   isSelected: boolean;
   isFiltered: boolean;
   scale: number;
@@ -14,7 +14,7 @@ interface NodeComponentProps {
   onDragMove: (id: string, x: number, y: number) => void;
   onDragEnd: () => void;
   onAnchorDragStart: (nodeId: string, e: React.MouseEvent) => void;
-  onUpdateNode: (id: string, updates: Partial<Node>) => void;
+  onUpdateNode: (id: string, updates: Partial<KnowledgeNode>) => void;
   onChangeColor: (id: string, color: NodeColor) => void;
   onDelete: (id: string) => void;
 }
@@ -52,7 +52,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = React.memo(({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as unknown as globalThis.Node)) {
         setShowColorPicker(false);
       }
     };
