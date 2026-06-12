@@ -107,6 +107,7 @@ export class BeatScene extends Phaser.Scene {
 
   private jumpChargeMs: number = 0;
   private isCharging: boolean = false;
+  private airDodgeArcYOffset: number = 0;
 
   private playerLandingTween: { active: boolean; progress: number } = { active: false, progress: 0 };
 
@@ -637,6 +638,7 @@ export class BeatScene extends Phaser.Scene {
       this.airDodge.progress = 1;
       this.airDodge.active = false;
       this.player.lane = this.airDodge.endLane;
+      this.airDodgeArcYOffset = 0;
     }
 
     const t = this.airDodge.progress;
@@ -644,15 +646,18 @@ export class BeatScene extends Phaser.Scene {
     const endX = centerX + (this.airDodge.endLane - 1) * LANE_WIDTH;
 
     const linearX = Phaser.Math.Linear(this.airDodge.startX, endX, t);
-    const arcOffset = Math.sin(t * Math.PI) * AIR_DODGE_ARC_HEIGHT;
+    const arcOffsetX = Math.sin(t * Math.PI) * AIR_DODGE_ARC_HEIGHT;
 
-    this.player.x = linearX + arcOffset * (this.airDodge.endLane > this.airDodge.startLane ? 1 : -1) * 0.3;
+    this.player.x = linearX + arcOffsetX * (this.airDodge.endLane > this.airDodge.startLane ? 1 : -1) * 0.3;
+
+    this.airDodgeArcYOffset = -Math.sin(t * Math.PI) * AIR_DODGE_ARC_HEIGHT;
   }
 
   private updatePlayerPhysics(deltaSec: number): void {
     if (!this.player.isGrounded) {
       this.player.velocityY += GRAVITY * deltaSec;
       this.player.y += this.player.velocityY * deltaSec;
+      this.player.y += this.airDodgeArcYOffset;
 
       if (this.player.velocityY > 0) {
         this.checkPlatformLanding();
@@ -734,16 +739,12 @@ export class BeatScene extends Phaser.Scene {
     this.player.scale = 1.0 + Math.sin(t * Math.PI) * 0.15;
   }
 
-  private updatePlatforms(deltaSec: number): void {
+  private updatePlatforms(_deltaSec: number): void {
     const beatDurationSec = this.musicManager.getBeatDurationSec();
     const distancePerBeat = this.trackSpeedUnitsPerSec * beatDurationSec;
     const pixelsPerUnit = 40;
-    const scrollPixelsPerSec = (this.trackSpeedUnitsPerSec * pixelsPerUnit) / beatDurationSec;
-    const scrollAmount = scrollPixelsPerSec * deltaSec;
 
     for (const platform of this.platforms) {
-      platform.y += scrollAmount;
-
       if (platform.y > this.trackBottom + 150 && !platform.passed) {
         platform.passed = true;
       }

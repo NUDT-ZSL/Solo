@@ -16,19 +16,19 @@ export interface MusicSettings {
   beatWindow: BeatWindow;
 }
 
-interface AudioSoundWithCurrentTime {
-  currentTime?: number;
-  seek?: number;
+interface PhaserSoundWithSeek {
+  seek: number;
   volume: number;
-  play(): void;
-  pause(): void;
+  isPlaying: boolean;
+  play(markerName?: string | Phaser.Types.Sound.SoundConfig, config?: Phaser.Types.Sound.SoundConfig): boolean;
+  pause(): boolean;
   stop(): void;
   destroy(): void;
 }
 
 export class MusicManager {
   private scene: Phaser.Scene;
-  private music: Phaser.Sound.BaseSound & AudioSoundWithCurrentTime | null = null;
+  private music: PhaserSoundWithSeek | null = null;
   private bpm: number;
   private beatDurationMs: number;
   private beatDurationSec: number;
@@ -40,6 +40,8 @@ export class MusicManager {
   private manualTimeSec: number = 0;
   private manualTimeStartMs: number = 0;
   private pausedAtSec: number = 0;
+
+  private audioStartOffsetSec: number = 0;
 
   constructor(scene: Phaser.Scene, settings: MusicSettings) {
     this.scene = scene;
@@ -59,10 +61,12 @@ export class MusicManager {
     if (this.music) {
       this.music.stop();
     }
-    this.music = this.scene.sound.add(key, {
+
+    const raw = this.scene.sound.add(key, {
       volume: this.settings.volume / 100,
       loop: true
-    }) as Phaser.Sound.BaseSound & AudioSoundWithCurrentTime;
+    });
+    this.music = raw as unknown as PhaserSoundWithSeek;
 
     if (this.music) {
       this.music.play();
@@ -70,8 +74,13 @@ export class MusicManager {
       this.manualTimeStartMs = this.scene.time.now;
       this.manualTimeSec = 0;
       this.pausedAtSec = 0;
+      this.audioStartOffsetSec = 0;
       this.generateBeatTimes();
     }
+  }
+
+  setAudioStartOffset(offsetSec: number): void {
+    this.audioStartOffsetSec = offsetSec;
   }
 
   private generateBeatTimes(): void {
@@ -90,23 +99,28 @@ export class MusicManager {
       return this.pausedAtSec;
     }
 
-    if (this.music && typeof this.music.currentTime === 'number' && this.music.currentTime > 0) {
-      return this.music.currentTime;
+    if (this.music && this.music.seek > 0) {
+      return this.music.seek;
     }
 
     const elapsedMs = this.scene.time.now - this.manualTimeStartMs;
     return this.manualTimeSec + elapsedMs / 1000;
   }
 
+  getEffectiveTimeSec(): number {
+    const rawTime = this.getAudioTimeSec();
+    return Math.max(0, rawTime - this.audioStartOffsetSec);
+  }
+
   getBeatState(): BeatState {
-    const audioTimeSec = this.getAudioTimeSec();
-    const audioTimeMs = audioTimeSec * 1000;
+    const effectiveTimeSec = this.getEffectiveTimeSec();
+    const effectiveTimeMs = effectiveTimeSec * 1000;
 
-    const currentBeat = Math.floor(audioTimeMs / this.beatDurationMs);
-    const beatProgress = (audioTimeMs % this.beatDurationMs) / this.beatDurationMs;
+    const currentBeat = Math.floor(effectiveTimeMs / this.beatDurationMs);
+    const beatProgress = (effectiveTimeMs % this.beatDurationMs) / this.beatDurationMs;
 
-    const timeSinceLastBeatMs = audioTimeMs - currentBeat * this.beatDurationMs;
-    const timeUntilNextBeatMs = (currentBeat + 1) * this.beatDurationMs - audioTimeMs;
+    const timeSinceLastBeatMs = effectiveTimeMs - currentBeat * this.beatDurationMs;
+    const timeUntilNextBeatMs = (currentBeat + 1) * this.beatDurationMs - effectiveTimeMs;
 
     const halfWindowMs = this.getBeatWindowMs() / 2;
     const isNearBeat = timeSinceLastBeatMs < halfWindowMs || timeUntilNextBeatMs < halfWindowMs;
@@ -129,7 +143,7 @@ export class MusicManager {
       timeUntilNextBeatMs,
       isNearBeat,
       beatOffsetMs,
-      audioTimeSec
+      audioTimeSec: effectiveTimeSec
     };
   }
 
@@ -139,12 +153,13 @@ export class MusicManager {
     offsetMs: number;
     beatIndex: number;
   } {
-    const audioTimeMs = audioTimeSec * 1000;
+    const effectiveTimeSec = audioTimeSec - this.audioStartOffsetSec;
+    const effectiveTimeMs = Math.max(0, effectiveTimeSec) * 1000;
     const beatWindowMs = this.getBeatWindowMs();
 
-    const nearestBeat = Math.round(audioTimeMs / this.beatDurationMs);
+    const nearestBeat = Math.round(effectiveTimeMs / this.beatDurationMs);
     const nearestBeatTimeMs = nearestBeat * this.beatDurationMs;
-    const offsetMs = audioTimeMs - nearestBeatTimeMs;
+    const offsetMs = effectiveTimeMs - nearestBeatTimeMs;
     const absOffsetMs = Math.abs(offsetMs);
 
     const hit = absOffsetMs <= beatWindowMs / 2;
@@ -260,6 +275,10 @@ export class MusicManager {
 
   getCurrentBeatIndex(): number {
     return this.currentBeatIndex;
+  }
+
+  getAudioStartOffsetSec(): number {
+    return this.audioStartOffsetSec;
   }
 
   destroy(): void {
