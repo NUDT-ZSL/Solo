@@ -1,5 +1,5 @@
 import { SceneRenderer, MoleculeInfo } from './sceneRenderer';
-import { ReactionSimulator } from './reactionSimulator';
+import { ReactionSimulator, ReactionPhase } from './reactionSimulator';
 import {
   MoleculeData,
   getAllMolecules,
@@ -29,12 +29,14 @@ export class UIController {
 
   private reactionSelect: HTMLSelectElement | null = null;
   private reactionEquation: HTMLElement | null = null;
-  private startBtn: HTMLElement | null = null;
-  private pauseBtn: HTMLElement | null = null;
-  private resetBtn: HTMLElement | null = null;
+  private startBtn: HTMLButtonElement | null = null;
+  private pauseBtn: HTMLButtonElement | null = null;
+  private resetBtn: HTMLButtonElement | null = null;
+  private replayBtn: HTMLButtonElement | null = null;
 
   private leftPanelOpen = true;
   private rightPanelOpen = true;
+  private isMobile = false;
 
   constructor(sceneRenderer: SceneRenderer, reactionSimulator: ReactionSimulator) {
     this.sceneRenderer = sceneRenderer;
@@ -67,9 +69,9 @@ export class UIController {
 
     this.reactionSelect = document.getElementById('reaction-select') as HTMLSelectElement;
     this.reactionEquation = document.getElementById('reaction-equation');
-    this.startBtn = document.getElementById('start-reaction');
-    this.pauseBtn = document.getElementById('pause-reaction');
-    this.resetBtn = document.getElementById('reset-reaction');
+    this.startBtn = document.getElementById('start-reaction') as HTMLButtonElement;
+    this.pauseBtn = document.getElementById('pause-reaction') as HTMLButtonElement;
+    this.resetBtn = document.getElementById('reset-reaction') as HTMLButtonElement;
   }
 
   private buildMoleculeList(): void {
@@ -104,6 +106,9 @@ export class UIController {
 
       item.addEventListener('click', () => {
         this.selectMolecule(molecule.id);
+        if (this.isMobile && this.leftPanelOpen) {
+          this.toggleLeftPanel();
+        }
       });
 
       this.moleculeList!.appendChild(item);
@@ -162,11 +167,17 @@ export class UIController {
 
   private bindEvents(): void {
     if (this.toggleLeftBtn) {
-      this.toggleLeftBtn.addEventListener('click', () => this.toggleLeftPanel());
+      this.toggleLeftBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleLeftPanel();
+      });
     }
 
     if (this.toggleRightBtn) {
-      this.toggleRightBtn.addEventListener('click', () => this.toggleRightPanel());
+      this.toggleRightBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleRightPanel();
+      });
     }
 
     if (this.reactionSelect) {
@@ -179,7 +190,7 @@ export class UIController {
     if (this.startBtn) {
       this.startBtn.addEventListener('click', (e) => {
         this.createRipple(e);
-        this.startReaction();
+        this.handleStartButton();
       });
     }
 
@@ -197,6 +208,10 @@ export class UIController {
 
     this.reactionSimulator.setOnPhaseChangeCallback((phase) => {
       this.updateReactionButtons(phase);
+    });
+
+    this.reactionSimulator.setOnPauseChangeCallback((paused) => {
+      this.updatePauseButton(paused);
     });
   }
 
@@ -224,6 +239,8 @@ export class UIController {
     const molecule = getMoleculeById(id);
     if (!molecule) return;
 
+    this.reactionSimulator.resetReaction();
+
     this.sceneRenderer.loadMolecule(molecule, true);
 
     document.querySelectorAll('.molecule-item').forEach(item => {
@@ -233,6 +250,13 @@ export class UIController {
     const activeItem = document.querySelector(`.molecule-item[data-id="${id}"]`);
     if (activeItem) {
       activeItem.classList.add('active');
+    }
+
+    if (this.reactionSelect) {
+      this.reactionSelect.value = '';
+    }
+    if (this.reactionEquation) {
+      this.reactionEquation.textContent = '-';
     }
   }
 
@@ -268,18 +292,24 @@ export class UIController {
     this.reactionSimulator.startReaction();
   }
 
-  private startReaction(): void {
-    if (!this.currentReactionId) {
-      if (this.reactionSelect && this.reactionSelect.value) {
-        this.currentReactionId = this.reactionSelect.value;
-      } else {
-        return;
-      }
-    }
-
+  private handleStartButton(): void {
     const phase = this.reactionSimulator.getPhase();
-    if (phase === 'idle' || phase === 'complete') {
+
+    if (phase === 'idle') {
+      if (!this.currentReactionId) {
+        if (this.reactionSelect && this.reactionSelect.value) {
+          this.currentReactionId = this.reactionSelect.value;
+          const reaction = getReactionById(this.currentReactionId);
+          if (reaction) {
+            this.reactionSimulator.setReaction(reaction);
+          }
+        } else {
+          return;
+        }
+      }
       this.reactionSimulator.startReaction();
+    } else if (phase === 'complete') {
+      this.reactionSimulator.replayReaction();
     } else if (this.reactionSimulator.getIsPaused()) {
       this.reactionSimulator.resumeReaction();
     }
@@ -295,39 +325,57 @@ export class UIController {
 
   private resetReaction(): void {
     this.reactionSimulator.resetReaction();
+
     if (this.currentMoleculeId) {
       const mol = getMoleculeById(this.currentMoleculeId);
       if (mol) this.sceneRenderer.loadMolecule(mol, true);
     }
+
     this.updateReactionButtons('idle');
   }
 
-  private updateReactionButtons(phase: string): void {
+  private updateReactionButtons(phase: ReactionPhase): void {
     if (!this.startBtn || !this.pauseBtn || !this.resetBtn) return;
 
     const startText = this.startBtn.querySelector('.btn-text');
-    const pauseText = this.pauseBtn.querySelector('.btn-text');
 
+    const isPlaying = this.reactionSimulator.getIsPlaying();
     const isPaused = this.reactionSimulator.getIsPaused();
 
-    if (phase === 'idle') {
-      if (startText) startText.textContent = '开始反应';
-      this.startBtn.classList.remove('btn-pause');
-      (this.pauseBtn as HTMLButtonElement).disabled = true;
-    } else if (phase === 'complete') {
-      if (startText) startText.textContent = '重新开始';
-      this.startBtn.classList.remove('btn-pause');
-      (this.pauseBtn as HTMLButtonElement).disabled = true;
-    } else {
-      if (isPaused) {
-        if (startText) startText.textContent = '继续';
-        (this.pauseBtn as HTMLButtonElement).disabled = false;
-        if (pauseText) pauseText.textContent = '暂停';
-      } else {
-        if (startText) startText.textContent = '反应中...';
-        (this.pauseBtn as HTMLButtonElement).disabled = false;
-        if (pauseText) pauseText.textContent = '暂停';
-      }
+    switch (phase) {
+      case 'idle':
+        if (startText) startText.textContent = '开始反应';
+        this.startBtn.disabled = false;
+        this.pauseBtn.disabled = true;
+        break;
+
+      case 'glow':
+      case 'break':
+      case 'drift':
+      case 'combine':
+        if (isPaused) {
+          if (startText) startText.textContent = '继续';
+        } else {
+          if (startText) startText.textContent = '反应中...';
+        }
+        this.startBtn.disabled = false;
+        this.pauseBtn.disabled = false;
+        break;
+
+      case 'complete':
+        if (startText) startText.textContent = '重新播放';
+        this.startBtn.disabled = false;
+        this.pauseBtn.disabled = true;
+        break;
+    }
+  }
+
+  private updatePauseButton(paused: boolean): void {
+    if (!this.pauseBtn) return;
+
+    const pauseText = this.pauseBtn.querySelector('.btn-text');
+    if (pauseText) {
+      pauseText.textContent = paused ? '继续' : '暂停';
     }
   }
 
@@ -344,35 +392,53 @@ export class UIController {
   private updatePanelState(): void {
     if (this.leftPanel) {
       if (this.leftPanelOpen) {
-        this.leftPanel.classList.add('open');
-        this.leftPanel.classList.remove('closed');
+        this.leftPanel.style.transform = 'translateX(0)';
+        this.leftPanel.style.opacity = '1';
+        this.leftPanel.style.pointerEvents = 'auto';
       } else {
-        this.leftPanel.classList.remove('open');
-        this.leftPanel.classList.add('closed');
+        this.leftPanel.style.transform = 'translateX(-100%)';
+        this.leftPanel.style.opacity = '0';
+        this.leftPanel.style.pointerEvents = 'none';
       }
     }
 
     if (this.rightPanel) {
       if (this.rightPanelOpen) {
-        this.rightPanel.classList.add('open');
-        this.rightPanel.classList.remove('closed');
+        this.rightPanel.style.transform = 'translateX(0)';
+        this.rightPanel.style.opacity = '1';
+        this.rightPanel.style.pointerEvents = 'auto';
       } else {
-        this.rightPanel.classList.remove('open');
-        this.rightPanel.classList.add('closed');
+        this.rightPanel.style.transform = 'translateX(100%)';
+        this.rightPanel.style.opacity = '0';
+        this.rightPanel.style.pointerEvents = 'none';
       }
+    }
+
+    if (this.toggleLeftBtn) {
+      this.toggleLeftBtn.style.left = this.leftPanelOpen ? '240px' : '0';
+    }
+    if (this.toggleRightBtn) {
+      this.toggleRightBtn.style.right = this.rightPanelOpen ? '300px' : '0';
     }
   }
 
   private setupResponsive(): void {
     const checkWidth = () => {
       const width = window.innerWidth;
-      if (width < 1024) {
+      this.isMobile = width < 1024;
+
+      if (this.isMobile) {
         this.leftPanelOpen = false;
         this.rightPanelOpen = false;
+        if (this.toggleLeftBtn) this.toggleLeftBtn.style.display = 'flex';
+        if (this.toggleRightBtn) this.toggleRightBtn.style.display = 'flex';
       } else {
         this.leftPanelOpen = true;
         this.rightPanelOpen = true;
+        if (this.toggleLeftBtn) this.toggleLeftBtn.style.display = 'none';
+        if (this.toggleRightBtn) this.toggleRightBtn.style.display = 'none';
       }
+
       this.updatePanelState();
     };
 

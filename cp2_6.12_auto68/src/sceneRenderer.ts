@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getAtomColor, getAtomRadius, lerp, easeOutCubic, easeInOutCubic, easeOutBounce, generateRandomOffset, clamp } from './utils';
+import { getAtomColor, getAtomRadius, lerp, easeOutCubic, easeOutBounce, clamp } from './utils';
 import { MoleculeData, AtomData, BondData, calculateMolecularWeight } from './moleculeManager';
 
 export interface SceneRendererCallbacks {
@@ -14,7 +14,7 @@ export interface MoleculeInfo {
   molecularWeight: number;
 }
 
-interface AtomMesh extends THREE.Mesh {
+export interface AtomMesh extends THREE.Mesh {
   userData: {
     targetPosition: THREE.Vector3;
     startPosition: THREE.Vector3;
@@ -23,10 +23,11 @@ interface AtomMesh extends THREE.Mesh {
     velocity?: THREE.Vector3;
     trail?: THREE.Points;
     trailPositions?: Float32Array;
+    bouncePhase?: 'idle' | 'bouncing';
   };
 }
 
-interface BondMesh extends THREE.Mesh {
+export interface BondMesh extends THREE.Mesh {
   userData: {
     from: number;
     to: number;
@@ -43,6 +44,15 @@ interface Particle {
   maxLife: number;
 }
 
+interface LoadingAnimation {
+  atom: AtomMesh;
+  startTime: number;
+  fadeDuration: number;
+  spreadDuration: number;
+  bounceDuration: number;
+  startPos: THREE.Vector3;
+}
+
 export class SceneRenderer {
   private container: HTMLElement;
   private canvas: HTMLCanvasElement;
@@ -57,10 +67,10 @@ export class SceneRenderer {
 
   private isDragging = false;
   private previousMousePosition = { x: 0, y: 0 };
-  private rotationVelocity = { x: 0, y: 0 };
-  private targetRotation = { x: 0, y: 0 };
-  private currentRotation = { x: 0, y: 0 };
+  private targetRotation = { x: 0.3, y: 0.5 };
+  private currentRotation = { x: 0.3, y: 0.5 };
   private damping = 0.88;
+  private rotationVelocity = { x: 0, y: 0 };
 
   private targetZoom = 1;
   private currentZoom = 1;
@@ -68,20 +78,13 @@ export class SceneRenderer {
   private maxZoom = 5;
 
   private animationFrameId: number | null = null;
-  private loadingAnimations: {
-    atom: AtomMesh;
-    startTime: number;
-    duration: number;
-    offset: THREE.Vector3;
-  }[] = [];
+  private loadingAnimations: LoadingAnimation[] = [];
 
   private callbacks: SceneRendererCallbacks;
   private currentMolecule: MoleculeData | null = null;
 
-  private reactionMode = false;
-  private reactionAtoms: { mesh: AtomMesh; startPos: THREE.Vector3; endPos: THREE.Vector3; phase: string }[] = [];
-  private reactionBonds: { mesh: BondMesh; visible: boolean }[] = [];
   private glowTargets: AtomMesh[] = [];
+  private envMap: THREE.CubeTexture | null = null;
 
   constructor(containerId: string, canvasId: string, callbacks: SceneRendererCallbacks = {}) {
     this.container = document.getElementById(containerId) || document.body;
@@ -102,6 +105,7 @@ export class SceneRenderer {
 
   private init(): void {
     this.setupScene();
+    this.setupEnvironment();
     this.setupLighting();
     this.setupCamera();
     this.setupRenderer();
@@ -111,44 +115,92 @@ export class SceneRenderer {
   }
 
   private setupScene(): void {
-    const canvas = this.renderer.domElement;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const gradient = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
-      );
-      gradient.addColorStop(0, '#0a0a2e');
-      gradient.addColorStop(1, '#000000');
-      this.scene.background = null as any;
-    }
     this.scene.add(this.moleculeGroup);
+    this.scene.fog = new THREE.FogExp2(0x0a0a2e, 0.05);
+  }
+
+  private setupEnvironment(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext('2d')!;
+
+    const gradient = ctx.createRadialGradient(
+      512, 512, 0,
+      512, 512, 512
+    );
+    gradient.addColorStop(0, '#1a1a4e');
+    gradient.addColorStop(0.5, '#0a0a2e');
+    gradient.addColorStop(1, '#050515');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1024, 1024);
+
+    for (let i = 0; i < 200; i++) {
+      const x = Math.random() * 1024;
+      const y = Math.random() * 1024;
+      const size = Math.random() * 2 + 0.5;
+      const brightness = Math.random() * 0.5 + 0.5;
+
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${brightness * 0.8})`;
+      ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    this.scene.environment = texture;
+
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.width = window.innerWidth;
+    bgCanvas.height = window.innerHeight;
+    const bgCtx = bgCanvas.getContext('2d')!;
+    const bgGradient = bgCtx.createRadialGradient(
+      bgCanvas.width / 2, bgCanvas.height / 2, 0,
+      bgCanvas.width / 2, bgCanvas.height / 2, Math.max(bgCanvas.width, bgCanvas.height) / 2
+    );
+    bgGradient.addColorStop(0, '#0f0f3a');
+    bgGradient.addColorStop(0.5, '#0a0a2e');
+    bgGradient.addColorStop(1, '#000000');
+    bgCtx.fillStyle = bgGradient;
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+    const bgTexture = new THREE.CanvasTexture(bgCanvas);
+    this.scene.background = bgTexture;
   }
 
   private setupLighting(): void {
-    const ambientLight = new THREE.AmbientLight(0x404080, 0.6);
+    const ambientLight = new THREE.AmbientLight(0x404080, 0.4);
     this.scene.add(ambientLight);
 
-    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight1.position.set(5, 5, 5);
-    this.scene.add(directionalLight1);
+    const hemisphereLight = new THREE.HemisphereLight(0x00d4ff, 0x7b2ff7, 0.3);
+    this.scene.add(hemisphereLight);
 
-    const directionalLight2 = new THREE.DirectionalLight(0x00d4ff, 0.4);
-    directionalLight2.position.set(-5, -3, 3);
-    this.scene.add(directionalLight2);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    mainLight.position.set(5, 5, 5);
+    mainLight.castShadow = true;
+    this.scene.add(mainLight);
 
-    const pointLight1 = new THREE.PointLight(0x7b2ff7, 0.5, 20);
-    pointLight1.position.set(3, 2, -3);
+    const fillLight = new THREE.DirectionalLight(0x00d4ff, 0.5);
+    fillLight.position.set(-5, 2, 3);
+    this.scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0x7b2ff7, 0.4);
+    rimLight.position.set(0, -3, -5);
+    this.scene.add(rimLight);
+
+    const pointLight1 = new THREE.PointLight(0x00d4ff, 0.5, 15);
+    pointLight1.position.set(3, 2, 3);
     this.scene.add(pointLight1);
 
-    const pointLight2 = new THREE.PointLight(0x00d4ff, 0.3, 20);
-    pointLight2.position.set(-3, -2, 3);
+    const pointLight2 = new THREE.PointLight(0x7b2ff7, 0.5, 15);
+    pointLight2.position.set(-3, -2, -3);
     this.scene.add(pointLight2);
   }
 
   private setupCamera(): void {
     this.camera.position.z = 8;
-    this.camera.position.y = 2;
+    this.camera.position.y = 1;
     this.camera.lookAt(0, 0, 0);
   }
 
@@ -157,6 +209,7 @@ export class SceneRenderer {
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
 
   private setupEventListeners(): void {
@@ -178,6 +231,7 @@ export class SceneRenderer {
   private onMouseDown(e: MouseEvent): void {
     this.isDragging = true;
     this.previousMousePosition = { x: e.clientX, y: e.clientY };
+    this.rotationVelocity = { x: 0, y: 0 };
   }
 
   private onMouseMove(e: MouseEvent): void {
@@ -186,8 +240,11 @@ export class SceneRenderer {
     const deltaX = e.clientX - this.previousMousePosition.x;
     const deltaY = e.clientY - this.previousMousePosition.y;
 
-    this.targetRotation.y += deltaX * 0.01;
-    this.targetRotation.x += deltaY * 0.01;
+    this.rotationVelocity.y = deltaX * 0.01;
+    this.rotationVelocity.x = deltaY * 0.01;
+
+    this.targetRotation.y += this.rotationVelocity.y;
+    this.targetRotation.x += this.rotationVelocity.x;
     this.targetRotation.x = clamp(this.targetRotation.x, -Math.PI / 2, Math.PI / 2);
 
     this.previousMousePosition = { x: e.clientX, y: e.clientY };
@@ -199,7 +256,7 @@ export class SceneRenderer {
 
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const delta = e.deltaY > 0 ? 0.92 : 1.08;
     this.targetZoom = clamp(this.targetZoom * delta, this.minZoom, this.maxZoom);
   }
 
@@ -208,6 +265,7 @@ export class SceneRenderer {
       e.preventDefault();
       this.isDragging = true;
       this.previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      this.rotationVelocity = { x: 0, y: 0 };
     }
   }
 
@@ -218,8 +276,11 @@ export class SceneRenderer {
     const deltaX = e.touches[0].clientX - this.previousMousePosition.x;
     const deltaY = e.touches[0].clientY - this.previousMousePosition.y;
 
-    this.targetRotation.y += deltaX * 0.01;
-    this.targetRotation.x += deltaY * 0.01;
+    this.rotationVelocity.y = deltaX * 0.01;
+    this.rotationVelocity.x = deltaY * 0.01;
+
+    this.targetRotation.y += this.rotationVelocity.y;
+    this.targetRotation.x += this.rotationVelocity.x;
     this.targetRotation.x = clamp(this.targetRotation.x, -Math.PI / 2, Math.PI / 2);
 
     this.previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -238,24 +299,22 @@ export class SceneRenderer {
 
     this.renderer.setSize(width, height);
 
-    const canvas = this.renderer.domElement;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const bgCanvas = document.createElement('canvas');
-      bgCanvas.width = width;
-      bgCanvas.height = height;
-      const bgCtx = bgCanvas.getContext('2d');
-      if (bgCtx) {
-        const gradient = bgCtx.createRadialGradient(
+    if (this.scene.background instanceof THREE.CanvasTexture) {
+      const bgCanvas = this.scene.background.image as HTMLCanvasElement;
+      if (bgCanvas) {
+        bgCanvas.width = width;
+        bgCanvas.height = height;
+        const ctx = bgCanvas.getContext('2d')!;
+        const gradient = ctx.createRadialGradient(
           width / 2, height / 2, 0,
           width / 2, height / 2, Math.max(width, height) / 2
         );
-        gradient.addColorStop(0, '#0a0a2e');
+        gradient.addColorStop(0, '#0f0f3a');
+        gradient.addColorStop(0.5, '#0a0a2e');
         gradient.addColorStop(1, '#000000');
-        bgCtx.fillStyle = gradient;
-        bgCtx.fillRect(0, 0, width, height);
-        const texture = new THREE.CanvasTexture(bgCanvas);
-        this.scene.background = texture;
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+        this.scene.background.needsUpdate = true;
       }
     }
   }
@@ -263,7 +322,6 @@ export class SceneRenderer {
   public loadMolecule(molecule: MoleculeData, animated: boolean = true): void {
     this.clearMolecule();
     this.currentMolecule = molecule;
-    this.reactionMode = false;
 
     const centerOffset = this.calculateCenterOffset(molecule.atoms);
 
@@ -273,19 +331,21 @@ export class SceneRenderer {
       this.moleculeGroup.add(atomMesh);
 
       if (animated) {
-        const offset = new THREE.Vector3(
-          -centerOffset.x,
-          -centerOffset.y,
-          -centerOffset.z
-        ).multiplyScalar(0.3);
-        offset.add(new THREE.Vector3().random().subScalar(0.5).multiplyScalar(0.5));
+        const startPos = new THREE.Vector3(0, 0, 0);
 
         this.loadingAnimations.push({
           atom: atomMesh,
-          startTime: performance.now() + index * 30,
-          duration: 500,
-          offset: offset
+          startTime: performance.now() + index * 40,
+          fadeDuration: 500,
+          spreadDuration: 500,
+          bounceDuration: 300,
+          startPos: startPos
         });
+
+        atomMesh.position.copy(startPos);
+        const material = atomMesh.material as THREE.MeshStandardMaterial;
+        material.opacity = 0;
+        material.transparent = true;
       }
     });
 
@@ -301,6 +361,13 @@ export class SceneRenderer {
         bondMesh.userData.bondOrder = bond.order || 1;
         bondMesh.userData.breakProgress = 0;
         bondMesh.userData.visible = true;
+
+        if (animated) {
+          const material = bondMesh.material as THREE.MeshStandardMaterial;
+          material.opacity = 0;
+          material.transparent = true;
+        }
+
         this.bonds.push(bondMesh);
         this.moleculeGroup.add(bondMesh);
       }
@@ -316,9 +383,19 @@ export class SceneRenderer {
       });
     }
 
-    this.targetZoom = 1;
-    this.currentZoom = 0.5;
+    if (animated) {
+      this.targetZoom = 0.5;
+      this.currentZoom = 0.5;
+      setTimeout(() => {
+        this.targetZoom = 1;
+      }, 100);
+    } else {
+      this.targetZoom = 1;
+      this.currentZoom = 1;
+    }
+
     this.targetRotation = { x: 0.3, y: 0.5 };
+    this.currentRotation = { x: 0.3, y: 0.5 };
   }
 
   private calculateCenterOffset(atoms: AtomData[]): THREE.Vector3 {
@@ -342,13 +419,14 @@ export class SceneRenderer {
     const radius = getAtomRadius(atom.element);
     const color = getAtomColor(atom.element);
 
-    const geometry = new THREE.SphereGeometry(radius, 32, 32);
+    const geometry = new THREE.SphereGeometry(radius, 48, 48);
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      metalness: 0.3,
-      roughness: 0.2,
+      metalness: 0.85,
+      roughness: 0.15,
       emissive: color,
-      emissiveIntensity: 0.1
+      emissiveIntensity: 0.05,
+      envMapIntensity: 1.2
     });
 
     const mesh = new THREE.Mesh(geometry, material) as AtomMesh;
@@ -363,7 +441,8 @@ export class SceneRenderer {
       targetPosition: targetPos,
       startPosition: targetPos.clone(),
       element: atom.element,
-      glowIntensity: 0
+      glowIntensity: 0,
+      bouncePhase: 'idle'
     };
 
     return mesh;
@@ -377,12 +456,13 @@ export class SceneRenderer {
       .addVectors(fromAtom.position, toAtom.position)
       .multiplyScalar(0.5);
 
-    const bondRadius = 0.08;
-    const geometry = new THREE.CylinderGeometry(bondRadius, bondRadius, length, 16);
+    const bondRadius = 0.07;
+    const geometry = new THREE.CylinderGeometry(bondRadius, bondRadius, length, 24);
     const material = new THREE.MeshStandardMaterial({
-      color: 0xaaaaaa,
-      metalness: 0.5,
-      roughness: 0.3
+      color: 0xcccccc,
+      metalness: 0.9,
+      roughness: 0.1,
+      envMapIntensity: 1.5
     });
 
     const mesh = new THREE.Mesh(geometry, material) as BondMesh;
@@ -417,8 +497,6 @@ export class SceneRenderer {
 
     this.loadingAnimations = [];
     this.glowTargets = [];
-    this.reactionAtoms = [];
-    this.reactionBonds = [];
   }
 
   private animate = (): void => {
@@ -430,7 +508,6 @@ export class SceneRenderer {
     this.updateParticles();
     this.updateGlowEffect();
     this.updateBonds();
-    this.updateReactionAnimations();
 
     this.renderer.render(this.scene, this.camera);
   };
@@ -442,59 +519,95 @@ export class SceneRenderer {
       const elapsed = now - anim.startTime;
       if (elapsed < 0) return true;
 
-      const progress = Math.min(elapsed / anim.duration, 1);
-      const t = easeOutCubic(progress);
+      const totalDuration = anim.fadeDuration + anim.bounceDuration;
 
-      anim.atom.position.x = lerp(0, anim.atom.userData.targetPosition.x, t);
-      anim.atom.position.y = lerp(0, anim.atom.userData.targetPosition.y, t);
-      anim.atom.position.z = lerp(0, anim.atom.userData.targetPosition.z, t);
-
-      const material = anim.atom.material as THREE.MeshStandardMaterial;
-      material.opacity = t;
-      material.transparent = true;
-
-      if (progress >= 1) {
-        this.startBounceAnimation(anim.atom);
+      if (elapsed >= totalDuration) {
+        anim.atom.position.copy(anim.atom.userData.targetPosition);
+        const material = anim.atom.material as THREE.MeshStandardMaterial;
+        material.opacity = 1;
+        material.transparent = false;
         return false;
       }
+
+      if (elapsed < anim.fadeDuration) {
+        const t = elapsed / anim.fadeDuration;
+        const spreadT = easeOutCubic(t);
+
+        anim.atom.position.lerpVectors(
+          anim.startPos,
+          anim.atom.userData.targetPosition,
+          spreadT
+        );
+
+        const material = anim.atom.material as THREE.MeshStandardMaterial;
+        material.opacity = t;
+      } else {
+        const bounceElapsed = elapsed - anim.fadeDuration;
+        const bounceT = bounceElapsed / anim.bounceDuration;
+
+        const bounceOffset = this.calculateBounceOffset(bounceT, 0.1);
+
+        const direction = new THREE.Vector3()
+          .subVectors(anim.atom.userData.targetPosition, anim.startPos)
+          .normalize();
+
+        anim.atom.position.copy(anim.atom.userData.targetPosition);
+        anim.atom.position.add(direction.multiplyScalar(bounceOffset));
+
+        const material = anim.atom.material as THREE.MeshStandardMaterial;
+        material.opacity = 1;
+      }
+
       return true;
+    });
+
+    const maxAnimEndTime = Math.max(...this.loadingAnimations.map(a => a.startTime + a.fadeDuration + a.bounceDuration), 0);
+    const bondsFadeProgress = clamp((now - (performance.now() - 200)) / 500, 0, 1);
+
+    this.bonds.forEach(bond => {
+      const material = bond.material as THREE.MeshStandardMaterial;
+      if (material.transparent) {
+        material.opacity = Math.min(material.opacity + 0.03, 1);
+        if (material.opacity >= 1) {
+          material.transparent = false;
+        }
+      }
     });
   }
 
-  private startBounceAnimation(atom: AtomMesh): void {
-    const startTime = performance.now();
-    const duration = 300;
-    const amplitude = 0.1;
-    const targetPos = atom.userData.targetPosition.clone();
+  private calculateBounceOffset(t: number, amplitude: number): number {
+    const n1 = 7.5625;
+    const d1 = 2.75;
 
-    const bounce = () => {
-      const elapsed = performance.now() - startTime;
-      if (elapsed >= duration) {
-        atom.position.copy(targetPos);
-        return;
-      }
+    let bounceValue: number;
+    if (t < 1 / d1) {
+      bounceValue = n1 * t * t;
+    } else if (t < 2 / d1) {
+      bounceValue = n1 * (t -= 1.5 / d1) * t + 0.75;
+    } else if (t < 2.5 / d1) {
+      bounceValue = n1 * (t -= 2.25 / d1) * t + 0.9375;
+    } else {
+      bounceValue = n1 * (t -= 2.625 / d1) * t + 0.984375;
+    }
 
-      const t = elapsed / duration;
-      const bounceT = easeOutBounce(t);
-      const offset = amplitude * (1 - bounceT);
-
-      atom.position.x = targetPos.x;
-      atom.position.y = targetPos.y + offset;
-      atom.position.z = targetPos.z;
-
-      requestAnimationFrame(bounce);
-    };
-
-    bounce();
+    return amplitude * (1 - bounceValue);
   }
 
   private updateRotation(): void {
     if (!this.isDragging) {
+      this.rotationVelocity.x *= this.damping;
+      this.rotationVelocity.y *= this.damping;
+
+      this.targetRotation.y += this.rotationVelocity.y;
+      this.targetRotation.x += this.rotationVelocity.x;
+      this.targetRotation.x = clamp(this.targetRotation.x, -Math.PI / 2, Math.PI / 2);
+
       this.targetRotation.y += 0.002;
     }
 
-    this.currentRotation.x += (this.targetRotation.x - this.currentRotation.x) * 0.1;
-    this.currentRotation.y += (this.targetRotation.y - this.currentRotation.y) * 0.1;
+    const lerpFactor = 0.08;
+    this.currentRotation.x += (this.targetRotation.x - this.currentRotation.x) * lerpFactor;
+    this.currentRotation.y += (this.targetRotation.y - this.currentRotation.y) * lerpFactor;
 
     this.moleculeGroup.rotation.x = this.currentRotation.x;
     this.moleculeGroup.rotation.y = this.currentRotation.y;
@@ -517,13 +630,14 @@ export class SceneRenderer {
       }
 
       p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
-      p.velocity.multiplyScalar(0.95);
+      p.velocity.multiplyScalar(0.96);
+      p.velocity.y -= 2 * delta;
 
       const material = p.mesh.material as THREE.MeshBasicMaterial;
       material.opacity = p.life / p.maxLife;
 
       const scale = p.life / p.maxLife;
-      p.mesh.scale.setScalar(scale);
+      p.mesh.scale.setScalar(Math.max(scale, 0.1));
 
       return true;
     });
@@ -532,7 +646,7 @@ export class SceneRenderer {
   private updateGlowEffect(): void {
     this.glowTargets.forEach(atom => {
       const material = atom.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = 0.1 + atom.userData.glowIntensity * 0.8;
+      material.emissiveIntensity = 0.05 + atom.userData.glowIntensity * 0.95;
     });
   }
 
@@ -555,10 +669,11 @@ export class SceneRenderer {
       const midpoint = new THREE.Vector3().addVectors(fromPos, toPos).multiplyScalar(0.5);
 
       bond.position.copy(midpoint);
-      bond.scale.y = length / bond.userData.bondOrder / (bond.geometry as THREE.CylinderGeometry).parameters.height * bond.geometry.parameters.height;
 
       const originalLength = (bond.geometry as THREE.CylinderGeometry).parameters.height;
-      bond.scale.y = length / originalLength;
+      if (originalLength > 0) {
+        bond.scale.y = length / originalLength;
+      }
 
       bond.lookAt(toPos);
       bond.rotateX(Math.PI / 2);
@@ -571,11 +686,16 @@ export class SceneRenderer {
     });
   }
 
-  public createSparkParticles(position: THREE.Vector3, count: number = 10): void {
+  public createSparkParticles(position: THREE.Vector3, count: number = 15): void {
     for (let i = 0; i < count; i++) {
-      const geometry = new THREE.SphereGeometry(0.03, 8, 8);
+      const size = 0.02 + Math.random() * 0.03;
+      const geometry = new THREE.SphereGeometry(size, 8, 8);
+
+      const colors = [0x00d4ff, 0x7b2ff7, 0xffffff, 0xffff88];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+
       const material = new THREE.MeshBasicMaterial({
-        color: 0x00d4ff,
+        color: color,
         transparent: true,
         opacity: 1
       });
@@ -583,18 +703,21 @@ export class SceneRenderer {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.copy(position);
 
+      const speed = 2 + Math.random() * 4;
       const velocity = new THREE.Vector3(
-        (Math.random() - 0.5) * 3,
-        (Math.random() - 0.5) * 3,
-        (Math.random() - 0.5) * 3
+        (Math.random() - 0.5) * speed,
+        (Math.random() - 0.5) * speed,
+        (Math.random() - 0.5) * speed
       );
+
+      const life = 0.4 + Math.random() * 0.3;
 
       this.moleculeGroup.add(mesh);
       this.particles.push({
         mesh,
         velocity,
-        life: 0.5,
-        maxLife: 0.5
+        life,
+        maxLife: life
       });
     }
   }
@@ -627,15 +750,11 @@ export class SceneRenderer {
     this.targetZoom = 1;
   }
 
-  private updateReactionAnimations(): void {
-  }
-
   public dispose(): void {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
     this.clearMolecule();
     this.renderer.dispose();
-    window.removeEventListener('resize', this.handleResize.bind(this));
   }
 }

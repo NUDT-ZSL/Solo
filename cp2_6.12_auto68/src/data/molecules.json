@@ -1,0 +1,157 @@
+[
+  {
+    "id": "h2o",
+    "name": "水",
+    "formula": "H₂O",
+    "atoms": [
+      { "element": "O", "x": 0, "y": 0, "z": 0 },
+      { "element": "H", "x": 0.76, "y": 0.59, "z": 0 },
+      { "element": "H", "x": -0.76, "y": 0.59, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 1 },
+      { "from": 0, "to": 2, "order": 1 }
+    ]
+  },
+  {
+    "id": "co2",
+    "name": "二氧化碳",
+    "formula": "CO₂",
+    "atoms": [
+      { "element": "C", "x": 0, "y": 0, "z": 0 },
+      { "element": "O", "x": 1.16, "y": 0, "z": 0 },
+      { "element": "O", "x": -1.16, "y": 0, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 2 },
+      { "from": 0, "to": 2, "order": 2 }
+    ]
+  },
+  {
+    "id": "h2",
+    "name": "氢气",
+    "formula": "H₂",
+    "atoms": [
+      { "element": "H", "x": -0.37, "y": 0, "z": 0 },
+      { "element": "H", "x": 0.37, "y": 0, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 1 }
+    ]
+  },
+  {
+    "id": "o2",
+    "name": "氧气",
+    "formula": "O₂",
+    "atoms": [
+      { "element": "O", "x": -0.6, "y": 0, "z": 0 },
+      { "element": "O", "x": 0.6, "y": 0, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 2 }
+    ]
+  },
+  {
+    "id": "n2",
+    "name": "氮气",
+    "formula": "N₂",
+    "atoms": [
+      { "element": "N", "x": -0.55, "y": 0, "z": 0 },
+      { "element": "N", "x": 0.55, "y": 0, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 3 }
+    ]
+  },
+  {
+    "id": "nh3",
+    "name": "氨",
+    "formula": "NH₃",
+    "atoms": [
+      { "element": "N", "x": 0, "y": 0, "z": 0.3 },
+      { "element": "H", "x": 0.94, "y": 0, "z": -0.1 },
+      { "element": "H", "x": -0.47, "y": 0.81, "z": -0.1 },
+      { "element": "H", "x": -0.47, "y": -0.81, "z": -0.1 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 1 },
+      { "from": 0, "to": 2, "order": 1 },
+      { "from": 0, "to": 3, "order": 1 }
+    ]
+  },
+  {
+    "id": "ch4",
+    "name": "甲烷",
+    "formula": "CH₄",
+    "atoms": [
+      { "element": "C", "x": 0, "y": 0, "z": 0 },
+      { "element": "H", "x": 0.63, "y": 0.63, "z": 0.63 },
+      { "element": "H", "x": -0.63, "y": -0.63, "z": 0.63 },
+      { "element": "H", "x": 0.63, "y": -0.63, "z": -0.63 },
+      { "element": "H", "x": -0.63, "y": 0.63, "z": -0.63 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 1 },
+      { "from": 0, "to": 2, "order": 1 },
+      { "from": 0, "to": 3, "order": 1 },
+      { "from": 0, "to": 4, "order": 1 }
+    ]
+  },
+  {
+    "id": "c6h6",
+    "name": "苯",
+    "formula": "C₆H₆",
+    "atoms": [
+      { "element": "C", "x": 1.39, "y": 0, "z": 0 },
+      { "element": "C", "x": 0.695, "y": 1.204, "z": 0 },
+      { "element": "C", "x": -0.695, "y": 1.204, "z": 0 },
+      { "element": "C", "x": -1.39, "y": 0, "z": 0 },
+      { "element": "C", "x": -0.695, "y": -1.204, "z": 0 },
+      { "element": "C", "x": 0.695, "y": -1.204, "z": 0 },
+      { "element": "H", "x": 2.47, "y": 0, "z": 0 },
+      { "element": "H", "x": 1.235, "y": 2.139, "z": 0 },
+      { "element": "H", "x": -1.235, "y": 2.139, "z": 0 },
+      { "element": "H", "x": -2.47, "y": 0, "z": 0 },
+      { "element": "H", "x": -1.235, "y": -2.139, "z": 0 },
+      { "element": "H", "x": 1.235, "y": -2.139, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 2 },
+      { "from": 1, "to": 2, "order": 1 },
+      { "from": 2, "to": 3, "order": 2 },
+      { "from": 3, "to": 4, "order": 1 },
+      { "from": 4, "to": 5, "order": 2 },
+      { "from": 5, "to": 0, "order": 1 },
+      { "from": 0, "to": 6, "order": 1 },
+      { "from": 1, "to": 7, "order": 1 },
+      { "from": 2, "to": 8, "order": 1 },
+      { "from": 3, "to": 9, "order": 1 },
+      { "from": 4, "to": 10, "order": 1 },
+      { "from": 5, "to": 11, "order": 1 }
+    ]
+  },
+  {
+    "id": "hcl",
+    "name": "氯化氢",
+    "formula": "HCl",
+    "atoms": [
+      { "element": "H", "x": -0.64, "y": 0, "z": 0 },
+      { "element": "Cl", "x": 0.64, "y": 0, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 1 }
+    ]
+  },
+  {
+    "id": "nacl",
+    "name": "氯化钠",
+    "formula": "NaCl",
+    "atoms": [
+      { "element": "Na", "x": -1.16, "y": 0, "z": 0 },
+      { "element": "Cl", "x": 1.16, "y": 0, "z": 0 }
+    ],
+    "bonds": [
+      { "from": 0, "to": 1, "order": 1 }
+    ]
+  }
+]
