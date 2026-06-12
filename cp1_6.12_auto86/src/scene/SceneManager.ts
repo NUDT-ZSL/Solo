@@ -9,6 +9,13 @@ interface GeometryObject {
   rotSpeed: THREE.Vector3;
   baseY: number;
   pitchBand: number;
+  colorT: number;
+}
+
+interface BandEnergy {
+  low: number;
+  mid: number;
+  high: number;
 }
 
 export class SceneManager {
@@ -37,6 +44,10 @@ export class SceneManager {
   private readonly PULSE_MIN = 0.8;
   private readonly PULSE_MAX = 1.3;
   private readonly PULSE_DURATION = 0.2;
+  private readonly GEOMETRY_MIN = 20;
+  private readonly GEOMETRY_MAX = 50;
+
+  private bandEnergy: BandEnergy = { low: 0, mid: 0, high: 0 };
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -78,81 +89,172 @@ export class SceneManager {
     this.pointLight2.position.set(5, 3, 5);
     this.scene.add(this.pointLight2);
 
-    this.createGeometryGroup();
+    this.createGeometryGroup(this.geometryCount);
     this.createParticleSystem(300);
     this.setupInteraction();
 
     this.updateCameraPosition();
   }
 
-  private lerpColorHSL(t: number, saturation: number, lightness: number): THREE.Color {
+  private threeStageGradient(t: number, saturation: number, lightness: number, band?: BandEnergy): THREE.Color {
     const color = new THREE.Color();
-    if (t < 0.5) {
-      const localT = t / 0.5;
-      const h1 = 0.75;
-      const h2 = 0.5;
-      const h = h1 + (h2 - h1) * localT;
-      color.setHSL(h, saturation, lightness);
+    let hue: number;
+
+    if (band) {
+      const total = band.low + band.mid + band.high + 1e-6;
+      const wLow = band.low / total;
+      const wMid = band.mid / total;
+      const wHigh = band.high / total;
+
+      const hPurple = 0.78;
+      const hCyan = 0.5;
+      const hPink = 0.94;
+
+      hue = hPurple * wLow + hCyan * wMid + hPink * wHigh;
+      hue = hue * 0.3 + t * 0.7;
+      hue = hue % 1;
+      if (hue < 0) hue += 1;
     } else {
-      const localT = (t - 0.5) / 0.5;
-      const h1 = 0.5;
-      const h2 = 0.92;
-      const h = h1 + (h2 - h1) * localT;
-      color.setHSL(h, saturation, lightness);
+      if (t < 0.33) {
+        const localT = t / 0.33;
+        hue = 0.78 + (0.5 - 0.78) * localT;
+      } else if (t < 0.66) {
+        const localT = (t - 0.33) / 0.33;
+        hue = 0.5 + (0.94 - 0.5) * localT * 0.3;
+      } else {
+        const localT = (t - 0.66) / 0.34;
+        hue = 0.63 + (0.94 - 0.63) * localT;
+      }
     }
+
+    color.setHSL(hue, saturation, lightness);
     return color;
   }
 
-  private createGeometryGroup(): void {
+  private computeBandEnergy(spectrum: Float32Array): BandEnergy {
+    const sampleRate = 44100;
+    const nyquist = sampleRate / 2;
+    const binCount = spectrum.length;
+
+    let lowSum = 0, lowCount = 0;
+    let midSum = 0, midCount = 0;
+    let highSum = 0, highCount = 0;
+
+    for (let i = 0; i < binCount; i++) {
+      const freq = (i / binCount) * nyquist;
+      const val = Math.pow(10, spectrum[i] / 10);
+      if (freq < 250) {
+        lowSum += val;
+        lowCount++;
+      } else if (freq < 2000) {
+        midSum += val;
+        midCount++;
+      } else if (freq < 8000) {
+        highSum += val;
+        highCount++;
+      }
+    }
+
+    return {
+      low: lowCount > 0 ? lowSum / lowCount : 0,
+      mid: midCount > 0 ? midSum / midCount : 0,
+      high: highCount > 0 ? highSum / highCount : 0,
+    };
+  }
+
+  private createSingleGeometry(index: number, total: number): GeometryObject {
     const geometries = [
       () => new THREE.BoxGeometry(0.6, 0.6, 0.6),
       () => new THREE.SphereGeometry(0.35, 16, 16),
       () => new THREE.TorusKnotGeometry(0.3, 0.1, 64, 8),
     ];
 
-    for (let i = 0; i < this.geometryCount; i++) {
-      const geoFn = geometries[i % geometries.length];
-      const geometry = geoFn();
+    const geoFn = geometries[index % geometries.length];
+    const geometry = geoFn();
 
-      const t = i / Math.max(1, this.geometryCount - 1);
-      const color = this.lerpColorHSL(t, this.saturation / 100, 0.55);
+    const t = total > 1 ? index / (total - 1) : 0.5;
+    const color = this.threeStageGradient(t, this.saturation / 100, 0.55, this.bandEnergy);
 
-      const material = new THREE.MeshPhongMaterial({
-        color,
-        emissive: color.clone().multiplyScalar(0.2),
-        shininess: 80,
-        transparent: true,
-        opacity: 0.88,
-      });
+    const material = new THREE.MeshPhongMaterial({
+      color,
+      emissive: color.clone().multiplyScalar(0.2),
+      shininess: 80,
+      transparent: true,
+      opacity: 0.88,
+    });
 
-      const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(geometry, material);
 
-      const angle = (i / this.geometryCount) * Math.PI * 2 + Math.random() * 0.3;
-      const radius = 2.5 + Math.random() * 4.5;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      const y = (Math.random() - 0.5) * 7;
+    const angle = (index / total) * Math.PI * 2 + Math.random() * 0.3;
+    const radius = 2.5 + Math.random() * 4.5;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    const y = (Math.random() - 0.5) * 7;
 
-      mesh.position.set(x, y, z);
-      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    mesh.position.set(x, y, z);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
 
-      const baseScale = 0.6 + Math.random() * 0.8;
-      mesh.scale.setScalar(baseScale * this.PULSE_MIN);
+    const baseScale = 0.6 + Math.random() * 0.8;
+    mesh.scale.setScalar(baseScale * this.PULSE_MIN);
 
-      this.scene.add(mesh);
+    this.scene.add(mesh);
 
-      this.geometryObjects.push({
-        mesh,
-        baseScale,
-        currentPulse: this.PULSE_MIN,
-        rotSpeed: new THREE.Vector3(
-          (Math.random() - 0.5) * 0.015,
-          (Math.random() - 0.5) * 0.015,
-          (Math.random() - 0.5) * 0.008
-        ),
-        baseY: y,
-        pitchBand: i / Math.max(1, this.geometryCount - 1),
-      });
+    return {
+      mesh,
+      baseScale,
+      currentPulse: this.PULSE_MIN,
+      rotSpeed: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.015,
+        (Math.random() - 0.5) * 0.015,
+        (Math.random() - 0.5) * 0.008
+      ),
+      baseY: y,
+      pitchBand: total > 1 ? index / (total - 1) : 0.5,
+      colorT: t,
+    };
+  }
+
+  private createGeometryGroup(count: number): void {
+    for (let i = 0; i < count; i++) {
+      this.geometryObjects.push(this.createSingleGeometry(i, count));
+    }
+  }
+
+  private setGeometryObjectsCount(newCount: number): void {
+    const clamped = Math.max(this.GEOMETRY_MIN, Math.min(this.GEOMETRY_MAX, Math.round(newCount)));
+    if (clamped === this.geometryCount) return;
+
+    if (clamped > this.geometryCount) {
+      for (let i = this.geometryCount; i < clamped; i++) {
+        this.geometryObjects.push(this.createSingleGeometry(i, clamped));
+      }
+    } else {
+      for (let i = this.geometryCount - 1; i >= clamped; i--) {
+        const obj = this.geometryObjects[i];
+        this.scene.remove(obj.mesh);
+        obj.mesh.geometry.dispose();
+        (obj.mesh.material as THREE.Material).dispose();
+        gsap.killTweensOf(obj);
+        this.geometryObjects.pop();
+      }
+    }
+
+    this.geometryCount = clamped;
+
+    for (let i = 0; i < this.geometryObjects.length; i++) {
+      this.geometryObjects[i].pitchBand = clamped > 1 ? i / (clamped - 1) : 0.5;
+      this.geometryObjects[i].colorT = clamped > 1 ? i / (clamped - 1) : 0.5;
+    }
+
+    this.refreshGeometryColors();
+  }
+
+  private refreshGeometryColors(): void {
+    for (let i = 0; i < this.geometryObjects.length; i++) {
+      const obj = this.geometryObjects[i];
+      const color = this.threeStageGradient(obj.colorT, this.saturation / 100, 0.55, this.bandEnergy);
+      (obj.mesh.material as THREE.MeshPhongMaterial).color.copy(color);
+      (obj.mesh.material as THREE.MeshPhongMaterial).emissive.copy(color).multiplyScalar(0.2);
     }
   }
 
@@ -183,7 +285,7 @@ export class SceneManager {
       this.particleBasePositions[i * 3 + 2] = z;
 
       const t = i / maxCount;
-      const color = this.lerpColorHSL(t, this.saturation / 100, 0.65);
+      const color = this.threeStageGradient(t, this.saturation / 100, 0.65);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
@@ -318,6 +420,7 @@ export class SceneManager {
 
   updateAudioData(data: AudioData): void {
     this.currentAudioData = data;
+    this.bandEnergy = this.computeBandEnergy(data.spectrum);
 
     if (data.isBeat) {
       this.triggerBeatPulse();
@@ -326,6 +429,7 @@ export class SceneManager {
     this.updatePitchPositions(data.pitch);
     this.updateParticleSystem(data);
     this.updateLighting(data);
+    this.refreshGeometryColors();
   }
 
   private triggerBeatPulse(): void {
@@ -377,6 +481,8 @@ export class SceneManager {
     const sizes = this.particleSystem.geometry.attributes.aSize.array as Float32Array;
 
     const particleSize = 2 + normalizedEnergy * 4;
+    const sat = this.saturation / 100;
+    const light = 0.55 + normalizedEnergy * 0.25;
 
     for (let i = 0; i < particleCount; i++) {
       const bx = this.particleBasePositions[i * 3];
@@ -389,9 +495,7 @@ export class SceneManager {
       positions[i * 3 + 2] = bz * expandFactor;
 
       const t = i / 500;
-      const sat = this.saturation / 100;
-      const light = 0.55 + normalizedEnergy * 0.25;
-      const color = this.lerpColorHSL(t, sat, light);
+      const color = this.threeStageGradient(t, sat, light, this.bandEnergy);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
@@ -415,36 +519,18 @@ export class SceneManager {
   }
 
   setGeometryDensity(count: number): void {
-    const clamped = Math.max(20, Math.min(50, Math.round(count)));
-    if (clamped === this.geometryCount) return;
-
-    for (const obj of this.geometryObjects) {
-      this.scene.remove(obj.mesh);
-      obj.mesh.geometry.dispose();
-      (obj.mesh.material as THREE.Material).dispose();
-      gsap.killTweensOf(obj);
-    }
-    this.geometryObjects = [];
-
-    this.geometryCount = clamped;
-    this.createGeometryGroup();
+    this.setGeometryObjectsCount(count);
   }
 
   setSaturation(val: number): void {
     this.saturation = Math.max(0, Math.min(100, val));
-    for (let i = 0; i < this.geometryObjects.length; i++) {
-      const obj = this.geometryObjects[i];
-      const t = i / Math.max(1, this.geometryObjects.length - 1);
-      const color = this.lerpColorHSL(t, this.saturation / 100, 0.55);
-      (obj.mesh.material as THREE.MeshPhongMaterial).color.copy(color);
-      (obj.mesh.material as THREE.MeshPhongMaterial).emissive.copy(color).multiplyScalar(0.2);
-    }
+    this.refreshGeometryColors();
 
     if (this.particleSystem) {
       const colors = this.particleSystem.geometry.attributes.aColor.array as Float32Array;
       for (let i = 0; i < 500; i++) {
         const t = i / 500;
-        const color = this.lerpColorHSL(t, this.saturation / 100, 0.65);
+        const color = this.threeStageGradient(t, this.saturation / 100, 0.65);
         colors[i * 3] = color.r;
         colors[i * 3 + 1] = color.g;
         colors[i * 3 + 2] = color.b;

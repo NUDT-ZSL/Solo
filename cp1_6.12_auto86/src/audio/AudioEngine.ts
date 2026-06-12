@@ -17,6 +17,10 @@ const BPM_MIN = 60;
 const BPM_MAX = 180;
 const FFT_SIZE = 2048;
 
+const BPM_ESTIMATION_WINDOW_SEC = 6;
+const ENERGY_SAMPLE_RATE = 60;
+const ENERGY_BUFFER_SIZE = BPM_ESTIMATION_WINDOW_SEC * ENERGY_SAMPLE_RATE;
+
 export class AudioEngine {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -39,13 +43,22 @@ export class AudioEngine {
   private gainNode: GainNode | null = null;
   private pauseTime = 0;
 
+  private energyRingBuffer: Float32Array = new Float32Array(ENERGY_BUFFER_SIZE);
+  private energyWriteIdx = 0;
+  private energySamplesCollected = 0;
+  private lastEnergySampleTime = 0;
+  private readonly ENERGY_SAMPLE_INTERVAL = 1000 / ENERGY_SAMPLE_RATE;
+
+  private bpmHistory: number[] = [];
+  private readonly BPM_HISTORY_MAX = 12;
+  private lastBpmEstimateTime = 0;
+  private readonly BPM_ESTIMATE_INTERVAL = 500;
+
   private energyHistory: number[] = [];
   private readonly ENERGY_HISTORY_SIZE = 43;
-  private beatHistory: number[] = [];
-  private readonly BEAT_HISTORY_MAX = 20;
   private lastBeatTime = 0;
   private beatDifferential: number[] = [];
-  private smoothedBPM = 0;
+  private readonly BEAT_DIFF_MAX = 20;
 
   constructor() {
     this.spectrumData = new Float32Array(FFT_SIZE / 2);
@@ -155,7 +168,11 @@ export class AudioEngine {
       } catch {
         // ignore
       }
-      (this.sourceNode as AudioBufferSourceNode).disconnect();
+      try {
+        (this.sourceNode as AudioBufferSourceNode).disconnect();
+      } catch {
+        // ignore
+      }
       this.sourceNode = null;
     }
 
@@ -229,15 +246,19 @@ export class AudioEngine {
 
   private resetAnalysisState(): void {
     this.bpm = 0;
-    this.smoothedBPM = 0;
     this.pitch = 0;
     this.volume = 0;
     this.isBeat = false;
     this.spectrumEnergy = 0;
     this.energyHistory = [];
-    this.beatHistory = [];
     this.beatDifferential = [];
     this.lastBeatTime = 0;
+    this.bpmHistory = [];
+    this.lastBpmEstimateTime = 0;
+    this.lastEnergySampleTime = 0;
+    this.energyWriteIdx = 0;
+    this.energySamplesCollected = 0;
+    this.energyRingBuffer.fill(0);
     this.pauseTime = 0;
   }
 
@@ -271,6 +292,9 @@ export class AudioEngine {
     if (this.isBeat) {
       this.beatTimestamp = performance.now();
     }
+
+    this.sampleEnergyForBpm(performance.now());
+    this.estimateBpmAutocorrelation(performance.now());
 
     if (this.callback) {
       this.callback({
@@ -318,6 +342,97 @@ export class AudioEngine {
     return lowEnergy / Math.max(1, count);
   }
 
+  private sampleEnergyForBpm(now: number): void {
+    if (now - this.lastEnergySampleTime < this.ENERGY_SAMPLE_INTERVAL) return;
+    this.lastEnergySampleTime = now;
+
+    const lowEnergy = this.computeLowBandEnergy();
+    this.energyRingBuffer[this.energyWriteIdx] = lowEnergy;
+    this.energyWriteIdx = (this.energyWriteIdx + 1) % ENERGY_BUFFER_SIZE;
+    this.energySamplesCollected = Math.min(this.energySamplesCollected + 1, ENERGY_BUFFER_SIZE);
+  }
+
+  private estimateBpmAutocorrelation(now: number): void {
+    if (now - this.lastBpmEstimateTime < this.BPM_ESTIMATE_INTERVAL) return;
+    if (this.energySamplesCollected < ENERGY_SAMPLE_RATE * 2) return;
+
+    this.lastBpmEstimateTime = now;
+
+    const sampleCount = this.energySamplesCollected;
+    const signal = new Float32Array(sampleCount);
+    for (let i = 0; i < sampleCount; i++) {
+      const idx = (this.energyWriteIdx - sampleCount + i + ENERGY_BUFFER_SIZE) % ENERGY_BUFFER_SIZE;
+      signal[i] = this.energyRingBuffer[idx];
+    }
+
+    let mean = 0;
+    for (let i = 0; i < sampleCount; i++) mean += signal[i];
+    mean /= sampleCount;
+
+    for (let i = 0; i < sampleCount; i++) signal[i] -= mean;
+
+    const minLag = Math.floor((60 / BPM_MAX) * ENERGY_SAMPLE_RATE);
+    const maxLag = Math.ceil((60 / BPM_MIN) * ENERGY_SAMPLE_RATE);
+
+    let bestLag = -1;
+    let bestCorr = -Infinity;
+    const correlations = new Float32Array(maxLag + 1);
+
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let sum = 0;
+      for (let i = 0; i < sampleCount - lag; i++) {
+        sum += signal[i] * signal[i + lag];
+      }
+      sum /= (sampleCount - lag);
+      correlations[lag] = sum;
+
+      if (sum > bestCorr) {
+        bestCorr = sum;
+        bestLag = lag;
+      }
+    }
+
+    if (bestLag <= 0 || bestCorr <= 0) return;
+
+    let refinedLag = bestLag;
+    if (bestLag > minLag && bestLag < maxLag) {
+      const cLeft = correlations[bestLag - 1];
+      const cCenter = bestCorr;
+      const cRight = correlations[bestLag + 1];
+      const denom = 2 * (2 * cCenter - cLeft - cRight);
+      if (Math.abs(denom) > 1e-10) {
+        refinedLag = bestLag + (cLeft - cRight) / denom;
+      }
+    }
+
+    const bpmEstimate = (60 * ENERGY_SAMPLE_RATE) / refinedLag;
+
+    if (bpmEstimate < BPM_MIN * 0.5 || bpmEstimate > BPM_MAX * 2) return;
+
+    let finalBpm = bpmEstimate;
+    if (bpmEstimate < BPM_MIN) finalBpm = bpmEstimate * 2;
+    if (bpmEstimate > BPM_MAX) finalBpm = bpmEstimate / 2;
+
+    if (finalBpm < BPM_MIN || finalBpm > BPM_MAX) return;
+
+    this.bpmHistory.push(finalBpm);
+    if (this.bpmHistory.length > this.BPM_HISTORY_MAX) this.bpmHistory.shift();
+
+    if (this.bpmHistory.length >= 3) {
+      const medianBpm = this.computeMedian(this.bpmHistory);
+      if (this.bpm === 0) {
+        this.bpm = Math.round(medianBpm);
+      } else {
+        const target = medianBpm;
+        const delta = target - this.bpm;
+        const alpha = Math.abs(delta) < 5 ? 0.25 : 0.6;
+        this.bpm = Math.round(this.bpm + alpha * delta);
+      }
+    } else {
+      this.bpm = Math.round(finalBpm);
+    }
+  }
+
   private detectBeat(): boolean {
     const lowEnergy = this.computeLowBandEnergy();
 
@@ -326,14 +441,10 @@ export class AudioEngine {
       this.energyHistory.shift();
     }
 
-    if (this.energyHistory.length < 10) {
-      return false;
-    }
+    if (this.energyHistory.length < 10) return false;
 
     let sum = 0;
-    for (const e of this.energyHistory) {
-      sum += e;
-    }
+    for (const e of this.energyHistory) sum += e;
     const avgEnergy = sum / this.energyHistory.length;
 
     let varianceSum = 0;
@@ -348,7 +459,6 @@ export class AudioEngine {
 
     const now = performance.now();
     const minInterval = (60 / BPM_MAX) * 1000;
-    const maxInterval = (60 / BPM_MIN) * 1000;
 
     if (
       lowEnergy > dynamicThreshold &&
@@ -357,29 +467,14 @@ export class AudioEngine {
     ) {
       if (this.lastBeatTime > 0) {
         const interval = now - this.lastBeatTime;
-        if (interval <= maxInterval && interval >= minInterval) {
+        if (interval < 2000 && interval > minInterval) {
           this.beatDifferential.push(interval);
-          if (this.beatDifferential.length > this.BEAT_HISTORY_MAX) {
+          if (this.beatDifferential.length > this.BEAT_DIFF_MAX) {
             this.beatDifferential.shift();
           }
-
-          const medianInterval = this.computeMedian(this.beatDifferential);
-          const instantBPM = Math.round(60000 / medianInterval);
-          const clampedBPM = Math.max(BPM_MIN, Math.min(BPM_MAX, instantBPM));
-
-          if (this.smoothedBPM === 0) {
-            this.smoothedBPM = clampedBPM;
-          } else {
-            this.smoothedBPM = this.smoothedBPM * 0.7 + clampedBPM * 0.3;
-          }
-          this.bpm = Math.round(this.smoothedBPM);
         }
       }
       this.lastBeatTime = now;
-      this.beatHistory.push(now);
-      if (this.beatHistory.length > this.BEAT_HISTORY_MAX * 3) {
-        this.beatHistory.shift();
-      }
       return true;
     }
 
@@ -407,7 +502,6 @@ export class AudioEngine {
     const maxPeriod = Math.floor(sampleRate / FREQ_MIN);
 
     let bestCorr = -Infinity;
-    let secondCorr = -Infinity;
     let bestOffset = -1;
 
     for (let offset = minPeriod; offset <= maxPeriod; offset++) {
@@ -422,15 +516,10 @@ export class AudioEngine {
         normB += b * b;
       }
       const norm = Math.sqrt(normA * normB);
-      if (norm > 0) {
-        corr /= norm;
-      }
+      if (norm > 0) corr /= norm;
       if (corr > bestCorr) {
-        secondCorr = bestCorr;
         bestCorr = corr;
         bestOffset = offset;
-      } else if (corr > secondCorr) {
-        secondCorr = corr;
       }
     }
 
