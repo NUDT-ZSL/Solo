@@ -14,7 +14,9 @@ function getRandomColor(excludeColors = []) {
   return available[Math.floor(Math.random() * available.length)];
 }
 
-function setupSocket(server, db) {
+function setupSocket(server, dbHelpers) {
+  const { updateRoomContent, getRoomContent } = dbHelpers;
+
   const io = new Server(server, {
     cors: {
       origin: '*',
@@ -30,50 +32,47 @@ function setupSocket(server, db) {
 
     socket.on('join-room', (data) => {
       const { roomId, userName } = data;
-      
+
       if (!roomUsers.has(roomId)) {
         roomUsers.set(roomId, new Map());
       }
-      
+
       const usersInRoom = roomUsers.get(roomId);
       const usedColors = Array.from(usersInRoom.values()).map(u => u.color);
       const userColor = getRandomColor(usedColors);
-      
+
       const userData = {
         id: socket.id,
         name: userName || '匿名用户',
         color: userColor,
         cursorPosition: null
       };
-      
+
       usersInRoom.set(socket.id, userData);
       socket.join(roomId);
-      
+
       if (roomCleanupTimers.has(roomId)) {
         clearTimeout(roomCleanupTimers.get(roomId));
         roomCleanupTimers.delete(roomId);
       }
-      
-      const contentStmt = db.prepare('SELECT current_content FROM rooms WHERE id = ?');
-      const room = contentStmt.get(roomId);
-      const currentContent = room ? room.current_content : '';
-      
+
+      const currentContent = getRoomContent(roomId);
+
       socket.emit('room-joined', {
         userId: socket.id,
         userColor,
         currentContent,
         users: Array.from(usersInRoom.values())
       });
-      
+
       socket.to(roomId).emit('user-joined', userData);
     });
 
     socket.on('edit', (data) => {
       const { roomId, content } = data;
-      
-      const updateStmt = db.prepare('UPDATE rooms SET current_content = ?, last_activity = ? WHERE id = ?');
-      updateStmt.run(content, Date.now(), roomId);
-      
+
+      updateRoomContent(roomId, content);
+
       socket.to(roomId).emit('edit-received', {
         content,
         fromUser: socket.id
@@ -82,14 +81,14 @@ function setupSocket(server, db) {
 
     socket.on('cursor-move', (data) => {
       const { roomId, position } = data;
-      
+
       if (roomUsers.has(roomId)) {
         const usersInRoom = roomUsers.get(roomId);
         if (usersInRoom.has(socket.id)) {
           const userData = usersInRoom.get(socket.id);
           userData.cursorPosition = position;
           usersInRoom.set(socket.id, userData);
-          
+
           socket.to(roomId).emit('cursor-update', {
             userId: socket.id,
             position
@@ -100,17 +99,17 @@ function setupSocket(server, db) {
 
     socket.on('disconnect', () => {
       console.log('用户断开:', socket.id);
-      
+
       for (const [roomId, usersInRoom] of roomUsers.entries()) {
         if (usersInRoom.has(socket.id)) {
           const userData = usersInRoom.get(socket.id);
           usersInRoom.delete(socket.id);
-          
+
           socket.to(roomId).emit('user-left', {
             userId: socket.id,
             userName: userData.name
           });
-          
+
           if (usersInRoom.size === 0) {
             roomCleanupTimers.set(roomId, setTimeout(() => {
               roomUsers.delete(roomId);
@@ -118,7 +117,7 @@ function setupSocket(server, db) {
               console.log('清理房间数据:', roomId);
             }, 10000));
           }
-          
+
           break;
         }
       }

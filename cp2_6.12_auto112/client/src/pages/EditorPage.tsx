@@ -29,11 +29,12 @@ export default function EditorPage() {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [savedVersion, setSavedVersion] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isContentUpdating, setIsContentUpdating] = useState(false);
   const [showCommentModal, setShowCommentModal] = useState(false);
-  const [commentText, setCommentText] = useState('');
   const quillRef = useRef<ReactQuill>(null);
   const isRemoteEditRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     isConnected,
@@ -51,10 +52,12 @@ export default function EditorPage() {
   useEffect(() => {
     onEdit((newContent: string) => {
       isRemoteEditRef.current = true;
+      setIsContentUpdating(true);
       setContent(newContent);
       setTimeout(() => {
         isRemoteEditRef.current = false;
-      }, 100);
+        setIsContentUpdating(false);
+      }, 300);
     });
   }, [onEdit]);
 
@@ -87,10 +90,24 @@ export default function EditorPage() {
   };
 
   const handleSaveVersion = async () => {
-    if (!roomId || !content.trim()) return;
+    if (!roomId || !content.trim() || isSaving) return;
+
     setIsSaving(true);
+    setShowSaveSuccess(false);
+
+    if (saveSpinnerTimerRef.current) {
+      clearTimeout(saveSpinnerTimerRef.current);
+    }
+
+    const minSpinnerTime = new Promise<void>(resolve => {
+      saveSpinnerTimerRef.current = setTimeout(() => resolve(), 1000);
+    });
+
     try {
-      const result = await saveVersion(roomId, content, userName);
+      const [result] = await Promise.all([
+        saveVersion(roomId, content, userName),
+        minSpinnerTime
+      ]);
       setSavedVersion(result.versionNumber);
       setShowSaveSuccess(true);
       setTimeout(() => {
@@ -108,7 +125,8 @@ export default function EditorPage() {
     navigate(`/room/${roomId}/versions`);
   };
 
-  const otherUsers = users.filter(u => u.name !== userName);
+  const otherUsers = users.filter(u => u.id !== (users.find(x => x.name === userName)?.id || ''));
+  const currentUser = users.find(x => x.name === userName);
 
   return (
     <div className="page-transition" style={styles.container}>
@@ -120,6 +138,9 @@ export default function EditorPage() {
             background: n.type === 'warning' ? '#e74c3c' : '#2ecc71'
           }}
         >
+          <span style={styles.notificationIcon}>
+            {n.type === 'warning' ? '⚠️' : 'ℹ️'}
+          </span>
           {n.message}
         </div>
       ))}
@@ -129,29 +150,36 @@ export default function EditorPage() {
           <div style={{ ...styles.statusDot, background: isConnected ? '#2ecc71' : '#e74c3c' }} />
           <span style={styles.statusText}>{isConnected ? '已连接' : '连接中...'}</span>
           {userColor && (
-            <div style={{ ...styles.userColorBadge, background: userColor }} />
+            <div style={{ ...styles.userColorBadge, background: userColor }} title="您的标识色" />
           )}
           <span style={styles.roomId}>房间号: {roomId}</span>
         </div>
         <div style={styles.toolbar}>
-          <button style={styles.toolbarButton} onClick={handleSaveVersion} disabled={isSaving}>
-            {isSaving ? (
-              <span style={styles.buttonContent}>
-                <span className="spinner" style={styles.spinner} />
-                <span>保存中</span>
-              </span>
-            ) : (
-              <span style={styles.buttonContent}>
-                <span>💾</span>
-                <span className="toolbar-text">保存版本</span>
-              </span>
+          <div style={styles.saveButtonWrapper}>
+            <button
+              style={{ ...styles.toolbarButton, opacity: isSaving ? 0.9 : 1 }}
+              onClick={handleSaveVersion}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <span style={styles.buttonContent}>
+                  <span className="spinner" style={styles.spinner} />
+                  <span className="toolbar-text">保存中</span>
+                </span>
+              ) : (
+                <span style={styles.buttonContent}>
+                  <span>💾</span>
+                  <span className="toolbar-text">保存版本</span>
+                </span>
+              )}
+            </button>
+            {showSaveSuccess && savedVersion && (
+              <div style={styles.saveSuccess} className="content-update">
+                <span style={{ marginRight: '4px' }}>✅</span>
+                已保存 v{savedVersion}
+              </div>
             )}
-          </button>
-          {showSaveSuccess && savedVersion && (
-            <div style={styles.saveSuccess}>
-              ✅ 已保存 v{savedVersion}
-            </div>
-          )}
+          </div>
           <button style={styles.toolbarButton} onClick={handleGoToHistory}>
             <span style={styles.buttonContent}>
               <span>📜</span>
@@ -169,46 +197,55 @@ export default function EditorPage() {
 
       <div data-editor-main style={styles.mainContent}>
         <div style={styles.editorSection}>
-          <ReactQuill
-            ref={quillRef}
-            theme="snow"
-            value={content}
-            onChange={handleChange}
-            onChangeSelection={handleSelectionChange}
-            modules={modules}
-            formats={formats}
-            placeholder="开始编辑您的简历..."
-          />
+          <div className={isContentUpdating ? 'content-update' : ''}>
+            <ReactQuill
+              ref={quillRef}
+              theme="snow"
+              value={content}
+              onChange={handleChange}
+              onChangeSelection={handleSelectionChange}
+              modules={modules}
+              formats={formats}
+              placeholder="开始编辑您的简历..."
+            />
+          </div>
         </div>
 
         <div data-collab-panel style={styles.collabPanel}>
-          <h3 style={styles.panelTitle}>在线协作者</h3>
+          <h3 style={styles.panelTitle}>在线协作者 ({users.length})</h3>
           <div style={styles.userList}>
-            {users.map(u => (
-              <div key={u.id} style={styles.userItem}>
-                <div style={styles.avatarContainer}>
-                  <div style={{ ...styles.avatarRing, borderColor: u.color }}>
-                    <div style={{ ...styles.avatar, background: u.color }}>
-                      {u.name.charAt(0).toUpperCase()}
+            {users.length === 0 ? (
+              <div style={styles.emptyUsers}>等待用户加入...</div>
+            ) : (
+              users.map(u => (
+                <div key={u.id} style={styles.userItem}>
+                  <div style={styles.avatarContainer}>
+                    <div style={{ ...styles.avatarRing, borderColor: u.color }}>
+                      <div style={{ ...styles.avatar, background: u.color }}>
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
                     </div>
                   </div>
+                  <span style={styles.userName}>{u.name}</span>
+                  {currentUser?.id === u.id && (
+                    <span style={styles.youBadge}>（你）</span>
+                  )}
                 </div>
-                <span style={styles.userName}>{u.name}</span>
-                {u.id === users.find(x => x.name === userName)?.id && (
-                  <span style={styles.youBadge}>（你）</span>
-                )}
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {otherUsers.length > 0 && (
             <>
-              <h3 style={{ ...styles.panelTitle, marginTop: '24px' }}>用户光标</h3>
+              <h3 style={{ ...styles.panelTitle, marginTop: '24px' }}>活跃光标</h3>
               <div style={styles.cursorInfo}>
-                {otherUsers.map(u => u.cursorPosition && (
+                {otherUsers.map(u => (
                   <div key={u.id} style={styles.cursorInfoItem}>
-                    <div style={{ ...styles.cursorIndicator, background: u.color }} />
-                    <span>{u.name} 正在编辑</span>
+                    <div style={{ ...styles.cursorIndicator, background: u.color, opacity: u.cursorPosition ? 0.7 : 0.3 }} />
+                    <span>
+                      {u.name}
+                      {u.cursorPosition ? ' 正在编辑...' : ' 空闲中'}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -220,18 +257,24 @@ export default function EditorPage() {
       {showCommentModal && (
         <div style={styles.modalOverlay} onClick={() => setShowCommentModal(false)}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
-            <h3 style={styles.modalTitle}>快速提示</h3>
-            <p style={styles.modalText}>前往版本历史页面可以查看版本差异并添加评论。</p>
-            <textarea
-              value={commentText}
-              onChange={e => setCommentText(e.target.value)}
-              style={styles.textarea}
-              placeholder="如需评论，请先保存当前版本，然后到版本历史页面对该版本添加评论..."
-              readOnly
-            />
+            <h3 style={styles.modalTitle}>💬 添加评论</h3>
+            <p style={styles.modalText}>
+              评论功能在版本历史页面提供。您可以：
+            </p>
+            <ul style={styles.modalList}>
+              <li>查看不同版本之间的差异对比</li>
+              <li>针对任意历史版本添加评论反馈</li>
+              <li>浏览最多50条历史评论</li>
+            </ul>
             <div style={styles.modalActions}>
-              <button style={styles.cancelButton} onClick={() => setShowCommentModal(false)}>关闭</button>
-              <button style={styles.confirmButton} onClick={() => { setShowCommentModal(false); handleGoToHistory(); }}>
+              <button style={styles.cancelButton} onClick={() => setShowCommentModal(false)}>稍后再说</button>
+              <button
+                style={styles.confirmButton}
+                onClick={() => {
+                  setShowCommentModal(false);
+                  handleGoToHistory();
+                }}
+              >
                 前往版本历史
               </button>
             </div>
@@ -246,6 +289,16 @@ export default function EditorPage() {
         @media (max-width: 768px) {
           .toolbar-text {
             display: none;
+          }
+          [data-editor-main] {
+            flex-direction: column !important;
+            height: auto !important;
+          }
+          [data-collab-panel] {
+            width: 100% !important;
+            border-left: none !important;
+            border-top: 1px solid #3d3d5e !important;
+            max-height: 260px !important;
           }
         }
       `}</style>
@@ -265,12 +318,19 @@ const styles: Record<string, React.CSSProperties> = {
     top: '20px',
     left: '50%',
     transform: 'translateX(-50%)',
-    padding: '12px 24px',
+    padding: '12px 20px',
     borderRadius: '8px',
     color: '#ffffff',
     fontWeight: 500,
     zIndex: 1000,
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    animation: 'fadeIn 0.3s ease-out'
+  },
+  notificationIcon: {
+    fontSize: '16px'
   },
   header: {
     display: 'flex',
@@ -291,7 +351,8 @@ const styles: Record<string, React.CSSProperties> = {
   statusDot: {
     width: '10px',
     height: '10px',
-    borderRadius: '50%'
+    borderRadius: '50%',
+    boxShadow: '0 0 8px currentColor'
   },
   statusText: {
     color: '#ccccdd',
@@ -301,18 +362,28 @@ const styles: Record<string, React.CSSProperties> = {
     width: '16px',
     height: '16px',
     borderRadius: '4px',
-    marginLeft: '8px'
+    marginLeft: '4px',
+    boxShadow: '0 0 6px rgba(255,255,255,0.2)'
   },
   roomId: {
     color: '#8888aa',
     fontSize: '13px',
-    marginLeft: '8px'
+    fontFamily: 'monospace',
+    background: '#1a1a2e',
+    padding: '4px 10px',
+    borderRadius: '4px'
   },
   toolbar: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: '12px',
     position: 'relative'
+  },
+  saveButtonWrapper: {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center'
   },
   toolbarButton: {
     display: 'flex',
@@ -326,8 +397,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     fontWeight: 500,
     cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    whiteSpace: 'nowrap'
   },
   buttonContent: {
     display: 'flex',
@@ -344,16 +415,18 @@ const styles: Record<string, React.CSSProperties> = {
   },
   saveSuccess: {
     position: 'absolute',
-    top: '100%',
-    left: '0',
-    marginTop: '8px',
-    padding: '8px 16px',
-    background: 'rgba(46, 204, 113, 0.9)',
+    top: 'calc(100% + 6px)',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    padding: '6px 14px',
+    background: 'rgba(46, 204, 113, 0.95)',
     color: '#ffffff',
     borderRadius: '6px',
-    fontSize: '13px',
+    fontSize: '12px',
+    fontWeight: 500,
     whiteSpace: 'nowrap',
-    zIndex: 10
+    zIndex: 20,
+    boxShadow: '0 2px 10px rgba(46, 204, 113, 0.4)'
   },
   mainContent: {
     display: 'flex',
@@ -371,10 +444,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#2d2d3e',
     padding: '20px',
     borderLeft: '1px solid #3d3d5e',
-    overflowY: 'auto'
+    overflowY: 'auto',
+    flexShrink: 0
   },
   panelTitle: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 600,
     color: '#8888aa',
     marginBottom: '16px',
@@ -386,43 +460,55 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: '12px'
   },
+  emptyUsers: {
+    fontSize: '13px',
+    color: '#666688',
+    fontStyle: 'italic'
+  },
   userItem: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px'
   },
   avatarContainer: {
-    position: 'relative'
+    position: 'relative',
+    flexShrink: 0
   },
   avatarRing: {
-    width: '44px',
-    height: '44px',
+    width: '42px',
+    height: '42px',
     borderRadius: '50%',
     border: '3px solid',
     padding: '2px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    transition: 'box-shadow 0.2s'
   },
   avatar: {
-    width: '34px',
-    height: '34px',
+    width: '32px',
+    height: '32px',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     color: '#ffffff',
     fontWeight: 600,
-    fontSize: '14px'
+    fontSize: '13px'
   },
   userName: {
     color: '#ffffff',
     fontSize: '14px',
-    fontWeight: 500
+    fontWeight: 500,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
   },
   youBadge: {
     color: '#667eea',
-    fontSize: '12px'
+    fontSize: '12px',
+    flexShrink: 0
   },
   cursorInfo: {
     display: 'flex',
@@ -432,8 +518,8 @@ const styles: Record<string, React.CSSProperties> = {
   cursorInfoItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '8px 12px',
+    gap: '10px',
+    padding: '10px 12px',
     background: '#1a1a2e',
     borderRadius: '6px',
     fontSize: '13px',
@@ -443,7 +529,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: '16px',
     height: '20px',
     borderRadius: '2px',
-    opacity: 0.5
+    flexShrink: 0,
+    transition: 'opacity 0.2s'
   },
   modalOverlay: {
     position: 'fixed',
@@ -456,14 +543,16 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 100,
-    padding: '20px'
+    padding: '20px',
+    animation: 'fadeIn 0.2s ease-out'
   },
   modal: {
     background: '#2d2d3e',
     borderRadius: '12px',
     padding: '28px',
     width: '100%',
-    maxWidth: '480px'
+    maxWidth: '480px',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
   },
   modalTitle: {
     fontSize: '18px',
@@ -474,27 +563,21 @@ const styles: Record<string, React.CSSProperties> = {
   modalText: {
     color: '#ccccdd',
     fontSize: '14px',
-    marginBottom: '16px',
+    marginBottom: '14px',
     lineHeight: 1.6
   },
-  textarea: {
-    width: '100%',
-    minHeight: '100px',
-    padding: '12px',
-    borderRadius: '8px',
-    border: '1px solid #3d3d5e',
-    background: '#1a1a2e',
-    color: '#8888aa',
-    fontSize: '14px',
-    resize: 'vertical',
-    outline: 'none',
-    fontFamily: 'inherit',
-    marginBottom: '20px'
+  modalList: {
+    color: '#aaaa cc',
+    fontSize: '13px',
+    paddingLeft: '20px',
+    marginBottom: '24px',
+    lineHeight: 2
   },
   modalActions: {
     display: 'flex',
     gap: '12px',
-    justifyContent: 'flex-end'
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap'
   },
   cancelButton: {
     padding: '10px 20px',
