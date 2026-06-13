@@ -61,12 +61,13 @@ const ParticleEffect = forwardRef<ParticleEffectHandle, ParticleEffectProps>(({ 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const angle = randomRange(0, Math.PI * 2);
       const speed = randomRange(INITIAL_SPEED_MIN, INITIAL_SPEED_MAX);
+      const vyOffset = randomRange(-100, 150);
 
       particles.push({
         x: centerX,
         y: centerY,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
+        vy: Math.sin(angle) * speed + vyOffset,
         size: randomRange(3, 6),
         color: colors[Math.floor(Math.random() * colors.length)],
         alpha: 1,

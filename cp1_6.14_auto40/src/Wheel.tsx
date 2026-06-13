@@ -162,14 +162,15 @@ const Wheel = forwardRef<WheelHandle, WheelProps>(({ prizes, onSpinComplete, dis
     const segmentAngle = 360 / prizes.length;
 
     const initialVelocity = randomRange(300, 500);
-    const deceleration = 50;
-
-    const targetAngle = 360 * 5 + (targetIndex * segmentAngle + segmentAngle / 2);
+    const extraSpins = randomRange(5, 8);
+    const targetAngle = 360 * extraSpins + (targetIndex * segmentAngle + segmentAngle / 2);
     const currentRotation = rotationRef.current % 360;
-    const finalRotation = targetAngle - currentRotation;
+    const totalRotation = targetAngle - currentRotation;
+
+    const requiredDeceleration = (initialVelocity * initialVelocity) / (2 * totalRotation);
 
     let currentVelocity = initialVelocity;
-    let currentRotationAngle = 0;
+    let accumulatedRotation = 0;
     lastFrameTimeRef.current = performance.now();
 
     const animate = () => {
@@ -177,18 +178,37 @@ const Wheel = forwardRef<WheelHandle, WheelProps>(({ prizes, onSpinComplete, dis
       const deltaTime = now - lastFrameTimeRef.current;
       lastFrameTimeRef.current = now;
 
-      const deltaSeconds = deltaTime / 1000;
+      const deltaSeconds = Math.min(deltaTime / 1000, 0.033);
 
-      currentVelocity -= deceleration * deltaSeconds;
-      
+      const remainingRotation = totalRotation - accumulatedRotation;
+
+      let dynamicDeceleration = requiredDeceleration;
+      if (remainingRotation < totalRotation * 0.3) {
+        const slowdownFactor = 1 + (1 - remainingRotation / (totalRotation * 0.3)) * 2;
+        dynamicDeceleration = requiredDeceleration * slowdownFactor;
+      }
+
+      currentVelocity -= dynamicDeceleration * deltaSeconds;
+
+      if (currentVelocity < 20 && remainingRotation < 10) {
+        currentVelocity = Math.max(5, remainingRotation / 0.5);
+      }
+
       if (currentVelocity < 0) {
         currentVelocity = 0;
       }
 
       const deltaAngle = currentVelocity * deltaSeconds;
-      currentRotationAngle += deltaAngle;
+      accumulatedRotation += deltaAngle;
 
-      if (currentRotationAngle >= finalRotation || currentVelocity <= 0) {
+      console.debug(
+        `[Wheel] 速度: ${currentVelocity.toFixed(1)}deg/s, ` +
+        `已转: ${accumulatedRotation.toFixed(1)}deg, ` +
+        `剩余: ${remainingRotation.toFixed(1)}deg, ` +
+        `减速度: ${dynamicDeceleration.toFixed(2)}deg/s²`
+      );
+
+      if (accumulatedRotation >= totalRotation || currentVelocity <= 0) {
         rotationRef.current = targetAngle;
         drawWheel((rotationRef.current * Math.PI) / 180);
 
@@ -196,7 +216,11 @@ const Wheel = forwardRef<WheelHandle, WheelProps>(({ prizes, onSpinComplete, dis
         fpsMonitorRef.current?.stop();
 
         const totalDuration = performance.now() - start;
-        console.debug(`[Perf] 转盘动画总耗时: ${totalDuration.toFixed(2)}ms`);
+        console.debug(
+          `[Perf] 转盘动画总耗时: ${totalDuration.toFixed(2)}ms, ` +
+          `总旋转: ${totalRotation.toFixed(0)}deg, ` +
+          `初始速度: ${initialVelocity.toFixed(0)}deg/s`
+        );
 
         onSpinComplete(targetIndex);
         return;
