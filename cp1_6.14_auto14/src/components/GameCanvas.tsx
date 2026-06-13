@@ -27,6 +27,9 @@ interface VictoryParticle {
   maxAge: number;
 }
 
+const MAX_VICTORY_PARTICLES = 150;
+const VICTORY_PARTICLE_SPEED = 120;
+
 export interface GameCanvasProps {
   physicsState: PhysicsState | null;
   predictedTrajectory: Vec2[];
@@ -134,12 +137,13 @@ export default function GameCanvas({
       const particles: VictoryParticle[] = [];
       const w = canvasWidthRef.current;
       const h = canvasHeightRef.current;
-      for (let i = 0; i < 150; i++) {
+      const count = Math.min(150, MAX_VICTORY_PARTICLES);
+      for (let i = 0; i < count; i++) {
         particles.push({
           x: Math.random() * w,
           y: h + Math.random() * 100 + Math.random() * h * 0.5,
-          vx: (Math.random() - 0.5) * 0.8,
-          vy: -2 - Math.random() * 1.5,
+          vx: (Math.random() - 0.5) * 20,
+          vy: -VICTORY_PARTICLE_SPEED * (0.8 + Math.random() * 0.4),
           age: Math.random() * 0.5,
           maxAge: 3,
         });
@@ -368,17 +372,23 @@ export default function GameCanvas({
     const updateVictory = (dt: number) => {
       const particles = victoryParticlesRef.current;
       const h = canvasHeightRef.current;
+      const w = canvasWidthRef.current;
       for (const p of particles) {
-        p.x += p.vx;
-        p.y += p.vy;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
         p.age += dt;
         if (p.y < -10) {
           p.y = h + 20;
           p.age = 0;
-          p.x = Math.random() * canvasWidthRef.current;
+          p.x = Math.random() * w;
+          p.vx = (Math.random() - 0.5) * 20;
+          p.vy = -VICTORY_PARTICLE_SPEED * (0.8 + Math.random() * 0.4);
         }
       }
       victoryParticlesRef.current = particles.filter((p) => p.age < p.maxAge);
+      if (victoryParticlesRef.current.length > MAX_VICTORY_PARTICLES) {
+        victoryParticlesRef.current = victoryParticlesRef.current.slice(0, MAX_VICTORY_PARTICLES);
+      }
     };
 
     const drawVictory = () => {

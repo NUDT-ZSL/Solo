@@ -47,11 +47,13 @@ export interface PhysicsState {
   time: number;
 }
 
-const G_BASE = 600;
+const G_UNIVERSAL = 600;
+const PROBE_MASS = 1;
 const MAX_TRAIL_PARTICLES = 20;
 const MAX_TRAJECTORY_POINTS = 200;
 const TRAIL_ADD_INTERVAL = 0.05;
 const FUEL_CONSUMPTION_RATE = 2;
+const MIN_DISTANCE_SQ = 2500;
 
 export default class GravityEngine {
   private probe: ProbeState;
@@ -155,7 +157,7 @@ export default class GravityEngine {
         continue;
       }
 
-      const force = (G_BASE * body.mass) / Math.max(distSq, 1000);
+      const force = (G_UNIVERSAL * PROBE_MASS * body.mass) / Math.max(distSq, MIN_DISTANCE_SQ);
       ax += force * (dx / dist);
       ay += force * (dy / dist);
     }
@@ -220,7 +222,7 @@ export default class GravityEngine {
         const distSq = dx * dx + dy * dy;
         const dist = Math.sqrt(distSq);
         if (dist < body.radius) break;
-        const force = (G_BASE * body.mass) / Math.max(distSq, 1000);
+        const force = (G_UNIVERSAL * PROBE_MASS * body.mass) / Math.max(distSq, MIN_DISTANCE_SQ);
         ax += force * (dx / dist);
         ay += force * (dy / dist);
       }
@@ -242,7 +244,7 @@ export default class GravityEngine {
       const dy = body.y - this.probe.y;
       const distSq = dx * dx + dy * dy;
       const dist = Math.sqrt(distSq);
-      const force = (G_BASE * body.mass) / Math.max(distSq, 1000);
+      const force = (G_UNIVERSAL * PROBE_MASS * body.mass) / Math.max(distSq, MIN_DISTANCE_SQ);
       const fx = force * (dx / dist);
       const fy = force * (dy / dist);
       vectors.push({ body, fx, fy, mag: Math.sqrt(fx * fx + fy * fy) });

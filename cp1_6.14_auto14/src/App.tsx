@@ -276,7 +276,6 @@ export default function App() {
       <GameCanvas
         physicsState={physicsState}
         predictedTrajectory={predictedTrajectory}
-        gravityVectors={gravityVectors}
         isDragging={isDragging}
         dragStart={dragStart}
         dragEnd={dragEnd}
@@ -284,9 +283,6 @@ export default function App() {
         explosionActive={explosionActive}
         explosionPos={explosionPos}
         victoryActive={victoryActive}
-        onReset={resetLevel}
-        onMenu={goToMenu}
-        onLaunch={handleLaunch}
       />
 
       {gameView === 'playing' && physicsState && (
