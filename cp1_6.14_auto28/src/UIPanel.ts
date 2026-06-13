@@ -30,29 +30,33 @@ export class UIPanel {
     this.callbacks = callbacks;
     this.container = document.createElement('div');
     this.brushHint = this.createBrushHint();
+    document.body.appendChild(this.brushHint);
     this.buildUI();
     this.applyResponsive();
     window.addEventListener('resize', () => this.applyResponsive());
     document.body.appendChild(this.container);
-    document.body.appendChild(this.brushHint);
   }
 
   private createBrushHint(): HTMLDivElement {
     const hint = document.createElement('div');
+    hint.textContent = 'Brush Size: 1';
     hint.style.cssText = `
       position: fixed;
-      top: 20px;
+      top: 24px;
       left: 50%;
-      transform: translateX(-50%);
-      padding: 8px 20px;
-      background: rgba(0,0,0,0.75);
-      color: white;
-      border-radius: 8px;
+      transform: translateX(-50%) scale(0.95);
+      padding: 10px 24px;
+      background: rgba(15, 16, 25, 0.92);
+      color: #ffffff;
+      border-radius: 10px;
       font-size: 14px;
-      z-index: 1000;
+      font-weight: 500;
+      z-index: 9999;
       opacity: 0;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s ease, transform 0.2s ease;
       pointer-events: none;
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
     `;
     return hint;
   }
@@ -60,55 +64,75 @@ export class UIPanel {
   public showBrushHint(): void {
     this.brushHint.textContent = `Brush Size: ${this.brushSize}`;
     this.brushHint.style.opacity = '1';
+    this.brushHint.style.transform = 'translateX(-50%) scale(1)';
     if (this.hintTimeout) window.clearTimeout(this.hintTimeout);
     this.hintTimeout = window.setTimeout(() => {
       this.brushHint.style.opacity = '0';
+      this.brushHint.style.transform = 'translateX(-50%) scale(0.95)';
       this.hintTimeout = null;
     }, 2000);
   }
 
   private applyResponsive(): void {
     const isMobile = window.innerWidth < 900;
+
     if (isMobile) {
       this.container.style.cssText = `
         position: fixed;
         left: 0;
         right: 0;
         bottom: 0;
-        height: 80px;
+        height: 90px;
         background: #2a2b36;
-        padding: 12px 16px;
+        padding: 10px 16px;
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
         z-index: 100;
         overflow-x: auto;
         overflow-y: hidden;
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
+        border-top-left-radius: 14px;
+        border-top-right-radius: 14px;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+        flex-wrap: nowrap;
       `;
+
       const title = this.container.querySelector('.vf-title') as HTMLElement;
       if (title) title.style.display = 'none';
+
       const palette = this.container.querySelector('.vf-palette') as HTMLElement;
       if (palette) {
         palette.style.cssText = `
           display: flex;
-          gap: 4px;
+          flex-direction: row;
           flex-wrap: nowrap;
+          gap: 5px;
           overflow-x: auto;
-          min-width: 180px;
-          padding-bottom: 4px;
+          overflow-y: hidden;
+          min-width: 200px;
+          flex-shrink: 0;
+          padding: 4px 2px;
         `;
-        palette.querySelectorAll('.vf-color-swatch').forEach((sw, i) => {
-          if (i >= 6) (sw as HTMLElement).style.display = 'inline-block';
+        palette.querySelectorAll('.vf-color-swatch').forEach((sw) => {
+          (sw as HTMLElement).style.display = 'inline-block';
+          (sw as HTMLElement).style.flexShrink = '0';
         });
       }
+
       const tools = this.container.querySelector('.vf-tools') as HTMLElement;
-      if (tools) tools.style.flexShrink = '0';
+      if (tools) {
+        tools.style.cssText = `display: flex; gap: 5px; flex-shrink: 0;`;
+      }
+
       const historyBtns = this.container.querySelector('.vf-history') as HTMLElement;
-      if (historyBtns) historyBtns.style.flexShrink = '0';
-      const exportBtn = this.container.querySelector('.vf-export') as HTMLElement;
-      if (exportBtn) exportBtn.style.flexShrink = '0';
+      if (historyBtns) {
+        historyBtns.style.cssText = `display: flex; gap: 5px; flex-shrink: 0;`;
+      }
+
+      const exportWrapper = this.container.querySelector('.vf-export-wrapper') as HTMLElement;
+      if (exportWrapper) {
+        exportWrapper.style.cssText = `display: flex; flex-shrink: 0;`;
+      }
     } else {
       this.container.style.cssText = `
         position: fixed;
@@ -121,7 +145,10 @@ export class UIPanel {
         z-index: 100;
         overflow-y: auto;
         box-sizing: border-box;
+        box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+        display: block;
       `;
+
       const title = this.container.querySelector('.vf-title') as HTMLElement;
       if (title) {
         title.style.display = 'block';
@@ -130,17 +157,20 @@ export class UIPanel {
           font-size: 20px;
           font-weight: bold;
           margin-bottom: 20px;
+          letter-spacing: 0.5px;
         `;
       }
+
       const palette = this.container.querySelector('.vf-palette') as HTMLElement;
       if (palette) {
         palette.style.cssText = `
           display: grid;
           grid-template-columns: repeat(6, 1fr);
           gap: 6px;
-          margin-bottom: 20px;
+          margin-bottom: 22px;
         `;
       }
+
       const tools = this.container.querySelector('.vf-tools') as HTMLElement;
       if (tools) {
         tools.style.cssText = `
@@ -149,61 +179,66 @@ export class UIPanel {
           margin-bottom: 16px;
         `;
       }
+
       const historyBtns = this.container.querySelector('.vf-history') as HTMLElement;
       if (historyBtns) {
         historyBtns.style.cssText = `
           display: flex;
           gap: 6px;
-          margin-bottom: 24px;
+          margin-bottom: 26px;
         `;
+      }
+
+      const exportWrapper = this.container.querySelector('.vf-export-wrapper') as HTMLElement;
+      if (exportWrapper) {
+        exportWrapper.style.cssText = `display: flex; justify-content: flex-end;`;
       }
     }
   }
 
   private bounceAnim(el: HTMLElement): void {
-    el.style.transition = 'transform 0.15s ease';
+    el.style.transition = 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)';
     el.style.transform = 'scale(1.05)';
-    setTimeout(() => {
-      el.style.transform = 'scale(1)';
-    }, 150);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        el.style.transform = 'scale(1)';
+      }, 120);
+    });
   }
 
   private buildUI(): void {
     const title = document.createElement('div');
     title.className = 'vf-title';
     title.textContent = 'VoxelFlow';
-    title.style.cssText = `
-      color: #ffffff;
-      font-size: 20px;
-      font-weight: bold;
-      margin-bottom: 20px;
-    `;
     this.container.appendChild(title);
 
     const palette = document.createElement('div');
     palette.className = 'vf-palette';
-    palette.style.cssText = `
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 6px;
-      margin-bottom: 20px;
-    `;
 
     PRESET_COLORS.forEach((color) => {
       const swatch = document.createElement('div');
       swatch.className = 'vf-color-swatch';
       swatch.dataset.color = color;
+      const isSelected = color === this.currentColor;
       swatch.style.cssText = `
         width: 28px;
         height: 28px;
         background: ${color};
-        border-radius: 4px;
+        border-radius: 5px;
         cursor: pointer;
         transition: box-shadow 0.1s ease, transform 0.1s ease;
-        box-shadow: ${color === this.currentColor ? 'inset 0 0 0 2px #ffffff' : 'inset 0 0 0 0px transparent'};
+        box-shadow: ${isSelected ? 'inset 0 0 0 2px #ffffff, 0 0 0 1px rgba(0,0,0,0.3)' : 'inset 0 0 0 0px transparent, 0 0 0 1px rgba(0,0,0,0.2)'};
         box-sizing: border-box;
+        flex-shrink: 0;
       `;
+      swatch.addEventListener('mouseenter', () => {
+        swatch.style.transform = 'scale(1.08)';
+      });
+      swatch.addEventListener('mouseleave', () => {
+        swatch.style.transform = 'scale(1)';
+      });
       swatch.addEventListener('click', () => {
+        if (this.currentColor === color) return;
         this.currentColor = color;
         this.callbacks.onColorChange(color);
         this.bounceAnim(swatch);
@@ -215,32 +250,31 @@ export class UIPanel {
 
     const tools = document.createElement('div');
     tools.className = 'vf-tools';
-    tools.style.cssText = `
-      display: flex;
-      gap: 6px;
-      margin-bottom: 16px;
-    `;
 
     const toolDefs: { type: ToolType; label: string }[] = [
       { type: 'single', label: 'Single' },
       { type: 'sphere', label: 'Sphere' },
-      { type: 'fill', label: 'Fill' }
+      { type: 'fill', label: 'Fill' },
+      { type: 'eraser', label: 'Erase' }
     ];
 
     toolDefs.forEach(({ type, label }) => {
       const btn = document.createElement('button');
       btn.dataset.tool = type;
       btn.textContent = label;
+      const isSelected = this.currentTool === type;
       btn.style.cssText = `
-        width: 72px;
+        flex: 1;
+        min-width: 56px;
         height: 36px;
         border: none;
         border-radius: 6px;
         cursor: pointer;
         font-size: 12px;
-        transition: background 0.15s, transform 0.15s;
-        background: ${this.currentTool === type ? '#4f46e5' : '#3b3f50'};
-        color: ${this.currentTool === type ? '#ffffff' : '#9ca3af'};
+        font-weight: 500;
+        transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
+        background: ${isSelected ? '#4f46e5' : '#3b3f50'};
+        color: ${isSelected ? '#ffffff' : '#9ca3af'};
       `;
       btn.addEventListener('click', () => {
         this.currentTool = type;
@@ -254,11 +288,6 @@ export class UIPanel {
 
     const historyBtns = document.createElement('div');
     historyBtns.className = 'vf-history';
-    historyBtns.style.cssText = `
-      display: flex;
-      gap: 6px;
-      margin-bottom: 24px;
-    `;
 
     const undoBtn = document.createElement('button');
     undoBtn.textContent = '↶';
@@ -269,10 +298,10 @@ export class UIPanel {
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
       background: #3b3f50;
       color: #e5e7eb;
-      transition: background 0.15s;
+      transition: background 0.15s ease, transform 0.15s ease;
     `;
     undoBtn.addEventListener('mouseenter', () => { undoBtn.style.background = '#4b5563'; });
     undoBtn.addEventListener('mouseleave', () => { undoBtn.style.background = '#3b3f50'; });
@@ -291,10 +320,10 @@ export class UIPanel {
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
       background: #3b3f50;
       color: #e5e7eb;
-      transition: background 0.15s;
+      transition: background 0.15s ease, transform 0.15s ease;
     `;
     redoBtn.addEventListener('mouseenter', () => { redoBtn.style.background = '#4b5563'; });
     redoBtn.addEventListener('mouseleave', () => { redoBtn.style.background = '#3b3f50'; });
@@ -306,10 +335,7 @@ export class UIPanel {
     this.container.appendChild(historyBtns);
 
     const exportWrapper = document.createElement('div');
-    exportWrapper.style.cssText = `
-      display: flex;
-      justify-content: ${window.innerWidth < 900 ? 'flex-start' : 'flex-end'};
-    `;
+    exportWrapper.className = 'vf-export-wrapper';
 
     const exportBtn = document.createElement('button');
     exportBtn.className = 'vf-export';
@@ -324,14 +350,15 @@ export class UIPanel {
       font-weight: 600;
       background: #3b82f6;
       color: #ffffff;
-      transition: background 0.15s, transform 0.1s;
+      transition: background 0.15s ease, transform 0.1s ease;
     `;
     exportBtn.addEventListener('mouseenter', () => { exportBtn.style.background = '#2563eb'; });
     exportBtn.addEventListener('mouseleave', () => { exportBtn.style.background = '#3b82f6'; });
     exportBtn.addEventListener('mousedown', () => { exportBtn.style.transform = 'scale(0.95)'; });
     exportBtn.addEventListener('mouseup', () => { exportBtn.style.transform = 'scale(1)'; });
     exportBtn.addEventListener('mouseleave', () => { exportBtn.style.transform = 'scale(1)'; });
-    exportBtn.addEventListener('click', () => {
+    exportBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.callbacks.onExport();
     });
     exportWrapper.appendChild(exportBtn);
@@ -342,10 +369,11 @@ export class UIPanel {
     const swatches = this.container.querySelectorAll('.vf-color-swatch');
     swatches.forEach((sw) => {
       const el = sw as HTMLElement;
-      if (el.dataset.color === this.currentColor) {
-        el.style.boxShadow = 'inset 0 0 0 2px #ffffff';
+      const color = el.dataset.color;
+      if (color === this.currentColor) {
+        el.style.boxShadow = 'inset 0 0 0 2px #ffffff, 0 0 0 1px rgba(0,0,0,0.3)';
       } else {
-        el.style.boxShadow = 'inset 0 0 0 0px transparent';
+        el.style.boxShadow = 'inset 0 0 0 0px transparent, 0 0 0 1px rgba(0,0,0,0.2)';
       }
     });
   }

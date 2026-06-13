@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GridController, Voxel } from './GridController';
 import { ToolManager } from './ToolManager';
-import { UIPanel, PRESET_COLORS } from './UIPanel';
+import { UIPanel } from './UIPanel';
 
 const GRID_SIZE = 32;
 const ANIM_DURATION = 0.15;
@@ -38,9 +38,13 @@ class VoxelFlowApp {
   private mouseY: number = 0;
   private mouseInCanvas: boolean = false;
 
+  private materialCache: Map<string, THREE.MeshLambertMaterial> = new Map();
+  private sharedGeometry: THREE.BoxGeometry;
+
   constructor() {
     this.clock = new THREE.Clock();
     this.gridController = new GridController();
+    this.sharedGeometry = new THREE.BoxGeometry(0.96, 0.96, 0.96);
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a1b26);
@@ -51,7 +55,7 @@ class VoxelFlowApp {
       0.1,
       1000
     );
-    this.camera.position.set(GRID_SIZE * 0.8, GRID_SIZE * 0.7, GRID_SIZE * 1.0);
+    this.camera.position.set(GRID_SIZE * 0.9, GRID_SIZE * 0.85, GRID_SIZE * 1.1);
 
     this.canvas = document.createElement('canvas');
     this.renderer = new THREE.WebGLRenderer({
@@ -60,7 +64,6 @@ class VoxelFlowApp {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = false;
     document.body.appendChild(this.canvas);
     this.canvas.style.display = 'block';
     this.canvas.style.position = 'absolute';
@@ -83,15 +86,19 @@ class VoxelFlowApp {
       TWO: THREE.TOUCH.ROTATE
     };
     this.controls.minDistance = GRID_SIZE * 0.3;
-    this.controls.maxDistance = GRID_SIZE * 2.0;
+    this.controls.maxDistance = GRID_SIZE * 2.5;
     this.controls.target.set(GRID_SIZE / 2, GRID_SIZE / 2, GRID_SIZE / 2);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     this.scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    dirLight.position.set(10, 20, 10);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.55);
+    dirLight.position.set(20, 40, 30);
     this.scene.add(dirLight);
+
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.25);
+    dirLight2.position.set(-20, 10, -20);
+    this.scene.add(dirLight2);
 
     this.gridHelper = this.createGridHelper();
     this.scene.add(this.gridHelper);
@@ -129,26 +136,38 @@ class VoxelFlowApp {
 
   private createGridHelper(): THREE.LineSegments {
     const size = GRID_SIZE;
-    const half = size / 2;
     const color = new THREE.Color(0x333344);
     const vertices: number[] = [];
     const colors: number[] = [];
 
     for (let i = 0; i <= size; i++) {
-      vertices.push(-half, -half, i - half);
-      vertices.push(half, -half, i - half);
-      colors.push(color.r, color.g, color.b);
-      colors.push(color.r, color.g, color.b);
+      vertices.push(0, 0, i); vertices.push(size, 0, i);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(0, i, 0); vertices.push(size, i, 0);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(i, 0, 0); vertices.push(i, size, 0);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
 
-      vertices.push(-half, i - half, -half);
-      vertices.push(half, i - half, -half);
-      colors.push(color.r, color.g, color.b);
-      colors.push(color.r, color.g, color.b);
+      vertices.push(0, size, i); vertices.push(size, size, i);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(0, i, size); vertices.push(size, i, size);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(i, 0, size); vertices.push(i, size, size);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
 
-      vertices.push(i - half, -half, -half);
-      vertices.push(i - half, half, -half);
-      colors.push(color.r, color.g, color.b);
-      colors.push(color.r, color.g, color.b);
+      vertices.push(0, i, 0); vertices.push(0, i, size);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(size, i, 0); vertices.push(size, i, size);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(i, 0, 0); vertices.push(i, 0, size);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+
+      vertices.push(0, i, size); vertices.push(0, i, 0);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(size, i, size); vertices.push(size, i, 0);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
+      vertices.push(i, size, 0); vertices.push(i, size, size);
+      colors.push(color.r, color.g, color.b); colors.push(color.r, color.g, color.b);
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -158,14 +177,17 @@ class VoxelFlowApp {
     const material = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.3
+      opacity: 0.25
     });
 
-    const lines = new THREE.LineSegments(geometry, material);
-    lines.position.set(half, half, half);
-    lines.name = 'gridHelper';
+    return new THREE.LineSegments(geometry, material);
+  }
 
-    return lines;
+  private getOrCreateMaterial(colorHex: string): THREE.MeshLambertMaterial {
+    if (!this.materialCache.has(colorHex)) {
+      this.materialCache.set(colorHex, new THREE.MeshLambertMaterial({ color: new THREE.Color(colorHex) }));
+    }
+    return this.materialCache.get(colorHex)!;
   }
 
   private bindEvents(): void {
@@ -202,13 +224,8 @@ class VoxelFlowApp {
       if (e.key === '1') this.toolManager.setTool('single');
       if (e.key === '2') this.toolManager.setTool('sphere');
       if (e.key === '3') this.toolManager.setTool('fill');
+      if (e.key.toLowerCase() === 'e') this.toolManager.setTool('eraser');
     });
-
-    this.canvas.addEventListener('wheel', (e) => {
-      if (!e.ctrlKey && !e.metaKey) {
-        e.stopPropagation();
-      }
-    }, { passive: true });
   }
 
   private handleUndo(): void {
@@ -225,13 +242,14 @@ class VoxelFlowApp {
     }
   }
 
-  private animateUndoRedo(removed: Voxel[], added: Voxel[], isRedo: boolean): void {
+  private animateUndoRedo(toRemove: Voxel[], toAdd: Voxel[], _isRedo: boolean): void {
     const now = performance.now();
 
-    for (const v of removed) {
+    for (const v of toRemove) {
       const key = `${v.x},${v.y},${v.z}`;
       const mesh = this.voxelMeshes.get(key);
       if (mesh) {
+        mesh.scale.set(1, 1, 1);
         this.animatingVoxels.push({
           mesh,
           startScale: 1,
@@ -242,12 +260,16 @@ class VoxelFlowApp {
       }
     }
 
-    for (const v of added) {
-      const mesh = this.createVoxelMesh(v.x, v.y, v.z, v.color);
-      mesh.scale.set(0, 0, 0);
-      this.voxelGroup.add(mesh);
+    for (const v of toAdd) {
       const key = `${v.x},${v.y},${v.z}`;
-      this.voxelMeshes.set(key, mesh);
+      let mesh = this.voxelMeshes.get(key);
+      if (!mesh) {
+        mesh = this.createVoxelMesh(v.x, v.y, v.z, v.color);
+        this.voxelGroup.add(mesh);
+        this.voxelMeshes.set(key, mesh);
+      }
+      mesh.scale.set(0, 0, 0);
+      mesh.visible = true;
       this.animatingVoxels.push({
         mesh,
         startScale: 0,
@@ -259,117 +281,44 @@ class VoxelFlowApp {
 
     setTimeout(() => {
       this.rebuildVoxelMeshes();
-    }, ANIM_DURATION * 1000 + 20);
+    }, ANIM_DURATION * 1000 + 50);
   }
 
   private handleExport(): void {
     const objContent = this.gridController.exportOBJ();
-    const blob = new Blob([objContent], { type: 'text/plain' });
+    const blob = new Blob([objContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'voxelflow_export.obj';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `voxelflow_${Date.now()}.obj`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   private createVoxelMesh(x: number, y: number, z: number, color: string): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(0.98, 0.98, 0.98);
-    const matColor = new THREE.Color(color);
-    const material = new THREE.MeshLambertMaterial({ color: matColor });
-    const mesh = new THREE.Mesh(geometry, material);
+    const material = this.getOrCreateMaterial(color);
+    const mesh = new THREE.Mesh(this.sharedGeometry, material);
     mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
     return mesh;
   }
 
   private rebuildVoxelMeshes(): void {
-    while (this.voxelGroup.children.length > 0) {
-      const child = this.voxelGroup.children[0];
-      this.voxelGroup.remove(child);
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        }
-      }
-    }
-    this.voxelMeshes.clear();
     this.animatingVoxels = [];
+    this.voxelMeshes.clear();
+
+    while (this.voxelGroup.children.length > 0) {
+      this.voxelGroup.remove(this.voxelGroup.children[0]);
+    }
 
     const voxels = this.gridController.getAllVoxels();
-    if (voxels.length === 0) return;
 
-    const colorGroups: Map<string, { positions: number[]; normals: number[]; indices: number[] }> = new Map();
-
-    const cornerOffsets = [
-      [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-      [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]
-    ];
-
-    const faceIndices = [
-      [0, 1, 2, 3],
-      [5, 4, 7, 6],
-      [4, 0, 3, 7],
-      [1, 5, 6, 2],
-      [4, 5, 1, 0],
-      [3, 2, 6, 7]
-    ];
-
-    const faceNormals = [
-      [0, 0, -1],
-      [0, 0, 1],
-      [-1, 0, 0],
-      [1, 0, 0],
-      [0, -1, 0],
-      [0, 1, 0]
-    ];
-
-    const isExposed = (x: number, y: number, z: number, dx: number, dy: number, dz: number): boolean => {
-      return !this.gridController.inBounds(x + dx, y + dy, z + dz) ||
-        !this.gridController.getVoxel(x + dx, y + dy, z + dz);
-    };
-
-    for (const voxel of voxels) {
-      const { x, y, z, color } = voxel;
-      const key = color;
-
-      if (!colorGroups.has(key)) {
-        colorGroups.set(key, { positions: [], normals: [], indices: [] });
-      }
-      const group = colorGroups.get(key)!;
-
-      for (let fi = 0; fi < 6; fi++) {
-        const [fdx, fdy, fdz] = faceNormals[fi];
-        if (!isExposed(x, y, z, fdx, fdy, fdz)) continue;
-
-        const [nx, ny, nz] = faceNormals[fi];
-        const baseIdx = group.positions.length / 3;
-
-        for (const vi of faceIndices[fi]) {
-          const [ox, oy, oz] = cornerOffsets[vi];
-          group.positions.push(x + ox, y + oy, z + oz);
-          group.normals.push(nx, ny, nz);
-        }
-
-        group.indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
-        group.indices.push(baseIdx, baseIdx + 2, baseIdx + 3);
-      }
-    }
-
-    for (const [color, data] of colorGroups) {
-      if (data.positions.length === 0) continue;
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
-      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(data.normals, 3));
-      geometry.setIndex(data.indices);
-
-      const matColor = new THREE.Color(color);
-      const material = new THREE.MeshLambertMaterial({ color: matColor });
-      const mesh = new THREE.Mesh(geometry, material);
+    for (const v of voxels) {
+      const key = `${v.x},${v.y},${v.z}`;
+      const mesh = this.createVoxelMesh(v.x, v.y, v.z, v.color);
       this.voxelGroup.add(mesh);
+      this.voxelMeshes.set(key, mesh);
     }
   }
 
@@ -378,8 +327,7 @@ class VoxelFlowApp {
       const child = this.previewGroup.children[0];
       this.previewGroup.remove(child);
       if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
+        if (child.material instanceof THREE.Material && child.material !== this.sharedGeometry) {
           child.material.dispose();
         }
       }
@@ -398,70 +346,59 @@ class VoxelFlowApp {
     if (!hit.hit) return;
 
     const previewVoxels = this.toolManager.getBrushPreviewVoxels(hit);
+    const isErase = this.toolManager.isEraserMode();
 
     for (const v of previewVoxels) {
       if (!this.gridController.inBounds(v.x, v.y, v.z)) continue;
 
-      const geometry = new THREE.BoxGeometry(0.98, 0.98, 0.98);
-      let material: THREE.Material;
+      const geometry = new THREE.BoxGeometry(0.96, 0.96, 0.96);
+      const baseColor = new THREE.Color(v.color);
 
-      if (v.color.startsWith('rgba') || v.color.includes('rgba')) {
-        const match = v.color.match(/rgba?\(([^)]+)\)/);
-        if (match) {
-          const parts = match[1].split(',').map(s => s.trim());
-          const r = parseInt(parts[0]) / 255;
-          const g = parseInt(parts[1]) / 255;
-          const b = parseInt(parts[2]) / 255;
-          const a = parts.length > 3 ? parseFloat(parts[3]) : 0.4;
-          material = new THREE.MeshBasicMaterial({
-            color: new THREE.Color(r, g, b),
-            transparent: true,
-            opacity: a,
-            wireframe: false
-          });
-        } else {
-          material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
-        }
-      } else {
-        material = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(v.color),
-          transparent: true,
-          opacity: 0.4,
-          wireframe: false
-        });
-      }
+      const material = new THREE.MeshBasicMaterial({
+        color: baseColor,
+        transparent: true,
+        opacity: isErase ? 0.35 : 0.45,
+        depthWrite: false
+      });
 
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(v.x + 0.5, v.y + 0.5, v.z + 0.5);
       this.previewGroup.add(mesh);
+
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({
+          color: isErase ? 0xff3333 : 0xffffff,
+          transparent: true,
+          opacity: 0.7
+        })
+      );
+      edges.position.copy(mesh.position);
+      this.previewGroup.add(edges);
     }
   }
 
-  private updateAnimations(dt: number): void {
+  private updateAnimations(): void {
     const now = performance.now();
-    const toRemove: number[] = [];
+    const stillAnimating: AnimVoxel[] = [];
 
-    for (let i = 0; i < this.animatingVoxels.length; i++) {
-      const av = this.animatingVoxels[i];
+    for (const av of this.animatingVoxels) {
       const elapsed = (now - av.startTime) / 1000;
       const t = Math.min(1, elapsed / ANIM_DURATION);
-
-      const scale = av.startScale + (av.endScale - av.startScale) * t;
+      const eased = 1 - Math.pow(1 - t, 3);
+      const scale = av.startScale + (av.endScale - av.startScale) * eased;
       av.mesh.scale.set(scale, scale, scale);
 
-      if (t >= 1) {
-        toRemove.push(i);
+      if (t < 1) {
+        stillAnimating.push(av);
+      } else {
+        if (!av.fadingIn) {
+          av.mesh.visible = false;
+        }
       }
     }
 
-    for (let i = toRemove.length - 1; i >= 0; i--) {
-      const idx = toRemove[i];
-      const av = this.animatingVoxels[idx];
-      if (!av.fadingIn) {
-        av.mesh.visible = false;
-      }
-      this.animatingVoxels.splice(idx, 1);
-    }
+    this.animatingVoxels = stillAnimating;
   }
 
   private onResize(): void {
@@ -475,10 +412,8 @@ class VoxelFlowApp {
   private animate(): void {
     requestAnimationFrame(() => this.animate());
 
-    const dt = this.clock.getDelta();
-
     this.controls.update();
-    this.updateAnimations(dt);
+    this.updateAnimations();
     this.updatePreview();
 
     this.renderer.render(this.scene, this.camera);
