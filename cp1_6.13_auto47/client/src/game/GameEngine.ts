@@ -233,14 +233,13 @@ export class GameEngine {
       }
     }
 
-    const shipColMin = Math.max(0, Math.floor(shipBBox.x / cellW));
-    const shipColMax = Math.min(GRID_COLS - 1, Math.floor((shipBBox.x + shipBBox.w) / cellW));
-    const shipRowMin = Math.max(0, Math.floor(shipBBox.y / cellH));
-    const shipRowMax = Math.min(GRID_ROWS - 1, Math.floor((shipBBox.y + shipBBox.h) / cellH));
+    const shipCenterCol = Math.floor((shipBBox.x + shipBBox.w / 2) / cellW);
+    const shipCenterRow = Math.floor((shipBBox.y + shipBBox.h / 2) / cellH);
+    const searchRadius = 1;
 
     const checkedDebris = new Set<any>();
-    for (let col = shipColMin; col <= shipColMax; col++) {
-      for (let row = shipRowMin; row <= shipRowMax; row++) {
+    for (let col = Math.max(0, shipCenterCol - searchRadius); col <= Math.min(GRID_COLS - 1, shipCenterCol + searchRadius); col++) {
+      for (let row = Math.max(0, shipCenterRow - searchRadius); row <= Math.min(GRID_ROWS - 1, shipCenterRow + searchRadius); row++) {
         const key = `${col},${row}`;
         const cell = grid.get(key);
         if (!cell) continue;
@@ -331,32 +330,21 @@ export class GameEngine {
     this.ship.draw(ctx);
 
     for (const e of this.collectEffects) {
+      ctx.save();
+      ctx.globalAlpha = e.alpha;
+      const gradient = ctx.createRadialGradient(e.x, e.y, e.radius * 0.6, e.x, e.y, e.radius);
+      gradient.addColorStop(0, 'rgba(16,185,129,0)');
+      gradient.addColorStop(0.7, 'rgba(16,185,129,0.5)');
+      gradient.addColorStop(1, 'rgba(16,185,129,0)');
+      ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.strokeStyle = e.color;
-      ctx.globalAlpha = e.alpha;
-      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    if (this.speedUpEffect) {
-      const t = 1 - this.speedUpEffect.life / this.speedUpEffect.maxLife;
-      const scale = 0.5 + t * 0.5;
-      const alpha = this.speedUpEffect.life / this.speedUpEffect.maxLife;
-      ctx.save();
-      ctx.translate(this.width / 2, this.height / 2);
-      ctx.scale(scale, scale);
-      ctx.globalAlpha = alpha;
-      ctx.font = 'bold 48px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#eab308';
-      ctx.shadowColor = '#eab308';
-      ctx.shadowBlur = 20;
-      ctx.fillText('Speed Up!', 0, 0);
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
       ctx.restore();
     }
   }
