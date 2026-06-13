@@ -85,6 +85,7 @@ export default function App() {
     fetchMaze()
 
     return () => {
+      window.removeEventListener('stoneTone', onStoneToneEvent)
       scene.dispose()
       processor.dispose()
     }

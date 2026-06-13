@@ -9,7 +9,7 @@ interface Pulse {
 
 interface Wall {
   mesh: THREE.Mesh
-  glowMaterial: THREE.MeshBasicMaterial
+  glowMaterial: THREE.MeshBasicMaterial | null
   glowStart: number
   baseMaterial: THREE.MeshStandardMaterial
 }
@@ -226,22 +226,12 @@ export class SceneManager {
       mesh.receiveShadow = true
       this.scene.add(mesh)
 
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: 0x60a5fa,
-        transparent: true,
-        opacity: 0,
-      })
-      const glowGeom = new THREE.BoxGeometry(w.width + 0.02, this.wallHeight + 0.02, w.depth + 0.02)
-      const glowMesh = new THREE.Mesh(glowGeom, glowMat)
-      glowMesh.position.copy(mesh.position)
-
       this.walls.push({
-        mesh: glowMesh,
-        glowMaterial: glowMat,
+        mesh,
+        glowMaterial: null,
         glowStart: -10,
         baseMaterial: baseMat,
       })
-      this.scene.remove(glowMesh)
 
       mesh.userData.basePosition = mesh.position.clone()
       mesh.userData.wallData = w
@@ -509,11 +499,8 @@ export class SceneManager {
   }
 
   private playStoneToneExternal(freq: number, dur: number) {
-    if (this.onStonesChange) {
-      // 声音由 AudioProcessor 管理，这里通过全局事件触发
-      const evt = new CustomEvent('stoneTone', { detail: { frequency: freq, duration: dur } })
-      window.dispatchEvent(evt)
-    }
+    const evt = new CustomEvent('stoneTone', { detail: { frequency: freq, duration: dur } })
+    window.dispatchEvent(evt)
   }
 
   private unlockExit() {
