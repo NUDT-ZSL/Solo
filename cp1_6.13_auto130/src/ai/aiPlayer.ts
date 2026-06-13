@@ -49,12 +49,16 @@ export class AIPlayer {
     
     const maxEnemyDamage = this.calculateMaxEnemyDamage(state);
     
-    if (aiHealth < this.config.lowHealthThreshold && aiShield === 0) {
+    if (aiHealth < this.config.lowHealthThreshold) {
+      return true;
+    }
+    
+    if (maxEnemyDamage >= 6 && aiShield === 0) {
       return true;
     }
     
     const effectiveHealth = aiHealth + aiShield;
-    if (maxEnemyDamage >= effectiveHealth * 0.6) {
+    if (maxEnemyDamage >= effectiveHealth * 0.5) {
       return true;
     }
     

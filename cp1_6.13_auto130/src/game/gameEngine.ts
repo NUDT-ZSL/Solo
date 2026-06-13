@@ -301,7 +301,6 @@ export class GameEngine {
     const currentPlayer = this.state.currentPlayer;
     const nextPlayer = currentPlayer === 'player' ? 'ai' : 'player';
 
-    this.state[nextPlayer].hero.shield = 0;
     this.state[currentPlayer].field.forEach(unit => {
       unit.hasAttacked = false;
     });
@@ -312,6 +311,8 @@ export class GameEngine {
     }
 
     this.state.currentPlayer = nextPlayer;
+    
+    this.state[nextPlayer].hero.shield = 0;
     
     this.drawCard(nextPlayer);
     
