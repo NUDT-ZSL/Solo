@@ -1,9 +1,9 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Search, Menu, X, LogIn, UserPlus, Sparkles, MessageCircleHeart, UsersRound, LogOut } from 'lucide-react';
 import { getSkills, type Skill } from '../api';
 import { useAppStore } from '../store';
-import { categoryIcon, debounce } from '../utils';
+import { categoryIcon } from '../utils';
 
 function truncate(str: string, n: number) {
   return str.replace(/[#*`>\n]/g, '').length > n ? str.replace(/[#*`>\n]/g, '').slice(0, n) + '…' : str.replace(/[#*`>\n]/g, '');
@@ -12,33 +12,30 @@ function truncate(str: string, n: number) {
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAppStore();
+  const { user, logout, skills, setSkills, skillsLoading, setSkillsLoading } = useAppStore();
 
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setLoading(true);
+    setSkillsLoading(true);
     getSkills(searchQuery || undefined)
       .then(setSkills)
-      .finally(() => setLoading(false));
-  }, [searchQuery]);
-
-  const debouncedSearch = useMemo(
-    () => debounce((v: string) => setSearchQuery(v), 300),
-    []
-  );
+      .finally(() => setSkillsLoading(false));
+  }, [searchQuery, setSkills, setSkillsLoading]);
 
   const onSearch = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const v = e.target.value;
       setSearch(v);
-      debouncedSearch(v);
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = setTimeout(() => {
+        setSearchQuery(v);
+      }, 300);
     },
-    [debouncedSearch]
+    []
   );
 
   const navItem = (to: string, label: string, icon?: React.ReactNode) => {
@@ -122,7 +119,7 @@ export default function Home() {
           <p>用你会的，换你想学的 —— 让每一次交换都成为美好相遇。</p>
         </div>
 
-        {loading ? (
+        {skillsLoading ? (
           <div className="loading"><div className="spinner"></div>正在加载技能…</div>
         ) : skills.length === 0 ? (
           <div className="empty-state" style={{ background: '#fff', borderRadius: 16, boxShadow: 'var(--shadow)', minHeight: 260 }}>

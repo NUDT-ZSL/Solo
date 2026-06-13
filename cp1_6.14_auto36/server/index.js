@@ -47,6 +47,14 @@ function avatar(seed) {
 }
 
 const COLORS = ['#e94560', '#0f3460', '#533483', '#f0a500'];
+function colorForCategory(cat) {
+  let hash = 0;
+  for (let i = 0; i < cat.length; i++) {
+    hash = ((hash << 5) - hash) + cat.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return COLORS[Math.abs(hash) % COLORS.length];
+}
 function randomColor(i) {
   return COLORS[i % COLORS.length];
 }
@@ -244,7 +252,8 @@ app.get('/api/skills', async (req, res) => {
       const re = new RegExp(String(q), 'i');
       query = { $or: [{ title: re }, { category: re }, { teacherName: re }] };
     }
-    const skills = await skillsDB.find(query).sort({ createdAt: -1 });
+    let skills = await skillsDB.find(query).sort({ createdAt: -1 });
+    skills = skills.map(s => ({ ...s, coverColor: colorForCategory(s.category) }));
     res.json(skills);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -253,8 +262,9 @@ app.get('/api/skills', async (req, res) => {
 
 app.get('/api/skills/:id', async (req, res) => {
   try {
-    const skill = await skillsDB.findOne({ _id: req.params.id });
+    let skill = await skillsDB.findOne({ _id: req.params.id });
     if (!skill) return res.status(404).json({ error: '技能不存在' });
+    skill = { ...skill, coverColor: colorForCategory(skill.category) };
     const teacher = await usersDB.findOne({ _id: skill.teacherId });
     if (teacher) delete teacher.password;
     const reviews = await reviewsDB.find({ skillId: skill._id }).sort({ createdAt: -1 });

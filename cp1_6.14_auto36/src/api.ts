@@ -74,13 +74,19 @@ export interface MatchResult {
 const TOKEN_KEY = 'skillswap_token';
 const USER_KEY = 'skillswap_user';
 
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const getSavedUser = (): User | null => {
+  const raw = localStorage.getItem(USER_KEY);
+  return raw ? (JSON.parse(raw) as User) : null;
+};
+
 const http: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 10000,
 });
 
 http.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -97,12 +103,6 @@ http.interceptors.response.use(
     return Promise.reject(err);
   }
 );
-
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const getSavedUser = (): User | null => {
-  const raw = localStorage.getItem(USER_KEY);
-  return raw ? (JSON.parse(raw) as User) : null;
-};
 
 export async function login(email: string, password: string) {
   const { data } = await http.post<{ token: string; user: User }>('/login', { email, password });

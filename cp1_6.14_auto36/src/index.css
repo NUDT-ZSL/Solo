@@ -423,6 +423,17 @@ img {
   padding: 24px 0;
 }
 
+.detail-left {
+  min-width: 0;
+}
+
+.detail-right {
+  min-width: 0;
+  position: sticky;
+  top: 80px;
+  align-self: start;
+}
+
 .detail-hero {
   height: 280px;
   border-radius: var(--radius-card);
