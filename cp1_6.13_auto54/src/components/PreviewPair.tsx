@@ -5,7 +5,7 @@ import { analyzeContrast, ContrastResult, formatRatio } from '../utils/ContrastA
 interface PreviewPairProps {
   schemeA: ColorScheme;
   schemeB: ColorScheme;
-  filterStyle?: React.CSSProperties;
+  filterValue?: string;
   stacked?: boolean;
 }
 
@@ -81,19 +81,19 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ scheme, label, labelBg }) => 
   );
 };
 
-const PreviewPair: React.FC<PreviewPairProps> = ({ schemeA, schemeB, filterStyle, stacked }) => {
+const PreviewPair: React.FC<PreviewPairProps> = ({ schemeA, schemeB, filterValue, stacked }) => {
   return (
     <div style={{
       ...styles.wrapper,
       flexDirection: stacked ? 'column' : 'row',
-      transition: 'filter 0.4s ease',
-      ...filterStyle
+      filter: filterValue || 'none',
+      transition: 'filter 0.4s ease'
     }}>
       <PreviewCard scheme={schemeA} label="方案 A" labelBg="#3b82f6" />
       <div style={{
         ...styles.divider,
-        width: stacked ? 480 : 1,
-        height: stacked ? 1 : 320,
+        width: stacked ? '480px' : '1px',
+        height: stacked ? '1px' : '320px',
         margin: stacked ? '16px 0' : '0 24px',
         borderLeft: stacked ? 'none' : '1px dashed #d1d5db',
         borderTop: stacked ? '1px dashed #d1d5db' : 'none',
@@ -113,17 +113,17 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap'
   },
   cardWrapper: {
-    width: 240,
-    height: 320,
-    minHeight: 320,
-    maxHeight: 320,
-    borderRadius: 12,
-    position: 'relative',
-    overflow: 'hidden',
+    width: '240px',
+    height: '320px',
+    minHeight: '320px',
+    maxHeight: '320px',
+    borderRadius: '12px',
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
     transition: 'background-color 0.4s ease, box-shadow 0.2s ease',
     flexShrink: 0,
-    boxSizing: 'border-box'
+    boxSizing: 'border-box' as const
   },
   cardLabel: {
     position: 'absolute',
@@ -223,9 +223,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'JetBrains Mono', monospace"
   },
   divider: {
-    width: 1,
-    minWidth: 1,
-    height: 320,
+    width: '1px',
+    minWidth: '1px',
+    height: '320px',
     margin: '0 24px',
     borderLeft: '1px dashed #d1d5db',
     flexShrink: 0

@@ -21,7 +21,7 @@ const App: React.FC = () => {
   const [schemeA, setSchemeA] = React.useState<ColorScheme>(defaultSchemeA);
   const [schemeB, setSchemeB] = React.useState<ColorScheme>(defaultSchemeB);
   const [filterType, setFilterType] = React.useState<ColorBlindnessType>('normal');
-  const [previewFilter, setPreviewFilter] = React.useState<React.CSSProperties>({});
+  const [previewFilter, setPreviewFilter] = React.useState<string>('none');
 
   const [isSmallScreen, setIsSmallScreen] = React.useState(false);
   const [isMediumScreen, setIsMediumScreen] = React.useState(false);
@@ -42,11 +42,11 @@ const App: React.FC = () => {
   }, []);
 
   const handleFilterChange = (type: ColorBlindnessType) => {
-    setPreviewFilter({ filter: 'brightness(1.15)' });
+    setPreviewFilter('brightness(1.2) saturate(1.3)');
     setTimeout(() => {
       setFilterType(type);
-      setPreviewFilter({ filter: 'brightness(1)' });
-    }, 50);
+      setPreviewFilter('none');
+    }, 400);
   };
 
   const displayedSchemeA = applyColorBlindnessToScheme(schemeA, filterType);
@@ -107,7 +107,7 @@ const App: React.FC = () => {
               <PreviewPair
                 schemeA={displayedSchemeA}
                 schemeB={displayedSchemeB}
-                filterStyle={previewFilter}
+                filterValue={previewFilter}
                 stacked={isSmallScreen}
               />
             </div>

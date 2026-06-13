@@ -1,6 +1,6 @@
 import React from 'react';
-import { ColorScheme, calculateColorDiff, ColorDiffResult, deltaE76, euclideanDistance } from '../utils/ColorCalculator';
-import { analyzeContrast, formatRatio, ContrastResult } from '../utils/ContrastAnalyzer';
+import { ColorScheme, calculateColorDiff, deltaE76, euclideanDistance, rgbToHsl, hexToRgb } from '../utils/ColorCalculator';
+import { analyzeContrast, formatRatio } from '../utils/ContrastAnalyzer';
 
 type DistanceMode = 'cie76' | 'euclidean';
 
@@ -30,26 +30,72 @@ const IndicatorCard: React.FC<IndicatorCardProps> = ({ label, value, highlighted
   );
 };
 
+const safeHueDiff = (color1: string, color2: string): number => {
+  try {
+    const hsl1 = rgbToHsl(hexToRgb(color1));
+    const hsl2 = rgbToHsl(hexToRgb(color2));
+    let diff = Math.abs(hsl1.h - hsl2.h);
+    if (diff > 180) diff = 360 - diff;
+    return Math.round(diff);
+  } catch {
+    return 0;
+  }
+};
+
+const safeSatDiff = (color1: string, color2: string): number => {
+  try {
+    const hsl1 = rgbToHsl(hexToRgb(color1));
+    const hsl2 = rgbToHsl(hexToRgb(color2));
+    return Math.round(Math.abs(hsl1.s - hsl2.s));
+  } catch {
+    return 0;
+  }
+};
+
+const safeLightDiff = (color1: string, color2: string): number => {
+  try {
+    const hsl1 = rgbToHsl(hexToRgb(color1));
+    const hsl2 = rgbToHsl(hexToRgb(color2));
+    return Math.round(Math.abs(hsl1.l - hsl2.l));
+  } catch {
+    return 0;
+  }
+};
+
 const IndicatorPanel: React.FC<IndicatorPanelProps> = ({ schemeA, schemeB }) => {
-  const [primaryDiff, setPrimaryDiff] = React.useState<ColorDiffResult | null>(null);
-  const [bgDiff, setBgDiff] = React.useState<ColorDiffResult | null>(null);
-  const [contrastA, setContrastA] = React.useState<ContrastResult | null>(null);
-  const [contrastB, setContrastB] = React.useState<ContrastResult | null>(null);
   const [distanceMode, setDistanceMode] = React.useState<DistanceMode>('cie76');
 
-  React.useEffect(() => {
-    setPrimaryDiff(calculateColorDiff(schemeA.primary, schemeB.primary));
-    setBgDiff(calculateColorDiff(schemeA.background, schemeB.background));
-    setContrastA(analyzeContrast(schemeA.text, schemeA.background));
-    setContrastB(analyzeContrast(schemeB.text, schemeB.background));
-  }, [schemeA, schemeB]);
+  const primaryHueDiff = React.useMemo(() => safeHueDiff(schemeA.primary, schemeB.primary), [schemeA.primary, schemeB.primary]);
+  const primarySatDiff = React.useMemo(() => safeSatDiff(schemeA.primary, schemeB.primary), [schemeA.primary, schemeB.primary]);
+  const primaryLightDiff = React.useMemo(() => safeLightDiff(schemeA.primary, schemeB.primary), [schemeA.primary, schemeB.primary]);
 
-  const getColorDistance = (color1: string, color2: string): number => {
-    if (distanceMode === 'cie76') {
-      return Math.round(deltaE76(color1, color2) * 100) / 100;
+  const primaryDistance = React.useMemo(() => {
+    try {
+      return distanceMode === 'cie76'
+        ? Math.round(deltaE76(schemeA.primary, schemeB.primary) * 100) / 100
+        : Math.round(euclideanDistance(schemeA.primary, schemeB.primary) * 100) / 100;
+    } catch {
+      return 0;
     }
-    return Math.round(euclideanDistance(color1, color2) * 100) / 100;
-  };
+  }, [schemeA.primary, schemeB.primary, distanceMode]);
+
+  const bgDistance = React.useMemo(() => {
+    try {
+      return distanceMode === 'cie76'
+        ? Math.round(deltaE76(schemeA.background, schemeB.background) * 100) / 100
+        : Math.round(euclideanDistance(schemeA.background, schemeB.background) * 100) / 100;
+    } catch {
+      return 0;
+    }
+  }, [schemeA.background, schemeB.background, distanceMode]);
+
+  const contrastA = React.useMemo(() => {
+    try { return analyzeContrast(schemeA.text, schemeA.background); } catch { return null; }
+  }, [schemeA.text, schemeA.background]);
+
+  const contrastB = React.useMemo(() => {
+    try { return analyzeContrast(schemeB.text, schemeB.background); } catch { return null; }
+  }, [schemeB.text, schemeB.background]);
 
   const distanceLabel = distanceMode === 'cie76' ? 'ΔE*76 (CIE76)' : 'ΔE (Euclidean)';
 
@@ -79,11 +125,11 @@ const IndicatorPanel: React.FC<IndicatorPanelProps> = ({ schemeA, schemeB }) => 
         </button>
       </div>
       <div style={styles.wrapper}>
-        <IndicatorCard label="色相差异 (ΔHue)" value={primaryDiff ? `${primaryDiff.hueDiff}°` : '--'} highlighted />
-        <IndicatorCard label="饱和度差异 (ΔSat)" value={primaryDiff ? `${primaryDiff.saturationDiff}%` : '--'} highlighted />
-        <IndicatorCard label="亮度差异 (ΔLight)" value={primaryDiff ? `${primaryDiff.lightnessDiff}%` : '--'} highlighted />
-        <IndicatorCard label={`主色距离 ${distanceLabel}`} value={primaryDiff ? getColorDistance(schemeA.primary, schemeB.primary).toString() : '--'} highlighted />
-        <IndicatorCard label={`背景距离 ${distanceLabel}`} value={bgDiff ? getColorDistance(schemeA.background, schemeB.background).toString() : '--'} highlighted />
+        <IndicatorCard label="色相差异 (ΔHue)" value={`${primaryHueDiff}°`} highlighted />
+        <IndicatorCard label="饱和度差异 (ΔSat)" value={`${primarySatDiff}%`} highlighted />
+        <IndicatorCard label="亮度差异 (ΔLight)" value={`${primaryLightDiff}%`} highlighted />
+        <IndicatorCard label={`主色距离 ${distanceLabel}`} value={primaryDistance.toString()} highlighted />
+        <IndicatorCard label={`背景距离 ${distanceLabel}`} value={bgDistance.toString()} highlighted />
         <IndicatorCard label="方案A 对比度" value={contrastA ? formatRatio(contrastA.ratio) + ' ' + contrastA.level : '--'} />
         <IndicatorCard label="方案B 对比度" value={contrastB ? formatRatio(contrastB.ratio) + ' ' + contrastB.level : '--'} />
         <IndicatorCard label="WCAG 评级" value={contrastA && contrastB ? (contrastA.level === contrastB.level ? contrastA.level : `${contrastA.level}/${contrastB.level}`) : '--'} highlighted />
@@ -117,20 +163,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   wrapper: {
     display: 'flex',
-    flexWrap: 'wrap',
+    flexWrap: 'wrap' as const,
     gap: 12,
     justifyContent: 'center',
     marginTop: 0
   },
   card: {
-    width: 180,
-    height: 60,
+    width: '180px',
+    height: '60px',
     backgroundColor: '#ffffff',
-    borderRadius: 8,
+    borderRadius: '8px',
     padding: '10px 14px',
-    boxSizing: 'border-box',
+    boxSizing: 'border-box' as const,
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column' as const,
     justifyContent: 'center',
     gap: 4,
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
