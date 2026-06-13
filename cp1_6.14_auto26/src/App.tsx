@@ -6,25 +6,48 @@ import { PuzzleModal } from './ui/PuzzleModal'
 import { WinScreen } from './ui/WinScreen'
 import { StartScreen } from './ui/StartScreen'
 import { InteractionHint } from './ui/InteractionHint'
-import { COLORS } from './game/constants'
+import { COLORS, ROOM_WIDTH, ROOM_HEIGHT, MOBILE_ROOM_WIDTH, MOBILE_ROOM_HEIGHT } from './game/constants'
 
 const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const gameWrapperRef = useRef<HTMLDivElement>(null)
   const gameEngineRef = useRef<GameEngine | null>(null)
   const [gameStarted, setGameStarted] = useState(false)
   const [gameState, setGameState] = useState<GameEngineState | null>(null)
-  const [isMobile, setIsMobile] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const [hintText, setHintText] = useState('')
+  const [canvasStyle, setCanvasStyle] = useState<React.CSSProperties>({})
+
+  const updateCanvasStyle = useCallback(() => {
+    if (!gameWrapperRef.current) return
+
+    const wrapperWidth = gameWrapperRef.current.clientWidth
+    const wrapperHeight = gameWrapperRef.current.clientHeight
+    const isMobile = wrapperWidth < 768
+
+    const baseWidth = isMobile ? MOBILE_ROOM_WIDTH : ROOM_WIDTH
+    const baseHeight = isMobile ? MOBILE_ROOM_HEIGHT : ROOM_HEIGHT
+
+    const scaleX = wrapperWidth / baseWidth
+    const scaleY = wrapperHeight / baseHeight
+    const scale = Math.min(scaleX, scaleY, 3)
+
+    const displayWidth = Math.floor(baseWidth * scale)
+    const displayHeight = Math.floor(baseHeight * scale)
+
+    setCanvasStyle({
+      width: `${displayWidth}px`,
+      height: `${displayHeight}px`,
+      imageRendering: 'pixelated',
+      display: 'block',
+    })
+  }, [])
 
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
+    updateCanvasStyle()
+    window.addEventListener('resize', updateCanvasStyle)
+    return () => window.removeEventListener('resize', updateCanvasStyle)
+  }, [updateCanvasStyle])
 
   const initGame = useCallback(() => {
     if (!canvasRef.current || gameEngineRef.current) return
@@ -42,8 +65,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (gameStarted && canvasRef.current) {
-      initGame()
+      const timer = setTimeout(() => {
+        initGame()
+      }, 50)
       return () => {
+        clearTimeout(timer)
         if (gameEngineRef.current) {
           gameEngineRef.current.stop()
           gameEngineRef.current = null
@@ -58,9 +84,23 @@ const App: React.FC = () => {
     const room = gameState.currentRoom
     const player = gameState.player
     const puzzleManager = gameEngineRef.current.getPuzzleManager()
+    const renderer = gameEngineRef.current.getRenderer()
+    const roomSize = renderer.getRoomSize()
+    const isMobile = renderer.getIsMobile()
 
     let hasInteraction = false
     let text = ''
+
+    if (room.hasMemoryShard && !room.shardCollected) {
+      const shardX = isMobile ? 24 : 32
+      const shardY = roomSize.height - (isMobile ? 30 : 40)
+      const dx = Math.abs(player.x - shardX)
+      const dy = Math.abs(player.y - shardY)
+      if (dx < 40 && dy < 40) {
+        hasInteraction = true
+        text = '收集记忆碎片'
+      }
+    }
 
     if (room.puzzleId) {
       const puzzle = puzzleManager.getPuzzle(room.puzzleId)
@@ -73,10 +113,17 @@ const App: React.FC = () => {
     if (room.isFinalRoom && room.pedestals) {
       const shardsCollected = gameState.shardsCollected.length
       if (shardsCollected >= 5) {
+        const ps = isMobile ? 15 : 20
         const nearPedestal = room.pedestals.some((p) => {
-          const dx = Math.abs(player.x - p.x)
-          const dy = Math.abs(player.y - p.y)
-          return dx < 30 && dy < 30
+          const px = isMobile
+            ? Math.floor(p.x * 0.75 * (MOBILE_ROOM_WIDTH / ROOM_WIDTH))
+            : p.x
+          const py = isMobile
+            ? Math.floor(p.y * 0.75 * (MOBILE_ROOM_HEIGHT / ROOM_HEIGHT))
+            : p.y
+          const dx = Math.abs(player.x - px)
+          const dy = Math.abs(player.y - py)
+          return dx < 30 + ps && dy < 30 + ps
         })
         if (nearPedestal) {
           hasInteraction = true
@@ -88,21 +135,9 @@ const App: React.FC = () => {
       }
     }
 
-    if (room.hasMemoryShard && !room.shardCollected) {
-      const roomSize = gameEngineRef.current.getRenderer().getRoomSize()
-      const shardX = isMobile ? 24 : 32
-      const shardY = roomSize.height - (isMobile ? 30 : 40)
-      const dx = Math.abs(player.x - shardX)
-      const dy = Math.abs(player.y - shardY)
-      if (dx < 30 && dy < 30) {
-        hasInteraction = true
-        text = '收集记忆碎片'
-      }
-    }
-
     setShowHint(hasInteraction)
     setHintText(text)
-  }, [gameState, isMobile])
+  }, [gameState])
 
   const handleStart = () => {
     setGameStarted(true)
@@ -114,8 +149,7 @@ const App: React.FC = () => {
     }
   }
 
-  const handlePuzzleSolved = () => {
-  }
+  const handlePuzzleSolved = () => {}
 
   const handleRestart = () => {
     if (gameEngineRef.current) {
@@ -133,10 +167,12 @@ const App: React.FC = () => {
     ? gameEngineRef.current?.getPuzzleManager().getPuzzle(gameState.activePuzzleId)
     : null
 
+  const isMobile = gameState?.isMobile ?? false
+
   return (
     <div style={styles.container}>
-      <div style={styles.gameWrapper}>
-        <canvas ref={canvasRef} style={styles.canvas} />
+      <div ref={gameWrapperRef} style={styles.gameWrapper}>
+        <canvas ref={canvasRef} style={canvasStyle} />
 
         {gameStarted && gameState && (
           <>
@@ -144,6 +180,7 @@ const App: React.FC = () => {
               loopCount={gameState.loopCount}
               timeRemaining={gameState.timeRemaining}
               shardCount={gameState.shardsCollected.length}
+              isWarning={gameState.isWarning}
               isMobile={isMobile}
             />
             <Inventory shardsCollected={gameState.shardsCollected} isMobile={isMobile} />
@@ -187,11 +224,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  canvas: {
-    display: 'block',
-    imageRendering: 'pixelated' as any,
-    WebkitImageRendering: 'pixelated' as any,
+    overflow: 'hidden',
   },
 }
 

@@ -1,22 +1,29 @@
 import React from 'react'
-import { FONT_FAMILY, FONT_SIZE, MOBILE_FONT_SIZE, WARNING_TIME, COLORS, MAX_SHARDS } from '../game/constants'
+import { FONT_FAMILY, FONT_SIZE, MOBILE_FONT_SIZE, COLORS, MAX_SHARDS } from '../game/constants'
 
 interface HUDProps {
   loopCount: number
   timeRemaining: number
   shardCount: number
+  isWarning?: boolean
   isMobile?: boolean
 }
 
-export const HUD: React.FC<HUDProps> = ({ loopCount, timeRemaining, shardCount, isMobile = false }) => {
-  const isWarning = timeRemaining <= WARNING_TIME
+export const HUD: React.FC<HUDProps> = ({
+  loopCount,
+  timeRemaining,
+  shardCount,
+  isWarning = false,
+  isMobile = false,
+}) => {
   const minutes = Math.floor(timeRemaining / 60)
   const seconds = Math.floor(timeRemaining % 60)
   const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   const fontSize = isMobile ? MOBILE_FONT_SIZE : FONT_SIZE
+  const padding = isMobile ? '10px' : '16px'
 
   return (
-    <div style={styles.container}>
+    <div style={{ ...styles.container, padding }}>
       <div style={styles.leftInfo}>
         <span style={{ ...styles.loopText, fontSize: `${fontSize}px` }}>循环 #{loopCount}</span>
       </div>
@@ -51,7 +58,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: '16px',
     pointerEvents: 'none',
     zIndex: 10,
   },

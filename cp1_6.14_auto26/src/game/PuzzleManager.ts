@@ -8,34 +8,9 @@ import {
   GameEvent,
 } from './types'
 import { SEED } from './constants'
+import { SeededRandom } from './utils/random'
 
 type Listener = (event: GameEvent) => void
-
-class SeededRandom {
-  private seed: number
-
-  constructor(seed: number) {
-    this.seed = seed
-  }
-
-  next(): number {
-    this.seed = (this.seed * 9301 + 49297) % 233280
-    return this.seed / 233280
-  }
-
-  nextInt(min: number, max: number): number {
-    return Math.floor(this.next() * (max - min + 1)) + min
-  }
-
-  shuffle<T>(array: T[]): T[] {
-    const result = [...array]
-    for (let i = result.length - 1; i > 0; i--) {
-      const j = this.nextInt(0, i)
-      ;[result[i], result[j]] = [result[j], result[i]]
-    }
-    return result
-  }
-}
 
 export class PuzzleManager {
   private puzzles: Map<string, Puzzle> = new Map()
@@ -53,8 +28,9 @@ export class PuzzleManager {
     let puzzleIndex = 0
 
     const types: PuzzleType[] = ['mechanical', 'mechanical', 'password', 'password', 'memory', 'memory']
+    const shuffledTypes = this.rng.shuffle([...types])
 
-    for (const type of types) {
+    for (const type of shuffledTypes) {
       if (puzzleIndex >= shuffledRooms.length) break
       const roomId = shuffledRooms[puzzleIndex]
       const puzzle = this.createPuzzle(type, roomId, puzzleIndex)
@@ -90,11 +66,14 @@ export class PuzzleManager {
     }
 
     const currentPattern = targetPattern.map((row) => [...row])
-    for (let i = 0; i < 3; i++) {
+    const shuffleTimes = this.rng.nextInt(3, 6)
+    for (let i = 0; i < shuffleTimes; i++) {
       const r = this.rng.nextInt(0, size - 1)
       const c = this.rng.nextInt(0, size - 1)
       currentPattern[r][c] = currentPattern[r][c] === 1 ? 0 : 1
     }
+
+    const grid = currentPattern.map((row) => [...row])
 
     return {
       id,
@@ -102,7 +81,7 @@ export class PuzzleManager {
       roomId,
       solved: false,
       data: {
-        grid: currentPattern.map((row) => [...row]),
+        grid,
         targetPattern,
         currentPattern,
       } as MechanicalPuzzleData,
@@ -116,7 +95,7 @@ export class PuzzleManager {
       `最后一位是${password[3]}`,
       `四位数字之和为${password.split('').reduce((a, b) => a + parseInt(b), 0)}`,
     ]
-    const hint = hints[this.rng.nextInt(0, hints.length - 1)]
+    const hint = this.rng.pick(hints)
 
     return {
       id,
