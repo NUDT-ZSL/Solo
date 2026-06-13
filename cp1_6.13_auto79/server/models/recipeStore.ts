@@ -10,32 +10,56 @@ const recipeStore = Datastore.create({
   autoload: true
 })
 
+recipeStore.on('load', async () => {
+  try {
+    await (recipeStore as any).ensureIndex({ fieldName: 'createdAt' })
+    await (recipeStore as any).ensureIndex({ fieldName: 'category' })
+    await (recipeStore as any).ensureIndex({ fieldName: 'authorId' })
+    await (recipeStore as any).ensureIndex({ fieldName: '_searchText' })
+    console.log('[RecipeDB] Indexes ensured successfully')
+  } catch (err) {
+    console.warn('[RecipeDB] Index warning (safe to ignore on first run):', (err as Error).message)
+  }
+})
+
 export interface Recipe {
   _id?: string
   title: string
-  cover: string
+  cover_image: string
   category: string
   ingredients: string[]
-  steps: string
-  likes: number
-  cookTime: number
-  authorId: string
-  authorName: string
-  createdAt: number
+  steps_html: string
+  likes_count: number
+  cook_time_minutes: number
+  author_id: string
+  author_name: string
+  created_at: number
+  _searchText?: string
 }
 
-export const createRecipe = async (recipe: Omit<Recipe, '_id' | 'createdAt' | 'likes'>): Promise<Recipe> => {
+const buildSearchText = (recipe: Omit<Recipe, '_id' | 'likes_count' | 'created_at' | '_searchText'>): string => {
+  const parts: string[] = []
+  parts.push(recipe.title.toLowerCase())
+  parts.push(recipe.category.toLowerCase())
+  parts.push(recipe.ingredients.map(i => i.toLowerCase().trim()).join(' '))
+  return parts.join(' | ')
+}
+
+export const createRecipe = async (
+  recipe: Omit<Recipe, '_id' | 'created_at' | 'likes_count' | '_searchText'>
+): Promise<Recipe> => {
   const newRecipe: Recipe = {
     ...recipe,
-    likes: 0,
-    createdAt: Date.now()
+    likes_count: 0,
+    created_at: Date.now(),
+    _searchText: buildSearchText(recipe)
   }
   const inserted = await recipeStore.insert(newRecipe)
   return inserted as Recipe
 }
 
 export const getRecipes = async (limit: number = 100): Promise<Recipe[]> => {
-  const docs = await recipeStore.find({}).sort({ createdAt: -1 }).limit(limit)
+  const docs = await recipeStore.find({}).sort({ created_at: -1 }).limit(limit)
   return docs as Recipe[]
 }
 
@@ -45,26 +69,52 @@ export const getRecipeById = async (id: string): Promise<Recipe | null> => {
 }
 
 export const searchRecipes = async (query: string, limit: number = 50): Promise<Recipe[]> => {
-  const regex = new RegExp(query, 'i')
-  const docs = await recipeStore.find({
-    $or: [
-      { ingredients: { $elemMatch: regex } },
-      { title: regex },
-      { category: regex }
-    ]
-  }).sort({ createdAt: -1 }).limit(limit)
-  return docs as Recipe[]
+  const keywords = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+
+  if (keywords.length === 0) {
+    return getLatestRecipes(limit)
+  }
+
+  const andConditions = keywords.map(kw => ({
+    _searchText: new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+  }))
+
+  try {
+    const docs = await recipeStore
+      .find({ $and: andConditions })
+      .sort({ created_at: -1 })
+      .limit(limit)
+    return docs as Recipe[]
+  } catch {
+    const fallbackRegex = new RegExp(keywords.join('|'), 'i')
+    const docs = await recipeStore
+      .find({
+        $or: [
+          { ingredients: { $elemMatch: fallbackRegex } },
+          { title: fallbackRegex },
+          { category: fallbackRegex }
+        ]
+      })
+      .sort({ created_at: -1 })
+      .limit(limit)
+    return docs as Recipe[]
+  }
 }
 
 export const getLatestRecipes = async (limit: number = 20): Promise<Recipe[]> => {
-  const docs = await recipeStore.find({}).sort({ createdAt: -1 }).limit(limit)
+  const docs = await recipeStore.find({}).sort({ created_at: -1 }).limit(limit)
   return docs as Recipe[]
 }
 
 export const likeRecipe = async (id: string): Promise<Recipe | null> => {
-  const numAffected = await recipeStore.update({ _id: id }, { $inc: { likes: 1 } }, {})
+  const numAffected = await recipeStore.update({ _id: id }, { $inc: { likes_count: 1 } }, {})
   if (numAffected === 0) return null
   return await getRecipeById(id)
+}
+
+export const getRecipesByAuthor = async (authorId: string, limit: number = 50): Promise<Recipe[]> => {
+  const docs = await recipeStore.find({ author_id: authorId }).sort({ created_at: -1 }).limit(limit)
+  return docs as Recipe[]
 }
 
 export default {
@@ -73,5 +123,6 @@ export default {
   getRecipeById,
   searchRecipes,
   getLatestRecipes,
-  likeRecipe
+  likeRecipe,
+  getRecipesByAuthor
 }
