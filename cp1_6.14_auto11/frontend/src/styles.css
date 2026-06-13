@@ -1,0 +1,204 @@
+:root {
+  --color-primary: #3498db;
+  --color-primary-dark: #2980b9;
+  --color-secondary: #2c3e50;
+  --color-mountain: #e74c3c;
+  --color-valley: #3498db;
+  --color-highlight: #f1c40f;
+  --color-background-start: #2c3e50;
+  --color-background-end: #1a252f;
+  --color-panel: #ffffff;
+  --color-text: #2c3e50;
+  --color-text-secondary: #7f8c8d;
+  --color-border: #ecf0f1;
+  --radius-panel: 16px;
+  --radius-button: 8px;
+  --radius-mode-btn: 8px;
+  --shadow-panel: 0 10px 40px rgba(0, 0, 0, 0.2);
+  --shadow-button: 0 4px 15px rgba(52, 152, 219, 0.4);
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    var(--color-background-start) 0%,
+    var(--color-background-end) 100%
+  );
+}
+
+.scene-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.5s ease forwards;
+  opacity: 0;
+}
+
+.scene-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.control-panel {
+  width: 340px;
+  background: var(--color-panel);
+  border-radius: var(--radius-panel) 0 0 var(--radius-panel);
+  padding: 20px;
+  overflow-y: auto;
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: slideInRight 0.4s ease forwards;
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.control-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.control-panel::-webkit-scrollbar-track {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.control-panel::-webkit-scrollbar-thumb {
+  background: var(--color-text-secondary);
+  border-radius: 3px;
+}
+
+.panel-header {
+  text-align: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+  animation: fadeInUp 0.5s ease 0.1s forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.app-title {
+  font-size: 1.5rem;
+  color: var(--color-secondary);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: fadeInUp 0.5s ease forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.panel-section:nth-child(2) { animation-delay: 0.15s; }
+.panel-section:nth-child(3) { animation-delay: 0.2s; }
+.panel-section:nth-child(4) { animation-delay: 0.25s; }
+.panel-section:nth-child(5) { animation-delay: 0.3s; }
+.panel-section:nth-child(6) { animation-delay: 0.35s; }
+.panel-section:nth-child(7) { animation-delay: 0.4s; }
+
+.section-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.angle-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.color-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-button);
+  font-size: 0.95rem;
+  background: #fff;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.color-select:hover,
+.color-select:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+.mode-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.mode-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-mode-btn);
+  background: #f5f6fa;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mode-btn:hover {
+  background: #e8f4fc;
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.mode-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.mode-btn.active .mode-icon,
+.mode-btn.active .mode-text {
+  color: #fff;
+}
+
+.mode-icon {
+  font-size: 1.5rem;
+  color: var(--color-secondary);
+  transition: color var(--transition-fast);
+}
+
+.mode-text {
+  font-size

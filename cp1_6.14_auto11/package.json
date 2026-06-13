@@ -1,0 +1,33 @@
+{
+  "name": "unfold-origami",
+  "version": "1.0.0",
+  "description": "3D Origami Design Visualization Application",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "vite",
+    "dev:backend": "tsx watch backend/server.ts",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "cannon-es": "^0.20.0",
+    "express": "^4.18.2",
+    "nedb-promises": "^6.2.3",
+    "uuid": "^9.0.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.5",
+    "@types/cors": "^2.8.17",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "tsx": "^4.7.0",
+    "concurrently": "^8.2.2"
+  }
+}

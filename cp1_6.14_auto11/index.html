@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UnfoldOrigami - 3D折纸设计可视化</title>
+  <link rel="stylesheet" href="/frontend/src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="scene-container" class="scene-container"></div>
+    
+    <aside id="control-panel" class="control-panel">
+      <div class="panel-header">
+        <h1 class="app-title">UnfoldOrigami</h1>
+      </div>
+
+      <div class="panel-section">
+        <label class="section-label">纸张颜色</label>
+        <select id="paper-color" class="color-select">
+          <option value="#fef9e7">浅黄色</option>
+          <option value="#ffffff">白色</option>
+          <option value="rainbow">彩虹渐变</option>
+          <option value="texture">纹理纸</option>
+        </select>
+      </div>
+
+      <div class="panel-section">
+        <label class="section-label">折叠模式</label>
+        <div class="mode-buttons">
+          <button class="mode-btn" data-mode="horizontal" title="横对折">
+            <span class="mode-icon">⇆</span>
+            <span class="mode-text">横对折</span>
+          </button>
+          <button class="mode-btn" data-mode="vertical" title="竖对折">
+            <span class="mode-icon">⇅</span>
+            <span class="mode-text">竖对折</span>
+          </button>
+          <button class="mode-btn" data-mode="diagonal1" title="对角折1">
+            <span class="mode-icon">⤡</span>
+            <span class="mode-text">对角1</span>
+          </button>
+          <button class="mode-btn" data-mode="diagonal2" title="对角折2">
+            <span class="mode-icon">⤢</span>
+            <span class="mode-text">对角2</span>
+          </button>
+          <button class="mode-btn" data-mode="waterbomb" title="水雷折">
+            <span class="mode-icon">◇</span>
+            <span class="mode-text">水雷折</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <label class="section-label">
+          折叠角度
+          <span id="angle-value" class="angle-value">0°</span>
+        </label>
+        <input 
+          type="range" 
+          id="fold-angle" 
+          class="angle-slider" 
+          min="0" 
+          max="180" 
+          value="0" 
+          step="1"
+        >
+        <div class="slider-labels">
+          <span>0°</span>
+          <span>90°</span>
+          <span>180°</span>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="button-group">
+          <button id="btn-unfold" class="action-btn">展开</button>
+          <button id="btn-reset" class="action-btn">重置视角</button>
+          <button id="btn-export-step" class="action-btn">导出步骤图</button>
+          <button id="btn-export-crease" class="action-btn">导出折痕图</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="step-counter">
+          <span id="step-info">第 0 步 / 共 0 步</span>
+        </div>
+        <div id="status-message" class="status-message">准备就绪</div>
+      </div>
+
+      <div class="panel-section">
+        <label class="section-label">分享模型</label>
+        <div class="model-share">
+          <input 
+            type="text" 
+            id="model-name" 
+            class="model-name-input" 
+            placeholder="输入模型名称"
+          >
+          <button id="btn-save-model" class="action-btn save-btn">保存模型</button>
+        </div>
+        <div id="models-list" class="models-list"></div>
+      </div>
+    </aside>
+
+    <div id="mobile-toggle" class="mobile-toggle">
+      <span>控制面板</span>
+    </div>
+  </div>
+
+  <script type="module" src="/frontend/src/main.ts"></script>
+</body>
+</html>
