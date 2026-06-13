@@ -52,7 +52,7 @@ export class SonarSystem {
       const fishPos = positions[i];
       const distance = fishPos.distanceTo(this.emitterPosition);
 
-      if (distance <= pulseRadius && distance > pulseRadius - 20) {
+      if (distance <= pulseRadius && distance > pulseRadius - 25) {
         const direction = fishPos.clone().sub(this.emitterPosition).normalize();
         const coneAxis = new THREE.Vector3(0, 0, -1);
         const angle = direction.angleTo(coneAxis);
@@ -88,6 +88,13 @@ export class SonarSystem {
     return 0.6 * (1 - elapsed / PULSE_DURATION);
   }
 
+  getPulseProgress(): number {
+    const elapsed = this.currentTime - this.pulseStartTime;
+    if (elapsed < 0) return 0;
+    if (elapsed >= PULSE_DURATION) return 1;
+    return elapsed / PULSE_DURATION;
+  }
+
   getDetectionEvents(): number[] {
     return [...this.detectionEvents];
   }
@@ -104,9 +111,14 @@ export class SonarSystem {
   }
 
   isFishFlashing(fishIndex: number): boolean {
+    return this.getFlashProgress(fishIndex) < 1;
+  }
+
+  getFlashProgress(fishIndex: number): number {
     const status = this.fishManager.getFishStatus(fishIndex);
-    if (status.lastPingTime < 0) return false;
-    return this.currentTime - status.lastPingTime < FISH_FLASH_DURATION;
+    if (status.lastPingTime < 0) return 1;
+    const elapsed = this.currentTime - status.lastPingTime;
+    return Math.min(1, elapsed / FISH_FLASH_DURATION);
   }
 
   getEmitterPosition(): THREE.Vector3 {
@@ -119,5 +131,9 @@ export class SonarSystem {
 
   getCurrentTime(): number {
     return this.currentTime;
+  }
+
+  getMaxPulseRadius(): number {
+    return PULSE_MAX_RADIUS;
   }
 }

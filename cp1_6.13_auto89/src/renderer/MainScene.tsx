@@ -29,7 +29,13 @@ function Seabed() {
   }, []);
 
   return (
-    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -SCENE_HEIGHT / 2 - 50, 0]} geometry={geometry} receiveShadow>
+    <mesh
+      ref={meshRef}
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, -SCENE_HEIGHT / 2 - 50, 0]}
+      geometry={geometry}
+      receiveShadow
+    >
       <meshStandardMaterial color="#1a3a4a" roughness={0.9} flatShading />
     </mesh>
   );
@@ -39,7 +45,7 @@ function WaterVolume() {
   return (
     <mesh position={[0, 0, 0]}>
       <boxGeometry args={[SCENE_WIDTH, SCENE_HEIGHT, SCENE_DEPTH]} />
-      <meshBasicMaterial color="#0c2340" transparent opacity={0.15} side={THREE.BackSide} />
+      <meshBasicMaterial color="#0c2340" transparent opacity={0.12} side={THREE.BackSide} />
     </mesh>
   );
 }
@@ -49,47 +55,52 @@ function SonarEmitter() {
   const coneAngle = sonarSystem.getConeAngle();
   const height = 400;
   const radius = Math.tan(coneAngle) * height;
+  const pulseRef = useRef<THREE.Mesh>(null);
+
+  useFrame(() => {
+    if (!pulseRef.current) return;
+    const progress = sonarSystem.getPulseProgress();
+    if (progress > 0 && progress < 1) {
+      pulseRef.current.scale.setScalar(progress);
+      const mat = pulseRef.current.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.5 * (1 - progress);
+      pulseRef.current.visible = true;
+    } else {
+      pulseRef.current.visible = false;
+    }
+  });
 
   return (
     <group position={[0, 0, 0]}>
       <mesh position={[0, 0, -height / 2]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[radius, height, 32, 1, true]} />
-        <meshBasicMaterial color="#00d4ff" transparent opacity={0.1} side={THREE.DoubleSide} />
+        <coneGeometry args={[radius, height, 48, 1, true]} />
+        <meshBasicMaterial color="#00d4ff" transparent opacity={0.12} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, 0, -height / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[radius - 2, radius, 48]} />
+        <meshBasicMaterial color="#00d4ff" transparent opacity={0.4} side={THREE.DoubleSide} />
       </mesh>
       <mesh>
-        <sphereGeometry args={[3, 16, 16]} />
+        <sphereGeometry args={[4, 24, 24]} />
         <meshBasicMaterial color="#00d4ff" />
       </mesh>
+      <mesh ref={pulseRef}>
+        <sphereGeometry args={[400, 32, 32]} />
+        <meshBasicMaterial color="#00aaff" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
     </group>
-  );
-}
-
-function SonarPulse() {
-  const { sonarSystem } = useSim();
-  const meshRef = useRef<THREE.Mesh>(null);
-
-  useFrame(() => {
-    if (!meshRef.current) return;
-    const radius = sonarSystem.getPulseRadius();
-    const opacity = sonarSystem.getPulseOpacity();
-    meshRef.current.scale.setScalar(radius > 0 ? radius : 0.01);
-    const material = meshRef.current.material as THREE.MeshBasicMaterial;
-    material.opacity = opacity;
-  });
-
-  return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[1, 32, 32]} />
-      <meshBasicMaterial color="#00aaff" transparent opacity={0} side={THREE.DoubleSide} />
-    </mesh>
   );
 }
 
 function FishModel({ index }: { index: number }) {
   const { fishManager, sonarSystem } = useSim();
   const groupRef = useRef<THREE.Group>(null);
-  const bodyMaterialRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const body1Ref = useRef<THREE.MeshStandardMaterial>(null);
+  const body2Ref = useRef<THREE.MeshStandardMaterial>(null);
   const echoRef = useRef<THREE.Mesh>(null);
+
+  const goldColor = useMemo(() => new THREE.Color('#f1c40f'), []);
+  const flashColor = useMemo(() => new THREE.Color('#e67e22'), []);
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -102,38 +113,50 @@ function FishModel({ index }: { index: number }) {
 
     if (velocity.length() > 0.01) {
       const targetRotation = Math.atan2(velocity.x, velocity.z);
-      groupRef.current.rotation.y = targetRotation;
+      const currentRotation = groupRef.current.rotation.y;
+      let diff = targetRotation - currentRotation;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      groupRef.current.rotation.y = currentRotation + diff * 0.15;
     }
 
-    const flashing = sonarSystem.isFishFlashing(index);
-    if (bodyMaterialRef.current) {
-      const targetColor = flashing ? new THREE.Color('#e67e22') : new THREE.Color('#f1c40f');
-      bodyMaterialRef.current.color.lerp(targetColor, 0.2);
+    const flashProgress = sonarSystem.getFlashProgress(index);
+    const blendFactor = flashProgress < 1 ? 1 - flashProgress : 0;
+    const currentColor = goldColor.clone().lerp(flashColor, blendFactor);
+
+    if (body1Ref.current) {
+      body1Ref.current.color.copy(currentColor);
+    }
+    if (body2Ref.current) {
+      body2Ref.current.color.copy(currentColor);
     }
 
     const echoProgress = sonarSystem.getEchoProgress(index);
     if (echoRef.current) {
-      const echoScale = echoProgress * 30;
-      echoRef.current.scale.setScalar(echoScale > 0 ? echoScale : 0.01);
-      const mat = echoRef.current.material as THREE.MeshBasicMaterial;
-      mat.opacity = (1 - echoProgress) * 0.8;
-      echoRef.current.visible = echoProgress > 0 && echoProgress < 1;
+      if (echoProgress > 0 && echoProgress < 1) {
+        echoRef.current.visible = true;
+        echoRef.current.scale.setScalar(Math.max(0.01, echoProgress * 30));
+        const mat = echoRef.current.material as THREE.MeshBasicMaterial;
+        mat.opacity = (1 - echoProgress) * 0.8;
+      } else {
+        echoRef.current.visible = false;
+      }
     }
   });
 
   return (
     <group ref={groupRef}>
-      <mesh position={[0, 0, 3]} rotation={[0, 0, 0]}>
+      <mesh position={[0, 0, 3]}>
         <coneGeometry args={[2, 6, 8]} />
-        <meshStandardMaterial ref={bodyMaterialRef} color="#f1c40f" metalness={0.3} roughness={0.4} />
+        <meshStandardMaterial ref={body1Ref} color="#f1c40f" metalness={0.4} roughness={0.35} emissive="#f1c40f" emissiveIntensity={0.1} />
       </mesh>
       <mesh position={[0, 0, -3]} rotation={[Math.PI, 0, 0]}>
         <coneGeometry args={[2, 6, 8]} />
-        <meshStandardMaterial color="#f1c40f" metalness={0.3} roughness={0.4} />
+        <meshStandardMaterial ref={body2Ref} color="#f1c40f" metalness={0.4} roughness={0.35} emissive="#f1c40f" emissiveIntensity={0.1} />
       </mesh>
-      <mesh ref={echoRef}>
+      <mesh ref={echoRef} visible={false}>
         <sphereGeometry args={[1, 16, 16]} />
-        <meshBasicMaterial color="#ff8800" transparent opacity={0} side={THREE.DoubleSide} />
+        <meshBasicMaterial color="#ff8800" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
     </group>
   );
@@ -158,10 +181,11 @@ function FishSchool() {
 function SceneLighting() {
   return (
     <>
-      <ambientLight intensity={0.3} />
-      <pointLight position={[0, 150, 0]} intensity={0.6} color="#88ccff" distance={600} />
-      <pointLight position={[-200, 100, 200]} intensity={0.3} color="#6699cc" />
-      <pointLight position={[200, 100, -200]} intensity={0.3} color="#6699cc" />
+      <ambientLight intensity={0.35} color="#6688aa" />
+      <pointLight position={[0, 150, 0]} intensity={0.7} color="#88ccff" distance={700} decay={2} />
+      <pointLight position={[-250, 80, 250]} intensity={0.35} color="#6699cc" distance={500} />
+      <pointLight position={[250, 80, -250]} intensity={0.35} color="#6699cc" distance={500} />
+      <pointLight position={[0, 0, 0]} intensity={0.5} color="#00d4ff" distance={300} />
     </>
   );
 }
@@ -190,13 +214,14 @@ function SceneContent() {
       <Seabed />
       <WaterVolume />
       <SonarEmitter />
-      <SonarPulse />
       <FishSchool />
       <OrbitControls
         enablePan={false}
-        minDistance={200
+        minDistance={200}
         maxDistance={1200}
         target={[0, 0, 0]}
+        enableDamping
+        dampingFactor={0.08}
       />
       <CameraController />
     </>
@@ -206,7 +231,7 @@ function SceneContent() {
 export function MainScene() {
   return (
     <Canvas
-      camera={{ position: [0, 200, 500], fov: 60 }}
+      camera={{ position: [0, 200, 500], fov: 60, near: 1, far: 3000 }}
       gl={{ antialias: true }}
       style={{
         position: 'absolute',
@@ -214,10 +239,10 @@ export function MainScene() {
         left: 0,
         width: '100%',
         height: '100%',
-        background: 'linear-gradient(180deg, #0b132b 0%, #1c2541 100%)',
+        background: 'linear-gradient(180deg, #1a5276 0%, #0c2340 50%, #061529 100%)',
       }}
     >
-      <fog attach="fog" args={['#0c2340', 300, 1000]} />
+      <fog attach="fog" args={['#0c2340', 400, 1100]} />
       <SceneContent />
     </Canvas>
   );
