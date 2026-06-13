@@ -125,13 +125,20 @@ export class PlantEngine {
   private calculateGrowthRate(): number {
     const { lightIntensity, nutrientConcentration, gravityMode } = this.envParams;
     
-    const lightFactor = Math.min(1, lightIntensity / 500);
+    const lightFactor = Math.min(1, lightIntensity / 1000);
     const nutrientFactor = nutrientConcentration;
     
-    const gravityMultiplier = gravityMode === 'earth' ? 0.8 : 1.2;
+    const gravityFactor = gravityMode === 'zero' ? 1.0 : 0.0;
     
-    const baseRate = 0.15;
-    return baseRate * (0.3 + 0.4 * lightFactor + 0.3 * nutrientFactor) * gravityMultiplier;
+    const nutrientDiffusionBoost = 1 + gravityFactor * 0.3;
+    const adjustedNutrient = Math.min(1, nutrientFactor * nutrientDiffusionBoost);
+    
+    const baseHeight = 0.02;
+    const growthIncrement = (lightFactor * 0.4 + adjustedNutrient * 0.4) * (1 + gravityFactor * 0.2);
+    const effectiveGrowthRate = baseHeight + growthIncrement;
+    
+    const baseRate = 0.18;
+    return baseRate * effectiveGrowthRate;
   }
 
   private updateStage(): void {

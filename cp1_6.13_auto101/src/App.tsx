@@ -23,10 +23,18 @@ const STAGE_NAMES: Record<GrowthStage, string> = {
   flowering: '开花期'
 };
 
+const DEBOUNCE_DELAY = 300;
+
 function App() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const sceneManagerRef = useRef<SceneManager | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  const uiRafIdRef = useRef<number | null>(null);
+  const isUiRafRunningRef = useRef<boolean>(false);
+  
+  const lightDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nutrientDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const isGrowthPlayingRef = useRef<boolean>(false);
   
   const [lightIntensity, setLightIntensity] = useState(500);
   const [nutrientConcentration, setNutrientConcentration] = useState(0.5);
@@ -49,58 +57,133 @@ function App() {
   useEffect(() => {
     if (!canvasContainerRef.current) return;
     
-    const sceneManager = new SceneManager(canvasContainerRef.current);
-    sceneManagerRef.current = sceneManager;
-    
-    sceneManager.setEnvironmentParams({
-      lightIntensity,
-      nutrientConcentration,
-      gravityMode
-    });
-    
-    fetchSnapshots();
-    
-    const updateState = () => {
-      const state = sceneManager.getPlantState();
-      setPlantState(state);
+    try {
+      const sceneManager = new SceneManager(canvasContainerRef.current);
+      sceneManagerRef.current = sceneManager;
       
-      const playing = sceneManager.isGrowthPlaying();
-      if (playing !== isGrowthPlaying) {
-        setIsGrowthPlaying(playing);
-        if (!playing && isGrowthPlaying) {
-          setShowCompleteModal(true);
-          handleSaveSnapshot();
+      sceneManager.setEnvironmentParams({
+        lightIntensity,
+        nutrientConcentration,
+        gravityMode
+      });
+      
+      fetchSnapshots();
+      
+      isUiRafRunningRef.current = true;
+      
+      const updateState = () => {
+        if (!isUiRafRunningRef.current) {
+          return;
         }
-      }
+        
+        uiRafIdRef.current = requestAnimationFrame(updateState);
+        
+        try {
+          if (!sceneManagerRef.current) return;
+          
+          const state = sceneManagerRef.current.getPlantState();
+          setPlantState(state);
+          
+          const playing = sceneManagerRef.current.isGrowthPlaying();
+          if (playing !== isGrowthPlayingRef.current) {
+            isGrowthPlayingRef.current = playing;
+            setIsGrowthPlaying(playing);
+            if (!playing) {
+              setShowCompleteModal(true);
+              try {
+                handleSaveSnapshotRef.current?.();
+              } catch {}
+            }
+          }
+        } catch (err) {
+          console.error('UI state sync error:', err);
+        }
+      };
       
-      animationFrameRef.current = requestAnimationFrame(updateState);
-    };
-    animationFrameRef.current = requestAnimationFrame(updateState);
+      uiRafIdRef.current = requestAnimationFrame(updateState);
+    } catch (err) {
+      console.error('Failed to initialize SceneManager:', err);
+    }
     
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      isUiRafRunningRef.current = false;
+      
+      if (uiRafIdRef.current !== null) {
+        cancelAnimationFrame(uiRafIdRef.current);
+        uiRafIdRef.current = null;
       }
-      sceneManager.dispose();
+      
+      if (lightDebounceRef.current) {
+        clearTimeout(lightDebounceRef.current);
+        lightDebounceRef.current = null;
+      }
+      if (nutrientDebounceRef.current) {
+        clearTimeout(nutrientDebounceRef.current);
+        nutrientDebounceRef.current = null;
+      }
+      
+      try {
+        sceneManagerRef.current?.dispose();
+        sceneManagerRef.current = null;
+      } catch (err) {
+        console.error('Dispose error:', err);
+      }
     };
   }, []);
 
   useEffect(() => {
     if (!sceneManagerRef.current) return;
-    
     sceneManagerRef.current.setEnvironmentParams({
-      lightIntensity,
-      nutrientConcentration,
       gravityMode
     });
-  }, [lightIntensity, nutrientConcentration, gravityMode]);
+  }, [gravityMode]);
+
+  const flushLightToScene = useCallback((value: number) => {
+    if (!sceneManagerRef.current) return;
+    try {
+      sceneManagerRef.current.setEnvironmentParams({ lightIntensity: value });
+    } catch (err) {
+      console.error('Failed to update light:', err);
+    }
+  }, []);
+
+  const flushNutrientToScene = useCallback((value: number) => {
+    if (!sceneManagerRef.current) return;
+    try {
+      sceneManagerRef.current.setEnvironmentParams({ nutrientConcentration: value });
+    } catch (err) {
+      console.error('Failed to update nutrient:', err);
+    }
+  }, []);
 
   const handleLightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLightIntensity(Number(e.target.value));
+    const value = Number(e.target.value);
+    setLightIntensity(value);
+    
+    if (lightDebounceRef.current) {
+      clearTimeout(lightDebounceRef.current);
+      lightDebounceRef.current = null;
+    }
+    
+    lightDebounceRef.current = setTimeout(() => {
+      flushLightToScene(value);
+      lightDebounceRef.current = null;
+    }, DEBOUNCE_DELAY);
   };
 
   const handleNutrientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNutrientConcentration(Number(e.target.value));
+    const value = Number(e.target.value);
+    setNutrientConcentration(value);
+    
+    if (nutrientDebounceRef.current) {
+      clearTimeout(nutrientDebounceRef.current);
+      nutrientDebounceRef.current = null;
+    }
+    
+    nutrientDebounceRef.current = setTimeout(() => {
+      flushNutrientToScene(value);
+      nutrientDebounceRef.current = null;
+    }, DEBOUNCE_DELAY);
   };
 
   const handleGravityToggle = () => {
@@ -108,47 +191,113 @@ function App() {
   };
 
   const handleSaveSnapshot = useCallback(async () => {
-    if (!sceneManagerRef.current || !plantState) return;
+    if (!sceneManagerRef.current) return;
     
     try {
-      const thumbnail = sceneManagerRef.current.captureThumbnail(64, 64);
+      let thumbnail = '';
+      let height = 0.3;
+      let leafCount = 0;
+      let stage: GrowthStage = 'germination';
+      
+      try {
+        thumbnail = sceneManagerRef.current.captureThumbnail(64, 64);
+        const currentState = sceneManagerRef.current.getPlantState();
+        height = currentState.height;
+        leafCount = currentState.leafCount;
+        stage = currentState.stage;
+      } catch (capErr) {
+        console.warn('Thumbnail capture partial failure, using fallback:', capErr);
+        const fallbackCanvas = document.createElement('canvas');
+        fallbackCanvas.width = 64;
+        fallbackCanvas.height = 64;
+        const ctx = fallbackCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(0, 0, 64, 64);
+        }
+        thumbnail = fallbackCanvas.toDataURL('image/png');
+      }
+      
+      if (!thumbnail || thumbnail.length < 20) {
+        console.warn('Thumbnail empty, using default');
+        const fallbackCanvas = document.createElement('canvas');
+        fallbackCanvas.width = 64;
+        fallbackCanvas.height = 64;
+        const ctx = fallbackCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(0, 0, 64, 64);
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = '10px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('SG', 32, 38);
+        }
+        thumbnail = fallbackCanvas.toDataURL('image/png');
+      }
+      
       const envParams = sceneManagerRef.current.getEnvironmentParams();
       
       const response = await axios.post('/api/snapshots', {
-        height: plantState.height,
-        leafCount: plantState.leafCount,
+        height,
+        leafCount,
         lightIntensity: envParams.lightIntensity,
         nutrientConcentration: envParams.nutrientConcentration,
         gravityMode: envParams.gravityMode,
         thumbnail,
-        stage: plantState.stage
+        stage
       });
       
       setSnapshots(prev => [response.data, ...prev]);
     } catch (error) {
       console.error('Failed to save snapshot:', error);
     }
-  }, [plantState]);
+  }, []);
+
+  const handleSaveSnapshotRef = useRef(handleSaveSnapshot);
+  useEffect(() => {
+    handleSaveSnapshotRef.current = handleSaveSnapshot;
+  }, [handleSaveSnapshot]);
 
   const handleLoadSnapshot = useCallback((snapshot: Snapshot) => {
     if (!sceneManagerRef.current) return;
     
-    sceneManagerRef.current.setPlantState({
-      height: snapshot.height,
-      leafCount: snapshot.leafCount,
-      stage: snapshot.stage
-    }, 2);
-    
-    setLightIntensity(snapshot.lightIntensity);
-    setNutrientConcentration(snapshot.nutrientConcentration);
-    setGravityMode(snapshot.gravityMode);
-  }, []);
+    try {
+      sceneManagerRef.current.setPlantState({
+        height: snapshot.height,
+        leafCount: snapshot.leafCount,
+        stage: snapshot.stage
+      }, 2);
+      
+      setLightIntensity(snapshot.lightIntensity);
+      setNutrientConcentration(snapshot.nutrientConcentration);
+      setGravityMode(snapshot.gravityMode);
+
+      if (lightDebounceRef.current) {
+        clearTimeout(lightDebounceRef.current);
+        lightDebounceRef.current = null;
+      }
+      if (nutrientDebounceRef.current) {
+        clearTimeout(nutrientDebounceRef.current);
+        nutrientDebounceRef.current = null;
+      }
+      
+      flushLightToScene(snapshot.lightIntensity);
+      flushNutrientToScene(snapshot.nutrientConcentration);
+    } catch (err) {
+      console.error('Failed to load snapshot:', err);
+    }
+  }, [flushLightToScene, flushNutrientToScene]);
 
   const handlePlayGrowth = () => {
     if (!sceneManagerRef.current) return;
     
-    sceneManagerRef.current.startGrowthPlayback();
-    setIsGrowthPlaying(true);
+    try {
+      sceneManagerRef.current.startGrowthPlayback();
+      isGrowthPlayingRef.current = true;
+      setIsGrowthPlaying(true);
+    } catch (err) {
+      console.error('Failed to start growth playback:', err);
+    }
   };
 
   const formatDate = (timestamp: number): string => {

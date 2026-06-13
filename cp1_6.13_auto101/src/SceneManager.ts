@@ -20,6 +20,14 @@ interface ParticleData {
   type: 'light' | 'nutrient';
 }
 
+interface TransitionState {
+  active: boolean;
+  duration: number;
+  elapsed: number;
+  startState: PlantState;
+  endState: PlantState;
+}
+
 export class SceneManager {
   private container: HTMLElement;
   private scene: THREE.Scene;
@@ -27,6 +35,7 @@ export class SceneManager {
   private renderer: THREE.WebGLRenderer;
   private plantEngine: PlantEngine;
   private animationId: number | null = null;
+  private isRunning: boolean = false;
   private clock: THREE.Clock;
   
   private stationGroup: THREE.Group;
@@ -41,9 +50,7 @@ export class SceneManager {
   private mainLight: THREE.DirectionalLight;
   private pointLights: THREE.PointLight[] = [];
   
-  private targetPlantState: PlantState | null = null;
-  private transitionProgress: number = 1;
-  private transitionDuration: number = 1;
+  private transition: TransitionState | null = null;
   
   private gravityMode: 'zero' | 'earth' = 'zero';
   private plantFloatOffset: number = 0;
@@ -74,7 +81,7 @@ export class SceneManager {
     this.camera.position.set(0, 2, 12);
     this.camera.lookAt(0, 0, 0);
     
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -116,6 +123,13 @@ export class SceneManager {
     
     window.addEventListener('resize', this.handleResize);
     
+    this.start();
+  }
+
+  private start(): void {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    this.clock.start();
     this.animate();
   }
 
@@ -229,11 +243,40 @@ export class SceneManager {
     });
     this.stemMesh = new THREE.Mesh(stemGeo, stemMat);
     this.stemMesh.castShadow = true;
-    this.stemMesh.position.y = state.height / 2 - state.height / 2;
     this.plantGroup.add(this.stemMesh);
     
     this.updateLeaves(state);
     this.updateFlowers(state);
+  }
+
+  private lerpColor(color1: string, color2: string, t: number): string {
+    const c1 = new THREE.Color(color1);
+    const c2 = new THREE.Color(color2);
+    const result = new THREE.Color().lerpColors(c1, c2, t);
+    return `#${result.getHexString()}`;
+  }
+
+  private lerpStage(startStage: GrowthStage, endStage: GrowthStage, t: number): GrowthStage {
+    const stages: GrowthStage[] = ['germination', 'seedling', 'growing', 'mature', 'flowering'];
+    const startIdx = stages.indexOf(startStage);
+    const endIdx = stages.indexOf(endStage);
+    const idx = Math.round(startIdx + (endIdx - startIdx) * t);
+    return stages[Math.max(0, Math.min(stages.length - 1, idx))];
+  }
+
+  private interpolateState(startState: PlantState, endState: PlantState, t: number): PlantState {
+    const easeOut = 1 - Math.pow(1 - t, 3);
+    return {
+      height: startState.height + (endState.height - startState.height) * easeOut,
+      leafCount: Math.round(startState.leafCount + (endState.leafCount - startState.leafCount) * easeOut),
+      stemColor: this.lerpColor(startState.stemColor, endState.stemColor, easeOut),
+      leafColor: this.lerpColor(startState.leafColor, endState.leafColor, easeOut),
+      stage: this.lerpStage(startState.stage, endState.stage, easeOut),
+      isWilting: endState.isWilting,
+      wiltProgress: startState.wiltProgress + (endState.wiltProgress - startState.wiltProgress) * easeOut,
+      flowerCount: Math.round(startState.flowerCount + (endState.flowerCount - startState.flowerCount) * easeOut),
+      stemThickness: startState.stemThickness + (endState.stemThickness - startState.stemThickness) * easeOut
+    };
   }
 
   private updateLeaves(state: PlantState): void {
@@ -264,8 +307,9 @@ export class SceneManager {
     const nonFallingLeaves = this.leaves.filter(l => !l.falling);
     for (let i = 0; i < nonFallingLeaves.length; i++) {
       const leaf = nonFallingLeaves[i];
-      const targetAngle = (i / targetCount) * Math.PI * 2;
-      const targetHeightRatio = 0.3 + (i / targetCount) * 0.6;
+      const displayCount = Math.max(1, targetCount);
+      const targetAngle = (i / displayCount) * Math.PI * 2;
+      const targetHeightRatio = 0.3 + (i / displayCount) * 0.6;
       
       leaf.angle += (targetAngle - leaf.angle) * 0.1;
       leaf.heightRatio += (targetHeightRatio - leaf.heightRatio) * 0.1;
@@ -331,7 +375,8 @@ export class SceneManager {
     
     for (let i = 0; i < this.flowers.length; i++) {
       const flower = this.flowers[i];
-      const angle = (i / targetCount) * Math.PI * 2;
+      const displayCount = Math.max(1, targetCount);
+      const angle = (i / displayCount) * Math.PI * 2;
       const y = state.height / 2 - 0.2;
       const radius = state.stemThickness + 0.2;
       
@@ -488,8 +533,6 @@ export class SceneManager {
   private updateStem(state: PlantState): void {
     if (!this.stemMesh) return;
     
-    const currentGeo = this.stemMesh.geometry;
-    
     const newGeo = new THREE.CylinderGeometry(
       state.stemThickness * 0.6,
       state.stemThickness,
@@ -500,27 +543,52 @@ export class SceneManager {
     this.stemMesh.geometry.dispose();
     this.stemMesh.geometry = newGeo;
     
-    this.stemMesh.position.y = -state.height / 2 + state.height / 2;
-    
     const mat = this.stemMesh.material as THREE.MeshStandardMaterial;
     mat.color.set(state.stemColor);
   }
 
   private handleResize = (): void => {
+    if (!this.container || this.container.clientWidth === 0 || this.container.clientHeight === 0) return;
     this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
   };
 
   private animate = (): void => {
+    if (!this.isRunning) return;
+    
+    if (this.animationId !== null) {
+      cancelAnimationFrame(this.animationId);
+    }
     this.animationId = requestAnimationFrame(this.animate);
     
     const delta = Math.min(this.clock.getDelta(), 0.1);
     
-    this.plantEngine.update(delta);
-    const state = this.plantEngine.getState();
+    let state: PlantState;
     
-    if (this.isPlayingGrowth) {
+    if (this.transition && this.transition.active) {
+      this.transition.elapsed += delta;
+      const t = Math.min(1, this.transition.elapsed / this.transition.duration);
+      state = this.interpolateState(this.transition.startState, this.transition.endState, t);
+      
+      if (t >= 1) {
+        this.plantEngine.setState({
+          height: this.transition.endState.height,
+          leafCount: this.transition.endState.leafCount,
+          stage: this.transition.endState.stage,
+          stemColor: this.transition.endState.stemColor,
+          leafColor: this.transition.endState.leafColor,
+          flowerCount: this.transition.endState.flowerCount,
+          stemThickness: this.transition.endState.stemThickness
+        });
+        this.transition = null;
+      }
+    } else {
+      this.plantEngine.update(delta);
+      state = this.plantEngine.getState();
+    }
+    
+    if (this.isPlayingGrowth && !this.transition) {
       this.growthPlayTime += delta;
       const totalDuration = 60;
       const progress = Math.min(1, this.growthPlayTime / totalDuration);
@@ -613,14 +681,28 @@ export class SceneManager {
   }
 
   getPlantState(): PlantState {
+    if (this.transition && this.transition.active) {
+      const t = Math.min(1, this.transition.elapsed / this.transition.duration);
+      return this.interpolateState(this.transition.startState, this.transition.endState, t);
+    }
     return this.plantEngine.getState();
   }
 
   setPlantState(state: Partial<PlantState>, transitionDuration: number = 2): void {
-    this.plantEngine.setState(state);
+    const currentState: PlantState = this.getPlantState();
+    const endState: PlantState = { ...currentState, ...state };
+    
+    this.transition = {
+      active: true,
+      duration: transitionDuration,
+      elapsed: 0,
+      startState: { ...currentState },
+      endState
+    };
   }
 
   resetPlant(): void {
+    this.transition = null;
     this.plantEngine.reset();
     
     this.leaves.forEach(leaf => {
@@ -655,31 +737,70 @@ export class SceneManager {
   }
 
   captureThumbnail(width: number = 64, height: number = 64): string {
-    const prevSize = {
-      width: this.renderer.domElement.width,
-      height: this.renderer.domElement.height
-    };
-    
-    this.renderer.setSize(width, height, false);
-    this.renderer.render(this.scene, this.camera);
-    
-    const dataUrl = this.renderer.domElement.toDataURL('image/png');
-    
-    this.renderer.setSize(prevSize.width, prevSize.height, false);
-    
-    return dataUrl;
+    try {
+      const canvas = this.renderer.domElement;
+      const gl = (canvas as HTMLCanvasElement).getContext('webgl2') || 
+                 (canvas as HTMLCanvasElement).getContext('webgl');
+      
+      if (!gl) {
+        throw new Error('WebGL context not available');
+      }
+      
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Canvas dimensions are zero');
+      }
+      
+      const prevWidth = canvas.width;
+      const prevHeight = canvas.height;
+      
+      this.renderer.setSize(width, height, false);
+      this.renderer.render(this.scene, this.camera);
+      
+      const snapshotCanvas = document.createElement('canvas');
+      snapshotCanvas.width = width;
+      snapshotCanvas.height = height;
+      const snapshotCtx = snapshotCanvas.getContext('2d');
+      if (!snapshotCtx) {
+        this.renderer.setSize(prevWidth, prevHeight, false);
+        throw new Error('2D context not available');
+      }
+      snapshotCtx.drawImage(canvas, 0, 0, width, height);
+      
+      this.renderer.setSize(prevWidth, prevHeight, false);
+      
+      const dataUrl = snapshotCanvas.toDataURL('image/jpeg', 0.7);
+      return dataUrl;
+    } catch (error) {
+      console.error('Failed to capture thumbnail:', error);
+      const fallbackCanvas = document.createElement('canvas');
+      fallbackCanvas.width = width;
+      fallbackCanvas.height = height;
+      const ctx = fallbackCanvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('SG', width / 2, height / 2 + 4);
+      }
+      return fallbackCanvas.toDataURL('image/png');
+    }
   }
 
   dispose(): void {
-    if (this.animationId) {
+    this.isRunning = false;
+    
+    if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
+      this.animationId = null;
     }
     
     window.removeEventListener('resize', this.handleResize);
     
     this.renderer.dispose();
     
-    if (this.container.contains(this.renderer.domElement)) {
+    if (this.container.contains(this.renderer.renderer ? (this.renderer as any).renderer.domElement : this.renderer.domElement)) {
       this.container.removeChild(this.renderer.domElement);
     }
   }
