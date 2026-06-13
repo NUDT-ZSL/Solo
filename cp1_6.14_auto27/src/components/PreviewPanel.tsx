@@ -46,9 +46,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ gradientConfig, overlayConf
       case 'radial': {
         const centerX = (config.centerX / 100) * width;
         const centerY = (config.centerY / 100) * height;
-        const radiusX = config.shape === 'ellipse' ? Math.max(width, height) : Math.max(width, height);
-        const radiusY = config.shape === 'ellipse' ? Math.max(width, height) * 0.7 : Math.max(width, height);
-        const radius = Math.max(radiusX, radiusY);
+        const radius = Math.max(width, height);
         gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
         break;
       }
@@ -100,7 +98,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ gradientConfig, overlayConf
     if (overlayConfig.enabled) {
       ctx.save();
       ctx.globalAlpha = overlayConfig.opacity / 100;
-      ctx.globalCompositeOperation = overlayConfig.blendMode;
+      ctx.globalCompositeOperation = overlayConfig.blendMode as GlobalCompositeOperation;
       ctx.fillStyle = createGradient(ctx, overlayConfig.gradient, cssWidth, cssHeight);
       ctx.fillRect(0, 0, cssWidth, cssHeight);
       ctx.restore();
@@ -145,105 +143,22 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ gradientConfig, overlayConf
     : `渐变: ${generateGradientCSS(gradientConfig).substring(0, 80)}...`;
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '60%',
-        backgroundColor: '#1e1e2e',
-        position: 'relative',
-        minHeight: '500px',
-        overflow: 'hidden',
-        '@media (max-width: 768px)': {
-          width: '100%',
-          height: '50vh',
-        }
-      } as React.CSSProperties}
-    >
+    <div ref={containerRef} className="preview-panel">
       <canvas
         ref={canvasRef}
-        style={{
-          display: 'block',
-          width: '100%',
-          height: '100%',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-        }}
+        className="preview-canvas"
       />
 
-      <div
-        style={{
-          position: 'absolute',
-          top: '16px',
-          right: '16px',
-          backgroundColor: '#2d2d3d',
-          borderRadius: '6px',
-          padding: '12px',
-          fontSize: '12px',
-          fontFamily: "'JetBrains Mono', monospace",
-          color: '#e0e0e0',
-          maxWidth: '320px',
-          maxHeight: '120px',
-          overflow: 'auto',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
-          zIndex: 10,
-        }}
-      >
+      <div className="preview-info">
         {currentInfo}
       </div>
 
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '16px',
-          right: '16px',
-          width: '280px',
-          height: '160px',
-          backgroundColor: '#252535',
-          borderRadius: '8px',
-          padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          zIndex: 10,
-        }}
-      >
-        <pre
-          style={{
-            margin: 0,
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '13px',
-            color: '#ffffff',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-all',
-            overflow: 'auto',
-            flex: 1,
-          }}
-        >
-          {cssSnippet}
-        </pre>
-        <div style={{ position: 'relative', alignSelf: 'flex-end' }}>
+      <div className="css-export-panel">
+        <pre className="css-code">{cssSnippet}</pre>
+        <div className="copy-button-container">
           <button
+            className="copy-button"
             onClick={handleCopy}
-            style={{
-              width: '40px',
-              height: '40px',
-              backgroundColor: '#6c63ff',
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'background-color 0.15s ease-out',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#7c73ff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#6c63ff';
-            }}
           >
             <svg
               width="18"
@@ -254,25 +169,12 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ gradientConfig, overlayConf
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              style={{ color: '#ffffff' }}
             >
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
           </button>
-          <span
-            style={{
-              position: 'absolute',
-              top: '-28px',
-              right: '0',
-              fontSize: '12px',
-              color: '#22c55e',
-              opacity: copied ? 1 : 0,
-              transition: 'opacity 0.3s ease-out',
-              pointerEvents: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
+          <span className={`copied-tooltip ${copied ? 'visible' : ''}`}>
             已复制
           </span>
         </div>
