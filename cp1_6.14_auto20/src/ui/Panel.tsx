@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import type { SoundType, PlantStage } from '../game/Core';
-import { MOOD_COLORS } from '../game/Core';
+import type { SoundType, PlantStage } from '../game/GameEngine';
+import { MOOD_COLORS } from '../game/GameEngine';
 
 interface PanelProps {
   canWater: boolean;
@@ -11,6 +11,7 @@ interface PanelProps {
   plantStage: PlantStage;
   growthPercent: number;
   isMeditating: boolean;
+  meditationRemaining: number;
   onWater: () => void;
   onLightChange: (value: number) => void;
   onSoundToggle: () => void;
@@ -57,6 +58,7 @@ export const Panel: React.FC<PanelProps> = ({
   plantStage,
   growthPercent,
   isMeditating,
+  meditationRemaining,
   onWater,
   onLightChange,
   onSoundToggle,
@@ -69,7 +71,9 @@ export const Panel: React.FC<PanelProps> = ({
     if (!canWater) return;
     setWaterScale(0.9);
     if (waterTimeoutRef.current) clearTimeout(waterTimeoutRef.current);
-    waterTimeoutRef.current = setTimeout(() => setWaterScale(1.0), 100);
+    waterTimeoutRef.current = setTimeout(() => {
+      setWaterScale(1.0);
+    }, 100);
     onWater();
   }, [canWater, onWater]);
 
@@ -80,15 +84,12 @@ export const Panel: React.FC<PanelProps> = ({
   }, []);
 
   const moodColor = MOOD_COLORS[plantStage];
-  const moodPercent = mood * 100;
+  const moodPercent = Math.round(mood * 100);
 
   return (
-    <div
-      className={`panel-container ${isMeditating ? 'panel-meditating' : ''}`}
-    >
+    <div className={`panel-container ${isMeditating ? 'panel-meditating' : ''}`}>
       <div className="panel-section">
         <div className="panel-label">照料植物</div>
-
         <button
           className="water-btn"
           onClick={handleWater}
@@ -96,6 +97,7 @@ export const Panel: React.FC<PanelProps> = ({
           style={{
             transform: `scale(${waterScale})`,
             opacity: canWater ? 1 : 0.5,
+            transition: 'transform 0.1s ease',
           }}
         >
           <WaterDropIcon />
@@ -148,7 +150,7 @@ export const Panel: React.FC<PanelProps> = ({
       <button
         className={`meditate-btn ${isMeditating ? 'meditate-active' : ''}`}
         onClick={onMeditate}
-        title={isMeditating ? '退出禅定' : '进入禅定模式'}
+        title={isMeditating ? `禅定中 (${meditationRemaining}s)` : '进入禅定模式'}
       >
         <MeditationIcon />
       </button>

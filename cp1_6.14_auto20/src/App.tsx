@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { GameEngine } from './game/Core';
-import type { GameState, SoundType } from './game/Core';
+import { GameEngine } from './game/GameEngine';
+import type { GameState } from './game/GameEngine';
 import { Panel } from './ui/Panel';
 
 export default function App() {
@@ -19,22 +19,14 @@ export default function App() {
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const resizeCanvas = () => {
-      const rect = container.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.scale(dpr, dpr);
-      if (engineRef.current) {
-        engineRef.current.resize(rect.width, rect.height);
-      }
-    };
-
     const engine = new GameEngine(canvas, handleStateUpdate);
     engineRef.current = engine;
+
+    const resizeCanvas = () => {
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      engine.resize(rect.width, rect.height);
+    };
 
     resizeCanvas();
     engine.start();
@@ -66,12 +58,13 @@ export default function App() {
   const handleMeditate = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    if (engine.getIsMeditating()) {
+    const state = gameState;
+    if (state?.isMeditating) {
       engine.exitMeditationManual();
     } else {
       engine.enterMeditation();
     }
-  }, []);
+  }, [gameState]);
 
   const state = gameState;
 
@@ -86,6 +79,7 @@ export default function App() {
         plantStage={state?.plant.stage ?? 'seed'}
         growthPercent={state?.plant.growthPercent ?? 0}
         isMeditating={state?.isMeditating ?? false}
+        meditationRemaining={state?.meditationRemaining ?? 0}
         onWater={handleWater}
         onLightChange={handleLightChange}
         onSoundToggle={handleSoundToggle}

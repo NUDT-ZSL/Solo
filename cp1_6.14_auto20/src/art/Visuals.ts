@@ -6,14 +6,17 @@ export interface PlantState {
   growthPercent: number;
   waterLevel: number;
   lightLevel: number;
-  stemHeight: number;
+  stemDrawHeight: number;
   leafCount: number;
+  leafUnfurlProgress: number[];
   bloomProgress: number;
   saturation: number;
   mood: number;
   isWatering: boolean;
   waterTimer: number;
 }
+
+export type ParticleType = 'petal' | 'burst' | 'rain' | 'stream' | 'wind' | 'drip' | 'sparkle' | 'ambient';
 
 export interface Particle {
   x: number;
@@ -22,164 +25,406 @@ export interface Particle {
   vy: number;
   size: number;
   opacity: number;
+  targetOpacity: number;
   rotation: number;
   rotationSpeed: number;
   color: string;
   life: number;
   maxLife: number;
-  type: 'petal' | 'burst' | 'rain' | 'stream' | 'wind' | 'drip' | 'sparkle';
+  type: ParticleType;
+  fadeInDuration: number;
+  fadeOutDuration: number;
+  born: number;
 }
 
 const MAX_PARTICLES = 300;
+const MIN_PARTICLES = 150;
+
+const SOUND_COLORS: Record<string, string> = {
+  rain: '#90caf9',
+  stream: '#66bb6a',
+  wind: '#ffd54f',
+};
 
 export class ParticleSystem {
   private particles: Particle[] = [];
+  private time: number = 0;
+  private ambientTimer: number = 0;
 
-  emit(x: number, y: number, count: number, type: Particle['type'], color: string, spread: number = 2) {
-    for (let i = 0; i < count; i++) {
-      if (this.particles.length >= MAX_PARTICLES) {
-        const idx = this.particles.findIndex(p => p.life <= 0);
-        if (idx >= 0) this.particles.splice(idx, 1);
-        else break;
+  get count(): number {
+    return this.particles.length;
+  }
+
+  private createParticle(cfg: Partial<Particle> & { x: number; y: number; type: ParticleType; color: string }): Particle {
+    const maxLife = cfg.maxLife ?? this.defaultLifeForType(cfg.type);
+    const fadeIn = cfg.fadeInDuration ?? this.defaultFadeIn(cfg.type);
+    const fadeOut = cfg.fadeOutDuration ?? this.defaultFadeOut(cfg.type);
+    return {
+      x: cfg.x,
+      y: cfg.y,
+      vx: cfg.vx ?? 0,
+      vy: cfg.vy ?? 0,
+      size: cfg.size ?? this.defaultSize(cfg.type),
+      opacity: 0,
+      targetOpacity: cfg.targetOpacity ?? 0.8,
+      rotation: cfg.rotation ?? Math.random() * Math.PI * 2,
+      rotationSpeed: cfg.rotationSpeed ?? (Math.random() - 0.5) * 0.08,
+      color: cfg.color,
+      life: maxLife,
+      maxLife,
+      type: cfg.type,
+      fadeInDuration: fadeIn,
+      fadeOutDuration: fadeOut,
+      born: this.time,
+    };
+  }
+
+  private defaultLifeForType(type: ParticleType): number {
+    switch (type) {
+      case 'drip': return 300;
+      case 'sparkle': return 2000;
+      case 'rain': return 2000;
+      case 'stream': return 2500;
+      case 'wind': return 3000;
+      case 'burst': return 1200;
+      case 'ambient': return 4000;
+      case 'petal': return 3500;
+      default: return 2000;
+    }
+  }
+
+  private defaultFadeIn(type: ParticleType): number {
+    switch (type) {
+      case 'sparkle': return 200;
+      case 'drip': return 50;
+      case 'burst': return 100;
+      default: return 400;
+    }
+  }
+
+  private defaultFadeOut(type: ParticleType): number {
+    switch (type) {
+      case 'sparkle': return 300;
+      case 'drip': return 100;
+      case 'burst': return 300;
+      default: return 500;
+    }
+  }
+
+  private defaultSize(type: ParticleType): number {
+    switch (type) {
+      case 'rain': return 2 + Math.random() * 2;
+      case 'drip': return 2.5 + Math.random();
+      case 'sparkle': return 2 + Math.random() * 3;
+      case 'wind': return 3 + Math.random() * 4;
+      case 'stream': return 2 + Math.random() * 3;
+      case 'ambient': return 2 + Math.random() * 3;
+      case 'petal': return 5 + Math.random() * 5;
+      case 'burst': return 3 + Math.random() * 4;
+      default: return 4;
+    }
+  }
+
+  private addParticle(p: Particle) {
+    if (this.particles.length >= MAX_PARTICLES) {
+      const oldest = this.particles.findIndex(pt => pt.life <= 0);
+      if (oldest >= 0) {
+        this.particles[oldest] = p;
+      } else if (this.particles.length < MAX_PARTICLES + 10) {
+        this.particles.push(p);
       }
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * spread;
-      const maxLife = type === 'drip' ? 300 : type === 'sparkle' ? 2000 : type === 'rain' ? 1500 : 2500;
-      this.particles.push({
-        x: x + (Math.random() - 0.5) * 20,
-        y: y + (Math.random() - 0.5) * 10,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        size: type === 'rain' ? 2 + Math.random() * 2 : type === 'drip' ? 3 : type === 'sparkle' ? 2 + Math.random() * 3 : 4 + Math.random() * 6,
-        opacity: 0,
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 0.05,
-        color,
-        life: maxLife,
-        maxLife,
-        type,
-      });
+    } else {
+      this.particles.push(p);
     }
   }
 
   emitPetals(x: number, y: number, count: number) {
-    this.emit(x, y, count, 'petal', '#f8bbd0', 1.5);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.3 + Math.random() * 1.2;
+      this.addParticle(this.createParticle({
+        x: x + (Math.random() - 0.5) * 30,
+        y: y + (Math.random() - 0.5) * 15,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 0.5,
+        type: 'petal',
+        color: this.randomPetalColor(),
+        rotationSpeed: (Math.random() - 0.5) * 0.1,
+      }));
+    }
+  }
+
+  private randomPetalColor(): string {
+    const colors = ['#f8bbd0', '#f48fb1', '#f06292', '#ec407a', '#fce4ec'];
+    return colors[Math.floor(Math.random() * colors.length)];
   }
 
   emitBurst(x: number, y: number, count: number) {
-    this.emit(x, y, count, 'burst', '#a5d6a7', 3);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1 + Math.random() * 3;
+      this.addParticle(this.createParticle({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        type: 'burst',
+        color: '#a5d6a7',
+        maxLife: 800 + Math.random() * 400,
+      }));
+    }
   }
 
-  emitDrip(x: number, y: number) {
-    for (let i = 0; i < 5; i++) {
+  emitDrip(x: number, y: number, count: number = 5) {
+    for (let i = 0; i < count; i++) {
+      const delay = i * 80;
       setTimeout(() => {
-        this.emit(x + (Math.random() - 0.5) * 30, y, 1, 'drip', '#64b5f6', 0.5);
-      }, i * 100);
+        this.addParticle(this.createParticle({
+          x: x + (Math.random() - 0.5) * 24,
+          y,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: 0.5,
+          type: 'drip',
+          color: '#64b5f6',
+          maxLife: 300,
+        }));
+      }, delay);
     }
   }
 
   emitSparkle(x: number, y: number, count: number) {
-    this.emit(x, y, count, 'sparkle', '#e3f2fd', 2);
+    for (let i = 0; i < count; i++) {
+      this.addParticle(this.createParticle({
+        x: x + (Math.random() - 0.5) * 40,
+        y: y + (Math.random() - 0.5) * 30,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: (Math.random() - 0.5) * 1.5,
+        type: 'sparkle',
+        color: '#e3f2fd',
+        maxLife: 1500 + Math.random() * 500,
+      }));
+    }
   }
 
   emitSoundParticles(type: SoundType, canvasWidth: number, canvasHeight: number) {
     if (type === 'none') return;
-    const colors: Record<string, string> = {
-      rain: '#90caf9',
-      stream: '#66bb6a',
-      wind: '#ffd54f',
-    };
-    const color = colors[type] || '#ffffff';
-    const count = type === 'rain' ? 8 : type === 'stream' ? 5 : 4;
+    const color = SOUND_COLORS[type] || '#ffffff';
+    const count = type === 'rain' ? 6 : type === 'stream' ? 4 : 3;
     for (let i = 0; i < count; i++) {
-      const x = Math.random() * canvasWidth;
-      const y = type === 'rain' ? -10 : Math.random() * canvasHeight;
-      this.emit(x, y, 1, type, color, type === 'stream' ? 1 : type === 'wind' ? 2 : 0.3);
+      let x: number, y: number, vx: number, vy: number;
+      if (type === 'rain') {
+        x = Math.random() * canvasWidth;
+        y = -10 - Math.random() * 50;
+        vx = -0.3 - Math.random() * 0.5;
+        vy = 3 + Math.random() * 2;
+      } else if (type === 'stream') {
+        x = -10;
+        y = canvasHeight * 0.5 + (Math.random() - 0.5) * canvasHeight * 0.6;
+        vx = 1 + Math.random() * 1.5;
+        vy = (Math.random() - 0.5) * 0.3;
+      } else {
+        x = -10 - Math.random() * 30;
+        y = Math.random() * canvasHeight * 0.7;
+        vx = 2 + Math.random() * 3;
+        vy = (Math.random() - 0.5) * 0.8;
+      }
+      this.addParticle(this.createParticle({
+        x, y, vx, vy,
+        type: type as ParticleType,
+        color,
+      }));
+    }
+  }
+
+  emitAmbient(canvasWidth: number, canvasHeight: number) {
+    if (this.particles.length < MIN_PARTICLES) {
+      const deficit = MIN_PARTICLES - this.particles.length;
+      const count = Math.min(deficit, 5);
+      for (let i = 0; i < count; i++) {
+        this.addParticle(this.createParticle({
+          x: Math.random() * canvasWidth,
+          y: Math.random() * canvasHeight,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: -0.1 - Math.random() * 0.3,
+          type: 'ambient',
+          color: '#c8e6c9',
+          targetOpacity: 0.3,
+        }));
+      }
     }
   }
 
   update(dt: number) {
+    this.time += dt;
+    this.ambientTimer += dt;
+
     for (const p of this.particles) {
       p.life -= dt;
       p.x += p.vx;
       p.y += p.vy;
       p.rotation += p.rotationSpeed;
 
-      if (p.type === 'petal') {
-        p.vy += 0.01;
-        p.vx += (Math.random() - 0.5) * 0.02;
-      } else if (p.type === 'rain') {
-        p.vy = 3 + Math.random();
-        p.vx = -0.5;
-      } else if (p.type === 'stream') {
-        p.vx += 0.02;
-        p.vy += Math.sin(p.x * 0.01) * 0.01;
-      } else if (p.type === 'wind') {
-        p.vx = 1 + Math.random() * 2;
-        p.vy += (Math.random() - 0.5) * 0.05;
-      } else if (p.type === 'drip') {
-        p.vy += 0.08;
-      } else if (p.type === 'burst') {
+      this.applyPhysics(p, dt);
+      this.computeOpacity(p);
+    }
+
+    this.particles = this.particles.filter(p => p.life > 0);
+  }
+
+  private applyPhysics(p: Particle, _dt: number) {
+    switch (p.type) {
+      case 'petal':
+        p.vy += 0.008;
+        p.vx += Math.sin(this.time * 0.002 + p.x * 0.01) * 0.01;
+        p.vx *= 0.99;
+        break;
+      case 'rain':
+        p.vy = 4 + Math.random() * 0.5;
+        p.vx = -0.3;
+        break;
+      case 'stream':
+        p.vx += 0.005;
+        p.vy += Math.sin(p.x * 0.008 + this.time * 0.001) * 0.008;
+        break;
+      case 'wind':
+        p.vx = 2 + Math.random() * 0.3;
+        p.vy += Math.sin(this.time * 0.003 + p.x * 0.005) * 0.01;
+        break;
+      case 'drip':
+        p.vy += 0.06;
+        break;
+      case 'burst':
+        p.vx *= 0.97;
+        p.vy *= 0.97;
+        break;
+      case 'sparkle':
         p.vx *= 0.98;
         p.vy *= 0.98;
-      }
-
-      const lifeRatio = p.life / p.maxLife;
-      if (lifeRatio > 0.9) {
-        p.opacity = (1 - lifeRatio) / 0.1;
-      } else if (lifeRatio < 0.2) {
-        p.opacity = lifeRatio / 0.2;
-      } else {
-        p.opacity = 1;
-      }
-
-      if (p.type === 'sparkle') {
-        p.opacity *= 0.5 + 0.5 * Math.sin(Date.now() * 0.01 + p.x);
-      }
+        break;
+      case 'ambient':
+        p.vy -= 0.001;
+        p.vx += Math.sin(this.time * 0.001 + p.y * 0.01) * 0.002;
+        break;
     }
-    this.particles = this.particles.filter(p => p.life > 0);
+  }
+
+  private computeOpacity(p: Particle) {
+    const age = this.time - p.born;
+    const lifeRatio = p.life / p.maxLife;
+
+    if (age < p.fadeInDuration) {
+      p.opacity = p.targetOpacity * (age / p.fadeInDuration);
+    } else if (lifeRatio < p.fadeOutDuration / p.maxLife) {
+      p.opacity = p.targetOpacity * (lifeRatio / (p.fadeOutDuration / p.maxLife));
+    } else {
+      p.opacity = p.targetOpacity;
+    }
+
+    if (p.type === 'sparkle') {
+      p.opacity *= 0.5 + 0.5 * Math.sin(this.time * 0.008 + p.x * 0.1);
+    }
   }
 
   draw(ctx: CanvasRenderingContext2D) {
     for (const p of this.particles) {
+      if (p.opacity <= 0.01) continue;
       ctx.save();
-      ctx.globalAlpha = p.opacity * 0.8;
+      ctx.globalAlpha = p.opacity;
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rotation);
 
-      if (p.type === 'petal') {
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, p.size, p.size * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (p.type === 'drip') {
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(0, 0, p.size, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (p.type === 'sparkle') {
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        const s = p.size;
-        ctx.moveTo(0, -s);
-        ctx.lineTo(s * 0.3, -s * 0.3);
-        ctx.lineTo(s, 0);
-        ctx.lineTo(s * 0.3, s * 0.3);
-        ctx.lineTo(0, s);
-        ctx.lineTo(-s * 0.3, s * 0.3);
-        ctx.lineTo(-s, 0);
-        ctx.lineTo(-s * 0.3, -s * 0.3);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, p.size * 0.5, p.size, 0, 0, Math.PI * 2);
-        ctx.fill();
+      switch (p.type) {
+        case 'petal':
+          this.drawPetal(ctx, p);
+          break;
+        case 'drip':
+          this.drawDrip(ctx, p);
+          break;
+        case 'sparkle':
+          this.drawSparkle(ctx, p);
+          break;
+        case 'rain':
+          this.drawRain(ctx, p);
+          break;
+        case 'stream':
+          this.drawStream(ctx, p);
+          break;
+        case 'wind':
+          this.drawWind(ctx, p);
+          break;
+        default:
+          this.drawGeneric(ctx, p);
+          break;
       }
 
       ctx.restore();
     }
+  }
+
+  private drawPetal(ctx: CanvasRenderingContext2D, p: Particle) {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, p.size, p.size * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(p.size * 0.2, -p.size * 0.1, p.size * 0.4, p.size * 0.2, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawDrip(ctx: CanvasRenderingContext2D, p: Particle) {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawSparkle(ctx: CanvasRenderingContext2D, p: Particle) {
+    ctx.fillStyle = p.color;
+    const s = p.size;
+    ctx.beginPath();
+    ctx.moveTo(0, -s);
+    ctx.lineTo(s * 0.25, -s * 0.25);
+    ctx.lineTo(s, 0);
+    ctx.lineTo(s * 0.25, s * 0.25);
+    ctx.lineTo(0, s);
+    ctx.lineTo(-s * 0.25, s * 0.25);
+    ctx.lineTo(-s, 0);
+    ctx.lineTo(-s * 0.25, -s * 0.25);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  private drawRain(ctx: CanvasRenderingContext2D, p: Particle) {
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(p.vx * 2, p.vy * 2);
+    ctx.stroke();
+  }
+
+  private drawStream(ctx: CanvasRenderingContext2D, p: Particle) {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, p.size * 1.5, p.size * 0.5, Math.atan2(p.vy, p.vx), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawWind(ctx: CanvasRenderingContext2D, p: Particle) {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    const w = p.size * 2;
+    const h = p.size * 0.4;
+    ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawGeneric(ctx: CanvasRenderingContext2D, p: Particle) {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.size * 0.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -191,90 +436,108 @@ export function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: numb
   ctx.fillRect(0, 0, w, h);
 }
 
+export function drawMeditationBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, w, h);
+}
+
 export function drawPlant(
   ctx: CanvasRenderingContext2D,
   state: PlantState,
   centerX: number,
   groundY: number,
   isMeditating: boolean,
-  breathPhase: number
 ) {
-  const { stage, stemHeight, leafCount, bloomProgress, saturation } = state;
+  const { stage, stemDrawHeight, leafCount, leafUnfurlProgress, bloomProgress, saturation } = state;
+  const sat = saturation;
 
   ctx.save();
 
-  if (isMeditating) {
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = '#ffffff';
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  }
-
-  const sat = saturation;
-
   if (stage === 'seed') {
-    const seedColor = isMeditating ? '#ffffff' : `hsl(30, ${sat * 40}%, 45%)`;
-    ctx.fillStyle = seedColor;
-    ctx.beginPath();
-    ctx.ellipse(centerX, groundY - 6, 8, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    if (!isMeditating) {
-      ctx.fillStyle = `hsl(30, ${sat * 30}%, 35%)`;
-      ctx.beginPath();
-      ctx.ellipse(centerX, groundY - 6, 5, 3, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    drawSeed(ctx, centerX, groundY, sat, isMeditating);
   }
 
-  if (stage === 'sprout' || stage === 'stem' || stage === 'bud' || stage === 'bloom') {
-    const stemColor = isMeditating ? '#ffffff' : `hsl(120, ${sat * 60}%, 35%)`;
-    ctx.strokeStyle = stemColor;
-    ctx.lineWidth = stage === 'sprout' ? 2 : 3;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(centerX, groundY);
-    const sway = Math.sin(Date.now() * 0.001) * 3;
-    ctx.quadraticCurveTo(
-      centerX + sway * 0.5,
-      groundY - stemHeight * 0.5,
-      centerX + sway,
-      groundY - stemHeight
-    );
-    ctx.stroke();
-
+  if (stage !== 'seed') {
+    drawStem(ctx, centerX, groundY, stemDrawHeight, sat, isMeditating);
+    const sway = Math.sin(Date.now() * 0.0008) * (2 + stemDrawHeight * 0.01);
     const topX = centerX + sway;
-    const topY = groundY - stemHeight;
+    const topY = groundY - stemDrawHeight;
 
-    if (leafCount >= 1) {
-      drawLeaf(ctx, centerX + sway * 0.3, groundY - stemHeight * 0.4, -1, sat, isMeditating, stemHeight);
-    }
-    if (leafCount >= 2) {
-      drawLeaf(ctx, centerX + sway * 0.6, groundY - stemHeight * 0.6, 1, sat, isMeditating, stemHeight);
-    }
-    if (leafCount >= 3) {
-      drawLeaf(ctx, centerX + sway * 0.2, groundY - stemHeight * 0.75, -1, sat, isMeditating, stemHeight);
-    }
-    if (leafCount >= 4) {
-      drawLeaf(ctx, centerX + sway * 0.7, groundY - stemHeight * 0.85, 1, sat, isMeditating, stemHeight);
+    const leafDefs = [
+      { t: 0.35, dir: -1, idx: 0 },
+      { t: 0.55, dir: 1, idx: 1 },
+      { t: 0.72, dir: -1, idx: 2 },
+      { t: 0.88, dir: 1, idx: 3 },
+    ];
+
+    for (let i = 0; i < Math.min(Math.floor(leafCount), leafDefs.length); i++) {
+      const def = leafDefs[i];
+      const lx = centerX + sway * def.t;
+      const ly = groundY - stemDrawHeight * def.t;
+      const unfurl = leafUnfurlProgress[i] ?? 0;
+      drawLeaf(ctx, lx, ly, def.dir, sat, isMeditating, stemDrawHeight, unfurl);
     }
 
     if (stage === 'bud') {
-      const budColor = isMeditating ? '#ffffff' : `hsl(340, ${sat * 70}%, 65%)`;
-      ctx.fillStyle = budColor;
-      ctx.beginPath();
-      ctx.ellipse(topX, topY - 8, 6, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawBud(ctx, topX, topY, sat, isMeditating);
     }
 
     if (stage === 'bloom') {
-      drawFlower(ctx, topX, topY - 10, bloomProgress, sat, isMeditating);
+      drawFlower(ctx, topX, topY - 5, bloomProgress, sat, isMeditating);
     }
   }
 
   ctx.restore();
+}
 
-  if (isMeditating) {
-    drawBreathCircle(ctx, ctx.canvas.width / 2, ctx.canvas.height / 2, breathPhase);
+function drawSeed(ctx: CanvasRenderingContext2D, cx: number, gy: number, sat: number, med: boolean) {
+  const seedColor = med ? '#ffffff' : `hsl(30, ${sat * 40}%, 45%)`;
+  ctx.fillStyle = seedColor;
+  ctx.beginPath();
+  ctx.ellipse(cx, gy - 6, 8, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (!med) {
+    ctx.fillStyle = `hsl(30, ${sat * 30}%, 35%)`;
+    ctx.beginPath();
+    ctx.ellipse(cx, gy - 6, 5, 3, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawStem(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  gy: number,
+  height: number,
+  sat: number,
+  med: boolean
+) {
+  const stemColor = med ? '#ffffff' : `hsl(120, ${sat * 60}%, 32%)`;
+  const sway = Math.sin(Date.now() * 0.0008) * (2 + height * 0.01);
+
+  if (med) {
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+  }
+
+  ctx.strokeStyle = stemColor;
+  ctx.lineWidth = Math.max(2, 3 + height * 0.005);
+  ctx.lineCap = 'round';
+
+  ctx.beginPath();
+  ctx.moveTo(cx, gy);
+
+  const segments = Math.max(1, Math.floor(height / 2));
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    const py = gy - height * t;
+    const px = cx + sway * t * t;
+    ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  if (med) {
+    ctx.shadowBlur = 0;
   }
 }
 
@@ -284,21 +547,82 @@ function drawLeaf(
   y: number,
   dir: number,
   sat: number,
-  isMeditating: boolean,
-  stemH: number
+  med: boolean,
+  stemH: number,
+  unfurl: number
 ) {
-  const leafColor = isMeditating ? 'rgba(255,255,255,0.3)' : `hsl(120, ${sat * 60}%, 45%)`;
-  const size = Math.min(stemH * 0.15, 20);
+  if (unfurl <= 0.01) return;
+
+  const leafColor = med ? 'rgba(255,255,255,0.4)' : `hsl(120, ${sat * 60}%, 42%)`;
+  const leafSize = Math.min(stemH * 0.12, 22) * unfurl;
+  const openAngle = unfurl * 0.6;
+
+  if (med) {
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+  }
+
   ctx.fillStyle = leafColor;
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(dir, 1);
+
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.quadraticCurveTo(size * 0.8, -size * 0.4, size, 0);
-  ctx.quadraticCurveTo(size * 0.8, size * 0.4, 0, 0);
+
+  const tipX = leafSize * Math.cos(-openAngle);
+  const tipY = -leafSize * Math.sin(openAngle);
+  const cp1x = leafSize * 0.4;
+  const cp1y = -leafSize * 0.8 * unfurl;
+  const cp2x = leafSize * 0.9;
+  const cp2y = -leafSize * 0.2 * unfurl;
+
+  ctx.quadraticCurveTo(cp1x, cp1y, tipX, tipY);
+  ctx.quadraticCurveTo(cp2x, cp2y, leafSize, 0);
+  const cp3x = leafSize * 0.9;
+  const cp3y = leafSize * 0.2 * unfurl;
+  const cp4x = leafSize * 0.4;
+  const cp4y = leafSize * 0.8 * unfurl;
+  ctx.quadraticCurveTo(cp3x, cp3y, cp4x, cp4y);
+  ctx.quadraticCurveTo(cp4x * 0.5, cp4y * 0.3, 0, 0);
   ctx.fill();
+
+  ctx.strokeStyle = med ? 'rgba(255,255,255,0.2)' : `hsl(120, ${sat * 40}%, 30%)`;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(tipX * 0.8, tipY * 0.8);
+  ctx.stroke();
+
   ctx.restore();
+
+  if (med) {
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawBud(ctx: CanvasRenderingContext2D, x: number, y: number, sat: number, med: boolean) {
+  const budColor = med ? '#ffffff' : `hsl(340, ${sat * 70}%, 62%)`;
+  if (med) {
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+  }
+  ctx.fillStyle = budColor;
+  ctx.beginPath();
+  ctx.ellipse(x, y - 8, 6, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (!med) {
+    ctx.fillStyle = `hsl(120, ${sat * 50}%, 35%)`;
+    ctx.beginPath();
+    ctx.ellipse(x - 5, y - 2, 4, 7, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x + 5, y - 2, 4, 7, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (med) ctx.shadowBlur = 0;
 }
 
 function drawFlower(
@@ -307,32 +631,39 @@ function drawFlower(
   y: number,
   progress: number,
   sat: number,
-  isMeditating: boolean
+  med: boolean
 ) {
-  const petalCount = 6;
-  const petalSize = 12 * progress;
-  const petalColor = isMeditating ? 'rgba(255,255,255,0.5)' : `hsl(340, ${sat * 70}%, 75%)`;
-  ctx.fillStyle = petalColor;
+  const petalCount = 8;
+  const petalSize = 14 * progress;
+
+  if (med) {
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+  }
 
   for (let i = 0; i < petalCount; i++) {
-    const angle = (Math.PI * 2 / petalCount) * i + Math.sin(Date.now() * 0.001) * 0.1;
+    const angle = (Math.PI * 2 / petalCount) * i + Math.sin(Date.now() * 0.0005) * 0.05;
+    const petalColor = med ? 'rgba(255,255,255,0.5)' : `hsl(340, ${sat * 70}%, ${70 + i * 2}%)`;
+    ctx.fillStyle = petalColor;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
     ctx.beginPath();
-    ctx.ellipse(petalSize * 0.6, 0, petalSize, petalSize * 0.4, 0, 0, Math.PI * 2);
+    ctx.ellipse(petalSize * 0.55, 0, petalSize, petalSize * 0.38, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
-  const centerColor = isMeditating ? '#ffffff' : `hsl(45, ${sat * 90}%, 65%)`;
+  const centerColor = med ? '#ffffff' : `hsl(45, ${sat * 90}%, 62%)`;
   ctx.fillStyle = centerColor;
   ctx.beginPath();
   ctx.arc(x, y, 5 * progress, 0, Math.PI * 2);
   ctx.fill();
+
+  if (med) ctx.shadowBlur = 0;
 }
 
-function drawBreathCircle(
+export function drawBreathCircle(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
@@ -344,7 +675,8 @@ function drawBreathCircle(
   ctx.save();
   ctx.globalAlpha = 0.6;
   const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+  gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.15)');
   gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = gradient;
   ctx.beginPath();
@@ -371,21 +703,25 @@ export function drawGrowthPercent(ctx: CanvasRenderingContext2D, x: number, y: n
   ctx.restore();
 }
 
-export function drawWaterSparkle(ctx: CanvasRenderingContext2D, state: PlantState, centerX: number, groundY: number) {
+export function drawWaterSparkle(
+  ctx: CanvasRenderingContext2D,
+  state: PlantState,
+  centerX: number,
+  groundY: number
+) {
   if (!state.isWatering || state.waterTimer <= 0) return;
   const progress = state.waterTimer / 2000;
   ctx.save();
-  ctx.globalAlpha = progress * 0.6;
-  const sparkleCount = 6;
-  const stemTop = groundY - state.stemHeight;
+  ctx.globalAlpha = progress * 0.7;
+  const sparkleCount = 8;
   for (let i = 0; i < sparkleCount; i++) {
     const angle = (Math.PI * 2 / sparkleCount) * i + Date.now() * 0.003;
-    const dist = 15 + Math.sin(Date.now() * 0.005 + i) * 8;
+    const dist = 18 + Math.sin(Date.now() * 0.004 + i) * 10;
     const sx = centerX + Math.cos(angle) * dist;
-    const sy = stemTop + state.stemHeight * 0.3 + Math.sin(angle) * dist * 0.5;
-    ctx.fillStyle = '#e3f2fd';
-    ctx.beginPath();
+    const sy = groundY - state.stemDrawHeight * 0.4 + Math.sin(angle) * dist * 0.5;
+    ctx.fillStyle = '#bbdefb';
     const s = 3;
+    ctx.beginPath();
     ctx.moveTo(sx, sy - s);
     ctx.lineTo(sx + s * 0.3, sy - s * 0.3);
     ctx.lineTo(sx + s, sy);
@@ -399,3 +735,5 @@ export function drawWaterSparkle(ctx: CanvasRenderingContext2D, state: PlantStat
   }
   ctx.restore();
 }
+
+export { MAX_PARTICLES, MIN_PARTICLES, SOUND_COLORS };
