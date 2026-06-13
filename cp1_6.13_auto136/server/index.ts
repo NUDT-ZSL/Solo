@@ -49,6 +49,7 @@ interface Room {
   createdAt: number
   gamePhase: 'waiting' | 'countdown' | 'playing' | 'finished'
   roundTimer: number
+  lastSerial: number
 }
 
 interface ChatMessage {
@@ -74,7 +75,7 @@ const PUZZLE_THEMES = [
   'abstract',
 ]
 
-app.get('/api/rooms', async (req, res) => {
+app.get('/api/rooms', (_req, res) => {
   try {
     const roomList = Array.from(rooms.values()).map((r) => ({
       id: r.id,
@@ -83,22 +84,22 @@ app.get('/api/rooms', async (req, res) => {
       maxPlayers: 4,
       gamePhase: r.gamePhase,
     }))
-    res.json(rooms)
-  } catch (err) {
+    res.json(roomList)
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to fetch rooms' })
   }
 })
 
 app.post('/api/rooms', async (req, res) => {
   try {
-    const { name, playerName } = req.body
+    const { name } = req.body
     const roomId = uuidv4().slice(0, 6)
     const theme = PUZZLE_THEMES[Math.floor(Math.random() * PUZZLE_THEMES.length)]
-    
+
     const cols = 4 + Math.floor(Math.random() * 2)
     const rows = 3 + Math.floor(Math.random() * 2)
     const totalPieces = cols * rows
-    
+
     const pieces: PuzzlePiece[] = []
     for (let i = 0; i < totalPieces; i++) {
       const col = i % cols
@@ -129,15 +130,16 @@ app.post('/api/rooms', async (req, res) => {
       createdAt: Date.now(),
       gamePhase: 'waiting',
       roundTimer: 180,
+      lastSerial: 0,
     }
 
     rooms.set(roomId, room)
     chatHistory.set(roomId, [])
-    
+
     await db.insert({ id: roomId, name: room.name, createdAt: room.createdAt })
-    
+
     res.json({ roomId, theme, cols, rows })
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to create room' })
   }
 })
@@ -159,9 +161,10 @@ app.get('/api/rooms/:id', (req, res) => {
   })
 })
 
-function getRoomState(room: Room) {
+function buildFullState(room: Room) {
   return {
     type: 'stateUpdate',
+    serial: ++room.lastSerial,
     roomId: room.id,
     gamePhase: room.gamePhase,
     roundTimer: room.roundTimer,
@@ -192,6 +195,47 @@ function getRoomState(room: Room) {
   }
 }
 
+function buildIncrementalUpdate(room: Room, changedPieceIds: string[], changedPlayerIds: string[]) {
+  const update: any = {
+    type: 'incrementalUpdate',
+    serial: ++room.lastSerial,
+    roomId: room.id,
+  }
+
+  if (changedPieceIds.length > 0) {
+    update.changedPieces = room.pieces
+      .filter((p) => changedPieceIds.includes(p.id))
+      .map((p) => ({
+        id: p.id,
+        index: p.index,
+        correctX: p.correctX,
+        correctY: p.correctY,
+        currentX: p.currentX,
+        currentY: p.currentY,
+        rotation: p.rotation,
+        ownerId: p.ownerId,
+        placed: p.placed,
+      }))
+  }
+
+  if (changedPlayerIds.length > 0) {
+    update.changedPlayers = room.players
+      .filter((p) => changedPlayerIds.includes(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        score: p.score,
+        color: p.color,
+        connected: p.connected,
+      }))
+  }
+
+  update.progress = room.pieces.filter((p) => p.placed).length / room.pieces.length
+  update.gamePhase = room.gamePhase
+
+  return update
+}
+
 function broadcastToRoom(roomId: string, message: any) {
   const data = JSON.stringify(message)
   for (const [ws, info] of wsToRoom.entries()) {
@@ -202,13 +246,13 @@ function broadcastToRoom(roomId: string, message: any) {
 }
 
 function assignPiecesToPlayer(room: Room, playerId: string) {
-  const unassignedPieces = room.pieces.filter((p) => !p.ownerId && !p.placed)
-  const players = room.players.filter((p) => p.connected)
-  const piecesPerPlayer = Math.ceil(unassignedPieces.length / players.length)
-  
+  const unassigned = room.pieces.filter((p) => !p.ownerId && !p.placed)
+  const playerCount = room.players.filter((p) => p.connected).length
+  const perPlayer = Math.ceil(unassigned.length / playerCount)
+
   let assigned = 0
-  for (const piece of unassignedPieces) {
-    if (assigned >= piecesPerPlayer) break
+  for (const piece of unassigned) {
+    if (assigned >= perPlayer) break
     piece.ownerId = playerId
     assigned++
   }
@@ -260,22 +304,19 @@ wss.on('connection', (ws) => {
               type: 'roomJoined',
               playerId,
               playerColor: player.color,
-              state: getRoomState(room),
+              state: buildFullState(room),
               chatHistory: chatHistory.get(roomId) || [],
             })
           )
 
-          broadcastToRoom(roomId, {
-            type: 'playerJoined',
-            player: {
-              id: player.id,
-              name: player.name,
-              score: player.score,
-              color: player.color,
-            },
-          })
+          const changedPieceIds = room.pieces
+            .filter((p) => p.ownerId === playerId)
+            .map((p) => p.id)
 
-          broadcastToRoom(roomId, getRoomState(room))
+          broadcastToRoom(
+            roomId,
+            buildIncrementalUpdate(room, changedPieceIds, [playerId])
+          )
           break
         }
 
@@ -286,7 +327,7 @@ wss.on('connection', (ws) => {
 
           const { pieceId, x, y, rotation } = message
           const piece = room.pieces.find((p) => p.id === pieceId)
-          
+
           if (piece && piece.ownerId === currentPlayerId && !piece.placed) {
             piece.currentX = x
             piece.currentY = y
@@ -311,7 +352,7 @@ wss.on('connection', (ws) => {
 
           const { pieceId, x, y } = message
           const piece = room.pieces.find((p) => p.id === pieceId)
-          
+
           if (!piece || piece.ownerId !== currentPlayerId || piece.placed) return
 
           const snapThreshold = 0.3
@@ -351,7 +392,10 @@ wss.on('connection', (ws) => {
               })
             }
 
-            broadcastToRoom(currentRoomId, getRoomState(room))
+            broadcastToRoom(
+              currentRoomId,
+              buildIncrementalUpdate(room, [pieceId], currentPlayerId ? [currentPlayerId] : [])
+            )
           } else {
             ws.send(
               JSON.stringify({
@@ -418,7 +462,7 @@ wss.on('connection', (ws) => {
                 broadcastToRoom(currentRoomId!, {
                   type: 'gameStarted',
                 })
-                broadcastToRoom(currentRoomId!, getRoomState(room))
+                broadcastToRoom(currentRoomId!, buildFullState(room))
               }
             }, 1000)
           }
@@ -429,7 +473,7 @@ wss.on('connection', (ws) => {
           if (!currentRoomId) return
           const room = rooms.get(currentRoomId)
           if (!room) return
-          ws.send(JSON.stringify(getRoomState(room)))
+          ws.send(JSON.stringify(buildFullState(room)))
           break
         }
       }
@@ -445,10 +489,12 @@ wss.on('connection', (ws) => {
         const player = room.players.find((p) => p.id === currentPlayerId)
         if (player) {
           player.connected = false
-          
+
+          const freedPieceIds: string[] = []
           room.pieces.forEach((piece) => {
             if (piece.ownerId === currentPlayerId && !piece.placed) {
               piece.ownerId = null
+              freedPieceIds.push(piece.id)
             }
           })
 
@@ -466,7 +512,10 @@ wss.on('connection', (ws) => {
               type: 'playerLeft',
               playerId: currentPlayerId,
             })
-            broadcastToRoom(currentRoomId, getRoomState(room))
+            broadcastToRoom(
+              currentRoomId,
+              buildIncrementalUpdate(room, freedPieceIds, [currentPlayerId])
+            )
           }
         }
       }

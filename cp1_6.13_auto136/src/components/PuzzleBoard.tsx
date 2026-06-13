@@ -1,18 +1,16 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useGame } from '../gameStore'
 import { socketService } from '../socketService'
-import { generatePuzzlePieces, easeOut, getShakeOffset, getAdjacentPieces } from '../puzzleUtils'
+import { generatePuzzlePieces, easeOutCubic, shakeOffset, getAdjacentPieceIndices } from '../puzzleUtils'
 import type { PuzzlePieceData } from '../puzzleUtils'
 
-interface AnimatingPiece {
-  id: string
+interface AnimState {
   type: 'snap' | 'shake'
   startX: number
   startY: number
   endX: number
   endY: number
   startTime: number
-  duration: number
 }
 
 export function PuzzleBoard() {
@@ -24,130 +22,100 @@ export function PuzzleBoard() {
   const [offsetX, setOffsetX] = useState(0)
   const [offsetY, setOffsetY] = useState(0)
 
-  const dragStateRef = useRef<{
-    isDragging: boolean
-    pieceId: string | null
-    startX: number
-    startY: number
-    pieceStartX: number
-    pieceStartY: number
-    lastMoveTime: number
-  }>({
-    isDragging: false,
-    pieceId: null,
-    startX: 0,
-    startY: 0,
+  const dragRef = useRef({
+    active: false,
+    pieceId: null as string | null,
+    startClientX: 0,
+    startClientY: 0,
     pieceStartX: 0,
     pieceStartY: 0,
-    lastMoveTime: 0,
+    lastEmit: 0,
   })
 
-  const animatingPiecesRef = useRef<Map<string, AnimatingPiece>>(new Map())
-  const pieceDataRef = useRef<Map<string, PuzzlePieceData>>(new Map())
-  const animationFrameRef = useRef<number | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
+  const animsRef = useRef<Map<string, AnimState>>(new Map())
+  const pieceDataMapRef = useRef<Map<string, PuzzlePieceData>>(new Map())
+  const rafRef = useRef<number | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
 
-  const { pieces, puzzlePiecesData, currentPlayerId, puzzleCols, puzzleRows, boardWidth, boardHeight } = state
+  const {
+    pieces, puzzlePiecesData, currentPlayerId,
+    puzzleCols, puzzleRows, boardWidth, boardHeight,
+    puzzleTheme, gamePhase,
+  } = state
 
   useEffect(() => {
     if (puzzleTheme && puzzleCols > 0 && puzzleRows > 0 && puzzlePiecesData.length === 0) {
       const data = generatePuzzlePieces({
-        cols: puzzleCols,
-        rows: puzzleRows,
-        boardWidth,
-        boardHeight,
-        theme: puzzleTheme,
+        cols: puzzleCols, rows: puzzleRows,
+        boardWidth, boardHeight, theme: puzzleTheme,
       })
       dispatch({ type: 'SET_PUZZLE_DATA', payload: data })
     }
   }, [puzzleTheme, puzzleCols, puzzleRows, boardWidth, boardHeight, puzzlePiecesData.length, dispatch])
 
   useEffect(() => {
-    pieceDataRef.current.clear()
-    puzzlePiecesData.forEach((p) => {
-      pieceDataRef.current.set(p.id, p)
-    })
+    pieceDataMapRef.current.clear()
+    puzzlePiecesData.forEach((p) => pieceDataMapRef.current.set(p.id, p))
   }, [puzzlePiecesData])
 
   const playSound = useCallback((type: 'ping' | 'buzzer') => {
     try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
       }
-      const ctx = audioContextRef.current
-      const oscillator = ctx.createOscillator()
-      const gainNode = ctx.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(ctx.destination)
+      const ctx = audioCtxRef.current
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
 
       if (type === 'ping') {
-        oscillator.type = 'sine'
-        oscillator.frequency.setValueAtTime(880, ctx.currentTime)
-        oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15)
-        gainNode.gain.setValueAtTime(0.15, ctx.currentTime)
-        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2)
-        oscillator.start(ctx.currentTime)
-        oscillator.stop(ctx.currentTime + 0.2)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(1200, ctx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.3)
+        gain.gain.setValueAtTime(0.12, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.4)
       } else {
-        oscillator.type = 'square'
-        oscillator.frequency.setValueAtTime(150, ctx.currentTime)
-        oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.15)
-        gainNode.gain.setValueAtTime(0.1, ctx.currentTime)
-        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2)
-        oscillator.start(ctx.currentTime)
-        oscillator.stop(ctx.currentTime + 0.2)
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(180, ctx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.2)
+        gain.gain.setValueAtTime(0.08, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.25)
       }
-    } catch (e) {
-      // Audio not available
-    }
+    } catch (_e) { /* audio unavailable */ }
   }, [])
 
   useEffect(() => {
-    const handlePiecePlaced = (message: any) => {
-      const { pieceId, x, y, playerId, score } = message
-      animatingPiecesRef.current.set(pieceId, {
-        id: pieceId,
+    const onPlaced = (msg: any) => {
+      const { pieceId, x, y, playerId } = msg
+      animsRef.current.set(pieceId, {
         type: 'snap',
-        startX: x,
-        startY: y,
-        endX: x,
-        endY: y,
+        startX: x, startY: y,
+        endX: x, endY: y,
         startTime: performance.now(),
-        duration: 400,
       })
-      if (playerId === currentPlayerId) {
-        playSound('ping')
-      }
+      if (playerId === currentPlayerId) playSound('ping')
     }
-
-    const handlePieceRejected = (message: any) => {
-      const { pieceId, originalX, originalY } = message
+    const onRejected = (msg: any) => {
+      const { pieceId, originalX, originalY } = msg
       const piece = pieces.find((p) => p.id === pieceId)
       if (piece) {
-        animatingPiecesRef.current.set(pieceId, {
-          id: pieceId,
+        animsRef.current.set(pieceId, {
           type: 'shake',
-          startX: piece.currentX,
-          startY: piece.currentY,
-          endX: originalX,
-          endY: originalY,
+          startX: piece.currentX, startY: piece.currentY,
+          endX: originalX, endY: originalY,
           startTime: performance.now(),
-          duration: 200,
         })
       }
-      if (piece?.ownerId === currentPlayerId) {
-        playSound('buzzer')
-      }
+      if (piece?.ownerId === currentPlayerId) playSound('buzzer')
     }
-
-    const unsub1 = socketService.on('piecePlaced', handlePiecePlaced)
-    const unsub2 = socketService.on('pieceRejected', handlePieceRejected)
-
-    return () => {
-      unsub1()
-      unsub2()
-    }
+    const u1 = socketService.on('piecePlaced', onPlaced)
+    const u2 = socketService.on('pieceRejected', onRejected)
+    return () => { u1(); u2() }
   }, [pieces, currentPlayerId, playSound])
 
   useEffect(() => {
@@ -155,162 +123,176 @@ export function PuzzleBoard() {
     const container = containerRef.current
     if (!canvas || !container) return
 
-    const resizeCanvas = () => {
-      const containerWidth = container.clientWidth
-      const containerHeight = container.clientHeight
-
+    const resize = () => {
+      const cw = container.clientWidth
+      const ch = container.clientHeight
       const boardAspect = boardWidth / boardHeight
-      const containerAspect = containerWidth / containerHeight
+      const containerAspect = cw / ch
+      const s = containerAspect > boardAspect
+        ? ch / boardHeight
+        : cw / boardWidth
+      const finalScale = Math.min(s, 1.5)
+      const rw = boardWidth * finalScale
+      const rh = boardHeight * finalScale
 
-      let newScale: number
-      if (containerAspect > boardAspect) {
-        newScale = containerHeight / boardHeight
-      } else {
-        newScale = containerWidth / boardWidth
-      }
-
-      newScale = Math.min(newScale, 1)
-
-      const renderedWidth = boardWidth * newScale
-      const renderedHeight = boardHeight * newScale
-
-      setScale(newScale)
-      setOffsetX((containerWidth - renderedWidth) / 2)
-      setOffsetY((containerHeight - renderedHeight) / 2)
+      setScale(finalScale)
+      setOffsetX((cw - rw) / 2)
+      setOffsetY((ch - rh) / 2)
 
       const dpr = window.devicePixelRatio || 1
-      canvas.width = containerWidth * dpr
-      canvas.height = containerHeight * dpr
-      canvas.style.width = containerWidth + 'px'
-      canvas.style.height = containerHeight + 'px'
+      canvas.width = cw * dpr
+      canvas.height = ch * dpr
+      canvas.style.width = cw + 'px'
+      canvas.style.height = ch + 'px'
     }
 
-    resizeCanvas()
-    window.addEventListener('resize', resizeCanvas)
-
-    return () => window.removeEventListener('resize', resizeCanvas)
+    resize()
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
   }, [boardWidth, boardHeight])
 
-  const getPieceAtPosition = useCallback(
-    (x: number, y: number): string | null => {
-      const boardX = (x - offsetX) / scale
-      const boardY = (y - offsetY) / scale
+  const clientToBoard = useCallback((clientX: number, clientY: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const x = (clientX - rect.left - offsetX) / scale
+    const y = (clientY - rect.top - offsetY) / scale
+    return { x, y }
+  }, [offsetX, offsetY, scale])
 
-      const myPieces = pieces
-        .filter((p) => p.ownerId === currentPlayerId && !p.placed)
-        .sort((a, b) => b.index - a.index)
+  const hitTest = useCallback((boardX: number, boardY: number): string | null => {
+    const myPieces = pieces
+      .filter((p) => p.ownerId === currentPlayerId && !p.placed)
+      .sort((a, b) => b.index - a.index)
 
-      for (const piece of myPieces) {
-        const pieceData = pieceDataRef.current.get(piece.id)
-        if (!pieceData) continue
+    for (const piece of myPieces) {
+      const pd = pieceDataMapRef.current.get(piece.id)
+      if (!pd) continue
+      const padding = pd.tabSize + 4
+      const px = piece.currentX * pd.width - padding
+      const py = piece.currentY * pd.height - padding
+      const pw = pd.width + padding * 2
+      const ph = pd.height + padding * 2
 
-        const px = piece.currentX * pieceData.width
-        const py = piece.currentY * pieceData.height
-        const pw = pieceData.width + pieceData.tabSize * 2
-        const ph = pieceData.height + pieceData.tabSize * 2
-
-        if (
-          boardX >= px - pieceData.tabSize &&
-          boardX <= px + pw - pieceData.tabSize &&
-          boardY >= py - pieceData.tabSize &&
-          boardY <= py + ph - pieceData.tabSize
-        ) {
-          return piece.id
-        }
+      if (boardX >= px && boardX <= px + pw && boardY >= py && boardY <= py + ph) {
+        return piece.id
       }
+    }
+    return null
+  }, [pieces, currentPlayerId])
 
-      return null
-    },
-    [pieces, currentPlayerId, offsetX, offsetY, scale]
-  )
+  const startDrag = useCallback((clientX: number, clientY: number) => {
+    if (gamePhase !== 'playing' || !currentPlayerId) return
+    const pos = clientToBoard(clientX, clientY)
+    if (!pos) return
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (state.gamePhase !== 'playing') return
-      if (!currentPlayerId) return
+    const pieceId = hitTest(pos.x, pos.y)
+    if (!pieceId) return
 
-      const rect = canvasRef.current?.getBoundingClientRect()
-      if (!rect) return
+    const piece = pieces.find((p) => p.id === pieceId)
+    if (!piece || piece.ownerId !== currentPlayerId) return
 
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+    dragRef.current = {
+      active: true,
+      pieceId,
+      startClientX: clientX,
+      startClientY: clientY,
+      pieceStartX: piece.currentX,
+      pieceStartY: piece.currentY,
+      lastEmit: 0,
+    }
+  }, [gamePhase, currentPlayerId, clientToBoard, hitTest, pieces])
 
-      const pieceId = getPieceAtPosition(x, y)
-      if (!pieceId) return
+  const moveDrag = useCallback((clientX: number, clientY: number) => {
+    const drag = dragRef.current
+    if (!drag.active || !drag.pieceId) return
 
-      const piece = pieces.find((p) => p.id === pieceId)
-      if (!piece || piece.ownerId !== currentPlayerId) return
+    const dxPx = clientX - drag.startClientX
+    const dyPx = clientY - drag.startClientY
+    const dxBoard = dxPx / scale
+    const dyBoard = dyPx / scale
 
-      dragStateRef.current = {
-        isDragging: true,
-        pieceId,
-        startX: x,
-        startY: y,
-        pieceStartX: piece.currentX,
-        pieceStartY: piece.currentY,
-        lastMoveTime: 0,
-      }
-    },
-    [getPieceAtPosition, pieces, currentPlayerId, state.gamePhase]
-  )
+    const pd = pieceDataMapRef.current.get(drag.pieceId)
+    if (!pd) return
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const drag = dragStateRef.current
-      if (!drag.isDragging || !drag.pieceId) return
+    const newX = Math.max(-0.5, Math.min(puzzleCols - 0.5, drag.pieceStartX + dxBoard / pd.width))
+    const newY = Math.max(-0.5, Math.min(puzzleRows - 0.5, drag.pieceStartY + dyBoard / pd.height))
 
-      const rect = canvasRef.current?.getBoundingClientRect()
-      if (!rect) return
+    dispatch({ type: 'UPDATE_PIECE', payload: { id: drag.pieceId, x: newX, y: newY } })
 
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+    const now = performance.now()
+    if (now - drag.lastEmit > 30) {
+      socketService.movePiece(drag.pieceId, newX, newY)
+      drag.lastEmit = now
+    }
+  }, [scale, puzzleCols, puzzleRows, dispatch])
 
-      const dx = (x - drag.startX) / scale
-      const dy = (y - drag.startY) / scale
-
-      const piece = pieces.find((p) => p.id === drag.pieceId)
-      const pieceData = pieceDataRef.current.get(drag.pieceId)
-      if (!piece || !pieceData) return
-
-      const pieceDX = dx / pieceData.width
-      const pieceDY = dy / pieceData.height
-
-      const newX = Math.max(-0.5, Math.min(puzzleCols - 0.5, drag.pieceStartX + pieceDX))
-      const newY = Math.max(-0.5, Math.min(puzzleRows - 0.5, drag.pieceStartY + pieceDY))
-
-      dispatch({
-        type: 'UPDATE_PIECE',
-        payload: { id: drag.pieceId, x: newX, y: newY },
-      })
-
-      const now = performance.now()
-      if (now - drag.lastMoveTime > 30) {
-        socketService.movePiece(drag.pieceId, newX, newY)
-        drag.lastMoveTime = now
-      }
-    },
-    [scale, pieces, puzzleCols, puzzleRows, dispatch]
-  )
-
-  const handleMouseUp = useCallback(() => {
-    const drag = dragStateRef.current
-    if (!drag.isDragging || !drag.pieceId) return
+  const endDrag = useCallback(() => {
+    const drag = dragRef.current
+    if (!drag.active || !drag.pieceId) return
 
     const piece = pieces.find((p) => p.id === drag.pieceId)
     if (piece && piece.ownerId === currentPlayerId) {
       socketService.placePiece(drag.pieceId, piece.currentX, piece.currentY)
     }
 
-    dragStateRef.current = {
-      isDragging: false,
-      pieceId: null,
-      startX: 0,
-      startY: 0,
-      pieceStartX: 0,
-      pieceStartY: 0,
-      lastMoveTime: 0,
+    dragRef.current = {
+      active: false, pieceId: null,
+      startClientX: 0, startClientY: 0,
+      pieceStartX: 0, pieceStartY: 0, lastEmit: 0,
     }
   }, [pieces, currentPlayerId])
+
+  useEffect(() => {
+    const onMM = (e: MouseEvent) => moveDrag(e.clientX, e.clientY)
+    const onMU = () => endDrag()
+    document.addEventListener('mousemove', onMM)
+    document.addEventListener('mouseup', onMU)
+    return () => {
+      document.removeEventListener('mousemove', onMM)
+      document.removeEventListener('mouseup', onMU)
+    }
+  }, [moveDrag, endDrag])
+
+  useEffect(() => {
+    const onTM = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault()
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY)
+      }
+    }
+    const onTE = (e: TouchEvent) => {
+      e.preventDefault()
+      endDrag()
+    }
+    document.addEventListener('touchmove', onTM, { passive: false })
+    document.addEventListener('touchend', onTE, { passive: false })
+    document.addEventListener('touchcancel', onTE, { passive: false })
+    return () => {
+      document.removeEventListener('touchmove', onTM)
+      document.removeEventListener('touchend', onTE)
+      document.removeEventListener('touchcancel', onTE)
+    }
+  }, [moveDrag, endDrag])
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    startDrag(e.clientX, e.clientY)
+  }, [startDrag])
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      e.preventDefault()
+      startDrag(e.touches[0].clientX, e.touches[0].clientY)
+    }
+  }, [startDrag])
+
+  const isAdjacentToOwned = useCallback((pieceIndex: number): boolean => {
+    if (!currentPlayerId) return false
+    return getAdjacentPieceIndices(pieceIndex, puzzleCols, puzzleRows).some((idx) => {
+      const adj = pieces.find((p) => p.index === idx)
+      return adj?.ownerId === currentPlayerId
+    })
+  }, [currentPlayerId, puzzleCols, puzzleRows, pieces])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -321,71 +303,67 @@ export function PuzzleBoard() {
     const render = () => {
       const dpr = window.devicePixelRatio || 1
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr)
 
       ctx.save()
       ctx.translate(offsetX, offsetY)
       ctx.scale(scale, scale)
 
-      const pieceDataList = Array.from(pieceDataRef.current.values())
-      if (pieceDataList.length === 0) {
-        ctx.fillStyle = '#f3f4f6'
-        ctx.fillRect(0, 0, boardWidth, boardHeight)
-        ctx.restore()
-        animationFrameRef.current = requestAnimationFrame(render)
-        return
-      }
-
       ctx.fillStyle = '#f3f4f6'
       ctx.fillRect(0, 0, boardWidth, boardHeight)
 
-      const sortedPieces = [...pieces].sort((a, b) => {
+      const sorted = [...pieces].sort((a, b) => {
         if (a.placed && !b.placed) return -1
         if (!a.placed && b.placed) return 1
         return a.index - b.index
       })
 
-      const drag = dragStateRef.current
+      const drag = dragRef.current
       const now = performance.now()
 
-      for (const piece of sortedPieces) {
-        const pieceData = pieceDataRef.current.get(piece.id)
-        if (!pieceData) continue
+      for (const piece of sorted) {
+        const pd = pieceDataMapRef.current.get(piece.id)
+        if (!pd || !pd.canvas) continue
 
-        const isDragging = drag.isDragging && drag.pieceId === piece.id
-        const animation = animatingPiecesRef.current.get(piece.id)
+        const isDraggingPiece = drag.active && drag.pieceId === piece.id
+        const anim = animsRef.current.get(piece.id)
 
-        let drawX = piece.currentX * pieceData.width
-        let drawY = piece.currentY * pieceData.height
+        let drawX = piece.currentX * pd.width
+        let drawY = piece.currentY * pd.height
+        let brightnessBoost = false
 
-        if (animation) {
-          const progress = Math.min(1, (now - animation.startTime) / animation.duration)
-          
-          if (animation.type === 'snap') {
-            const eased = easeOut(progress)
-            drawX = animation.startX * pieceData.width + (animation.endX * pieceData.width - animation.startX * pieceData.width) * eased
-            drawY = animation.startY * pieceData.height + (animation.endY * pieceData.height - animation.startY * pieceData.height) * eased
-          } else if (animation.type === 'shake') {
-            const offset = getShakeOffset(progress, 0.15)
-            drawX += offset * pieceData.width
-            drawY = animation.startY * pieceData.height + (animation.endY * pieceData.height - animation.startY * pieceData.height) * progress
-          }
+        if (anim) {
+          const snapDur = 400
+          const shakeDur = 200
 
-          if (progress >= 1) {
-            animatingPiecesRef.current.delete(piece.id)
+          if (anim.type === 'snap') {
+            const progress = Math.min(1, (now - anim.startTime) / snapDur)
+            const eased = easeOutCubic(progress)
+            drawX = anim.startX * pd.width + (anim.endX * pd.width - anim.startX * pd.width) * eased
+            drawY = anim.startY * pd.height + (anim.endY * pd.height - anim.startY * pd.height) * eased
+            if (progress > 0.1) brightnessBoost = true
+            if (progress >= 1) animsRef.current.delete(piece.id)
+          } else {
+            const progress = Math.min(1, (now - anim.startTime) / shakeDur)
+            const pxShake = shakeOffset(progress)
+            drawX += pxShake
+            drawY = anim.startY * pd.height + (anim.endY * pd.height - anim.startY * pd.height) * progress
+            if (progress >= 1) animsRef.current.delete(piece.id)
           }
         }
 
+        if (piece.placed) brightnessBoost = true
+
         const isMine = piece.ownerId === currentPlayerId
-        const isAdjacentToMine = isMine ? false : isAdjacentToOwnedPiece(piece.id)
+        const adjacentToMine = !isMine && isAdjacentToOwned(piece.index)
 
         let alpha = 1
         if (piece.placed) {
           alpha = 1
         } else if (isMine) {
           alpha = 1
-        } else if (isAdjacentToMine) {
-          alpha = 0.6
+        } else if (adjacentToMine) {
+          alpha = 0.3
         } else if (piece.ownerId === null) {
           alpha = 0
         } else {
@@ -394,32 +372,31 @@ export function PuzzleBoard() {
 
         if (alpha <= 0) continue
 
+        const padding = pd.tabSize + 4
+        const pxOffset = drawX - padding
+        const pyOffset = drawY - padding
+
         ctx.save()
         ctx.globalAlpha = alpha
-        ctx.translate(drawX - pieceData.tabSize, drawY - pieceData.tabSize)
 
-        const imgCanvas = document.createElement('canvas')
-        imgCanvas.width = pieceData.imageData!.width
-        imgCanvas.height = pieceData.imageData!.height
-        const imgCtx = imgCanvas.getContext('2d')!
-        imgCtx.putImageData(pieceData.imageData!, 0, 0)
-
-        if (piece.placed) {
+        if (brightnessBoost) {
           ctx.filter = 'brightness(1.2)'
         }
 
-        ctx.drawImage(imgCanvas, 0, 0)
+        ctx.drawImage(pd.canvas, pxOffset, pyOffset)
 
-        if (isDragging) {
-          ctx.globalAlpha = 0.3
+        if (isDraggingPiece) {
+          ctx.globalAlpha = 0.35
+          ctx.filter = 'none'
+          const strokePad = padding
           ctx.strokeStyle = '#6366f1'
-          ctx.lineWidth = 3
+          ctx.lineWidth = 2 / scale
+          ctx.setLineDash([6 / scale, 4 / scale])
           ctx.strokeRect(
-            pieceData.tabSize,
-            pieceData.tabSize,
-            pieceData.width,
-            pieceData.height
+            pxOffset + strokePad, pyOffset + strokePad,
+            pd.width, pd.height
           )
+          ctx.setLineDash([])
         }
 
         ctx.restore()
@@ -430,30 +407,12 @@ export function PuzzleBoard() {
       ctx.strokeRect(0, 0, boardWidth, boardHeight)
 
       ctx.restore()
-
-      animationFrameRef.current = requestAnimationFrame(render)
+      rafRef.current = requestAnimationFrame(render)
     }
 
-    animationFrameRef.current = requestAnimationFrame(render)
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-    }
-  }, [pieces, offsetX, offsetY, scale, boardWidth, boardHeight, currentPlayerId])
-
-  function isAdjacentToOwnedPiece(pieceId: string): boolean {
-    if (!currentPlayerId) return false
-    const piece = pieces.find((p) => p.id === pieceId)
-    if (!piece) return false
-
-    const adjacent = getAdjacentPieces(piece.index, puzzleCols, puzzleRows)
-    return adjacent.some((adjIndex) => {
-      const adjPiece = pieces.find((p) => p.index === adjIndex)
-      return adjPiece?.ownerId === currentPlayerId
-    })
-  }
+    rafRef.current = requestAnimationFrame(render)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [pieces, offsetX, offsetY, scale, boardWidth, boardHeight, currentPlayerId, isAdjacentToOwned])
 
   return (
     <div
@@ -471,12 +430,10 @@ export function PuzzleBoard() {
     >
       <canvas
         ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
         style={{
-          cursor: dragStateRef.current.isDragging ? 'grabbing' : 'grab',
+          cursor: dragRef.current.active ? 'grabbing' : 'grab',
           touchAction: 'none',
         }}
       />
