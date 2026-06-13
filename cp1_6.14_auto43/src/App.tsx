@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import RuleList from './components/RuleList';
 import EditorPanel from './components/EditorPanel';
 import LogPanel from './components/LogPanel';
-import type { Rule, RequestLog } from './types';
+import type { Rule, RequestLog, MatchCondition } from './types';
 import { startSimulation } from './utils/mockServer';
 
 const initialRules: Rule[] = [
@@ -146,4 +146,176 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const stop = startSimulation(rules, addLog, 50
+    const stop = startSimulation(rules, addLog, 5000);
+    return stop;
+  }, [rules, addLog]);
+
+  const selectedRule = rules.find((r) => r.id === selectedRuleId) || null;
+
+  const handleSelectRule = (id: string) => {
+    setSelectedRuleId(id);
+    setSidebarOpen(false);
+  };
+
+  const handleToggleRule = (id: string) => {
+    setRules((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
+    );
+  };
+
+  const handleUpdateRule = (rule: Rule) => {
+    setRules((prev) => prev.map((r) => (r.id === rule.id ? rule : r)));
+  };
+
+  const handleAddRule = () => {
+    const newRule: Rule = {
+      id: `rule-${Date.now()}`,
+      name: '新规则',
+      urlPattern: '/api/endpoint',
+      method: 'GET',
+      conditions: [],
+      responseBody: { message: 'Hello MockMate' },
+      responseHeaders: { 'Content-Type': 'application/json' },
+      statusCode: 200,
+      delay: 200,
+      cacheEnabled: false,
+      enabled: true
+    };
+    setRules((prev) => [...prev, newRule]);
+    setSelectedRuleId(newRule.id);
+  };
+
+  const handleAddCondition = (ruleId: string) => {
+    const newCondition: MatchCondition = {
+      id: `cond-${Date.now()}`,
+      type: 'query',
+      key: '',
+      operator: 'equals',
+      value: ''
+    };
+    setRules((prev) =>
+      prev.map((r) =>
+        r.id === ruleId ? { ...r, conditions: [...r.conditions, newCondition] } : r
+      )
+    );
+  };
+
+  const handleUpdateCondition = (ruleId: string, conditionId: string, patch: Partial<MatchCondition>) => {
+    setRules((prev) =>
+      prev.map((r) =>
+        r.id === ruleId
+          ? {
+              ...r,
+              conditions: r.conditions.map((c) =>
+                c.id === conditionId ? { ...c, ...patch } : c
+              )
+            }
+          : r
+      )
+    );
+  };
+
+  const handleRemoveCondition = (ruleId: string, conditionId: string) => {
+    setRules((prev) =>
+      prev.map((r) =>
+        r.id === ruleId
+          ? { ...r, conditions: r.conditions.filter((c) => c.id !== conditionId) }
+          : r
+      )
+    );
+  };
+
+  const handleClearLogs = () => {
+    setLogs([]);
+  };
+
+  const handleExport = () => {
+    const exportData = rules.map((r) => ({
+      name: r.name,
+      urlPattern: r.urlPattern,
+      method: r.method,
+      matchConditions: r.conditions,
+      responseBody: r.responseBody,
+      responseHeaders: r.responseHeaders,
+      statusCode: r.statusCode,
+      delay: r.delay,
+      cacheEnabled: r.cacheEnabled
+    }));
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mockmate-rules-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredRules = rules.filter((r) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      r.name.toLowerCase().includes(q) ||
+      r.urlPattern.toLowerCase().includes(q) ||
+      r.method.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="app-container">
+      <div className="top-bar">
+        <button className="hamburger-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
+          <span className="hamburger-line" />
+          <span className="hamburger-line" />
+          <span className="hamburger-line" />
+        </button>
+        <div className="logo">
+          <span className="logo-icon">M</span>
+          MockMate
+        </div>
+        <div className="top-bar-spacer" />
+        <button className="export-btn" onClick={handleExport}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          导出规则
+        </button>
+      </div>
+
+      <div className="main-content">
+        {sidebarOpen && (
+          <div className="sidebar-overlay visible" onClick={() => setSidebarOpen(false)} />
+        )}
+
+        <div className={`rule-sidebar ${sidebarOpen ? 'open' : ''}`}>
+          <RuleList
+            rules={filteredRules}
+            selectedRuleId={selectedRuleId}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onSelectRule={handleSelectRule}
+            onToggleRule={handleToggleRule}
+            onAddRule={handleAddRule}
+          />
+        </div>
+
+        <div className="editor-panel">
+          <EditorPanel
+            rule={selectedRule}
+            onUpdateRule={handleUpdateRule}
+            onAddCondition={handleAddCondition}
+            onUpdateCondition={handleUpdateCondition}
+            onRemoveCondition={handleRemoveCondition}
+          />
+        </div>
+      </div>
+
+      <LogPanel logs={logs} onClearLogs={handleClearLogs} />
+    </div>
+  );
+}
+
+export default App;
