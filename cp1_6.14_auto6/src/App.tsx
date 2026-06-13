@@ -14,7 +14,7 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('search');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [animatingTab, setAnimatingTab] = useState(false);
   const previousTabRef = useRef<TabType>('search');
 
   const handleRecipeClick = useCallback((recipeId: string) => {
@@ -28,6 +28,7 @@ export default function App() {
   }, [currentTab]);
 
   const handleTabChange = useCallback((tab: TabType) => {
+    if (tab === currentTab) return;
     const prevIndex = TAB_ORDER.indexOf(previousTabRef.current);
     const nextIndex = TAB_ORDER.indexOf(tab);
     setSlideDirection(nextIndex > prevIndex ? 'right' : 'left');
@@ -35,55 +36,37 @@ export default function App() {
     setCurrentTab(tab);
     setCurrentPage(tab);
     setSelectedRecipeId(null);
-    setIsAnimating(true);
-  }, []);
+    setAnimatingTab(true);
+    requestAnimationFrame(() => {
+      setTimeout(() => setAnimatingTab(false), 300);
+    });
+  }, [currentTab]);
 
-  useEffect(() => {
-    if (isAnimating) {
-      const timer = setTimeout(() => setIsAnimating(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [isAnimating]);
-
-  const getTranslateX = () => {
-    if (!isAnimating) return 0;
-    return slideDirection === 'right' ? 0 : 0;
+  const getTabSlideClass = () => {
+    if (!animatingTab) return '';
+    return slideDirection === 'right' ? 'tab-slide-in-right' : 'tab-slide-in-left';
   };
 
-  const getEntryX = () => {
-    if (!isAnimating) return 0;
-    return slideDirection === 'right' ? 60 : -60;
-  };
+  const renderTabContent = () => (
+    <div key={currentTab} className={`tab-slide ${getTabSlideClass()}`}>
+      {currentTab === 'search' && <SearchPage onRecipeClick={handleRecipeClick} />}
+      {currentTab === 'favorites' && <FavoritesPage onRecipeClick={handleRecipeClick} />}
+      {currentTab === 'shopping' && <ShoppingListPage />}
+    </div>
+  );
 
   const renderContent = () => {
     if (currentPage === 'detail' && selectedRecipeId) {
       return (
         <div
           key={`detail-${selectedRecipeId}`}
-          className="page-slide"
-          style={{
-            animation: 'slideInFromRight 0.3s ease-in-out'
-          }}
+          className="tab-slide detail-slide"
         >
           <RecipeDetail recipeId={selectedRecipeId} onBack={handleBack} />
         </div>
       );
     }
-
-    const slideClass = isAnimating
-      ? slideDirection === 'right' ? 'slide-in-right' : 'slide-in-left'
-      : '';
-
-    return (
-      <div
-        key={currentTab}
-        className={`page-slide ${slideClass}`}
-      >
-        {currentTab === 'search' && <SearchPage onRecipeClick={handleRecipeClick} />}
-        {currentTab === 'favorites' && <FavoritesPage onRecipeClick={handleRecipeClick} />}
-        {currentTab === 'shopping' && <ShoppingListPage />}
-      </div>
-    );
+    return renderTabContent();
   };
 
   return (
@@ -113,7 +96,9 @@ export default function App() {
         </div>
       </nav>
       <main className="main-content">
-        {renderContent()}
+        <div className="tab-viewport">
+          {renderContent()}
+        </div>
       </main>
     </>
   );
