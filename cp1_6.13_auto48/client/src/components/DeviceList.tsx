@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 interface Device {
@@ -30,6 +30,9 @@ function formatCountdown(targetTime: string): string {
 
 function validateReturnTime(timeStr: string): string | null {
   if (!timeStr) return '请选择预计归还时间';
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(timeStr)) {
+    return '日期格式不正确';
+  }
   const returnTime = new Date(timeStr);
   if (isNaN(returnTime.getTime())) return '日期格式不正确';
   if (returnTime.getTime() <= Date.now()) return '归还时间必须在当前时间之后';
@@ -52,6 +55,7 @@ export default function DeviceList() {
   const [loading, setLoading] = useState(false);
   const [countdowns, setCountdowns] = useState<Record<string, string>>({});
   const [isCompact, setIsCompact] = useState(window.innerWidth < 768);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -67,7 +71,7 @@ export default function DeviceList() {
   }, [fetchDevices]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const updateCountdowns = () => {
       const newCountdowns: Record<string, string> = {};
       devices.forEach((device) => {
         if (device.status === 'borrowed' && device.expectedReturnTime) {
@@ -75,17 +79,18 @@ export default function DeviceList() {
         }
       });
       setCountdowns(newCountdowns);
-    }, 30000);
+    };
 
-    const newCountdowns: Record<string, string> = {};
-    devices.forEach((device) => {
-      if (device.status === 'borrowed' && device.expectedReturnTime) {
-        newCountdowns[device._id] = formatCountdown(device.expectedReturnTime);
+    updateCountdowns();
+
+    intervalRef.current = setInterval(updateCountdowns, 30000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-    });
-    setCountdowns(newCountdowns);
-
-    return () => clearInterval(timer);
+    };
   }, [devices]);
 
   useEffect(() => {

@@ -207,15 +207,19 @@ export default function Calendar() {
 
   const renderDayColumn = (date: Date) => {
     const dateStr = formatDate(date);
-    const hours: React.ReactNode[] = [];
+    const cells: React.ReactNode[] = [];
+    let skipUntilHour = HOURS_START - 1;
 
     for (let h = HOURS_START; h < HOURS_END; h++) {
+      if (h <= skipUntilHour) continue;
+
       const cellInfo = getCellStatus(h, dateStr, selectedSpace, bookings);
 
       if (cellInfo.status === 'booked' && cellInfo.booking) {
         if (isBookingStart(h, cellInfo.booking)) {
           const span = getBookingSpan(cellInfo.booking);
-          hours.push(
+          skipUntilHour = timeToHour(cellInfo.booking.endTime) - 1;
+          cells.push(
             <div
               key={`${dateStr}-${h}`}
               style={{
@@ -229,7 +233,8 @@ export default function Calendar() {
                 justifyContent: 'center',
                 cursor: 'default',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                boxSizing: 'border-box'
               }}
             >
               <div style={{ fontSize: '12px', fontWeight: 600, color: '#92400e' }}>
@@ -253,7 +258,7 @@ export default function Calendar() {
         const bgColor = cellInfo.status === 'maintenance' ? '#e5e7eb' : '#d1fae5';
         const cursor = cellInfo.status === 'maintenance' || isPast ? 'not-allowed' : 'pointer';
 
-        hours.push(
+        cells.push(
           <div
             key={`${dateStr}-${h}`}
             onClick={() => handleCellClick(dateStr, h)}
@@ -267,7 +272,8 @@ export default function Calendar() {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '11px',
-              color: cellInfo.status === 'maintenance' ? '#6b7280' : '#065f46'
+              color: cellInfo.status === 'maintenance' ? '#6b7280' : '#065f46',
+              boxSizing: 'border-box'
             }}
             onMouseEnter={(e) => {
               if (cursor === 'pointer') {
@@ -286,7 +292,7 @@ export default function Calendar() {
       }
     }
 
-    return hours;
+    return cells;
   };
 
   return (
