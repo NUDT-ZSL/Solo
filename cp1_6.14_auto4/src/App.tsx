@@ -1,34 +1,23 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { useStore, VIEWPORTS } from './store';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { VIEWPORTS, type CaptureFrame, type DiffResult, type DiffRegion } from './types';
 import Toolbar from './components/Toolbar';
 import PreviewPanel from './components/PreviewPanel';
 import { captureAllPanels, computeDiff } from './utils/screenshot';
 import { exportPDF } from './utils/exportPDF';
-import { CircleOff, Crosshair, Loader } from 'lucide-react';
+import { CircleOff, Crosshair } from 'lucide-react';
 
 export default function App() {
-  const {
-    targetUrl,
-    isRecording,
-    captures,
-    selectedFrameIndex,
-    isPaused,
-    isDiffMode,
-    diffResult,
-    diffSourceA,
-    diffSourceB,
-    isLoading,
-    setRecording,
-    addCapture,
-    setSelectedFrameIndex,
-    setPaused,
-    setDiffMode,
-    setDiffResult,
-    setDiffSourceA,
-    setDiffSourceB,
-    setLoading,
-    clearCaptures,
-  } = useStore();
+  const [targetUrl, setTargetUrl] = useState('');
+  const [crosshair, setCrosshair] = useState<{ nx: number; ny: number } | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [captures, setCaptures] = useState<CaptureFrame[]>([]);
+  const [selectedFrameIndex, setSelectedFrameIndex] = useState(-1);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isDiffMode, setIsDiffMode] = useState(false);
+  const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
+  const [diffSourceA, setDiffSourceA] = useState('Mobile');
+  const [diffSourceB, setDiffSourceB] = useState('Desktop');
+  const [isLoading, setIsLoading] = useState(false);
 
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const panelRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -37,38 +26,62 @@ export default function App() {
     panelRefs.current[name] = el;
   }, []);
 
+  const handleMouseMove = useCallback((viewportName: string, nx: number, ny: number) => {
+    setCrosshair({ nx, ny });
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setCrosshair(null);
+  }, []);
+
   const handleStartRecording = useCallback(() => {
     if (isRecording) {
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
       }
-      setRecording(false);
+      setIsRecording(false);
       return;
     }
-    clearCaptures();
-    setRecording(true);
-    setPaused(false);
+    setCaptures([]);
+    setSelectedFrameIndex(-1);
+    setIsRecording(true);
+    setIsPaused(false);
+  }, [isRecording]);
+
+  useEffect(() => {
+    if (!isRecording || isPaused) {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      return;
+    }
+
     recordingTimerRef.current = setInterval(async () => {
       const screenshots = await captureAllPanels(panelRefs.current);
       if (screenshots) {
-        addCapture({
-          timestamp: Date.now(),
-          screenshots,
-        });
+        setCaptures((prev) => [...prev, { timestamp: Date.now(), screenshots }]);
       }
     }, 1000);
-  }, [isRecording, setRecording, setPaused, clearCaptures, addCapture]);
+
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    };
+  }, [isRecording, isPaused]);
 
   const handleDetectDiff = useCallback(async () => {
     if (isDiffMode) {
-      setDiffMode(false);
+      setIsDiffMode(false);
       setDiffResult(null);
       return;
     }
     if (captures.length === 0) return;
-    setDiffMode(true);
-    setLoading(true);
+    setIsDiffMode(true);
+    setIsLoading(true);
 
     try {
       const frameIdx = selectedFrameIndex >= 0 ? selectedFrameIndex : captures.length - 1;
@@ -79,16 +92,16 @@ export default function App() {
       const imgB = frame.screenshots[diffSourceB];
       if (!imgA || !imgB) return;
 
-      const result = await computeDiff(imgA, imgB);
+      const result = await computeDiff(imgA, imgB, diffSourceB);
       setDiffResult(result);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [isDiffMode, captures, selectedFrameIndex, diffSourceA, diffSourceB, setDiffMode, setDiffResult, setLoading]);
+  }, [isDiffMode, captures, selectedFrameIndex, diffSourceA, diffSourceB]);
 
   const handleExport = useCallback(async () => {
     if (captures.length === 0) return;
-    setLoading(true);
+    setIsLoading(true);
     try {
       const frameIdx = selectedFrameIndex >= 0 ? selectedFrameIndex : captures.length - 1;
       const frame = captures[frameIdx];
@@ -99,45 +112,30 @@ export default function App() {
         timestamp: frame?.timestamp ?? Date.now(),
       });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [captures, selectedFrameIndex, targetUrl, diffResult, setLoading]);
-
-  useEffect(() => {
-    return () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-    };
-  }, []);
+  }, [captures, selectedFrameIndex, targetUrl, diffResult]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && isRecording) {
         e.preventDefault();
-        setPaused(!isPaused);
+        setIsPaused((p) => !p);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isRecording, isPaused, setPaused]);
+  }, [isRecording]);
 
-  useEffect(() => {
-    if (isPaused && recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    } else if (isRecording && !isPaused && !recordingTimerRef.current) {
-      recordingTimerRef.current = setInterval(async () => {
-        const screenshots = await captureAllPanels(panelRefs.current);
-        if (screenshots) {
-          addCapture({
-            timestamp: Date.now(),
-            screenshots,
-          });
-        }
-      }, 1000);
+  const handleDiffItemClick = useCallback((region: DiffRegion) => {
+    const panels = Object.values(panelRefs.current);
+    if (panels.length > 0) {
+      const firstPanel = panels[0];
+      if (firstPanel) {
+        firstPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
-  }, [isPaused, isRecording, addCapture]);
+  }, []);
 
   const currentFrame = selectedFrameIndex >= 0 ? captures[selectedFrameIndex] : null;
   const viewports = VIEWPORTS;
@@ -151,6 +149,8 @@ export default function App() {
         isRecording={isRecording}
         isDiffMode={isDiffMode}
         isLoading={isLoading}
+        targetUrl={targetUrl}
+        setTargetUrl={setTargetUrl}
       />
 
       <div className="content-area">
@@ -167,23 +167,26 @@ export default function App() {
           ) : isDiffMode ? (
             <div className="diff-container">
               <div className="diff-preview-area">
-                {viewports.map((vp) => (
-                  <PreviewPanel
-                    key={vp.name}
-                    viewport={vp}
-                    registerRef={registerPanelRef}
-                    overrideScreenshot={
-                      currentFrame ? currentFrame.screenshots[vp.name] : undefined
-                    }
-                    diffRegions={
-                      diffResult
-                        ? diffResult.regions.filter((r) =>
-                            r.domPath.includes(vp.name)
-                          )
-                        : []
-                    }
-                  />
-                ))}
+                {viewports.map((vp) => {
+                  const showDiffOverlay = vp.name === diffSourceB && diffResult?.diffImage;
+                  return (
+                    <PreviewPanel
+                      key={vp.name}
+                      viewport={vp}
+                      registerRef={registerPanelRef}
+                      overrideScreenshot={
+                        currentFrame ? currentFrame.screenshots[vp.name] : undefined
+                      }
+                      diffRegions={
+                        vp.name === diffSourceB ? diffResult?.regions ?? [] : []
+                      }
+                      diffImage={showDiffOverlay ? diffResult!.diffImage : undefined}
+                      crosshair={crosshair}
+                      onMouseMove={handleMouseMove}
+                      onMouseLeave={handleMouseLeave}
+                    />
+                  );
+                })}
               </div>
               <div className="diff-side-panel">
                 <div className="diff-selector">
@@ -219,47 +222,44 @@ export default function App() {
                     <div className="diff-empty-text">检测中...</div>
                   </div>
                 ) : diffResult && diffResult.regions.length > 0 ? (
-                  <>
-                    <div className="diff-list">
-                      {diffResult.regions.map((region, i) => (
-                        <div
-                          key={i}
-                          className="diff-item"
-                          onClick={() => {
-                            const el = panelRefs.current[region.domPath];
-                            if (el) el.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                        >
-                          <span className="diff-item-coord">
-                            ({region.x}, {region.y}) - {region.width}×{region.height}
+                    <>
+                      <div className="diff-list">
+                        {diffResult.regions.map((region, i) => (
+                          <div
+                            key={i}
+                            className="diff-item"
+                            onClick={() => handleDiffItemClick(region)}
+                          >
+                            <span className="diff-item-coord">
+                              ({region.x}, {region.y}) - {region.width}×{region.height}
+                            </span>
+                            <span className="diff-item-percent">
+                              差异 {region.diffPercentage.toFixed(2)}%
+                            </span>
+                            <span className="diff-item-dom">{region.domPath}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="diff-stats">
+                        <div className="diff-stat-row">
+                          <span className="diff-stat-label">总差异像素数</span>
+                          <span className="diff-stat-value">
+                            {diffResult.totalDiffPixels.toLocaleString()}
                           </span>
-                          <span className="diff-item-percent">
-                            差异 {region.diffPercentage.toFixed(2)}%
-                          </span>
-                          <span className="diff-item-dom">{region.domPath}</span>
                         </div>
-                      ))}
-                    </div>
-                    <div className="diff-stats">
-                      <div className="diff-stat-row">
-                        <span className="diff-stat-label">总差异像素数</span>
-                        <span className="diff-stat-value">
-                          {diffResult.totalDiffPixels.toLocaleString()}
-                        </span>
+                        <div className="diff-stat-row">
+                          <span className="diff-stat-label">差异区域数量</span>
+                          <span className="diff-stat-value">{diffResult.regionCount}</span>
+                        </div>
+                        <div className="diff-stat-row">
+                          <span className="diff-stat-label">最大差异区域面积</span>
+                          <span className="diff-stat-value">
+                            {diffResult.maxRegionArea.toLocaleString()}px²
+                          </span>
+                        </div>
                       </div>
-                      <div className="diff-stat-row">
-                        <span className="diff-stat-label">差异区域数量</span>
-                        <span className="diff-stat-value">{diffResult.regionCount}</span>
-                      </div>
-                      <div className="diff-stat-row">
-                        <span className="diff-stat-label">最大差异区域面积</span>
-                        <span className="diff-stat-value">
-                          {diffResult.maxRegionArea.toLocaleString()}px²
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
+                    </>
+                  ) : (
                   <div className="diff-empty">
                     <div className="diff-empty-icon">
                       <CircleOff size={24} />
@@ -273,13 +273,16 @@ export default function App() {
             <div className="preview-grid">
               {viewports.map((vp) => (
                 <PreviewPanel
-                  key={vp.name}
-                  viewport={vp}
-                  registerRef={registerPanelRef}
-                  overrideScreenshot={
-                    currentFrame ? currentFrame.screenshots[vp.name] : undefined
-                  }
-                />
+                key={vp.name}
+                viewport={vp}
+                registerRef={registerPanelRef}
+                overrideScreenshot={
+                  currentFrame ? currentFrame.screenshots[vp.name] : undefined
+                }
+                crosshair={crosshair}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+              />
               ))}
             </div>
           )}
@@ -309,6 +312,7 @@ export default function App() {
                     src={firstScreenshot}
                     alt={`Frame ${i + 1}`}
                     onClick={() => setSelectedFrameIndex(i)}
+                    draggable={false}
                   />
                 );
               })}

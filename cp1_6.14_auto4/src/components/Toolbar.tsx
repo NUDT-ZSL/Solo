@@ -1,5 +1,4 @@
-import { useCallback, useState } from 'react';
-import { useStore } from '../store';
+import { useCallback, useState, useEffect } from 'react';
 import {
   Monitor,
   Circle,
@@ -16,6 +15,8 @@ interface ToolbarProps {
   isRecording: boolean;
   isDiffMode: boolean;
   isLoading: boolean;
+  targetUrl: string;
+  setTargetUrl: (url: string) => void;
 }
 
 export default function Toolbar({
@@ -25,9 +26,14 @@ export default function Toolbar({
   isRecording,
   isDiffMode,
   isLoading,
+  targetUrl,
+  setTargetUrl,
 }: ToolbarProps) {
-  const { targetUrl, setTargetUrl } = useStore();
   const [inputValue, setInputValue] = useState('');
+
+  useEffect(() => {
+    setInputValue(targetUrl);
+  }, [targetUrl]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -49,12 +55,8 @@ export default function Toolbar({
         <div className="toolbar-logo">
           <Monitor size={24} />
           <div>
-            <span className="toolbar-logo-text">
-              ViewportScope
-            </span>
-            <span className="toolbar-logo-sub">
-              响应式验证
-            </span>
+            <span className="toolbar-logo-text">ViewportScope</span>
+            <span className="toolbar-logo-sub">响应式验证</span>
           </div>
         </div>
       </div>
@@ -106,11 +108,7 @@ export default function Toolbar({
         </button>
 
         <button className="btn" onClick={onExport} disabled={isLoading}>
-          {isLoading ? (
-            <Loader size={14} />
-          ) : (
-            <FileDown size={14} />
-          )}
+          {isLoading ? <Loader size={14} /> : <FileDown size={14} />}
           导出报告
         </button>
       </div>
