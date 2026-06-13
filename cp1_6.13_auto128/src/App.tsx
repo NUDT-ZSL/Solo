@@ -88,6 +88,8 @@ interface AppContextValue {
   createProject: (data: { name: string; genres: string[]; description: string }) => Promise<Project>
   joinProject: (projectId: string, inviteCode: string) => Promise<void>
   exportScore: (projectId: string, projectName: string) => Promise<void>
+  loadProjectDetail: (projectId: string) => Promise<void>
+  refreshProjects: () => Promise<void>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -122,25 +124,9 @@ const getOrCreateUser = () => {
 
 function AppContent() {
   const [state, dispatch] = useReducer(appReducer, initialState)
-  const { id } = useParams<{ id?: string }>()
   const navigate = useNavigate()
 
-  useEffect(() => {
-    const user = getOrCreateUser()
-    dispatch({ type: 'SET_USER', payload: user })
-    loadProjects()
-  }, [])
-
-  useEffect(() => {
-    if (id && state.user) {
-      loadProjectDetail(id)
-    } else {
-      dispatch({ type: 'SET_CURRENT_PROJECT', payload: null })
-      dispatch({ type: 'SET_PARAGRAPHS', payload: [] })
-    }
-  }, [id, state.user?.id])
-
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true })
       const projects = await projectAPI.list()
@@ -150,9 +136,9 @@ function AppContent() {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
-  }
+  }, [])
 
-  const loadProjectDetail = async (projectId: string) => {
+  const loadProjectDetail = useCallback(async (projectId: string) => {
     try {
       const project = await projectAPI.get(projectId)
       dispatch({ type: 'SET_CURRENT_PROJECT', payload: project })
@@ -161,7 +147,13 @@ function AppContent() {
     } catch (err) {
       console.error('加载项目详情失败:', err)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const user = getOrCreateUser()
+    dispatch({ type: 'SET_USER', payload: user })
+    loadProjects()
+  }, [])
 
   const createProject = async (data: { name: string; genres: string[]; description: string }) => {
     if (!state.user) throw new Error('用户未登录')
@@ -204,6 +196,8 @@ function AppContent() {
     createProject,
     joinProject,
     exportScore,
+    loadProjectDetail,
+    refreshProjects: loadProjects,
   }
 
   const sidebarWidth = state.sidebarCollapsed ? '60px' : '280px'
@@ -227,6 +221,41 @@ function AppContent() {
       <GlobalModals />
     </AppContext.Provider>
   )
+}
+
+function ProjectPage() {
+  const { id } = useParams<{ id: string }>()
+  const { state, loadProjectDetail } = useAppContext()
+
+  useEffect(() => {
+    if (id) {
+      loadProjectDetail(id)
+    }
+    return () => {
+      // cleanup not needed, keep project data for sidebar
+    }
+  }, [id])
+
+  if (!state.currentProject || state.currentProject._id !== id) {
+    return <div className="loading-page">加载中...</div>
+  }
+  return <ProjectOverview />
+}
+
+function EditorPage() {
+  const { id } = useParams<{ id: string }>()
+  const { state, loadProjectDetail } = useAppContext()
+
+  useEffect(() => {
+    if (id) {
+      loadProjectDetail(id)
+    }
+  }, [id])
+
+  if (!state.currentProject || state.currentProject._id !== id) {
+    return <div className="loading-page">加载中...</div>
+  }
+  return <Editor />
 }
 
 function HomePage() {
@@ -266,22 +295,6 @@ function HomePage() {
       </div>
     </div>
   )
-}
-
-function ProjectPage() {
-  const { state } = useAppContext()
-  if (!state.currentProject) {
-    return <div className="loading-page">加载中...</div>
-  }
-  return <ProjectOverview />
-}
-
-function EditorPage() {
-  const { state } = useAppContext()
-  if (!state.currentProject) {
-    return <div className="loading-page">加载中...</div>
-  }
-  return <Editor />
 }
 
 function GlobalModals() {
