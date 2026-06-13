@@ -85,7 +85,7 @@ export const update = async (
 };
 
 export const remove = async (id: string): Promise<number> => {
-  return await db.remove({ id });
+  return await db.remove({ id }, {});
 };
 
 export type { OrigamiModel, FoldStep, CreasePattern, CreaseLine };
