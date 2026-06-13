@@ -48,6 +48,16 @@ router.get('/api/users/:id', async (req: Request, res: Response) => {
   }
 })
 
+router.get('/api/users', async (_req: Request, res: Response) => {
+  try {
+    const users = await db.users.findAll()
+    res.json(users)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: '获取用户列表失败' })
+  }
+})
+
 router.post('/api/skills', async (req: Request, res: Response) => {
   try {
     const { userId, name, category, level, description, type } = req.body as {

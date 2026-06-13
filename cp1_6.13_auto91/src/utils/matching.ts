@@ -63,37 +63,63 @@ export function generateMatchSuggestions(
   const myLearn = mySkills.filter(s => s.type === 'learn')
   const myTeach = mySkills.filter(s => s.type === 'teach')
 
+  const teachByName = new Map<string, Skill[]>()
+  const learnByName = new Map<string, Skill[]>()
+
+  for (const skill of allSkills) {
+    if (skill.userId === currentUserId) continue
+    if (skill.type === 'teach') {
+      const arr = teachByName.get(skill.name) || []
+      arr.push(skill)
+      teachByName.set(skill.name, arr)
+    } else {
+      const arr = learnByName.get(skill.name) || []
+      arr.push(skill)
+      learnByName.set(skill.name, arr)
+    }
+  }
+
   const suggestions: MatchSuggestion[] = []
   const processedPairs = new Set<string>()
 
   for (const wantToLearn of myLearn) {
-    for (const canTeach of allSkills) {
-      if (canTeach.userId === currentUserId || canTeach.type !== 'teach') continue
-      if (canTeach.name !== wantToLearn.name) continue
+    const canTeachList = teachByName.get(wantToLearn.name)
+    if (!canTeachList) continue
+
+    for (const canTeach of canTeachList) {
+      const partnerId = canTeach.userId
+      const pairKey = [currentUserId, partnerId].sort().join('_')
+      if (processedPairs.has(pairKey)) continue
+
+      let bestMatch: { myTeachSkill: Skill; theyLearnSkill: Skill; score: number } | null = null
 
       for (const wantToTeach of myTeach) {
-        for (const theyLearn of allSkills) {
-          if (theyLearn.userId !== canTeach.userId || theyLearn.type !== 'learn') continue
-          if (theyLearn.name !== wantToTeach.name) continue
+        const theyLearnList = learnByName.get(wantToTeach.name)
+        if (!theyLearnList) continue
 
-          const pairKey = [currentUserId, canTeach.userId].sort().join('_')
-          if (processedPairs.has(pairKey)) continue
-          processedPairs.add(pairKey)
-
-          const partner = userMap.get(canTeach.userId)
-          if (!partner) continue
+        for (const theyLearn of theyLearnList) {
+          if (theyLearn.userId !== partnerId) continue
 
           const score = calculateMatchScore(wantToLearn, canTeach, wantToTeach, theyLearn)
-
-          suggestions.push({
-            partner,
-            skillIWant: wantToLearn,
-            skillTeachMe: canTeach,
-            skillTeachThem: wantToTeach,
-            skillTheyWant: theyLearn,
-            score
-          })
+          if (!bestMatch || score > bestMatch.score) {
+            bestMatch = { myTeachSkill: wantToTeach, theyLearnSkill: theyLearn, score }
+          }
         }
+      }
+
+      if (bestMatch) {
+        const partner = userMap.get(partnerId)
+        if (!partner) continue
+
+        processedPairs.add(pairKey)
+        suggestions.push({
+          partner,
+          skillIWant: wantToLearn,
+          skillTeachMe: canTeach,
+          skillTeachThem: bestMatch.myTeachSkill,
+          skillTheyWant: bestMatch.theyLearnSkill,
+          score: bestMatch.score
+        })
       }
     }
   }
@@ -110,4 +136,31 @@ export const categoryColors: Record<SkillCategory, string> = {
 
 export const categoryLabels: Record<SkillCategory, string> = {
   tech: '技术',
-  art
+  art: '艺术',
+  life: '生活',
+  language: '语言'
+}
+
+export const levelLabels: Record<SkillLevel, string> = {
+  beginner: '初级',
+  intermediate: '中级',
+  advanced: '高级'
+}
+
+export const typeLabels: Record<SkillType, string> = {
+  learn: '想学',
+  teach: '能教'
+}
+
+export const skillCategories: { value: SkillCategory; label: string; color: string }[] = [
+  { value: 'tech', label: '技术', color: '#3b82f6' },
+  { value: 'art', label: '艺术', color: '#f59e0b' },
+  { value: 'life', label: '生活', color: '#22c55e' },
+  { value: 'language', label: '语言', color: '#a855f7' }
+]
+
+export const skillLevels: { value: SkillLevel; label: string }[] = [
+  { value: 'beginner', label: '初级' },
+  { value: 'intermediate', label: '中级' },
+  { value: 'advanced', label: '高级' }
+]
