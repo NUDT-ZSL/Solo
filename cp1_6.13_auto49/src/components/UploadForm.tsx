@@ -44,7 +44,11 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+      document.body.style.overflow = '';
+    };
   }, [onClose]);
 
   const handleAddTag = (tag?: string) => {
@@ -90,7 +94,6 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
 
   return (
     <div
-      className="upload-modal-overlay"
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -104,19 +107,21 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
         justifyContent: 'center',
         zIndex: 200,
         backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
       }}
     >
       <div
-        className="upload-modal"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '600px',
           maxHeight: '90vh',
           overflowY: 'auto',
           borderRadius: '24px',
-          background: 'rgba(239, 68, 68, 0.08)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(239, 68, 68, 0.15)',
+          background: 'rgba(239, 68, 68, 0.1)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          boxShadow: '0 20px 60px rgba(239, 68, 68, 0.15)',
           padding: '32px',
           position: 'relative',
         }}
@@ -131,13 +136,15 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
             height: '32px',
             border: 'none',
             borderRadius: '50%',
-            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+            backgroundColor: 'rgba(255, 255, 255, 0.6)',
+            backdropFilter: 'blur(8px)',
             color: '#4b5563',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '18px',
             lineHeight: 1,
+            cursor: 'pointer',
           }}
         >
           ×
@@ -161,7 +168,7 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
             borderRadius: '12px',
             background: previewGradient,
             marginBottom: '24px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
           }}
         />
 
@@ -180,52 +187,76 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
             </label>
             <div style={{ display: 'flex', gap: '16px' }}>
               <div style={{ textAlign: 'center' }}>
-                <input
-                  type="color"
-                  value={color1}
-                  onChange={(e) => setColor1(e.target.value)}
+                <div
                   style={{
                     width: '120px',
                     height: '120px',
-                    border: 'none',
                     borderRadius: '8px',
-                    cursor: 'pointer',
-                    backgroundColor: 'transparent',
-                    padding: 0,
+                    overflow: 'hidden',
+                    backgroundColor: '#ffffff',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
                   }}
-                />
+                >
+                  <input
+                    type="color"
+                    value={color1}
+                    onChange={(e) => setColor1(e.target.value)}
+                    style={{
+                      width: '140px',
+                      height: '140px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      margin: '-10px',
+                      backgroundColor: 'transparent',
+                    }}
+                  />
+                </div>
                 <div
                   style={{
                     marginTop: '8px',
                     fontSize: '12px',
                     color: '#6b7280',
                     fontFamily: 'monospace',
+                    fontWeight: 500,
                   }}
                 >
                   {color1}
                 </div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <input
-                  type="color"
-                  value={color2}
-                  onChange={(e) => setColor2(e.target.value)}
+                <div
                   style={{
                     width: '120px',
                     height: '120px',
-                    border: 'none',
                     borderRadius: '8px',
-                    cursor: 'pointer',
-                    backgroundColor: 'transparent',
-                    padding: 0,
+                    overflow: 'hidden',
+                    backgroundColor: '#ffffff',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
                   }}
-                />
+                >
+                  <input
+                    type="color"
+                    value={color2}
+                    onChange={(e) => setColor2(e.target.value)}
+                    style={{
+                      width: '140px',
+                      height: '140px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      margin: '-10px',
+                      backgroundColor: 'transparent',
+                    }}
+                  />
+                </div>
                 <div
                   style={{
                     marginTop: '8px',
                     fontSize: '12px',
                     color: '#6b7280',
                     fontFamily: 'monospace',
+                    fontWeight: 500,
                   }}
                 >
                   {color2}
@@ -257,7 +288,8 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
                 borderRadius: '8px',
                 fontSize: '14px',
                 color: '#4b5563',
-                backgroundColor: '#ffffff',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(8px)',
                 outline: 'none',
                 cursor: 'pointer',
               }}
@@ -295,7 +327,8 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
                 borderRadius: '8px',
                 fontSize: '14px',
                 color: '#4b5563',
-                backgroundColor: '#ffffff',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(8px)',
                 outline: 'none',
               }}
             />
@@ -332,7 +365,8 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
                 padding: '8px',
                 border: '1px solid #e5e7eb',
                 borderRadius: '8px',
-                backgroundColor: '#ffffff',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(8px)',
                 minHeight: '44px',
               }}
             >
@@ -446,6 +480,7 @@ export default function UploadForm({ allTags, onSubmit, onClose }: UploadFormPro
               fontSize: '15px',
               fontWeight: 600,
               boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+              cursor: 'pointer',
             }}
           >
             保存作品

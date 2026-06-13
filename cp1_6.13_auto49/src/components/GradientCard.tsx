@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Gradient } from '../data/demoGradients';
 
 interface GradientCardProps {
@@ -9,7 +9,7 @@ interface GradientCardProps {
   onClick: (id: string) => void;
 }
 
-interface Particle {
+interface ParticleData {
   id: number;
   tx: number;
   ty: number;
@@ -17,61 +17,80 @@ interface Particle {
 }
 
 export default function GradientCard({ gradient, index, onLike, onClick }: GradientCardProps) {
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [particles, setParticles] = useState<Particle[]>([]);
-  const particleIdRef = useRef(0);
-  const [visible, setVisible] = useState(false);
+  const [particles, setParticles] = useState<ParticleData[]>([]);
+  const [isHeartAnimating, setIsHeartAnimating] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const particleIdRef = useRef(0);
+  const cleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setVisible(true);
-    }, index * 50);
-    return () => clearTimeout(timer);
+  const handleIntersection = useCallback((entries: IntersectionObserverEntry[]) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        setTimeout(() => {
+          setIsVisible(true);
+        }, index * 50);
+      }
+    });
   }, [index]);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setVisible(true);
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
+    const observer = new IntersectionObserver(handleIntersection, {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px',
+    });
+
     if (cardRef.current) {
       observer.observe(cardRef.current);
     }
-    return () => observer.disconnect();
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [handleIntersection]);
+
+  useEffect(() => {
+    return () => {
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current);
+      }
+    };
   }, []);
 
   const gradientValue = `linear-gradient(${gradient.angle}deg, ${gradient.color1} 0%, ${gradient.color2} 100%)`;
 
+  const createParticles = (): ParticleData[] => {
+    const count = 12;
+    const newParticles: ParticleData[] = [];
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+      const distance = 20 + Math.random() * 25;
+      newParticles.push({
+        id: particleIdRef.current++,
+        tx: Math.cos(angle) * distance,
+        ty: Math.sin(angle) * distance,
+        size: 4 + Math.random() * 5,
+      });
+    }
+    return newParticles;
+  };
+
   const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     onLike(gradient.id);
 
     if (!gradient.liked) {
-      setIsAnimating(true);
-      const newParticles: Particle[] = [];
-      const particleCount = 8;
-      for (let i = 0; i < particleCount; i++) {
-        const angle = (i / particleCount) * Math.PI * 2;
-        const distance = 25 + Math.random() * 15;
-        newParticles.push({
-          id: particleIdRef.current++,
-          tx: Math.cos(angle) * distance,
-          ty: Math.sin(angle) * distance,
-          size: 4 + Math.random() * 4,
-        });
-      }
-      setParticles(newParticles);
+      setParticles(createParticles());
+      setIsHeartAnimating(true);
 
-      setTimeout(() => {
-        setIsAnimating(false);
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current);
+      }
+      cleanupTimerRef.current = setTimeout(() => {
         setParticles([]);
+        setIsHeartAnimating(false);
       }, 500);
     }
   };
@@ -79,31 +98,27 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
   return (
     <div
       ref={cardRef}
-      className="gradient-card"
+      className={`gradient-card ${isVisible ? 'gradient-card-enter-active' : 'gradient-card-enter'}`}
       onClick={() => onClick(gradient.id)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         width: '320px',
         borderRadius: '16px',
         backgroundColor: '#ffffff',
-        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
+        boxShadow: isHovered
+          ? '0 8px 24px rgba(0, 0, 0, 0.1)'
+          : '0 2px 12px rgba(0, 0, 0, 0.06)',
         overflow: 'hidden',
         cursor: 'pointer',
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(30px)',
-        transition: 'opacity 0.4s ease, transform 0.4s ease, box-shadow 0.3s ease',
+        transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+        transform: isHovered && isVisible ? 'translateY(-4px)' : 'translateY(0)',
         position: 'relative',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)';
-        e.currentTarget.style.transform = visible ? 'translateY(-4px)' : 'translateY(30px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.06)';
-        e.currentTarget.style.transform = visible ? 'translateY(0)' : 'translateY(30px)';
+        animationDelay: `${index * 50}ms`,
+        animationFillMode: 'both',
       }}
     >
       <div
-        className="gradient-preview"
         style={{
           width: '100%',
           height: '400px',
@@ -111,14 +126,8 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
         }}
       />
 
-      <div
-        className="card-info"
-        style={{
-          padding: '16px',
-        }}
-      >
+      <div style={{ padding: '16px' }}>
         <div
-          className="gradient-name"
           style={{
             fontSize: '16px',
             fontWeight: 600,
@@ -130,7 +139,6 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
         </div>
 
         <div
-          className="gradient-value"
           style={{
             fontSize: '12px',
             color: '#4b5563',
@@ -147,7 +155,6 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
         </div>
 
         <div
-          className="tags"
           style={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -172,72 +179,77 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
         </div>
 
         <div
-          className="card-footer"
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
           }}
         >
-          <span
-            style={{
-              fontSize: '13px',
-              color: '#9ca3af',
-            }}
-          >
+          <span style={{ fontSize: '13px', color: '#9ca3af' }}>
             {gradient.comments.length} 条评论
           </span>
 
-          <button
-            className="like-btn"
-            onClick={handleLikeClick}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              background: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              color: gradient.liked ? '#ef4444' : '#9ca3af',
-              position: 'relative',
-              padding: '4px 8px',
-              borderRadius: '8px',
-              animation: isAnimating ? 'heart-pop 0.5s ease' : 'none',
-            }}
-          >
-            {particles.map((particle) => (
-              <span
-                key={particle.id}
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '50%',
-                  width: `${particle.size}px`,
-                  height: `${particle.size}px`,
-                  borderRadius: '50%',
-                  backgroundColor: '#ef4444',
-                  '--tx': `${particle.tx}px`,
-                  '--ty': `${particle.ty}px`,
-                  animation: 'particle-burst 0.5s ease-out forwards',
-                  pointerEvents: 'none',
-                } as React.CSSProperties}
-              />
-            ))}
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill={gradient.liked ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={handleLikeClick}
+              className={isHeartAnimating ? 'heart-anim' : ''}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                border: 'none',
+                background: 'none',
+                fontSize: '14px',
+                fontWeight: 500,
+                color: gradient.liked ? '#ef4444' : '#9ca3af',
+                padding: '4px 8px',
+                borderRadius: '8px',
+                position: 'relative',
+                zIndex: 1,
+              }}
             >
-              <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-            </svg>
-            {gradient.likes}
-          </button>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill={gradient.liked ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+              </svg>
+              {gradient.likes}
+            </button>
+
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: 0,
+                height: 0,
+                pointerEvents: 'none',
+                zIndex: 2,
+              }}
+            >
+              {particles.map((p) => (
+                <span
+                  key={p.id}
+                  className="particle"
+                  style={
+                    {
+                      width: `${p.size}px`,
+                      height: `${p.size}px`,
+                      '--tx': `${p.tx}px`,
+                      '--ty': `${p.ty}px`,
+                    } as React.CSSProperties
+                  }
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -51,6 +51,21 @@ input, select, textarea {
   font-family: inherit;
 }
 
+.navbar-scrolled {
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 8px 16px !important;
+}
+
+.gradient-card-enter {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+.gradient-card-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -73,6 +88,18 @@ input, select, textarea {
   }
 }
 
+.particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background-color: #ef4444;
+  pointer-events: none;
+  animation: particle-burst 0.5s ease-out forwards;
+  animation-duration: 0.5s;
+  animation-iteration-count: 1;
+}
+
 @keyframes heart-pop {
   0% {
     transform: scale(1);
@@ -89,4 +116,10 @@ input, select, textarea {
   100% {
     transform: scale(1);
   }
+}
+
+.heart-anim {
+  animation: heart-pop 0.5s ease !important;
+  animation-duration: 0.5s;
+  animation-iteration-count: 1;
 }

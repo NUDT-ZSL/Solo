@@ -9,13 +9,16 @@ interface NavbarProps {
 export default function Navbar({ onUploadClick, onSearch }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [isBtnHovered, setIsBtnHovered] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 10);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,7 +29,7 @@ export default function Navbar({ onUploadClick, onSearch }: NavbarProps) {
 
   return (
     <nav
-      className="navbar"
+      className={`navbar ${scrolled ? 'navbar-scrolled' : ''}`}
       style={{
         position: 'fixed',
         top: 0,
@@ -35,17 +38,16 @@ export default function Navbar({ onUploadClick, onSearch }: NavbarProps) {
         height: '60px',
         backgroundColor: 'rgba(17, 24, 39, 0.88)',
         backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 32px',
         zIndex: 100,
-        boxShadow: scrolled ? 'rgba(0, 0, 0, 0.1) 0px 8px 16px' : 'none',
         transition: 'box-shadow 0.3s ease',
       }}
     >
       <div
-        className="logo"
         style={{
           fontSize: '22px',
           fontWeight: 700,
@@ -60,21 +62,13 @@ export default function Navbar({ onUploadClick, onSearch }: NavbarProps) {
       </div>
 
       <div
-        className="nav-right"
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '16px',
         }}
       >
-        <div
-          className="search-box"
-          style={{
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <svg
             width="16"
             height="16"
@@ -115,8 +109,9 @@ export default function Navbar({ onUploadClick, onSearch }: NavbarProps) {
         </div>
 
         <button
-          className="upload-btn"
           onClick={onUploadClick}
+          onMouseEnter={() => setIsBtnHovered(true)}
+          onMouseLeave={() => setIsBtnHovered(false)}
           style={{
             height: '36px',
             padding: '0 20px',
@@ -126,15 +121,11 @@ export default function Navbar({ onUploadClick, onSearch }: NavbarProps) {
             color: '#ffffff',
             fontSize: '14px',
             fontWeight: 600,
-            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.02)';
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(16, 185, 129, 0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+            boxShadow: isBtnHovered
+              ? '0 4px 16px rgba(16, 185, 129, 0.4)'
+              : '0 2px 8px rgba(16, 185, 129, 0.3)',
+            transform: isBtnHovered ? 'scale(1.02)' : 'scale(1)',
+            transition: 'all 0.2s ease',
           }}
         >
           + 上传
