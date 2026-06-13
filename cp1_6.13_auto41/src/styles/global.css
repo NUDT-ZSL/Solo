@@ -541,18 +541,30 @@ ul, ol { list-style: none; }
   flex: 1;
   font-size: 14px;
   color: var(--text-primary);
-  transition: all 0.3s ease;
+  transition: color 0.3s ease;
   position: relative;
-  text-decoration: none;
-  text-decoration-color: transparent;
-  text-decoration-thickness: 0;
+  display: inline-block;
+}
+
+.ingredient-text::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--text-muted);
+  transform: translateY(-50%);
+  transition: width 0.3s ease;
+  pointer-events: none;
 }
 
 .ingredient-text.checked {
   color: var(--text-muted);
-  text-decoration: line-through;
-  text-decoration-color: var(--text-muted);
-  text-decoration-thickness: 2px;
+}
+
+.ingredient-text.checked::after {
+  width: 100%;
 }
 
 .ingredient-amount {
