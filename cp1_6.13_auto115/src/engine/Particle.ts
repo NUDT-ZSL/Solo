@@ -13,11 +13,11 @@ export interface ParticleConfig {
   radius: number;
   charge: number;
   mass?: number;
-  lifeSpan?: number;
+  lifeFrames?: number;
 }
 
 export class Particle {
-  public id: string;
+  public id: number;
   public x: number;
   public y: number;
   public vx: number;
@@ -26,17 +26,18 @@ export class Particle {
   public radius: number;
   public charge: number;
   public mass: number;
-  public birthTime: number;
-  public lifeSpan: number;
+  public lifeFrames: number;
+  public maxLifeFrames: number;
   public selected: boolean;
-  public scale: number;
-  public scaleStartTime: number;
   public merged: boolean;
+
+  public scaleProgress: number;
+  public scaleActive: boolean;
 
   private static idCounter = 0;
 
   constructor(config: ParticleConfig) {
-    this.id = `p_${Particle.idCounter++}_${Date.now().toString(36)}`;
+    this.id = Particle.idCounter++;
     this.x = config.x;
     this.y = config.y;
     this.vx = config.vx;
@@ -45,50 +46,37 @@ export class Particle {
     this.radius = config.radius;
     this.charge = config.charge;
     this.mass = config.mass ?? Math.pow(config.radius, 2);
-    this.birthTime = performance.now();
-    this.lifeSpan = (config.lifeSpan ?? 60) * 1000;
+    this.maxLifeFrames = config.lifeFrames ?? 3600;
+    this.lifeFrames = this.maxLifeFrames;
     this.selected = false;
-    this.scale = 1;
-    this.scaleStartTime = 0;
     this.merged = false;
-  }
-
-  public get age(): number {
-    return performance.now() - this.birthTime;
-  }
-
-  public get remainingLife(): number {
-    return Math.max(0, this.lifeSpan - this.age);
+    this.scaleProgress = 1;
+    this.scaleActive = false;
   }
 
   public get isDead(): boolean {
-    return this.remainingLife <= 0;
+    return this.lifeFrames <= 0;
   }
 
   public get opacity(): number {
-    const remaining = this.remainingLife;
-    if (remaining > 5000) return 1;
-    return remaining / 5000;
+    const fadeFrames = 300;
+    if (this.lifeFrames > fadeFrames) return 1;
+    return this.lifeFrames / fadeFrames;
   }
 
   public get currentScale(): number {
-    if (this.scaleStartTime === 0) return this.scale;
-    const elapsed = performance.now() - this.scaleStartTime;
-    const duration = 200;
-    if (elapsed >= duration) {
-      this.scale = 1;
-      this.scaleStartTime = 0;
-      return 1;
-    }
-    return 0.8 + (elapsed / duration) * 0.2;
+    if (!this.scaleActive) return 1;
+    return 0.8 + this.scaleProgress * 0.2;
   }
 
   public startScaleAnimation(): void {
-    this.scale = 0.8;
-    this.scaleStartTime = performance.now();
+    this.scaleActive = true;
+    this.scaleProgress = 0;
   }
 
   public update(deltaTime: number, width: number, height: number): void {
+    this.lifeFrames -= 1;
+
     this.x += this.vx * deltaTime;
     this.y += this.vy * deltaTime;
 
@@ -100,19 +88,20 @@ export class Particle {
 
     this.vx *= 0.999;
     this.vy *= 0.999;
+
+    if (this.scaleActive) {
+      this.scaleProgress += deltaTime / 12;
+      if (this.scaleProgress >= 1) {
+        this.scaleProgress = 1;
+        this.scaleActive = false;
+      }
+    }
   }
 
   public containsPoint(px: number, py: number): boolean {
     const dx = px - this.x;
     const dy = py - this.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    return dist <= this.radius + 4;
-  }
-
-  public distanceTo(other: Particle): number {
-    const dx = other.x - this.x;
-    const dy = other.y - this.y;
-    return Math.sqrt(dx * dx + dy * dy);
+    return dx * dx + dy * dy <= (this.radius + 4) * (this.radius + 4);
   }
 
   public static merge(p1: Particle, p2: Particle): Particle {
@@ -130,7 +119,8 @@ export class Particle {
       b: Math.round(p1.color.b * 0.5 + p2.color.b * 0.5),
     };
 
-    const maxLife = Math.max(p1.lifeSpan - p1.age, p2.lifeSpan - p2.age);
+    const maxRemaining = Math.max(p1.lifeFrames, p2.lifeFrames);
+
     const merged = new Particle({
       x: nx,
       y: ny,
@@ -140,8 +130,9 @@ export class Particle {
       radius: nradius,
       charge: ncharge,
       mass: totalMass,
-      lifeSpan: maxLife / 1000,
+      lifeFrames: maxRemaining,
     });
+    merged.maxLifeFrames = maxRemaining;
     merged.startScaleAnimation();
     return merged;
   }
@@ -163,7 +154,7 @@ export class Particle {
         color: { ...source.color },
         radius: splitRadius,
         charge: source.charge / count,
-        lifeSpan: 10,
+        lifeFrames: 600,
       }));
     }
     return particles;

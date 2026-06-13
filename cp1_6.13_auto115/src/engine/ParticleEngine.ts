@@ -14,44 +14,47 @@ export interface PerformanceStats {
   performanceMode: boolean;
 }
 
-export interface TrailPoint {
+interface TrailPoint {
   x: number;
   y: number;
-  alpha: number;
+  age: number;
 }
 
-type EngineEventCallback = (stats: PerformanceStats) => void;
+type StatsCallback = (stats: PerformanceStats) => void;
 
 export class ParticleEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private particles: Particle[] = [];
-  private maxParticles: number = 500;
-  private defaultMaxParticles: number = 500;
-  private reducedMaxParticles: number = 300;
+  private maxParticles = 500;
   private config: EngineConfig;
-  private animationId: number = 0;
-  private lastTime: number = 0;
-  private fpsFrames: number = 0;
-  private fpsTime: number = 0;
-  private currentFps: number = 60;
-  private cpuLoad: number = 0;
-  private frameStart: number = 0;
-  private lowFpsStartTime: number = 0;
-  private performanceMode: boolean = false;
-  private performanceModeTimeout: number | null = null;
+
+  private animationId = 0;
+  private lastTime = 0;
+  private frameCount = 0;
+  private fpsAccum = 0;
+  private fpsSampleTime = 0;
+  private currentFps = 60;
+  private cpuLoad = 0;
+
+  private lowFpsStart = 0;
+  private performanceMode = false;
+  private perfRecoverTimer: number | null = null;
+
   private selectedParticle: Particle | null = null;
-  private isDragging: boolean = false;
-  private lastMouseX: number = 0;
-  private lastMouseY: number = 0;
-  private mouseX: number = 0;
-  private mouseY: number = 0;
+  private isDragging = false;
+  private lastMouseX = 0;
+  private lastMouseY = 0;
+
   private trail: TrailPoint[] = [];
-  private readonly TRAIL_LENGTH: number = 20;
-  private readonly GRID_SIZE: number = 50;
-  private spawnCooldown: number = 0;
-  private onStatsUpdate: EngineEventCallback | null = null;
-  private paused: boolean = false;
+  private readonly TRAIL_MAX_AGE = 20;
+
+  private readonly GRID_SIZE = 50;
+  private grid: Map<number, Particle[]> = new Map();
+  private gridCols = 0;
+  private gridRows = 0;
+
+  private onStatsUpdate: StatsCallback | null = null;
 
   constructor(canvas: HTMLCanvasElement, config: EngineConfig) {
     this.canvas = canvas;
@@ -66,7 +69,7 @@ export class ParticleEngine {
     this.config = { ...config };
   }
 
-  public setStatsCallback(cb: EngineEventCallback | null): void {
+  public setStatsCallback(cb: StatsCallback | null): void {
     this.onStatsUpdate = cb;
   }
 
@@ -75,12 +78,12 @@ export class ParticleEngine {
     const rect = this.canvas.getBoundingClientRect();
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
-    this.ctx.scale(dpr, dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   public start(): void {
     this.lastTime = performance.now();
-    this.fpsTime = this.lastTime;
+    this.fpsSampleTime = this.lastTime;
     this.loop();
   }
 
@@ -94,28 +97,24 @@ export class ParticleEngine {
   public destroy(): void {
     this.stop();
     this.particles = [];
-  }
-
-  public getSelectedParticle(): Particle | null {
-    return this.selectedParticle;
+    this.trail = [];
+    this.grid.clear();
   }
 
   public deleteSelected(): void {
     if (this.selectedParticle) {
-      this.particles = this.particles.filter(p => p.id !== this.selectedParticle!.id);
+      const id = this.selectedParticle.id;
+      this.particles = this.particles.filter(p => p.id !== id);
       this.selectedParticle = null;
     }
-  }
-
-  public clearAll(): void {
-    this.particles = [];
-    this.selectedParticle = null;
   }
 
   public handleMouseDown(x: number, y: number): void {
     const clicked = this.findParticleAt(x, y);
     if (clicked) {
-      if (this.selectedParticle) this.selectedParticle.selected = false;
+      if (this.selectedParticle && this.selectedParticle !== clicked) {
+        this.selectedParticle.selected = false;
+      }
       this.selectedParticle = clicked;
       clicked.selected = true;
       this.isDragging = false;
@@ -125,8 +124,6 @@ export class ParticleEngine {
         this.selectedParticle = null;
       }
       this.isDragging = true;
-      this.mouseX = x;
-      this.mouseY = y;
       this.lastMouseX = x;
       this.lastMouseY = y;
       this.trail = [];
@@ -135,19 +132,14 @@ export class ParticleEngine {
   }
 
   public handleMouseMove(x: number, y: number): void {
-    this.mouseX = x;
-    this.mouseY = y;
     if (this.isDragging) {
-      this.addTrailPoint(x, y);
-      this.spawnCooldown -= 1;
-      if (this.spawnCooldown <= 0) {
-        const dx = x - this.lastMouseX;
-        const dy = y - this.lastMouseY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 3) {
-          this.spawnParticle(x, y, dx * 0.1, dy * 0.1);
-          this.spawnCooldown = 0;
-        }
+      this.trail.push({ x, y, age: 0 });
+
+      const dx = x - this.lastMouseX;
+      const dy = y - this.lastMouseY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 3) {
+        this.spawnParticle(x, y, dx * 0.1, dy * 0.1);
       }
       this.lastMouseX = x;
       this.lastMouseY = y;
@@ -158,20 +150,17 @@ export class ParticleEngine {
     this.isDragging = false;
   }
 
-  private addTrailPoint(x: number, y: number): void {
-    this.trail.push({ x, y, alpha: 0.8 });
-    if (this.trail.length > this.TRAIL_LENGTH) {
-      this.trail.shift();
-    }
-    for (let i = 0; i < this.trail.length; i++) {
-      this.trail[i].alpha = (i / this.trail.length) * 0.8;
-    }
-  }
-
   private findParticleAt(x: number, y: number): Particle | null {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      if (this.particles[i].containsPoint(x, y)) {
-        return this.particles[i];
+    const col = Math.floor(x / this.GRID_SIZE);
+    const row = Math.floor(y / this.GRID_SIZE);
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const key = (row + dr) * this.gridCols + (col + dc);
+        const cell = this.grid.get(key);
+        if (!cell) continue;
+        for (let i = cell.length - 1; i >= 0; i--) {
+          if (cell[i].containsPoint(x, y)) return cell[i];
+        }
       }
     }
     return null;
@@ -179,9 +168,22 @@ export class ParticleEngine {
 
   private spawnParticle(x: number, y: number, vxBase: number, vyBase: number): void {
     if (this.performanceMode) return;
+
     if (this.particles.length >= this.maxParticles) {
-      this.particles.sort((a, b) => a.remainingLife - b.remainingLife);
-      this.particles = this.particles.slice(1);
+      let minLife = Infinity;
+      let minIdx = 0;
+      for (let i = 0; i < this.particles.length; i++) {
+        if (this.particles[i].lifeFrames < minLife) {
+          minLife = this.particles[i].lifeFrames;
+          minIdx = i;
+        }
+      }
+      const removed = this.particles[minIdx];
+      if (this.selectedParticle && this.selectedParticle.id === removed.id) {
+        this.selectedParticle = null;
+      }
+      this.particles[minIdx] = this.particles[this.particles.length - 1];
+      this.particles.pop();
     }
 
     const [minSize, maxSize] = this.config.sizeRange;
@@ -190,11 +192,10 @@ export class ParticleEngine {
     const angle = Math.random() * Math.PI * 2;
     const speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
     const color = this.config.colors[Math.floor(Math.random() * this.config.colors.length)];
-
     const isPositive = Math.random() < (this.config.chargeBias + 1) / 2;
     const charge = isPositive ? (0.5 + Math.random() * 0.5) : -(0.5 + Math.random() * 0.5);
 
-    const p = new Particle({
+    this.particles.push(new Particle({
       x: x + (Math.random() - 0.5) * 4,
       y: y + (Math.random() - 0.5) * 4,
       vx: vxBase + Math.cos(angle) * speed,
@@ -202,82 +203,96 @@ export class ParticleEngine {
       color,
       radius,
       charge,
-    });
-    this.particles.push(p);
+    }));
   }
 
-  private buildSpatialGrid(): Map<string, Particle[]> {
-    const grid = new Map<string, Particle[]>();
+  private buildGrid(): void {
+    this.grid.clear();
+    const w = this.canvas.width / (window.devicePixelRatio || 1);
+    const h = this.canvas.height / (window.devicePixelRatio || 1);
+    this.gridCols = Math.ceil(w / this.GRID_SIZE) + 2;
+    this.gridRows = Math.ceil(h / this.GRID_SIZE) + 2;
+
     for (const p of this.particles) {
-      const gx = Math.floor(p.x / this.GRID_SIZE);
-      const gy = Math.floor(p.y / this.GRID_SIZE);
-      const key = `${gx},${gy}`;
-      if (!grid.has(key)) grid.set(key, []);
-      grid.get(key)!.push(p);
-    }
-    return grid;
-  }
-
-  private getNeighborCells(gx: number, gy: number): string[] {
-    const cells: string[] = [];
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        cells.push(`${gx + dx},${gy + dy}`);
+      const col = Math.floor(p.x / this.GRID_SIZE);
+      const row = Math.floor(p.y / this.GRID_SIZE);
+      const key = row * this.gridCols + col;
+      let cell = this.grid.get(key);
+      if (!cell) {
+        cell = [];
+        this.grid.set(key, cell);
       }
+      cell.push(p);
     }
-    return cells;
   }
 
-  private applyPhysics(deltaTime: number): void {
-    const grid = this.buildSpatialGrid();
-    const processed = new Set<string>();
+  private applyPhysics(dt: number): void {
+    this.buildGrid();
+
     const toMerge: [Particle, Particle][] = [];
+    const checked = new Set<number>();
 
-    for (const p of this.particles) {
-      const gx = Math.floor(p.x / this.GRID_SIZE);
-      const gy = Math.floor(p.y / this.GRID_SIZE);
-      const neighbors = this.getNeighborCells(gx, gy);
+    for (const [key, cell] of this.grid) {
+      const row = Math.floor(key / this.gridCols);
+      const col = key % this.gridCols;
 
-      for (const cellKey of neighbors) {
-        const cell = grid.get(cellKey);
-        if (!cell) continue;
-        for (const other of cell) {
-          if (p.id === other.id) continue;
-          const pairKey = p.id < other.id ? `${p.id}|${other.id}` : `${other.id}|${p.id}`;
-          if (processed.has(pairKey)) continue;
-          processed.add(pairKey);
+      for (let dr = 0; dr <= 1; dr++) {
+        for (let dc = (dr === 0 ? 0 : -1); dc <= 1; dc++) {
+          const nKey = (row + dr) * this.gridCols + (col + dc);
+          const neighbor = this.grid.get(nKey);
+          if (!neighbor) continue;
 
-          const dx = other.x - p.x;
-          const dy = other.y - p.y;
-          const distSq = dx * dx + dy * dy;
-          const minDist = p.radius + other.radius;
+          const isSame = dr === 0 && dc === 0;
+          const startJ = isSame ? 0 : 0;
 
-          if (distSq < minDist * minDist) {
-            toMerge.push([p, other]);
-            continue;
+          for (let i = 0; i < cell.length; i++) {
+            const p = cell[i];
+            if (p.merged) continue;
+            const jStart = isSame ? i + 1 : startJ;
+
+            for (let j = jStart; j < neighbor.length; j++) {
+              const other = neighbor[j];
+              if (other.merged) continue;
+
+              const dx = other.x - p.x;
+              const dy = other.y - p.y;
+              const distSq = dx * dx + dy * dy;
+              const minDist = p.radius + other.radius;
+
+              if (distSq < minDist * minDist && distSq > 0) {
+                const pairHash = p.id < other.id
+                  ? p.id * 100000 + other.id
+                  : other.id * 100000 + p.id;
+                if (!checked.has(pairHash)) {
+                  checked.add(pairHash);
+                  toMerge.push([p, other]);
+                }
+                continue;
+              }
+
+              if (distSq > 90000) continue;
+
+              const dist = Math.sqrt(distSq);
+              const sameSign = p.charge * other.charge > 0;
+              const k = 800;
+              let force: number;
+
+              if (sameSign) {
+                force = k * Math.abs(p.charge * other.charge) / (distSq + 100);
+              } else {
+                const decay = Math.max(0, 1 - dist / 200);
+                force = -k * Math.abs(p.charge * other.charge) * decay / (distSq + 100);
+              }
+
+              const fx = (dx / dist) * force;
+              const fy = (dy / dist) * force;
+
+              p.vx += (fx / p.mass) * dt;
+              p.vy += (fy / p.mass) * dt;
+              other.vx -= (fx / other.mass) * dt;
+              other.vy -= (fy / other.mass) * dt;
+            }
           }
-
-          const dist = Math.sqrt(distSq);
-          if (dist > 300) continue;
-
-          const sameSign = p.charge * other.charge > 0;
-          const k = 800;
-          let force: number;
-
-          if (sameSign) {
-            force = k * Math.abs(p.charge * other.charge) / (distSq + 100);
-          } else {
-            const decay = Math.max(0, 1 - dist / 200);
-            force = -k * Math.abs(p.charge * other.charge) * decay / (distSq + 100);
-          }
-
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-
-          p.vx += (fx / p.mass) * deltaTime;
-          p.vy += (fy / p.mass) * deltaTime;
-          other.vx -= (fx / other.mass) * deltaTime;
-          other.vy -= (fy / other.mass) * deltaTime;
         }
       }
     }
@@ -286,7 +301,7 @@ export class ParticleEngine {
   }
 
   private processMerges(toMerge: [Particle, Particle][]): void {
-    const mergedIds = new Set<string>();
+    const mergedIds = new Set<number>();
     const newParticles: Particle[] = [];
 
     for (const [p1, p2] of toMerge) {
@@ -297,6 +312,12 @@ export class ParticleEngine {
       mergedIds.add(p2.id);
       p1.merged = true;
       p2.merged = true;
+
+      if (this.selectedParticle) {
+        if (this.selectedParticle.id === p1.id || this.selectedParticle.id === p2.id) {
+          this.selectedParticle = null;
+        }
+      }
 
       const merged = Particle.merge(p1, p2);
       newParticles.push(merged);
@@ -314,43 +335,54 @@ export class ParticleEngine {
     }
   }
 
-  private updateParticles(deltaTime: number): void {
+  private updateParticles(dt: number): void {
     const width = this.canvas.width / (window.devicePixelRatio || 1);
     const height = this.canvas.height / (window.devicePixelRatio || 1);
 
     for (const p of this.particles) {
-      p.update(deltaTime, width, height);
+      p.update(dt, width, height);
     }
 
+    const deadSelected = this.selectedParticle?.isDead ?? false;
+    if (deadSelected) this.selectedParticle = null;
+
     this.particles = this.particles.filter(p => !p.isDead);
+  }
+
+  private updateTrail(): void {
+    for (const t of this.trail) {
+      t.age++;
+    }
+    this.trail = this.trail.filter(t => t.age < this.TRAIL_MAX_AGE);
   }
 
   private render(): void {
     const width = this.canvas.width / (window.devicePixelRatio || 1);
     const height = this.canvas.height / (window.devicePixelRatio || 1);
 
-    const grad = this.ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, Math.max(width, height) / 1.2);
+    const grad = this.ctx.createRadialGradient(
+      width / 2, height / 2, 0,
+      width / 2, height / 2, Math.max(width, height) / 1.2
+    );
     grad.addColorStop(0, '#0f0a1a');
     grad.addColorStop(1, '#1a0f2e');
     this.ctx.fillStyle = grad;
     this.ctx.fillRect(0, 0, width, height);
 
     this.renderTrail();
-
     for (const p of this.particles) {
       this.renderParticle(p);
     }
   }
 
   private renderTrail(): void {
-    for (const point of this.trail) {
+    for (const t of this.trail) {
+      const alpha = Math.max(0, 0.8 * (1 - t.age / this.TRAIL_MAX_AGE));
+      if (alpha <= 0) continue;
       this.ctx.beginPath();
-      this.ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
-      this.ctx.fillStyle = `rgba(139, 92, 246, ${point.alpha})`;
+      this.ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+      this.ctx.fillStyle = `rgba(139, 92, 246, ${alpha})`;
       this.ctx.fill();
-    }
-    if (this.trail.length > 0) {
-      this.trail = this.trail.map(p => ({ ...p, alpha: p.alpha * 0.92 })).filter(p => p.alpha > 0.05);
     }
   }
 
@@ -358,6 +390,7 @@ export class ParticleEngine {
     const scale = p.currentScale;
     const r = p.radius * scale;
     const alpha = p.opacity;
+    if (alpha <= 0 || r <= 0) return;
 
     this.ctx.save();
     this.ctx.globalAlpha = alpha;
@@ -377,6 +410,7 @@ export class ParticleEngine {
 
     if (p.selected) {
       this.ctx.shadowBlur = 0;
+      this.ctx.globalAlpha = 1;
       this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
       this.ctx.lineWidth = 1;
       this.ctx.beginPath();
@@ -387,25 +421,28 @@ export class ParticleEngine {
     this.ctx.restore();
   }
 
-  private updatePerformance(now: number, deltaTime: number): void {
-    this.fpsFrames++;
-    if (now - this.fpsTime >= 500) {
-      this.currentFps = (this.fpsFrames * 1000) / (now - this.fpsTime);
-      this.fpsFrames = 0;
-      this.fpsTime = now;
+  private updatePerformance(now: number): void {
+    this.frameCount++;
+    this.fpsAccum++;
+
+    if (now - this.fpsSampleTime >= 500) {
+      this.currentFps = (this.fpsAccum * 1000) / (now - this.fpsSampleTime);
+      this.fpsAccum = 0;
+      this.fpsSampleTime = now;
 
       if (this.currentFps < 25) {
-        if (this.lowFpsStartTime === 0) {
-          this.lowFpsStartTime = now;
-        } else if (now - this.lowFpsStartTime > 2000 && !this.performanceMode) {
+        if (this.lowFpsStart === 0) {
+          this.lowFpsStart = now;
+        } else if (now - this.lowFpsStart > 2000 && !this.performanceMode) {
           this.enterPerformanceMode();
         }
       } else {
-        this.lowFpsStartTime = 0;
+        this.lowFpsStart = 0;
+        if (this.performanceMode && this.currentFps > 35) {
+          this.exitPerformanceMode();
+        }
       }
     }
-
-    this.cpuLoad = Math.min(1, deltaTime / 16.67);
 
     if (this.onStatsUpdate) {
       this.onStatsUpdate({
@@ -419,37 +456,33 @@ export class ParticleEngine {
 
   private enterPerformanceMode(): void {
     this.performanceMode = true;
-    this.maxParticles = this.reducedMaxParticles;
+    this.maxParticles = 300;
     if (this.particles.length > this.maxParticles) {
-      this.particles.sort((a, b) => a.remainingLife - b.remainingLife);
+      this.particles.sort((a, b) => a.lifeFrames - b.lifeFrames);
       this.particles = this.particles.slice(this.particles.length - this.maxParticles);
     }
-    if (this.performanceModeTimeout) clearTimeout(this.performanceModeTimeout);
-    this.performanceModeTimeout = window.setTimeout(() => {
-      this.performanceMode = false;
-      this.maxParticles = this.defaultMaxParticles;
-      this.lowFpsStartTime = 0;
-    }, 10000);
+  }
+
+  private exitPerformanceMode(): void {
+    this.performanceMode = false;
+    this.maxParticles = 500;
+    this.lowFpsStart = 0;
   }
 
   private loop = (): void => {
-    if (this.paused) {
-      this.animationId = requestAnimationFrame(this.loop);
-      return;
-    }
-
     const now = performance.now();
     const deltaMs = now - this.lastTime;
-    const deltaTime = Math.min(deltaMs / 16.67, 2);
+    const dt = Math.min(deltaMs / 16.67, 2);
     this.lastTime = now;
-    this.frameStart = now;
 
-    this.applyPhysics(deltaTime);
-    this.updateParticles(deltaTime);
+    this.cpuLoad = Math.min(1, deltaMs / 16.67);
+
+    this.applyPhysics(dt);
+    this.updateParticles(dt);
+    this.updateTrail();
     this.render();
 
-    const frameDuration = performance.now() - this.frameStart;
-    this.updatePerformance(now, frameDuration);
+    this.updatePerformance(now);
 
     this.animationId = requestAnimationFrame(this.loop);
   };
