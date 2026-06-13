@@ -66,17 +66,23 @@ export default function App() {
     }
   }, [nodes, links])
 
+  const particlesPerSecondRef = useRef(17.5)
+
   const updateParticles = useCallback(
     (delta: number) => {
       setParticles((prev) => {
-        const targetParticlesPerSecond = 15 + Math.random() * 5
-        particleSpawnRef.current += delta * targetParticlesPerSecond
+        particleSpawnRef.current += delta * particlesPerSecondRef.current
 
         let newParticles = prev
           .map((p) => ({ ...p, progress: p.progress + p.speed * delta }))
           .filter((p) => p.progress < 1)
 
         const maxParticles = 100
+        if (newParticles.length > maxParticles) {
+          newParticles = newParticles.slice(0, maxParticles)
+          particleSpawnRef.current = 0
+        }
+
         while (particleSpawnRef.current >= 1 && newParticles.length < maxParticles) {
           particleSpawnRef.current -= 1
           const p = generateParticle(links, nodePositionsRef.current)
@@ -85,9 +91,7 @@ export default function App() {
           }
         }
 
-        if (newParticles.length > maxParticles) {
-          console.warn(`Particle count (${newParticles.length}) exceeds limit of ${maxParticles}, pausing new particle generation`)
-          newParticles = newParticles.slice(0, maxParticles)
+        if (newParticles.length >= maxParticles && particleSpawnRef.current > 0) {
           particleSpawnRef.current = 0
         }
 
@@ -246,7 +250,7 @@ export default function App() {
               <span style={{ color: '#cbd5e1' }}>
                 {pair.source} <span style={{ color: '#64748b' }}>→</span> {pair.target}
               </span>
-              <span style={{ color: '#a78bfa', fontWeight: 500 }}>{pair.traffic.toFixed(1)} MB/s</span>
+              <span style={{ color: '#22d3ee', fontWeight: 500 }}>{pair.traffic.toFixed(1)} MB/s</span>
             </div>
           ))}
         </div>

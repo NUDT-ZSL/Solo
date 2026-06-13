@@ -196,28 +196,28 @@ function DataParticle({
 }
 
 function FPSTracker() {
-  const frameCountRef = useRef(0)
-  const lastTimeRef = useRef(performance.now())
-  const warnedRef = useRef(false)
+  const lastFrameTimeRef = useRef(performance.now())
+  const lowFrameCountRef = useRef(0)
+  const lastWarnTimeRef = useRef(0)
 
   useFrame(() => {
-    frameCountRef.current++
     const now = performance.now()
-    const elapsed = now - lastTimeRef.current
+    const delta = now - lastFrameTimeRef.current
+    lastFrameTimeRef.current = now
 
-    if (elapsed >= 1000) {
-      const fps = (frameCountRef.current * 1000) / elapsed
-      frameCountRef.current = 0
-      lastTimeRef.current = now
+    const instantFps = 1000 / Math.max(delta, 1)
 
-      if (fps < 45) {
-        if (!warnedRef.current) {
-          console.warn(`[NetworkScene] FPS is below 45! Current FPS: ${fps.toFixed(1)}`)
-          warnedRef.current = true
+    if (instantFps < 45) {
+      lowFrameCountRef.current++
+      if (lowFrameCountRef.current >= 3) {
+        if (now - lastWarnTimeRef.current >= 1000) {
+          console.warn(`[NetworkScene] FPS is below 45! Current FPS: ${instantFps.toFixed(1)}`)
+          lastWarnTimeRef.current = now
         }
-      } else {
-        warnedRef.current = false
+        lowFrameCountRef.current = 3
       }
+    } else {
+      lowFrameCountRef.current = Math.max(0, lowFrameCountRef.current - 1)
     }
   })
 

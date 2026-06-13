@@ -136,9 +136,9 @@ export function generateParticle(links: LinkData[], positions: THREE.Vector3[]):
 
   const mid = new THREE.Vector3().addVectors(sourceNode, targetNode).multiplyScalar(0.5)
   const randomDir = new THREE.Vector3(
-    Math.random() - 0.5,
-    Math.random() - 0.5,
-    Math.random() - 0.5
+    (Math.random() - 0.5) * 2,
+    (Math.random() - 0.5) * 2,
+    (Math.random() - 0.5) * 2
   ).normalize()
   const offset = randomDir.multiplyScalar(offsetMagnitude)
   const controlPoint = mid.add(offset)
