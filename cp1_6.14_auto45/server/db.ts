@@ -195,15 +195,6 @@ export function submitVote(
   selections: { optionIndex: number; rating?: number; rankPosition?: number }[],
   ip: string | null
 ): { success: boolean; message?: string } {
-  const poll = getPoll(pollId);
-  if (!poll) {
-    return { success: false, message: '投票不存在' };
-  }
-
-  if (poll.deadline && Date.now() > poll.deadline) {
-    return { success: false, message: '投票已截止' };
-  }
-
   const ipPrefix = getIpPrefix(ip);
   const sessionId = uuidv4();
   const now = Date.now();
@@ -222,7 +213,20 @@ export function submitVote(
     UPDATE polls SET participant_count = participant_count + 1 WHERE id = ?
   `);
 
+  const getPollForUpdate = db.prepare(`
+    SELECT * FROM polls WHERE id = ?
+  `);
+
   const transaction = db.transaction(() => {
+    const pollRow = getPollForUpdate.get(pollId) as any;
+    if (!pollRow) {
+      throw new Error('投票不存在');
+    }
+
+    if (pollRow.deadline && now > pollRow.deadline) {
+      throw new Error('投票已截止');
+    }
+
     insertSession.run(sessionId, pollId, ipPrefix, now);
 
     for (const selection of selections) {
@@ -244,8 +248,8 @@ export function submitVote(
   try {
     transaction();
     return { success: true };
-  } catch (err) {
-    return { success: false, message: '投票失败' };
+  } catch (err: any) {
+    return { success: false, message: err.message || '投票失败' };
   }
 }
 

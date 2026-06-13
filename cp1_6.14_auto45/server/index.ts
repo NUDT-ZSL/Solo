@@ -22,7 +22,7 @@ const io = new Server(httpServer, {
   }
 });
 
-const PORT = 3001;
+const PORT = 3002;
 
 app.use(express.json());
 

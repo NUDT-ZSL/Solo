@@ -31,16 +31,25 @@ const Home: React.FC = () => {
         params: { offset, limit: PAGE_SIZE },
       });
 
+      const pollsData = res?.data?.polls;
+      const totalData = res?.data?.total;
+
+      if (!Array.isArray(pollsData)) {
+        console.warn('Invalid polls data format:', res?.data);
+        loadedPagesRef.current.delete(pageIndex);
+        return;
+      }
+
       setPolls(prev => {
         const newPolls = [...prev];
-        res.data.polls.forEach((poll: Poll, idx: number) => {
+        pollsData.forEach((poll: Poll, idx: number) => {
           newPolls[offset + idx] = poll;
         });
         return newPolls;
       });
 
-      if (pageIndex === 0) {
-        setTotal(res.data.total);
+      if (pageIndex === 0 && typeof totalData === 'number') {
+        setTotal(totalData);
       }
     } catch (err) {
       console.error('Failed to load polls:', err);

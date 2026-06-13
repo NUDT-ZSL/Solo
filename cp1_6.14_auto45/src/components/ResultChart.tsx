@@ -26,6 +26,10 @@ const INNER_RADIUS = 70;
 
 const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
 
+const MIN_FPS = 50;
+const FRAME_DURATION_TARGET = 1000 / 60;
+const MAX_FRAME_SKIP = 2;
+
 const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, participantCount }) => {
   const [isVisible, setIsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,6 +38,9 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
   const targetValuesRef = useRef<AnimatedValue[]>([]);
   const startValuesRef = useRef<AnimatedValue[]>([]);
   const animationStartTimeRef = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(0);
+  const frameCountRef = useRef<number>(0);
+  const fpsRef = useRef<number>(60);
   const [, forceRender] = useState({});
 
   const calculateAngles = useCallback((values: PollResult[]): { startAngle: number; endAngle: number }[] => {
@@ -112,6 +119,9 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
     startValuesRef.current = animatedValuesRef.current.map(v => ({ ...v }));
     targetValuesRef.current = newTargets;
     animationStartTimeRef.current = performance.now();
+    lastFrameTimeRef.current = performance.now();
+    frameCountRef.current = 0;
+    fpsRef.current = 60;
 
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -119,7 +129,27 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - animationStartTimeRef.current;
-      const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+      const frameDuration = currentTime - lastFrameTimeRef.current;
+      lastFrameTimeRef.current = currentTime;
+      frameCountRef.current++;
+
+      const instantFps = frameDuration > 0 ? 1000 / frameDuration : 60;
+      fpsRef.current = fpsRef.current * 0.9 + instantFps * 0.1;
+
+      let progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+
+      if (fpsRef.current < MIN_FPS && progress < 0.9) {
+        const skipFactor = Math.min(MAX_FRAME_SKIP, Math.ceil(MIN_FPS / Math.max(fpsRef.current, 1)));
+        const adjustedElapsed = elapsed + (skipFactor - 1) * FRAME_DURATION_TARGET;
+        progress = Math.min(adjustedElapsed / ANIMATION_DURATION, 1);
+        console.warn(`[ResultChart] FPS dropped to ${fpsRef.current.toFixed(1)}, accelerating animation`);
+      }
+
+      if (elapsed > ANIMATION_DURATION * 1.1) {
+        progress = 1;
+        console.warn(`[ResultChart] Animation exceeded ${ANIMATION_DURATION * 1.1}ms, forcing completion`);
+      }
+
       const easedProgress = easeOutCubic(progress);
 
       animatedValuesRef.current = startValuesRef.current.map((start, i) => {
@@ -140,6 +170,13 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         animationFrameRef.current = null;
+        const totalDuration = performance.now() - animationStartTimeRef.current;
+        const avgFps = frameCountRef.current / (totalDuration / 1000);
+        if (avgFps < MIN_FPS) {
+          console.warn(`[ResultChart] Animation completed with avg FPS: ${avgFps.toFixed(1)}, duration: ${totalDuration.toFixed(0)}ms`);
+        } else if (process.env.NODE_ENV === 'development') {
+          console.log(`[ResultChart] Animation OK - avg FPS: ${avgFps.toFixed(1)}, duration: ${totalDuration.toFixed(0)}ms`);
+        }
       }
     };
 

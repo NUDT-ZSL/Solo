@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import ResultChart from '../components/ResultChart';
 import socket from '../socket';
 import { Poll, PollResult, PollType, VoteSelection } from '../types';
+
+const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 24;
+const CHECKMARK_PATH_LENGTH = 33;
 
 const PollDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +23,8 @@ const PollDetail: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [showRecords, setShowRecords] = useState(false);
   const [voteRecords, setVoteRecords] = useState<any[]>([]);
+  const successSvgRef = useRef<SVGSVGElement>(null);
+  const animationTimersRef = useRef<NodeJS.Timeout[]>([]);
 
   const fetchPoll = useCallback(async () => {
     if (!id) return;
@@ -41,6 +46,12 @@ const PollDetail: React.FC = () => {
   useEffect(() => {
     fetchPoll();
   }, [fetchPoll]);
+
+  useEffect(() => {
+    return () => {
+      animationTimersRef.current.forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -143,13 +154,24 @@ const PollDetail: React.FC = () => {
       setHasVoted(true);
       setShowSuccess(true);
       setFadeOut(false);
-      setTimeout(() => {
+
+      animationTimersRef.current.forEach(timer => clearTimeout(timer));
+      animationTimersRef.current = [];
+
+      const drawDuration = 500;
+      const holdDuration = 300;
+      const fadeDuration = 500;
+
+      const fadeOutTimer = setTimeout(() => {
         setFadeOut(true);
-      }, 800);
-      setTimeout(() => {
+      }, drawDuration + holdDuration);
+
+      const hideTimer = setTimeout(() => {
         setShowSuccess(false);
         setFadeOut(false);
-      }, 1300);
+      }, drawDuration + holdDuration + fadeDuration);
+
+      animationTimersRef.current.push(fadeOutTimer, hideTimer);
     } catch (err: any) {
       setError(err.response?.data?.error || '投票失败');
     } finally {
@@ -374,7 +396,7 @@ const PollDetail: React.FC = () => {
           }}
         >
           <div style={styles.successCheckmark}>
-            <svg width="80" height="80" viewBox="0 0 52 52">
+            <svg width="80" height="80" viewBox="0 0 52 52" ref={successSvgRef}>
               <circle
                 cx="26"
                 cy="26"
@@ -382,7 +404,11 @@ const PollDetail: React.FC = () => {
                 fill="none"
                 stroke="#10b981"
                 strokeWidth="3"
-                style={styles.circle}
+                style={{
+                  ...styles.circle,
+                  strokeDasharray: CIRCLE_CIRCUMFERENCE,
+                  strokeDashoffset: CIRCLE_CIRCUMFERENCE,
+                }}
               />
               <path
                 fill="none"
@@ -391,7 +417,11 @@ const PollDetail: React.FC = () => {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M14 27l7 7 16-16"
-                style={styles.checkmarkPath}
+                style={{
+                  ...styles.checkmarkPath,
+                  strokeDasharray: CHECKMARK_PATH_LENGTH,
+                  strokeDashoffset: CHECKMARK_PATH_LENGTH,
+                }}
               />
             </svg>
             <p
@@ -701,13 +731,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
   },
   circle: {
-    strokeDasharray: 151,
-    strokeDashoffset: 151,
     animation: 'checkmarkCircle 0.5s cubic-bezier(0.65, 0, 0.45, 1) forwards',
   },
   checkmarkPath: {
-    strokeDasharray: 60,
-    strokeDashoffset: 60,
     animation: 'checkmark 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.2s forwards',
   },
 };
