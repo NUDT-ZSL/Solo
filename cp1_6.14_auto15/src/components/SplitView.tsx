@@ -12,6 +12,27 @@ function SplitView({ position, onPositionChange, isDragging, setIsDragging }: Sp
   const containerRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);
   const startPositionRef = useRef(0);
+  const pendingPositionRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const updatePosition = useCallback((clientX: number) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const deltaX = clientX - startXRef.current;
+    const deltaPercent = (deltaX / rect.width) * 100;
+    const newPosition = Math.max(0, Math.min(100, startPositionRef.current + deltaPercent));
+    
+    pendingPositionRef.current = newPosition;
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(() => {
+        if (pendingPositionRef.current !== null) {
+          onPositionChange(pendingPositionRef.current);
+          pendingPositionRef.current = null;
+        }
+        rafRef.current = null;
+      });
+    }
+  }, [onPositionChange]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -30,34 +51,44 @@ function SplitView({ position, onPositionChange, isDragging, setIsDragging }: Sp
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const deltaX = e.clientX - startXRef.current;
-      const deltaPercent = (deltaX / rect.width) * 100;
-      const newPosition = Math.max(0, Math.min(100, startPositionRef.current + deltaPercent));
-      onPositionChange(newPosition);
+      e.preventDefault();
+      updatePosition(e.clientX);
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const deltaX = e.touches[0].clientX - startXRef.current;
-      const deltaPercent = (deltaX / rect.width) * 100;
-      const newPosition = Math.max(0, Math.min(100, startPositionRef.current + deltaPercent));
-      onPositionChange(newPosition);
+      e.preventDefault();
+      if (e.touches.length > 0) {
+        updatePosition(e.touches[0].clientX);
+      }
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (pendingPositionRef.current !== null) {
+        onPositionChange(pendingPositionRef.current);
+        pendingPositionRef.current = null;
+      }
     };
 
     const handleTouchEnd = () => {
       setIsDragging(false);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (pendingPositionRef.current !== null) {
+        onPositionChange(pendingPositionRef.current);
+        pendingPositionRef.current = null;
+      }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: false });
     window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
     window.addEventListener('touchend', handleTouchEnd);
 
     return () => {
@@ -65,8 +96,11 @@ function SplitView({ position, onPositionChange, isDragging, setIsDragging }: Sp
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
     };
-  }, [isDragging, onPositionChange, setIsDragging]);
+  }, [isDragging, setIsDragging, updatePosition, onPositionChange]);
 
   return (
     <div

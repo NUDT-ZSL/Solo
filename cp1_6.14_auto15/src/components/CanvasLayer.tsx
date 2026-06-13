@@ -18,20 +18,28 @@ function CanvasLayer({ layers, width, height, clipX, clipSide }: CanvasLayerProp
   layersRef.current = layers;
   sizeRef.current = { width, height, clipX, clipSide };
 
-  const layerIds = useMemo(() => layers.map(l => l.id).join(','), [layers]);
+  const layerSig = useMemo(() =>
+    layers.map(l => `${l.id}-${l.opacity}-${l.blendMode}-${l.visible}`).join('|')
+  , [layers]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || width === 0 || height === 0) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
+
+    let frameCount = 0;
+    let lastTime = performance.now();
 
     const render = () => {
       const { width: w, height: h, clipX: cx, clipSide: side } = sizeRef.current;
       const currentLayers = layersRef.current;
 
-      if (w === 0 || h === 0) return;
+      if (w === 0 || h === 0) {
+        animationRef.current = requestAnimationFrame(render);
+        return;
+      }
 
       if (canvas.width !== w) {
         canvas.width = w;
@@ -81,6 +89,13 @@ function CanvasLayer({ layers, width, height, clipX, clipSide }: CanvasLayerProp
 
       ctx.restore();
 
+      frameCount++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        lastTime = now;
+        frameCount = 0;
+      }
+
       animationRef.current = requestAnimationFrame(render);
     };
 
@@ -91,7 +106,7 @@ function CanvasLayer({ layers, width, height, clipX, clipSide }: CanvasLayerProp
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [width, height, layerIds, clipX, clipSide]);
+  }, [width, height, layerSig, clipX, clipSide]);
 
   return (
     <canvas

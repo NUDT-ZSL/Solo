@@ -131,20 +131,30 @@ function App() {
   }, []);
 
   const visibleLayers = layers.filter(l => l.visible && l.image);
+  
+  const isLeftOfCenter = splitPosition < 50;
+  
+  const leftLayers = isLeftOfCenter && visibleLayers.length > 1
+    ? visibleLayers.slice(0, 1)
+    : visibleLayers.slice(1);
+  
+  const rightLayers = isLeftOfCenter && visibleLayers.length > 1
+    ? visibleLayers.slice(1)
+    : visibleLayers.slice(0, 1);
 
   return (
     <div className="app-container">
       <div className="canvas-container" ref={canvasContainerRef}>
         <div className="canvas-wrapper">
           <CanvasLayer
-            layers={visibleLayers}
+            layers={visibleLayers.length > 1 ? leftLayers : visibleLayers}
             width={containerSize.width}
             height={containerSize.height}
             clipX={splitPosition}
             clipSide="left"
           />
           <CanvasLayer
-            layers={visibleLayers.slice(1)}
+            layers={visibleLayers.length > 1 ? rightLayers : visibleLayers}
             width={containerSize.width}
             height={containerSize.height}
             clipX={splitPosition}

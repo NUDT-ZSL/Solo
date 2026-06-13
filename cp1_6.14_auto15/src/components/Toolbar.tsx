@@ -1,3 +1,4 @@
+import { useRef, useCallback } from 'react';
 import { Layer } from '../types';
 import './Toolbar.css';
 
@@ -10,6 +11,21 @@ interface ToolbarProps {
 
 function Toolbar({ layers, onOpacityChange, selectedLayerId, onSelectLayer }: ToolbarProps) {
   const selectedLayer = layers.find(l => l.id === selectedLayerId);
+  const pendingOpacityRef = useRef<{ id: string; opacity: number } | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const handleOpacityChangeOptimized = useCallback((id: string, opacity: number) => {
+    pendingOpacityRef.current = { id, opacity };
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(() => {
+        if (pendingOpacityRef.current) {
+          onOpacityChange(pendingOpacityRef.current.id, pendingOpacityRef.current.opacity);
+          pendingOpacityRef.current = null;
+        }
+        rafRef.current = null;
+      });
+    }
+  }, [onOpacityChange]);
 
   const handlePrevLayer = () => {
     if (layers.length === 0) return;
@@ -66,7 +82,7 @@ function Toolbar({ layers, onOpacityChange, selectedLayerId, onSelectLayer }: To
           value={selectedLayer?.opacity || 0}
           onChange={(e) => {
             if (selectedLayerId) {
-              onOpacityChange(selectedLayerId, parseFloat(e.target.value));
+              handleOpacityChangeOptimized(selectedLayerId, parseFloat(e.target.value));
             }
           }}
           className="opacity-slider"

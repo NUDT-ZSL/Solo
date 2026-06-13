@@ -27,13 +27,21 @@
   width: 3px;
   transform: translateX(-50%);
   background-color: #facc15;
-  box-shadow: 0 0 10px rgba(250, 204, 21, 0.6), 0 0 20px rgba(250, 204, 21, 0.3);
+  box-shadow: 
+    0 0 8px rgba(250, 204, 21, 0.7),
+    0 0 16px rgba(250, 204, 21, 0.5),
+    0 0 24px rgba(250, 204, 21, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.4);
   transition: box-shadow 0.2s ease;
 }
 
 .split-divider:hover .divider-line,
 .split-divider.dragging .divider-line {
-  box-shadow: 0 0 15px rgba(250, 204, 21, 0.8), 0 0 30px rgba(250, 204, 21, 0.5);
+  box-shadow: 
+    0 0 12px rgba(250, 204, 21, 0.9),
+    0 0 24px rgba(250, 204, 21, 0.7),
+    0 0 36px rgba(250, 204, 21, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .divider-handle {
