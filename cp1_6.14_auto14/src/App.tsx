@@ -3,9 +3,12 @@ import GravityEngine from './physics/GravityEngine';
 import LevelManager from './engine/LevelManager';
 import type { LevelStatus } from './engine/LevelManager';
 import GameCanvas from './components/GameCanvas';
-import type { PhysicsState, Vec2 } from './physics/GravityEngine';
+import { FuelBar, LevelInfo, InfoPanel, GameButtons } from './components/ui';
+import type { PhysicsState, Vec2, CelestialBody } from './physics/GravityEngine';
 
 type GameView = 'menu' | 'playing' | 'victory';
+
+type GravityVector = { body: CelestialBody; fx: number; fy: number; mag: number };
 
 export default function App() {
   const [gameView, setGameView] = useState<GameView>('menu');
@@ -16,7 +19,7 @@ export default function App() {
   const [dragStart, setDragStart] = useState<Vec2 | null>(null);
   const [dragEnd, setDragEnd] = useState<Vec2 | null>(null);
   const [predictedTrajectory, setPredictedTrajectory] = useState<Vec2[]>([]);
-  const [gravityVectors, setGravityVectors] = useState<PhysicsState['bodies'] extends Array<infer T> ? { body: T; fx: number; fy: number; mag: number }[] : never>([]);
+  const [gravityVectors, setGravityVectors] = useState<GravityVector[]>([]);
   const [explosionActive, setExplosionActive] = useState(false);
   const [explosionPos, setExplosionPos] = useState<Vec2 | null>(null);
   const [victoryActive, setVictoryActive] = useState(false);
@@ -26,6 +29,11 @@ export default function App() {
   const loopRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const gameViewRef = useRef(gameView);
+
+  useEffect(() => {
+    gameViewRef.current = gameView;
+  }, [gameView]);
 
   const getDimensions = useCallback(() => {
     if (containerRef.current) {
@@ -56,6 +64,9 @@ export default function App() {
     setVictoryActive(false);
     setPredictedTrajectory([]);
     setGravityVectors([]);
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
   }, [getDimensions]);
 
   const startGame = useCallback(() => {
@@ -65,7 +76,7 @@ export default function App() {
     engineRef.current = engine;
     levelMgrRef.current = mgr;
     setGameView('playing');
-    loadCurrentLevel();
+    setTimeout(() => loadCurrentLevel(), 0);
   }, [getDimensions, loadCurrentLevel]);
 
   const resetLevel = useCallback(() => {
@@ -86,14 +97,21 @@ export default function App() {
     setElapsedTime(0);
     setExplosionActive(false);
     setExplosionPos(null);
-    setVictoryActive(false);
     setPredictedTrajectory([]);
     setGravityVectors([]);
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
   }, [getDimensions]);
 
   const goToMenu = useCallback(() => {
     setGameView('menu');
-    if (loopRef.current) cancelAnimationFrame(loopRef.current);
+    if (loopRef.current) {
+      cancelAnimationFrame(loopRef.current);
+      loopRef.current = 0;
+    }
+    setPhysicsState(null);
+    setVictoryActive(false);
   }, []);
 
   const handleLaunch = useCallback((vx: number, vy: number) => {
@@ -110,7 +128,9 @@ export default function App() {
     if (gameView !== 'playing') return;
 
     const gameLoop = (timestamp: number) => {
-      const dt = lastTimeRef.current ? Math.min((timestamp - lastTimeRef.current) / 1000, 0.05) : 0.016;
+      const dt = lastTimeRef.current
+        ? Math.min((timestamp - lastTimeRef.current) / 1000, 0.05)
+        : 0.016;
       lastTimeRef.current = timestamp;
 
       const engine = engineRef.current;
@@ -122,7 +142,7 @@ export default function App() {
 
       const state = engine.update(dt);
       setPhysicsState(state);
-      setElapsedTime(prev => prev + dt);
+      setElapsedTime((prev) => prev + dt);
 
       if (state.probe.launched && state.probe.alive) {
         setGravityVectors(engine.getGravityVectors());
@@ -140,7 +160,7 @@ export default function App() {
         if (status === 'won') {
           if (mgr.isVictory()) {
             setVictoryActive(true);
-            setTimeout(() => setGameView('victory'), 500);
+            setTimeout(() => setGameView('victory'), 800);
           } else {
             mgr.advanceLevel();
             setTimeout(() => loadCurrentLevel(), 800);
@@ -159,79 +179,64 @@ export default function App() {
     loopRef.current = requestAnimationFrame(gameLoop);
 
     return () => {
-      if (loopRef.current) cancelAnimationFrame(loopRef.current);
+      if (loopRef.current) {
+        cancelAnimationFrame(loopRef.current);
+      }
     };
   }, [gameView, loadCurrentLevel, resetLevel]);
 
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (gameView === 'menu') {
-      startGame();
-      return;
-    }
-    if (gameView === 'victory') {
-      goToMenu();
-      return;
-    }
+  const getEventPos = useCallback((e: React.MouseEvent | MouseEvent): Vec2 => {
     const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const gravityVecLen = gravityVectors.length;
-    const bx = 12;
-    const by = 60 + gravityVecLen * 28 + 60;
-    const bw = 105;
-    const bh = 32;
-    if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
-      resetLevel();
-      return;
-    }
-    if (x >= bx + bw + 10 && x <= bx + bw * 2 + 10 && y >= by && y <= by + bh) {
-      goToMenu();
-      return;
-    }
-  }, [gameView, startGame, goToMenu, resetLevel, gravityVectors.length]);
+    if (!rect) return { x: 0, y: 0 };
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }, []);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (gameView !== 'playing') return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const gravityVecLen = gravityVectors.length;
-    const bx = 12;
-    const by = 60 + gravityVecLen * 28 + 60;
-    const bw = 105;
-    const bh = 32;
-    if ((x >= bx && x <= bx + bw && y >= by && y <= by + bh) ||
-        (x >= bx + bw + 10 && x <= bx + bw * 2 + 10 && y >= by && y <= by + bh)) {
-      return;
-    }
-    setIsDragging(true);
-    setDragStart({ x, y });
-    setDragEnd({ x, y });
-  }, [gameView, gravityVectors.length]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setDragEnd({ x, y });
-
-    if (dragStart && engineRef.current) {
-      const dx = dragStart.x - x;
-      const dy = dragStart.y - y;
-      const mag = Math.sqrt(dx * dx + dy * dy);
-      if (mag > 10) {
-        const speed = Math.min(mag * 1.5, 400);
-        const vx = (dx / mag) * speed;
-        const vy = (dy / mag) * speed;
-        const traj = engineRef.current.predictTrajectory(vx, vy);
-        setPredictedTrajectory(traj);
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (gameViewRef.current === 'menu') {
+        startGame();
+        return;
       }
-    }
-  }, [isDragging, dragStart]);
+      if (gameViewRef.current === 'victory') {
+        goToMenu();
+        return;
+      }
+      if (gameViewRef.current !== 'playing') return;
+      if (!engineRef.current) return;
+
+      const pos = getEventPos(e);
+      const engine = engineRef.current;
+      const state = engine.getState();
+      if (state.probe.launched) return;
+
+      setIsDragging(true);
+      setDragStart(pos);
+      setDragEnd(pos);
+    },
+    [startGame, goToMenu, getEventPos]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isDragging) return;
+      const pos = getEventPos(e);
+      setDragEnd(pos);
+
+      if (dragStart && engineRef.current) {
+        const dx = dragStart.x - pos.x;
+        const dy = dragStart.y - pos.y;
+        const mag = Math.sqrt(dx * dx + dy * dy);
+        if (mag > 10) {
+          const speed = Math.min(mag * 1.5, 400);
+          const vx = (dx / mag) * speed;
+          const vy = (dy / mag) * speed;
+          const traj = engineRef.current.predictTrajectory(vx, vy);
+          setPredictedTrajectory(traj);
+        }
+      }
+    },
+    [isDragging, dragStart, getEventPos]
+  );
 
   const handleMouseUp = useCallback(() => {
     if (!isDragging || !dragStart || !dragEnd) {
@@ -254,12 +259,12 @@ export default function App() {
   return (
     <div
       ref={containerRef}
-      onClick={handleCanvasClick}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       style={{
+        position: 'relative',
         width: '100vw',
         height: '100vh',
         minWidth: 800,
@@ -275,16 +280,25 @@ export default function App() {
         isDragging={isDragging}
         dragStart={dragStart}
         dragEnd={dragEnd}
-        levelNumber={levelNumber}
-        elapsedTime={elapsedTime}
+        gameView={gameView}
         explosionActive={explosionActive}
         explosionPos={explosionPos}
         victoryActive={victoryActive}
-        gameView={gameView}
         onReset={resetLevel}
         onMenu={goToMenu}
         onLaunch={handleLaunch}
       />
+
+      {gameView === 'playing' && physicsState && (
+        <>
+          {physicsState.probe.launched && physicsState.probe.alive && (
+            <FuelBar fuel={physicsState.probe.fuel} maxFuel={physicsState.probe.maxFuel} />
+          )}
+          <LevelInfo levelNumber={levelNumber} elapsedTime={elapsedTime} />
+          <InfoPanel gravityVectors={gravityVectors} />
+          <GameButtons onReset={resetLevel} onMenu={goToMenu} />
+        </>
+      )}
     </div>
   );
 }

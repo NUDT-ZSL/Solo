@@ -47,10 +47,11 @@ export interface PhysicsState {
   time: number;
 }
 
-const G = 800;
-const MAX_TRAIL = 200;
-const MAX_TRAJECTORY = 200;
+const G_BASE = 600;
+const MAX_TRAIL_PARTICLES = 20;
+const MAX_TRAJECTORY_POINTS = 200;
 const TRAIL_ADD_INTERVAL = 0.05;
+const FUEL_CONSUMPTION_RATE = 2;
 
 export default class GravityEngine {
   private probe: ProbeState;
@@ -130,7 +131,7 @@ export default class GravityEngine {
     this.time += dt;
     this.wormhole.rotation += dt * (Math.PI * 2 / 0.3);
 
-    this.probe.fuel -= 2 * dt;
+    this.probe.fuel -= FUEL_CONSUMPTION_RATE * dt;
     if (this.probe.fuel <= 0) {
       this.probe.fuel = 0;
       this.probe.alive = false;
@@ -154,7 +155,7 @@ export default class GravityEngine {
         continue;
       }
 
-      const force = (G * body.mass) / Math.max(distSq, 2500);
+      const force = (G_BASE * body.mass) / Math.max(distSq, 1000);
       ax += force * (dx / dist);
       ay += force * (dy / dist);
     }
@@ -168,7 +169,7 @@ export default class GravityEngine {
     if (this.trailTimer >= TRAIL_ADD_INTERVAL) {
       this.trailTimer = 0;
       this.probe.trail.push({ x: this.probe.x, y: this.probe.y, age: 0 });
-      if (this.probe.trail.length > 20) {
+      if (this.probe.trail.length > MAX_TRAIL_PARTICLES) {
         this.probe.trail.shift();
       }
     }
@@ -178,7 +179,7 @@ export default class GravityEngine {
     }
 
     this.probe.trajectory.push({ x: this.probe.x, y: this.probe.y });
-    if (this.probe.trajectory.length > MAX_TRAJECTORY) {
+    if (this.probe.trajectory.length > MAX_TRAJECTORY_POINTS) {
       this.probe.trajectory.shift();
     }
 
@@ -219,7 +220,7 @@ export default class GravityEngine {
         const distSq = dx * dx + dy * dy;
         const dist = Math.sqrt(distSq);
         if (dist < body.radius) break;
-        const force = (G * body.mass) / Math.max(distSq, 2500);
+        const force = (G_BASE * body.mass) / Math.max(distSq, 1000);
         ax += force * (dx / dist);
         ay += force * (dy / dist);
       }
@@ -241,7 +242,7 @@ export default class GravityEngine {
       const dy = body.y - this.probe.y;
       const distSq = dx * dx + dy * dy;
       const dist = Math.sqrt(distSq);
-      const force = (G * body.mass) / Math.max(distSq, 2500);
+      const force = (G_BASE * body.mass) / Math.max(distSq, 1000);
       const fx = force * (dx / dist);
       const fy = force * (dy / dist);
       vectors.push({ body, fx, fy, mag: Math.sqrt(fx * fx + fy * fy) });

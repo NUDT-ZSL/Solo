@@ -10,8 +10,10 @@ export interface LevelConfig {
 
 const PLANET_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899'];
 const ASTEROID_COLOR = '#94a3b8';
+const GRAVITY_RADIUS_FACTOR = 3.5;
 
 function makePlanet(id: string, x: number, y: number, mass: number, radius: number, colorIdx: number): CelestialBody {
+  const gravityRadius = Math.sqrt(mass) * GRAVITY_RADIUS_FACTOR + radius;
   return {
     id,
     x,
@@ -20,7 +22,7 @@ function makePlanet(id: string, x: number, y: number, mass: number, radius: numb
     radius,
     type: 'planet',
     color: PLANET_COLORS[colorIdx % PLANET_COLORS.length],
-    gravityRadius: radius * 4,
+    gravityRadius,
   };
 }
 
@@ -45,8 +47,8 @@ function generateLevels(width: number, height: number): LevelConfig[] {
     {
       level: 1,
       bodies: [
-        makePlanet('p1', cx - 50, cy, 60, 30, 0),
-        makePlanet('p2', cx + 120, cy - 80, 40, 22, 1),
+        makePlanet('p1', cx - 50, cy, 120, 32, 0),
+        makePlanet('p2', cx + 120, cy - 80, 40, 18, 1),
       ],
       wormhole: { x: cx + 250, y: cy + 60, radius: 25, rotation: 0 },
       probeStart: { x: cx - 300, y: cy },
@@ -55,9 +57,9 @@ function generateLevels(width: number, height: number): LevelConfig[] {
     {
       level: 2,
       bodies: [
-        makePlanet('p1', cx - 80, cy - 60, 70, 32, 2),
-        makePlanet('p2', cx + 80, cy + 40, 50, 25, 3),
-        makePlanet('p3', cx + 200, cy - 100, 35, 20, 4),
+        makePlanet('p1', cx - 80, cy - 60, 150, 38, 2),
+        makePlanet('p2', cx + 80, cy + 40, 70, 26, 3),
+        makePlanet('p3', cx + 200, cy - 100, 30, 16, 4),
       ],
       wormhole: { x: cx + 300, y: cy + 100, radius: 25, rotation: 0 },
       probeStart: { x: cx - 320, y: cy + 20 },
@@ -66,9 +68,9 @@ function generateLevels(width: number, height: number): LevelConfig[] {
     {
       level: 3,
       bodies: [
-        makePlanet('p1', cx - 100, cy - 80, 80, 35, 5),
-        makePlanet('p2', cx + 60, cy + 60, 55, 28, 6),
-        makePlanet('p3', cx + 200, cy - 40, 45, 24, 0),
+        makePlanet('p1', cx - 100, cy - 80, 180, 42, 5),
+        makePlanet('p2', cx + 60, cy + 60, 80, 28, 6),
+        makePlanet('p3', cx + 200, cy - 40, 50, 22, 0),
         makeAsteroid('a1', cx + 140, cy + 140, 12),
       ],
       wormhole: { x: cx + 350, y: cy - 80, radius: 25, rotation: 0 },
@@ -78,10 +80,10 @@ function generateLevels(width: number, height: number): LevelConfig[] {
     {
       level: 4,
       bodies: [
-        makePlanet('p1', cx - 120, cy, 90, 38, 1),
-        makePlanet('p2', cx + 40, cy - 100, 60, 27, 2),
-        makePlanet('p3', cx + 160, cy + 80, 50, 25, 3),
-        makePlanet('p4', cx - 30, cy + 120, 40, 22, 4),
+        makePlanet('p1', cx - 120, cy, 200, 45, 1),
+        makePlanet('p2', cx + 40, cy - 100, 90, 30, 2),
+        makePlanet('p3', cx + 160, cy + 80, 60, 24, 3),
+        makePlanet('p4', cx - 30, cy + 120, 35, 18, 4),
         makeAsteroid('a1', cx + 100, cy + 20, 10),
         makeAsteroid('a2', cx - 60, cy - 60, 8),
       ],
@@ -92,11 +94,11 @@ function generateLevels(width: number, height: number): LevelConfig[] {
     {
       level: 5,
       bodies: [
-        makePlanet('p1', cx - 80, cy - 100, 100, 40, 5),
-        makePlanet('p2', cx + 100, cy - 60, 70, 30, 6),
-        makePlanet('p3', cx - 40, cy + 100, 55, 26, 0),
-        makePlanet('p4', cx + 220, cy + 60, 45, 24, 1),
-        makePlanet('p5', cx + 60, cy + 160, 35, 20, 2),
+        makePlanet('p1', cx - 80, cy - 100, 220, 48, 5),
+        makePlanet('p2', cx + 100, cy - 60, 120, 34, 6),
+        makePlanet('p3', cx - 40, cy + 100, 70, 26, 0),
+        makePlanet('p4', cx + 220, cy + 60, 50, 22, 1),
+        makePlanet('p5', cx + 60, cy + 160, 25, 14, 2),
         makeAsteroid('a1', cx + 30, cy - 10, 10),
         makeAsteroid('a2', cx + 160, cy - 120, 8),
         makeAsteroid('a3', cx - 100, cy + 30, 12),
