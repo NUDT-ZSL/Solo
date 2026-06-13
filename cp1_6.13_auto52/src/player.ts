@@ -23,9 +23,9 @@ export class Player {
     this.radius = 12;
     this.maxLives = 3;
     this.lives = 3;
-    this.baseLightRadius = 120;
-    this.lightRadius = 120;
-    this.lightDecayRate = 0.5;
+    this.baseLightRadius = 240;
+    this.lightRadius = 240;
+    this.lightDecayRate = 1.0;
     this.gemsCollected = 0;
     this.moveSpeed = 2;
     this.invulnerable = 0;
@@ -108,7 +108,7 @@ export class Player {
       const dx = c.x - this.x;
       const dy = c.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < this.radius + c.radius) {
+      if (dist <= this.radius + c.radius) {
         this.hit();
         break;
       }
@@ -128,6 +128,6 @@ export class Player {
 
   public collectGem(): void {
     this.gemsCollected++;
-    this.lightRadius = Math.min(this.lightRadius + 15, this.baseLightRadius + 100);
+    this.lightRadius = Math.min(this.lightRadius + 15, this.baseLightRadius + 60);
   }
 }

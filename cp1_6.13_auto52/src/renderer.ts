@@ -20,6 +20,12 @@ export class Renderer {
   private width: number;
   private height: number;
   private wallNoiseCanvas: HTMLCanvasElement | null = null;
+  private offscreenCanvas: HTMLCanvasElement | null = null;
+  private offscreenCtx: CanvasRenderingContext2D | null = null;
+  private currentMazeKey: string = '';
+  private lastPlayerX: number = -1;
+  private lastPlayerY: number = -1;
+  private lastLightRadius: number = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
@@ -28,6 +34,11 @@ export class Renderer {
     this.width = canvas.width;
     this.height = canvas.height;
     this.generateWallNoise();
+
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCanvas.width = canvas.width;
+    this.offscreenCanvas.height = canvas.height;
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d');
   }
 
   private generateWallNoise(): void {
@@ -54,10 +65,9 @@ export class Renderer {
   public render(state: GameState): void {
     const { maze, player, gems, creatures, portal } = state;
 
-    this.ctx.fillStyle = '#000000';
-    this.ctx.fillRect(0, 0, this.width, this.height);
-
     if (state.gameOver) {
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(0, 0, this.width, this.height);
       this.renderGameOver(state);
       return;
     }
@@ -65,10 +75,65 @@ export class Renderer {
     const offsetX = (this.width - maze.width * CELL_SIZE) / 2;
     const offsetY = (this.height - maze.height * CELL_SIZE) / 2;
 
+    const mazeKey = maze.grid.map(row => row.join('')).join('|');
+    if (mazeKey !== this.currentMazeKey) {
+      this.currentMazeKey = mazeKey;
+      this.preRenderMaze(maze, offsetX, offsetY);
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.lastPlayerX = -1;
+      this.lastPlayerY = -1;
+      this.lastLightRadius = -1;
+    }
+
+    const maxLight = Math.max(this.lastLightRadius, player.lightRadius) + CELL_SIZE * 2;
+
+    const dirtyRects: { x: number; y: number; w: number; h: number }[] = [];
+    const playerCanvasX = player.x + offsetX;
+    const playerCanvasY = player.y + offsetY;
+    const lastPlayerCanvasX = this.lastPlayerX + offsetX;
+    const lastPlayerCanvasY = this.lastPlayerY + offsetY;
+
+    if (this.lastPlayerX >= 0) {
+      const prevL = Math.max(0, Math.floor((lastPlayerCanvasX - maxLight) / 2) * 2);
+      const prevT = Math.max(0, Math.floor((lastPlayerCanvasY - maxLight) / 2) * 2);
+      const prevR = Math.min(this.width, Math.ceil((lastPlayerCanvasX + maxLight) / 2) * 2);
+      const prevB = Math.min(this.height, Math.ceil((lastPlayerCanvasY + maxLight) / 2) * 2);
+      dirtyRects.push({ x: prevL, y: prevT, w: prevR - prevL, h: prevB - prevT });
+    }
+
+    const currL = Math.max(0, Math.floor((playerCanvasX - maxLight) / 2) * 2);
+    const currT = Math.max(0, Math.floor((playerCanvasY - maxLight) / 2) * 2);
+    const currR = Math.min(this.width, Math.ceil((playerCanvasX + maxLight) / 2) * 2);
+    const currB = Math.min(this.height, Math.ceil((playerCanvasY + maxLight) / 2) * 2);
+    dirtyRects.push({ x: currL, y: currT, w: currR - currL, h: currB - currT });
+
+    for (const rect of dirtyRects) {
+      if (rect.w <= 0 || rect.h <= 0) continue;
+      this.ctx.clearRect(rect.x, rect.y, rect.w, rect.h);
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+
+      if (this.offscreenCanvas) {
+        this.ctx.drawImage(
+          this.offscreenCanvas,
+          rect.x, rect.y, rect.w, rect.h,
+          rect.x, rect.y, rect.w, rect.h
+        );
+      }
+    }
+
     this.ctx.save();
     this.ctx.translate(offsetX, offsetY);
 
-    this.renderWalls(maze, player);
+    const clipL = Math.max(0, (player.x - player.lightRadius - CELL_SIZE));
+    const clipT = Math.max(0, (player.y - player.lightRadius - CELL_SIZE));
+    const clipR = Math.min(maze.width * CELL_SIZE, (player.x + player.lightRadius + CELL_SIZE));
+    const clipB = Math.min(maze.height * CELL_SIZE, (player.y + player.lightRadius + CELL_SIZE));
+    this.ctx.beginPath();
+    this.ctx.rect(clipL, clipT, clipR - clipL, clipB - clipT);
+    this.ctx.clip();
+
     this.renderPortal(portal, player);
     this.renderGems(gems, player);
     this.renderCreatures(creatures, player);
@@ -78,22 +143,27 @@ export class Renderer {
 
     this.renderLightMask(player, offsetX, offsetY);
     this.renderUI(state);
+
+    this.lastPlayerX = player.x;
+    this.lastPlayerY = player.y;
+    this.lastLightRadius = player.lightRadius;
   }
 
-  private renderWalls(maze: Maze, player: Player): void {
-    const ctx = this.ctx;
+  private preRenderMaze(maze: Maze, offsetX: number, offsetY: number): void {
+    if (!this.offscreenCtx) return;
+    const ctx = this.offscreenCtx;
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
 
     for (let y = 0; y < maze.height; y++) {
       for (let x = 0; x < maze.width; x++) {
         if (maze.grid[y][x] === 1) {
           const px = x * CELL_SIZE;
           const py = y * CELL_SIZE;
-
-          const dx = px + CELL_SIZE / 2 - player.x;
-          const dy = py + CELL_SIZE / 2 - player.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > player.lightRadius + CELL_SIZE) continue;
-
           if (this.wallNoiseCanvas) {
             ctx.drawImage(this.wallNoiseCanvas, px, py);
           } else {
@@ -103,6 +173,8 @@ export class Renderer {
         }
       }
     }
+
+    ctx.restore();
   }
 
   private renderPlayer(player: Player): void {
@@ -276,8 +348,20 @@ export class Renderer {
     }
 
     if (portal.active) {
-      ctx.strokeStyle = `rgba(253, 224, 71, ${0.5 + pulse * 0.5})`;
-      ctx.lineWidth = 2;
+      const glowPulse = (Math.sin(portal.pulseTime * Math.PI * 4) + 1) / 2;
+      for (let g = 0; g < 3; g++) {
+        const glowT = (portal.pulseTime * 2 + g * 0.17) % 1;
+        const glowAlpha = Math.sin(glowT * Math.PI) * 0.7;
+        const glowR = portal.radius + 6 + glowT * 20;
+        ctx.strokeStyle = `rgba(251, 191, 36, ${glowAlpha})`;
+        ctx.lineWidth = 3 - g;
+        ctx.beginPath();
+        ctx.arc(0, 0, glowR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = `rgba(253, 224, 71, ${0.6 + glowPulse * 0.4})`;
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(0, 0, portal.radius + pulse * 4, 0, Math.PI * 2);
       ctx.stroke();
@@ -375,9 +459,16 @@ export class Renderer {
     if (state.gameOverTime < 0.5) return;
 
     ctx.save();
-    const shakeX = state.gameOverTime < 1.0 ? (Math.random() - 0.5) * 6 : 0;
-    const shakeY = state.gameOverTime < 1.0 ? (Math.random() - 0.5) * 6 : 0;
-    ctx.translate(shakeX, shakeY);
+
+    let textShakeX = 0;
+    let textShakeY = 0;
+    const shakeDuration = 0.5;
+    if (state.gameOverTime >= 0.5 && state.gameOverTime < 0.5 + shakeDuration) {
+      textShakeX = 2 + Math.random() * 3;
+      textShakeY = 2 + Math.random() * 3;
+      if (Math.random() > 0.5) textShakeX = -textShakeX;
+      if (Math.random() > 0.5) textShakeY = -textShakeY;
+    }
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 48px sans-serif';
@@ -385,7 +476,7 @@ export class Renderer {
     ctx.textBaseline = 'middle';
     ctx.shadowColor = '#ef4444';
     ctx.shadowBlur = 20;
-    ctx.fillText('Game Over', this.width / 2, this.height / 2 - 60);
+    ctx.fillText('Game Over', this.width / 2 + textShakeX, this.height / 2 - 60 + textShakeY);
     ctx.shadowBlur = 0;
 
     ctx.font = '18px sans-serif';
