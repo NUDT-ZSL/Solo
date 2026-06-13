@@ -4,12 +4,10 @@ import {
   endOfWeek,
   eachDayOfInterval,
   format,
-  isSameDay,
   addWeeks,
   subWeeks,
   isToday,
   parseISO,
-  subDays,
 } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { usePetContext } from '../context/PetContext'
@@ -18,11 +16,45 @@ import TaskModal from './TaskModal'
 import AddTaskModal from './AddTaskModal'
 import WeeklyReport from './WeeklyReport'
 
-const categoryConfig: Record<string, { color: string; icon: string }> = {
-  feeding: { color: '#f97316', icon: '🍽️' },
-  walking: { color: '#22c55e', icon: '🐕' },
-  medication: { color: '#a855f7', icon: '💊' },
-  vet: { color: '#ef4444', icon: '🏥' },
+const categoryConfig: Record<string, { color: string; svg: React.ReactNode }> = {
+  feeding: {
+    color: '#f97316',
+    svg: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C13.1046 2 14 2.89543 14 4C14 5.10457 13.1046 6 12 6C10.8954 6 10 5.10457 10 4C10 2.89543 10.8954 2 12 2Z" fill="white"/>
+        <path d="M5 11C5 8.79086 6.79086 7 9 7H15C17.2091 7 19 8.79086 19 11V17C19 19.2091 17.2091 21 15 21H9C6.79086 21 5 19.2091 5 17V11Z" fill="white"/>
+        <path d="M12 7V21M12 11H5" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  walking: {
+    color: '#22c55e',
+    svg: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="13" cy="4" r="2.5" fill="white"/>
+        <path d="M9 20L10 14L7 17L4 19L5 20L7 19.5L9 20Z" fill="white"/>
+        <path d="M13 6C11 7 10 9 10 12L12 13L14 18L17 17L16 12L18 10" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  medication: {
+    color: '#a855f7',
+    svg: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="10" width="18" height="8" rx="4" transform="rotate(-45 3 10)" fill="white"/>
+        <path d="M9.5 14.5L14.5 9.5" stroke="#a855f7" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  vet: {
+    color: '#ef4444',
+    svg: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L14.5 8.5L21 9L16 14L17.5 21L12 17.5L6.5 21L8 14L3 9L9.5 8.5L12 2Z" fill="white"/>
+        <path d="M12 10V15M9.5 12.5H14.5" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
 }
 
 const weekDaysNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -35,24 +67,31 @@ const Dashboard: React.FC = () => {
   const [showAddTaskModal, setShowAddTaskModal] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [showReport, setShowReport] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   const currentPet = pets.find((p) => p._id === currentPetId)
   const petTasks = getCurrentPetTasks()
 
   useEffect(() => {
-    if (notificationSettings?.weeklyReportEnabled) {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (notificationSettings?.weeklyReportEnabled && mounted) {
       const today = new Date()
       const dayOfWeek = today.getDay()
       if (dayOfWeek === 1) {
         const stored = localStorage.getItem('lastReportDate')
         const todayStr = format(today, 'yyyy-MM-dd')
         if (stored !== todayStr) {
-          setShowReport(true)
+          setTimeout(() => {
+            setShowReport(true)
+          }, 1000)
           localStorage.setItem('lastReportDate', todayStr)
         }
       }
     }
-  }, [notificationSettings])
+  }, [notificationSettings, mounted])
 
   const weekDays = useMemo(() => {
     return eachDayOfInterval({
@@ -115,9 +154,13 @@ const Dashboard: React.FC = () => {
   if (!currentPet) {
     return (
       <div style={emptyContainerStyle}>
-        <div style={{ fontSize: '80px', marginBottom: '20px' }}>🐾</div>
-        <h2 style={{ color: '#64748b', margin: '0 0 8px 0' }}>欢迎使用 PetCarePlanner</h2>
-        <p style={{ color: '#94a3b8', margin: 0 }}>请先在左侧添加您的毛孩子档案开始使用</p>
+        <div style={{ fontSize: '80px', marginBottom: '20px', animation: 'fadeInUp 0.4s ease-out 0.1s both' }}>🐾</div>
+        <h2 style={{ color: '#64748b', margin: '0 0 8px 0', animation: 'fadeInUp 0.4s ease-out 0.15s both' }}>
+          欢迎使用 PetCarePlanner
+        </h2>
+        <p style={{ color: '#94a3b8', margin: 0, animation: 'fadeInUp 0.4s ease-out 0.2s both' }}>
+          请先在左侧添加您的毛孩子档案开始使用
+        </p>
       </div>
     )
   }
@@ -158,37 +201,25 @@ const Dashboard: React.FC = () => {
       </header>
 
       <div style={statsContainerStyle}>
-        <div style={statCardStyle}>
-          <div style={{ fontSize: '28px' }}>🍽️</div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>本周喂食</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: '#f97316' }}>{weekStats.feedingCount} 次</div>
+        {[
+          { emoji: '🍽️', label: '本周喂食', value: weekStats.feedingCount, unit: '次', color: '#f97316', delay: 0.05 },
+          { emoji: '🐕', label: '遛弯时长', value: weekStats.walkingMinutes, unit: '分钟', color: '#22c55e', delay: 0.1 },
+          { emoji: '💊', label: '用药次数', value: weekStats.medicationCount, unit: '次', color: '#a855f7', delay: 0.15 },
+          { emoji: '🏥', label: '就诊预约', value: weekStats.vetCount, unit: '次', color: '#ef4444', delay: 0.2 },
+        ].map((stat) => (
+          <div key={stat.label} style={{ ...statCardStyle, animation: `fadeInUp 0.4s ease-out ${stat.delay}s both` }}>
+            <div style={{ fontSize: '28px' }}>{stat.emoji}</div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>{stat.label}</div>
+              <div style={{ fontSize: '22px', fontWeight: 700, color: stat.color }}>
+                {stat.value} {stat.unit}
+              </div>
+            </div>
           </div>
-        </div>
-        <div style={statCardStyle}>
-          <div style={{ fontSize: '28px' }}>🐕</div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>遛弯时长</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: '#22c55e' }}>{weekStats.walkingMinutes} 分钟</div>
-          </div>
-        </div>
-        <div style={statCardStyle}>
-          <div style={{ fontSize: '28px' }}>💊</div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>用药次数</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: '#a855f7' }}>{weekStats.medicationCount} 次</div>
-          </div>
-        </div>
-        <div style={statCardStyle}>
-          <div style={{ fontSize: '28px' }}>🏥</div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>就诊预约</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: '#ef4444' }}>{weekStats.vetCount} 次</div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      <div style={weekNavStyle}>
+      <div style={{ ...weekNavStyle, animation: 'fadeInUp 0.4s ease-out 0.25s both' }}>
         <button
           onClick={goToPrevWeek}
           style={navButtonStyle}
@@ -235,9 +266,16 @@ const Dashboard: React.FC = () => {
               key={dateStr}
               style={{
                 ...dayCardStyle,
+                width: '200px',
+                minWidth: '200px',
+                maxWidth: '200px',
+                height: '280px',
+                minHeight: '280px',
+                maxHeight: '280px',
                 borderTop: isTodayCard ? '4px solid #f59e0b' : '4px solid transparent',
                 paddingTop: isTodayCard ? '12px' : '16px',
-                animation: `fadeInUp 0.4s ease-out ${dayIndex * 0.06}s both`,
+                animation: `fadeInUp 0.4s ease-out ${0.3 + dayIndex * 0.06}s both`,
+                boxSizing: 'border-box',
               }}
               className="day-card"
             >
@@ -283,7 +321,7 @@ const Dashboard: React.FC = () => {
                 )}
               </div>
 
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ flex: '1 1 auto', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', height: 0 }}>
                 {dayTasks.map((task, taskIndex) => {
                   const config = categoryConfig[task.category] || categoryConfig.feeding
                   return (
@@ -291,11 +329,26 @@ const Dashboard: React.FC = () => {
                       key={task._id}
                       onClick={() => handleTaskClick(task)}
                       style={{
-                        ...taskItemStyle,
-                        animation: `fadeInUp 0.3s ease-out ${0.1 + taskIndex * 0.05}s both`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '8px',
+                        borderRadius: '10px',
+                        background: '#f8fafc',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxSizing: 'border-box',
+                        animation: `fadeInUp 0.3s ease-out ${0.45 + taskIndex * 0.05}s both`,
                         opacity: task.completed ? 0.5 : 1,
                       }}
                       className="task-item"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#f1f5f9'
+                        e.currentTarget.style.transform = 'translateX(2px)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f8fafc'
+                        e.currentTarget.style.transform = 'translateX(0)'
+                      }}
                     >
                       <div
                         style={{
@@ -307,10 +360,9 @@ const Dashboard: React.FC = () => {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '16px',
                         }}
                       >
-                        {config.icon}
+                        {config.svg}
                       </div>
                       <div style={{ flex: 1, marginLeft: '10px', overflow: 'hidden' }}>
                         <div
@@ -400,7 +452,7 @@ const Dashboard: React.FC = () => {
 }
 
 const containerStyle: React.CSSProperties = {
-  flex: 1,
+  flex: '1 1 auto',
   padding: '24px 28px',
   background: '#fff7ed',
   overflowY: 'auto',
@@ -436,6 +488,7 @@ const primaryButtonStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   transition: 'all 0.15s ease',
+  fontFamily: 'inherit',
 }
 
 const secondaryButtonStyle: React.CSSProperties = {
@@ -448,6 +501,7 @@ const secondaryButtonStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   transition: 'all 0.15s ease',
+  fontFamily: 'inherit',
 }
 
 const statsContainerStyle: React.CSSProperties = {
@@ -465,7 +519,6 @@ const statCardStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: '14px',
   boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-  animation: 'fadeInUp 0.4s ease-out 0.05s both',
 }
 
 const weekNavStyle: React.CSSProperties = {
@@ -474,7 +527,6 @@ const weekNavStyle: React.CSSProperties = {
   justifyContent: 'center',
   marginBottom: '20px',
   gap: '8px',
-  animation: 'fadeInUp 0.4s ease-out 0.1s both',
 }
 
 const navButtonStyle: React.CSSProperties = {
@@ -490,37 +542,26 @@ const navButtonStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  fontFamily: 'inherit',
 }
 
 const calendarContainerStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(7, 200px)',
   gap: '16px',
-  justifyContent: 'center',
+  justifyContent: 'flex-start',
+  paddingBottom: '40px',
+  overflowX: 'auto',
 }
 
 const dayCardStyle: React.CSSProperties = {
-  width: '200px',
-  height: '280px',
   background: '#ffffff',
   borderRadius: '12px',
   padding: '16px 14px',
   boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
   display: 'flex',
   flexDirection: 'column',
-  boxSizing: 'border-box',
   transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-}
-
-const taskItemStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  padding: '8px',
-  borderRadius: '10px',
-  background: '#f8fafc',
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  boxSizing: 'border-box',
 }
 
 const addTaskBtnStyle: React.CSSProperties = {
@@ -534,6 +575,8 @@ const addTaskBtnStyle: React.CSSProperties = {
   fontWeight: 500,
   cursor: 'pointer',
   transition: 'all 0.15s ease',
+  fontFamily: 'inherit',
+  flexShrink: 0,
 }
 
 export default Dashboard

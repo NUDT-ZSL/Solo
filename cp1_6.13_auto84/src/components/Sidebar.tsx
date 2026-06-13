@@ -3,11 +3,18 @@ import { usePetContext } from '../context/PetContext'
 import { Pet } from '../api'
 import AddPetModal from './AddPetModal'
 
-const categoryColors: Record<string, string> = {
-  feeding: '#f97316',
-  walking: '#22c55e',
-  medication: '#a855f7',
-  vet: '#ef4444',
+const petColorOptions = ['#f97316', '#22c55e', '#a855f7', '#3b82f6', '#f43f5e']
+
+const getPetColor = (pet: Pet) => {
+  if (pet.borderColor && petColorOptions.includes(pet.borderColor)) {
+    return pet.borderColor
+  }
+  const name = pet.name || 'pet'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return petColorOptions[Math.abs(hash) % petColorOptions.length]
 }
 
 const getInitial = (name: string) => name.charAt(0).toUpperCase()
@@ -22,6 +29,7 @@ const Sidebar: React.FC = () => {
   const completedToday = todayTasks.filter((t) => t.completed).length
 
   const getAvatar = (pet: Pet) => {
+    const borderColor = getPetColor(pet)
     if (pet.avatar) {
       return (
         <img
@@ -32,7 +40,7 @@ const Sidebar: React.FC = () => {
             height: '60px',
             borderRadius: '50%',
             objectFit: 'cover',
-            border: `3px solid ${pet.borderColor || '#f59e0b'}`,
+            border: `3px solid ${borderColor}`,
           }}
         />
       )
@@ -43,14 +51,14 @@ const Sidebar: React.FC = () => {
           width: '60px',
           height: '60px',
           borderRadius: '50%',
-          background: `linear-gradient(135deg, ${pet.borderColor || '#f59e0b'}, #fbbf24)`,
+          background: `linear-gradient(135deg, ${borderColor}, #fbbf24)`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: 'white',
           fontSize: '24px',
           fontWeight: 'bold',
-          border: `3px solid ${pet.borderColor || '#f59e0b'}`,
+          border: `3px solid ${borderColor}`,
         }}
       >
         {getInitial(pet.name)}
@@ -60,7 +68,7 @@ const Sidebar: React.FC = () => {
 
   return (
     <>
-      <aside className="sidebar" style={sidebarStyle}>
+      <aside className="sidebar desktop-sidebar" style={sidebarStyle}>
         <div style={{ padding: '24px 20px', borderBottom: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
             <span style={{ fontSize: '28px' }}>🐾</span>
@@ -109,7 +117,7 @@ const Sidebar: React.FC = () => {
           )}
         </div>
 
-        <div style={{ padding: '16px 20px', flex: 1, overflowY: 'auto' }}>
+        <div style={{ padding: '16px 20px', flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <div
             style={{
               display: 'flex',
@@ -218,6 +226,100 @@ const Sidebar: React.FC = () => {
         </div>
       </aside>
 
+      <nav className="mobile-bottom-nav">
+        <div className="mobile-nav-scroll">
+          {pets.map((pet) => {
+            const borderColor = getPetColor(pet)
+            const isActive = currentPetId === pet._id
+            return (
+              <div
+                key={pet._id}
+                onClick={() => pet._id && setCurrentPetId(pet._id)}
+                className={`mobile-pet-item ${isActive ? 'active' : ''}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  padding: '6px 10px',
+                  borderRadius: '12px',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {pet.avatar ? (
+                  <img
+                    src={pet.avatar}
+                    alt={pet.name}
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: isActive ? `3px solid #f59e0b` : `3px solid ${borderColor}`,
+                      transition: 'all 0.2s ease',
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${borderColor}, #fbbf24)`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      border: isActive ? `3px solid #f59e0b` : `3px solid ${borderColor}`,
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {getInitial(pet.name)}
+                  </div>
+                )}
+                <span style={{ fontSize: '11px', color: isActive ? '#f59e0b' : '#64748b', fontWeight: isActive ? 600 : 500 }}>
+                  {pet.name}
+                </span>
+              </div>
+            )
+          })}
+          <div
+            onClick={() => setShowAddModal(true)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '4px',
+              cursor: 'pointer',
+              flexShrink: 0,
+              padding: '6px 10px',
+            }}
+          >
+            <div
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: '#f1f5f9',
+                border: '2px dashed #cbd5e1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#94a3b8',
+                fontSize: '20px',
+              }}
+            >
+              +
+            </div>
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>添加</span>
+          </div>
+        </div>
+      </nav>
+
       <AddPetModal open={showAddModal} onClose={() => setShowAddModal(false)} />
     </>
   )
@@ -257,6 +359,7 @@ const addButtonStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   transition: 'all 0.15s ease',
+  fontFamily: 'inherit',
 }
 
 export default Sidebar
