@@ -1,18 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animal,
-  getAnimals,
-  submitApplication,
-} from '../api';
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from 'react';
+import { Animal, getAnimals, submitApplication } from '../api';
 
+/* ---------- Types ---------- */
 interface AdoptModalProps {
   animal: Animal | null;
   open: boolean;
   onClose: () => void;
-  onSubmitted: () => void;
 }
 
-function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
+/* ---------- Adopt Modal ---------- */
+function AdoptModal({ animal, open, onClose }: AdoptModalProps) {
   const [form, setForm] = useState({
     applicantName: '',
     phone: '',
@@ -44,9 +47,8 @@ function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
       });
       setSubmitted(true);
       setTimeout(() => {
-        onSubmitted();
         onClose();
-      }, 1000);
+      }, 1400);
     } catch (err) {
       console.error(err);
     } finally {
@@ -54,8 +56,7 @@ function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
     }
   };
 
-  const inputBase =
-    'w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm transition-all duration-300 ease focus:outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f620]';
+  const disabled = submitting || submitted;
 
   return (
     <div
@@ -74,6 +75,15 @@ function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .adopt-input {
+          width: 100%; padding: 11px 14px; border-radius: 12px;
+          border: 2px solid #e5e7eb; font-size: 14px; outline: none;
+          background: #ffffff; color: #1f2937; transition: all 0.3s ease;
+          box-sizing: border-box; font-family: inherit;
+        }
+        .adopt-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,0.12); }
+        .adopt-input::placeholder { color: #9ca3af; }
+        .adopt-input:disabled { background: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
       `}</style>
       <div
         onClick={(e) => e.stopPropagation()}
@@ -98,61 +108,101 @@ function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
           申请领养
         </h3>
         <p style={{ color: '#6b7280', margin: '0 0 20px 0', fontSize: 14 }}>
-          您正在申请领养：<span style={{ color: '#f97316', fontWeight: 600 }}>{animal.name}</span>
+          您正在申请领养：
+          <span style={{ color: '#f97316', fontWeight: 600 }}>{animal.name}</span>
         </p>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+        >
           <div>
-            <label style={{ fontSize: 13, color: '#374151', fontWeight: 600, marginBottom: 6, display: 'block' }}>
+            <label
+              style={{
+                fontSize: 13,
+                color: '#374151',
+                fontWeight: 600,
+                marginBottom: 6,
+                display: 'block',
+              }}
+            >
               申请人姓名
             </label>
             <input
               required
-              className={inputBase}
+              className="adopt-input"
               value={form.applicantName}
-              disabled={submitted}
-              onChange={(e) => setForm({ ...form, applicantName: e.target.value })}
+              disabled={disabled}
+              onChange={(e) =>
+                setForm({ ...form, applicantName: e.target.value })
+              }
               placeholder="请输入您的姓名"
             />
           </div>
           <div>
-            <label style={{ fontSize: 13, color: '#374151', fontWeight: 600, marginBottom: 6, display: 'block' }}>
+            <label
+              style={{
+                fontSize: 13,
+                color: '#374151',
+                fontWeight: 600,
+                marginBottom: 6,
+                display: 'block',
+              }}
+            >
               联系电话
             </label>
             <input
               required
               type="tel"
-              className={inputBase}
+              className="adopt-input"
               value={form.phone}
-              disabled={submitted}
+              disabled={disabled}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="请输入联系电话"
             />
           </div>
           <div>
-            <label style={{ fontSize: 13, color: '#374151', fontWeight: 600, marginBottom: 6, display: 'block' }}>
+            <label
+              style={{
+                fontSize: 13,
+                color: '#374151',
+                fontWeight: 600,
+                marginBottom: 6,
+                display: 'block',
+              }}
+            >
               家庭住址
             </label>
             <input
               required
-              className={inputBase}
+              className="adopt-input"
               value={form.address}
-              disabled={submitted}
+              disabled={disabled}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
               placeholder="请输入家庭住址"
             />
           </div>
           <div>
-            <label style={{ fontSize: 13, color: '#374151', fontWeight: 600, marginBottom: 6, display: 'block' }}>
+            <label
+              style={{
+                fontSize: 13,
+                color: '#374151',
+                fontWeight: 600,
+                marginBottom: 6,
+                display: 'block',
+              }}
+            >
               养宠经验简述
             </label>
             <textarea
               required
               rows={3}
-              className={inputBase}
+              className="adopt-input"
               style={{ resize: 'none' }}
               value={form.experience}
-              disabled={submitted}
-              onChange={(e) => setForm({ ...form, experience: e.target.value })}
+              disabled={disabled}
+              onChange={(e) =>
+                setForm({ ...form, experience: e.target.value })
+              }
               placeholder="请描述您的养宠经验"
             />
           </div>
@@ -169,7 +219,7 @@ function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
                 background: '#f9fafb',
                 color: '#4b5563',
                 fontWeight: 600,
-                cursor: submitted ? 'not-allowed' : 'pointer',
+                cursor: submitting ? 'not-allowed' : 'pointer',
                 opacity: submitting ? 0.6 : 1,
                 transition: 'all 0.3s ease',
                 fontSize: 14,
@@ -179,21 +229,25 @@ function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
             </button>
             <button
               type="submit"
-              disabled={submitting || submitted}
+              disabled={disabled}
               style={{
                 flex: 1,
                 padding: '12px 20px',
                 borderRadius: 12,
                 border: 'none',
-                background: submitted ? '#9ca3af' : '#f97316',
+                background: disabled ? '#9ca3af' : '#f97316',
                 color: '#ffffff',
                 fontWeight: 600,
-                cursor: submitted ? 'not-allowed' : 'pointer',
+                cursor: disabled ? 'not-allowed' : 'pointer',
                 transition: 'all 0.3s ease',
                 fontSize: 14,
               }}
             >
-              {submitting ? '提交中...' : submitted ? '✓ 已提交' : '提交申请'}
+              {submitting
+                ? '提交中...'
+                : submitted
+                ? '✓ 已提交'
+                : '提交申请'}
             </button>
           </div>
         </form>
@@ -202,13 +256,13 @@ function AdoptModal({ animal, open, onClose, onSubmitted }: AdoptModalProps) {
   );
 }
 
+/* ---------- Animal Card ---------- */
 interface AnimalCardProps {
   animal: Animal;
-  index: number;
   onAdopt: () => void;
 }
 
-function AnimalCard({ animal, index, onAdopt }: AnimalCardProps) {
+function AnimalCard({ animal, onAdopt }: AnimalCardProps) {
   const gradient =
     animal.species === 'cat'
       ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
@@ -216,7 +270,12 @@ function AnimalCard({ animal, index, onAdopt }: AnimalCardProps) {
       ? 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)'
       : 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)';
 
-  const emoji = animal.species === 'cat' ? '🐱' : animal.species === 'dog' ? '🐶' : '🐾';
+  const emoji =
+    animal.species === 'cat'
+      ? '🐱'
+      : animal.species === 'dog'
+      ? '🐶'
+      : '🐾';
 
   return (
     <div
@@ -231,24 +290,20 @@ function AnimalCard({ animal, index, onAdopt }: AnimalCardProps) {
         flexDirection: 'column',
         transition: 'all 0.3s ease',
         cursor: 'pointer',
-        animation: `cardFadeIn 0.3s ease ${index * 0.03}s both`,
         flexShrink: 0,
       }}
       className="animal-card"
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+        e.currentTarget.style.boxShadow =
+          '0 8px 24px rgba(0,0,0,0.15)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+        e.currentTarget.style.boxShadow =
+          '0 4px 12px rgba(0,0,0,0.08)';
       }}
     >
-      <style>{`
-        @keyframes cardFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes cardFadeOut { from { opacity: 1; } to { opacity: 0; transform: scale(0.95); } }
-        .animal-card.fading { animation: cardFadeOut 0.3s ease forwards !important; }
-      `}</style>
       <div
         style={{
           height: 180,
@@ -264,6 +319,7 @@ function AnimalCard({ animal, index, onAdopt }: AnimalCardProps) {
           <img
             src={animal.thumbnail}
             alt={animal.name}
+            loading="lazy"
             style={{
               width: 150,
               height: 150,
@@ -291,8 +347,22 @@ function AnimalCard({ animal, index, onAdopt }: AnimalCardProps) {
           {animal.vaccinated ? '✓ 已接种' : '待接种'}
         </div>
       </div>
-      <div style={{ padding: 18, flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+      <div
+        style={{
+          padding: 18,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+          }}
+        >
           <h3
             style={{
               fontSize: 20,
@@ -303,7 +373,9 @@ function AnimalCard({ animal, index, onAdopt }: AnimalCardProps) {
           >
             {animal.name}
           </h3>
-          <span style={{ fontSize: 12, color: '#9ca3af' }}>{animal.gender}</span>
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>
+            {animal.gender}
+          </span>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <span
@@ -379,15 +451,21 @@ function AnimalCard({ animal, index, onAdopt }: AnimalCardProps) {
   );
 }
 
+/* ---------- Page Component ---------- */
+const PAGE_SIZE = 24;
+
 export default function AdoptPage() {
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const loadAnimals = async () => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const loadAnimals = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getAnimals();
@@ -395,37 +473,13 @@ export default function AdoptPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadAnimals();
-  }, []);
+  }, [loadAnimals]);
 
-  const prevSearchRef = useRef(search);
-  useEffect(() => {
-    const prev = prevSearchRef.current;
-    if (prev !== search) {
-      const filtered = animals.filter((a) => matchesSearch(a, prev));
-      const stillFiltered = animals.filter((a) => matchesSearch(a, search));
-      const disappearing = filtered.filter(
-        (a) => !stillFiltered.find((b) => b._id === a._id)
-      );
-      if (disappearing.length > 0) {
-        const ids = new Set(disappearing.map((a) => a._id));
-        setFadingIds(ids);
-        setTimeout(() => {
-          setFadingIds((cur) => {
-            const next = new Set(cur);
-            ids.forEach((id) => next.delete(id));
-            return next;
-          });
-        }, 320);
-      }
-      prevSearchRef.current = search;
-    }
-  }, [search, animals]);
-
-  const matchesSearch = (a: Animal, q: string) => {
+  const matchesSearch = useCallback((a: Animal, q: string) => {
     if (!q.trim()) return true;
     const lower = q.toLowerCase();
     return (
@@ -433,14 +487,48 @@ export default function AdoptPage() {
       a.breed.toLowerCase().includes(lower) ||
       (a.species || '').toLowerCase().includes(lower)
     );
-  };
+  }, []);
 
-  const displayedAnimals = useMemo(() => {
-    return animals.filter((a) => matchesSearch(a, search));
-  }, [animals, search]);
+  const filtered = useMemo(
+    () => animals.filter((a) => matchesSearch(a, search)),
+    [animals, search, matchesSearch]
+  );
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && visibleCount < filtered.length) {
+          setVisibleCount((n) =>
+            Math.min(n + PAGE_SIZE, filtered.length)
+          );
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visibleCount, filtered.length]);
+
+  const displayedAnimals = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount]
+  );
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px 80px 24px' }}>
+    <div
+      style={{
+        maxWidth: 1200,
+        margin: '0 auto',
+        padding: '32px 24px 80px 24px',
+      }}
+      ref={scrollRef}
+    >
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <h1
           style={{
@@ -457,14 +545,18 @@ export default function AdoptPage() {
           每一只毛孩子都在等待遇见属于它的家人
         </p>
       </div>
+
       <div
         style={{
+          position: 'sticky',
+          top: 80,
+          zIndex: 30,
+          padding: '12px 0 24px 0',
+          marginTop: -12,
           display: 'flex',
           justifyContent: 'center',
-          marginBottom: 36,
-          position: 'sticky',
-          top: 78,
-          zIndex: 10,
+          background:
+            'linear-gradient(to bottom, #f1f5f9 60%, rgba(241,245,249,0) 100%)',
         }}
       >
         <div
@@ -483,6 +575,7 @@ export default function AdoptPage() {
               fontSize: 18,
               color: '#9ca3af',
               pointerEvents: 'none',
+              zIndex: 2,
             }}
           >
             🔍
@@ -491,38 +584,43 @@ export default function AdoptPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索品种关键字，如：橘猫、金毛、柯基..."
-            style={{
-              width: '100%',
-              padding: '16px 20px 16px 52px',
-              borderRadius: 16,
-              border: '2px solid #e5e7eb',
-              fontSize: 15,
-              outline: 'none',
-              background: '#ffffff',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-              color: '#1f2937',
-              transition: 'all 0.3s ease',
-              boxSizing: 'border-box',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = '#3b82f6';
-              e.currentTarget.style.boxShadow = '0 0 0 4px rgba(59, 130, 246, 0.1)';
-              (e.currentTarget as HTMLInputElement).style.setProperty('--ph', '#3b82f6');
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = '#e5e7eb';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
-            }}
+            className="adopt-search-input"
           />
           <style>{`
-            input::placeholder { color: #9ca3af; }
-            input:focus::placeholder { color: #3b82f6; opacity: 0.7; }
+            .adopt-search-input {
+              width: 100%;
+              padding: 16px 20px 16px 52px;
+              border-radius: 16px;
+              border: 2px solid #e5e7eb;
+              font-size: 15px;
+              outline: none;
+              background: #ffffff;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+              color: #1f2937;
+              transition: all 0.3s ease;
+              box-sizing: border-box;
+              font-family: inherit;
+            }
+            .adopt-search-input::placeholder { color: #9ca3af; }
+            .adopt-search-input:focus {
+              border-color: #3b82f6;
+              box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+            }
+            .adopt-search-input:focus::placeholder { color: #3b82f6; opacity: 0.7; }
+            @keyframes cardAppear {
+              from { opacity: 0; transform: translateY(12px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+            .card-wrap {
+              animation: cardAppear 0.3s ease both;
+            }
             @media (max-width: 768px) {
               .cards-grid { grid-template-columns: 1fr !important; justify-items: center; }
             }
           `}</style>
         </div>
       </div>
+
       {loading ? (
         <div
           style={{
@@ -535,7 +633,7 @@ export default function AdoptPage() {
           <div style={{ fontSize: 40, marginBottom: 12 }}>🐾</div>
           加载中...
         </div>
-      ) : displayedAnimals.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div
           style={{
             textAlign: 'center',
@@ -547,46 +645,80 @@ export default function AdoptPage() {
           }}
         >
           <div style={{ fontSize: 56, marginBottom: 12 }}>🔍</div>
-          <div style={{ fontWeight: 600, color: '#374151', fontSize: 18, marginBottom: 4 }}>
+          <div
+            style={{
+              fontWeight: 600,
+              color: '#374151',
+              fontSize: 18,
+              marginBottom: 4,
+            }}
+          >
             暂无符合条件的小动物
           </div>
           <div style={{ fontSize: 14 }}>试试其他关键字，或稍后再来看看~</div>
         </div>
       ) : (
-        <div
-          className="cards-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, 300px)',
-            gap: 28,
-            justifyContent: 'center',
-          }}
-        >
-          {displayedAnimals.map((animal, i) => (
+        <>
+          <div
+            className="cards-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, 300px)',
+              gap: 28,
+              justifyContent: 'center',
+            }}
+          >
+            {displayedAnimals.map((animal, i) => (
+              <div
+                className="card-wrap"
+                key={animal._id}
+                style={{ animationDelay: `${(i % PAGE_SIZE) * 0.02}s` }}
+              >
+                <AnimalCard
+                  animal={animal}
+                  onAdopt={() => {
+                    setSelectedAnimal(animal);
+                    setModalOpen(true);
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div ref={sentinelRef} style={{ height: 20 }} />
+          {visibleCount < filtered.length && (
             <div
-              key={animal._id}
               style={{
-                opacity: fadingIds.has(animal._id) ? 0 : 1,
-                transition: 'opacity 0.3s ease',
+                textAlign: 'center',
+                padding: 30,
+                color: '#94a3b8',
+                fontSize: 14,
               }}
             >
-              <AnimalCard
-                animal={animal}
-                index={i}
-                onAdopt={() => {
-                  setSelectedAnimal(animal);
-                  setModalOpen(true);
+              <div
+                style={{
+                  display: 'inline-block',
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  border: '2px solid #cbd5e1',
+                  borderTopColor: '#f97316',
+                  animation: 'spin 0.8s linear infinite',
+                  marginRight: 10,
+                  verticalAlign: 'middle',
                 }}
               />
+              加载更多 ({visibleCount}/{filtered.length})...
+              <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+              `}</style>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
       <AdoptModal
         animal={selectedAnimal}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSubmitted={loadAnimals}
       />
     </div>
   );
