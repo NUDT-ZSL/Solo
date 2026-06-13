@@ -219,6 +219,12 @@ export const PlantCard: React.FC<PlantCardProps> = ({ plant, onClick }) => {
     repot: '🪴'
   }
 
+  const ellipsisStyle: React.CSSProperties = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
+  }
+
   return (
     <div
       onClick={onClick}
@@ -252,28 +258,48 @@ export const PlantCard: React.FC<PlantCardProps> = ({ plant, onClick }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 64
+        fontSize: 64,
+        overflow: 'hidden'
       }}>
         {!plant.coverPhoto && '🌱'}
       </div>
-      <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#334155' }}>{plant.name}</h3>
+      <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: 18,
+            fontWeight: 600,
+            color: '#334155',
+            flex: 1,
+            minWidth: 0,
+            ...ellipsisStyle
+          }}>{plant.name}</h3>
           <span style={{
             fontSize: 11,
             padding: '2px 8px',
             borderRadius: 10,
             background: '#f0fdf4',
-            color: '#16a34a'
+            color: '#16a34a',
+            flexShrink: 0
           }}>
             {LOCATION_LABELS[plant.location]}
           </span>
         </div>
-        <p style={{ margin: '0 0 4px 0', fontSize: 13, color: '#64748b' }}>{plant.variety}</p>
-        <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>
+        <p style={{
+          margin: '0 0 4px 0',
+          fontSize: 13,
+          color: '#64748b',
+          ...ellipsisStyle
+        }}>{plant.variety}</p>
+        <p style={{
+          margin: 0,
+          fontSize: 12,
+          color: '#94a3b8',
+          ...ellipsisStyle
+        }}>
           种植于 {new Date(plant.plantDate).toLocaleDateString('zh-CN')}
         </p>
-        <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+        <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #f1f5f9', overflow: 'hidden' }}>
           {tasks.length > 0 ? (
             tasks.map((task, idx) => (
               <div key={idx} style={{
@@ -282,14 +308,15 @@ export const PlantCard: React.FC<PlantCardProps> = ({ plant, onClick }) => {
                 gap: 6,
                 fontSize: 12,
                 color: task.dueInDays <= 0 ? '#dc2626' : '#64748b',
-                marginBottom: idx < tasks.length - 1 ? 4 : 0
+                marginBottom: idx < tasks.length - 1 ? 4 : 0,
+                overflow: 'hidden'
               }}>
-                <span>{taskIcons[task.type]}</span>
-                <span>{task.message}</span>
+                <span style={{ flexShrink: 0 }}>{taskIcons[task.type]}</span>
+                <span style={ellipsisStyle}>{task.message}</span>
               </div>
             ))
           ) : (
-            <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>暂无待办事项</p>
+            <p style={{ margin: 0, fontSize: 12, color: '#94a3b8', ...ellipsisStyle }}>暂无待办事项</p>
           )}
         </div>
       </div>
@@ -309,43 +336,73 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
   const [loading, setLoading] = useState(false)
   const [hoveredPhoto, setHoveredPhoto] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const loadedOnce = useRef(false)
+  const loadingRef = useRef(false)
+  const lastScrollHeightRef = useRef(0)
 
-  const loadPhotos = useCallback(async (pageNum: number, reset: boolean = false) => {
-    if (loading) return
+  const loadMorePhotos = useCallback(async () => {
+    if (loadingRef.current || !hasMore) return
+    loadingRef.current = true
     setLoading(true)
+
+    const container = containerRef.current
+    if (container) {
+      lastScrollHeightRef.current = container.scrollHeight
+    }
+
     try {
-      const result = await getPlantPhotos(plantId, pageNum)
-      setPhotos(prev => reset ? result.photos : [...prev, ...result.photos])
+      const nextPage = page + 1
+      const result = await getPlantPhotos(plantId, nextPage)
+      if (result.photos.length > 0) {
+        setPhotos(prev => {
+          const existingIds = new Set(prev.map(p => p._id))
+          const newPhotos = result.photos.filter((p: Photo) => !existingIds.has(p._id))
+          return [...newPhotos, ...prev]
+        })
+        setPage(nextPage)
+      }
       setHasMore(result.hasMore)
     } finally {
+      loadingRef.current = false
+      setLoading(false)
+      if (container && lastScrollHeightRef.current > 0) {
+        requestAnimationFrame(() => {
+          const newScrollHeight = container.scrollHeight
+          container.scrollTop = newScrollHeight - lastScrollHeightRef.current
+        })
+      }
+    }
+  }, [plantId, page, hasMore, getPlantPhotos])
+
+  const loadInitialPhotos = useCallback(async () => {
+    loadingRef.current = true
+    setLoading(true)
+    try {
+      const result = await getPlantPhotos(plantId, 1)
+      setPhotos(result.photos)
+      setPage(1)
+      setHasMore(result.hasMore)
+    } finally {
+      loadingRef.current = false
       setLoading(false)
     }
-  }, [plantId, getPlantPhotos, loading])
-
-  useEffect(() => {
-    if (!loadedOnce.current) {
-      loadedOnce.current = true
-      loadPhotos(1, true)
-    }
-  }, [plantId, loadPhotos])
+  }, [plantId, getPlantPhotos])
 
   useEffect(() => {
     setPhotos([])
     setPage(1)
     setHasMore(true)
-    loadedOnce.current = false
-  }, [plantId])
+    loadingRef.current = false
+    loadInitialPhotos()
+  }, [plantId, loadInitialPhotos])
 
   const handleScroll = useCallback(() => {
     const container = containerRef.current
-    if (!container || loading || !hasMore) return
-    if (container.scrollTop < 50) {
-      const nextPage = page + 1
-      setPage(nextPage)
-      loadPhotos(nextPage)
+    if (!container || loadingRef.current || !hasMore) return
+
+    if (container.scrollTop <= 20) {
+      loadMorePhotos()
     }
-  }, [loading, hasMore, page, loadPhotos])
+  }, [hasMore, loadMorePhotos])
 
   if (photos.length === 0 && !loading) {
     return (
@@ -360,6 +417,10 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
     )
   }
 
+  const sortedPhotos = [...photos].sort((a, b) =>
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  )
+
   return (
     <div
       ref={containerRef}
@@ -368,9 +429,23 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
         maxHeight: 500,
         overflowY: 'auto',
         padding: '24px 16px',
-        scrollBehavior: 'smooth'
+        scrollBehavior: 'smooth',
+        WebkitOverflowScrolling: 'touch'
       }}
     >
+      {loading && photos.length > 0 && (
+        <div style={{ textAlign: 'center', padding: '0 0 16px 0' }}>
+          <div style={{
+            width: 280,
+            height: 200,
+            borderRadius: 8,
+            background: '#e2e8f0',
+            animation: 'pulse 1.5s ease-in-out infinite',
+            margin: '0 auto'
+          }} />
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>加载更早的照片...</p>
+        </div>
+      )}
       {loading && photos.length === 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {[1, 2, 3].map(i => (
@@ -396,7 +471,7 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
           transform: 'translateX(-50%)'
         }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {photos.map((photo, idx) => (
+          {sortedPhotos.map((photo, idx) => (
             <div key={photo._id} style={{
               display: 'flex',
               justifyContent: idx % 2 === 0 ? 'flex-start' : 'flex-end',
@@ -428,7 +503,8 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
                 padding: '2px 10px',
                 borderRadius: 10,
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                zIndex: 1
+                zIndex: 1,
+                whiteSpace: 'nowrap'
               }}>
                 {new Date(photo.date).toLocaleDateString('zh-CN')}
               </div>
@@ -442,7 +518,8 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
                   overflow: 'hidden',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                   transition: 'all 0.3s ease',
-                  background: '#f0fdf4'
+                  background: '#f0fdf4',
+                  position: 'relative'
                 }}
               >
                 <img
@@ -450,26 +527,28 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
                   alt="成长照片"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
+                {hoveredPhoto === photo._id && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                    color: 'white',
+                    padding: '12px 12px 10px',
+                    fontSize: 12
+                  }}>
+                    📅 {new Date(photo.date).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       </div>
-      {loading && photos.length > 0 && (
-        <div style={{ textAlign: 'center', padding: 16 }}>
-          <div style={{
-            width: 280,
-            height: 200,
-            borderRadius: 8,
-            background: '#e2e8f0',
-            animation: 'pulse 1.5s ease-in-out infinite',
-            margin: '0 auto'
-          }} />
-        </div>
-      )}
       {!hasMore && photos.length > 0 && (
         <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 16 }}>
-          已加载全部 {photos.length} 张照片
+          已加载全部 {photos.length} 张照片 · 最早记录于 {new Date(sortedPhotos[0]?.date).toLocaleDateString('zh-CN')}
         </p>
       )}
     </div>
