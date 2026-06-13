@@ -91,6 +91,8 @@ export default function DifficultyChart({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const context = ctx;
+
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
@@ -148,19 +150,23 @@ export default function DifficultyChart({
 
     const gradientStroke = ctx.createLinearGradient(padding.left, 0, width - padding.right, 0);
     gradientStroke.addColorStop(0, '#3b82f6');
+    gradientStroke.addColorStop(0.35, '#6366f1');
+    gradientStroke.addColorStop(0.7, '#8b5cf6');
     gradientStroke.addColorStop(1, '#a78bfa');
 
     const gradientFill = ctx.createLinearGradient(padding.left, 0, width - padding.right, 0);
-    gradientFill.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
-    gradientFill.addColorStop(1, 'rgba(167, 139, 250, 0.3)');
+    gradientFill.addColorStop(0, 'rgba(59, 130, 246, 0.55)');
+    gradientFill.addColorStop(0.35, 'rgba(99, 102, 241, 0.5)');
+    gradientFill.addColorStop(0.7, 'rgba(139, 92, 246, 0.45)');
+    gradientFill.addColorStop(1, 'rgba(167, 139, 250, 0.4)');
 
     function buildCurvePath(close: boolean) {
-      ctx.beginPath();
+      context.beginPath();
       if (close) {
-        ctx.moveTo(getX(0), baselineY);
-        ctx.lineTo(getX(0), getY(data[0].compositeScore));
+        context.moveTo(getX(0), baselineY);
+        context.lineTo(getX(0), getY(data[0].compositeScore));
       } else {
-        ctx.moveTo(getX(0), getY(data[0].compositeScore));
+        context.moveTo(getX(0), getY(data[0].compositeScore));
       }
 
       for (let i = 1; i < data.length; i++) {
@@ -169,12 +175,12 @@ export default function DifficultyChart({
         const prevX = getX(i - 1);
         const prevY = getY(data[i - 1].compositeScore);
         const cpX = (prevX + x) / 2;
-        ctx.bezierCurveTo(cpX, prevY, cpX, y, x, y);
+        context.bezierCurveTo(cpX, prevY, cpX, y, x, y);
       }
 
       if (close) {
-        ctx.lineTo(getX(data.length - 1), baselineY);
-        ctx.closePath();
+        context.lineTo(getX(data.length - 1), baselineY);
+        context.closePath();
       }
     }
 

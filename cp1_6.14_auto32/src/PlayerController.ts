@@ -305,7 +305,8 @@ export class PlayerController {
 
       const targetCameraX = this.player.x - 300;
       const targetCameraY = Math.max(0, this.player.y - 300);
-      const maxCameraSpeed = RUN_SPEED * CAMERA_FOLLOW_SPEED_FACTOR;
+      const playerSpeed = Math.sqrt(this.player.vx * this.player.vx + this.player.vy * this.player.vy);
+      const maxCameraSpeed = Math.max(RUN_SPEED * 0.3, playerSpeed * CAMERA_FOLLOW_SPEED_FACTOR);
       const dx = targetCameraX - this.camera.x;
       const dy = targetCameraY - this.camera.y;
       const dist = Math.sqrt(dx * dx + dy * dy);

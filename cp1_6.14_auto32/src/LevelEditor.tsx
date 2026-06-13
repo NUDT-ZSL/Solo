@@ -59,6 +59,7 @@ const MAX_HISTORY = 50;
 const SPRING_DURATION = 400;
 const SPRING_ELASTICITY = 0.3;
 const GRID_SIZE = 20;
+const GRID_LINE_COLOR = 'rgba(255, 255, 255, 0.067)';
 
 function generateId(): string {
   return `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -371,7 +372,7 @@ const LevelEditor = forwardRef(function LevelEditor(
     h: number,
     cam: typeof camera
   ) => {
-    ctx.strokeStyle = '#ffffff11';
+    ctx.strokeStyle = GRID_LINE_COLOR;
     ctx.lineWidth = 1;
 
     const startX = Math.floor(cam.x / GRID_SIZE) * GRID_SIZE;
@@ -995,7 +996,7 @@ const LevelEditor = forwardRef(function LevelEditor(
           </div>
         ))}
 
-        <div style={{ marginTop: 24, padding: '0 16px' }}>
+        <div style={{ marginTop: 24, padding: '0' }}>
           <div className="toolbox-title" style={{ opacity: 0.7 }}>⌨️ 快捷键</div>
           <div style={{ fontSize: 11, color: '#9ca3af', lineHeight: 1.8 }}>
             <div>Ctrl+Z 撤销</div>
@@ -1106,18 +1107,15 @@ const LevelEditor = forwardRef(function LevelEditor(
               <div className="property-label">元件颜色</div>
               <div className="color-preset-grid">
                 {PRESET_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    className={`color-preset-btn ${selectedElement.color === color ? 'selected' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateElement(selectedElement.id, { color })}
-                    title={color}
-                  />
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 4 }}>
-                {['红', '橙', '黄', '绿', '青', '蓝', '紫', '粉'].map((name) => (
-                  <div key={name} style={{ textAlign: 'center', fontSize: 10, color: '#6b7280' }}>{name}</div>
+                  <div key={color} className="color-preset-item">
+                    <button
+                      className={`color-preset-btn ${selectedElement.color === color ? 'selected' : ''}`}
+                      style={{ background: color }}
+                      onClick={() => updateElement(selectedElement.id, { color })}
+                      title={color}
+                    />
+                    <span className="color-preset-label">{color}</span>
+                  </div>
                 ))}
               </div>
             </div>
