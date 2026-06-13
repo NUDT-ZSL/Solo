@@ -3,6 +3,7 @@ import Datastore from 'nedb-promises';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,11 +13,22 @@ const PORT = 5789;
 
 app.use(express.json());
 
-const surveysDB = Datastore.create(path.join(__dirname, 'data', 'surveys.db'));
-const responsesDB = Datastore.create(path.join(__dirname, 'data', 'responses.db'));
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
 
-await surveysDB.ensureIndex({ fieldName: 'shortId', unique: true });
-await responsesDB.ensureIndex({ fieldName: 'surveyId' });
+let surveysDB, responsesDB;
+
+async function initDB() {
+  surveysDB = Datastore.create(path.join(dataDir, 'surveys.db'));
+  responsesDB = Datastore.create(path.join(dataDir, 'responses.db'));
+  
+  await surveysDB.ensureIndex({ fieldName: 'shortId', unique: true });
+  await responsesDB.ensureIndex({ fieldName: 'surveyId' });
+  
+  console.log('Database initialized');
+}
 
 function generateShortId() {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -30,9 +42,10 @@ function generateShortId() {
 function getClientIp(req) {
   return req.ip || 
          req.headers['x-forwarded-for'] || 
-         req.connection.remoteAddress || 
-         req.socket.remoteAddress ||
-         (req.connection.socket ? req.connection.socket.remoteAddress : 'unknown');
+         (req.connection && req.connection.remoteAddress) || 
+         (req.socket && req.socket.remoteAddress) ||
+         (req.connection && req.connection.socket && req.connection.socket.remoteAddress) || 
+         'unknown';
 }
 
 app.get('/api/surveys', async (req, res) => {
@@ -227,7 +240,7 @@ app.get('/api/surveys/:id/stats', async (req, res) => {
       } else if (question.type === 'text') {
         const allTexts = responses
           .map(resp => resp.answers[qIndex])
-          .filter(text => text && text.trim());
+          .filter(text => text && text.toString().trim());
         
         const wordFreq = {};
         allTexts.forEach(text => {
@@ -299,6 +312,10 @@ app.get('/api/surveys/:id/export', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
 });
