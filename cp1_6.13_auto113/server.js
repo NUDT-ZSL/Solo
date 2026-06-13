@@ -68,10 +68,9 @@ function getAllDescendants(nodeId, allNodes) {
   return descendants;
 }
 
-function generateMarkdown(nodes, depth = 1) {
+function generateMarkdown(nodes, depth = 2) {
   let md = '';
-  const headingLevel = depth + 1;
-  const prefix = '#'.repeat(Math.min(headingLevel, 6));
+  const prefix = '#'.repeat(Math.min(depth, 6));
 
   nodes.forEach(node => {
     if (node.url && node.url.trim()) {

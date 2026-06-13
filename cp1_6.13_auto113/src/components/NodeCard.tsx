@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Draggable } from 'react-beautiful-dnd';
+import { Draggable } from '@hello-pangea/dnd';
 import type { BookmarkNode } from '../api/bookmarks';
 
 interface NodeCardProps {
@@ -28,13 +28,17 @@ function getGradientFromUrl(url: string): string {
 
   let hash = 0;
   for (let i = 0; i < domain.length; i++) {
-    hash = domain.charCodeAt(i) + ((hash << 5) - hash);
+    const char = domain.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
   }
 
   const hue1 = Math.abs(hash) % 360;
-  const hue2 = (hue1 + 40) % 360;
+  const hue2 = (hue1 + 30 + (Math.abs(hash >> 8) % 30)) % 360;
+  const sat1 = 65 + (Math.abs(hash >> 4) % 15);
+  const sat2 = 60 + (Math.abs(hash >> 6) % 20);
 
-  return `linear-gradient(135deg, hsl(${hue1}, 70%, 60%) 0%, hsl(${hue2}, 70%, 50%) 100%)`;
+  return `linear-gradient(135deg, hsl(${hue1}, ${sat1}%, 58%) 0%, hsl(${hue2}, ${sat2}%, 48%) 100%)`;
 }
 
 function getFaviconLetter(title: string): string {

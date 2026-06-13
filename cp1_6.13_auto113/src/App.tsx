@@ -267,32 +267,22 @@ export default function App() {
       const newFlatMap = { ...flatMap };
       const parentId = node.parentId;
 
-      const collectDescendants = (id: string): string[] => {
-        const result: string[] = [];
-        const children = Object.values(newFlatMap).filter(n => n.parentId === id);
-        children.forEach(child => {
-          result.push(child._id);
-          result.push(...collectDescendants(child._id));
-        });
-        return result;
-      };
+      const directChildren = Object.keys(newFlatMap).filter(id => newFlatMap[id].parentId === nodeId);
+      directChildren.forEach(childId => {
+        newFlatMap[childId] = { ...newFlatMap[childId], parentId: parentId };
+      });
 
-      const descendants = collectDescendants(nodeId);
+      delete newFlatMap[nodeId];
 
       if (parentId) {
-        const childrenOfDeleted = Object.values(newFlatMap).filter(n => n.parentId === nodeId);
-        childrenOfDeleted.forEach(child => {
-          newFlatMap[child._id] = { ...child, parentId };
-        });
-
         const parent = newFlatMap[parentId];
         if (parent) {
-          const newSiblings = Object.values(newFlatMap).filter(n => n.parentId === parentId);
-          const newPositions = calculateChildPositions(parent.x, parent.y, newSiblings.length);
-          newSiblings.forEach((sibling, index) => {
+          const allSiblings = Object.keys(newFlatMap).filter(id => newFlatMap[id].parentId === parentId);
+          const newPositions = calculateChildPositions(parent.x, parent.y, allSiblings.length);
+          allSiblings.forEach((siblingId, index) => {
             if (newPositions[index]) {
-              newFlatMap[sibling._id] = {
-                ...newFlatMap[sibling._id],
+              newFlatMap[siblingId] = {
+                ...newFlatMap[siblingId],
                 x: newPositions[index].x,
                 y: newPositions[index].y,
               };
@@ -300,8 +290,6 @@ export default function App() {
           });
         }
       }
-
-      delete newFlatMap[nodeId];
 
       setFlatMap(newFlatMap);
       setDeletingNodeIds(prev => {
@@ -314,6 +302,10 @@ export default function App() {
       setBookmarks(tree);
 
       await apiDeleteBookmark(nodeId);
+
+      for (const childId of directChildren) {
+        await apiUpdateBookmark(childId, { parentId: parentId });
+      }
     } catch (err) {
       console.error('Failed to delete bookmark:', err);
       loadBookmarks();

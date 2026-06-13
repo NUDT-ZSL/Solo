@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { DragDropContext, Droppable, OnDragEndResponder, OnDragUpdateResponder } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import NodeCard from './NodeCard';
 import type { BookmarkNode } from '../api/bookmarks';
 import type { FlatBookmarkMap } from '../App';
@@ -28,7 +28,6 @@ export default function Canvas({
   onDeleteBookmark,
 }: CanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
-  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const lineCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -49,41 +48,6 @@ export default function Canvas({
     });
     return descendants;
   }, [flatMap, nodeIds]);
-
-  const drawBackground = useCallback(() => {
-    const canvas = bgCanvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
-    ctx.scale(dpr, dpr);
-
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillRect(0, 0, rect.width, rect.height);
-
-    ctx.fillStyle = '#cbd5e1';
-    const dotSize = 2;
-    const spacing = 40;
-
-    const offsetX = -(viewport.x % spacing);
-    const offsetY = -(viewport.y % spacing);
-
-    for (let x = offsetX; x < rect.width; x += spacing) {
-      for (let y = offsetY; y < rect.height; y += spacing) {
-        ctx.beginPath();
-        ctx.arc(x, y, dotSize / 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }, [viewport.x, viewport.y]);
 
   const drawConnections = useCallback(() => {
     const canvas = lineCanvasRef.current;
@@ -118,7 +82,6 @@ export default function Canvas({
       const endY = node.y + NODE_HEIGHT / 2 - viewport.y;
 
       const dx = endX - startX;
-      const dy = endY - startY;
       const controlOffset = Math.min(Math.abs(dx) * 0.5, 120);
 
       ctx.beginPath();
@@ -136,10 +99,9 @@ export default function Canvas({
   }, [flatMap, viewport.x, viewport.y]);
 
   const renderFrame = useCallback(() => {
-    drawBackground();
     drawConnections();
     animationFrameRef.current = requestAnimationFrame(renderFrame);
-  }, [drawBackground, drawConnections]);
+  }, [drawConnections]);
 
   useEffect(() => {
     animationFrameRef.current = requestAnimationFrame(renderFrame);
@@ -193,7 +155,7 @@ export default function Canvas({
     setDraggingNodeId(result.draggableId);
   }, []);
 
-  const onDragUpdate: OnDragUpdateResponder = useCallback((update) => {
+  const onDragUpdate = useCallback((update: any) => {
     if (!update.destination) return;
 
     const clientX = update.draggableId ? (window as any).__lastMouseX : 0;
@@ -212,7 +174,7 @@ export default function Canvas({
     setDropTargetId(null);
   }, [findNodeAtPosition, getAllDescendantIds]);
 
-  const onDragEnd: OnDragEndResponder = useCallback((result) => {
+  const onDragEnd = useCallback((result: any) => {
     setDraggingNodeId(null);
 
     const targetId = dropTargetId;
@@ -239,7 +201,7 @@ export default function Canvas({
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.target === containerRef.current || e.target === bgCanvasRef.current || e.target === lineCanvasRef.current) {
+    if (e.target === containerRef.current || e.target === lineCanvasRef.current) {
       setIsPanning(true);
       panStartRef.current = {
         x: e.clientX,
@@ -288,9 +250,21 @@ export default function Canvas({
     return { width: maxX, height: maxY };
   }, [flatMap]);
 
+  const dotGridBackground = useMemo(() => {
+    const spacing = 40;
+    const offsetX = viewport.x % spacing;
+    const offsetY = viewport.y % spacing;
+    return {
+      backgroundColor: '#f1f5f9',
+      backgroundImage: `radial-gradient(circle, #cbd5e1 1px, transparent 1px)`,
+      backgroundSize: `${spacing}px ${spacing}px`,
+      backgroundPosition: `${-offsetX}px ${-offsetY}px`,
+    };
+  }, [viewport.x, viewport.y]);
+
   return (
     <DragDropContext
-      onDragStart={onDragStart as any}
+      onDragStart={onDragStart}
       onDragUpdate={onDragUpdate}
       onDragEnd={onDragEnd}
     >
@@ -303,23 +277,13 @@ export default function Canvas({
           overflow: 'hidden',
           cursor: isPanning ? 'grabbing' : 'grab',
           padding: `${CANVAS_PADDING}px`,
+          ...dotGridBackground,
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove2}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <canvas
-          ref={bgCanvasRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            pointerEvents: 'none',
-          }}
-        />
         <canvas
           ref={lineCanvasRef}
           style={{
