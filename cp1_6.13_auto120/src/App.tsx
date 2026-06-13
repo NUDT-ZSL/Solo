@@ -9,7 +9,7 @@ type Screen = 'menu' | 'game' | 'result';
 
 function getBpmColor(bpm: number): string {
   if (bpm < 100) return '#3b82f6';
-  if (bpm <= 150) return '#8b5cf6';
+  if (bpm < 150) return '#8b5cf6';
   return '#ef4444';
 }
 

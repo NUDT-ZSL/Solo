@@ -241,8 +241,6 @@ export class Renderer {
     const dotSize = 6;
     const dotSpacing = 8;
     const maxDots = Math.min(beats.length, 20);
-    const totalWidth = maxDots * dotSize + (maxDots - 1) * dotSpacing;
-    const startX = (this.width - totalWidth) / 2;
     const y = 30;
 
     const visibleStart = Math.max(0, currentBeatIndex - 5);
@@ -262,16 +260,21 @@ export class Renderer {
       if (isActive) {
         this.ctx.fillStyle = '#facc15';
         this.ctx.shadowColor = '#facc15';
-        this.ctx.shadowBlur = 10;
+        this.ctx.shadowBlur = 12;
       } else if (isPast) {
-        this.ctx.fillStyle = 'rgba(250, 204, 21, 0.3)';
+        this.ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
         this.ctx.shadowBlur = 0;
       } else {
-        this.ctx.fillStyle = 'rgba(250, 204, 21, 0.6)';
+        this.ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+        this.ctx.strokeStyle = 'rgba(250, 204, 21, 0.5)';
+        this.ctx.lineWidth = 1;
         this.ctx.shadowBlur = 0;
       }
 
       this.ctx.fill();
+      if (!isActive && !isPast) {
+        this.ctx.stroke();
+      }
       this.ctx.shadowBlur = 0;
     }
   }

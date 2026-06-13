@@ -87,8 +87,11 @@ class GameManager {
   private jumpDuration: number = 0;
   private jumpStartTime: number = 0;
   private jumpHeight: number = 120;
+  private jumpInitialVy: number = 0;
+  private gravity: number = 1500;
   private landPressed: boolean = false;
   private landTime: number = 0;
+  private lastUpdateTime: number = 0;
   private glowActive: boolean = false;
   private glowTime: number = 0;
   private glowDuration: number = 0.5;
@@ -133,7 +136,9 @@ class GameManager {
     this.songName = songName;
     this.bpm = bpm;
     this.beatInterval = 60 / bpm;
-    this.jumpDuration = this.beatInterval;
+    this.jumpDuration = this.beatInterval * 0.85;
+    this.gravity = (8 * this.jumpHeight) / (this.jumpDuration * this.jumpDuration);
+    this.jumpInitialVy = this.gravity * (this.jumpDuration / 2);
     this.gameSpeed = (150 + bpm * 1.5) * DIFFICULTY_MULTIPLIER[this.difficulty];
     this.beatSchedule = audioEngine.getBeatSchedule(beats, bpm, duration);
     this.currentBeatIndex = -1;
@@ -241,6 +246,7 @@ class GameManager {
   private startJump(beatTime: number): void {
     this.character.isJumping = true;
     this.character.onGround = false;
+    this.character.vy = -this.jumpInitialVy;
     this.jumpStartTime = beatTime;
     this.landPressed = false;
     this.landTime = 0;
@@ -249,22 +255,26 @@ class GameManager {
   private updateCharacter(currentTime: number): void {
     if (!this.beatSchedule) return;
 
+    const dt = this.lastUpdateTime === 0 ? 1 / 60 : currentTime - this.lastUpdateTime;
+    this.lastUpdateTime = currentTime;
+
     if (this.character.isJumping) {
+      this.character.vy += this.gravity * dt;
+      this.character.y += this.character.vy * dt;
+
       const elapsed = currentTime - this.jumpStartTime;
       const progress = Math.min(elapsed / this.jumpDuration, 1);
-
-      const jumpProgress = progress * Math.PI;
-      const heightRatio = Math.sin(jumpProgress);
-      this.character.y = this.groundY - this.character.height - heightRatio * this.jumpHeight;
-
-      const targetRotation = this.landPressed ? 0 : (progress * 360);
+      const targetRotation = this.landPressed ? 0 : progress * 360;
       this.character.rotation = targetRotation;
 
-      if (progress >= 1) {
+      const groundLevel = this.groundY - this.character.height;
+      if (this.character.y >= groundLevel) {
+        this.character.y = groundLevel;
         this.landCharacter();
       }
     } else {
       this.character.y = this.groundY - this.character.height;
+      this.character.vy = 0;
       this.character.rotation = 0;
     }
   }
