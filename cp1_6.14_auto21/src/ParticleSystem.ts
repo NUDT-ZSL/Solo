@@ -12,6 +12,8 @@ interface Particle {
   height: number;
   alpha: number;
   gravity: number;
+  rotation: number;
+  rotationSpeed: number;
 }
 
 interface ParticleConfig {
@@ -21,36 +23,78 @@ interface ParticleConfig {
   minCount: number;
   maxCount: number;
   life: number;
-  speedX: [number, number];
-  speedY: [number, number];
+  baseSpeedMin: number;
+  baseSpeedMax: number;
+  angleMin: number;
+  angleMax: number;
   gravity: number;
 }
 
 const CONFIGS: Record<MaterialType, ParticleConfig> = {
   grass: {
-    width: 4, height: 8, color: '#22c55e',
-    minCount: 12, maxCount: 18, life: 0.6,
-    speedX: [-60, 60], speedY: [-200, -80], gravity: 300
+    width: 4,
+    height: 8,
+    color: '#22c55e',
+    minCount: 12,
+    maxCount: 18,
+    life: 0.6,
+    baseSpeedMin: 80,
+    baseSpeedMax: 200,
+    angleMin: -Math.PI * 0.8,
+    angleMax: -Math.PI * 0.2,
+    gravity: 200
   },
   sand: {
-    width: 2, height: 2, color: '#eab308',
-    minCount: 8, maxCount: 12, life: 0.4,
-    speedX: [-120, 120], speedY: [-120, 120], gravity: 400
+    width: 2,
+    height: 2,
+    color: '#eab308',
+    minCount: 8,
+    maxCount: 12,
+    life: 0.4,
+    baseSpeedMin: 60,
+    baseSpeedMax: 120,
+    angleMin: 0,
+    angleMax: Math.PI * 2,
+    gravity: 300
   },
   stone: {
-    width: 3, height: 3, color: '#e2e8f0',
-    minCount: 4, maxCount: 6, life: 0.3,
-    speedX: [-80, 80], speedY: [-150, -50], gravity: 500
+    width: 3,
+    height: 3,
+    color: '#e2e8f0',
+    minCount: 4,
+    maxCount: 6,
+    life: 0.3,
+    baseSpeedMin: 50,
+    baseSpeedMax: 150,
+    angleMin: -Math.PI * 0.7,
+    angleMax: -Math.PI * 0.3,
+    gravity: 500
   },
   metal: {
-    width: 2, height: 4, color: '#f97316',
-    minCount: 6, maxCount: 10, life: 0.5,
-    speedX: [-40, 40], speedY: [-250, -100], gravity: 600
+    width: 2,
+    height: 4,
+    color: '#f97316',
+    minCount: 6,
+    maxCount: 10,
+    life: 0.5,
+    baseSpeedMin: 100,
+    baseSpeedMax: 250,
+    angleMin: -Math.PI * 0.65,
+    angleMax: -Math.PI * 0.35,
+    gravity: 600
   },
   wood: {
-    width: 1, height: 6, color: '#92400e',
-    minCount: 10, maxCount: 14, life: 0.8,
-    speedX: [-70, 70], speedY: [-160, -40], gravity: 200
+    width: 1,
+    height: 6,
+    color: '#92400e',
+    minCount: 10,
+    maxCount: 14,
+    life: 0.8,
+    baseSpeedMin: 40,
+    baseSpeedMax: 160,
+    angleMin: -Math.PI * 0.75,
+    angleMax: -Math.PI * 0.25,
+    gravity: 150
   }
 };
 
@@ -70,12 +114,15 @@ export class ParticleSystem {
     for (let i = 0; i < count; i++) {
       if (this.particles.length >= MAX_PARTICLES) break;
 
-      const offset = 0.2;
-      const baseVx = cfg.speedX[0] + Math.random() * (cfg.speedX[1] - cfg.speedX[0]);
-      const baseVy = cfg.speedY[0] + Math.random() * (cfg.speedY[1] - cfg.speedY[0]);
+      const speed = cfg.baseSpeedMin + Math.random() * (cfg.baseSpeedMax - cfg.baseSpeedMin);
+      const speedWithOffset = speed * (1 + (Math.random() * 2 - 1) * 0.2);
 
-      const vx = baseVx * (1 + (Math.random() * 2 - 1) * offset);
-      const vy = baseVy * (1 + (Math.random() * 2 - 1) * offset);
+      const angleRange = cfg.angleMax - cfg.angleMin;
+      const angle = cfg.angleMin + Math.random() * angleRange;
+      const angleWithOffset = angle + (Math.random() * 2 - 1) * 0.2 * angleRange;
+
+      const vx = Math.cos(angleWithOffset) * speedWithOffset;
+      const vy = Math.sin(angleWithOffset) * speedWithOffset;
 
       this.particles.push({
         x: x + (Math.random() - 0.5) * 20,
@@ -88,7 +135,9 @@ export class ParticleSystem {
         width: cfg.width,
         height: cfg.height,
         alpha: 1,
-        gravity: cfg.gravity
+        gravity: cfg.gravity,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 8
       });
     }
   }
@@ -101,6 +150,7 @@ export class ParticleSystem {
       p.y += p.vy * dt;
       p.life -= dt;
       p.alpha = Math.max(0, p.life / p.maxLife);
+      p.rotation += p.rotationSpeed * dt;
 
       if (p.life <= 0) {
         this.particles.splice(i, 1);
@@ -112,8 +162,10 @@ export class ParticleSystem {
     for (const p of this.particles) {
       ctx.save();
       ctx.globalAlpha = p.alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
       ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
+      ctx.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
       ctx.restore();
     }
   }

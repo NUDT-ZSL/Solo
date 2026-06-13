@@ -16,19 +16,18 @@ export interface PhysicsState {
   isMoving: boolean;
 }
 
-const GRAVITY = 980;
-const MOVE_ACCEL = 1200;
-const JUMP_VELOCITY = -420;
-const GROUND_Y = 500;
-const CANVAS_WIDTH = 1200;
-const SURFACE_WIDTH = 200;
-const CHAR_WIDTH = 40;
-const CHAR_HEIGHT = 60;
-const HEAD_HEIGHT = 15;
+export const CANVAS_WIDTH = 1200;
+export const CANVAS_HEIGHT = 600;
+export const SURFACE_WIDTH = 200;
+export const CHAR_WIDTH = 40;
+export const CHAR_HEIGHT = 60;
+export const CHAR_HEAD_HEIGHT = 20;
+export const GROUND_Y = 500;
+export const GRAVITY = 980;
 
-const MATERIALS: MaterialType[] = ['grass', 'sand', 'stone', 'metal', 'wood'];
+export const MATERIALS: MaterialType[] = ['grass', 'sand', 'stone', 'metal', 'wood'];
 
-const DEFAULT_PARAMS: Record<MaterialType, MaterialParams> = {
+export const DEFAULT_PARAMS: Record<MaterialType, MaterialParams> = {
   grass: { friction: 0.6, bounce: 0.1 },
   sand: { friction: 0.8, bounce: 0.0 },
   stone: { friction: 0.1, bounce: 0.3 },
@@ -56,26 +55,6 @@ export class PhysicsEngine {
     this.keys = { left: false, right: false, jump: false };
   }
 
-  static getDefaultParams(): Record<MaterialType, MaterialParams> {
-    return { ...DEFAULT_PARAMS };
-  }
-
-  static getMaterials(): MaterialType[] {
-    return MATERIALS;
-  }
-
-  static getSurfaceWidth(): number {
-    return SURFACE_WIDTH;
-  }
-
-  static getGroundY(): number {
-    return GROUND_Y;
-  }
-
-  static getCharDimensions(): { width: number; height: number; headHeight: number } {
-    return { width: CHAR_WIDTH, height: CHAR_HEIGHT, headHeight: HEAD_HEIGHT };
-  }
-
   getMaterialAt(x: number): MaterialType {
     const idx = Math.floor(x / SURFACE_WIDTH);
     return MATERIALS[Math.max(0, Math.min(idx, MATERIALS.length - 1))];
@@ -88,6 +67,8 @@ export class PhysicsEngine {
     const mat = this.getMaterialAt(this.state.x + CHAR_WIDTH / 2);
     this.state.currentMaterial = mat;
     const params = this.materialParams[mat];
+
+    const MOVE_ACCEL = 1200;
 
     let ax = 0;
     if (this.keys.left) ax -= MOVE_ACCEL;
@@ -112,6 +93,7 @@ export class PhysicsEngine {
 
     this.state.vy += GRAVITY * dt;
 
+    const JUMP_VELOCITY = -420;
     if (this.keys.jump && this.state.onGround) {
       this.state.vy = JUMP_VELOCITY * (1 + params.bounce * 0.5);
       this.state.onGround = false;

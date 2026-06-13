@@ -33,10 +33,13 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ paused, onToggle
           borderRadius: '8px',
           border: 'none',
           cursor: 'pointer',
-          transition: 'all 0.2s ease-out'
+          transition: 'all 0.2s ease-out',
+          fontWeight: 500
         }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        onMouseEnter={e => { e.currentTarget.style.background = '#2563eb'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = '#3b82f6'; e.currentTarget.style.transform = 'scale(1)'; }}
+        onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.98)'; }}
+        onMouseUp={e => { e.currentTarget.style.transform = 'scale(1.02)'; }}
       >
         {paused ? '继续' : '暂停'}
       </button>
@@ -51,10 +54,13 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ paused, onToggle
           borderRadius: '8px',
           border: 'none',
           cursor: 'pointer',
-          transition: 'all 0.2s ease-out'
+          transition: 'all 0.2s ease-out',
+          fontWeight: 500
         }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        onMouseEnter={e => { e.currentTarget.style.background = '#dc2626'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.transform = 'scale(1)'; }}
+        onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.98)'; }}
+        onMouseUp={e => { e.currentTarget.style.transform = 'scale(1.02)'; }}
       >
         重置
       </button>

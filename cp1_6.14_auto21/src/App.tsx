@@ -1,18 +1,13 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { PhysicsEngine, MaterialType, MaterialParams } from './PhysicsEngine';
+import { useRef, useEffect, useState, useCallback } from 'react';
+import {
+  PhysicsEngine, MaterialType, MaterialParams,
+  CANVAS_WIDTH, CANVAS_HEIGHT, SURFACE_WIDTH, CHAR_WIDTH, CHAR_HEIGHT,
+  CHAR_HEAD_HEIGHT, GROUND_Y, MATERIALS, DEFAULT_PARAMS
+} from './PhysicsEngine';
 import { ParticleSystem } from './ParticleSystem';
 import { AudioManager } from './AudioManager';
 import { GlobalSettings } from './components/GlobalSettings';
 import { MaterialEditor } from './components/MaterialEditor';
-
-const CANVAS_WIDTH = 1200;
-const CANVAS_HEIGHT = 600;
-const SURFACE_WIDTH = 200;
-const CHAR_WIDTH = 40;
-const CHAR_HEIGHT = 60;
-const HEAD_HEIGHT = 15;
-
-const MATERIALS: MaterialType[] = ['grass', 'sand', 'stone', 'metal', 'wood'];
 
 const MATERIAL_NAMES: Record<MaterialType, string> = {
   grass: '草地', sand: '沙地', stone: '石板', metal: '金属', wood: '木地板'
@@ -26,14 +21,6 @@ const MATERIAL_COLORS: Record<MaterialType, string[]> = {
   wood: ['#78350f', '#92400e', '#b45309']
 };
 
-const DEFAULT_PARAMS: Record<MaterialType, MaterialParams> = {
-  grass: { friction: 0.6, bounce: 0.1 },
-  sand: { friction: 0.8, bounce: 0.0 },
-  stone: { friction: 0.1, bounce: 0.3 },
-  metal: { friction: 0.2, bounce: 0.5 },
-  wood: { friction: 0.4, bounce: 0.2 }
-};
-
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const physicsRef = useRef<PhysicsEngine | null>(null);
@@ -42,6 +29,7 @@ export default function App() {
   const animFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const fpsHistoryRef = useRef<number[]>([]);
+  const hoveredBtnRef = useRef<number | null>(null);
 
   const [paused, setPaused] = useState(false);
   const [materialParams, setMaterialParams] = useState<Record<MaterialType, MaterialParams>>(
@@ -84,11 +72,11 @@ export default function App() {
   }, []);
 
   const openEditor = useCallback((material: MaterialType, canvasRect: DOMRect, idx: number) => {
-    const btnX = idx * SURFACE_WIDTH + SURFACE_WIDTH - 20;
-    const btnY = PhysicsEngine.getGroundY() - 90;
+    const btnScreenX = canvasRect.left + (idx * SURFACE_WIDTH + SURFACE_WIDTH - 20);
+    const btnScreenY = canvasRect.top + (GROUND_Y - 80);
     setEditorPos({
-      x: canvasRect.left + btnX - 140,
-      y: canvasRect.top + btnY - 180
+      x: Math.min(btnScreenX - 140, window.innerWidth - 300),
+      y: Math.max(btnScreenY - 200, 10)
     });
     setEditorOpen(material);
   }, []);
@@ -117,8 +105,27 @@ export default function App() {
       if (e.key === ' ') physics.keys.jump = false;
     };
 
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const scaleY = CANVAS_HEIGHT / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+
+      let found: number | null = null;
+      MATERIALS.forEach((_mat, idx) => {
+        const bx = idx * SURFACE_WIDTH + SURFACE_WIDTH - 20;
+        const by = GROUND_Y - 64;
+        const dist = Math.sqrt((mx - bx) ** 2 + (my - by) ** 2);
+        if (dist <= 16) found = idx;
+      });
+      hoveredBtnRef.current = found;
+      canvas.style.cursor = found !== null ? 'pointer' : 'default';
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    canvas.addEventListener('mousemove', handleMouseMove);
 
     let prevStepMaterial: MaterialType | null = null;
 
@@ -147,7 +154,7 @@ export default function App() {
         const state = physics.state;
 
         if (state.justLanded && state.currentMaterial) {
-          particles.emit(state.x + CHAR_WIDTH / 2, PhysicsEngine.getGroundY(), state.currentMaterial);
+          particles.emit(state.x + CHAR_WIDTH / 2, GROUND_Y, state.currentMaterial);
           audio.playLand(state.currentMaterial);
           prevStepMaterial = null;
           audio.stopStepLoop();
@@ -169,7 +176,7 @@ export default function App() {
       setFps(Math.round(avgFps));
       setParticleCount(particles.getCount());
 
-      render(ctx, physics, particles);
+      renderScene(ctx, physics, particles);
     };
 
     lastTimeRef.current = 0;
@@ -179,11 +186,12 @@ export default function App() {
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      canvas.removeEventListener('mousemove', handleMouseMove);
       audio.stopStepLoop();
     };
   }, []);
 
-  const render = (
+  const renderScene = (
     ctx: CanvasRenderingContext2D,
     physics: PhysicsEngine,
     particles: ParticleSystem
@@ -196,27 +204,26 @@ export default function App() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    const groundY = PhysicsEngine.getGroundY();
     MATERIALS.forEach((mat, idx) => {
       const x = idx * SURFACE_WIDTH;
       const colors = MATERIAL_COLORS[mat];
-      const g = ctx.createLinearGradient(x, groundY, x, CANVAS_HEIGHT);
+      const g = ctx.createLinearGradient(x, GROUND_Y, x, CANVAS_HEIGHT);
       g.addColorStop(0, colors[1]);
       g.addColorStop(0.5, colors[0]);
       g.addColorStop(1, colors[2]);
       ctx.fillStyle = g;
-      ctx.fillRect(x, groundY, SURFACE_WIDTH, CANVAS_HEIGHT - groundY);
+      ctx.fillRect(x, GROUND_Y, SURFACE_WIDTH, CANVAS_HEIGHT - GROUND_Y);
 
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x, groundY);
-      ctx.lineTo(x + SURFACE_WIDTH, groundY);
+      ctx.moveTo(x, GROUND_Y);
+      ctx.lineTo(x + SURFACE_WIDTH, GROUND_Y);
       ctx.stroke();
 
       if (idx > 0) {
         ctx.beginPath();
-        ctx.moveTo(x, groundY);
+        ctx.moveTo(x, GROUND_Y);
         ctx.lineTo(x, CANVAS_HEIGHT);
         ctx.stroke();
       }
@@ -225,7 +232,7 @@ export default function App() {
       const labelW = 48;
       const labelH = 22;
       const labelX = x + 4;
-      const labelY = groundY + 6;
+      const labelY = GROUND_Y + 6;
       ctx.beginPath();
       ctx.roundRect(labelX, labelY, labelW, labelH, 4);
       ctx.fill();
@@ -236,29 +243,31 @@ export default function App() {
       ctx.fillText(MATERIAL_NAMES[mat], labelX + labelW / 2, labelY + labelH / 2);
     });
 
-    const shadowY = groundY - 2;
     const charBottom = state.y + CHAR_HEIGHT;
-    const heightAboveGround = groundY - charBottom;
+    const heightAboveGround = GROUND_Y - charBottom;
     const shadowScale = Math.max(0.3, 1 - heightAboveGround / 200);
     const shadowOpacity = 0.3 * shadowScale;
     const shadowWidth = 20 * shadowScale;
     ctx.fillStyle = `rgba(0,0,0,${shadowOpacity})`;
     ctx.beginPath();
-    ctx.ellipse(state.x + CHAR_WIDTH / 2, shadowY, shadowWidth / 2, 4 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.ellipse(state.x + CHAR_WIDTH / 2, GROUND_Y - 2, shadowWidth / 2, 4 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
 
     particles.render(ctx);
 
     ctx.fillStyle = '#3b82f6';
-    ctx.fillRect(state.x, state.y + HEAD_HEIGHT, CHAR_WIDTH, CHAR_HEIGHT - HEAD_HEIGHT);
+    ctx.fillRect(state.x, state.y + CHAR_HEAD_HEIGHT, CHAR_WIDTH, CHAR_HEIGHT - CHAR_HEAD_HEIGHT);
 
     ctx.fillStyle = '#22c55e';
-    ctx.fillRect(state.x, state.y, CHAR_WIDTH, HEAD_HEIGHT);
+    ctx.fillRect(state.x, state.y, CHAR_WIDTH, CHAR_HEAD_HEIGHT);
 
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = '#1e3a5f';
     ctx.lineWidth = 1;
-    ctx.strokeRect(state.x, state.y, CHAR_WIDTH, HEAD_HEIGHT);
-    ctx.strokeRect(state.x, state.y + HEAD_HEIGHT, CHAR_WIDTH, CHAR_HEIGHT - HEAD_HEIGHT);
+    ctx.strokeRect(state.x, state.y, CHAR_WIDTH, CHAR_HEIGHT);
+    ctx.beginPath();
+    ctx.moveTo(state.x, state.y + CHAR_HEAD_HEIGHT);
+    ctx.lineTo(state.x + CHAR_WIDTH, state.y + CHAR_HEAD_HEIGHT);
+    ctx.stroke();
 
     const fpsColor = fps >= 50 ? '#22c55e' : fps >= 30 ? '#eab308' : '#ef4444';
     ctx.fillStyle = '#00000080';
@@ -277,18 +286,18 @@ export default function App() {
     ctx.fillText(`材质: ${state.currentMaterial ? MATERIAL_NAMES[state.currentMaterial] : '-'}`, 20, CANVAS_HEIGHT - 28);
 
     MATERIALS.forEach((_mat, idx) => {
-      const bx = idx * SURFACE_WIDTH + SURFACE_WIDTH - 36;
-      const by = groundY - 48;
-      const isHovered = false;
+      const bx = idx * SURFACE_WIDTH + SURFACE_WIDTH - 20;
+      const by = GROUND_Y - 64;
+      const isHovered = hoveredBtnRef.current === idx;
       ctx.fillStyle = isHovered ? '#ffffff80' : '#ffffff40';
       ctx.beginPath();
-      ctx.arc(bx + 16, by + 16, 16, 0, Math.PI * 2);
+      ctx.arc(bx, by, 16, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.font = '16px sans-serif';
+      ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('⚙', bx + 16, by + 16);
+      ctx.fillText('⚙', bx, by);
     });
   };
 
@@ -301,12 +310,10 @@ export default function App() {
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
 
-    const groundY = PhysicsEngine.getGroundY();
-
     MATERIALS.forEach((mat, idx) => {
-      const bx = idx * SURFACE_WIDTH + SURFACE_WIDTH - 36;
-      const by = groundY - 48;
-      const dist = Math.sqrt((mx - (bx + 16)) ** 2 + (my - (by + 16)) ** 2);
+      const bx = idx * SURFACE_WIDTH + SURFACE_WIDTH - 20;
+      const by = GROUND_Y - 64;
+      const dist = Math.sqrt((mx - bx) ** 2 + (my - by) ** 2);
       if (dist <= 16) {
         openEditor(mat, rect, idx);
       }
@@ -331,8 +338,7 @@ export default function App() {
         onClick={handleCanvasClick}
         style={{
           border: '1px solid #334155',
-          borderRadius: '8px',
-          cursor: 'pointer'
+          borderRadius: '8px'
         }}
       />
 
