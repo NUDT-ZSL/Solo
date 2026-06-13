@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   fetchComments,
   addComment,
@@ -35,6 +35,9 @@ const COLUMN_LABELS: Record<ColumnType, string> = {
   done: '已完成',
 };
 
+const VISIBLE_BATCH = 20;
+const ITEM_HEIGHT = 80;
+
 function CardDetail({
   card,
   currentUser,
@@ -56,7 +59,9 @@ function CardDetail({
   const [newTagInput, setNewTagInput] = useState('');
   const [editTags, setEditTags] = useState<Tag[]>(card.tags);
   const [saving, setSaving] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(VISIBLE_BATCH);
   const commentListRef = useRef<HTMLDivElement>(null);
+  const commentSentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -69,11 +74,31 @@ function CardDetail({
     });
   }, [card.id]);
 
+  useEffect(() => {
+    if (!commentSentinelRef.current || comments.length <= VISIBLE_BATCH) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + VISIBLE_BATCH, comments.length));
+        }
+      },
+      { root: commentListRef.current, threshold: 0.1 }
+    );
+    observer.observe(commentSentinelRef.current);
+    return () => observer.disconnect();
+  }, [comments.length]);
+
+  useEffect(() => {
+    if (comments.length > 0) {
+      setVisibleCount(Math.min(VISIBLE_BATCH, comments.length));
+      setTimeout(() => scrollCommentsToBottom(), 50);
+    }
+  }, [comments.length > 0]);
+
   const loadComments = async () => {
     const res = await fetchComments(card.id);
     if (res.code === 0) {
       setComments(res.data);
-      setTimeout(() => scrollCommentsToBottom(), 50);
     }
   };
 
@@ -94,7 +119,9 @@ function CardDetail({
     setCommentText('');
     const res = await addComment(card.id, currentUser.id, text);
     if (res.code === 0 && res.data) {
-      setComments((prev) => [...prev, res.data as Comment]);
+      const newComment = res.data as Comment;
+      setComments((prev) => [...prev, newComment]);
+      setVisibleCount((prev) => prev + 1);
       setTimeout(() => scrollCommentsToBottom(), 10);
     }
   };
@@ -129,15 +156,8 @@ function CardDetail({
     const name = newTagInput.trim();
     if (!name) return;
     const palette = [
-      '#ef4444',
-      '#f97316',
-      '#f59e0b',
-      '#10b981',
-      '#14b8a6',
-      '#3b82f6',
-      '#8b5cf6',
-      '#ec4899',
-      '#6b7280',
+      '#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6',
+      '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280',
     ];
     const color = palette[editTags.length % palette.length];
     setEditTags([...editTags, { name, color }]);
@@ -151,11 +171,11 @@ function CardDetail({
   const assignee = allUsers.find((u) => u.id === editAssignee);
   const formatTime = (iso: string) => {
     const d = new Date(iso);
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(
-      2,
-      '0'
-    )}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
+
+  const visibleComments = comments.slice(0, visibleCount);
+  const hasMore = visibleCount < comments.length;
 
   return (
     <>
@@ -171,6 +191,7 @@ function CardDetail({
         }}
       />
       <div
+        data-card-detail
         style={{
           position: 'fixed',
           top: 0,
@@ -190,12 +211,7 @@ function CardDetail({
       >
         <div style={s.header}>
           <div style={s.headerTitleRow}>
-            <div
-              style={{
-                ...s.priorityDot,
-                background: PRIORITY_COLORS[card.priority],
-              }}
-            />
+            <div style={{ ...s.priorityDot, background: PRIORITY_COLORS[card.priority] }} />
             <span
               style={{
                 ...s.colBadge,
@@ -205,9 +221,7 @@ function CardDetail({
             >
               {COLUMN_LABELS[card.column]}
             </span>
-            <button style={s.closeBtn} onClick={handleClose}>
-              ×
-            </button>
+            <button style={s.closeBtn} onClick={handleClose}>x</button>
           </div>
 
           {editingTitle ? (
@@ -220,21 +234,14 @@ function CardDetail({
                 if (editTitle.trim() !== card.title) handleSave();
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setEditingTitle(false);
-                  handleSave();
-                }
+                if (e.key === 'Enter') { setEditingTitle(false); handleSave(); }
               }}
               autoFocus
             />
           ) : (
-            <div
-              style={s.cardTitle}
-              onClick={() => setEditingTitle(true)}
-              title="点击编辑"
-            >
+            <div style={s.cardTitle} onClick={() => setEditingTitle(true)} title="点击编辑">
               {card.title}
-              <span style={s.editHint}>✎</span>
+              <span style={s.editHint}>edit</span>
             </div>
           )}
         </div>
@@ -251,37 +258,13 @@ function CardDetail({
                   autoFocus
                 />
                 <div style={s.inlineActions}>
-                  <button
-                    style={s.smallBtnGhost}
-                    onClick={() => {
-                      setEditDesc(card.description);
-                      setEditingDesc(false);
-                    }}
-                  >
-                    取消
-                  </button>
-                  <button
-                    style={s.smallBtn}
-                    onClick={() => {
-                      setEditingDesc(false);
-                      handleSave();
-                    }}
-                  >
-                    保存
-                  </button>
+                  <button style={s.smallBtnGhost} onClick={() => { setEditDesc(card.description); setEditingDesc(false); }}>取消</button>
+                  <button style={s.smallBtn} onClick={() => { setEditingDesc(false); handleSave(); }}>保存</button>
                 </div>
               </div>
             ) : (
-              <div
-                style={{
-                  ...s.descText,
-                  minHeight: card.description ? 'auto' : 40,
-                }}
-                onClick={() => setEditingDesc(true)}
-              >
-                {card.description || (
-                  <span style={{ color: '#9ca3af' }}>点击添加描述</span>
-                )}
+              <div style={{ ...s.descText, minHeight: card.description ? 'auto' : 40 }} onClick={() => setEditingDesc(true)}>
+                {card.description || <span style={{ color: '#9ca3af' }}>点击添加描述</span>}
               </div>
             )}
           </div>
@@ -289,82 +272,36 @@ function CardDetail({
           <div style={s.fieldGrid}>
             <div style={s.field}>
               <div style={s.fieldLabel}>优先级</div>
-              <select
-                style={s.fieldSelect}
-                value={editPriority}
-                onChange={(e) => {
-                  setEditPriority(e.target.value as Priority);
-                  setTimeout(() => handleSave(), 0);
-                }}
-              >
-                {(['urgent', 'high', 'medium', 'low'] as Priority[]).map(
-                  (p) => (
-                    <option key={p} value={p}>
-                      {PRIORITY_LABELS[p]}
-                    </option>
-                  )
-                )}
+              <select style={s.fieldSelect} value={editPriority} onChange={(e) => { setEditPriority(e.target.value as Priority); setTimeout(() => handleSave(), 0); }}>
+                {(['urgent', 'high', 'medium', 'low'] as Priority[]).map((p) => (
+                  <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+                ))}
               </select>
             </div>
             <div style={s.field}>
               <div style={s.fieldLabel}>状态</div>
-              <select
-                style={s.fieldSelect}
-                value={editColumn}
-                onChange={(e) => {
-                  setEditColumn(e.target.value as ColumnType);
-                  setTimeout(() => handleSave(), 0);
-                }}
-              >
+              <select style={s.fieldSelect} value={editColumn} onChange={(e) => { setEditColumn(e.target.value as ColumnType); setTimeout(() => handleSave(), 0); }}>
                 {(['todo', 'inProgress', 'done'] as ColumnType[]).map((c) => (
-                  <option key={c} value={c}>
-                    {COLUMN_LABELS[c]}
-                  </option>
+                  <option key={c} value={c}>{COLUMN_LABELS[c]}</option>
                 ))}
               </select>
             </div>
             <div style={s.field}>
               <div style={s.fieldLabel}>截止日期</div>
-              <input
-                style={s.fieldInput}
-                type="date"
-                value={editDueDate}
-                onChange={(e) => {
-                  setEditDueDate(e.target.value);
-                  setTimeout(() => handleSave(), 0);
-                }}
-              />
+              <input style={s.fieldInput} type="date" value={editDueDate} onChange={(e) => { setEditDueDate(e.target.value); setTimeout(() => handleSave(), 0); }} />
             </div>
             <div style={s.field}>
               <div style={s.fieldLabel}>负责人</div>
-              <select
-                style={s.fieldSelect}
-                value={editAssignee}
-                onChange={(e) => {
-                  setEditAssignee(e.target.value);
-                  setTimeout(() => handleSave(), 0);
-                }}
-              >
+              <select style={s.fieldSelect} value={editAssignee} onChange={(e) => { setEditAssignee(e.target.value); setTimeout(() => handleSave(), 0); }}>
                 <option value="">未分配</option>
-                {allUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nickname}
-                  </option>
-                ))}
+                {allUsers.map((u) => (<option key={u.id} value={u.id}>{u.nickname}</option>))}
               </select>
             </div>
           </div>
 
           {assignee && (
             <div style={s.assigneeRow}>
-              <div
-                style={{
-                  ...s.avatar,
-                  background: colorForName(assignee.nickname),
-                }}
-              >
-                {assignee.avatar}
-              </div>
+              <div style={{ ...s.avatar, background: colorForName(assignee.nickname) }}>{assignee.avatar}</div>
               <div>
                 <div style={s.assigneeName}>{assignee.nickname}</div>
                 <div style={s.assigneeLabel}>负责人</div>
@@ -376,45 +313,16 @@ function CardDetail({
             <div style={s.sectionLabel}>标签</div>
             <div style={s.tagList}>
               {editTags.map((t, i) => (
-                <span
-                  key={i}
-                  style={{
-                    ...s.tag,
-                    background: t.color + '22',
-                    borderColor: t.color,
-                    color: t.color,
-                  }}
-                >
+                <span key={i} style={{ ...s.tag, background: t.color + '22', borderColor: t.color, color: t.color }}>
                   {t.name}
-                  <span style={s.tagX} onClick={() => removeTag(i)}>
-                    ×
-                  </span>
+                  <span style={s.tagX} onClick={() => removeTag(i)}>x</span>
                 </span>
               ))}
             </div>
             <div style={s.tagAddRow}>
-              <input
-                style={s.tagInput}
-                placeholder="添加标签，回车确认"
-                value={newTagInput}
-                onChange={(e) => setNewTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTag();
-                    handleSave();
-                  }
-                }}
-              />
-              <button
-                style={s.smallBtn}
-                onClick={() => {
-                  addTag();
-                  handleSave();
-                }}
-              >
-                添加
-              </button>
+              <input style={s.tagInput} placeholder="添加标签，回车确认" value={newTagInput} onChange={(e) => setNewTagInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); handleSave(); } }} />
+              <button style={s.smallBtn} onClick={() => { addTag(); handleSave(); }}>添加</button>
             </div>
           </div>
 
@@ -431,38 +339,41 @@ function CardDetail({
               {comments.length === 0 ? (
                 <div style={s.emptyComments}>还没有评论，来发第一条吧</div>
               ) : (
-                comments.map((c) => (
-                  <div key={c.id} style={s.commentItem}>
-                    <div
-                      style={{
-                        ...s.avatar,
-                        width: 32,
-                        height: 32,
-                        fontSize: 12,
-                        background: c.user
-                          ? colorForName(c.user.nickname)
-                          : '#6b7280',
-                      }}
-                    >
-                      {c.user?.avatar || '?'}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={s.commentHeader}>
-                        <span style={s.commentName}>
-                          {c.user?.nickname || '未知用户'}
-                        </span>
-                        <span style={s.commentTime}>{formatTime(c.createdAt)}</span>
+                <>
+                  {visibleComments.map((c) => (
+                    <div key={c.id} style={s.commentItem}>
+                      <div
+                        style={{
+                          ...s.avatar,
+                          width: 32,
+                          height: 32,
+                          fontSize: 12,
+                          background: c.user ? colorForName(c.user.nickname) : '#6b7280',
+                        }}
+                      >
+                        {c.user?.avatar || '?'}
                       </div>
-                      <div style={s.commentContent}>{c.content}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={s.commentHeader}>
+                          <span style={s.commentName}>{c.user?.nickname || '未知用户'}</span>
+                          <span style={s.commentTime}>{formatTime(c.createdAt)}</span>
+                        </div>
+                        <div style={s.commentContent}>{c.content}</div>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                  {hasMore && (
+                    <div ref={commentSentinelRef} style={s.loadMore}>
+                      加载更多... ({comments.length - visibleCount} 条未显示)
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div style={s.commentInputWrap}>
               <textarea
                 style={s.commentInput}
-                placeholder="输入评论内容..."
+                placeholder="输入评论内容... (Ctrl+Enter 发送)"
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 onKeyDown={(e) => {
@@ -488,9 +399,7 @@ function CardDetail({
         </div>
 
         <div style={s.footer}>
-          <button style={s.deleteBtn} onClick={handleDelete}>
-            删除卡片
-          </button>
+          <button style={s.deleteBtn} onClick={handleDelete}>删除卡片</button>
           <div style={{ flex: 1 }} />
           {saving && <span style={{ color: '#6b7280', fontSize: 12 }}>保存中...</span>}
         </div>
@@ -500,334 +409,57 @@ function CardDetail({
 }
 
 function colorForName(name: string): string {
-  const colors = [
-    '#ef4444',
-    '#f97316',
-    '#f59e0b',
-    '#10b981',
-    '#14b8a6',
-    '#3b82f6',
-    '#8b5cf6',
-    '#ec4899',
-  ];
+  const colors = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899'];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
 }
 
 const s: Record<string, React.CSSProperties> = {
-  header: {
-    padding: '20px 24px',
-    borderBottom: '1px solid #e5e7eb',
-    flexShrink: 0,
-  },
-  headerTitleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  priorityDot: {
-    width: 10,
-    height: 10,
-    borderRadius: '50%',
-  },
-  colBadge: {
-    fontSize: 12,
-    padding: '2px 10px',
-    borderRadius: 10,
-    fontWeight: 500,
-  },
-  closeBtn: {
-    marginLeft: 'auto',
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    background: '#f3f4f6',
-    color: '#6b7280',
-    fontSize: 20,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 600,
-    color: '#111827',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
-  editHint: {
-    color: '#9ca3af',
-    fontSize: 14,
-    opacity: 0,
-    transition: 'opacity 0.2s',
-  },
-  titleInput: {
-    fontSize: 20,
-    fontWeight: 600,
-    color: '#111827',
-    background: '#f9fafb',
-    borderRadius: 6,
-    padding: '6px 10px',
-    width: '100%',
-    border: '1px solid #e5e7eb',
-  },
-  body: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '20px 24px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 20,
-  },
-  section: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#374151',
-    letterSpacing: 0.2,
-  },
-  descText: {
-    fontSize: 14,
-    color: '#4b5563',
-    lineHeight: 1.6,
-    background: '#f9fafb',
-    borderRadius: 8,
-    padding: 12,
-    cursor: 'pointer',
-    whiteSpace: 'pre-wrap',
-  },
-  descTextarea: {
-    width: '100%',
-    minHeight: 120,
-    fontSize: 14,
-    color: '#111827',
-    background: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    border: '1px solid #e5e7eb',
-    resize: 'vertical',
-    lineHeight: 1.6,
-  },
-  inlineActions: {
-    display: 'flex',
-    gap: 8,
-    justifyContent: 'flex-end',
-    marginTop: 8,
-  },
-  smallBtn: {
-    padding: '6px 14px',
-    borderRadius: 6,
-    background: '#3b82f6',
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 500,
-  },
-  smallBtnGhost: {
-    padding: '6px 14px',
-    borderRadius: 6,
-    background: '#f3f4f6',
-    color: '#4b5563',
-    fontSize: 12,
-  },
-  fieldGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 14,
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: 500,
-  },
-  fieldSelect: {
-    height: 36,
-    borderRadius: 6,
-    background: '#f9fafb',
-    color: '#111827',
-    padding: '0 10px',
-    fontSize: 13,
-    border: '1px solid #e5e7eb',
-    outline: 'none',
-  },
-  fieldInput: {
-    height: 36,
-    borderRadius: 6,
-    background: '#f9fafb',
-    color: '#111827',
-    padding: '0 10px',
-    fontSize: 13,
-    border: '1px solid #e5e7eb',
-  },
-  assigneeRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    background: '#f9fafb',
-    borderRadius: 8,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 600,
-    flexShrink: 0,
-  },
-  assigneeName: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#111827',
-  },
-  assigneeLabel: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  tagList: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tag: {
-    fontSize: 12,
-    padding: '4px 12px',
-    borderRadius: 12,
-    border: '1px solid',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    fontWeight: 500,
-  },
-  tagX: {
-    cursor: 'pointer',
-    fontSize: 14,
-    lineHeight: 1,
-  },
-  tagAddRow: {
-    display: 'flex',
-    gap: 8,
-  },
-  tagInput: {
-    flex: 1,
-    height: 34,
-    borderRadius: 6,
-    background: '#f9fafb',
-    color: '#111827',
-    padding: '0 10px',
-    fontSize: 13,
-    border: '1px solid #e5e7eb',
-  },
-  meta: {
-    fontSize: 12,
-    color: '#9ca3af',
-    display: 'flex',
-    gap: 16,
-    flexWrap: 'wrap',
-    paddingTop: 4,
-  },
-  commentList: {
-    maxHeight: 320,
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 14,
-    padding: 4,
-  },
-  emptyComments: {
-    padding: '24px 0',
-    textAlign: 'center',
-    fontSize: 13,
-    color: '#9ca3af',
-  },
-  commentItem: {
-    display: 'flex',
-    gap: 10,
-    animation: 'fadeIn 0.2s ease-out',
-  },
-  commentHeader: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 8,
-    marginBottom: 4,
-  },
-  commentName: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#111827',
-  },
-  commentTime: {
-    fontSize: 11,
-    color: '#9ca3af',
-  },
-  commentContent: {
-    fontSize: 13,
-    color: '#374151',
-    lineHeight: 1.6,
-    wordBreak: 'break-word',
-    background: '#f9fafb',
-    padding: '8px 12px',
-    borderRadius: 8,
-  },
-  commentInputWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  commentInput: {
-    width: '100%',
-    borderRadius: 8,
-    background: '#f9fafb',
-    color: '#111827',
-    padding: 10,
-    fontSize: 13,
-    border: '1px solid #e5e7eb',
-    resize: 'vertical',
-    lineHeight: 1.5,
-  },
-  commentSubmit: {
-    alignSelf: 'flex-end',
-    padding: '8px 22px',
-    borderRadius: 6,
-    background: '#3b82f6',
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: 500,
-    transition: 'all 0.2s',
-  },
-  footer: {
-    padding: '16px 24px',
-    borderTop: '1px solid #e5e7eb',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    flexShrink: 0,
-  },
-  deleteBtn: {
-    padding: '8px 16px',
-    borderRadius: 6,
-    background: '#fef2f2',
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: 500,
-  },
+  header: { padding: '20px 24px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 },
+  headerTitleRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 },
+  priorityDot: { width: 10, height: 10, borderRadius: '50%' },
+  colBadge: { fontSize: 12, padding: '2px 10px', borderRadius: 10, fontWeight: 500 },
+  closeBtn: { marginLeft: 'auto', width: 32, height: 32, borderRadius: 8, background: '#f3f4f6', color: '#6b7280', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontSize: 20, fontWeight: 600, color: '#111827', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 },
+  editHint: { color: '#9ca3af', fontSize: 14, opacity: 0, transition: 'opacity 0.2s' },
+  titleInput: { fontSize: 20, fontWeight: 600, color: '#111827', background: '#f9fafb', borderRadius: 6, padding: '6px 10px', width: '100%', border: '1px solid #e5e7eb' },
+  body: { flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 },
+  section: { display: 'flex', flexDirection: 'column', gap: 10 },
+  sectionLabel: { fontSize: 13, fontWeight: 600, color: '#374151', letterSpacing: 0.2 },
+  descText: { fontSize: 14, color: '#4b5563', lineHeight: 1.6, background: '#f9fafb', borderRadius: 8, padding: 12, cursor: 'pointer', whiteSpace: 'pre-wrap' },
+  descTextarea: { width: '100%', minHeight: 120, fontSize: 14, color: '#111827', background: '#fff', borderRadius: 8, padding: 12, border: '1px solid #e5e7eb', resize: 'vertical', lineHeight: 1.6 },
+  inlineActions: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 },
+  smallBtn: { padding: '6px 14px', borderRadius: 6, background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 500 },
+  smallBtnGhost: { padding: '6px 14px', borderRadius: 6, background: '#f3f4f6', color: '#4b5563', fontSize: 12 },
+  fieldGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 },
+  field: { display: 'flex', flexDirection: 'column', gap: 6 },
+  fieldLabel: { fontSize: 12, color: '#6b7280', fontWeight: 500 },
+  fieldSelect: { height: 36, borderRadius: 6, background: '#f9fafb', color: '#111827', padding: '0 10px', fontSize: 13, border: '1px solid #e5e7eb', outline: 'none' },
+  fieldInput: { height: 36, borderRadius: 6, background: '#f9fafb', color: '#111827', padding: '0 10px', fontSize: 13, border: '1px solid #e5e7eb' },
+  assigneeRow: { display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: '#f9fafb', borderRadius: 8 },
+  avatar: { width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 600, flexShrink: 0 },
+  assigneeName: { fontSize: 14, fontWeight: 600, color: '#111827' },
+  assigneeLabel: { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  tagList: { display: 'flex', flexWrap: 'wrap', gap: 8 },
+  tag: { fontSize: 12, padding: '4px 12px', borderRadius: 12, border: '1px solid', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 500 },
+  tagX: { cursor: 'pointer', fontSize: 14, lineHeight: 1 },
+  tagAddRow: { display: 'flex', gap: 8 },
+  tagInput: { flex: 1, height: 34, borderRadius: 6, background: '#f9fafb', color: '#111827', padding: '0 10px', fontSize: 13, border: '1px solid #e5e7eb' },
+  meta: { fontSize: 12, color: '#9ca3af', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4 },
+  commentList: { maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, padding: 4, willChange: 'scroll-position' },
+  emptyComments: { padding: '24px 0', textAlign: 'center', fontSize: 13, color: '#9ca3af' },
+  loadMore: { padding: '12px 0', textAlign: 'center', fontSize: 12, color: '#9ca3af' },
+  commentItem: { display: 'flex', gap: 10, contain: 'layout style paint' },
+  commentHeader: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 },
+  commentName: { fontSize: 13, fontWeight: 600, color: '#111827' },
+  commentTime: { fontSize: 11, color: '#9ca3af' },
+  commentContent: { fontSize: 13, color: '#374151', lineHeight: 1.6, wordBreak: 'break-word', background: '#f9fafb', padding: '8px 12px', borderRadius: 8 },
+  commentInputWrap: { display: 'flex', flexDirection: 'column', gap: 8 },
+  commentInput: { width: '100%', borderRadius: 8, background: '#f9fafb', color: '#111827', padding: 10, fontSize: 13, border: '1px solid #e5e7eb', resize: 'vertical', lineHeight: 1.5 },
+  commentSubmit: { alignSelf: 'flex-end', padding: '8px 22px', borderRadius: 6, background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 500, transition: 'all 0.2s' },
+  footer: { padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 },
+  deleteBtn: { padding: '8px 16px', borderRadius: 6, background: '#fef2f2', color: '#ef4444', fontSize: 12, fontWeight: 500 },
 };
 
 export default CardDetail;

@@ -326,23 +326,22 @@ app.get('/api/chart/burndown', (req, res) => {
   const cards = db.get('cards').filter({ projectId }).value();
   const total = cards.length;
 
-  const startDate = project.startDate
-    ? new Date(project.startDate)
-    : new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
-  startDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   const dates = [];
   const ideal = [];
   const actual = [];
+  const dailyRatios = [];
 
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(startDate);
-    d.setDate(startDate.getDate() + i);
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    d.setHours(0, 0, 0, 0);
     const dateStr = d.toISOString().split('T')[0];
     dates.push(dateStr);
-    ideal.push(Math.max(0, Math.round(total * (1 - i / 6))));
 
-    let doneCount = 0;
+    let doneCountByDay = 0;
     for (let j = 0; j < cards.length; j++) {
       const card = cards[j];
       if (card.column === 'done') {
@@ -350,14 +349,21 @@ app.get('/api/chart/burndown', (req, res) => {
         const movedDate = new Date(movedAt);
         movedDate.setHours(0, 0, 0, 0);
         if (movedDate.getTime() <= d.getTime()) {
-          doneCount++;
+          doneCountByDay++;
         }
       }
     }
-    actual.push(total - doneCount);
+
+    const ratio = total > 0 ? doneCountByDay / total : 0;
+    dailyRatios.push(Math.round(ratio * 1000) / 1000);
+    actual.push(total - doneCountByDay);
   }
 
-  res.json(resOk({ dates, ideal, actual, total }));
+  for (let i = 0; i < 7; i++) {
+    ideal.push(Math.max(0, Math.round(total * (1 - i / 6))));
+  }
+
+  res.json(resOk({ dates, ideal, actual, total, dailyRatios }));
 });
 
 app.get('/api/users', (req, res) => {

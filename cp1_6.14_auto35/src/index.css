@@ -50,7 +50,6 @@ input:focus, textarea:focus, select:focus {
   background: #6b7280;
 }
 
-/* Hover effects */
 button:hover {
   filter: brightness(1.1);
 }
@@ -59,7 +58,14 @@ button:active {
   transform: scale(0.97);
 }
 
-/* Responsive layout for mobile (< 768px) */
+[data-chart-btn]:hover {
+  background: #2563eb !important;
+}
+
+[data-chart-btn]:active {
+  background: #1d4ed8 !important;
+}
+
 @media (max-width: 768px) {
   html, body, #root {
     overflow: auto;
@@ -67,7 +73,6 @@ button:active {
     min-height: 100vh;
   }
 
-  /* Navbar */
   [data-navbar] {
     height: 50px !important;
     padding: 0 16px !important;
@@ -89,7 +94,6 @@ button:active {
     font-size: 12px !important;
   }
 
-  /* Board */
   [data-board-wrap] {
     padding: 16px !important;
     overflow: visible !important;
@@ -114,23 +118,19 @@ button:active {
     max-height: 400px !important;
   }
 
-  /* Card Detail Panel */
   [data-card-detail] {
     width: 100vw !important;
   }
 
-  /* Project select grid */
   [data-project-grid] {
     grid-template-columns: 1fr !important;
   }
 
-  /* Auth card */
   [data-auth-card] {
     width: 92vw !important;
     padding: 28px 20px !important;
   }
 
-  /* Chart modal */
   [data-chart-modal] {
     width: 96vw !important;
   }
@@ -140,7 +140,6 @@ button:active {
   }
 }
 
-/* Spin animation for loading */
 @keyframes kanban-spin {
   to { transform: rotate(360deg); }
 }

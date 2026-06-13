@@ -106,7 +106,7 @@ function App() {
   if (view === 'auth') {
     return (
       <div style={styles.authWrap}>
-        <div style={styles.authCard}>
+        <div style={styles.authCard} data-auth-card>
           <h1 style={styles.authTitle}>协作看板</h1>
           <div style={styles.authTabs}>
             <span
@@ -196,7 +196,7 @@ function App() {
           {projects.length === 0 ? (
             <div style={styles.emptyProjects}>暂无项目，请创建或加入一个</div>
           ) : (
-            <div style={styles.projectGrid}>
+            <div style={styles.projectGrid} data-project-grid>
               {projects.map((p) => (
                 <div
                   key={p.id}
@@ -219,18 +219,18 @@ function App() {
 
   return (
     <div style={styles.app}>
-      <div style={styles.navbar}>
+      <div style={styles.navbar} data-navbar>
         <div style={styles.navLeft}>
           <button style={styles.backBtn} onClick={backToProjects}>
-            ←
+            &larr;
           </button>
-          <div style={styles.projectName}>{currentProject?.name}</div>
+          <div style={styles.projectName} data-project-name>{currentProject?.name}</div>
         </div>
         <div style={styles.navRight}>
-          <button style={styles.chartBtn} onClick={() => setShowChart(true)}>
-            📊 生成燃尽图
+          <button style={styles.chartBtn} data-chart-btn onClick={() => setShowChart(true)}>
+            生成燃尽图
           </button>
-          <div style={styles.userAvatar}>{user?.avatar}</div>
+          <div style={styles.userAvatar} data-user-avatar>{user?.avatar}</div>
         </div>
       </div>
 

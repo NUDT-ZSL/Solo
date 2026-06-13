@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchChartData } from '../api';
 import type { BurndownData } from '../types';
 
@@ -7,9 +7,13 @@ interface BurndownChartProps {
   onClose: () => void;
 }
 
+interface ChartData extends BurndownData {
+  dailyRatios: number[];
+}
+
 function BurndownChart({ projectId, onClose }: BurndownChartProps) {
   const [visible, setVisible] = useState(false);
-  const [data, setData] = useState<BurndownData | null>(null);
+  const [data, setData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,9 +26,14 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
 
   const loadData = async () => {
     setLoading(true);
+    const startTime = performance.now();
     const res = await fetchChartData(projectId);
+    const elapsed = performance.now() - startTime;
+    if (res.code === 0) setData(res.data as ChartData);
     setLoading(false);
-    if (res.code === 0) setData(res.data);
+    if (elapsed > 800) {
+      console.warn('燃尽图生成耗时:', elapsed.toFixed(0), 'ms');
+    }
   };
 
   const handleClose = () => {
@@ -37,17 +46,8 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
     return `${d.getMonth() + 1}/${d.getDate()}`;
   };
 
-  const renderChart = () => {
-    if (!data || loading) {
-      return (
-        <div style={s.loading}>
-          <div style={s.spinner} />
-          <div style={s.loadingText}>
-            {loading ? '正在生成燃尽图...' : '暂无数据'}
-          </div>
-        </div>
-      );
-    }
+  const chartSvg = useMemo(() => {
+    if (!data) return null;
 
     const W = 680;
     const H = 420;
@@ -57,6 +57,7 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
     const n = data.dates.length;
     const maxVal = Math.max(...data.ideal, ...data.actual, 1);
     const yMax = Math.ceil(maxVal / 5) * 5 || 5;
+    const barWidth = Math.min(30, chartW / n * 0.5);
 
     const xAt = (i: number) => padding.left + (chartW * i) / (n - 1);
     const yAt = (v: number) => padding.top + chartH - (chartH * v) / yMax;
@@ -78,9 +79,43 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
     const doneCount = data.total - (data.actual[data.actual.length - 1] || 0);
     const completion = data.total > 0 ? Math.round((doneCount / data.total) * 100) : 0;
 
+    const bars = data.actual.map((v, i) => {
+      const barH = (yMax - v) > 0 ? ((yMax - v) / yMax) * chartH : 0;
+      const bx = xAt(i) - barWidth / 2;
+      const by = yAt(yMax) - barH;
+      return { x: bx, y: by, w: barWidth, h: barH, i };
+    });
+
+    return {
+      W, H, padding, chartW, chartH, n, yMax,
+      idealPoints, actualPoints, areaPath,
+      tickVals, doneCount, completion, bars,
+      xAt, yAt,
+    };
+  }, [data]);
+
+  const renderChart = () => {
+    if (!data || loading || !chartSvg) {
+      return (
+        <div style={s.loading}>
+          <div style={s.spinner} />
+          <div style={s.loadingText}>
+            {loading ? '正在生成燃尽图...' : '暂无数据'}
+          </div>
+        </div>
+      );
+    }
+
+    const {
+      W, H, padding, n, yMax,
+      idealPoints, actualPoints, areaPath,
+      tickVals, doneCount, completion, bars,
+      xAt, yAt,
+    } = chartSvg;
+
     return (
       <div>
-        <div style={s.statsRow}>
+        <div style={s.statsRow} data-stats-row>
           <div style={s.stat}>
             <div style={s.statNum}>{data.total}</div>
             <div style={s.statLabel}>总任务</div>
@@ -140,11 +175,11 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
 
           <text
             x={padding.left - 44}
-            y={padding.top + chartH / 2}
+            y={padding.top + chartSvg.chartH / 2}
             fontSize={12}
             fill="#9ca3af"
             textAnchor="middle"
-            transform={`rotate(-90 ${padding.left - 44} ${padding.top + chartH / 2})`}
+            transform={`rotate(-90 ${padding.left - 44} ${padding.top + chartSvg.chartH / 2})`}
           >
             未完成任务数
           </text>
@@ -172,6 +207,18 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
             日期
           </text>
 
+          {bars.map((bar) => (
+            <rect
+              key={`bar-${bar.i}`}
+              x={bar.x}
+              y={bar.y}
+              width={bar.w}
+              height={bar.h}
+              fill="#3b82f633"
+              rx={3}
+            />
+          ))}
+
           <path
             d={areaPath}
             fill="url(#areaGradient)"
@@ -190,7 +237,7 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
             points={actualPoints}
             fill="none"
             stroke="#3b82f6"
-            strokeWidth="2.5"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -211,14 +258,35 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
                 cx={xAt(i)}
                 cy={yAt(v)}
                 r="6"
-                fill="#3b82f6"
-                stroke="#fff"
+                fill="#fff"
+                stroke="#3b82f6"
                 strokeWidth="2"
               />
-              <title>{`${formatDateLabel(data.dates[i])}: 剩余 ${v} 个`}</title>
+              <title>{`${formatDateLabel(data.dates[i])}: 剩余 ${v} 个，完成比例 ${Math.round((data.dailyRatios?.[i] ?? 0) * 100)}%`}</title>
             </g>
           ))}
         </svg>
+
+        {data.dailyRatios && (
+          <div style={s.ratioGrid}>
+            {data.dates.map((d, i) => (
+              <div key={i} style={s.ratioItem}>
+                <div style={s.ratioDate}>{formatDateLabel(d)}</div>
+                <div style={s.ratioBar}>
+                  <div
+                    style={{
+                      ...s.ratioFill,
+                      width: `${Math.round((data.dailyRatios[i] ?? 0) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <div style={s.ratioPct}>
+                  {Math.round((data.dailyRatios[i] ?? 0) * 100)}%
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={s.legend}>
           <div style={s.legendItem}>
@@ -254,6 +322,7 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
         }}
       />
       <div
+        data-chart-modal
         style={{
           position: 'fixed',
           top: '50%',
@@ -277,15 +346,15 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
       >
         <div style={s.chartHeader}>
           <div>
-            <div style={s.chartTitle}>📊 项目燃尽图</div>
+            <div style={s.chartTitle}>项目燃尽图</div>
             <div style={s.chartSubtitle}>最近 7 天进度追踪</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button style={s.refreshBtn} onClick={loadData}>
-              ↻ 刷新
+              刷新
             </button>
             <button style={s.closeBtn} onClick={handleClose}>
-              ×
+              x
             </button>
           </div>
         </div>
@@ -328,7 +397,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     background: '#31314a',
     color: '#9ca3af',
-    fontSize: 20,
+    fontSize: 16,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -351,7 +420,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '3px solid #31314a',
     borderTopColor: '#3b82f6',
     borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
+    animation: 'kanban-spin 0.8s linear infinite',
   },
   loadingText: {
     fontSize: 13,
@@ -378,6 +447,41 @@ const s: Record<string, React.CSSProperties> = {
   statLabel: {
     fontSize: 11,
     color: '#6b7280',
+  },
+  ratioGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  ratioItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratioDate: {
+    fontSize: 10,
+    color: '#6b7280',
+  },
+  ratioBar: {
+    width: '100%',
+    height: 4,
+    background: '#31314a',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  ratioFill: {
+    height: '100%',
+    background: '#3b82f6',
+    borderRadius: 2,
+    transition: 'width 0.3s ease-out',
+  },
+  ratioPct: {
+    fontSize: 10,
+    color: '#3b82f6',
+    fontWeight: 600,
   },
   legend: {
     display: 'flex',
@@ -416,16 +520,5 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #3b82f666',
   },
 };
-
-const keyframesStyle = `
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-`;
-if (typeof document !== 'undefined' && !document.getElementById('kanban-kf')) {
-  const el = document.createElement('style');
-  el.id = 'kanban-kf';
-  el.textContent = keyframesStyle;
-  document.head.appendChild(el);
-}
 
 export default BurndownChart;

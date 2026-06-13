@@ -37,8 +37,6 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
   const [cards, setCards] = useState<Card[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [hoverCol, setHoverCol] = useState<ColumnType | null>(null);
   const [addingColumn, setAddingColumn] = useState<ColumnType | null>(null);
   const [newTitle, setNewTitle] = useState('');
@@ -47,8 +45,17 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
   const [newDueDate, setNewDueDate] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [newTags, setNewTags] = useState<Tag[]>([]);
-  const dragStartPos = useRef({ x: 0, y: 0 });
-  const dragCardEl = useRef<HTMLDivElement | null>(null);
+
+  const dragState = useRef({
+    active: false,
+    cardId: null as string | null,
+    offsetX: 0,
+    offsetY: 0,
+    currentX: 0,
+    currentY: 0,
+    rafId: 0,
+  });
+  const ghostRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = useCallback(async () => {
     const [cardsRes, usersRes] = await Promise.all([
@@ -65,40 +72,65 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
 
   const getUser = (id: string | null) => users.find((u) => u.id === id) || null;
 
+  const updateGhostPosition = useCallback(() => {
+    const ghost = ghostRef.current;
+    const ds = dragState.current;
+    if (!ghost || !ds.active) return;
+    ghost.style.transform = `translate(${ds.currentX - ds.offsetX}px, ${ds.currentY - ds.offsetY}px) rotate(3deg) scale(1.04)`;
+  }, []);
+
   const onCardMouseDown = (e: React.MouseEvent, card: Card) => {
     if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const ds = dragState.current;
+    ds.active = true;
+    ds.cardId = card.id;
+    ds.offsetX = e.clientX - rect.left;
+    ds.offsetY = e.clientY - rect.top;
+    ds.currentX = e.clientX;
+    ds.currentY = e.clientY;
     setDraggingId(card.id);
-    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-    setDragPos({ x: e.clientX, y: e.clientY });
-    dragStartPos.current = { x: e.clientX, y: e.clientY };
   };
 
   useEffect(() => {
     if (!draggingId) return;
 
     const onMove = (e: MouseEvent) => {
-      setDragPos({ x: e.clientX, y: e.clientY });
-      const cols = document.querySelectorAll('[data-column]');
-      let found: ColumnType | null = null;
-      cols.forEach((el) => {
-        const r = (el as HTMLElement).getBoundingClientRect();
-        if (
-          e.clientX >= r.left &&
-          e.clientX <= r.right &&
-          e.clientY >= r.top &&
-          e.clientY <= r.bottom
-        ) {
-          found = (el as HTMLElement).dataset.column as ColumnType;
+      const ds = dragState.current;
+      if (!ds.active) return;
+      ds.currentX = e.clientX;
+      ds.currentY = e.clientY;
+
+      if (ds.rafId) cancelAnimationFrame(ds.rafId);
+      ds.rafId = requestAnimationFrame(() => {
+        updateGhostPosition();
+
+        const cols = document.querySelectorAll('[data-column]');
+        let found: ColumnType | null = null;
+        for (let i = 0; i < cols.length; i++) {
+          const r = (cols[i] as HTMLElement).getBoundingClientRect();
+          if (
+            e.clientX >= r.left &&
+            e.clientX <= r.right &&
+            e.clientY >= r.top &&
+            e.clientY <= r.bottom
+          ) {
+            found = (cols[i] as HTMLElement).dataset.column as ColumnType;
+            break;
+          }
         }
+        setHoverCol(found);
       });
-      setHoverCol(found);
     };
 
     const onUp = async () => {
-      const id = draggingId;
+      const ds = dragState.current;
+      if (ds.rafId) cancelAnimationFrame(ds.rafId);
+      const id = ds.cardId;
       const targetCol = hoverCol;
+      ds.active = false;
+      ds.cardId = null;
       setDraggingId(null);
       setHoverCol(null);
       if (id && targetCol) {
@@ -119,8 +151,10 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      const ds = dragState.current;
+      if (ds.rafId) cancelAnimationFrame(ds.rafId);
     };
-  }, [draggingId, hoverCol, cards]);
+  }, [draggingId, hoverCol, cards, updateGhostPosition]);
 
   const handleCreateCard = async () => {
     if (!addingColumn || !newTitle.trim()) return;
@@ -153,15 +187,8 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
     const name = newTagInput.trim();
     if (!name) return;
     const palette = [
-      '#ef4444',
-      '#f97316',
-      '#f59e0b',
-      '#10b981',
-      '#14b8a6',
-      '#3b82f6',
-      '#8b5cf6',
-      '#ec4899',
-      '#6b7280',
+      '#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6',
+      '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280',
     ];
     const color = palette[newTags.length % palette.length];
     setNewTags([...newTags, { name, color }]);
@@ -178,8 +205,8 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
   const draggingCard = draggingId ? cards.find((c) => c.id === draggingId) : null;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.board}>
+    <div style={styles.container} data-board-wrap>
+      <div style={styles.board} data-board>
         {COLUMN_CONFIG.map((col) => {
           const colCards = getColCards(col.key);
           const isHover = hoverCol === col.key;
@@ -207,11 +234,11 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
                     setNewTags([]);
                   }}
                 >
-                  ＋
+                  +
                 </button>
               </div>
 
-              <div style={styles.columnBody}>
+              <div style={styles.columnBody} data-column-body>
                 {addingColumn === col.key && (
                   <div data-no-drag style={styles.addCardForm}>
                     <input
@@ -281,7 +308,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
                               style={styles.tagRemove}
                               onClick={() => removeTag(i)}
                             >
-                              ×
+                              x
                             </span>
                           </span>
                         ))}
@@ -304,10 +331,10 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
                   return (
                     <div
                       key={card.id}
-                      ref={(el) => {
-                        if (card.id === draggingId) dragCardEl.current = el;
+                      style={{
+                        ...styles.card,
+                        willChange: draggingId ? 'transform' : 'auto',
                       }}
-                      style={styles.card}
                       onMouseDown={(e) => onCardMouseDown(e, card)}
                       onClick={() => onSelectCard(card)}
                     >
@@ -323,8 +350,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
                           <span
                             style={{
                               ...styles.priorityBadge,
-                              background:
-                                PRIORITY_COLORS[card.priority] + '22',
+                              background: PRIORITY_COLORS[card.priority] + '22',
                               color: PRIORITY_COLORS[card.priority],
                               borderColor: PRIORITY_COLORS[card.priority],
                             }}
@@ -359,7 +385,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
                         <div style={styles.cardFooter}>
                           {card.dueDate && (
                             <div style={styles.dueDate}>
-                              📅 {card.dueDate}
+                              {card.dueDate}
                             </div>
                           )}
                           {assignee && (
@@ -386,19 +412,19 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
 
       {draggingCard && (
         <div
+          ref={ghostRef}
           style={{
             position: 'fixed',
-            left: dragPos.x - dragOffset.x,
-            top: dragPos.y - dragOffset.y,
-            width: dragCardEl.current?.offsetWidth || 260,
+            left: 0,
+            top: 0,
             zIndex: 9999,
             pointerEvents: 'none',
-            transform: 'rotate(2deg)',
-            opacity: 0.9,
-            transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            willChange: 'transform',
+            transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s',
+            opacity: 0.92,
           }}
         >
-          <div style={styles.card}>
+          <div style={styles.ghostCard}>
             <div
               style={{
                 ...styles.priorityBar,
@@ -417,14 +443,8 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
 
 function colorForName(name: string): string {
   const colors = [
-    '#ef4444',
-    '#f97316',
-    '#f59e0b',
-    '#10b981',
-    '#14b8a6',
-    '#3b82f6',
-    '#8b5cf6',
-    '#ec4899',
+    '#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6',
+    '#3b82f6', '#8b5cf6', '#ec4899',
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -494,7 +514,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s',
   },
   columnBody: {
     flex: 1,
@@ -512,6 +531,14 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s',
     boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+  },
+  ghostCard: {
+    background: '#31314a',
+    borderRadius: 8,
+    overflow: 'hidden',
+    width: 290,
+    boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
+    border: '1px solid #3b82f644',
   },
   priorityBar: {
     height: 3,
