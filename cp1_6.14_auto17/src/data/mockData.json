@@ -1,0 +1,32 @@
+{
+  "strata": [
+    { "id": 1, "name": "表土层", "color": "#d2b48c", "depthTop": 0, "depthBottom": 0.8, "period": "现代" },
+    { "id": 2, "name": "耕作层", "color": "#cd853f", "depthTop": 0.8, "depthBottom": 2.0, "period": "明清" },
+    { "id": 3, "name": "文化层A", "color": "#deb887", "depthTop": 2.0, "depthBottom": 3.8, "period": "宋元" },
+    { "id": 4, "name": "文化层B", "color": "#d2691e", "depthTop": 3.8, "depthBottom": 6.0, "period": "汉唐" },
+    { "id": 5, "name": "文化层C", "color": "#8b4513", "depthTop": 6.0, "depthBottom": 8.5, "period": "先秦" },
+    { "id": 6, "name": "基岩层", "color": "#4a2c2a", "depthTop": 8.5, "depthBottom": 12.0, "period": "史前" }
+  ],
+  "artifacts": [
+    { "id": "A001", "name": "青花瓷碗", "year": 300, "material": "陶瓷", "description": "清代康熙年间青花缠枝莲纹碗，胎质细腻，釉色温润，青花发色纯正。碗身绘缠枝莲花纹，线条流畅自然，是清代官窑的典型代表作品。", "stratumId": 2, "position": { "x": 3.2, "y": 1.4, "z": -2.1 }, "category": "陶器" },
+    { "id": "A002", "name": "铜钱串", "year": 250, "material": "铜", "description": "清代乾隆通宝铜钱一组，共计12枚，用麻绳穿系。钱币保存状态良好，文字清晰可辨，对研究清代货币体系具有重要价值。", "stratumId": 2, "position": { "x": -1.8, "y": 1.7, "z": 1.3 }, "category": "青铜器" },
+    { "id": "A003", "name": "瓷瓶残片", "year": 500, "material": "陶瓷", "description": "明代晚期青花瓷瓶残片，可见云龙纹图案局部。胎体厚重，青花呈色偏灰蓝，具有明晚期民窑风格特征。", "stratumId": 2, "position": { "x": 0.6, "y": 1.2, "z": 3.5 }, "category": "陶器" },
+    { "id": "A004", "name": "银簪", "year": 600, "material": "银", "description": "元代银发簪，首部作如意云头形，簪身扁平。錾刻缠枝花卉纹，工艺精湛，是研究元代妇女头饰的重要实物。", "stratumId": 3, "position": { "x": -3.1, "y": 2.8, "z": -0.9 }, "category": "青铜器" },
+    { "id": "A005", "name": "青白瓷注子", "year": 800, "material": "陶瓷", "description": "宋代影青釉注子，通体施青白釉，釉色莹润如青玉。器形饱满端庄，是宋代景德镇窑的精品之作。", "stratumId": 3, "position": { "x": 2.4, "y": 3.0, "z": 2.8 }, "category": "陶器" },
+    { "id": "A006", "name": "玉璧", "year": 1200, "material": "和田玉", "description": "唐代青玉璧，玉质温润呈青白色，璧面光素无纹。边缘规整，穿孔对钻而成，是唐代祭祀用玉的典型。", "stratumId": 4, "position": { "x": -0.4, "y": 4.7, "z": -3.2 }, "category": "玉器" },
+    { "id": "A007", "name": "唐三彩残件", "year": 1300, "material": "陶瓷", "description": "唐代三彩骆驼俑残件，保留了骆驼的头部和前躯。施黄、绿、白三色釉，釉彩交融自然，造型生动传神。", "stratumId": 4, "position": { "x": 3.8, "y": 4.9, "z": 0.5 }, "category": "陶器" },
+    { "id": "A008", "name": "铜佛造像", "year": 1400, "material": "青铜", "description": "隋代青铜佛像，结跏趺坐于莲台之上，面容慈祥宁静。背光作舟形，铸火焰纹，是佛教在中原传播的重要见证。", "stratumId": 4, "position": { "x": -2.7, "y": 5.4, "z": 3.1 }, "category": "青铜器" },
+    { "id": "A009", "name": "陶罐", "year": 1700, "material": "陶", "description": "汉代灰陶罐，器形规整，肩部饰弦纹两周。泥质灰陶，火候较高，为汉代日常储盛器具。", "stratumId": 5, "position": { "x": 1.2, "y": 7.0, "z": -1.6 }, "category": "陶器" },
+    { "id": "A010", "name": "五铢钱", "year": 1900, "material": "铜", "description": "西汉五铢钱，铜质精良，钱文端庄秀丽。外郭整齐，光背，是汉代流通时间最长的货币。", "stratumId": 5, "position": { "x": -4.0, "y": 7.8, "z": 2.4 }, "category": "青铜器" },
+    { "id": "A011", "name": "骨簪", "year": 2000, "material": "骨", "description": "战国时期骨笄，用动物肢骨磨制而成。首部雕刻鸟首形，通体打磨光滑，是战国时期妇女束发用具。", "stratumId": 5, "position": { "x": 0.8, "y": 7.3, "z": 4.0 }, "category": "骨器" },
+    { "id": "A012", "name": "石斧", "year": 4000, "material": "石材", "description": "新石器时代石斧，选用玄武岩打制磨制而成。器身扁平，弧刃锋利，是原始农业生产的重要工具。", "stratumId": 6, "position": { "x": -1.5, "y": 10.0, "z": -2.8 }, "category": "石器" },
+    { "id": "A013", "name": "彩陶片", "year": 4500, "material": "陶", "description": "仰韶文化彩陶片，陶质为细泥红陶，黑彩绘弧线三角纹。图案构图严谨，色彩对比鲜明，是仰韶文化庙底沟类型的典型遗存。", "stratumId": 6, "position": { "x": 2.9, "y": 10.8, "z": 1.9 }, "category": "陶器" },
+    { "id": "A014", "name": "玉佩饰", "year": 1500, "material": "和田玉", "description": "南北朝时期青玉组佩构件，玉质呈青白色，温润有光泽。作云头形，两端有穿孔，用于组佩串系。", "stratumId": 4, "position": { "x": 4.2, "y": 5.6, "z": -3.8 }, "category": "玉器" },
+    { "id": "A015", "name": "铁犁铧", "year": 900, "material": "铁", "description": "北宋铁犁铧，形制呈V形，锋部尖锐。表面虽经锈蚀仍可见铸造痕迹，是研究宋代农业生产工具的重要实物。", "stratumId": 3, "position": { "x": -4.5, "y": 3.3, "z": -3.5 }, "category": "青铜器" },
+    { "id": "A016", "name": "卜骨", "year": 3200, "material": "骨", "description": "商代晚期牛肩胛骨卜骨，背面有钻凿痕迹，正面可见兆纹。对于研究商代占卜制度和文字起源具有重要意义。", "stratumId": 5, "position": { "x": 3.5, "y": 8.2, "z": -0.3 }, "category": "骨器" },
+    { "id": "A017", "name": "玉琮", "year": 4800, "material": "岫玉", "description": "良渚文化玉琮，器形外方内圆，中心穿孔。四面各饰简化兽面纹，是良渚文化最具代表性的礼器，象征天地贯通。", "stratumId": 6, "position": { "x": -3.3, "y": 11.2, "z": 0.8 }, "category": "玉器" },
+    { "id": "A018", "name": "青铜剑", "year": 2400, "material": "青铜", "description": "春秋晚期青铜剑，剑身修长，中脊隆起。剑格作倒凹字形，圆茎有箍，是吴越式青铜剑的典型形制，仍锋利无比。", "stratumId": 5, "position": { "x": 1.7, "y": 6.5, "z": 2.2 }, "category": "青铜器" },
+    { "id": "A019", "name": "陶纺轮", "year": 3500, "material": "陶", "description": "商代陶纺轮，呈扁圆饼状，中心穿孔。器面饰细绳纹，是古代纺织工序中用于捻线的重要工具。", "stratumId": 5, "position": { "x": -0.8, "y": 6.8, "z": -4.2 }, "category": "陶器" },
+    { "id": "A020", "name": "石镞", "year": 4200, "material": "燧石", "description": "新石器时代石箭镞，用燧石压制而成。器形呈三角形，铤部明显，锋利异常，是原始狩猎活动的主要远射武器。", "stratumId": 6, "position": { "x": 4.0, "y": 9.5, "z": 3.8 }, "category": "石器" }
+  ]
+}
