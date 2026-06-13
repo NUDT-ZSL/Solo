@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
+import fs from 'fs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -15,10 +17,14 @@ app.use(cors());
 app.use(express.json());
 
 const dbPath = join(__dirname, '..', 'data');
-const menuDb = Datastore.create(join(dbPath, 'menu.db'));
-const ordersDb = Datastore.create(join(dbPath, 'orders.db'));
-const userDb = Datastore.create(join(dbPath, 'user.db'));
-const rewardsDb = Datastore.create(join(dbPath, 'rewards.db'));
+if (!fs.existsSync(dbPath)) {
+  fs.mkdirSync(dbPath, { recursive: true });
+}
+
+const menuDb = Datastore.create({ filename: join(dbPath, 'menu.db'), autoload: true });
+const ordersDb = Datastore.create({ filename: join(dbPath, 'orders.db'), autoload: true });
+const userDb = Datastore.create({ filename: join(dbPath, 'user.db'), autoload: true });
+const rewardsDb = Datastore.create({ filename: join(dbPath, 'rewards.db'), autoload: true });
 
 const seedMenu = [
   {
@@ -220,29 +226,35 @@ const seedOrders = [
 
 async function seedDatabase() {
   try {
-    const menuCount = await menuDb.count({});
-    if (menuCount === 0) {
-      await menuDb.insert(seedMenu);
-      console.log('Menu seeded');
+    for (const item of seedMenu) {
+      const exists = await menuDb.findOne({ id: item.id });
+      if (!exists) {
+        await menuDb.insert(item);
+      }
     }
+    console.log('Menu seeded');
 
-    const rewardsCount = await rewardsDb.count({});
-    if (rewardsCount === 0) {
-      await rewardsDb.insert(seedRewards);
-      console.log('Rewards seeded');
+    for (const reward of seedRewards) {
+      const exists = await rewardsDb.findOne({ id: reward.id });
+      if (!exists) {
+        await rewardsDb.insert(reward);
+      }
     }
+    console.log('Rewards seeded');
 
-    const userCount = await userDb.count({});
-    if (userCount === 0) {
+    const userExists = await userDb.findOne({ id: seedUser.id });
+    if (!userExists) {
       await userDb.insert(seedUser);
       console.log('User seeded');
     }
 
-    const ordersCount = await ordersDb.count({});
-    if (ordersCount === 0) {
-      await ordersDb.insert(seedOrders);
-      console.log('Orders seeded');
+    for (const order of seedOrders) {
+      const exists = await ordersDb.findOne({ id: order.id });
+      if (!exists) {
+        await ordersDb.insert(order);
+      }
     }
+    console.log('Orders seeded');
   } catch (err) {
     console.error('Seed error:', err);
   }
