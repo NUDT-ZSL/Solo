@@ -16,6 +16,7 @@
       overflow: hidden;
       background: #0b0f1a;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #e2e8f0;
     }
     #app {
       width: 100%;
@@ -49,15 +50,263 @@
       border: 2px solid transparent;
       border-radius: 10px;
       outline: none;
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      position: relative;
+      transition: box-shadow 0.3s ease;
+      background-clip: padding-box;
     }
-    .text-input:focus {
-      border-image: linear-gradient(90deg, #4ade80, #3b82f6) 1;
-      border-radius: 10px;
-      box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15), 0 0 20px rgba(59, 130, 246, 0.25);
+    .input-wrapper {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      border-radius: 12px;
+      padding: 2px;
+      background: transparent;
+      transition: background 0.3s ease;
+    }
+    .input-wrapper.focused {
+      background: linear-gradient(90deg, #4ade80, #3b82f6);
     }
     .text-input::placeholder {
       color: #64748b;
+    }
+    .controls-panel {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      width: 280px;
+      background: rgba(18, 25, 45, 0.92);
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 20;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(96, 165, 250, 0.15);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .controls-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+    .controls-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .controls-panel::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    .control-group {
+      margin-bottom: 18px;
+    }
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+    .control-label {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      display: block;
+      font-weight: 500;
+    }
+    .control-value {
+      float: right;
+      color: #60a5fa;
+      font-size: 12px;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #334155;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #60a5fa;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 12px rgba(96, 165, 250, 0.7);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #60a5fa;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+    }
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 12px rgba(96, 165, 250, 0.7);
+    }
+    .color-presets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .color-preset {
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+    .color-preset:hover {
+      transform: translateY(-2px);
+    }
+    .color-preset.active {
+      border-color: #ffffff;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
+    }
+    .color-preset.cyan {
+      background: linear-gradient(135deg, #22d3ee, #06b6d4);
+      box-shadow: 0 0 8px rgba(34, 211, 238, 0.3);
+    }
+    .color-preset.magenta {
+      background: linear-gradient(135deg, #e879f9, #c026d3);
+      box-shadow: 0 0 8px rgba(232, 121, 249, 0.3);
+    }
+    .color-preset.gold {
+      background: linear-gradient(135deg, #fcd34d, #f59e0b);
+      box-shadow: 0 0 8px rgba(252, 211, 77, 0.3);
+    }
+    .color-preset.lime {
+      background: linear-gradient(135deg, #a3e635, #65a30d);
+      box-shadow: 0 0 8px rgba(163, 230, 53, 0.3);
+    }
+    .custom-color-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 40px;
+      height: 32px;
+      border: 2px solid #334155;
+      border-radius: 8px;
+      padding: 2px;
+      background: #1e2433;
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+    }
+    input[type="color"]:hover {
+      border-color: #60a5fa;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 5px;
+    }
+    .custom-color-label {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .animation-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .anim-btn {
+      padding: 10px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+    }
+    .anim-btn:hover {
+      background: #3b82f6;
+      box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+    }
+    .anim-btn:active {
+      transform: scale(0.96);
+    }
+    .anim-btn.active {
+      background: #1d4ed8;
+      box-shadow: 0 0 14px rgba(59, 130, 246, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.1);
+    }
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      background: #334155;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .toggle-switch.active {
+      background: #2563eb;
+    }
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: #ffffff;
+      border-radius: 50%;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    .toggle-switch.active::after {
+      transform: translateX(18px);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+    }
+    .stats {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      color: #60a5fa;
+      font-weight: 500;
     }
     .panel-toggle {
       display: none;
@@ -81,13 +330,33 @@
     .panel-toggle:active {
       transform: translateX(-50%) scale(0.96);
     }
+    @media (max-width: 1024px) and (min-width: 769px) {
+      .controls-panel {
+        width: 260px;
+      }
+    }
     @media (max-width: 768px) {
       .text-input {
-        width: calc(100% - 40px);
+        width: calc(100vw - 80px);
         max-width: 360px;
       }
       .panel-toggle {
         display: block;
+      }
+      .controls-panel {
+        top: auto;
+        right: 0;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: 50vh;
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+        border: none;
+        border-top: 1px solid rgba(96, 165, 250, 0.2);
+      }
+      .controls-panel.open {
+        transform: translateY(0);
       }
     }
   </style>
@@ -95,8 +364,8 @@
 <body>
   <div id="app">
     <div id="canvas-container"></div>
-    <div class="input-wrapper">
-      <input type="text" class="text-input" id="text-input" placeholder="Type a word or phrase..." value="HELLO" autocomplete="off" />
+    <div class="input-wrapper" id="input-wrapper">
+      <input type="text" class="text-input" id="text-input" placeholder="Type a word or phrase..." value="HELLO" autocomplete="off" spellcheck="false" />
     </div>
     <button class="panel-toggle" id="panel-toggle">Toggle Controls</button>
   </div>
