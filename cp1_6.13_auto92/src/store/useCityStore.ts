@@ -49,15 +49,19 @@ const PRESET_CONFIGS: Record<PresetTemplate, PresetConfig> = {
   }
 }
 
-const generateBuildings = (config: PresetConfig): Building[] => {
+const TERRAIN_SIZE = 200
+const TERRAIN_HALF = TERRAIN_SIZE / 2
+const BUFFER = 15
+
+const generateBuildings = (config: PresetConfig, startHidden = false): Building[] => {
   const buildings: Building[] = []
   const { buildingCount, heightRange, colorPalette, layout } = config
 
   for (let i = 0; i < buildingCount; i++) {
     let x: number, z: number
-    const width = 15 + Math.random() * 20
-    const depth = 15 + Math.random() * 20
-    const height = heightRange[0] + Math.random() * (heightRange[1] - heightRange[0])
+    const width = 10 + Math.random() * 30
+    const depth = 10 + Math.random() * 30
+    const targetHeight = heightRange[0] + Math.random() * (heightRange[1] - heightRange[0])
     const color = colorPalette[Math.floor(Math.random() * colorPalette.length)]
     const hasCrown = Math.random() > 0.4
 
@@ -66,27 +70,31 @@ const generateBuildings = (config: PresetConfig): Building[] => {
         const cols = Math.ceil(Math.sqrt(buildingCount))
         const row = Math.floor(i / cols)
         const col = i % cols
-        const spacing = 180 / cols
-        x = -90 + col * spacing + spacing / 2 + (Math.random() - 0.5) * 10
-        z = -90 + row * spacing + spacing / 2 + (Math.random() - 0.5) * 10
+        const cellW = (TERRAIN_SIZE - BUFFER * 2) / cols
+        const cellH = (TERRAIN_SIZE - BUFFER * 2) / cols
+        x = -TERRAIN_HALF + BUFFER + col * cellW + cellW / 2 + (Math.random() - 0.5) * 8
+        z = -TERRAIN_HALF + BUFFER + row * cellH + cellH / 2 + (Math.random() - 0.5) * 8
         break
       }
       case 'cluster': {
         const angle = (i / buildingCount) * Math.PI * 2
-        const radius = 20 + Math.random() * 70
-        x = Math.cos(angle) * radius + (Math.random() - 0.5) * 20
-        z = Math.sin(angle) * radius + (Math.random() - 0.5) * 20
+        const radius = 15 + Math.random() * 70
+        x = Math.cos(angle) * radius + (Math.random() - 0.5) * 15
+        z = Math.sin(angle) * radius + (Math.random() - 0.5) * 15
+        x = Math.max(-TERRAIN_HALF + BUFFER, Math.min(TERRAIN_HALF - BUFFER, x))
+        z = Math.max(-TERRAIN_HALF + BUFFER, Math.min(TERRAIN_HALF - BUFFER, z))
         break
       }
       case 'linear': {
         const t = i / buildingCount
-        x = -80 + t * 160 + (Math.random() - 0.5) * 20
-        z = (Math.random() - 0.5) * 60
+        x = -TERRAIN_HALF + BUFFER + t * (TERRAIN_SIZE - BUFFER * 2) + (Math.random() - 0.5) * 10
+        z = (Math.random() - 0.5) * 80
+        z = Math.max(-TERRAIN_HALF + BUFFER, Math.min(TERRAIN_HALF - BUFFER, z))
         break
       }
       default: {
-        x = (Math.random() - 0.5) * 160
-        z = (Math.random() - 0.5) * 160
+        x = (Math.random() - 0.5) * (TERRAIN_SIZE - BUFFER * 2)
+        z = (Math.random() - 0.5) * (TERRAIN_SIZE - BUFFER * 2)
       }
     }
 
@@ -96,8 +104,8 @@ const generateBuildings = (config: PresetConfig): Building[] => {
       z,
       width,
       depth,
-      height: 0,
-      targetHeight: height,
+      height: startHidden ? 0 : targetHeight,
+      targetHeight,
       color,
       hasCrown
     })
@@ -109,21 +117,22 @@ const generateBuildings = (config: PresetConfig): Building[] => {
 interface CityState {
   buildings: Building[]
   selectedIds: Set<string>
+  selectedCount: number
   currentTemplate: PresetTemplate
   isTransitioning: boolean
   selectBuilding: (id: string, additive?: boolean) => void
   selectBuildings: (ids: string[]) => void
   clearSelection: () => void
   updateBuilding: (id: string, updates: Partial<Building>) => void
-  batchUpdate: (updates: Partial<Building>) => void
+  batchUpdateHeight: (height: number) => void
+  batchUpdateColor: (color: string) => void
   setTemplate: (template: PresetTemplate) => void
-  setTransitioning: (value: boolean) => void
-  animateBuildings: () => void
 }
 
 export const useCityStore = create<CityState>((set, get) => ({
-  buildings: generateBuildings(PRESET_CONFIGS.default),
+  buildings: generateBuildings(PRESET_CONFIGS.default, true),
   selectedIds: new Set(),
+  selectedCount: 0,
   currentTemplate: 'default',
   isTransitioning: false,
 
@@ -133,58 +142,68 @@ export const useCityStore = create<CityState>((set, get) => ({
       if (newSelected.has(id)) {
         newSelected.delete(id)
       } else {
-          if (!additive) newSelected.clear()
-          newSelected.add(id)
-        }
-      return { selectedIds: newSelected }
+        if (!additive) newSelected.clear()
+        newSelected.add(id)
+      }
+      return { selectedIds: newSelected, selectedCount: newSelected.size }
     })
   },
 
   selectBuildings: (ids) => {
-    set({ selectedIds: new Set(ids) })
+    const newSet = new Set(ids)
+    set({ selectedIds: newSet, selectedCount: newSet.size })
   },
 
   clearSelection: () => {
-    set({ selectedIds: new Set() })
+    set({ selectedIds: new Set(), selectedCount: 0 })
   },
 
   updateBuilding: (id, updates) => {
     set((state) => ({
       buildings: state.buildings.map((b) =>
-        b.id === id ? { ...b, ...updates } : b
+        b.id === id ? { ...b, ...updates, targetHeight: updates.height ?? b.targetHeight } : b
       )
     }))
   },
 
-  batchUpdate: (updates) => {
+  batchUpdateHeight: (height) => {
     const { selectedIds, buildings } = get()
     if (selectedIds.size === 0) return
     set({
       buildings: buildings.map((b) =>
-        selectedIds.has(b.id) ? { ...b, ...updates } : b
+        selectedIds.has(b.id) ? { ...b, height, targetHeight: height } : b
+      )
+    })
+  },
+
+  batchUpdateColor: (color) => {
+    const { selectedIds, buildings } = get()
+    if (selectedIds.size === 0) return
+    set({
+      buildings: buildings.map((b) =>
+        selectedIds.has(b.id) ? { ...b, color } : b
       )
     })
   },
 
   setTemplate: (template) => {
     const config = PRESET_CONFIGS[template]
-    const newBuildings = generateBuildings(config)
+    const newBuildings = generateBuildings(config, true)
     set({
       buildings: newBuildings,
       selectedIds: new Set(),
+      selectedCount: 0,
       currentTemplate: template,
       isTransitioning: true
     })
-  },
 
-  setTransitioning: (value) => {
-    set({ isTransitioning: value })
-  },
-
-  animateBuildings: () => {
-    const { buildings } = get()
-    set({
-      buildings: buildings.map((b) => ({ ...b, height: b.targetHeight }))
+    requestAnimationFrame(() => {
+      set((state) => ({
+        buildings: state.buildings.map((b) => ({ ...b, height: b.targetHeight }))
+      }))
+      setTimeout(() => {
+        set({ isTransitioning: false })
+      }, 1000)
     })
   }
 }))
