@@ -13,7 +13,7 @@ export interface ParticleConfig {
   radius: number;
   charge: number;
   mass?: number;
-  lifeFrames?: number;
+  lifeMs?: number;
 }
 
 export class Particle {
@@ -26,14 +26,16 @@ export class Particle {
   public radius: number;
   public charge: number;
   public mass: number;
-  public lifeFrames: number;
-  public maxLifeFrames: number;
+  public lifeMs: number;
+  public maxLifeMs: number;
   public selected: boolean;
   public merged: boolean;
 
-  public scaleProgress: number;
+  public scaleElapsedMs: number;
   public scaleActive: boolean;
 
+  private static readonly SCALE_DURATION_MS = 200;
+  private static readonly FADE_DURATION_MS = 5000;
   private static idCounter = 0;
 
   constructor(config: ParticleConfig) {
@@ -46,39 +48,53 @@ export class Particle {
     this.radius = config.radius;
     this.charge = config.charge;
     this.mass = config.mass ?? Math.pow(config.radius, 2);
-    this.maxLifeFrames = config.lifeFrames ?? 3600;
-    this.lifeFrames = this.maxLifeFrames;
+    this.maxLifeMs = config.lifeMs ?? 60000;
+    this.lifeMs = this.maxLifeMs;
     this.selected = false;
     this.merged = false;
-    this.scaleProgress = 1;
+    this.scaleElapsedMs = Particle.SCALE_DURATION_MS;
     this.scaleActive = false;
   }
 
   public get isDead(): boolean {
-    return this.lifeFrames <= 0;
+    return this.lifeMs <= 0;
   }
 
   public get opacity(): number {
-    const fadeFrames = 300;
-    if (this.lifeFrames > fadeFrames) return 1;
-    return this.lifeFrames / fadeFrames;
+    if (this.lifeMs > Particle.FADE_DURATION_MS) return 1;
+    if (this.lifeMs <= 0) return 0;
+    return this.lifeMs / Particle.FADE_DURATION_MS;
   }
 
   public get currentScale(): number {
     if (!this.scaleActive) return 1;
-    return 0.8 + this.scaleProgress * 0.2;
+    const t = Math.min(1, this.scaleElapsedMs / Particle.SCALE_DURATION_MS);
+    return 0.8 + t * 0.2;
   }
 
   public startScaleAnimation(): void {
     this.scaleActive = true;
-    this.scaleProgress = 0;
+    this.scaleElapsedMs = 0;
   }
 
-  public update(deltaTime: number, width: number, height: number): void {
-    this.lifeFrames -= 1;
+  public update(
+    dtFactor: number,
+    elapsedMs: number,
+    width: number,
+    height: number
+  ): void {
+    this.lifeMs -= elapsedMs;
 
-    this.x += this.vx * deltaTime;
-    this.y += this.vy * deltaTime;
+    if (this.scaleActive) {
+      this.scaleElapsedMs += elapsedMs;
+      if (this.scaleElapsedMs >= Particle.SCALE_DURATION_MS) {
+        this.scaleElapsedMs = Particle.SCALE_DURATION_MS;
+        this.scaleActive = false;
+      }
+    }
+
+    this.x += this.vx * dtFactor;
+    this.y += this.vy * dtFactor;
 
     const r = this.radius;
     if (this.x < r) { this.x = r; this.vx *= -0.8; }
@@ -86,16 +102,9 @@ export class Particle {
     if (this.y < r) { this.y = r; this.vy *= -0.8; }
     if (this.y > height - r) { this.y = height - r; this.vy *= -0.8; }
 
-    this.vx *= 0.999;
-    this.vy *= 0.999;
-
-    if (this.scaleActive) {
-      this.scaleProgress += deltaTime / 12;
-      if (this.scaleProgress >= 1) {
-        this.scaleProgress = 1;
-        this.scaleActive = false;
-      }
-    }
+    const damping = Math.pow(0.999, dtFactor);
+    this.vx *= damping;
+    this.vy *= damping;
   }
 
   public containsPoint(px: number, py: number): boolean {
@@ -119,7 +128,7 @@ export class Particle {
       b: Math.round(p1.color.b * 0.5 + p2.color.b * 0.5),
     };
 
-    const maxRemaining = Math.max(p1.lifeFrames, p2.lifeFrames);
+    const maxRemaining = Math.max(p1.lifeMs, p2.lifeMs);
 
     const merged = new Particle({
       x: nx,
@@ -130,9 +139,9 @@ export class Particle {
       radius: nradius,
       charge: ncharge,
       mass: totalMass,
-      lifeFrames: maxRemaining,
+      lifeMs: maxRemaining,
     });
-    merged.maxLifeFrames = maxRemaining;
+    merged.maxLifeMs = Math.max(p1.maxLifeMs, p2.maxLifeMs);
     merged.startScaleAnimation();
     return merged;
   }
@@ -154,7 +163,7 @@ export class Particle {
         color: { ...source.color },
         radius: splitRadius,
         charge: source.charge / count,
-        lifeFrames: 600,
+        lifeMs: 10000,
       }));
     }
     return particles;
