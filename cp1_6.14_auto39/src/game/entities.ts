@@ -361,14 +361,14 @@ export interface Debris {
   size: number;
 }
 
-export type EnemyState = 'patrol' | 'chase';
+export type EnemyState = 'idle' | 'patrol' | 'chase';
 
 export class Enemy extends Entity {
   hp: number;
   maxHp: number;
   attack: number;
   speed: number;
-  state: EnemyState = 'patrol';
+  state: EnemyState = 'idle';
   isBoss: boolean;
   hitFlashTimer: number = 0;
   attackCooldown: number = 0;
@@ -377,6 +377,9 @@ export class Enemy extends Entity {
   shootTimer: number = 0;
   knockbackX: number = 0;
   knockbackY: number = 0;
+  chaseLingerTimer: number = 0;
+  idleTimer: number = 0;
+  wallCollisionCount: number = 0;
 
   constructor(
     id: string,
@@ -397,6 +400,8 @@ export class Enemy extends Entity {
       this.attack = 10;
       this.speed = 60;
     }
+    this.idleTimer = Math.random() * 2;
+    this.patrolDirection = Math.random() * Math.PI * 2;
   }
 
   update(
@@ -415,11 +420,64 @@ export class Enemy extends Entity {
 
     const distToPlayer = this.distanceTo(player);
     const visionRange = this.isBoss ? 999 : 120;
+    const aggroRange = this.isBoss ? 999 : 150;
 
-    if (distToPlayer < visionRange) {
-      this.state = 'chase';
-    } else {
-      this.state = 'patrol';
+    switch (this.state) {
+      case 'idle':
+        this.idleTimer -= dt;
+        if (this.idleTimer <= 0) {
+          this.state = 'patrol';
+          this.patrolTimer = 2 + Math.random() * 2;
+          this.patrolDirection = Math.random() * Math.PI * 2;
+          this.wallCollisionCount = 0;
+        }
+        if (distToPlayer < aggroRange) {
+          this.state = 'chase';
+          this.chaseLingerTimer = 2;
+        }
+        break;
+
+      case 'patrol':
+        this.patrolTimer -= dt;
+        if (this.patrolTimer <= 0) {
+          this.state = 'idle';
+          this.idleTimer = 1 + Math.random() * 2;
+          this.vx = 0;
+          this.vy = 0;
+          break;
+        }
+        if (distToPlayer < aggroRange) {
+          this.state = 'chase';
+          this.chaseLingerTimer = 2;
+          break;
+        }
+        this.vx = Math.cos(this.patrolDirection) * this.speed * 0.5;
+        this.vy = Math.sin(this.patrolDirection) * this.speed * 0.5;
+        break;
+
+      case 'chase':
+        if (distToPlayer < visionRange) {
+          this.chaseLingerTimer = 2;
+        } else {
+          this.chaseLingerTimer -= dt;
+        }
+
+        if (this.chaseLingerTimer <= 0) {
+          this.state = 'idle';
+          this.idleTimer = 0.5;
+          this.vx = 0;
+          this.vy = 0;
+          break;
+        }
+
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0) {
+          this.vx = (dx / len) * this.speed;
+          this.vy = (dy / len) * this.speed;
+        }
+        break;
     }
 
     if (this.knockbackX !== 0 || this.knockbackY !== 0) {
@@ -429,27 +487,12 @@ export class Enemy extends Entity {
       this.knockbackY *= 0.9;
       if (Math.abs(this.knockbackX) < 0.1) this.knockbackX = 0;
       if (Math.abs(this.knockbackY) < 0.1) this.knockbackY = 0;
-    } else {
-      if (this.state === 'chase') {
-        const dx = player.x - this.x;
-        const dy = player.y - this.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len > 0) {
-          this.vx = (dx / len) * this.speed;
-          this.vy = (dy / len) * this.speed;
-        }
-      } else {
-        this.patrolTimer -= dt;
-        if (this.patrolTimer <= 0) {
-          this.patrolTimer = 2 + Math.random() * 2;
-          this.patrolDirection = Math.random() * Math.PI * 2;
-        }
-        this.vx = Math.cos(this.patrolDirection) * this.speed * 0.5;
-        this.vy = Math.sin(this.patrolDirection) * this.speed * 0.5;
-      }
-
+    } else if (this.state !== 'idle') {
       const newX = this.x + this.vx * dt;
       const newY = this.y + this.vy * dt;
+
+      let blockedX = false;
+      let blockedY = false;
 
       if (
         isWalkable(room, newX - this.radius / 2, this.y) &&
@@ -457,7 +500,7 @@ export class Enemy extends Entity {
       ) {
         this.x = newX;
       } else {
-        this.patrolDirection = Math.PI - this.patrolDirection;
+        blockedX = true;
       }
       if (
         isWalkable(room, this.x, newY - this.radius / 2) &&
@@ -465,7 +508,26 @@ export class Enemy extends Entity {
       ) {
         this.y = newY;
       } else {
-        this.patrolDirection = -this.patrolDirection;
+        blockedY = true;
+      }
+
+      if (blockedX || blockedY) {
+        this.wallCollisionCount++;
+        if (this.state === 'patrol') {
+          if (blockedX && blockedY) {
+            this.patrolDirection += Math.PI;
+          } else if (blockedX) {
+            this.patrolDirection = Math.PI - this.patrolDirection;
+          } else {
+            this.patrolDirection = -this.patrolDirection;
+          }
+          if (this.wallCollisionCount > 4) {
+            this.patrolDirection = Math.random() * Math.PI * 2;
+            this.wallCollisionCount = 0;
+          }
+        }
+      } else {
+        this.wallCollisionCount = 0;
       }
     }
 
@@ -530,16 +592,32 @@ export class Enemy extends Entity {
   checkHitByAttack(attackArea: AttackArea): boolean {
     const dx = this.x - attackArea.x;
     const dy = this.y - attackArea.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const distSq = dx * dx + dy * dy;
+    const combinedRadius = attackArea.radius + this.radius;
 
-    if (dist > attackArea.radius + this.radius) return false;
+    if (distSq > combinedRadius * combinedRadius) return false;
 
-    const angleToEnemy = Math.atan2(dy, dx);
-    let angleDiff = angleToEnemy - attackArea.direction;
-    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    const dist = Math.sqrt(distSq);
+    if (dist < 0.001) return true;
 
-    return Math.abs(angleDiff) < attackArea.angle / 2;
+    const halfAngle = attackArea.angle / 2;
+    const cosHalf = Math.cos(halfAngle);
+    const dirX = Math.cos(attackArea.direction);
+    const dirY = Math.sin(attackArea.direction);
+
+    const dot = dx * dirX + dy * dirY;
+    const perpDot = dx * (-dirY) + dy * dirX;
+
+    if (dot >= dist * cosHalf) return true;
+
+    if (dot * dot + perpDot * perpDot <= this.radius * this.radius) {
+      const cross = Math.abs(perpDot);
+      if (cross <= this.radius * Math.sin(halfAngle) + dist * cosHalf * 0.1) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
 

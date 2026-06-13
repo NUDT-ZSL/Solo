@@ -1,11 +1,15 @@
-import { GameData } from './core';
+import type { IGameData } from './types';
 import { RoomData, TILE_SIZE, getTileCenter } from './room';
-import { Player, Enemy, Projectile, Debris, Particle } from './entities';
+import type { IPlayerState, IEnemyState, IProjectileState, IDebris, IParticle, IAttackArea } from './types';
+import { Player } from './entities';
 
 export class GameRenderer {
   private ctx: CanvasRenderingContext2D;
   private canvasWidth: number;
   private canvasHeight: number;
+  private cachedRoomKey: string = '';
+  private roomCanvas: HTMLCanvasElement | null = null;
+  private roomCtx: CanvasRenderingContext2D | null = null;
 
   constructor(ctx: CanvasRenderingContext2D, width: number, height: number) {
     this.ctx = ctx;
@@ -13,7 +17,7 @@ export class GameRenderer {
     this.canvasHeight = height;
   }
 
-  render(data: GameData): void {
+  render(data: IGameData): void {
     this.ctx.fillStyle = '#09090b';
     this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
 
@@ -27,7 +31,7 @@ export class GameRenderer {
     this.ctx.save();
     this.ctx.translate(offsetX, offsetY);
 
-    this.drawRoom(room);
+    this.drawRoomCached(room);
     this.drawEntranceExit(room);
     this.drawChests(room);
     this.drawEnemies(enemies);
@@ -35,7 +39,7 @@ export class GameRenderer {
     this.drawPlayer(player);
     this.drawAttackEffect(player);
     this.drawDebris(debris);
-    this.drawPlayerParticles(player.particles);
+    this.drawPlayerParticles(player);
 
     this.ctx.restore();
 
@@ -45,7 +49,24 @@ export class GameRenderer {
     }
   }
 
-  private drawRoom(room: RoomData): void {
+  private getRoomKey(room: RoomData): string {
+    return `${room.width}_${room.height}_${room.seed}`;
+  }
+
+  private drawRoomCached(room: RoomData): void {
+    const key = this.getRoomKey(room);
+    if (this.cachedRoomKey !== key || !this.roomCanvas) {
+      this.roomCanvas = document.createElement('canvas');
+      this.roomCanvas.width = room.width * TILE_SIZE;
+      this.roomCanvas.height = room.height * TILE_SIZE;
+      this.roomCtx = this.roomCanvas.getContext('2d')!;
+      this.drawRoomToContext(this.roomCtx, room);
+      this.cachedRoomKey = key;
+    }
+    this.ctx.drawImage(this.roomCanvas, 0, 0);
+  }
+
+  private drawRoomToContext(ctx: CanvasRenderingContext2D, room: RoomData): void {
     for (let y = 0; y < room.height; y++) {
       for (let x = 0; x < room.width; x++) {
         const tile = room.tiles[y][x];
@@ -53,40 +74,44 @@ export class GameRenderer {
         const py = y * TILE_SIZE;
 
         if (tile === 1) {
-          this.ctx.fillStyle = '#4a4a5a';
-          this.ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-          this.ctx.fillStyle = '#3a3a4a';
-          this.ctx.fillRect(px, py + TILE_SIZE - 4, TILE_SIZE, 4);
-          this.ctx.fillStyle = '#5a5a6a';
-          this.ctx.fillRect(px, py, TILE_SIZE, 2);
+          ctx.fillStyle = '#4a4a5a';
+          ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+          ctx.fillStyle = '#3a3a4a';
+          ctx.fillRect(px, py + TILE_SIZE - 4, TILE_SIZE, 4);
+          ctx.fillStyle = '#5a5a6a';
+          ctx.fillRect(px, py, TILE_SIZE, 2);
         } else if (tile === 2) {
-          this.ctx.fillStyle = '#2a2a3a';
-          this.ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-          this.ctx.fillStyle = '#5c5c6c';
+          ctx.fillStyle = '#2a2a3a';
+          ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+          ctx.fillStyle = '#5c5c6c';
           const pillarSize = TILE_SIZE * 0.7;
           const pillarOffset = (TILE_SIZE - pillarSize) / 2;
-          this.ctx.fillRect(
+          ctx.fillRect(
             px + pillarOffset,
             py + pillarOffset,
             pillarSize,
             pillarSize
           );
-          this.ctx.fillStyle = '#6c6c7c';
-          this.ctx.fillRect(
+          ctx.fillStyle = '#6c6c7c';
+          ctx.fillRect(
             px + pillarOffset,
             py + pillarOffset,
             pillarSize,
             4
           );
         } else {
-          this.ctx.fillStyle = '#2a2a3a';
-          this.ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-          this.ctx.strokeStyle = '#252535';
-          this.ctx.lineWidth = 1;
-          this.ctx.strokeRect(px + 0.5, py + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+          ctx.fillStyle = '#2a2a3a';
+          ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+          ctx.strokeStyle = '#252535';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px + 0.5, py + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
         }
       }
     }
+  }
+
+  private drawRoom(room: RoomData): void {
+    this.drawRoomToContext(this.ctx, room);
   }
 
   private drawEntranceExit(room: RoomData): void {
@@ -163,7 +188,7 @@ export class GameRenderer {
     });
   }
 
-  private drawPlayer(player: Player): void {
+  private drawPlayer(player: IPlayerState): void {
     const flashAlpha = player.hitFlashTimer > 0 ? 0.5 : 1;
     const invincibleAlpha = player.invincibleTimer > 0 ? 
       (Math.sin(Date.now() / 50) > 0 ? 1 : 0.3) : 1;
@@ -173,7 +198,7 @@ export class GameRenderer {
 
     if (player.hasShield) {
       this.ctx.beginPath();
-      this.ctx.arc(player.x, player.y, player.radius + 6, 0, Math.PI * 2);
+      this.ctx.arc(player.x, player.y, 10 + 6, 0, Math.PI * 2);
       this.ctx.strokeStyle = '#60a5fa';
       this.ctx.lineWidth = 2;
       this.ctx.setLineDash([4, 4]);
@@ -182,7 +207,7 @@ export class GameRenderer {
     }
 
     this.ctx.beginPath();
-    this.ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+    this.ctx.arc(player.x, player.y, 10, 0, Math.PI * 2);
     this.ctx.fillStyle = player.hitFlashTimer > 0 ? '#ffffff' : '#3b82f6';
     this.ctx.fill();
     this.ctx.strokeStyle = '#1d4ed8';
@@ -203,9 +228,16 @@ export class GameRenderer {
     this.ctx.restore();
   }
 
-  private drawAttackEffect(player: Player): void {
-    const attackArea = player.getAttackArea();
-    if (!attackArea) return;
+  private drawAttackEffect(player: IPlayerState): void {
+    if (!player.isAttacking) return;
+
+    const attackArea: IAttackArea = {
+      x: player.x,
+      y: player.y,
+      direction: player.direction,
+      angle: Math.PI / 3,
+      radius: 40,
+    };
 
     this.ctx.save();
     this.ctx.globalAlpha = 0.4;
@@ -229,7 +261,7 @@ export class GameRenderer {
     this.ctx.restore();
   }
 
-  private drawEnemies(enemies: Enemy[]): void {
+  private drawEnemies(enemies: IEnemyState[]): void {
     enemies.forEach((enemy) => {
       this.ctx.save();
 
@@ -345,7 +377,7 @@ export class GameRenderer {
     this.ctx.stroke();
   }
 
-  private drawProjectiles(projectiles: Projectile[]): void {
+  private drawProjectiles(projectiles: IProjectileState[]): void {
     projectiles.forEach((proj) => {
       this.ctx.save();
       this.ctx.beginPath();
@@ -359,7 +391,7 @@ export class GameRenderer {
     });
   }
 
-  private drawDebris(debris: Debris[]): void {
+  private drawDebris(debris: IDebris[]): void {
     debris.forEach((d) => {
       const alpha = d.life / d.maxLife;
       this.ctx.save();
@@ -370,21 +402,28 @@ export class GameRenderer {
     });
   }
 
-  private drawPlayerParticles(particles: Particle[]): void {
-    particles.forEach((p) => {
-      const alpha = (p.life / p.maxLife) * 0.5;
+  private drawPlayerParticles(player: IPlayerState): void {
+    const time = Date.now() / 1000;
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI * 2 * i) / 6 + time * 2;
+      const radius = 15 + Math.sin(time * 3 + i) * 5;
+      const px = player.x + Math.cos(angle) * radius;
+      const py = player.y + Math.sin(angle) * radius;
       this.ctx.save();
-      this.ctx.globalAlpha = alpha;
+      this.ctx.globalAlpha = 0.3 + 0.2 * Math.sin(time * 4 + i);
       this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      this.ctx.fillStyle = p.color;
+      this.ctx.arc(px, py, 2, 0, Math.PI * 2);
+      this.ctx.fillStyle = '#60a5fa';
       this.ctx.fill();
       this.ctx.restore();
-    });
+    }
   }
 
   resize(width: number, height: number): void {
     this.canvasWidth = width;
     this.canvasHeight = height;
+    this.cachedRoomKey = '';
+    this.roomCanvas = null;
+    this.roomCtx = null;
   }
 }

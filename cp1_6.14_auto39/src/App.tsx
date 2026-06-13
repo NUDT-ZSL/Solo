@@ -1,12 +1,12 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import GameCanvas from './components/GameCanvas';
 import HUD from './components/HUD';
-import { GameCore, GameData } from './game/core';
-import { Item, PermanentUpgrade } from './game/entities';
+import { GameCore } from './game/core';
+import type { IGameData, IItem, IPermanentUpgrade } from './game/types';
 
 export default function App() {
   const gameCore = useMemo(() => new GameCore(), []);
-  const [gameData, setGameData] = useState<GameData>(gameCore.getData());
+  const [gameData, setGameData] = useState<IGameData>(gameCore.getData());
   const [canvasScale, setCanvasScale] = useState(1);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleGameUpdate = useCallback((data: GameData) => {
+  const handleGameUpdate = useCallback((data: IGameData) => {
     setGameData(data);
   }, []);
 
@@ -269,7 +269,7 @@ export default function App() {
           <p style={{ color: '#9ca3af', fontSize: '12px', textAlign: 'center', margin: '0 0 16px 0' }}>
             选择一件道具
           </p>
-          {gameData.chestItems.map((item: Item, index: number) => (
+          {gameData.chestItems.map((item: IItem, index: number) => (
             <div
               key={item.id}
               style={itemRowStyle}
@@ -309,7 +309,7 @@ export default function App() {
           <p style={{ color: '#9ca3af', fontSize: '12px', textAlign: 'center', margin: '0 0 16px 0' }}>
             选择一项永久升级
           </p>
-          {gameData.upgradeOptions.map((upgrade: PermanentUpgrade, index: number) => (
+          {gameData.upgradeOptions.map((upgrade: IPermanentUpgrade, index: number) => (
             <div
               key={upgrade.id}
               style={upgradeRowStyle}

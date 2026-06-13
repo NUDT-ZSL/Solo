@@ -1,10 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { GameCore, GameData } from '../game/core';
+import { GameCore } from '../game/core';
+import type { IGameData } from '../game/types';
 import { GameRenderer } from '../game/renderer';
 
 interface GameCanvasProps {
   gameCore: GameCore;
-  onGameUpdate: (data: GameData) => void;
+  onGameUpdate: (data: IGameData) => void;
   width?: number;
   height?: number;
 }
@@ -19,6 +20,7 @@ export default function GameCanvas({
   const rendererRef = useRef<GameRenderer | null>(null);
   const animationFrameRef = useRef<number>(0);
   const keysRef = useRef<Set<string>>(new Set());
+  const lastDataRef = useRef<IGameData | null>(null);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -62,21 +64,35 @@ export default function GameCanvas({
     gameCore.start();
 
     const gameLoop = () => {
-      const input = {
-        up: keysRef.current.has('w'),
-        down: keysRef.current.has('s'),
-        left: keysRef.current.has('a'),
-        right: keysRef.current.has('d'),
-      };
-      gameCore.setInput(input);
+      const data = gameCore.getData();
 
-      const data = gameCore.update();
+      const fullyPaused =
+        data.state === 'item_select' ||
+        data.state === 'upgrade_select' ||
+        data.state === 'game_over';
 
-      if (rendererRef.current) {
-        rendererRef.current.render(data);
+      if (!fullyPaused) {
+        const input = {
+          up: keysRef.current.has('w'),
+          down: keysRef.current.has('s'),
+          left: keysRef.current.has('a'),
+          right: keysRef.current.has('d'),
+        };
+        gameCore.setInput(input);
+
+        const updatedData = gameCore.update();
+        lastDataRef.current = updatedData;
+        onGameUpdate(updatedData);
+
+        if (rendererRef.current) {
+          rendererRef.current.render(updatedData);
+        }
+      } else {
+        if (lastDataRef.current && rendererRef.current) {
+          rendererRef.current.render(lastDataRef.current);
+        }
+        onGameUpdate(data);
       }
-
-      onGameUpdate(data);
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };

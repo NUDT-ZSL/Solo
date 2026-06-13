@@ -15,14 +15,17 @@ import {
   generateRandomItems,
   generateRandomUpgrade,
 } from './entities';
+import type {
+  IGameData,
+  IPlayerState,
+  IEnemyState,
+  IProjectileState,
+  IGameStats,
+  GameState,
+} from './types';
 
-export type GameState =
-  | 'playing'
-  | 'item_select'
-  | 'death_animation'
-  | 'game_over'
-  | 'victory'
-  | 'upgrade_select';
+export type { GameState };
+export type { IGameData as GameData };
 
 export interface GameStats {
   floor: number;
@@ -32,7 +35,7 @@ export interface GameStats {
   endlessPoints: number;
 }
 
-export interface GameData {
+interface InternalGameData {
   state: GameState;
   room: RoomData;
   player: Player;
@@ -48,28 +51,42 @@ export interface GameData {
 }
 
 const ROOMS_PER_FLOOR = 5;
+const MAX_ENTITY_COUNT = 80;
+const TARGET_FPS = 60;
+const FRAME_BUDGET = 1000 / TARGET_FPS;
 
 export class GameCore {
-  private data: GameData;
+  private data: InternalGameData;
   private lastTime: number = 0;
   private baseSeed: number = 0;
   private pendingInput: Partial<PlayerInput> = {};
   private attackPressed: boolean = false;
+  private fpsHistory: number[] = [];
+  private lastFpsUpdate: number = 0;
+  private frameCount: number = 0;
+  private currentFps: number = 60;
 
   constructor() {
     this.baseSeed = Date.now();
     this.data = this.createInitialGameData();
   }
 
-  private createInitialGameData(): GameData {
+  private createInitialGameData(): InternalGameData {
     const floor = 1;
     const roomIndex = 0;
     const isBossRoom = false;
     const seed = this.generateSeed(floor, roomIndex);
     const room = generateRoom(seed, isBossRoom);
 
-    const entrancePos = getTileCenter(room.entrance.x, room.entrance.y);
-    const player = new Player('player', entrancePos.x, entrancePos.y, 100, 10, 150, 0);
+    let spawnX: number, spawnY: number;
+    if (room.entrance.x === 0) {
+      spawnX = 1 * 48 + 24;
+      spawnY = room.entrance.y * 48 + 24;
+    } else {
+      spawnX = room.entrance.x * 48 + 24;
+      spawnY = 1 * 48 + 24;
+    }
+    const player = new Player('player', spawnX, spawnY, 100, 10, 150, 0);
 
     const enemies: Enemy[] = room.enemies.map((config, index) => {
       const pos = getTileCenter(config.position.x, config.position.y);
@@ -104,6 +121,7 @@ export class GameCore {
 
   start(): void {
     this.lastTime = performance.now();
+    this.lastFpsUpdate = this.lastTime;
   }
 
   setInput(input: Partial<PlayerInput>): void {
@@ -114,10 +132,39 @@ export class GameCore {
     this.attackPressed = true;
   }
 
-  update(): GameData {
+  getFps(): number {
+    return this.currentFps;
+  }
+
+  getEntityCount(): number {
+    return (
+      1 +
+      this.data.enemies.length +
+      this.data.projectiles.length +
+      this.data.debris.length +
+      this.data.player.particles.length
+    );
+  }
+
+  private updateFps(now: number): void {
+    this.frameCount++;
+    const elapsed = now - this.lastFpsUpdate;
+    if (elapsed >= 500) {
+      this.currentFps = (this.frameCount / elapsed) * 1000;
+      this.frameCount = 0;
+      this.lastFpsUpdate = now;
+      this.fpsHistory.push(this.currentFps);
+      if (this.fpsHistory.length > 60) {
+        this.fpsHistory.shift();
+      }
+    }
+  }
+
+  update(): IGameData {
     const now = performance.now();
     let dt = (now - this.lastTime) / 1000;
     this.lastTime = now;
+    this.updateFps(now);
 
     dt = Math.min(dt, 1 / 30);
 
@@ -127,14 +174,14 @@ export class GameCore {
         this.data.deathAnimationProgress = 1;
         this.data.state = 'game_over';
       }
-      return this.data;
+      return this.toSnapshot();
     }
 
     if (
       this.data.state !== 'playing' &&
       this.data.state !== 'victory'
     ) {
-      return this.data;
+      return this.toSnapshot();
     }
 
     const input: PlayerInput = {
@@ -205,6 +252,10 @@ export class GameCore {
       return d.life > 0;
     });
 
+    if (this.getEntityCount() > MAX_ENTITY_COUNT) {
+      this.data.debris = this.data.debris.slice(0, this.data.debris.length - 4);
+    }
+
     for (let i = 0; i < this.data.room.chests.length; i++) {
       const chest = this.data.room.chests[i];
       if (!chest.opened) {
@@ -218,7 +269,7 @@ export class GameCore {
           this.data.chestItems = generateRandomItems(3);
           this.data.selectedChestIndex = i;
           this.data.state = 'item_select';
-          return this.data;
+          return this.toSnapshot();
         }
       }
     }
@@ -233,7 +284,7 @@ export class GameCore {
 
     if (exitDist < 24 && allEnemiesDefeated) {
       this.nextRoom();
-      return this.data;
+      return this.toSnapshot();
     }
 
     if (this.data.player.hp <= 0) {
@@ -242,7 +293,7 @@ export class GameCore {
       this.data.stats.endlessPoints = this.data.stats.floor * 10;
     }
 
-    return this.data;
+    return this.toSnapshot();
   }
 
   private nextRoom(): void {
@@ -269,9 +320,17 @@ export class GameCore {
     const seed = this.generateSeed(this.data.stats.floor, this.data.stats.roomIndex);
     this.data.room = generateRoom(seed, isBossRoom);
 
-    const entrancePos = getTileCenter(this.data.room.entrance.x, this.data.room.entrance.y);
-    this.data.player.x = entrancePos.x;
-    this.data.player.y = entrancePos.y;
+    const room = this.data.room;
+    let spawnX: number, spawnY: number;
+    if (room.entrance.x === 0) {
+      spawnX = 1 * 48 + 24;
+      spawnY = room.entrance.y * 48 + 24;
+    } else {
+      spawnX = room.entrance.x * 48 + 24;
+      spawnY = 1 * 48 + 24;
+    }
+    this.data.player.x = spawnX;
+    this.data.player.y = spawnY;
 
     this.data.enemies = this.data.room.enemies.map((config, index) => {
       const pos = getTileCenter(config.position.x, config.position.y);
@@ -318,7 +377,69 @@ export class GameCore {
     savedUpgrades.forEach((u) => this.data.player.applyPermanentUpgrade(u));
   }
 
-  getData(): GameData {
-    return this.data;
+  getData(): IGameData {
+    return this.toSnapshot();
+  }
+
+  private toSnapshot(): IGameData {
+    const p = this.data.player;
+    const playerState: IPlayerState = {
+      x: p.x,
+      y: p.y,
+      hp: p.hp,
+      maxHp: p.maxHp,
+      attackPower: p.attackPower,
+      baseAttack: p.baseAttack,
+      speed: p.speed,
+      baseSpeed: p.baseSpeed,
+      gold: p.gold,
+      direction: p.direction,
+      isAttacking: p.isAttacking,
+      hasShield: p.hasShield,
+      activeItems: p.activeItems,
+      permanentUpgrades: p.permanentUpgrades,
+      hitFlashTimer: p.hitFlashTimer,
+      invincibleTimer: p.invincibleTimer,
+    };
+
+    const enemiesState: IEnemyState[] = this.data.enemies.map((e) => ({
+      id: e.id,
+      x: e.x,
+      y: e.y,
+      hp: e.hp,
+      maxHp: e.maxHp,
+      attack: e.attack,
+      speed: e.speed,
+      state: e.state,
+      isBoss: e.isBoss,
+      hitFlashTimer: e.hitFlashTimer,
+      attackCooldown: e.attackCooldown,
+      radius: e.radius,
+    }));
+
+    const projectilesState: IProjectileState[] = this.data.projectiles.map((p) => ({
+      id: p.id,
+      x: p.x,
+      y: p.y,
+      angle: p.angle,
+      speed: p.speed,
+      damage: p.damage,
+      radius: p.radius,
+      life: p.life,
+    }));
+
+    return {
+      state: this.data.state,
+      room: this.data.room,
+      player: playerState,
+      enemies: enemiesState,
+      projectiles: projectilesState,
+      debris: this.data.debris,
+      chestItems: this.data.chestItems,
+      selectedChestIndex: this.data.selectedChestIndex,
+      upgradeOptions: this.data.upgradeOptions,
+      stats: this.data.stats,
+      deathAnimationProgress: this.data.deathAnimationProgress,
+    };
   }
 }

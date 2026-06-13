@@ -100,8 +100,38 @@ export function generateRoom(
     }
   }
 
-  const entrance: Position = { x: 1, y: Math.floor(height / 2) };
-  const exit: Position = { x: width - 2, y: Math.floor(height / 2) };
+  const entranceSide = rng.nextInt(0, 1);
+  let entrance: Position;
+  let exit: Position;
+
+  if (entranceSide === 0) {
+    const entranceY = rng.nextInt(2, height - 3);
+    entrance = { x: 0, y: entranceY };
+    const exitBaseY = Math.floor(height / 2);
+    const exitOffset = rng.nextInt(-2, 2);
+    exit = { x: width - 1, y: Math.max(1, Math.min(height - 2, exitBaseY + exitOffset)) };
+  } else {
+    const entranceX = rng.nextInt(2, width - 3);
+    entrance = { x: entranceX, y: 0 };
+    const exitBaseX = Math.floor(width / 2);
+    const exitOffset = rng.nextInt(-2, 2);
+    exit = { x: Math.max(1, Math.min(width - 2, exitBaseX + exitOffset)), y: height - 1 };
+  }
+
+  tiles[entrance.y][entrance.x] = 0;
+  tiles[exit.y][exit.x] = 0;
+
+  if (entrance.x === 0) {
+    tiles[entrance.y][1] = 0;
+  } else if (entrance.y === 0) {
+    tiles[1][entrance.x] = 0;
+  }
+
+  if (exit.x === width - 1) {
+    tiles[exit.y][width - 2] = 0;
+  } else if (exit.y === height - 1) {
+    tiles[height - 2][exit.x] = 0;
+  }
 
   const enemies: EnemyConfig[] = [];
   if (isBossRoom) {

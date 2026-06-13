@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { GameData } from '../game/core';
+import type { IGameData } from '../game/types';
 
 interface HUDProps {
-  gameData: GameData;
+  gameData: IGameData;
 }
 
 export default function HUD({ gameData }: HUDProps) {
