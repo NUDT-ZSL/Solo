@@ -124,6 +124,7 @@ export default function App() {
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordingStartTimeRef = useRef<number>(0)
+  const displayTimeRef = useRef(0)
 
   useEffect(() => {
     fetchTracks().then(setTracks).catch(console.error)
@@ -146,8 +147,13 @@ export default function App() {
   useEffect(() => {
     if (!isDraggingProgress) {
       setDisplayTime(currentTime)
+      displayTimeRef.current = currentTime
     }
   }, [currentTime, isDraggingProgress])
+
+  useEffect(() => {
+    displayTimeRef.current = displayTime
+  }, [displayTime])
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -189,9 +195,14 @@ export default function App() {
       setIsDraggingProgress(true)
       const time = getTimeFromEvent(e.clientX)
       setDisplayTime(time)
+      displayTimeRef.current = time
     },
     [getTimeFromEvent]
   )
+
+  const handleProgressMouseLeave = useCallback(() => {
+    if (!isDraggingProgress) return
+  }, [isDraggingProgress])
 
   useEffect(() => {
     if (!isDraggingProgress) return
@@ -199,11 +210,12 @@ export default function App() {
     const handleMouseMove = (e: MouseEvent) => {
       const time = getTimeFromEvent(e.clientX)
       setDisplayTime(time)
+      displayTimeRef.current = time
     }
 
     const handleMouseUp = () => {
       setIsDraggingProgress(false)
-      setCurrentTime(displayTime)
+      setCurrentTime(displayTimeRef.current)
     }
 
     window.addEventListener('mousemove', handleMouseMove)
@@ -213,7 +225,7 @@ export default function App() {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isDraggingProgress, getTimeFromEvent, setCurrentTime, displayTime])
+  }, [isDraggingProgress, getTimeFromEvent, setCurrentTime])
 
   const handleSend = useCallback(async () => {
     if (!inputText.trim()) return
@@ -355,6 +367,7 @@ export default function App() {
             className="flex-1 relative h-6 flex items-center cursor-pointer select-none"
             style={{ maxWidth: '80%' }}
             onMouseDown={handleProgressMouseDown}
+            onMouseLeave={handleProgressMouseLeave}
           >
             <div className="w-full h-1 rounded-full bg-[#404040] relative overflow-visible">
               <div

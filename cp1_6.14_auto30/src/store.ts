@@ -14,7 +14,7 @@ interface StudioState {
   setMessages: (messages: Message[]) => void
   addMessage: (message: Message) => void
   setIsPlaying: (playing: boolean) => void
-  setCurrentTime: (time: number) => void
+  setCurrentTime: (time: number | ((prev: number) => number)) => void
   setSelectedTrackId: (id: string | null) => void
   setIsRecording: (recording: boolean) => void
   reorderTracks: (startIndex: number, endIndex: number) => void
@@ -43,7 +43,10 @@ export const useStudioStore = create<StudioState>((set) => ({
 
   setIsPlaying: (isPlaying) => set({ isPlaying }),
 
-  setCurrentTime: (currentTime) => set({ currentTime }),
+  setCurrentTime: (currentTime) =>
+    set((state) => ({
+      currentTime: typeof currentTime === 'function' ? currentTime(state.currentTime) : currentTime,
+    })),
 
   setSelectedTrackId: (selectedTrackId) => set({ selectedTrackId }),
 

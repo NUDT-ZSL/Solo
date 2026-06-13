@@ -22,34 +22,37 @@ const instrumentIcons: Record<string, React.ReactNode> = {
   keyboard: <Piano size={20} />,
 }
 
-export default function AudioTrack({
-  track,
-  isSelected,
-  isPlaying,
-  currentTime,
-  onSelect,
-  onUpdate,
-  onDragStart,
-  onDragOver,
-  onDragEnd,
-  index,
-}: AudioTrackProps) {
-  const waveformRef = useRef<HTMLCanvasElement>(null)
-  const animFrameRef = useRef<number | null>(null)
-  const lastFrameTimeRef = useRef<number>(0)
-  const [panTooltip, setPanTooltip] = useState(false)
-  const [muteBounce, setMuteBounce] = useState(false)
-  const [soloBounce, setSoloBounce] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : true)
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false
+  )
 
   useEffect(() => {
-    const handleResize = () => setIsDesktop(window.innerWidth >= 768)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+    const media = window.matchMedia(query)
+    const listener = (e: MediaQueryListEvent) => setMatches(e.matches)
+    setMatches(media.matches)
+    media.addEventListener('change', listener)
+    return () => media.removeEventListener('change', listener)
+  }, [query])
+
+  return matches
+}
+
+function WaveformCanvas({
+  track,
+  isPlaying,
+  currentTime,
+}: {
+  track: Track
+  isPlaying: boolean
+  currentTime: number
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animFrameRef = useRef<number | null>(null)
+  const lastFrameTimeRef = useRef<number>(0)
 
   const drawWaveform = useCallback(() => {
-    const canvas = waveformRef.current
+    const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -58,9 +61,11 @@ export default function AudioTrack({
     if (rect.width === 0 || rect.height === 0) return
 
     const dpr = window.devicePixelRatio || 1
-    if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
-      canvas.width = Math.floor(rect.width * dpr)
-      canvas.height = Math.floor(rect.height * dpr)
+    const targetWidth = Math.floor(rect.width * dpr)
+    const targetHeight = Math.floor(rect.height * dpr)
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth
+      canvas.height = targetHeight
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
@@ -99,7 +104,7 @@ export default function AudioTrack({
     }
 
     ctx.globalAlpha = 1
-  }, [track.waveformData, track.color, track.duration, isPlaying, currentTime, isDesktop])
+  }, [track.waveformData, track.color, track.duration, isPlaying, currentTime])
 
   useEffect(() => {
     const animate = (timestamp: number) => {
@@ -118,14 +123,40 @@ export default function AudioTrack({
   }, [drawWaveform])
 
   useEffect(() => {
-    const canvas = waveformRef.current
+    const canvas = canvasRef.current
     if (!canvas) return
     const observer = new ResizeObserver(() => {
       drawWaveform()
     })
     observer.observe(canvas)
     return () => observer.disconnect()
-  }, [drawWaveform, isDesktop])
+  }, [drawWaveform])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="w-full h-full rounded"
+      style={{ display: 'block' }}
+    />
+  )
+}
+
+export default function AudioTrack({
+  track,
+  isSelected,
+  isPlaying,
+  currentTime,
+  onSelect,
+  onUpdate,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  index,
+}: AudioTrackProps) {
+  const [panTooltip, setPanTooltip] = useState(false)
+  const [muteBounce, setMuteBounce] = useState(false)
+  const [soloBounce, setSoloBounce] = useState(false)
+  const isDesktop = useMediaQuery('(min-width: 768px)')
 
   const handleMute = () => {
     setMuteBounce(true)
@@ -149,6 +180,60 @@ export default function AudioTrack({
 
   const panRotation = ((track.pan + 50) / 100) * 270 - 135
   const panLabel = track.pan > 0 ? `R${track.pan}` : track.pan < 0 ? `L${Math.abs(track.pan)}` : 'C'
+
+  const PanControl = ({ size = 24, fontSize = '11px', tooltipTop = -8 }: { size?: number; fontSize?: string; tooltipTop?: number }) => (
+    <div className="relative flex items-center">
+      <div
+        className="relative cursor-grab active:cursor-grabbing"
+        onMouseEnter={() => setPanTooltip(true)}
+        onMouseLeave={() => setPanTooltip(false)}
+      >
+        <div
+          className="rounded-full border-2 flex items-center justify-center"
+          style={{
+            width: size,
+            height: size,
+            backgroundColor: '#2a2a3a',
+            borderColor: '#4a4a4a',
+          }}
+        >
+          <div
+            className="w-0.5 rounded-full"
+            style={{
+              height: size * 0.45,
+              backgroundColor: '#1db954',
+              transform: `rotate(${panRotation}deg)`,
+              transformOrigin: 'center bottom',
+              transition: 'transform 0.1s ease-out',
+            }}
+          />
+        </div>
+        <input
+          type="range"
+          min={-50}
+          max={50}
+          value={track.pan}
+          onChange={handlePanChange}
+          className="absolute inset-0 opacity-0 cursor-pointer"
+          style={{ width: size, height: size, margin: 0 }}
+        />
+      </div>
+      {panTooltip && (
+        <div
+          className="absolute bg-gray-800 text-white px-2 py-1 rounded whitespace-nowrap z-30 pointer-events-none"
+          style={{
+            fontSize,
+            top: tooltipTop,
+            left: '50%',
+            transform: 'translateX(-50%) translateY(-100%)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          }}
+        >
+          {panLabel}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div
@@ -176,12 +261,7 @@ export default function AudioTrack({
           </div>
 
           <div className="flex-1 h-10 relative">
-            <canvas
-              key="desktop-canvas"
-              ref={waveformRef}
-              className="w-full h-full rounded"
-              style={{ display: 'block' }}
-            />
+            <WaveformCanvas track={track} isPlaying={isPlaying} currentTime={currentTime} />
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -241,51 +321,7 @@ export default function AudioTrack({
               />
               <span className="text-xs text-gray-500 w-7 text-right tabular-nums">{track.volume}</span>
             </div>
-
-            <div className="relative flex items-center" style={{ height: 28 }}>
-              <div
-                className="relative cursor-grab active:cursor-grabbing"
-                onMouseEnter={() => setPanTooltip(true)}
-                onMouseLeave={() => setPanTooltip(false)}
-              >
-                <div
-                  className="rounded-full border-2 flex items-center justify-center"
-                  style={{
-                    width: 24,
-                    height: 24,
-                    backgroundColor: '#2a2a3a',
-                    borderColor: '#4a4a4a',
-                  }}
-                >
-                  <div
-                    className="w-0.5 h-2.5 rounded-full"
-                    style={{
-                      backgroundColor: '#1db954',
-                      transform: `rotate(${panRotation}deg)`,
-                      transformOrigin: 'center bottom',
-                      transition: 'transform 0.1s ease-out',
-                    }}
-                  />
-                </div>
-                <input
-                  type="range"
-                  min={-50}
-                  max={50}
-                  value={track.pan}
-                  onChange={handlePanChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  style={{ width: 24, height: 24, margin: 0 }}
-                />
-              </div>
-              {panTooltip && (
-                <div
-                  className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[11px] px-2 py-1 rounded whitespace-nowrap z-20 pointer-events-none"
-                  style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}
-                >
-                  {panLabel}
-                </div>
-              )}
-            </div>
+            <PanControl />
           </div>
         </div>
       ) : (
@@ -344,12 +380,7 @@ export default function AudioTrack({
           </div>
 
           <div className="h-10 w-full">
-            <canvas
-              key="mobile-canvas"
-              ref={waveformRef}
-              className="w-full h-full rounded"
-              style={{ display: 'block' }}
-            />
+            <WaveformCanvas track={track} isPlaying={isPlaying} currentTime={currentTime} />
           </div>
 
           <div className="flex items-center justify-between gap-4" onClick={(e) => e.stopPropagation()}>
@@ -365,50 +396,9 @@ export default function AudioTrack({
               />
               <span className="text-[11px] text-gray-500 w-6 text-right tabular-nums">{track.volume}</span>
             </div>
-            <div className="relative flex items-center gap-1.5" style={{ height: 26 }}>
+            <div className="flex items-center gap-1.5">
               <span className="text-[10px] text-gray-500">声像</span>
-              <div
-                className="relative cursor-grab active:cursor-grabbing"
-                onMouseEnter={() => setPanTooltip(true)}
-                onMouseLeave={() => setPanTooltip(false)}
-              >
-                <div
-                  className="rounded-full border-2 flex items-center justify-center"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    backgroundColor: '#2a2a3a',
-                    borderColor: '#4a4a4a',
-                  }}
-                >
-                  <div
-                    className="w-0.5 h-2 rounded-full"
-                    style={{
-                      backgroundColor: '#1db954',
-                      transform: `rotate(${panRotation}deg)`,
-                      transformOrigin: 'center bottom',
-                      transition: 'transform 0.1s ease-out',
-                    }}
-                  />
-                </div>
-                <input
-                  type="range"
-                  min={-50}
-                  max={50}
-                  value={track.pan}
-                  onChange={handlePanChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  style={{ width: 22, height: 22, margin: 0 }}
-                />
-              </div>
-              {panTooltip && (
-                <div
-                  className="absolute -top-7 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-20 pointer-events-none"
-                  style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.4)' }}
-                >
-                  {panLabel}
-                </div>
-              )}
+              <PanControl size={22} fontSize="10px" tooltipTop={-6} />
             </div>
           </div>
         </div>
