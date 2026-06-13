@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Gradient } from '../data/demoGradients';
 
 interface GradientCardProps {
@@ -14,7 +14,10 @@ interface ParticleData {
   tx: number;
   ty: number;
   size: number;
+  color: string;
 }
+
+const PARTICLE_COLORS = ['#ef4444', '#f87171', '#fca5a5', '#fb7185', '#f472b6'];
 
 export default function GradientCard({ gradient, index, onLike, onClick }: GradientCardProps) {
   const [particles, setParticles] = useState<ParticleData[]>([]);
@@ -23,57 +26,48 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
   const [isHovered, setIsHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const particleIdRef = useRef(0);
-  const cleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleIntersection = useCallback((entries: IntersectionObserverEntry[]) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        setTimeout(() => {
-          setIsVisible(true);
-        }, index * 50);
-      }
-    });
-  }, [index]);
+  const hasAnimated = useRef(false);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(handleIntersection, {
-      threshold: 0.1,
-      rootMargin: '0px 0px -50px 0px',
-    });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !hasAnimated.current) {
+            hasAnimated.current = true;
+            setTimeout(() => {
+              setIsVisible(true);
+            }, index * 50);
+          }
+        });
+      },
+      { threshold: 0.05, rootMargin: '0px 0px 50px 0px' }
+    );
 
-    if (cardRef.current) {
-      observer.observe(cardRef.current);
-    }
-
+    const el = cardRef.current;
+    if (el) observer.observe(el);
     return () => {
+      if (el) observer.unobserve(el);
       observer.disconnect();
     };
-  }, [handleIntersection]);
-
-  useEffect(() => {
-    return () => {
-      if (cleanupTimerRef.current) {
-        clearTimeout(cleanupTimerRef.current);
-      }
-    };
-  }, []);
+  }, [index]);
 
   const gradientValue = `linear-gradient(${gradient.angle}deg, ${gradient.color1} 0%, ${gradient.color2} 100%)`;
 
   const createParticles = (): ParticleData[] => {
-    const count = 12;
-    const newParticles: ParticleData[] = [];
+    const count = 14;
+    const result: ParticleData[] = [];
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-      const distance = 20 + Math.random() * 25;
-      newParticles.push({
+      const angle = (i / count) * Math.PI * 2;
+      const distance = 22 + Math.random() * 20;
+      result.push({
         id: particleIdRef.current++,
         tx: Math.cos(angle) * distance,
         ty: Math.sin(angle) * distance,
-        size: 4 + Math.random() * 5,
+        size: 5 + Math.random() * 4,
+        color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
       });
     }
-    return newParticles;
+    return result;
   };
 
   const handleLikeClick = (e: React.MouseEvent) => {
@@ -85,10 +79,7 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
       setParticles(createParticles());
       setIsHeartAnimating(true);
 
-      if (cleanupTimerRef.current) {
-        clearTimeout(cleanupTimerRef.current);
-      }
-      cleanupTimerRef.current = setTimeout(() => {
+      setTimeout(() => {
         setParticles([]);
         setIsHeartAnimating(false);
       }, 500);
@@ -98,25 +89,26 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
   return (
     <div
       ref={cardRef}
-      className={`gradient-card ${isVisible ? 'gradient-card-enter-active' : 'gradient-card-enter'}`}
+      className={`gradient-card ${isVisible ? 'is-visible' : ''}`}
       onClick={() => onClick(gradient.id)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      style={{
-        width: '320px',
-        borderRadius: '16px',
-        backgroundColor: '#ffffff',
-        boxShadow: isHovered
-          ? '0 8px 24px rgba(0, 0, 0, 0.1)'
-          : '0 2px 12px rgba(0, 0, 0, 0.06)',
-        overflow: 'hidden',
-        cursor: 'pointer',
-        transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-        transform: isHovered && isVisible ? 'translateY(-4px)' : 'translateY(0)',
-        position: 'relative',
-        animationDelay: `${index * 50}ms`,
-        animationFillMode: 'both',
-      }}
+      style={
+        {
+          width: '320px',
+          borderRadius: '16px',
+          backgroundColor: '#ffffff',
+          boxShadow: isHovered
+            ? '0 8px 24px rgba(0, 0, 0, 0.1)'
+            : '0 2px 12px rgba(0, 0, 0, 0.06)',
+          overflow: 'hidden',
+          cursor: 'pointer',
+          transition: 'box-shadow 0.3s ease',
+          transform: isHovered && isVisible ? 'translateY(-4px)' : undefined,
+          animationDelay: `${index * 50}ms`,
+          position: 'relative',
+        } as React.CSSProperties
+      }
     >
       <div
         style={{
@@ -189,10 +181,10 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
             {gradient.comments.length} 条评论
           </span>
 
-          <div style={{ position: 'relative' }}>
+          <div className="like-btn-wrapper">
             <button
               onClick={handleLikeClick}
-              className={isHeartAnimating ? 'heart-anim' : ''}
+              className={`heart-btn ${isHeartAnimating ? 'heart-anim' : ''}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -204,8 +196,6 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
                 color: gradient.liked ? '#ef4444' : '#9ca3af',
                 padding: '4px 8px',
                 borderRadius: '8px',
-                position: 'relative',
-                zIndex: 1,
               }}
             >
               <svg
@@ -223,17 +213,7 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
               {gradient.likes}
             </button>
 
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                width: 0,
-                height: 0,
-                pointerEvents: 'none',
-                zIndex: 2,
-              }}
-            >
+            <div className="particle-container">
               {particles.map((p) => (
                 <span
                   key={p.id}
@@ -242,6 +222,7 @@ export default function GradientCard({ gradient, index, onLike, onClick }: Gradi
                     {
                       width: `${p.size}px`,
                       height: `${p.size}px`,
+                      backgroundColor: p.color,
                       '--tx': `${p.tx}px`,
                       '--ty': `${p.ty}px`,
                     } as React.CSSProperties

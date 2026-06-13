@@ -55,15 +55,19 @@ input, select, textarea {
   box-shadow: rgba(0, 0, 0, 0.1) 0px 8px 16px !important;
 }
 
-.gradient-card-enter {
+.gradient-card {
   opacity: 0;
   transform: translateY(30px);
+  animation-name: fadeInUp;
+  animation-duration: 0.4s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+  will-change: opacity, transform;
 }
 
-.gradient-card-enter-active {
+.gradient-card.is-visible {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 @keyframes fadeInUp {
@@ -77,6 +81,33 @@ input, select, textarea {
   }
 }
 
+.like-btn-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.particle-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation-name: particle-burst;
+  animation-duration: 0.5s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+  animation-iteration-count: 1;
+}
+
 @keyframes particle-burst {
   0% {
     transform: translate(-50%, -50%) scale(0);
@@ -88,15 +119,14 @@ input, select, textarea {
   }
 }
 
-.particle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  border-radius: 50%;
-  background-color: #ef4444;
-  pointer-events: none;
-  animation: particle-burst 0.5s ease-out forwards;
+.heart-btn {
+  transition: color 0.2s ease;
+}
+
+.heart-btn.heart-anim {
+  animation-name: heart-pop;
   animation-duration: 0.5s;
+  animation-timing-function: ease;
   animation-iteration-count: 1;
 }
 
@@ -116,10 +146,4 @@ input, select, textarea {
   100% {
     transform: scale(1);
   }
-}
-
-.heart-anim {
-  animation: heart-pop 0.5s ease !important;
-  animation-duration: 0.5s;
-  animation-iteration-count: 1;
 }
