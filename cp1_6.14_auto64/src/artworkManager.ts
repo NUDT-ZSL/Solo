@@ -1,8 +1,25 @@
 import { eventBus, ArtworkData, SeriesChangePayload } from './eventBus'
 
-const SERIES_NAMES = ['自然之韵', '城市印象', '抽象梦境']
+export const SERIES_NAMES = ['自然之韵', '城市印象', '抽象梦境']
 
-const SERIES_DATA: Record<string, { titles: string[]; descriptions: string[] }> = {
+export type PatternType = 'gradient-stripes' | 'concentric-circles' | 'checkerboard' | 'radial-gradient' | 'diagonal-lines' | 'geometric-grid'
+
+export const SERIES_PATTERN_CONFIG: Record<string, { patterns: PatternType[]; palette: string[] }> = {
+  '自然之韵': {
+    patterns: ['gradient-stripes', 'radial-gradient', 'concentric-circles', 'diagonal-lines', 'gradient-stripes', 'radial-gradient', 'concentric-circles', 'diagonal-lines'],
+    palette: ['#2d5a27', '#6b8e23', '#90ee90', '#f0e68c', '#85c1e9', '#f5deb3', '#8fbc8f', '#ffe4b5']
+  },
+  '城市印象': {
+    patterns: ['geometric-grid', 'checkerboard', 'diagonal-lines', 'geometric-grid', 'checkerboard', 'diagonal-lines', 'geometric-grid', 'checkerboard'],
+    palette: ['#1a1a2e', '#16213e', '#0f3460', '#e94560', '#0f0f23', '#2c3e50', '#34495e', '#95a5a6']
+  },
+  '抽象梦境': {
+    patterns: ['concentric-circles', 'radial-gradient', 'checkerboard', 'concentric-circles', 'radial-gradient', 'checkerboard', 'concentric-circles', 'radial-gradient'],
+    palette: ['#6c3483', '#8e44ad', '#a569bd', '#bb8fce', '#d2b4de', '#e8daef', '#f5eef8', '#fef5e7']
+  }
+}
+
+export const SERIES_DATA: Record<string, { titles: string[]; descriptions: string[] }> = {
   '自然之韵': {
     titles: ['晨曦微露', '溪流低语', '秋叶归根', '云海翻涌', '翠竹幽径', '落日余晖', '雨后新芽', '碧波荡漾'],
     descriptions: [
@@ -50,224 +67,289 @@ function generateArtworkCanvas(seriesName: string, index: number): HTMLCanvasEle
   canvas.height = 768
   const ctx = canvas.getContext('2d')!
 
-  const seed = seriesName.charCodeAt(0) * 100 + index * 7
-  const rng = createRNG(seed)
+  const config = SERIES_PATTERN_CONFIG[seriesName] || SERIES_PATTERN_CONFIG['抽象梦境']
+  const pattern = config.patterns[index % config.patterns.length]
+  const palette = config.palette
 
-  if (seriesName === '自然之韵') {
-    drawNatureArt(ctx, rng, index)
-  } else if (seriesName === '城市印象') {
-    drawCityArt(ctx, rng, index)
-  } else {
-    drawAbstractArt(ctx, rng, index)
+  switch (pattern) {
+    case 'gradient-stripes':
+      drawGradientStripes(ctx, palette, index)
+      break
+    case 'concentric-circles':
+      drawConcentricCircles(ctx, palette, index)
+      break
+    case 'checkerboard':
+      drawCheckerboard(ctx, palette, index)
+      break
+    case 'radial-gradient':
+      drawRadialGradient(ctx, palette, index)
+      break
+    case 'diagonal-lines':
+      drawDiagonalLines(ctx, palette, index)
+      break
+    case 'geometric-grid':
+      drawGeometricGrid(ctx, palette, index)
+      break
+    default:
+      drawGradientStripes(ctx, palette, index)
   }
 
   return canvas
 }
 
-function createRNG(seed: number): () => number {
-  let s = seed
-  return () => {
-    s = (s * 16807 + 0) % 2147483647
-    return (s - 1) / 2147483646
+function drawGradientStripes(ctx: CanvasRenderingContext2D, palette: string[], index: number): void {
+  const angle = (index * Math.PI / 4) % (Math.PI / 2)
+  const gradient = ctx.createLinearGradient(
+    0, 0,
+    1024 * Math.cos(angle), 768 * Math.sin(angle)
+  )
+
+  const colorCount = 5
+  for (let i = 0; i <= colorCount; i++) {
+    const colorIdx = (index + i) % palette.length
+    gradient.addColorStop(i / colorCount, palette[colorIdx])
   }
-}
 
-function drawNatureArt(ctx: CanvasRenderingContext2D, rng: () => number, _index: number): void {
-  const palettes = [
-    ['#2d5a27', '#6b8e23', '#90ee90', '#f0e68c', '#ffd700'],
-    ['#1a5276', '#2e86c1', '#85c1e9', '#d4efdf', '#f9e79f'],
-    ['#784212', '#b9770e', '#f39c12', '#f5b041', '#fad7a0'],
-    ['#145a32', '#1e8449', '#82e0aa', '#d5f5e3', '#fef9e7'],
-    ['#0e6655', '#1abc9c', '#76d7c4', '#d1f2eb', '#fdebd0'],
-    ['#6c3483', '#af7ac5', '#d2b4de', '#f5eef8', '#fef5e7'],
-    ['#1a5276', '#2980b9', '#7fb3d8', '#d6eaf8', '#fef9e7'],
-    ['#0b5345', '#148f77', '#48c9b0', '#a3e4d7', '#fdebd0']
-  ]
-  const palette = palettes[_index % palettes.length]
-
-  const gradient = ctx.createLinearGradient(0, 0, 1024, 768)
-  gradient.addColorStop(0, palette[0])
-  gradient.addColorStop(0.3, palette[1])
-  gradient.addColorStop(0.6, palette[2])
-  gradient.addColorStop(0.85, palette[3])
-  gradient.addColorStop(1, palette[4])
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, 1024, 768)
 
-  for (let i = 0; i < 8; i++) {
-    ctx.beginPath()
-    const cx = rng() * 1024
-    const cy = rng() * 768
-    const rx = 40 + rng() * 200
-    const ry = 40 + rng() * 150
-    ctx.ellipse(cx, cy, rx, ry, rng() * Math.PI, 0, Math.PI * 2)
-    ctx.fillStyle = palette[Math.floor(rng() * palette.length)] + '66'
-    ctx.fill()
+  const stripeCount = 8 + index % 4
+  const stripeWidth = 1024 / stripeCount
+  for (let i = 0; i < stripeCount; i++) {
+    const x = i * stripeWidth
+    const colorIdx = (index + i + 2) % palette.length
+    ctx.fillStyle = palette[colorIdx] + (i % 2 === 0 ? '1a' : '33')
+    ctx.fillRect(x, 0, stripeWidth, 768)
   }
 
-  for (let i = 0; i < 5; i++) {
-    ctx.beginPath()
-    const sx = rng() * 1024
-    const sy = rng() * 768
-    const ex = sx + (rng() - 0.5) * 400
-    const ey = sy + (rng() - 0.5) * 300
-    const cpx = (sx + ex) / 2 + (rng() - 0.5) * 200
-    const cpy = (sy + ey) / 2 + (rng() - 0.5) * 200
-    ctx.moveTo(sx, sy)
-    ctx.quadraticCurveTo(cpx, cpy, ex, ey)
-    ctx.strokeStyle = palette[Math.floor(rng() * palette.length)] + '88'
-    ctx.lineWidth = 2 + rng() * 4
-    ctx.stroke()
-  }
-
-  for (let i = 0; i < 30; i++) {
-    const x = rng() * 1024
-    const y = rng() * 768
-    const r = 2 + rng() * 8
+  for (let i = 0; i < 6; i++) {
+    const x = (index * 100 + i * 150) % 1024
+    const y = (index * 80 + i * 120) % 768
+    const r = 30 + index * 3
     ctx.beginPath()
     ctx.arc(x, y, r, 0, Math.PI * 2)
-    ctx.fillStyle = palette[3] + 'aa'
+    ctx.fillStyle = palette[(index + i) % palette.length] + '44'
     ctx.fill()
   }
 }
 
-function drawCityArt(ctx: CanvasRenderingContext2D, rng: () => number, _index: number): void {
-  const bgColors = ['#0c1445', '#1a1a2e', '#16213e', '#0f0f23', '#1b1b3a', '#141428', '#1c1c3c', '#101030']
-  ctx.fillStyle = bgColors[_index % bgColors.length]
+function drawConcentricCircles(ctx: CanvasRenderingContext2D, palette: string[], index: number): void {
+  const bgGradient = ctx.createRadialGradient(
+    512, 384, 0,
+    512, 384, 600
+  )
+  bgGradient.addColorStop(0, palette[(index + 1) % palette.length])
+  bgGradient.addColorStop(0.5, palette[(index + 2) % palette.length])
+  bgGradient.addColorStop(1, palette[index % palette.length])
+  ctx.fillStyle = bgGradient
   ctx.fillRect(0, 0, 1024, 768)
 
-  const skylineY = 300 + rng() * 100
-  const buildingCount = 12 + Math.floor(rng() * 8)
-  for (let i = 0; i < buildingCount; i++) {
-    const bw = 30 + rng() * 80
-    const bh = 100 + rng() * 300
-    const bx = rng() * 1024
-    const by = skylineY + (300 - bh)
-    ctx.fillStyle = `rgba(${20 + rng() * 40}, ${20 + rng() * 40}, ${40 + rng() * 60}, 0.9)`
-    ctx.fillRect(bx, by, bw, bh)
+  const centerX = 512 + (index - 3.5) * 30
+  const centerY = 384 + (index % 4 - 1.5) * 20
+  const maxRadius = 700
+  const circleCount = 12 + index % 4
 
-    for (let wy = by + 10; wy < by + bh - 10; wy += 15) {
-      for (let wx = bx + 5; wx < bx + bw - 5; wx += 12) {
-        if (rng() > 0.3) {
-          const warmth = rng()
-          ctx.fillStyle = `rgba(${200 + warmth * 55}, ${180 + warmth * 40}, ${80 + warmth * 50}, ${0.5 + rng() * 0.5})`
-          ctx.fillRect(wx, wy, 6, 8)
-        }
+  for (let i = circleCount; i >= 0; i--) {
+    const r = (i / circleCount) * maxRadius
+    const colorIdx = (index + i) % palette.length
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, r, 0, Math.PI * 2)
+    ctx.strokeStyle = palette[colorIdx] + 'aa'
+    ctx.lineWidth = 6 + (i % 3) * 3
+    ctx.stroke()
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2 + (index * Math.PI / 8)
+    const dist = 200
+    const x = centerX + Math.cos(angle) * dist
+    const y = centerY + Math.sin(angle) * dist
+    const r = 40 + index * 2
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fillStyle = palette[(index + i + 3) % palette.length] + '66'
+    ctx.fill()
+  }
+}
+
+function drawCheckerboard(ctx: CanvasRenderingContext2D, palette: string[], index: number): void {
+  const bgColor = palette[index % palette.length]
+  const gradient = ctx.createLinearGradient(0, 0, 1024, 768)
+  gradient.addColorStop(0, bgColor)
+  gradient.addColorStop(1, palette[(index + 3) % palette.length])
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, 1024, 768)
+
+  const cols = 8 + index % 4
+  const rows = 6 + index % 3
+  const cellW = 1024 / cols
+  const cellH = 768 / rows
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if ((r + c) % 2 === 0) {
+        const colorIdx = (index + r + c) % palette.length
+        ctx.fillStyle = palette[colorIdx] + (60 + index * 5).toString(16)
+        ctx.fillRect(c * cellW, r * cellH, cellW, cellH)
       }
     }
   }
 
-  for (let i = 0; i < 6; i++) {
-    const x1 = rng() * 1024
-    const y1 = rng() * skylineY
-    const x2 = x1 + (rng() - 0.5) * 200
-    const y2 = y1 + rng() * 100
-    ctx.beginPath()
-    ctx.moveTo(x1, y1)
-    ctx.lineTo(x2, y2)
-    const neonColors = ['#ff0066', '#00ffcc', '#ff6600', '#cc00ff', '#00ccff', '#ffff00']
-    ctx.strokeStyle = neonColors[Math.floor(rng() * neonColors.length)] + '88'
-    ctx.lineWidth = 1 + rng() * 3
-    ctx.shadowColor = ctx.strokeStyle
-    ctx.shadowBlur = 15
-    ctx.stroke()
-    ctx.shadowBlur = 0
-  }
+  for (let i = 0; i < 3; i++) {
+    const x = (index * 120 + i * 300) % 1024
+    const y = (index * 90 + i * 200) % 768
+    const size = 60 + index * 5
+    const colorIdx = (index + i + 2) % palette.length
+    ctx.fillStyle = palette[colorIdx] + 'cc'
+    ctx.fillRect(x - size / 2, y - size / 2, size, size)
 
-  for (let i = 0; i < 60; i++) {
-    const x = rng() * 1024
-    const y = rng() * skylineY
-    ctx.beginPath()
-    ctx.arc(x, y, 0.5 + rng() * 1.5, 0, Math.PI * 2)
-    ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + rng() * 0.7})`
-    ctx.fill()
-  }
-
-  const roadGrad = ctx.createLinearGradient(0, skylineY + 100, 0, 768)
-  roadGrad.addColorStop(0, '#1a1a2e')
-  roadGrad.addColorStop(1, '#2a2a4e')
-  ctx.fillStyle = roadGrad
-  ctx.fillRect(0, skylineY + 100, 1024, 768 - skylineY - 100)
-
-  for (let i = 0; i < 10; i++) {
-    const lx = rng() * 1024
-    const ly = skylineY + 100 + rng() * (768 - skylineY - 100)
-    const len = 20 + rng() * 80
-    ctx.beginPath()
-    ctx.moveTo(lx, ly)
-    ctx.lineTo(lx + len, ly)
-    ctx.strokeStyle = `rgba(255, 200, 100, ${0.3 + rng() * 0.4})`
-    ctx.lineWidth = 1
-    ctx.stroke()
+    ctx.strokeStyle = palette[(colorIdx + 2) % palette.length]
+    ctx.lineWidth = 4
+    ctx.strokeRect(x - size / 2, y - size / 2, size, size)
   }
 }
 
-function drawAbstractArt(ctx: CanvasRenderingContext2D, rng: () => number, _index: number): void {
-  const bgColors = ['#1a0a2e', '#0a1628', '#2e0a1a', '#0a2e1a', '#2e2e0a', '#1a1a0a', '#0a0a2e', '#2e0a2e']
-  ctx.fillStyle = bgColors[_index % bgColors.length]
-  ctx.fillRect(0, 0, 1024, 768)
+function drawRadialGradient(ctx: CanvasRenderingContext2D, palette: string[], index: number): void {
+  const x1 = 200 + (index * 80) % 600
+  const y1 = 150 + (index * 60) % 400
+  const x2 = 800 - (index * 70) % 600
+  const y2 = 600 - (index * 50) % 400
 
-  const accentColors = ['#ff3366', '#33ff99', '#6633ff', '#ff9933', '#33ccff', '#ff33cc', '#99ff33', '#ff6633']
-
-  for (let i = 0; i < 6; i++) {
+  for (let layer = 0; layer < 4; layer++) {
+    const ox = (layer % 2) * 100 - 50
+    const oy = Math.floor(layer / 2) * 100 - 50
     const gradient = ctx.createRadialGradient(
-      rng() * 1024, rng() * 768, 0,
-      rng() * 1024, rng() * 768, 200 + rng() * 300
+      x1 + ox, y1 + oy, 0,
+      x2 + ox, y2 + oy, 600
     )
-    gradient.addColorStop(0, accentColors[Math.floor(rng() * accentColors.length)] + '44')
+    gradient.addColorStop(0, palette[(index + layer) % palette.length] + 'ff')
+    gradient.addColorStop(0.4, palette[(index + layer + 1) % palette.length] + 'aa')
+    gradient.addColorStop(0.7, palette[(index + layer + 2) % palette.length] + '55')
     gradient.addColorStop(1, 'transparent')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, 1024, 768)
   }
 
-  const shapeCount = 5 + Math.floor(rng() * 8)
-  for (let i = 0; i < shapeCount; i++) {
+  for (let i = 0; i < 5; i++) {
+    const x = (x1 + i * 100 + index * 30) % 1024
+    const y = (y1 + i * 80 + index * 25) % 768
+    const r = 15 + index * 2
     ctx.beginPath()
-    const sides = 3 + Math.floor(rng() * 5)
-    const cx = rng() * 1024
-    const cy = rng() * 768
-    const radius = 30 + rng() * 150
-    const rotation = rng() * Math.PI * 2
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fillStyle = palette[(index + i + 4) % palette.length] + 'dd'
+    ctx.fill()
+    ctx.strokeStyle = '#ffffff44'
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+}
 
+function drawDiagonalLines(ctx: CanvasRenderingContext2D, palette: string[], index: number): void {
+  const bgGradient = ctx.createLinearGradient(0, 768, 1024, 0)
+  bgGradient.addColorStop(0, palette[index % palette.length])
+  bgGradient.addColorStop(0.5, palette[(index + 2) % palette.length])
+  bgGradient.addColorStop(1, palette[(index + 4) % palette.length])
+  ctx.fillStyle = bgGradient
+  ctx.fillRect(0, 0, 1024, 768)
+
+  const lineCount = 20 + index % 10
+  const spacing = (1024 + 768) / lineCount
+  const angle = Math.PI / 4 + (index % 4) * (Math.PI / 12)
+
+  for (let i = -lineCount; i < lineCount * 2; i++) {
+    const offset = i * spacing
+    const colorIdx = (index + Math.abs(i)) % palette.length
+
+    ctx.beginPath()
+    const x1 = offset - 768 * Math.tan(angle)
+    const y1 = 0
+    const x2 = offset
+    const y2 = 768
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+
+    ctx.strokeStyle = palette[colorIdx] + (i % 2 === 0 ? '66' : '44')
+    ctx.lineWidth = 8 + (index % 4) * 2
+    ctx.stroke()
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const x = (index * 150 + i * 250) % 1024
+    const y = (index * 100 + i * 180) % 768
+    const sides = 3 + (index + i) % 4
+    const r = 50 + index * 3
+
+    ctx.beginPath()
     for (let s = 0; s <= sides; s++) {
-      const angle = (s / sides) * Math.PI * 2 + rotation
-      const px = cx + Math.cos(angle) * radius
-      const py = cy + Math.sin(angle) * radius
+      const a = (s / sides) * Math.PI * 2 + index * 0.3
+      const px = x + Math.cos(a) * r
+      const py = y + Math.sin(a) * r
       if (s === 0) ctx.moveTo(px, py)
       else ctx.lineTo(px, py)
     }
     ctx.closePath()
-
-    if (rng() > 0.5) {
-      ctx.fillStyle = accentColors[Math.floor(rng() * accentColors.length)] + '55'
-      ctx.fill()
-    }
-    ctx.strokeStyle = accentColors[Math.floor(rng() * accentColors.length)] + 'cc'
-    ctx.lineWidth = 1 + rng() * 3
-    ctx.stroke()
-  }
-
-  for (let i = 0; i < 15; i++) {
-    ctx.beginPath()
-    const x1 = rng() * 1024
-    const y1 = rng() * 768
-    const x2 = rng() * 1024
-    const y2 = rng() * 768
-    ctx.moveTo(x1, y1)
-    ctx.lineTo(x2, y2)
-    ctx.strokeStyle = accentColors[Math.floor(rng() * accentColors.length)] + '66'
-    ctx.lineWidth = 0.5 + rng() * 2
-    ctx.stroke()
-  }
-
-  for (let i = 0; i < 40; i++) {
-    const x = rng() * 1024
-    const y = rng() * 768
-    const r = 1 + rng() * 6
-    ctx.beginPath()
-    ctx.arc(x, y, r, 0, Math.PI * 2)
-    ctx.fillStyle = accentColors[Math.floor(rng() * accentColors.length)] + '88'
+    ctx.fillStyle = palette[(index + i + 5) % palette.length] + '55'
     ctx.fill()
+    ctx.strokeStyle = palette[(index + i) % palette.length]
+    ctx.lineWidth = 3
+    ctx.stroke()
+  }
+}
+
+function drawGeometricGrid(ctx: CanvasRenderingContext2D, palette: string[], index: number): void {
+  ctx.fillStyle = palette[index % palette.length]
+  ctx.fillRect(0, 0, 1024, 768)
+
+  const cols = 6 + index % 3
+  const rows = 5 + index % 2
+  const cellW = 1024 / cols
+  const cellH = 768 / rows
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = c * cellW + cellW / 2
+      const cy = r * cellH + cellH / 2
+      const shapeType = (r + c + index) % 3
+      const colorIdx = (index + r * cols + c) % palette.length
+      const size = Math.min(cellW, cellH) * 0.35
+
+      ctx.fillStyle = palette[colorIdx] + 'bb'
+      ctx.strokeStyle = palette[(colorIdx + 3) % palette.length]
+      ctx.lineWidth = 2
+
+      ctx.beginPath()
+      if (shapeType === 0) {
+        ctx.arc(cx, cy, size, 0, Math.PI * 2)
+      } else if (shapeType === 1) {
+        ctx.rect(cx - size, cy - size, size * 2, size * 2)
+      } else {
+        for (let s = 0; s < 3; s++) {
+          const a = (s / 3) * Math.PI * 2 - Math.PI / 2
+          const px = cx + Math.cos(a) * size
+          const py = cy + Math.sin(a) * size
+          if (s === 0) ctx.moveTo(px, py)
+          else ctx.lineTo(px, py)
+        }
+        ctx.closePath()
+      }
+      ctx.fill()
+      ctx.stroke()
+    }
+  }
+
+  ctx.strokeStyle = '#ffffff22'
+  ctx.lineWidth = 1
+  for (let c = 0; c <= cols; c++) {
+    ctx.beginPath()
+    ctx.moveTo(c * cellW, 0)
+    ctx.lineTo(c * cellW, 768)
+    ctx.stroke()
+  }
+  for (let r = 0; r <= rows; r++) {
+    ctx.beginPath()
+    ctx.moveTo(0, r * cellH)
+    ctx.lineTo(1024, r * cellH)
+    ctx.stroke()
   }
 }
 

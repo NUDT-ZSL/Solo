@@ -2,15 +2,15 @@ import * as THREE from 'three'
 import { eventBus, NavigateArtworkPayload } from './eventBus'
 import { GalleryScene } from './galleryScene'
 
-const DAMPING = 0.9
-const ROTATION_SPEED = 0.003
-const MIN_POLAR = -15 * Math.PI / 180
-const MAX_POLAR = 60 * Math.PI / 180
-const ZOOM_SPEED = 0.1
-const MIN_ZOOM = 1
-const MAX_ZOOM = 10
-const CAMERA_HEIGHT = 1.6
-const EASING = (t: number) => 1 - Math.pow(1 - t, 3)
+export const DAMPING = 0.9
+export const ROTATION_SPEED = 0.003
+export const MIN_POLAR = -15 * Math.PI / 180
+export const MAX_POLAR = 60 * Math.PI / 180
+export const ZOOM_SPEED = 0.1
+export const MIN_ZOOM = 1
+export const MAX_ZOOM = 10
+export const CAMERA_HEIGHT = 1.6
+export const EASING = (t: number) => 1 - Math.pow(1 - t, 3)
 
 export class InteractionController {
   private camera: THREE.PerspectiveCamera
@@ -151,7 +151,7 @@ export class InteractionController {
     if (this.isPanelOpen) return
     e.preventDefault()
     const deltaNorm = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 100) / 100
-    this.targetZoom += deltaNorm * ZOOM_SPEED * 5
+    this.targetZoom += deltaNorm * ZOOM_SPEED
     this.targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.targetZoom))
   }
 

@@ -1,20 +1,20 @@
 import * as THREE from 'three'
 import { eventBus, ArtworkData, FrameTextureUpdatePayload, ArtworkClickPayload, NavigateArtworkPayload } from './eventBus'
 
-const WALL_COLOR = 0xf5f0e1
-const FLOOR_COLOR = 0xd4cdc0
-const FRAME_COLOR = 0x8b7355
-const FRAME_HIGHLIGHT_COLOR = 0xffd700
-const FRAME_WIDTH = 2
-const FRAME_HEIGHT = 1.5
-const FRAME_BORDER = 0.05
-const FRAMES_PER_WALL = 4
-const FRAME_SPACING = 1.5
-const CAMERA_HEIGHT = 1.6
-const ROOM_WIDTH = 12
-const ROOM_LENGTH = 20
-const ROOM_HEIGHT = 4
-const WALL_THICKNESS = 0.2
+export const WALL_COLOR = 0xf5f0e1
+export const FLOOR_COLOR = 0xd4cdc0
+export const FRAME_COLOR = 0x8b7355
+export const FRAME_HIGHLIGHT_COLOR = 0xffd700
+export const FRAME_WIDTH = 2
+export const FRAME_HEIGHT = 1.5
+export const FRAME_BORDER = 0.05
+export const FRAMES_PER_WALL = 4
+export const FRAME_SPACING = 1.5
+export const CAMERA_HEIGHT = 1.6
+export const ROOM_WIDTH = 12
+export const ROOM_LENGTH = 20
+export const ROOM_HEIGHT = 4
+export const WALL_THICKNESS = 0.2
 
 interface FrameObject {
   group: THREE.Group
