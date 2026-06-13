@@ -1,3 +1,11 @@
+// ============================================================
+// FPSCounter —— 帧率计数器 HTML 组件
+// 数据流向：
+//   useFPS hook (requestAnimationFrame 每 500ms 计算) -> fps
+//   fps >= 30 -> 绿色 #4ade80
+//   fps <  30 -> 红色 #ef4444
+// Scene3D 中同时渲染了 drei 的 <Stats /> 提供更详细的性能面板
+// ============================================================
 import { useFPS } from '@/hooks/useFPS';
 
 export default function FPSCounter() {

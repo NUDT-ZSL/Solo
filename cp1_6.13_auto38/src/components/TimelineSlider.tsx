@@ -1,3 +1,10 @@
+// ============================================================
+// TimelineSlider —— 地层沉积时间轴滑块
+// 数据流向：
+//   用户拖动滑块 -> onChange -> useStrataStore.setTimeline(value)
+//   -> Scene3D / LayerSlice 读取 timeline 并执行 1.5s ease-in-out 动画
+//   速度选择器 -> setAnimationSpeed -> LayerSlice.animationSpeed (0.5x/1x/2x)
+// ============================================================
 import { Clock } from 'lucide-react';
 import { useStrataStore } from '@/store/useStrataStore';
 import type { AnimationSpeed } from '@/types';

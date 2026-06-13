@@ -1,3 +1,10 @@
+// ============================================================
+// FossilCard —— 单个化石卡片
+// 数据流向：
+//   SidePanel (父) -> 传入 fossil 对象
+//   onClick "查看3D" -> useStrataStore.viewFossil(fossil)
+//   -> Scene3D/FossilViewer 读取 viewingFossil 并渲染 3D 模型
+// ============================================================
 import { Eye } from 'lucide-react';
 import type { Fossil } from '@/types';
 import { useStrataStore } from '@/store/useStrataStore';

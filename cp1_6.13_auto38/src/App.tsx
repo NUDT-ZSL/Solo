@@ -1,3 +1,17 @@
+// ============================================================
+// App —— 应用根组件
+// 数据流向：
+//   App -> fetch('/api/layers') -> useStrataStore.setLayers -> Scene3D 读取
+//   App -> fetch('/api/layers/:id/fossils') 由 SidePanel 内部执行
+//   组件树：
+//     App
+//      ├─ Scene3D (3D 场景，含地层+化石)
+//      ├─ TopBar (标题栏 + 重置视角按钮)
+//      ├─ FPSCounter (帧率显示，<30帧红色)
+//      ├─ SidePanel (右侧信息面板，含地层+化石列表)
+//      ├─ TimelineSlider (底部时间轴滑块)
+//      └─ FossilDetailModal (化石详情 HTML 弹窗)
+// ============================================================
 import { useEffect, useState } from 'react';
 import Scene3D from '@/components/Scene3D';
 import TopBar from '@/components/TopBar';
@@ -20,6 +34,10 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, [setIsMobile]);
 
+  // ------------------------------------------------------------
+  // 从后端 Express API (端口 3001, 通过 vite 代理 /api) 获取地层元数据
+  // GET /api/layers -> server/src/server.ts -> layersDB.find().sort()
+  // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
     (async () => {

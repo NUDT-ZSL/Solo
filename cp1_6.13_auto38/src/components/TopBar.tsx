@@ -1,3 +1,10 @@
+// ============================================================
+// TopBar —— 顶部标题栏
+// 数据流向：
+//   重置视角按钮 onClick -> useStrataStore.resetCamera
+//   -> Scene3D 中 CameraResetInner 监听 cameraResetTrigger
+//   -> 0.5 秒 easeInOutCubic 平滑恢复 (0, 80, 200) 视角
+// ============================================================
 import { Maximize2 } from 'lucide-react';
 import { useStrataStore } from '@/store/useStrataStore';
 
@@ -21,6 +28,7 @@ export default function TopBar() {
         onClick={resetCamera}
         className="bg-white text-gray-900 rounded-full flex items-center justify-center transition-transform hover:scale-105"
         style={{ width: '40px', height: '40px' }}
+        title="重置视角"
       >
         <Maximize2 size={20} />
       </button>

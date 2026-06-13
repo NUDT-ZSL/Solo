@@ -1,3 +1,10 @@
+// ============================================================
+// SidePanel —— 右侧（或底部移动端）信息面板
+// 数据流向：
+//   useStrataStore.selectedLayerId -> 监听变化 -> fetch('/api/layers/:id/fossils')
+//   server: GET /api/layers/:id/fossils -> 返回 Fossil[] -> useStrataStore.setFossils
+//   -> maps FossilCard 列表
+// ============================================================
 import { Info, ChevronUp } from 'lucide-react';
 import { useStrataStore } from '@/store/useStrataStore';
 import { FossilCard } from './FossilCard';
@@ -11,7 +18,7 @@ function formatAge(age: number): string {
   return `${age}万年前`;
 }
 
-export function SidePanel() {
+export default function SidePanel() {
   const layers = useStrataStore((s) => s.layers);
   const selectedLayerId = useStrataStore((s) => s.selectedLayerId);
   const fossils = useStrataStore((s) => s.fossils);
@@ -19,6 +26,10 @@ export function SidePanel() {
 
   const selectedLayer: Layer | undefined = layers.find((l) => l._id === selectedLayerId) || undefined;
 
+  // ------------------------------------------------------------
+  // selectedLayerId 变化时向后端请求该层的化石列表
+  // GET /api/layers/:id/fossils 由 server/src/server.ts 提供
+  // ------------------------------------------------------------
   useEffect(() => {
     if (!selectedLayerId) {
       setFossils([]);
@@ -67,7 +78,7 @@ export function SidePanel() {
               <p className="text-blue-300 text-sm">{selectedLayer.era} · {selectedLayer.period}</p>
             </div>
             <div
-              className="w-6 h-6 rounded shrink-0 ml-3"
+              className="w-6 h-6 rounded shrink-0 ml-3 border border-white/20"
               style={{ backgroundColor: selectedLayer.color }}
             />
           </div>

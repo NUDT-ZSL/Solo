@@ -1,3 +1,11 @@
+// ============================================================
+// Scene3D 组件 —— 核心 3D 场景容器
+// 数据流向：
+//   App(父) -> useStrataStore.layers -> StrataLayers(子) -> LayerSlice(子子)
+//   LayerSlice onClick -> useStrataStore.selectLayer -> SidePanel 读取 selectedLayerId
+//   useStrataStore.viewingFossil -> FossilViewer(子) 渲染化石模型
+//   TimelineSlider -> useStrataStore.timeline -> LayerSlice 读取动画
+// ============================================================
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stats } from '@react-three/drei';
 import * as THREE from 'three';
@@ -7,9 +15,14 @@ import { useStrataStore } from '@/store/useStrataStore';
 import type { Layer } from '@/types';
 import { useMemo, useRef, useEffect } from 'react';
 
+// 地层间距（单位：Three.js 世界单位）
 const LAYER_SPACING = 1;
 const BASE_LAYER_HEIGHT = 10;
 
+// ------------------------------------------------------------
+// CameraResetInner —— 视角重置控制器
+// 数据流：useStrataStore.cameraResetTrigger 变化 -> 平滑恢复默认视角
+// ------------------------------------------------------------
 function CameraResetInner() {
   const { camera, controls } = useThree() as { camera: THREE.PerspectiveCamera; controls: any };
   const cameraResetTrigger = useStrataStore((s) => s.cameraResetTrigger);
@@ -54,6 +67,10 @@ function CameraResetInner() {
   return null;
 }
 
+// ------------------------------------------------------------
+// StrataLayers —— 地层堆叠容器
+// 负责：计算每层的 baseY（堆叠偏移）、从 store 读取 timeline 并分发
+// ------------------------------------------------------------
 function StrataLayers() {
   const layers = useStrataStore((s) => s.layers);
   const selectedLayerId = useStrataStore((s) => s.selectedLayerId);
@@ -108,11 +125,18 @@ export default function Scene3D() {
       shadows
       gl={{ antialias: true, powerPreference: 'high-performance' }}
       dpr={[1, 2]}
+      frameloop="always"
     >
       <color attach="background" args={[0x0f172a]} />
       <fog attach="fog" args={[0x0f172a, 300, 800]} />
       <ambientLight intensity={0.4} />
-      <directionalLight position={[50, 100, 50]} intensity={0.8} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+      <directionalLight
+        position={[50, 100, 50]}
+        intensity={0.8}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
       <directionalLight position={[-50, 60, -50]} intensity={0.25} />
       <OrbitControls
         enableDamping
@@ -125,7 +149,7 @@ export default function Scene3D() {
       />
       <CameraResetInner />
       <StrataLayers />
-      <Stats />
+      <Stats className="!top-16 !left-4" />
     </Canvas>
   );
 }

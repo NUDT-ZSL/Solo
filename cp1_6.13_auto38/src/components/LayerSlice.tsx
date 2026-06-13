@@ -1,10 +1,16 @@
+// ============================================================
+// LayerSlice 组件 —— 单个地层切片
+// 数据流向：Scene3D(父) -> 传入 layer / isSelected / timelineProgress 等
+// 输出：Three.js 3D 对象（ExtrudeGeometry 挤压不规则多边形）
+// 交互：onClick -> 调用 Scene3D 传入的 selectLayer 回调更新 store
+// ============================================================
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Layer } from '@/types';
 import { easeInOutCubic } from '@/utils/easing';
 
-interface LayerSliceProps {
+export interface LayerSliceProps {
   layer: Layer;
   isSelected: boolean;
   onClick: () => void;
@@ -26,27 +32,29 @@ export function LayerSlice({
   totalLayers,
 }: LayerSliceProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
-  const edgesMaterialRef = useRef<THREE.LineBasicMaterial>(null);
+  const edgesMatRef = useRef<THREE.LineBasicMaterial>(null);
 
-  const animState = useRef({
-    currentY: baseY - totalLayers * (layerHeight + 1),
-    currentOpacity: 0,
-    currentScaleY: 0,
-    targetY: baseY - totalLayers * (layerHeight + 1),
-    targetOpacity: 0,
-    targetScaleY: 0,
-    animating: false,
-    startY: 0,
-    startOpacity: 0,
-    startScaleY: 0,
-    animDuration: 1.5 / animationSpeed,
-    animStart: -9999,
+  const animRef = useRef({
+    posY: baseY,
+    opacity: 0,
+    scaleY: 0,
     selectOffset: 0,
-    selectAnimStart: -9999,
+    lastTimeline: -1,
+    timelineAnimStart: -9999,
+    timelineAnimDuration: 1.5,
+    timelineStartPosY: baseY,
+    timelineStartOpacity: 0,
+    timelineStartScaleY: 0,
   });
 
-  const geometry = useMemo(() => {
+  // ------------------------------------------------------------
+  // 生成不规则多边形（模拟自然断层的不规则边界）
+  // 使用 Shape + quadraticCurveTo 构造弯曲边缘
+  // 然后通过 ExtrudeGeometry 沿 Z 轴（之后旋转到 Y）挤压出地层厚度
+  // ------------------------------------------------------------
+  const { geometry, edgesGeometry } = useMemo(() => {
     const shape = new THREE.Shape();
     const halfSize = 90;
     const cornerOffsets = [
@@ -83,8 +91,8 @@ export function LayerSlice({
         const prevI = i - 1;
         const [pvx, pvy] = vertices[prevI];
         const [pox, poy] = cornerOffsets[prevI % cornerOffsets.length];
-        const cpx = (pvx + pox + vx + ox) / 2 + (Math.random() - 0.5) * 6;
-        const cpy = (pvy + poy + vy + oy) / 2 + (Math.random() - 0.5) * 6;
+        const cpx = (pvx + pox + vx + ox) / 2 + (Math.sin(i * 1.3) * 6);
+        const cpy = (pvy + poy + vy + oy) / 2 + (Math.cos(i * 1.7) * 6);
         shape.quadraticCurveTo(cpx, cpy, vx + ox, vy + oy);
       }
     }
@@ -97,42 +105,59 @@ export function LayerSlice({
       bevelSize: 0.5,
       bevelSegments: 2,
       curveSegments: 8,
+      steps: 1,
     };
 
     const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     geo.center();
-    return geo;
+    const edges = new THREE.EdgesGeometry(geo, 20);
+    return { geometry: geo, edgesGeometry: edges };
   }, [layerHeight]);
 
-  const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 20), [geometry]);
-
+  // ------------------------------------------------------------
+  // 每帧更新：处理 timeline 动画 + 选中动画
+  // 使用 easeInOutCubic 插值实现 1.5 秒缓动
+  // ------------------------------------------------------------
   useFrame((_state, delta) => {
-    if (!groupRef.current || !materialRef.current || !edgesMaterialRef.current) return;
+    if (!groupRef.current || !materialRef.current || !edgesMatRef.current) return;
 
-    const layerThreshold = ((layer.order - 1) / totalLayers) * 100;
-    const shouldBeVisible = timelineProgress > layerThreshold;
-    const withinRange = timelineProgress >= layerThreshold && timelineProgress <= layerThreshold + (100 / totalLayers) + 0.01;
-    const progressWithin = withinRange
-      ? Math.min(1, (timelineProgress - layerThreshold) / (100 / totalLayers))
-      : shouldBeVisible ? 1 : 0;
+    const st = animRef.current;
+    const now = performance.now() / 1000;
+    const total = totalLayers;
 
-    const easedProgress = easeInOutCubic(progressWithin);
+    const layerThreshold = ((layer.order - 1) / total) * 100;
+    const targetVisibility = timelineProgress >= layerThreshold ? 1 : 0;
 
-    const finalTargetY = baseY + (1 - easedProgress) * (-totalLayers * (layerHeight + 1) * 2);
-    const finalTargetOpacity = easedProgress * (isSelected ? 0.85 : 0.7);
-    const finalTargetScaleY = 0.2 + easedProgress * 0.8;
+    if (Math.abs(timelineProgress - st.lastTimeline) > 0.01) {
+      st.lastTimeline = timelineProgress;
+      st.timelineAnimStart = now;
+      st.timelineStartPosY = st.posY;
+      st.timelineStartOpacity = st.opacity;
+      st.timelineStartScaleY = st.scaleY;
+    }
+
+    const elapsed = now - st.timelineAnimStart;
+    const duration = st.timelineAnimDuration / animationSpeed;
+    const rawT = Math.min(elapsed / duration, 1);
+    const tEased = easeInOutCubic(rawT);
+
+    const belowHideY = baseY - (total * (layerHeight + 1)) * 1.2;
+    const finalTargetPos = targetVisibility > 0.5 ? baseY : belowHideY;
+    const finalTargetOpacity = targetVisibility > 0.5 ? (isSelected ? 0.85 : 0.7) : 0;
+    const finalTargetScaleY = targetVisibility > 0.5 ? 1 : 0;
+
+    st.posY = st.timelineStartPosY + (finalTargetPos - st.timelineStartPosY) * tEased;
+    st.opacity = st.timelineStartOpacity + (finalTargetOpacity - st.timelineStartOpacity) * tEased;
+    st.scaleY = st.timelineStartScaleY + (finalTargetScaleY - st.timelineStartScaleY) * tEased;
 
     const selectTarget = isSelected ? 8 : 0;
-    animState.current.selectOffset += (selectTarget - animState.current.selectOffset) * Math.min(1, delta * 8);
+    const selectSpeed = 1 / 0.3;
+    const selectLerp = Math.min(1, delta * selectSpeed);
+    st.selectOffset += (selectTarget - st.selectOffset) * selectLerp;
 
-    const lerpFactor = Math.min(1, delta * 4 * animationSpeed);
-    animState.current.currentY += (finalTargetY - animState.current.currentY) * lerpFactor;
-    animState.current.currentOpacity += (finalTargetOpacity - animState.current.currentOpacity) * lerpFactor;
-    animState.current.currentScaleY += (finalTargetScaleY - animState.current.currentScaleY) * lerpFactor;
-
-    groupRef.current.position.y = animState.current.currentY + animState.current.selectOffset;
-    groupRef.current.scale.y = animState.current.currentScaleY;
-    materialRef.current.opacity = animState.current.currentOpacity;
+    groupRef.current.position.y = st.posY + st.selectOffset;
+    groupRef.current.scale.y = Math.max(0.001, st.scaleY);
+    materialRef.current.opacity = st.opacity;
 
     const baseC = new THREE.Color(layer.color);
     if (isSelected) {
@@ -142,17 +167,31 @@ export function LayerSlice({
       baseC.setHSL(hsl.h, hsl.s, hsl.l);
     }
     materialRef.current.color.copy(baseC);
-    edgesMaterialRef.current.opacity = isSelected ? 1 : 0;
-    edgesMaterialRef.current.visible = isSelected;
+
+    edgesMatRef.current.opacity = isSelected ? 1 : 0;
+    edgesMatRef.current.visible = isSelected;
   });
 
+  // 将 XY 平面的几何体旋转到 XZ 平面（使挤压方向变为 Y 轴高度）
   return (
     <group ref={groupRef} rotation={[-Math.PI / 2, 0, 0]}>
       <mesh
+        ref={meshRef}
         geometry={geometry}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
-        onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; }}
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        castShadow
+        receiveShadow
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = 'pointer';
+        }}
+        onPointerOut={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = 'auto';
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
       >
         <meshStandardMaterial
           ref={materialRef}
@@ -166,7 +205,7 @@ export function LayerSlice({
       </mesh>
       <lineSegments geometry={edgesGeometry}>
         <lineBasicMaterial
-          ref={edgesMaterialRef}
+          ref={edgesMatRef}
           color="#ffffff"
           transparent
           opacity={0}
