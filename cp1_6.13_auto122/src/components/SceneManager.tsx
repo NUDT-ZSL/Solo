@@ -186,10 +186,6 @@ function ScaleHandles({ building }: { building: Building }) {
     }
   };
 
-  useFrame(() => {
-    if (!dragging || !dragStart.current) return;
-  });
-
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       if (!dragging || !dragStart.current) return;
@@ -268,6 +264,8 @@ function ScaleHandles({ building }: { building: Building }) {
       <mesh
         position={[0, building.height + 0.1, 0]}
         onPointerDown={handlePointerDown('top')}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'ns-resize'; }}
+        onPointerOut={() => { document.body.style.cursor = 'default'; }}
       >
         <cylinderGeometry args={[0.3, 0.3, 0.3, 16]} />
         <meshStandardMaterial color="#0ea5e9" emissive="#0ea5e9" emissiveIntensity={0.3} />
@@ -278,7 +276,7 @@ function ScaleHandles({ building }: { building: Building }) {
           position={[c.x, 0.05, c.z]}
           rotation={[-Math.PI / 2, 0, 0]}
           onPointerDown={handlePointerDown(c.key)}
-          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'nwse-resize'; }}
           onPointerOut={() => { document.body.style.cursor = 'default'; }}
         >
           <planeGeometry args={[handleSize, handleSize]} />
@@ -418,17 +416,40 @@ function CameraController({ isCutaway, cutawayBuildingId, buildings }: {
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   const lastCutaway = useRef(false);
+  const animProgress = useRef(0);
+  const startPos = useRef(new THREE.Vector3());
+  const startTarget = useRef(new THREE.Vector3());
+  const endPos = useRef(new THREE.Vector3());
+  const endTarget = useRef(new THREE.Vector3());
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (isCutaway && cutawayBuildingId && !lastCutaway.current) {
       const b = buildings.find(x => x.id === cutawayBuildingId);
       if (b && controlsRef.current) {
-        const targetPos = new THREE.Vector3(b.position.x, b.height / 2, b.position.z);
-        camera.position.set(b.position.x - 0.5, b.height / 2, b.position.z + b.depth / 2 + 1);
-        controlsRef.current.target.copy(targetPos);
-        controlsRef.current.update();
+        startPos.current.copy(camera.position);
+        startTarget.current.copy(controlsRef.current.target);
+        endTarget.current.set(b.position.x, b.height / 2, b.position.z);
+        endPos.current.set(b.position.x - 1, b.height / 2, b.position.z + b.depth / 2 + 1.5);
+        animProgress.current = 0;
       }
     }
+
+    if (!isCutaway && lastCutaway.current) {
+      animProgress.current = 0;
+      startPos.current.copy(camera.position);
+      startTarget.current.copy(controlsRef.current.target);
+      endPos.current.set(30, 35, 35);
+      endTarget.current.set(0, 0, 0);
+    }
+
+    if (animProgress.current < 1 && controlsRef.current) {
+      animProgress.current = Math.min(1, animProgress.current + delta * 3);
+      const t = 1 - Math.pow(1 - animProgress.current, 3);
+      camera.position.lerpVectors(startPos.current, endPos.current, t);
+      controlsRef.current.target.lerpVectors(startTarget.current, endTarget.current, t);
+      controlsRef.current.update();
+    }
+
     lastCutaway.current = isCutaway;
   });
 
@@ -514,13 +535,15 @@ function SceneContent() {
   const handleBuildingContext = (buildingId: string) => (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     setSelectedBuildingId(buildingId);
-    setContextMenu({ x: e.clientX || e.nativeEvent.clientX, y: e.clientY || e.nativeEvent.clientY, buildingId });
+    const clientX = (e as any).clientX || e.nativeEvent?.clientX || 0;
+    const clientY = (e as any).clientY || e.nativeEvent?.clientY || 0;
+    setContextMenu({ x: clientX, y: clientY, buildingId });
   };
 
   useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
     if (contextMenu) {
-      window.addEventListener('click', handleClickOutside);
+      setTimeout(() => window.addEventListener('click', handleClickOutside), 0);
     }
     return () => window.removeEventListener('click', handleClickOutside);
   }, [contextMenu]);
@@ -611,7 +634,7 @@ function SceneContent() {
               pointerEvents: 'auto',
             }}
           >
-            <div style={menuItemStyle}>📝 编辑属性</div>
+            <div style={menuItemStyle}>编辑属性</div>
           </div>
         </Html>
       )}
@@ -658,4 +681,14 @@ const SceneManager: React.FC = () => {
   return (
     <Canvas
       shadows
-      camera={{ position: [30, 35, 35], fov: 50, near:
+      camera={{ position: [30, 35, 35], fov: 50, near: 0.1, far: 500 }}
+      gl={{ antialias: true, alpha: false }}
+      dpr={[1, 2]}
+      style={{ width: '100%', height: '100%' }}
+    >
+      <SceneContent />
+    </Canvas>
+  );
+};
+
+export default SceneManager;
