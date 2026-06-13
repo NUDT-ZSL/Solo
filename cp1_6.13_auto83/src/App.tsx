@@ -26,7 +26,7 @@ export interface AppState {
   compareLineHeights: number[];
   schemes: FontScheme[];
   drawerOpen: boolean;
-  fading: 'in' | 'out' | 'none';
+  opacity: number;
 }
 
 type Action =
@@ -43,7 +43,7 @@ type Action =
   | { type: 'LOAD_SCHEME'; scheme: FontScheme }
   | { type: 'DELETE_SCHEME'; id: string }
   | { type: 'TOGGLE_DRAWER' }
-  | { type: 'SET_FADING'; fading: 'in' | 'out' | 'none' };
+  | { type: 'SET_OPACITY'; opacity: number };
 
 const initialState: AppState = {
   selectedFont: 'Inter',
@@ -57,7 +57,7 @@ const initialState: AppState = {
   compareLineHeights: [],
   schemes: [],
   drawerOpen: false,
-  fading: 'none',
+  opacity: 1,
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -123,8 +123,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, schemes: state.schemes.filter((s) => s.id !== action.id) };
     case 'TOGGLE_DRAWER':
       return { ...state, drawerOpen: !state.drawerOpen };
-    case 'SET_FADING':
-      return { ...state, fading: action.fading };
+    case 'SET_OPACITY':
+      return { ...state, opacity: action.opacity };
     default:
       return state;
   }
@@ -165,13 +165,12 @@ export default function App() {
     if (fontItem) {
       loadGoogleFont(fontItem);
     }
-    dispatch({ type: 'SET_FADING', fading: 'out' });
+    dispatch({ type: 'SET_OPACITY', opacity: 0 });
     window.setTimeout(() => {
       dispatch({ type: 'SELECT_FONT', font });
-      dispatch({ type: 'SET_FADING', fading: 'in' });
       window.setTimeout(() => {
-        dispatch({ type: 'SET_FADING', fading: 'none' });
-      }, 200);
+        dispatch({ type: 'SET_OPACITY', opacity: 1 });
+      }, 0);
     }, 200);
   }, []);
 
@@ -207,13 +206,12 @@ export default function App() {
       const fi = fontList.find((f) => f.name === fName);
       if (fi) loadGoogleFont(fi);
     });
-    dispatch({ type: 'SET_FADING', fading: 'out' });
+    dispatch({ type: 'SET_OPACITY', opacity: 0 });
     window.setTimeout(() => {
       dispatch({ type: 'LOAD_SCHEME', scheme });
-      dispatch({ type: 'SET_FADING', fading: 'in' });
       window.setTimeout(() => {
-        dispatch({ type: 'SET_FADING', fading: 'none' });
-      }, 200);
+        dispatch({ type: 'SET_OPACITY', opacity: 1 });
+      }, 0);
     }, 200);
   }, []);
 
@@ -250,7 +248,7 @@ export default function App() {
             compareFonts={state.compareFonts}
             compareFontSizes={state.compareFontSizes}
             compareLineHeights={state.compareLineHeights}
-            fading={state.fading}
+            opacity={state.opacity}
             fontItem={selectedFontItem}
             onFontWeightChange={(w) => dispatch({ type: 'SET_FONT_WEIGHT', weight: w })}
             onFontSizeChange={(s) => dispatch({ type: 'SET_FONT_SIZE', size: s })}

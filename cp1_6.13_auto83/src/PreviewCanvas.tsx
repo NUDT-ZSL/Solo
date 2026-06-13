@@ -11,7 +11,7 @@ interface PreviewCanvasProps {
   compareFonts: string[];
   compareFontSizes: number[];
   compareLineHeights: number[];
-  fading: 'in' | 'out' | 'none';
+  opacity: number;
   fontItem: FontItem | undefined;
   onFontWeightChange: (weight: number) => void;
   onFontSizeChange: (size: number) => void;
@@ -78,7 +78,7 @@ export default function PreviewCanvas({
   compareFonts,
   compareFontSizes,
   compareLineHeights,
-  fading,
+  opacity,
   fontItem,
   onFontWeightChange,
   onFontSizeChange,
@@ -88,8 +88,8 @@ export default function PreviewCanvas({
   onCompareLineHeightChange,
 }: PreviewCanvasProps) {
   const columnRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const syncLock = useRef(false);
-  const rafId = useRef<number | null>(null);
+  const suppressScrollEvents = useRef<Set<number>>(new Set());
+  const lastScrollTop = useRef<number[]>([]);
 
   const allFonts = compareMode ? [selectedFont, ...compareFonts] : [selectedFont];
   const allSizes = compareMode ? [fontSize, ...compareFontSizes] : [fontSize];
@@ -100,47 +100,42 @@ export default function PreviewCanvas({
     return item?.type ?? 'sans-serif';
   };
 
-  const syncScrollTo = useCallback((sourceIdx: number) => {
+  const syncScrollFrom = useCallback((sourceIdx: number) => {
     const source = columnRefs.current[sourceIdx];
     if (!source) return;
-    const top = source.scrollTop;
+    const targetTop = source.scrollTop;
+    lastScrollTop.current[sourceIdx] = targetTop;
     columnRefs.current.forEach((ref, i) => {
-      if (i !== sourceIdx && ref) {
-        ref.scrollTop = top;
-      }
+      if (i === sourceIdx || !ref) return;
+      if (lastScrollTop.current[i] === targetTop) return;
+      lastScrollTop.current[i] = targetTop;
+      suppressScrollEvents.current.add(i);
+      ref.scrollTop = targetTop;
+      window.setTimeout(() => {
+        suppressScrollEvents.current.delete(i);
+      }, 0);
     });
   }, []);
 
   const handleColumnScroll = useCallback(
     (idx: number) => {
-      if (syncLock.current) return;
-      syncLock.current = true;
-      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
-      rafId.current = requestAnimationFrame(() => {
-        syncScrollTo(idx);
-        syncLock.current = false;
-        rafId.current = null;
-      });
+      if (suppressScrollEvents.current.has(idx)) return;
+      syncScrollFrom(idx);
     },
-    [syncScrollTo]
+    [syncScrollFrom]
   );
 
   useEffect(() => {
     columnRefs.current = columnRefs.current.slice(0, allFonts.length);
+    lastScrollTop.current = lastScrollTop.current.slice(0, allFonts.length);
+    for (let i = 0; i < allFonts.length; i++) {
+      if (lastScrollTop.current[i] === undefined) lastScrollTop.current[i] = 0;
+    }
   }, [allFonts.length]);
-
-  useEffect(() => {
-    return () => {
-      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
-    };
-  }, []);
 
   const setColumnRef = (idx: number) => (el: HTMLDivElement | null) => {
     columnRefs.current[idx] = el;
   };
-
-  const fadingClass =
-    fading === 'out' ? 'fading-out' : fading === 'in' ? 'fading-in' : '';
 
   const metaWeights = fontItem?.weights ?? [];
   const metaWeightRange = metaWeights.length
@@ -214,10 +209,12 @@ export default function PreviewCanvas({
       </div>
 
       <div
-        className={`preview-canvas ${fadingClass}`}
+        className="preview-canvas"
         style={{
           width: compareMode ? '100%' : '595px',
           height: '842px',
+          opacity,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       >
         {compareMode ? (
