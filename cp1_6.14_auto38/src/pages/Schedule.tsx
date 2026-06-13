@@ -25,52 +25,78 @@ const PART_COLORS: Record<string, string> = {
   '打击乐': '#dc2626',
 };
 
-const getPartColor = (part: string): string => {
-  return PART_COLORS[part] || '#6b7280';
-};
+const getPartColor = (part: string): string => PART_COLORS[part] || '#6b7280';
 
 const getPartShortName = (part: string): string => {
   const map: Record<string, string> = {
-    '第一小提琴': '小提1',
-    '第二小提琴': '小提2',
-    '小提琴': '小提',
-    '大提琴': '大提',
-    '低音提琴': '低音',
-    '中提琴': '中提',
-    '长笛': '长笛',
-    '双簧管': '双簧',
-    '单簧管': '单簧',
-    '大管': '大管',
-    '圆号': '圆号',
-    '小号': '小号',
-    '长号': '长号',
-    '大号': '大号',
-    '打击乐': '打击',
+    '第一小提琴': '小提1', '第二小提琴': '小提2', '小提琴': '小提',
+    '大提琴': '大提', '低音提琴': '低音', '中提琴': '中提',
+    '长笛': '长笛', '双簧管': '双簧', '单簧管': '单簧',
+    '大管': '大管', '圆号': '圆号', '小号': '小号',
+    '长号': '长号', '大号': '大号', '打击乐': '打击',
   };
   return map[part] || part.slice(0, 2);
 };
+
+interface BlockState {
+  slot: ScheduleSlot;
+  x: number;
+  y: number;
+  animating: boolean;
+}
 
 export default function Schedule() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);
-  const [draggingItem, setDraggingItem] = useState<ScheduleSlot | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [blocks, setBlocks] = useState<BlockState[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [dragCurrentPos, setDragCurrentPos] = useState({ x: 0, y: 0 });
   const [dragOverSlot, setDragOverSlot] = useState<{ dayIndex: number; timeSlot: number } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const scheduleRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const animFrameRef = useRef<number>(0);
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
-    if (selectedProjectId) {
-      loadSchedule();
-    }
+    if (selectedProjectId) loadSchedule();
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    updateBlockPositions(schedule, false);
+  }, [schedule]);
+
+  const updateBlockPositions = useCallback((slots: ScheduleSlot[], animate: boolean) => {
+    if (!gridRef.current) return;
+    const gridEl = gridRef.current;
+    const headerRow = gridEl.querySelector('[data-row="header"]');
+    const timeCol = gridEl.querySelector('[data-time="0"]');
+
+    if (!headerRow || !timeCol) return;
+
+    const gridRect = gridEl.getBoundingClientRect();
+    const headerWidth = timeCol.getBoundingClientRect().width;
+    const headerHeight = headerRow.getBoundingClientRect().height;
+    const cellWidth = (gridRect.width - headerWidth) / 7;
+
+    const newBlocks = slots.map((slot) => {
+      const x = headerWidth + slot.dayIndex * cellWidth + (cellWidth - BLOCK_SIZE) / 2;
+      const y = headerHeight + slot.timeSlot * SLOT_HEIGHT + (SLOT_HEIGHT - BLOCK_SIZE) / 2;
+      return { slot, x, y, animating: animate };
+    });
+
+    setBlocks(newBlocks);
+
+    if (animate) {
+      setTimeout(() => {
+        setBlocks((prev) => prev.map((b) => ({ ...b, animating: false })));
+      }, 150);
+    }
+  }, []);
 
   const loadData = async () => {
     try {
@@ -78,10 +104,11 @@ export default function Schedule() {
         projectApi.getAll(),
         memberApi.getAll(),
       ]);
-      setProjects(projectsRes.data);
-      setMembers(membersRes.data);
-      if (projectsRes.data.length > 0) {
-        setSelectedProjectId(projectsRes.data[0].id);
+      const projectsData = Array.isArray(projectsRes.data) ? projectsRes.data : [];
+      setProjects(projectsData);
+      setMembers(Array.isArray(membersRes.data) ? membersRes.data : []);
+      if (projectsData.length > 0) {
+        setSelectedProjectId(projectsData[0].id);
       }
     } catch (e) {
       console.error('Failed to load data:', e);
@@ -94,12 +121,12 @@ export default function Schedule() {
       const res = await scheduleApi.get(selectedProjectId);
       let scheduleData = res.data;
 
-      if (scheduleData.length === 0) {
+      if (!Array.isArray(scheduleData) || scheduleData.length === 0) {
         const project = projects.find((p) => p.id === selectedProjectId);
         if (project) {
           const confirmedMembers: Array<{ memberId: string; part: string }> = [];
-          project.tracks.forEach((track) => {
-            track.assignments.forEach((a) => {
+          (project.tracks || []).forEach((track) => {
+            (track.assignments || []).forEach((a) => {
               if (a.status === 'confirmed') {
                 const exists = confirmedMembers.some(
                   (m) => m.memberId === a.memberId && m.part === a.part
@@ -139,84 +166,77 @@ export default function Schedule() {
     }
   }, [selectedProjectId]);
 
-  const checkCollision = (slot: ScheduleSlot, excludeId?: string): boolean => {
+  const hasCollision = (dayIndex: number, timeSlot: number, excludeId?: string): boolean => {
     return schedule.some(
-      (s) =>
-        s.id !== excludeId &&
-        s.dayIndex === slot.dayIndex &&
-        s.timeSlot === slot.timeSlot
+      (s) => s.id !== excludeId && s.dayIndex === dayIndex && s.timeSlot === timeSlot
     );
   };
 
-  const getSlotPosition = (dayIndex: number, timeSlot: number) => {
-    if (!scheduleRef.current) return null;
-    const cellWidth = scheduleRef.current.offsetWidth / 8;
-    const x = 80 + dayIndex * cellWidth + (cellWidth - BLOCK_SIZE) / 2;
-    const y = 40 + timeSlot * SLOT_HEIGHT + (SLOT_HEIGHT - BLOCK_SIZE) / 2;
-    return { x, y, cellWidth };
-  };
+  const getSlotFromMouse = (clientX: number, clientY: number) => {
+    if (!gridRef.current) return null;
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const timeCol = gridRef.current.querySelector('[data-time="0"]');
+    const headerRow = gridRef.current.querySelector('[data-row="header"]');
+    if (!timeCol || !headerRow) return null;
 
-  const handleMouseDown = (e: React.MouseEvent, item: ScheduleSlot) => {
-    e.preventDefault();
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
-    setDraggingItem(item);
-    setIsDragging(true);
-    setDragPosition({ x: e.clientX, y: e.clientY });
-  };
+    const headerWidth = timeCol.getBoundingClientRect().width;
+    const headerHeight = headerRow.getBoundingClientRect().height;
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!draggingItem || !scheduleRef.current) return;
-
-    setDragPosition({ x: e.clientX, y: e.clientY });
-
-    const rect = scheduleRef.current.getBoundingClientRect();
-    const cellWidth = (rect.width - 80) / 7;
-    const x = e.clientX - rect.left - 80;
-    const y = e.clientY - rect.top - 40;
+    const x = clientX - gridRect.left - headerWidth;
+    const y = clientY - gridRect.top - headerHeight;
+    const cellWidth = (gridRect.width - headerWidth) / 7;
 
     const dayIndex = Math.floor(x / cellWidth);
     const timeSlot = Math.floor(y / SLOT_HEIGHT);
 
     if (dayIndex >= 0 && dayIndex < 7 && timeSlot >= 0 && timeSlot < TIME_SLOTS) {
-      setDragOverSlot({ dayIndex, timeSlot });
-    } else {
-      setDragOverSlot(null);
+      return { dayIndex, timeSlot };
     }
-  }, [draggingItem]);
+    return null;
+  };
 
-  const handleMouseUp = useCallback(() => {
-    if (!draggingItem || !dragOverSlot) {
-      setDraggingItem(null);
-      setIsDragging(false);
-      setDragOverSlot(null);
-      return;
-    }
+  const handleMouseDown = (e: React.MouseEvent, block: BlockState) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingId(block.slot.id);
+    setDragStartPos({ x: e.clientX - block.x, y: e.clientY - block.y });
+    setDragCurrentPos({ x: block.x, y: block.y });
+  };
 
-    const newSlot: ScheduleSlot = {
-      ...draggingItem,
-      dayIndex: dragOverSlot.dayIndex,
-      timeSlot: dragOverSlot.timeSlot,
-    };
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!draggingId) return;
+    const newX = e.clientX - dragStartPos.x;
+    const newY = e.clientY - dragStartPos.y;
+    setDragCurrentPos({ x: newX, y: newY });
 
-    if (!checkCollision(newSlot, draggingItem.id)) {
+    const slotInfo = getSlotFromMouse(e.clientX, e.clientY);
+    setDragOverSlot(slotInfo);
+  }, [draggingId, dragStartPos]);
+
+  const handleMouseUp = useCallback((e: MouseEvent) => {
+    if (!draggingId) return;
+
+    const slotInfo = getSlotFromMouse(e.clientX, e.clientY);
+
+    if (slotInfo && !hasCollision(slotInfo.dayIndex, slotInfo.timeSlot, draggingId)) {
       const newSchedule = schedule.map((s) =>
-        s.id === draggingItem.id ? newSlot : s
+        s.id === draggingId
+          ? { ...s, dayIndex: slotInfo.dayIndex, timeSlot: slotInfo.timeSlot }
+          : s
       );
       setSchedule(newSchedule);
       saveSchedule(newSchedule);
+      updateBlockPositions(newSchedule, true);
+    } else {
+      updateBlockPositions(schedule, true);
     }
 
-    setDraggingItem(null);
-    setIsDragging(false);
+    setDraggingId(null);
     setDragOverSlot(null);
-  }, [draggingItem, dragOverSlot, schedule, saveSchedule]);
+  }, [draggingId, schedule, saveSchedule, updateBlockPositions]);
 
   useEffect(() => {
-    if (isDragging) {
+    if (draggingId) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       return () => {
@@ -224,49 +244,14 @@ export default function Schedule() {
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [draggingId, handleMouseMove, handleMouseUp]);
 
   const getMemberName = (id: string) => members.find((m) => m.id === id)?.name || id;
 
-  const renderDraggingItem = () => {
-    if (!draggingItem) return null;
-    return (
-      <div
-        className="member-block dragging"
-        style={{
-          position: 'fixed',
-          left: dragPosition.x - dragOffset.x,
-          top: dragPosition.y - dragOffset.y,
-          background: getPartColor(draggingItem.part),
-          pointerEvents: 'none',
-          zIndex: 1000,
-        }}
-      >
-        {getPartShortName(draggingItem.part)}
-      </div>
-    );
-  };
-
-  const renderBlock = (item: ScheduleSlot) => {
-    const pos = getSlotPosition(item.dayIndex, item.timeSlot);
-    if (!pos) return null;
-
-    return (
-      <div
-        key={item.id}
-        className={`member-block ${draggingItem?.id === item.id ? 'dragging' : ''}`}
-        style={{
-          left: pos.x,
-          top: pos.y,
-          background: getPartColor(item.part),
-          display: draggingItem?.id === item.id ? 'none' : 'flex',
-        }}
-        onMouseDown={(e) => handleMouseDown(e, item)}
-        title={`${getMemberName(item.memberId)} - ${item.part}`}
-      >
-        {getPartShortName(item.part)}
-      </div>
-    );
+  const getTimeLabel = (idx: number) => {
+    const hour = 9 + Math.floor(idx * 1.5);
+    const min = idx % 2 === 0 ? '00' : '30';
+    return `${String(hour).padStart(2, '0')}:${min}`;
   };
 
   return (
@@ -275,20 +260,18 @@ export default function Schedule() {
         <div className="flex-between">
           <div>
             <h1 className="page-title">排练时间表</h1>
-            <p className="page-subtitle">拖拽彩色方块调整排练时间，避免重叠冲突</p>
+            <p className="page-subtitle">拖拽彩色方块调整排练时间，碰撞检测避免重叠</p>
           </div>
-          <div className="flex gap-2">
-            <select
-              className="form-select"
-              style={{ width: '200px' }}
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.title}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            className="form-select"
+            style={{ width: '200px' }}
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+          >
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.title}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -300,14 +283,7 @@ export default function Schedule() {
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             {Object.entries(PART_COLORS).slice(0, 6).map(([part, color]) => (
               <div key={part} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '4px',
-                    background: color,
-                  }}
-                />
+                <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: color }} />
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                   {getPartShortName(part)}
                 </span>
@@ -316,44 +292,100 @@ export default function Schedule() {
           </div>
         </div>
 
-        <div className="schedule-container" ref={scheduleRef}>
-          <div className="schedule-grid">
-            <div className="schedule-header"></div>
+        <div style={{ position: 'relative', overflowX: 'auto' }}>
+          <div
+            ref={gridRef}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '80px repeat(7, 1fr)',
+              gap: '0px',
+              border: '2px solid #333',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              minWidth: '700px',
+            }}
+          >
+            <div data-row="header" className="schedule-header" style={{ background: 'var(--bg-nav)', padding: '12px 8px', textAlign: 'center', fontWeight: 600, fontSize: '13px' }}></div>
             {DAYS.map((day, idx) => (
-              <div key={idx} className="schedule-header">{day}</div>
+              <div key={idx} className="schedule-header" style={{ background: 'var(--bg-nav)', padding: '12px 8px', textAlign: 'center', fontWeight: 600, fontSize: '13px' }}>{day}</div>
             ))}
 
             {Array.from({ length: TIME_SLOTS }).map((_, timeIdx) => (
-              <>
-                <div key={`time-${timeIdx}`} className="schedule-time-label">
-                  {String(9 + timeIdx * 1.5).padStart(2, '0')}:00
+              <div key={`row-${timeIdx}`} style={{ display: 'contents' }}>
+                <div
+                  data-time={String(timeIdx)}
+                  className="schedule-time-label"
+                  style={{ background: 'var(--bg-nav)', padding: '8px', textAlign: 'center', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  {getTimeLabel(timeIdx)}
                 </div>
-                {DAYS.map((_, dayIdx) => (
-                  <div
-                    key={`slot-${dayIdx}-${timeIdx}`}
-                    className={`schedule-slot ${
-                      dragOverSlot?.dayIndex === dayIdx && dragOverSlot?.timeSlot === timeIdx
-                        ? 'drag-over'
-                        : ''
-                    }`}
-                    style={{
-                      background: dragOverSlot?.dayIndex === dayIdx && dragOverSlot?.timeSlot === timeIdx
-                        ? draggingItem && checkCollision(
-                            { ...draggingItem, dayIndex: dayIdx, timeSlot: timeIdx },
-                            draggingItem.id
-                          )
-                          ? '#7f1d1d'
-                          : '#065f46'
-                        : undefined,
-                    }}
-                  />
-                ))}
-              </>
+                {DAYS.map((_, dayIdx) => {
+                  const isOver = dragOverSlot?.dayIndex === dayIdx && dragOverSlot?.timeSlot === timeIdx;
+                  const isCollision = isOver && draggingId && hasCollision(dayIdx, timeIdx, draggingId);
+                  return (
+                    <div
+                      key={`slot-${dayIdx}-${timeIdx}`}
+                      className="schedule-slot"
+                      style={{
+                        background: isCollision ? '#7f1d1d' : isOver ? '#065f46' : '#1e1e2e',
+                        minHeight: `${SLOT_HEIGHT}px`,
+                        position: 'relative',
+                        borderTop: '1px solid #333',
+                        borderBottom: '1px solid #333',
+                        transition: 'background 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                      }}
+                    />
+                  );
+                })}
+              </div>
             ))}
           </div>
 
-          <div style={{ position: 'relative', marginTop: '-8px' }}>
-            {schedule.map((item) => renderBlock(item))}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+            {blocks.map((block) => {
+              const isDragging = block.slot.id === draggingId;
+              const currentX = isDragging ? dragCurrentPos.x : block.x;
+              const currentY = isDragging ? dragCurrentPos.y : block.y;
+
+              return (
+                <div
+                  key={block.slot.id}
+                  onMouseDown={(e) => !isDragging && handleMouseDown(e, block)}
+                  style={{
+                    position: 'absolute',
+                    left: currentX,
+                    top: currentY,
+                    width: `${BLOCK_SIZE}px`,
+                    height: `${BLOCK_SIZE}px`,
+                    borderRadius: '8px',
+                    background: getPartColor(block.slot.part),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isDragging ? 'grabbing' : 'grab',
+                    userSelect: 'none',
+                    zIndex: isDragging ? 1000 : 10,
+                    opacity: isDragging ? 0.9 : 1,
+                    pointerEvents: isDragging ? 'none' : 'auto',
+                    boxShadow: isDragging
+                      ? '0 8px 25px rgba(0,0,0,0.5)'
+                      : '0 2px 8px rgba(0,0,0,0.3)',
+                    transform: isDragging ? 'scale(1.1)' : 'scale(1)',
+                    transition: isDragging
+                      ? 'box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
+                      : block.animating
+                        ? 'left 0.15s cubic-bezier(0.4, 0, 0.2, 1), top 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
+                        : 'box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                  title={`${getMemberName(block.slot.memberId)} - ${block.slot.part}`}
+                >
+                  {getPartShortName(block.slot.part)}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -362,14 +394,12 @@ export default function Schedule() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {schedule.map((item) => (
               <span key={item.id} className="badge badge-info">
-                {getMemberName(item.memberId)} ({item.part}) - {DAYS[item.dayIndex]} {String(9 + item.timeSlot * 1.5).padStart(2, '0')}:00
+                {getMemberName(item.memberId)} ({item.part}) - {DAYS[item.dayIndex]} {getTimeLabel(item.timeSlot)}
               </span>
             ))}
           </div>
         </div>
       </div>
-
-      {renderDraggingItem()}
     </div>
   );
 }

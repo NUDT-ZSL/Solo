@@ -1,14 +1,15 @@
 {
   "projects": [
     {
-      "id": "a7ae34dd-6710-4a0b-b204-8ba562fbfdb8",
+      "id": "c36ae366-19a2-42b8-b194-ad1b8f362277",
       "title": "2026春季音乐会",
       "date": "2026-06-20",
       "venue": "音乐厅",
       "createdAt": "2026-06-01",
+      "recent": "2026-06-14",
       "tracks": [
         {
-          "id": "bbb3e1f8-3025-4fe9-8485-03385e84263f",
+          "id": "194f494a-7592-4fad-9332-739f1797d05d",
           "title": "D大调卡农",
           "key": "D大调",
           "difficulty": "medium",
@@ -38,12 +39,13 @@
               "memberId": "m4",
               "part": "低音提琴",
               "status": "adjust_request",
-              "adjustNote": "希望改拉大提琴"
+              "adjustNote": "希望改拉大提琴",
+              "requestedPart": "大提琴"
             }
           ]
         },
         {
-          "id": "dfc979a8-6fa4-4cb4-8a32-f966ba02d6e5",
+          "id": "68aab4d1-68b7-49ab-a67f-9f0b4c06d94e",
           "title": "蓝色多瑙河",
           "key": "D大调",
           "difficulty": "hard",
@@ -114,6 +116,34 @@
       "instrument": "中提琴"
     }
   ],
-  "feedbacks": [],
+  "feedbacks": [
+    {
+      "id": "9c361bab-f8b2-4554-bec6-1e3d2cfb9b42",
+      "projectId": "",
+      "memberId": "m1",
+      "rating": 4,
+      "note": "整体配合不错",
+      "part": "第一小提琴",
+      "createdAt": "2026-06-13T20:48:53.170Z"
+    },
+    {
+      "id": "6e84d5a0-b3bc-43bf-b28a-7a61848e3360",
+      "projectId": "",
+      "memberId": "m2",
+      "rating": 3,
+      "note": "节奏还需要磨合",
+      "part": "第二小提琴",
+      "createdAt": "2026-06-13T20:48:53.171Z"
+    },
+    {
+      "id": "e72b6dd2-1e98-4c84-93f5-558f7c406a17",
+      "projectId": "",
+      "memberId": "m5",
+      "rating": 5,
+      "note": "长笛段落表现很好",
+      "part": "长笛",
+      "createdAt": "2026-06-13T20:48:53.171Z"
+    }
+  ],
   "adjustRequests": []
 }

@@ -1,9 +1,46 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectApi, memberApi, Project, Member } from '../utils/api';
 
 interface DashboardProps {
   currentMemberId: string;
+}
+
+function VirtualList<T>({ items, itemHeight, renderItem }: {
+  items: T[];
+  itemHeight: number;
+  renderItem: (item: T, index: number) => React.ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const visibleHeight = 600;
+
+  const totalHeight = items.length * itemHeight;
+
+  const visibleRange = useMemo(() => {
+    const start = Math.floor(scrollTop / itemHeight);
+    const end = Math.min(start + Math.ceil(visibleHeight / itemHeight) + 2, items.length);
+    return { start: Math.max(0, start), end };
+  }, [scrollTop, itemHeight, items.length]);
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      style={{ maxHeight: visibleHeight, overflowY: 'auto', position: 'relative' }}
+    >
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        {items.slice(visibleRange.start, visibleRange.end).map((item, i) => (
+          <div
+            key={visibleRange.start + i}
+            style={{ position: 'absolute', top: (visibleRange.start + i) * itemHeight, width: '100%', height: itemHeight }}
+          >
+            {renderItem(item, visibleRange.start + i)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard({ currentMemberId }: DashboardProps) {
@@ -28,8 +65,10 @@ export default function Dashboard({ currentMemberId }: DashboardProps) {
         projectApi.getAll(),
         memberApi.getAll(),
       ]);
-      setProjects(projectsRes.data);
-      setMembers(membersRes.data);
+      const projectsData = Array.isArray(projectsRes.data) ? projectsRes.data : [];
+      const membersData = Array.isArray(membersRes.data) ? membersRes.data : [];
+      setProjects(projectsData);
+      setMembers(membersData);
     } catch (e) {
       console.error('Failed to load data:', e);
     }
@@ -78,19 +117,15 @@ export default function Dashboard({ currentMemberId }: DashboardProps) {
   };
 
   const getDifficultyLabel = (difficulty: string) => {
-    const labels: Record<string, string> = {
-      easy: '简单',
-      medium: '中等',
-      hard: '困难',
-    };
+    const labels: Record<string, string> = { easy: '简单', medium: '中等', hard: '困难' };
     return labels[difficulty] || difficulty;
   };
 
   const getMyAssignments = () => {
     const assignments: Array<{ project: Project; trackTitle: string; part: string; status: string }> = [];
     projects.forEach((p) => {
-      p.tracks.forEach((t) => {
-        t.assignments.forEach((a) => {
+      (p.tracks || []).forEach((t) => {
+        (t.assignments || []).forEach((a) => {
           if (a.memberId === currentMemberId) {
             assignments.push({ project: p, trackTitle: t.title, part: a.part, status: a.status });
           }
@@ -101,8 +136,9 @@ export default function Dashboard({ currentMemberId }: DashboardProps) {
   };
 
   const myAssignments = getMyAssignments();
-  const confirmedCount = projects.flatMap((p) => p.tracks).flatMap((t) => t.assignments).filter((a) => a.status === 'confirmed').length;
-  const pendingCount = projects.flatMap((p) => p.tracks).flatMap((t) => t.assignments).filter((a) => a.status === 'pending').length;
+  const allAssignments = projects.flatMap((p) => (p.tracks || []).flatMap((t) => t.assignments || []));
+  const confirmedCount = allAssignments.filter((a) => a.status === 'confirmed').length;
+  const pendingCount = allAssignments.filter((a) => a.status === 'pending').length;
 
   return (
     <div>
@@ -131,19 +167,31 @@ export default function Dashboard({ currentMemberId }: DashboardProps) {
           <div className="flex-between" style={{ marginBottom: '16px' }}>
             <h2 style={{ fontSize: '18px', fontWeight: '600' }}>我的声部分配</h2>
           </div>
-          {myAssignments.map((a, index) => (
-            <div key={index} className="assignment-row">
-              <div className="assignment-info">
-                <div className="member-name">{a.trackTitle}</div>
-                <div className="part-name">
-                  {a.part} · {a.project.title} · {a.project.date}
+          {myAssignments.length > 100 ? (
+            <VirtualList items={myAssignments} itemHeight={56} renderItem={(a) => (
+              <div className="assignment-row" style={{ height: '100%', padding: '8px 0' }}>
+                <div className="assignment-info">
+                  <div className="member-name">{a.trackTitle}</div>
+                  <div className="part-name">{a.part} · {a.project.title} · {a.project.date}</div>
                 </div>
+                <span className={`badge ${getStatusBadge(a.status).className}`}>
+                  {getStatusBadge(a.status).text}
+                </span>
               </div>
-              <span className={`badge ${getStatusBadge(a.status).className}`}>
-                {getStatusBadge(a.status).text}
-              </span>
-            </div>
-          ))}
+            )} />
+          ) : (
+            myAssignments.map((a, index) => (
+              <div key={index} className="assignment-row">
+                <div className="assignment-info">
+                  <div className="member-name">{a.trackTitle}</div>
+                  <div className="part-name">{a.part} · {a.project.title} · {a.project.date}</div>
+                </div>
+                <span className={`badge ${getStatusBadge(a.status).className}`}>
+                  {getStatusBadge(a.status).text}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       )}
 
@@ -154,21 +202,22 @@ export default function Dashboard({ currentMemberId }: DashboardProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2">
-        {projects.map((project) => (
+      {projects.length > 100 ? (
+        <VirtualList items={projects} itemHeight={160} renderItem={(project) => (
           <div
-            key={project.id}
             className="card project-card"
+            style={{ margin: '4px 0', height: '140px', overflow: 'hidden' }}
             onClick={() => navigate(`/project/${project.id}`)}
           >
             <h3>{project.title}</h3>
             <div className="project-meta">
               <span>📅 {project.date}</span>
               <span>📍 {project.venue}</span>
-              <span>🎵 {project.tracks.length} 首曲目</span>
+              <span>🎵 {(project.tracks || []).length} 首曲目</span>
+              {project.recent && <span>🕐 最近: {project.recent}</span>}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {project.tracks.map((track) => (
+              {(project.tracks || []).map((track) => (
                 <span key={track.id} className="badge badge-info">
                   {track.title}
                   <span className={`difficulty-${track.difficulty}`} style={{ marginLeft: '6px' }}>
@@ -178,8 +227,36 @@ export default function Dashboard({ currentMemberId }: DashboardProps) {
               ))}
             </div>
           </div>
-        ))}
-      </div>
+        )} />
+      ) : (
+        <div className="grid grid-cols-2">
+          {projects.map((project) => (
+            <div
+              key={project.id}
+              className="card project-card"
+              onClick={() => navigate(`/project/${project.id}`)}
+            >
+              <h3>{project.title}</h3>
+              <div className="project-meta">
+                <span>📅 {project.date}</span>
+                <span>📍 {project.venue}</span>
+                <span>🎵 {(project.tracks || []).length} 首曲目</span>
+                {project.recent && <span>🕐 最近: {project.recent}</span>}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {(project.tracks || []).map((track) => (
+                  <span key={track.id} className="badge badge-info">
+                    {track.title}
+                    <span className={`difficulty-${track.difficulty}`} style={{ marginLeft: '6px' }}>
+                      · {getDifficultyLabel(track.difficulty)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>

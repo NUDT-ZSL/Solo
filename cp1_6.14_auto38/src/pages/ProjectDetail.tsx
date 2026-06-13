@@ -1,9 +1,46 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { projectApi, memberApi, assignmentApi, feedbackApi, Project, Member } from '../utils/api';
+import { projectApi, memberApi, assignmentApi, feedbackApi, adjustRequestApi, Project, Member, AdjustRequest } from '../utils/api';
 
 interface ProjectDetailProps {
   currentMemberId: string;
+}
+
+function VirtualList<T>({ items, itemHeight, renderItem }: {
+  items: T[];
+  itemHeight: number;
+  renderItem: (item: T, index: number) => React.ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const visibleHeight = 500;
+
+  const totalHeight = items.length * itemHeight;
+
+  const visibleRange = useMemo(() => {
+    const start = Math.floor(scrollTop / itemHeight);
+    const end = Math.min(start + Math.ceil(visibleHeight / itemHeight) + 2, items.length);
+    return { start: Math.max(0, start), end };
+  }, [scrollTop, itemHeight, items.length]);
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      style={{ maxHeight: visibleHeight, overflowY: 'auto', position: 'relative' }}
+    >
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        {items.slice(visibleRange.start, visibleRange.end).map((item, i) => (
+          <div
+            key={visibleRange.start + i}
+            style={{ position: 'absolute', top: (visibleRange.start + i) * itemHeight, width: '100%', height: itemHeight }}
+          >
+            {renderItem(item, visibleRange.start + i)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
@@ -20,10 +57,42 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
   const [feedbackNote, setFeedbackNote] = useState('');
   const [feedbackPart, setFeedbackPart] = useState('');
   const [hoverRating, setHoverRating] = useState(0);
+  const [adminRequests, setAdminRequests] = useState<AdjustRequest[]>([]);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [selectedAdminRequest, setSelectedAdminRequest] = useState<AdjustRequest | null>(null);
 
   useEffect(() => {
     if (id) loadData();
   }, [id]);
+
+  const loadAdminRequests = useCallback(async () => {
+    try {
+      const res = await adjustRequestApi.getAll();
+      const pending = res.data.filter((r) => r.status === 'pending');
+      setAdminRequests(pending);
+      if (pending.length > 0 && !selectedAdminRequest) {
+        setSelectedAdminRequest(pending[0]);
+      } else if (pending.length === 0) {
+        setShowAdminModal(false);
+        setSelectedAdminRequest(null);
+      } else {
+        const stillExists = pending.find((r) => r.id === selectedAdminRequest?.id);
+        if (!stillExists) {
+          setSelectedAdminRequest(pending[0]);
+        } else {
+          setSelectedAdminRequest(stillExists);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load admin requests:', e);
+    }
+  }, [selectedAdminRequest]);
+
+  useEffect(() => {
+    loadAdminRequests();
+    const interval = setInterval(loadAdminRequests, 3000);
+    return () => clearInterval(interval);
+  }, [loadAdminRequests]);
 
   const loadData = async () => {
     if (!id) return;
@@ -33,7 +102,7 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
         memberApi.getAll(),
       ]);
       setProject(projectRes.data);
-      setMembers(membersRes.data);
+      setMembers(Array.isArray(membersRes.data) ? membersRes.data : []);
     } catch (e) {
       console.error('Failed to load data:', e);
     }
@@ -44,6 +113,9 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
     try {
       await assignmentApi.update(id, trackId, memberId, { status, ...extraData });
       await loadData();
+      if (status === 'adjust_request') {
+        await loadAdminRequests();
+      }
     } catch (e) {
       console.error('Failed to update status:', e);
     }
@@ -80,6 +152,16 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
     }
   };
 
+  const handleAdminDecision = async (requestId: string, decision: 'approved' | 'rejected') => {
+    try {
+      await adjustRequestApi.update(requestId, decision);
+      await loadAdminRequests();
+      await loadData();
+    } catch (e) {
+      console.error('Failed to process request:', e);
+    }
+  };
+
   const getMemberName = (memberId: string) => members.find((m) => m.id === memberId)?.name || memberId;
 
   const getStatusBadge = (status: string) => {
@@ -99,8 +181,8 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
 
   const getMyAssignments = () => {
     if (!project) return [];
-    return project.tracks.flatMap((t) =>
-      t.assignments.filter((a) => a.memberId === currentMemberId).map((a) => ({ ...a, track: t }))
+    return (project.tracks || []).flatMap((t) =>
+      (t.assignments || []).filter((a) => a.memberId === currentMemberId).map((a) => ({ ...a, track: t }))
     );
   };
 
@@ -110,6 +192,10 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
     return <div className="card">加载中...</div>;
   }
 
+  const allAssignments = (project.tracks || []).flatMap((t) =>
+    (t.assignments || []).map((a) => ({ ...a, track: t }))
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -118,9 +204,21 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
             <h1 className="page-title">{project.title}</h1>
             <p className="page-subtitle">
               📅 {project.date} · 📍 {project.venue}
+              {project.recent && <span> · 🕐 最近排练: {project.recent}</span>}
             </p>
           </div>
           <div className="flex gap-2">
+            {adminRequests.length > 0 && (
+              <button
+                className="btn btn-danger"
+                onClick={() => {
+                  setSelectedAdminRequest(adminRequests[0]);
+                  setShowAdminModal(true);
+                }}
+              >
+                ⚠️ 调整申请 ({adminRequests.length})
+              </button>
+            )}
             <button className="btn btn-secondary" onClick={() => navigate('/schedule')}>
               📅 排练时间
             </button>
@@ -146,9 +244,7 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
             <div key={index} className="assignment-row">
               <div className="assignment-info">
                 <div className="member-name">{a.track.title}</div>
-                <div className="part-name">
-                  {a.part} · {a.track.key}
-                </div>
+                <div className="part-name">{a.part} · {a.track.key}</div>
               </div>
               <div className="flex gap-2">
                 <span className={`badge ${getStatusBadge(a.status).className}`}>
@@ -190,7 +286,7 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
 
       <div className="card">
         <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>曲目列表</h2>
-        {project.tracks.map((track) => (
+        {(project.tracks || []).map((track) => (
           <div key={track.id} className="track-item">
             <div className="track-header">
               <div>
@@ -210,17 +306,35 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
               </div>
             </div>
             <div style={{ paddingLeft: '8px' }}>
-              {track.assignments.map((assignment, idx) => (
-                <div key={idx} className="assignment-row">
-                  <div className="assignment-info">
-                    <div className="member-name">{getMemberName(assignment.memberId)}</div>
-                    <div className="part-name">{assignment.part}</div>
+              {track.assignments.length > 100 ? (
+                <VirtualList
+                  items={track.assignments}
+                  itemHeight={56}
+                  renderItem={(assignment) => (
+                    <div className="assignment-row" style={{ height: '100%', padding: '8px 0' }}>
+                      <div className="assignment-info">
+                        <div className="member-name">{getMemberName(assignment.memberId)}</div>
+                        <div className="part-name">{assignment.part}</div>
+                      </div>
+                      <span className={`badge ${getStatusBadge(assignment.status).className}`}>
+                        {getStatusBadge(assignment.status).text}
+                      </span>
+                    </div>
+                  )}
+                />
+              ) : (
+                track.assignments.map((assignment, idx) => (
+                  <div key={idx} className="assignment-row">
+                    <div className="assignment-info">
+                      <div className="member-name">{getMemberName(assignment.memberId)}</div>
+                      <div className="part-name">{assignment.part}</div>
+                    </div>
+                    <span className={`badge ${getStatusBadge(assignment.status).className}`}>
+                      {getStatusBadge(assignment.status).text}
+                    </span>
                   </div>
-                  <span className={`badge ${getStatusBadge(assignment.status).className}`}>
-                    {getStatusBadge(assignment.status).text}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
               {track.assignments.length === 0 && (
                 <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
                   暂无成员分配
@@ -230,6 +344,96 @@ export default function ProjectDetail({ currentMemberId }: ProjectDetailProps) {
           </div>
         ))}
       </div>
+
+      {showAdminModal && selectedAdminRequest && (
+        <div className="modal-overlay" onClick={() => setShowAdminModal(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              color: '#1e293b',
+              width: '540px',
+              borderRadius: '16px',
+              padding: '24px',
+              animation: 'slideUp 0.3s ease-out',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div className="modal-header">
+              <h2 className="modal-title">声部调整申请</h2>
+              <button className="modal-close" onClick={() => setShowAdminModal(false)}>×</button>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', padding: '8px', background: '#f1f5f9', borderRadius: '8px' }}>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#334155' }}>
+                  {selectedAdminRequest.memberName}
+                </span>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  请求调整声部
+                </span>
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>项目：</span>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>{selectedAdminRequest.projectTitle}</span>
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>曲目：</span>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>{selectedAdminRequest.trackTitle}</span>
+              </div>
+              <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '14px', color: '#64748b' }}>{selectedAdminRequest.currentPart}</span>
+                <span style={{ color: '#64748b' }}>→</span>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#f59e0b' }}>{selectedAdminRequest.requestedPart || '未指定'}</span>
+              </div>
+              {selectedAdminRequest.reason && (
+                <div style={{ marginBottom: '8px', padding: '8px', background: '#fef3c7', borderRadius: '6px', fontSize: '13px' }}>
+                  <strong>理由：</strong>{selectedAdminRequest.reason}
+                </div>
+              )}
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                申请时间：{new Date(selectedAdminRequest.createdAt).toLocaleString('zh-CN')}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                style={{ padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: '500', fontSize: '14px', transition: 'background 0.2s' }}
+                onClick={() => handleAdminDecision(selectedAdminRequest.id, 'rejected')}
+                onMouseOver={(e) => (e.target as HTMLElement).style.background = '#dc2626'}
+                onMouseOut={(e) => (e.target as HTMLElement).style.background = '#ef4444'}
+              >
+                拒绝
+              </button>
+              <button
+                style={{ padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#10b981', color: '#fff', cursor: 'pointer', fontWeight: '500', fontSize: '14px', transition: 'background 0.2s' }}
+                onClick={() => handleAdminDecision(selectedAdminRequest.id, 'approved')}
+                onMouseOver={(e) => (e.target as HTMLElement).style.background = '#059669'}
+                onMouseOut={(e) => (e.target as HTMLElement).style.background = '#10b981'}
+              >
+                批准
+              </button>
+            </div>
+            {adminRequests.length > 1 && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>
+                  还有 {adminRequests.length - 1} 个待处理申请
+                </p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {adminRequests.filter((r) => r.id !== selectedAdminRequest.id).map((r) => (
+                    <button
+                      key={r.id}
+                      style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontSize: '12px', color: '#475569' }}
+                      onClick={() => setSelectedAdminRequest(r)}
+                    >
+                      {r.memberName}: {r.currentPart} → {r.requestedPart}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showAdjustModal && (
         <div className="modal-overlay" onClick={() => setShowAdjustModal(false)}>

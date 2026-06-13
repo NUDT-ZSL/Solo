@@ -45,6 +45,7 @@ export interface Project {
   tracks: Track[];
   schedule: ScheduleSlot[];
   createdAt: string;
+  recent?: string;
 }
 
 export interface ScheduleSlot {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import Schedule from './pages/Schedule';
@@ -18,6 +18,77 @@ const bottomNavItems = [
   { path: '/review', icon: '📊', label: '回顾' },
 ];
 
+const PINYIN_MAP: Record<string, string> = {
+  '张': 'zhang', '李': 'li', '王': 'wang', '赵': 'zhao', '陈': 'chen', '刘': 'liu',
+  '杨': 'yang', '黄': 'huang', '吴': 'wu', '周': 'zhou', '孙': 'sun', '马': 'ma',
+  '朱': 'zhu', '胡': 'hu', '林': 'lin', '何': 'he', '郭': 'guo', '罗': 'luo',
+  '高': 'gao', '梁': 'liang', '郑': 'zheng', '谢': 'xie', '韩': 'han', '唐': 'tang',
+  '明': 'ming', '华': 'hua', '芳': 'fang', '强': 'qiang', '静': 'jing', '伟': 'wei',
+  '春': 'chun', '夏': 'xia', '秋': 'qiu', '冬': 'dong', '大': 'da', '小': 'xiao',
+  '蓝': 'lan', '色': 'se', '多': 'duo', '瑙': 'nao', '河': 'he', '卡': 'ka',
+  '农': 'nong', '调': 'diao', '音': 'yin', '乐': 'yue', '会': 'hui', '季': 'ji',
+};
+
+function getPinyinInitials(name: string): string {
+  let result = '';
+  for (const char of name) {
+    const py = PINYIN_MAP[char];
+    if (py) {
+      result += py[0];
+    } else if (/[a-zA-Z]/.test(char)) {
+      result += char.toLowerCase();
+    }
+  }
+  return result;
+}
+
+function matchPinyinInitials(name: string, query: string): boolean {
+  const queryLower = query.toLowerCase();
+  const initials = getPinyinInitials(name);
+  return initials.includes(queryLower);
+}
+
+function SearchVirtualList({ items, itemHeight, renderItem }: {
+  items: SearchResult[];
+  itemHeight: number;
+  renderItem: (item: SearchResult, index: number) => React.ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const visibleHeight = 400;
+
+  const totalHeight = items.length * itemHeight;
+
+  const visibleRange = useMemo(() => {
+    const start = Math.floor(scrollTop / itemHeight);
+    const end = Math.min(start + Math.ceil(visibleHeight / itemHeight) + 2, items.length);
+    return { start: Math.max(0, start), end };
+  }, [scrollTop, itemHeight, items.length]);
+
+  if (items.length === 0) {
+    return <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>未找到结果</div>;
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      style={{ maxHeight: visibleHeight, overflowY: 'auto', position: 'relative' }}
+    >
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        {items.slice(visibleRange.start, visibleRange.end).map((item, i) => (
+          <div
+            key={visibleRange.start + i}
+            style={{ position: 'absolute', top: (visibleRange.start + i) * itemHeight, width: '100%', height: itemHeight }}
+          >
+            {renderItem(item, visibleRange.start + i)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -27,7 +98,6 @@ export default function App() {
   const [selectedRequest, setSelectedRequest] = useState<AdjustRequest | null>(null);
   const [currentMemberId] = useState('m1');
   const navigate = useNavigate();
-  const _location = useLocation();
   const searchRef = useRef<HTMLDivElement>(null);
 
   const loadAdjustRequests = useCallback(async () => {
@@ -60,7 +130,22 @@ export default function App() {
     if (query.trim().length > 0) {
       try {
         const res = await searchApi.query(query);
-        setSearchResults(res.data);
+        let results = res.data;
+
+        if (results.length === 0 && /^[a-zA-Z]+$/.test(query)) {
+          try {
+            const allRes = await searchApi.query('');
+            if (Array.isArray(allRes.data)) {
+              results = allRes.data.filter((item: SearchResult) => {
+                return matchPinyinInitials(item.title, query);
+              });
+            }
+          } catch {
+            // fallback: use existing empty results
+          }
+        }
+
+        setSearchResults(results);
         setShowSearchResults(true);
       } catch (e) {
         console.error('Search failed:', e);
@@ -91,50 +176,6 @@ export default function App() {
     } catch (e) {
       console.error('Failed to process adjust request:', e);
     }
-  };
-
-  const VirtualList = ({ items, itemHeight = 56, renderItem }: {
-    items: SearchResult[];
-    itemHeight?: number;
-    renderItem: (item: SearchResult, index: number) => React.ReactNode;
-  }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [scrollTop, setScrollTop] = useState(0);
-    const containerHeight = Math.min(items.length * itemHeight, 400);
-
-    const visibleItems = useMemo(() => {
-      const startIndex = Math.floor(scrollTop / itemHeight);
-      const endIndex = Math.min(startIndex + Math.ceil(400 / itemHeight) + 2, items.length);
-      return items.slice(startIndex, endIndex).map((item, i) => ({
-        item,
-        index: startIndex + i,
-      }));
-    }, [items, scrollTop, itemHeight]);
-
-    if (items.length === 0) {
-      return <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>未找到结果</div>;
-    }
-
-    return (
-      <div
-        ref={containerRef}
-        className="virtual-list"
-        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-        style={{ maxHeight: containerHeight > 400 ? 400 : containerHeight }}
-      >
-        <div style={{ height: items.length * itemHeight, position: 'relative' }}>
-          {visibleItems.map(({ item, index }) => (
-            <div
-              key={index}
-              className="virtual-list-item"
-              style={{ top: index * itemHeight }}
-            >
-              {renderItem(item, index)}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -176,24 +217,49 @@ export default function App() {
           <input
             type="text"
             className="search-input"
-            placeholder="搜索演出项目、曲目、成员（支持拼音首字母）..."
+            placeholder="搜索演出项目、曲目、成员（支持拼音首字母，如zm=张明）..."
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             onFocus={() => searchQuery && setShowSearchResults(true)}
           />
           {showSearchResults && (
-            <div className="search-results">
-              <VirtualList
+            <div
+              className="search-results"
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                background: '#1a1a2e',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px #00000040',
+                marginTop: '8px',
+                zIndex: 100,
+                overflow: 'hidden',
+              }}
+            >
+              <SearchVirtualList
                 items={searchResults}
                 itemHeight={56}
                 renderItem={(item) => (
                   <div
-                    className="search-result-item"
                     onClick={() => handleSearchResultClick(item)}
-                    style={{ position: 'static' }}
+                    style={{
+                      height: '56px',
+                      padding: '0 16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      borderBottom: '1px solid #333',
+                      transition: 'background 0.2s ease-out',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#0f3460')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <div className="search-result-title">{item.title}</div>
-                    <div className="search-result-subtitle">{item.subtitle}</div>
+                    <div style={{ fontSize: '15px', fontWeight: 500, color: '#cbd5e1' }}>{item.title}</div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8' }}>{item.subtitle}</div>
                   </div>
                 )}
               />
@@ -224,7 +290,19 @@ export default function App() {
 
       {showAdjustModal && selectedRequest && (
         <div className="modal-overlay" onClick={() => setShowAdjustModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              color: '#1e293b',
+              width: '540px',
+              borderRadius: '16px',
+              padding: '24px',
+              animation: 'slideUp 0.3s ease-out',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+            }}
+          >
             <div className="modal-header">
               <h2 className="modal-title">声部调整申请</h2>
               <button className="modal-close" onClick={() => setShowAdjustModal(false)}>×</button>
@@ -252,15 +330,15 @@ export default function App() {
                 申请时间：{new Date(selectedRequest.createdAt).toLocaleString('zh-CN')}
               </p>
             </div>
-            <div className="flex gap-4" style={{ justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
-                className="btn btn-danger"
+                style={{ padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: 500, fontSize: '14px', transition: 'background 0.2s' }}
                 onClick={() => handleAdjustRequest('rejected')}
               >
                 拒绝
               </button>
               <button
-                className="btn btn-success"
+                style={{ padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#10b981', color: '#fff', cursor: 'pointer', fontWeight: 500, fontSize: '14px', transition: 'background 0.2s' }}
                 onClick={() => handleAdjustRequest('approved')}
               >
                 批准
