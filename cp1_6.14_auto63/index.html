@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AquaFlow - 3D流体粒子模拟</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(ellipse at center, #0f1a3a 0%, #0a0a1a 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 100;
+      transition: all 0.3s ease-out;
+    }
+
+    .fluid-btn {
+      width: 120px;
+      height: 40px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      transition: all 0.3s ease-out;
+      color: white;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .fluid-btn:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .fluid-btn.active-water {
+      background: #42a5f5;
+      box-shadow: 0 0 20px rgba(66, 165, 245, 0.5);
+    }
+
+    .fluid-btn.active-smoke {
+      background: #9e9e9e;
+      box-shadow: 0 0 20px rgba(158, 158, 158, 0.5);
+    }
+
+    .fluid-btn.active-fire {
+      background: #ff7043;
+      box-shadow: 0 0 20px rgba(255, 112, 67, 0.5);
+    }
+
+    .fps-counter {
+      position: fixed;
+      top: 72px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: all 0.3s ease-out;
+    }
+
+    .info-panel {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: all 0.3s ease-out;
+      line-height: 1.6;
+    }
+
+    .info-panel .label {
+      color: #90caf9;
+      margin-right: 6px;
+    }
+
+    .info-panel .value {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .performance-warning {
+      position: fixed;
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 152, 0, 0.9);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+    }
+
+    .performance-warning.show {
+      opacity: 1;
+    }
+
+    .gui-toggle-btn {
+      position: fixed;
+      top: 72px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      font-size: 20px;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: all 0.3s ease-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gui-toggle-btn:hover {
+      background: rgba(0, 0, 0, 0.7);
+      transform: scale(1.05);
+    }
+
+    .dg.ac {
+      z-index: 101 !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="toolbar">
+      <button class="fluid-btn" data-fluid="water">💧 水</button>
+      <button class="fluid-btn" data-fluid="smoke">💨 烟雾</button>
+      <button class="fluid-btn" data-fluid="fire">🔥 火焰</button>
+    </div>
+
+    <div class="fps-counter">FPS: 60</div>
+
+    <button class="gui-toggle-btn" id="guiToggle">⚙️</button>
+
+    <div class="performance-warning" id="perfWarning">
+      ⚠️ 性能较低，已自动调整粒子数量至1500
+    </div>
+
+    <div class="info-panel">
+      <div><span class="label">粒子数量:</span><span class="value" id="particleCount">3000</span></div>
+      <div><span class="label">流体类型:</span><span class="value" id="fluidType">水</span></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
