@@ -100,12 +100,38 @@ const ProjectDetailPage = () => {
     }
   };
 
-  const handleScroll = useCallback(() => {
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && hasMoreComments && !loadingComments) {
+            loadComments(commentsPage + 1);
+          }
+        });
+      },
+      {
+        root: commentsContainerRef.current,
+        rootMargin: '100px',
+        threshold: 0.1,
+      }
+    );
+
+    const sentinel = loadMoreRef.current;
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMoreComments, loadingComments, commentsPage]);
+
+  const handleScrollFallback = useCallback(() => {
     const container = commentsContainerRef.current;
     if (!container || loadingComments || !hasMoreComments) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
-    if (scrollTop + clientHeight >= scrollHeight - 100) {
+    if (scrollTop + clientHeight >= scrollHeight - 150) {
       loadComments(commentsPage + 1);
     }
   }, [loadingComments, hasMoreComments, commentsPage]);
@@ -113,10 +139,10 @@ const ProjectDetailPage = () => {
   useEffect(() => {
     const container = commentsContainerRef.current;
     if (container) {
-      container.addEventListener('scroll', handleScroll, { passive: true });
-      return () => container.removeEventListener('scroll', handleScroll);
+      container.addEventListener('scroll', handleScrollFallback, { passive: true });
+      return () => container.removeEventListener('scroll', handleScrollFallback);
     }
-  }, [handleScroll]);
+  }, [handleScrollFallback]);
 
   const handleSupportClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!project || project.status === 'completed') return;

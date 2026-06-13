@@ -1,29 +1,48 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { fetchProjects } from '@/api/projectApi';
 import type { Project } from '../../server/models';
 import ProjectCard from '@/components/ProjectCard';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ChevronDown } from 'lucide-react';
 
+const MAX_VISIBLE_CARDS = 20;
 const CARD_WIDTH = 280;
 const CARD_HEIGHT = 340;
 const GAP = 24;
 const PADDING = 16;
-const MAX_VISIBLE_CARDS = 20;
-const OVERSCAN = 3;
 
 const HomePage = () => {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [visibleStart, setVisibleStart] = useState(0);
-  const [scrollTop, setScrollTop] = useState(0);
+
+  const [renderCount, setRenderCount] = useState(MAX_VISIBLE_CARDS);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number>();
+
+  const sentinelTopRef = useRef<HTMLDivElement>(null);
+  const sentinelBottomRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const columns = useMemo(() => {
+    return Math.max(1, Math.floor((viewportWidth - 48 - PADDING * 2) / (CARD_WIDTH + GAP)));
+  }, [viewportWidth]);
+
+  const rowsPerPage = Math.ceil(MAX_VISIBLE_CARDS / columns);
+  const rowHeight = CARD_HEIGHT + GAP;
 
   useEffect(() => {
     const loadProjects = async () => {
       try {
         const data = await fetchProjects();
-        setProjects(data);
+        setAllProjects(data);
       } catch (error) {
         console.error('Failed to fetch projects:', error);
       } finally {
@@ -40,49 +59,88 @@ const HomePage = () => {
 
     animationFrameRef.current = requestAnimationFrame(() => {
       if (scrollContainerRef.current) {
-        setScrollTop(scrollContainerRef.current.scrollTop);
+        setScrollOffset(scrollContainerRef.current.scrollTop);
       }
     });
   }, []);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll, { passive: true });
-      return () => {
-        container.removeEventListener('scroll', handleScroll);
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-      };
-    }
+    if (!container) return;
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, [handleScroll]);
 
-  const columns = Math.max(1, Math.floor((window.innerWidth - 48) / (CARD_WIDTH + GAP)));
-  const rowsPerPage = Math.ceil(MAX_VISIBLE_CARDS / columns);
-  const rowHeight = CARD_HEIGHT + GAP;
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            if (entry.target === sentinelBottomRef.current) {
+              setRenderCount((prev) =>
+                Math.min(allProjects.length, prev + MAX_VISIBLE_CARDS)
+              );
+            } else if (entry.target === sentinelTopRef.current) {
+              setRenderCount((prev) => Math.max(MAX_VISIBLE_CARDS, prev - MAX_VISIBLE_CARDS));
+            }
+          }
+        });
+      },
+      {
+        root: scrollContainerRef.current,
+        rootMargin: '200px',
+        threshold: 0,
+      }
+    );
 
-  const visibleRowStart = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN);
-  const visibleRowEnd = Math.min(
-    Math.ceil(projects.length / columns),
-    visibleRowStart + rowsPerPage + OVERSCAN * 2
+    const observer = observerRef.current;
+    if (sentinelTopRef.current) observer.observe(sentinelTopRef.current);
+    if (sentinelBottomRef.current) observer.observe(sentinelBottomRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [allProjects.length]);
+
+  const startRow = useMemo(() => {
+    return Math.max(0, Math.floor(scrollOffset / rowHeight) - 2);
+  }, [scrollOffset, rowHeight]);
+
+  const visibleRowCount = rowsPerPage + 4;
+  const startIndex = Math.min(
+    Math.max(0, startRow * columns),
+    Math.max(0, allProjects.length - MAX_VISIBLE_CARDS)
+  );
+  const endIndex = Math.min(
+    allProjects.length,
+    Math.min(renderCount, startIndex + MAX_VISIBLE_CARDS)
   );
 
-  const visibleStartIndex = visibleRowStart * columns;
-  const visibleEndIndex = Math.min(projects.length, visibleRowEnd * columns);
-  const visibleProjects = projects.slice(visibleStartIndex, visibleEndIndex);
+  const visibleProjects = useMemo(() => {
+    const slice = allProjects.slice(startIndex, endIndex);
+    return slice.length > MAX_VISIBLE_CARDS ? slice.slice(0, MAX_VISIBLE_CARDS) : slice;
+  }, [allProjects, startIndex, endIndex]);
 
-  const totalRows = Math.ceil(projects.length / columns);
-  const totalHeight = totalRows * rowHeight - GAP + PADDING * 2;
+  const getCardPosition = useCallback(
+    (globalIndex: number) => {
+      const row = Math.floor(globalIndex / columns);
+      const col = globalIndex % columns;
+      return {
+        top: row * rowHeight + PADDING,
+        left: col * (CARD_WIDTH + GAP) + PADDING,
+      };
+    },
+    [columns, rowHeight]
+  );
 
-  const getCardPosition = (index: number) => {
-    const row = Math.floor(index / columns);
-    const col = index % columns;
-    return {
-      top: row * rowHeight + PADDING,
-      left: col * (CARD_WIDTH + GAP) + PADDING,
-    };
-  };
+  const totalRows = Math.ceil(renderCount / columns);
+  const totalHeight = Math.max(0, totalRows * rowHeight - GAP + PADDING * 2);
 
   if (loading) {
     return (
@@ -108,16 +166,18 @@ const HomePage = () => {
 
       <div
         ref={scrollContainerRef}
-        className="relative overflow-auto"
+        className="relative overflow-auto rounded-xl border border-gray-200 bg-white"
         style={{
           height: 'calc(100vh - 280px)',
           width: '100%',
         }}
       >
-        <div style={{ height: totalHeight, position: 'relative' }}>
+        <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
+          <div ref={sentinelTopRef} style={{ height: 1, position: 'absolute', top: 0, left: 0, right: 0 }} />
+
           {visibleProjects.map((project, idx) => {
-            const absoluteIndex = visibleStartIndex + idx;
-            const position = getCardPosition(absoluteIndex);
+            const globalIndex = startIndex + idx;
+            const position = getCardPosition(globalIndex);
             return (
               <div
                 key={project.id}
@@ -133,21 +193,52 @@ const HomePage = () => {
               </div>
             );
           })}
+
+          <div
+            ref={sentinelBottomRef}
+            style={{
+              height: 1,
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+            }}
+          />
         </div>
 
-        {projects.length === 0 && (
+        {allProjects.length === 0 && (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <div className="text-6xl mb-4">🚀</div>
-            <h3 className="text-xl font-semibold text-[#1f2937] mb-2">
-              还没有项目
-            </h3>
+            <h3 className="text-xl font-semibold text-[#1f2937] mb-2">还没有项目</h3>
             <p className="text-[#4b5563]">成为第一个发起项目的人吧！</p>
           </div>
         )}
       </div>
 
-      <div className="mt-4 text-sm text-[#64748b] text-center">
-        显示 {visibleProjects.length} / {projects.length} 个项目 | 同时渲染不超过 {MAX_VISIBLE_CARDS} 张卡片
+      <div className="mt-6 bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-[#64748b]">
+            <span className="font-medium text-[#1f2937]">{visibleProjects.length}</span> 个项目正在渲染 /
+            共 <span className="font-medium text-[#1f2937]">{allProjects.length}</span> 个项目
+            <span className="mx-2">|</span>
+            最多同时渲染 <span className="font-medium text-[#3b82f6]">{MAX_VISIBLE_CARDS}</span> 张卡片
+            <span className="mx-2">|</span>
+            {columns} 列布局
+          </div>
+          {renderCount < allProjects.length && (
+            <button
+              onClick={() => {
+                setRenderCount((prev) =>
+                  Math.min(allProjects.length, prev + MAX_VISIBLE_CARDS)
+                );
+              }}
+              className="flex items-center gap-1 text-sm text-[#3b82f6] hover:text-[#2563eb] font-medium transition-colors"
+            >
+              <ChevronDown className="w-4 h-4" />
+              加载更多
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

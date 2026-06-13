@@ -3,6 +3,7 @@ import cors from 'cors';
 import Datastore from 'nedb-promises';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import type { Project, Support, Comment, User, ThankYouLetter } from './models';
 
@@ -16,31 +17,135 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
 
-const projectsDB = Datastore.create({
-  filename: path.join(dataDir, 'projects.db'),
-  autoload: true,
-});
-const supportsDB = Datastore.create({
-  filename: path.join(dataDir, 'supports.db'),
-  autoload: true,
-});
-const commentsDB = Datastore.create({
-  filename: path.join(dataDir, 'comments.db'),
-  autoload: true,
-});
-const usersDB = Datastore.create({
-  filename: path.join(dataDir, 'users.db'),
-  autoload: true,
-});
-const thankYouLettersDB = Datastore.create({
-  filename: path.join(dataDir, 'thankyou.db'),
-  autoload: true,
-});
+function createDatastore(filename: string) {
+  return Datastore.create({
+    filename: path.join(dataDir, filename),
+    autoload: true,
+  });
+}
+
+const projectsDB = createDatastore('projects.db');
+const supportsDB = createDatastore('supports.db');
+const commentsDB = createDatastore('comments.db');
+const usersDB = createDatastore('users.db');
+const thankYouLettersDB = createDatastore('thankyou.db');
+
+async function loadAllDatabases() {
+  await Promise.all([
+    (projectsDB as any).loadDatabase ? (projectsDB as any).loadDatabase() : Promise.resolve(),
+    (supportsDB as any).loadDatabase ? (supportsDB as any).loadDatabase() : Promise.resolve(),
+    (commentsDB as any).loadDatabase ? (commentsDB as any).loadDatabase() : Promise.resolve(),
+    (usersDB as any).loadDatabase ? (usersDB as any).loadDatabase() : Promise.resolve(),
+    (thankYouLettersDB as any).loadDatabase ? (thankYouLettersDB as any).loadDatabase() : Promise.resolve(),
+  ]);
+  console.log('All databases loaded successfully');
+}
+
+async function generateThankYouLetter(projectId: string): Promise<ThankYouLetter | null> {
+  const project = (await projectsDB.findOne({ id: projectId })) as Project | null;
+  if (!project) return null;
+
+  if (project.currentAmount < project.goalAmount) {
+    console.log(`Project ${projectId} has not reached goal yet. Current: ${project.currentAmount}, Goal: ${project.goalAmount}`);
+    return null;
+  }
+
+  const supports = (await supportsDB.find({ projectId }).sort({ createdAt: -1 })) as Support[];
+
+  const supporterMap = new Map<string, { total: number; messages: string[] }>();
+  for (const support of supports) {
+    const existing = supporterMap.get(support.supporterName);
+    if (existing) {
+      existing.total += support.amount;
+      if (support.message) existing.messages.push(support.message);
+    } else {
+      supporterMap.set(support.supporterName, {
+        total: support.amount,
+        messages: support.message ? [support.message] : [],
+      });
+    }
+  }
+
+  const supporters = Array.from(supporterMap.entries()).map(([name, data]) => ({
+    name,
+    amount: data.total,
+    message: data.messages[0] || '',
+  }));
+
+  const ranking = [...supporters]
+    .sort((a, b) => b.amount - a.amount)
+    .map((s, index) => ({
+      name: s.name,
+      amount: s.amount,
+      rank: index + 1,
+    }));
+
+  const letter: ThankYouLetter = {
+    projectId,
+    projectTitle: project.title,
+    totalAmount: project.currentAmount,
+    supporterCount: supporters.length,
+    supporters,
+    ranking,
+    generatedAt: new Date().toISOString(),
+  };
+
+  const existing = await thankYouLettersDB.findOne({ projectId });
+  if (existing) {
+    await thankYouLettersDB.update({ projectId }, { $set: letter });
+    console.log(`Thank you letter updated for project ${projectId}`);
+  } else {
+    await thankYouLettersDB.insert(letter);
+    console.log(`Thank you letter created for project ${projectId}`);
+  }
+
+  return letter;
+}
+
+async function checkAndCompleteProject(projectId: string): Promise<boolean> {
+  const project = (await projectsDB.findOne({ id: projectId })) as Project | null;
+  if (!project) return false;
+
+  const reachedGoal = project.currentAmount >= project.goalAmount;
+  const wasNotCompleted = project.status !== 'completed';
+
+  if (reachedGoal && wasNotCompleted) {
+    await projectsDB.update({ id: projectId }, { $set: { status: 'completed' } });
+    console.log(`Project ${projectId} status updated to completed!`);
+
+    const letter = await generateThankYouLetter(projectId);
+    if (letter) {
+      console.log(`Thank you letter generated with ${letter.supporterCount} supporters!`);
+      return true;
+    }
+  } else if (reachedGoal && project.status === 'completed') {
+    const existingLetter = await thankYouLettersDB.findOne({ projectId });
+    if (!existingLetter) {
+      await generateThankYouLetter(projectId);
+    }
+  }
+
+  return false;
+}
 
 async function initSampleData() {
   const existingProjects = await projectsDB.find({});
-  if (existingProjects.length > 0) return;
+  if (existingProjects.length > 0) {
+    console.log(`Found ${existingProjects.length} existing projects, skipping sample data init.`);
+
+    for (const proj of existingProjects) {
+      if (proj.currentAmount >= proj.goalAmount && proj.status !== 'completed') {
+        await checkAndCompleteProject(proj.id);
+      }
+    }
+    return;
+  }
+
+  console.log('Initializing sample data...');
 
   const sampleUsers: User[] = [
     { id: uuidv4(), name: '张三', avatar: '' },
@@ -169,83 +274,23 @@ async function initSampleData() {
     await commentsDB.insert(comment);
   }
 
-  console.log('Sample data initialized successfully!');
-}
-
-async function generateThankYouLetter(projectId: string): Promise<ThankYouLetter | null> {
-  const project = await projectsDB.findOne({ id: projectId }) as Project | null;
-  if (!project) return null;
-
-  const supports = await supportsDB.find({ projectId }).sort({ createdAt: -1 }) as Support[];
-  
-  const supporterMap = new Map<string, { total: number; messages: string[] }>();
-  for (const support of supports) {
-    const existing = supporterMap.get(support.supporterName);
-    if (existing) {
-      existing.total += support.amount;
-      if (support.message) existing.messages.push(support.message);
-    } else {
-      supporterMap.set(support.supporterName, {
-        total: support.amount,
-        messages: support.message ? [support.message] : [],
-      });
+  for (const proj of sampleProjects) {
+    if (proj.currentAmount >= proj.goalAmount) {
+      await projectsDB.update({ id: proj.id }, { $set: { status: 'completed' } });
+      await generateThankYouLetter(proj.id);
     }
   }
 
-  const supporters = Array.from(supporterMap.entries()).map(([name, data]) => ({
-    name,
-    amount: data.total,
-    message: data.messages[0] || '',
-  }));
-
-  const ranking = [...supporters]
-    .sort((a, b) => b.amount - a.amount)
-    .map((s, index) => ({
-      name: s.name,
-      amount: s.amount,
-      rank: index + 1,
-    }));
-
-  const letter: ThankYouLetter = {
-    projectId,
-    projectTitle: project.title,
-    totalAmount: project.currentAmount,
-    supporterCount: supporters.length,
-    supporters,
-    ranking,
-    generatedAt: new Date().toISOString(),
-  };
-
-  const existing = await thankYouLettersDB.findOne({ projectId });
-  if (existing) {
-    await thankYouLettersDB.update({ projectId }, { $set: letter });
-  } else {
-    await thankYouLettersDB.insert(letter);
-  }
-
-  return letter;
+  console.log('Sample data initialized successfully!');
 }
-
-async function checkAndCompleteProject(projectId: string) {
-  const project = await projectsDB.findOne({ id: projectId }) as Project | null;
-  if (!project) return;
-
-  if (project.currentAmount >= project.goalAmount && project.status !== 'completed') {
-    await projectsDB.update({ id: projectId }, { $set: { status: 'completed' } });
-    await generateThankYouLetter(projectId);
-    console.log(`Project ${projectId} completed! Thank you letter generated.`);
-  }
-}
-
-initSampleData().catch(console.error);
 
 app.get('/api/projects', async (_req, res) => {
   try {
     const projects = await projectsDB.find({}).sort({ createdAt: -1 });
     res.json(projects);
   } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch projects' });
-    }
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
 });
 
 app.post('/api/projects', async (req, res) => {
@@ -278,7 +323,7 @@ app.post('/api/projects', async (req, res) => {
 
 app.get('/api/projects/:id', async (req, res) => {
   try {
-    const project = await projectsDB.findOne({ id: req.params.id }) as Project | null;
+    const project = (await projectsDB.findOne({ id: req.params.id })) as Project | null;
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -291,19 +336,28 @@ app.get('/api/projects/:id', async (req, res) => {
 app.get('/api/projects/:id/thankyou', async (req, res) => {
   try {
     const projectId = req.params.id;
-    const project = await projectsDB.findOne({ id: projectId }) as Project | null;
-    
+    const project = (await projectsDB.findOne({ id: projectId })) as Project | null;
+
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    if (project.status !== 'completed') {
-      return res.status(400).json({ error: 'Project not completed yet' });
+    if (project.currentAmount < project.goalAmount) {
+      return res.status(400).json({
+        error: 'Project goal not reached yet',
+        currentAmount: project.currentAmount,
+        goalAmount: project.goalAmount,
+        progress: ((project.currentAmount / project.goalAmount) * 100).toFixed(1) + '%',
+      });
     }
 
-    let letter = await thankYouLettersDB.findOne({ projectId }) as ThankYouLetter | null;
+    let letter = (await thankYouLettersDB.findOne({ projectId })) as ThankYouLetter | null;
     if (!letter) {
       letter = await generateThankYouLetter(projectId);
+    }
+
+    if (!letter) {
+      return res.status(500).json({ error: 'Failed to generate thank you letter' });
     }
 
     res.json(letter);
@@ -320,7 +374,7 @@ app.post('/api/support', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const project = await projectsDB.findOne({ id: projectId }) as Project | null;
+    const project = (await projectsDB.findOne({ id: projectId })) as Project | null;
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -343,18 +397,23 @@ app.post('/api/support', async (req, res) => {
     const newCurrentAmount = project.currentAmount + Number(amount);
     await projectsDB.update(
       { id: projectId },
-      { $set: { currentAmount: newCurrentAmount }
+      { $set: { currentAmount: newCurrentAmount } }
     );
 
-    await checkAndCompleteProject(projectId);
+    console.log(`Support added! Project ${projectId}: ${project.currentAmount} -> ${newCurrentAmount} (Goal: ${project.goalAmount})`);
 
-    const updatedProject = await projectsDB.findOne({ id: projectId });
+    const letterGenerated = await checkAndCompleteProject(projectId);
+
+    const updatedProject = (await projectsDB.findOne({ id: projectId })) as Project;
 
     res.json({
       support: newSupport,
       project: updatedProject,
+      letterGenerated,
+      reachedGoal: newCurrentAmount >= project.goalAmount,
     });
   } catch (error) {
+    console.error('Error in /api/support:', error);
     res.status(500).json({ error: 'Failed to submit support' });
   }
 });
@@ -362,7 +421,7 @@ app.post('/api/support', async (req, res) => {
 app.get('/api/comments', async (req, res) => {
   try {
     const { projectId, page = '1', limit = '20' } = req.query;
-    
+
     if (!projectId) {
       return res.status(400).json({ error: 'ProjectId is required' });
     }
@@ -433,7 +492,7 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    let user = await usersDB.findOne({ name }) as User | null;
+    let user = (await usersDB.findOne({ name })) as User | null;
 
     if (!user) {
       user = {
@@ -452,7 +511,7 @@ app.post('/api/users', async (req, res) => {
 
 app.get('/api/users/:id', async (req, res) => {
   try {
-    const user = await usersDB.findOne({ id: req.params.id }) as User | null;
+    const user = (await usersDB.findOne({ id: req.params.id })) as User | null;
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -462,7 +521,18 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Data directory: ${dataDir}`);
-});
+async function startServer() {
+  try {
+    await loadAllDatabases();
+    await initSampleData();
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+      console.log(`Data directory: ${dataDir}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();

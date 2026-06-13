@@ -1,12 +1,14 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Particle {
   id: number;
-  x: number;
-  y: number;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  size: number;
   color: string;
-  tx: number;
-  ty: number;
+  createdAt: number;
 }
 
 interface ParticleExplosionProps {
@@ -16,80 +18,165 @@ interface ParticleExplosionProps {
   onComplete?: () => void;
 }
 
+const DURATION = 1000;
+const PARTICLE_COUNT = 40;
+
 const ParticleExplosion = ({ trigger, x, y, onComplete }: ParticleExplosionProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const particlesRef = useRef<Particle[]>([]);
+  const [particles, setParticles] = useState<Particle[]>([]);
+  const [displayX, setDisplayX] = useState(0);
+  const [displayY, setDisplayY] = useState(0);
   const lastTriggerRef = useRef(trigger);
+  const timersRef = useRef<number[]>([]);
 
-  const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899'];
+  const colors = [
+    '#3b82f6',
+    '#ef4444',
+    '#22c55e',
+    '#f59e0b',
+    '#8b5cf6',
+    '#ec4899',
+    '#06b6d4',
+    '#f97316',
+    '#6366f1',
+    '#10b981',
+  ];
 
-  const createParticles = useCallback(
-    (centerX: number, centerY: number) => {
-      const container = containerRef.current;
-      if (!container) return;
-
-      const particleCount = 30;
-      const newParticles: Particle[] = [];
-
-      for (let i = 0; i < particleCount; i++) {
-        const angle = (Math.PI * 2 * i) / particleCount;
-        const distance = 50 + Math.random() * 80;
-        const tx = Math.cos(angle) * distance;
-        const ty = Math.sin(angle) * distance;
-
-        const particle: Particle = {
-          id: Date.now() + i,
-          x: centerX,
-          y: centerY,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          tx,
-          ty,
-        };
-
-        newParticles.push(particle);
-      }
-
-      particlesRef.current = newParticles;
-      container.innerHTML = '';
-
-      newParticles.forEach((particle) => {
-        const el = document.createElement('div');
-        el.className = 'particle';
-        el.style.left = `${particle.x}px`;
-        el.style.top = `${particle.y}px`;
-        el.style.backgroundColor = particle.color;
-        el.style.setProperty('--tx', `${particle.tx}px`);
-        el.style.setProperty('--ty', `${particle.ty}px`);
-        el.style.boxShadow = `0 0 6px ${particle.color}`;
-        container.appendChild(el);
-      });
-
-      setTimeout(() => {
-        if (container) {
-          container.innerHTML = '';
-        }
-        particlesRef.current = [];
-        onComplete?.();
-      }, 1000);
-    },
-    [onComplete]
-  );
+  const clearAllTimers = () => {
+    timersRef.current.forEach((t) => clearTimeout(t));
+    timersRef.current = [];
+  };
 
   useEffect(() => {
-    if (trigger !== lastTriggerRef.current) {
-      lastTriggerRef.current = trigger;
-      if (x !== 0 && y !== 0) {
-        createParticles(x, y);
-      }
+    if (trigger === 0 || trigger === lastTriggerRef.current) return;
+    lastTriggerRef.current = trigger;
+
+    if (x === 0 && y === 0) return;
+
+    clearAllTimers();
+
+    setDisplayX(x);
+    setDisplayY(y);
+
+    const newParticles: Particle[] = [];
+    const now = performance.now();
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const angle = (Math.PI * 2 * i) / PARTICLE_COUNT + (Math.random() - 0.5) * 0.5;
+      const distance = 60 + Math.random() * 100;
+      const size = 4 + Math.random() * 8;
+
+      newParticles.push({
+        id: now + i,
+        startX: x,
+        startY: y,
+        endX: x + Math.cos(angle) * distance,
+        endY: y + Math.sin(angle) * distance,
+        size,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        createdAt: now,
+      });
     }
-  }, [trigger, x, y, createParticles]);
+
+    setParticles(newParticles);
+
+    const removeTimer = window.setTimeout(() => {
+      setParticles([]);
+      onComplete?.();
+    }, DURATION + 50);
+
+    timersRef.current.push(removeTimer);
+
+    return () => {
+      clearAllTimers();
+    };
+  }, [trigger, x, y, onComplete]);
+
+  if (particles.length === 0) return null;
 
   return (
     <div
-      ref={containerRef}
-      className="fixed pointer-events-none z-50"
-      style={{ left: 0, top: 0, width: '100%', height: '100%' }}
-    />
+      className="fixed pointer-events-none z-[9999]"
+      style={{ left: 0, top: 0, width: 0, height: 0 }}
+    >
+      {particles.map((particle) => {
+        const dx = particle.endX - particle.startX;
+        const dy = particle.endY - particle.startY;
+
+        return (
+          <div
+            key={particle.id}
+            style={{
+              position: 'fixed',
+              left: particle.startX,
+              top: particle.startY,
+              width: particle.size,
+              height: particle.size,
+              borderRadius: '50%',
+              backgroundColor: particle.color,
+              boxShadow: `0 0 ${particle.size * 2}px ${particle.color}`,
+              animation: `particle-explode-${particle.id} ${DURATION}ms cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+              ['--tx' as any]: `${dx}px`,
+              ['--ty' as any]: `${dy}px`,
+            }}
+          >
+            <style>
+              {`
+                @keyframes particle-explode-${particle.id} {
+                  0% {
+                    opacity: 1;
+                    transform: translate(0, 0) scale(1);
+                  }
+                  50% {
+                    opacity: 0.9;
+                    transform: translate(calc(var(--tx) * 0.6), calc(var(--ty) * 0.6)) scale(1.3);
+                  }
+                  100% {
+                    opacity: 0;
+                    transform: translate(var(--tx), var(--ty)) scale(0);
+                  }
+                }
+              `}
+            </style>
+          </div>
+        );
+      })}
+
+      <div
+        style={{
+          position: 'fixed',
+          left: displayX,
+          top: displayY,
+          width: 40,
+          height: 40,
+          marginLeft: -20,
+          marginTop: -20,
+          borderRadius: '50%',
+          background:
+            'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(59,130,246,0.4) 40%, transparent 70%)',
+          animation: `shockwave-${trigger} ${DURATION}ms ease-out forwards`,
+          pointerEvents: 'none',
+        }}
+      >
+        <style>
+          {`
+            @keyframes shockwave-${trigger} {
+              0% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(0.5);
+                width: 40px;
+                height: 40px;
+              }
+              100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(4);
+                width: 120px;
+                height: 120px;
+              }
+            }
+          `}
+        </style>
+      </div>
+    </div>
   );
 };
 
