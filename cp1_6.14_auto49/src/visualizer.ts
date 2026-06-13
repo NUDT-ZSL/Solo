@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { MoleculeData, AtomData, BondData, AtomSymbol } from './moleculeData';
+import type { MoleculeData, AtomSymbol } from './moleculeData';
 
 const CPK_COLORS: Record<AtomSymbol, number> = {
   C: 0x909090,
@@ -34,7 +34,6 @@ interface MoleculeGroup {
 
 const MAX_PARTICLES = 4000;
 const PARTICLE_LIFETIME = 2.0;
-const BOND_SINGLE_LENGTH = 2.2;
 const BOND_DOUBLE_SPACING = 0.3;
 
 export class MoleculeVisualizer {
@@ -44,34 +43,53 @@ export class MoleculeVisualizer {
   private particlePool: THREE.Mesh[] = [];
   private selectedIndex: number = -1;
   private volatilityScale: number = 1.0;
-  private elapsedTime: number = 0;
   private particleGeometry: THREE.BoxGeometry;
+  private _atomGeom: Map<string, THREE.SphereGeometry> = new Map();
+  private _cylGeom: Map<string, THREE.CylinderGeometry> = new Map();
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.particleGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
   }
 
+  private getAtomGeom(radius: number): THREE.SphereGeometry {
+    const key = radius.toFixed(4);
+    if (!this._atomGeom.has(key)) {
+      this._atomGeom.set(key, new THREE.SphereGeometry(radius, 10, 8));
+    }
+    return this._atomGeom.get(key)!;
+  }
+
+  private getCylGeom(radius: number, length: number): THREE.CylinderGeometry {
+    const key = radius.toFixed(4) + '_' + length.toFixed(4);
+    if (!this._cylGeom.has(key)) {
+      this._cylGeom.set(key, new THREE.CylinderGeometry(radius, radius, length, 6, 1));
+    }
+    return this._cylGeom.get(key)!;
+  }
+
   buildMolecules(molecules: MoleculeData[]): void {
     const shellRadius = 15;
     const count = molecules.length;
+    const phiStep = Math.atan(Math.sqrt(count)) * 2;
+    const thetaStep = Math.PI * (3 - Math.sqrt(5));
 
     for (let i = 0; i < count; i++) {
       const molData = molecules[i];
       const group = new THREE.Group();
 
-      const phi = Math.acos(1 - 2 * (i + 0.5) / count);
-      const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+      const y = i / count * 2 - 1 + 1 / count;
+      const radiusAtY = Math.sqrt(1 - y * y);
+      const theta = thetaStep * i;
+      const phi = phiStep * i;
 
-      const pos = new THREE.Vector3(
-        shellRadius * Math.sin(phi) * Math.cos(theta),
-        shellRadius * Math.sin(phi) * Math.sin(theta),
-        shellRadius * Math.cos(phi)
-      );
+      const x = Math.cos(phi) * radiusAtY * shellRadius;
+      const z = Math.sin(phi) * radiusAtY * shellRadius;
+      const yy = y * shellRadius + (i * 0.01 % 1) * 0.3;
 
       const atomMeshes: THREE.Mesh[] = [];
       for (const at of molData.atoms) {
-        const geo = new THREE.SphereGeometry(at.radius, 12, 8);
+        const geo = this.getAtomGeom(at.radius);
         const mat = new THREE.MeshStandardMaterial({
           color: CPK_COLORS[at.symbol],
           roughness: 0.3,
@@ -101,19 +119,13 @@ export class MoleculeVisualizer {
           originalBondColors.push(0xaaaaaa);
         } else {
           const dir = new THREE.Vector3().subVectors(a2, a1).normalize();
-          const perp = new THREE.Vector3();
-          if (Math.abs(dir.y) < 0.99) {
-            perp.crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
-          } else {
-            perp.crossVectors(dir, new THREE.Vector3(1, 0, 0)).normalize();
-          }
-          const offset = perp.multiplyScalar(BOND_DOUBLE_SPACING / 2);
+          const perp = this.perpendicularTo(dir).multiplyScalar(BOND_DOUBLE_SPACING / 2);
 
           const c1 = this.createBondCylinder(
-            a1.clone().add(offset), a2.clone().add(offset), 0xaaaaaa, 0.06
+            a1.clone().add(perp), a2.clone().add(perp), 0xaaaaaa, 0.06
           );
           const c2 = this.createBondCylinder(
-            a1.clone().sub(offset), a2.clone().sub(offset), 0xaaaaaa, 0.06
+            a1.clone().sub(perp), a2.clone().sub(perp), 0xaaaaaa, 0.06
           );
           group.add(c1, c2);
           bondMeshes.push(c1, c2);
@@ -121,8 +133,12 @@ export class MoleculeVisualizer {
         }
       }
 
-      group.position.copy(pos);
-      const randAxis = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      group.position.set(x, yy, z);
+      const randAxis = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2
+      ).normalize();
       const randAngle = Math.random() * Math.PI * 2;
       group.quaternion.setFromAxisAngle(randAxis, randAngle);
 
@@ -138,11 +154,19 @@ export class MoleculeVisualizer {
     }
   }
 
+  private perpendicularTo(dir: THREE.Vector3): THREE.Vector3 {
+    const a = dir.clone().normalize();
+    const worldUp = Math.abs(a.y) < 0.9
+      ? new THREE.Vector3(0, 1, 0)
+      : new THREE.Vector3(1, 0, 0);
+    return new THREE.Vector3().crossVectors(a, worldUp).normalize();
+  }
+
   private createBondCylinder(start: THREE.Vector3, end: THREE.Vector3, color: number, radius: number): THREE.Mesh {
     const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
     const dir = new THREE.Vector3().subVectors(end, start);
     const length = Math.max(dir.length(), 0.01);
-    const geo = new THREE.CylinderGeometry(radius, radius, length, 6, 1);
+    const geo = this.getCylGeom(radius, length);
     const mat = new THREE.MeshStandardMaterial({
       color,
       transparent: true,
@@ -169,18 +193,21 @@ export class MoleculeVisualizer {
     for (let i = 0; i < this.moleculeGroups.length; i++) {
       const mg = this.moleculeGroups[i];
       const isSelected = i === index;
+      const dimOpacity = isSelected ? 1.0 : 0.3;
+      const bondOpacity = isSelected ? 0.9 : 0.2;
+      const emissiveMul = isSelected ? 1.5 : 1.0;
 
       for (const am of mg.atomMeshes) {
         const mat = am.material as THREE.MeshStandardMaterial;
-        mat.emissiveIntensity = isSelected ? mg.baseEmissiveIntensity * 1.5 : mg.baseEmissiveIntensity;
-        mat.opacity = isSelected ? 1.0 : 0.3;
+        mat.emissiveIntensity = mg.baseEmissiveIntensity * emissiveMul;
+        mat.opacity = dimOpacity;
       }
 
       for (let j = 0; j < mg.bondMeshes.length; j++) {
         const bm = mg.bondMeshes[j];
         const mat = bm.material as THREE.MeshStandardMaterial;
         mat.color.set(isSelected ? 0x00ffff : mg.originalBondColors[j]);
-        mat.opacity = isSelected ? 0.9 : 0.2;
+        mat.opacity = bondOpacity;
       }
     }
   }
@@ -203,7 +230,6 @@ export class MoleculeVisualizer {
   }
 
   update(dt: number): void {
-    this.elapsedTime += dt;
     this.emitParticles(dt);
     this.updateParticles(dt);
   }
@@ -223,33 +249,49 @@ export class MoleculeVisualizer {
   }
 
   private emitParticles(dt: number): void {
+    if (this.volatilityScale <= 0) return;
+
+    let totalTarget = 0;
+    const perMolTarget: number[] = [];
+
     for (let i = 0; i < this.moleculeGroups.length; i++) {
       const mg = this.moleculeGroups[i];
       const effectiveVol = mg.moleculeData.volatility * this.volatilityScale;
-      const targetCount = Math.floor(effectiveVol * 200);
-      const currentCount = this.particles.filter(p => p.moleculeIndex === i).length;
+      const tgt = Math.floor(effectiveVol * 200);
+      perMolTarget.push(tgt);
+      totalTarget += tgt;
+    }
 
-      if (currentCount < targetCount && this.particles.length < MAX_PARTICLES) {
-        const emitCount = Math.min(
-          Math.ceil(effectiveVol * 8 * dt * 60),
+    const scaleFactor = totalTarget > MAX_PARTICLES ? MAX_PARTICLES / totalTarget : 1.0;
+
+    for (let i = 0; i < this.moleculeGroups.length; i++) {
+      const targetCount = Math.floor(perMolTarget[i] * scaleFactor);
+      const currentCount = this.countMolParticles(i);
+      const availableSlots = MAX_PARTICLES - this.particles.length;
+
+      if (currentCount < targetCount && availableSlots > 0) {
+        const mg = this.moleculeGroups[i];
+        const effectiveVol = mg.moleculeData.volatility * this.volatilityScale;
+
+        const emitPerSec = Math.max(1, Math.floor(effectiveVol * 10));
+        let toEmit = Math.min(
+          Math.ceil(emitPerSec * dt),
           targetCount - currentCount,
-          MAX_PARTICLES - this.particles.length
+          availableSlots
         );
 
         const domAtom = this.getDominantAtom(mg.moleculeData);
         const particleColor = COMPLEMENT_COLORS[domAtom];
 
-        for (let e = 0; e < emitCount; e++) {
+        for (let e = 0; e < toEmit; e++) {
           const atomIdx = Math.floor(Math.random() * mg.atomMeshes.length);
           const atomMesh = mg.atomMeshes[atomIdx];
 
-          const localPos = atomMesh.position.clone();
-          const worldPos = localPos.clone();
-          mg.group.localToWorld(worldPos);
+          const worldPos = atomMesh.getWorldPosition(new THREE.Vector3());
 
           const mesh = this.getParticleMesh(particleColor);
           mesh.position.copy(worldPos);
-          mesh.material.opacity = 1.0;
+          (mesh.material as THREE.MeshBasicMaterial).opacity = 1.0;
 
           const dir = new THREE.Vector3(
             Math.random() - 0.5,
@@ -257,7 +299,9 @@ export class MoleculeVisualizer {
             Math.random() - 0.5
           ).normalize();
 
-          const speed = 0.5 + effectiveVol * 1.5;
+          const baseSpeed = 0.4;
+          const varSpeed = effectiveVol * 2.2;
+          const speed = baseSpeed + varSpeed;
 
           this.particles.push({
             mesh,
@@ -266,9 +310,17 @@ export class MoleculeVisualizer {
             maxLife: PARTICLE_LIFETIME,
             moleculeIndex: i,
           });
+
+          if (this.particles.length >= MAX_PARTICLES) break;
         }
       }
     }
+  }
+
+  private countMolParticles(molIdx: number): number {
+    let c = 0;
+    for (const p of this.particles) if (p.moleculeIndex === molIdx) c++;
+    return c;
   }
 
   private getParticleMesh(color: number): THREE.Mesh {
@@ -293,30 +345,34 @@ export class MoleculeVisualizer {
   }
 
   private updateParticles(dt: number): void {
-    const toRemove: number[] = [];
+    if (this.volatilityScale > 0) {
+      const speedMul = 0.3 + 0.7 * this.volatilityScale;
+      for (const p of this.particles) {
+        p.life += dt;
+        p.mesh.position.addScaledVector(p.velocity, dt * speedMul);
 
-    for (let i = 0; i < this.particles.length; i++) {
-      const p = this.particles[i];
-      p.life += dt;
-
-      if (p.life >= p.maxLife) {
-        toRemove.push(i);
-        continue;
-      }
-
-      p.mesh.position.addScaledVector(p.velocity, dt);
-
-      const mat = p.mesh.material as THREE.MeshBasicMaterial;
-      const fadeRatio = p.life / p.maxLife;
-      mat.opacity = 1.0 - fadeRatio;
-
-      if (this.particles.length - toRemove.length > MAX_PARTICLES) {
-        toRemove.push(i);
+        const fadeR = p.life / p.maxLife;
+        (p.mesh.material as THREE.MeshBasicMaterial).opacity = 1.0 - fadeR;
       }
     }
 
-    for (let i = toRemove.length - 1; i >= 0; i--) {
-      const idx = toRemove[i];
+    const toRemove: number[] = [];
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      if (p.life >= p.maxLife) toRemove.push(i);
+    }
+
+    while (this.particles.length - toRemove.length > MAX_PARTICLES) {
+      for (let i = 0; i < this.particles.length; i++) {
+        if (!toRemove.includes(i)) {
+          toRemove.push(i);
+          if (this.particles.length - toRemove.length <= MAX_PARTICLES) break;
+        }
+      }
+    }
+
+    toRemove.sort((a, b) => b - a);
+    for (const idx of toRemove) {
       const p = this.particles[idx];
       p.mesh.visible = false;
       this.particlePool.push(p.mesh);

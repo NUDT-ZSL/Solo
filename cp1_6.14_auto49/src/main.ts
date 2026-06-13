@@ -53,14 +53,6 @@ const ui = new UIController({
   onVolatilityChange: (value: number) => {
     visualizer.updateVolatilityScale(value);
   },
-  onMoleculeClick: (index: number) => {
-    visualizer.highlightMolecule(index);
-    ui.showMoleculeDetail(molecules[index]);
-  },
-  onBackgroundClick: () => {
-    visualizer.clearHighlight();
-    ui.clearDetail();
-  },
 });
 
 const raycaster = new THREE.Raycaster();
