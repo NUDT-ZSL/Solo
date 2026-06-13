@@ -11,17 +11,6 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-const db = {
-  photos: Datastore.create({
-    filename: path.join(__dirname, '../data/photos.db'),
-    autoload: true
-  }),
-  reviews: Datastore.create({
-    filename: path.join(__dirname, '../data/reviews.db'),
-    autoload: true
-  })
-};
-
 interface Photo {
   _id?: string;
   title: string;
@@ -47,6 +36,17 @@ interface Review {
   markerY: number;
   createdAt: number;
 }
+
+const db = {
+  photos: Datastore.create({
+    filename: path.join(__dirname, '../data/photos.db'),
+    autoload: true
+  }) as any,
+  reviews: Datastore.create({
+    filename: path.join(__dirname, '../data/reviews.db'),
+    autoload: true
+  }) as any
+};
 
 const simulateDelay = (ms: number = 300) =>
   new Promise(resolve => setTimeout(resolve, ms));
@@ -195,10 +195,10 @@ async function initMockData() {
 }
 
 async function updatePhotoRating(photoId: string) {
-  const reviews = await db.reviews.find({ photoId });
+  const reviews = await db.reviews.find({ photoId }) as Review[];
   const reviewCount = reviews.length;
   const averageRating = reviewCount > 0
-    ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
+    ? reviews.reduce((sum: number, r: Review) => sum + r.rating, 0) / reviewCount
     : 0;
   const compositeScore = (averageRating * reviewCount) / 100;
 
