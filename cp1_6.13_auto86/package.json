@@ -2,6 +2,7 @@
   "name": "band-manager",
   "version": "1.0.0",
   "description": "Band management app for events, sheet music, and guestbook",
+  "type": "module",
   "main": "server/index.ts",
   "scripts": {
     "dev": "concurrently \"npm:server\" \"npm:client\"",

@@ -65,12 +65,6 @@ const statValueStyle: React.CSSProperties = {
   color: '#38bdf8',
 };
 
-const svgLineStyle: React.CSSProperties = {
-  height: 120,
-  width: 60,
-  flexShrink: 0,
-};
-
 const formSectionStyle: React.CSSProperties = {
   background: '#1e1b4b',
   borderRadius: 16,
@@ -113,6 +107,54 @@ const submitBtnStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div
+      style={statCardStyle}
+      className="stat-card"
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.2)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+        (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+      }}
+    >
+      <div style={statLabelStyle}>{label}</div>
+      <div style={statValueStyle}>{value}</div>
+    </div>
+  );
+}
+
+function DecorativeLine({ delay }: { delay: string }) {
+  return (
+    <svg
+      className="dashboard-deco-line"
+      style={{ height: 120, width: 60, flexShrink: 0 }}
+      viewBox="0 0 60 120"
+    >
+      <defs>
+        <linearGradient id={`lineGrad-${delay}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#a78bfa" />
+          <stop offset="100%" stopColor="#38bdf8" />
+        </linearGradient>
+      </defs>
+      <g className={`deco-g deco-g-${delay}`}>
+        <path
+          d="M30 10 Q45 30 30 60 Q15 90 30 110"
+          stroke={`url(#lineGrad-${delay})`}
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <circle cx="30" cy="10" r="5" fill="#a78bfa" />
+        <circle cx="30" cy="110" r="5" fill="#38bdf8" />
+      </g>
+    </svg>
+  );
+}
+
 function Dashboard() {
   const [stats, setStats] = useState<Stats>({ totalEvents: 0, totalMessages: 0, newFans: 0 });
   const [form, setForm] = useState({ name: '', date: '', time: '', location: '', price: '' });
@@ -144,84 +186,11 @@ function Dashboard() {
       </div>
 
       <div style={statsContainerStyle}>
-        <div
-          style={statCardStyle}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
-            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.2)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-          }}
-        >
-          <div style={statLabelStyle}>总演出数</div>
-          <div style={statValueStyle}>{stats.totalEvents}</div>
-        </div>
-
-        <svg style={svgLineStyle} viewBox="0 0 60 120">
-          <defs>
-            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#a78bfa" />
-              <stop offset="100%" stopColor="#38bdf8" />
-            </linearGradient>
-          </defs>
-          <g style={{ transformOrigin: '50% 50%', animation: 'spin3d 6s ease-in-out infinite' }}>
-            <path
-              d="M30 10 Q45 30 30 60 Q15 90 30 110"
-              stroke="url(#lineGrad)"
-              strokeWidth="3"
-              fill="none"
-              strokeLinecap="round"
-            />
-            <circle cx="30" cy="10" r="5" fill="#a78bfa" />
-            <circle cx="30" cy="110" r="5" fill="#38bdf8" />
-          </g>
-        </svg>
-
-        <div
-          style={statCardStyle}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
-            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.2)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-          }}
-        >
-          <div style={statLabelStyle}>总留言数</div>
-          <div style={statValueStyle}>{stats.totalMessages}</div>
-        </div>
-
-        <svg style={svgLineStyle} viewBox="0 0 60 120">
-          <g style={{ transformOrigin: '50% 50%', animation: 'spin3d 6s ease-in-out infinite', animationDelay: '1s' }}>
-            <path
-              d="M30 10 Q15 30 30 60 Q45 90 30 110"
-              stroke="url(#lineGrad)"
-              strokeWidth="3"
-              fill="none"
-              strokeLinecap="round"
-            />
-            <circle cx="30" cy="10" r="5" fill="#a78bfa" />
-            <circle cx="30" cy="110" r="5" fill="#38bdf8" />
-          </g>
-        </svg>
-
-        <div
-          style={statCardStyle}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
-            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.2)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-          }}
-        >
-          <div style={statLabelStyle}>近7天新增粉丝</div>
-          <div style={statValueStyle}>{stats.newFans}</div>
-        </div>
+        <StatCard label="总演出数" value={stats.totalEvents} />
+        <DecorativeLine delay="0s" />
+        <StatCard label="总留言数" value={stats.totalMessages} />
+        <DecorativeLine delay="1s" />
+        <StatCard label="近7天新增粉丝" value={stats.newFans} />
       </div>
 
       <div style={formSectionStyle}>
@@ -274,9 +243,24 @@ function Dashboard() {
       </div>
 
       <style>{`
-        @keyframes spin3d {
+        .deco-g {
+          transform-origin: 30px 60px;
+          animation: dashSpin3d 6s ease-in-out infinite;
+          perspective: 200px;
+        }
+        .deco-g-1s {
+          animation-delay: 1s;
+        }
+        .deco-g-0s {
+          animation-delay: 0s;
+        }
+        @keyframes dashSpin3d {
           0%, 100% { transform: rotateY(0deg); }
           50% { transform: rotateY(180deg); }
+        }
+        .stat-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 10px 30px rgba(56, 189, 248, 0.2);
         }
       `}</style>
     </div>

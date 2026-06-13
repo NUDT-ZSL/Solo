@@ -69,7 +69,7 @@ const inputStyle: React.CSSProperties = {
 
 const textareaStyle: React.CSSProperties = {
   ...inputStyle,
-  resize: 'vertical',
+  resize: 'vertical' as const,
   minHeight: 100,
   marginBottom: 12,
 };
@@ -113,7 +113,7 @@ const messageCardStyle: React.CSSProperties = {
   transition: 'all 0.2s ease-in-out',
 };
 
-const avatarStyle = (color: string): React.CSSProperties => ({
+const avatarStyleFn = (color: string): React.CSSProperties => ({
   width: 40,
   height: 40,
   borderRadius: '50%',
@@ -164,16 +164,6 @@ const loadMoreStyle: React.CSSProperties = {
   fontSize: 13,
 };
 
-const loaderStyle: React.CSSProperties = {
-  display: 'inline-block',
-  width: 20,
-  height: 20,
-  border: '2px solid #334155',
-  borderTopColor: '#a78bfa',
-  borderRadius: '50%',
-  animation: 'spin 0.8s linear infinite',
-};
-
 const responsiveStyle = `
   @media (max-width: 1024px) {
     .guestbook-container { grid-template-columns: 280px 1fr !important; }
@@ -182,8 +172,17 @@ const responsiveStyle = `
     .guestbook-container { grid-template-columns: 1fr !important; }
     .guestbook-form { position: static !important; }
   }
-  @keyframes spin {
+  @keyframes gb-spin {
     to { transform: rotate(360deg); }
+  }
+  .gb-loader {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #334155;
+    border-top-color: #a78bfa;
+    border-radius: 50%;
+    animation: gb-spin 0.8s linear infinite;
   }
 `;
 
@@ -214,38 +213,66 @@ function Guestbook() {
   const [submitting, setSubmitting] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadingRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const messagesRef = useRef<Message[]>([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
 
   const loadMore = useCallback(async () => {
-    if (loading || !hasMore) return;
+    if (loadingRef.current || !hasMoreRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
-      const lastTs = messages.length > 0 ? messages[messages.length - 1].timestamp : Date.now();
+      const currentMessages = messagesRef.current;
+      const lastTs = currentMessages.length > 0 ? currentMessages[currentMessages.length - 1].timestamp : Date.now();
       const res = await axios.get('/api/guestbook/more', { params: { before: lastTs } });
-      setMessages((prev) => [...prev, ...res.data.messages]);
-      setHasMore(res.data.hasMore);
+      const newMessages = res.data.messages as Message[];
+      const hasMoreNew = res.data.hasMore as boolean;
+      hasMoreRef.current = hasMoreNew;
+      setHasMore(hasMoreNew);
+      if (newMessages.length > 0) {
+        setMessages((prev) => [...prev, ...newMessages]);
+      }
     } catch (err) {
       console.error(err);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [loading, hasMore, messages]);
+  }, []);
 
   useEffect(() => {
     axios.get('/api/guestbook').then((res) => {
-      setMessages(res.data.messages);
+      const msgs = res.data.messages as Message[];
+      setMessages(msgs);
       setHasMore(res.data.hasMore);
+      hasMoreRef.current = res.data.hasMore;
     });
   }, []);
 
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
+
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) loadMore();
+        if (entries[0].isIntersecting && !loadingRef.current && hasMoreRef.current) {
+          loadMore();
+        }
       },
-      { rootMargin: '100px' }
+      { rootMargin: '200px' }
     );
-    if (sentinelRef.current) observerRef.current.observe(sentinelRef.current);
+
+    if (sentinelRef.current) {
+      observerRef.current.observe(sentinelRef.current);
+    }
+
     return () => {
       if (observerRef.current) observerRef.current.disconnect();
     };
@@ -323,7 +350,7 @@ function Guestbook() {
                 (e.currentTarget as HTMLDivElement).style.background = '#1e293b';
               }}
             >
-              <div style={avatarStyle(getAvatarColor(msg.nickname))}>
+              <div style={avatarStyleFn(getAvatarColor(msg.nickname))}>
                 {msg.nickname.charAt(0).toUpperCase()}
               </div>
               <div style={messageBodyStyle}>
@@ -339,7 +366,7 @@ function Guestbook() {
 
         <div ref={sentinelRef} style={loadMoreStyle}>
           {loading ? (
-            <div style={loaderStyle} />
+            <div className="gb-loader" />
           ) : hasMore ? (
             '向下滚动加载更多'
           ) : (

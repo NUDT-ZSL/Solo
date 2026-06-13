@@ -158,6 +158,34 @@ app.get('/api/music', async (req, res) => {
   }
 });
 
+async function generateThumbnail(filePath: string, outputPath: string): Promise<void> {
+  const roundedCorners = Buffer.from(
+    `<svg width="200" height="280">
+      <rect x="0" y="0" width="200" height="280" rx="8" ry="8" fill="white"/>
+    </svg>`
+  );
+
+  await sharp(filePath)
+    .resize(200, 280, { fit: 'cover' })
+    .composite([{ input: roundedCorners, blend: 'dest-in' }])
+    .jpeg({ quality: 85 })
+    .toFile(outputPath);
+
+  const finalBuffer = await sharp({
+    create: {
+      width: 200,
+      height: 280,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: outputPath, top: 0, left: 0 }])
+    .png()
+    .toFile(outputPath.replace('.jpg', '.png'));
+
+  fs.unlinkSync(outputPath);
+}
+
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -165,14 +193,28 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
     const { originalname, filename, mimetype, size } = req.file;
     let thumbnailPath = '';
+
     if (mimetype.startsWith('image/')) {
-      const thumbName = `thumb_${filename}.jpg`;
-      await sharp(req.file.path)
-        .resize(200, 280, { fit: 'cover' })
-        .jpeg({ quality: 85 })
-        .toFile(path.join(uploadsDir, thumbName));
+      const thumbName = `thumb_${filename}.png`;
+      await generateThumbnail(req.file.path, path.join(uploadsDir, thumbName));
       thumbnailPath = `/uploads/${thumbName}`;
+    } else if (mimetype === 'application/pdf') {
+      const thumbName = `thumb_${filename}.png`;
+      const pdfPagePath = path.join(uploadsDir, `page_${filename}.png`);
+      try {
+        await sharp(req.file.path, { page: 0, density: 150 })
+          .resize(200, 280, { fit: 'cover' })
+          .png()
+          .toFile(pdfPagePath);
+        await generateThumbnail(pdfPagePath, path.join(uploadsDir, thumbName));
+        fs.unlinkSync(pdfPagePath);
+        thumbnailPath = `/uploads/${thumbName}`;
+      } catch (pdfErr) {
+        console.error('PDF缩略图生成失败:', pdfErr);
+        thumbnailPath = '';
+      }
     }
+
     const music = await musicDB.insert({
       title: path.basename(originalname, path.extname(originalname)),
       originalName: originalname,

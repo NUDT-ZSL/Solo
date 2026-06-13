@@ -40,13 +40,6 @@ const gridContainerStyle: React.CSSProperties = {
   gap: 24,
 };
 
-const cardWrapperStyle: React.CSSProperties = {
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-};
-
 function generateEmbedCode(event: EventItem) {
   return `<div style="width:400px;height:220px;border-radius:16px;background:linear-gradient(135deg,#1e1b4b,#0f0e17);padding:20px;color:#e2e8f0;font-family:system-ui,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;">
   <div>
@@ -65,19 +58,19 @@ function HeartParticles({ trigger }: { trigger: number }) {
   const particles = [];
   for (let i = 0; i < 16; i++) {
     const angle = (i / 16) * Math.PI * 2;
-    const dx = Math.cos(angle) * 40;
-    const dy = Math.sin(angle) * 40 - 30;
+    const dx = Math.cos(angle) * 50;
+    const dy = Math.sin(angle) * 50 - 40;
     particles.push(
       <span
         key={`${trigger}-${i}`}
+        className="heart-particle"
         style={{
           position: 'absolute',
           left: '50%',
           top: '50%',
           fontSize: 14,
-          animation: `heartFloat 0.6s ease-out forwards`,
-          animationDelay: `${i * 0.01}s`,
-          transform: `translate(-50%, -50%)`,
+          pointerEvents: 'none',
+          animationDelay: `${i * 0.02}s`,
           '--dx': `${dx}px`,
           '--dy': `${dy}px`,
         } as React.CSSProperties}
@@ -86,28 +79,27 @@ function HeartParticles({ trigger }: { trigger: number }) {
       </span>
     );
   }
-  return (
-    <>
-      {particles}
-      <style>{`
-        @keyframes heartFloat {
-          0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
-          100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.2); }
-        }
-      `}</style>
-    </>
-  );
+  return <>{particles}</>;
 }
 
 function EventCard({ event }: { event: EventItem }) {
   const [going, setGoing] = useState(false);
   const [showEmbed, setShowEmbed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [particleTrigger, setParticleTrigger] = useState(0);
-  const btnRef = useRef<HTMLDivElement>(null);
 
   const handleGoing = () => {
     setGoing(true);
     setParticleTrigger((t) => t + 1);
+  };
+
+  const handleCopyEmbed = () => {
+    const code = generateEmbedCode(event);
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setShowEmbed(false);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   const cardStyle: React.CSSProperties = {
@@ -121,7 +113,6 @@ function EventCard({ event }: { event: EventItem }) {
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    overflow: 'hidden',
     position: 'relative',
     boxShadow: '0 8px 32px rgba(167, 139, 250, 0.1)',
     transition: 'all 0.2s ease-in-out',
@@ -174,6 +165,7 @@ function EventCard({ event }: { event: EventItem }) {
     fontWeight: 600,
     position: 'relative',
     overflow: 'visible',
+    zIndex: 2,
   };
 
   const embedBtnStyle: React.CSSProperties = {
@@ -200,12 +192,12 @@ function EventCard({ event }: { event: EventItem }) {
     background: '#1e1b4b',
     borderRadius: 12,
     padding: 24,
-    maxWidth: 500,
+    maxWidth: 560,
     width: '100%',
   };
 
   return (
-    <div style={cardWrapperStyle}>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div
         style={cardStyle}
         onMouseEnter={(e) => {
@@ -226,12 +218,12 @@ function EventCard({ event }: { event: EventItem }) {
         </div>
         <div style={bottomRowStyle}>
           <div style={priceStyle}>¥{event.price}</div>
-          <div style={btnContainerStyle} ref={btnRef}>
+          <div style={btnContainerStyle}>
             <button style={goBtnStyle} onClick={handleGoing}>
               {going ? '已想去 ❤️' : '想去'}
             </button>
             <button style={embedBtnStyle} onClick={() => setShowEmbed(true)}>
-              {}嵌入
+              生成嵌入代码
             </button>
             {particleTrigger > 0 && <HeartParticles trigger={particleTrigger} />}
           </div>
@@ -244,40 +236,122 @@ function EventCard({ event }: { event: EventItem }) {
         </Link>
       </div>
 
+      {copied && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 80,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#7c3aed',
+            color: 'white',
+            padding: '10px 24px',
+            borderRadius: 8,
+            fontSize: 14,
+            zIndex: 10000,
+            animation: 'fadeInOut 2s ease-in-out forwards',
+          }}
+        >
+          ✅ 嵌入代码已复制到剪贴板
+        </div>
+      )}
+
       {showEmbed && (
         <div style={embedModalStyle} onClick={() => setShowEmbed(false)}>
           <div style={embedContentStyle} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginBottom: 16, fontSize: 16 }}>嵌入代码</h3>
+            <h3 style={{ marginBottom: 16, fontSize: 16, color: '#e2e8f0' }}>嵌入代码</h3>
+            <div
+              style={{
+                background: '#0f0e17',
+                padding: 16,
+                borderRadius: 8,
+                marginBottom: 16,
+                border: '1px solid #334155',
+              }}
+            >
+              <div
+                style={{
+                  width: 400,
+                  height: 220,
+                  maxWidth: '100%',
+                  borderRadius: 16,
+                  background: 'linear-gradient(135deg, #1e1b4b, #0f0e17)',
+                  padding: 20,
+                  color: '#e2e8f0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{event.name}</div>
+                  <div style={{ fontSize: 14, color: '#a78bfa', fontWeight: 700, marginBottom: 4 }}>
+                    {event.date} {event.time}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#94a3b8' }}>📍 {event.location}</div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24' }}>¥{event.price}</div>
+                  <div
+                    style={{
+                      padding: '8px 20px',
+                      background: '#a78bfa',
+                      color: 'white',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    想去
+                  </div>
+                </div>
+              </div>
+            </div>
             <pre
               style={{
                 background: '#0f0e17',
                 padding: 16,
                 borderRadius: 8,
-                fontSize: 12,
+                fontSize: 11,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-all',
                 marginBottom: 16,
                 color: '#38bdf8',
+                maxHeight: 200,
+                overflow: 'auto',
               }}
             >
               {generateEmbedCode(event)}
             </pre>
-            <button
-              style={{
-                padding: '8px 20px',
-                background: '#a78bfa',
-                color: 'white',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-              onClick={() => {
-                navigator.clipboard.writeText(generateEmbedCode(event));
-                setShowEmbed(false);
-              }}
-            >
-              复制代码
-            </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                style={{
+                  padding: '10px 24px',
+                  background: '#a78bfa',
+                  color: 'white',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+                onClick={handleCopyEmbed}
+              >
+                📋 复制嵌入代码
+              </button>
+              <button
+                style={{
+                  padding: '10px 24px',
+                  background: 'transparent',
+                  border: '1px solid #475569',
+                  color: '#94a3b8',
+                  borderRadius: 8,
+                  fontSize: 14,
+                }}
+                onClick={() => setShowEmbed(false)}
+              >
+                关闭
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -291,6 +365,20 @@ const responsiveStyle = `
   }
   @media (max-width: 768px) {
     .events-grid { grid-template-columns: 1fr !important; }
+  }
+  .heart-particle {
+    animation: heartFloat 0.6s ease-out forwards;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  @keyframes heartFloat {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.2); }
+  }
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
   }
 `;
 
