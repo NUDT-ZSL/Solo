@@ -95,7 +95,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: 12px;
   padding: 14px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -119,6 +119,7 @@ input:focus, select:focus, textarea:focus {
 .admin-table-row {
   height: 48px;
   transition: background 0.15s ease;
+  display: table-row;
 }
 
 .admin-table-row-odd {
@@ -146,6 +147,7 @@ input:focus, select:focus, textarea:focus {
   color: white;
   margin-bottom: 6px;
   opacity: 0.95;
+  pointer-events: none;
 }
 
 .coach-course-card {

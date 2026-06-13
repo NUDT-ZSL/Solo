@@ -36,7 +36,7 @@ function CourseCard({
   isFull,
   isBooked,
   isCancelled,
-  animateKey,
+  shouldAnimate,
   onClick
 }: {
   course: Course;
@@ -46,11 +46,23 @@ function CourseCard({
   isFull: boolean;
   isBooked: boolean;
   isCancelled: boolean;
-  animateKey?: string;
+  shouldAnimate: boolean;
   onClick: () => void;
+  onAnimationComplete?: () => void;
 }) {
   const remaining = course.capacity - course.bookedCount;
   const disabled = isFull || isCancelled;
+  const [animating, setAnimating] = useState(false);
+
+  useEffect(() => {
+    if (shouldAnimate) {
+      setAnimating(true);
+    }
+  }, [shouldAnimate]);
+
+  const handleAnimationEnd = () => {
+    setAnimating(false);
+  };
 
   return (
     <div
@@ -88,8 +100,8 @@ function CourseCard({
           <div style={{ fontSize: 12, color: '#4b5563' }}>
             剩余
             <span
-              key={animateKey}
-              className="number-pop"
+              className={animating ? 'number-pop' : ''}
+              onAnimationEnd={handleAnimationEnd}
               style={{ fontWeight: 700, marginLeft: 4, fontSize: 14, color: remaining <= 2 ? '#dc2626' : '#1f2937' }}
             >
               {remaining}
@@ -411,7 +423,7 @@ export default function MemberDashboard() {
                         isFull={full}
                         isBooked={booked}
                         isCancelled={course.status === 'cancelled'}
-                        animateKey={animatingCourses.has(course._id) ? Date.now().toString() : undefined}
+                        shouldAnimate={animatingCourses.has(course._id)}
                         onClick={() => setSelectedCourse(course)}
                       />
                     );
