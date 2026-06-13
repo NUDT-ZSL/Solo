@@ -296,8 +296,17 @@ export class GalleryScene {
   private updateFrameTextures(artworks: ArtworkData[]): void {
     for (let i = 0; i < this.frames.length && i < artworks.length; i++) {
       const frame = this.frames[i]
-      frame.canvasTexture.image = artworks[i].imageCanvas
-      frame.canvasTexture.needsUpdate = true
+      const oldTexture = frame.canvasTexture
+      const newTexture = new THREE.CanvasTexture(artworks[i].imageCanvas)
+      newTexture.minFilter = THREE.LinearFilter
+      newTexture.magFilter = THREE.LinearFilter
+      newTexture.colorSpace = THREE.SRGBColorSpace
+      newTexture.anisotropy = 4
+      frame.canvasTexture = newTexture
+      const mat = frame.canvasPlane.material as THREE.MeshStandardMaterial
+      mat.map = newTexture
+      mat.needsUpdate = true
+      if (oldTexture) oldTexture.dispose()
     }
   }
 
@@ -317,17 +326,13 @@ export class GalleryScene {
   getFrameLookAt(index: number): THREE.Vector3 {
     if (index < 0 || index >= this.frames.length) return new THREE.Vector3()
     const frame = this.frames[index]
-    const normal = new THREE.Vector3(0, 0, 1)
-    normal.applyEuler(frame.originalRotation)
-    const lookAt = frame.originalPosition.clone().add(normal.multiplyScalar(-3))
-    lookAt.y = CAMERA_HEIGHT
-    return lookAt
+    return frame.originalPosition.clone()
   }
 
   update(delta: number): void {
     const t = Math.min(delta * 5, 1)
     for (const frame of this.frames) {
-      const targetHighlight = frame.isHighlighted ? 1 : 0
+      const targetHighlight = (frame.isHighlighted || frame.isFocused) ? 1 : 0
       frame.highlightProgress += (targetHighlight - frame.highlightProgress) * t
       if (Math.abs(frame.highlightProgress - targetHighlight) < 0.001) {
         frame.highlightProgress = targetHighlight
@@ -339,6 +344,7 @@ export class GalleryScene {
         const baseColor = new THREE.Color(FRAME_COLOR)
         const highlightColor = new THREE.Color(FRAME_HIGHLIGHT_COLOR)
         mat.color.copy(baseColor).lerp(highlightColor, hp)
+        mat.needsUpdate = true
       }
 
       const normal = new THREE.Vector3(0, 0, 1)

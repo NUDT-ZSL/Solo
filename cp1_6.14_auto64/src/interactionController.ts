@@ -18,13 +18,15 @@ export class InteractionController {
   private galleryScene: GalleryScene
 
   private isDragging: boolean = false
+  private dragStartX: number = 0
+  private dragStartY: number = 0
   private previousMouseX: number = 0
   private previousMouseY: number = 0
 
-  private azimuthalAngle: number = 0
+  private azimuthalAngle: number = -Math.PI / 2
   private polarAngle: number = 0
 
-  private targetAzimuthal: number = 0
+  private targetAzimuthal: number = -Math.PI / 2
   private targetPolar: number = 0
 
   private zoomDistance: number = 5
@@ -57,6 +59,8 @@ export class InteractionController {
     this.domElement = domElement
     this.galleryScene = galleryScene
 
+    this.domElement.style.cursor = 'grab'
+
     this.updateCameraPosition()
     this.setupEventListeners()
     this.setupDOMEvents()
@@ -84,17 +88,22 @@ export class InteractionController {
     this.domElement.addEventListener('mousedown', this.onMouseDown.bind(this))
     this.domElement.addEventListener('mousemove', this.onMouseMove.bind(this))
     this.domElement.addEventListener('mouseup', this.onMouseUp.bind(this))
+    this.domElement.addEventListener('mouseleave', this.onMouseLeave.bind(this))
+    this.domElement.addEventListener('click', this.onClick.bind(this))
     this.domElement.addEventListener('wheel', this.onWheel.bind(this), { passive: false })
-    this.domElement.addEventListener('touchstart', this.onTouchStart.bind(this))
-    this.domElement.addEventListener('touchmove', this.onTouchMove.bind(this))
+    this.domElement.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false })
+    this.domElement.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false })
     this.domElement.addEventListener('touchend', this.onTouchEnd.bind(this))
   }
 
   private onMouseDown(e: MouseEvent): void {
     if (this.isPanelOpen) return
     this.isDragging = true
+    this.dragStartX = e.clientX
+    this.dragStartY = e.clientY
     this.previousMouseX = e.clientX
     this.previousMouseY = e.clientY
+    this.domElement.style.cursor = 'grabbing'
   }
 
   private onMouseMove(e: MouseEvent): void {
@@ -115,20 +124,34 @@ export class InteractionController {
   }
 
   private onMouseUp(e: MouseEvent): void {
-    if (this.isDragging && !this.isPanelOpen) {
-      const deltaX = Math.abs(e.clientX - this.previousMouseX)
-      const deltaY = Math.abs(e.clientY - this.previousMouseY)
-      if (deltaX < 3 && deltaY < 3) {
-        this.handleClick(e.clientX, e.clientY)
-      }
-    }
     this.isDragging = false
+    if (!this.isPanelOpen) {
+      this.domElement.style.cursor = this.hoveredFrameIndex >= 0 ? 'pointer' : 'grab'
+    }
+  }
+
+  private onMouseLeave(): void {
+    this.isDragging = false
+    if (this.hoveredFrameIndex >= 0) {
+      eventBus.emit('artwork-unhover')
+      this.hoveredFrameIndex = -1
+    }
+    this.domElement.style.cursor = 'grab'
+  }
+
+  private onClick(e: MouseEvent): void {
+    if (this.isPanelOpen) return
+    const dx = Math.abs(e.clientX - this.dragStartX)
+    const dy = Math.abs(e.clientY - this.dragStartY)
+    if (dx > 3 || dy > 3) return
+    this.handleClick(e.clientX, e.clientY)
   }
 
   private onWheel(e: WheelEvent): void {
     if (this.isPanelOpen) return
     e.preventDefault()
-    this.targetZoom += e.deltaY * ZOOM_SPEED * 0.01
+    const deltaNorm = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 100) / 100
+    this.targetZoom += deltaNorm * ZOOM_SPEED * 5
     this.targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.targetZoom))
   }
 
@@ -137,15 +160,19 @@ export class InteractionController {
 
   private onTouchStart(e: TouchEvent): void {
     if (this.isPanelOpen || e.touches.length !== 1) return
+    e.preventDefault()
     this.isDragging = true
     this.touchStartX = e.touches[0].clientX
     this.touchStartY = e.touches[0].clientY
     this.previousMouseX = this.touchStartX
     this.previousMouseY = this.touchStartY
+    this.dragStartX = this.touchStartX
+    this.dragStartY = this.touchStartY
   }
 
   private onTouchMove(e: TouchEvent): void {
     if (!this.isDragging || this.isPanelOpen || e.touches.length !== 1) return
+    e.preventDefault()
     const deltaX = e.touches[0].clientX - this.previousMouseX
     const deltaY = e.touches[0].clientY - this.previousMouseY
     this.targetAzimuthal -= deltaX * ROTATION_SPEED
@@ -156,7 +183,17 @@ export class InteractionController {
   }
 
   private onTouchEnd(e: TouchEvent): void {
+    if (!this.isDragging) return
     this.isDragging = false
+    const lastTouch = e.changedTouches[0]
+    if (lastTouch) {
+      const dx = Math.abs(lastTouch.clientX - this.touchStartX)
+      const dy = Math.abs(lastTouch.clientY - this.touchStartY)
+      if (dx < 10 && dy < 10) {
+        this.updateHover(lastTouch.clientX, lastTouch.clientY)
+        this.handleClick(lastTouch.clientX, lastTouch.clientY)
+      }
+    }
   }
 
   private updateHover(clientX: number, clientY: number): void {
@@ -166,24 +203,27 @@ export class InteractionController {
 
     this.raycaster.setFromCamera(this.mouse, this.camera)
     const frameObjects = this.galleryScene.getFrameObjects()
-    const intersects = this.raycaster.intersectObjects(frameObjects)
+    const intersects = this.raycaster.intersectObjects(frameObjects, false)
 
     if (intersects.length > 0) {
       const hit = intersects[0].object
-      const idx = hit.userData.frameIndex
+      let idx: number | undefined
+      if (hit.userData && typeof hit.userData.frameIndex === 'number') {
+        idx = hit.userData.frameIndex
+      }
       if (idx !== undefined && idx !== this.hoveredFrameIndex) {
         if (this.hoveredFrameIndex >= 0) {
           eventBus.emit('artwork-unhover')
         }
         this.hoveredFrameIndex = idx
         eventBus.emit('artwork-hover', idx)
-        this.domElement.style.cursor = 'pointer'
+        if (!this.isDragging) this.domElement.style.cursor = 'pointer'
       }
     } else {
       if (this.hoveredFrameIndex >= 0) {
         eventBus.emit('artwork-unhover')
         this.hoveredFrameIndex = -1
-        this.domElement.style.cursor = 'grab'
+        if (!this.isDragging) this.domElement.style.cursor = 'grab'
       }
     }
   }
@@ -195,12 +235,15 @@ export class InteractionController {
 
     this.raycaster.setFromCamera(this.mouse, this.camera)
     const frameObjects = this.galleryScene.getFrameObjects()
-    const intersects = this.raycaster.intersectObjects(frameObjects)
+    const intersects = this.raycaster.intersectObjects(frameObjects, false)
 
     if (intersects.length > 0) {
       const hit = intersects[0].object
-      const idx = hit.userData.frameIndex
-      if (idx !== undefined) {
+      let idx: number | undefined
+      if (hit.userData && typeof hit.userData.frameIndex === 'number') {
+        idx = hit.userData.frameIndex
+      }
+      if (idx !== undefined && idx >= 0 && idx < this.galleryScene.getFrameCount()) {
         this.focusedArtworkIndex = idx
         this.isPanelOpen = true
         eventBus.emit('artwork-focused', idx)
@@ -213,22 +256,22 @@ export class InteractionController {
     if (index < 0 || index >= this.galleryScene.getFrameCount()) return
 
     this.focusedArtworkIndex = index
+    this.isPanelOpen = true
     const framePos = this.galleryScene.getFramePosition(index)
-    const lookAtPos = this.galleryScene.getFrameLookAt(index)
+    const frameGroup = this.galleryScene.getFrameGroups()[index]
 
     this.cameraAnimStart.copy(this.camera.position)
-    this.cameraAnimEnd.copy(framePos)
 
     const normal = new THREE.Vector3(0, 0, 1)
-    const frameGroup = this.galleryScene.getFrameGroups()[index]
     if (frameGroup) {
-      normal.applyEuler(frameGroup.rotation)
+      normal.applyQuaternion(frameGroup.quaternion)
     }
-    this.cameraAnimEnd.addScaledVector(normal, -3)
+    this.cameraAnimEnd.copy(framePos).addScaledVector(normal, 3)
     this.cameraAnimEnd.y = CAMERA_HEIGHT
 
     this.lookAtAnimStart.copy(this.lookAtTarget)
-    this.lookAtAnimEnd.copy(lookAtPos)
+    this.lookAtAnimEnd.copy(framePos)
+    this.lookAtAnimEnd.y = CAMERA_HEIGHT
 
     this.cameraAnimProgress = 0
     this.isAnimatingCamera = true
@@ -238,9 +281,10 @@ export class InteractionController {
   }
 
   private updateCameraPosition(): void {
-    const x = this.lookAtTarget.x + this.zoomDistance * Math.sin(this.azimuthalAngle) * Math.cos(this.polarAngle)
+    const hDist = this.zoomDistance * Math.cos(this.polarAngle)
+    const x = this.lookAtTarget.x + hDist * Math.sin(this.azimuthalAngle)
     const y = this.lookAtTarget.y + this.zoomDistance * Math.sin(this.polarAngle)
-    const z = this.lookAtTarget.z + this.zoomDistance * Math.cos(this.azimuthalAngle) * Math.cos(this.polarAngle)
+    const z = this.lookAtTarget.z + hDist * Math.cos(this.azimuthalAngle)
 
     this.camera.position.set(x, y, z)
     this.camera.lookAt(this.lookAtTarget)
@@ -259,17 +303,13 @@ export class InteractionController {
       this.lookAtTarget.lerpVectors(this.lookAtAnimStart, this.lookAtAnimEnd, t)
       this.camera.lookAt(this.lookAtTarget)
 
-      this.azimuthalAngle = Math.atan2(
-        this.camera.position.x - this.lookAtTarget.x,
-        this.camera.position.z - this.lookAtTarget.z
-      )
       const dx = this.camera.position.x - this.lookAtTarget.x
       const dz = this.camera.position.z - this.lookAtTarget.z
+      const dy = this.camera.position.y - this.lookAtTarget.y
       const horizontalDist = Math.sqrt(dx * dx + dz * dz)
-      this.polarAngle = Math.atan2(
-        this.camera.position.y - this.lookAtTarget.y,
-        horizontalDist
-      )
+
+      this.azimuthalAngle = Math.atan2(dx, dz)
+      this.polarAngle = Math.atan2(dy, horizontalDist)
       this.zoomDistance = this.camera.position.distanceTo(this.lookAtTarget)
 
       this.targetAzimuthal = this.azimuthalAngle
@@ -278,9 +318,15 @@ export class InteractionController {
       return
     }
 
-    this.azimuthalAngle += (this.targetAzimuthal - this.azimuthalAngle) * (1 - DAMPING * delta)
-    this.polarAngle += (this.targetPolar - this.polarAngle) * (1 - DAMPING * delta)
-    this.zoomDistance += (this.targetZoom - this.zoomDistance) * (1 - DAMPING * delta)
+    const lerpPerFrame = 1 - DAMPING
+    const fpsFactor = delta * 60
+    const lerpFactor = 1 - Math.pow(1 - lerpPerFrame, fpsFactor)
+
+    this.azimuthalAngle += (this.targetAzimuthal - this.azimuthalAngle) * lerpFactor
+    this.polarAngle += (this.targetPolar - this.polarAngle) * lerpFactor
+    this.zoomDistance += (this.targetZoom - this.zoomDistance) * lerpFactor
+
+    this.lookAtTarget.lerp(this.targetLookAt, lerpFactor)
 
     this.updateCameraPosition()
   }
