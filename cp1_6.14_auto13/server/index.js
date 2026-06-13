@@ -3,6 +3,7 @@ import cors from 'cors';
 import Datastore from 'nedb-promises';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,6 +14,9 @@ app.use(cors());
 app.use(express.json());
 
 const dbPath = path.join(__dirname, 'data');
+if (!fs.existsSync(dbPath)) {
+  fs.mkdirSync(dbPath, { recursive: true });
+}
 
 const users = Datastore.create({ filename: path.join(dbPath, 'users.db'), autoload: true });
 const courses = Datastore.create({ filename: path.join(dbPath, 'courses.db'), autoload: true });
@@ -134,6 +138,8 @@ app.post('/api/bookings', async (req, res) => {
     const { userId, courseId } = req.body;
     const course = await courses.findOne({ _id: courseId });
     if (!course) return res.status(404).json({ error: 'Course not found' });
+    const user = await users.findOne({ _id: userId });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const existing = await bookings.findOne({ userId, courseId, status: { $ne: 'cancelled' } });
     if (existing) return res.status(400).json({ error: 'Already booked' });
@@ -144,6 +150,7 @@ app.post('/api/bookings', async (req, res) => {
     const booking = {
       _id: uuidv4(),
       userId,
+      userName: user.name,
       courseId,
       courseName: course.name,
       coachName: course.coachName,

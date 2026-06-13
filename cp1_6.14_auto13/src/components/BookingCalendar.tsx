@@ -39,6 +39,23 @@ export default function BookingCalendar({ courses, bookings, userId, onBookingCh
   }, [courses]);
 
   const handleBook = useCallback(async (courseId: string) => {
+    if (!userId) {
+      toast.error('请先登录');
+      return;
+    }
+    const course = courses.find(c => c._id === courseId);
+    if (!course) {
+      toast.error('课程不存在');
+      return;
+    }
+    if ((course.remaining ?? 0) <= 0) {
+      toast.error('该课程名额已满');
+      return;
+    }
+    if (userBookedCourseIds.has(courseId)) {
+      toast.error('您已预约该课程');
+      return;
+    }
     try {
       await createBooking(userId, courseId);
       toast.success('预约成功！');
@@ -46,7 +63,7 @@ export default function BookingCalendar({ courses, bookings, userId, onBookingCh
     } catch (err: any) {
       toast.error(err.response?.data?.error || '预约失败');
     }
-  }, [userId, onBookingChange]);
+  }, [userId, courses, userBookedCourseIds, onBookingChange]);
 
   const handleCancel = useCallback(async (bookingId: string) => {
     try {

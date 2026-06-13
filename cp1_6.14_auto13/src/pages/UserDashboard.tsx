@@ -64,7 +64,8 @@ export default function UserDashboard({ user }: UserDashboardProps) {
   const totalMinutes = weekRecords.reduce((s, r) => s + (r.duration || 0), 0);
   const totalCalories = weekRecords.reduce((s, r) => s + (r.calories || 0), 0);
 
-  const recentRecords = weekTrainingRecords.slice(0, 20);
+  const recentRecords = weekTrainingRecords;
+  const displayRecords = weekTrainingRecords.slice(0, 20);
 
   const handleBodySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,7 +156,7 @@ export default function UserDashboard({ user }: UserDashboardProps) {
             </List>
           ) : (
             <div className="records-list">
-              {recentRecords.map(r => (
+              {displayRecords.map(r => (
                 <div key={r._id} className="record-row">
                   <div className="record-date">{r.date}</div>
                   <div className="record-info">
