@@ -5,7 +5,8 @@ import {
   ELEMENT_COLORS,
   ELEMENT_LABELS,
   GridElement,
-  ElementType
+  ElementType,
+  COLLIDABLE_TYPES
 } from './EditorState';
 import { buildCollisionGrid, CollisionResult } from './CollisionEngine';
 
@@ -22,6 +23,8 @@ interface ContextMenuState {
   y: number;
   element: GridElement | null;
 }
+
+const SUPPORTS_TRANSPARENCY: ElementType[] = ['water'];
 
 const roundRect = (
   ctx: CanvasRenderingContext2D,
@@ -45,19 +48,18 @@ const roundRect = (
   ctx.closePath();
 };
 
-const easeOutBack = (t: number): number => {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-};
-
-const bounceScale = (t: number): number => {
-  if (t <= 0.5) {
-    const p = t * 2;
-    return 1 + 0.15 * easeOutBack(p);
+const elasticBounce = (t: number): number => {
+  if (t <= 0) return 1;
+  if (t >= 1) return 1;
+  const mid = 0.5;
+  if (t < mid) {
+    const p = t / mid;
+    const eased = 1 - Math.pow(1 - p, 3);
+    return 1 + 0.15 * eased;
   } else {
-    const p = (t - 0.5) * 2;
-    return 1.15 - 0.15 * easeOutBack(p);
+    const p = (t - mid) / mid;
+    const eased = 1 - Math.pow(1 - p, 3);
+    return 1.15 - 0.15 * eased;
   }
 };
 
@@ -232,7 +234,8 @@ const drawElementShape = (
 };
 
 const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mainCanvasRef = useRef<HTMLCanvasElement>(null);
+  const collisionCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -245,21 +248,10 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
   const lastPosRef = useRef({ x: 0, y: 0 });
   const dragOverRef = useRef(false);
 
-  const collisionOpacityRef = useRef(state.showCollisionLayer ? 1 : 0);
-  const targetCollisionOpacityRef = useRef(state.showCollisionLayer ? 1 : 0);
-  const prevShowCollisionRef = useRef(state.showCollisionLayer);
-
   const collision: CollisionResult = useMemo(
     () => buildCollisionGrid(state.elements, state.gridSize),
     [state.elements, state.gridSize]
   );
-
-  useEffect(() => {
-    if (prevShowCollisionRef.current !== state.showCollisionLayer) {
-      targetCollisionOpacityRef.current = state.showCollisionLayer ? 1 : 0;
-      prevShowCollisionRef.current = state.showCollisionLayer;
-    }
-  }, [state.showCollisionLayer]);
 
   useEffect(() => {
     const updateSize = () => {
@@ -328,6 +320,10 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
   const placeElementAt = useCallback(
     (gridX: number, gridY: number, type: ElementType) => {
       const id = 'el_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      const props: { opacity?: number } = {};
+      if (SUPPORTS_TRANSPARENCY.includes(type)) {
+        props.opacity = 0.8;
+      }
       dispatch({
         type: 'PLACE_ELEMENT',
         payload: {
@@ -335,7 +331,7 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
           type,
           gridX,
           gridY,
-          properties: { opacity: 0.8 },
+          properties: props,
           placedAt: Date.now()
         }
       });
@@ -343,8 +339,8 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
     [dispatch]
   );
 
-  const render = useCallback(() => {
-    const canvas = canvasRef.current;
+  const renderMain = useCallback(() => {
+    const canvas = mainCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -390,17 +386,6 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
 
     const now = performance.now();
 
-    const target = targetCollisionOpacityRef.current;
-    const current = collisionOpacityRef.current;
-    if (Math.abs(current - target) > 0.001) {
-      const step = (1 / 0.3) / 60;
-      if (current < target) {
-        collisionOpacityRef.current = Math.min(target, current + step);
-      } else {
-        collisionOpacityRef.current = Math.max(target, current - step);
-      }
-    }
-
     const animMap = new Map<string, { startTime: number; type: 'place' | 'delete' }>();
     for (const a of state.animatingCells) {
       animMap.set(a.key, { startTime: a.startTime, type: a.type });
@@ -421,7 +406,7 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
           const elapsed = now - anim.startTime;
           const t = Math.min(1, elapsed / 200);
           if (anim.type === 'place') {
-            const scale = bounceScale(t);
+            const scale = elasticBounce(t);
             if (el) {
               const pos = worldToScreen(gx, gy);
               drawElementShape(ctx, el, pos.x, pos.y, cs, scale);
@@ -430,7 +415,7 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
             const alpha = 1 - t;
             if (alpha > 0 && el) {
               const pos = worldToScreen(gx, gy);
-              drawElementShape(ctx, el, pos.x, pos.y, cs, 1 + t * 0.15, alpha);
+              drawElementShape(ctx, el, pos.x, pos.y, cs, elasticBounce(t), alpha);
             }
           }
         } else if (el) {
@@ -440,29 +425,13 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
       }
     }
 
-    const colOpacity = collisionOpacityRef.current;
-    if (colOpacity > 0.001) {
-      ctx.save();
-      ctx.globalAlpha = colOpacity;
-      for (let gy = 0; gy < state.gridSize; gy++) {
-        for (let gx = 0; gx < state.gridSize; gx++) {
-          if (collision.collisionGrid[gy]?.[gx]) {
-            const pos = worldToScreen(gx, gy);
-            ctx.fillStyle = '#ff000040';
-            ctx.fillRect(pos.x + cs * 0.04, pos.y + cs * 0.04, cs * 0.92, cs * 0.92);
-          }
-        }
-      }
-      ctx.restore();
-    }
-
     const blinkPhase = (now % 1200) / 1200;
     const blinkAlpha = 0.15 + Math.abs(Math.sin(blinkPhase * Math.PI)) * 0.4;
     for (const el of state.elements) {
       if (el.type === 'start' || el.type === 'end') {
         const pos = worldToScreen(el.gridX, el.gridY);
         ctx.save();
-        ctx.globalAlpha = blinkAlpha * (colOpacity > 0.5 ? 1 : 0.8);
+        ctx.globalAlpha = blinkAlpha;
         ctx.fillStyle = el.type === 'start' ? '#00ff00' : '#ff0000';
         const inset = cs * 0.05;
         ctx.fillRect(pos.x + inset, pos.y + inset, cs - inset * 2, cs - inset * 2);
@@ -490,12 +459,16 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
         const pos = worldToScreen(hoverGrid.x, hoverGrid.y);
         ctx.save();
         ctx.globalAlpha = 0.55;
+        const ghostProps: { opacity?: number } = {};
+        if (SUPPORTS_TRANSPARENCY.includes(type)) {
+          ghostProps.opacity = 0.8;
+        }
         const ghostEl: GridElement = {
           id: 'ghost',
           type,
           gridX: hoverGrid.x,
           gridY: hoverGrid.y,
-          properties: { opacity: 0.8 },
+          properties: ghostProps,
           placedAt: 0
         };
         drawElementShape(ctx, ghostEl, pos.x, pos.y, cs, 1);
@@ -509,51 +482,128 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
     }
 
     const fadeSize = 30;
-    ctx.save();
-    const mapLeft = originX;
-    const mapTop = originY;
-    const mapRight = originX + totalW;
-    const mapBottom = originY + totalH;
+    const fadePx = Math.min(fadeSize, totalW / 3, totalH / 3);
+    if (fadePx > 1) {
+      ctx.save();
+      const mapLeft = originX;
+      const mapTop = originY;
+      const mapRight = originX + totalW;
+      const mapBottom = originY + totalH;
 
-    const lgTop = ctx.createLinearGradient(0, mapTop, 0, mapTop + fadeSize);
-    lgTop.addColorStop(0, '#0f0f1a');
-    lgTop.addColorStop(1, 'rgba(15, 15, 26, 0)');
-    ctx.fillStyle = lgTop;
-    ctx.fillRect(mapLeft, mapTop, totalW, fadeSize);
+      ctx.globalCompositeOperation = 'destination-out';
 
-    const lgBottom = ctx.createLinearGradient(0, mapBottom - fadeSize, 0, mapBottom);
-    lgBottom.addColorStop(0, 'rgba(15, 15, 26, 0)');
-    lgBottom.addColorStop(1, '#0f0f1a');
-    ctx.fillStyle = lgBottom;
-    ctx.fillRect(mapLeft, mapBottom - fadeSize, totalW, fadeSize);
+      const lgTop = ctx.createLinearGradient(0, mapTop, 0, mapTop + fadePx);
+      lgTop.addColorStop(0, 'rgba(0,0,0,1)');
+      lgTop.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = lgTop;
+      ctx.fillRect(mapLeft, mapTop, totalW, fadePx);
 
-    const lgLeft = ctx.createLinearGradient(mapLeft, 0, mapLeft + fadeSize, 0);
-    lgLeft.addColorStop(0, '#0f0f1a');
-    lgLeft.addColorStop(1, 'rgba(15, 15, 26, 0)');
-    ctx.fillStyle = lgLeft;
-    ctx.fillRect(mapLeft, mapTop, fadeSize, totalH);
+      const lgBottom = ctx.createLinearGradient(0, mapBottom - fadePx, 0, mapBottom);
+      lgBottom.addColorStop(0, 'rgba(0,0,0,0)');
+      lgBottom.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.fillStyle = lgBottom;
+      ctx.fillRect(mapLeft, mapBottom - fadePx, totalW, fadePx);
 
-    const lgRight = ctx.createLinearGradient(mapRight - fadeSize, 0, mapRight, 0);
-    lgRight.addColorStop(0, 'rgba(15, 15, 26, 0)');
-    lgRight.addColorStop(1, '#0f0f1a');
-    ctx.fillStyle = lgRight;
-    ctx.fillRect(mapRight - fadeSize, mapTop, fadeSize, totalH);
-    ctx.restore();
+      const lgLeft = ctx.createLinearGradient(mapLeft, 0, mapLeft + fadePx, 0);
+      lgLeft.addColorStop(0, 'rgba(0,0,0,1)');
+      lgLeft.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = lgLeft;
+      ctx.fillRect(mapLeft, mapTop, fadePx, totalH);
+
+      const lgRight = ctx.createLinearGradient(mapRight - fadePx, 0, mapRight, 0);
+      lgRight.addColorStop(0, 'rgba(0,0,0,0)');
+      lgRight.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.fillStyle = lgRight;
+      ctx.fillRect(mapRight - fadePx, mapTop, fadePx, totalH);
+
+      ctx.restore();
+    }
 
     dispatch({ type: 'CLEAR_ANIMATING_CELLS' });
-  }, [state, canvasSize, collision, hoverGrid, dragType, isPanning, worldToScreen, dispatch]);
+  }, [state, canvasSize, hoverGrid, dragType, isPanning, worldToScreen, dispatch]);
+
+  const renderCollision = useCallback(() => {
+    const canvas = collisionCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvasSize.w * dpr;
+    canvas.height = canvasSize.h * dpr;
+    canvas.style.width = canvasSize.w + 'px';
+    canvas.style.height = canvasSize.h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.clearRect(0, 0, canvasSize.w, canvasSize.h);
+
+    const cs = state.cellSize * state.zoom;
+    const originX = canvasSize.w / 2 - (state.gridSize * cs) / 2 + state.panX;
+    const originY = canvasSize.h / 2 - (state.gridSize * cs) / 2 + state.panY;
+
+    for (let gy = 0; gy < state.gridSize; gy++) {
+      for (let gx = 0; gx < state.gridSize; gx++) {
+        if (collision.collisionGrid[gy]?.[gx]) {
+          const pos = worldToScreen(gx, gy);
+          ctx.fillStyle = '#ff000040';
+          ctx.fillRect(pos.x + cs * 0.04, pos.y + cs * 0.04, cs * 0.92, cs * 0.92);
+        }
+      }
+    }
+
+    const fadeSize = 30;
+    const totalW = state.gridSize * cs;
+    const totalH = state.gridSize * cs;
+    const fadePx = Math.min(fadeSize, totalW / 3, totalH / 3);
+    if (fadePx > 1) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+
+      const mapLeft = originX;
+      const mapTop = originY;
+      const mapRight = originX + totalW;
+      const mapBottom = originY + totalH;
+
+      const lgTop = ctx.createLinearGradient(0, mapTop, 0, mapTop + fadePx);
+      lgTop.addColorStop(0, 'rgba(0,0,0,1)');
+      lgTop.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = lgTop;
+      ctx.fillRect(mapLeft, mapTop, totalW, fadePx);
+
+      const lgBottom = ctx.createLinearGradient(0, mapBottom - fadePx, 0, mapBottom);
+      lgBottom.addColorStop(0, 'rgba(0,0,0,0)');
+      lgBottom.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.fillStyle = lgBottom;
+      ctx.fillRect(mapLeft, mapBottom - fadePx, totalW, fadePx);
+
+      const lgLeft = ctx.createLinearGradient(mapLeft, 0, mapLeft + fadePx, 0);
+      lgLeft.addColorStop(0, 'rgba(0,0,0,1)');
+      lgLeft.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = lgLeft;
+      ctx.fillRect(mapLeft, mapTop, fadePx, totalH);
+
+      const lgRight = ctx.createLinearGradient(mapRight - fadePx, 0, mapRight, 0);
+      lgRight.addColorStop(0, 'rgba(0,0,0,0)');
+      lgRight.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.fillStyle = lgRight;
+      ctx.fillRect(mapRight - fadePx, mapTop, fadePx, totalH);
+
+      ctx.restore();
+    }
+  }, [state, canvasSize, collision, worldToScreen]);
 
   useEffect(() => {
     const loop = () => {
-      render();
+      renderMain();
+      renderCollision();
       animFrameRef.current = requestAnimationFrame(loop);
     };
     animFrameRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animFrameRef.current);
-  }, [render]);
+  }, [renderMain, renderCollision]);
 
   const getRelativePos = (e: React.MouseEvent | MouseEvent) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
+    const rect = containerRef.current!.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
@@ -622,11 +672,10 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
       const el = state.elements.find(em => em.gridX === grid.x && em.gridY === grid.y);
       if (el) {
         dispatch({ type: 'SELECT_ELEMENT', payload: el.id });
-        const containerRect = containerRef.current!.getBoundingClientRect();
         setContextMenu({
           visible: true,
-          x: e.clientX - containerRect.left,
-          y: e.clientY - containerRect.top,
+          x: p.x,
+          y: p.y,
           element: el
         });
         return;
@@ -640,8 +689,7 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     dragOverRef.current = true;
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const p = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const p = getRelativePos(e);
     const grid = screenToGrid(p.x, p.y);
     setHoverGrid(grid);
   };
@@ -653,8 +701,7 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
   const onDrop = (e: React.DragEvent) => {
     if (!dragType) return;
     e.preventDefault();
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const p = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const p = getRelativePos(e);
     const grid = screenToGrid(p.x, p.y);
     if (grid) {
       placeElementAt(grid.x, grid.y, dragType);
@@ -678,29 +725,50 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
   const handleRotate = () => {
     if (contextMenu.element) {
       dispatch({ type: 'ROTATE_ELEMENT', payload: { id: contextMenu.element.id, degrees: 90 } });
+      setContextMenu(prev => prev.element ? {
+        ...prev,
+        element: {
+          ...prev.element,
+          properties: {
+            ...prev.element.properties,
+            rotation: ((prev.element.properties.rotation || 0) + 90) % 360
+          }
+        }
+      } : prev);
     }
   };
 
   const handleOpacityChange = (val: number) => {
+    const clamped = Math.max(0.3, Math.min(1, val));
     if (contextMenu.element) {
       dispatch({
         type: 'UPDATE_ELEMENT_PROPERTIES',
-        payload: { id: contextMenu.element.id, properties: { opacity: val } }
+        payload: { id: contextMenu.element.id, properties: { opacity: clamped } }
       });
       setContextMenu(prev => prev.element ? {
         ...prev,
         element: {
           ...prev.element,
-          properties: { ...prev.element.properties, opacity: val }
+          properties: { ...prev.element.properties, opacity: clamped }
         }
       } : prev);
     }
+  };
+
+  const handleOpacityStep = (delta: number) => {
+    if (!contextMenu.element) return;
+    const current = contextMenu.element.properties.opacity ?? 0.8;
+    const stepped = Math.round(current * 20) / 20 + delta * 0.05;
+    handleOpacityChange(stepped);
   };
 
   const passablePct = (collision.passableRatio * 100).toFixed(1);
 
   const activeElement = contextMenu.element;
   const currentOpacity = activeElement?.properties.opacity ?? 0.8;
+  const supportsOpacity = activeElement ? SUPPORTS_TRANSPARENCY.includes(activeElement.type) : false;
+  const supportsRotation = activeElement && activeElement.type !== 'start' && activeElement.type !== 'end';
+  const isCollidable = activeElement ? COLLIDABLE_TYPES.includes(activeElement.type) : false;
 
   return (
     <div
@@ -725,8 +793,29 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
       onClick={() => { if (contextMenu.visible) closeContextMenu(); }}
     >
       <canvas
-        ref={canvasRef}
-        style={{ display: 'block', width: '100%', height: '100%' }}
+        ref={mainCanvasRef}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          top: 0,
+          left: 0
+        }}
+      />
+      <canvas
+        ref={collisionCanvasRef}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          pointerEvents: 'none',
+          opacity: state.showCollisionLayer ? 1 : 0,
+          transition: 'opacity 0.3s ease-out'
+        }}
       />
 
       <div
@@ -765,7 +854,7 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
             backdropFilter: 'blur(8px)',
             borderRadius: 8,
             padding: 6,
-            minWidth: 220,
+            minWidth: 240,
             border: '1px solid #ffffff18',
             boxShadow: '0 8px 32px #00000080',
             zIndex: 1000
@@ -796,6 +885,17 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
               />
             )}
             {ELEMENT_LABELS[contextMenu.element.type]} · ({contextMenu.element.gridX}, {contextMenu.element.gridY})
+            {isCollidable && (
+              <span style={{
+                float: 'right',
+                fontSize: 10,
+                padding: '1px 6px',
+                borderRadius: 4,
+                background: '#ef444430',
+                color: '#fca5a5',
+                fontWeight: 500
+              }}>不可通行</span>
+            )}
           </div>
 
           <button
@@ -820,47 +920,106 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
             🗑 删除元素
           </button>
 
-          <button
-            onClick={handleRotate}
-            style={{
-              display: 'block',
-              width: '100%',
-              height: 36,
-              padding: '0 12px',
-              background: 'transparent',
-              color: '#e5e7eb',
-              border: 'none',
-              borderRadius: 6,
-              cursor: 'pointer',
-              textAlign: 'left',
-              fontSize: 13,
-              transition: 'background 0.15s'
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#3b82f6')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-          >
-            ↻ 旋转 90°（当前: {contextMenu.element.properties.rotation || 0}°）
-          </button>
+          {supportsRotation && (
+            <button
+              onClick={handleRotate}
+              style={{
+                display: 'block',
+                width: '100%',
+                height: 36,
+                padding: '0 12px',
+                background: 'transparent',
+                color: '#e5e7eb',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontSize: 13,
+                transition: 'background 0.15s'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#3b82f6')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              ↻ 旋转 90°（当前: {contextMenu.element.properties.rotation || 0}°）
+            </button>
+          )}
 
-          <div style={{ padding: '8px 12px 6px', borderTop: '1px solid #ffffff12', marginTop: 4 }}>
-            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 6 }}>
-              元素属性
-            </div>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, color: '#d1d5db', marginBottom: 4 }}>
-                透明度: {(currentOpacity * 100).toFixed(0)}%
+          {supportsOpacity && (
+            <div style={{ padding: '10px 12px 8px', borderTop: '1px solid #ffffff12', marginTop: 4 }}>
+              <div style={{
+                fontSize: 12,
+                color: '#9ca3af',
+                marginBottom: 8,
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5
+              }}>
+                元素属性
               </div>
-              <input
-                type="range"
-                min="0.3"
-                max="1"
-                step="0.05"
-                value={currentOpacity}
-                onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
-                style={{ width: '100%', accentColor: '#3b82f6' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#d1d5db', minWidth: 56 }}>透明度</span>
+                <button
+                  onClick={() => handleOpacityStep(-1)}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 4,
+                    border: '1px solid #ffffff20',
+                    background: '#2a2a3e',
+                    color: '#e5e7eb',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#3b82f6')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#2a2a3e')}
+                >−</button>
+                <input
+                  type="range"
+                  min="0.3"
+                  max="1"
+                  step="0.05"
+                  value={currentOpacity}
+                  onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
+                  style={{ flex: 1, accentColor: '#3b82f6' }}
+                />
+                <button
+                  onClick={() => handleOpacityStep(1)}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 4,
+                    border: '1px solid #ffffff20',
+                    background: '#2a2a3e',
+                    color: '#e5e7eb',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#3b82f6')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#2a2a3e')}
+                >+</button>
+                <span style={{
+                  fontSize: 12,
+                  color: '#93c5fd',
+                  minWidth: 36,
+                  textAlign: 'right',
+                  fontFamily: 'monospace',
+                  fontWeight: 600
+                }}>
+                  {Math.round(currentOpacity * 100)}%
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           <button
             onClick={closeContextMenu}
@@ -876,6 +1035,8 @@ const Editor: React.FC<EditorProps> = ({ state, dispatch, dragType, onDragEnd })
               cursor: 'pointer',
               textAlign: 'left',
               fontSize: 13,
+              marginTop: 4,
+              borderTop: supportsOpacity || supportsRotation ? '1px solid #ffffff12' : 'none',
               transition: 'background 0.15s'
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = '#3b82f6')}

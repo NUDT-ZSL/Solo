@@ -46,19 +46,33 @@ export const exportMap = (state: EditorStateShape): ExportedMapData => {
   const canvasHeight = state.gridSize * state.cellSize;
   const collision = buildCollisionGrid(state.elements, state.gridSize);
 
-  if (collision.collisionGrid.length !== state.gridSize ||
-      (collision.collisionGrid[0] && collision.collisionGrid[0].length !== state.gridSize)) {
-    console.warn('[IOHandler] 碰撞层维度与网格尺寸不匹配，已自动修正');
+  const expectedRows = state.gridSize;
+  const expectedCols = state.gridSize;
+  const actualRows = collision.collisionGrid.length;
+  const actualCols = collision.collisionGrid[0]?.length || 0;
+
+  let finalCollision: boolean[][];
+  if (actualRows === expectedRows && actualCols === expectedCols) {
+    finalCollision = collision.collisionGrid;
+  } else {
+    console.warn(
+      `[IOHandler] 碰撞层维度(${actualRows}x${actualCols})与网格尺寸(${expectedRows}x${expectedCols})不匹配，已根据元素位置重新计算`
+    );
+    finalCollision = [];
+    for (let y = 0; y < expectedRows; y++) {
+      const row: boolean[] = [];
+      for (let x = 0; x < expectedCols; x++) {
+        const el = state.elements.find(e => e.gridX === x && e.gridY === y);
+        row.push(!!el && ['water', 'rock', 'building'].includes(el.type));
+      }
+      finalCollision.push(row);
+    }
   }
 
-  const normalizedCollision: boolean[][] = [];
-  for (let y = 0; y < state.gridSize; y++) {
-    const row: boolean[] = [];
-    for (let x = 0; x < state.gridSize; x++) {
-      row.push(collision.collisionGrid[y]?.[x] ?? false);
-    }
-    normalizedCollision.push(row);
-  }
+  const blockedCount = finalCollision.flat().filter(Boolean).length;
+  const totalCells = expectedRows * expectedCols;
+  const passableCount = totalCells - blockedCount;
+  const passableRatio = totalCells > 0 ? passableCount / totalCells : 0;
 
   return {
     version: CURRENT_VERSION,
@@ -77,12 +91,12 @@ export const exportMap = (state: EditorStateShape): ExportedMapData => {
         rotation: el.properties.rotation
       }
     })),
-    collisionLayer: normalizedCollision,
+    collisionLayer: finalCollision,
     collisionStats: {
-      blockedCount: collision.blockedCount,
-      passableCount: collision.passableCount,
-      passableRatio: collision.passableRatio,
-      totalCells: collision.totalCells
+      blockedCount,
+      passableCount,
+      passableRatio,
+      totalCells
     }
   };
 };
@@ -160,13 +174,16 @@ export const importMap = (jsonString: string): ImportResult => {
       if (el.gridX < 0 || el.gridX >= gridSize || el.gridY < 0 || el.gridY >= gridSize) continue;
 
       const props = el.properties || {};
+      const supportsOpacity = el.type === 'water';
       elements.push({
         id: typeof el.id === 'string' ? el.id : generateId(),
         type: el.type,
         gridX: el.gridX,
         gridY: el.gridY,
         properties: {
-          opacity: typeof props.opacity === 'number' ? Math.max(0.3, Math.min(1, props.opacity)) : 0.8,
+          opacity: supportsOpacity
+            ? (typeof props.opacity === 'number' ? Math.max(0.3, Math.min(1, props.opacity)) : 0.8)
+            : undefined,
           rotation: typeof props.rotation === 'number' ? props.rotation % 360 : undefined
         },
         placedAt: Date.now()
