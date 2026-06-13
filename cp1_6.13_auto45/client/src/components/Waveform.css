@@ -1,0 +1,101 @@
+.waveform-player {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.waveform-container {
+  width: 100%;
+  height: 200px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+}
+
+.waveform-canvas-large {
+  width: 100%;
+  height: 100%;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f97316;
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.play-btn:hover {
+  background: #ea580c;
+}
+
+.play-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #4b5563;
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #f97316;
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.progress-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: #f97316;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.progress-bar:hover .progress-thumb {
+  opacity: 1;
+}
+
+.time-display {
+  font-size: 14px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+  min-width: 60px;
+  text-align: right;
+}
+
+.zoom-indicator {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.zoom-hint {
+  color: #4b5563;
+  margin-left: 8px;
+}
