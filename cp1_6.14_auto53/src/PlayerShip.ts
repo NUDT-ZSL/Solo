@@ -191,14 +191,90 @@ export class PlayerShip {
     return 14;
   }
 
+  getVertices(): { x: number; y: number }[] {
+    const cos = Math.cos(this.angle);
+    const sin = Math.sin(this.angle);
+    const localPoints = [
+      { x: 18, y: 0 },
+      { x: -12, y: -10 },
+      { x: -12, y: 10 },
+    ];
+    return localPoints.map((p) => ({
+      x: this.x + p.x * cos - p.y * sin,
+      y: this.y + p.x * sin + p.y * cos,
+    }));
+  }
+
+  static cross2D(ax: number, ay: number, bx: number, by: number): number {
+    return ax * by - ay * bx;
+  }
+
+  static pointInTriangle(
+    px: number,
+    py: number,
+    v1: { x: number; y: number },
+    v2: { x: number; y: number },
+    v3: { x: number; y: number },
+  ): boolean {
+    const c1 = PlayerShip.cross2D(v2.x - v1.x, v2.y - v1.y, px - v1.x, py - v1.y);
+    const c2 = PlayerShip.cross2D(v3.x - v2.x, v3.y - v2.y, px - v2.x, py - v2.y);
+    const c3 = PlayerShip.cross2D(v1.x - v3.x, v1.y - v3.y, px - v3.x, py - v3.y);
+    const hasNeg = c1 < 0 || c2 < 0 || c3 < 0;
+    const hasPos = c1 > 0 || c2 > 0 || c3 > 0;
+    return !(hasNeg && hasPos);
+  }
+
+  static pointToSegmentDistance(
+    px: number,
+    py: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+  ): number {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+    let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+    return Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
+  }
+
+  static checkCircleTriangleCollision(
+    cx: number,
+    cy: number,
+    cr: number,
+    vertices: { x: number; y: number }[],
+  ): boolean {
+    if (vertices.length < 3) return false;
+
+    if (PlayerShip.pointInTriangle(cx, cy, vertices[0], vertices[1], vertices[2])) {
+      return true;
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const v1 = vertices[i];
+      const v2 = vertices[(i + 1) % 3];
+      const dist = PlayerShip.pointToSegmentDistance(cx, cy, v1.x, v1.y, v2.x, v2.y);
+      if (dist < cr) return true;
+    }
+
+    return false;
+  }
+
+  checkBulletAgainstShip(bulletX: number, bulletY: number, bulletSize: number, shipVertices: { x: number; y: number }[]): boolean {
+    return PlayerShip.checkCircleTriangleCollision(bulletX, bulletY, bulletSize, shipVertices);
+  }
+
   checkBulletCollision(other: PlayerShip): boolean {
     let hit = false;
-    const r = other.getCollisionRadius();
+    const otherVertices = other.getVertices();
     for (const b of this.bullets) {
       if (!b.alive) continue;
-      const dx = b.x - other.x;
-      const dy = b.y - other.y;
-      if (dx * dx + dy * dy < (r + b.size) * (r + b.size)) {
+      if (this.checkBulletAgainstShip(b.x, b.y, b.size, otherVertices)) {
         b.alive = false;
         other.takeDamage(b.damage);
         hit = true;

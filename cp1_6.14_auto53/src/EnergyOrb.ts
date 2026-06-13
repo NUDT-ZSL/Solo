@@ -31,23 +31,32 @@ export class EnergyOrb {
     this.rotation += dt * 2;
   }
 
+  private getVertices(): { x: number; y: number }[] {
+    const verts: { x: number; y: number }[] = [];
+    for (let i = 0; i < this.sides; i++) {
+      const a = this.rotation + (Math.PI * 2 * i) / this.sides;
+      verts.push({
+        x: this.x + Math.cos(a) * this.radius,
+        y: this.y + Math.sin(a) * this.radius,
+      });
+    }
+    return verts;
+  }
+
   draw(ctx: CanvasRenderingContext2D) {
     if (!this.alive) return;
 
+    const verts = this.getVertices();
+
     ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.rotation);
 
     ctx.shadowColor = this.color;
     ctx.shadowBlur = 12;
 
     ctx.beginPath();
-    for (let i = 0; i < this.sides; i++) {
-      const a = (Math.PI * 2 * i) / this.sides;
-      const px = Math.cos(a) * this.radius;
-      const py = Math.sin(a) * this.radius;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+    for (let i = 0; i < verts.length; i++) {
+      if (i === 0) ctx.moveTo(verts[i].x, verts[i].y);
+      else ctx.lineTo(verts[i].x, verts[i].y);
     }
     ctx.closePath();
 
@@ -69,7 +78,7 @@ export class EnergyOrb {
       speed: '>',
       missile: 'M',
     };
-    ctx.fillText(symbols[this.type], 0, 1);
+    ctx.fillText(symbols[this.type], this.x, this.y + 1);
 
     ctx.restore();
   }

@@ -50,6 +50,8 @@ export class GameEngine {
   private animFrameId: number = 0;
   private lastTime: number = 0;
   private running: boolean = false;
+  private readonly FIXED_DT: number = 1 / 60;
+  private accumulator: number = 0;
 
   keys: Set<string> = new Set();
 
@@ -92,6 +94,7 @@ export class GameEngine {
     this.winner = null;
     this.isRedFlash = false;
     this.redFlashTimer = 0;
+    this.accumulator = 0;
     this.mode = 'playing';
     this.emitState();
 
@@ -115,12 +118,16 @@ export class GameEngine {
   private loop = (now: number) => {
     if (!this.running) return;
 
-    const rawDt = (now - this.lastTime) / 1000;
-    const dt = Math.min(rawDt, 1 / 30);
+    const frameDt = (now - this.lastTime) / 1000;
     this.lastTime = now;
 
+    this.accumulator += Math.min(frameDt, this.FIXED_DT * 3);
+
     if (this.mode === 'playing') {
-      this.update(dt);
+      while (this.accumulator >= this.FIXED_DT) {
+        this.update(this.FIXED_DT);
+        this.accumulator -= this.FIXED_DT;
+      }
     }
 
     this.render();
@@ -141,8 +148,26 @@ export class GameEngine {
       this.ship2.update(dt, input.p2);
     }
 
-    this.ship1.checkBulletCollision(this.ship2);
-    this.ship2.checkBulletCollision(this.ship1);
+    const ship1Vertices = this.ship1.getVertices();
+    const ship2Vertices = this.ship2.getVertices();
+
+    for (const b of this.ship1.bullets) {
+      if (!b.alive) continue;
+      if (this.ship1.checkBulletAgainstShip(b.x, b.y, b.size, ship2Vertices)) {
+        b.alive = false;
+        this.ship2.takeDamage(b.damage);
+      }
+    }
+    for (const b of this.ship2.bullets) {
+      if (!b.alive) continue;
+      if (this.ship2.checkBulletAgainstShip(b.x, b.y, b.size, ship1Vertices)) {
+        b.alive = false;
+        this.ship1.takeDamage(b.damage);
+      }
+    }
+
+    this.ship1.bullets = this.ship1.bullets.filter((b) => b.alive);
+    this.ship2.bullets = this.ship2.bullets.filter((b) => b.alive);
 
     this.arena.update(dt);
 

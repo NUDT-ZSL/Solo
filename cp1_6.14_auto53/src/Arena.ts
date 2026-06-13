@@ -21,6 +21,8 @@ export class Arena {
   shrinkSpeed: ShrinkSpeed = 'medium';
   isShrinking: boolean = false;
   shrinkFlashTimer: number = 0;
+  flashPhase: number = 0;
+  flashFrequency: number = 5;
   outsideDamageRate: number = 15;
   totalElapsed: number = 0;
 
@@ -57,8 +59,10 @@ export class Arena {
 
     if (this.shrinkFlashTimer > 0) {
       this.shrinkFlashTimer -= dt;
+      this.flashPhase += dt * this.flashFrequency;
       if (this.shrinkFlashTimer <= 0) {
         this.isShrinking = false;
+        this.flashPhase = 0;
       }
     }
 
@@ -115,8 +119,8 @@ export class Arena {
     ctx.strokeRect(this.left, this.top, this.right - this.left, this.bottom - this.top);
 
     if (this.isShrinking || this.shrinkFlashTimer > 0) {
-      const flashFreq = 5;
-      const alpha = 0.5 * (0.5 + 0.5 * Math.sin(this.totalElapsed * flashFreq * Math.PI * 2));
+      const pulse = 0.5 + 0.5 * Math.sin(this.flashPhase * Math.PI * 2);
+      const alpha = 0.3 + pulse * 0.7;
       ctx.strokeStyle = `rgba(255,0,0,${alpha})`;
       ctx.lineWidth = 3;
       ctx.shadowColor = '#ff0000';
@@ -149,6 +153,7 @@ export class Arena {
     this.shrinkTimer = SHRINK_INTERVAL;
     this.isShrinking = false;
     this.shrinkFlashTimer = 0;
+    this.flashPhase = 0;
     this.totalElapsed = 0;
   }
 }

@@ -3,14 +3,48 @@ import { Arena } from './Arena';
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard';
 
+const AIM_OFFSETS: Record<AIDifficulty, number> = {
+  easy: (20 * Math.PI) / 180,
+  medium: (10 * Math.PI) / 180,
+  hard: (5 * Math.PI) / 180,
+};
+
+const SHOOT_THRESHOLDS: Record<AIDifficulty, number> = {
+  easy: 0.15,
+  medium: 0.12,
+  hard: 0.1,
+};
+
 export class SinglePlayerAI {
   difficulty: AIDifficulty;
+  private aimOffset: number = 0;
+  private aimOffsetTimer: number = 0;
   private randomShootTimer: number = 0;
   private randomTurnDir: number = 0;
   private decisionTimer: number = 0;
 
   constructor(difficulty: AIDifficulty) {
     this.difficulty = difficulty;
+    this.rollNewAimOffset();
+  }
+
+  private rollNewAimOffset() {
+    const maxOffset = AIM_OFFSETS[this.difficulty];
+    this.aimOffset = (Math.random() * 2 - 1) * maxOffset;
+  }
+
+  private predictTargetPos(
+    aiShip: PlayerShip,
+    playerShip: PlayerShip,
+  ): { x: number; y: number } {
+    const dx = playerShip.x - aiShip.x;
+    const dy = playerShip.y - aiShip.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const bulletTravelTime = dist / aiShip.bulletSpeed;
+    return {
+      x: playerShip.x + playerShip.vx * bulletTravelTime,
+      y: playerShip.y + playerShip.vy * bulletTravelTime,
+    };
   }
 
   decide(aiShip: PlayerShip, playerShip: PlayerShip, arena: Arena, dt: number): {
@@ -25,6 +59,11 @@ export class SinglePlayerAI {
     }
 
     this.decisionTimer += dt;
+    this.aimOffsetTimer -= dt;
+    if (this.aimOffsetTimer <= 0) {
+      this.rollNewAimOffset();
+      this.aimOffsetTimer = 0.8 + Math.random() * 1.2;
+    }
 
     switch (this.difficulty) {
       case 'easy':
@@ -45,13 +84,15 @@ export class SinglePlayerAI {
       this.randomTurnDir = Math.random() > 0.5 ? 1 : -1;
     }
 
-    const toTarget = Math.atan2(playerShip.y - aiShip.y, playerShip.x - aiShip.x);
-    const angleDiff = this.normalizeAngle(toTarget - aiShip.angle);
+    const target = this.predictTargetPos(aiShip, playerShip);
+    const targetAngle = Math.atan2(target.y - aiShip.y, target.x - aiShip.x) + this.aimOffset;
+    const angleDiff = this.normalizeAngle(targetAngle - aiShip.angle);
 
     const turnLeft = angleDiff < -0.1;
     const turnRight = angleDiff > 0.1;
 
-    const shouldShoot = Math.abs(angleDiff) < 0.8 && Math.random() < 0.2;
+    const threshold = SHOOT_THRESHOLDS.easy;
+    const shouldShoot = Math.abs(angleDiff) < threshold && aiShip.shootCooldown <= 0;
 
     const nearBoundary = arena.isOutOfBounds(aiShip.x, aiShip.y, 30);
     const moveForward = !nearBoundary || Math.random() > 0.5;
@@ -61,7 +102,7 @@ export class SinglePlayerAI {
       down: false,
       left: turnLeft || (Math.random() < 0.02 ? this.randomTurnDir < 0 : false),
       right: turnRight || (Math.random() < 0.02 ? this.randomTurnDir > 0 : false),
-      shoot: shouldShoot && aiShip.shootCooldown <= 0,
+      shoot: shouldShoot,
     };
   }
 
@@ -72,27 +113,25 @@ export class SinglePlayerAI {
     const dy = playerShip.y - aiShip.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    const bulletTravelTime = dist / aiShip.bulletSpeed;
-    const predictedX = playerShip.x + playerShip.vx * bulletTravelTime * 0.5;
-    const predictedY = playerShip.y + playerShip.vy * bulletTravelTime * 0.5;
+    const target = this.predictTargetPos(aiShip, playerShip);
+    const targetAngle = Math.atan2(target.y - aiShip.y, target.x - aiShip.x) + this.aimOffset;
+    const angleDiff = this.normalizeAngle(targetAngle - aiShip.angle);
 
-    const toTarget = Math.atan2(predictedY - aiShip.y, predictedX - aiShip.x);
-    const angleDiff = this.normalizeAngle(toTarget - aiShip.angle);
-
-    const idealDist = 200;
-    const moveForward = dist > idealDist * 0.7;
+    const idealDist = 220;
+    const moveForward = dist > idealDist * 0.8;
     const moveBackward = dist < idealDist * 0.4;
 
-    const shouldShoot = Math.abs(angleDiff) < 0.4 && Math.random() < 0.4;
+    const threshold = SHOOT_THRESHOLDS.medium;
+    const shouldShoot = Math.abs(angleDiff) < threshold && aiShip.shootCooldown <= 0;
 
     const avoidBoundary = this.avoidBoundary(aiShip, arena);
 
     return {
       up: avoidBoundary.up || moveForward,
       down: avoidBoundary.down || moveBackward,
-      left: avoidBoundary.left || angleDiff < -0.05,
-      right: avoidBoundary.right || angleDiff > 0.05,
-      shoot: shouldShoot && aiShip.shootCooldown <= 0,
+      left: avoidBoundary.left || angleDiff < -0.08,
+      right: avoidBoundary.right || angleDiff > 0.08,
+      shoot: shouldShoot,
     };
   }
 
@@ -103,29 +142,26 @@ export class SinglePlayerAI {
     const dy = playerShip.y - aiShip.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    const bulletTravelTime = dist / aiShip.bulletSpeed;
-    const predictedX = playerShip.x + playerShip.vx * bulletTravelTime;
-    const predictedY = playerShip.y + playerShip.vy * bulletTravelTime;
+    const target = this.predictTargetPos(aiShip, playerShip);
+    const targetAngle = Math.atan2(target.y - aiShip.y, target.x - aiShip.x) + this.aimOffset;
+    const angleDiff = this.normalizeAngle(targetAngle - aiShip.angle);
 
-    const toTarget = Math.atan2(predictedY - aiShip.y, predictedX - aiShip.x);
-    const angleDiff = this.normalizeAngle(toTarget - aiShip.angle);
-
-    const aggressiveDist = 150;
+    const aggressiveDist = 160;
     const moveForward = dist > aggressiveDist;
     const moveBackward = dist < aggressiveDist * 0.5;
 
-    const shouldShoot = Math.abs(angleDiff) < 0.25 && Math.random() < 0.6;
+    const threshold = SHOOT_THRESHOLDS.hard;
+    const shouldShoot = Math.abs(angleDiff) < threshold && aiShip.shootCooldown <= 0;
 
     const avoidBoundary = this.avoidBoundary(aiShip, arena);
-
     const dodgeBullets = this.dodgeIncomingBullets(aiShip, playerShip);
 
     return {
       up: dodgeBullets.up || avoidBoundary.up || moveForward,
       down: dodgeBullets.down || avoidBoundary.down || moveBackward,
-      left: dodgeBullets.left || avoidBoundary.left || angleDiff < -0.03,
-      right: dodgeBullets.right || avoidBoundary.right || angleDiff > 0.03,
-      shoot: shouldShoot && aiShip.shootCooldown <= 0,
+      left: dodgeBullets.left || avoidBoundary.left || angleDiff < -0.05,
+      right: dodgeBullets.right || avoidBoundary.right || angleDiff > 0.05,
+      shoot: shouldShoot,
     };
   }
 

@@ -6,6 +6,8 @@ import { ShrinkSpeed } from './Arena';
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
+  const showSettingsRef = useRef(false);
+  const showDifficultyRef = useRef(false);
   const [gameState, setGameState] = useState<GameState>({
     mode: 'menu',
     playMode: 'dual',
@@ -26,9 +28,23 @@ export default function App() {
   const [sensitivity, setSensitivity] = useState(50);
   const [shrinkSpeed, setShrinkSpeed] = useState<ShrinkSpeed>('medium');
 
+  const setShowSettingsSync = useCallback((v: boolean) => {
+    showSettingsRef.current = v;
+    setShowSettings(v);
+  }, []);
+
+  const setShowDifficultySync = useCallback((v: boolean) => {
+    showDifficultyRef.current = v;
+    setShowDifficulty(v);
+  }, []);
+
   useEffect(() => {
     const engine = new GameEngine();
     engineRef.current = engine;
+
+    if (canvasRef.current) {
+      engine.init(canvasRef.current);
+    }
 
     engine.onStateChange = (state) => {
       setGameState({ ...state });
@@ -40,20 +56,20 @@ export default function App() {
       if (engine.getState().mode === 'menu') {
         if (e.code === 'KeyL') {
           engine.startDual();
-          setShowDifficulty(false);
-          setShowSettings(false);
-        } else if (e.code === 'KeyS' && !showSettings) {
-          setShowDifficulty(true);
+          setShowDifficultySync(false);
+          setShowSettingsSync(false);
+        } else if (e.code === 'KeyS' && !showSettingsRef.current) {
+          setShowDifficultySync(true);
         } else if (e.code === 'KeyO') {
-          setShowSettings(true);
+          setShowSettingsSync(true);
         }
       }
 
       if (e.code === 'Escape') {
-        if (showSettings) {
-          setShowSettings(false);
-        } else if (showDifficulty) {
-          setShowDifficulty(false);
+        if (showSettingsRef.current) {
+          setShowSettingsSync(false);
+        } else if (showDifficultyRef.current) {
+          setShowDifficultySync(false);
         } else if (engine.getState().mode !== 'menu') {
           engine.stop();
         }
@@ -72,13 +88,7 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
       engine.stop();
     };
-  }, [showSettings, showDifficulty]);
-
-  useEffect(() => {
-    if (canvasRef.current && engineRef.current) {
-      engineRef.current.init(canvasRef.current);
-    }
-  }, []);
+  }, [setShowSettingsSync, setShowDifficultySync]);
 
   useEffect(() => {
     if (engineRef.current) {
@@ -89,18 +99,18 @@ export default function App() {
   const startDual = useCallback(() => {
     if (engineRef.current) {
       engineRef.current.startDual();
-      setShowDifficulty(false);
-      setShowSettings(false);
+      setShowDifficultySync(false);
+      setShowSettingsSync(false);
     }
-  }, []);
+  }, [setShowDifficultySync, setShowSettingsSync]);
 
   const startSingle = useCallback((difficulty: AIDifficulty) => {
     if (engineRef.current) {
       engineRef.current.startSingle(difficulty);
-      setShowDifficulty(false);
-      setShowSettings(false);
+      setShowDifficultySync(false);
+      setShowSettingsSync(false);
     }
-  }, []);
+  }, [setShowDifficultySync, setShowSettingsSync]);
 
   const restart = useCallback(() => {
     if (engineRef.current) {
@@ -182,10 +192,10 @@ export default function App() {
             <button className="menu-btn" onClick={startDual}>
               双人对战 <span className="shortcut">[L]</span>
             </button>
-            <button className="menu-btn" onClick={() => setShowDifficulty(true)}>
+            <button className="menu-btn" onClick={() => setShowDifficultySync(true)}>
               单人模式 <span className="shortcut">[S]</span>
             </button>
-            <button className="menu-btn" onClick={() => setShowSettings(true)}>
+            <button className="menu-btn" onClick={() => setShowSettingsSync(true)}>
               设置 <span className="shortcut">[O]</span>
             </button>
           </div>
