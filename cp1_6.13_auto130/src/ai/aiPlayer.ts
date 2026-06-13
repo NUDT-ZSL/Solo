@@ -18,41 +18,47 @@ export class AIPlayer {
     return unit.attack + unit.health / 2;
   }
 
-  estimateEnemyDamage(state: GameState): number {
+  calculateMaxEnemyDamage(state: GameState): number {
     const playerField = state.player.field;
     const playerHand = state.player.hand;
     
-    let estimatedDamage = 0;
+    let maxDamage = 0;
     
     playerField.forEach(unit => {
       if (!unit.hasAttacked) {
-        estimatedDamage += unit.attack;
+        maxDamage += unit.attack;
       }
     });
     
     playerHand.forEach(card => {
       if (card.type === 'attack') {
-        estimatedDamage += card.value;
+        maxDamage += card.value;
       }
     });
     
-    return estimatedDamage;
+    return maxDamage;
+  }
+
+  estimateEnemyDamage(state: GameState): number {
+    return this.calculateMaxEnemyDamage(state);
   }
 
   shouldUseDefense(state: GameState): boolean {
     const aiHealth = state.ai.hero.health;
     const aiShield = state.ai.hero.shield;
     
+    const maxEnemyDamage = this.calculateMaxEnemyDamage(state);
+    
     if (aiHealth < this.config.lowHealthThreshold && aiShield === 0) {
       return true;
     }
     
-    const estimatedDamage = this.estimateEnemyDamage(state);
-    if (aiHealth - estimatedDamage <= 0) {
+    const effectiveHealth = aiHealth + aiShield;
+    if (maxEnemyDamage >= effectiveHealth * 0.6) {
       return true;
     }
     
-    if (aiHealth < this.config.lowHealthThreshold * 1.5 && estimatedDamage >= 5) {
+    if (aiHealth - maxEnemyDamage <= 5) {
       return true;
     }
     
@@ -77,6 +83,10 @@ export class AIPlayer {
             score += threat * this.config.attackUnitPriority;
             
             if (card.value >= targetUnit.health) {
+              score += 3;
+            }
+            
+            if (targetUnit.attack >= 3 && targetUnit.health <= 3) {
               score += 2;
             }
           }
@@ -85,6 +95,10 @@ export class AIPlayer {
           
           if (playerHero.health - card.value <= 0) {
             score += 100;
+          }
+          
+          if (playerHero.health <= this.config.lowHealthThreshold) {
+            score += card.value * 0.5;
           }
           
           if (playerField.length === 0) {
@@ -100,14 +114,19 @@ export class AIPlayer {
         if (shouldDefend) {
           score += card.value * this.config.defenseUrgencyWeight;
           
-          const estimatedDamage = this.estimateEnemyDamage(state);
-          score += Math.min(card.value, estimatedDamage) * 1.5;
+          const maxEnemyDamage = this.calculateMaxEnemyDamage(state);
+          const damageAbsorbed = Math.min(card.value, maxEnemyDamage);
+          score += damageAbsorbed * 1.5;
           
           if (aiHero.health < this.config.lowHealthThreshold * 0.6) {
-            score += 5;
+            score += 8;
+          }
+          
+          if (maxEnemyDamage >= aiHero.health) {
+            score += 15;
           }
         } else {
-          score -= 10;
+          score -= 20;
         }
         break;
       }
@@ -121,11 +140,19 @@ export class AIPlayer {
         }
         
         if (aiField.length < playerField.length) {
-          score += 2;
+          score += 2.5;
         }
         
         if (playerField.length === 0 && aiField.length === 0) {
-          score += 3;
+          score += 4;
+        }
+        
+        if (card.value2 && card.value2 >= 3) {
+          score += 1.5;
+        }
+        
+        if (card.value >= 2) {
+          score += 1;
         }
         break;
       }
@@ -183,6 +210,7 @@ export class AIPlayer {
   }
 
   chooseBestAction(state: GameState): Action | null {
+    const startTime = Date.now();
     const actions = this.enumerateActions(state);
     
     if (actions.length === 0) {
@@ -197,6 +225,10 @@ export class AIPlayer {
       if (score > bestScore) {
         bestScore = score;
         bestAction = action;
+      }
+      
+      if (Date.now() - startTime > 900) {
+        break;
       }
     }
 
@@ -214,7 +246,7 @@ export class AIPlayer {
           }
         }
         
-        if (bestNonDefenseScore > -5) {
+        if (bestNonDefenseScore > -10) {
           return bestNonDefense;
         }
       }
@@ -263,6 +295,10 @@ export class AIPlayer {
         score += 100;
       }
       
+      if (playerHero.health <= this.config.lowHealthThreshold) {
+        score += attacker.attack * 0.5;
+      }
+      
       if (playerField.length === 0) {
         score += 1;
       }
@@ -273,11 +309,17 @@ export class AIPlayer {
         score += threat * this.config.attackUnitPriority;
         
         if (attacker.attack >= targetUnit.health) {
-          score += 3;
+          score += 4;
           
           if (targetUnit.attack >= attacker.health) {
-            score -= 1;
+            score -= 1.5;
+          } else {
+            score += 1;
           }
+        }
+        
+        if (targetUnit.attack >= 3) {
+          score += 2;
         }
       }
     }
@@ -288,6 +330,7 @@ export class AIPlayer {
   chooseBestUnitAction(
     state: GameState
   ): { attackerId: string; target: Target } | null {
+    const startTime = Date.now();
     const actions = this.enumerateUnitActions(state);
     
     if (actions.length === 0) {
@@ -305,6 +348,10 @@ export class AIPlayer {
       if (score > bestScore) {
         bestScore = score;
         bestAction = action;
+      }
+      
+      if (Date.now() - startTime > 900) {
+        break;
       }
     }
 

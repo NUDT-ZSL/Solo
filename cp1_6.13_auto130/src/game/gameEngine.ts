@@ -301,7 +301,7 @@ export class GameEngine {
     const currentPlayer = this.state.currentPlayer;
     const nextPlayer = currentPlayer === 'player' ? 'ai' : 'player';
 
-    this.state[currentPlayer].hero.shield = 0;
+    this.state[nextPlayer].hero.shield = 0;
     this.state[currentPlayer].field.forEach(unit => {
       unit.hasAttacked = false;
     });
