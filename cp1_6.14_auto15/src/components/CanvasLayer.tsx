@@ -11,26 +11,25 @@ interface CanvasLayerProps {
 
 function CanvasLayer({ layers, width, height, clipX, clipSide }: CanvasLayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
-  const layersRef = useRef(layers);
+  const animationRef = useRef<number | null>(null);
+  const layersRef = useRef<Layer[]>(layers);
   const sizeRef = useRef({ width, height, clipX, clipSide });
 
   layersRef.current = layers;
   sizeRef.current = { width, height, clipX, clipSide };
 
-  const layerSig = useMemo(() =>
-    layers.map(l => `${l.id}-${l.opacity}-${l.blendMode}-${l.visible}`).join('|')
+  const layerConfigSig = useMemo(() =>
+    layers.map(l =>
+      `${l.id}:${l.opacity.toFixed(3)}:${l.blendMode}:${l.visible ? '1' : '0'}`
+    ).join('||')
   , [layers]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || width === 0 || height === 0) return;
+    if (!canvas) return;
 
-    const ctx = canvas.getContext('2d', { alpha: true });
+    const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
     if (!ctx) return;
-
-    let frameCount = 0;
-    let lastTime = performance.now();
 
     const render = () => {
       const { width: w, height: h, clipX: cx, clipSide: side } = sizeRef.current;
@@ -59,10 +58,17 @@ function CanvasLayer({ layers, width, height, clipX, clipSide }: CanvasLayerProp
       }
       ctx.clip();
 
-      currentLayers.forEach((layer) => {
-        if (!layer.image || !layer.visible) return;
+      const len = currentLayers.length;
+      for (let i = 0; i < len; i++) {
+        const layer = currentLayers[i];
+        if (!layer.image || !layer.visible) continue;
 
-        const imgAspect = layer.image.width / layer.image.height;
+        const img = layer.image;
+        const imgW = img.width;
+        const imgH = img.height;
+        if (imgW === 0 || imgH === 0) continue;
+
+        const imgAspect = imgW / imgH;
         const canvasAspect = w / h;
 
         let drawWidth: number;
@@ -84,29 +90,25 @@ function CanvasLayer({ layers, width, height, clipX, clipSide }: CanvasLayerProp
 
         ctx.globalAlpha = layer.opacity;
         ctx.globalCompositeOperation = layer.blendMode;
-        ctx.drawImage(layer.image, offsetX, offsetY, drawWidth, drawHeight);
-      });
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+      }
 
       ctx.restore();
-
-      frameCount++;
-      const now = performance.now();
-      if (now - lastTime >= 1000) {
-        lastTime = now;
-        frameCount = 0;
-      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
 
       animationRef.current = requestAnimationFrame(render);
     };
 
-    render();
+    animationRef.current = requestAnimationFrame(render);
 
     return () => {
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     };
-  }, [width, height, layerSig, clipX, clipSide]);
+  }, [width, height, layerConfigSig, clipX, clipSide]);
 
   return (
     <canvas
@@ -115,6 +117,7 @@ function CanvasLayer({ layers, width, height, clipX, clipSide }: CanvasLayerProp
         width: '100%',
         height: '100%',
         display: 'block',
+        imageRendering: 'auto',
       }}
     />
   );

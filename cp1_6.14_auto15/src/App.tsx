@@ -69,25 +69,59 @@ function App() {
     const filesToProcess = fileArray.slice(0, remainingSlots);
     const sortedFiles = filesToProcess.sort((a, b) => a.name.localeCompare(b.name));
 
+    const pendingLayers: Layer[] = [];
+    let completedCount = 0;
+
     sortedFiles.forEach((file, index) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const newLayer: Layer = {
-            id: `layer-${Date.now()}-${index}`,
-            name: file.name.replace(/\.[^/.]+$/, ''),
-            image: img,
-            opacity: 0.5,
-            blendMode: 'source-over',
-            color: LAYER_COLORS[(layers.length + index) % LAYER_COLORS.length],
-            visible: true,
-          };
-          setLayers(prev => [...prev, newLayer].sort((a, b) => a.name.localeCompare(b.name)));
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.decoding = 'async';
+      
+      const createLayer = async () => {
+        try {
+          if ('decode' in img) {
+            await img.decode();
+          }
+        } catch (e) {
+        }
+
+        const baseName = file.name.replace(/\.[^/.]+$/, '');
+        
+        pendingLayers[index] = {
+          id: `layer-${Date.now()}-${index}`,
+          name: baseName,
+          image: img,
+          opacity: 0.5,
+          blendMode: 'source-over',
+          color: LAYER_COLORS[(layers.length + index) % LAYER_COLORS.length],
+          visible: true,
         };
-        img.src = e.target?.result as string;
+        
+        completedCount++;
+        
+        if (completedCount === sortedFiles.length) {
+          const validLayers = pendingLayers.filter(l => l);
+          setLayers(prev => {
+            const merged = [...prev, ...validLayers];
+            return merged.sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }
       };
-      reader.readAsDataURL(file);
+
+      img.onload = createLayer;
+      img.onerror = () => {
+        completedCount++;
+        if (completedCount === sortedFiles.length) {
+          const validLayers = pendingLayers.filter(l => l);
+          if (validLayers.length > 0) {
+            setLayers(prev => {
+              const merged = [...prev, ...validLayers];
+              return merged.sort((a, b) => a.name.localeCompare(b.name));
+            });
+          }
+        }
+      };
+      img.src = url;
     });
   }, [layers.length]);
 

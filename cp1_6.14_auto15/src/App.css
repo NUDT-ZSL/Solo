@@ -4,6 +4,8 @@
   position: relative;
   background-color: #0f172a;
   overflow: hidden;
+  display: flex;
+  flex-direction: row;
 }
 
 .canvas-container {
@@ -27,9 +29,28 @@
   left: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .canvas-container {
+    right: 260px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .canvas-container {
+    position: absolute;
     right: 0;
+    left: 0;
+    top: 70px;
+    bottom: 210px;
+  }
+}
+
+@media (max-width: 600px) {
+  .canvas-container {
     top: 60px;
     bottom: 200px;
   }
@@ -37,6 +58,14 @@
 
 @media (max-width: 480px) {
   .canvas-container {
+    top: 110px;
     bottom: 180px;
+  }
+}
+
+@media (max-width: 375px) {
+  .canvas-container {
+    top: 100px;
+    bottom: 170px;
   }
 }
