@@ -34,9 +34,10 @@ export interface ShareItem {
 export interface ShareData {
   id: string;
   name: string;
-  userId: string;
+  userId?: string;
   items: ShareItem[];
   totalPrice: number;
+  totalCount?: number;
   createdAt: string;
 }
 

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useData } from '../context/DataContext';
+import { useCart } from '../hooks/useCart';
 
 const BookDetailModal: React.FC = () => {
   const { selectedBook, setSelectedBook } = useData();
