@@ -97,14 +97,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ selectedBuilding }) => {
       <div style={dividerStyle} />
 
       <div style={sectionStyle}>
-        <button style={{ ...btnPrimaryStyle, background: isAddingMode ? '#0284c7' : '#0ea5e9' }} onClick={handleAddBuilding}>
+        <button className="cp-btn cp-btn-primary" style={{ ...btnPrimaryStyle, background: isAddingMode ? '#0284c7' : '#0ea5e9' }} onClick={handleAddBuilding}>
           {isAddingMode ? '✕ 取消放置' : '+ 添加建筑'}
         </button>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button style={btnSecondaryStyle} onClick={() => { setShowSaveDialog(true); refreshLayouts(); }}>
+          <button className="cp-btn cp-btn-secondary" style={btnSecondaryStyle} onClick={() => { setShowSaveDialog(true); refreshLayouts(); }}>
             💾 保存
           </button>
-          <button style={btnSecondaryStyle} onClick={() => { setShowLoadDialog(true); refreshLayouts(); }}>
+          <button className="cp-btn cp-btn-secondary" style={btnSecondaryStyle} onClick={() => { setShowLoadDialog(true); refreshLayouts(); }}>
             📂 加载
           </button>
         </div>
@@ -208,6 +208,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ selectedBuilding }) => {
             </div>
 
             <button
+              className="cp-btn cp-btn-danger"
               style={{ ...btnDangerStyle, marginTop: 12 }}
               onClick={() => removeBuilding(selectedBuilding.id)}
             >
@@ -367,6 +368,31 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ selectedBuilding }) => {
           </div>
         </div>
       )}
+
+      <style>{`
+        .cp-btn:hover {
+          transform: scale(1.05) !important;
+          filter: brightness(1.15) !important;
+        }
+        .cp-btn {
+          transition: all 0.2s ease-out !important;
+        }
+        .cp-btn-primary:hover {
+          background: #38bdf8 !important;
+        }
+        .cp-btn-secondary:hover {
+          background: rgba(71, 85, 105, 0.8) !important;
+        }
+        .cp-btn-danger:hover {
+          background: rgba(239, 68, 68, 0.3) !important;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+          transition: all 0.2s ease;
+        }
+        input[type="range"]:hover::-webkit-slider-thumb {
+          transform: scale(1.2);
+        }
+      `}</style>
     </>
   );
 };

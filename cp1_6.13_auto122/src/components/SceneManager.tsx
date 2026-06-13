@@ -93,37 +93,111 @@ function BuildingMesh({
   onContextMenu: (e: ThreeEvent<MouseEvent>) => void;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const glowRingRef = useRef<THREE.Mesh>(null);
+  const particlesRef = useRef<THREE.Points>(null);
   const [animated, setAnimated] = useState(false);
   const startTime = useRef(building.createdAt);
   const [hovered, setHovered] = useState(false);
+
+  const particleData = useMemo(() => {
+    const count = 24;
+    const positions = new Float32Array(count * 3);
+    const velocities = new Float32Array(count * 3);
+    const angles = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const radius = 0.3 + Math.random() * 0.5;
+      positions[i * 3] = Math.cos(angle) * radius;
+      positions[i * 3 + 1] = 0.05;
+      positions[i * 3 + 2] = Math.sin(angle) * radius;
+      velocities[i * 3] = Math.cos(angle) * (0.5 + Math.random() * 0.5);
+      velocities[i * 3 + 1] = 0.5 + Math.random() * 1.5;
+      velocities[i * 3 + 2] = Math.sin(angle) * (0.5 + Math.random() * 0.5);
+      angles[i] = angle;
+    }
+    return { count, positions, velocities, angles };
+  }, []);
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;
     const elapsed = Date.now() - startTime.current;
     const duration = 500;
-    if (elapsed < duration) {
-      const t = elapsed / duration;
+    const t = Math.min(1, elapsed / duration);
+
+    if (t < 1) {
       const eased = 1 - Math.pow(1 - t, 3);
       meshRef.current.scale.y = eased;
       meshRef.current.position.y = (building.height / 2) * eased;
       if (meshRef.current.material instanceof THREE.MeshStandardMaterial) {
-        meshRef.current.material.emissiveIntensity = (1 - t) * 0.8;
+        meshRef.current.material.emissiveIntensity = Math.pow(1 - t, 0.5) * 1.2;
+        meshRef.current.material.emissive = new THREE.Color('#fbbf24');
+      }
+
+      if (glowRingRef.current) {
+        const glowScale = 0.5 + t * 6;
+        glowRingRef.current.scale.set(glowScale, 1, glowScale);
+        const glowMat = glowRingRef.current.material as THREE.MeshBasicMaterial;
+        glowMat.opacity = (1 - t) * 0.7;
+      }
+
+      if (particlesRef.current) {
+        const geom = particlesRef.current.geometry as THREE.BufferGeometry;
+        const posAttr = geom.attributes.position as THREE.BufferAttribute;
+        const arr = posAttr.array as Float32Array;
+        for (let i = 0; i < particleData.count; i++) {
+          arr[i * 3] = particleData.positions[i * 3] + particleData.velocities[i * 3] * t * 4;
+          arr[i * 3 + 1] = particleData.positions[i * 3 + 1] + particleData.velocities[i * 3 + 1] * t * building.height * 0.6;
+          arr[i * 3 + 2] = particleData.positions[i * 3 + 2] + particleData.velocities[i * 3 + 2] * t * 4;
+        }
+        posAttr.needsUpdate = true;
+        const pMat = particlesRef.current.material as THREE.PointsMaterial;
+        pMat.opacity = (1 - t) * 0.9;
+        pMat.size = 0.15 + t * 0.1;
       }
     } else if (!animated) {
       meshRef.current.scale.y = 1;
       meshRef.current.position.y = building.height / 2;
       if (meshRef.current.material instanceof THREE.MeshStandardMaterial) {
         meshRef.current.material.emissiveIntensity = 0;
+        meshRef.current.material.emissive = new THREE.Color('#000000');
       }
       setAnimated(true);
+    }
+
+    if (animated && meshRef.current && !isCutaway && !isOtherInCutaway) {
+      const mat = meshRef.current.material as THREE.MeshStandardMaterial;
+      mat.emissive = new THREE.Color(hovered ? '#0ea5e9' : '#000000');
+      mat.emissiveIntensity = hovered ? 0.15 : 0;
     }
   });
 
   const displayOpacity = isOtherInCutaway ? 0.25 : isCutaway ? 0.15 : 1;
   const transparent = isOtherInCutaway || isCutaway;
 
+  const isNew = Date.now() - building.createdAt < 600;
+
   return (
     <group position={[building.position.x, 0, building.position.z]}>
+      {isNew && (
+        <>
+          <mesh ref={glowRingRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+            <ringGeometry args={[0.8, 1.2, 32]} />
+            <meshBasicMaterial color="#fbbf24" transparent opacity={0.6} side={THREE.DoubleSide} depthWrite={false} />
+          </mesh>
+          <points ref={particlesRef}>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                count={particleData.count}
+                array={new Float32Array(particleData.positions)}
+                itemSize={3}
+              />
+            </bufferGeometry>
+            <pointsMaterial color="#fde047" size={0.15} transparent opacity={0.9} sizeAttenuation depthWrite={false} />
+          </points>
+        </>
+      )}
+
       <mesh
         ref={meshRef}
         castShadow
@@ -146,8 +220,8 @@ function BuildingMesh({
           color={building.color}
           roughness={0.7}
           metalness={0.1}
-          emissive={hovered ? '#0ea5e9' : '#000000'}
-          emissiveIntensity={hovered ? 0.15 : 0}
+          emissive="#000000"
+          emissiveIntensity={0}
           transparent={transparent}
           opacity={displayOpacity}
         />
@@ -289,10 +363,20 @@ function ScaleHandles({ building }: { building: Building }) {
 
 function ShadowOverlay({ sunAltitude, sunAzimuth }: { sunAltitude: number; sunAzimuth: number }) {
   const { buildings } = useScene();
+  const [shadowCells, setShadowCells] = useState<Array<{ x: number; z: number; weight: number }>>([]);
+  const lastCalcTime = useRef(0);
+  const MIN_INTERVAL = 100;
 
-  const shadowCells = useMemo(() => {
-    if (sunAltitude <= 0) return [];
-    const cells: Array<{ x: number; z: number; weight: number }> = [];
+  useFrame(() => {
+    const now = performance.now();
+    if (now - lastCalcTime.current < MIN_INTERVAL) return;
+    lastCalcTime.current = now;
+
+    if (sunAltitude <= 0.1) {
+      if (shadowCells.length > 0) setShadowCells([]);
+      return;
+    }
+
     const half = GRID_SIZE / 2;
     const altRad = degToRad(sunAltitude);
     const aziRad = degToRad(sunAzimuth);
@@ -301,79 +385,75 @@ function ShadowOverlay({ sunAltitude, sunAzimuth }: { sunAltitude: number; sunAz
     const tanAlt = Math.tan(altRad);
 
     const cellShadow: Map<string, number> = new Map();
+    const buildingData = buildings.map(b => ({
+      bx0: b.position.x - b.width / 2,
+      bx1: b.position.x + b.width / 2,
+      bz0: b.position.z - b.depth / 2,
+      bz1: b.position.z + b.depth / 2,
+      height: b.height,
+      shadowLen: b.height / tanAlt,
+    }));
 
-    for (const b of buildings) {
-      const bHalfW = b.width / 2;
-      const bHalfD = b.depth / 2;
-      const bx0 = b.position.x - bHalfW;
-      const bx1 = b.position.x + bHalfW;
-      const bz0 = b.position.z - bHalfD;
-      const bz1 = b.position.z + bHalfD;
+    for (let bi = 0; bi < buildingData.length; bi++) {
+      const b = buildingData[bi];
+      const projX0 = b.bx0 + Math.min(0, dirX * b.shadowLen);
+      const projX1 = b.bx1 + Math.max(0, dirX * b.shadowLen);
+      const projZ0 = b.bz0 + Math.min(0, dirZ * b.shadowLen);
+      const projZ1 = b.bz1 + Math.max(0, dirZ * b.shadowLen);
 
-      const shadowLen = b.height / tanAlt;
-      const projX0 = bx0 + Math.min(0, dirX * shadowLen);
-      const projX1 = bx1 + Math.max(0, dirX * shadowLen);
-      const projZ0 = bz0 + Math.min(0, dirZ * shadowLen);
-      const projZ1 = bz1 + Math.max(0, dirZ * shadowLen);
-
-      const cx0 = Math.ceil((projX0 + half) / GRID_SPACING);
-      const cx1 = Math.floor((projX1 + half) / GRID_SPACING);
-      const cz0 = Math.ceil((projZ0 + half) / GRID_SPACING);
-      const cz1 = Math.floor((projZ1 + half) / GRID_SPACING);
+      const cx0 = Math.max(1, Math.ceil((projX0 + half) / GRID_SPACING));
+      const cx1 = Math.min(GRID_DIVISIONS - 1, Math.floor((projX1 + half) / GRID_SPACING));
+      const cz0 = Math.max(1, Math.ceil((projZ0 + half) / GRID_SPACING));
+      const cz1 = Math.min(GRID_DIVISIONS - 1, Math.floor((projZ1 + half) / GRID_SPACING));
 
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cz = cz0; cz <= cz1; cz++) {
-          const cellX = -half + cx * GRID_SPACING - GRID_SPACING / 2;
-          const cellZ = -half + cz * GRID_SPACING - GRID_SPACING / 2;
-          const inBuilding = cellX >= bx0 && cellX <= bx1 && cellZ >= bz0 && cellZ <= bz1;
-          if (inBuilding) continue;
+          const cellX = -half + cx * GRID_SPACING;
+          const cellZ = -half + cz * GRID_SPACING;
 
-          const testPoints = [
-            [cellX - 0.5, cellZ - 0.5],
-            [cellX + 0.5, cellZ - 0.5],
-            [cellX - 0.5, cellZ + 0.5],
-            [cellX + 0.5, cellZ + 0.5],
-            [cellX, cellZ],
-          ];
+          const inAnyBuilding = buildingData.some(bb =>
+            cellX >= bb.bx0 && cellX <= bb.bx1 && cellZ >= bb.bz0 && cellZ <= bb.bz1
+          );
+          if (inAnyBuilding) continue;
 
+          const samples = 9;
           let covered = 0;
-          for (const [px, pz] of testPoints) {
-            let inShadow = false;
-            for (const bb of buildings) {
-              const bbHalfW = bb.width / 2;
-              const bbHalfD = bb.depth / 2;
-              const bbx0 = bb.position.x - bbHalfW;
-              const bbx1 = bb.position.x + bbHalfW;
-              const bbz0 = bb.position.z - bbHalfD;
-              const bbz1 = bb.position.z + bbHalfD;
+          for (let si = 0; si < samples; si++) {
+            const sx = cellX + ((si % 3) - 1) * (GRID_SPACING / 3);
+            const sz = cellZ + (Math.floor(si / 3) - 1) * (GRID_SPACING / 3);
 
-              if (px >= bbx0 && px <= bbx1 && pz >= bbz0 && pz <= bbz1) {
+            for (let bi2 = 0; bi2 < buildingData.length; bi2++) {
+              const bb = buildingData[bi2];
+              if (sx >= bb.bx0 && sx <= bb.bx1 && sz >= bb.bz0 && sz <= bb.bz1) {
                 covered++;
-                inShadow = true;
                 break;
               }
-
-              const tMax = shadowLen + 20;
-              let t = 0.1;
-              let step = 0.3;
-              while (t < tMax) {
-                const sx = px - dirX * t;
-                const sz = pz - dirZ * t;
-                const requiredHeight = t * tanAlt;
-                if (sx >= bbx0 && sx <= bbx1 && sz >= bbz0 && sz <= bbz1) {
-                  if (requiredHeight <= bb.height) {
-                    covered++;
-                    inShadow = true;
-                    break;
-                  }
+              const tMax = bb.shadowLen + 2;
+              const dx = bb.bx1 - bb.bx0;
+              const dz = bb.bz1 - bb.bz0;
+              const tHitX1 = dirX !== 0 ? (bb.bx0 - sx) / dirX : Infinity;
+              const tHitX2 = dirX !== 0 ? (bb.bx1 - sx) / dirX : Infinity;
+              const tHitZ1 = dirZ !== 0 ? (bb.bz0 - sz) / dirZ : Infinity;
+              const tHitZ2 = dirZ !== 0 ? (bb.bz1 - sz) / dirZ : Infinity;
+              const tMin = Math.max(
+                Math.min(tHitX1, tHitX2),
+                Math.min(tHitZ1, tHitZ2)
+              );
+              const tMaxHit = Math.min(
+                Math.max(tHitX1, tHitX2),
+                Math.max(tHitZ1, tHitZ2)
+              );
+              if (tMaxHit > 0 && tMin < tMax && tMin > 0) {
+                const requiredH = tMin * tanAlt;
+                if (requiredH <= bb.height) {
+                  covered++;
+                  break;
                 }
-                t += step;
               }
-              if (inShadow) break;
             }
           }
 
-          const coverage = covered / testPoints.length;
+          const coverage = covered / samples;
           if (coverage >= 0.5) {
             const key = `${cx}_${cz}`;
             cellShadow.set(key, Math.max(cellShadow.get(key) || 0, coverage));
@@ -382,21 +462,29 @@ function ShadowOverlay({ sunAltitude, sunAzimuth }: { sunAltitude: number; sunAz
       }
     }
 
+    const newCells: Array<{ x: number; z: number; weight: number }> = [];
     cellShadow.forEach((weight, key) => {
-      const [cx, cz] = key.split('_').map(Number);
-      const cellX = -half + cx * GRID_SPACING - GRID_SPACING / 2;
-      const cellZ = -half + cz * GRID_SPACING - GRID_SPACING / 2;
-      cells.push({ x: cellX, z: cellZ, weight });
+      const [cxS, czS] = key.split('_');
+      const cx = parseInt(cxS, 10);
+      const cz = parseInt(czS, 10);
+      const cellX = -half + cx * GRID_SPACING;
+      const cellZ = -half + cz * GRID_SPACING;
+      newCells.push({ x: cellX, z: cellZ, weight });
     });
 
-    return cells;
-  }, [buildings, sunAltitude, sunAzimuth]);
+    if (
+      newCells.length !== shadowCells.length ||
+      newCells.some((c, i) => !shadowCells[i] || shadowCells[i].x !== c.x || shadowCells[i].z !== c.z)
+    ) {
+      setShadowCells(newCells);
+    }
+  });
 
   return (
     <group>
       {shadowCells.map((c, i) => (
         <mesh
-          key={`${c.x}_${c.z}_${i}`}
+          key={`${c.x}_${c.z}`}
           position={[c.x, 0.015, c.z]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
