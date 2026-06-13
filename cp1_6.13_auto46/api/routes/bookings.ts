@@ -1,90 +1,87 @@
-import { Router, type Request, type Response } from 'express';
-import { classesDB, bookingsDB } from '../db.js';
+import { Router, type Request, type Response } from "express";
+import { v4 as uuidv4 } from "uuid";
+import { bookingDB, classDB } from "../db";
+import type { BookClassInput, Booking, CancelBookingInput, GymClass } from "../types/models";
 
 const router = Router();
 
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { classId, memberId, memberName } = req.body;
-
-    if (!classId || !memberId || !memberName) {
-      res.status(400).json({ success: false, error: 'classId, memberId and memberName are required' });
+    const { classId, memberId, memberName } = req.body as BookClassInput;
+    const cls = await classDB.findOne<GymClass>({ _id: classId });
+    if (!cls) {
+      res.status(404).json({ success: false, error: "Class not found" });
+      return;
+    }
+    if (cls.bookedMembers.includes(memberId)) {
+      res.status(400).json({ success: false, error: "已经预约过该课程" });
+      return;
+    }
+    if (cls.bookedCount >= cls.capacity) {
+      res.status(400).json({ success: false, error: "该课程已满员" });
       return;
     }
 
-    const fitnessClass = await classesDB.findOne({ _id: classId });
-    if (!fitnessClass) {
-      res.status(404).json({ success: false, error: 'Class not found' });
-      return;
-    }
-
-    const bookedMembers: string[] = fitnessClass.bookedMembers || [];
-    if (bookedMembers.includes(memberId)) {
-      res.status(400).json({ success: false, error: 'Already booked' });
-      return;
-    }
-
-    if (fitnessClass.bookedCount >= fitnessClass.capacity) {
-      res.status(400).json({ success: false, error: 'Class is full' });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const booking = {
+    const booking: Booking = {
+      _id: uuidv4(),
       classId,
       memberId,
       memberName,
-      createdAt: now,
+      createdAt: new Date().toISOString(),
     };
+    await bookingDB.insert(booking);
 
-    await bookingsDB.insert(booking);
-
-    await classesDB.update(
+    const updated = await classDB.update<GymClass>(
       { _id: classId },
       {
-        $set: { updatedAt: now },
-        $inc: { bookedCount: 1 },
-        $push: { bookedMembers: memberId },
+        $set: {
+          bookedCount: cls.bookedCount + 1,
+          bookedMembers: [...cls.bookedMembers, memberId],
+          updatedAt: new Date().toISOString(),
+        },
       },
+      { returnUpdatedDocs: true }
     );
+    const updatedDoc = (updated as { documents: GymClass[] }).documents?.[0];
 
-    res.status(201).json({ success: true, data: booking });
+    res.status(201).json({ success: true, data: { booking, class: updatedDoc } });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Server internal error' });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
-router.delete('/:classId/:memberId', async (req: Request, res: Response): Promise<void> => {
+router.delete("/:classId/:memberId", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { classId, memberId } = req.params;
-
-    const fitnessClass = await classesDB.findOne({ _id: classId });
-    if (!fitnessClass) {
-      res.status(404).json({ success: false, error: 'Class not found' });
+    const { classId, memberId } = req.params as CancelBookingInput;
+    const cls = await classDB.findOne<GymClass>({ _id: classId });
+    if (!cls) {
+      res.status(404).json({ success: false, error: "Class not found" });
+      return;
+    }
+    if (!cls.bookedMembers.includes(memberId)) {
+      res.status(400).json({ success: false, error: "未预约该课程" });
       return;
     }
 
-    const bookedMembers: string[] = fitnessClass.bookedMembers || [];
-    if (!bookedMembers.includes(memberId)) {
-      res.status(400).json({ success: false, error: 'Booking not found' });
-      return;
-    }
+    await bookingDB.remove({ classId, memberId }, { multi: true });
 
-    await bookingsDB.remove({ classId, memberId }, { multi: true });
-
-    const now = new Date().toISOString();
-    await classesDB.update(
+    const newBookedMembers = cls.bookedMembers.filter((id) => id !== memberId);
+    const updated = await classDB.update<GymClass>(
       { _id: classId },
       {
-        $set: { updatedAt: now },
-        $inc: { bookedCount: -1 },
-        $pull: { bookedMembers: memberId },
+        $set: {
+          bookedCount: newBookedMembers.length,
+          bookedMembers: newBookedMembers,
+          updatedAt: new Date().toISOString(),
+        },
       },
+      { returnUpdatedDocs: true }
     );
+    const updatedDoc = (updated as { documents: GymClass[] }).documents?.[0];
 
-    res.json({ success: true, message: 'Booking cancelled' });
+    res.status(200).json({ success: true, data: { class: updatedDoc } });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Server internal error' });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 

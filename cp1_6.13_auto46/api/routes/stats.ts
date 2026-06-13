@@ -1,61 +1,45 @@
-import { Router, type Request, type Response } from 'express';
-import { classesDB } from '../db.js';
+import { Router, type Request, type Response } from "express";
+import { classDB } from "../db";
+import { STORES, TIME_SLOTS } from "../constants/classTypes";
+import type { GymClass, HeatmapCell, HeatmapMatrix, Store } from "../types/models";
 
 const router = Router();
 
-const allTimeSlots = [
-  '06:00-07:00', '07:00-08:00', '08:00-09:00', '09:00-10:00', '10:00-11:00',
-  '11:00-12:00', '14:00-15:00', '15:00-16:00', '16:00-17:00', '18:00-19:00',
-];
-
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get("/", async (_req: Request, res: Response): Promise<void> => {
   try {
-    const { startDate, endDate } = req.query;
-    const query: Record<string, unknown> = {};
+    const classes = await classDB.find<GymClass>({});
 
-    if (startDate || endDate) {
-      const dateFilter: Record<string, string> = {};
-      if (startDate) dateFilter.$gte = String(startDate);
-      if (endDate) dateFilter.$lte = String(endDate);
-      query.date = dateFilter;
-    }
+    const storeList: Store[] = STORES.map((s) => ({ _id: s.id, name: s.name }));
 
-    const classes = await classesDB.find(query);
-
-    const storeMap = new Map<string, { storeId: string; storeName: string; classes: typeof classes }>();
-    for (const cls of classes) {
-      if (!storeMap.has(cls.storeId)) {
-        storeMap.set(cls.storeId, { storeId: cls.storeId, storeName: cls.storeName, classes: [] });
-      }
-      storeMap.get(cls.storeId)!.classes.push(cls);
-    }
-
-    const result = Array.from(storeMap.values()).map(store => {
-      const timeSlots = allTimeSlots.map(timeSlot => {
-        const slotClasses = store.classes.filter(c => c.timeSlot === timeSlot);
-        const totalCapacity = slotClasses.reduce((sum, c) => sum + (c.capacity as number), 0);
-        const totalBooked = slotClasses.reduce((sum, c) => sum + (c.bookedCount as number), 0);
-        const fillRate = totalCapacity > 0 ? Math.round((totalBooked / totalCapacity) * 10000) / 100 : 0;
-
+    const cells: HeatmapCell[][] = STORES.map((store) =>
+      TIME_SLOTS.map((timeSlot) => {
+        const storeClasses = classes.filter(
+          (c) => c.storeId === store.id && c.timeSlot === timeSlot
+        );
+        const totalCapacity = storeClasses.reduce((sum, c) => sum + c.capacity, 0);
+        const totalBooked = storeClasses.reduce((sum, c) => sum + c.bookedCount, 0);
+        const fillRate = totalCapacity > 0 ? totalBooked / totalCapacity : 0;
         return {
+          storeId: store.id,
+          storeName: store.name,
           timeSlot,
+          fillRate,
           totalCapacity,
           totalBooked,
-          fillRate,
-          classes: slotClasses,
-        };
-      });
+          classes: storeClasses,
+        } as HeatmapCell;
+      })
+    );
 
-      return {
-        storeId: store.storeId,
-        storeName: store.storeName,
-        timeSlots,
-      };
-    });
+    const matrix: HeatmapMatrix = {
+      stores: storeList,
+      timeSlots: TIME_SLOTS,
+      cells,
+    };
 
-    res.json({ success: true, data: result });
+    res.status(200).json({ success: true, data: matrix });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Server internal error' });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
