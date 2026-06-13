@@ -13,25 +13,59 @@ const router = Router()
 const eventsDB = Datastore.create({
   filename: path.join(__dirname, '../../data/events.db'),
   autoload: true
-})
+}) as unknown as Datastore<Event>
 
 const registrationsDB = Datastore.create({
   filename: path.join(__dirname, '../../data/registrations.db'),
   autoload: true
-})
+}) as unknown as Datastore<Registration>
 
 function generateCheckinCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
+interface CacheEntry<T> {
+  data: T
+  timestamp: number
+}
+
+const eventsCache = new Map<string, CacheEntry<Event[]>>()
+const CACHE_TTL = 30 * 1000
+
+function getCachedEvents(key: string): Event[] | null {
+  const entry = eventsCache.get(key)
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    return entry.data
+  }
+  return null
+}
+
+function setCachedEvents(key: string, data: Event[]): void {
+  eventsCache.set(key, { data, timestamp: Date.now() })
+}
+
+function clearEventsCache(): void {
+  eventsCache.clear()
+}
+
 router.get('/events', async (req: Request, res: Response) => {
   try {
     const { category } = req.query
+    const cacheKey = category ? String(category) : 'all'
+
+    const cached = getCachedEvents(cacheKey)
+    if (cached) {
+      return res.json(cached)
+    }
+
     const query: any = {}
     if (category && category !== 'all') {
       query.category = category
     }
     const events = await eventsDB.find(query).sort({ createdAt: -1 })
+
+    setCachedEvents(cacheKey, events)
+
     res.json(events)
   } catch (error) {
     res.status(500).json({ error: '获取活动列表失败' })
@@ -60,6 +94,7 @@ router.post('/events', async (req: Request, res: Response) => {
     }
 
     const event = await eventsDB.insert(newEvent)
+    clearEventsCache()
     res.status(201).json(event)
   } catch (error) {
     res.status(500).json({ error: '创建活动失败' })
@@ -144,7 +179,8 @@ router.post('/events/:id/register', async (req: Request, res: Response) => {
     }
 
     await registrationsDB.insert(registration)
-    await eventsDB.update({ _id: id }, { $inc: { registeredCount: 1 } }, { returnUpdatedDocs: true })
+    await eventsDB.update({ _id: id }, { $inc: { registeredCount: 1 } })
+    clearEventsCache()
 
     res.status(201).json(registration)
   } catch (error) {
@@ -170,11 +206,14 @@ router.patch('/events/:id/checkin', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '该签到码已使用，请勿重复签到' })
     }
 
-    const updatedRegistration = await registrationsDB.update(
+    const result = await registrationsDB.update(
       { _id: registration._id },
       { $set: { checkedIn: true, checkedInAt: new Date().toISOString() } },
       { returnUpdatedDocs: true }
     )
+
+    const updatedRegistration = Array.isArray(result) ? result[0] : result
+    clearEventsCache()
 
     res.json(updatedRegistration)
   } catch (error) {
