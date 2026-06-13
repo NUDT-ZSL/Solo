@@ -1,5 +1,10 @@
 import React, { useEffect } from 'react'
-import { User, Skill, levelLabels } from '../utils/matching'
+import {
+  User,
+  Skill,
+  getLevelLabel,
+  themeColors
+} from '../utils/matching'
 
 interface InviteModalProps {
   isOpen: boolean
@@ -56,7 +61,7 @@ const InviteModal: React.FC<InviteModalProps> = ({
           width: '400px',
           minHeight: '280px',
           borderRadius: '16px',
-          backgroundColor: '#f8fafc',
+          backgroundColor: themeColors.background,
           padding: '28px 24px',
           boxSizing: 'border-box',
           display: 'flex',
@@ -68,7 +73,7 @@ const InviteModal: React.FC<InviteModalProps> = ({
         <h2 style={{
           fontSize: '20px',
           fontWeight: 700,
-          color: '#1e293b',
+          color: themeColors.textPrimary,
           margin: '0 0 20px 0',
           textAlign: 'center'
         }}>
@@ -99,40 +104,40 @@ const InviteModal: React.FC<InviteModalProps> = ({
           justifyContent: 'space-around',
           marginBottom: '24px',
           padding: '16px',
-          backgroundColor: '#ffffff',
+          backgroundColor: themeColors.surface,
           borderRadius: '12px'
         }}>
           <div style={{ textAlign: 'center', flex: 1 }}>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>TA 教你</p>
+            <p style={{ fontSize: '12px', color: themeColors.textMuted, margin: '0 0 6px 0' }}>TA 教你</p>
             <p style={{
               fontSize: '14px',
               fontWeight: 600,
-              color: '#16a34a',
+              color: themeColors.successText,
               margin: 0
             }}>
               {skillTheyTeach?.name}
             </p>
-            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>
-              {skillTheyTeach ? levelLabels[skillTheyTeach.level] : ''}
+            <p style={{ fontSize: '11px', color: themeColors.textMuted, margin: '4px 0 0 0' }}>
+              {skillTheyTeach ? getLevelLabel(skillTheyTeach.level) : ''}
             </p>
           </div>
           <div style={{
             width: '1px',
-            backgroundColor: '#e2e8f0',
+            backgroundColor: themeColors.border,
             margin: '0 16px'
           }} />
           <div style={{ textAlign: 'center', flex: 1 }}>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>你教TA</p>
+            <p style={{ fontSize: '12px', color: themeColors.textMuted, margin: '0 0 6px 0' }}>你教TA</p>
             <p style={{
               fontSize: '14px',
               fontWeight: 600,
-              color: '#6366f1',
+              color: themeColors.primary,
               margin: 0
             }}>
               {skillTheyLearn?.name}
             </p>
-            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>
-              {skillTheyLearn ? levelLabels[skillTheyLearn.level] : ''}
+            <p style={{ fontSize: '11px', color: themeColors.textMuted, margin: '4px 0 0 0' }}>
+              {skillTheyLearn ? getLevelLabel(skillTheyLearn.level) : ''}
             </p>
           </div>
         </div>
@@ -144,12 +149,12 @@ const InviteModal: React.FC<InviteModalProps> = ({
               padding: '10px 20px',
               borderRadius: '8px',
               border: '1px solid #cbd5e1',
-              backgroundColor: '#ffffff',
-              color: '#64748b',
+              backgroundColor: themeColors.surface,
+              color: themeColors.textSecondary,
               fontSize: '14px',
               fontWeight: 500,
               cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              transition: 'transform 0.2s ease, background-color 0.2s ease'
             }}
             onClick={onClose}
             onMouseDown={(e) => {
@@ -170,20 +175,20 @@ const InviteModal: React.FC<InviteModalProps> = ({
               padding: '10px 20px',
               borderRadius: '8px',
               border: 'none',
-              backgroundColor: '#6366f1',
+              backgroundColor: themeColors.primary,
               color: '#ffffff',
               fontSize: '14px',
               fontWeight: 500,
               cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              transition: 'transform 0.2s ease, background-color 0.2s ease'
             }}
             onClick={onAccept}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#4f46e5'
+              e.currentTarget.style.backgroundColor = themeColors.primaryHover
               e.currentTarget.style.transform = 'translateY(-4px)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#6366f1'
+              e.currentTarget.style.backgroundColor = themeColors.primary
               e.currentTarget.style.transform = 'translateY(0)'
             }}
             onMouseDown={(e) => {

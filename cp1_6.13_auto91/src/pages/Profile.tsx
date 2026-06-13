@@ -6,7 +6,8 @@ import InviteModal from '../components/InviteModal'
 import {
   Skill,
   User,
-  MatchSuggestion
+  MatchSuggestion,
+  themeColors
 } from '../utils/matching'
 
 const Profile: React.FC = () => {
@@ -73,11 +74,11 @@ const Profile: React.FC = () => {
     return (
       <div style={{
         minHeight: '100vh',
-        backgroundColor: '#f8fafc',
+        backgroundColor: themeColors.background,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#94a3b8'
+        color: themeColors.textMuted
       }}>
         加载中...
       </div>
@@ -88,11 +89,11 @@ const Profile: React.FC = () => {
     return (
       <div style={{
         minHeight: '100vh',
-        backgroundColor: '#f8fafc',
+        backgroundColor: themeColors.background,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#94a3b8'
+        color: themeColors.textMuted
       }}>
         用户不存在
       </div>
@@ -100,7 +101,7 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: themeColors.background }}>
       <header className="profile-header" style={{
         position: 'sticky',
         top: 0,
@@ -110,17 +111,17 @@ const Profile: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         gap: '16px',
-        borderBottom: '1px solid #e2e8f0'
+        borderBottom: `1px solid ${themeColors.border}`
       }}>
         <button
           onClick={() => navigate('/')}
           style={{
             padding: '8px 16px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #e2e8f0',
+            backgroundColor: themeColors.surface,
+            border: `1px solid ${themeColors.border}`,
             borderRadius: '8px',
             fontSize: '13px',
-            color: '#64748b',
+            color: themeColors.textSecondary,
             cursor: 'pointer',
             transition: 'all 0.2s ease'
           }}
@@ -138,18 +139,18 @@ const Profile: React.FC = () => {
           <img
             src={user.avatar}
             alt={user.name}
-            style={{ width: '56px', height: '56px', borderRadius: '50%', border: '3px solid #e0e7ff' }}
+            style={{ width: '56px', height: '56px', borderRadius: '50%', border: `3px solid ${themeColors.secondary}` }}
           />
           <div>
             <h1 style={{
               fontSize: '22px',
               fontWeight: 700,
-              color: '#1e293b',
+              color: themeColors.textPrimary,
               margin: 0
             }}>
               {user.name}
             </h1>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
+            <p style={{ fontSize: '13px', color: themeColors.textSecondary, margin: '4px 0 0 0' }}>
               SkillSwap 用户
             </p>
           </div>
@@ -157,16 +158,16 @@ const Profile: React.FC = () => {
 
         <div style={{ display: 'flex', gap: '24px' }}>
           <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: '20px', fontWeight: 700, color: '#6366f1', margin: 0 }}>
+            <p style={{ fontSize: '20px', fontWeight: 700, color: themeColors.primary, margin: 0 }}>
               {learnSkills.length}
             </p>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>想学</p>
+            <p style={{ fontSize: '12px', color: themeColors.textMuted, margin: '2px 0 0 0' }}>想学</p>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: '20px', fontWeight: 700, color: '#16a34a', margin: 0 }}>
+            <p style={{ fontSize: '20px', fontWeight: 700, color: themeColors.successText, margin: 0 }}>
               {teachSkills.length}
             </p>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>能教</p>
+            <p style={{ fontSize: '12px', color: themeColors.textMuted, margin: '2px 0 0 0' }}>能教</p>
           </div>
         </div>
       </header>
@@ -174,7 +175,7 @@ const Profile: React.FC = () => {
       {matchSuggestions.length > 0 && (
         <div style={{ padding: '24px 32px 0 32px' }}>
           <div style={{
-            backgroundColor: '#e0e7ff',
+            backgroundColor: themeColors.secondary,
             borderRadius: '12px',
             padding: '16px 20px',
             display: 'flex',
@@ -183,10 +184,10 @@ const Profile: React.FC = () => {
             marginBottom: '8px'
           }}>
             <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#4f46e5', margin: '0 0 4px 0' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: themeColors.primaryHover, margin: '0 0 4px 0' }}>
                 🎯 为你找到 {matchSuggestions.length} 个匹配伙伴
               </h3>
-              <p style={{ fontSize: '13px', color: '#6366f1', margin: 0 }}>
+              <p style={{ fontSize: '13px', color: themeColors.primary, margin: 0 }}>
                 基于技能难度和发布时间智能匹配
               </p>
             </div>
@@ -197,7 +198,7 @@ const Profile: React.FC = () => {
               }}
               style={{
                 padding: '10px 20px',
-                backgroundColor: '#6366f1',
+                backgroundColor: themeColors.primary,
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: '8px',
@@ -207,11 +208,11 @@ const Profile: React.FC = () => {
                 transition: 'all 0.2s ease'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#4f46e5'
+                e.currentTarget.style.backgroundColor = themeColors.primaryHover
                 e.currentTarget.style.transform = 'translateY(-2px)'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#6366f1'
+                e.currentTarget.style.backgroundColor = themeColors.primary
                 e.currentTarget.style.transform = 'translateY(0)'
               }}
               onMouseDown={(e) => {
@@ -230,25 +231,27 @@ const Profile: React.FC = () => {
       <div className="profile-content" style={{
         display: 'flex',
         padding: '24px 32px 32px 32px',
-        gap: '24px'
+        gap: '24px',
+        minHeight: 'calc(100vh - 120px)'
       }}>
-        <div style={{ flex: 1, width: '50%' }}>
+        <div style={{ flex: 1, width: '50%', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '16px'
+            marginBottom: '16px',
+            flexShrink: 0
           }}>
             <div style={{
               width: '4px',
               height: '20px',
-              backgroundColor: '#6366f1',
+              backgroundColor: themeColors.primary,
               borderRadius: '2px'
             }} />
             <h2 style={{
               fontSize: '18px',
               fontWeight: 600,
-              color: '#1e293b',
+              color: themeColors.textPrimary,
               margin: 0
             }}>
               我想学
@@ -257,8 +260,8 @@ const Profile: React.FC = () => {
               fontSize: '12px',
               padding: '2px 8px',
               borderRadius: '4px',
-              backgroundColor: '#e0e7ff',
-              color: '#6366f1',
+              backgroundColor: themeColors.secondary,
+              color: themeColors.primary,
               fontWeight: 500
             }}>
               {learnSkills.length}
@@ -269,7 +272,12 @@ const Profile: React.FC = () => {
             <div className="skill-list" style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              paddingRight: '8px',
+              flex: 1,
+              minHeight: 0
             }}>
               {learnSkills.map((skill, index) => (
                 <SkillCard key={skill.id} skill={skill} delay={index * 50} />
@@ -277,13 +285,13 @@ const Profile: React.FC = () => {
             </div>
           ) : (
             <div style={{
-              backgroundColor: '#ffffff',
+              backgroundColor: themeColors.surface,
               borderRadius: '12px',
               padding: '40px 20px',
               textAlign: 'center',
-              color: '#94a3b8',
+              color: themeColors.textMuted,
               fontSize: '14px',
-              border: '1px dashed #e2e8f0'
+              border: `1px dashed ${themeColors.border}`
             }}>
               还没有想学的技能
               <br />
@@ -292,23 +300,24 @@ const Profile: React.FC = () => {
           )}
         </div>
 
-        <div style={{ flex: 1, width: '50%' }}>
+        <div style={{ flex: 1, width: '50%', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '16px'
+            marginBottom: '16px',
+            flexShrink: 0
           }}>
             <div style={{
               width: '4px',
               height: '20px',
-              backgroundColor: '#22c55e',
+              backgroundColor: themeColors.success,
               borderRadius: '2px'
             }} />
             <h2 style={{
               fontSize: '18px',
               fontWeight: 600,
-              color: '#1e293b',
+              color: themeColors.textPrimary,
               margin: 0
             }}>
               我能教
@@ -317,8 +326,8 @@ const Profile: React.FC = () => {
               fontSize: '12px',
               padding: '2px 8px',
               borderRadius: '4px',
-              backgroundColor: '#dcfce7',
-              color: '#16a34a',
+              backgroundColor: themeColors.successBg,
+              color: themeColors.successText,
               fontWeight: 500
             }}>
               {teachSkills.length}
@@ -329,7 +338,12 @@ const Profile: React.FC = () => {
             <div className="skill-list" style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              paddingRight: '8px',
+              flex: 1,
+              minHeight: 0
             }}>
               {teachSkills.map((skill, index) => (
                 <SkillCard key={skill.id} skill={skill} delay={index * 50} />
@@ -337,13 +351,13 @@ const Profile: React.FC = () => {
             </div>
           ) : (
             <div style={{
-              backgroundColor: '#ffffff',
+              backgroundColor: themeColors.surface,
               borderRadius: '12px',
               padding: '40px 20px',
               textAlign: 'center',
-              color: '#94a3b8',
+              color: themeColors.textMuted,
               fontSize: '14px',
-              border: '1px dashed #e2e8f0'
+              border: `1px dashed ${themeColors.border}`
             }}>
               还没有能教的技能
               <br />
@@ -373,13 +387,28 @@ const Profile: React.FC = () => {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        .skill-list::-webkit-scrollbar {
+          width: 6px;
+        }
+        .skill-list::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .skill-list::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 3px;
+        }
+        .skill-list::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
         @media (max-width: 768px) {
           .profile-content {
             flex-direction: column !important;
             padding: 16px !important;
+            min-height: auto !important;
           }
           .profile-content > div {
             width: 100% !important;
+            min-height: auto !important;
           }
           .profile-header {
             padding: 12px 16px !important;
@@ -389,9 +418,13 @@ const Profile: React.FC = () => {
             display: grid !important;
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 12px !important;
+            overflow: visible !important;
+            max-height: none !important;
           }
           .skill-card {
             width: 100% !important;
+            min-width: 0 !important;
+            flex-basis: auto !important;
             height: 180px !important;
           }
           h1 {

@@ -164,3 +164,35 @@ export const skillLevels: { value: SkillLevel; label: string }[] = [
   { value: 'intermediate', label: '中级' },
   { value: 'advanced', label: '高级' }
 ]
+
+export const themeColors = {
+  primary: '#6366f1',
+  primaryHover: '#4f46e5',
+  secondary: '#e0e7ff',
+  background: '#f8fafc',
+  surface: '#ffffff',
+  border: '#e2e8f0',
+  textPrimary: '#1e293b',
+  textSecondary: '#64748b',
+  textMuted: '#94a3b8',
+  success: '#22c55e',
+  successBg: '#dcfce7',
+  successText: '#16a34a',
+  defaultColor: '#94a3b8'
+} as const
+
+export function getCategoryColor(category: SkillCategory): string {
+  return categoryColors[category] ?? themeColors.defaultColor
+}
+
+export function getCategoryLabel(category: SkillCategory): string {
+  return categoryLabels[category] ?? '其他'
+}
+
+export function getLevelLabel(level: SkillLevel): string {
+  return levelLabels[level] ?? '未知'
+}
+
+export function getTypeLabel(type: SkillType): string {
+  return typeLabels[type] ?? '未知'
+}

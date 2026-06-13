@@ -1,5 +1,12 @@
 import React from 'react'
-import { Skill, categoryColors, categoryLabels, levelLabels, typeLabels } from '../utils/matching'
+import {
+  Skill,
+  getCategoryColor,
+  getCategoryLabel,
+  getLevelLabel,
+  getTypeLabel,
+  themeColors
+} from '../utils/matching'
 
 interface SkillCardProps {
   skill: Skill
@@ -8,15 +15,20 @@ interface SkillCardProps {
 }
 
 const SkillCard: React.FC<SkillCardProps> = ({ skill, delay = 0, onClick }) => {
-  const borderColor = categoryColors[skill.category]
+  const borderColor = getCategoryColor(skill.category)
+  const categoryLabel = getCategoryLabel(skill.category)
+  const levelLabel = getLevelLabel(skill.level)
+  const typeLabel = getTypeLabel(skill.type)
 
   return (
     <div
       className="skill-card"
       style={{
         width: '280px',
+        minWidth: '260px',
+        flexBasis: '280px',
         height: '200px',
-        backgroundColor: '#ffffff',
+        backgroundColor: themeColors.surface,
         borderRadius: '12px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
         padding: '16px 20px',
@@ -59,7 +71,7 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, delay = 0, onClick }) => {
         <h3 style={{
           fontSize: '18px',
           fontWeight: 600,
-          color: '#1e293b',
+          color: themeColors.textPrimary,
           margin: 0,
           lineHeight: 1.4,
           overflow: 'hidden',
@@ -74,13 +86,13 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, delay = 0, onClick }) => {
           fontSize: '12px',
           padding: '2px 8px',
           borderRadius: '4px',
-          backgroundColor: skill.type === 'learn' ? '#e0e7ff' : '#dcfce7',
-          color: skill.type === 'learn' ? '#6366f1' : '#16a34a',
+          backgroundColor: skill.type === 'learn' ? themeColors.secondary : themeColors.successBg,
+          color: skill.type === 'learn' ? themeColors.primary : themeColors.successText,
           fontWeight: 500,
           flexShrink: 0,
           marginLeft: '8px'
         }}>
-          {typeLabels[skill.type]}
+          {typeLabel}
         </span>
       </div>
 
@@ -93,23 +105,23 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, delay = 0, onClick }) => {
           color: borderColor,
           fontWeight: 500
         }}>
-          {categoryLabels[skill.category]}
+          {categoryLabel}
         </span>
         <span style={{
           fontSize: '12px',
           padding: '2px 8px',
           borderRadius: '4px',
           backgroundColor: '#f1f5f9',
-          color: '#64748b',
+          color: themeColors.textSecondary,
           fontWeight: 500
         }}>
-          {levelLabels[skill.level]}
+          {levelLabel}
         </span>
       </div>
 
       <p style={{
         fontSize: '13px',
-        color: '#64748b',
+        color: themeColors.textSecondary,
         margin: 0,
         lineHeight: 1.5,
         overflow: 'hidden',
@@ -136,7 +148,7 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, delay = 0, onClick }) => {
             alt={skill.userName}
             style={{ width: '24px', height: '24px', borderRadius: '50%' }}
           />
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>{skill.userName}</span>
+          <span style={{ fontSize: '12px', color: themeColors.textMuted }}>{skill.userName}</span>
         </div>
       )}
     </div>
