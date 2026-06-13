@@ -31,6 +31,7 @@ const SpritePreview: React.FC<Props> = ({ currentNode, transition }) => {
     fromFrame: number;
     loopDir: number;
     lastTime: number;
+    accumulatedTime: number;
   }>({
     node: null,
     transition: undefined,
@@ -43,6 +44,7 @@ const SpritePreview: React.FC<Props> = ({ currentNode, transition }) => {
     fromFrame: 0,
     loopDir: 1,
     lastTime: 0,
+    accumulatedTime: 0,
   });
 
   stateRef.current.node = currentNode;
@@ -106,11 +108,23 @@ const SpritePreview: React.FC<Props> = ({ currentNode, transition }) => {
       return;
     }
 
+    const targetFPS = 50;
+    const frameInterval = 1000 / targetFPS;
+    s.accumulatedTime = (s.accumulatedTime || 0) + dt;
+
+    if (s.accumulatedTime < frameInterval) {
+      animRef.current = requestAnimationFrame(tick);
+      return;
+    }
+
+    const ticks = Math.floor(s.accumulatedTime / frameInterval);
+    s.accumulatedTime -= ticks * frameInterval;
+
     const sprite = SpriteService.getSpriteById(s.node.spriteId);
     if (!sprite) return;
 
     if (s.transitioning && s.transition) {
-      s.transitionTimer += dt;
+      s.transitionTimer += frameInterval * ticks;
       const duration = s.transition.duration || 300;
       let t = Math.min(s.transitionTimer / duration, 1);
       const curveFn = CURVE_FN[s.transition.curve];
@@ -143,9 +157,7 @@ const SpritePreview: React.FC<Props> = ({ currentNode, transition }) => {
       return;
     }
 
-    const fps = 60;
-    const frameInterval = 1000 / fps;
-    s.frameTimer += dt;
+    s.frameTimer += frameInterval * ticks;
 
     if (s.frameTimer >= frameInterval * 4) {
       s.frameTimer = 0;
