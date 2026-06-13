@@ -8,17 +8,19 @@ export const recipeApi = {
     const startTime = performance.now();
     const response = await axios.get<Recipe[]>(API_BASE);
     const duration = performance.now() - startTime;
-    console.log(`[Performance] getAll recipes: ${duration.toFixed(2)}ms`);
+    console.log('[Performance] getAll recipes: ' + duration.toFixed(2) + 'ms');
     return response.data;
   },
 
   async searchByIngredients(ingredients: string[]): Promise<Recipe[]> {
     const startTime = performance.now();
-    const response = await axios.get<Recipe[]>(`${API_BASE}/search`, {
+    const response = await axios.get<Recipe[]>(API_BASE + '/search', {
       params: { ingredients: ingredients.join(',') },
     });
     const duration = performance.now() - startTime;
-    console.log(`[Performance] searchByIngredients: ${duration.toFixed(2)}ms${duration <= 300 ? ' ✓ (<=300ms target' : ' ✗ (>300ms target')}`);
+    const status = duration <= 300 ? ' [OK]' : ' [WARN]';
+    const target = duration <= 300 ? '(<=300ms target met)' : '(>300ms target exceeded)';
+    console.log('[Performance] searchByIngredients: ' + duration.toFixed(2) + 'ms ' + status + ' ' + target);
     return response.data;
   },
 
@@ -28,11 +30,11 @@ export const recipeApi = {
   },
 
   async toggleFavorite(id: string, favorite: boolean): Promise<Recipe> {
-    const response = await axios.patch<Recipe>(`${API_BASE}/${id}/favorite`, { favorite });
+    const response = await axios.patch<Recipe>(API_BASE + '/' + id + '/favorite', { favorite });
     return response.data;
   },
 
   async delete(id: string): Promise<void> {
-    await axios.delete(`${API_BASE}/${id}`);
+    await axios.delete(API_BASE + '/' + id);
   },
 };

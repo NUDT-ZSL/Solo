@@ -97,74 +97,87 @@ input {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
-/* ===== 瀑布流容器 ===== */
-.masonry-container {
-  column-gap: 16px;
-  width: 100%;
-}
+/* ===== 瀑布流容器（已废弃，改用JS Masonry组件） ===== */
+/* CSS column方式不用于瀑布流，仅作骨架屏降级 */
 
-.masonry-item {
-  break-inside: avoid;
-  margin-bottom: 16px;
-  display: inline-block;
-  width: 100%;
-}
+/* ===== 响应式断点说明 - 覆盖320px到1920px全范围 =====
+   < 320px  : 1列 (极限小屏)
+   320-419px: 1列 (手机竖屏，确保小屏单列不拥挤)
+   420-639px: 2列 (大屏手机)
+   640-767px: 2列
+   768-1023px: 3列 (平板)
+   1024-1279px: 3列 (小屏笔记本)
+   1280-1535px: 4列 (普通桌面)
+   1536-1919px: 4列 (大屏桌面)
+   >= 1920px : 5列 (4K及以上)
+*/
 
-/* ===== 响应式布局 - 从1列到4列平滑过渡 ===== */
-.masonry-container {
+/* 基础：320px及以下默认1列 */
+.responsive-cols {
   column-count: 1;
+  column-gap: 12px;
 }
 
+/* 320px以上仍然保持1列，确保最小屏单列显示 */
+@media (min-width: 320px) {
+  .responsive-cols {
+    column-count: 1;
+    column-gap: 12px;
+  }
+}
+
+/* 420px开始切换到2列 */
 @media (min-width: 420px) {
-  .masonry-container {
+  .responsive-cols {
     column-count: 2;
+    column-gap: 14px;
   }
 }
 
+/* 640px增加列间距 */
 @media (min-width: 640px) {
-  .masonry-container {
+  .responsive-cols {
     column-count: 2;
-    column-gap: 20px;
-  }
-  .masonry-item {
-    margin-bottom: 20px;
+    column-gap: 18px;
   }
 }
 
+/* 768px平板切换到3列 */
 @media (min-width: 768px) {
-  .masonry-container {
+  .responsive-cols {
     column-count: 3;
+    column-gap: 18px;
   }
 }
 
+/* 1024px增加列间距 */
 @media (min-width: 1024px) {
-  .masonry-container {
+  .responsive-cols {
     column-count: 3;
-    column-gap: 24px;
-  }
-  .masonry-item {
-    margin-bottom: 24px;
+    column-gap: 22px;
   }
 }
 
+/* 1280px桌面切换到4列 */
 @media (min-width: 1280px) {
-  .masonry-container {
+  .responsive-cols {
     column-count: 4;
+    column-gap: 22px;
   }
 }
 
+/* 1536px增加列间距 */
 @media (min-width: 1536px) {
-  .masonry-container {
+  .responsive-cols {
     column-count: 4;
-    column-gap: 28px;
-  }
-  .masonry-item {
-    margin-bottom: 28px;
+    column-gap: 26px;
   }
 }
 
+/* 1920px及以上5列 */
 @media (min-width: 1920px) {
-  .masonry-container {
+  .responsive-cols {
     column-count: 5;
+    column-gap: 26px;
   }
 }

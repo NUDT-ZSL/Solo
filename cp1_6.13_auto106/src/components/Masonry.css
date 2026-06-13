@@ -1,0 +1,10 @@
+.masonry-wrapper {
+  position: relative;
+  width: 100%;
+  transition: height 0.2s ease;
+}
+
+.masonry-item-wrapper {
+  transition: left 0.3s ease, top 0.3s ease;
+  will-change: left, top;
+}
