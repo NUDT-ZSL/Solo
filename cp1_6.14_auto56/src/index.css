@@ -167,13 +167,22 @@ body {
 }
 
 .card-grid {
-  column-count: 2;
-  column-gap: 24px;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.card-grid-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  flex: 1;
+  min-width: 0;
 }
 
 @media (max-width: 900px) {
   .card-grid {
-    column-count: 1;
+    flex-direction: column;
   }
 }
 
@@ -182,8 +191,6 @@ body {
   border-radius: 16px;
   padding: 24px;
   will-change: transform, opacity;
-  break-inside: avoid;
-  margin-bottom: 24px;
 }
 
 .color-swatch {
@@ -208,12 +215,6 @@ body {
   opacity: 1;
 }
 
-.color-swatch:hover .color-tooltip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-  pointer-events: auto;
-}
-
 .color-tooltip {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -227,9 +228,16 @@ body {
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   white-space: nowrap;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.2s, transform 0.2s;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
   z-index: 5;
+}
+
+.color-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
 }
 
 .color-tooltip::after {
@@ -318,5 +326,15 @@ body {
     border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.3;
   }
 }

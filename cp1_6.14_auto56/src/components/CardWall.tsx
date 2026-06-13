@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, createElement } from 'react';
+import { useState, useRef, useEffect, useMemo, createElement } from 'react';
 import { 
   DesignSpec, 
   ColorSwatch, 
@@ -13,13 +13,60 @@ interface CardWallProps {
   onSpecChange: (updatedSpecs: DesignSpec[]) => void;
 }
 
+const estimateCardHeight = (spec: DesignSpec): number => {
+  const basePadding = 48;
+  const titleHeight = 44;
+  switch (spec.type) {
+    case 'colors':
+      return basePadding + titleHeight + 100;
+    case 'fonts':
+      return basePadding + titleHeight + 220;
+    case 'typography':
+      return basePadding + titleHeight + 340;
+    default:
+      return basePadding + titleHeight + 150;
+  }
+};
+
+const masonryLayout = (specs: DesignSpec[], columns: number): DesignSpec[][] => {
+  const cols: DesignSpec[][] = Array.from({ length: columns }, () => []);
+  const colHeights: number[] = Array(columns).fill(0);
+
+  specs.forEach((spec) => {
+    const height = estimateCardHeight(spec);
+    const shortestColIndex = colHeights.indexOf(Math.min(...colHeights));
+    cols[shortestColIndex].push(spec);
+    colHeights[shortestColIndex] += height + 24;
+  });
+
+  return cols;
+};
+
 const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
   const [copied, setCopied] = useState(false);
   const [activeColorPicker, setActiveColorPicker] = useState<string | null>(null);
   const [activeFontDropdown, setActiveFontDropdown] = useState<string | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [fontFadeKey, setFontFadeKey] = useState(0);
+  const [columnCount, setColumnCount] = useState(2);
+  const hideTooltipTimer = useRef<number | null>(null);
   const pickerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.offsetWidth;
+        setColumnCount(width < 700 ? 1 : 2);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [specs]);
+
+  const columns = useMemo(() => masonryLayout(specs, columnCount), [specs, columnCount]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -39,6 +86,24 @@ const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeColorPicker, activeFontDropdown]);
+
+  const handleTooltipEnter = (tooltipId: string) => {
+    if (hideTooltipTimer.current) {
+      clearTimeout(hideTooltipTimer.current);
+      hideTooltipTimer.current = null;
+    }
+    setActiveTooltip(tooltipId);
+  };
+
+  const handleTooltipLeave = () => {
+    if (hideTooltipTimer.current) {
+      clearTimeout(hideTooltipTimer.current);
+    }
+    hideTooltipTimer.current = window.setTimeout(() => {
+      setActiveTooltip(null);
+      hideTooltipTimer.current = null;
+    }, 200);
+  };
 
   const handleColorChange = (specId: string, colorIndex: number, newValue: string) => {
     const updated = specs.map(spec => {
@@ -104,8 +169,183 @@ const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
     );
   }
 
+  const renderCard = (spec: DesignSpec, index: number) => (
+    <div
+      key={spec.id}
+      className="card"
+      style={{
+        animation: `fadeInUp 0.3s ease ${index * 0.05}s both`,
+      }}
+    >
+      <h3 style={cardTitleStyle}>{spec.title}</h3>
+      
+      {spec.type === 'colors' && spec.colors && (
+        <div style={colorContainerStyle}>
+          {spec.colors.map((color: ColorSwatch, colorIndex: number) => {
+            const tooltipId = `${spec.id}-${colorIndex}`;
+            return (
+              <div key={colorIndex} style={colorWrapperStyle}>
+                <div
+                  className="color-swatch"
+                  style={{
+                    backgroundColor: color.value,
+                  }}
+                  onClick={() => setActiveColorPicker(
+                    activeColorPicker === tooltipId 
+                      ? null 
+                      : tooltipId
+                  )}
+                  onMouseEnter={() => handleTooltipEnter(tooltipId)}
+                  onMouseLeave={handleTooltipLeave}
+                >
+                  <span 
+                    className="color-value"
+                    style={{
+                      color: isLightColor(color.value) ? '#212529' : '#ffffff',
+                    }}
+                  >
+                    {color.value}
+                  </span>
+                  <span className={`color-tooltip ${activeTooltip === tooltipId ? 'visible' : ''}`}>
+                    {color.value}
+                  </span>
+                </div>
+                <span style={colorLabelStyle}>{color.name}</span>
+                
+                {activeColorPicker === tooltipId && (
+                  <div
+                    ref={el => pickerRefs.current[tooltipId] = el}
+                    style={colorPickerStyle}
+                  >
+                    <div style={pickerHeaderStyle}>
+                      <span>选择颜色</span>
+                    </div>
+                    <input
+                      type="color"
+                      value={color.value}
+                      onChange={(e) => handleColorChange(spec.id, colorIndex, e.target.value)}
+                      style={colorInputStyle}
+                    />
+                    <input
+                      type="text"
+                      value={color.value}
+                      onChange={(e) => handleColorChange(spec.id, colorIndex, e.target.value)}
+                      style={colorTextInputStyle}
+                      placeholder="#RRGGBB"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {spec.type === 'fonts' && spec.fonts && (
+        <div key={fontFadeKey} style={{ animation: 'fadeIn 0.2s ease' }}>
+          <div style={{ ...fontSectionStyle, marginBottom: '20px' }}>
+            <div style={fontRowStyle}>
+              <span style={fontLabelStyle}>标题字体</span>
+              <div ref={el => dropdownRefs.current[`${spec.id}-heading`] = el} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setActiveFontDropdown(
+                    activeFontDropdown === `${spec.id}-heading` 
+                      ? null 
+                      : `${spec.id}-heading`
+                  )}
+                  className="font-select-button"
+                >
+                  {spec.fonts.heading} ▾
+                </button>
+                {activeFontDropdown === `${spec.id}-heading` && (
+                  <div style={dropdownMenuStyle}>
+                    {getAlternativeFonts('heading').map((font) => (
+                      <div
+                        key={font}
+                        onClick={() => handleFontChange(spec.id, 'heading', font)}
+                        className={`dropdown-item ${font === spec.fonts?.heading ? 'active' : ''}`}
+                      >
+                        {font}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <p style={{
+              ...fontPreviewStyle,
+              fontFamily: spec.fonts.headingStack || `'${spec.fonts.heading}', ${spec.fonts.fallback}`,
+            }}>
+              设计改变世界
+            </p>
+          </div>
+
+          <div style={fontSectionStyle}>
+            <div style={fontRowStyle}>
+              <span style={fontLabelStyle}>正文字体</span>
+              <div ref={el => dropdownRefs.current[`${spec.id}-body`] = el} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setActiveFontDropdown(
+                    activeFontDropdown === `${spec.id}-body` 
+                      ? null 
+                      : `${spec.id}-body`
+                  )}
+                  className="font-select-button"
+                >
+                  {spec.fonts.body} ▾
+                </button>
+                {activeFontDropdown === `${spec.id}-body` && (
+                  <div style={dropdownMenuStyle}>
+                    {getAlternativeFonts('body').map((font) => (
+                      <div
+                        key={font}
+                        onClick={() => handleFontChange(spec.id, 'body', font)}
+                        className={`dropdown-item ${font === spec.fonts?.body ? 'active' : ''}`}
+                      >
+                        {font}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <p style={{
+              ...fontPreviewStyle,
+              fontFamily: spec.fonts.bodyStack || `'${spec.fonts.body}', ${spec.fonts.fallback}`,
+              fontSize: '16px',
+              fontWeight: 400,
+            }}>
+              优秀的设计是显而易见的。伟大的设计是透明的。
+            </p>
+          </div>
+        </div>
+      )}
+
+      {spec.type === 'typography' && spec.typography && (
+        <div style={typographyContainerStyle}>
+          {spec.typography.map((level: TypographyLevel) => (
+            <div key={level.tag} style={typeLevelStyle}>
+              {createElement(level.tag, {
+                style: {
+                  ...typeStyle,
+                  fontSize: `${level.fontSize}rem`,
+                  fontWeight: level.fontWeight,
+                  lineHeight: level.lineHeight,
+                  letterSpacing: `${level.letterSpacing}em`,
+                },
+              }, getTypeSample(level.tag))}
+              <span style={typeMetaStyle}>
+                {level.tag.toUpperCase()} · {level.fontSize}rem · {level.fontWeight}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle} ref={containerRef}>
       <div style={exportBarStyle}>
         <button 
           onClick={handleExportJSON}
@@ -121,175 +361,21 @@ const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
         </button>
       </div>
 
-      <div className="card-grid">
-        {specs.map((spec, index) => (
-          <div
-            key={spec.id}
-            className="card"
-            style={{
-              animation: `fadeInUp 0.3s ease ${index * 0.05}s both`,
-            }}
-          >
-            <h3 style={cardTitleStyle}>{spec.title}</h3>
-            
-            {spec.type === 'colors' && spec.colors && (
-              <div style={colorContainerStyle}>
-                {spec.colors.map((color: ColorSwatch, colorIndex: number) => (
-                  <div key={colorIndex} style={colorWrapperStyle}>
-                    <div
-                      className="color-swatch"
-                      style={{
-                        backgroundColor: color.value,
-                      }}
-                      onClick={() => setActiveColorPicker(
-                        activeColorPicker === `${spec.id}-${colorIndex}` 
-                          ? null 
-                          : `${spec.id}-${colorIndex}`
-                      )}
-                    >
-                      <span 
-                        className="color-value"
-                        style={{
-                          color: isLightColor(color.value) ? '#212529' : '#ffffff',
-                        }}
-                      >
-                        {color.value}
-                      </span>
-                      <span className="color-tooltip">{color.value}</span>
-                    </div>
-                    <span style={colorLabelStyle}>{color.name}</span>
-                    
-                    {activeColorPicker === `${spec.id}-${colorIndex}` && (
-                      <div
-                        ref={el => pickerRefs.current[`${spec.id}-${colorIndex}`] = el}
-                        style={colorPickerStyle}
-                      >
-                        <div style={pickerHeaderStyle}>
-                          <span>选择颜色</span>
-                        </div>
-                        <input
-                          type="color"
-                          value={color.value}
-                          onChange={(e) => handleColorChange(spec.id, colorIndex, e.target.value)}
-                          style={colorInputStyle}
-                        />
-                        <input
-                          type="text"
-                          value={color.value}
-                          onChange={(e) => handleColorChange(spec.id, colorIndex, e.target.value)}
-                          style={colorTextInputStyle}
-                          placeholder="#RRGGBB"
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {spec.type === 'fonts' && spec.fonts && (
-              <div key={fontFadeKey} style={{ animation: 'fadeIn 0.2s ease' }}>
-                <div style={{ ...fontSectionStyle, marginBottom: '20px' }}>
-                  <div style={fontRowStyle}>
-                    <span style={fontLabelStyle}>标题字体</span>
-                    <div ref={el => dropdownRefs.current[`${spec.id}-heading`] = el} style={{ position: 'relative' }}>
-                      <button
-                        onClick={() => setActiveFontDropdown(
-                          activeFontDropdown === `${spec.id}-heading` 
-                            ? null 
-                            : `${spec.id}-heading`
-                        )}
-                        className="font-select-button"
-                      >
-                        {spec.fonts.heading} ▾
-                      </button>
-                      {activeFontDropdown === `${spec.id}-heading` && (
-                        <div style={dropdownMenuStyle}>
-                          {getAlternativeFonts('heading').map((font) => (
-                            <div
-                              key={font}
-                              onClick={() => handleFontChange(spec.id, 'heading', font)}
-                              className={`dropdown-item ${font === spec.fonts?.heading ? 'active' : ''}`}
-                            >
-                              {font}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <p style={{
-                    ...fontPreviewStyle,
-                    fontFamily: spec.fonts.headingStack || `'${spec.fonts.heading}', ${spec.fonts.fallback}`,
-                  }}>
-                    设计改变世界
-                  </p>
-                </div>
-
-                <div style={fontSectionStyle}>
-                  <div style={fontRowStyle}>
-                    <span style={fontLabelStyle}>正文字体</span>
-                    <div ref={el => dropdownRefs.current[`${spec.id}-body`] = el} style={{ position: 'relative' }}>
-                      <button
-                        onClick={() => setActiveFontDropdown(
-                          activeFontDropdown === `${spec.id}-body` 
-                            ? null 
-                            : `${spec.id}-body`
-                        )}
-                        className="font-select-button"
-                      >
-                        {spec.fonts.body} ▾
-                      </button>
-                      {activeFontDropdown === `${spec.id}-body` && (
-                        <div style={dropdownMenuStyle}>
-                          {getAlternativeFonts('body').map((font) => (
-                            <div
-                              key={font}
-                              onClick={() => handleFontChange(spec.id, 'body', font)}
-                              className={`dropdown-item ${font === spec.fonts?.body ? 'active' : ''}`}
-                            >
-                              {font}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <p style={{
-                    ...fontPreviewStyle,
-                    fontFamily: spec.fonts.bodyStack || `'${spec.fonts.body}', ${spec.fonts.fallback}`,
-                    fontSize: '16px',
-                    fontWeight: 400,
-                  }}>
-                    优秀的设计是显而易见的。伟大的设计是透明的。
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {spec.type === 'typography' && spec.typography && (
-              <div style={typographyContainerStyle}>
-                {spec.typography.map((level: TypographyLevel) => (
-                  <div key={level.tag} style={typeLevelStyle}>
-                    {createElement(level.tag, {
-                      style: {
-                        ...typeStyle,
-                        fontSize: level.fontSize,
-                        fontWeight: level.fontWeight,
-                        lineHeight: level.lineHeight,
-                        letterSpacing: level.letterSpacing,
-                      },
-                    }, getTypeSample(level.tag))}
-                    <span style={typeMetaStyle}>
-                      {level.tag.toUpperCase()} · {level.fontSize} · {level.fontWeight}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+      {columnCount === 1 ? (
+        <div className="card-grid">
+          <div className="card-grid-column">
+            {specs.map((spec, i) => renderCard(spec, i))}
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="card-grid">
+          {columns.map((column, colIndex) => (
+            <div key={colIndex} className="card-grid-column">
+              {column.map((spec, i) => renderCard(spec, colIndex * 10 + i))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

@@ -14,10 +14,10 @@ export interface FontPair {
 
 export interface TypographyLevel {
   tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
-  fontSize: string;
+  fontSize: number;
   fontWeight: number;
   lineHeight: number;
-  letterSpacing: string;
+  letterSpacing: number;
 }
 
 export interface DesignSpec {
@@ -184,12 +184,12 @@ const stylePresets: StylePreset[] = [
 ];
 
 const typographyPresets: TypographyLevel[] = [
-  { tag: 'h1', fontSize: '3.052rem', fontWeight: 700, lineHeight: 1.125, letterSpacing: '-0.025em' },
-  { tag: 'h2', fontSize: '2.441rem', fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.02em' },
-  { tag: 'h3', fontSize: '1.953rem', fontWeight: 600, lineHeight: 1.25, letterSpacing: '-0.015em' },
-  { tag: 'h4', fontSize: '1.563rem', fontWeight: 600, lineHeight: 1.3, letterSpacing: '-0.01em' },
-  { tag: 'h5', fontSize: '1.25rem', fontWeight: 500, lineHeight: 1.4, letterSpacing: '0' },
-  { tag: 'h6', fontSize: '1rem', fontWeight: 500, lineHeight: 1.5, letterSpacing: '0' },
+  { tag: 'h1', fontSize: 3.052, fontWeight: 700, lineHeight: 1.125, letterSpacing: -0.025 },
+  { tag: 'h2', fontSize: 2.441, fontWeight: 700, lineHeight: 1.2, letterSpacing: -0.02 },
+  { tag: 'h3', fontSize: 1.953, fontWeight: 600, lineHeight: 1.25, letterSpacing: -0.015 },
+  { tag: 'h4', fontSize: 1.563, fontWeight: 600, lineHeight: 1.3, letterSpacing: -0.01 },
+  { tag: 'h5', fontSize: 1.25, fontWeight: 500, lineHeight: 1.4, letterSpacing: 0 },
+  { tag: 'h6', fontSize: 1, fontWeight: 500, lineHeight: 1.5, letterSpacing: 0 },
 ];
 
 const alternativeFonts: Record<string, string[]> = {
@@ -315,9 +315,10 @@ export const exportToCSSVars = (specs: DesignSpec[]): string => {
   const typeSpec = specs.find(s => s.type === 'typography');
   if (typeSpec?.typography) {
     typeSpec.typography.forEach(t => {
-      lines.push(`  --font-size-${t.tag}: ${t.fontSize};`);
+      lines.push(`  --font-size-${t.tag}: ${t.fontSize}rem;`);
       lines.push(`  --font-weight-${t.tag}: ${t.fontWeight};`);
       lines.push(`  --line-height-${t.tag}: ${t.lineHeight};`);
+      lines.push(`  --letter-spacing-${t.tag}: ${t.letterSpacing}em;`);
     });
   }
 
