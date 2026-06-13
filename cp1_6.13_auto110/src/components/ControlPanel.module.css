@@ -25,21 +25,49 @@
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  flex-shrink: 0;
 }
 
 .logo {
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
 }
 
 .title {
   font-size: 24px;
   font-weight: 700;
   margin: 0;
+  flex: 1;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.expandButton {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(71, 85, 105, 0.5);
+  color: #f8fafc;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.expandButton:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  gap: 4px;
 }
 
 .section {
@@ -157,6 +185,7 @@
   border-radius: 10px;
   border: 1px solid rgba(71, 85, 105, 0.5);
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .emptyState {
@@ -228,6 +257,8 @@
   z-index: 1001;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
+  align-items: center;
+  justify-content: center;
 }
 
 .toggleButton:hover {
@@ -240,26 +271,21 @@
     height: 220px;
     top: auto;
     bottom: 0;
+    left: 0;
+    right: 0;
     border-radius: 16px 16px 0 0;
-    transform: translateY(calc(100% - 60px));
-    transition: transform 0.3s ease;
+    padding: 16px;
+    transform: translateY(0);
+    transition: transform 0.3s ease, height 0.3s ease;
+    overflow: hidden;
   }
 
   .controlPanel.expanded {
-    transform: translateY(0);
     height: 70vh;
   }
 
-  .toggleButton {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    bottom: calc(220px - 24px);
-    transition: bottom 0.3s ease;
-  }
-
-  .controlPanel.expanded ~ .toggleButton {
-    bottom: calc(70vh - 24px);
+  .controlPanel:not(.expanded) .content {
+    overflow: hidden;
   }
 
   .header {
@@ -267,7 +293,36 @@
     padding-bottom: 10px;
   }
 
+  .expandButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .section {
     margin-bottom: 12px;
+  }
+
+  .sectionTitle {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .detailsPanel {
+    padding: 12px;
+  }
+
+  .toggleButton {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .toggleButton {
+    display: none !important;
+  }
+
+  .expandButton {
+    display: none !important;
   }
 }

@@ -34,7 +34,7 @@ async function initializeDatabase() {
   if (existingNodes === 0) {
     console.log('Initializing database with sample data...');
     const nodes = [];
-    let nodeIndex = 1;
+    let nodeIndex = 0;
 
     for (const type of NODE_TYPES) {
       for (let i = 0; i < TYPE_COUNTS[type]; i++) {
@@ -60,18 +60,20 @@ async function initializeDatabase() {
     const allNodes = await nodesDb.find({});
     const edges = [];
     const existingPairs = new Set();
+    const nodeConnections = new Map();
 
-    while (edges.length < EDGE_COUNT) {
-      const sourceIdx = Math.floor(Math.random() * allNodes.length);
-      const targetIdx = Math.floor(Math.random() * allNodes.length);
+    allNodes.forEach(node => nodeConnections.set(node.id, 0));
 
-      if (sourceIdx === targetIdx) continue;
+    const nodesByType: Record<string, typeof allNodes> = {
+      A: allNodes.filter(n => n.type === 'A'),
+      B: allNodes.filter(n => n.type === 'B'),
+      C: allNodes.filter(n => n.type === 'C')
+    };
 
-      const sourceId = allNodes[sourceIdx].id;
-      const targetId = allNodes[targetIdx].id;
-
+    function addEdge(sourceId: string, targetId: string): boolean {
+      if (sourceId === targetId) return false;
       const pairKey = [sourceId, targetId].sort().join('-');
-      if (existingPairs.has(pairKey)) continue;
+      if (existingPairs.has(pairKey)) return false;
 
       existingPairs.add(pairKey);
       edges.push({
@@ -80,7 +82,51 @@ async function initializeDatabase() {
         sourceId: sourceId,
         targetId: targetId
       });
+      nodeConnections.set(sourceId, (nodeConnections.get(sourceId) || 0) + 1);
+      nodeConnections.set(targetId, (nodeConnections.get(targetId) || 0) + 1);
+      return true;
     }
+
+    allNodes.forEach((node, idx) => {
+      const sameTypeNodes = nodesByType[node.type].filter(n => n.id !== node.id);
+      if (sameTypeNodes.length > 0) {
+        const randomSameType = sameTypeNodes[Math.floor(Math.random() * sameTypeNodes.length)];
+        addEdge(node.id, randomSameType.id);
+      }
+    });
+
+    const SAME_TYPE_RATIO = 0.6;
+    while (edges.length < EDGE_COUNT) {
+      const isSameType = Math.random() < SAME_TYPE_RATIO;
+      let sourceIdx: number, targetIdx: number;
+
+      if (isSameType) {
+        const type = NODE_TYPES[Math.floor(Math.random() * NODE_TYPES.length)];
+        const typeNodes = nodesByType[type];
+        if (typeNodes.length < 2) continue;
+        sourceIdx = allNodes.findIndex(n => n.id === typeNodes[Math.floor(Math.random() * typeNodes.length)].id);
+        targetIdx = allNodes.findIndex(n => n.id === typeNodes[Math.floor(Math.random() * typeNodes.length)].id);
+      } else {
+        let type1 = NODE_TYPES[Math.floor(Math.random() * NODE_TYPES.length)];
+        let type2 = NODE_TYPES[Math.floor(Math.random() * NODE_TYPES.length)];
+        while (type1 === type2) {
+          type2 = NODE_TYPES[Math.floor(Math.random() * NODE_TYPES.length)];
+        }
+        const type1Nodes = nodesByType[type1];
+        const type2Nodes = nodesByType[type2];
+        sourceIdx = allNodes.findIndex(n => n.id === type1Nodes[Math.floor(Math.random() * type1Nodes.length)].id);
+        targetIdx = allNodes.findIndex(n => n.id === type2Nodes[Math.floor(Math.random() * type2Nodes.length)].id);
+      }
+
+      if (sourceIdx === -1 || targetIdx === -1 || sourceIdx === targetIdx) continue;
+
+      const sourceId = allNodes[sourceIdx].id;
+      const targetId = allNodes[targetIdx].id;
+      addEdge(sourceId, targetId);
+    }
+
+    const isolatedNodes = allNodes.filter(n => (nodeConnections.get(n.id) || 0) === 0);
+    console.log(`Isolated nodes before fix: ${isolatedNodes.length}`);
 
     await edgesDb.insert(edges);
     console.log(`Inserted ${edges.length} edges`);

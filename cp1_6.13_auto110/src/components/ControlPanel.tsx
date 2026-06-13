@@ -1,13 +1,19 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { NodeData, NodeType, NODE_COLORS } from '@/types';
-import { SceneManager } from '@/modules/SceneManager';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import styles from './ControlPanel.module.css';
 
 interface ControlPanelProps {
-  sceneManager: SceneManager | null;
   selectedNode: NodeData | null;
   onNodeSelect: (node: NodeData | null) => void;
-  onDataRefresh: () => void;
+  searchFilter: string;
+  onSearchChange: (value: string) => void;
+  hiddenTypes: NodeType[];
+  onHiddenTypesChange: (types: NodeType[]) => void;
+  onResetLayout: () => void;
+  onFocusNode: () => void;
+  connectionCount: number;
 }
 
 const NodeIcon: React.FC = () => (
@@ -51,75 +57,57 @@ const NodeIcon: React.FC = () => (
 );
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
-  sceneManager,
   selectedNode,
   onNodeSelect,
-  onDataRefresh
+  searchFilter,
+  onSearchChange,
+  hiddenTypes,
+  onHiddenTypesChange,
+  onResetLayout,
+  onFocusNode,
+  connectionCount
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hiddenTypes, setHiddenTypes] = useState<NodeType[]>([]);
+  const [searchInput, setSearchInput] = useState(searchFilter);
+  const debouncedSearch = useDebounce(searchInput, 300);
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [isExpanded, setIsExpanded] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    onSearchChange(debouncedSearch);
+  }, [debouncedSearch, onSearchChange]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setSearchQuery(value);
-
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-
-      searchTimeoutRef.current = setTimeout(() => {
-        sceneManager?.setSearchFilter(value);
-      }, 300);
+      setSearchInput(e.target.value);
     },
-    [sceneManager]
+    []
   );
 
   const handleTypeToggle = useCallback(
     (type: NodeType) => {
-      setHiddenTypes(prev => {
-        const newHiddenTypes = prev.includes(type)
-          ? prev.filter(t => t !== type)
-          : [...prev, type];
-        sceneManager?.setHiddenTypes(newHiddenTypes);
-        return newHiddenTypes;
-      });
+      onHiddenTypesChange(
+        hiddenTypes.includes(type)
+          ? hiddenTypes.filter(t => t !== type)
+          : [...hiddenTypes, type]
+      );
     },
-    [sceneManager]
+    [hiddenTypes, onHiddenTypesChange]
   );
 
   const handleResetLayout = useCallback(() => {
-    sceneManager?.resetLayout();
-    setSearchQuery('');
-    setHiddenTypes([]);
-    sceneManager?.setSearchFilter('');
-    sceneManager?.setHiddenTypes([]);
+    setSearchInput('');
+    onSearchChange('');
+    onHiddenTypesChange([]);
     onNodeSelect(null);
-  }, [sceneManager, onNodeSelect]);
+    onResetLayout();
+  }, [onSearchChange, onHiddenTypesChange, onNodeSelect, onResetLayout]);
 
   const handleFocusClick = useCallback(() => {
-    if (selectedNode) {
-      sceneManager?.focusOnNode(selectedNode.id);
-    }
-  }, [sceneManager, selectedNode]);
+    onFocusNode();
+  }, [onFocusNode]);
 
   const handleToggleExpand = useCallback(() => {
     setIsExpanded(prev => !prev);
-  }, []);
-
-  const getConnectionCount = useCallback(() => {
-    if (!selectedNode || !sceneManager) return 0;
-    return sceneManager.getNodeConnections(selectedNode.id);
-  }, [selectedNode, sceneManager]);
-
-  useEffect(() => {
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
   }, []);
 
   const typeOptions: { type: NodeType; label: string }[] = [
@@ -130,89 +118,108 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
   return (
     <>
-      <div className={`${styles.controlPanel} ${isExpanded ? styles.expanded : ''}`}>
+      <div
+        className={`${styles.controlPanel} ${
+          isMobile && isExpanded ? styles.expanded : ''
+        } ${isMobile ? styles.mobile : ''}`}
+      >
         <div className={styles.header}>
           <NodeIcon />
           <h1 className={styles.title}>FlowViz</h1>
-        </div>
-
-        <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>搜索</h3>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder="搜索节点名称"
-            value={searchQuery}
-            onChange={handleSearchChange}
-          />
-        </div>
-
-        <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>节点类型过滤</h3>
-          <div className={styles.filterOptions}>
-            {typeOptions.map(({ type, label }) => (
-              <label key={type} className={styles.filterCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={!hiddenTypes.includes(type)}
-                  onChange={() => handleTypeToggle(type)}
-                />
-                <span
-                  className={`${styles.typeDot} ${styles[`typeDot${type}`]}`}
-                />
-                <span className={styles.typeLabel}>{label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className={styles.section}>
-          <button
-            className={styles.resetButton}
-            onClick={handleResetLayout}
-          >
-            重置布局
-          </button>
-        </div>
-
-        <div className={styles.detailsPanel}>
-          <h3 className={styles.sectionTitle}>节点详情</h3>
-          {selectedNode ? (
-            <>
-              <h4 className={styles.nodeName}>{selectedNode.name}</h4>
-              <div className={styles.nodeType}>
-                <span
-                  className={`${styles.typeDot} ${
-                    styles[`typeDot${selectedNode.type}`]
-                  }`}
-                />
-                <span>类型 {selectedNode.type}</span>
-              </div>
-              <div className={styles.connectionCount}>
-                连接数: <strong>{getConnectionCount()}</strong>
-              </div>
-              <button
-                className={styles.focusButton}
-                onClick={handleFocusClick}
-              >
-                聚焦
-              </button>
-            </>
-          ) : (
-            <div className={styles.emptyState}>
-              点击场景中的节点查看详情
-            </div>
+          {isMobile && (
+            <button
+              className={styles.expandButton}
+              onClick={handleToggleExpand}
+              aria-label={isExpanded ? '收起' : '展开'}
+            >
+              {isExpanded ? '↓' : '↑'}
+            </button>
           )}
+        </div>
+
+        <div className={styles.content}>
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>搜索</h3>
+            <input
+              type="text"
+              className={styles.searchInput}
+              placeholder="搜索节点名称"
+              value={searchInput}
+              onChange={handleSearchChange}
+            />
+          </div>
+
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>节点类型过滤</h3>
+            <div className={styles.filterOptions}>
+              {typeOptions.map(({ type, label }) => (
+                <label key={type} className={styles.filterCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={!hiddenTypes.includes(type)}
+                    onChange={() => handleTypeToggle(type)}
+                  />
+                  <span
+                    className={`${styles.typeDot} ${
+                      styles[`typeDot${type}`]
+                    }`}
+                  />
+                  <span className={styles.typeLabel}>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.section}>
+            <button
+              className={styles.resetButton}
+              onClick={handleResetLayout}
+            >
+              重置布局
+            </button>
+          </div>
+
+          <div className={styles.detailsPanel}>
+            <h3 className={styles.sectionTitle}>节点详情</h3>
+            {selectedNode ? (
+              <>
+                <h4 className={styles.nodeName}>{selectedNode.name}</h4>
+                <div className={styles.nodeType}>
+                  <span
+                    className={`${styles.typeDot} ${
+                      styles[`typeDot${selectedNode.type}`]
+                    }`}
+                  />
+                  <span>类型 {selectedNode.type}</span>
+                </div>
+                <div className={styles.connectionCount}>
+                  连接数: <strong>{connectionCount}</strong>
+                </div>
+                <button
+                  className={styles.focusButton}
+                  onClick={handleFocusClick}
+                >
+                  聚焦
+                </button>
+              </>
+            ) : (
+              <div className={styles.emptyState}>
+                点击场景中的节点查看详情
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <button
-        className={styles.toggleButton}
-        onClick={handleToggleExpand}
-        aria-label={isExpanded ? '收起面板' : '展开面板'}
-      >
-        {isExpanded ? '↓' : '↑'}
-      </button>
+      {isMobile && !isExpanded && (
+        <button
+          className={styles.toggleButton}
+          onClick={handleToggleExpand}
+          aria-label="展开面板"
+        >
+          ↑
+        </button>
+      )}
     </>
   );
 };
