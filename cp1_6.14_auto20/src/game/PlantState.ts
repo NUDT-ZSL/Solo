@@ -1,21 +1,18 @@
-import type { PlantStage } from '../art/Visuals';
-
-export { type PlantStage };
+export type PlantStage = 'seed' | 'sprout' | 'stem' | 'bud' | 'bloom';
 
 export interface PlantState {
   stage: PlantStage;
   growthPercent: number;
   waterLevel: number;
   lightLevel: number;
-  stemDrawHeight: number;
-  targetStemHeight: number;
+  stemHeight: number;
   leafCount: number;
-  leafUnfurlProgress: number[];
+  leafUnfurl: number[];
   bloomProgress: number;
   saturation: number;
   mood: number;
   isWatering: boolean;
-  waterTimer: number;
+  waterEffectTimer: number;
 }
 
 const STAGE_THRESHOLDS: { stage: PlantStage; minGrowth: number }[] = [
@@ -26,22 +23,6 @@ const STAGE_THRESHOLDS: { stage: PlantStage; minGrowth: number }[] = [
   { stage: 'bloom', minGrowth: 90 },
 ];
 
-const TARGET_STEM_HEIGHTS: Record<PlantStage, number> = {
-  seed: 0,
-  sprout: 30,
-  stem: 80,
-  bud: 120,
-  bloom: 150,
-};
-
-const TARGET_LEAF_COUNTS: Record<PlantStage, number> = {
-  seed: 0,
-  sprout: 1,
-  stem: 3,
-  bud: 4,
-  bloom: 4,
-};
-
 const MOOD_COLORS: Record<PlantStage, string> = {
   seed: '#9ca3af',
   sprout: '#86efac',
@@ -50,7 +31,20 @@ const MOOD_COLORS: Record<PlantStage, string> = {
   bloom: '#f472b6',
 };
 
-export { STAGE_THRESHOLDS, TARGET_STEM_HEIGHTS, TARGET_LEAF_COUNTS, MOOD_COLORS };
+const STEM_HEIGHT_MAX = 150;
+const STEM_GROW_PER_FRAME = 2;
+const LEAF_GROW_PER_FRAME = 0.012;
+
+const LEAF_APPEAR_THRESHOLDS = [15, 30, 50, 70];
+
+export {
+  STAGE_THRESHOLDS,
+  MOOD_COLORS,
+  STEM_HEIGHT_MAX,
+  STEM_GROW_PER_FRAME,
+  LEAF_GROW_PER_FRAME,
+  LEAF_APPEAR_THRESHOLDS,
+};
 
 export function getStage(growth: number): PlantStage {
   let result: PlantStage = 'seed';
@@ -60,43 +54,47 @@ export function getStage(growth: number): PlantStage {
   return result;
 }
 
-export function createInitialPlantState(): PlantState {
+export function createInitialPlant(): PlantState {
   return {
     stage: 'seed',
     growthPercent: 0,
     waterLevel: 50,
     lightLevel: 50,
-    stemDrawHeight: 0,
-    targetStemHeight: 0,
+    stemHeight: 0,
     leafCount: 0,
-    leafUnfurlProgress: [0, 0, 0, 0],
+    leafUnfurl: [0, 0, 0, 0],
     bloomProgress: 0,
     saturation: 0.8,
     mood: 0,
     isWatering: false,
-    waterTimer: 0,
+    waterEffectTimer: 0,
   };
 }
 
-export function updatePlantState(state: PlantState, dt: number): PlantStage | null {
+export function getTargetStemHeight(growthPercent: number): number {
+  return (growthPercent / 100) * STEM_HEIGHT_MAX;
+}
+
+export function updatePlant(state: PlantState, dtMs: number, frameTimeMs: number = 16.67): PlantStage | null {
   const lightFactor = state.lightLevel / 100;
   const waterFactor = state.waterLevel / 100;
+  const frameRatio = dtMs / frameTimeMs;
 
   if (state.isWatering) {
-    state.waterTimer -= dt;
-    if (state.waterTimer <= 0) {
+    state.waterEffectTimer -= dtMs;
+    if (state.waterEffectTimer <= 0) {
       state.isWatering = false;
-      state.waterTimer = 0;
+      state.waterEffectTimer = 0;
     }
   }
 
   if (state.waterLevel > 0) {
-    state.waterLevel = Math.max(0, state.waterLevel - 0.005 * (dt / 16.67));
+    state.waterLevel = Math.max(0, state.waterLevel - 0.008 * frameRatio);
   }
 
   if (state.growthPercent < 100) {
-    const growthRate = 0.1 * (0.3 + lightFactor * 0.4 + waterFactor * 0.3);
-    state.growthPercent = Math.min(100, state.growthPercent + growthRate);
+    const growthRate = 0.08 * (0.3 + lightFactor * 0.4 + waterFactor * 0.3);
+    state.growthPercent = Math.min(100, state.growthPercent + growthRate * frameRatio);
   }
 
   const newStage = getStage(state.growthPercent);
@@ -106,47 +104,52 @@ export function updatePlantState(state: PlantState, dt: number): PlantStage | nu
     state.stage = newStage;
   }
 
-  state.targetStemHeight = TARGET_STEM_HEIGHTS[state.stage];
-  const stemDiff = state.targetStemHeight - state.stemDrawHeight;
-  const stemGrowSpeed = 2;
-  if (Math.abs(stemDiff) > 0.5) {
-    state.stemDrawHeight += Math.sign(stemDiff) * Math.min(stemGrowSpeed, Math.abs(stemDiff));
+  const targetH = getTargetStemHeight(state.growthPercent);
+  const diff = targetH - state.stemHeight;
+  if (Math.abs(diff) > 0.1) {
+    const step = Math.min(STEM_GROW_PER_FRAME * frameRatio, Math.abs(diff));
+    state.stemHeight += Math.sign(diff) * step;
   } else {
-    state.stemDrawHeight = state.targetStemHeight;
-  }
-
-  const targetLeaf = TARGET_LEAF_COUNTS[state.stage];
-  if (state.leafCount < targetLeaf) {
-    state.leafCount = Math.min(targetLeaf, state.leafCount + 0.008 * (dt / 16.67));
+    state.stemHeight = targetH;
   }
 
   for (let i = 0; i < 4; i++) {
-    const targetUnfurl = i < Math.floor(state.leafCount) ? 1 : 0;
-    const currentUnfurl = state.leafUnfurlProgress[i] ?? 0;
-    if (currentUnfurl < targetUnfurl) {
-      state.leafUnfurlProgress[i] = Math.min(targetUnfurl, currentUnfurl + 0.006 * (dt / 16.67));
+    const threshold = LEAF_APPEAR_THRESHOLDS[i];
+    const shouldGrow = state.growthPercent >= threshold;
+    const targetUnfurl = shouldGrow ? 1 : 0;
+    const current = state.leafUnfurl[i];
+    if (current !== targetUnfurl) {
+      const step = LEAF_GROW_PER_FRAME * frameRatio;
+      if (current < targetUnfurl) {
+        state.leafUnfurl[i] = Math.min(targetUnfurl, current + step);
+      } else {
+        state.leafUnfurl[i] = Math.max(targetUnfurl, current - step);
+      }
     }
   }
 
+  state.leafCount = state.leafUnfurl.filter(u => u > 0.01).length;
+
   if (state.stage === 'bloom') {
-    state.bloomProgress = Math.min(1, state.bloomProgress + 0.005 * (dt / 16.67));
+    const bloomSpeed = 0.004 * frameRatio;
+    state.bloomProgress = Math.min(1, state.bloomProgress + bloomSpeed);
   }
 
   const targetSat = state.isWatering ? 1.0 : 0.8;
-  state.saturation += (targetSat - state.saturation) * 0.02;
+  state.saturation += (targetSat - state.saturation) * 0.03;
 
   const stageIdx = STAGE_THRESHOLDS.findIndex(s => s.stage === state.stage);
-  state.mood = stageIdx / (STAGE_THRESHOLDS.length - 1);
+  const stageProgress = stageIdx / (STAGE_THRESHOLDS.length - 1);
+  state.mood = stageProgress * 0.8 + state.bloomProgress * 0.2;
 
   return stageChanged;
 }
 
-export function applyWater(state: PlantState): boolean {
-  state.waterLevel = Math.min(100, state.waterLevel + 20);
+export function waterPlant(state: PlantState): void {
+  state.waterLevel = Math.min(100, state.waterLevel + 25);
   state.isWatering = true;
-  state.waterTimer = 2000;
+  state.waterEffectTimer = 2000;
   if (state.growthPercent < 100) {
     state.growthPercent = Math.min(100, state.growthPercent + 2);
   }
-  return true;
 }

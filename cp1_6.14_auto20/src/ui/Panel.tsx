@@ -65,7 +65,11 @@ export const Panel: React.FC<PanelProps> = ({
   onMeditate,
 }) => {
   const [waterScale, setWaterScale] = useState(1);
+  const [moodWidth, setMoodWidth] = useState(0);
+  const [moodColor, setMoodColor] = useState('#9ca3af');
   const waterTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const moodAnimRef = useRef<number | null>(null);
+  const moodTargetRef = useRef(0);
 
   const handleWater = useCallback(() => {
     if (!canWater) return;
@@ -80,11 +84,54 @@ export const Panel: React.FC<PanelProps> = ({
   useEffect(() => {
     return () => {
       if (waterTimeoutRef.current) clearTimeout(waterTimeoutRef.current);
+      if (moodAnimRef.current) cancelAnimationFrame(moodAnimRef.current);
     };
   }, []);
 
-  const moodColor = MOOD_COLORS[plantStage];
-  const moodPercent = Math.round(mood * 100);
+  useEffect(() => {
+    const targetPercent = mood * 100;
+    const targetColor = MOOD_COLORS[plantStage];
+    moodTargetRef.current = targetPercent;
+    const startPercent = moodWidth;
+    const startColor = moodColor;
+    const duration = 500;
+    const startTime = performance.now();
+
+    if (moodAnimRef.current) cancelAnimationFrame(moodAnimRef.current);
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+
+      const currentPercent = startPercent + (targetPercent - startPercent) * eased;
+      setMoodWidth(currentPercent);
+
+      const currentColor = lerpColor(startColor, targetColor, eased);
+      setMoodColor(currentColor);
+
+      if (t < 1) {
+        moodAnimRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    moodAnimRef.current = requestAnimationFrame(animate);
+  }, [mood, plantStage]);
+
+  const lerpColor = (a: string, b: string, t: number): string => {
+    const ah = parseInt(a.replace('#', ''), 16);
+    const bh = parseInt(b.replace('#', ''), 16);
+    const ar = (ah >> 16) & 255;
+    const ag = (ah >> 8) & 255;
+    const ab = ah & 255;
+    const br = (bh >> 16) & 255;
+    const bg = (bh >> 8) & 255;
+    const bb = bh & 255;
+    const rr = Math.round(ar + (br - ar) * t);
+    const rg = Math.round(ag + (bg - ag) * t);
+    const rb = Math.round(ab + (bb - ab) * t);
+    return `#${((rr << 16) | (rg << 8) | rb).toString(16).padStart(6, '0')}`;
+  };
 
   return (
     <div className={`panel-container ${isMeditating ? 'panel-meditating' : ''}`}>
@@ -97,7 +144,6 @@ export const Panel: React.FC<PanelProps> = ({
           style={{
             transform: `scale(${waterScale})`,
             opacity: canWater ? 1 : 0.5,
-            transition: 'transform 0.1s ease',
           }}
         >
           <WaterDropIcon />
@@ -137,7 +183,7 @@ export const Panel: React.FC<PanelProps> = ({
           <div
             className="mood-bar-fill"
             style={{
-              width: `${moodPercent}%`,
+              width: `${moodWidth}%`,
               backgroundColor: moodColor,
             }}
           />

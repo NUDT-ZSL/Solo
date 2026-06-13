@@ -1,3 +1,6 @@
+import { GameLogic, type GameState, type PlantStage, type SoundType } from './GameLogic';
+import type { PlantState } from './GameLogic';
+import { SoundEngine } from './SoundEngine';
 import {
   ParticleSystem,
   drawBackground,
@@ -6,69 +9,47 @@ import {
   drawBreathCircle,
   drawBase,
   drawGrowthPercent,
-  drawWaterSparkle,
+  drawWaterEffect,
 } from '../art/Visuals';
-import type { PlantState, SoundType, PlantStage } from '../art/Visuals';
-import {
-  createInitialPlantState,
-  updatePlantState,
-  applyWater,
-  MOOD_COLORS,
-} from './PlantState';
-import { SoundEngine } from './SoundEngine';
-import { MeditationController } from './MeditationController';
 
-export type { PlantState, SoundType, PlantStage };
-export { MOOD_COLORS };
-
-export interface GameState {
-  plant: PlantState;
-  activeSound: SoundType;
-  isMeditating: boolean;
-  meditationRemaining: number;
-  canWater: boolean;
-  waterCooldownMs: number;
-}
+export { type GameState, type PlantState, type PlantStage, type SoundType };
+export { MOOD_COLORS } from './GameLogic';
 
 export type StateCallback = (state: GameState) => void;
 
 const TARGET_FPS = 60;
 const FRAME_INTERVAL = 1000 / TARGET_FPS;
-const WATER_COOLDOWN_MS = 5000;
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private logic: GameLogic;
   private particles: ParticleSystem;
-  private soundEngine: SoundEngine;
-  private meditation: MeditationController;
+  private sound: SoundEngine;
   private stateCallback: StateCallback;
 
   private animFrameId: number = 0;
   private lastTime: number = 0;
   private running: boolean = false;
   private accumulator: number = 0;
+  private fps: number = 60;
 
-  private plant: PlantState;
-  private waterCooldownRemaining: number = 0;
-  private lastWaterTime: number = 0;
-
-  private canvasLogicalWidth: number = 0;
-  private canvasLogicalHeight: number = 0;
+  private canvasW: number = 0;
+  private canvasH: number = 0;
 
   constructor(canvas: HTMLCanvasElement, callback: StateCallback) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false })!;
+    this.logic = new GameLogic();
     this.particles = new ParticleSystem();
-    this.soundEngine = new SoundEngine();
-    this.meditation = new MeditationController();
+    this.sound = new SoundEngine();
     this.stateCallback = callback;
-    this.plant = createInitialPlantState();
 
-    this.soundEngine.init();
+    this.sound.init().catch(() => { /* audio not available */ });
   }
 
   start() {
+    if (this.running) return;
     this.running = true;
     this.lastTime = performance.now();
     this.loop(this.lastTime);
@@ -78,6 +59,7 @@ export class GameEngine {
     this.running = false;
     if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = 0;
     }
   }
 
@@ -86,161 +68,187 @@ export class GameEngine {
 
     const dt = Math.min(timestamp - this.lastTime, 100);
     this.lastTime = timestamp;
+    this.fps = 1000 / dt;
 
     this.accumulator += dt;
 
-    while (this.accumulator >= FRAME_INTERVAL) {
-      this.fixedUpdate(FRAME_INTERVAL);
+    let fixedSteps = 0;
+    while (this.accumulator >= FRAME_INTERVAL && fixedSteps < 5) {
+      this.fixedUpdate(FRAME_INTERVAL, timestamp - this.accumulator);
       this.accumulator -= FRAME_INTERVAL;
+      fixedSteps++;
+    }
+
+    if (fixedSteps >= 5) {
+      this.accumulator = 0;
     }
 
     this.render();
-    this.emitState();
+    this.stateCallback(this.logic.getState());
 
     this.animFrameId = requestAnimationFrame(this.loop);
   };
 
-  private fixedUpdate(dt: number) {
-    const stageChanged = updatePlantState(this.plant, dt);
+  private fixedUpdate(dt: number, currentTimeMs: number) {
+    const stageChanged = this.logic.update(dt, currentTimeMs);
 
     if (stageChanged) {
       this.onStageChange(stageChanged);
     }
 
-    if (this.waterCooldownRemaining > 0) {
-      this.waterCooldownRemaining = Math.max(0, this.waterCooldownRemaining - dt);
-    }
-
+    const state = this.logic.getState();
     this.particles.update(dt);
-    this.particles.emitAmbient(this.canvasLogicalWidth, this.canvasLogicalHeight);
+    this.particles.maintainAmbient(this.canvasW, this.canvasH);
 
-    const activeSound = this.soundEngine.getActiveSound();
+    const activeSound = this.logic.getActiveSound();
     if (activeSound !== 'none') {
-      this.particles.emitSoundParticles(activeSound, this.canvasLogicalWidth, this.canvasLogicalHeight);
+      this.particles.emitSoundParticles(activeSound, this.canvasW, this.canvasH);
     }
 
-    if (this.plant.stage === 'bloom' && Math.random() < 0.04) {
-      const cx = this.canvasLogicalWidth / 2;
-      const gy = this.canvasLogicalHeight - 100;
-      this.particles.emitPetals(cx + (Math.random() - 0.5) * 40, gy - this.plant.stemDrawHeight - 10, 2);
+    if (state.plant.stage === 'bloom' && Math.random() < 0.05) {
+      const cx = this.canvasW / 2;
+      const gy = this.canvasH - 100;
+      this.particles.emitPetals(
+        cx + (Math.random() - 0.5) * 45,
+        gy - state.plant.stemHeight - 10,
+        2
+      );
     }
-
-    this.meditation.update(dt);
   }
 
-  private onStageChange(newStage: PlantStage) {
-    const cx = this.canvasLogicalWidth / 2;
-    const gy = this.canvasLogicalHeight - 100;
+  private onStageChange(stage: PlantStage) {
+    const cx = this.canvasW / 2;
+    const gy = this.canvasH - 100;
+    const plant = this.logic.getPlant();
 
-    if (newStage === 'sprout') {
-      this.particles.emitBurst(cx, gy - 10, 40);
-    } else if (newStage === 'bloom') {
-      this.particles.emitPetals(cx, gy - this.plant.stemDrawHeight - 10, 25);
-    } else if (newStage === 'stem') {
-      this.particles.emitBurst(cx, gy - this.plant.stemDrawHeight * 0.5, 20);
-    } else if (newStage === 'bud') {
-      this.particles.emitSparkle(cx, gy - this.plant.stemDrawHeight - 5, 15);
+    if (stage === 'sprout') {
+      this.particles.emitBurst(cx, gy - 10, 45);
+    } else if (stage === 'stem') {
+      this.particles.emitBurst(cx, gy - plant.stemHeight * 0.5, 25);
+    } else if (stage === 'bud') {
+      this.particles.emitSparkle(cx, gy - plant.stemHeight - 5, 20);
+    } else if (stage === 'bloom') {
+      this.particles.emitPetals(cx, gy - plant.stemHeight - 10, 30);
     }
   }
 
   private render() {
     const ctx = this.ctx;
-    const w = this.canvasLogicalWidth;
-    const h = this.canvasLogicalHeight;
-    if (w <= 0 || h <= 0) return;
+    if (this.canvasW <= 0 || this.canvasH <= 0) return;
 
-    ctx.save();
     const dpr = window.devicePixelRatio || 1;
-    ctx.scale(dpr, dpr);
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    if (this.meditation.isActive()) {
-      drawMeditationBackground(ctx, w, h);
+    const state = this.logic.getState();
+    const isMeditating = state.isMeditating;
+
+    if (isMeditating) {
+      drawMeditationBackground(ctx, this.canvasW, this.canvasH);
     } else {
-      drawBackground(ctx, w, h);
+      drawBackground(ctx, this.canvasW, this.canvasH);
     }
 
-    const cx = w / 2;
-    const groundY = h - 100;
+    const cx = this.canvasW / 2;
+    const groundY = this.canvasH - 100;
 
     drawBase(ctx, cx, groundY);
-    drawPlant(ctx, this.plant, cx, groundY, this.meditation.isActive());
-    drawWaterSparkle(ctx, this.plant, cx, groundY);
+    drawPlant(ctx, state.plant, cx, groundY, isMeditating);
+    drawWaterEffect(ctx, state.plant, cx, groundY);
 
-    if (this.plant.stage !== 'seed') {
-      drawGrowthPercent(ctx, cx, groundY - this.plant.stemDrawHeight - 25, this.plant.growthPercent);
+    if (state.plant.stage !== 'seed') {
+      drawGrowthPercent(ctx, cx, groundY - state.plant.stemHeight - 28, state.plant.growthPercent);
     } else {
-      drawGrowthPercent(ctx, cx, groundY - 25, this.plant.growthPercent);
+      drawGrowthPercent(ctx, cx, groundY - 28, state.plant.growthPercent);
     }
 
     this.particles.draw(ctx);
 
-    if (this.meditation.isActive()) {
-      const medState = this.meditation.getState();
-      drawBreathCircle(ctx, w / 2, h / 2, medState.breathPhase);
+    if (isMeditating) {
+      const breathPhase = this.getBreathPhase();
+      drawBreathCircle(ctx, this.canvasW / 2, this.canvasH / 2, breathPhase);
     }
 
     ctx.restore();
   }
 
-  private emitState() {
-    const medState = this.meditation.getState();
-    this.stateCallback({
-      plant: { ...this.plant, leafUnfurlProgress: [...this.plant.leafUnfurlProgress] },
-      activeSound: this.soundEngine.getActiveSound(),
-      isMeditating: medState.isActive,
-      meditationRemaining: medState.remainingSeconds,
-      canWater: this.waterCooldownRemaining <= 0,
-      waterCooldownMs: this.waterCooldownRemaining,
-    });
+  private getBreathPhase(): number {
+    const state = this.logic.getState();
+    const period = 4000;
+    return (state.meditationElapsedMs % period) / period * Math.PI * 2;
   }
 
-  water() {
-    if (this.waterCooldownRemaining > 0) return;
-    const now = performance.now();
-    if (now - this.lastWaterTime < WATER_COOLDOWN_MS) return;
-
-    this.lastWaterTime = now;
-    this.waterCooldownRemaining = WATER_COOLDOWN_MS;
-
-    applyWater(this.plant);
-
-    const cx = this.canvasLogicalWidth / 2;
-    const gy = this.canvasLogicalHeight - 100;
-    this.particles.emitSparkle(cx, gy - this.plant.stemDrawHeight * 0.5, 15);
-
-    setTimeout(() => {
-      this.particles.emitDrip(cx, gy - this.plant.stemDrawHeight + 15, 5);
-    }, 500);
+  water(): void {
+    const didWater = this.logic.water(performance.now());
+    if (didWater) {
+      const state = this.logic.getState();
+      const cx = this.canvasW / 2;
+      const gy = this.canvasH - 100;
+      this.particles.emitSparkle(cx, gy - state.plant.stemHeight * 0.5, 18);
+      setTimeout(() => {
+        if (this.running) {
+          const s = this.logic.getState();
+          this.particles.emitDrip(cx, gy - s.plant.stemHeight + 15, 5);
+        }
+      }, 500);
+    }
   }
 
-  setLight(value: number) {
-    this.plant.lightLevel = Math.max(0, Math.min(100, value));
+  setLight(value: number): void {
+    this.logic.setLight(value);
   }
 
   toggleSound(): SoundType {
-    return this.soundEngine.toggle();
+    const current = this.logic.getActiveSound();
+    const sounds: SoundType[] = ['none', 'rain', 'stream', 'wind'];
+    const idx = sounds.indexOf(current);
+    const next = sounds[(idx + 1) % sounds.length];
+    const result = this.sound.play(next);
+    this.logic.setSound(result);
+    return result;
   }
 
-  enterMeditation() {
-    this.meditation.enter(() => {
-      this.soundEngine.playHarp();
-    });
+  toggleMeditation(): void {
+    const state = this.logic.getState();
+    if (state.isMeditating) {
+      this.logic.exitMeditation();
+    } else {
+      this.logic.enterMeditation();
+    }
   }
 
-  exitMeditationManual() {
-    this.meditation.exit();
+  enterMeditation(): void {
+    this.logic.enterMeditation();
+  }
+
+  exitMeditation(): void {
+    this.logic.exitMeditation();
   }
 
   resize(width: number, height: number) {
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = width * dpr;
-    this.canvas.height = height * dpr;
-    this.canvasLogicalWidth = width;
-    this.canvasLogicalHeight = height;
+    this.canvas.width = Math.max(1, width * dpr);
+    this.canvas.height = Math.max(1, height * dpr);
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+    this.canvasW = width;
+    this.canvasH = height;
+  }
+
+  getState(): GameState {
+    return this.logic.getState();
+  }
+
+  getFPS(): number {
+    return this.fps;
+  }
+
+  getParticleCount(): number {
+    return this.particles.count;
   }
 
   destroy() {
     this.stop();
-    this.soundEngine.destroy();
+    this.sound.destroy();
   }
 }
