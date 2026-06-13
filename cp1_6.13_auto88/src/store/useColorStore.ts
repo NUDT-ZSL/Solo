@@ -14,7 +14,12 @@ interface ColorState {
   triggerExportSuccess: () => void;
 }
 
-validatePalette();
+const validation = validatePalette();
+if (!validation.pass) {
+  console.warn('[ColorChron] 配色引擎校验:\n' + validation.results.join('\n'));
+} else {
+  console.info('[ColorChron] 配色引擎校验通过 ✓\n' + validation.results.join('\n'));
+}
 
 export const useColorStore = create<ColorState>((set, get) => ({
   currentHour: 12,
@@ -45,9 +50,6 @@ export const useColorStore = create<ColorState>((set, get) => ({
 
   triggerExportSuccess: () => {
     set({ exportSuccess: true });
-    setTimeout(() => {
-      set({ exportSuccess: false });
-    }, 2000);
   },
 }));
 

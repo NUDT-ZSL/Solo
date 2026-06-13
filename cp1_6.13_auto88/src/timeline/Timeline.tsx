@@ -11,13 +11,16 @@ function TimelineComponent({ currentHour, onHourChange }: TimelineProps) {
   const isDragging = useRef(false);
   const rafId = useRef<number | null>(null);
   const pendingHour = useRef<number | null>(null);
+  const lastUpdateTime = useRef(0);
 
   const updateHourFromPosition = useCallback((clientY: number) => {
     if (!trackRef.current) return;
     const rect = trackRef.current.getBoundingClientRect();
     const percentage = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
     const hour = percentage * 24;
+
     pendingHour.current = hour;
+
     if (rafId.current === null) {
       rafId.current = requestAnimationFrame(() => {
         if (pendingHour.current !== null) {
@@ -25,6 +28,7 @@ function TimelineComponent({ currentHour, onHourChange }: TimelineProps) {
           pendingHour.current = null;
         }
         rafId.current = null;
+        lastUpdateTime.current = performance.now();
       });
     }
   }, [onHourChange]);
@@ -40,15 +44,24 @@ function TimelineComponent({ currentHour, onHourChange }: TimelineProps) {
       cancelAnimationFrame(rafId.current);
       rafId.current = null;
     }
+    if (pendingHour.current !== null) {
+      onHourChange(pendingHour.current);
+      pendingHour.current = null;
+    }
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
-  }, [handleMouseMove]);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }, [handleMouseMove, onHourChange]);
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     isDragging.current = true;
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
     updateHourFromPosition(e.clientY);
-    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mousemove', handleMouseMove, { passive: true });
     document.addEventListener('mouseup', handleMouseUp);
   }, [updateHourFromPosition, handleMouseMove, handleMouseUp]);
 
@@ -63,6 +76,8 @@ function TimelineComponent({ currentHour, onHourChange }: TimelineProps) {
       if (rafId.current !== null) cancelAnimationFrame(rafId.current);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
   }, [handleMouseMove, handleMouseUp]);
 
