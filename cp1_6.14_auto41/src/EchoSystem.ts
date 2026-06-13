@@ -12,8 +12,9 @@ export interface Echo {
   x: number
   y: number
   radius: number
+  facing: number
   createdAt: number
-  trajectory: { x: number; y: number; time: number }[]
+  trajectory: { x: number; y: number; time: number; facing: number }[]
   startTime: number
   replayDuration: number
   existDuration: number
@@ -37,7 +38,7 @@ export class EchoSystem {
   createEcho(
     x: number,
     y: number,
-    trajectory: { x: number; y: number; time: number }[]
+    trajectory: { x: number; y: number; time: number; facing: number }[]
   ): Echo | null {
     if (this.echoes.filter((e) => e.phase !== 'expired').length >= this.maxEchoes) {
       const oldest = this.echoes
@@ -66,7 +67,7 @@ export class EchoSystem {
 
     const normalizedTrajectory = trajectory.length > 0
       ? trajectory.map((t) => ({ ...t, time: t.time - trajectory[0].time }))
-      : [{ x, y, time: 0 }]
+      : [{ x, y, time: 0, facing: 0 }]
 
     const replayDuration = normalizedTrajectory.length > 0
       ? normalizedTrajectory[normalizedTrajectory.length - 1].time
@@ -77,6 +78,7 @@ export class EchoSystem {
       x,
       y,
       radius: 20,
+      facing: trajectory.length > 0 ? trajectory[trajectory.length - 1].facing : 0,
       createdAt: now,
       trajectory: normalizedTrajectory,
       startTime: now,
@@ -112,6 +114,7 @@ export class EchoSystem {
             const last = echo.trajectory[echo.trajectory.length - 1]
             echo.x = last.x
             echo.y = last.y
+            echo.facing = last.facing
           }
         } else {
           let target = echo.trajectory[0]
@@ -125,6 +128,7 @@ export class EchoSystem {
           if (target) {
             echo.x = target.x
             echo.y = target.y
+            echo.facing = target.facing
           }
         }
       }
@@ -201,6 +205,27 @@ export class EchoSystem {
         ctx.fill()
         ctx.restore()
       })
+
+      ctx.save()
+      ctx.globalAlpha = alpha
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.7)'
+      ctx.lineWidth = 2
+      ctx.shadowColor = '#00d4ff'
+      ctx.shadowBlur = 6
+      ctx.beginPath()
+      ctx.moveTo(sx, sy)
+      ctx.lineTo(sx + Math.cos(echo.facing) * 16, sy + Math.sin(echo.facing) * 16)
+      ctx.stroke()
+      ctx.beginPath()
+      const fx = sx + Math.cos(echo.facing) * 16
+      const fy = sy + Math.sin(echo.facing) * 16
+      ctx.moveTo(fx, fy)
+      ctx.lineTo(fx - Math.cos(echo.facing - 0.5) * 5, fy - Math.sin(echo.facing - 0.5) * 5)
+      ctx.lineTo(fx - Math.cos(echo.facing + 0.5) * 5, fy - Math.sin(echo.facing + 0.5) * 5)
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(0, 212, 255, 0.8)'
+      ctx.fill()
+      ctx.restore()
 
       if (echo.phase === 'replaying') {
         ctx.save()

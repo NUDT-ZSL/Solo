@@ -5,12 +5,14 @@ export interface Particle {
   vy: number
   life: number
   maxLife: number
+  baseSize: number
   size: number
   baseX: number
   baseY: number
   angle: number
   orbitRadius: number
   orbitSpeed: number
+  sizePhase: number
 }
 
 export interface TrailParticle {
@@ -33,7 +35,8 @@ export class Player {
   keys: Set<string>
   pulsePhase: number
   isRecording: boolean
-  recordBuffer: { x: number; y: number; time: number }[]
+  recordBuffer: { x: number; y: number; time: number; facing: number }[]
+  facing: number
 
   constructor(x: number, y: number) {
     this.x = x
@@ -48,6 +51,7 @@ export class Player {
     this.pulsePhase = 0
     this.isRecording = false
     this.recordBuffer = []
+    this.facing = 0
     this.initParticles()
   }
 
@@ -56,6 +60,7 @@ export class Player {
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3
       const orbitRadius = 5 + Math.random() * 18
+      const baseSize = 2 + Math.random() * 2.5
       this.particles.push({
         x: this.x + Math.cos(angle) * orbitRadius,
         y: this.y + Math.sin(angle) * orbitRadius,
@@ -63,12 +68,14 @@ export class Player {
         vy: 0,
         life: 1,
         maxLife: 1,
-        size: 2 + Math.random() * 2.5,
+        baseSize,
+        size: baseSize,
         baseX: this.x,
         baseY: this.y,
         angle,
         orbitRadius,
         orbitSpeed: 0.015 + Math.random() * 0.025,
+        sizePhase: Math.random() * Math.PI * 2,
       })
     }
   }
@@ -125,21 +132,28 @@ export class Player {
 
     this.pulsePhase += dt * 0.004
 
+    if (this.vx !== 0 || this.vy !== 0) {
+      this.facing = Math.atan2(this.vy, this.vx)
+    }
+
     this.particles.forEach((p) => {
       const pulse = 1 + Math.sin(this.pulsePhase + p.angle * 2) * 0.25
+      const sizePulse = 1 + Math.sin(this.pulsePhase * 2 + p.sizePhase) * 0.35
       const currentOrbit = p.orbitRadius * pulse
       p.angle += p.orbitSpeed
+      p.sizePhase += 0.03
       const jitterX = (Math.random() - 0.5) * 1.5
       const jitterY = (Math.random() - 0.5) * 1.5
       p.x = this.x + Math.cos(p.angle) * currentOrbit + jitterX
       p.y = this.y + Math.sin(p.angle) * currentOrbit + jitterY
+      p.size = p.baseSize * sizePulse
       p.baseX = this.x
       p.baseY = this.y
     })
 
     if (this.isRecording) {
       const now = Date.now()
-      this.recordBuffer.push({ x: this.x, y: this.y, time: now })
+      this.recordBuffer.push({ x: this.x, y: this.y, time: now, facing: this.facing })
       const cutoff = now - 2000
       this.recordBuffer = this.recordBuffer.filter((r) => r.time >= cutoff)
     }
@@ -202,6 +216,26 @@ export class Player {
     ctx.beginPath()
     ctx.arc(sx, sy, 6, 0, Math.PI * 2)
     ctx.fillStyle = '#ffffff'
+    ctx.fill()
+    ctx.restore()
+
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
+    ctx.lineWidth = 2.5
+    ctx.shadowColor = '#00d4ff'
+    ctx.shadowBlur = 8
+    ctx.beginPath()
+    ctx.moveTo(sx, sy)
+    ctx.lineTo(sx + Math.cos(this.facing) * 18, sy + Math.sin(this.facing) * 18)
+    ctx.stroke()
+    ctx.beginPath()
+    const fx = sx + Math.cos(this.facing) * 18
+    const fy = sy + Math.sin(this.facing) * 18
+    ctx.moveTo(fx, fy)
+    ctx.lineTo(fx - Math.cos(this.facing - 0.5) * 6, fy - Math.sin(this.facing - 0.5) * 6)
+    ctx.lineTo(fx - Math.cos(this.facing + 0.5) * 6, fy - Math.sin(this.facing + 0.5) * 6)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
     ctx.fill()
     ctx.restore()
   }

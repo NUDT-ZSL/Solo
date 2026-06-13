@@ -141,22 +141,59 @@ export class PuzzleManager {
     }
   }
 
+  circleRectOverlap(cx: number, cy: number, cr: number, rx: number, ry: number, rw: number, rh: number): boolean {
+    const closestX = Math.max(rx, Math.min(cx, rx + rw))
+    const closestY = Math.max(ry, Math.min(cy, ry + rh))
+    const dx = cx - closestX
+    const dy = cy - closestY
+    return dx * dx + dy * dy <= cr * cr
+  }
+
   updatePlates(player: Player, echoes: Echo[]) {
     for (const plate of this.level.plates) {
-      const pcx = plate.x + plate.size / 2
-      const pcy = plate.y + plate.size / 2
-      const pr = plate.size / 2
+      const px = plate.x
+      const py = plate.y
+      const ps = plate.size
 
-      let playerOn = this.pointInCircle(player.x, player.y, pcx, pcy, pr + 8)
+      let playerOn = false
+
+      if (this.circleRectOverlap(player.x, player.y, player.radius, px, py, ps, ps)) {
+        playerOn = true
+      }
+
+      if (!playerOn) {
+        for (const particle of player.particles) {
+          if (this.circleRectOverlap(particle.x, particle.y, particle.size + 2, px, py, ps, ps)) {
+            playerOn = true
+            break
+          }
+        }
+      }
+
       for (const block of this.level.blocks) {
-        if (this.circleRectCollide(pcx, pcy, pr - 5, block.x, block.y, block.size, block.size)) {
+        if (this.circleRectCollide(px + ps / 2, py + ps / 2, ps / 2 - 5, block.x, block.y, block.size, block.size)) {
           playerOn = true
         }
       }
 
       let echoOn = false
       for (const echo of echoes) {
-        if (this.pointInCircle(echo.x, echo.y, pcx, pcy, pr + 6)) {
+        let echoTriggers = false
+
+        if (this.circleRectOverlap(echo.x, echo.y, echo.radius, px, py, ps, ps)) {
+          echoTriggers = true
+        }
+
+        if (!echoTriggers) {
+          for (const particle of echo.particles) {
+            if (this.circleRectOverlap(particle.x, particle.y, particle.size + 2, px, py, ps, ps)) {
+              echoTriggers = true
+              break
+            }
+          }
+        }
+
+        if (echoTriggers) {
           echoOn = true
           if (plate.required === 'echo' || plate.required === 'any') {
             echo.activatedPlateIds.add(plate.id)

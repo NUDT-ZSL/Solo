@@ -138,7 +138,7 @@ export const GameUI: React.FC<UIProps> = ({
                 border: `1px solid ${gameState.hourglassReady ? 'rgba(255, 215, 0, 0.5)' : 'rgba(100, 100, 100, 0.3)'}`,
                 cursor: gameState.hourglassReady ? 'pointer' : 'not-allowed',
                 transition: 'all 0.2s ease',
-                opacity: gameState.hourglassReady ? 1 : 0.6,
+                opacity: gameState.hourglassReady ? 1 : 0.85,
               }}
               onClick={() => gameState.hourglassReady && onUseHourglass()}
               onMouseEnter={(e) => {
@@ -152,10 +152,10 @@ export const GameUI: React.FC<UIProps> = ({
                 e.currentTarget.style.transform = 'scale(1)'
               }}
             >
-              <HourglassIcon ready={gameState.hourglassReady} />
+              <HourglassIcon ready={gameState.hourglassReady} cooldown={gameState.hourglassCooldown} />
               <div
                 style={{
-                  color: gameState.hourglassReady ? '#ffd700' : '#666',
+                  color: gameState.hourglassReady ? '#ffd700' : '#888',
                   fontSize: 11,
                   textAlign: 'center',
                   marginTop: 6,
@@ -240,31 +240,96 @@ export const GameUI: React.FC<UIProps> = ({
   )
 }
 
-const HourglassIcon: React.FC<{ ready: boolean }> = ({ ready }) => {
+const HourglassIcon: React.FC<{ ready: boolean; cooldown: number }> = ({ ready, cooldown }) => {
+  const COOLDOWN_TOTAL = 30000
+  const progress = ready ? 0 : Math.max(0, Math.min(1, 1 - cooldown / COOLDOWN_TOTAL))
+  const svgSize = 48
+  const center = svgSize / 2
+  const ringRadius = 22
+  const strokeWidth = 3
+
+  const drawRing = () => {
+    if (ready) return null
+    const circumference = 2 * Math.PI * ringRadius
+    const offset = circumference * (1 - progress)
+    return (
+      <circle
+        cx={center}
+        cy={center}
+        r={ringRadius}
+        fill="none"
+        stroke="#ffd700"
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        opacity={0.8}
+        transform={`rotate(-90 ${center} ${center})`}
+      />
+    )
+  }
+
+  const drawBgRing = () => {
+    if (ready) return null
+    return (
+      <circle
+        cx={center}
+        cy={center}
+        r={ringRadius}
+        fill="none"
+        stroke="#333"
+        strokeWidth={strokeWidth}
+        opacity={0.5}
+      />
+    )
+  }
+
   return (
-    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+    <svg width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`} fill="none">
       <defs>
         <linearGradient id="hgGold" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={ready ? '#ffd700' : '#555'} />
-          <stop offset="100%" stopColor={ready ? '#ff8c00' : '#333'} />
+          <stop offset="0%" stopColor={ready ? '#ffd700' : '#666'} />
+          <stop offset="100%" stopColor={ready ? '#ff8c00' : '#444'} />
         </linearGradient>
       </defs>
-      <rect x="10" y="4" width="28" height="4" rx="1" fill="url(#hgGold)" />
-      <rect x="10" y="40" width="28" height="4" rx="1" fill="url(#hgGold)" />
-      <path
-        d="M12 8 L24 24 L12 40"
-        stroke="url(#hgGold)"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M36 8 L24 24 L36 40"
-        stroke="url(#hgGold)"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinejoin="round"
-      />
+
+      {drawBgRing()}
+      {drawRing()}
+
+      {!ready && (
+        <text
+          x={center}
+          y={center + 1}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#ffd700"
+          fontSize="14"
+          fontWeight="bold"
+          opacity={0.9}
+        >
+          {Math.ceil(cooldown / 1000)}
+        </text>
+      )}
+
+      <g opacity={ready ? 1 : 0.4}>
+        <rect x="10" y="4" width="28" height="4" rx="1" fill="url(#hgGold)" />
+        <rect x="10" y="40" width="28" height="4" rx="1" fill="url(#hgGold)" />
+        <path
+          d="M12 8 L24 24 L12 40"
+          stroke="url(#hgGold)"
+          strokeWidth="2.5"
+          fill="none"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M36 8 L24 24 L36 40"
+          stroke="url(#hgGold)"
+          strokeWidth="2.5"
+          fill="none"
+          strokeLinejoin="round"
+        />
+      </g>
+
       {ready && (
         <>
           <circle cx="17" cy="13" r="1.5" fill="#ffd700">
