@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { decksApi, Deck } from '../api';
+import { useAuth } from '../App';
+import { decksApi, statsApi, Deck, UserStats } from '../api';
 import { formatDistanceToNow, zhCN } from 'date-fns';
 
 function AnimatedCounter({ value, duration = 500 }: { value: number; duration?: number }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
+    if (value === 0) {
+      setCount(0);
+      return;
+    }
+
     let startTime: number | null = null;
     let animationFrame: number;
 
@@ -36,21 +42,29 @@ function AnimatedCounter({ value, duration = 500 }: { value: number; duration?: 
 export default function Dashboard() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
+  const [localStats, setLocalStats] = useState<UserStats | null>(null);
   const navigate = useNavigate();
+  const { stats: contextStats, refreshStats } = useAuth();
+
+  const stats = localStats || contextStats;
 
   useEffect(() => {
-    const fetchDecks = async () => {
+    const fetchData = async () => {
       try {
-        const data = await decksApi.getAll();
-        setDecks(data);
+        const [decksData, statsData] = await Promise.all([
+          decksApi.getAll(),
+          statsApi.getStats(),
+        ]);
+        setDecks(decksData);
+        setLocalStats(statsData);
       } catch (err) {
-        console.error('Failed to fetch decks:', err);
+        console.error('Failed to fetch data:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDecks();
+    fetchData();
   }, []);
 
   const handleDeckClick = (deckId: string) => {
@@ -66,8 +80,9 @@ export default function Dashboard() {
     }
   };
 
-  const todayLearned = decks.length > 0 ? decks.reduce((sum, d) => sum + d.cardCount, 0) : 0;
-  const totalCards = todayLearned;
+  const todayLearned = stats?.todayLearned ?? 0;
+  const totalCards = stats?.totalCards ?? 0;
+  const streakDays = stats?.streakDays ?? 0;
 
   return (
     <div>
@@ -92,9 +107,9 @@ export default function Dashboard() {
           <div className="stat-card-icon" style={{ background: '#dcfce7', color: '#22c55e' }}>
             🎯
           </div>
-          <div className="stat-card-label">今日待复习</div>
+          <div className="stat-card-label">今日已学习</div>
           <div className="stat-card-value">
-            <AnimatedCounter value={Math.min(10, totalCards)} />
+            <AnimatedCounter value={todayLearned} />
           </div>
         </div>
         <div className="stat-card">
@@ -103,7 +118,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-card-label">连续学习</div>
           <div className="stat-card-value">
-            <AnimatedCounter value={3} />
+            <AnimatedCounter value={streakDays} />
             <span style={{ fontSize: 18, color: '#94a3b8', marginLeft: 4 }}>天</span>
           </div>
         </div>

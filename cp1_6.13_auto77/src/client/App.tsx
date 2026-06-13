@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import ReviewPage from './components/ReviewPage';
@@ -25,6 +25,11 @@ function AnimatedCounter({ value, duration = 500 }: { value: number; duration?: 
   const [count, setCount] = useState(0);
 
   useEffect(() => {
+    if (value === 0) {
+      setCount(0);
+      return;
+    }
+
     let startTime: number | null = null;
     let animationFrame: number;
 
@@ -129,18 +134,18 @@ function AuthProvider({ children }: { children: ReactNode }) {
   const [user] = useState({ name: '学习者' });
   const [stats, setStats] = useState<UserStats | null>(null);
 
-  const refreshStats = async () => {
+  const refreshStats = useCallback(async () => {
     try {
       const data = await statsApi.getStats();
       setStats(data);
     } catch (err) {
       console.error('Failed to fetch stats:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshStats();
-  }, []);
+  }, [refreshStats]);
 
   return (
     <AuthContext.Provider value={{ user, stats, refreshStats }}>
