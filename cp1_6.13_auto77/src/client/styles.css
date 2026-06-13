@@ -209,12 +209,12 @@ body {
 
 .decks-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, 320px);
   gap: 24px;
 }
 
 .deck-card {
-  width: 100%;
+  width: 320px;
   height: 200px;
   border-radius: 16px;
   padding: 24px;
