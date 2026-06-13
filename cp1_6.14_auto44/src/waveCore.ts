@@ -4,6 +4,9 @@ export interface WaveformBar {
   position: THREE.Vector3;
   height: number;
   frequency: number;
+  normalizedFrequency: number;
+  centerFrequencyHz: number;
+  amplitude: number;
   color: THREE.Color;
 }
 
@@ -15,6 +18,15 @@ export interface WaveformConfig {
   rowsCount: number;
 }
 
+export interface VisualConfig {
+  colorLowHex: number;
+  colorHighHex: number;
+  spectrumColorLowHex: number;
+  spectrumColorHighHex: number;
+  inheritParticleColor: boolean;
+  easingDurationMs: number;
+}
+
 export class WaveCore {
   private config: WaveformConfig = {
     heightMultiplier: 1.5,
@@ -24,6 +36,18 @@ export class WaveCore {
     rowsCount: 4
   };
 
+  private visualConfig: VisualConfig = {
+    colorLowHex: 0x1e90ff,
+    colorHighHex: 0xff4500,
+    spectrumColorLowHex: 0x00bfff,
+    spectrumColorHighHex: 0x8a2be2,
+    inheritParticleColor: true,
+    easingDurationMs: 300
+  };
+
+  private sampleRate = 44100;
+  private nyquist = 22050;
+
   private bars: WaveformBar[] = [];
   private barMeshes: THREE.Mesh[] = [];
   private barGeometries: Map<string, THREE.BoxGeometry> = new Map();
@@ -31,6 +55,19 @@ export class WaveCore {
 
   constructor() {
     this.initializeBars();
+  }
+
+  setSampleRate(rate: number): void {
+    this.sampleRate = rate;
+    this.nyquist = rate / 2;
+  }
+
+  getVisualConfig(): VisualConfig {
+    return { ...this.visualConfig };
+  }
+
+  setVisualConfigKey<K extends keyof VisualConfig>(key: K, value: VisualConfig[K]): void {
+    this.visualConfig[key] = value;
   }
 
   private initializeBars(): void {
@@ -55,6 +92,9 @@ export class WaveCore {
           position: new THREE.Vector3(x, 0, z),
           height: 0.1,
           frequency,
+          normalizedFrequency: frequency,
+          centerFrequencyHz: frequency * this.nyquist,
+          amplitude: 0,
           color: this.getColorForHeight(0, frequency)
         };
 
@@ -63,11 +103,11 @@ export class WaveCore {
     }
   }
 
-  getColorForHeight(normalizedHeight: number, frequency: number): THREE.Color {
-    const freqLowColor = new THREE.Color(0x1e90ff);
-    const freqHighColor = new THREE.Color(0xff4500);
+  getColorForHeight(normalizedHeight: number, normalizedFrequency: number): THREE.Color {
+    const freqLowColor = new THREE.Color(this.visualConfig.colorLowHex);
+    const freqHighColor = new THREE.Color(this.visualConfig.colorHighHex);
     
-    const freqT = Math.max(0, Math.min(1, frequency));
+    const freqT = Math.max(0, Math.min(1, normalizedFrequency));
     const baseColor = freqLowColor.clone().lerp(freqHighColor, freqT);
     
     const brightness = 0.4 + Math.max(0, Math.min(1, normalizedHeight)) * 0.6;
@@ -78,8 +118,8 @@ export class WaveCore {
   }
 
   getSpectrumColor(normalizedFreq: number): string {
-    const lowColor = new THREE.Color(0x00bfff);
-    const highColor = new THREE.Color(0x8a2be2);
+    const lowColor = new THREE.Color(this.visualConfig.spectrumColorLowHex);
+    const highColor = new THREE.Color(this.visualConfig.spectrumColorHighHex);
     const t = Math.max(0, Math.min(1, normalizedFreq));
     const color = lowColor.clone().lerp(highColor, t);
     return `rgb(${Math.floor(color.r * 255)}, ${Math.floor(color.g * 255)}, ${Math.floor(color.b * 255)})`;
@@ -87,33 +127,45 @@ export class WaveCore {
 
   updateWave(frequencyData: Uint8Array, waveformData: Float32Array): void {
     const { barCount, rowsCount, heightMultiplier } = this.config;
-    const freqStep = Math.floor(frequencyData.length / barCount);
+    const totalBins = frequencyData.length;
+    if (totalBins === 0) return;
+
+    const binsPerBar = Math.floor(totalBins / barCount);
+    const hzPerBin = this.nyquist / totalBins;
 
     for (let row = 0; row < rowsCount; row++) {
-      const rowOffset = Math.floor((row / rowsCount) * freqStep);
+      const rowOffset = Math.floor((row / rowsCount) * binsPerBar);
       
       for (let col = 0; col < barCount; col++) {
         const barIndex = row * barCount + col;
         if (barIndex >= this.bars.length) continue;
 
         let amplitude = 0;
-        const freqStart = Math.max(0, col * freqStep + rowOffset);
-        const freqEnd = Math.min(frequencyData.length, freqStart + freqStep);
+        const binStart = Math.max(0, col * binsPerBar + rowOffset);
+        const binEnd = Math.min(totalBins, binStart + binsPerBar);
         
-        for (let i = freqStart; i < freqEnd; i++) {
+        for (let i = binStart; i < binEnd; i++) {
           amplitude += frequencyData[i] / 255;
         }
-        amplitude = amplitude / (freqEnd - freqStart);
+        const binCount = Math.max(1, binEnd - binStart);
+        amplitude = amplitude / binCount;
 
-        const waveIndex = Math.floor((col / barCount) * waveformData.length);
+        const centerBinIndex = binStart + Math.floor(binCount / 2);
+        const centerHz = centerBinIndex * hzPerBin;
+        const normalizedFreq = Math.max(0, Math.min(1, centerBinIndex / totalBins));
+
+        const waveIndex = Math.min(waveformData.length - 1, Math.floor((col / barCount) * waveformData.length));
         const waveAmplitude = Math.abs(waveformData[waveIndex] || 0);
         
         const combinedAmplitude = (amplitude * 0.7 + waveAmplitude * 0.3);
         const height = Math.max(0.1, combinedAmplitude * heightMultiplier * 10);
 
         this.bars[barIndex].height = height;
-        this.bars[barIndex].frequency = col / barCount;
-        this.bars[barIndex].color = this.getColorForHeight(combinedAmplitude, col / barCount);
+        this.bars[barIndex].amplitude = combinedAmplitude;
+        this.bars[barIndex].frequency = normalizedFreq;
+        this.bars[barIndex].normalizedFrequency = normalizedFreq;
+        this.bars[barIndex].centerFrequencyHz = centerHz;
+        this.bars[barIndex].color = this.getColorForHeight(combinedAmplitude, normalizedFreq);
       }
     }
   }
