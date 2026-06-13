@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import GlobeScene from './GlobeScene'
 import ControlPanel from './ControlPanel'
 import StoryCard from './StoryCard'
@@ -60,6 +60,8 @@ export default function App() {
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadedCount, setLoadedCount] = useState(0)
+  const [fadedOutIds, setFadedOutIds] = useState<Set<string>>(new Set())
+  const prevFilteredIds = useRef<Set<string>>(new Set(MOCK_STORIES.map(s => s.id)))
 
   const filteredStories = useMemo(() => {
     return MOCK_STORIES.filter(s => {
@@ -68,6 +70,27 @@ export default function App() {
       return regionMatch && dateMatch
     })
   }, [filter])
+
+  const filteredIds = useMemo(() => new Set(filteredStories.map(s => s.id)), [filteredStories])
+
+  useEffect(() => {
+    const newFaded = new Set<string>()
+    for (const id of prevFilteredIds.current) {
+      if (!filteredIds.has(id)) newFaded.add(id)
+    }
+    setFadedOutIds(newFaded)
+    prevFilteredIds.current = filteredIds
+
+    const timer = setTimeout(() => {
+      setFadedOutIds(prev => {
+        const next = new Set(prev)
+        for (const id of newFaded) next.delete(id)
+        return next
+      })
+    }, 600)
+
+    return () => clearTimeout(timer)
+  }, [filteredIds])
 
   const selectedStory = useMemo(() => {
     if (!selectedStoryId) return null
@@ -94,7 +117,8 @@ export default function App() {
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       <GlobeScene
-        stories={filteredStories}
+        stories={MOCK_STORIES}
+        fadedOutIds={fadedOutIds}
         onStorySelect={handleStorySelect}
         selectedStoryId={selectedStoryId}
         onLoadProgress={handleLoadProgress}

@@ -1,11 +1,12 @@
 import { useRef, useMemo, useCallback, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber'
-import { OrbitControls, Stars as DreiStars, useTexture } from '@react-three/drei'
+import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Story } from './App'
 
 interface GlobeSceneProps {
   stories: Story[]
+  fadedOutIds: Set<string>
   onStorySelect: (id: string) => void
   selectedStoryId: string | null
   onLoadProgress: (count: number, total: number) => void
@@ -13,6 +14,16 @@ interface GlobeSceneProps {
 
 const EARTH_RADIUS = 5
 const CAMERA_DEFAULT = new THREE.Vector3(0, 0, 12)
+
+const CROSSHAIR_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <line x1="12" y1="4" x2="12" y2="10" stroke="white" stroke-width="1" stroke-linecap="round"/>
+  <line x1="12" y1="14" x2="12" y2="20" stroke="white" stroke-width="1" stroke-linecap="round"/>
+  <line x1="4" y1="12" x2="10" y2="12" stroke="white" stroke-width="1" stroke-linecap="round"/>
+  <line x1="14" y1="12" x2="20" y2="12" stroke="white" stroke-width="1" stroke-linecap="round"/>
+  <circle cx="12" cy="12" r="1.5" fill="white"/>
+</svg>
+`)}`
 
 function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180)
@@ -24,17 +35,26 @@ function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector
   )
 }
 
-function createPulseTexture(): THREE.Texture {
+function createRingTexture(color: string): THREE.Texture {
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 128
+  canvas.width = 256
+  canvas.height = 256
   const ctx = canvas.getContext('2d')!
-  const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
-  gradient.addColorStop(0, 'rgba(255,255,255,0.8)')
-  gradient.addColorStop(0.3, 'rgba(255,255,255,0.3)')
-  gradient.addColorStop(1, 'rgba(255,255,255,0)')
+  const cx = 128, cy = 128
+  const outerR = 120, innerR = 100
+  ctx.beginPath()
+  ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
+  ctx.arc(cx, cy, innerR, 0, Math.PI * 2, true)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.fill()
+  const gradient = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
+  gradient.addColorStop(0, 'rgba(255,255,255,0.2)')
+  gradient.addColorStop(0.5, 'rgba(255,255,255,0)')
+  gradient.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.globalCompositeOperation = 'destination-in'
   ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 128, 128)
+  ctx.fillRect(0, 0, 256, 256)
   const texture = new THREE.CanvasTexture(canvas)
   texture.needsUpdate = true
   return texture
@@ -138,19 +158,21 @@ function EarthMesh() {
 function StoryDot({
   story,
   onSelect,
-  isSelected,
+  isFadedOut,
 }: {
   story: Story
   onSelect: (id: string) => void
-  isSelected: boolean
+  isFadedOut: boolean
 }) {
   const groupRef = useRef<THREE.Group>(null)
-  const pulseRef = useRef<THREE.Sprite>(null)
   const glowRef = useRef<THREE.Sprite>(null)
+  const ringRef = useRef<THREE.Sprite>(null)
   const [hovered, setHovered] = useState(false)
   const [scale, setScale] = useState(1)
+  const [opacity, setOpacity] = useState(1)
   const pulseTime = useRef(Math.random() * Math.PI * 2)
   const glowTexture = useMemo(() => createGlowTexture(story.dotColor), [story.dotColor])
+  const ringTexture = useMemo(() => createRingTexture(story.dotColor), [story.dotColor])
 
   const position = useMemo(
     () => latLngToVector3(story.latitude, story.longitude, EARTH_RADIUS + 0.01),
@@ -164,34 +186,55 @@ function StoryDot({
       setScale(s => Math.max(s - delta * 4, 1))
     }
 
-    pulseTime.current += delta * Math.PI * 2
-    if (pulseRef.current) {
-      const t = (pulseTime.current % (Math.PI * 2)) / (Math.PI * 2)
-      const pulseScale = 0.1 + t * 0.5
-      pulseRef.current.scale.set(pulseScale, pulseScale, 1)
-      pulseRef.current.material.opacity = 0.8 * (1 - t)
+    if (isFadedOut && opacity > 0) {
+      setOpacity(o => Math.max(o - delta * 2, 0))
+    } else if (!isFadedOut && opacity < 1) {
+      setOpacity(o => Math.min(o + delta * 2, 1))
+    }
+
+    pulseTime.current += delta
+    if (ringRef.current) {
+      const cycleDuration = 1.0
+      const t = (pulseTime.current % cycleDuration) / cycleDuration
+      const ringScale = 0.1 + t * 0.5
+      ringRef.current.scale.set(ringScale, ringScale, 1)
+      const mat = ringRef.current.material as THREE.SpriteMaterial
+      mat.opacity = 0.8 * (1 - t)
     }
 
     if (groupRef.current) {
       groupRef.current.scale.setScalar(scale)
+      groupRef.current.visible = opacity > 0.01
+    }
+
+    if (glowRef.current) {
+      const glowMat = glowRef.current.material as THREE.SpriteMaterial
+      glowMat.opacity = 0.7 * opacity
+    }
+
+    if (ringRef.current) {
+      const ringMat = ringRef.current.material as THREE.SpriteMaterial
+      ringMat.opacity = ringMat.opacity * opacity
     }
   })
 
   const handleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
-    onSelect(story.id)
-  }, [story.id, onSelect])
+    if (!isFadedOut) onSelect(story.id)
+  }, [story.id, onSelect, isFadedOut])
 
   const handlePointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    setHovered(true)
-    playHoverSound()
-    document.body.style.cursor = 'pointer'
-  }, [])
+    if (!isFadedOut) {
+      setHovered(true)
+      playHoverSound()
+      document.body.style.cursor = 'pointer'
+    }
+  }, [isFadedOut])
 
   const handlePointerOut = useCallback(() => {
     setHovered(false)
-    document.body.style.cursor = 'crosshair'
+    document.body.style.cursor = `url("${CROSSHAIR_SVG}") 12 12, crosshair`
   }, [])
 
   return (
@@ -202,7 +245,7 @@ function StoryDot({
         onPointerOut={handlePointerOut}
       >
         <sphereGeometry args={[0.08, 16, 16]} />
-        <meshBasicMaterial color={story.dotColor} />
+        <meshBasicMaterial color={story.dotColor} transparent opacity={opacity} />
       </mesh>
       <sprite ref={glowRef} scale={[0.5, 0.5, 1]}>
         <spriteMaterial
@@ -213,9 +256,9 @@ function StoryDot({
           blending={THREE.AdditiveBlending}
         />
       </sprite>
-      <sprite ref={pulseRef} scale={[0.1, 0.1, 1]}>
+      <sprite ref={ringRef} scale={[0.1, 0.1, 1]}>
         <spriteMaterial
-          color={story.dotColor}
+          map={ringTexture}
           transparent
           opacity={0.8}
           depthWrite={false}
@@ -235,30 +278,28 @@ function CameraController({ target, selectedStoryId }: { target: THREE.Vector3 |
   const startTarget = useRef(new THREE.Vector3())
   const endTarget = useRef(new THREE.Vector3())
   const prevSelectedId = useRef<string | null>(null)
+  const controlsRef = useRef<any>(null)
 
   useEffect(() => {
     if (selectedStoryId && selectedStoryId !== prevSelectedId.current && target) {
-      const dir = target.clone().normalize()
-      const cameraEnd = dir.clone().multiplyScalar(EARTH_RADIUS + 2)
-      cameraEnd.y += 0.5
+      const surfaceDir = target.clone().normalize()
+      const cameraEnd = surfaceDir.clone().multiplyScalar(EARTH_RADIUS + 2)
       startPos.current.copy(camera.position)
       endPos.current.copy(cameraEnd)
-      startTarget.current.copy(controlsRef?.target ?? new THREE.Vector3())
+      startTarget.current.copy(controlsRef.current?.target ?? new THREE.Vector3())
       endTarget.current.copy(target)
       animProgress.current = 0
       animating.current = true
     } else if (!selectedStoryId && prevSelectedId.current) {
       startPos.current.copy(camera.position)
       endPos.current.copy(CAMERA_DEFAULT)
-      startTarget.current.copy(controlsRef?.target ?? new THREE.Vector3())
+      startTarget.current.copy(controlsRef.current?.target ?? new THREE.Vector3())
       endTarget.current.set(0, 0, 0)
       animProgress.current = 0
       animating.current = true
     }
     prevSelectedId.current = selectedStoryId
-  }, [selectedStoryId, target])
-
-  const controlsRef = useRef<any>(null)
+  }, [selectedStoryId, target, camera])
 
   useFrame((_, delta) => {
     if (animating.current) {
@@ -303,19 +344,10 @@ function StarField() {
     return pos
   }, [])
 
-  const sizes = useMemo(() => {
-    const s = new Float32Array(2000)
-    for (let i = 0; i < 2000; i++) {
-      s[i] = 1 + Math.random() * 2
-    }
-    return s
-  }, [])
-
   return (
     <points>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" count={2000} array={positions} itemSize={3} />
-        <bufferAttribute attach="attributes-size" count={2000} array={sizes} itemSize={1} />
       </bufferGeometry>
       <pointsMaterial
         size={1.5}
@@ -329,7 +361,7 @@ function StarField() {
   )
 }
 
-function SceneContent({ stories, onStorySelect, selectedStoryId, onLoadProgress }: GlobeSceneProps) {
+function SceneContent({ stories, fadedOutIds, onStorySelect, selectedStoryId, onLoadProgress }: GlobeSceneProps) {
   const [targetPos, setTargetPos] = useState<THREE.Vector3 | null>(null)
   const loadedRef = useRef(false)
 
@@ -367,7 +399,7 @@ function SceneContent({ stories, onStorySelect, selectedStoryId, onLoadProgress 
           key={story.id}
           story={story}
           onSelect={handleSelect}
-          isSelected={selectedStoryId === story.id}
+          isFadedOut={fadedOutIds.has(story.id)}
         />
       ))}
       <CameraController target={targetPos} selectedStoryId={selectedStoryId} />
@@ -375,10 +407,15 @@ function SceneContent({ stories, onStorySelect, selectedStoryId, onLoadProgress 
   )
 }
 
-export default function GlobeScene({ stories, onStorySelect, selectedStoryId, onLoadProgress }: GlobeSceneProps) {
+export default function GlobeScene({ stories, fadedOutIds, onStorySelect, selectedStoryId, onLoadProgress }: GlobeSceneProps) {
+  useEffect(() => {
+    document.body.style.cursor = `url("${CROSSHAIR_SVG}") 12 12, crosshair`
+    return () => { document.body.style.cursor = 'default' }
+  }, [])
+
   return (
     <div
-      style={{ width: '100%', height: '100%', cursor: 'crosshair' }}
+      style={{ width: '100%', height: '100%', cursor: `url("${CROSSHAIR_SVG}") 12 12, crosshair` }}
       onContextMenu={e => e.preventDefault()}
     >
       <Canvas
@@ -391,6 +428,7 @@ export default function GlobeScene({ stories, onStorySelect, selectedStoryId, on
       >
         <SceneContent
           stories={stories}
+          fadedOutIds={fadedOutIds}
           onStorySelect={onStorySelect}
           selectedStoryId={selectedStoryId}
           onLoadProgress={onLoadProgress}
