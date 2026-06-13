@@ -48,6 +48,8 @@ export class Neuron {
   fireDuration: number;
   baseOpacity: number;
   baseBrightness: number;
+  fireParticleCount: number;
+  hasSpawnedParticles: boolean;
 
   constructor(id: number, position: Vec3, palette: ColorPalette, somaRadius: number) {
     this.id = id;
@@ -60,6 +62,8 @@ export class Neuron {
     this.fireDuration = 400;
     this.baseOpacity = 0.7;
     this.baseBrightness = 1.0;
+    this.fireParticleCount = 0;
+    this.hasSpawnedParticles = false;
   }
 }
 
@@ -232,6 +236,44 @@ export function generateNeurons(count: number = NEURON_COUNT): Neuron[] {
   return neurons;
 }
 
+function buildSpatialGrid(neurons: Neuron[], cellSize: number): Map<string, Neuron[]> {
+  const grid = new Map<string, Neuron[]>();
+  for (const n of neurons) {
+    const gx = Math.floor(n.position.x / cellSize);
+    const gy = Math.floor(n.position.y / cellSize);
+    const gz = Math.floor(n.position.z / cellSize);
+    const key = `${gx},${gy},${gz}`;
+    let bucket = grid.get(key);
+    if (!bucket) {
+      bucket = [];
+      grid.set(key, bucket);
+    }
+    bucket.push(n);
+  }
+  return grid;
+}
+
+function getNearbyNeurons(grid: Map<string, Neuron[]>, neuron: Neuron, cellSize: number): Neuron[] {
+  const result: Neuron[] = [];
+  const gx = Math.floor(neuron.position.x / cellSize);
+  const gy = Math.floor(neuron.position.y / cellSize);
+  const gz = Math.floor(neuron.position.z / cellSize);
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const key = `${gx + dx},${gy + dy},${gz + dz}`;
+        const bucket = grid.get(key);
+        if (bucket) {
+          for (const n of bucket) {
+            if (n.id !== neuron.id) result.push(n);
+          }
+        }
+      }
+    }
+  }
+  return result;
+}
+
 export function updateNeuronPositions(
   neurons: Neuron[],
   deltaTime: number
@@ -283,17 +325,25 @@ export function updateNeuronPositions(
   }
 
   const collisionIterations = 3;
+  const minDist = MIN_DISTANCE;
+  const minDistSq = minDist * minDist;
+
   for (let iter = 0; iter < collisionIterations; iter++) {
-    for (let i = 0; i < neurons.length; i++) {
-      for (let j = i + 1; j < neurons.length; j++) {
-        const a = neurons[i];
-        const b = neurons[j];
+    const grid = buildSpatialGrid(neurons, minDist);
+    const processed = new Set<string>();
+
+    for (const a of neurons) {
+      const nearby = getNearbyNeurons(grid, a, minDist);
+      for (const b of nearby) {
+        if (b.id < a.id) continue;
+        const pairKey = a.id < b.id ? `${a.id}-${b.id}` : `${b.id}-${a.id}`;
+        if (processed.has(pairKey)) continue;
+        processed.add(pairKey);
+
         const dx = b.position.x - a.position.x;
         const dy = b.position.y - a.position.y;
         const dz = b.position.z - a.position.z;
         const distSq = dx * dx + dy * dy + dz * dz;
-        const minDist = MIN_DISTANCE;
-        const minDistSq = minDist * minDist;
 
         if (distSq < minDistSq && distSq > 0.0001) {
           const dist = Math.sqrt(distSq);

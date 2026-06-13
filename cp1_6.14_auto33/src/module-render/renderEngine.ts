@@ -13,6 +13,7 @@ import {
 
 interface NeuronVisual {
   neuron: Neuron;
+  neuronGroup: THREE.Group;
   somaMesh: THREE.Mesh;
   dendriteMeshes: THREE.Mesh[];
   baseSomaMaterial: THREE.MeshBasicMaterial;
@@ -117,9 +118,15 @@ function createDendriteTube(
     taperValues.push(dendrite.taperStart, dendrite.taperEnd);
   }
 
+  let curveLength = 0;
+  for (let i = 1; i < points.length; i++) {
+    curveLength += points[i].distanceTo(points[i - 1]);
+  }
+
   const curvePath = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.2);
   const avgRadius = taperValues.reduce((a, b) => a + b, 0) / taperValues.length;
-  const tubularSegments = 10;
+  const segmentsPerUnit = 0.35;
+  const tubularSegments = Math.max(6, Math.min(20, Math.round(curveLength * segmentsPerUnit)));
 
   const geometry = new THREE.TubeGeometry(curvePath, tubularSegments, avgRadius, 6, false);
   const material = baseMaterial.clone();
@@ -128,11 +135,10 @@ function createDendriteTube(
 
 function buildNeuronVisuals() {
   for (const nv of neuronVisuals) {
-    scene.remove(nv.somaMesh);
+    scene.remove(nv.neuronGroup);
     nv.baseSomaMaterial.dispose();
     (nv.somaMesh.geometry as THREE.BufferGeometry).dispose();
     for (let i = 0; i < nv.dendriteMeshes.length; i++) {
-      nv.somaMesh.remove(nv.dendriteMeshes[i]);
       nv.baseDendriteMaterials[i].dispose();
       (nv.dendriteMeshes[i].geometry as THREE.BufferGeometry).dispose();
     }
@@ -142,12 +148,16 @@ function buildNeuronVisuals() {
 
   for (const neuron of neurons) {
     const rgb = hexToRgb(neuron.palette.hex);
+    const neuronGroup = new THREE.Group();
+    neuronGroup.position.set(neuron.position.x, neuron.position.y, neuron.position.z);
+    scene.add(neuronGroup);
+
     const somaGeometry = new THREE.SphereGeometry(neuron.somaRadius, 24, 18);
     const somaMaterial = createSomaMaterial(neuron.palette.hex, 0.7);
     const somaMesh = new THREE.Mesh(somaGeometry, somaMaterial);
-    somaMesh.position.set(neuron.position.x, neuron.position.y, neuron.position.z);
     somaMesh.userData.neuronId = neuron.id;
-    scene.add(somaMesh);
+    somaMesh.userData.isSoma = true;
+    neuronGroup.add(somaMesh);
     somaMeshesForRaycast.push(somaMesh);
 
     const dendriteMeshes: THREE.Mesh[] = [];
@@ -160,13 +170,14 @@ function buildNeuronVisuals() {
       const tube = createDendriteTube(dendrite, mat);
       tube.userData.neuronId = neuron.id;
       tube.userData.isDendrite = true;
-      somaMesh.add(tube);
+      neuronGroup.add(tube);
       dendriteMeshes.push(tube);
     }
     dendriteBaseMat.dispose();
 
     neuronVisuals.push({
       neuron,
+      neuronGroup,
       somaMesh,
       dendriteMeshes,
       baseSomaMaterial: somaMaterial,
@@ -265,84 +276,83 @@ function updateParticles(dt: number) {
 }
 
 function triggerFire(neuron: Neuron, now: number, range: number, delay: number, particleCount: number) {
-  const fireNeuronVisual = (n: Neuron, animStartOffset: number, particlesToSpawn: number) => {
-    const visual = neuronVisuals.find(v => v.neuron.id === n.id);
-    if (!visual) return;
-    const rgb = hexToRgb(n.palette.hex);
-    const lightRgb = hexToRgb(n.palette.lightHex);
-
+  const scheduleFire = (n: Neuron, startOffset: number, pCount: number) => {
+    if (n.isFiring && n.fireStartTime <= now + startOffset) return;
     n.isFiring = true;
-    n.fireStartTime = now + animStartOffset;
+    n.fireStartTime = now + startOffset;
     n.fireDuration = 400;
-
-    if (animStartOffset <= 0) {
-      spawnParticles(n, particlesToSpawn);
-    } else {
-      setTimeout(() => {
-        spawnParticles(n, particlesToSpawn);
-      }, animStartOffset);
-    }
-
-    const startTime = now + animStartOffset;
-    const anim = () => {
-      const t = performance.now() - startTime;
-      if (t < 0) {
-        requestAnimationFrame(anim);
-        return;
-      }
-      if (t >= 400) {
-        visual.baseSomaMaterial.opacity = 0.7;
-        visual.baseSomaMaterial.color.setRGB(rgb.r, rgb.g, rgb.b);
-        for (let i = 0; i < visual.baseDendriteMaterials.length; i++) {
-          visual.baseDendriteMaterials[i].opacity = 0.4;
-          visual.baseDendriteMaterials[i].color.setRGB(lightRgb.r, lightRgb.g, lightRgb.b);
-        }
-        n.isFiring = false;
-        return;
-      }
-      const progress = t / 400;
-      let multiplier: number;
-      if (progress < 0.25) {
-        multiplier = 1 + progress / 0.25 * 0.5;
-      } else if (progress < 0.6) {
-        multiplier = 1.5;
-      } else {
-        multiplier = 1.5 - ((progress - 0.6) / 0.4) * 0.5;
-      }
-      const somaOpacity = 0.7 + (0.9 - 0.7) * (multiplier - 1) / 0.5;
-      visual.baseSomaMaterial.opacity = somaOpacity;
-      visual.baseSomaMaterial.color.setRGB(
-        Math.min(1, rgb.r * multiplier),
-        Math.min(1, rgb.g * multiplier),
-        Math.min(1, rgb.b * multiplier)
-      );
-      const dendOpacity = 0.4 + (0.85 - 0.4) * (multiplier - 1) / 0.5;
-      for (let i = 0; i < visual.baseDendriteMaterials.length; i++) {
-        visual.baseDendriteMaterials[i].opacity = dendOpacity;
-        visual.baseDendriteMaterials[i].color.setRGB(
-          Math.min(1, lightRgb.r * multiplier),
-          Math.min(1, lightRgb.g * multiplier),
-          Math.min(1, lightRgb.b * multiplier)
-        );
-      }
-      requestAnimationFrame(anim);
-    };
-    requestAnimationFrame(anim);
+    n.fireParticleCount = pCount;
+    n.hasSpawnedParticles = false;
   };
 
-  fireNeuronVisual(neuron, 0, particleCount);
+  scheduleFire(neuron, 0, particleCount);
 
   const neighbors = getNeighborsWithinRange(neurons, neuron, range);
-
   for (let i = 0; i < neighbors.length; i++) {
     const step = i + 1;
     const stepDelay = step * delay;
     const n = neighbors[i];
     const neighborParticleCount = Math.max(5, Math.floor(particleCount * 0.7));
+    scheduleFire(n, stepDelay, neighborParticleCount);
+  }
+}
 
-    setTimeout(() => {
-      fireNeuronVisual(n, 0, neighborParticleCount);
-    }, stepDelay);
+function updateFiringNeurons(now: number) {
+  let firingCount = 0;
+  for (const nv of neuronVisuals) {
+    const n = nv.neuron;
+    if (!n.isFiring) continue;
+    firingCount++;
+
+    const t = now - n.fireStartTime;
+    if (t < 0) continue;
+
+    if (!n.hasSpawnedParticles) {
+      n.hasSpawnedParticles = true;
+      spawnParticles(n, n.fireParticleCount);
+    }
+
+    const rgb = hexToRgb(n.palette.hex);
+    const lightRgb = hexToRgb(n.palette.lightHex);
+
+    if (t >= n.fireDuration) {
+      nv.baseSomaMaterial.opacity = 0.7;
+      nv.baseSomaMaterial.color.setRGB(rgb.r, rgb.g, rgb.b);
+      for (let i = 0; i < nv.baseDendriteMaterials.length; i++) {
+        nv.baseDendriteMaterials[i].opacity = 0.4;
+        nv.baseDendriteMaterials[i].color.setRGB(lightRgb.r, lightRgb.g, lightRgb.b);
+      }
+      n.isFiring = false;
+      n.hasSpawnedParticles = false;
+      n.fireParticleCount = 0;
+      continue;
+    }
+
+    const progress = t / n.fireDuration;
+    let multiplier: number;
+    if (progress < 0.25) {
+      multiplier = 1 + progress / 0.25 * 0.5;
+    } else if (progress < 0.6) {
+      multiplier = 1.5;
+    } else {
+      multiplier = 1.5 - ((progress - 0.6) / 0.4) * 0.5;
+    }
+    const somaOpacity = 0.7 + (0.9 - 0.7) * (multiplier - 1) / 0.5;
+    nv.baseSomaMaterial.opacity = somaOpacity;
+    nv.baseSomaMaterial.color.setRGB(
+      Math.min(1, rgb.r * multiplier),
+      Math.min(1, rgb.g * multiplier),
+      Math.min(1, rgb.b * multiplier)
+    );
+    const dendOpacity = 0.4 + (0.85 - 0.4) * (multiplier - 1) / 0.5;
+    for (let i = 0; i < nv.baseDendriteMaterials.length; i++) {
+      nv.baseDendriteMaterials[i].opacity = dendOpacity;
+      nv.baseDendriteMaterials[i].color.setRGB(
+        Math.min(1, lightRgb.r * multiplier),
+        Math.min(1, lightRgb.g * multiplier),
+        Math.min(1, lightRgb.b * multiplier)
+      );
+    }
   }
 }
 
@@ -355,7 +365,7 @@ function countActiveParticles(): number {
 function updateNeuronVisualPositions() {
   for (const nv of neuronVisuals) {
     const n = nv.neuron;
-    nv.somaMesh.position.set(n.position.x, n.position.y, n.position.z);
+    nv.neuronGroup.position.set(n.position.x, n.position.y, n.position.z);
   }
 }
 
@@ -495,13 +505,13 @@ export function animate() {
 
   updateNeuronPositions(neurons, dt);
   updateNeuronVisualPositions();
+  updateFiringNeurons(now);
 
   for (const nv of neuronVisuals) {
     const isHovered = hoveredNeuron && nv.neuron.id === hoveredNeuron.id;
-    const isFiring = nv.neuron.isFiring;
-    const targetScale = isFiring ? 1.0 : (isHovered ? 1.12 : 1.0);
+    const targetScale = isHovered ? 1.12 : 1.0;
     const currentScale = nv.somaMesh.scale.x;
-    const newScale = currentScale + (targetScale - currentScale) * 0.12;
+    const newScale = currentScale + (targetScale - currentScale) * 0.15;
     nv.somaMesh.scale.set(newScale, newScale, newScale);
   }
 
@@ -631,7 +641,15 @@ if (typeof window !== 'undefined') {
       const n = neurons.find(x => x.id === id);
       if (!n) return 'not found';
       const visual = neuronVisuals.find(v => v.neuron.id === n.id);
-      return 'n=' + !!n + ', v=' + !!visual;
+      return {
+        exists: !!n,
+        hasVisual: !!visual,
+        isFiring: n.isFiring,
+        fireStartTime: n.fireStartTime,
+        fireParticleCount: n.fireParticleCount,
+        hasSpawnedParticles: n.hasSpawnedParticles,
+        now: performance.now()
+      };
     },
     pickNeuronAt: (clientX: number, clientY: number) => {
       const n = pickNeuron(clientX, clientY);
@@ -642,6 +660,17 @@ if (typeof window !== 'undefined') {
       updateHoverInfo(null);
       return null;
     },
-    getHovered: () => hoveredNeuron ? { id: hoveredNeuron.id } : null
+    getHovered: () => hoveredNeuron ? { id: hoveredNeuron.id } : null,
+    debugCheck: () => {
+      const firstVisual = neuronVisuals[0];
+      const firstNeuron = neurons[0];
+      return {
+        visualCount: neuronVisuals.length,
+        neuronCount: neurons.length,
+        sameRef: firstVisual && firstNeuron ? firstVisual.neuron === firstNeuron : false,
+        firstVisualFiring: firstVisual ? firstVisual.neuron.isFiring : null,
+        firstNeuronFiring: firstNeuron ? firstNeuron.isFiring : null
+      };
+    }
   };
 }
