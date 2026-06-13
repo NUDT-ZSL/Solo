@@ -84,8 +84,7 @@ function createDendriteMaterial(hexColor: string, opacity: number): THREE.MeshBa
 
 function createDendriteTube(
   dendrite: Dendrite,
-  baseMaterial: THREE.MeshBasicMaterial,
-  somaPos: Vec3
+  baseMaterial: THREE.MeshBasicMaterial
 ): THREE.Mesh {
   const points: THREE.Vector3[] = [];
   const taperValues: number[] = [];
@@ -93,10 +92,10 @@ function createDendriteTube(
 
   dendrite.segments.forEach((seg: BezierSegment, segIdx: number) => {
     const curve = new THREE.CubicBezierCurve3(
-      new THREE.Vector3(seg.p0.x + somaPos.x, seg.p0.y + somaPos.y, seg.p0.z + somaPos.z),
-      new THREE.Vector3(seg.p1.x + somaPos.x, seg.p1.y + somaPos.y, seg.p1.z + somaPos.z),
-      new THREE.Vector3(seg.p2.x + somaPos.x, seg.p2.y + somaPos.y, seg.p2.z + somaPos.z),
-      new THREE.Vector3(seg.p3.x + somaPos.x, seg.p3.y + somaPos.y, seg.p3.z + somaPos.z)
+      new THREE.Vector3(seg.p0.x, seg.p0.y, seg.p0.z),
+      new THREE.Vector3(seg.p1.x, seg.p1.y, seg.p1.z),
+      new THREE.Vector3(seg.p2.x, seg.p2.y, seg.p2.z),
+      new THREE.Vector3(seg.p3.x, seg.p3.y, seg.p3.z)
     );
     const segSamples = 12;
     for (let i = 0; i <= segSamples; i++) {
@@ -113,15 +112,16 @@ function createDendriteTube(
   });
 
   if (points.length < 2) {
-    points.push(new THREE.Vector3(somaPos.x, somaPos.y, somaPos.z));
-    points.push(new THREE.Vector3(somaPos.x + 1, somaPos.y, somaPos.z));
+    points.push(new THREE.Vector3(0, 0, 0));
+    points.push(new THREE.Vector3(1, 0, 0));
     taperValues.push(dendrite.taperStart, dendrite.taperEnd);
   }
 
   const curvePath = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.2);
   const avgRadius = taperValues.reduce((a, b) => a + b, 0) / taperValues.length;
+  const tubularSegments = 10;
 
-  const geometry = new THREE.TubeGeometry(curvePath, Math.max(8, points.length), avgRadius, 6, false);
+  const geometry = new THREE.TubeGeometry(curvePath, tubularSegments, avgRadius, 6, false);
   const material = baseMaterial.clone();
   return new THREE.Mesh(geometry, material);
 }
@@ -132,7 +132,7 @@ function buildNeuronVisuals() {
     nv.baseSomaMaterial.dispose();
     (nv.somaMesh.geometry as THREE.BufferGeometry).dispose();
     for (let i = 0; i < nv.dendriteMeshes.length; i++) {
-      scene.remove(nv.dendriteMeshes[i]);
+      nv.somaMesh.remove(nv.dendriteMeshes[i]);
       nv.baseDendriteMaterials[i].dispose();
       (nv.dendriteMeshes[i].geometry as THREE.BufferGeometry).dispose();
     }
@@ -157,10 +157,10 @@ function buildNeuronVisuals() {
     for (const dendrite of neuron.dendrites) {
       const mat = dendriteBaseMat.clone();
       dendriteMaterials.push(mat);
-      const tube = createDendriteTube(dendrite, mat, neuron.position);
+      const tube = createDendriteTube(dendrite, mat);
       tube.userData.neuronId = neuron.id;
       tube.userData.isDendrite = true;
-      scene.add(tube);
+      somaMesh.add(tube);
       dendriteMeshes.push(tube);
     }
     dendriteBaseMat.dispose();
@@ -265,21 +265,25 @@ function updateParticles(dt: number) {
 }
 
 function triggerFire(neuron: Neuron, now: number, range: number, delay: number, particleCount: number) {
-  const fireCascade = (n: Neuron, stepDelay: number) => {
+  const fireNeuronVisual = (n: Neuron, animStartOffset: number, particlesToSpawn: number) => {
     const visual = neuronVisuals.find(v => v.neuron.id === n.id);
     if (!visual) return;
     const rgb = hexToRgb(n.palette.hex);
     const lightRgb = hexToRgb(n.palette.lightHex);
 
     n.isFiring = true;
-    n.fireStartTime = now + stepDelay;
+    n.fireStartTime = now + animStartOffset;
     n.fireDuration = 400;
 
-    setTimeout(() => {
-      spawnParticles(n, particleCount);
-    }, Math.max(0, stepDelay));
+    if (animStartOffset <= 0) {
+      spawnParticles(n, particlesToSpawn);
+    } else {
+      setTimeout(() => {
+        spawnParticles(n, particlesToSpawn);
+      }, animStartOffset);
+    }
 
-    const startTime = now + stepDelay;
+    const startTime = now + animStartOffset;
     const anim = () => {
       const t = performance.now() - startTime;
       if (t < 0) {
@@ -326,24 +330,18 @@ function triggerFire(neuron: Neuron, now: number, range: number, delay: number, 
     requestAnimationFrame(anim);
   };
 
-  fireCascade(neuron, 0);
+  fireNeuronVisual(neuron, 0, particleCount);
 
   const neighbors = getNeighborsWithinRange(neurons, neuron, range);
-  const maxParticlesPerFrame = 60;
-  let particlesPlanned = particleCount;
 
   for (let i = 0; i < neighbors.length; i++) {
-    const step = (i + 1);
+    const step = i + 1;
     const stepDelay = step * delay;
     const n = neighbors[i];
+    const neighborParticleCount = Math.max(5, Math.floor(particleCount * 0.7));
 
     setTimeout(() => {
-      const available = maxParticlesPerFrame - countActiveParticles();
-      const pCount = Math.min(particleCount, Math.max(3, Math.floor(particleCount * 0.7)));
-      fireCascade(n, 0);
-      setTimeout(() => {
-        spawnParticles(n, Math.min(pCount, Math.max(2, available)));
-      }, 0);
+      fireNeuronVisual(n, 0, neighborParticleCount);
     }, stepDelay);
   }
 }
@@ -358,46 +356,6 @@ function updateNeuronVisualPositions() {
   for (const nv of neuronVisuals) {
     const n = nv.neuron;
     nv.somaMesh.position.set(n.position.x, n.position.y, n.position.z);
-
-    for (let di = 0; di < n.dendrites.length; di++) {
-      const dendrite = n.dendrites[di];
-      const mesh = nv.dendriteMeshes[di];
-      if (!mesh) continue;
-
-      const points: THREE.Vector3[] = [];
-      const taperValues: number[] = [];
-      const totalSegments = dendrite.segments.length;
-
-      dendrite.segments.forEach((seg: BezierSegment, segIdx: number) => {
-        const curve = new THREE.CubicBezierCurve3(
-          new THREE.Vector3(seg.p0.x + n.position.x, seg.p0.y + n.position.y, seg.p0.z + n.position.z),
-          new THREE.Vector3(seg.p1.x + n.position.x, seg.p1.y + n.position.y, seg.p1.z + n.position.z),
-          new THREE.Vector3(seg.p2.x + n.position.x, seg.p2.y + n.position.y, seg.p2.z + n.position.z),
-          new THREE.Vector3(seg.p3.x + n.position.x, seg.p3.y + n.position.y, seg.p3.z + n.position.z)
-        );
-        const segSamples = 12;
-        for (let i = 0; i <= segSamples; i++) {
-          if (segIdx < totalSegments - 1 || i < segSamples) {
-            const t = i / segSamples;
-            const overallT = (segIdx + t) / totalSegments;
-            const p = curve.getPoint(t);
-            points.push(p);
-            taperValues.push(
-              dendrite.taperStart * (1 - overallT) + dendrite.taperEnd * overallT
-            );
-          }
-        }
-      });
-
-      if (points.length < 2) continue;
-
-      const oldGeo = mesh.geometry as THREE.TubeGeometry;
-      const curvePath = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.2);
-      const avgRadius = taperValues.reduce((a, b) => a + b, 0) / taperValues.length;
-      const newGeo = new THREE.TubeGeometry(curvePath, Math.max(8, points.length), avgRadius, 6, false);
-      mesh.geometry.dispose();
-      mesh.geometry = newGeo;
-    }
   }
 }
 
@@ -471,6 +429,7 @@ export function initScene(containerEl: HTMLElement) {
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
   renderer.domElement.style.display = 'block';
+  renderer.domElement.style.cursor = 'default';
 
   raycaster = new THREE.Raycaster();
   pointer = new THREE.Vector2();
@@ -536,6 +495,24 @@ export function animate() {
 
   updateNeuronPositions(neurons, dt);
   updateNeuronVisualPositions();
+
+  for (const nv of neuronVisuals) {
+    const isHovered = hoveredNeuron && nv.neuron.id === hoveredNeuron.id;
+    const isFiring = nv.neuron.isFiring;
+    const targetScale = isFiring ? 1.0 : (isHovered ? 1.12 : 1.0);
+    const currentScale = nv.somaMesh.scale.x;
+    const newScale = currentScale + (targetScale - currentScale) * 0.12;
+    nv.somaMesh.scale.set(newScale, newScale, newScale);
+  }
+
+  if (renderer && renderer.domElement) {
+    if (isCameraDragging || isDragging) {
+      renderer.domElement.style.cursor = isDragging ? 'crosshair' : 'grabbing';
+    } else {
+      renderer.domElement.style.cursor = hoveredNeuron ? 'pointer' : 'grab';
+    }
+  }
+
   updateParticles(dt);
   updateCamera();
 
@@ -572,25 +549,10 @@ export function handlePointerDown(e: PointerEvent) {
 }
 
 export function handlePointerMove(e: PointerEvent) {
-  if (!isDragging && !isCameraDragging) {
-    const n = pickNeuron(e.clientX, e.clientY);
-    if (n !== hoveredNeuron) {
-      hoveredNeuron = n;
-      updateHoverInfo(n);
-    }
-    return;
-  }
-
-  if (isDragging) {
-    const dx = e.clientX - dragStartPos.x;
-    const dy = e.clientY - dragStartPos.y;
-    if (dx * dx + dy * dy < 25) return;
-
-    const n = pickNeuron(e.clientX, e.clientY);
-    if (n && n.id !== lastDragFiredId) {
-      triggerFire(n, performance.now(), controlParams.triggerRange, controlParams.propagationDelay, controlParams.particleCount);
-      lastDragFiredId = n.id;
-    }
+  const n = pickNeuron(e.clientX, e.clientY);
+  if (n !== hoveredNeuron) {
+    hoveredNeuron = n;
+    updateHoverInfo(n);
   }
 
   if (isCameraDragging && cameraDragStart) {
@@ -600,6 +562,18 @@ export function handlePointerMove(e: PointerEvent) {
     cameraTargetPhi = Math.max(0.15, Math.min(Math.PI - 0.15, cameraTargetPhi - dy * 0.005));
     cameraDragStart.x = e.clientX;
     cameraDragStart.y = e.clientY;
+    return;
+  }
+
+  if (isDragging) {
+    const dx = e.clientX - dragStartPos.x;
+    const dy = e.clientY - dragStartPos.y;
+    if (dx * dx + dy * dy < 25) return;
+
+    if (n && n.id !== lastDragFiredId) {
+      triggerFire(n, performance.now(), controlParams.triggerRange, controlParams.propagationDelay, controlParams.particleCount);
+      lastDragFiredId = n.id;
+    }
   }
 }
 
@@ -658,6 +632,16 @@ if (typeof window !== 'undefined') {
       if (!n) return 'not found';
       const visual = neuronVisuals.find(v => v.neuron.id === n.id);
       return 'n=' + !!n + ', v=' + !!visual;
-    }
+    },
+    pickNeuronAt: (clientX: number, clientY: number) => {
+      const n = pickNeuron(clientX, clientY);
+      if (n) {
+        updateHoverInfo(n);
+        return { id: n.id, colorName: n.palette.name, color: n.palette.hex, x: n.position.x, y: n.position.y, z: n.position.z };
+      }
+      updateHoverInfo(null);
+      return null;
+    },
+    getHovered: () => hoveredNeuron ? { id: hoveredNeuron.id } : null
   };
 }

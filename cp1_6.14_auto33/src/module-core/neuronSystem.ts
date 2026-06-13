@@ -282,35 +282,49 @@ export function updateNeuronPositions(
     }
   }
 
-  for (let i = 0; i < neurons.length; i++) {
-    for (let j = i + 1; j < neurons.length; j++) {
-      const a = neurons[i];
-      const b = neurons[j];
-      const dx = b.position.x - a.position.x;
-      const dy = b.position.y - a.position.y;
-      const dz = b.position.z - a.position.z;
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      const minDist = MIN_DISTANCE * 0.85;
-      if (dist < minDist && dist > 0) {
-        const overlap = (minDist - dist) / 2;
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const nz = dz / dist;
-        a.position.x -= nx * overlap;
-        a.position.y -= ny * overlap;
-        a.position.z -= nz * overlap;
-        b.position.x += nx * overlap;
-        b.position.y += ny * overlap;
-        b.position.z += nz * overlap;
-        const tmpvx = a.velocity.x;
-        const tmpvy = a.velocity.y;
-        const tmpvz = a.velocity.z;
-        a.velocity.x = b.velocity.x * 0.5;
-        a.velocity.y = b.velocity.y * 0.5;
-        a.velocity.z = b.velocity.z * 0.5;
-        b.velocity.x = tmpvx * 0.5;
-        b.velocity.y = tmpvy * 0.5;
-        b.velocity.z = tmpvz * 0.5;
+  const collisionIterations = 3;
+  for (let iter = 0; iter < collisionIterations; iter++) {
+    for (let i = 0; i < neurons.length; i++) {
+      for (let j = i + 1; j < neurons.length; j++) {
+        const a = neurons[i];
+        const b = neurons[j];
+        const dx = b.position.x - a.position.x;
+        const dy = b.position.y - a.position.y;
+        const dz = b.position.z - a.position.z;
+        const distSq = dx * dx + dy * dy + dz * dz;
+        const minDist = MIN_DISTANCE;
+        const minDistSq = minDist * minDist;
+
+        if (distSq < minDistSq && distSq > 0.0001) {
+          const dist = Math.sqrt(distSq);
+          const overlap = (minDist - dist) / 2;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const nz = dz / dist;
+
+          a.position.x -= nx * overlap;
+          a.position.y -= ny * overlap;
+          a.position.z -= nz * overlap;
+          b.position.x += nx * overlap;
+          b.position.y += ny * overlap;
+          b.position.z += nz * overlap;
+
+          const dvx = a.velocity.x - b.velocity.x;
+          const dvy = a.velocity.y - b.velocity.y;
+          const dvz = a.velocity.z - b.velocity.z;
+          const vn = dvx * nx + dvy * ny + dvz * nz;
+
+          if (vn > 0) {
+            const restitution = 0.4;
+            const impulse = -(1 + restitution) * vn * 0.5;
+            a.velocity.x += impulse * nx;
+            a.velocity.y += impulse * ny;
+            a.velocity.z += impulse * nz;
+            b.velocity.x -= impulse * nx;
+            b.velocity.y -= impulse * ny;
+            b.velocity.z -= impulse * nz;
+          }
+        }
       }
     }
   }
