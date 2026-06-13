@@ -35,6 +35,8 @@ export class GameEngine {
   private animFrameId: number = 0;
   private onStateChange: OnStateChange | null = null;
   private lastTimestamp: number = 0;
+  private accumulator: number = 0;
+  private fixedDt: number = 1000 / 60;
   private damageCooldown: number = 0;
   private transitionTimer: number = 0;
   private transitionPhase: 'none' | 'fadeOut' | 'fadeIn' = 'none';
@@ -61,12 +63,19 @@ export class GameEngine {
 
   init(canvas: HTMLCanvasElement, onStateChange: OnStateChange): void {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('无法获取Canvas 2D上下文');
+    }
+    this.ctx = ctx;
     this.onStateChange = onStateChange;
+
     this.generateInitialRoom();
     this.bindInput();
     this.lastTimestamp = performance.now();
-    this.loop(this.lastTimestamp);
+    this.accumulator = 0;
+
+    this.animFrameId = requestAnimationFrame(this.loop);
   }
 
   destroy(): void {
@@ -81,6 +90,7 @@ export class GameEngine {
     this.transitionTimer = 0;
     this.transitionPhase = 'none';
     this.nextRoomId = 0;
+    this.accumulator = 0;
     this.generateInitialRoom();
     this.notifyChange();
   }
@@ -102,27 +112,32 @@ export class GameEngine {
 
   private handleKeyDown = (e: KeyboardEvent): void => {
     const key = e.key.toLowerCase();
-    if (key in this.input) {
-      (this.input as Record<string, boolean>)[key] = true;
+    if (key === 'w' || key === 'a' || key === 's' || key === 'd' || key === 'e') {
+      (this.input as unknown as Record<string, boolean>)[key] = true;
     }
   };
 
   private handleKeyUp = (e: KeyboardEvent): void => {
     const key = e.key.toLowerCase();
-    if (key in this.input) {
-      (this.input as Record<string, boolean>)[key] = false;
+    if (key === 'w' || key === 'a' || key === 's' || key === 'd' || key === 'e') {
+      (this.input as unknown as Record<string, boolean>)[key] = false;
     }
   };
 
   private loop = (timestamp: number): void => {
-    const delta = timestamp - this.lastTimestamp;
+    const deltaTime = timestamp - this.lastTimestamp;
     this.lastTimestamp = timestamp;
 
-    if (delta < 33.4) {
+    const frameTime = Math.min(deltaTime, this.fixedDt * 3);
+    this.accumulator += frameTime;
+
+    while (this.accumulator >= this.fixedDt) {
       this.update();
+      this.accumulator -= this.fixedDt;
     }
 
     this.render();
+
     this.animFrameId = requestAnimationFrame(this.loop);
   };
 
@@ -143,7 +158,7 @@ export class GameEngine {
     this.updateDamageCooldown();
 
     if (this.data.damageFlash > 0) {
-      this.data = { ...this.data, damageFlash: this.data.damageFlash - 0.05 };
+      this.data = { ...this.data, damageFlash: Math.max(0, this.data.damageFlash - 0.05) };
     }
 
     this.notifyChange();
@@ -163,38 +178,41 @@ export class GameEngine {
     if (dx === 0 && dy === 0) return;
 
     const len = Math.sqrt(dx * dx + dy * dy);
-    dx = (dx / len) * this.data.player.speed;
-    dy = (dy / len) * this.data.player.speed;
+    const moveX = (dx / len) * this.data.player.speed;
+    const moveY = (dy / len) * this.data.player.speed;
 
-    const newX = this.data.player.x + dx;
-    const newY = this.data.player.y + dy;
+    const steps = 4;
+    for (let step = 0; step < steps; step++) {
+      const stepX = moveX / steps;
+      const stepY = moveY / steps;
 
-    const canMoveX = !this.isWallForPlayer(room, newX, this.data.player.y);
-    const canMoveY = !this.isWallForPlayer(room, this.data.player.x, newY);
-    const canMoveBoth = !this.isWallForPlayer(room, newX, newY);
+      const curX = this.data.player.x;
+      const curY = this.data.player.y;
 
-    let finalX = this.data.player.x;
-    let finalY = this.data.player.y;
+      const tryX = curX + stepX;
+      const tryY = curY + stepY;
 
-    if (canMoveBoth) {
-      finalX = newX;
-      finalY = newY;
-    } else if (canMoveX) {
-      finalX = newX;
-    } else if (canMoveY) {
-      finalY = newY;
+      const canX = !this.isWallForPlayer(room, tryX, curY);
+      const canY = !this.isWallForPlayer(room, curX, tryY);
+      const canBoth = !this.isWallForPlayer(room, tryX, tryY);
+
+      if (canBoth) {
+        this.data = updatePlayer(this.data, { x: tryX, y: tryY });
+      } else if (canX) {
+        this.data = updatePlayer(this.data, { x: tryX });
+      } else if (canY) {
+        this.data = updatePlayer(this.data, { y: tryY });
+      }
     }
-
-    this.data = updatePlayer(this.data, { x: finalX, y: finalY });
   }
 
   private isWallForPlayer(room: Room, px: number, py: number): boolean {
     const r = this.data.player.radius;
     const corners = [
-      { x: px - r, y: py - r },
-      { x: px + r, y: py - r },
-      { x: px - r, y: py + r },
-      { x: px + r, y: py + r },
+      { x: px - r + 0.5, y: py - r + 0.5 },
+      { x: px + r - 0.5, y: py - r + 0.5 },
+      { x: px - r + 0.5, y: py + r - 0.5 },
+      { x: px + r - 0.5, y: py + r - 0.5 },
     ];
 
     for (const corner of corners) {
@@ -312,7 +330,7 @@ export class GameEngine {
   }
 
   private updateTransition(): void {
-    this.transitionTimer -= 16.7;
+    this.transitionTimer -= this.fixedDt;
 
     if (this.transitionPhase === 'fadeOut') {
       const progress = 1 - Math.max(0, this.transitionTimer / (TRANSITION_DURATION / 2));
