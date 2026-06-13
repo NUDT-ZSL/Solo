@@ -215,6 +215,9 @@ function calculateChainBonus(state: GameState, cell: HexCell): number {
   
   let bonus = 0;
   for (const adj of adjacentCells) {
+    if (adj.coord.q === cell.coord.q && adj.coord.r === cell.coord.r) {
+      continue;
+    }
     if (adj.tower && adj.tower.owner === cell.tower.owner) {
       if (adj.tower.type === cell.tower.type) {
         bonus += adj.tower.level;

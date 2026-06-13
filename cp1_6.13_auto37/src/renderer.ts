@@ -31,6 +31,7 @@ export class GameRenderer {
   private animationFrameId: number | null = null;
   private accumulator: number = 0;
   private lastFrameTime: number = 0;
+  private blinkTime: number = 0;
   private onCellClick?: (coord: HexCoord) => void;
   private onCellHover?: (coord: HexCoord | null) => void;
   private screenShake: { offsetX: number; offsetY: number; startTime: number; duration: number } | null = null;
@@ -166,6 +167,7 @@ export class GameRenderer {
   public start(): void {
     this.lastFrameTime = performance.now();
     this.accumulator = 0;
+    this.blinkTime = 0;
     this.loop(this.lastFrameTime);
   }
 
@@ -184,6 +186,7 @@ export class GameRenderer {
     
     while (this.accumulator >= FRAME_DURATION) {
       this.accumulator -= FRAME_DURATION;
+      this.blinkTime += FRAME_DURATION;
     }
     
     this.render();
@@ -359,8 +362,9 @@ export class GameRenderer {
     const ctx = this.ctx;
     const corners = getHexCorners(x, y, size + 3);
     
-    const time = Date.now() / 500;
-    const alpha = 0.5 + Math.sin(time * Math.PI * 2) * 0.5;
+    const BLINK_PERIOD = 1000;
+    const phase = (this.blinkTime % BLINK_PERIOD) / BLINK_PERIOD;
+    const alpha = 0.5 + Math.sin(phase * Math.PI * 2) * 0.5;
     
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);

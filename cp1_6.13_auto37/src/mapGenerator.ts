@@ -1,5 +1,13 @@
 import { HexCoord, HexCell, Owner } from './types';
 
+/**
+ * Flat-top 正六边形布局（上下边水平，左右顶点突出）
+ * 边长 HEX_SIZE = 40px
+ * 六边形宽度（水平方向顶点间距） = 2 * HEX_SIZE = 80px
+ * 六边形高度（垂直方向两边距离） = sqrt(3) * HEX_SIZE ≈ 69.28px
+ * q 方向相邻中心点水平位移 = 3/2 * HEX_SIZE = 60px
+ * r 方向相邻中心点位移 = sqrt(3) * HEX_SIZE ≈ 69.28px
+ */
 const HEX_SIZE = 40;
 const GRID_RADIUS = 3;
 
@@ -51,12 +59,22 @@ function getInitialOwner(coord: HexCoord): Owner {
   return null;
 }
 
+/**
+ * Flat-top 轴向坐标 → 像素坐标转换
+ * x = size * (3/2 * q)
+ * y = size * (sqrt(3)/2 * q + sqrt(3) * r) = size * sqrt(3) * (r + q/2)
+ */
 export function hexToPixel(coord: HexCoord, centerX: number, centerY: number): { x: number; y: number } {
   const x = HEX_SIZE * (3 / 2 * coord.q);
   const y = HEX_SIZE * (Math.sqrt(3) / 2 * coord.q + Math.sqrt(3) * coord.r);
   return { x: x + centerX, y: y + centerY };
 }
 
+/**
+ * Flat-top 六边形顶点坐标
+ * 起始角度为 0（水平向右），每次递增 π/3
+ * 确保宽度 = 2 * size = 80px
+ */
 export function getHexCorners(centerX: number, centerY: number, size: number): { x: number; y: number }[] {
   const corners: { x: number; y: number }[] = [];
   for (let i = 0; i < 6; i++) {
@@ -89,6 +107,11 @@ export function findCell(cells: HexCell[], coord: HexCoord): HexCell | undefined
   return cells.find(c => c.coord.q === coord.q && c.coord.r === coord.r);
 }
 
+/**
+ * Flat-top 像素坐标 → 轴向坐标转换（逆矩阵）
+ * q = (2/3 * px) / size
+ * r = (-1/3 * px + sqrt(3)/3 * py) / size
+ */
 export function pixelToHex(
   x: number,
   y: number,
