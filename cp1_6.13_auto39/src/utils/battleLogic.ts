@@ -1,6 +1,7 @@
+export type { HexCoord, TerrainMap } from './hexagonMath';
 import {
-  HexCoord,
-  TerrainMap,
+  type HexCoord,
+  type TerrainMap,
   hexDistance,
   hexKey,
   aStar,
@@ -8,8 +9,6 @@ import {
 } from './hexagonMath';
 
 export type RaceType = 'human' | 'elf' | 'orc';
-
-export { HexCoord, TerrainMap };
 
 export interface Unit {
   id: string;
@@ -93,6 +92,13 @@ export interface BattleResult {
   logs: BattleLogEntry[];
   stats: BattleStats[];
   totalTurns: number;
+}
+
+export interface HistoryRecord {
+  id: string;
+  timestamp: number;
+  summary: string;
+  winner: RaceType | 'draw';
 }
 
 let unitIdCounter = 0;
