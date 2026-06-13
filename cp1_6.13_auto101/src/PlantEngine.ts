@@ -124,19 +124,21 @@ export class PlantEngine {
 
   private calculateGrowthRate(): number {
     const { lightIntensity, nutrientConcentration, gravityMode } = this.envParams;
-    
+
     const lightFactor = Math.min(1, lightIntensity / 1000);
     const nutrientFactor = nutrientConcentration;
-    
-    const gravityFactor = gravityMode === 'zero' ? 1.0 : 0.0;
-    
-    const nutrientDiffusionBoost = 1 + gravityFactor * 0.3;
-    const adjustedNutrient = Math.min(1, nutrientFactor * nutrientDiffusionBoost);
-    
+
+    const gravityFactor: number = gravityMode === 'zero' ? 0 : 1;
+
+    const nutrientDiffusionCoeff = 1 + (1 - gravityFactor) * 0.3;
+    const adjustedNutrient = Math.min(1, nutrientFactor * nutrientDiffusionCoeff);
+
     const baseHeight = 0.02;
-    const growthIncrement = (lightFactor * 0.4 + adjustedNutrient * 0.4) * (1 + gravityFactor * 0.2);
+    const growthIncrement =
+      (lightFactor * 0.4 + adjustedNutrient * 0.4) *
+      (1 + (1 - gravityFactor) * 0.2);
     const effectiveGrowthRate = baseHeight + growthIncrement;
-    
+
     const baseRate = 0.18;
     return baseRate * effectiveGrowthRate;
   }
