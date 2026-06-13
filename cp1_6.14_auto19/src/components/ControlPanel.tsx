@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import { ParticleConfig } from '../utils/particleEngine';
 
 interface SliderConfig {
@@ -26,17 +26,50 @@ interface ControlPanelProps {
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({ config, onChange, compact }) => {
-  const lastUpdateRef = useRef<number>(0);
+  const pendingRef = useRef<Partial<Record<keyof ParticleConfig, number>>>({});
+  const rafRef = useRef<number | null>(null);
+  const [localValues, setLocalValues] = useState<Partial<ParticleConfig>>({});
+
+  const flush = useCallback(() => {
+    const pending = pendingRef.current;
+    const keys = Object.keys(pending) as (keyof ParticleConfig)[];
+    for (const key of keys) {
+      const val = pending[key];
+      if (val !== undefined) {
+        onChange(key, val);
+      }
+    }
+    pendingRef.current = {};
+    rafRef.current = null;
+  }, [onChange]);
+
+  const scheduleFlush = useCallback(() => {
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(flush);
+    }
+  }, [flush]);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
 
   const handleChange = useCallback(
     (key: keyof ParticleConfig, value: number) => {
-      const now = performance.now();
-      if (now - lastUpdateRef.current < 16) return;
-      lastUpdateRef.current = now;
-      onChange(key, value);
+      pendingRef.current[key] = value;
+      setLocalValues((prev) => ({ ...prev, [key]: value }));
+      scheduleFlush();
     },
-    [onChange]
+    [scheduleFlush]
   );
+
+  const getValue = (key: keyof ParticleConfig) => {
+    return localValues[key] !== undefined ? (localValues[key] as number) : config[key];
+  };
 
   const visibleSliders = compact
     ? SLIDERS.filter((s) => ['count', 'speed', 'colorMix'].includes(s.key))
@@ -88,7 +121,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ config, onChange, compact }
           >
             <span>{slider.label}</span>
             <span style={{ color: '#e5e7f0', fontVariantNumeric: 'tabular-nums' }}>
-              {config[slider.key]}
+              {getValue(slider.key)}
             </span>
           </div>
           <input
@@ -96,7 +129,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ config, onChange, compact }
             min={slider.min}
             max={slider.max}
             step={slider.step}
-            value={config[slider.key]}
+            value={getValue(slider.key)}
             onChange={(e) => handleChange(slider.key, parseFloat(e.target.value))}
             style={{ width: '100%', height: '6px' }}
           />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { parseCode, ParseResult } from '../utils/codeParser';
 import { ParticleConfig } from '../utils/particleEngine';
 
@@ -10,33 +10,64 @@ const CodeInput: React.FC<CodeInputProps> = ({ onParse }) => {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
 
-  const handleRun = () => {
+  const handleRun = useCallback(() => {
     if (!code.trim()) {
-      setError('请输入代码片段');
+      setSuccessMsg(null);
+      setError('请输入代码片段，例如: count = 8000; speed = 2.5; rotation = 0.5');
       return;
     }
 
-    const start = performance.now();
-    const result: ParseResult = parseCode(code);
-    const elapsed = performance.now() - start;
+    setIsRunning(true);
+    setSuccessMsg(null);
+    setError(null);
 
-    if (result.success && result.config) {
-      setError(null);
-      onParse(result.config);
-    } else {
-      setError(result.error || '解析失败');
-    }
-  };
+    requestAnimationFrame(() => {
+      try {
+        const t0 = performance.now();
+        const result: ParseResult = parseCode(code);
+        const totalElapsed = performance.now() - t0;
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (result.success && result.config) {
+          const keys = Object.keys(result.config).join(', ');
+          setError(null);
+          setSuccessMsg(
+            `✅ 解析成功 (${totalElapsed.toFixed(0)}ms): ${keys}`
+          );
+          onParse(result.config);
+        } else {
+          setError(result.error || '解析失败，请检查代码');
+          setSuccessMsg(null);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`运行时错误: ${msg}`);
+        setSuccessMsg(null);
+      } finally {
+        setIsRunning(false);
+      }
+    });
+  }, [code, onParse]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
       handleRun();
     }
-  };
+  }, [handleRun]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+      }}
+    >
       <div
         style={{
           display: 'flex',
@@ -50,16 +81,22 @@ const CodeInput: React.FC<CodeInputProps> = ({ onParse }) => {
           overflow: 'hidden',
           transition: 'border-color 0.2s ease-out',
           margin: '0 auto',
+          boxShadow: focused ? '0 0 0 4px rgba(139, 92, 246, 0.15)' : 'none',
         }}
       >
         <input
           type="text"
           value={code}
-          onChange={(e) => setCode(e.target.value)}
+          onChange={(e) => {
+            setCode(e.target.value);
+            if (error) setError(null);
+            if (successMsg) setSuccessMsg(null);
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}
           placeholder="粘贴代码片段 (HTML/CSS/JS)... Ctrl+Enter 运行"
+          spellCheck={false}
           style={{
             flex: 1,
             background: 'transparent',
@@ -70,53 +107,63 @@ const CodeInput: React.FC<CodeInputProps> = ({ onParse }) => {
             padding: '0 16px',
             fontFamily: "'Fira Code', 'Consolas', monospace",
             letterSpacing: '0.5px',
+            caretColor: '#8b5cf6',
+            minWidth: 0,
           }}
         />
         <button
           onClick={handleRun}
+          disabled={isRunning}
           style={{
             width: '40px',
             height: '40px',
             borderRadius: '50%',
-            background: '#8b5cf6',
+            background: isRunning ? '#6366f1' : '#8b5cf6',
             color: 'white',
             border: 'none',
-            cursor: 'pointer',
+            cursor: isRunning ? 'progress' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '16px',
             marginRight: '4px',
+            flexShrink: 0,
             transition: 'background 0.2s ease-out, transform 0.1s ease-out',
+            transform: isRunning ? 'scale(0.95)' : 'scale(1)',
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = '#7c3aed';
+            if (!isRunning) (e.currentTarget as HTMLElement).style.background = '#7c3aed';
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = '#8b5cf6';
+            if (!isRunning) (e.currentTarget as HTMLElement).style.background = '#8b5cf6';
           }}
           onMouseDown={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = 'scale(0.95)';
+            if (!isRunning) (e.currentTarget as HTMLElement).style.transform = 'scale(0.92)';
           }}
           onMouseUp={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+            if (!isRunning) (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
           }}
         >
-          ▶
+          {isRunning ? '⋯' : '▶'}
         </button>
       </div>
-      {error && (
+
+      {(error || successMsg) && (
         <div
           style={{
             width: '60%',
             maxWidth: '800px',
             margin: '0 auto',
-            color: '#ef4444',
             fontSize: '12px',
             padding: '4px 16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            color: error ? '#ef4444' : '#22c55e',
+            fontFamily: "'Fira Code', monospace",
           }}
         >
-          {error}
+          <span>{error || successMsg}</span>
         </div>
       )}
     </div>

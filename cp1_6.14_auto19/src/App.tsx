@@ -8,6 +8,8 @@ import { ParticleConfig, DEFAULT_CONFIG, ParticleEngine } from './utils/particle
 
 type LayoutMode = 'full' | 'tablet' | 'mobile';
 
+const LOAD_START_TIME = performance.now();
+
 function getLayoutMode(): LayoutMode {
   const width = window.innerWidth;
   if (width > 1024) return 'full';
@@ -21,13 +23,28 @@ const App: React.FC = () => {
   const [showExport, setShowExport] = useState(false);
   const [layout, setLayout] = useState<LayoutMode>(getLayoutMode());
   const [viewInfo, setViewInfo] = useState({ zoom: 1.0, count: DEFAULT_CONFIG.count });
-  const [controlPanelCollapsed, setControlPanelCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [fps, setFps] = useState<number>(0);
+  const [loadTime, setLoadTime] = useState<number | null>(null);
   const engineRef = useRef<ParticleEngine | null>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleResize = () => setLayout(getLayoutMode());
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (loadTime === null) {
+      const t = performance.now() - LOAD_START_TIME;
+      setLoadTime(t);
+      console.log(`[CodeCanvas] 首屏交互时间: ${t.toFixed(0)}ms`);
+    }
+  }, [loadTime]);
+
+  const handleFpsUpdate = useCallback((newFps: number) => {
+    setFps(newFps);
   }, []);
 
   const handleConfigChange = useCallback((key: keyof ParticleConfig, value: number) => {
@@ -41,6 +58,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleCodeParse = useCallback((parsed: Partial<ParticleConfig>) => {
+    const t0 = performance.now();
     setConfig((prev) => {
       const next = { ...prev, ...parsed };
       if (engineRef.current) {
@@ -48,6 +66,8 @@ const App: React.FC = () => {
       }
       return next;
     });
+    const elapsed = performance.now() - t0;
+    console.log(`[CodeCanvas] 解析+渲染耗时: ${elapsed.toFixed(1)}ms (目标 <= 300ms, ${elapsed <= 300 ? '✅' : '⚠️'})`);
   }, []);
 
   const handleModeChange = useCallback((newMode: ToolMode) => {
@@ -69,8 +89,13 @@ const App: React.FC = () => {
     setViewInfo({ zoom, count });
   }, []);
 
+  const toggleDrawer = useCallback(() => {
+    setDrawerOpen((prev) => !prev);
+  }, []);
+
   const isMobile = layout === 'mobile';
   const isTablet = layout === 'tablet';
+  const isFull = layout === 'full';
 
   return (
     <div
@@ -85,7 +110,7 @@ const App: React.FC = () => {
         fontSize: isMobile ? '14px' : '16px',
       }}
     >
-      {layout === 'full' && (
+      {isFull && (
         <div
           style={{
             width: '60px',
@@ -114,6 +139,7 @@ const App: React.FC = () => {
           config={config}
           onViewChange={handleViewChange}
           engineRef={engineRef}
+          onFpsUpdate={handleFpsUpdate}
         />
 
         <div
@@ -149,26 +175,53 @@ const App: React.FC = () => {
         <div
           style={{
             position: 'absolute',
-            bottom: isMobile ? '12px' : '16px',
+            bottom: isMobile ? '12px' : (isTablet ? (drawerOpen ? '260px' : '56px') : '16px'),
             left: '16px',
-            width: '120px',
-            height: '32px',
-            background: 'rgba(26,26,46,0.7)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#9ca3af',
-            fontSize: '12px',
             zIndex: 20,
-            letterSpacing: '0.5px',
+            transition: 'bottom 0.3s ease-out',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
           }}
         >
-          {viewInfo.zoom.toFixed(1)}x · {viewInfo.count}
+          <div
+            style={{
+              width: '120px',
+              height: '32px',
+              background: 'rgba(26,26,46,0.7)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#9ca3af',
+              fontSize: '12px',
+              letterSpacing: '0.5px',
+            }}
+          >
+            {viewInfo.zoom.toFixed(1)}x · {viewInfo.count}
+          </div>
+          <div
+            style={{
+              width: '120px',
+              height: '28px',
+              background: 'rgba(26,26,46,0.7)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: fps >= 50 ? '#22c55e' : (fps >= 30 ? '#fbbf24' : '#ef4444'),
+              fontSize: '11px',
+              fontFamily: "'Fira Code', monospace",
+              letterSpacing: '0.5px',
+              fontWeight: 600,
+            }}
+          >
+            {fps.toFixed(0)} FPS
+          </div>
         </div>
       </div>
 
-      {layout === 'full' && (
+      {isFull && (
         <div
           style={{
             position: 'absolute',
@@ -185,20 +238,36 @@ const App: React.FC = () => {
 
       {isTablet && (
         <div
+          ref={drawerRef}
           style={{
             position: 'absolute',
-            bottom: '0',
-            left: '0',
-            right: '0',
-            zIndex: 20,
-            transition: 'transform 0.3s ease-out',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 30,
+            transform: drawerOpen ? 'translateY(0)' : 'translateY(calc(100% - 40px))',
+            transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+            willChange: 'transform',
+            maxHeight: '70vh',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
           <div
-            onClick={() => setControlPanelCollapsed(!controlPanelCollapsed)}
+            onClick={toggleDrawer}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background =
+                'linear-gradient(rgba(45,45,74,0.95), rgba(45,45,74,0.95)), linear-gradient(135deg, #6366f1, #ec4899)';
+              (e.currentTarget as HTMLElement).style.color = '#c7d2fe';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background =
+                'linear-gradient(rgba(26,26,46,0.9), rgba(26,26,46,0.9)), linear-gradient(135deg, #6366f1, #ec4899)';
+              (e.currentTarget as HTMLElement).style.color = '#9ca3af';
+            }}
             style={{
               height: '40px',
-              background: 'rgba(26,26,46,0.9)',
+              flexShrink: 0,
               borderRadius: '16px 16px 0 0',
               display: 'flex',
               alignItems: 'center',
@@ -214,15 +283,38 @@ const App: React.FC = () => {
                 'linear-gradient(rgba(26,26,46,0.9), rgba(26,26,46,0.9)), linear-gradient(135deg, #6366f1, #ec4899)',
               backgroundOrigin: 'border-box',
               backgroundClip: 'padding-box, border-box',
+              userSelect: 'none',
+              transition: 'background 0.2s ease-out, color 0.2s ease-out',
             }}
           >
-            控制面板 {controlPanelCollapsed ? '▲' : '▼'}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <span>控制面板</span>
+              <span
+                style={{
+                  display: 'inline-block',
+                  transform: drawerOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.3s ease-out',
+                  width: '16px',
+                  height: '16px',
+                  textAlign: 'center',
+                  lineHeight: '16px',
+                }}
+              >
+                ▼
+              </span>
+            </span>
           </div>
-          {!controlPanelCollapsed && (
-            <div style={{ padding: '0 16px 16px' }}>
-              <ControlPanel config={config} onChange={handleConfigChange} />
-            </div>
-          )}
+          <div
+            style={{
+              overflow: 'auto',
+              padding: '16px',
+              paddingTop: '0',
+              background: 'rgba(22, 22, 42, 0.95)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <ControlPanel config={config} onChange={handleConfigChange} />
+          </div>
         </div>
       )}
 
