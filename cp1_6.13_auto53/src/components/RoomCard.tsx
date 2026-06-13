@@ -56,6 +56,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onBook, isLoading }) => {
         borderRadius: '16px',
         overflow: 'hidden',
         cursor: 'pointer',
+        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-4px)';

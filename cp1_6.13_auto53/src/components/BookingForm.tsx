@@ -36,6 +36,54 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const [error, setError] = useState('');
   const [isCalculating, setIsCalculating] = useState(false);
 
+  const isWeekend = (dateStr: string): boolean => {
+    const date = new Date(dateStr);
+    const day = date.getDay();
+    return day === 0 || day === 6;
+  };
+
+  const getDatesBetween = (checkIn: string, checkOut: string): string[] => {
+    const dates: string[] = [];
+    const start = new Date(checkIn);
+    const end = new Date(checkOut);
+    const current = new Date(start);
+    while (current < end) {
+      dates.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+    }
+    return dates;
+  };
+
+  const calculatePriceLocal = (): PriceCalculation | null => {
+    if (!formData.roomId || !formData.checkIn || !formData.checkOut) return null;
+    
+    const room = rooms.find(r => r.id === formData.roomId);
+    if (!room) return null;
+
+    const dates = getDatesBetween(formData.checkIn, formData.checkOut);
+    let roomTotal = 0;
+    
+    for (const date of dates) {
+      roomTotal += isWeekend(date) ? room.weekendPrice : room.weekdayPrice;
+    }
+
+    const days = dates.length;
+    const feeding = formData.services.feeding ? 30 * days : 0;
+    const walking = formData.services.walking * 50;
+    const bathing = formData.services.bathing * 80;
+
+    return {
+      totalPrice: roomTotal + feeding + walking + bathing,
+      days,
+      breakdown: {
+        roomTotal,
+        feeding,
+        walking,
+        bathing,
+      }
+    };
+  };
+
   useEffect(() => {
     if (preselectedRoomId) {
       setFormData(prev => ({ ...prev, roomId: preselectedRoomId }));
@@ -43,10 +91,11 @@ const BookingForm: React.FC<BookingFormProps> = ({
   }, [preselectedRoomId]);
 
   useEffect(() => {
+    const localPrice = calculatePriceLocal();
+    setPriceData(localPrice);
+    
     if (formData.roomId && formData.checkIn && formData.checkOut) {
       calculatePrice();
-    } else {
-      setPriceData(null);
     }
   }, [formData.roomId, formData.checkIn, formData.checkOut, formData.services]);
 
