@@ -25,7 +25,6 @@ class SoundWaveSurferApp {
   private decibelValueEl: HTMLElement | null = null;
   private navDecibelValueEl: HTMLElement | null = null;
   private fileNameEl: HTMLElement | null = null;
-  private mobileMinimapPopup: HTMLElement | null = null;
 
   constructor() {
     this.canvas = document.getElementById('three-canvas') as HTMLCanvasElement;
@@ -181,7 +180,6 @@ class SoundWaveSurferApp {
     const mobileMinimap = document.createElement('div');
     mobileMinimap.className = 'mobile-minimap-popup';
     app.appendChild(mobileMinimap);
-    this.mobileMinimapPopup = mobileMinimap;
     this.effectManager.setupMinimap(mobileMinimap);
 
     minimapFab.addEventListener('click', () => {

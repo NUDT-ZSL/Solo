@@ -98,7 +98,6 @@ export class EffectManager {
       const historyIdx = (this.frameIndex - t + TRAIL_MAX_FRAMES) % TRAIL_MAX_FRAMES;
       const avgPos = this.trailGeometries[t].getAttribute('position') as THREE.BufferAttribute;
       const avgArr = avgPos.array as Float32Array;
-      const srcArr = this.positionHistory[historyIdx];
 
       const avgWindow = Math.min(t + 1, 5);
       for (let i = 0; i < TRAIL_VERTEX_COUNT * 3; i++) {

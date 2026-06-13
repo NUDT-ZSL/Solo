@@ -12,8 +12,8 @@ export class AudioAnalyzer {
   private source: AudioBufferSourceNode | MediaElementAudioSourceNode | null = null;
   private audioBuffer: AudioBuffer | null = null;
   private audioElement: HTMLAudioElement | null = null;
-  private frequencyDataArray: Uint8Array = new Uint8Array();
-  private timeDomainDataArray: Uint8Array = new Uint8Array();
+  private frequencyDataArray: Uint8Array<ArrayBuffer> = new Uint8Array();
+  private timeDomainDataArray: Uint8Array<ArrayBuffer> = new Uint8Array();
   private sampleRate: number = 44100;
   private fftSize: number = 2048;
 
