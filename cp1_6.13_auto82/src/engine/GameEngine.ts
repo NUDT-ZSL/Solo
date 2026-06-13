@@ -61,13 +61,15 @@ export class GameEngine {
     const pHand = pDeck.splice(0, INITIAL_HAND_SIZE);
     const aHand = aDeck.splice(0, INITIAL_HAND_SIZE);
 
+    const initMaxEnergy = Math.min(MAX_ENERGY, INITIAL_ENERGY);
+    const initEnergy = Math.max(0, Math.min(initMaxEnergy, INITIAL_ENERGY));
     return {
       player: {
         hp: MAX_HP,
         maxHp: MAX_HP,
         shield: 0,
-        energy: INITIAL_ENERGY,
-        maxEnergy: INITIAL_ENERGY,
+        energy: initEnergy,
+        maxEnergy: initMaxEnergy,
         hand: pHand,
         deck: pDeck,
         discard: []
@@ -76,8 +78,8 @@ export class GameEngine {
         hp: MAX_HP,
         maxHp: MAX_HP,
         shield: 0,
-        energy: INITIAL_ENERGY,
-        maxEnergy: INITIAL_ENERGY,
+        energy: initEnergy,
+        maxEnergy: initMaxEnergy,
         hand: aHand,
         deck: aDeck,
         discard: []
@@ -121,8 +123,9 @@ export class GameEngine {
     if (idx === -1) return null;
     const card = attacker.hand[idx];
     if (card.cost > attacker.energy) return null;
+    if (card.cost < 0) return null;
 
-    attacker.energy -= card.cost;
+    attacker.energy = Math.max(0, attacker.energy - card.cost);
     attacker.hand.splice(idx, 1);
     attacker.discard.push(card);
 
