@@ -118,6 +118,25 @@ app.post('/api/markers', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
+app.put('/api/markers/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const existing = await markersDB.findOne({ id: req.params.id })
+    if (!existing) {
+      res.status(404).json({ success: false, error: 'Marker not found' })
+      return
+    }
+    const updated = {
+      ...existing,
+      label: req.body.label ?? existing.label,
+      position: req.body.position ?? existing.position,
+    }
+    await markersDB.update({ id: req.params.id }, { $set: updated })
+    res.status(200).json(updated)
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update marker' })
+  }
+})
+
 app.delete('/api/markers/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     await markersDB.remove({ id: req.params.id }, {})

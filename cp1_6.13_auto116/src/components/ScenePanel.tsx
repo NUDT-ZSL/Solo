@@ -16,6 +16,11 @@ interface StratumProps {
   onClick: (e: any) => void
 }
 
+const elasticOut = (t: number): number => {
+  const p = 0.3
+  return Math.pow(2, -10 * t) * Math.sin((t - p / 4) * (2 * Math.PI) / p) + 1
+}
+
 function Fossil({
   fossil,
   opacity,
@@ -36,9 +41,8 @@ function Fossil({
   const geometry = useMemo(() => {
     if (fossil.type === 'ammonite') {
       return new THREE.TorusGeometry(0.05, 0.02, 8, 16)
-    } else {
-      return new THREE.SphereGeometry(0.05, 12, 8).scale(1.5, 0.6, 1)
     }
+    return new THREE.SphereGeometry(0.05, 12, 8).scale(1.5, 0.6, 1)
   }, [fossil.type])
 
   const yOffset = fossil.position.y - layer.position - layer.thickness / 2
@@ -87,18 +91,11 @@ function Stratum({
     return 0
   }, [depositProgress, index])
 
-  const materialProps = useMemo(
-    () => ({
-      color: layer.color,
-      transparent: true,
-      opacity: opacity,
-      emissive: isHighlighted || hovered ? layer.color : '#000000',
-      emissiveIntensity: isHighlighted ? 0.3 : hovered ? 0.1 : 0,
-      roughness: 0.8,
-      metalness: 0.1,
-    }),
-    [layer.color, opacity, isHighlighted, hovered]
-  )
+  const emissiveIntensity = useMemo(() => {
+    if (isHighlighted) return 0.3
+    if (hovered) return 0.1
+    return 0
+  }, [isHighlighted, hovered])
 
   const yPos = layer.position + layer.thickness / 2
 
@@ -121,7 +118,15 @@ function Stratum({
         userData={{ layerId: layer.id }}
       >
         <boxGeometry args={[10, layer.thickness, 8]} />
-        <meshStandardMaterial {...materialProps} />
+        <meshStandardMaterial
+          color={layer.color}
+          transparent
+          opacity={opacity}
+          emissive={layer.color}
+          emissiveIntensity={emissiveIntensity}
+          roughness={0.8}
+          metalness={0.1}
+        />
       </mesh>
       <lineSegments>
         <edgesGeometry
@@ -130,7 +135,7 @@ function Stratum({
         <lineBasicMaterial
           color="#ffffff"
           transparent
-          opacity={0.4}
+          opacity={opacity > 0 ? 0.4 : 0}
         />
       </lineSegments>
       {showFossils &&
@@ -154,40 +159,44 @@ function Ripple({
   onComplete: (id: string) => void
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
-  const startTime = useRef(Date.now())
+  const startTime = useRef<number>(Date.now())
+  const completed = useRef(false)
 
   useFrame(() => {
+    if (!meshRef.current || completed.current) return
+
     const elapsed = (Date.now() - startTime.current) / 1000
     const duration = 0.5
 
     if (elapsed >= duration) {
+      completed.current = true
       onComplete(ripple.id)
       return
     }
 
     const t = elapsed / duration
-    const radius = t * 1
-    const opacity = (1 - t) * 0.6
+    const radius = 0 + t * (1 - 0)
+    const opacity = 0.6 + t * (0 - 0.6)
 
-    if (meshRef.current) {
-      meshRef.current.scale.setScalar(radius)
-      const mat = meshRef.current.material as THREE.MeshBasicMaterial
-      mat.opacity = opacity
-    }
+    meshRef.current.scale.setScalar(Math.max(0.001, radius))
+    const mat = meshRef.current.material as THREE.MeshBasicMaterial
+    mat.opacity = Math.max(0, opacity)
   })
 
   return (
     <mesh
       ref={meshRef}
-      position={[ripple.position.x, ripple.position.y + 0.01, ripple.position.z]}
+      position={[ripple.position.x, ripple.position.y + 0.02, ripple.position.z]}
       rotation={[-Math.PI / 2, 0, 0]}
+      scale={0.001}
     >
-      <ringGeometry args={[0.95, 1, 32]} />
+      <ringGeometry args={[0.95, 1, 48]} />
       <meshBasicMaterial
         color="#ffffff"
         transparent
         opacity={0.6}
         side={THREE.DoubleSide}
+        depthWrite={false}
       />
     </mesh>
   )
@@ -195,52 +204,62 @@ function Ripple({
 
 function MarkerPin({ marker, isNew }: { marker: Marker; isNew?: boolean }) {
   const groupRef = useRef<THREE.Group>(null)
-  const [insertProgress, setInsertProgress] = useState(isNew ? 0 : 1)
+  const progressRef = useRef(isNew ? 0 : 1)
+  const startTimeRef = useRef<number>(Date.now())
+  const hasAnimatedRef = useRef(!isNew)
+  const [yOffset, setYOffset] = useState(isNew ? 0 : 0.3)
 
-  useEffect(() => {
-    if (!isNew) return
-    const startTime = Date.now()
+  useFrame(() => {
+    if (hasAnimatedRef.current) return
+
+    const elapsed = Date.now() - startTimeRef.current
     const duration = 200
-    const animate = () => {
-      const elapsed = Date.now() - startTime
-      const t = Math.min(elapsed / duration, 1)
-      const elasticT = 1 - Math.pow(1 - t, 3)
-      setInsertProgress(elasticT)
-      if (t < 1) requestAnimationFrame(animate)
-    }
-    animate()
-  }, [isNew])
+    const t = Math.min(elapsed / duration, 1)
+    const elasticT = elasticOut(t)
+    progressRef.current = elasticT
+    setYOffset(elasticT * 0.3)
 
-  const yOffset = insertProgress * 0.3
+    if (t >= 1) {
+      hasAnimatedRef.current = true
+    }
+  })
 
   return (
     <group
       ref={groupRef}
       position={[marker.position.x, marker.position.y, marker.position.z]}
     >
-      <mesh position={[0, yOffset / 2, 0]}>
-        <cylinderGeometry args={[0.02, 0.02, yOffset, 8]} />
-        <meshStandardMaterial color="#94a3b8" metalness={0.5} roughness={0.3} />
-      </mesh>
-      <mesh position={[0, yOffset + 0.03, 0]}>
-        <sphereGeometry args={[0.05, 16, 16]} />
-        <meshStandardMaterial
-          color="#ef4444"
-          emissive="#ef4444"
-          emissiveIntensity={0.2}
-        />
-      </mesh>
-      <Text
-        position={[0, yOffset + 0.15, 0]}
-        fontSize={0.12}
-        color="#ffffff"
-        anchorX="center"
-        anchorY="bottom"
-        outlineWidth={0.01}
-        outlineColor="#000000"
-      >
-        {marker.label}
-      </Text>
+      {yOffset > 0.001 && (
+        <>
+          <mesh position={[0, yOffset / 2, 0]}>
+            <cylinderGeometry args={[0.02, 0.02, yOffset, 8]} />
+            <meshStandardMaterial
+              color="#94a3b8"
+              metalness={0.5}
+              roughness={0.3}
+            />
+          </mesh>
+          <mesh position={[0, yOffset + 0.03, 0]}>
+            <sphereGeometry args={[0.05, 16, 16]} />
+            <meshStandardMaterial
+              color="#ef4444"
+              emissive="#ef4444"
+              emissiveIntensity={0.2}
+            />
+          </mesh>
+          <Text
+            position={[0, yOffset + 0.15, 0]}
+            fontSize={0.12}
+            color="#ffffff"
+            anchorX="center"
+            anchorY="bottom"
+            outlineWidth={0.01}
+            outlineColor="#000000"
+          >
+            {marker.label}
+          </Text>
+        </>
+      )}
     </group>
   )
 }
@@ -305,7 +324,7 @@ function SceneContent() {
       }
       addRipple(ripple)
 
-      if (e.event.ctrlKey) {
+      if (e.event.ctrlKey || e.event.metaKey) {
         setNewMarkerPosition({
           x: e.point.x,
           y: e.point.y,
@@ -329,6 +348,7 @@ function SceneContent() {
   const highlightedLayerId = useMemo(() => {
     if (eraSliderValue <= 0) return null
     const sortedLayers = [...layers].sort((a, b) => a.position - b.position)
+    if (sortedLayers.length === 0) return null
     const index = Math.min(
       Math.floor(eraSliderValue * sortedLayers.length),
       sortedLayers.length - 1
@@ -360,15 +380,15 @@ function SceneContent() {
   }, [layers, setFossils])
 
   useEffect(() => {
-    const checkNewMarkers = () => {
-      markers.forEach((m) => {
-        if (!newMarkerIds.has(m.id)) {
-          setNewMarkerIds((prev) => new Set(prev).add(m.id))
+    markers.forEach((m) => {
+      setNewMarkerIds((prev) => {
+        if (!prev.has(m.id)) {
+          return new Set(prev).add(m.id)
         }
+        return prev
       })
-    }
-    checkNewMarkers()
-  }, [markers, newMarkerIds])
+    })
+  }, [markers])
 
   return (
     <>
@@ -432,7 +452,7 @@ export default function ScenePanel() {
     <div className="flex-1 relative bg-[#0f0f0f] overflow-hidden">
       <Canvas
         shadows
-        gl={{ antialias: true, alpha: false }}
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         camera={{ position: [12, 6, 12], fov: 50 }}
         onPointerMissed={() => useStore.getState().selectLayer(null)}
       >
