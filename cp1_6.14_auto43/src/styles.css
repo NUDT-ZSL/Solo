@@ -310,26 +310,28 @@ input, select, textarea {
   cursor: pointer;
   position: relative;
   flex-shrink: 0;
-  transition: background 0.2s ease;
+  transition: background-color 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  border: none;
 }
 
 .toggle-enabled {
-  background: #6366f1;
+  background-color: #6366f1;
 }
 
 .toggle-disabled {
-  background: #52525b;
+  background-color: #52525b;
 }
 
 .toggle-slider {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: transform 0.2s ease;
 }
 
@@ -574,13 +576,13 @@ input, select, textarea {
 }
 
 .tree-value.highlight {
-  animation: valueHighlight 0.6s ease;
+  animation: valueHighlight 0.3s ease;
 }
 
 @keyframes valueHighlight {
-  0% { background: transparent; }
-  30% { background: #ffff0033; }
-  100% { background: transparent; }
+  0% { background-color: transparent; }
+  50% { background-color: #ffff0033; }
+  100% { background-color: transparent; }
 }
 
 .tree-value-string { color: #86efac; }

@@ -257,7 +257,7 @@ export default function EditorPanel({
         next.delete(id);
         return next;
       });
-    }, 600);
+    }, 300);
   };
 
   const handleCancelEdit = () => {
