@@ -149,9 +149,21 @@ app.post('/api/devices/borrow', async (req, res) => {
       return res.status(400).json({ error: '设备当前不可借用' });
     }
 
+    if (!expectedReturnTime) {
+      return res.status(400).json({ error: '请提供预计归还时间' });
+    }
+
+    const returnDate = new Date(expectedReturnTime);
+    if (isNaN(returnDate.getTime())) {
+      return res.status(400).json({ error: '归还时间格式不正确' });
+    }
+    if (returnDate.getTime() <= Date.now()) {
+      return res.status(400).json({ error: '归还时间必须在当前时间之后' });
+    }
+
     const updated = await devicesDB.update(
       { _id: deviceId },
-      { $set: { status: 'borrowed', expectedReturnTime, borrowCount: (device.borrowCount || 0) + 1 } },
+      { $set: { status: 'borrowed', expectedReturnTime: returnDate.toISOString(), borrowCount: (device.borrowCount || 0) + 1 } },
       { returnUpdatedDocs: true }
     );
     res.json(updated);
