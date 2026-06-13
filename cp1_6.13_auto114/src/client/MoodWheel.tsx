@@ -26,7 +26,14 @@ const INNER_RADIUS = OUTER_RADIUS - RING_WIDTH;
 interface FlyingBall {
   id: number;
   mood: MoodInfo;
-  progress: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  scale: number;
+  targetScale: number;
+  opacity: number;
+  phase: number;
 }
 
 interface MoodWheelProps {
@@ -35,6 +42,9 @@ interface MoodWheelProps {
   onlineCount: number;
   atmosphereText: string;
 }
+
+const SPRING_K = 0.12;
+const DAMPING = 0.82;
 
 export const MoodWheel: React.FC<MoodWheelProps> = ({
   onMoodSelect,
@@ -48,7 +58,9 @@ export const MoodWheel: React.FC<MoodWheelProps> = ({
   const [flyingBalls, setFlyingBalls] = useState<FlyingBall[]>([]);
   const ballIdRef = useRef(0);
   const animationRef = useRef<number>(0);
-  const startTimeRef = useRef<Record<number, number>>({});
+  const flyingBallsRef = useRef<FlyingBall[]>([]);
+
+  flyingBallsRef.current = flyingBalls;
 
   const getMoodAtPosition = useCallback((x: number, y: number): MoodInfo | null => {
     const cx = WHEEL_SIZE / 2;
@@ -129,21 +141,59 @@ export const MoodWheel: React.FC<MoodWheelProps> = ({
   }, [hoveredMood, selectedMood]);
 
   const animateBalls = useCallback(() => {
-    setFlyingBalls((prev) => {
-      const now = performance.now();
-      return prev
-        .map((ball) => {
-          const start = startTimeRef.current[ball.id] || now;
-          const elapsed = now - start;
-          const duration = 300;
-          const t = Math.min(elapsed / duration, 1);
-          const elasticT = t < 0.5
-            ? 2 * t * t
-            : -1 + (4 - 2 * t) * t;
-          return { ...ball, progress: elasticT };
-        })
-        .filter((ball) => ball.progress < 1 || performance.now() - (startTimeRef.current[ball.id] || 0) < 350);
-    });
+    const cx = WHEEL_SIZE / 2;
+    const cy = WHEEL_SIZE / 2;
+    const updated = flyingBallsRef.current
+      .map((ball) => {
+        const dx = cx - ball.x;
+        const dy = cy - ball.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        let ax = dx * SPRING_K;
+        let ay = dy * SPRING_K;
+
+        if (ball.phase < 0.3) {
+          ball.phase += 1 / 60;
+          ball.vx += ax * 2;
+          ball.vy += ay * 2;
+        } else if (dist > 3) {
+          ball.vx += ax;
+          ball.vy += ay;
+          ball.vx *= DAMPING;
+          ball.vy *= DAMPING;
+        } else {
+          const overshoot = 1 - ball.phase;
+          if (overshoot > 0) {
+            ball.vx = -dx * 0.08 * overshoot;
+            ball.vy = -dy * 0.08 * overshoot;
+            ball.phase += 0.02;
+          } else {
+            ball.vx *= 0.7;
+            ball.vy *= 0.7;
+          }
+        }
+
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+        ball.scale += (1 + Math.min(speed * 0.03, 0.6) - ball.scale) * 0.2;
+        ball.opacity = Math.max(0, ball.opacity - 0.008);
+
+        return ball;
+      })
+      .filter((ball) => ball.opacity > 0.01);
+
+    if (updated.length !== flyingBallsRef.current.length ||
+        updated.some((b, i) =>
+          Math.abs(b.x - flyingBallsRef.current[i]?.x) > 0.1 ||
+          Math.abs(b.y - flyingBallsRef.current[i]?.y) > 0.1 ||
+          b.scale !== flyingBallsRef.current[i]?.scale ||
+          b.opacity !== flyingBallsRef.current[i]?.opacity
+        )) {
+      setFlyingBalls(updated.map((b) => ({ ...b })));
+    }
+
     animationRef.current = requestAnimationFrame(animateBalls);
   }, []);
 
@@ -164,13 +214,31 @@ export const MoodWheel: React.FC<MoodWheelProps> = ({
     const y = ((e.clientY - rect.top) / rect.height) * WHEEL_SIZE;
     const mood = getMoodAtPosition(x, y);
     if (mood) {
+      const cx = WHEEL_SIZE / 2;
+      const cy = WHEEL_SIZE / 2;
+      const idx = MOODS.findIndex((m) => m.key === mood.key);
+      const segmentAngle = (2 * Math.PI) / MOODS.length;
+      const startAngle = -Math.PI / 2 - segmentAngle / 2;
+      const midAngle = startAngle + (idx + 0.5) * segmentAngle;
+      const startRadius = (OUTER_RADIUS + INNER_RADIUS) / 2;
+      const startX = cx + Math.cos(midAngle) * startRadius;
+      const startY = cy + Math.sin(midAngle) * startRadius;
+
       const id = ballIdRef.current++;
-      startTimeRef.current[id] = performance.now();
-      setFlyingBalls((prev) => [...prev, { id, mood, progress: 0 }]);
+      const newBall: FlyingBall = {
+        id,
+        mood,
+        x: startX,
+        y: startY,
+        vx: 0,
+        vy: 0,
+        scale: 1,
+        targetScale: 1,
+        opacity: 1,
+        phase: 0,
+      };
+      setFlyingBalls((prev) => [...prev, newBall]);
       onMoodSelect(mood.key);
-      setTimeout(() => {
-        delete startTimeRef.current[id];
-      }, 400);
     }
   };
 
@@ -183,26 +251,6 @@ export const MoodWheel: React.FC<MoodWheelProps> = ({
     const mood = getMoodAtPosition(x, y);
     setHoveredMood(mood ? mood.key : null);
     canvas.style.cursor = mood ? 'pointer' : 'default';
-  };
-
-  const getBallPosition = (ball: FlyingBall) => {
-    const cx = WHEEL_SIZE / 2;
-    const cy = WHEEL_SIZE / 2;
-    const idx = MOODS.findIndex((m) => m.key === ball.mood.key);
-    const segmentAngle = (2 * Math.PI) / MOODS.length;
-    const startAngle = -Math.PI / 2 - segmentAngle / 2;
-    const midAngle = startAngle + (idx + 0.5) * segmentAngle;
-    const startRadius = (OUTER_RADIUS + INNER_RADIUS) / 2;
-    const startX = cx + Math.cos(midAngle) * startRadius;
-    const startY = cy + Math.sin(midAngle) * startRadius;
-
-    const t = ball.progress;
-    const x = startX + (cx - startX) * t;
-    const y = startY + (cy - startY) * t;
-    const scale = 1 + Math.sin(t * Math.PI) * 0.5;
-    const opacity = t < 0.8 ? 1 : 1 - (t - 0.8) * 5;
-
-    return { x, y, scale, opacity };
   };
 
   return (
@@ -253,27 +301,25 @@ export const MoodWheel: React.FC<MoodWheelProps> = ({
           {atmosphereText}
         </div>
       </div>
-      {flyingBalls.map((ball) => {
-        const pos = getBallPosition(ball);
-        return (
-          <div
-            key={ball.id}
-            style={{
-              position: 'absolute',
-              left: pos.x - 10,
-              top: pos.y - 10,
-              width: 20,
-              height: 20,
-              borderRadius: '50%',
-              background: ball.mood.color,
-              transform: `scale(${pos.scale})`,
-              opacity: pos.opacity,
-              boxShadow: `0 0 20px ${ball.mood.color}`,
-              pointerEvents: 'none',
-            }}
-          />
-        );
-      })}
+      {flyingBalls.map((ball) => (
+        <div
+          key={ball.id}
+          style={{
+            position: 'absolute',
+            left: ball.x - 10,
+            top: ball.y - 10,
+            width: 20,
+            height: 20,
+            borderRadius: '50%',
+            background: `radial-gradient(circle at 30% 30%, ${ball.mood.color}ff, ${ball.mood.color}88)`,
+            transform: `scale(${ball.scale})`,
+            opacity: ball.opacity,
+            boxShadow: `0 0 ${15 * ball.scale}px ${ball.mood.color}`,
+            pointerEvents: 'none',
+            willChange: 'transform, opacity, left, top',
+          }}
+        />
+      ))}
     </div>
   );
 };
