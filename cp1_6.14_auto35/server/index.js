@@ -334,6 +334,10 @@ app.get('/api/chart/burndown', (req, res) => {
   const actual = [];
   const dailyRatios = [];
 
+  const doneCards = cards.filter(function (c) {
+    return c.column === 'done' && c.movedAt;
+  });
+
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
@@ -341,22 +345,18 @@ app.get('/api/chart/burndown', (req, res) => {
     const dateStr = d.toISOString().split('T')[0];
     dates.push(dateStr);
 
-    let doneCountByDay = 0;
-    for (let j = 0; j < cards.length; j++) {
-      const card = cards[j];
-      if (card.column === 'done') {
-        const movedAt = card.movedAt || card.createdAt;
-        const movedDate = new Date(movedAt);
-        movedDate.setHours(0, 0, 0, 0);
-        if (movedDate.getTime() <= d.getTime()) {
-          doneCountByDay++;
-        }
+    let cumulDone = 0;
+    for (let j = 0; j < doneCards.length; j++) {
+      const movedDate = new Date(doneCards[j].movedAt);
+      movedDate.setHours(0, 0, 0, 0);
+      if (movedDate.getTime() <= d.getTime()) {
+        cumulDone++;
       }
     }
 
-    const ratio = total > 0 ? doneCountByDay / total : 0;
+    const ratio = total > 0 ? Math.min(1, Math.max(0, cumulDone / total)) : 0;
     dailyRatios.push(Math.round(ratio * 1000) / 1000);
-    actual.push(total - doneCountByDay);
+    actual.push(total - cumulDone);
   }
 
   for (let i = 0; i < 7; i++) {

@@ -158,9 +158,9 @@ function App() {
   if (view === 'projectSelect') {
     return (
       <div style={styles.projectWrap}>
-        <div style={styles.projectHeader}>
+        <div style={styles.projectHeader} data-navbar>
           <div style={styles.projectUser}>
-            <div style={styles.userAvatar}>{user?.avatar}</div>
+            <div style={styles.userAvatar} data-user-avatar>{user?.avatar}</div>
             <span style={{ fontSize: 16 }}>{user?.nickname}</span>
           </div>
           <button style={styles.logoutBtn} onClick={logout}>
@@ -193,11 +193,11 @@ function App() {
               </button>
             </div>
           </div>
-          {projects.length === 0 ? (
-            <div style={styles.emptyProjects}>暂无项目，请创建或加入一个</div>
-          ) : (
-            <div style={styles.projectGrid} data-project-grid>
-              {projects.map((p) => (
+          <div style={styles.projectGrid} data-project-grid>
+            {projects.length === 0 ? (
+              <div style={styles.emptyProjects}>暂无项目，请创建或加入一个</div>
+            ) : (
+              projects.map((p) => (
                 <div
                   key={p.id}
                   style={styles.projectItem}
@@ -209,9 +209,9 @@ function App() {
                     创建于 {new Date(p.createdAt).toLocaleDateString('zh-CN')}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     );

@@ -38,6 +38,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverCol, setHoverCol] = useState<ColumnType | null>(null);
+  const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
   const [addingColumn, setAddingColumn] = useState<ColumnType | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -55,7 +56,6 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
     currentY: 0,
     rafId: 0,
   });
-  const ghostRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = useCallback(async () => {
     const [cardsRes, usersRes] = await Promise.all([
@@ -72,13 +72,6 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
 
   const getUser = (id: string | null) => users.find((u) => u.id === id) || null;
 
-  const updateGhostPosition = useCallback(() => {
-    const ghost = ghostRef.current;
-    const ds = dragState.current;
-    if (!ghost || !ds.active) return;
-    ghost.style.transform = `translate(${ds.currentX - ds.offsetX}px, ${ds.currentY - ds.offsetY}px) rotate(3deg) scale(1.04)`;
-  }, []);
-
   const onCardMouseDown = (e: React.MouseEvent, card: Card) => {
     if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
     e.preventDefault();
@@ -91,6 +84,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
     ds.currentX = e.clientX;
     ds.currentY = e.clientY;
     setDraggingId(card.id);
+    setGhostPos({ x: e.clientX - ds.offsetX, y: e.clientY - ds.offsetY });
   };
 
   useEffect(() => {
@@ -104,7 +98,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
 
       if (ds.rafId) cancelAnimationFrame(ds.rafId);
       ds.rafId = requestAnimationFrame(() => {
-        updateGhostPosition();
+        setGhostPos({ x: ds.currentX - ds.offsetX, y: ds.currentY - ds.offsetY });
 
         const cols = document.querySelectorAll('[data-column]');
         let found: ColumnType | null = null;
@@ -133,6 +127,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
       ds.cardId = null;
       setDraggingId(null);
       setHoverCol(null);
+      setGhostPos(null);
       if (id && targetCol) {
         const card = cards.find((c) => c.id === id);
         if (card && card.column !== targetCol) {
@@ -154,7 +149,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
       const ds = dragState.current;
       if (ds.rafId) cancelAnimationFrame(ds.rafId);
     };
-  }, [draggingId, hoverCol, cards, updateGhostPosition]);
+  }, [draggingId, hoverCol, cards]);
 
   const handleCreateCard = async () => {
     if (!addingColumn || !newTitle.trim()) return;
@@ -410,9 +405,8 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
         })}
       </div>
 
-      {draggingCard && (
+      {draggingCard && ghostPos && (
         <div
-          ref={ghostRef}
           style={{
             position: 'fixed',
             left: 0,
@@ -420,6 +414,7 @@ function Board({ projectId, currentUser, onSelectCard }: BoardProps) {
             zIndex: 9999,
             pointerEvents: 'none',
             willChange: 'transform',
+            transform: `translate(${ghostPos.x}px, ${ghostPos.y}px) rotate(3deg) scale(1.04)`,
             transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s',
             opacity: 0.92,
           }}

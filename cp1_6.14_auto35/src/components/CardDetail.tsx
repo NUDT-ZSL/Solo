@@ -62,6 +62,8 @@ function CardDetail({
   const [visibleCount, setVisibleCount] = useState(VISIBLE_BATCH);
   const commentListRef = useRef<HTMLDivElement>(null);
   const commentSentinelRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const debounceTimerRef = useRef<number>(0);
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -75,17 +77,44 @@ function CardDetail({
   }, [card.id]);
 
   useEffect(() => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = 0;
+    }
     if (!commentSentinelRef.current || comments.length <= VISIBLE_BATCH) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + VISIBLE_BATCH, comments.length));
+          if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+          debounceTimerRef.current = window.setTimeout(() => {
+            setVisibleCount((prev) => {
+              const next = Math.min(prev + VISIBLE_BATCH, comments.length);
+              if (next >= comments.length) {
+                if (observerRef.current) {
+                  observerRef.current.disconnect();
+                  observerRef.current = null;
+                }
+              }
+              return next;
+            });
+          }, 100);
         }
       },
       { root: commentListRef.current, threshold: 0.1 }
     );
     observer.observe(commentSentinelRef.current);
-    return () => observer.disconnect();
+    observerRef.current = observer;
+    return () => {
+      observer.disconnect();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = 0;
+      }
+    };
   }, [comments.length]);
 
   useEffect(() => {

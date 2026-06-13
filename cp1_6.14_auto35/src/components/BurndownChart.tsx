@@ -54,20 +54,27 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
     const padding = { top: 40, right: 40, bottom: 60, left: 56 };
     const chartW = W - padding.left - padding.right;
     const chartH = H - padding.top - padding.bottom;
-    const n = data.dates.length;
-    const maxVal = Math.max(...data.ideal, ...data.actual, 1);
+    const dates = data.dates && data.dates.length > 0 ? data.dates : [];
+    const n = dates.length || 1;
+    const safeRatios = (data.dailyRatios || []).map(function (v) {
+      return Math.min(1, Math.max(0, typeof v === 'number' && isFinite(v) ? v : 0));
+    });
+    while (safeRatios.length < n) safeRatios.push(0);
+    const ideal = data.ideal && data.ideal.length > 0 ? data.ideal : Array(n).fill(0);
+    const actual = data.actual && data.actual.length > 0 ? data.actual : Array(n).fill(data.total || 0);
+    const maxVal = Math.max(...ideal, ...actual, 1);
     const yMax = Math.ceil(maxVal / 5) * 5 || 5;
     const barWidth = Math.min(30, chartW / n * 0.5);
 
-    const xAt = (i: number) => padding.left + (chartW * i) / (n - 1);
+    const xAt = (i: number) => padding.left + (chartW * i) / (n > 1 ? n - 1 : 1);
     const yAt = (v: number) => padding.top + chartH - (chartH * v) / yMax;
 
-    const idealPoints = data.ideal.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ');
-    const actualPoints = data.actual.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ');
+    const idealPoints = ideal.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ');
+    const actualPoints = actual.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ');
 
     const areaPath =
       `M ${xAt(0)},${yAt(yMax)} ` +
-      data.actual.map((v, i) => `L ${xAt(i)},${yAt(v)}`).join(' ') +
+      actual.map((v, i) => `L ${xAt(i)},${yAt(v)}`).join(' ') +
       ` L ${xAt(n - 1)},${yAt(yMax)} Z`;
 
     const yTicks = 5;
@@ -76,10 +83,10 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
       tickVals.push(Math.round((yMax * i) / yTicks));
     }
 
-    const doneCount = data.total - (data.actual[data.actual.length - 1] || 0);
+    const doneCount = data.total - (actual[actual.length - 1] || 0);
     const completion = data.total > 0 ? Math.round((doneCount / data.total) * 100) : 0;
 
-    const bars = data.actual.map((v, i) => {
+    const bars = actual.map((v, i) => {
       const barH = (yMax - v) > 0 ? ((yMax - v) / yMax) * chartH : 0;
       const bx = xAt(i) - barWidth / 2;
       const by = yAt(yMax) - barH;
@@ -88,8 +95,8 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
 
     return {
       W, H, padding, chartW, chartH, n, yMax,
-      idealPoints, actualPoints, areaPath,
-      tickVals, doneCount, completion, bars,
+      dates, ideal, actual, idealPoints, actualPoints, areaPath,
+      tickVals, doneCount, completion, bars, safeRatios,
       xAt, yAt,
     };
   }, [data]);
@@ -108,8 +115,8 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
 
     const {
       W, H, padding, n, yMax,
-      idealPoints, actualPoints, areaPath,
-      tickVals, doneCount, completion, bars,
+      dates, idealPoints, actualPoints, areaPath,
+      tickVals, doneCount, completion, bars, safeRatios,
       xAt, yAt,
     } = chartSvg;
 
@@ -184,7 +191,7 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
             未完成任务数
           </text>
 
-          {data.dates.map((d, i) => (
+          {dates.map((d, i) => (
             <text
               key={i}
               x={xAt(i)}
@@ -242,7 +249,7 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
             strokeLinejoin="round"
           />
 
-          {data.ideal.map((v, i) => (
+          {chartSvg.ideal.map((v, i) => (
             <circle
               key={`i-${i}`}
               cx={xAt(i)}
@@ -252,7 +259,7 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
             />
           ))}
 
-          {data.actual.map((v, i) => (
+          {chartSvg.actual && chartSvg.actual.map((v, i) => (
             <g key={`a-${i}`}>
               <circle
                 cx={xAt(i)}
@@ -262,29 +269,33 @@ function BurndownChart({ projectId, onClose }: BurndownChartProps) {
                 stroke="#3b82f6"
                 strokeWidth="2"
               />
-              <title>{`${formatDateLabel(data.dates[i])}: 剩余 ${v} 个，完成比例 ${Math.round((data.dailyRatios?.[i] ?? 0) * 100)}%`}</title>
+              <title>{`${formatDateLabel(dates[i])}: 剩余 ${v} 个，完成比例 ${Math.round((safeRatios[i] ?? 0) * 100)}%`}</title>
             </g>
           ))}
         </svg>
 
-        {data.dailyRatios && (
+        {safeRatios && safeRatios.length > 0 && (
           <div style={s.ratioGrid}>
-            {data.dates.map((d, i) => (
-              <div key={i} style={s.ratioItem}>
-                <div style={s.ratioDate}>{formatDateLabel(d)}</div>
-                <div style={s.ratioBar}>
-                  <div
-                    style={{
-                      ...s.ratioFill,
-                      width: `${Math.round((data.dailyRatios[i] ?? 0) * 100)}%`,
-                    }}
-                  />
+            {dates.map((d, i) => {
+              const ratio = safeRatios[i] ?? 0;
+              const pct = Math.round(ratio * 100);
+              return (
+                <div key={i} style={s.ratioItem}>
+                  <div style={s.ratioDate}>{formatDateLabel(d)}</div>
+                  <div style={s.ratioBar}>
+                    <div
+                      style={{
+                        ...s.ratioFill,
+                        width: `${pct}%`,
+                      }}
+                    />
+                  </div>
+                  <div style={s.ratioPct}>
+                    {pct}%
+                  </div>
                 </div>
-                <div style={s.ratioPct}>
-                  {Math.round((data.dailyRatios[i] ?? 0) * 100)}%
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
