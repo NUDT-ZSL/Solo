@@ -15,6 +15,7 @@ export class PlayerShip {
   invincibleTimer: number = 0;
   invincibleDuration: number = 0.5;
   invincibleFreq: number = 8;
+  invincibleElapsed: number = 0;
 
   private keys: Set<string> = new Set();
   private canvasW: number;
@@ -46,6 +47,7 @@ export class PlayerShip {
     this.lives = 3;
     this.invincible = false;
     this.invincibleTimer = 0;
+    this.invincibleElapsed = 0;
     this.keys.clear();
   }
 
@@ -83,6 +85,7 @@ export class PlayerShip {
 
     if (this.invincible) {
       this.invincibleTimer -= dt;
+      this.invincibleElapsed += dt;
       if (this.invincibleTimer <= 0) {
         this.invincible = false;
       }
@@ -121,6 +124,7 @@ export class PlayerShip {
     this.lives--;
     this.invincible = true;
     this.invincibleTimer = this.invincibleDuration;
+    this.invincibleElapsed = 0;
     return true;
   }
 
@@ -136,10 +140,10 @@ export class PlayerShip {
 
   getAlpha(): number {
     if (!this.invincible) return 1;
-    const freq = this.invincibleFreq;
-    const t = this.invincibleTimer;
-    const blink = Math.sin(t * freq * Math.PI * 2);
-    return blink > 0 ? 1 : 0.3;
+    const period = 1 / this.invincibleFreq;
+    const halfPeriod = period / 2;
+    const t = this.invincibleElapsed % period;
+    return t < halfPeriod ? 1 : 0.3;
   }
 
   draw(ctx: CanvasRenderingContext2D) {
