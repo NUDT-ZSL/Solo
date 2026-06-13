@@ -330,6 +330,34 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onPhotosUploaded }) => {
                         />
                       </div>
                     </div>
+                    <button
+                      onClick={() => {
+                        const current = photos.find((ph) => ph.id === p.id)
+                        if (!current) return
+                        if (current.takenAt && (current.latitude || current.latitude === 0) && (current.longitude || current.longitude === 0)) {
+                          setPhotos((prev) =>
+                            prev.map((ph) =>
+                              ph.id === p.id ? { ...ph, status: 'ready' } : ph
+                            )
+                          )
+                        } else {
+                          alert('请填写完整的拍摄时间、纬度和经度')
+                        }
+                      }}
+                      style={{
+                        marginTop: 4,
+                        padding: '6px 10px',
+                        background: 'linear-gradient(90deg, #f97316, #d946ef)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      确认并提交
+                    </button>
                   </div>
                 )}
 

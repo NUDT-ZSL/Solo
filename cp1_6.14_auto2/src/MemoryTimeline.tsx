@@ -89,7 +89,7 @@ const MemoryTimeline: React.FC<MemoryTimelineProps> = ({
                 <div
                   style={{
                     width: 6,
-                    background: 'linear-gradient(180deg, #f97316 0%, #d946ef 100%)',
+                    background: 'linear-gradient(to bottom, #f97316 0%, #d946ef 100%)',
                     flexShrink: 0
                   }}
                 />
@@ -182,7 +182,7 @@ const MemoryTimeline: React.FC<MemoryTimelineProps> = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     boxShadow: '0 2px 8px rgba(249,115,22,0.4)',
-                    transition: 'transform 0.2s ease-out, opacity 0.2s ease-out',
+                    transition: 'all 0.2s ease-out',
                     opacity: 0
                   }}
                   title="编辑"
