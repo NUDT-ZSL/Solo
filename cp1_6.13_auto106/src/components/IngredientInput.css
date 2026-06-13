@@ -1,0 +1,82 @@
+.ingredient-input-container {
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  cursor: text;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ingredient-input-container:focus-within {
+  border-color: #d97706;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.ingredient-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ingredient-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transform: scale(0.95);
+  opacity: 0;
+  animation: tagIn 0.2s ease forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes tagIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.tag-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  color: #92400e;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.tag-remove:hover {
+  background: #fcd34d;
+  color: #78350f;
+}
+
+.ingredient-input-field {
+  flex: 1;
+  min-width: 120px;
+  border: none;
+  outline: none;
+  padding: 6px 0;
+  font-size: 14px;
+  color: #78350f;
+  background: transparent;
+}
+
+.ingredient-input-field::placeholder {
+  color: #d97706;
+  opacity: 0.6;
+}

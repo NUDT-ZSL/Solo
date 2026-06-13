@@ -1,0 +1,170 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: #fffbeb;
+  color: #78350f;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+input {
+  font-family: inherit;
+}
+
+/* ===== 页面切换动画 (GPU加速) ===== */
+.page-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  will-change: opacity, transform;
+}
+
+.page-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-exit-active {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  will-change: opacity, transform;
+}
+
+/* ===== 抖动动画 ===== */
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-4px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(4px);
+  }
+}
+
+.shake {
+  animation: shake 0.3s ease-in-out;
+}
+
+/* ===== 心形膨胀动画 ===== */
+@keyframes heartPop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.heart-pop {
+  animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* ===== 骨架屏脉冲动画 ===== */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ===== 瀑布流容器 ===== */
+.masonry-container {
+  column-gap: 16px;
+  width: 100%;
+}
+
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 16px;
+  display: inline-block;
+  width: 100%;
+}
+
+/* ===== 响应式布局 - 从1列到4列平滑过渡 ===== */
+.masonry-container {
+  column-count: 1;
+}
+
+@media (min-width: 420px) {
+  .masonry-container {
+    column-count: 2;
+  }
+}
+
+@media (min-width: 640px) {
+  .masonry-container {
+    column-count: 2;
+    column-gap: 20px;
+  }
+  .masonry-item {
+    margin-bottom: 20px;
+  }
+}
+
+@media (min-width: 768px) {
+  .masonry-container {
+    column-count: 3;
+  }
+}
+
+@media (min-width: 1024px) {
+  .masonry-container {
+    column-count: 3;
+    column-gap: 24px;
+  }
+  .masonry-item {
+    margin-bottom: 24px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .masonry-container {
+    column-count: 4;
+  }
+}
+
+@media (min-width: 1536px) {
+  .masonry-container {
+    column-count: 4;
+    column-gap: 28px;
+  }
+  .masonry-item {
+    margin-bottom: 28px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .masonry-container {
+    column-count: 5;
+  }
+}
