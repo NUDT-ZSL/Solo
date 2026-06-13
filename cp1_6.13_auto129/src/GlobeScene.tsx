@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Story } from './App'
+import { getCursorStyle, CROSSHAIR_SVG, isTouchDevice } from './cursor'
 
 interface GlobeSceneProps {
   stories: Story[]
@@ -15,16 +16,6 @@ interface GlobeSceneProps {
 const EARTH_RADIUS = 5
 const CAMERA_DEFAULT = new THREE.Vector3(0, 0, 12)
 
-const CROSSHAIR_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(`
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <line x1="12" y1="4" x2="12" y2="10" stroke="white" stroke-width="1" stroke-linecap="round"/>
-  <line x1="12" y1="14" x2="12" y2="20" stroke="white" stroke-width="1" stroke-linecap="round"/>
-  <line x1="4" y1="12" x2="10" y2="12" stroke="white" stroke-width="1" stroke-linecap="round"/>
-  <line x1="14" y1="12" x2="20" y2="12" stroke="white" stroke-width="1" stroke-linecap="round"/>
-  <circle cx="12" cy="12" r="1.5" fill="white"/>
-</svg>
-`)}`
-
 function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180)
   const theta = (lng + 180) * (Math.PI / 180)
@@ -33,31 +24,6 @@ function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector
     radius * Math.cos(phi),
     radius * Math.sin(phi) * Math.sin(theta)
   )
-}
-
-function createRingTexture(color: string): THREE.Texture {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 256
-  const ctx = canvas.getContext('2d')!
-  const cx = 128, cy = 128
-  const outerR = 120, innerR = 100
-  ctx.beginPath()
-  ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
-  ctx.arc(cx, cy, innerR, 0, Math.PI * 2, true)
-  ctx.closePath()
-  ctx.fillStyle = color
-  ctx.fill()
-  const gradient = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
-  gradient.addColorStop(0, 'rgba(255,255,255,0.2)')
-  gradient.addColorStop(0.5, 'rgba(255,255,255,0)')
-  gradient.addColorStop(1, 'rgba(0,0,0,0)')
-  ctx.globalCompositeOperation = 'destination-in'
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 256, 256)
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.needsUpdate = true
-  return texture
 }
 
 function createGlowTexture(color: string): THREE.Texture {
@@ -76,6 +42,31 @@ function createGlowTexture(color: string): THREE.Texture {
   texture.needsUpdate = true
   return texture
 }
+
+const PULSE_RING_VERT = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`
+
+const PULSE_RING_FRAG = `
+uniform vec3 uColor;
+uniform float uInnerRadius;
+uniform float uOuterRadius;
+uniform float uOpacity;
+varying vec2 vUv;
+void main() {
+  float dist = length(vUv - 0.5) * 2.0;
+  float edgeSmooth = 0.05;
+  float innerEdge = smoothstep(uInnerRadius - edgeSmooth, uInnerRadius + edgeSmooth, dist);
+  float outerEdge = smoothstep(uOuterRadius - edgeSmooth, uOuterRadius + edgeSmooth, dist);
+  float ring = innerEdge * (1.0 - outerEdge);
+  if (ring < 0.01) discard;
+  gl_FragColor = vec4(uColor, ring * uOpacity);
+}
+`
 
 let audioCtx: AudioContext | null = null
 function playHoverSound() {
@@ -155,6 +146,48 @@ function EarthMesh() {
   )
 }
 
+function PulseRing({ color }: { color: string }) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  const pulseTime = useRef(Math.random())
+
+  const uniforms = useMemo(() => ({
+    uColor: { value: new THREE.Color(color) },
+    uInnerRadius: { value: 0.0 },
+    uOuterRadius: { value: 0.2 },
+    uOpacity: { value: 0.8 },
+  }), [color])
+
+  useFrame((_, delta) => {
+    pulseTime.current += delta
+    const cycleDuration = 1.0
+    const t = (pulseTime.current % cycleDuration) / cycleDuration
+    const outerRadius = 0.1 + t * 0.5
+    const innerRadius = Math.max(0.0, outerRadius - 0.12)
+    uniforms.uInnerRadius.value = innerRadius / outerRadius
+    uniforms.uOuterRadius.value = 1.0
+    uniforms.uOpacity.value = 0.8 * (1 - t)
+
+    if (meshRef.current) {
+      meshRef.current.scale.set(outerRadius, outerRadius, 1)
+    }
+  })
+
+  return (
+    <mesh ref={meshRef} rotation={[0, 0, 0]}>
+      <planeGeometry args={[1, 1]} />
+      <shaderMaterial
+        vertexShader={PULSE_RING_VERT}
+        fragmentShader={PULSE_RING_FRAG}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  )
+}
+
 function StoryDot({
   story,
   onSelect,
@@ -166,13 +199,11 @@ function StoryDot({
 }) {
   const groupRef = useRef<THREE.Group>(null)
   const glowRef = useRef<THREE.Sprite>(null)
-  const ringRef = useRef<THREE.Sprite>(null)
   const [hovered, setHovered] = useState(false)
   const [scale, setScale] = useState(1)
-  const [opacity, setOpacity] = useState(1)
-  const pulseTime = useRef(Math.random() * Math.PI * 2)
+  const opacityRef = useRef(1)
+  const fadeDoneRef = useRef(true)
   const glowTexture = useMemo(() => createGlowTexture(story.dotColor), [story.dotColor])
-  const ringTexture = useMemo(() => createRingTexture(story.dotColor), [story.dotColor])
 
   const position = useMemo(
     () => latLngToVector3(story.latitude, story.longitude, EARTH_RADIUS + 0.01),
@@ -186,46 +217,39 @@ function StoryDot({
       setScale(s => Math.max(s - delta * 4, 1))
     }
 
-    if (isFadedOut && opacity > 0) {
-      setOpacity(o => Math.max(o - delta * 2, 0))
-    } else if (!isFadedOut && opacity < 1) {
-      setOpacity(o => Math.min(o + delta * 2, 1))
+    const prevOpacity = opacityRef.current
+    if (isFadedOut && opacityRef.current > 0) {
+      opacityRef.current = Math.max(opacityRef.current - delta * 2, 0)
+    } else if (!isFadedOut && opacityRef.current < 1) {
+      opacityRef.current = Math.min(opacityRef.current + delta * 2, 1)
     }
 
-    pulseTime.current += delta
-    if (ringRef.current) {
-      const cycleDuration = 1.0
-      const t = (pulseTime.current % cycleDuration) / cycleDuration
-      const ringScale = 0.1 + t * 0.5
-      ringRef.current.scale.set(ringScale, ringScale, 1)
-      const mat = ringRef.current.material as THREE.SpriteMaterial
-      mat.opacity = 0.8 * (1 - t)
+    if (isFadedOut && prevOpacity > 0 && opacityRef.current === 0) {
+      fadeDoneRef.current = true
+    }
+    if (!isFadedOut && prevOpacity < 1 && opacityRef.current === 1) {
+      fadeDoneRef.current = true
     }
 
     if (groupRef.current) {
       groupRef.current.scale.setScalar(scale)
-      groupRef.current.visible = opacity > 0.01
+      groupRef.current.visible = opacityRef.current > 0.01
     }
 
     if (glowRef.current) {
       const glowMat = glowRef.current.material as THREE.SpriteMaterial
-      glowMat.opacity = 0.7 * opacity
-    }
-
-    if (ringRef.current) {
-      const ringMat = ringRef.current.material as THREE.SpriteMaterial
-      ringMat.opacity = ringMat.opacity * opacity
+      glowMat.opacity = 0.7 * opacityRef.current
     }
   })
 
   const handleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
-    if (!isFadedOut) onSelect(story.id)
+    if (!isFadedOut && opacityRef.current > 0.5) onSelect(story.id)
   }, [story.id, onSelect, isFadedOut])
 
   const handlePointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    if (!isFadedOut) {
+    if (!isFadedOut && opacityRef.current > 0.5) {
       setHovered(true)
       playHoverSound()
       document.body.style.cursor = 'pointer'
@@ -234,8 +258,19 @@ function StoryDot({
 
   const handlePointerOut = useCallback(() => {
     setHovered(false)
-    document.body.style.cursor = `url("${CROSSHAIR_SVG}") 12 12, crosshair`
+    if (!isTouchDevice()) {
+      document.body.style.cursor = getCursorStyle()
+    }
   }, [])
+
+  const dotMat = useMemo(() => {
+    const mat = new THREE.MeshBasicMaterial({ color: story.dotColor, transparent: true })
+    return mat
+  }, [story.dotColor])
+
+  useFrame(() => {
+    dotMat.opacity = opacityRef.current
+  })
 
   return (
     <group ref={groupRef} position={position}>
@@ -243,9 +278,9 @@ function StoryDot({
         onClick={handleClick}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
+        material={dotMat}
       >
         <sphereGeometry args={[0.08, 16, 16]} />
-        <meshBasicMaterial color={story.dotColor} transparent opacity={opacity} />
       </mesh>
       <sprite ref={glowRef} scale={[0.5, 0.5, 1]}>
         <spriteMaterial
@@ -256,15 +291,7 @@ function StoryDot({
           blending={THREE.AdditiveBlending}
         />
       </sprite>
-      <sprite ref={ringRef} scale={[0.1, 0.1, 1]}>
-        <spriteMaterial
-          map={ringTexture}
-          transparent
-          opacity={0.8}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </sprite>
+      <PulseRing color={story.dotColor} />
     </group>
   )
 }
@@ -283,7 +310,21 @@ function CameraController({ target, selectedStoryId }: { target: THREE.Vector3 |
   useEffect(() => {
     if (selectedStoryId && selectedStoryId !== prevSelectedId.current && target) {
       const surfaceDir = target.clone().normalize()
-      const cameraEnd = surfaceDir.clone().multiplyScalar(EARTH_RADIUS + 2)
+      const targetCameraPos = surfaceDir.clone().multiplyScalar(EARTH_RADIUS + 2)
+      const viewDir = new THREE.Vector3()
+      camera.getWorldDirection(viewDir)
+      const currentPos = camera.position.clone()
+      const distToCenter = currentPos.length()
+      const currentDistToSurface = distToCenter - EARTH_RADIUS
+      const desiredDistToSurface = 2
+      const moveDistance = currentDistToSurface - desiredDistToSurface
+      const moveDir = currentPos.clone().normalize().negate()
+      const cameraEnd = currentPos.clone().add(moveDir.multiplyScalar(moveDistance))
+      const toTarget = cameraEnd.clone().sub(target)
+      const desiredDist = EARTH_RADIUS + 2
+      if (toTarget.length() < desiredDist * 0.5) {
+        cameraEnd.copy(targetCameraPos)
+      }
       startPos.current.copy(camera.position)
       endPos.current.copy(cameraEnd)
       startTarget.current.copy(controlsRef.current?.target ?? new THREE.Vector3())
@@ -408,14 +449,22 @@ function SceneContent({ stories, fadedOutIds, onStorySelect, selectedStoryId, on
 }
 
 export default function GlobeScene({ stories, fadedOutIds, onStorySelect, selectedStoryId, onLoadProgress }: GlobeSceneProps) {
+  const cursorStyle = getCursorStyle()
+
   useEffect(() => {
-    document.body.style.cursor = `url("${CROSSHAIR_SVG}") 12 12, crosshair`
+    if (!isTouchDevice()) {
+      document.body.style.cursor = cursorStyle
+    }
     return () => { document.body.style.cursor = 'default' }
-  }, [])
+  }, [cursorStyle])
 
   return (
     <div
-      style={{ width: '100%', height: '100%', cursor: `url("${CROSSHAIR_SVG}") 12 12, crosshair` }}
+      style={{
+        width: '100%',
+        height: '100%',
+        cursor: isTouchDevice() ? 'default' : cursorStyle,
+      }}
       onContextMenu={e => e.preventDefault()}
     >
       <Canvas

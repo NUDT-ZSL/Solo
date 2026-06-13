@@ -37,9 +37,11 @@ export default function StoryCard({ story, onClose }: StoryCardProps) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '320px',
+          width: 'min(320px, calc(100vw - 48px))',
+          maxWidth: '320px',
           background: 'rgba(15,23,42,0.9)',
           borderRadius: '16px',
+          WebkitBoxShadow: 'inset 0 0 8px rgba(255,255,255,0.5), 0 25px 50px rgba(0,0,0,0.5)',
           boxShadow: 'inset 0 0 8px rgba(255,255,255,0.5), 0 25px 50px rgba(0,0,0,0.5)',
           overflow: 'hidden',
           transform: visible ? 'scale(1)' : 'scale(0.8)',
