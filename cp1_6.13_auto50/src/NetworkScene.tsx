@@ -195,6 +195,35 @@ function DataParticle({
   )
 }
 
+function FPSTracker() {
+  const frameCountRef = useRef(0)
+  const lastTimeRef = useRef(performance.now())
+  const warnedRef = useRef(false)
+
+  useFrame(() => {
+    frameCountRef.current++
+    const now = performance.now()
+    const elapsed = now - lastTimeRef.current
+
+    if (elapsed >= 1000) {
+      const fps = (frameCountRef.current * 1000) / elapsed
+      frameCountRef.current = 0
+      lastTimeRef.current = now
+
+      if (fps < 45) {
+        if (!warnedRef.current) {
+          console.warn(`[NetworkScene] FPS is below 45! Current FPS: ${fps.toFixed(1)}`)
+          warnedRef.current = true
+        }
+      } else {
+        warnedRef.current = false
+      }
+    }
+  })
+
+  return null
+}
+
 export default function NetworkScene({
   nodes,
   links,
@@ -203,6 +232,8 @@ export default function NetworkScene({
 }: NetworkSceneProps) {
   return (
     <group>
+      <FPSTracker />
+
       {links.map((link, idx) => {
         const source = nodes[link.source]
         const target = nodes[link.target]

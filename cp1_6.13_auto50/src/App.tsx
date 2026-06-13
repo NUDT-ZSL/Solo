@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import NetworkScene from './NetworkScene'
+import * as THREE from 'three'
 import {
   NodeData,
   LinkData,
@@ -34,11 +35,13 @@ export default function App() {
   const frameCountRef = useRef(0)
   const lastFpsTimeRef = useRef(performance.now())
   const particleSpawnRef = useRef(0)
+  const nodePositionsRef = useRef<THREE.Vector3[]>([])
 
   useEffect(() => {
     const initial = generateInitialData()
     setNodes(initial.nodes)
     setLinks(initial.links)
+    nodePositionsRef.current = initial.nodes.map((n) => n.position.clone())
     setStats(generateTrafficStats(initial.nodes, initial.links))
   }, [])
 
@@ -66,20 +69,29 @@ export default function App() {
   const updateParticles = useCallback(
     (delta: number) => {
       setParticles((prev) => {
-        particleSpawnRef.current += delta
-        const spawnRate = 1 / 17
+        const targetParticlesPerSecond = 15 + Math.random() * 5
+        particleSpawnRef.current += delta * targetParticlesPerSecond
 
         let newParticles = prev
           .map((p) => ({ ...p, progress: p.progress + p.speed * delta }))
           .filter((p) => p.progress < 1)
 
-        while (particleSpawnRef.current > spawnRate && newParticles.length < 100) {
-          particleSpawnRef.current -= spawnRate
-          const p = generateParticle(links)
-          if (p) newParticles = [...newParticles, p]
+        const maxParticles = 100
+        while (particleSpawnRef.current >= 1 && newParticles.length < maxParticles) {
+          particleSpawnRef.current -= 1
+          const p = generateParticle(links, nodePositionsRef.current)
+          if (p) {
+            newParticles = [...newParticles, p]
+          }
         }
 
-        return newParticles.slice(0, 100)
+        if (newParticles.length > maxParticles) {
+          console.warn(`Particle count (${newParticles.length}) exceeds limit of ${maxParticles}, pausing new particle generation`)
+          newParticles = newParticles.slice(0, maxParticles)
+          particleSpawnRef.current = 0
+        }
+
+        return newParticles
       })
     },
     [links]

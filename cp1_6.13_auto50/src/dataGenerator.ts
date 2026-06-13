@@ -79,7 +79,7 @@ export function generateInitialData(): { nodes: NodeData[]; links: LinkData[] } 
         links.push({
           source: i,
           target: j,
-          traffic: Math.random() * 100 + 10
+          traffic: Math.random() * 100
         })
       }
     }
@@ -100,7 +100,7 @@ export function updateNodeTraffic(nodes: NodeData[]): NodeData[] {
 export function updateLinkTraffic(links: LinkData[]): LinkData[] {
   return links.map((link) => ({
     ...link,
-    traffic: Math.max(5, link.traffic + (Math.random() - 0.5) * 30)
+    traffic: Math.max(0, Math.min(100, link.traffic + (Math.random() - 0.5) * 20))
   }))
 }
 
@@ -124,18 +124,23 @@ export function generateTrafficStats(nodes: NodeData[], links: LinkData[]): Traf
 
 let particleIdCounter = 0
 
-export function generateParticle(links: LinkData[]): ParticleData | null {
+export function generateParticle(links: LinkData[], positions: THREE.Vector3[]): ParticleData | null {
   if (links.length === 0) return null
   const link = links[Math.floor(Math.random() * links.length)]
-  const sourceNode = generateNodePositions()[link.source]
-  const targetNode = generateNodePositions()[link.target]
+  const sourceNode = positions[link.source]
+  const targetNode = positions[link.target]
+
+  const linkLength = sourceNode.distanceTo(targetNode)
+  const offsetFactor = 0.2 + Math.random() * 0.2
+  const offsetMagnitude = linkLength * offsetFactor
 
   const mid = new THREE.Vector3().addVectors(sourceNode, targetNode).multiplyScalar(0.5)
-  const offset = new THREE.Vector3(
-    (Math.random() - 0.5) * 3,
-    (Math.random() - 0.5) * 3,
-    (Math.random() - 0.5) * 3
-  )
+  const randomDir = new THREE.Vector3(
+    Math.random() - 0.5,
+    Math.random() - 0.5,
+    Math.random() - 0.5
+  ).normalize()
+  const offset = randomDir.multiplyScalar(offsetMagnitude)
   const controlPoint = mid.add(offset)
 
   return {
