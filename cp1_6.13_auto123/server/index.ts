@@ -253,6 +253,38 @@ app.post('/api/rooms/:roomId/elements', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/strokes', async (req: Request, res: Response) => {
+  try {
+    const { roomId } = req.query;
+    if (!roomId || typeof roomId !== 'string') {
+      return res.status(400).json({ error: 'roomId query param required' });
+    }
+    const doc = await roomsDb.findOne<RoomDoc>({ roomId });
+    res.json(doc?.elements || []);
+  } catch (e: any) {
+    console.error('[API] GET strokes error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/strokes', async (req: Request, res: Response) => {
+  try {
+    const { roomId, elements } = req.body;
+    if (!roomId || !Array.isArray(elements)) {
+      return res.status(400).json({ error: 'roomId and elements array required' });
+    }
+    await roomsDb.update(
+      { roomId },
+      { $set: { roomId, elements, updatedAt: Date.now() } },
+      { upsert: true }
+    );
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error('[API] POST strokes error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, time: Date.now(), clients: clients.size, rooms: roomClients.size });
 });
