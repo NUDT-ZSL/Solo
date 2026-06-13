@@ -65,9 +65,11 @@
     }
 
     .heart {
+      --heart-color: #ef4444;
       width: 16px;
       height: 16px;
       position: relative;
+      flex-shrink: 0;
     }
 
     .heart::before,
@@ -76,7 +78,7 @@
       position: absolute;
       width: 8px;
       height: 12px;
-      background-color: #ef4444;
+      background-color: var(--heart-color);
       border-radius: 8px 8px 0 0;
     }
 
@@ -92,9 +94,8 @@
       transform-origin: 100% 100%;
     }
 
-    .heart.lost::before,
-    .heart.lost::after {
-      background-color: #6b7280;
+    .heart.lost {
+      --heart-color: #6b7280;
     }
 
     #pause-overlay {

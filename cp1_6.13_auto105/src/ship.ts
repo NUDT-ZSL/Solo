@@ -42,30 +42,21 @@ const INVULNERABLE_DURATION = 1.5;
 function createShipGeometry(): THREE.BufferGeometry {
   const h = SHIP_SIDE_LENGTH * Math.sqrt(3) / 2;
 
+  const apex = new THREE.Vector3(0, h * 0.6, -SHIP_SIDE_LENGTH / 2);
+  const baseLeftFront = new THREE.Vector3(-SHIP_SIDE_LENGTH / 2, -h * 0.4, -SHIP_SIDE_LENGTH / 2);
+  const baseRightFront = new THREE.Vector3(SHIP_SIDE_LENGTH / 2, -h * 0.4, -SHIP_SIDE_LENGTH / 2);
+  const baseLeftBack = new THREE.Vector3(-SHIP_SIDE_LENGTH / 2, -h * 0.4, SHIP_SIDE_LENGTH / 2);
+  const baseRightBack = new THREE.Vector3(SHIP_SIDE_LENGTH / 2, -h * 0.4, SHIP_SIDE_LENGTH / 2);
+
+  const v = (vec: THREE.Vector3): number[] => [vec.x, vec.y, vec.z];
+
   const vertices = new Float32Array([
-    0,   h * 0.6,       -SHIP_SIDE_LENGTH / 2,
-    -SHIP_SIDE_LENGTH / 2, -h * 0.4,  -SHIP_SIDE_LENGTH / 2,
-    SHIP_SIDE_LENGTH / 2,  -h * 0.4,  -SHIP_SIDE_LENGTH / 2,
-
-    0,   h * 0.6,       -SHIP_SIDE_LENGTH / 2,
-    SHIP_SIDE_LENGTH / 2,  -h * 0.4,  -SHIP_SIDE_LENGTH / 2,
-    SHIP_SIDE_LENGTH / 2,  -h * 0.4,   SHIP_SIDE_LENGTH / 2,
-
-    0,   h * 0.6,       -SHIP_SIDE_LENGTH / 2,
-    -SHIP_SIDE_LENGTH / 2, -h * 0.4,   SHIP_SIDE_LENGTH / 2,
-    -SHIP_SIDE_LENGTH / 2, -h * 0.4,  -SHIP_SIDE_LENGTH / 2,
-
-    0,   h * 0.6,       -SHIP_SIDE_LENGTH / 2,
-    -SHIP_SIDE_LENGTH / 2, -h * 0.4,   SHIP_SIDE_LENGTH / 2,
-    SHIP_SIDE_LENGTH / 2,  -h * 0.4,   SHIP_SIDE_LENGTH / 2,
-
-    -SHIP_SIDE_LENGTH / 2, -h * 0.4,  -SHIP_SIDE_LENGTH / 2,
-    -SHIP_SIDE_LENGTH / 2, -h * 0.4,   SHIP_SIDE_LENGTH / 2,
-    SHIP_SIDE_LENGTH / 2,  -h * 0.4,   SHIP_SIDE_LENGTH / 2,
-
-    -SHIP_SIDE_LENGTH / 2, -h * 0.4,  -SHIP_SIDE_LENGTH / 2,
-    SHIP_SIDE_LENGTH / 2,  -h * 0.4,   SHIP_SIDE_LENGTH / 2,
-    SHIP_SIDE_LENGTH / 2,  -h * 0.4,  -SHIP_SIDE_LENGTH / 2,
+    ...v(apex), ...v(baseLeftFront), ...v(baseRightFront),
+    ...v(apex), ...v(baseRightFront), ...v(baseRightBack),
+    ...v(apex), ...v(baseLeftBack), ...v(baseLeftFront),
+    ...v(apex), ...v(baseLeftBack), ...v(baseRightBack),
+    ...v(baseLeftFront), ...v(baseLeftBack), ...v(baseRightBack),
+    ...v(baseLeftFront), ...v(baseRightBack), ...v(baseRightFront),
   ]);
 
   const geometry = new THREE.BufferGeometry();
