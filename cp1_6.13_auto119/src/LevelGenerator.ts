@@ -42,27 +42,78 @@ const PLATFORM_THICKNESS = 20;
 const SPIKE_SIZE = 24;
 const COIN_SIZE = 20;
 const PORTAL_RADIUS = 40;
+const SPIKE_MIN_SPACING = 200;
 
 const PLAYER_SPEED = 250;
 const JUMP_VELOCITY = 400;
 const GRAVITY = 800;
+const SAFETY_MARGIN = 0.85;
+const SAFETY_HEIGHT = 8;
 
-const SAFETY_MARGIN = 0.75;
+interface JumpPhysicsConfig {
+  speed: number;
+  jumpVelocity: number;
+  gravity: number;
+}
 
-function maxHorizontalDistance(heightDiff: number): number {
+const DEFAULT_PHYSICS: JumpPhysicsConfig = {
+  speed: PLAYER_SPEED,
+  jumpVelocity: JUMP_VELOCITY,
+  gravity: GRAVITY,
+};
+
+function canReachPlatform(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  config: JumpPhysicsConfig = DEFAULT_PHYSICS
+): boolean {
+  const { speed, jumpVelocity, gravity } = config;
+
+  const dx = toX - fromX;
+  if (dx <= 0) return false;
+
+  const maxTotalTime = (2 * jumpVelocity) / gravity;
+  const timeAtDistance = dx / speed;
+
+  if (timeAtDistance > maxTotalTime * SAFETY_MARGIN) {
+    return false;
+  }
+
+  const dy = toY - fromY;
+  const maxHeight = (jumpVelocity * jumpVelocity) / (2 * gravity);
+  if (dy > maxHeight * SAFETY_MARGIN) {
+    return false;
+  }
+
+  const heightAtTime = jumpVelocity * timeAtDistance - 0.5 * gravity * timeAtDistance * timeAtDistance;
+  return heightAtTime >= dy + SAFETY_HEIGHT;
+}
+
+function maxHorizontalDistanceForHeight(
+  heightDiff: number,
+  config: JumpPhysicsConfig = DEFAULT_PHYSICS
+): number {
+  const { speed, jumpVelocity, gravity } = config;
+
   if (heightDiff > 0) {
-    const discriminant = JUMP_VELOCITY * JUMP_VELOCITY - 2 * GRAVITY * heightDiff;
+    const maxHeight = (jumpVelocity * jumpVelocity) / (2 * gravity);
+    if (heightDiff > maxHeight * SAFETY_MARGIN) return 0;
+
+    const discriminant = jumpVelocity * jumpVelocity - 2 * gravity * heightDiff;
     if (discriminant < 0) return 0;
-    const time = (JUMP_VELOCITY - Math.sqrt(discriminant)) / GRAVITY;
-    return PLAYER_SPEED * time * SAFETY_MARGIN;
+
+    const time = (jumpVelocity - Math.sqrt(discriminant)) / gravity;
+    return speed * time * SAFETY_MARGIN;
   } else {
     const fallHeight = -heightDiff;
-    const timeUp = JUMP_VELOCITY / GRAVITY;
-    const maxHeight = (JUMP_VELOCITY * JUMP_VELOCITY) / (2 * GRAVITY);
+    const timeUp = jumpVelocity / gravity;
+    const maxHeight = (jumpVelocity * jumpVelocity) / (2 * gravity);
     const totalHeight = maxHeight + fallHeight;
-    const timeDown = Math.sqrt((2 * totalHeight) / GRAVITY);
+    const timeDown = Math.sqrt((2 * totalHeight) / gravity);
     const totalTime = timeUp + timeDown;
-    return PLAYER_SPEED * totalTime * SAFETY_MARGIN;
+    return speed * totalTime * SAFETY_MARGIN;
   }
 }
 
@@ -99,6 +150,8 @@ export class LevelGenerator {
     const spikes: Spike[] = [];
     const coins: Coin[] = [];
 
+    let lastSpikeX = -SPIKE_MIN_SPACING * 2;
+
     const groundY = LEVEL_HEIGHT - GROUND_HEIGHT_BASE;
 
     let currentX = 0;
@@ -106,63 +159,65 @@ export class LevelGenerator {
     let currentY = groundY;
 
     while (currentX < LEVEL_WIDTH) {
-      const segmentWidth = this.rng.nextInt(100, 300);
+      const segmentWidth = this.rng.nextInt(120, 280);
       const endX = Math.min(currentX + segmentWidth, LEVEL_WIDTH);
       const actualWidth = endX - currentX;
 
-      platforms.push({
+      const newGround: Platform = {
         x: currentX,
         y: currentY,
         width: actualWidth,
         height: currentGroundHeight,
         isGround: true,
-      });
+      };
+      platforms.push(newGround);
 
       currentX = endX;
 
       if (currentX >= LEVEL_WIDTH - 200) break;
 
-      const gapWidth = this.rng.nextInt(80, 180);
-      const maxJumpDist = maxHorizontalDistance(0);
-      const safeGap = Math.min(gapWidth, maxJumpDist * 0.9);
+      const gapWidth = this.rng.nextInt(70, 160);
 
-      if (safeGap < 60) {
-        currentGroundHeight = GROUND_HEIGHT_BASE;
-        currentY = LEVEL_HEIGHT - currentGroundHeight;
-        continue;
-      }
-
-      const heightChange = this.rng.nextInt(-40, 50);
+      const heightChange = this.rng.nextInt(-50, 60);
       const newGroundHeight = Math.max(50, Math.min(150, GROUND_HEIGHT_BASE + heightChange));
-      const heightDiff = newGroundHeight - currentGroundHeight;
+      const newY = LEVEL_HEIGHT - newGroundHeight;
 
-      const reachableDist = maxHorizontalDistance(Math.abs(heightDiff));
-      if (safeGap > reachableDist * 0.85) {
-        currentGroundHeight = GROUND_HEIGHT_BASE;
-        currentY = LEVEL_HEIGHT - currentGroundHeight;
-        continue;
+      const fromJumpX = newGround.x + newGround.width - 10;
+      const fromJumpY = newGround.y;
+      const toJumpX = currentX + gapWidth + 10;
+      const toJumpY = newY;
+
+      const reachable = canReachPlatform(fromJumpX, fromJumpY, toJumpX, toJumpY);
+
+      let actualGap = gapWidth;
+      if (!reachable) {
+        const heightDiff = currentGroundHeight - newGroundHeight;
+        const maxDist = maxHorizontalDistanceForHeight(heightDiff);
+        actualGap = Math.max(60, Math.floor(maxDist * 0.75));
       }
 
-      if (this.rng.next() > 0.4) {
-        const spikeCount = Math.min(2, Math.floor(safeGap / 100));
-        let lastSpikeX = currentX - 300;
+      if (actualGap < 50) {
+        actualGap = 0;
+      }
 
+      if (actualGap > 0 && this.rng.next() > 0.35) {
+        const spikeCount = Math.min(1, Math.floor(actualGap / 120));
         for (let i = 0; i < spikeCount; i++) {
-          const spikeX = currentX + this.rng.nextFloat(20, safeGap - 20);
-          if (spikeX - lastSpikeX >= 200) {
-            const spikeY = LEVEL_HEIGHT - 24;
+          const spikeX = currentX + this.rng.nextFloat(20, actualGap - 20);
+          if (spikeX - lastSpikeX >= SPIKE_MIN_SPACING) {
+            const spikeY = LEVEL_HEIGHT - SPIKE_SIZE;
             spikes.push({ x: spikeX, y: spikeY, size: SPIKE_SIZE });
             lastSpikeX = spikeX;
           }
         }
       }
 
-      currentX += safeGap;
+      currentX += actualGap;
       currentGroundHeight = newGroundHeight;
-      currentY = LEVEL_HEIGHT - currentGroundHeight;
+      currentY = newY;
     }
 
-    this.generateFloatingPlatforms(platforms, spikes);
+    this.generateFloatingPlatforms(platforms, spikes, lastSpikeX);
     this.generateCoins(coins, platforms);
 
     const portal: Portal = {
@@ -182,35 +237,47 @@ export class LevelGenerator {
     };
   }
 
-  private generateFloatingPlatforms(platforms: Platform[], spikes: Spike[]): void {
+  private generateFloatingPlatforms(
+    platforms: Platform[],
+    spikes: Spike[],
+    initialLastSpikeX: number
+  ): void {
+    let lastSpikeX = initialLastSpikeX;
     const minY = 150;
-    const maxY = LEVEL_HEIGHT - 150;
+    const maxY = LEVEL_HEIGHT - 180;
     let lastPlatformEnd = 0;
 
-    for (let x = 200; x < LEVEL_WIDTH - 200; x += this.rng.nextInt(180, 350)) {
-      if (x - lastPlatformEnd < 150) continue;
+    for (let x = 250; x < LEVEL_WIDTH - 250; x += this.rng.nextInt(220, 400)) {
+      if (x - lastPlatformEnd < 180) continue;
 
-      const width = this.rng.nextInt(80, 160);
+      const width = this.rng.nextInt(70, 140);
       const y = this.rng.nextInt(minY, maxY);
 
       let reachable = false;
+
       for (const p of platforms) {
-        if (p.isGround) continue;
-        const horizontalGap = Math.abs(p.x + p.width - x);
-        const verticalDiff = p.y - y;
-        const maxDist = maxHorizontalDistance(Math.abs(verticalDiff));
-        if (horizontalGap < maxDist * 0.8) {
-          reachable = true;
-          break;
+        if (p.isGround) {
+          const fromX = p.x + p.width / 2;
+          const fromY = p.y;
+          const toX = x + width / 2;
+          const toY = y;
+          if (canReachPlatform(fromX, fromY, toX, toY)) {
+            reachable = true;
+            break;
+          }
+        } else {
+          const fromX = p.x + p.width;
+          const fromY = p.y;
+          const toX = x;
+          const toY = y;
+          if (canReachPlatform(fromX, fromY, toX, toY)) {
+            reachable = true;
+            break;
+          }
         }
       }
 
-      if (!reachable) {
-        const groundY = LEVEL_HEIGHT - GROUND_HEIGHT_BASE;
-        const verticalDiff = groundY - y;
-        const maxDist = maxHorizontalDistance(Math.abs(verticalDiff));
-        if (maxDist < 100) continue;
-      }
+      if (!reachable) continue;
 
       platforms.push({
         x,
@@ -223,19 +290,10 @@ export class LevelGenerator {
       lastPlatformEnd = x + width;
 
       if (this.rng.next() > 0.5) {
-        const belowGap = width;
-        if (belowGap > 60) {
-          const spikeX = x + width / 2 - SPIKE_SIZE / 2;
-          let lastSpikeX = -300;
-          for (const s of spikes) {
-            if (Math.abs(s.x - spikeX) < 200) {
-              lastSpikeX = s.x;
-              break;
-            }
-          }
-          if (Math.abs(spikeX - lastSpikeX) >= 200) {
-            spikes.push({ x: spikeX, y: y + PLATFORM_THICKNESS, size: SPIKE_SIZE });
-          }
+        const spikeX = x + width / 2 - SPIKE_SIZE / 2;
+        if (spikeX - lastSpikeX >= SPIKE_MIN_SPACING) {
+          spikes.push({ x: spikeX, y: y + PLATFORM_THICKNESS, size: SPIKE_SIZE });
+          lastSpikeX = spikeX;
         }
       }
     }

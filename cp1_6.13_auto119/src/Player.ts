@@ -140,21 +140,35 @@ export class Player {
       if (this.squashTimer < 0) this.squashTimer = 0;
 
       const t = 1 - this.squashTimer / SQUASH_DURATION;
-      const ease = this.easeInOutQuad(t);
 
-      if (ease <= 0.5) {
-        const s = ease * 2;
-        this.scaleX = 1 + (1 - SQUASH_SCALE) * s;
-        this.scaleY = SQUASH_SCALE + (1 - SQUASH_SCALE) * s;
+      if (t <= 0.5) {
+        const compressT = t * 2;
+        const eased = this.easeOutBack(compressT);
+        this.scaleX = 1 + (1 - SQUASH_SCALE) * eased;
+        this.scaleY = 1 - (1 - SQUASH_SCALE) * eased;
       } else {
-        const s = (ease - 0.5) * 2;
-        this.scaleX = 1 - (1 - SQUASH_SCALE) * s;
-        this.scaleY = SQUASH_SCALE + (1 - SQUASH_SCALE) * (1 - s);
+        const recoverT = (t - 0.5) * 2;
+        const eased = this.easeOutElastic(recoverT);
+        this.scaleX = 1 + (1 - SQUASH_SCALE) * (1 - eased);
+        this.scaleY = SQUASH_SCALE + (1 - SQUASH_SCALE) * eased;
       }
     } else {
       this.scaleX = 1;
       this.scaleY = 1;
     }
+  }
+
+  private easeOutBack(t: number): number {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+
+  private easeOutElastic(t: number): number {
+    const c4 = (2 * Math.PI) / 3;
+    if (t === 0) return 0;
+    if (t === 1) return 1;
+    return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
   }
 
   private easeInOutQuad(t: number): number {

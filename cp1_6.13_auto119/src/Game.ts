@@ -97,10 +97,11 @@ export class Game {
     this.score = 0;
     this.lives = INITIAL_LIVES;
     this.levelNum = 1;
-    this.countdown = GAME_TIME;
-    this.countdownTimer = 0;
+    this.resetCountdown();
     this.gameTime = 0;
     this.cameraX = 0;
+
+    this.resetInput();
 
     this.generateLevel();
     this.spawnPlayer();
@@ -109,6 +110,17 @@ export class Game {
 
   restart(): void {
     this.start();
+  }
+
+  private resetCountdown(): void {
+    this.countdown = GAME_TIME;
+    this.countdownTimer = 0;
+  }
+
+  private resetInput(): void {
+    this.input.left = false;
+    this.input.right = false;
+    this.input.jump = false;
   }
 
   private generateLevel(): void {
@@ -149,6 +161,8 @@ export class Game {
   }
 
   private update(dt: number): void {
+    if (this.gameState !== 'playing') return;
+
     this.gameTime += dt;
 
     this.countdownTimer += dt;
@@ -178,6 +192,7 @@ export class Game {
 
     if (this.player.checkPortalCollision(this.levelData.portal)) {
       this.win();
+      return;
     }
 
     if (this.player.y > LEVEL_HEIGHT + 100) {
@@ -192,6 +207,8 @@ export class Game {
 
   private loseLife(): void {
     this.lives--;
+    this.resetInput();
+
     if (this.lives <= 0) {
       this.gameOver();
     } else {

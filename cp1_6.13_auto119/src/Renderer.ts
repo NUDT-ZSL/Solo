@@ -37,12 +37,15 @@ export class Renderer {
     levelNum: number,
     countdown: number
   ): void {
+    const maxCameraX = level.width - this.width;
+    const clampedCameraX = Math.max(0, Math.min(maxCameraX, cameraX));
+
     this.clear();
     this.drawSky();
-    this.drawParallaxBackground(cameraX, time);
+    this.drawParallaxBackground(clampedCameraX, maxCameraX, time);
 
     this.ctx.save();
-    this.ctx.translate(-cameraX, 0);
+    this.ctx.translate(-clampedCameraX, 0);
 
     this.drawPlatforms(level.platforms);
     this.drawSpikes(level.spikes, time);
@@ -67,10 +70,21 @@ export class Renderer {
     this.ctx.fillRect(0, 0, this.width, this.height);
   }
 
-  private drawParallaxBackground(cameraX: number, time: number): void {
-    this.drawMountainLayer(cameraX * 0.1);
-    this.drawTreeLayer(cameraX * 0.3);
-    this.drawGrassLayer(cameraX * 0.6);
+  private drawParallaxBackground(cameraX: number, maxCameraX: number, time: number): void {
+    const mountainOffset = this.clampParallaxOffset(cameraX, maxCameraX, 0.1);
+    const treeOffset = this.clampParallaxOffset(cameraX, maxCameraX, 0.3);
+    const grassOffset = this.clampParallaxOffset(cameraX, maxCameraX, 0.6);
+
+    this.drawMountainLayer(mountainOffset);
+    this.drawTreeLayer(treeOffset);
+    this.drawGrassLayer(grassOffset);
+  }
+
+  private clampParallaxOffset(cameraX: number, maxCameraX: number, speedFactor: number): number {
+    if (maxCameraX <= 0) return 0;
+    const progress = cameraX / maxCameraX;
+    const maxOffset = maxCameraX * speedFactor;
+    return progress * maxOffset;
   }
 
   private drawMountainLayer(offset: number): void {
