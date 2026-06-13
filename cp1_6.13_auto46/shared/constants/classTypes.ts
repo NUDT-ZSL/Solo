@@ -22,9 +22,7 @@ export const CLASS_TYPE_COLORS: Record<ClassType, string> = {
 export const DEFAULT_CLASS_COLOR = "#cbd5e1";
 
 export function getClassColor(type: string): string {
-  return (
-    CLASS_TYPE_COLORS[type as ClassType] ?? DEFAULT_CLASS_COLOR
-  );
+  return CLASS_TYPE_COLORS[type as ClassType] ?? DEFAULT_CLASS_COLOR;
 }
 
 export function getClassLabel(type: string): string {
