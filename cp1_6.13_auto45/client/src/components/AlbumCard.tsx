@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Podcast } from '../utils/api';
 import './AlbumCard.css';
@@ -20,8 +20,8 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ podcast }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    if (isLoading || !canvasRef.current) return;
+  const drawWaveform = useCallback(() => {
+    if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -55,7 +55,23 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ podcast }) => {
       ctx.roundRect(x, centerY - barHeight / 2, barWidth * 0.7, barHeight, 2);
       ctx.fill();
     });
-  }, [isLoading, podcast.waveform]);
+  }, [podcast.waveform]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      drawWaveform();
+    }
+  }, [isLoading, drawWaveform]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!isLoading) {
+        drawWaveform();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isLoading, drawWaveform]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
