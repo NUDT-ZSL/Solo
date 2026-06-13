@@ -3,6 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { SpriteService, SpriteFrame } from '../services/SpriteService';
 import { StorageService } from '../services/StorageService';
 import { eventBus } from '../utils/EventBus';
+import TransitionModal, {
+  TransitionFormData,
+  CurvePreview,
+  CURVE_FUNCTIONS,
+} from './TransitionModal';
 
 export type LoopMode = 'once' | 'loop' | 'pingpong';
 export type CurveType = 'EaseInOut' | 'EaseOut' | 'Linear';
@@ -34,99 +39,54 @@ interface Props {
   onPlayState: (node: StateNode | null, transition?: Transition) => void;
 }
 
-const CURVE_FUNCTIONS: Record<CurveType, (t: number) => number> = {
-  EaseInOut: (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2),
-  EaseOut: (t) => 1 - Math.pow(1 - t, 3),
-  Linear: (t) => t,
-};
+const NODE_W = 160;
+const NODE_H = 50;
+const PORT_R = 8;
 
-function drawCurvePreview(
-  canvas: HTMLCanvasElement,
-  curve: CurveType,
-  color: string
-) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const w = canvas.width;
-  const h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, h);
-  ctx.lineTo(w, 0);
-  ctx.stroke();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i <= 100; i++) {
-    const t = i / 100;
-    const v = CURVE_FUNCTIONS[curve](t);
-    const x = t * w;
-    const y = h - v * h;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
+interface DragState {
+  nodeId: string;
+  offsetX: number;
+  offsetY: number;
 }
 
-const CanvasCurvePreview: React.FC<{ curve: CurveType; color: string }> = ({
-  curve,
-  color,
-}) => {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    if (ref.current) drawCurvePreview(ref.current, curve, color);
-  }, [curve, color]);
-  return (
-    <canvas
-      ref={ref}
-      width={60}
-      height={30}
-      style={{ verticalAlign: 'middle', marginLeft: 6, borderRadius: 4 }}
-    />
-  );
-};
+interface ConnectState {
+  fromId: string;
+  mx: number;
+  my: number;
+}
 
 const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
   const [nodes, setNodes] = useState<StateNode[]>([]);
   const [transitions, setTransitions] = useState<Transition[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [sprites, setSprites] = useState<SpriteFrame[]>([]);
-  const [dragging, setDragging] = useState<{
-    id: string;
-    offsetX: number;
-    offsetY: number;
-  } | null>(null);
-  const [connecting, setConnecting] = useState<{
-    fromId: string;
-    mx: number;
-    my: number;
-  } | null>(null);
-  const [showTransitionModal, setShowTransitionModal] = useState(false);
-  const [pendingTransition, setPendingTransition] = useState<{
-    fromId: string;
-    toId: string;
-  } | null>(null);
-  const [transitionForm, setTransitionForm] = useState<{
-    triggerType: TriggerType;
-    triggerValue: string;
-    duration: number;
-    curve: CurveType;
-    midFrames: number[];
-  }>({
+  const [mobileTab, setMobileTab] = useState<'nodes' | 'props' | null>(null);
+
+  const [showModal, setShowModal] = useState(false);
+  const [modalFromId, setModalFromId] = useState<string | null>(null);
+  const [modalToId, setModalToId] = useState<string | null>(null);
+  const [transitionForm, setTransitionForm] = useState<TransitionFormData>({
     triggerType: 'KeyboardKey',
     triggerValue: 'KeyW',
     duration: 300,
     curve: 'EaseInOut',
     midFrames: [],
   });
-  const [mobileTab, setMobileTab] = useState<'nodes' | 'props' | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const nodeCounter = useRef(0);
   const animFrameRef = useRef<number>(0);
+
+  const nodesRef = useRef<StateNode[]>([]);
+  const transitionsRef = useRef<Transition[]>([]);
+  const selectedRef = useRef<string | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const connectRef = useRef<ConnectState | null>(null);
+  const hoverPortRef = useRef<string | null>(null);
+
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { transitionsRef.current = transitions; }, [transitions]);
+  useEffect(() => { selectedRef.current = selectedNodeId; }, [selectedNodeId]);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
   const selectedTransitions = transitions.filter(
@@ -181,11 +141,7 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
 
   const saveConfig = useCallback(async () => {
     try {
-      await StorageService.saveConfig({
-        name: 'untitled',
-        nodes,
-        transitions,
-      });
+      await StorageService.saveConfig({ name: 'untitled', nodes, transitions });
       eventBus.emit('config:saved');
     } catch {}
   }, [nodes, transitions]);
@@ -212,18 +168,15 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
       })),
     };
     const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
     const w = window.open('', '_blank');
     if (w) {
-      w.document.write(`
-        <html><head><title>StateMachine Export</title>
-        <style>body{background:#0b0b1a;color:#e2e8f0;font-family:monospace;padding:24px}
-        pre{white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.6}
-        button{background:#f59e0b;border:none;color:#000;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;margin-bottom:16px}
-        button:hover{background:#d97706}</style></head>
-        <body><button onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent);this.textContent='Copied!'">Copy to Clipboard</button>
-        <pre>${json.replace(/</g, '&lt;')}</pre></body></html>`);
+      w.document.write(`<!DOCTYPE html><html><head><title>StateMachine Export</title>
+<style>body{background:#0b0b1a;color:#e2e8f0;font-family:monospace;padding:24px;margin:0}
+pre{white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.6;background:#16162a;padding:20px;border-radius:12px;border:1px solid #334155}
+.btn-copy{background:#f59e0b;border:none;color:#000;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;margin-bottom:16px;font-weight:600}
+.btn-copy:hover{background:#d97706}</style></head>
+<body><button class="btn-copy" onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy to Clipboard',2000)})">Copy to Clipboard</button>
+<pre>${json.replace(/</g, '&lt;')}</pre></body></html>`);
       w.document.close();
     }
   }, [nodes, transitions]);
@@ -233,11 +186,17 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     const w = rect.width;
     const h = rect.height;
 
@@ -246,42 +205,39 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
 
     ctx.strokeStyle = '#333344';
     ctx.lineWidth = 0.5;
-    const gridSize = 40;
-    for (let x = 0; x < w; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
+    const grid = 40;
+    for (let x = 0; x < w; x += grid) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
     }
-    for (let y = 0; y < h; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+    for (let y = 0; y < h; y += grid) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
 
-    transitions.forEach((t) => {
-      const from = nodes.find((n) => n.id === t.fromId);
-      const to = nodes.find((n) => n.id === t.toId);
+    const currentNodes = nodesRef.current;
+    const currentTransitions = transitionsRef.current;
+    const currentSelected = selectedRef.current;
+
+    currentTransitions.forEach((t) => {
+      const from = currentNodes.find((n) => n.id === t.fromId);
+      const to = currentNodes.find((n) => n.id === t.toId);
       if (!from || !to) return;
 
-      const fx = from.x + 80;
-      const fy = from.y + 25;
-      const tx = to.x + 80;
-      const ty = to.y + 25;
+      const fx = from.x + NODE_W / 2;
+      const fy = from.y + NODE_H / 2;
+      const tx = to.x + NODE_W / 2;
+      const ty = to.y + NODE_H / 2;
 
-      const isSelfLoop = t.fromId === t.toId;
-      if (isSelfLoop) {
+      if (t.fromId === t.toId) {
         ctx.strokeStyle = '#6366f1';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.ellipse(fx, fy - 30, 30, 20, 0, -Math.PI, 0);
+        ctx.ellipse(fx, from.y - 20, 30, 18, 0, -Math.PI, 0);
         ctx.stroke();
         ctx.fillStyle = '#6366f1';
         ctx.beginPath();
-        ctx.moveTo(fx + 30, fy - 30);
-        ctx.lineTo(fx + 24, fy - 38);
-        ctx.lineTo(fx + 36, fy - 34);
+        ctx.moveTo(fx + 30, from.y - 20);
+        ctx.lineTo(fx + 24, from.y - 28);
+        ctx.lineTo(fx + 36, from.y - 24);
         ctx.closePath();
         ctx.fill();
         return;
@@ -298,123 +254,94 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
       const cx1 = (fx + tx) / 2 + nx * curvature;
       const cy1 = (fy + ty) / 2 + ny * curvature;
 
-      const isSelected =
-        t.fromId === selectedNodeId || t.toId === selectedNodeId;
-      ctx.strokeStyle = isSelected ? '#8b5cf6' : '#6366f1';
-      ctx.lineWidth = isSelected ? 2.5 : 1.5;
+      const isSel = t.fromId === currentSelected || t.toId === currentSelected;
+      ctx.strokeStyle = isSel ? '#8b5cf6' : '#6366f1';
+      ctx.lineWidth = isSel ? 2.5 : 1.5;
       ctx.beginPath();
       ctx.moveTo(fx, fy);
       ctx.quadraticCurveTo(cx1, cy1, tx, ty);
       ctx.stroke();
 
-      const tParam = 0.85;
-      const bx =
-        (1 - tParam) * (1 - tParam) * fx +
-        2 * (1 - tParam) * tParam * cx1 +
-        tParam * tParam * tx;
-      const by =
-        (1 - tParam) * (1 - tParam) * fy +
-        2 * (1 - tParam) * tParam * cy1 +
-        tParam * tParam * ty;
+      const tp = 0.85;
       const ax =
-        2 * (1 - tParam) * (cx1 - fx) + 2 * tParam * (tx - cx1);
+        2 * (1 - tp) * (cx1 - fx) + 2 * tp * (tx - cx1);
       const ay =
-        2 * (1 - tParam) * (cy1 - fy) + 2 * tParam * (ty - cy1);
+        2 * (1 - tp) * (cy1 - fy) + 2 * tp * (ty - cy1);
       const angle = Math.atan2(ay, ax);
-
-      const arrowSize = 10;
-      ctx.fillStyle = isSelected ? '#8b5cf6' : '#6366f1';
+      const as = 10;
+      ctx.fillStyle = isSel ? '#8b5cf6' : '#6366f1';
       ctx.beginPath();
       ctx.moveTo(tx, ty);
-      ctx.lineTo(
-        tx - arrowSize * Math.cos(angle - Math.PI / 6),
-        ty - arrowSize * Math.sin(angle - Math.PI / 6)
-      );
-      ctx.lineTo(
-        tx - arrowSize * Math.cos(angle + Math.PI / 6),
-        ty - arrowSize * Math.sin(angle + Math.PI / 6)
-      );
+      ctx.lineTo(tx - as * Math.cos(angle - Math.PI / 6), ty - as * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(tx - as * Math.cos(angle + Math.PI / 6), ty - as * Math.sin(angle + Math.PI / 6));
       ctx.closePath();
       ctx.fill();
 
-      const midT = 0.5;
-      const labelX =
-        (1 - midT) * (1 - midT) * fx +
-        2 * (1 - midT) * midT * cx1 +
-        midT * midT * tx;
-      const labelY =
-        (1 - midT) * (1 - midT) * fy +
-        2 * (1 - midT) * midT * cy1 +
-        midT * midT * ty;
+      const mt = 0.5;
+      const lx = (1 - mt) * (1 - mt) * fx + 2 * (1 - mt) * mt * cx1 + mt * mt * tx;
+      const ly = (1 - mt) * (1 - mt) * fy + 2 * (1 - mt) * mt * cy1 + mt * mt * ty;
       ctx.fillStyle = '#9ca3af';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
-      const triggerLabel =
+      const label =
         t.triggerType === 'KeyboardKey'
           ? t.triggerValue.replace('Key', '')
           : t.triggerType === 'Timer'
           ? `${t.duration}ms`
           : 'AnimEnd';
-      ctx.fillText(triggerLabel, labelX, labelY - 6);
+      ctx.fillText(label, lx, ly - 6);
       ctx.textAlign = 'left';
     });
 
-    if (connecting) {
-      const from = nodes.find((n) => n.id === connecting.fromId);
+    const conn = connectRef.current;
+    if (conn) {
+      const from = currentNodes.find((n) => n.id === conn.fromId);
       if (from) {
         ctx.strokeStyle = '#22c55e';
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
-        ctx.moveTo(from.x + 80, from.y + 25);
-        ctx.lineTo(connecting.mx, connecting.my);
+        ctx.moveTo(from.x + NODE_W, from.y + NODE_H / 2);
+        ctx.lineTo(conn.mx, conn.my);
         ctx.stroke();
         ctx.setLineDash([]);
       }
     }
 
-    nodes.forEach((node) => {
-      const isSelected = node.id === selectedNodeId;
+    currentNodes.forEach((node) => {
+      const isSel = node.id === currentSelected;
       const sprite = SpriteService.getSpriteById(node.spriteId);
       const color = sprite ? SpriteService.getSpriteColor(sprite.name) : '#6366f1';
 
-      if (isSelected) {
+      if (isSel) {
         ctx.shadowColor = color;
         ctx.shadowBlur = 16;
       }
 
-      ctx.fillStyle = isSelected ? '#1e293b' : '#16213e';
+      ctx.fillStyle = isSel ? '#1e293b' : '#16213e';
       ctx.beginPath();
-      ctx.roundRect(node.x, node.y, 160, 50, 8);
+      ctx.roundRect(node.x, node.y, NODE_W, NODE_H, 8);
       ctx.fill();
-
       ctx.shadowBlur = 0;
 
-      ctx.strokeStyle = isSelected ? color : '#334155';
-      ctx.lineWidth = isSelected ? 2 : 1;
+      ctx.strokeStyle = isSel ? color : '#334155';
+      ctx.lineWidth = isSel ? 2 : 1;
       ctx.beginPath();
-      ctx.roundRect(node.x, node.y, 160, 50, 8);
+      ctx.roundRect(node.x, node.y, NODE_W, NODE_H, 8);
       ctx.stroke();
 
-      if (isSelected) {
+      if (isSel) {
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.roundRect(node.x, node.y, 4, 50, [8, 0, 0, 8]);
+        ctx.roundRect(node.x, node.y, 4, NODE_H, [8, 0, 0, 8]);
         ctx.fill();
       }
 
       if (sprite) {
         const spriteCanvas = SpriteService.generateSpriteCanvas(sprite);
         ctx.drawImage(
-          spriteCanvas,
-          0,
-          0,
-          sprite.width,
-          sprite.height,
-          node.x + 8,
-          node.y + 5,
-          36,
-          36
+          spriteCanvas, 0, 0, sprite.width, sprite.height,
+          node.x + 8, node.y + 5, 36, 36
         );
       }
 
@@ -422,101 +349,146 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
       ctx.font = '14px sans-serif';
       ctx.fillText(node.name, node.x + 50, node.y + 30);
 
-      const transCount = transitions.filter(
-        (t) => t.fromId === node.id || t.toId === node.id
-      ).length;
-      ctx.fillStyle = '#9ca3af';
+      const px = node.x + NODE_W;
+      const py = node.y + NODE_H / 2;
+      const isHoverPort = hoverPortRef.current === node.id;
+      ctx.fillStyle = isHoverPort ? '#22c55e' : '#334155';
+      ctx.beginPath();
+      ctx.arc(px, py, PORT_R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = isHoverPort ? '#22c55e' : '#64748b';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(px, py, PORT_R, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = isHoverPort ? '#ffffff' : '#9ca3af';
       ctx.font = '10px sans-serif';
-      ctx.fillText(`${transCount}`, node.x + 140, node.y + 14);
+      ctx.textAlign = 'center';
+      ctx.fillText('+', px, py + 3.5);
+      ctx.textAlign = 'left';
     });
-  }, [nodes, transitions, selectedNodeId, connecting]);
+  }, []);
 
   useEffect(() => {
+    let active = true;
     const loop = () => {
+      if (!active) return;
       drawCanvas();
       animFrameRef.current = requestAnimationFrame(loop);
     };
     animFrameRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animFrameRef.current);
+    return () => {
+      active = false;
+      cancelAnimationFrame(animFrameRef.current);
+    };
   }, [drawCanvas]);
 
-  const getCanvasPos = useCallback(
-    (e: React.MouseEvent): { x: number; y: number } => {
-      const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
-      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    },
-    []
-  );
+  const getPos = useCallback((e: React.MouseEvent): { x: number; y: number } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }, []);
 
-  const findNodeAt = useCallback(
-    (x: number, y: number): StateNode | null => {
-      for (let i = nodes.length - 1; i >= 0; i--) {
-        const n = nodes[i];
-        if (x >= n.x && x <= n.x + 160 && y >= n.y && y <= n.y + 50) {
-          return n;
-        }
+  const findNodeAt = useCallback((x: number, y: number): StateNode | null => {
+    const ns = nodesRef.current;
+    for (let i = ns.length - 1; i >= 0; i--) {
+      const n = ns[i];
+      if (x >= n.x && x <= n.x + NODE_W && y >= n.y && y <= n.y + NODE_H) {
+        return n;
       }
-      return null;
-    },
-    [nodes]
-  );
+    }
+    return null;
+  }, []);
 
-  const handleCanvasMouseDown = useCallback(
+  const isOnPort = useCallback((x: number, y: number, node: StateNode): boolean => {
+    const px = node.x + NODE_W;
+    const py = node.y + NODE_H / 2;
+    const dx = x - px;
+    const dy = y - py;
+    return dx * dx + dy * dy <= (PORT_R + 4) * (PORT_R + 4);
+  }, []);
+
+  const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      const pos = getCanvasPos(e);
+      const pos = getPos(e);
       const node = findNodeAt(pos.x, pos.y);
+
+      if (node && isOnPort(pos.x, pos.y, node)) {
+        connectRef.current = { fromId: node.id, mx: pos.x, my: pos.y };
+        return;
+      }
+
       if (node) {
         setSelectedNodeId(node.id);
-        if (e.shiftKey) {
-          setConnecting({ fromId: node.id, mx: pos.x, my: pos.y });
-        } else {
-          setDragging({
-            id: node.id,
-            offsetX: pos.x - node.x,
-            offsetY: pos.y - node.y,
-          });
-        }
+        dragRef.current = {
+          nodeId: node.id,
+          offsetX: pos.x - node.x,
+          offsetY: pos.y - node.y,
+        };
+        const canvas = canvasRef.current;
+        if (canvas) canvas.style.cursor = 'grabbing';
       } else {
         setSelectedNodeId(null);
       }
     },
-    [getCanvasPos, findNodeAt]
+    [getPos, findNodeAt, isOnPort]
   );
 
-  const handleCanvasMouseMove = useCallback(
+  const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      const pos = getCanvasPos(e);
-      if (dragging) {
-        setNodes((prev) =>
-          prev.map((n) =>
-            n.id === dragging.id
-              ? { ...n, x: pos.x - dragging.offsetX, y: pos.y - dragging.offsetY }
-              : n
-          )
+      const pos = getPos(e);
+      const drag = dragRef.current;
+      const conn = connectRef.current;
+
+      if (drag) {
+        const newX = pos.x - drag.offsetX;
+        const newY = pos.y - drag.offsetY;
+        nodesRef.current = nodesRef.current.map((n) =>
+          n.id === drag.nodeId ? { ...n, x: newX, y: newY } : n
         );
+        return;
       }
-      if (connecting) {
-        setConnecting((prev) =>
-          prev ? { ...prev, mx: pos.x, my: pos.y } : null
-        );
+
+      if (conn) {
+        connectRef.current = { ...conn, mx: pos.x, my: pos.y };
+        return;
+      }
+
+      const node = findNodeAt(pos.x, pos.y);
+      if (node && isOnPort(pos.x, pos.y, node)) {
+        hoverPortRef.current = node.id;
+        if (canvasRef.current) canvasRef.current.style.cursor = 'crosshair';
+      } else if (node) {
+        hoverPortRef.current = null;
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+      } else {
+        hoverPortRef.current = null;
+        if (canvasRef.current) canvasRef.current.style.cursor = 'default';
       }
     },
-    [dragging, connecting, getCanvasPos]
+    [getPos, findNodeAt, isOnPort]
   );
 
-  const handleCanvasMouseUp = useCallback(
+  const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      if (connecting) {
-        const pos = getCanvasPos(e);
+      const canvas = canvasRef.current;
+      if (canvas) canvas.style.cursor = 'default';
+
+      if (dragRef.current) {
+        setNodes([...nodesRef.current]);
+        dragRef.current = null;
+        return;
+      }
+
+      const conn = connectRef.current;
+      if (conn) {
+        const pos = getPos(e);
         const target = findNodeAt(pos.x, pos.y);
-        if (target && target.id !== connecting.fromId) {
-          setPendingTransition({
-            fromId: connecting.fromId,
-            toId: target.id,
-          });
-          setShowTransitionModal(true);
+        if (target && target.id !== conn.fromId) {
+          setModalFromId(conn.fromId);
+          setModalToId(target.id);
           setTransitionForm({
             triggerType: 'KeyboardKey',
             triggerValue: 'KeyW',
@@ -524,31 +496,39 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
             curve: 'EaseInOut',
             midFrames: [],
           });
+          setShowModal(true);
         }
-        setConnecting(null);
+        connectRef.current = null;
       }
-      setDragging(null);
     },
-    [connecting, getCanvasPos, findNodeAt]
+    [getPos, findNodeAt]
   );
 
+  const handleMouseLeave = useCallback(() => {
+    if (dragRef.current) {
+      setNodes([...nodesRef.current]);
+    }
+    dragRef.current = null;
+    connectRef.current = null;
+    hoverPortRef.current = null;
+  }, []);
+
   const confirmTransition = useCallback(() => {
-    if (!pendingTransition) return;
+    if (!modalFromId || !modalToId) return;
     const t: Transition = {
       id: uuidv4(),
-      fromId: pendingTransition.fromId,
-      toId: pendingTransition.toId,
+      fromId: modalFromId,
+      toId: modalToId,
       ...transitionForm,
     };
     setTransitions((prev) => [...prev, t]);
-    setShowTransitionModal(false);
-    setPendingTransition(null);
-  }, [pendingTransition, transitionForm]);
+    setShowModal(false);
+    setModalFromId(null);
+    setModalToId(null);
+  }, [modalFromId, modalToId, transitionForm]);
 
   const handlePlayCurrent = useCallback(() => {
-    if (selectedNode) {
-      onPlayState(selectedNode);
-    }
+    if (selectedNode) onPlayState(selectedNode);
   }, [selectedNode, onPlayState]);
 
   const triggerEvent = useCallback(
@@ -562,9 +542,7 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
       );
       if (match) {
         const targetNode = nodes.find((n) => n.id === match.toId);
-        if (targetNode) {
-          onPlayState(targetNode, match);
-        }
+        if (targetNode) onPlayState(targetNode, match);
       }
     },
     [selectedNodeId, transitions, nodes, onPlayState]
@@ -574,23 +552,19 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       const keyMap: Record<string, string> = {
-        w: 'KeyW',
-        a: 'KeyA',
-        s: 'KeyS',
-        d: 'KeyD',
-        arrowup: 'ArrowUp',
-        arrowdown: 'ArrowDown',
-        arrowleft: 'ArrowLeft',
-        arrowright: 'ArrowRight',
+        w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD',
+        arrowup: 'ArrowUp', arrowdown: 'ArrowDown',
+        arrowleft: 'ArrowLeft', arrowright: 'ArrowRight',
       };
       const mapped = keyMap[key];
-      if (mapped) {
-        triggerEvent('KeyboardKey', mapped);
-      }
+      if (mapped) triggerEvent('KeyboardKey', mapped);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [triggerEvent]);
+
+  const fromNode = nodes.find((n) => n.id === modalFromId) || null;
+  const toNode = nodes.find((n) => n.id === modalToId) || null;
 
   const renderNodeList = () => (
     <div className="panel-left">
@@ -603,22 +577,15 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
       <div className="node-list">
         {nodes.map((node) => {
           const sprite = SpriteService.getSpriteById(node.spriteId);
-          const color = sprite
-            ? SpriteService.getSpriteColor(sprite.name)
-            : '#6366f1';
+          const color = sprite ? SpriteService.getSpriteColor(sprite.name) : '#6366f1';
           return (
             <div
               key={node.id}
               className={`node-item ${node.id === selectedNodeId ? 'selected' : ''}`}
               onClick={() => setSelectedNodeId(node.id)}
             >
-              {node.id === selectedNodeId && (
-                <div className="node-indicator" />
-              )}
-              <div
-                className="node-thumb"
-                style={{ borderColor: color }}
-              >
+              {node.id === selectedNodeId && <div className="node-indicator" />}
+              <div className="node-thumb" style={{ borderColor: color }}>
                 <span style={{ color, fontSize: 11 }}>
                   {sprite?.name?.slice(0, 4) || '????'}
                 </span>
@@ -626,10 +593,7 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
               <span className="node-name">{node.name}</span>
               <button
                 className="node-delete"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteNode(node.id);
-                }}
+                onClick={(e) => { e.stopPropagation(); deleteNode(node.id); }}
               >
                 ×
               </button>
@@ -650,9 +614,7 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
             <input
               className="prop-input"
               value={selectedNode.name}
-              onChange={(e) =>
-                updateNode(selectedNode.id, { name: e.target.value })
-              }
+              onChange={(e) => updateNode(selectedNode.id, { name: e.target.value })}
             />
           </div>
           <div className="prop-group">
@@ -660,16 +622,10 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
             <select
               className="prop-input"
               value={selectedNode.spriteId}
-              onChange={(e) =>
-                updateNode(selectedNode.id, {
-                  spriteId: Number(e.target.value),
-                })
-              }
+              onChange={(e) => updateNode(selectedNode.id, { spriteId: Number(e.target.value) })}
             >
               {sprites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
@@ -678,11 +634,7 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
             <select
               className="prop-input"
               value={selectedNode.loopMode}
-              onChange={(e) =>
-                updateNode(selectedNode.id, {
-                  loopMode: e.target.value as LoopMode,
-                })
-              }
+              onChange={(e) => updateNode(selectedNode.id, { loopMode: e.target.value as LoopMode })}
             >
               <option value="once">Once</option>
               <option value="loop">Loop</option>
@@ -692,19 +644,12 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
           <div className="prop-group">
             <label className="prop-label">
               Enter Curve
-              <CanvasCurvePreview
-                curve={selectedNode.enterCurve}
-                color="#22c55e"
-              />
+              <CurvePreview curve={selectedNode.enterCurve} color="#22c55e" />
             </label>
             <select
               className="prop-input"
               value={selectedNode.enterCurve}
-              onChange={(e) =>
-                updateNode(selectedNode.id, {
-                  enterCurve: e.target.value as CurveType,
-                })
-              }
+              onChange={(e) => updateNode(selectedNode.id, { enterCurve: e.target.value as CurveType })}
             >
               <option value="EaseInOut">EaseInOut</option>
               <option value="EaseOut">EaseOut</option>
@@ -714,19 +659,12 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
           <div className="prop-group">
             <label className="prop-label">
               Exit Curve
-              <CanvasCurvePreview
-                curve={selectedNode.exitCurve}
-                color="#f59e0b"
-              />
+              <CurvePreview curve={selectedNode.exitCurve} color="#f59e0b" />
             </label>
             <select
               className="prop-input"
               value={selectedNode.exitCurve}
-              onChange={(e) =>
-                updateNode(selectedNode.id, {
-                  exitCurve: e.target.value as CurveType,
-                })
-              }
+              onChange={(e) => updateNode(selectedNode.id, { exitCurve: e.target.value as CurveType })}
             >
               <option value="EaseInOut">EaseInOut</option>
               <option value="EaseOut">EaseOut</option>
@@ -739,14 +677,12 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
             </label>
             <div className="transition-list">
               {selectedTransitions.map((t) => {
-                const isOutgoing = t.fromId === selectedNode.id;
-                const otherNode = nodes.find((n) =>
-                  n.id === (isOutgoing ? t.toId : t.fromId)
-                );
+                const isOut = t.fromId === selectedNode.id;
+                const other = nodes.find((n) => n.id === (isOut ? t.toId : t.fromId));
                 return (
                   <div key={t.id} className="transition-item">
                     <span className="transition-dir">
-                      {isOutgoing ? '→' : '←'} {otherNode?.name || '?'}
+                      {isOut ? '→' : '←'} {other?.name || '?'}
                     </span>
                     <span className="transition-trigger">
                       {t.triggerType === 'KeyboardKey'
@@ -757,11 +693,7 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
                     </span>
                     <button
                       className="transition-delete"
-                      onClick={() =>
-                        setTransitions((prev) =>
-                          prev.filter((tr) => tr.id !== t.id)
-                        )
-                      }
+                      onClick={() => setTransitions((prev) => prev.filter((tr) => tr.id !== t.id))}
                     >
                       ×
                     </button>
@@ -777,164 +709,9 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
       ) : (
         <div className="panel-right-empty">
           <p>Select a state node to edit properties</p>
-          <p className="hint">Hold Shift + drag from a node to create a transition</p>
+          <p className="hint">Drag from the + port on a node to create a transition</p>
         </div>
       )}
-    </div>
-  );
-
-  const renderTransitionModal = () => {
-    if (!showTransitionModal || !pendingTransition) return null;
-    const fromNode = nodes.find((n) => n.id === pendingTransition.fromId);
-    const toNode = nodes.find((n) => n.id === pendingTransition.toId);
-
-    return (
-      <div className="modal-overlay" onClick={() => setShowTransitionModal(false)}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-title">
-            Transition: {fromNode?.name} → {toNode?.name}
-          </div>
-          <div className="prop-group">
-            <label className="prop-label">Trigger Type</label>
-            <select
-              className="prop-input"
-              value={transitionForm.triggerType}
-              onChange={(e) =>
-                setTransitionForm((f) => ({
-                  ...f,
-                  triggerType: e.target.value as TriggerType,
-                }))
-              }
-            >
-              <option value="KeyboardKey">KeyboardKey</option>
-              <option value="Timer">Timer</option>
-              <option value="AnimationEnd">AnimationEnd</option>
-            </select>
-          </div>
-          {transitionForm.triggerType === 'KeyboardKey' && (
-            <div className="prop-group">
-              <label className="prop-label">Key</label>
-              <select
-                className="prop-input"
-                value={transitionForm.triggerValue}
-                onChange={(e) =>
-                  setTransitionForm((f) => ({
-                    ...f,
-                    triggerValue: e.target.value,
-                  }))
-                }
-              >
-                <option value="KeyW">W</option>
-                <option value="KeyA">A</option>
-                <option value="KeyS">S</option>
-                <option value="KeyD">D</option>
-                <option value="ArrowUp">↑</option>
-                <option value="ArrowDown">↓</option>
-                <option value="ArrowLeft">←</option>
-                <option value="ArrowRight">→</option>
-              </select>
-            </div>
-          )}
-          <div className="prop-group">
-            <label className="prop-label">
-              Duration: {transitionForm.duration}ms
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={2000}
-              step={10}
-              value={transitionForm.duration}
-              onChange={(e) =>
-                setTransitionForm((f) => ({
-                  ...f,
-                  duration: Number(e.target.value),
-                }))
-              }
-              className="prop-slider"
-            />
-          </div>
-          <div className="prop-group">
-            <label className="prop-label">
-              Curve
-              <CanvasCurvePreview
-                curve={transitionForm.curve}
-                color="#6366f1"
-              />
-            </label>
-            <select
-              className="prop-input"
-              value={transitionForm.curve}
-              onChange={(e) =>
-                setTransitionForm((f) => ({
-                  ...f,
-                  curve: e.target.value as CurveType,
-                }))
-              }
-            >
-              <option value="EaseInOut">EaseInOut</option>
-              <option value="EaseOut">EaseOut</option>
-              <option value="Linear">Linear</option>
-            </select>
-          </div>
-          <div className="prop-group">
-            <label className="prop-label">
-              Mid Frames (max 3): {transitionForm.midFrames.length}
-            </label>
-            <div className="mid-frames">
-              {[0, 1, 2].map((i) => (
-                <button
-                  key={i}
-                  className={`mid-frame-btn ${transitionForm.midFrames.includes(i) ? 'active' : ''}`}
-                  onClick={() =>
-                    setTransitionForm((f) => {
-                      const has = f.midFrames.includes(i);
-                      return {
-                        ...f,
-                        midFrames: has
-                          ? f.midFrames.filter((v) => v !== i)
-                          : f.midFrames.length < 3
-                          ? [...f.midFrames, i]
-                          : f.midFrames,
-                      };
-                    })
-                  }
-                >
-                  Frame {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="modal-actions">
-            <button
-              className="btn-cancel"
-              onClick={() => setShowTransitionModal(false)}
-            >
-              Cancel
-            </button>
-            <button className="btn-confirm" onClick={confirmTransition}>
-              Create Transition
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderMobileTabs = () => (
-    <div className="mobile-tabs">
-      <button
-        className={`mobile-tab ${mobileTab === 'nodes' ? 'active' : ''}`}
-        onClick={() => setMobileTab(mobileTab === 'nodes' ? null : 'nodes')}
-      >
-        States
-      </button>
-      <button
-        className={`mobile-tab ${mobileTab === 'props' ? 'active' : ''}`}
-        onClick={() => setMobileTab(mobileTab === 'props' ? null : 'props')}
-      >
-        Properties
-      </button>
     </div>
   );
 
@@ -952,35 +729,49 @@ const StateMachineEditor: React.FC<Props> = ({ onPlayState }) => {
         </div>
       </div>
       <div className="editor-body">
-        {renderMobileTabs()}
-        <div
-          className={`panel-left-wrapper ${mobileTab === 'nodes' ? 'mobile-open' : ''}`}
-        >
+        <div className="mobile-tabs">
+          <button
+            className={`mobile-tab ${mobileTab === 'nodes' ? 'active' : ''}`}
+            onClick={() => setMobileTab(mobileTab === 'nodes' ? null : 'nodes')}
+          >
+            States
+          </button>
+          <button
+            className={`mobile-tab ${mobileTab === 'props' ? 'active' : ''}`}
+            onClick={() => setMobileTab(mobileTab === 'props' ? null : 'props')}
+          >
+            Properties
+          </button>
+        </div>
+        <div className={`panel-left-wrapper ${mobileTab === 'nodes' ? 'mobile-open' : ''}`}>
           {renderNodeList()}
         </div>
-        <div className="canvas-container" ref={canvasContainerRef}>
+        <div className="canvas-container">
           <canvas
             ref={canvasRef}
             className="state-canvas"
-            onMouseDown={handleCanvasMouseDown}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseUp={handleCanvasMouseUp}
-            onMouseLeave={() => {
-              setDragging(null);
-              setConnecting(null);
-            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
           />
           <div className="canvas-hint">
-            Shift+Drag from node to create transition
+            Drag node to move · Drag + port to connect
           </div>
         </div>
-        <div
-          className={`panel-right-wrapper ${mobileTab === 'props' ? 'mobile-open' : ''}`}
-        >
+        <div className={`panel-right-wrapper ${mobileTab === 'props' ? 'mobile-open' : ''}`}>
           {renderPropertyPanel()}
         </div>
       </div>
-      {renderTransitionModal()}
+      <TransitionModal
+        visible={showModal}
+        fromNode={fromNode}
+        toNode={toNode}
+        form={transitionForm}
+        onFormChange={setTransitionForm}
+        onConfirm={confirmTransition}
+        onCancel={() => { setShowModal(false); setModalFromId(null); setModalToId(null); }}
+      />
     </div>
   );
 };
