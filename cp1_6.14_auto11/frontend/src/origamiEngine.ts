@@ -187,18 +187,21 @@ export class OrigamiEngine {
       const start = new THREE.Vector3(line.start[0], 0.01, line.start[1]);
       const end = new THREE.Vector3(line.end[0], 0.01, line.end[1]);
       
-      const points = this.createDashedLinePoints(start, end, 0.08);
+      const dashSize = line.type === 'mountain' ? 0.1 : 0.06;
+      const gapSize = line.type === 'mountain' ? 0.05 : 0.06;
+      const points = this.createDashedLinePoints(start, end, dashSize, gapSize);
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       
       const color = line.type === 'mountain' ? '#e74c3c' : '#3498db';
+      const lineWidth = line.type === 'mountain' ? 3 : 2;
       const material = new THREE.LineBasicMaterial({ 
         color,
-        linewidth: 2,
+        linewidth: lineWidth,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.95
       });
       
-      const lineMesh = new THREE.Line(geometry, material);
+      const lineMesh = new THREE.LineSegments(geometry, material);
       lineMesh.userData.creaseId = line.id;
       lineMesh.userData.creaseType = line.type;
       this.creaseMeshes.add(lineMesh);
@@ -208,21 +211,34 @@ export class OrigamiEngine {
   private createDashedLinePoints(
     start: THREE.Vector3,
     end: THREE.Vector3,
-    dashSize: number
+    dashSize: number,
+    gapSize: number
   ): THREE.Vector3[] {
     const points: THREE.Vector3[] = [];
     const distance = start.distanceTo(end);
     const direction = end.clone().sub(start).normalize();
-    const dashCount = Math.floor(distance / (dashSize * 2));
+    const segmentSize = dashSize + gapSize;
+    const dashCount = Math.floor(distance / segmentSize);
 
     for (let i = 0; i < dashCount; i++) {
       const dashStart = start.clone().add(
-        direction.clone().multiplyScalar(i * dashSize * 2)
+        direction.clone().multiplyScalar(i * segmentSize)
       );
       const dashEnd = start.clone().add(
-        direction.clone().multiplyScalar((i * 2 + 1) * dashSize)
+        direction.clone().multiplyScalar(i * segmentSize + dashSize)
       );
       points.push(dashStart, dashEnd);
+    }
+
+    const remaining = distance - dashCount * segmentSize;
+    if (remaining > dashSize * 0.5) {
+      const lastStart = start.clone().add(
+        direction.clone().multiplyScalar(dashCount * segmentSize)
+      );
+      const lastEnd = start.clone().add(
+        direction.clone().multiplyScalar(Math.min(dashCount * segmentSize + dashSize, distance))
+      );
+      points.push(lastStart, lastEnd);
     }
 
     return points;
@@ -591,7 +607,7 @@ export class OrigamiEngine {
   selectVertex(vertexIndex: number): void {
     if (!this.selectionMarker || !this.paperGeometry) return;
 
-    const positions = this.paperGeometry.attributes.position.array as Float32Array;
+    const positions = this.getPositionArray();
     const i3 = vertexIndex * 3;
     const x = positions[i3];
     const y = positions[i3 + 1];
