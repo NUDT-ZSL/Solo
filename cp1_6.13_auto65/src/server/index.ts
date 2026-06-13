@@ -5,6 +5,31 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { addTrailRecord, getTrailByBookId, getTrailsByUser } from './trailManager';
 
+interface BookDoc {
+  _id: string;
+  title: string;
+  author: string;
+  coverUrl: string;
+  isbn: string;
+  ownerName: string;
+  ownerId: string;
+  currentHolder: string;
+  currentHolderName: string;
+  status: 'available' | 'borrowed';
+  borrowedAt: string | null;
+  dueDate: string | null;
+  qrCode: string;
+  createdAt: string;
+}
+
+interface UserDoc {
+  _id: string;
+  name: string;
+  phone: string;
+  address: string;
+  createdAt: string;
+}
+
 const dataDir = path.join(__dirname, '../../data');
 
 const app = express();
@@ -33,7 +58,7 @@ app.post('/api/auth/register', async (req, res) => {
       res.status(409).json({ error: '该手机号已注册' });
       return;
     }
-    const user = {
+    const user: UserDoc = {
       _id: uuidv4(),
       name,
       phone,
@@ -54,7 +79,7 @@ app.post('/api/auth/login', async (req, res) => {
       res.status(400).json({ error: '手机号必填' });
       return;
     }
-    const user = await usersDb.findOne({ phone });
+    const user = await usersDb.findOne({ phone }) as UserDoc | null;
     if (!user) {
       res.status(404).json({ error: '用户不存在' });
       return;
@@ -65,9 +90,9 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/books', async (req, res) => {
+app.get('/api/books', async (_req, res) => {
   try {
-    const books = await booksDb.find({}).sort({ createdAt: -1 }).exec();
+    const books = await booksDb.find({}).sort({ createdAt: -1 }).exec() as BookDoc[];
     res.json(books);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -81,7 +106,7 @@ app.post('/api/books', async (req, res) => {
       res.status(400).json({ error: '书名和作者为必填' });
       return;
     }
-    const book = {
+    const book: BookDoc = {
       _id: uuidv4(),
       title,
       author,
@@ -91,13 +116,13 @@ app.post('/api/books', async (req, res) => {
       ownerId: ownerId || '',
       currentHolder: ownerId || '',
       currentHolderName: ownerName || '',
-      status: 'available' as const,
-      borrowedAt: null as string | null,
-      dueDate: null as string | null,
+      status: 'available',
+      borrowedAt: null,
+      dueDate: null,
       qrCode: uuidv4(),
       createdAt: new Date().toISOString(),
     };
-    const doc = await booksDb.insert(book);
+    const doc = await booksDb.insert(book) as BookDoc;
     await addTrailRecord({
       bookId: doc._id,
       fromUser: '',
@@ -113,12 +138,12 @@ app.post('/api/books', async (req, res) => {
 
 app.put('/api/books/borrow', async (req, res) => {
   try {
-    const { bookId, borrowerId, borrowerName, lenderId, lenderName } = req.body;
+    const { bookId, borrowerId, borrowerName, lenderId } = req.body;
     if (!bookId || !borrowerId || !borrowerName) {
       res.status(400).json({ error: '缺少借阅必要参数' });
       return;
     }
-    const book = await booksDb.findOne({ _id: bookId });
+    const book = await booksDb.findOne({ _id: bookId }) as BookDoc | null;
     if (!book) {
       res.status(404).json({ error: '图书不存在' });
       return;
@@ -129,7 +154,7 @@ app.put('/api/books/borrow', async (req, res) => {
     }
     const borrowedAt = new Date().toISOString();
     const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-    const updated = await booksDb.update(
+    await booksDb.update(
       { _id: bookId },
       {
         $set: {
@@ -139,8 +164,7 @@ app.put('/api/books/borrow', async (req, res) => {
           borrowedAt,
           dueDate,
         },
-      },
-      { returnUpdatedDocs: true }
+      }
     );
     await addTrailRecord({
       bookId,
@@ -149,7 +173,7 @@ app.put('/api/books/borrow', async (req, res) => {
       action: 'borrow',
       timestamp: borrowedAt,
     });
-    const updatedBook = await booksDb.findOne({ _id: bookId });
+    const updatedBook = await booksDb.findOne({ _id: bookId }) as BookDoc;
     res.json(updatedBook);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -163,7 +187,7 @@ app.put('/api/books/return', async (req, res) => {
       res.status(400).json({ error: '缺少归还必要参数' });
       return;
     }
-    const book = await booksDb.findOne({ _id: bookId });
+    const book = await booksDb.findOne({ _id: bookId }) as BookDoc | null;
     if (!book) {
       res.status(404).json({ error: '图书不存在' });
       return;
@@ -188,7 +212,7 @@ app.put('/api/books/return', async (req, res) => {
       action: 'return',
       timestamp: returnTime,
     });
-    const updatedBook = await booksDb.findOne({ _id: bookId });
+    const updatedBook = await booksDb.findOne({ _id: bookId }) as BookDoc;
     res.json(updatedBook);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -198,7 +222,7 @@ app.put('/api/books/return', async (req, res) => {
 app.get('/api/books/trail/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const book = await booksDb.findOne({ _id: id });
+    const book = await booksDb.findOne({ _id: id }) as BookDoc | null;
     if (!book) {
       res.status(404).json({ error: '图书不存在' });
       return;
@@ -213,16 +237,17 @@ app.get('/api/books/trail/:id', async (req, res) => {
 app.get('/api/books/overdue', async (req, res) => {
   try {
     const { userId } = req.query;
-    const now = new Date().toISOString();
-    const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-    const query: any = {
-      status: 'borrowed',
-      dueDate: { $lte: threeDaysLater },
-    };
+    const allBorrowed = await booksDb.find({ status: 'borrowed' }).exec() as BookDoc[];
+    const now = Date.now();
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    let overdueBooks = allBorrowed.filter((b) => {
+      if (!b.dueDate) return false;
+      const dueTime = new Date(b.dueDate).getTime();
+      return dueTime - now <= threeDaysMs;
+    });
     if (userId) {
-      query.currentHolder = userId;
+      overdueBooks = overdueBooks.filter((b) => b.currentHolder === userId);
     }
-    const overdueBooks = await booksDb.find(query).exec();
     res.json(overdueBooks);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -232,7 +257,7 @@ app.get('/api/books/overdue', async (req, res) => {
 app.get('/api/users/:id/borrowed', async (req, res) => {
   try {
     const { id } = req.params;
-    const borrowedBooks = await booksDb.find({ currentHolder: id, status: 'borrowed' }).exec();
+    const borrowedBooks = await booksDb.find({ currentHolder: id, status: 'borrowed' }).exec() as BookDoc[];
     res.json(borrowedBooks);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
