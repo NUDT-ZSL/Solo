@@ -53,7 +53,6 @@ export class ParticleSystem {
   private sizes: Float32Array;
   private alphas: Float32Array;
   private randoms: Float32Array;
-  private noisePhases: Float32Array;
 
   private positionAttribute: THREE.BufferAttribute;
   private colorAttribute: THREE.BufferAttribute;
@@ -65,6 +64,7 @@ export class ParticleSystem {
   private targetFluidType: FluidType = 'water';
   private transitionProgress: number = 1;
   private transitionDuration: number = 0.5;
+  private transitionId: number = 0;
 
   private currentVisual: FluidVisualPreset;
   private targetVisual: FluidVisualPreset;
@@ -110,7 +110,6 @@ export class ParticleSystem {
     this.sizes = new Float32Array(this.particleCount);
     this.alphas = new Float32Array(this.particleCount);
     this.randoms = new Float32Array(this.particleCount);
-    this.noisePhases = new Float32Array(this.particleCount * 3);
 
     this.geometry = new THREE.BufferGeometry();
     this.setupAttributes();
@@ -164,15 +163,10 @@ export class ParticleSystem {
       this.colors[i3 + 1] = color.g;
       this.colors[i3 + 2] = color.b;
 
-      const baseSize = lerp(c.bottomSize, c.topSize, heightT) * this.params.particleSize * 35;
-      this.sizes[i] = baseSize;
+      this.sizes[i] = lerp(c.bottomSize, c.topSize, heightT) * this.params.particleSize * 35;
 
       this.alphas[i] = lerp(c.bottomAlpha, c.topAlpha, heightT);
       this.randoms[i] = Math.random();
-
-      this.noisePhases[i3] = Math.random() * Math.PI * 2;
-      this.noisePhases[i3 + 1] = Math.random() * Math.PI * 2;
-      this.noisePhases[i3 + 2] = Math.random() * Math.PI * 2;
     }
   }
 
@@ -190,9 +184,19 @@ export class ParticleSystem {
   private handleFluidTypeChange(type: FluidType): void {
     if (type === this.targetFluidType && this.transitionProgress >= 1) return;
 
+    this.currentVisual = {
+      bottomColor: { ...this.displayMaterialParams.bottomColor },
+      topColor: { ...this.displayMaterialParams.topColor },
+      bottomAlpha: this.displayMaterialParams.bottomAlpha,
+      topAlpha: this.displayMaterialParams.topAlpha,
+      bottomSize: this.displayMaterialParams.bottomSize,
+      topSize: this.displayMaterialParams.topSize,
+    };
+
     this.targetFluidType = type;
     this.targetVisual = { ...FLUID_VISUAL_PRESETS[type] };
     this.transitionProgress = 0;
+    this.transitionId++;
 
     const newMaterial = this.rendererModule.createParticleMaterial(type);
     if (newMaterial.uniforms && this.material.uniforms) {
@@ -239,7 +243,6 @@ export class ParticleSystem {
     this.sizes = new Float32Array(newCount);
     this.alphas = new Float32Array(newCount);
     this.randoms = new Float32Array(newCount);
-    this.noisePhases = new Float32Array(newCount * 3);
 
     this.geometry.dispose();
     this.geometry = new THREE.BufferGeometry();
@@ -343,7 +346,6 @@ export class ParticleSystem {
   }
 
   private updateVisualProperties(): void {
-    const time = performance.now() * 0.001;
     const c = this.displayMaterialParams;
     const sizeMul = this.params.particleSize * 35;
 
@@ -351,53 +353,29 @@ export class ParticleSystem {
       const i3 = i * 3;
       const y = this.positions[i3 + 1];
       const heightT = this.calcHeightT(y);
-      const rand = this.randoms[i];
-      const pR = this.noisePhases[i3];
-      const pG = this.noisePhases[i3 + 1];
-      const pB = this.noisePhases[i3 + 2];
 
       const baseColor = lerpColor(c.bottomColor, c.topColor, heightT);
-
-      const noiseR = this.noise3(time * 0.9, pR, rand * 3.7) * 0.02;
-      const noiseG = this.noise3(time * 1.1, pG, rand * 5.3) * 0.02;
-      const noiseB = this.noise3(time * 0.7, pB, rand * 7.1) * 0.02;
-
       const randOffsetR = (Math.random() - 0.5) * 0.02;
       const randOffsetG = (Math.random() - 0.5) * 0.02;
       const randOffsetB = (Math.random() - 0.5) * 0.02;
 
-      this.colors[i3] = clamp(baseColor.r + noiseR + randOffsetR, 0, 1);
-      this.colors[i3 + 1] = clamp(baseColor.g + noiseG + randOffsetG, 0, 1);
-      this.colors[i3 + 2] = clamp(baseColor.b + noiseB + randOffsetB, 0, 1);
+      this.colors[i3] = clamp(baseColor.r + randOffsetR, 0, 1);
+      this.colors[i3 + 1] = clamp(baseColor.g + randOffsetG, 0, 1);
+      this.colors[i3 + 2] = clamp(baseColor.b + randOffsetB, 0, 1);
 
-      const baseSize = lerp(c.bottomSize, c.topSize, heightT) * sizeMul;
-
-      const noiseSize = this.noise3(time * 2.2, rand * 11.0, pR + 3.0);
-      const randJitter = (Math.random() - 0.5) * 0.15;
-      const sizeFactor = 1.0 + noiseSize * 0.5 + randJitter;
-      const minSize = 0.2 * sizeMul;
-      const maxSize = 0.8 * sizeMul;
-      this.sizes[i] = clamp(baseSize * sizeFactor, minSize, maxSize);
+      this.sizes[i] = (0.2 + Math.random() * 0.6) * sizeMul;
 
       const baseAlpha = lerp(c.bottomAlpha, c.topAlpha, heightT);
-      const noiseAlpha = this.noise3(time * 1.8, rand * 13.0, pB + 5.0) * 0.02;
       const randAlpha = (Math.random() - 0.5) * 0.02;
 
-      let finalAlpha = baseAlpha + noiseAlpha + randAlpha;
+      let finalAlpha = baseAlpha + randAlpha;
       if (this.currentFluidType === 'smoke' || this.targetFluidType === 'smoke') {
-        finalAlpha *= 0.55 + rand * 0.25;
+        finalAlpha *= 0.55 + this.randoms[i] * 0.25;
       } else if (this.currentFluidType === 'fire' || this.targetFluidType === 'fire') {
         finalAlpha *= 0.75 + heightT * 0.35;
       }
       this.alphas[i] = clamp(finalAlpha, 0.05, 1.0);
     }
-  }
-
-  private noise3(a: number, b: number, c: number): number {
-    const s1 = Math.sin(a + b * 1.7 + c * 0.3);
-    const s2 = Math.sin(a * 1.3 - b * 0.9 + c * 2.1);
-    const s3 = Math.cos(a * 0.7 + b * 2.3 - c * 1.1);
-    return (s1 + s2 * 0.5 + s3 * 0.3) / 1.8;
   }
 
   private updateGeometryAttributes(): void {

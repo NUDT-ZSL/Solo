@@ -35,7 +35,7 @@ const FLUID_PRESETS: Record<FluidType, FluidPhysicsParams> = {
     restDensity: 80,
     stiffness: 120,
     viscosity: 40,
-    surfaceTension: 0.02,
+    surfaceTension: 0,
     gravityScale: -0.15,
     buoyancy: 1.5,
     damping: 0.992,
@@ -45,7 +45,7 @@ const FLUID_PRESETS: Record<FluidType, FluidPhysicsParams> = {
     restDensity: 40,
     stiffness: 60,
     viscosity: 15,
-    surfaceTension: 0.01,
+    surfaceTension: 0,
     gravityScale: -2.2,
     buoyancy: 3.0,
     damping: 0.985,
@@ -58,6 +58,10 @@ export class SimulationEngine {
   private velocities: Float32Array;
   private densities: Float32Array;
   private pressures: Float32Array;
+  private colorFieldGradX: Float32Array;
+  private colorFieldGradY: Float32Array;
+  private colorFieldGradZ: Float32Array;
+  private colorFieldLaplacian: Float32Array;
 
   private baseGravity: number = -9.8;
   private gravity: number = -9.8;
@@ -105,6 +109,10 @@ export class SimulationEngine {
     this.velocities = new Float32Array(particleCount * 3);
     this.densities = new Float32Array(particleCount);
     this.pressures = new Float32Array(particleCount);
+    this.colorFieldGradX = new Float32Array(particleCount);
+    this.colorFieldGradY = new Float32Array(particleCount);
+    this.colorFieldGradZ = new Float32Array(particleCount);
+    this.colorFieldLaplacian = new Float32Array(particleCount);
 
     this.currentParams = { ...FLUID_PRESETS.water };
     this.targetParams = { ...FLUID_PRESETS.water };
@@ -181,6 +189,7 @@ export class SimulationEngine {
 
   private handleFluidTypeChanged(type: FluidType): void {
     this.currentFluidType = type;
+    this.currentParams = { ...this.currentParams };
     this.targetParams = { ...FLUID_PRESETS[type] };
     this.paramsTransitionProgress = 0;
   }
@@ -224,6 +233,10 @@ export class SimulationEngine {
     this.velocities = new Float32Array(newCount * 3);
     this.densities = new Float32Array(newCount);
     this.pressures = new Float32Array(newCount);
+    this.colorFieldGradX = new Float32Array(newCount);
+    this.colorFieldGradY = new Float32Array(newCount);
+    this.colorFieldGradZ = new Float32Array(newCount);
+    this.colorFieldLaplacian = new Float32Array(newCount);
     this.accelX = new Float32Array(newCount);
     this.accelY = new Float32Array(newCount);
     this.accelZ = new Float32Array(newCount);
@@ -328,14 +341,15 @@ export class SimulationEngine {
     const h = this.smoothingRadius;
     const h2 = h * h;
     const h9 = Math.pow(h, 9);
-    const poly6 = (315.0) / (64.0 * Math.PI * h9);
+    const poly6 = 315.0 / (64.0 * Math.PI * h9);
     const mass = this.currentParams.particleMass;
     const restDensity = this.currentParams.restDensity;
     const stiffness = this.currentParams.stiffness;
+    const mass2 = mass * mass;
 
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
-      let density = mass * poly6 * Math.pow(h2, 3);
+      let density = mass * poly6 * h2 * h2 * h2;
 
       const neighbors = this.neighborCache[i];
       const nCount = this.neighborCountCache[i];
@@ -358,6 +372,54 @@ export class SimulationEngine {
       this.pressures[i] = stiffness * (densityRatio * densityRatio * densityRatio - 1) * restDensity;
       if (this.pressures[i] < 0) this.pressures[i] = 0;
     }
+
+    if (this.currentParams.surfaceTension > 0.001) {
+      this.computeColorField(poly6, h, h2, mass2);
+    }
+  }
+
+  private computeColorField(poly6: number, h: number, h2: number, mass2: number): void {
+    const poly6GradCoeff = -945.0 / (32.0 * Math.PI * Math.pow(h, 9));
+    const poly6LapCoeff = -945.0 / (32.0 * Math.PI * Math.pow(h, 9));
+
+    for (let i = 0; i < this.particleCount; i++) {
+      const i3 = i * 3;
+      let gradX = 0;
+      let gradY = 0;
+      let gradZ = 0;
+      let laplacian = 0;
+
+      const cSelf = poly6 * h2 * h2 * h2;
+      gradX += mass2 * poly6GradCoeff * this.positions[i3] * 0;
+      gradY += mass2 * poly6GradCoeff * this.positions[i3 + 1] * 0;
+      gradZ += mass2 * poly6GradCoeff * this.positions[i3 + 2] * 0;
+      laplacian += mass2 * poly6LapCoeff * (h2 * 6);
+
+      const neighbors = this.neighborCache[i];
+      const nCount = this.neighborCountCache[i];
+
+      for (let k = 0; k < nCount; k++) {
+        const j = neighbors[k];
+        const j3 = j * 3;
+        const rx = this.positions[i3] - this.positions[j3];
+        const ry = this.positions[i3 + 1] - this.positions[j3 + 1];
+        const rz = this.positions[i3 + 2] - this.positions[j3 + 2];
+        const r2 = rx * rx + ry * ry + rz * rz;
+        const diff = h2 - r2;
+
+        const gradW = mass2 * poly6GradCoeff * diff * diff;
+        gradX += gradW * rx;
+        gradY += gradW * ry;
+        gradZ += gradW * rz;
+
+        laplacian += mass2 * poly6LapCoeff * diff * (3 * h2 - 7 * r2);
+      }
+
+      this.colorFieldGradX[i] = gradX;
+      this.colorFieldGradY[i] = gradY;
+      this.colorFieldGradZ[i] = gradZ;
+      this.colorFieldLaplacian[i] = laplacian;
+    }
   }
 
   private computeForces(): void {
@@ -366,8 +428,8 @@ export class SimulationEngine {
     const h6 = Math.pow(h, 6);
     const spikyGrad = -45.0 / (Math.PI * h6);
     const viscLap = 45.0 / (Math.PI * h6);
-    const cohesionCoef = this.currentParams.surfaceTension * 32.0 / (Math.PI * Math.pow(h, 9));
     const mass = this.currentParams.particleMass;
+    const sigma = this.currentParams.surfaceTension;
 
     const ax = this.accelX;
     const ay = this.accelY;
@@ -381,7 +443,6 @@ export class SimulationEngine {
       az[i] = this.wind.z * this.windStrength;
 
       const rhoI = this.densities[i];
-      const rhoI2 = rhoI * rhoI;
       const pI = this.pressures[i];
 
       this.applyVortexForce(i, i3, ax, ay, az);
@@ -421,12 +482,20 @@ export class SimulationEngine {
         ax[i] += viscTerm * (this.velocities[j3] - this.velocities[i3]);
         ay[i] += viscTerm * (this.velocities[j3 + 1] - this.velocities[i3 + 1]);
         az[i] += viscTerm * (this.velocities[j3 + 2] - this.velocities[i3 + 2]);
+      }
 
-        if (this.currentParams.surfaceTension > 0.001) {
-          const cohesion = cohesionCoef * mass * mass * diff2 * (h2 - r2);
-          ax[i] -= cohesion * rx * invR / rhoI2;
-          ay[i] -= cohesion * ry * invR / rhoI2;
-          az[i] -= cohesion * rz * invR / rhoI2;
+      if (sigma > 0.001) {
+        const gradLen2 = this.colorFieldGradX[i] * this.colorFieldGradX[i]
+          + this.colorFieldGradY[i] * this.colorFieldGradY[i]
+          + this.colorFieldGradZ[i] * this.colorFieldGradZ[i];
+        const gradLen = Math.sqrt(gradLen2);
+
+        if (gradLen > 1e-6) {
+          const kappa = -this.colorFieldLaplacian[i] / gradLen;
+          const fST = sigma * kappa / rhoI;
+          ax[i] += fST * this.colorFieldGradX[i] / gradLen;
+          ay[i] += fST * this.colorFieldGradY[i] / gradLen;
+          az[i] += fST * this.colorFieldGradZ[i] / gradLen;
         }
       }
     }
@@ -455,11 +524,10 @@ export class SimulationEngine {
 
       const invDist = 1 / dist;
       const tx = -dz * invDist;
-      const ty = 0;
       const tz = dx * invDist;
 
       ax[i] += tx * strength;
-      ay[i] += ty * strength + dy * strength * 0.05;
+      ay[i] += dy * strength * 0.05;
       az[i] += tz * strength;
     }
   }
@@ -518,7 +586,6 @@ export class SimulationEngine {
   private xsphSmoothing(): void {
     const h = this.smoothingRadius;
     const h2 = h * h;
-    const h6 = Math.pow(h, 6);
     const poly6 = 315.0 / (64.0 * Math.PI * Math.pow(h, 9));
     const epsilon = 0.15;
 
@@ -531,7 +598,7 @@ export class SimulationEngine {
       let sumVx = 0;
       let sumVy = 0;
       let sumVz = 0;
-      let sumW = poly6 * Math.pow(h2, 3);
+      let sumW = poly6 * h2 * h2 * h2;
 
       sumVx += this.velocities[i3] * sumW;
       sumVy += this.velocities[i3 + 1] * sumW;
@@ -557,13 +624,9 @@ export class SimulationEngine {
       }
 
       if (sumW > 1e-6) {
-        const avgVx = sumVx / sumW;
-        const avgVy = sumVy / sumW;
-        const avgVz = sumVz / sumW;
-
-        newVx[i] = this.velocities[i3] + epsilon * (avgVx - this.velocities[i3]);
-        newVy[i] = this.velocities[i3 + 1] + epsilon * (avgVy - this.velocities[i3 + 1]);
-        newVz[i] = this.velocities[i3 + 2] + epsilon * (avgVz - this.velocities[i3 + 2]);
+        newVx[i] = this.velocities[i3] + epsilon * (sumVx / sumW - this.velocities[i3]);
+        newVy[i] = this.velocities[i3 + 1] + epsilon * (sumVy / sumW - this.velocities[i3 + 1]);
+        newVz[i] = this.velocities[i3 + 2] + epsilon * (sumVz / sumW - this.velocities[i3 + 2]);
       } else {
         newVx[i] = this.velocities[i3];
         newVy[i] = this.velocities[i3 + 1];
