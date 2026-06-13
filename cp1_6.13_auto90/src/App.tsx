@@ -45,11 +45,19 @@ export default function App() {
   const [timelineValue, setTimelineValue] = useState(100)
   const [totalSnapshots, setTotalSnapshots] = useState(0)
   const [historyInfo, setHistoryInfo] = useState<{ oldest: number; newest: number } | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
   const playRef = useRef(isPlaying)
   const timelineRef = useRef(timelineValue)
 
   useEffect(() => { playRef.current = isPlaying }, [isPlaying])
   useEffect(() => { timelineRef.current = timelineValue }, [timelineValue])
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   const fetchNoiseData = useCallback(async (timestamp?: number) => {
     try {
@@ -161,15 +169,17 @@ export default function App() {
       background: '#0f172a',
       position: 'relative',
       overflow: 'hidden',
+      display: 'flex',
     }}>
       <div
         ref={containerRef}
         style={{
-          width: '100%',
+          width: isMobile ? '50%' : '100%',
           height: '100%',
-          position: 'absolute',
+          position: 'relative',
           top: 0,
           left: 0,
+          transition: 'width 0.3s ease',
         }}
       />
       <UIPanel

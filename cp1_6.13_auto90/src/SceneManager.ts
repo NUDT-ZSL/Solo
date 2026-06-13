@@ -9,6 +9,7 @@ export class SceneManager {
   private animationId: number = 0
   private breathTime: number = 0
   private container: HTMLElement
+  private currentData: number[][] = []
 
   constructor(container: HTMLElement) {
     this.container = container
@@ -58,19 +59,14 @@ export class SceneManager {
     this.animationId = requestAnimationFrame(this.animate)
     this.breathTime += 0.016
     const breathFactor = 0.9 + 0.1 * ((Math.sin(this.breathTime * (2 * Math.PI / 3)) + 1) / 2)
-    this.renderer.render(this.scene, this.camera)
-    if (this._pendingUpdate) {
-      updateHeatmap(this.heatmapMesh, this._pendingData, breathFactor)
-      this._pendingUpdate = false
+    if (this.currentData.length > 0) {
+      updateHeatmap(this.heatmapMesh, this.currentData, breathFactor)
     }
+    this.renderer.render(this.scene, this.camera)
   }
 
-  private _pendingUpdate = false
-  private _pendingData: number[][] = []
-
   updateNoiseData(data: number[][]) {
-    this._pendingData = data
-    this._pendingUpdate = true
+    this.currentData = data
   }
 
   enableOrbitControls() {

@@ -93,6 +93,7 @@ export default function UIPanel({
     }}>
       <button
         onClick={handlePlay}
+        className={`play-button ${spinning ? 'spinning' : ''}`}
         style={{
           ...glassStyle,
           width: '40px',
@@ -104,8 +105,6 @@ export default function UIPanel({
           cursor: 'pointer',
           border: '1px solid rgba(56,189,248,0.3)',
           color: '#38bdf8',
-          transition: 'all 0.2s',
-          transform: spinning ? 'rotate(360deg)' : 'rotate(0deg)',
         }}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(56,189,248,0.15)' }}
         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(30,41,59,0.7)' }}
@@ -214,6 +213,10 @@ const rangeThumbStyle = `
     cursor: pointer;
     border: 2px solid rgba(255,255,255,0.3);
     box-shadow: 0 0 8px rgba(56,189,248,0.5);
+    transition: transform 0.2s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
   }
   input[type="range"]::-moz-range-thumb {
     width: 16px;
@@ -223,5 +226,11 @@ const rangeThumbStyle = `
     cursor: pointer;
     border: 2px solid rgba(255,255,255,0.3);
     box-shadow: 0 0 8px rgba(56,189,248,0.5);
+  }
+  .play-button {
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  .play-button.spinning {
+    transform: rotate(360deg) !important;
   }
 `
