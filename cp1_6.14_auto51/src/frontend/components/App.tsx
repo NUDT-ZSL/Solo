@@ -63,9 +63,12 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !canvasAreaRef.current) return;
     const engine = new GraphEngine(
+      canvasAreaRef.current,
       canvasRef.current,
       { expressions, parameters, viewState },
       (v) => setViewState({ ...v })
@@ -109,18 +112,7 @@ const App: React.FC = () => {
   }, [expressions, parameters, viewState]);
 
   const captureThumbnail = (): string => {
-    if (!canvasRef.current) return '';
-    try {
-      const c = document.createElement('canvas');
-      c.width = 200;
-      c.height = 160;
-      const ctx = c.getContext('2d');
-      if (!ctx) return '';
-      ctx.drawImage(canvasRef.current, 0, 0, 200, 160);
-      return c.toDataURL('image/jpeg', 0.7);
-    } catch {
-      return '';
-    }
+    return engineRef.current?.captureThumbnail() || '';
   };
 
   const refreshHistory = () => {
@@ -288,7 +280,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div style={styles.canvasArea}>
+        <div style={styles.canvasArea} ref={canvasAreaRef}>
           <canvas ref={canvasRef} style={styles.canvas} />
           <div style={styles.canvasOverlay}>
             <div style={styles.hintBox}>

@@ -41,8 +41,29 @@ const FormulaInput: React.FC<FormulaInputProps> = ({
   const [activeParamId, setActiveParamId] = useState<string | null>(null);
   const [autocompleteIdx, setAutocompleteIdx] = useState<number | null>(null);
   const [showSuggestFor, setShowSuggestFor] = useState<number | null>(null);
+  const [suggestFilter, setSuggestFilter] = useState('');
+  const [userLang, setUserLang] = useState<'zh' | 'en'>('zh');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const suggestRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const lang = navigator.language.toLowerCase();
+    setUserLang(lang.startsWith('zh') ? 'zh' : 'en');
+  }, []);
+
+  const filteredTemplates = useMemo(() => {
+    const filter = suggestFilter.toLowerCase().trim();
+    const templates = FUNCTION_TEMPLATES.filter(
+      (t) => t.lang === userLang || t.lang === 'zh'
+    );
+    if (!filter) return templates;
+    return templates.filter(
+      (t) =>
+        t.label.toLowerCase().includes(filter) ||
+        t.template.toLowerCase().includes(filter) ||
+        t.desc.toLowerCase().includes(filter)
+    );
+  }, [suggestFilter, userLang]);
 
   useEffect(() => {
     const allParams = new Set<string>();
@@ -117,6 +138,7 @@ const FormulaInput: React.FC<FormulaInputProps> = ({
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     updateExpression(index, { formula: e.target.value });
+    setSuggestFilter(e.target.value);
     if (e.target.value.length > 0) {
       setShowSuggestFor(index);
       setAutocompleteIdx(null);
@@ -187,12 +209,11 @@ const FormulaInput: React.FC<FormulaInputProps> = ({
                   style={styles.input}
                   spellCheck={false}
                 />
-                {showSuggestFor === idx && (
+                {showSuggestFor === idx && filteredTemplates.length > 0 && (
                   <div ref={suggestRef} style={styles.suggestBox}>
-                    {FUNCTION_TEMPLATES.map((tpl, i) => (
+                    {filteredTemplates.map((tpl, i) => (
                       <div
-                        key={tpl.label}
-                        className="suggest-item"
+                        key={tpl.label + tpl.lang}
                         onClick={() => applySuggestion(tpl.template, idx)}
                         style={{
                           ...styles.suggestItem,
