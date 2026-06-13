@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { loadGoogleFont, type FontItem } from './fontData';
+import { type FontItem } from './fontData';
 
 interface FontListProps {
   fonts: FontItem[];
@@ -20,14 +19,6 @@ export default function FontList({
   onToggleCompareMode,
   onToggleCompareFont,
 }: FontListProps) {
-  useEffect(() => {
-    fonts.forEach((f) => {
-      if (f.googleFontName) {
-        loadGoogleFont(f);
-      }
-    });
-  }, [fonts]);
-
   return (
     <aside className="font-list-panel">
       <div className="font-list-header">

@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { sampleTexts, type FontItem } from './fontData';
+import { sampleTexts, fontList, type FontItem } from './fontData';
 
 interface PreviewCanvasProps {
   selectedFont: string;
@@ -11,7 +11,7 @@ interface PreviewCanvasProps {
   compareFonts: string[];
   compareFontSizes: number[];
   compareLineHeights: number[];
-  fading: boolean;
+  fading: 'in' | 'out' | 'none';
   fontItem: FontItem | undefined;
   onFontWeightChange: (weight: number) => void;
   onFontSizeChange: (size: number) => void;
@@ -47,7 +47,16 @@ function ColumnContent({
         lineHeight,
       }}
     >
-      <p className="preview-label" style={{ fontSize: '12px', fontWeight: 400, fontFamily: 'inherit', opacity: 0.5, marginBottom: '8px' }}>
+      <p
+        className="preview-label"
+        style={{
+          fontSize: '12px',
+          fontWeight: 400,
+          fontFamily: 'inherit',
+          opacity: 0.5,
+          marginBottom: '8px',
+        }}
+      >
         {fontName} — {fontWeight} / {fontSize}px
       </p>
       {textType === 'symbols' ? (
@@ -78,58 +87,65 @@ export default function PreviewCanvas({
   onCompareFontSizeChange,
   onCompareLineHeightChange,
 }: PreviewCanvasProps) {
-  const scrollRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const isSyncing = useRef(false);
+  const columnRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const syncLock = useRef(false);
+  const rafId = useRef<number | null>(null);
 
-  const handleScroll = useCallback(
-    (sourceIndex: number) => {
-      if (isSyncing.current) return;
-      isSyncing.current = true;
-      requestAnimationFrame(() => {
-        const source = scrollRefs.current[sourceIndex];
-        if (!source) {
-          isSyncing.current = false;
-          return;
-        }
-        const scrollTop = source.scrollTop;
-        scrollRefs.current.forEach((ref, i) => {
-          if (i !== sourceIndex && ref) {
-            ref.scrollTop = scrollTop;
-          }
-        });
-        isSyncing.current = false;
-      });
-    },
-    []
-  );
-
-  const allFonts = compareMode
-    ? [selectedFont, ...compareFonts]
-    : [selectedFont];
-  const allSizes = compareMode
-    ? [fontSize, ...compareFontSizes]
-    : [fontSize];
-  const allHeights = compareMode
-    ? [lineHeight, ...compareLineHeights]
-    : [lineHeight];
-
-  useEffect(() => {
-    scrollRefs.current = scrollRefs.current.slice(0, allFonts.length);
-  }, [allFonts.length]);
-
-  const fontItems = allFonts.map(
-    (name) => {
-      const found = fontItem && fontItem.name === name
-        ? fontItem
-        : undefined;
-      return found;
-    }
-  );
+  const allFonts = compareMode ? [selectedFont, ...compareFonts] : [selectedFont];
+  const allSizes = compareMode ? [fontSize, ...compareFontSizes] : [fontSize];
+  const allHeights = compareMode ? [lineHeight, ...compareLineHeights] : [lineHeight];
 
   const getFontType = (name: string) => {
-    const item = fontItems.find((f) => f?.name === name);
+    const item = fontList.find((f) => f.name === name);
     return item?.type ?? 'sans-serif';
   };
+
+  const syncScrollTo = useCallback((sourceIdx: number) => {
+    const source = columnRefs.current[sourceIdx];
+    if (!source) return;
+    const top = source.scrollTop;
+    columnRefs.current.forEach((ref, i) => {
+      if (i !== sourceIdx && ref) {
+        ref.scrollTop = top;
+      }
+    });
+  }, []);
+
+  const handleColumnScroll = useCallback(
+    (idx: number) => {
+      if (syncLock.current) return;
+      syncLock.current = true;
+      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+      rafId.current = requestAnimationFrame(() => {
+        syncScrollTo(idx);
+        syncLock.current = false;
+        rafId.current = null;
+      });
+    },
+    [syncScrollTo]
+  );
+
+  useEffect(() => {
+    columnRefs.current = columnRefs.current.slice(0, allFonts.length);
+  }, [allFonts.length]);
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
+  const setColumnRef = (idx: number) => (el: HTMLDivElement | null) => {
+    columnRefs.current[idx] = el;
+  };
+
+  const fadingClass =
+    fading === 'out' ? 'fading-out' : fading === 'in' ? 'fading-in' : '';
+
+  const metaWeights = fontItem?.weights ?? [];
+  const metaWeightRange = metaWeights.length
+    ? `${metaWeights[0]}–${metaWeights[metaWeights.length - 1]}`
+    : '—';
 
   return (
     <div className="preview-canvas-container">
@@ -137,7 +153,7 @@ export default function PreviewCanvas({
         <div className="meta-info">
           <h3 className="meta-font-name">{selectedFont}</h3>
           <p className="meta-detail">
-            字重范围: {fontItem?.weights[0]}–{fontItem?.weights[fontItem.weights.length - 1]} | 字符集: {fontItem?.charset}
+            字重范围: {metaWeightRange} | 字符集: {fontItem?.charset ?? '—'}
           </p>
         </div>
         <div className="meta-controls">
@@ -186,7 +202,9 @@ export default function PreviewCanvas({
       <div className="text-type-selector">
         <select
           value={textType}
-          onChange={(e) => onTextTypeChange(e.target.value as 'english' | 'chinese' | 'symbols')}
+          onChange={(e) =>
+            onTextTypeChange(e.target.value as 'english' | 'chinese' | 'symbols')
+          }
           className="text-type-select"
         >
           <option value="english">英文诗歌</option>
@@ -196,21 +214,22 @@ export default function PreviewCanvas({
       </div>
 
       <div
-        className={`preview-canvas${fading ? ' fading' : ''}`}
+        className={`preview-canvas ${fadingClass}`}
         style={{
           width: compareMode ? '100%' : '595px',
-          height: compareMode ? '842px' : '842px',
+          height: '842px',
         }}
       >
         {compareMode ? (
           <div className="compare-columns">
             {allFonts.map((fontName, i) => (
               <div
-                key={fontName}
+                key={`${fontName}-${i}`}
                 className="compare-column"
                 style={{
                   width: `${100 / allFonts.length}%`,
-                  borderRight: i < allFonts.length - 1 ? '2px solid #d1d5db' : 'none',
+                  borderRight:
+                    i < allFonts.length - 1 ? '2px solid #d1d5db' : 'none',
                 }}
               >
                 <div className="compare-column-controls">
@@ -223,7 +242,9 @@ export default function PreviewCanvas({
                       max={72}
                       step={1}
                       value={allSizes[i] ?? 16}
-                      onChange={(e) => onCompareFontSizeChange(i, Number(e.target.value))}
+                      onChange={(e) =>
+                        onCompareFontSizeChange(i, Number(e.target.value))
+                      }
                       className="custom-slider"
                     />
                     <span className="slider-value">{allSizes[i] ?? 16}px</span>
@@ -236,18 +257,20 @@ export default function PreviewCanvas({
                       max={3}
                       step={0.1}
                       value={allHeights[i] ?? 1.6}
-                      onChange={(e) => onCompareLineHeightChange(i, Number(e.target.value))}
+                      onChange={(e) =>
+                        onCompareLineHeightChange(i, Number(e.target.value))
+                      }
                       className="custom-slider"
                     />
-                    <span className="slider-value">{(allHeights[i] ?? 1.6).toFixed(1)}</span>
+                    <span className="slider-value">
+                      {(allHeights[i] ?? 1.6).toFixed(1)}
+                    </span>
                   </label>
                 </div>
                 <div
                   className="compare-scroll-area"
-                  ref={(el) => {
-                    scrollRefs.current[i] = el;
-                  }}
-                  onScroll={() => handleScroll(i)}
+                  ref={setColumnRef(i)}
+                  onScroll={() => handleColumnScroll(i)}
                 >
                   <ColumnContent
                     fontName={fontName}

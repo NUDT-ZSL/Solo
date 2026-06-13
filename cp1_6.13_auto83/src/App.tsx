@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useEffect } from 'react';
+import { useReducer, useCallback, useEffect, useRef } from 'react';
 import { fontList, loadGoogleFont, type FontItem } from './fontData';
 import FontList from './FontList';
 import PreviewCanvas from './PreviewCanvas';
@@ -26,7 +26,7 @@ export interface AppState {
   compareLineHeights: number[];
   schemes: FontScheme[];
   drawerOpen: boolean;
-  fading: boolean;
+  fading: 'in' | 'out' | 'none';
 }
 
 type Action =
@@ -43,7 +43,7 @@ type Action =
   | { type: 'LOAD_SCHEME'; scheme: FontScheme }
   | { type: 'DELETE_SCHEME'; id: string }
   | { type: 'TOGGLE_DRAWER' }
-  | { type: 'SET_FADING'; fading: boolean };
+  | { type: 'SET_FADING'; fading: 'in' | 'out' | 'none' };
 
 const initialState: AppState = {
   selectedFont: 'Inter',
@@ -57,7 +57,7 @@ const initialState: AppState = {
   compareLineHeights: [],
   schemes: [],
   drawerOpen: false,
-  fading: false,
+  fading: 'none',
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -131,37 +131,49 @@ function reducer(state: AppState, action: Action): AppState {
 }
 
 export default function App() {
+  const initialFontLoadedRef = useRef(false);
+
   const [state, dispatch] = useReducer(reducer, initialState, (init) => {
+    let schemes: FontScheme[] = [];
     try {
       const saved = localStorage.getItem('font-schemes');
       if (saved) {
-        const schemes = JSON.parse(saved) as FontScheme[];
-        return { ...init, schemes };
+        schemes = JSON.parse(saved) as FontScheme[];
       }
     } catch {
       /* ignore */
     }
-    return init;
+    return { ...init, schemes };
   });
 
   useEffect(() => {
     localStorage.setItem('font-schemes', JSON.stringify(state.schemes));
   }, [state.schemes]);
 
-  const handleSelectFont = useCallback(
-    (font: string) => {
-      dispatch({ type: 'SET_FADING', fading: true });
-      const fontItem = fontList.find((f) => f.name === font);
-      if (fontItem) {
-        loadGoogleFont(fontItem);
+  useEffect(() => {
+    if (!initialFontLoadedRef.current) {
+      initialFontLoadedRef.current = true;
+      const initialFont = fontList.find((f) => f.name === state.selectedFont);
+      if (initialFont) {
+        loadGoogleFont(initialFont);
       }
-      setTimeout(() => {
-        dispatch({ type: 'SELECT_FONT', font });
-        dispatch({ type: 'SET_FADING', fading: false });
-      }, 150);
-    },
-    []
-  );
+    }
+  }, [state.selectedFont]);
+
+  const handleSelectFont = useCallback((font: string) => {
+    const fontItem = fontList.find((f) => f.name === font);
+    if (fontItem) {
+      loadGoogleFont(fontItem);
+    }
+    dispatch({ type: 'SET_FADING', fading: 'out' });
+    window.setTimeout(() => {
+      dispatch({ type: 'SELECT_FONT', font });
+      dispatch({ type: 'SET_FADING', fading: 'in' });
+      window.setTimeout(() => {
+        dispatch({ type: 'SET_FADING', fading: 'none' });
+      }, 200);
+    }, 200);
+  }, []);
 
   const handleToggleCompareFont = useCallback((font: string) => {
     const fontItem = fontList.find((f) => f.name === font);
@@ -195,7 +207,14 @@ export default function App() {
       const fi = fontList.find((f) => f.name === fName);
       if (fi) loadGoogleFont(fi);
     });
-    dispatch({ type: 'LOAD_SCHEME', scheme });
+    dispatch({ type: 'SET_FADING', fading: 'out' });
+    window.setTimeout(() => {
+      dispatch({ type: 'LOAD_SCHEME', scheme });
+      dispatch({ type: 'SET_FADING', fading: 'in' });
+      window.setTimeout(() => {
+        dispatch({ type: 'SET_FADING', fading: 'none' });
+      }, 200);
+    }, 200);
   }, []);
 
   const selectedFontItem: FontItem | undefined = fontList.find((f) => f.name === state.selectedFont);
