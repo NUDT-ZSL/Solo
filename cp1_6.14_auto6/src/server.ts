@@ -214,6 +214,100 @@ const seedRecipes = [
       '锅中留底油，放入番茄酱、糖、醋和少许水熬至浓稠。',
       '倒入炸好的里脊快速翻炒均匀即可。'
     ]
+  },
+  {
+    id: 'r11',
+    name: '番茄鸡蛋面',
+    ingredients: [
+      { name: '面条', amount: '200克' },
+      { name: '番茄', amount: '2个' },
+      { name: '鸡蛋', amount: '2个' },
+      { name: '葱', amount: '少许' },
+      { name: '盐', amount: '适量' },
+      { name: '酱油', amount: '1勺' }
+    ],
+    steps: [
+      '番茄切块，鸡蛋打散，葱切葱花。',
+      '热锅下油，倒入蛋液炒散盛出。',
+      '锅中再加油，放入番茄炒出汁，加酱油调味。',
+      '加入适量水烧开，放入面条煮至熟透。',
+      '倒入炒好的鸡蛋，加盐调味，撒葱花即可。'
+    ]
+  },
+  {
+    id: 'r12',
+    name: '鸡肉沙拉',
+    ingredients: [
+      { name: '鸡肉', amount: '200克' },
+      { name: '生菜', amount: '100克' },
+      { name: '番茄', amount: '1个' },
+      { name: '洋葱', amount: '半个' },
+      { name: '橄榄油', amount: '2勺' },
+      { name: '柠檬汁', amount: '1勺' },
+      { name: '盐', amount: '适量' }
+    ],
+    steps: [
+      '鸡肉煮熟后撕成丝。',
+      '生菜洗净撕小片，番茄切片，洋葱切丝。',
+      '将鸡肉丝、生菜、番茄、洋葱放入大碗。',
+      '橄榄油、柠檬汁、盐调成沙拉酱汁。',
+      '将酱汁淋在沙拉上拌匀即可。'
+    ]
+  },
+  {
+    id: 'r13',
+    name: '土豆焖鸡',
+    ingredients: [
+      { name: '鸡肉', amount: '500克' },
+      { name: '土豆', amount: '2个' },
+      { name: '姜', amount: '3片' },
+      { name: '蒜', amount: '3瓣' },
+      { name: '酱油', amount: '2勺' },
+      { name: '老抽', amount: '1勺' },
+      { name: '糖', amount: '1勺' },
+      { name: '葱', amount: '2根' }
+    ],
+    steps: [
+      '鸡肉切块焯水，土豆去皮切块。',
+      '热锅下油，炒香姜蒜。',
+      '放入鸡块翻炒至变色，加酱油、老抽、糖上色。',
+      '加入土豆块和适量水，大火烧开转小火焖20分钟。',
+      '大火收汁，撒上葱段即可。'
+    ]
+  },
+  {
+    id: 'r14',
+    name: '洋葱圈',
+    ingredients: [
+      { name: '洋葱', amount: '2个' },
+      { name: '鸡蛋', amount: '1个' },
+      { name: '淀粉', amount: '2勺' },
+      { name: '面包糠', amount: '100克' },
+      { name: '盐', amount: '少许' }
+    ],
+    steps: [
+      '洋葱切成圈，撒少许盐腌制5分钟。',
+      '鸡蛋打散成蛋液备用。',
+      '洋葱圈依次裹上淀粉、蛋液、面包糠。',
+      '油温六成热，放入洋葱圈炸至金黄。',
+      '捞出沥油即可食用。'
+    ]
+  },
+  {
+    id: 'r15',
+    name: '鸡蛋羹',
+    ingredients: [
+      { name: '鸡蛋', amount: '2个' },
+      { name: '盐', amount: '少许' },
+      { name: '酱油', amount: '半勺' },
+      { name: '葱', amount: '少许' }
+    ],
+    steps: [
+      '鸡蛋打散，加入1.5倍温水和少许盐搅匀。',
+      '蛋液过筛，倒入碗中，盖保鲜膜。',
+      '水开后上锅蒸10分钟。',
+      '取出淋酱油，撒葱花即可。'
+    ]
   }
 ];
 
@@ -226,6 +320,13 @@ async function seedDatabase() {
 
 seedDatabase();
 
+function isIngredientMatch(input: string, ingredientName: string): boolean {
+  if (input === ingredientName) return true;
+  if (ingredientName.includes(input) && input.length >= 2) return true;
+  if (input.includes(ingredientName) && ingredientName.length >= 2) return true;
+  return false;
+}
+
 app.get('/api/search', async (req, res) => {
   try {
     const ingredientsParam = req.query.ingredients as string;
@@ -237,13 +338,23 @@ app.get('/api/search', async (req, res) => {
 
     const results = allRecipes.map(recipe => {
       const recipeIngredientNames = recipe.ingredients.map((ing: any) => ing.name);
-      const matched = inputIngredients.filter(input =>
-        recipeIngredientNames.some(name =>
-          name.includes(input) || input.includes(name)
-        )
-      );
+      const matched: string[] = [];
+      const matchedInput = new Set<string>();
+
+      for (const input of inputIngredients) {
+        for (const name of recipeIngredientNames) {
+          if (isIngredientMatch(input, name) && !matchedInput.has(input)) {
+            matched.push(name);
+            matchedInput.add(input);
+            break;
+          }
+        }
+      }
+
       const matchCount = matched.length;
-      const matchPercentage = Math.round((matchCount / recipe.ingredients.length) * 100);
+      const totalRecipeIngredients = recipe.ingredients.length;
+      const matchPercentage = Math.round((matchCount / totalRecipeIngredients) * 100);
+
       return {
         ...recipe,
         matchCount,
@@ -252,7 +363,10 @@ app.get('/api/search', async (req, res) => {
       };
     })
       .filter(r => r.matchCount > 0)
-      .sort((a, b) => b.matchCount - a.matchCount)
+      .sort((a, b) => {
+        if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
+        return b.matchPercentage - a.matchPercentage;
+      })
       .slice(0, 5);
 
     res.json(results);
