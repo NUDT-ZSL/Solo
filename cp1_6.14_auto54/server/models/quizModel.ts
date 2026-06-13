@@ -3,7 +3,18 @@ import { JSONFile } from 'lowdb/node';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import type { DatabaseSchema, Question, Paper, Submission, AnswerRecord, Difficulty, QuestionType } from '../types';
+import type {
+  DatabaseSchema,
+  Question,
+  Paper,
+  Submission,
+  AnswerRecord,
+  Difficulty,
+  QuestionType,
+  PaperAnalysis,
+  QuestionAnalysis,
+  PaperWithQuestions,
+} from '../types';
 
 const dbDir = path.resolve(__dirname, '..', 'data');
 if (!fs.existsSync(dbDir)) {
@@ -23,25 +34,42 @@ let dbInstance: Low<DatabaseSchema> | null = null;
 
 type QuestionIndex = Map<string, Question>;
 type PaperIndex = Map<string, Paper>;
+type AnswerByPaperIndex = Map<string, AnswerRecord[]>;
+type SubmissionByPaperIndex = Map<string, Submission[]>;
 
 const questionIdx: QuestionIndex = new Map();
 const paperIdx: PaperIndex = new Map();
+const answerByPaperIdx: AnswerByPaperIndex = new Map();
+const submissionByPaperIdx: SubmissionByPaperIndex = new Map();
 let indexBuilt = false;
 
 function buildIndex(data: DatabaseSchema) {
   if (indexBuilt) return;
   data.questions.forEach((q) => questionIdx.set(q.id, q));
   data.papers.forEach((p) => paperIdx.set(p.id, p));
+
+  for (const rec of data.answerRecords) {
+    if (!answerByPaperIdx.has(rec.paperId)) {
+      answerByPaperIdx.set(rec.paperId, []);
+    }
+    answerByPaperIdx.get(rec.paperId)!.push(rec);
+  }
+
+  for (const sub of data.submissions) {
+    if (!submissionByPaperIdx.has(sub.paperId)) {
+      submissionByPaperIdx.set(sub.paperId, []);
+    }
+    submissionByPaperIdx.get(sub.paperId)!.push(sub);
+  }
+
   indexBuilt = true;
 }
 
-function invalidateQuestionIndex() {
+function invalidateAllIndex() {
   questionIdx.clear();
-  indexBuilt = false;
-}
-
-function invalidatePaperIndex() {
   paperIdx.clear();
+  answerByPaperIdx.clear();
+  submissionByPaperIdx.clear();
   indexBuilt = false;
 }
 
@@ -75,18 +103,18 @@ export const questionModel = {
   },
 
   async getById(id: string): Promise<Question | null> {
-    const db = await getDb();
     if (indexBuilt && questionIdx.has(id)) {
       return questionIdx.get(id)!;
     }
+    const db = await getDb();
     return db.data.questions.find((q) => q.id === id) || null;
   },
 
   async getByIds(ids: string[]): Promise<Question[]> {
-    const db = await getDb();
     if (indexBuilt) {
       return ids.map((id) => questionIdx.get(id)).filter((q): q is Question => !!q);
     }
+    const db = await getDb();
     return ids
       .map((id) => db.data.questions.find((q) => q.id === id))
       .filter((q): q is Question => !!q);
@@ -123,8 +151,8 @@ export const questionModel = {
     const db = await getDb();
     const before = db.data.questions.length;
     db.data.questions = db.data.questions.filter((q) => q.id !== id);
-    await db.write();
     questionIdx.delete(id);
+    await db.write();
     return db.data.questions.length < before;
   },
 
@@ -147,7 +175,7 @@ export const questionModel = {
 
   async rebuildIndex() {
     const db = await getDb();
-    invalidateQuestionIndex();
+    invalidateAllIndex();
     buildIndex(db.data);
   },
 };
@@ -158,10 +186,15 @@ export const paperModel = {
     return [...db.data.papers].sort((a, b) => b.createdAt - a.createdAt);
   },
 
-  async getById(id: string): Promise<(Paper & { questions: Question[] }) | null> {
-    const db = await getDb();
-    const paper = indexBuilt ? paperIdx.get(id) : db.data.papers.find((p) => p.id === id);
-    if (!paper) return null;
+  async getById(id: string): Promise<PaperWithQuestions | null> {
+    const paper = indexBuilt ? paperIdx.get(id) : null;
+    if (!paper) {
+      const db = await getDb();
+      const found = db.data.papers.find((p) => p.id === id);
+      if (!found) return null;
+      const questions = await questionModel.getByIds(found.questionIds);
+      return { ...found, questions };
+    }
     const questions = await questionModel.getByIds(paper.questionIds);
     return { ...paper, questions };
   },
@@ -238,54 +271,53 @@ export const paperModel = {
   },
 };
 
-export interface QuestionAnalysis {
-  questionId: string;
-  questionIndex: number;
-  totalAttempts: number;
-  correctCount: number;
-  correctRate: number;
-  avgScore: number;
-  studentAnswers: {
-    studentId: string;
-    studentName: string;
-    answer: string | string[];
-    score: number;
-    isCorrect: boolean;
-  }[];
-}
-
-export interface PaperAnalysis {
-  paperId: string;
-  totalSubmissions: number;
-  avgTotalScore: number;
-  questionAnalysis: QuestionAnalysis[];
-}
-
 export const analysisModel = {
   async getPaperAnalysis(paperId: string): Promise<PaperAnalysis> {
     const db = await getDb();
-    const paper = db.data.papers.find((p) => p.id === paperId);
+    const paper = indexBuilt ? paperIdx.get(paperId) : db.data.papers.find((p) => p.id === paperId);
+
     if (!paper) {
       return { paperId, totalSubmissions: 0, avgTotalScore: 0, questionAnalysis: [] };
     }
 
-    const submissions = db.data.submissions.filter((s) => s.paperId === paperId);
-    const answerRecords = db.data.answerRecords.filter((r) => r.paperId === paperId);
+    const allRecords = indexBuilt
+      ? answerByPaperIdx.get(paperId) || []
+      : db.data.answerRecords.filter((r) => r.paperId === paperId);
+
+    const submissions = indexBuilt
+      ? submissionByPaperIdx.get(paperId) || []
+      : db.data.submissions.filter((s) => s.paperId === paperId);
+
+    const recordsByQuestion = new Map<string, AnswerRecord[]>();
+    for (const rec of allRecords) {
+      if (!recordsByQuestion.has(rec.questionId)) {
+        recordsByQuestion.set(rec.questionId, []);
+      }
+      recordsByQuestion.get(rec.questionId)!.push(rec);
+    }
 
     const questionAnalysis: QuestionAnalysis[] = paper.questionIds.map((qId, idx) => {
-      const qRecords = answerRecords.filter((r) => r.questionId === qId);
+      const qRecords = recordsByQuestion.get(qId) || [];
       const totalAttempts = qRecords.length;
-      const correctCount = qRecords.filter((r) => r.isCorrect).length;
-      const correctRate = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
-      const avgScore = totalAttempts > 0 ? Math.round(qRecords.reduce((s, r) => s + r.score, 0) / totalAttempts) : 0;
 
-      const studentAnswers = qRecords.map((r) => ({
-        studentId: r.studentId,
-        studentName: r.studentName,
-        answer: r.answer,
-        score: r.score,
-        isCorrect: r.isCorrect,
-      }));
+      let correctCount = 0;
+      let scoreSum = 0;
+      const studentAnswers: QuestionAnalysis['studentAnswers'] = [];
+
+      for (const r of qRecords) {
+        scoreSum += r.score;
+        if (r.isCorrect) correctCount++;
+        studentAnswers.push({
+          studentId: r.studentId,
+          studentName: r.studentName,
+          answer: r.answer,
+          score: r.score,
+          isCorrect: r.isCorrect,
+        });
+      }
+
+      const correctRate = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
+      const avgScore = totalAttempts > 0 ? Math.round(scoreSum / totalAttempts) : 0;
 
       return {
         questionId: qId,
@@ -298,10 +330,11 @@ export const analysisModel = {
       };
     });
 
-    const avgTotalScore =
-      submissions.length > 0
-        ? Math.round(submissions.reduce((s, sub) => s + sub.totalScore, 0) / submissions.length)
-        : 0;
+    let scoreSum = 0;
+    for (const sub of submissions) {
+      scoreSum += sub.totalScore;
+    }
+    const avgTotalScore = submissions.length > 0 ? Math.round(scoreSum / submissions.length) : 0;
 
     return {
       paperId,
@@ -313,14 +346,18 @@ export const analysisModel = {
 
   async getStudentAnswersForQuestion(paperId: string, questionId: string): Promise<AnswerRecord[]> {
     const db = await getDb();
-    return db.data.answerRecords.filter(
-      (r) => r.paperId === paperId && r.questionId === questionId
-    );
+    const allRecords = indexBuilt
+      ? answerByPaperIdx.get(paperId) || []
+      : db.data.answerRecords.filter((r) => r.paperId === paperId);
+    return allRecords.filter((r) => r.questionId === questionId);
   },
 
   async getStudentSubmission(paperId: string, studentId: string): Promise<Submission | null> {
     const db = await getDb();
     return db.data.submissions.find((s) => s.paperId === paperId && s.studentId === studentId) || null;
+  },
+
+  invalidatePaperAnalysis(paperId: string) {
   },
 };
 
@@ -339,15 +376,35 @@ export const submissionModel = {
       id: uuidv4(),
       submittedAt: Date.now(),
     };
+
     const existingIdx = db.data.answerRecords.findIndex(
-      (r) => r.paperId === record.paperId && r.questionId === record.questionId && r.studentId === record.studentId
+      (r) =>
+        r.paperId === record.paperId &&
+        r.questionId === record.questionId &&
+        r.studentId === record.studentId
     );
+
     if (existingIdx >= 0) {
       answerRecord.id = db.data.answerRecords[existingIdx].id;
       db.data.answerRecords[existingIdx] = answerRecord;
     } else {
       db.data.answerRecords.push(answerRecord);
     }
+
+    if (indexBuilt) {
+      if (!answerByPaperIdx.has(record.paperId)) {
+        answerByPaperIdx.set(record.paperId, []);
+      }
+      const arr = answerByPaperIdx.get(record.paperId)!;
+      if (existingIdx >= 0) {
+        const idx = arr.findIndex((r) => r.id === answerRecord.id);
+        if (idx >= 0) arr[idx] = answerRecord;
+        else arr.push(answerRecord);
+      } else {
+        arr.push(answerRecord);
+      }
+    }
+
     await db.write();
     return answerRecord;
   },
@@ -365,6 +422,14 @@ export const submissionModel = {
       submittedAt: Date.now(),
     };
     db.data.submissions.push(newSubmission);
+
+    if (indexBuilt) {
+      if (!submissionByPaperIdx.has(submission.paperId)) {
+        submissionByPaperIdx.set(submission.paperId, []);
+      }
+      submissionByPaperIdx.get(submission.paperId)!.push(newSubmission);
+    }
+
     await db.write();
     return newSubmission;
   },

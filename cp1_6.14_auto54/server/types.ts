@@ -1,13 +1,18 @@
 export type QuestionType = 'single' | 'multiple' | 'fill' | 'essay';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
+export interface Keyword {
+  word: string;
+  weight: number;
+}
+
 export interface Question {
   id: string;
   type: QuestionType;
   content: string;
   options?: string[];
   answer: string | string[];
-  keywords?: { word: string; weight: number }[];
+  keywords?: Keyword[];
   knowledgePoint: string;
   difficulty: Difficulty;
   createdAt: number;
@@ -22,6 +27,10 @@ export interface Paper {
   createdAt: number;
 }
 
+export interface PaperWithQuestions extends Paper {
+  questions: Question[];
+}
+
 export interface AnswerRecord {
   id: string;
   paperId: string;
@@ -32,6 +41,7 @@ export interface AnswerRecord {
   score: number;
   isCorrect: boolean;
   submittedAt: number;
+  gradeDetails?: GradeDetail;
 }
 
 export interface Submission {
@@ -44,6 +54,48 @@ export interface Submission {
   totalQuestions: number;
   startedAt: number;
   submittedAt: number;
+}
+
+export interface GradeDetail {
+  matchedKeywords: string[];
+  missedKeywords: string[];
+  hitWeight: number;
+  totalWeight: number;
+}
+
+export interface GradeResult {
+  score: number;
+  isCorrect: boolean;
+  details?: GradeDetail;
+}
+
+export interface QuestionAnalysis {
+  questionId: string;
+  questionIndex: number;
+  totalAttempts: number;
+  correctCount: number;
+  correctRate: number;
+  avgScore: number;
+  studentAnswers: {
+    studentId: string;
+    studentName: string;
+    answer: string | string[];
+    score: number;
+    isCorrect: boolean;
+  }[];
+}
+
+export interface PaperAnalysis {
+  paperId: string;
+  totalSubmissions: number;
+  avgTotalScore: number;
+  questionAnalysis: QuestionAnalysis[];
+}
+
+export interface GradeOptions {
+  keywords?: Keyword[];
+  passScore?: number;
+  minWordCount?: number;
 }
 
 export interface DatabaseSchema {

@@ -1,13 +1,18 @@
 export type QuestionType = 'single' | 'multiple' | 'fill' | 'essay';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
+export interface Keyword {
+  word: string;
+  weight: number;
+}
+
 export interface Question {
   id: string;
   type: QuestionType;
   content: string;
   options?: string[];
   answer: string | string[];
-  keywords?: { word: string; weight: number }[];
+  keywords?: Keyword[];
   knowledgePoint: string;
   difficulty: Difficulty;
   createdAt: number;
@@ -20,7 +25,23 @@ export interface Paper {
   duration: number;
   difficultyRatio: { easy: number; medium: number; hard: number };
   createdAt: number;
-  questions?: Question[];
+}
+
+export interface PaperWithQuestions extends Paper {
+  questions: Question[];
+}
+
+export interface GradeDetail {
+  matchedKeywords: string[];
+  missedKeywords: string[];
+  hitWeight: number;
+  totalWeight: number;
+}
+
+export interface GradeResult {
+  score: number;
+  isCorrect: boolean;
+  details?: GradeDetail;
 }
 
 export interface AnswerRecord {
@@ -33,12 +54,7 @@ export interface AnswerRecord {
   score: number;
   isCorrect: boolean;
   submittedAt: number;
-  gradeDetails?: {
-    matchedKeywords: string[];
-    missedKeywords: string[];
-    hitWeight: number;
-    totalWeight: number;
-  };
+  gradeDetails?: GradeDetail;
 }
 
 export interface Submission {
@@ -74,4 +90,10 @@ export interface PaperAnalysis {
   totalSubmissions: number;
   avgTotalScore: number;
   questionAnalysis: QuestionAnalysis[];
+}
+
+export interface GradeOptions {
+  keywords?: Keyword[];
+  passScore?: number;
+  minWordCount?: number;
 }

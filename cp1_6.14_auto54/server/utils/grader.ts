@@ -1,15 +1,4 @@
-import type { Question, QuestionType } from '../types';
-
-export interface GradeResult {
-  score: number;
-  isCorrect: boolean;
-  details?: {
-    matchedKeywords: string[];
-    missedKeywords: string[];
-    hitWeight: number;
-    totalWeight: number;
-  };
-}
+import type { Question, QuestionType, GradeResult, GradeOptions, Keyword } from '../types';
 
 function normalizeText(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -36,6 +25,25 @@ function fuzzyMatchFill(correct: string, user: string): boolean {
     if (matchCount / cChars.length >= 0.85) return true;
   }
   return false;
+}
+
+function calcFillSimilarity(correct: string, user: string): number {
+  const correctNorm = normalizeText(correct);
+  const userNorm = normalizeText(user);
+  if (correctNorm.length === 0 || userNorm.length === 0) return 0;
+  const maxLen = Math.max(correctNorm.length, userNorm.length);
+  let matches = 0;
+  const used: boolean[] = new Array(userNorm.length).fill(false);
+  for (let i = 0; i < correctNorm.length; i++) {
+    for (let j = 0; j < userNorm.length; j++) {
+      if (!used[j] && correctNorm[i] === userNorm[j]) {
+        matches++;
+        used[j] = true;
+        break;
+      }
+    }
+  }
+  return matches / maxLen;
 }
 
 function gradeSingleChoice(question: Question, userAnswer: string | string[]): GradeResult {
@@ -83,25 +91,9 @@ function gradeFill(question: Question, userAnswer: string | string[]): GradeResu
     }
   }
 
-  const userNorm = normalizeText(userText);
   let bestSimilarity = 0;
   for (const correct of correctAnswers) {
-    const correctNorm = normalizeText(correct);
-    if (correctNorm.length === 0 || userNorm.length === 0) continue;
-    const maxLen = Math.max(correctNorm.length, userNorm.length);
-    let matches = 0;
-    const used: boolean[] = new Array(userNorm.length).fill(false);
-    for (let i = 0; i < correctNorm.length; i++) {
-      for (let j = 0; j < userNorm.length; j++) {
-        if (!used[j] && correctNorm[i] === userNorm[j]) {
-          matches++;
-          used[j] = true;
-          break;
-        }
-      }
-    }
-    const similarity = matches / maxLen;
-    bestSimilarity = Math.max(bestSimilarity, similarity);
+    bestSimilarity = Math.max(bestSimilarity, calcFillSimilarity(correct, userText));
   }
 
   if (bestSimilarity >= 0.8) {
@@ -110,11 +102,25 @@ function gradeFill(question: Question, userAnswer: string | string[]): GradeResu
   return { score: 0, isCorrect: false };
 }
 
-function gradeEssay(question: Question, userAnswer: string | string[]): GradeResult {
-  const userText = (Array.isArray(userAnswer) ? userAnswer.join(' ') : userAnswer) || '';
+function resolveKeywords(question: Question, options?: GradeOptions): Keyword[] {
+  if (options?.keywords && options.keywords.length > 0) {
+    return options.keywords;
+  }
+  return question.keywords || [];
+}
 
-  if (!question.keywords || question.keywords.length === 0) {
-    return { score: 0, isCorrect: false, details: { matchedKeywords: [], missedKeywords: [], hitWeight: 0, totalWeight: 0 } };
+function gradeEssay(question: Question, userAnswer: string | string[], options?: GradeOptions): GradeResult {
+  const userText = (Array.isArray(userAnswer) ? userAnswer.join(' ') : userAnswer) || '';
+  const keywords = resolveKeywords(question, options);
+  const passScore = options?.passScore ?? 60;
+  const minWordCount = options?.minWordCount ?? 5;
+
+  if (keywords.length === 0) {
+    return {
+      score: 0,
+      isCorrect: false,
+      details: { matchedKeywords: [], missedKeywords: [], hitWeight: 0, totalWeight: 0 },
+    };
   }
 
   const userNorm = normalizeText(userText);
@@ -123,7 +129,7 @@ function gradeEssay(question: Question, userAnswer: string | string[]): GradeRes
   const matchedKeywords: string[] = [];
   const missedKeywords: string[] = [];
 
-  for (const kw of question.keywords) {
+  for (const kw of keywords) {
     totalWeight += kw.weight;
     if (userNorm.includes(normalizeText(kw.word))) {
       hitWeight += kw.weight;
@@ -134,7 +140,11 @@ function gradeEssay(question: Question, userAnswer: string | string[]): GradeRes
   }
 
   if (totalWeight === 0) {
-    return { score: 0, isCorrect: false, details: { matchedKeywords, missedKeywords, hitWeight: 0, totalWeight: 0 } };
+    return {
+      score: 0,
+      isCorrect: false,
+      details: { matchedKeywords, missedKeywords, hitWeight: 0, totalWeight: 0 },
+    };
   }
 
   const rawRatio = hitWeight / totalWeight;
@@ -143,21 +153,21 @@ function gradeEssay(question: Question, userAnswer: string | string[]): GradeRes
   if (rawRatio >= 1.0) {
     score = 100;
   } else if (rawRatio >= 0.8) {
-    score = 80 + Math.round((rawRatio - 0.8) / 0.2 * 20);
+    score = 80 + Math.round(((rawRatio - 0.8) / 0.2) * 20);
   } else if (rawRatio >= 0.6) {
-    score = 60 + Math.round((rawRatio - 0.6) / 0.2 * 20);
+    score = 60 + Math.round(((rawRatio - 0.6) / 0.2) * 20);
   } else if (rawRatio >= 0.4) {
-    score = 40 + Math.round((rawRatio - 0.4) / 0.2 * 20);
+    score = 40 + Math.round(((rawRatio - 0.4) / 0.2) * 20);
   } else if (rawRatio >= 0.2) {
-    score = 20 + Math.round((rawRatio - 0.2) / 0.2 * 20);
+    score = 20 + Math.round(((rawRatio - 0.2) / 0.2) * 20);
   } else {
-    score = Math.round(rawRatio / 0.2 * 20);
+    score = Math.round((rawRatio / 0.2) * 20);
   }
 
   const wordCount = userNorm.split(' ').filter((w) => w.length > 0).length;
-  if (wordCount < 5) {
+  if (wordCount < minWordCount) {
     score = Math.round(score * 0.5);
-  } else if (wordCount < 10) {
+  } else if (wordCount < minWordCount * 2) {
     score = Math.round(score * 0.8);
   }
 
@@ -165,12 +175,16 @@ function gradeEssay(question: Question, userAnswer: string | string[]): GradeRes
 
   return {
     score,
-    isCorrect: score >= 60,
+    isCorrect: score >= passScore,
     details: { matchedKeywords, missedKeywords, hitWeight, totalWeight },
   };
 }
 
-export function gradeQuestion(question: Question, userAnswer: string | string[]): GradeResult {
+export function gradeQuestion(
+  question: Question,
+  userAnswer: string | string[],
+  options?: GradeOptions
+): GradeResult {
   const type: QuestionType = question.type;
 
   switch (type) {
@@ -181,7 +195,7 @@ export function gradeQuestion(question: Question, userAnswer: string | string[])
     case 'fill':
       return gradeFill(question, userAnswer);
     case 'essay':
-      return gradeEssay(question, userAnswer);
+      return gradeEssay(question, userAnswer, options);
     default:
       return { score: 0, isCorrect: false };
   }
@@ -189,7 +203,8 @@ export function gradeQuestion(question: Question, userAnswer: string | string[])
 
 export function gradeAll(
   questions: Question[],
-  answers: Record<string, string | string[]>
+  answers: Record<string, string | string[]>,
+  options?: GradeOptions
 ): { results: Record<string, GradeResult>; totalScore: number; correctCount: number } {
   const results: Record<string, GradeResult> = {};
   let totalScore = 0;
@@ -198,7 +213,7 @@ export function gradeAll(
   for (const q of questions) {
     const answer = answers[q.id];
     if (answer !== undefined && answer !== '') {
-      const result = gradeQuestion(q, answer);
+      const result = gradeQuestion(q, answer, options);
       results[q.id] = result;
       totalScore += result.score;
       if (result.isCorrect) correctCount++;
@@ -213,3 +228,5 @@ export function gradeAll(
     correctCount,
   };
 }
+
+export { fuzzyMatchFill, calcFillSimilarity, resolveKeywords };

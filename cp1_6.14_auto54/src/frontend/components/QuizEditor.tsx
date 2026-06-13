@@ -42,6 +42,10 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ onPaperCreated, onToast 
   const [diffRatio, setDiffRatio] = useState({ easy: 3, medium: 4, hard: 3 });
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragItemRef = useRef<HTMLDivElement | null>(null);
+  const touchStartY = useRef<number>(0);
+  const touchCurrentIdx = useRef<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [csvData, setCsvData] = useState<Partial<Question>[]>([]);
@@ -102,28 +106,83 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ onPaperCreated, onToast 
     setOrderedQuestions(selectedQuestions);
   }, [selectedIds]);
 
-  const handleDragStart = (idx: number) => {
+  const moveItem = (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const items = [...orderedQuestions];
+    const [dragged] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, dragged);
+    setOrderedQuestions(items);
+    setSelectedIds(new Set(items.map((q) => q.id)));
+  };
+
+  const handleDragStart = (idx: number, e?: React.DragEvent) => {
     setDragIdx(idx);
+    setIsDragging(true);
+    if (e?.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+    }
   };
 
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    setDragOverIdx(idx);
+    if (dragIdx !== null && dragIdx !== idx) {
+      setDragOverIdx(idx);
+    }
   };
 
   const handleDrop = (idx: number) => {
-    if (dragIdx === null || dragIdx === idx) {
-      setDragIdx(null);
-      setDragOverIdx(null);
-      return;
+    if (dragIdx !== null && dragIdx !== idx) {
+      moveItem(dragIdx, idx);
     }
-    const items = [...orderedQuestions];
-    const [dragged] = items.splice(dragIdx, 1);
-    items.splice(idx, 0, dragged);
-    setOrderedQuestions(items);
-    setSelectedIds(new Set(items.map((q) => q.id)));
     setDragIdx(null);
     setDragOverIdx(null);
+    setIsDragging(false);
+  };
+
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+    setIsDragging(false);
+  };
+
+  const handleTouchStart = (idx: number, e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartY.current = touch.clientY;
+    touchCurrentIdx.current = idx;
+    setDragIdx(idx);
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || touchCurrentIdx.current === null) return;
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - touchStartY.current;
+    const itemHeight = 56;
+    const moveSteps = Math.round(deltaY / itemHeight);
+    const targetIdx = Math.max(0, Math.min(orderedQuestions.length - 1, touchCurrentIdx.current + moveSteps));
+
+    if (targetIdx !== dragOverIdx) {
+      setDragOverIdx(targetIdx);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
+      moveItem(dragIdx, dragOverIdx);
+    }
+    setDragIdx(null);
+    setDragOverIdx(null);
+    setIsDragging(false);
+    touchCurrentIdx.current = null;
+  };
+
+  const handleTouchCancel = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+    setIsDragging(false);
+    touchCurrentIdx.current = null;
   };
 
   const handleGeneratePaper = async () => {
@@ -677,36 +736,80 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ onPaperCreated, onToast 
             <h3 style={{ fontSize: 20, fontWeight: 700, color: '#ecf0f1', marginBottom: 16 }}>
               已选题目（拖拽排序）
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchCancel}
+            >
               {orderedQuestions.map((q, i) => (
-                <div
-                  key={q.id}
-                  draggable
-                  onDragStart={() => handleDragStart(i)}
-                  onDragOver={(e) => handleDragOver(e, i)}
-                  onDrop={() => handleDrop(i)}
-                  onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
-                  style={{
-                    background: dragOverIdx === i ? '#3498db30' : '#2c3e50',
-                    borderRadius: 8,
-                    padding: '10px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    cursor: 'grab',
-                    borderLeft: `3px solid ${DIFFICULTY_COLORS[q.difficulty]}`,
-                    transition: 'background 0.15s',
-                  }}
-                >
-                  <span style={{ color: '#7f8c8d', fontSize: 14, minWidth: 24 }}>☰ {i + 1}</span>
-                  <span style={{ fontSize: 12, color: DIFFICULTY_COLORS[q.difficulty], fontWeight: 600 }}>
-                    {DIFFICULTY_LABELS[q.difficulty]}
-                  </span>
-                  <span style={{ flex: 1, color: '#ecf0f1', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {q.content}
-                  </span>
-                </div>
+                <React.Fragment key={q.id}>
+                  {dragOverIdx === i && dragIdx !== null && dragIdx !== i && (
+                    <div
+                      style={{
+                        height: 4,
+                        background: '#3498db',
+                        borderRadius: 2,
+                        margin: '2px 0',
+                        boxShadow: '0 0 8px rgba(52, 152, 219, 0.6)',
+                        transition: 'all 0.15s ease',
+                      }}
+                    />
+                  )}
+                  <div
+                    ref={dragIdx === i ? dragItemRef : undefined}
+                    draggable
+                    onDragStart={(e) => handleDragStart(i, e)}
+                    onDragOver={(e) => handleDragOver(e, i)}
+                    onDrop={() => handleDrop(i)}
+                    onDragEnd={handleDragEnd}
+                    onTouchStart={(e) => handleTouchStart(i, e)}
+                    style={{
+                      background: dragOverIdx === i ? '#3498db20' : '#2c3e50',
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      cursor: 'grab',
+                      borderLeft: `3px solid ${DIFFICULTY_COLORS[q.difficulty]}`,
+                      transition: 'all 0.2s ease',
+                      opacity: dragIdx === i ? 0.5 : 1,
+                      transform: dragIdx === i ? 'scale(0.98)' : 'scale(1)',
+                      boxShadow: dragIdx === i ? '0 4px 12px rgba(0,0,0,0.3)' : 'none',
+                      touchAction: 'none',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span style={{ color: '#7f8c8d', fontSize: 14, minWidth: 24 }}>☰ {i + 1}</span>
+                    <span style={{ fontSize: 12, color: DIFFICULTY_COLORS[q.difficulty], fontWeight: 600 }}>
+                      {DIFFICULTY_LABELS[q.difficulty]}
+                    </span>
+                    <span style={{ flex: 1, color: '#ecf0f1', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {q.content}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleSelect(q.id); }}
+                      style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: 18, padding: '2px 6px', borderRadius: 4 }}
+                      onMouseOver={(e) => { e.currentTarget.style.background = '#e74c3c20'; }}
+                      onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </React.Fragment>
               ))}
+              {dragOverIdx === orderedQuestions.length && dragIdx !== null && dragIdx !== orderedQuestions.length && (
+                <div
+                  style={{
+                    height: 4,
+                    background: '#3498db',
+                    borderRadius: 2,
+                    margin: '2px 0',
+                    boxShadow: '0 0 8px rgba(52, 152, 219, 0.6)',
+                  }}
+                />
+              )}
             </div>
 
             <div style={{ marginTop: 20, background: '#2c3e50', borderRadius: 8, padding: 20 }}>

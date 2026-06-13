@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { questionModel, paperModel, submissionModel, analysisModel } from '../models/quizModel';
 import { gradeQuestion } from '../utils/grader';
-import { getCache, setCache, invalidateCache } from '../index';
+import { getCache, setCache, invalidateCache, PAPER_GENERATE_TTL, ANALYSIS_TTL } from '../index';
 import type { Difficulty, QuestionType, Question } from '../types';
 
 class AppError extends Error {
@@ -286,7 +286,7 @@ paperRoutes.get(
     }
 
     const analysis = await analysisModel.getPaperAnalysis(paperId);
-    setCache(cacheKey, analysis);
+    setCache(cacheKey, analysis, ANALYSIS_TTL);
     res.json(analysis);
   })
 );
