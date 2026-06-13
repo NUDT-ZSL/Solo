@@ -242,14 +242,15 @@ export const GameUI: React.FC<UIProps> = ({
 
 const HourglassIcon: React.FC<{ ready: boolean; cooldown: number }> = ({ ready, cooldown }) => {
   const COOLDOWN_TOTAL = 30000
-  const progress = ready ? 0 : Math.max(0, Math.min(1, 1 - cooldown / COOLDOWN_TOTAL))
+  const effectivelyReady = ready || cooldown <= 0
+  const progress = effectivelyReady ? 0 : Math.max(0, Math.min(1, 1 - cooldown / COOLDOWN_TOTAL))
   const svgSize = 48
   const center = svgSize / 2
   const ringRadius = 22
   const strokeWidth = 3
 
   const drawRing = () => {
-    if (ready) return null
+    if (effectivelyReady) return null
     const circumference = 2 * Math.PI * ringRadius
     const offset = circumference * (1 - progress)
     return (
@@ -263,14 +264,14 @@ const HourglassIcon: React.FC<{ ready: boolean; cooldown: number }> = ({ ready, 
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         strokeLinecap="round"
-        opacity={0.8}
+        opacity={0.85}
         transform={`rotate(-90 ${center} ${center})`}
       />
     )
   }
 
   const drawBgRing = () => {
-    if (ready) return null
+    if (effectivelyReady) return null
     return (
       <circle
         cx={center}
@@ -288,15 +289,15 @@ const HourglassIcon: React.FC<{ ready: boolean; cooldown: number }> = ({ ready, 
     <svg width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`} fill="none">
       <defs>
         <linearGradient id="hgGold" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={ready ? '#ffd700' : '#666'} />
-          <stop offset="100%" stopColor={ready ? '#ff8c00' : '#444'} />
+          <stop offset="0%" stopColor={effectivelyReady ? '#ffd700' : '#666'} />
+          <stop offset="100%" stopColor={effectivelyReady ? '#ff8c00' : '#444'} />
         </linearGradient>
       </defs>
 
       {drawBgRing()}
       {drawRing()}
 
-      {!ready && (
+      {!effectivelyReady && (
         <text
           x={center}
           y={center + 1}
@@ -307,11 +308,26 @@ const HourglassIcon: React.FC<{ ready: boolean; cooldown: number }> = ({ ready, 
           fontWeight="bold"
           opacity={0.9}
         >
-          {Math.ceil(cooldown / 1000)}
+          {Math.max(1, Math.ceil(cooldown / 1000))}
         </text>
       )}
 
-      <g opacity={ready ? 1 : 0.4}>
+      {effectivelyReady && (
+        <text
+          x={center}
+          y={center + 18}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#ffd700"
+          fontSize="9"
+          fontWeight="bold"
+          opacity={0.95}
+        >
+          READY
+        </text>
+      )}
+
+      <g opacity={effectivelyReady ? 1 : 0.4}>
         <rect x="10" y="4" width="28" height="4" rx="1" fill="url(#hgGold)" />
         <rect x="10" y="40" width="28" height="4" rx="1" fill="url(#hgGold)" />
         <path
@@ -330,7 +346,7 @@ const HourglassIcon: React.FC<{ ready: boolean; cooldown: number }> = ({ ready, 
         />
       </g>
 
-      {ready && (
+      {effectivelyReady && (
         <>
           <circle cx="17" cy="13" r="1.5" fill="#ffd700">
             <animate attributeName="cy" values="13;22;13" dur="1.5s" repeatCount="indefinite" />

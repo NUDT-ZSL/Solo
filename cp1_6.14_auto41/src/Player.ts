@@ -12,7 +12,6 @@ export interface Particle {
   angle: number
   orbitRadius: number
   orbitSpeed: number
-  sizePhase: number
 }
 
 export interface TrailParticle {
@@ -37,6 +36,7 @@ export class Player {
   isRecording: boolean
   recordBuffer: { x: number; y: number; time: number; facing: number }[]
   facing: number
+  lastMovingFacing: number
 
   constructor(x: number, y: number) {
     this.x = x
@@ -52,6 +52,7 @@ export class Player {
     this.isRecording = false
     this.recordBuffer = []
     this.facing = 0
+    this.lastMovingFacing = 0
     this.initParticles()
   }
 
@@ -75,7 +76,6 @@ export class Player {
         angle,
         orbitRadius,
         orbitSpeed: 0.015 + Math.random() * 0.025,
-        sizePhase: Math.random() * Math.PI * 2,
       })
     }
   }
@@ -132,21 +132,22 @@ export class Player {
 
     this.pulsePhase += dt * 0.004
 
-    if (this.vx !== 0 || this.vy !== 0) {
-      this.facing = Math.atan2(this.vy, this.vx)
+    if (isMoving) {
+      this.lastMovingFacing = Math.atan2(this.vy, this.vx)
     }
+    this.facing = this.lastMovingFacing
+
+    const globalSizePulse = 1 + Math.sin(this.pulsePhase * 2) * 0.35
 
     this.particles.forEach((p) => {
-      const pulse = 1 + Math.sin(this.pulsePhase + p.angle * 2) * 0.25
-      const sizePulse = 1 + Math.sin(this.pulsePhase * 2 + p.sizePhase) * 0.35
-      const currentOrbit = p.orbitRadius * pulse
+      const orbitPulse = 1 + Math.sin(this.pulsePhase + p.angle * 2) * 0.25
+      const currentOrbit = p.orbitRadius * orbitPulse
       p.angle += p.orbitSpeed
-      p.sizePhase += 0.03
       const jitterX = (Math.random() - 0.5) * 1.5
       const jitterY = (Math.random() - 0.5) * 1.5
       p.x = this.x + Math.cos(p.angle) * currentOrbit + jitterX
       p.y = this.y + Math.sin(p.angle) * currentOrbit + jitterY
-      p.size = p.baseSize * sizePulse
+      p.size = p.baseSize * globalSizePulse
       p.baseX = this.x
       p.baseY = this.y
     })
