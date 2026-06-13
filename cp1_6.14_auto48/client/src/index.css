@@ -1,0 +1,58 @@
+:root {
+  --bg-ivory: #faf3e0;
+  --color-purple: #6c5ce7;
+  --color-purple-light: #a29bfe;
+  --color-green: #00b894;
+  --color-yellow: #ffeaa7;
+  --color-yellow-light: #fffde7;
+  --color-dark: #2d3436;
+  --color-gray: #636e72;
+  --color-gray-light: #dfe6e9;
+  --color-orange: #fdcb6e;
+  --font-display: 'Caveat', cursive;
+  --font-body: 'Noto Sans SC', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg-ivory);
+  color: var(--color-dark);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(108, 92, 231, 0.4); }
+  50% { box-shadow: 0 0 12px rgba(108, 92, 231, 0.7); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes nodeAppear {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
