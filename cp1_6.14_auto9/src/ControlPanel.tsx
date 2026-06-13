@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { type FontPair, type FontConfig, allFonts, webSafeFonts, googleFonts } from './fonts';
+import { type FontPair, type FontConfig, webSafeFonts, googleFonts } from './fonts';
 
 interface TextStyle {
   fontSize: number;
@@ -75,15 +75,12 @@ const Slider: React.FC<{
         step={step}
         value={value}
         onChange={handleChange}
+        className="custom-slider"
+        data-thumb-color={color}
         style={{
           width: '100%',
           height: 4,
-          appearance: 'none',
-          WebkitAppearance: 'none',
           background: `linear-gradient(to right, ${color} 0%, ${color} ${((value - min) / (max - min)) * 100}%, #e2e8f0 ${((value - min) / (max - min)) * 100}%, #e2e8f0 100%)`,
-          borderRadius: 2,
-          outline: 'none',
-          cursor: 'pointer',
         }}
       />
     </div>
@@ -93,57 +90,60 @@ const Slider: React.FC<{
 const FontSelect: React.FC<{
   label: string;
   value: FontConfig;
-  options: FontConfig[];
   onChange: (font: FontConfig) => void;
-}> = ({ label, value, options, onChange }) => (
-  <div style={{ marginBottom: 12 }}>
-    <label
-      style={{
-        fontSize: 12,
-        color: '#64748b',
-        fontWeight: 500,
-        display: 'block',
-        marginBottom: 4,
-      }}
-    >
-      {label}
-    </label>
-    <select
-      value={value.name}
-      onChange={(e) => {
-        const font = options.find((f) => f.name === e.target.value);
-        if (font) onChange(font);
-      }}
-      style={{
-        width: '100%',
-        padding: '6px 8px',
-        fontSize: 13,
-        border: '1px solid #e2e8f0',
-        borderRadius: 6,
-        background: '#fff',
-        color: '#1e293b',
-        outline: 'none',
-        fontFamily: value.family,
-        cursor: 'pointer',
-      }}
-    >
-      <optgroup label="Web 安全字体">
-        {webSafeFonts.map((f) => (
-          <option key={f.name} value={f.name}>
-            {f.name}
-          </option>
-        ))}
-      </optgroup>
-      <optgroup label="Google Fonts">
-        {googleFonts.map((f) => (
-          <option key={f.name} value={f.name}>
-            {f.name}
-          </option>
-        ))}
-      </optgroup>
-    </select>
-  </div>
-);
+}> = ({ label, value, onChange }) => {
+  const options = [...webSafeFonts, ...googleFonts];
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label
+        style={{
+          fontSize: 12,
+          color: '#64748b',
+          fontWeight: 500,
+          display: 'block',
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </label>
+      <select
+        value={value.name}
+        onChange={(e) => {
+          const font = options.find((f) => f.name === e.target.value);
+          if (font) onChange(font);
+        }}
+        style={{
+          width: '100%',
+          padding: '6px 8px',
+          fontSize: 13,
+          border: '1px solid #e2e8f0',
+          borderRadius: 6,
+          background: '#fff',
+          color: '#1e293b',
+          outline: 'none',
+          fontFamily: value.family,
+          cursor: 'pointer',
+        }}
+      >
+        <optgroup label="Web 安全字体">
+          {webSafeFonts.map((f) => (
+            <option key={`ws-${f.name}`} value={f.name}>
+              {f.name}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Google Fonts">
+          {googleFonts.map((f) => (
+            <option key={`gf-${f.name}`} value={f.name}>
+              {f.name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+    </div>
+  );
+};
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
   fontPairs,
@@ -201,10 +201,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: 0,
             background: '#fff',
             overflow: 'hidden',
-            padding: '0 16px',
+            padding: '0 12px',
           }}
         >
           <span
@@ -215,6 +214,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
+              width: '100%',
+              textAlign: 'center',
             }}
           >
             中英混排 AaBbCc
@@ -263,13 +264,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <FontSelect
               label="标题字体"
               value={activePair.title}
-              options={allFonts}
               onChange={(font) => onTitleFontChange(activePairIndex, font)}
             />
             <FontSelect
               label="正文字体"
               value={activePair.body}
-              options={allFonts}
               onChange={(font) => onBodyFontChange(activePairIndex, font)}
             />
             <div
@@ -282,17 +281,29 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 lineHeight: 1.6,
               }}
             >
-              <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#94a3b8' }}>标题：</span>
-                {activePair.title.name} / {activePair.title.weights.join(', ')}
+                <span style={{ textAlign: 'right', fontFamily: activePair.title.family }}>
+                  {activePair.title.name}
+                </span>
               </div>
-              <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>标题字重：</span>
+                <span style={{ textAlign: 'right' }}>{activePair.title.weights.join(', ')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#94a3b8' }}>正文：</span>
-                {activePair.body.name} / {activePair.body.weights.join(', ')}
+                <span style={{ textAlign: 'right', fontFamily: activePair.body.family }}>
+                  {activePair.body.name}
+                </span>
               </div>
-              <div>
-                <span style={{ color: '#94a3b8' }}>行高：</span>
-                {textStyle.lineHeight.toFixed(1)}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>正文字重：</span>
+                <span style={{ textAlign: 'right' }}>{activePair.body.weights.join(', ')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>当前行高：</span>
+                <span style={{ textAlign: 'right' }}>{textStyle.lineHeight.toFixed(1)}</span>
               </div>
             </div>
           </>
@@ -391,7 +402,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             border: 'none',
             borderRadius: 8,
             cursor: 'pointer',
-            transition: 'background 0.15s ease',
+            transition: 'background 0.15s ease, transform 0.15s ease',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -399,9 +410,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           }}
           onMouseOver={(e) => {
             (e.currentTarget as HTMLButtonElement).style.background = '#2563eb';
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
           }}
           onMouseOut={(e) => {
             (e.currentTarget as HTMLButtonElement).style.background = '#3b82f6';
+            (e.currentTarget as HTMLButtonElement).style.transform = '';
+          }}
+          onMouseDown={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
           }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
