@@ -17,8 +17,6 @@ const PODIUM_RADIUS = 0.4;
 const PODIUM_HEIGHT = 0.6;
 const PRODUCT_SPEED = 0.5;
 const INTERACT_DISTANCE = 1.2;
-const PODIUM_COLLIDE_RADIUS = PODIUM_RADIUS + PLAYER_RADIUS;
-
 const COLOR_PALETTE = ['#f97316', '#a855f7', '#06b6d4', '#22c55e'];
 
 interface PedestalPos {
@@ -153,14 +151,8 @@ function GlowSprite({ position, color }: { position: [number, number, number]; c
   );
 }
 
-function clampColorToPalette(colorStr: string): string {
-  const normalized = colorStr.toLowerCase();
-  if (COLOR_PALETTE.includes(normalized)) return normalized;
-  let hash = 0;
-  for (let i = 0; i < colorStr.length; i++) {
-    hash = (hash * 31 + colorStr.charCodeAt(i)) >>> 0;
-  }
-  return COLOR_PALETTE[hash % COLOR_PALETTE.length];
+function pickColor(index: number): string {
+  return COLOR_PALETTE[index % COLOR_PALETTE.length];
 }
 
 function ProductShape({
@@ -174,7 +166,6 @@ function ProductShape({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const targetScale = isNear ? 1.3 : 1;
-  const safeColor = useMemo(() => clampColorToPalette(color), [color]);
 
   useFrame((_, delta) => {
     if (groupRef.current) {
@@ -190,68 +181,48 @@ function ProductShape({
       {shapeType === 0 && (
         <group>
           <mesh castShadow>
-            <boxGeometry args={[0.42, 0.38, 0.28]} />
-            <meshStandardMaterial color={safeColor} metalness={0.3} roughness={0.4} />
+            <boxGeometry args={[0.4, 0.35, 0.25]} />
+            <meshStandardMaterial color={color} metalness={0.3} roughness={0.4} />
           </mesh>
-          <mesh position={[0, 0.26, 0]} castShadow>
-            <sphereGeometry args={[0.11, 16, 16]} />
-            <meshStandardMaterial color={safeColor} metalness={0.5} roughness={0.3} emissive={safeColor} emissiveIntensity={0.2} />
+          <mesh position={[0, 0.24, 0]} castShadow>
+            <sphereGeometry args={[0.1, 16, 16]} />
+            <meshStandardMaterial color={color} metalness={0.5} roughness={0.3} emissive={color} emissiveIntensity={0.2} />
           </mesh>
-          <mesh position={[0, -0.05, 0.16]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <mesh position={[0, -0.06, 0.15]} rotation={[Math.PI / 2, 0, 0]} castShadow>
             <torusGeometry args={[0.06, 0.018, 8, 24]} />
-            <meshStandardMaterial color={safeColor} metalness={0.7} roughness={0.25} />
-          </mesh>
-          <mesh position={[-0.23, -0.05, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-            <torusGeometry args={[0.05, 0.015, 8, 20]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.7} roughness={0.3} />
-          </mesh>
-          <mesh position={[0.23, -0.05, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-            <torusGeometry args={[0.05, 0.015, 8, 20]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.7} roughness={0.3} />
+            <meshStandardMaterial color={color} metalness={0.7} roughness={0.25} />
           </mesh>
         </group>
       )}
       {shapeType === 1 && (
         <group>
-          <mesh position={[0, 0.02, 0]} castShadow>
-            <sphereGeometry args={[0.24, 24, 24]} />
-            <meshStandardMaterial color={safeColor} metalness={0.45} roughness={0.32} />
+          <mesh castShadow>
+            <sphereGeometry args={[0.22, 24, 24]} />
+            <meshStandardMaterial color={color} metalness={0.45} roughness={0.32} />
           </mesh>
-          <mesh position={[0, 0.2, 0.12]} castShadow>
-            <boxGeometry args={[0.16, 0.16, 0.04]} />
+          <mesh position={[0, 0.18, 0.1]} castShadow>
+            <boxGeometry args={[0.14, 0.14, 0.03]} />
             <meshStandardMaterial color="#0f172a" metalness={0.5} roughness={0.3} />
           </mesh>
-          <mesh position={[0, 0.2, 0.145]}>
-            <boxGeometry args={[0.13, 0.13, 0.005]} />
-            <meshStandardMaterial color={safeColor} emissive={safeColor} emissiveIntensity={0.6} />
-          </mesh>
-          <mesh position={[0, -0.1, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <torusGeometry args={[0.18, 0.025, 10, 36]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.8} roughness={0.2} />
+          <mesh position={[0, -0.08, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <torusGeometry args={[0.16, 0.02, 10, 36]} />
+            <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} emissive={color} emissiveIntensity={0.15} />
           </mesh>
         </group>
       )}
       {shapeType === 2 && (
         <group>
           <mesh position={[0, -0.02, 0]} castShadow>
-            <boxGeometry args={[0.34, 0.3, 0.34]} />
-            <meshStandardMaterial color={safeColor} metalness={0.35} roughness={0.38} />
+            <boxGeometry args={[0.3, 0.28, 0.3]} />
+            <meshStandardMaterial color={color} metalness={0.35} roughness={0.38} />
           </mesh>
-          <mesh position={[0, 0.17, 0]} castShadow>
-            <sphereGeometry args={[0.08, 16, 16]} />
+          <mesh position={[0, 0.16, 0]} castShadow>
+            <sphereGeometry args={[0.07, 16, 16]} />
             <meshStandardMaterial color="#fbbf24" metalness={0.9} roughness={0.12} emissive="#fbbf24" emissiveIntensity={0.3} />
           </mesh>
           <mesh position={[0, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <torusGeometry args={[0.22, 0.02, 10, 40]} />
-            <meshStandardMaterial color={safeColor} metalness={0.8} roughness={0.2} emissive={safeColor} emissiveIntensity={0.15} />
-          </mesh>
-          <mesh position={[-0.14, 0.08, 0.18]} rotation={[0, Math.PI / 4, 0]} castShadow>
-            <boxGeometry args={[0.04, 0.12, 0.04]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.3} />
-          </mesh>
-          <mesh position={[0.14, 0.08, 0.18]} rotation={[0, -Math.PI / 4, 0]} castShadow>
-            <boxGeometry args={[0.04, 0.12, 0.04]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.3} />
+            <torusGeometry args={[0.2, 0.018, 10, 40]} />
+            <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} emissive={color} emissiveIntensity={0.15} />
           </mesh>
         </group>
       )}
@@ -270,7 +241,6 @@ interface ProductPedestalProps {
 function ProductPedestal({ product, position, playerPos, onClick, isFavorited }: ProductPedestalProps) {
   const pedestalPos = useMemo(() => new THREE.Vector3(...position), [position]);
   const [hovered, setHovered] = useState(false);
-  const safeColor = useMemo(() => clampColorToPalette(product.color), [product.color]);
 
   const distance = useMemo(() => {
     const dx = pedestalPos.x - playerPos.x;
@@ -333,7 +303,7 @@ function ProductPedestal({ product, position, playerPos, onClick, isFavorited }:
         </mesh>
       </group>
 
-      {isNear && <GlowSprite position={[0, 0.08, 0]} color={safeColor} />}
+      {isNear && <GlowSprite position={[0, 0.08, 0]} color={product.color} />}
 
       <group
         onClick={(e) => {
@@ -350,12 +320,12 @@ function ProductPedestal({ product, position, playerPos, onClick, isFavorited }:
           document.body.style.cursor = 'grab';
         }}
       >
-        <ProductShape shapeType={product.shapeType} color={safeColor} isNear={isNear} />
+        <ProductShape shapeType={product.shapeType} color={product.color} isNear={isNear} />
       </group>
 
       <pointLight
         position={[0, 0.15, 0]}
-        color={safeColor}
+        color={product.color}
         intensity={isNear ? 0.6 : 0.3}
         distance={3}
         decay={2}
@@ -378,14 +348,12 @@ interface FirstPersonControlsProps {
   playerPosRef: React.MutableRefObject<THREE.Vector3>;
   setPlayerPos: (p: THREE.Vector3) => void;
   isMobile: boolean;
-  pedestalPositions: PedestalPos[];
 }
 
 function FirstPersonControls({
   playerPosRef,
   setPlayerPos,
   isMobile,
-  pedestalPositions,
 }: FirstPersonControlsProps) {
   const { camera, gl } = useThree();
   const yawRef = useRef(0);
@@ -472,39 +440,6 @@ function FirstPersonControls({
     };
   }, [gl, isMobile]);
 
-  const collideWithWalls = useCallback((pos: THREE.Vector3, dx: number, dz: number): [number, number] => {
-    let nextX = pos.x + dx;
-    let nextZ = pos.z + dz;
-    const boundary = ROOM_HALF - PLAYER_RADIUS;
-    if (nextX > boundary) nextX = boundary;
-    if (nextX < -boundary) nextX = -boundary;
-    if (nextZ > boundary) nextZ = boundary;
-    if (nextZ < -boundary) nextZ = -boundary;
-    return [nextX - pos.x, nextZ - pos.z];
-  }, []);
-
-  const collideWithPedestals = useCallback((pos: THREE.Vector3, dx: number, dz: number): [number, number] => {
-    let newX = dx;
-    let newZ = dz;
-    for (const ped of pedestalPositions) {
-      const testX = pos.x + newX;
-      const testZ = pos.z + newZ;
-      const relX = testX - ped.x;
-      const relZ = testZ - ped.z;
-      const distSq = relX * relX + relZ * relZ;
-      if (distSq < PODIUM_COLLIDE_RADIUS * PODIUM_COLLIDE_RADIUS) {
-        const dist = Math.sqrt(distSq);
-        if (dist === 0) continue;
-        const overlap = PODIUM_COLLIDE_RADIUS - dist;
-        const pushX = (relX / dist) * overlap;
-        const pushZ = (relZ / dist) * overlap;
-        newX += pushX;
-        newZ += pushZ;
-      }
-    }
-    return [newX, newZ];
-  }, [pedestalPositions]);
-
   useFrame((_, delta) => {
     const damp = 0.1;
     yawRef.current += (targetYaw.current - yawRef.current) * damp;
@@ -528,18 +463,11 @@ function FirstPersonControls({
 
     if (move.lengthSq() > 0) {
       move.normalize().multiplyScalar(speed);
-      let dx = move.x;
-      let dz = move.z;
-
-      [dx, dz] = collideWithWalls(playerPosRef.current, dx, dz);
-      [dx, dz] = collideWithPedestals(playerPosRef.current, dx, dz);
-
       const boundary = ROOM_HALF - PLAYER_RADIUS;
-      const finalX = Math.max(-boundary, Math.min(boundary, playerPosRef.current.x + dx));
-      const finalZ = Math.max(-boundary, Math.min(boundary, playerPosRef.current.z + dz));
-
-      playerPosRef.current.x = finalX;
-      playerPosRef.current.z = finalZ;
+      const newX = Math.max(-boundary, Math.min(boundary, playerPosRef.current.x + move.x));
+      const newZ = Math.max(-boundary, Math.min(boundary, playerPosRef.current.z + move.z));
+      playerPosRef.current.x = newX;
+      playerPosRef.current.z = newZ;
       setPlayerPos(playerPosRef.current.clone());
     }
 
