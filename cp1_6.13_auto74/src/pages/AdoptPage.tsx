@@ -549,7 +549,7 @@ export default function AdoptPage() {
       <div
         style={{
           position: 'sticky',
-          top: 80,
+          top: 'var(--navbar-height, 68px)',
           zIndex: 30,
           padding: '12px 0 24px 0',
           marginTop: -12,

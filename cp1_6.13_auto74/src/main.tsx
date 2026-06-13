@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import AdoptPage from './pages/AdoptPage';
@@ -8,8 +8,31 @@ function NavBar() {
   const location = useLocation();
   const linkBase =
     'px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ease';
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const update = () => {
+      document.documentElement.style.setProperty(
+        '--navbar-height',
+        `${el.offsetHeight}px`
+      );
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
   return (
     <nav
+      ref={navRef}
+      id="app-navbar"
       style={{
         background: '#ffffff',
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
