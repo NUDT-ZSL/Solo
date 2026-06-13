@@ -5,9 +5,10 @@ interface ExportPanelProps {
   bookmarks: BookmarkNode[];
 }
 
-function generateMarkdownTree(nodes: BookmarkNode[], depth: number = 2): string {
+function generateMarkdownTree(nodes: BookmarkNode[], depth: number = 1): string {
   let md = '';
-  const prefix = '#'.repeat(Math.min(depth, 6));
+  const headingLevel = Math.min(depth + 1, 6);
+  const prefix = '#'.repeat(headingLevel);
 
   nodes.forEach(node => {
     if (node.url && node.url.trim()) {

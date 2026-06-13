@@ -13,26 +13,32 @@ interface NodeCardProps {
   onDelete: (id: string) => void;
 }
 
-function getGradientFromUrl(url: string): string {
-  if (!url || url.trim() === '') {
-    return 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)';
-  }
-
-  let domain = '';
-  try {
-    const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-    domain = urlObj.hostname;
-  } catch {
-    domain = url;
-  }
-
+function hashString(str: string): number {
   let hash = 0;
-  for (let i = 0; i < domain.length; i++) {
-    const char = domain.charCodeAt(i);
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash;
   }
+  return hash;
+}
 
+function getGradientFromUrl(url: string, title: string): string {
+  const source = url && url.trim() !== '' ? url : title || 'default';
+
+  let domain = '';
+  if (url && url.trim() !== '') {
+    try {
+      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+      domain = urlObj.hostname;
+    } catch {
+      domain = url;
+    }
+  } else {
+    domain = source;
+  }
+
+  const hash = hashString(domain);
   const hue1 = Math.abs(hash) % 360;
   const hue2 = (hue1 + 30 + (Math.abs(hash >> 8) % 30)) % 360;
   const sat1 = 65 + (Math.abs(hash >> 4) % 15);
@@ -64,7 +70,7 @@ export default function NodeCard({
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const gradient = getGradientFromUrl(node.url);
+  const gradient = getGradientFromUrl(node.url, node.title);
   const faviconLetter = getFaviconLetter(node.title);
 
   useEffect(() => {
