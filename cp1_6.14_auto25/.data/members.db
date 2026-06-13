@@ -1,0 +1,5 @@
+{"_id":"u1","nickname":"张三","avatarColor":"#e07a5f","bookStatuses":{"book-1":"reading","book-2":"unread","book-3":"read"}}
+{"_id":"u2","nickname":"李四","avatarColor":"#81b29a","bookStatuses":{"book-1":"reading","book-2":"reading","book-3":"read"}}
+{"_id":"u3","nickname":"王五","avatarColor":"#3d405b","bookStatuses":{"book-1":"unread","book-2":"reading","book-3":"reading"}}
+{"_id":"u4","nickname":"赵六","avatarColor":"#f2cc8f","bookStatuses":{"book-1":"read","book-2":"unread","book-3":"reading"}}
+{"_id":"u5","nickname":"孙七","avatarColor":"#e56b6f","bookStatuses":{"book-1":"reading","book-2":"read","book-3":"unread"}}
