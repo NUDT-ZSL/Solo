@@ -21,14 +21,32 @@ const App: React.FC = () => {
   const [schemeA, setSchemeA] = React.useState<ColorScheme>(defaultSchemeA);
   const [schemeB, setSchemeB] = React.useState<ColorScheme>(defaultSchemeB);
   const [filterType, setFilterType] = React.useState<ColorBlindnessType>('normal');
-  const [filterTransitioning, setFilterTransitioning] = React.useState(false);
+  const [previewFilter, setPreviewFilter] = React.useState<React.CSSProperties>({});
+
+  const [isSmallScreen, setIsSmallScreen] = React.useState(false);
+  const [isMediumScreen, setIsMediumScreen] = React.useState(false);
+
+  React.useEffect(() => {
+    const mq768 = window.matchMedia('(max-width: 768px)');
+    const mq1024 = window.matchMedia('(max-width: 1024px)');
+    setIsSmallScreen(mq768.matches);
+    setIsMediumScreen(mq1024.matches);
+    const handler768 = (e: MediaQueryListEvent) => setIsSmallScreen(e.matches);
+    const handler1024 = (e: MediaQueryListEvent) => setIsMediumScreen(e.matches);
+    mq768.addEventListener('change', handler768);
+    mq1024.addEventListener('change', handler1024);
+    return () => {
+      mq768.removeEventListener('change', handler768);
+      mq1024.removeEventListener('change', handler1024);
+    };
+  }, []);
 
   const handleFilterChange = (type: ColorBlindnessType) => {
-    setFilterTransitioning(true);
+    setPreviewFilter({ filter: 'brightness(1.15)' });
     setTimeout(() => {
       setFilterType(type);
-      setTimeout(() => setFilterTransitioning(false), 300);
-    }, 100);
+      setPreviewFilter({ filter: 'brightness(1)' });
+    }, 50);
   };
 
   const displayedSchemeA = applyColorBlindnessToScheme(schemeA, filterType);
@@ -37,13 +55,6 @@ const App: React.FC = () => {
   return (
     <div style={styles.app}>
       <style>{`
-        @keyframes pulse-glow {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; filter: brightness(1.1); }
-        }
-        .filter-transitioning {
-          animation: pulse-glow 0.4s ease-in-out;
-        }
         * {
           box-sizing: border-box;
         }
@@ -73,12 +84,17 @@ const App: React.FC = () => {
       </header>
 
       <main style={styles.main}>
-        <div style={styles.layout}>
+        <div style={{
+          ...styles.layout,
+          flexDirection: isSmallScreen ? 'column' : 'row',
+          alignItems: isSmallScreen ? 'center' : 'flex-start'
+        }}>
           <InputPanel
             schemeA={schemeA}
             schemeB={schemeB}
             onSchemeAChange={setSchemeA}
             onSchemeBChange={setSchemeB}
+            compact={isSmallScreen || isMediumScreen}
           />
 
           <section style={styles.rightPanel}>
@@ -87,11 +103,12 @@ const App: React.FC = () => {
               onChange={handleFilterChange}
             />
 
-            <div className={filterTransitioning ? 'filter-transitioning' : ''}>
+            <div>
               <PreviewPair
                 schemeA={displayedSchemeA}
                 schemeB={displayedSchemeB}
-                filterActive={filterTransitioning}
+                filterStyle={previewFilter}
+                stacked={isSmallScreen}
               />
             </div>
 

@@ -5,7 +5,8 @@ import { analyzeContrast, ContrastResult, formatRatio } from '../utils/ContrastA
 interface PreviewPairProps {
   schemeA: ColorScheme;
   schemeB: ColorScheme;
-  filterActive: boolean;
+  filterStyle?: React.CSSProperties;
+  stacked?: boolean;
 }
 
 interface PreviewCardProps {
@@ -80,14 +81,24 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ scheme, label, labelBg }) => 
   );
 };
 
-const PreviewPair: React.FC<PreviewPairProps> = ({ schemeA, schemeB, filterActive }) => {
+const PreviewPair: React.FC<PreviewPairProps> = ({ schemeA, schemeB, filterStyle, stacked }) => {
   return (
     <div style={{
       ...styles.wrapper,
-      transition: filterActive ? 'filter 0.4s ease-in-out' : 'none'
+      flexDirection: stacked ? 'column' : 'row',
+      transition: 'filter 0.4s ease',
+      ...filterStyle
     }}>
       <PreviewCard scheme={schemeA} label="方案 A" labelBg="#3b82f6" />
-      <div style={styles.divider} />
+      <div style={{
+        ...styles.divider,
+        width: stacked ? 480 : 1,
+        height: stacked ? 1 : 320,
+        margin: stacked ? '16px 0' : '0 24px',
+        borderLeft: stacked ? 'none' : '1px dashed #d1d5db',
+        borderTop: stacked ? '1px dashed #d1d5db' : 'none',
+        flexShrink: 0
+      }} />
       <PreviewCard scheme={schemeB} label="方案 B" labelBg="#10b981" />
     </div>
   );
@@ -104,11 +115,15 @@ const styles: Record<string, React.CSSProperties> = {
   cardWrapper: {
     width: 240,
     height: 320,
+    minHeight: 320,
+    maxHeight: 320,
     borderRadius: 12,
     position: 'relative',
     overflow: 'hidden',
     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-    transition: 'background-color 0.4s ease, box-shadow 0.2s ease'
+    transition: 'background-color 0.4s ease, box-shadow 0.2s ease',
+    flexShrink: 0,
+    boxSizing: 'border-box'
   },
   cardLabel: {
     position: 'absolute',
@@ -128,7 +143,8 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    overflow: 'hidden'
   },
   iconPlaceholder: {
     width: 48,
