@@ -79,18 +79,27 @@ export const surveyApi = {
     return response.data;
   },
 
-  exportCSV: async (surveyId: string) => {
+  exportExcel: async (surveyId: string) => {
     const response = await api.get(`/surveys/${surveyId}/export`, {
       responseType: 'blob',
     });
     
-    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const url = window.URL.createObjectURL(new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    }));
     const link = document.createElement('a');
     link.href = url;
     const contentDisposition = response.headers['content-disposition'];
-    const filename = contentDisposition
-      ? contentDisposition.split('filename=')[1].replace(/"/g, '')
-      : 'survey.csv';
+    let filename = `survey_${Date.now()}.xlsx`;
+    if (contentDisposition) {
+      const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
+      if (utf8Match) {
+        filename = decodeURIComponent(utf8Match[1]);
+      } else {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+    }
     link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
