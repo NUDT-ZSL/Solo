@@ -3,7 +3,7 @@ import type { Recipe } from '../../server/models/recipeStore'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000
+  timeout: 15000
 })
 
 api.interceptors.request.use((config) => {
@@ -16,13 +16,21 @@ api.interceptors.request.use((config) => {
 
 export interface CreateRecipeData {
   title: string
-  cover: string
+  cover_image: string
   category: string
   ingredients: string[]
-  steps: string
-  cookTime: number
-  authorId: string
-  authorName: string
+  steps_html: string
+  cook_time_minutes: number
+  author_id: string
+  author_name: string
+}
+
+export interface RecommendResponse {
+  preference_tags: string[]
+  history: Array<{ recipe_id: string; action: string; timestamp: number }>
+  liked_recipes: string[]
+  uploaded_recipes: string[]
+  recipes: Recipe[]
 }
 
 export const fetchRecipes = async (limit?: number): Promise<Recipe[]> => {
@@ -58,11 +66,17 @@ export const likeRecipe = async (id: string): Promise<Recipe> => {
   return data
 }
 
+export const fetchRecommendData = async (userId: string): Promise<RecommendResponse> => {
+  const { data } = await api.get<RecommendResponse>(`/recipes/recommend/${userId}`)
+  return data
+}
+
 export default {
   fetchRecipes,
   fetchLatestRecipes,
   fetchRecipeById,
   createRecipe,
   searchRecipes,
-  likeRecipe
+  likeRecipe,
+  fetchRecommendData
 }
