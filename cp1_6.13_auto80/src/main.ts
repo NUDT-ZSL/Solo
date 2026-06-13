@@ -1,6 +1,5 @@
 import {
   GRID_SIZE,
-  gridToPixel,
   pixelToGrid,
   type GameState,
   type ToolType,
@@ -10,7 +9,7 @@ import {
   type TargetZone,
   type Direction,
 } from './entities';
-import { LEVELS, getLevel, getTotalLevels } from './levels';
+import { getLevel, getTotalLevels } from './levels';
 import { GameLoop } from './game-loop';
 import { UIManager } from './ui';
 import {
@@ -27,11 +26,9 @@ class Game {
   private uiManager: UIManager;
   private state: GameState;
   private currentLevelIndex: number = 0;
-  private toolIdCounter: number = 0;
 
   constructor() {
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
-
     this.state = this.createInitialState();
 
     this.uiManager = new UIManager({
@@ -94,7 +91,6 @@ class Game {
     this.uiManager.updateTime(this.state.timeRemaining);
 
     this.bindCanvasEvents();
-
     this.gameLoop.start();
     this.setupResponsiveLayout();
   }
@@ -109,6 +105,7 @@ class Game {
       e.preventDefault();
       this.state.selectedTool = null;
       this.state.selectedCell = null;
+      this.uiManager.clearSelection();
     });
 
     window.addEventListener('resize', () => this.setupResponsiveLayout());
@@ -117,24 +114,28 @@ class Game {
   private setupResponsiveLayout(): void {
     const width = window.innerWidth;
     const sidePanel = document.querySelector('.side-panel') as HTMLElement;
-    const canvasWrapper = document.querySelector('.canvas-wrapper') as HTMLElement;
+    const gameContainer = document.querySelector('.game-container') as HTMLElement;
 
-    if (sidePanel && canvasWrapper) {
+    if (sidePanel && gameContainer) {
       if (width < 1024) {
         sidePanel.style.width = '100%';
         sidePanel.style.maxWidth = '600px';
+        sidePanel.style.marginTop = '20px';
       } else {
         sidePanel.style.width = '280px';
         sidePanel.style.maxWidth = 'none';
+        sidePanel.style.marginTop = '0';
       }
     }
   }
 
   private getCanvasMousePos(e: MouseEvent): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
     };
   }
 
@@ -172,11 +173,15 @@ class Game {
       const existingSorter = getSorterAt(gridPos, this.state.sorters);
       const existingArm = getArmAt(gridPos, this.state.arms);
 
-      if (existingConveyor || existingSorter || existingArm) {
+      if (existingConveyor) {
         this.state.selectedCell = gridPos;
-        if (existingConveyor) {
-          this.rotateConveyor(existingConveyor);
-        }
+        this.rotateConveyor(existingConveyor);
+      } else if (existingSorter) {
+        this.state.selectedCell = gridPos;
+        this.rotateSorter(existingSorter);
+      } else if (existingArm) {
+        this.state.selectedCell = gridPos;
+        existingArm.rotation = (existingArm.rotation + 90) % 360;
       } else {
         this.state.selectedCell = null;
       }
@@ -187,6 +192,15 @@ class Game {
     const directions: Direction[] = ['right', 'down', 'left', 'up'];
     const currentIndex = directions.indexOf(conveyor.direction);
     conveyor.direction = directions[(currentIndex + 1) % 4];
+  }
+
+  private rotateSorter(sorter: Sorter): void {
+    const directions: Direction[] = ['up', 'right', 'down', 'left'];
+    const colors: ('red' | 'yellow' | 'green' | 'blue')[] = ['red', 'yellow', 'green', 'blue'];
+    colors.forEach(color => {
+      const currentIndex = directions.indexOf(sorter.colorMap[color]);
+      sorter.colorMap[color] = directions[(currentIndex + 1) % 4];
+    });
   }
 
   private placeTool(toolType: ToolType, gridPos: { x: number; y: number }): void {
@@ -211,36 +225,33 @@ class Game {
     const id = this.state.toolIdCounter++;
 
     if (toolType === 'conveyor') {
-      const conveyor: Conveyor = {
+      this.state.conveyors.push({
         id,
         gridPos: { ...gridPos },
         direction: 'right',
         placementAnimation: 1,
-      };
-      this.state.conveyors.push(conveyor);
+      });
     } else if (toolType === 'sorter') {
-        const sorter: Sorter = {
-          id,
-          gridPos: { ...gridPos },
-          colorMap: {
-            red: 'up',
-            yellow: 'down',
-            green: 'left',
-            blue: 'right',
-          },
-          placementAnimation: 1,
-        };
-        this.state.sorters.push(sorter);
-      } else if (toolType === 'arm') {
-          const arm: Arm = {
-            id,
-            gridPos: { ...gridPos },
-            rotation: 0,
-            rotationSpeed: 1,
-            placementAnimation: 1,
-          };
-          this.state.arms.push(arm);
-        }
+      this.state.sorters.push({
+        id,
+        gridPos: { ...gridPos },
+        colorMap: {
+          red: 'up',
+          yellow: 'down',
+          green: 'left',
+          blue: 'right',
+        },
+        placementAnimation: 1,
+      });
+    } else if (toolType === 'arm') {
+      this.state.arms.push({
+        id,
+        gridPos: { ...gridPos },
+        rotation: 0,
+        rotationSpeed: 0.5,
+        placementAnimation: 1,
+      });
+    }
 
     this.state.availableTools[toolType]--;
     this.state.steps++;
@@ -263,11 +274,12 @@ class Game {
 
     const level = getLevel(this.currentLevelIndex);
     const spawnPos = level.spawnPoint;
-    const firstConveyor = this.state.conveyors.find(c =>
-      (c.gridPos.x === spawnPos.x + 1 && c.gridPos.y === spawnPos.y) ||
-      this.state.conveyors.find(c => isSameGridPos(c.gridPos, { x: spawnPos.x + 1, y: spawnPos.y }));
+    const nextPos = { x: spawnPos.x + 1, y: spawnPos.y };
+    const hasConveyorNearSpawn = this.state.conveyors.some(c =>
+      isSameGridPos(c.gridPos, nextPos)
+    );
 
-    if (!firstConveyor && this.state.conveyors.length === 0) {
+    if (this.state.conveyors.length === 0 && !hasConveyorNearSpawn) {
       alert('请先放置传送带！');
       return;
     }
@@ -283,7 +295,6 @@ class Game {
 
   private resetLevel(): void {
     this.state = this.createInitialState();
-    this.currentLevelIndex = this.currentLevelIndex;
 
     const level = getLevel(this.currentLevelIndex);
 

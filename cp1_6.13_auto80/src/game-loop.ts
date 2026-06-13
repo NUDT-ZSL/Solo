@@ -15,7 +15,6 @@ import {
   type GameState,
   type Level,
   type Block,
-  type Direction,
 } from './entities';
 import {
   getNextBlockPosition,
@@ -33,6 +32,9 @@ export interface GameCallbacks {
   onTimeChange: (time: number) => void;
 }
 
+const ANIMATION_SPEED = 0.008;
+const BLOCK_MOVE_SPEED = 0.0025;
+
 export class GameLoop {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -45,6 +47,7 @@ export class GameLoop {
   private lastSecondTime: number = 0;
   private currentColorIndex: number = 0;
   private isPaused: boolean = false;
+  private runningStartTime: number = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -68,6 +71,10 @@ export class GameLoop {
   public updateLevel(level: Level, state: GameState): void {
     this.level = level;
     this.state = state;
+    this.gameTime = 0;
+    this.lastSecondTime = 0;
+    this.runningStartTime = 0;
+    this.currentColorIndex = 0;
     this.resizeCanvas();
   }
 
@@ -99,21 +106,26 @@ export class GameLoop {
 
   private loop = (): void => {
     const now = performance.now();
-    const deltaTime = now - this.lastTime;
+    const deltaTime = Math.min(now - this.lastTime, 50);
     this.lastTime = now;
 
     if (!this.isPaused) {
       this.gameTime += deltaTime;
 
-      if (now - this.lastSecondTime >= 1000 && this.state.isRunning) {
-        this.state.timeRemaining = Math.max(0, this.state.timeRemaining - 1);
-        this.callbacks.onTimeChange(this.state.timeRemaining);
-        this.lastSecondTime = now;
+      if (this.state.isRunning && !this.state.isWon && !this.state.isLost) {
+        if (this.runningStartTime === 0) {
+          this.runningStartTime = this.gameTime;
+        }
 
-        if (this.state.timeRemaining <= 0 && !this.state.isWon) {
-          this.state.isLost = true;
-          this.callbacks.onLose();
-          return;
+        if (now - this.lastSecondTime >= 1000) {
+          this.state.timeRemaining = Math.max(0, this.state.timeRemaining - 1);
+          this.callbacks.onTimeChange(this.state.timeRemaining);
+          this.lastSecondTime = now;
+
+          if (this.state.timeRemaining <= 0 && !this.state.isWon) {
+            this.state.isLost = true;
+            this.callbacks.onLose();
+          }
         }
       }
 
@@ -125,42 +137,36 @@ export class GameLoop {
   };
 
   private update(deltaTime: number): void {
-    const timeInSeconds = this.gameTime / 1000;
-
-    this.state.arms.forEach(arm => {
-      arm.rotation += arm.rotationSpeed * deltaTime * 0.06;
-      if (arm.rotation >= 360) arm.rotation -= 360;
-    });
-
     this.state.conveyors.forEach(c => {
       if (c.placementAnimation > 0) {
-        c.placementAnimation = Math.max(0, c.placementAnimation - deltaTime * 0.004);
+        c.placementAnimation = Math.max(0, c.placementAnimation - deltaTime * ANIMATION_SPEED);
       }
     });
     this.state.sorters.forEach(s => {
       if (s.placementAnimation > 0) {
-        s.placementAnimation = Math.max(0, s.placementAnimation - deltaTime * 0.004);
+        s.placementAnimation = Math.max(0, s.placementAnimation - deltaTime * ANIMATION_SPEED);
       }
     });
     this.state.arms.forEach(a => {
       if (a.placementAnimation > 0) {
-        a.placementAnimation = Math.max(0, a.placementAnimation - deltaTime * 0.004);
+        a.placementAnimation = Math.max(0, a.placementAnimation - deltaTime * ANIMATION_SPEED);
       }
     });
 
     this.state.targetZones.forEach(z => {
       if (z.celebrateAnimation > 0) {
-        z.celebrateAnimation = Math.max(0, z.celebrateAnimation - deltaTime * 0.003);
+        z.celebrateAnimation = Math.max(0, z.celebrateAnimation - deltaTime * 0.005);
       }
     });
 
     if (this.state.isRunning && !this.state.isWon && !this.state.isLost) {
+      const timeSinceStart = this.gameTime - this.runningStartTime;
       if (
-        this.gameTime - this.state.lastSpawnTime >= this.level.spawnInterval &&
+        timeSinceStart - this.state.lastSpawnTime >= this.level.spawnInterval &&
         this.state.blocks.length < MAX_BLOCKS
       ) {
         this.spawnBlock();
-        this.state.lastSpawnTime = this.gameTime;
+        this.state.lastSpawnTime = timeSinceStart;
       }
 
       this.updateBlocks(deltaTime);
@@ -168,7 +174,7 @@ export class GameLoop {
 
     this.state.blocks.forEach(b => {
       if (b.spawnAnimation > 0) {
-        b.spawnAnimation = Math.max(0, b.spawnAnimation - deltaTime * 0.004);
+        b.spawnAnimation = Math.max(0, b.spawnAnimation - deltaTime * ANIMATION_SPEED);
       }
     });
   }
@@ -200,10 +206,14 @@ export class GameLoop {
     const blocksToRemove: number[] = [];
 
     for (const block of this.state.blocks) {
-      if (block.spawnAnimation > 0) continue;
+      if (block.spawnAnimation > 0) {
+        const spawnPixel = gridToPixel(block.gridPos.x, block.gridPos.y);
+        block.pos = { ...spawnPixel };
+        continue;
+      }
 
       if (!block.isMoving) {
-        const nextPos = getNextBlockPosition(
+        const nextResult = getNextBlockPosition(
           block,
           this.state.conveyors,
           this.state.sorters,
@@ -215,48 +225,21 @@ export class GameLoop {
           this.level.gridSize.height
         );
 
-        if (nextPos) {
+        if (nextResult) {
           const targetZone = checkBlockTargetCollision(
-            { ...block, gridPos: nextPos.pos },
-            this.state.targetZones
-          );
-
-          if (targetZone && targetZone.filled < targetZone.required) {
-            block.targetGridPos = nextPos.pos;
-            block.isMoving = true;
-            block.progress = 0;
-          } else if (!targetZone) {
-            block.targetGridPos = nextPos.pos;
-            block.isMoving = true;
-            block.progress = 0;
-          }
-        }
-      } else {
-        block.progress += MOVE_SPEED * deltaTime * 0.06;
-
-        if (block.progress >= 1) {
-          block.progress = 1;
-          block.gridPos = { ...block.targetGridPos };
-          block.isMoving = false;
-          block.progress = 0;
-
-          const targetZone = checkBlockTargetCollision(
-            block,
+            { ...block, gridPos: nextResult.pos },
             this.state.targetZones
           );
 
           if (targetZone) {
-            targetZone.filled++;
-            targetZone.celebrateAnimation = 1;
-            blocksToRemove.push(block.id);
-
-            if (checkWinCondition(this.state.targetZones)) {
-              this.state.isWon = true;
-              this.callbacks.onWin();
+            if (targetZone.filled < targetZone.required && targetZone.color === block.color) {
+              block.targetGridPos = { ...nextResult.pos };
+              block.isMoving = true;
+              block.progress = 0;
             }
           } else {
-            const nextPos = getNextBlockPosition(
-              block,
+            const nextNextResult = getNextBlockPosition(
+              { ...block, gridPos: nextResult.pos },
               this.state.conveyors,
               this.state.sorters,
               this.state.arms,
@@ -267,14 +250,55 @@ export class GameLoop {
               this.level.gridSize.height
             );
 
-            if (!nextPos) {
+            const nextTarget = checkBlockTargetCollision(
+              { ...block, gridPos: nextResult.pos },
+              this.state.targetZones
+            );
+
+            if (nextNextResult || nextTarget) {
+              block.targetGridPos = { ...nextResult.pos };
+              block.isMoving = true;
+              block.progress = 0;
+            } else {
               blocksToRemove.push(block.id);
             }
           }
+        } else {
+          const targetZone = checkBlockTargetCollision(block, this.state.targetZones);
+          if (!targetZone) {
+            blocksToRemove.push(block.id);
+          }
         }
+      }
 
-        const pixelPos = getBlockPixelPosition(block, Math.min(block.progress, 1));
-        block.pos = pixelPos;
+      if (block.isMoving) {
+        block.progress += BLOCK_MOVE_SPEED * deltaTime;
+
+        if (block.progress >= 1) {
+          block.progress = 1;
+          block.gridPos = { ...block.targetGridPos };
+          block.isMoving = false;
+          block.progress = 0;
+
+          const pixelPos = gridToPixel(block.gridPos.x, block.gridPos.y);
+          block.pos = { ...pixelPos };
+
+          const targetZone = checkBlockTargetCollision(block, this.state.targetZones);
+
+          if (targetZone && targetZone.color === block.color && targetZone.filled < targetZone.required) {
+            targetZone.filled++;
+            targetZone.celebrateAnimation = 1;
+            blocksToRemove.push(block.id);
+
+            if (checkWinCondition(this.state.targetZones)) {
+              this.state.isWon = true;
+              this.callbacks.onWin();
+            }
+          }
+        } else {
+          const pixelPos = getBlockPixelPosition(block, block.progress);
+          block.pos = pixelPos;
+        }
       }
     }
 
@@ -310,6 +334,10 @@ export class GameLoop {
     });
 
     this.state.arms.forEach(arm => {
+      if (this.state.isRunning) {
+        arm.rotation += arm.rotationSpeed * 1.2;
+        if (arm.rotation >= 360) arm.rotation -= 360;
+      }
       drawArm(ctx, arm, timeInSeconds);
     });
 
