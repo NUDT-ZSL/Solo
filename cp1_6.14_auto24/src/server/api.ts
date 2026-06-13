@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { db, User, Book, ReadingStatus, Vote, Activity, ReadingLog } from './db.js';
+import { db, User, Book, ReadingStatus, Vote, VoteRecord, Activity, ReadingLog } from './db.js';
 
 const app = express();
 app.use(cors());
@@ -147,7 +147,7 @@ app.get('/api/votes/active', async (req, res) => {
   }
   if (!activeVote) return res.json(null);
   const books = await db.books.find<Book>({ _id: { $in: activeVote.bookIds } });
-  const records = await db.voteRecords.find({ voteId: activeVote._id });
+  const records = await db.voteRecords.find<VoteRecord>({ voteId: activeVote._id });
   const counts: Record<string, number> = {};
   records.forEach((r) => {
     counts[r.bookId] = (counts[r.bookId] || 0) + 1;
@@ -215,7 +215,7 @@ app.get('/api/votes/:id/result', async (req, res) => {
   const vote = await db.votes.findOne<Vote>({ _id: req.params.id });
   if (!vote) return res.status(404).json({ error: '投票不存在' });
   const books = await db.books.find<Book>({ _id: { $in: vote.bookIds } });
-  const records = await db.voteRecords.find({ voteId: req.params.id });
+  const records = await db.voteRecords.find<VoteRecord>({ voteId: req.params.id });
   const counts: Record<string, number> = {};
   records.forEach((r) => {
     counts[r.bookId] = (counts[r.bookId] || 0) + 1;

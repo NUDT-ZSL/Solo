@@ -10,7 +10,8 @@ import {
   TrendPoint,
 } from '../client/activity';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts';
 
 interface DashboardProps {
   userId: string;
@@ -21,48 +22,143 @@ const pad = (n: number) => n.toString().padStart(2, '0');
 const dateKey = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-const buildCalendar = (calendar: CalendarData) => {
-  const today = new Date();
-  const startDay = today.getDay();
-  const totalDays = 52 * 7 + startDay + 1;
-  const weeks: { date: string; data: CalendarCell }[][] = [];
-  let currentWeek: { date: string; data: CalendarCell }[] = [];
-  for (let i = totalDays - 1; i >= 0; i--) {
-    const d = new Date(today);
+const HEAT_COLORS = ['#f0ebe0', '#bbf7d0', '#86efac', '#4ade80', '#16a34a'];
+
+const buildLastNDays = (n: number) => {
+  const list: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date();
     d.setDate(d.getDate() - i);
-    const key = dateKey(d);
-    if (weeks.length === 0 && weeks.length === 0 && d.getDay() !== 0) {
-      for (let j = 0; j < d.getDay(); j++) {
-        currentWeek.push({ date: '', data: { minutes: 0, pages: 0, intensity: 0 });
-      }
-    }
-    currentWeek.push({
-      date: key, data: calendar[key] || { minutes: 0, pages: 0, intensity: 0 }
-    });
-    if (d.getDay() === 6 || i === 0) {
-      if (currentWeek.length > 0) {
-        weeks.push(currentWeek);
-        currentWeek = [];
-      }
-    }
+    list.push(dateKey(d));
   }
-  return weeks;
+  return list;
 };
 
-const monthLabels = (weeks: { date: string; data: CalendarCell }[][]) => {
-  const labels: { offset: number; label: string }[] = [];
-  let lastMonth = -1;
-  weeks.forEach((week, idx) => {
-    const firstValid = week.find((d) => d.date);
-    if (firstValid) {
-      const m = new Date(firstValid.date).getMonth();
-      if (m !== lastMonth) {
-        labels.push({ offset: idx * 15, label: `${m + 1}月` });
-        lastMonth = m;
-      }
+const CircularCalendar: React.FC<{
+  cal: CalendarData;
+  onSelect: (date: string) => void;
+}> = ({ cal, onSelect }) => {
+  const days = buildLastNDays(365);
+  const cx = 260;
+  const cy = 260;
+  const outerR = 240;
+  const innerR = 70;
+  const rings = 13;
+  const cellAngle = (2 * Math.PI) / (Math.ceil(365 / rings));
+  const ringWidth = (outerR - innerR) / rings;
+
+  const cells: React.ReactNode[] = [];
+  const labelAngles: { angle: number; label: string; x: number; y: number }[] = [];
+  const monthSet = new Set<string>();
+
+  days.forEach((day, idx) => {
+    const ring = idx % rings;
+    const wedge = Math.floor(idx / rings);
+    const angle = wedge * cellAngle - Math.PI / 2;
+    const r0 = innerR + ring * ringWidth + 1;
+    const r1 = r0 + ringWidth - 2;
+    const a0 = angle;
+    const a1 = angle + cellAngle - 0.02;
+    const x0o = cx + r1 * Math.cos(a0);
+    const y0o = cy + r1 * Math.sin(a0);
+    const x1o = cx + r1 * Math.cos(a1);
+    const y1o = cy + r1 * Math.sin(a1);
+    const x0i = cx + r0 * Math.cos(a1);
+    const y0i = cy + r0 * Math.sin(a1);
+    const x1i = cx + r0 * Math.cos(a0);
+    const y1i = cy + r0 * Math.sin(a0);
+    const largeArc = cellAngle > Math.PI ? 1 : 0;
+    const data = cal[day] || { intensity: 0, minutes: 0, pages: 0 };
+    const fill = HEAT_COLORS[data.intensity];
+    const path = `M ${x0o} ${y0o} A ${r1} ${r1} 0 ${largeArc} 1 ${x1o} ${y1o} L ${x0i} ${y0i} A ${r0} ${r0} 0 ${largeArc} 0 ${x1i} ${y1i} Z`;
+    cells.push(
+      <path
+        key={idx}
+        d={path}
+        fill={fill}
+        stroke="#ffffff"
+        strokeWidth={0.4}
+        style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.03)')}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = '')}
+        onClick={() => onSelect(day)}
+      >
+        <title>{`${day}\n阅读 ${data.minutes} 分钟 · ${data.pages} 页`}</title>
+      </path>
+    );
+    const monthKey = day.slice(0, 7);
+    if (!monthSet.has(monthKey) && wedge % 3 === 0) {
+      monthSet.add(monthKey);
+      const [y, m] = monthKey.split('-');
+      const midA = angle + cellAngle / 2;
+      const lr = outerR + 18;
+      labelAngles.push({
+        angle: midA,
+        label: `${parseInt(m, 10)}月`,
+        x: cx + lr * Math.cos(midA),
+        y: cy + lr * Math.sin(midA),
+      });
     }
   });
-  return labels;
+
+  const todayIdx = days.length - 1;
+  const todayRing = todayIdx % rings;
+  const todayWedge = Math.floor(todayIdx / rings);
+  const todayA = todayWedge * cellAngle + cellAngle / 2 - Math.PI / 2;
+  const tr = innerR + todayRing * ringWidth + ringWidth / 2;
+  const todayX = cx + tr * Math.cos(todayA);
+  const todayY = cy + tr * Math.sin(todayA);
+
+  const streak = (() => {
+    let s = 0;
+    for (let i = days.length - 1; i >= 0; i--) {
+      const d = cal[days[i]];
+      if (d && d.minutes > 0) s++;
+      else break;
+    }
+    return s;
+  })();
+
+  const totalDays = days.filter((d) => cal[d]?.minutes > 0).length;
+  const totalMin = days.reduce((s, d) => s + (cal[d]?.minutes || 0), 0);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+      <svg viewBox="0 0 520 520" style={{ maxWidth: '100%', height: 'auto' }}>
+        <defs>
+          <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#fff7ed" />
+            <stop offset="100%" stopColor="#ffedd5" />
+          </radialGradient>
+        </defs>
+        <circle cx={cx} cy={cy} r={innerR - 4} fill="url(#centerGlow)" stroke="#fed7aa" strokeWidth={1} />
+        {cells}
+        {labelAngles.map((l, i) => (
+          <text key={i} x={l.x} y={l.y} fontSize="10" fill="#92400e" textAnchor="middle" dominantBaseline="middle" fontWeight={600}>
+            {l.label}
+          </text>
+        ))}
+        <circle cx={todayX} cy={todayY} r={5} fill="#d97706" stroke="#ffffff" strokeWidth={1.5}>
+          <animate attributeName="r" values="5;7;5" dur="1.8s" repeatCount="indefinite" />
+        </circle>
+        <text x={cx} y={cy - 18} textAnchor="middle" fontSize="11" fill="#92400e" fontWeight={600}>
+          🔥 连续打卡
+        </text>
+        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="36" fontWeight={800} fill="#d97706">
+          {streak}
+        </text>
+        <text x={cx} y={cy + 32} textAnchor="middle" fontSize="11" fill="#a16207">
+          天
+        </text>
+        <text x={cx - 32} y={cy + 52} textAnchor="middle" fontSize="10" fill="#7a5a48">
+          {totalDays}天
+        </text>
+        <text x={cx + 32} y={cy + 52} textAnchor="middle" fontSize="10" fill="#7a5a48">
+          {Math.round(totalMin / 60)}h
+        </text>
+      </svg>
+    </div>
+  );
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ userId, username }) => {
@@ -72,8 +168,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, username }) => {
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [showLogModal, setShowLogModal] = useState(false);
   const [logForm, setLogForm] = useState({ pages: 0, minutes: 0, note: '' });
-  const weeks = useMemo(() => buildCalendar(calendar), [calendar]);
-  const months = useMemo(() => monthLabels(weeks), [weeks]);
 
   const loadData = async () => {
     const [cal, trendData, board] = await Promise.all([
@@ -90,12 +184,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, username }) => {
     loadData();
   }, [userId]);
 
-  const onCellClick = (day: { date: string }) => {
-    if (!day.date) return;
-    setSelectedDay(day.date);
-    const existing = calendar[day.date] || { pages: 0, minutes: 0, intensity: 0 };
+  const onSelectDay = (date: string) => {
+    setSelectedDay(date);
+    const existing = calendar[date] || { pages: 0, minutes: 0, intensity: 0 };
     setLogForm({
-      pages: existing.pages || 0, minutes: existing.minutes || 0, note: '' });
+      pages: existing.pages || 0,
+      minutes: existing.minutes || 0,
+      note: '',
+    });
     setShowLogModal(true);
   };
 
@@ -141,49 +237,21 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, username }) => {
 
       <div className="dashboard-full">
         <div className="card">
-          <h2 className="section-title">🔥 阅读打卡热力图（点击任意格子填写记录）</h2>
-          <div className="heatmap-container">
-            <div className="heatmap-wrapper">
-              <div className="heatmap-months">
-                {months.map((m, i) => (
-                <div key={i} style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>{m.label}</span>
-                </div>
-              ))}
-              </div>
-              <div className="heatmap-body">
-                <div className="heatmap-weekdays">
-                  <div>日</div>
-                  <div style={{ opacity: 0 }}>一</div>
-                  <div>二</div>
-                  <div style={{ opacity: 0 }}>三</div>
-                  <div>四</div>
-                  <div style={{ opacity: 0 }}>五</div>
-                  <div>六</div>
-                </div>
-                <div className="heatmap-weeks">
-                  {weeks.map((week, wIdx) => (
-                    <div key={wIdx} className="heatmap-week">
-                      {week.map((day, dIdx) => (
-                        <div
-                          key={dIdx}
-                          className={`heatmap-cell heatmap-${day.data.intensity}`}
-                          onClick={() => onCellClick(day)}
-                          title={day.date ? `${day.date}: ${day.data.minutes}分钟, ${day.data.pages}页` : ''}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="heatmap-legend">
-                <span>少</span>
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <span key={i} className={`heatmap-legend-box heatmap-${i}`} />
-                )}
-                <span>多</span>
-              </div>
-            </div>
+          <h2 className="section-title">🔥 阅读打卡圆形日历（点击任意扇区填写记录）</h2>
+          <div style={{ position: 'relative' }}>
+            <CircularCalendar cal={calendar} onSelect={onSelectDay} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', marginTop: '14px', fontSize: '12px', color: '#7a5a48' }}>
+            <span>阅读强度：</span>
+            {HEAT_COLORS.map((c, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{
+                  width: '16px', height: '16px', background: c,
+                  borderRadius: '3px', border: '1px solid #ffffff'
+                }} />
+                <span>{['无', '少', '中', '多', '强'][i]}</span>
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -200,8 +268,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, username }) => {
                 <Tooltip
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e8d5c0', fontSize: '12px' }}
                 />
-                <Line type="monotone" dataKey="页数" stroke="#d97706" strokeWidth={2} dot={{ fill: '#d97706', r: 3 }} />
-                <Line type="monotone" dataKey="分钟" stroke="#22c55e" strokeWidth={2} dot={{ fill: '#22c55e', r: 3 }} />
+                <Line
+                  type="monotone" dataKey="页数" stroke="#d97706" strokeWidth={2}
+                  dot={{ fill: '#d97706', r: 3 }}
+                />
+                <Line
+                  type="monotone" dataKey="分钟" stroke="#22c55e" strokeWidth={2}
+                  dot={{ fill: '#22c55e', r: 3 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -211,10 +285,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, username }) => {
           <h2 className="section-title">🏆 俱乐部阅读排行榜</h2>
           <div className="leaderboard-list">
             {leaderboard?.board.map((item) => (
-              <div
-                key={item.userId}
-                className={`leaderboard-item ${item.medal}`}
-              >
+              <div key={item.userId} className={`leaderboard-item ${item.medal}`}>
                 <div className={`leaderboard-rank ${item.medal}`}>
                   {item.medal ? (
                     <span className="medal-icon">
@@ -245,26 +316,23 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, username }) => {
             <div className="form-group">
               <label>阅读页数</label>
               <input
-                type="number"
-                className="form-input"
+                type="number" className="form-input"
                 value={logForm.pages}
-                onChange={(e) => setLogForm((p) => ({ ...p, pages: Number(e.target.value) })}
+                onChange={(e) => setLogForm((p) => ({ ...p, pages: Number(e.target.value) }))}
               />
             </div>
             <div className="form-group" style={{ marginTop: '14px' }}>
               <label>阅读时长（分钟）</label>
               <input
-                type="number"
-                className="form-input"
+                type="number" className="form-input"
                 value={logForm.minutes}
-                onChange={(e) => setLogForm((p) => ({ ...p, minutes: Number(e.target.value) })}
+                onChange={(e) => setLogForm((p) => ({ ...p, minutes: Number(e.target.value) }))}
               />
             </div>
             <div className="form-group" style={{ marginTop: '14px' }}>
               <label>阅读感悟</label>
               <textarea
-                className="form-input"
-                style={{ minHeight: '80px' }}
+                className="form-input" style={{ minHeight: '80px' }}
                 placeholder="今日心得..."
                 value={logForm.note}
                 onChange={(e) => setLogForm((p) => ({ ...p, note: e.target.value }))}

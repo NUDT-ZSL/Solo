@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 export interface NavItem {
   key: string;
@@ -16,15 +16,47 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ active, onNavigate, username, avatar, isAdmin, onLogout }) => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   const items: NavItem[] = [
-    { key: 'home', label: '俱乐部首页', icon: '🏠' },
+    { key: 'home', label: '首页', icon: '🏠' },
     { key: 'library', label: '书库', icon: '📚' },
-    { key: 'dashboard', label: '我的阅读', icon: '📊' },
+    { key: 'dashboard', label: '我的', icon: '📊' },
     { key: 'votes', label: '投票', icon: '🗳️' },
   ];
 
   if (isAdmin) {
     items.push({ key: 'admin', label: '管理', icon: '⚙️' });
+  }
+
+  if (isMobile) {
+    return (
+      <nav className="navbar mobile-navbar">
+        <ul className="nav-list">
+          {items.map((item) => (
+            <li
+              key={item.key}
+              className={`nav-item ${active === item.key ? 'active' : ''}`}
+              onClick={() => onNavigate(item.key)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+            </li>
+          ))}
+          <li className="nav-item" onClick={onLogout}>
+            <span className="nav-icon">🚪</span>
+            <span className="nav-label">退出</span>
+          </li>
+        </ul>
+      </nav>
+    );
   }
 
   return (
@@ -40,7 +72,8 @@ const Navbar: React.FC<NavbarProps> = ({ active, onNavigate, username, avatar, i
       <ul className="nav-list">
         {items.map((item) => (
           <li
-            key={item.key} className={`nav-item ${active === item.key ? 'active' : ''}`}
+            key={item.key}
+            className={`nav-item ${active === item.key ? 'active' : ''}`}
             onClick={() => onNavigate(item.key)}
           >
             <span className="nav-icon">{item.icon}</span>

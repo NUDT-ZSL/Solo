@@ -132,12 +132,12 @@ const seedData = async () => {
   if (logCount === 0) {
     const allUsers = await users.find<User>({});
     const logs: ReadingLog[] = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       allUsers.forEach((user, idx) => {
-        if (Math.random() > 0.3) {
+        if (Math.random() > 0.25) {
           logs.push({
             userId: user._id!,
             date: dateStr,
@@ -150,6 +150,68 @@ const seedData = async () => {
       });
     }
     await readingLogs.insertMany(logs);
+  }
+
+  const statusCount = await readingStatuses.count({});
+  if (statusCount === 0) {
+    const allUsers = await users.find<User>({});
+    const allBooks = await books.find<Book>({});
+    const statuses: ReadingStatus[] = [];
+    const options: ('unread' | 'reading' | 'read')[] = ['unread', 'reading', 'read'];
+    const notes = [
+      '这本书的开头非常引人入胜！',
+      '看到第三章，情节慢慢展开了',
+      '令人深思的一本书，值得反复阅读',
+      '语言很优美，翻译也很棒',
+      '人物刻画太生动了',
+      '节奏稍慢，但很有味道',
+    ];
+    allUsers.forEach((u, ui) => {
+      allBooks.forEach((b, bi) => {
+        const r = Math.random();
+        let status: 'unread' | 'reading' | 'read' = 'unread';
+        if (ui === 0) status = r < 0.3 ? 'read' : r < 0.5 ? 'reading' : 'unread';
+        else status = r < 0.25 ? 'read' : r < 0.5 ? 'reading' : 'unread';
+        if (status !== 'unread') {
+          statuses.push({
+            userId: u._id!,
+            bookId: b._id!,
+            status,
+            note: Math.random() > 0.3 ? notes[Math.floor(Math.random() * notes.length)] : '',
+            updatedAt: Date.now() - (bi + ui) * 3600 * 1000,
+          });
+        }
+      });
+    });
+    await readingStatuses.insertMany(statuses);
+  }
+
+  const voteCount = await votes.count({});
+  if (voteCount === 0) {
+    const allBooks = await books.find<Book>({});
+    const bookIds = allBooks.slice(0, 4).map((b) => b._id!);
+    const vote = await votes.insert({
+      title: '下个月共读哪本书？',
+      bookIds,
+      createdAt: Date.now() - 2 * 60 * 60 * 1000,
+      endsAt: Date.now() + 70 * 60 * 60 * 1000,
+      closed: false,
+    } as Vote);
+    const allUsers = await users.find<User>({});
+    const vr: VoteRecord[] = [];
+    allUsers.forEach((u, i) => {
+      if (i < 3) {
+        vr.push({
+          voteId: vote._id!,
+          userId: u._id!,
+          bookId: bookIds[i % bookIds.length],
+          createdAt: Date.now() - (i + 1) * 40 * 60 * 1000,
+        } as VoteRecord);
+      }
+    });
+    if (vr.length > 0) {
+      await voteRecords.insertMany(vr);
+    }
   }
 };
 

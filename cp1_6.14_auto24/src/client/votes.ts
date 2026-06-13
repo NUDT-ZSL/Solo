@@ -19,9 +19,12 @@ export interface ActiveVote {
   bookIds: string[];
   books: Book[];
   counts: Record<string, number>;
+  result: VoteResultItem[];
   total: number;
   endsAt: number;
+  createdAt: number;
   closed: boolean;
+  userVoteMap: Record<string, string>;
 }
 
 export const getActiveVote = async (): Promise<ActiveVote | null> => {
