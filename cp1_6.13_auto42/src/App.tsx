@@ -7,6 +7,7 @@ import { Task, GroupId, Comment } from './types';
 import { MOCK_TASKS, MEMBERS, GROUP_MAP } from './data/mockData';
 import KanbanBoard from './components/KanbanBoard';
 import Modal from './components/Modal';
+import useDebounce from './hooks/useDebounce';
 import './App.css';
 
 dayjs.extend(relativeTime);
@@ -40,6 +41,7 @@ export const useAppContext = () => {
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const debouncedSearchKeyword = useDebounce(searchKeyword, 300);
   const [filterGroup, setFilterGroup] = useState<GroupId | 'all'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -119,13 +121,13 @@ const App: React.FC = () => {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
-      const matchesSearch = searchKeyword
-        ? task.title.toLowerCase().includes(searchKeyword.toLowerCase())
+      const matchesSearch = debouncedSearchKeyword
+        ? task.title.toLowerCase().includes(debouncedSearchKeyword.toLowerCase())
         : true;
       const matchesGroup = filterGroup === 'all' ? true : task.group === filterGroup;
       return matchesSearch && matchesGroup;
     });
-  }, [tasks, searchKeyword, filterGroup]);
+  }, [tasks, debouncedSearchKeyword, filterGroup]);
 
   const handleOpenCreateModal = (group: GroupId) => {
     setEditingTask(null);
@@ -247,12 +249,16 @@ const App: React.FC = () => {
                     <span className="detail-value">
                       {(() => {
                         const m = getMemberById(detailTask.assignee);
-                        return m ? (
-                          <span className="detail-assignee" style={{ background: m.color }}>
-                            {m.name[0]}
-                          </span>
-                        ) : null}
-                        {m?.name || '未分配'}
+                        return (
+                          <>
+                            {m ? (
+                              <span className="detail-assignee" style={{ background: m.color }}>
+                                {m.name[0]}
+                              </span>
+                            ) : null}
+                            {m?.name || '未分配'}
+                          </>
+                        );
                       })()}
                     </span>
                   </div>

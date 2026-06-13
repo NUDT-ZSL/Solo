@@ -11,14 +11,13 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-beautiful-dnd": "^13.1.1",
+    "@hello-pangea/dnd": "^16.5.0",
     "uuid": "^9.0.0",
     "dayjs": "^1.11.10"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
-    "@types/react-beautiful-dnd": "^13.1.8",
     "@types/uuid": "^9.0.7",
     "@vitejs/plugin-react": "^4.2.1",
     "typescript": "^5.2.2",

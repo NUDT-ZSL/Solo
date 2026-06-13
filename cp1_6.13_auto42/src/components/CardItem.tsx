@@ -1,5 +1,5 @@
 import React from 'react';
-import { Draggable } from 'react-beautiful-dnd';
+import { Draggable } from '@hello-pangea/dnd';
 import { Task } from '../types';
 import { useAppContext } from '../App';
 import './CardItem.css';
@@ -8,9 +8,10 @@ interface CardItemProps {
   task: Task;
   index: number;
   onClick: () => void;
+  isDraggingContext: boolean;
 }
 
-const CardItem: React.FC<CardItemProps> = ({ task, index, onClick }) => {
+const CardItem: React.FC<CardItemProps> = ({ task, index, onClick, isDraggingContext }) => {
   const { getMemberById } = useAppContext();
   const assignee = getMemberById(task.assignee);
 
@@ -21,11 +22,15 @@ const CardItem: React.FC<CardItemProps> = ({ task, index, onClick }) => {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className={`card-item ${snapshot.isDragging ? 'is-dragging' : ''}`}
+          className={`card-item ${snapshot.isDragging ? 'is-dragging' : ''} ${
+            isDraggingContext && !snapshot.isDragging ? 'is-dragging-context' : ''
+          }`}
           onClick={onClick}
           style={{
             ...provided.draggableProps.style,
-            animation: !snapshot.isDragging ? 'fadeIn 0.4s ease' : undefined
+            backgroundColor: snapshot.isDragging ? '#60a5fa40' : undefined,
+            transition: snapshot.isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.2s ease',
+            animation: !snapshot.isDragging && !isDraggingContext ? 'fadeIn 0.4s ease' : undefined
           }}
         >
           <h4 className="card-title">{task.title}</h4>
@@ -53,15 +58,8 @@ const CardItem: React.FC<CardItemProps> = ({ task, index, onClick }) => {
                 {assignee.name[0]}
               </div>
             )}
-            <div className="card-comment-count" title={`${task.commentCount}条评论`}>
-              <svg viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span>{task.commentCount}</span>
+            <div className="card-comment-bubble" title={`${task.commentCount}条评论`}>
+              {task.commentCount}
             </div>
           </div>
         </div>

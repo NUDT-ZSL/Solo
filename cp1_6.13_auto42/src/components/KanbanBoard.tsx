@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { DragDropContext, Droppable, DropResult } from 'react-beautiful-dnd';
+import React, { useMemo, useState } from 'react';
+import { DragDropContext, Droppable, DropResult, DragStart, DragEnd } from '@hello-pangea/dnd';
 import { Task, GroupId } from '../types';
 import { useAppContext } from '../App';
 import CardItem from './CardItem';
@@ -21,6 +21,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   setActiveMobileColumn
 }) => {
   const { tasks, groupMap, moveCard, filterGroup } = useAppContext();
+  const [isDragging, setIsDragging] = useState(false);
 
   const groupedTasks = useMemo(() => {
     const result: Record<GroupId, Task[]> = {
@@ -37,7 +38,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     return result;
   }, [tasks]);
 
+  const onDragStart = (_: DragStart) => {
+    setIsDragging(true);
+  };
+
   const onDragEnd = (result: DropResult) => {
+    setIsDragging(false);
     if (!result.destination) return;
 
     const { draggableId, destination } = result;
@@ -45,7 +51,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
+    <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <div className="kanban-board">
         <div className="kanban-columns">
           {GROUP_ORDER.map((groupId, idx) => {
@@ -81,6 +87,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             task={task}
                             index={index}
                             onClick={() => onCardClick(task)}
+                            isDraggingContext={isDragging}
                           />
                         ))
                       )}
