@@ -9,7 +9,7 @@ export interface UICallbacks {
 
 export class GlacierUI {
   private container: HTMLElement;
-  private callbacks: UIBallbacks;
+  private callbacks: UICallbacks;
   private currentYear: number = START_YEAR;
   private isPlaying: boolean = false;
   private playInterval: ReturnType<typeof setInterval> | null = null;
@@ -29,7 +29,7 @@ export class GlacierUI {
   private closeDetailBtn!: HTMLElement;
   private currentDetailRegion: GlacierRegion | null = null;
 
-  constructor(container: HTMLElement, callbacks: UIBallbacks) {
+  constructor(container: HTMLElement, callbacks: UICallbacks) {
     this.container = container;
     this.callbacks = callbacks;
     this.createInfoPanel();
@@ -430,13 +430,22 @@ export class GlacierUI {
 
     this.drawChart(region, year);
 
-    this.detailPanel.style.opacity = '1';
     this.detailPanel.style.pointerEvents = 'auto';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.detailPanel.style.opacity = '1';
+      });
+    });
   }
 
   hideDetail(): void {
     this.detailPanel.style.opacity = '0';
-    this.detailPanel.style.pointerEvents = 'none';
+    const after = () => {
+      if (this.detailPanel.style.opacity === '0') {
+        this.detailPanel.style.pointerEvents = 'none';
+      }
+    };
+    setTimeout(after, 220);
     this.currentDetailRegion = null;
   }
 

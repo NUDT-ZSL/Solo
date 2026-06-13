@@ -4,31 +4,36 @@ import { MAX_VOLUME, MAX_BAR_HEIGHT } from './data';
 
 const SPHERE_RADIUS = 5;
 const BAR_RADIUS = 0.3;
+const GLOW_RADIUS = BAR_RADIUS * 1.5;
 const COLOR_LOW = '#0044cc';
 const COLOR_HIGH = '#ff6633';
+const ANIM_DURATION = 0.1;
+const GLOW_ANIM_DURATION = 0.3;
 
 interface BarMesh {
   mesh: THREE.Mesh;
   region: GlacierRegion;
   targetHeight: number;
-  currentHeight: number;
   startHeight: number;
   animT: number;
+  currentHeight: number;
+  unitPositions: Float32Array;
+  glowUnitPositions: Float32Array;
   glowWireframe: THREE.LineSegments;
-  glowTargetOpacity: number;
-  glowCurrentOpacity: number;
+  glowStartScale: number;
   glowTargetScale: number;
-  glowCurrentScale: number;
-  unitBarPositions: Float32Array;
-  unitGlowPositions: Float32Array;
+  glowStartOpacity: number;
+  glowTargetOpacity: number;
+  glowAnimT: number;
+  isHovered: boolean;
   label: THREE.Sprite | null;
 }
 
 export function easeOutElastic(t: number): number {
   const c4 = (2 * Math.PI) / 3;
-  return t === 0
+  return t <= 0
     ? 0
-    : t === 1
+    : t >= 1
     ? 1
     : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
 }
@@ -175,45 +180,39 @@ export class GlacierMap {
     );
   }
 
-  private applyVertexColors(bar: BarMesh): void {
-    const geometry = bar.mesh.geometry;
-    const posAttr = geometry.attributes.position as THREE.BufferAttribute;
-    let colorAttr = geometry.attributes.color as THREE.BufferAttribute | undefined;
-    if (!colorAttr) {
-      colorAttr = new THREE.BufferAttribute(new Float32Array(posAttr.count * 3), 3);
-      geometry.setAttribute('color', colorAttr);
-    }
-    const h = Math.max(0.01, bar.currentHeight);
-    for (let i = 0; i < posAttr.count; i++) {
-      const y = posAttr.getY(i);
-      const t = Math.max(0, Math.min(1, y / h));
-      const c = this.bottomColor.clone().lerp(this.topColor, t);
-      colorAttr.setXYZ(i, c.r, c.g, c.b);
-    }
-    colorAttr.needsUpdate = true;
-  }
-
   private createBar(region: GlacierRegion, year: number): BarMesh {
     const pos = this.latLonToPosition(region.latitude, region.longitude);
     const direction = pos.clone().normalize();
     const yearData = region.yearlyData.find(d => d.year === year);
     const volume = yearData ? yearData.cumulativeVolume : 0;
-    const height = (volume / MAX_VOLUME) * MAX_BAR_HEIGHT;
-    const safeHeight = Math.max(0.01, height);
+    const safeHeight = Math.max(0.01, (volume / MAX_VOLUME) * MAX_BAR_HEIGHT);
 
-    const unitGeometry = new THREE.CylinderGeometry(BAR_RADIUS, BAR_RADIUS, 1, 16, 1, false);
-    unitGeometry.translate(0, 0.5, 0);
-    const unitBarPositions = new Float32Array(unitGeometry.attributes.position.array);
+    const unitGeo = new THREE.CylinderGeometry(BAR_RADIUS, BAR_RADIUS, 1, 20, 1, false);
+    unitGeo.translate(0, 0.5, 0);
+    const unitPositions = new Float32Array(unitGeo.attributes.position.array);
 
-    const geometry = unitGeometry.clone();
+    const geometry = unitGeo.clone();
     geometry.scale(1, safeHeight, 1);
+
+    const colorArr = new Float32Array(geometry.attributes.position.count * 3);
+    const posAttr = geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < posAttr.count; i++) {
+      const y = posAttr.getY(i);
+      const t = Math.max(0, Math.min(1, y / safeHeight));
+      const r = this.bottomColor.r + (this.topColor.r - this.bottomColor.r) * t;
+      const g = this.bottomColor.g + (this.topColor.g - this.bottomColor.g) * t;
+      const b = this.bottomColor.b + (this.topColor.b - this.bottomColor.b) * t;
+      colorArr[i * 3] = r;
+      colorArr[i * 3 + 1] = g;
+      colorArr[i * 3 + 2] = b;
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colorArr, 3));
 
     const material = new THREE.MeshPhongMaterial({
       vertexColors: true,
       transparent: true,
       opacity: 0.92,
       shininess: 80,
-      flatShading: false,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -222,18 +221,15 @@ export class GlacierMap {
     const up = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
     mesh.quaternion.copy(quaternion);
-
     mesh.userData = { regionName: region.name };
-
     this.scene.add(mesh);
 
-    const glowUnitGeo = new THREE.CylinderGeometry(BAR_RADIUS * 1.5, BAR_RADIUS * 1.5, 1, 16, 1, false);
+    const glowUnitGeo = new THREE.CylinderGeometry(GLOW_RADIUS, GLOW_RADIUS, 1, 20, 1, false);
     glowUnitGeo.translate(0, 0.5, 0);
-    const unitGlowPositions = new Float32Array(glowUnitGeo.attributes.position.array);
-
+    const glowUnitPositions = new Float32Array(glowUnitGeo.attributes.position.array);
     const glowGeo = glowUnitGeo.clone();
     glowGeo.scale(1, safeHeight, 1);
-    const edges = new THREE.EdgesGeometry(glowGeo, 25);
+    const edges = new THREE.EdgesGeometry(glowGeo, 20);
     const glowMat = new THREE.LineBasicMaterial({
       color: 0xff6633,
       transparent: true,
@@ -246,30 +242,28 @@ export class GlacierMap {
     glowWireframe.quaternion.copy(quaternion);
     this.scene.add(glowWireframe);
 
-    unitGeometry.dispose();
+    unitGeo.dispose();
     glowUnitGeo.dispose();
     glowGeo.dispose();
 
-    const bar: BarMesh = {
+    return {
       mesh,
       region,
       targetHeight: safeHeight,
-      currentHeight: safeHeight,
       startHeight: safeHeight,
       animT: 1,
+      currentHeight: safeHeight,
+      unitPositions,
+      glowUnitPositions,
       glowWireframe,
-      glowTargetOpacity: 0,
-      glowCurrentOpacity: 0,
+      glowStartScale: 1,
       glowTargetScale: 1,
-      glowCurrentScale: 1,
-      unitBarPositions,
-      unitGlowPositions,
+      glowStartOpacity: 0,
+      glowTargetOpacity: 0,
+      glowAnimT: 1,
+      isHovered: false,
       label: null,
     };
-
-    this.applyVertexColors(bar);
-
-    return bar;
   }
 
   loadRegions(regions: GlacierRegion[], year: number): void {
@@ -294,67 +288,66 @@ export class GlacierMap {
     this.bars.forEach(bar => {
       const yearData = bar.region.yearlyData.find(d => d.year === year);
       const volume = yearData ? yearData.cumulativeVolume : 0;
-      bar.targetHeight = Math.max(0.01, (volume / MAX_VOLUME) * MAX_BAR_HEIGHT);
-      bar.elasticVelocity = 0;
+      const newHeight = Math.max(0.01, (volume / MAX_VOLUME) * MAX_BAR_HEIGHT);
+      bar.startHeight = bar.currentHeight;
+      bar.targetHeight = newHeight;
+      bar.animT = 0;
     });
   }
 
-  private updateBarGeometry(bar: BarMesh): void {
-    const h = Math.max(0.01, bar.currentHeight);
+  private setBarHeight(bar: BarMesh, h: number): void {
+    bar.currentHeight = h;
 
     const posAttr = bar.mesh.geometry.attributes.position as THREE.BufferAttribute;
     const positions = posAttr.array as Float32Array;
-    const unitPos = bar.unitBarPositions;
-    for (let i = 0; i < unitPos.length; i += 3) {
-      positions[i] = unitPos[i];
-      positions[i + 1] = unitPos[i + 1] * h;
-      positions[i + 2] = unitPos[i + 2];
+    const unit = bar.unitPositions;
+    for (let i = 0; i < unit.length; i += 3) {
+      positions[i] = unit[i];
+      positions[i + 1] = unit[i + 1] * h;
+      positions[i + 2] = unit[i + 2];
     }
     posAttr.needsUpdate = true;
-    posAttr.updatedRanges = [{ offset: 0, count: Infinity }];
     (bar.mesh.geometry as THREE.BufferGeometry).computeVertexNormals();
+
+    const colorAttr = bar.mesh.geometry.attributes.color as THREE.BufferAttribute;
+    const colors = colorAttr.array as Float32Array;
+    for (let i = 0; i < colorAttr.count; i++) {
+      const y = posAttr.getY(i);
+      const t = Math.max(0, Math.min(1, y / h));
+      colors[i * 3] = this.bottomColor.r + (this.topColor.r - this.bottomColor.r) * t;
+      colors[i * 3 + 1] = this.bottomColor.g + (this.topColor.g - this.bottomColor.g) * t;
+      colors[i * 3 + 2] = this.bottomColor.b + (this.topColor.b - this.bottomColor.b) * t;
+    }
+    colorAttr.needsUpdate = true;
 
     const glowPosAttr = bar.glowWireframe.geometry.attributes.position as THREE.BufferAttribute;
     const glowPos = glowPosAttr.array as Float32Array;
-    const unitGlow = bar.unitGlowPositions;
-    for (let i = 0; i < unitGlow.length; i += 3) {
-      glowPos[i] = unitGlow[i];
-      glowPos[i + 1] = unitGlow[i + 1] * h;
-      glowPos[i + 2] = unitGlow[i + 2];
+    const glowUnit = bar.glowUnitPositions;
+    for (let i = 0; i < glowUnit.length; i += 3) {
+      glowPos[i] = glowUnit[i];
+      glowPos[i + 1] = glowUnit[i + 1] * h;
+      glowPos[i + 2] = glowUnit[i + 2];
     }
     glowPosAttr.needsUpdate = true;
-    glowPosAttr.updatedRanges = [{ offset: 0, count: Infinity }];
-
-    this.applyVertexColors(bar);
   }
 
   updateAnimation(delta: number): void {
-    const lerpSpeed = 1 - Math.pow(0.001, delta);
-
     this.bars.forEach(bar => {
-      const disp = bar.targetHeight - bar.elasticHeight;
-      bar.elasticVelocity += disp * 80 * delta;
-      bar.elasticVelocity *= Math.pow(0.001, delta);
-      bar.elasticHeight += bar.elasticVelocity * delta;
-
-      const elasticT = easeOutElastic(
-        Math.max(0, Math.min(1, Math.abs(bar.targetHeight - bar.currentHeight) / Math.max(0.01, Math.abs(bar.targetHeight - (bar.targetHeight - (bar.elasticHeight - bar.currentHeight))) + 0.001)))
-      );
-
-      bar.currentHeight += (bar.elasticHeight - bar.currentHeight) * (1 - Math.pow(0.001, delta / 0.1));
-
-      if (Math.abs(bar.currentHeight - (Number((bar as any)._lastRenderedH || 0))) > 0.003) {
-        (bar as any)._lastRenderedH = bar.currentHeight;
-        this.updateBarGeometry(bar);
+      if (bar.animT < 1) {
+        bar.animT = Math.min(1, bar.animT + delta / ANIM_DURATION);
+        const easedT = easeOutElastic(bar.animT);
+        const newH = bar.startHeight + (bar.targetHeight - bar.startHeight) * easedT;
+        this.setBarHeight(bar, newH);
       }
 
-      bar.glowTargetOpacity = bar === this.hoveredBar ? 1 : 0;
-      bar.glowCurrentOpacity += (bar.glowTargetOpacity - bar.glowCurrentOpacity) * (1 - Math.pow(0.001, delta / 0.3));
-      (bar.glowWireframe.material as THREE.LineBasicMaterial).opacity = bar.glowCurrentOpacity;
-
-      bar.glowTargetScale = bar === this.hoveredBar ? 1.15 : 1;
-      bar.glowCurrentScale += (bar.glowTargetScale - bar.glowCurrentScale) * (1 - Math.pow(0.001, delta / 0.3));
-      bar.glowWireframe.scale.set(bar.glowCurrentScale, bar.glowCurrentScale, bar.glowCurrentScale);
+      if (bar.glowAnimT < 1) {
+        bar.glowAnimT = Math.min(1, bar.glowAnimT + delta / GLOW_ANIM_DURATION);
+        const t = bar.glowAnimT;
+        const s = bar.glowStartScale + (bar.glowTargetScale - bar.glowStartScale) * t;
+        bar.glowWireframe.scale.set(s, s, s);
+        const o = bar.glowStartOpacity + (bar.glowTargetOpacity - bar.glowStartOpacity) * t;
+        (bar.glowWireframe.material as THREE.LineBasicMaterial).opacity = o;
+      }
     });
 
     const time = performance.now() * 0.0001;
@@ -370,6 +363,24 @@ export class GlacierMap {
     positions.needsUpdate = true;
   }
 
+  private startHoverGlow(bar: BarMesh): void {
+    bar.glowStartScale = bar.glowWireframe.scale.x;
+    bar.glowTargetScale = 1.25;
+    bar.glowStartOpacity = (bar.glowWireframe.material as THREE.LineBasicMaterial).opacity;
+    bar.glowTargetOpacity = 0.9;
+    bar.glowAnimT = 0;
+    bar.isHovered = true;
+  }
+
+  private stopHoverGlow(bar: BarMesh): void {
+    bar.glowStartScale = bar.glowWireframe.scale.x;
+    bar.glowTargetScale = 1;
+    bar.glowStartOpacity = (bar.glowWireframe.material as THREE.LineBasicMaterial).opacity;
+    bar.glowTargetOpacity = 0;
+    bar.glowAnimT = 0;
+    bar.isHovered = false;
+  }
+
   handleMouseMove(event: MouseEvent, camera: THREE.Camera): void {
     const rect = (event.target as HTMLElement).getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -382,15 +393,19 @@ export class GlacierMap {
     if (intersects.length > 0) {
       const hitMesh = intersects[0].object as THREE.Mesh;
       const bar = this.bars.find(b => b.mesh === hitMesh);
-      if (bar && bar !== this.hoveredBar) {
-        this.hoveredBar = bar;
-        if (this.onBarHover) this.onBarHover(bar.region);
+      if (bar) {
+        if (!bar.isHovered) this.startHoverGlow(bar);
+        if (bar !== this.hoveredBar) {
+          this.hoveredBar = bar;
+          if (this.onBarHover) this.onBarHover(bar.region);
+        }
+        return;
       }
-    } else {
-      if (this.hoveredBar) {
-        this.hoveredBar = null;
-        if (this.onBarHover) this.onBarHover(null);
-      }
+    }
+    if (this.hoveredBar) {
+      if (this.hoveredBar.isHovered) this.stopHoverGlow(this.hoveredBar);
+      this.hoveredBar = null;
+      if (this.onBarHover) this.onBarHover(null);
     }
   }
 

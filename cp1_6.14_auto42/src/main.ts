@@ -66,7 +66,7 @@ class GlacialDriftApp {
     this.glacierMap = new GlacierMap(this.scene);
     this.glacierMap.loadRegions(this.regions, this.currentYear);
 
-    const callbacks: UIBallbacks = {
+    const callbacks: UICallbacks = {
       onYearChange: (year: number) => this.onYearChange(year),
       onResetCamera: () => this.onResetCamera(),
       onPlayToggle: (playing: boolean) => {},
