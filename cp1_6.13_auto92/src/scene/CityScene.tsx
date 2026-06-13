@@ -5,6 +5,8 @@ import * as THREE from 'three'
 import type { Building } from '../types'
 import { useCityStore } from '../store/useCityStore'
 
+const sharedCamera: { current: THREE.PerspectiveCamera | null } = { current: null }
+
 interface BuildingMeshProps {
   building: Building
   isSelected: boolean
@@ -23,7 +25,7 @@ function BuildingMesh({ building, isSelected, onClick, onPointerOver, onPointerO
     if (!bodyMeshRef.current) return
 
     const targetHeight = building.height
-    const lerpFactor = Math.min(delta * 4, 1)
+    const lerpFactor = Math.min(delta * 3.5, 1)
     currentHeight.current = THREE.MathUtils.lerp(currentHeight.current, targetHeight, lerpFactor)
 
     const h = currentHeight.current
@@ -37,9 +39,9 @@ function BuildingMesh({ building, isSelected, onClick, onPointerOver, onPointerO
 
     if (crownMeshRef.current) {
       if (building.hasCrown && h > 2) {
-        crownMeshRef.current.visible = true
         crownMeshRef.current.scale.set(building.width * 0.85, 5, building.depth * 0.85)
         crownMeshRef.current.position.y = h + 2.5
+        crownMeshRef.current.visible = true
       } else {
         crownMeshRef.current.visible = false
       }
@@ -67,7 +69,7 @@ function BuildingMesh({ building, isSelected, onClick, onPointerOver, onPointerO
         </lineSegments>
       )}
 
-      <mesh ref={crownMeshRef} visible={false}>
+      <mesh ref={crownMeshRef}>
         <boxGeometry args={[1, 1, 1]} />
         <meshPhysicalMaterial
           color="#ffffff"
@@ -83,13 +85,12 @@ function BuildingMesh({ building, isSelected, onClick, onPointerOver, onPointerO
 
 function Ground() {
   const size = 200
-  const gridSize = 10
-  const divisions = size / gridSize
+  const divisions = 20
 
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[size, size, divisions, divisions]} />
+        <planeGeometry args={[size, size]} />
         <meshStandardMaterial color="#e5e5e5" />
       </mesh>
       <gridHelper
@@ -100,44 +101,23 @@ function Ground() {
   )
 }
 
-interface SceneContentProps {
-  onBoxSelectStart: () => void
-  onBoxSelectEnd: () => void
-  isBoxSelecting: boolean
-  setBoxStart: (p: { x: number; y: number } | null) => void
-  setBoxEnd: (p: { x: number; y: number } | null) => void
-  containerRef: React.RefObject<HTMLDivElement>
-}
-
-function SceneContent({
-  onBoxSelectStart,
-  onBoxSelectEnd,
-  isBoxSelecting,
-  setBoxStart,
-  setBoxEnd,
-  containerRef
-}: SceneContentProps) {
+function SceneInner() {
   const buildings = useCityStore((state) => state.buildings)
   const selectedIds = useCityStore((state) => state.selectedIds)
+  const temporarySelectedIds = useCityStore((state) => state.temporarySelectedIds)
   const selectBuilding = useCityStore((state) => state.selectBuilding)
-  const selectBuildings = useCityStore((state) => state.selectBuildings)
-  const clearSelection = useCityStore((state) => state.clearSelection)
   const { camera, gl } = useThree()
-  const orbitRef = useRef<any>(null)
+
+  useEffect(() => {
+    sharedCamera.current = camera as THREE.PerspectiveCamera
+  }, [camera])
+
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   useEffect(() => {
     document.body.style.cursor = hoveredId ? 'pointer' : 'auto'
-    return () => {
-      document.body.style.cursor = 'auto'
-    }
+    return () => { document.body.style.cursor = 'auto' }
   }, [hoveredId])
-
-  useEffect(() => {
-    if (orbitRef.current) {
-      orbitRef.current.enabled = !isBoxSelecting
-    }
-  }, [isBoxSelecting])
 
   const handleBuildingClick = useCallback((building: Building) => (e: any) => {
     e.stopPropagation()
@@ -153,91 +133,241 @@ function SceneContent({
     setHoveredId(null)
   }, [])
 
-  const getBuildingScreenBounds = useCallback((building: Building): { minX: number; maxX: number; minY: number; maxY: number } | null => {
-    if (!containerRef.current || !camera) return null
+  return (
+    <>
+      <ambientLight intensity={0.4} />
+      <directionalLight
+        position={[100, 100, 50]}
+        intensity={1}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+      />
+      <directionalLight position={[-50, 50, -50]} intensity={0.3} />
 
-    const halfW = building.width / 2
-    const halfD = building.depth / 2
-    const h = Math.max(building.height, 1)
+      <Ground />
 
-    const corners = [
-      new THREE.Vector3(building.x - halfW, 0, building.z - halfD),
-      new THREE.Vector3(building.x + halfW, 0, building.z - halfD),
-      new THREE.Vector3(building.x - halfW, 0, building.z + halfD),
-      new THREE.Vector3(building.x + halfW, 0, building.z + halfD),
-      new THREE.Vector3(building.x - halfW, h, building.z - halfD),
-      new THREE.Vector3(building.x + halfW, h, building.z - halfD),
-      new THREE.Vector3(building.x - halfW, h, building.z + halfD),
-      new THREE.Vector3(building.x + halfW, h, building.z + halfD)
-    ]
+      {buildings.map((building) => {
+        const isHighlighted = selectedIds.has(building.id) || temporarySelectedIds.has(building.id)
+        return (
+          <BuildingMesh
+            key={building.id}
+            building={building}
+            isSelected={isHighlighted}
+            onClick={handleBuildingClick(building)}
+            onPointerOver={handlePointerOver(building)}
+            onPointerOut={handlePointerOut}
+          />
+        )
+      })}
 
+      <OrbitControls
+        enableDamping
+        dampingFactor={0.05}
+        minDistance={20}
+        maxDistance={300}
+        maxPolarAngle={Math.PI / 2.1}
+        enablePan={true}
+      />
+    </>
+  )
+}
+
+export default function CityScene() {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const buildings = useCityStore((state) => state.buildings)
+  const clearSelection = useCityStore((state) => state.clearSelection)
+  const selectBuildings = useCityStore((state) => state.selectBuildings)
+  const setTemporarySelected = useCityStore((state) => state.setTemporarySelected)
+  const clearTemporarySelected = useCityStore((state) => state.clearTemporarySelected)
+
+  const [isBoxSelecting, setIsBoxSelecting] = useState(false)
+  const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null)
+  const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null)
+
+  const checkBuildingsInBox = useCallback((left: number, right: number, top: number, bottom: number): string[] => {
+    if (!containerRef.current || !sharedCamera.current) return []
+
+    const camera = sharedCamera.current
     const rect = containerRef.current.getBoundingClientRect()
-    let minX = Infinity, maxX = -Infinity
-    let minY = Infinity, maxY = -Infinity
-    let hasVisiblePoint = false
+    const result: string[] = []
 
-    for (const corner of corners) {
-      const projected = corner.clone().project(camera)
-      if (projected.z < 1 && projected.z > -1) {
-        hasVisiblePoint = true
-        const x = (projected.x * 0.5 + 0.5) * rect.width
-        const y = (-projected.y * 0.5 + 0.5) * rect.height
-        minX = Math.min(minX, x)
-        maxX = Math.max(maxX, x)
-        minY = Math.min(minY, y)
-        maxY = Math.max(maxY, y)
+    for (const building of buildings) {
+      const halfW = building.width / 2
+      const halfD = building.depth / 2
+      const h = Math.max(building.height, 1)
+
+      const corners = [
+        new THREE.Vector3(building.x - halfW, 0, building.z - halfD),
+        new THREE.Vector3(building.x + halfW, 0, building.z - halfD),
+        new THREE.Vector3(building.x - halfW, 0, building.z + halfD),
+        new THREE.Vector3(building.x + halfW, 0, building.z + halfD),
+        new THREE.Vector3(building.x - halfW, h, building.z - halfD),
+        new THREE.Vector3(building.x + halfW, h, building.z - halfD),
+        new THREE.Vector3(building.x - halfW, h, building.z + halfD),
+        new THREE.Vector3(building.x + halfW, h, building.z + halfD)
+      ]
+
+      let minX = Infinity, maxX = -Infinity
+      let minY = Infinity, maxY = -Infinity
+      let hasVisiblePoint = false
+
+      for (const corner of corners) {
+        const projected = corner.clone().project(camera)
+        if (projected.z < 1 && projected.z > -1) {
+          hasVisiblePoint = true
+          const x = (projected.x * 0.5 + 0.5) * rect.width
+          const y = (-projected.y * 0.5 + 0.5) * rect.height
+          minX = Math.min(minX, x)
+          maxX = Math.max(maxX, x)
+          minY = Math.min(minY, y)
+          maxY = Math.max(maxY, y)
+        }
+      }
+
+      if (hasVisiblePoint &&
+          maxX >= left && minX <= right &&
+          maxY >= top && minY <= bottom) {
+        result.push(building.id)
       }
     }
 
-    if (!hasVisiblePoint) return null
-    return { minX, maxX, minY, maxY }
-  }, [camera, containerRef])
+    return result
+  }, [buildings])
 
-  const handlePointerDown = useCallback((e: any) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (!containerRef.current) return
     if (e.shiftKey && e.button === 0) {
-      e.stopPropagation()
-      if (!containerRef.current) return
+      e.preventDefault()
       const rect = containerRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
-      onBoxSelectStart()
+      setIsBoxSelecting(true)
       setBoxStart({ x, y })
       setBoxEnd({ x, y })
     }
-  }, [onBoxSelectStart, setBoxStart, setBoxEnd, containerRef])
+  }, [])
 
-  const handlePointerMove = useCallback((e: any) => {
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isBoxSelecting || !containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
-    setBoxEnd({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    })
-  }, [isBoxSelecting, setBoxEnd, containerRef])
+    const curX = e.clientX - rect.left
+    const curY = e.clientY - rect.top
+    setBoxEnd({ x: curX, y: curY })
 
-  const handlePointerUp = useCallback((e: any) => {
-    if (!isBoxSelecting) return
+    if (boxStart) {
+      const left = Math.min(boxStart.x, curX)
+      const right = Math.max(boxStart.x, curX)
+      const top = Math.min(boxStart.y, curY)
+      const bottom = Math.max(boxStart.y, curY)
+      const ids = checkBuildingsInBox(left, right, top, bottom)
+      setTemporarySelected(ids)
+    }
+  }, [isBoxSelecting, boxStart, checkBuildingsInBox, setTemporarySelected])
 
-    const boxStart = (e as any)._boxStart
-    const boxEnd = (e as any)._boxEnd
+  const handlePointerUp = useCallback(() => {
+    if (!isBoxSelecting || !boxStart || !boxEnd) {
+      setIsBoxSelecting(false)
+      return
+    }
 
-    onBoxSelectEnd()
-  }, [isBoxSelecting, onBoxSelectEnd])
+    const left = Math.min(boxStart.x, boxEnd.x)
+    const right = Math.max(boxStart.x, boxEnd.x)
+    const top = Math.min(boxStart.y, boxEnd.y)
+    const bottom = Math.max(boxStart.y, boxEnd.y)
 
-  const handleCanvasPointerMissed = useCallback((e: any) => {
-    if (!e.shiftKey) {
+    const dx = right - left
+    const dy = bottom - top
+
+    if (dx < 5 && dy < 5) {
+      clearTemporarySelected()
+      setIsBoxSelecting(false)
+      setBoxStart(null)
+      setBoxEnd(null)
+      return
+    }
+
+    const ids = checkBuildingsInBox(left, right, top, bottom)
+    if (ids.length > 0) {
+      selectBuildings(ids)
+    } else {
       clearSelection()
     }
-  }, [clearSelection])
 
-  useEffect(() => {
-    const canvas = gl.domElement
-    if (!canvas) return
+    setIsBoxSelecting(false)
+    setBoxStart(null)
+    setBoxEnd(null)
+  }, [isBoxSelecting, boxStart, boxEnd, checkBuildingsInBox, selectBuildings, clearSelection, clearTemporarySelected])
 
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.shiftKey && e.button === 0) {
-        e.preventDefault()
-        e.stopPropagation()
-        if (!containerRef.current) return
-        const rect = containerRef.current.getBoundingClientRect()
-        const x = e.client
+  const handlePointerCancel = useCallback(() => {
+    setIsBoxSelecting(false)
+    setBoxStart(null)
+    setBoxEnd(null)
+    clearTemporarySelected()
+  }, [clearTemporarySelected])
+
+  const handleContainerClick = useCallback(() => {
+    if (!isBoxSelecting) {
+      clearSelection()
+    }
+  }, [clearSelection, isBoxSelecting])
+
+  const selectionBoxVisible = isBoxSelecting && boxStart && boxEnd
+  const selectionBoxStyle = selectionBoxVisible ? {
+    left: Math.min(boxStart!.x, boxEnd!.x),
+    top: Math.min(boxStart!.y, boxEnd!.y),
+    width: Math.abs(boxEnd!.x - boxStart!.x),
+    height: Math.abs(boxEnd!.y - boxStart!.y),
+    display: 'block' as const
+  } : {
+    display: 'none' as const
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onClick={handleContainerClick}
+    >
+      <Canvas
+        camera={{ position: [120, 80, 120], fov: 50 }}
+        shadows
+        gl={{ antialias: true, alpha: false }}
+        onCreated={({ gl }) => {
+          gl.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+        }}
+      >
+        <color attach="background" args={['#f0f4f8']} />
+        <fog attach="fog" args={['#f0f4f8', 150, 400]} />
+        <Suspense fallback={null}>
+          <SceneInner />
+        </Suspense>
+      </Canvas>
+
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 10
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            ...selectionBoxStyle,
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            border: '2px solid #2563eb',
+            pointerEvents: 'none',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+    </div>
+  )
+}

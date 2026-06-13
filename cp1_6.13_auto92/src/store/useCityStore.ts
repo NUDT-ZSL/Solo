@@ -4,7 +4,7 @@ import type { Building, PresetTemplate, PresetConfig } from '../types'
 
 const DEFAULT_PALETTE = ['#4a90d9', '#f5a623', '#7ed321', '#d0021b', '#9013fe']
 
-const PRESET_CONFIGS: Record<PresetTemplate, PresetConfig> = {
+const PRESET_CONFIGS: Record<Exclude<PresetTemplate, 'default'>, PresetConfig> & { default: PresetConfig } = {
   default: {
     name: '默认场景',
     buildingCount: 12,
@@ -51,52 +51,68 @@ const PRESET_CONFIGS: Record<PresetTemplate, PresetConfig> = {
 
 const TERRAIN_SIZE = 200
 const TERRAIN_HALF = TERRAIN_SIZE / 2
-const BUFFER = 15
+const MIN_MARGIN = 8
 
-const generateBuildings = (config: PresetConfig, startHidden = false): Building[] => {
+const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val))
+
+const generateBuildings = (config: PresetConfig, startHidden: boolean): Building[] => {
   const buildings: Building[] = []
   const { buildingCount, heightRange, colorPalette, layout } = config
 
   for (let i = 0; i < buildingCount; i++) {
-    let x: number, z: number
     const width = 10 + Math.random() * 30
     const depth = 10 + Math.random() * 30
     const targetHeight = heightRange[0] + Math.random() * (heightRange[1] - heightRange[0])
     const color = colorPalette[Math.floor(Math.random() * colorPalette.length)]
     const hasCrown = Math.random() > 0.4
 
+    const halfW = width / 2 + MIN_MARGIN
+    const halfD = depth / 2 + MIN_MARGIN
+    const minX = -TERRAIN_HALF + halfW
+    const maxX = TERRAIN_HALF - halfW
+    const minZ = -TERRAIN_HALF + halfD
+    const maxZ = TERRAIN_HALF - halfD
+
+    let x: number, z: number
+
     switch (layout) {
       case 'grid': {
         const cols = Math.ceil(Math.sqrt(buildingCount))
+        const rows = Math.ceil(buildingCount / cols)
         const row = Math.floor(i / cols)
         const col = i % cols
-        const cellW = (TERRAIN_SIZE - BUFFER * 2) / cols
-        const cellH = (TERRAIN_SIZE - BUFFER * 2) / cols
-        x = -TERRAIN_HALF + BUFFER + col * cellW + cellW / 2 + (Math.random() - 0.5) * 8
-        z = -TERRAIN_HALF + BUFFER + row * cellH + cellH / 2 + (Math.random() - 0.5) * 8
+        const cellW = (maxX - minX) / cols
+        const cellD = (maxZ - minZ) / rows
+        const baseX = minX + col * cellW + cellW / 2
+        const baseZ = minZ + row * cellD + cellD / 2
+        x = baseX + (Math.random() - 0.5) * cellW * 0.3
+        z = baseZ + (Math.random() - 0.5) * cellD * 0.3
         break
       }
       case 'cluster': {
-        const angle = (i / buildingCount) * Math.PI * 2
-        const radius = 15 + Math.random() * 70
-        x = Math.cos(angle) * radius + (Math.random() - 0.5) * 15
-        z = Math.sin(angle) * radius + (Math.random() - 0.5) * 15
-        x = Math.max(-TERRAIN_HALF + BUFFER, Math.min(TERRAIN_HALF - BUFFER, x))
-        z = Math.max(-TERRAIN_HALF + BUFFER, Math.min(TERRAIN_HALF - BUFFER, z))
+        const angle = (i / buildingCount) * Math.PI * 2 + Math.random() * 0.3
+        const maxRadius = Math.min(maxX - minX, maxZ - minZ) / 2.5
+        const radius = maxRadius * (0.25 + Math.random() * 0.75)
+        x = Math.cos(angle) * radius
+        z = Math.sin(angle) * radius
         break
       }
       case 'linear': {
-        const t = i / buildingCount
-        x = -TERRAIN_HALF + BUFFER + t * (TERRAIN_SIZE - BUFFER * 2) + (Math.random() - 0.5) * 10
-        z = (Math.random() - 0.5) * 80
-        z = Math.max(-TERRAIN_HALF + BUFFER, Math.min(TERRAIN_HALF - BUFFER, z))
+        const t = i / Math.max(buildingCount - 1, 1)
+        x = minX + t * (maxX - minX)
+        const centerZ = (minZ + maxZ) / 2
+        const spread = (maxZ - minZ) * 0.35
+        z = centerZ + (Math.random() - 0.5) * spread * 2
         break
       }
       default: {
-        x = (Math.random() - 0.5) * (TERRAIN_SIZE - BUFFER * 2)
-        z = (Math.random() - 0.5) * (TERRAIN_SIZE - BUFFER * 2)
+        x = minX + Math.random() * (maxX - minX)
+        z = minZ + Math.random() * (maxZ - minZ)
       }
     }
+
+    x = clamp(x, minX, maxX)
+    z = clamp(z, minZ, maxZ)
 
     buildings.push({
       id: uuidv4(),
@@ -117,11 +133,14 @@ const generateBuildings = (config: PresetConfig, startHidden = false): Building[
 interface CityState {
   buildings: Building[]
   selectedIds: Set<string>
+  temporarySelectedIds: Set<string>
   selectedCount: number
   currentTemplate: PresetTemplate
   isTransitioning: boolean
   selectBuilding: (id: string, additive?: boolean) => void
   selectBuildings: (ids: string[]) => void
+  setTemporarySelected: (ids: string[]) => void
+  clearTemporarySelected: () => void
   clearSelection: () => void
   updateBuilding: (id: string, updates: Partial<Building>) => void
   batchUpdateHeight: (height: number) => void
@@ -132,6 +151,7 @@ interface CityState {
 export const useCityStore = create<CityState>((set, get) => ({
   buildings: generateBuildings(PRESET_CONFIGS.default, true),
   selectedIds: new Set(),
+  temporarySelectedIds: new Set(),
   selectedCount: 0,
   currentTemplate: 'default',
   isTransitioning: false,
@@ -145,24 +165,51 @@ export const useCityStore = create<CityState>((set, get) => ({
         if (!additive) newSelected.clear()
         newSelected.add(id)
       }
-      return { selectedIds: newSelected, selectedCount: newSelected.size }
+      return {
+        selectedIds: newSelected,
+        temporarySelectedIds: new Set(),
+        selectedCount: newSelected.size
+      }
     })
   },
 
   selectBuildings: (ids) => {
     const newSet = new Set(ids)
-    set({ selectedIds: newSet, selectedCount: newSet.size })
+    set({
+      selectedIds: newSet,
+      temporarySelectedIds: new Set(),
+      selectedCount: newSet.size
+    })
+  },
+
+  setTemporarySelected: (ids) => {
+    set({ temporarySelectedIds: new Set(ids) })
+  },
+
+  clearTemporarySelected: () => {
+    set({ temporarySelectedIds: new Set() })
   },
 
   clearSelection: () => {
-    set({ selectedIds: new Set(), selectedCount: 0 })
+    set({
+      selectedIds: new Set(),
+      temporarySelectedIds: new Set(),
+      selectedCount: 0
+    })
   },
 
   updateBuilding: (id, updates) => {
     set((state) => ({
-      buildings: state.buildings.map((b) =>
-        b.id === id ? { ...b, ...updates, targetHeight: updates.height ?? b.targetHeight } : b
-      )
+      buildings: state.buildings.map((b) => {
+        if (b.id !== id) return b
+        const newHeight = updates.height ?? b.height
+        return {
+          ...b,
+          ...updates,
+          height: newHeight,
+          targetHeight: updates.height !== undefined ? newHeight : b.targetHeight
+        }
+      })
     }))
   },
 
@@ -192,6 +239,7 @@ export const useCityStore = create<CityState>((set, get) => ({
     set({
       buildings: newBuildings,
       selectedIds: new Set(),
+      temporarySelectedIds: new Set(),
       selectedCount: 0,
       currentTemplate: template,
       isTransitioning: true
