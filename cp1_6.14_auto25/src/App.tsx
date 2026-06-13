@@ -34,22 +34,18 @@ interface NavItemProps {
 }
 
 function NavItem({ icon, label, active, onClick }: NavItemProps) {
-  const [clicked, setClicked] = useState(false);
+  const [animKey, setAnimKey] = useState(0);
 
-  const handleClick = () => {
-    setClicked(true);
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAnimKey((k) => k + 1);
     onClick();
   };
 
-  useEffect(() => {
-    if (!clicked) return;
-    const timer = setTimeout(() => setClicked(false), 400);
-    return () => clearTimeout(timer);
-  }, [clicked]);
-
   return (
     <div
-      className={`nav-item ${active ? 'active' : ''} ${clicked ? 'clicked' : ''}`}
+      key={animKey}
+      className={`nav-item ${active ? 'active' : ''} nav-click-anim`}
       onClick={handleClick}
     >
       <div className="nav-icon">{icon}</div>
@@ -58,21 +54,66 @@ function NavItem({ icon, label, active, onClick }: NavItemProps) {
   );
 }
 
+function ReminderTicker({ reminders }: { reminders: Reminder[] }) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [phase, setPhase] = useState<'enter' | 'show' | 'exit'>('enter');
+  const timerRef = useRef<number | null>(null);
+
+  const nextSlide = useCallback(() => {
+    setPhase('exit');
+    timerRef.current = window.setTimeout(() => {
+      setCurrentIdx((idx) => (idx + 1) % reminders.length);
+      setPhase('enter');
+    }, 500);
+  }, [reminders.length]);
+
+  useEffect(() => {
+    if (reminders.length === 0) return;
+
+    if (phase === 'enter') {
+      const t = window.setTimeout(() => setPhase('show'), 10);
+      return () => clearTimeout(t);
+    }
+    if (phase === 'show') {
+      timerRef.current = window.setTimeout(nextSlide, 2000);
+      return () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      };
+    }
+  }, [phase, nextSlide, reminders.length]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  if (reminders.length === 0) return null;
+
+  const current = reminders[currentIdx];
+
+  return (
+    <div className="reminder-ticker">
+      <div
+        className={`reminder-item reminder-phase-${phase}`}
+        key={currentIdx}
+      >
+        {current.userName} 催更了《{current.bookTitle}》
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'dashboard' });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [activeReminderIdx, setActiveReminderIdx] = useState(0);
-  const [reminderKey, setReminderKey] = useState(0);
   const isMobile = useIsMobile();
-  const reminderTimerRef = useRef<number | null>(null);
 
   const loadReminders = useCallback(async () => {
     try {
-      const data = await remindersApi.list();
+      const data = await remindersApi.list(true);
       setReminders(data);
-      setActiveReminderIdx(0);
-      setReminderKey((k) => k + 1);
     } catch (_e) {
       // ignore
     }
@@ -83,28 +124,10 @@ export default function App() {
   }, [loadReminders]);
 
   useEffect(() => {
-    if (reminders.length === 0) return;
-
-    const startTimer = () => {
-      reminderTimerRef.current = window.setTimeout(() => {
-        setActiveReminderIdx((idx) => (idx + 1) % reminders.length);
-        setReminderKey((k) => k + 1);
-      }, 2500);
-    };
-
-    startTimer();
-    return () => {
-      if (reminderTimerRef.current) {
-        clearTimeout(reminderTimerRef.current);
-      }
-    };
-  }, [reminders.length, activeReminderIdx, reminderKey]);
-
-  useEffect(() => {
     if (isMobile) {
       setSidebarOpen(false);
     }
-  }, [isMobile, route]);
+  }, [isMobile]);
 
   const navigateToBook = (bookId: string) => {
     setRoute({ name: 'book-detail', bookId });
@@ -117,8 +140,6 @@ export default function App() {
   };
 
   const currentNav = route.name === 'dashboard' ? 'dashboard' : 'books';
-
-  const activeReminder = reminders[activeReminderIdx];
 
   const toggleSidebar = () => {
     setSidebarOpen((v) => !v);
@@ -213,13 +234,7 @@ export default function App() {
           </div>
         )}
         <div className="top-bar">
-          <div className="reminder-ticker">
-            {activeReminder && (
-              <div key={`${activeReminderIdx}-${reminderKey}`} className="reminder-item">
-                {activeReminder.userName} 催更了《{activeReminder.bookTitle}》
-              </div>
-            )}
-          </div>
+          <ReminderTicker reminders={reminders} />
         </div>
         <div className="content">
           {route.name === 'dashboard' && (

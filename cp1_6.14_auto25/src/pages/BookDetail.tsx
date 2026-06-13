@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { booksApi, Book, Note, Member, MemberStatus, remindersApi, NotesPage } from '../api';
+import { booksApi, Book, Note, Member, MemberStatus, remindersApi } from '../api';
 
 interface Props {
   bookId: string;
@@ -32,6 +32,26 @@ function initialOf(name: string) {
   return name ? name.charAt(0) : '?';
 }
 
+function NoteItem({ note }: { note: Note }) {
+  return (
+    <div className="note-item">
+      <div className="note-avatar" style={{ background: note.userAvatarColor }}>
+        {initialOf(note.userName)}
+      </div>
+      <div className="note-body">
+        <div className="note-meta">
+          <span className="note-username">{note.userName}</span>
+          <span className="note-date">{formatDate(note.createdAt)}</span>
+        </div>
+        <div className="note-content">{note.content}</div>
+        {note.quote && note.quote.trim() && (
+          <div className="note-quote">"{note.quote}"</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) {
   const [book, setBook] = useState<Book | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -45,55 +65,77 @@ export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) 
   const [submitting, setSubmitting] = useState(false);
   const [urgedMap, setUrgedMap] = useState<Record<string, boolean>>({});
 
-  const notesStartRef = useRef<number>(0);
   const skipRef = useRef(0);
-  const listEndRef = useRef<HTMLDivElement>(null);
-
-  const loadInitialData = useCallback(async () => {
-    notesStartRef.current = performance.now();
-    skipRef.current = 0;
-
-    const [bookData, notesData, membersData] = await Promise.all([
-      booksApi.get(bookId),
-      booksApi.getNotes(bookId, { limit: PAGE_SIZE, skip: 0 }),
-      booksApi.getMembers(bookId),
-    ]);
-
-    setBook(bookData);
-    setNotes(notesData.notes);
-    setHasMore(notesData.hasMore);
-    setTotalNotes(notesData.total);
-    setMembers(membersData);
-    setLoading(false);
-
-    const elapsed = performance.now() - notesStartRef.current;
-    if (elapsed > 200) {
-      console.warn(`[perf] BookDetail initial load took ${elapsed.toFixed(0)}ms (>200ms)`);
-    } else {
-      console.info(`[perf] BookDetail initial load: ${elapsed.toFixed(0)}ms`);
-    }
-  }, [bookId]);
-
-  useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const perfStartRef = useRef(0);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const loadMoreNotes = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     const nextSkip = skipRef.current + PAGE_SIZE;
     try {
-      const data: NotesPage = await booksApi.getNotes(bookId, {
+      const data = await booksApi.getNotes(bookId, {
         limit: PAGE_SIZE,
         skip: nextSkip,
       });
-      setNotes((prev) => [...prev, ...data.notes]);
+      setNotes((prev) => {
+        const existingIds = new Set(prev.map((n) => n._id));
+        const newNotes = data.notes.filter((n) => !existingIds.has(n._id));
+        return [...prev, ...newNotes];
+      });
       setHasMore(data.hasMore);
       skipRef.current = nextSkip;
     } finally {
       setLoadingMore(false);
     }
   }, [bookId, hasMore, loadingMore]);
+
+  useEffect(() => {
+    perfStartRef.current = performance.now();
+    skipRef.current = 0;
+
+    Promise.all([
+      booksApi.get(bookId),
+      booksApi.getNotes(bookId, { limit: PAGE_SIZE, skip: 0 }),
+      booksApi.getMembers(bookId),
+    ]).then(([bookData, notesData, membersData]) => {
+      setBook(bookData);
+      setNotes(notesData.notes);
+      setHasMore(notesData.hasMore);
+      setTotalNotes(notesData.total);
+      setMembers(membersData);
+      setLoading(false);
+
+      const elapsed = performance.now() - perfStartRef.current;
+      if (elapsed > 200) {
+        console.warn(`[perf] BookDetail initial load took ${elapsed.toFixed(0)}ms (>200ms)`);
+      } else {
+        console.info(`[perf] BookDetail initial load: ${elapsed.toFixed(0)}ms, notes: ${notesData.notes.length}/${notesData.total}`);
+      }
+    });
+  }, [bookId]);
+
+  useEffect(() => {
+    if (!hasMore || loading) return;
+
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore) {
+          loadMoreNotes();
+        }
+      },
+      { rootMargin: '200px', threshold: 0.1 }
+    );
+    observerRef.current.observe(sentinel);
+
+    return () => {
+      observerRef.current?.disconnect();
+    };
+  }, [hasMore, loading, loadingMore, loadMoreNotes]);
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
@@ -107,12 +149,14 @@ export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) 
       });
       setNotes((prev) => [newNote, ...prev]);
       setTotalNotes((prev) => prev + 1);
+      skipRef.current = skipRef.current + 1;
       setContent('');
       setQuote('');
-      skipRef.current = skipRef.current + 1;
       const elapsed = performance.now() - t0;
       if (elapsed > 100) {
         console.warn(`[perf] Note update took ${elapsed.toFixed(0)}ms (>100ms)`);
+      } else {
+        console.info(`[perf] Note insert: ${elapsed.toFixed(0)}ms`);
       }
     } finally {
       setSubmitting(false);
@@ -190,47 +234,27 @@ export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) 
               <span style={{ color: '#a99882', fontWeight: 500, fontSize: 13 }}>({totalNotes})</span>
             </div>
 
-            {notes.length === 0 ? (
-              <div className="empty-state">还没有笔记，来写下第一条吧～</div>
-            ) : (
-              <div className="notes-list">
-                {notes.map((note) => (
-                  <div className="note-item" key={note._id}>
-                    <div
-                      className="note-avatar"
-                      style={{ background: note.userAvatarColor }}
-                    >
-                      {initialOf(note.userName)}
-                    </div>
-                    <div className="note-body">
-                      <div className="note-meta">
-                        <span className="note-username">{note.userName}</span>
-                        <span className="note-date">{formatDate(note.createdAt)}</span>
-                      </div>
-                      <div className="note-content">{note.content}</div>
-                      {note.quote && note.quote.trim() && (
-                        <div className="note-quote">"{note.quote}"</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="notes-list">
+              {notes.map((note) => (
+                <NoteItem key={note._id} note={note} />
+              ))}
+            </div>
 
             {hasMore && (
-              <div ref={listEndRef} style={{ textAlign: 'center', padding: '16px 0' }}>
-                <button
-                  className="btn-submit"
-                  onClick={loadMoreNotes}
-                  disabled={loadingMore}
-                  style={{ background: 'var(--wood-dark)' }}
-                >
-                  {loadingMore ? '加载中...' : `加载更多 (${totalNotes - notes.length} 条)`}
-                </button>
+              <div ref={loadMoreRef} className="load-more-sentinel">
+                {loadingMore ? (
+                  <span>加载中...</span>
+                ) : (
+                  <span>下滑加载更多 ({totalNotes - notes.length} 条剩余)</span>
+                )}
               </div>
             )}
 
-            <div className="note-form" style={{ marginTop: 0, boxShadow: 'none', padding: 0 }}>
+            {notes.length === 0 && !loading && (
+              <div className="empty-state">还没有笔记，来写下第一条吧～</div>
+            )}
+
+            <div className="note-form" style={{ marginTop: 24, boxShadow: 'none', padding: 0 }}>
               <div className="form-title">✍️ 写下新笔记</div>
               <textarea
                 className="textarea-main"
