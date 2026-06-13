@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { VIEWPORTS, type CaptureFrame, type DiffResult, type DiffRegion } from './types';
 import Toolbar from './components/Toolbar';
 import PreviewPanel from './components/PreviewPanel';
+import Timeline from './components/Timeline';
 import { captureAllPanels, computeDiff } from './utils/screenshot';
 import { exportPDF } from './utils/exportPDF';
 import { CircleOff, Crosshair } from 'lucide-react';
@@ -21,12 +22,13 @@ export default function App() {
 
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const panelRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const diffPanelRef = useRef<HTMLDivElement | null>(null);
 
   const registerPanelRef = useCallback((name: string, el: HTMLDivElement | null) => {
     panelRefs.current[name] = el;
   }, []);
 
-  const handleMouseMove = useCallback((viewportName: string, nx: number, ny: number) => {
+  const handleMouseMove = useCallback((_viewportName: string, nx: number, ny: number) => {
     setCrosshair({ nx, ny });
   }, []);
 
@@ -58,14 +60,20 @@ export default function App() {
       return;
     }
 
-    recordingTimerRef.current = setInterval(async () => {
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
       const screenshots = await captureAllPanels(panelRefs.current);
-      if (screenshots) {
+      if (screenshots && !cancelled) {
         setCaptures((prev) => [...prev, { timestamp: Date.now(), screenshots }]);
       }
-    }, 1000);
+    };
+
+    tick();
+    recordingTimerRef.current = setInterval(tick, 1000);
 
     return () => {
+      cancelled = true;
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
@@ -110,11 +118,13 @@ export default function App() {
         screenshots: frame?.screenshots ?? {},
         diffResult,
         timestamp: frame?.timestamp ?? Date.now(),
+        diffSourceA,
+        diffSourceB,
       });
     } finally {
       setIsLoading(false);
     }
-  }, [captures, selectedFrameIndex, targetUrl, diffResult]);
+  }, [captures, selectedFrameIndex, targetUrl, diffResult, diffSourceA, diffSourceB]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -127,15 +137,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isRecording]);
 
-  const handleDiffItemClick = useCallback((region: DiffRegion) => {
-    const panels = Object.values(panelRefs.current);
-    if (panels.length > 0) {
-      const firstPanel = panels[0];
-      if (firstPanel) {
-        firstPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+  const handleDiffItemClick = useCallback((_region: DiffRegion) => {
+    const panel = panelRefs.current[diffSourceB];
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, []);
+  }, [diffSourceB]);
 
   const currentFrame = selectedFrameIndex >= 0 ? captures[selectedFrameIndex] : null;
   const viewports = VIEWPORTS;
@@ -165,7 +172,7 @@ export default function App() {
               </div>
             </div>
           ) : isDiffMode ? (
-            <div className="diff-container">
+            <div className="diff-container" ref={diffPanelRef}>
               <div className="diff-preview-area">
                 {viewports.map((vp) => {
                   const showDiffOverlay = vp.name === diffSourceB && diffResult?.diffImage;
@@ -222,44 +229,52 @@ export default function App() {
                     <div className="diff-empty-text">检测中...</div>
                   </div>
                 ) : diffResult && diffResult.regions.length > 0 ? (
-                    <>
-                      <div className="diff-list">
-                        {diffResult.regions.map((region, i) => (
-                          <div
-                            key={i}
-                            className="diff-item"
-                            onClick={() => handleDiffItemClick(region)}
-                          >
-                            <span className="diff-item-coord">
-                              ({region.x}, {region.y}) - {region.width}×{region.height}
-                            </span>
-                            <span className="diff-item-percent">
-                              差异 {region.diffPercentage.toFixed(2)}%
-                            </span>
-                            <span className="diff-item-dom">{region.domPath}</span>
-                          </div>
-                        ))}
+                  <>
+                    <div className="diff-side-panel-header">
+                      <div className="diff-side-panel-title">差异列表</div>
+                      <div className="diff-side-panel-subtitle">
+                        共 {diffResult.regionCount} 处差异
                       </div>
-                      <div className="diff-stats">
-                        <div className="diff-stat-row">
-                          <span className="diff-stat-label">总差异像素数</span>
-                          <span className="diff-stat-value">
-                            {diffResult.totalDiffPixels.toLocaleString()}
+                    </div>
+                    <div className="diff-list">
+                      {diffResult.regions.map((region, i) => (
+                        <div
+                          key={i}
+                          className="diff-item"
+                          onClick={() => handleDiffItemClick(region)}
+                        >
+                          <span className="diff-item-coord">
+                            #{i + 1} ({region.x}, {region.y}) - {region.width}×{region.height}
+                          </span>
+                          <span className="diff-item-percent">
+                            差异占比 {region.diffPercentage.toFixed(2)}%
+                          </span>
+                          <span className="diff-item-dom" title={region.domPath}>
+                            {region.domPath}
                           </span>
                         </div>
-                        <div className="diff-stat-row">
-                          <span className="diff-stat-label">差异区域数量</span>
-                          <span className="diff-stat-value">{diffResult.regionCount}</span>
-                        </div>
-                        <div className="diff-stat-row">
-                          <span className="diff-stat-label">最大差异区域面积</span>
-                          <span className="diff-stat-value">
-                            {diffResult.maxRegionArea.toLocaleString()}px²
-                          </span>
-                        </div>
+                      ))}
+                    </div>
+                    <div className="diff-stats">
+                      <div className="diff-stat-row">
+                        <span className="diff-stat-label">总差异像素数</span>
+                        <span className="diff-stat-value">
+                          {diffResult.totalDiffPixels.toLocaleString()}
+                        </span>
                       </div>
-                    </>
-                  ) : (
+                      <div className="diff-stat-row">
+                        <span className="diff-stat-label">差异区域数量</span>
+                        <span className="diff-stat-value">{diffResult.regionCount}</span>
+                      </div>
+                      <div className="diff-stat-row">
+                        <span className="diff-stat-label">最大差异区域面积</span>
+                        <span className="diff-stat-value">
+                          {diffResult.maxRegionArea.toLocaleString()}px²
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
                   <div className="diff-empty">
                     <div className="diff-empty-icon">
                       <CircleOff size={24} />
@@ -273,52 +288,28 @@ export default function App() {
             <div className="preview-grid">
               {viewports.map((vp) => (
                 <PreviewPanel
-                key={vp.name}
-                viewport={vp}
-                registerRef={registerPanelRef}
-                overrideScreenshot={
-                  currentFrame ? currentFrame.screenshots[vp.name] : undefined
-                }
-                crosshair={crosshair}
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-              />
+                  key={vp.name}
+                  viewport={vp}
+                  registerRef={registerPanelRef}
+                  overrideScreenshot={
+                    currentFrame ? currentFrame.screenshots[vp.name] : undefined
+                  }
+                  crosshair={crosshair}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
+                />
               ))}
             </div>
           )}
         </div>
 
-        {captures.length > 0 && (
-          <div className="timeline-container">
-            <div className="timeline-header">
-              <span className="timeline-title">录制时间轴</span>
-              <span className="timeline-status">
-                {isRecording
-                  ? isPaused
-                    ? '已暂停 (按空格继续)'
-                    : '录制中 (按空格暂停)'
-                  : `共 ${captures.length} 帧`}
-              </span>
-            </div>
-            <div className="timeline-scroll">
-              {captures.map((frame, i) => {
-                const firstScreenshot =
-                  frame.screenshots[VIEWPORTS[0].name] ||
-                  Object.values(frame.screenshots)[0];
-                return (
-                  <img
-                    key={frame.timestamp}
-                    className={`timeline-thumb ${selectedFrameIndex === i ? 'active' : ''}`}
-                    src={firstScreenshot}
-                    alt={`Frame ${i + 1}`}
-                    onClick={() => setSelectedFrameIndex(i)}
-                    draggable={false}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <Timeline
+          captures={captures}
+          selectedIndex={selectedFrameIndex}
+          onSelect={setSelectedFrameIndex}
+          isRecording={isRecording}
+          isPaused={isPaused}
+        />
       </div>
     </div>
   );

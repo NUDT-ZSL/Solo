@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import type { Viewport, DiffRegion } from '../types';
 import { Smartphone, Tablet, Laptop, Monitor } from 'lucide-react';
 
@@ -32,6 +32,8 @@ export default function PreviewPanel({
 }: PreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const Icon = iconMap[viewport.icon];
 
   useEffect(() => {
@@ -77,48 +79,31 @@ export default function PreviewPanel({
       <div
         className="preview-panel-body"
         ref={bodyRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
       >
-        {overrideScreenshot ? (
-          <img
-            src={overrideScreenshot}
-            alt={`${viewport.name} preview`}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'top center',
-              display: 'block',
-            }}
-          />
-        ) : (
-          <iframe
-            className="preview-iframe"
-            src={''}
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-            title={`${viewport.name} preview`}
-            style={{
-              width: viewport.width,
-              height: viewport.height,
-            }}
-          />
-        )}
+        <div className="preview-content-wrap" ref={contentRef}>
+          {overrideScreenshot ? (
+            <img
+              src={overrideScreenshot}
+              alt={`${viewport.name} preview`}
+              className="preview-content-image"
+            />
+          ) : (
+            <iframe
+              className="preview-iframe"
+              src={''}
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              title={`${viewport.name} preview`}
+              style={{ width: viewport.width, height: viewport.height }}
+              onLoad={() => setIframeLoaded(true)}
+            />
+          )}
+        </div>
 
         {diffImage && (
           <img
             src={diffImage}
             alt="diff overlay"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-              mixBlendMode: 'multiply',
-              objectFit: 'cover',
-              objectPosition: 'top center',
-            }}
+            className="diff-image-overlay"
           />
         )}
 
@@ -145,6 +130,12 @@ export default function PreviewPanel({
             <div className="crosshair-v" style={{ left: `${crossV}%` }} />
           </div>
         )}
+
+        <div
+          className="mouse-capture-overlay"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        />
       </div>
     </div>
   );
