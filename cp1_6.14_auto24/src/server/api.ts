@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
 import { db, User, Book, ReadingStatus, Vote, Activity, ReadingLog } from './db.js';
 
 const app = express();
@@ -42,6 +41,11 @@ app.post('/api/register', async (req, res) => {
   res.json({ id: user._id, username: user.username, avatar: user.avatar, isAdmin: user.isAdmin });
 });
 
+app.get('/api/users', async (req, res) => {
+  const users = await db.users.find<User>({});
+  res.json(users.map((u) => ({ id: u._id, username: u.username, avatar: u.avatar, isAdmin: u.isAdmin })));
+});
+
 app.get('/api/books', async (req, res) => {
   const { q } = req.query;
   let query = {};
@@ -57,8 +61,10 @@ app.get('/api/books/:id', async (req, res) => {
   const book = await db.books.findOne<Book>({ _id: req.params.id });
   if (!book) return res.status(404).json({ error: '图书不存在' });
   const statuses = await db.readingStatuses.find<ReadingStatus>({ bookId: req.params.id });
-  const users = await db.users.find<User>({ _id: { $in: statuses.map((s) => s.userId) } });
-  const userMap = new Map(users.map((u) => [u._id, u]));
+  const userIds = statuses.map((s) => s.userId);
+  const allUsers = await db.users.find<User>({});
+  const userMap = new Map(allUsers.map((u) => [u._id, u]));
+  const seen = new Set(userIds);
   const memberStatuses = statuses.map((s) => ({
     userId: s.userId,
     username: userMap.get(s.userId)?.username || '未知',
@@ -67,6 +73,18 @@ app.get('/api/books/:id', async (req, res) => {
     note: s.note,
     updatedAt: s.updatedAt,
   }));
+  allUsers.forEach((u) => {
+    if (!seen.has(u._id!)) {
+      memberStatuses.push({
+        userId: u._id!,
+        username: u.username,
+        avatar: u.avatar,
+        status: 'unread',
+        note: '',
+        updatedAt: 0,
+      });
+    }
+  });
   res.json({ ...book, memberStatuses });
 });
 
@@ -98,7 +116,7 @@ app.put('/api/reading-status', async (req, res) => {
   } else {
     await db.readingStatuses.insert({ userId, bookId, status, note, updatedAt: Date.now() } as ReadingStatus);
   }
-  if (status === 'read') {
+  if (status === 'read' && existing?.status !== 'read') {
     const book = await db.books.findOne<Book>({ _id: bookId });
     const activity: Activity = {
       type: 'complete_book',
@@ -115,9 +133,18 @@ app.put('/api/reading-status', async (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/reading-status/me/:userId', async (req, res) => {
+  const statuses = await db.readingStatuses.find<ReadingStatus>({ userId: req.params.userId });
+  res.json(statuses);
+});
+
 app.get('/api/votes/active', async (req, res) => {
   const now = Date.now();
-  const activeVote = await db.votes.findOne<Vote>({ $and: [{ closed: false }, { endsAt: { $gt: now } }] });
+  const allVotes = await db.votes.find<Vote>({});
+  let activeVote = allVotes.find((v) => !v.closed && v.endsAt > now) || null;
+  if (!activeVote && allVotes.length > 0) {
+    activeVote = allVotes.sort((a, b) => b.createdAt - a.createdAt)[0];
+  }
   if (!activeVote) return res.json(null);
   const books = await db.books.find<Book>({ _id: { $in: activeVote.bookIds } });
   const records = await db.voteRecords.find({ voteId: activeVote._id });
@@ -125,7 +152,17 @@ app.get('/api/votes/active', async (req, res) => {
   records.forEach((r) => {
     counts[r.bookId] = (counts[r.bookId] || 0) + 1;
   });
-  res.json({ ...activeVote, books, counts, total: records.length });
+  const total = records.length;
+  const result = books.map((b) => ({
+    book: b,
+    count: counts[b._id!] || 0,
+    percent: total ? ((counts[b._id!] || 0) / total) * 100 : 0,
+  }));
+  const userVoteMap: Record<string, string> = {};
+  records.forEach((r) => {
+    userVoteMap[r.userId] = r.bookId;
+  });
+  res.json({ ...activeVote, books, counts, result, total, userVoteMap });
 });
 
 app.post('/api/votes', async (req, res) => {
@@ -155,6 +192,22 @@ app.post('/api/votes/:id/vote', async (req, res) => {
   const existing = await db.voteRecords.findOne({ voteId: req.params.id, userId });
   if (existing) return res.status(400).json({ error: '您已投过票' });
   await db.voteRecords.insert({ voteId: req.params.id, userId, bookId, createdAt: Date.now() });
+  const vote = await db.votes.findOne<Vote>({ _id: req.params.id });
+  const book = await db.books.findOne<Book>({ _id: bookId });
+  const user = await db.users.findOne<User>({ _id: userId });
+  if (vote && book && user) {
+    const activity: Activity = {
+      type: 'vote_book',
+      userId,
+      username: user.username,
+      avatar: user.avatar,
+      bookId: book._id,
+      bookTitle: book.title,
+      createdAt: Date.now(),
+    };
+    await db.activities.insert(activity);
+    emitActivity(activity);
+  }
   res.json({ ok: true });
 });
 
@@ -172,7 +225,7 @@ app.get('/api/votes/:id/result', async (req, res) => {
     book: b,
     count: counts[b._id!] || 0,
     percent: total ? ((counts[b._id!] || 0) / total) * 100 : 0,
-  }));
+  })).sort((a, b) => b.count - a.count);
   res.json({ vote, result, total });
 });
 
@@ -194,9 +247,81 @@ app.get('/api/activities/stream', (req, res) => {
   });
 });
 
+app.post('/api/announcements', async (req, res) => {
+  const { userId, username, avatar, content } = req.body;
+  const activity: Activity = {
+    type: 'announcement',
+    userId,
+    username,
+    avatar,
+    content,
+    createdAt: Date.now(),
+  };
+  const doc = await db.activities.insert(activity);
+  emitActivity(activity);
+  res.json(doc);
+});
+
+app.get('/api/reading-calendar/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const days = 365;
+  const start = new Date();
+  start.setDate(start.getDate() - days + 1);
+  const startStr = start.toISOString().split('T')[0];
+  const logs = await db.readingLogs.find<ReadingLog>({
+    userId,
+    date: { $gte: startStr },
+  });
+  const dayMap: Record<string, { minutes: number; pages: number }> = {};
+  logs.forEach((l) => {
+    dayMap[l.date] = { minutes: l.minutes, pages: l.pages };
+  });
+  const cal: Record<string, { minutes: number; pages: number; intensity: number }> = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const item = dayMap[key] || { minutes: 0, pages: 0 };
+    let intensity = 0;
+    if (item.minutes > 0) {
+      if (item.minutes < 15) intensity = 1;
+      else if (item.minutes < 30) intensity = 2;
+      else if (item.minutes < 60) intensity = 3;
+      else intensity = 4;
+    }
+    cal[key] = { minutes: item.minutes, pages: item.pages, intensity };
+  }
+  res.json(cal);
+});
+
 app.get('/api/reading-logs/:userId', async (req, res) => {
   const logs = await db.readingLogs.find<ReadingLog>({ userId: req.params.userId }).sort({ date: 1 });
   res.json(logs);
+});
+
+app.get('/api/reading-trend/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const days = 30;
+  const start = new Date();
+  start.setDate(start.getDate() - days + 1);
+  const startStr = start.toISOString().split('T')[0];
+  const logs = await db.readingLogs.find<ReadingLog>({
+    userId,
+    date: { $gte: startStr },
+  });
+  const dayMap: Record<string, { minutes: number; pages: number }> = {};
+  logs.forEach((l) => {
+    dayMap[l.date] = { minutes: l.minutes, pages: l.pages };
+  });
+  const trend: { date: string; minutes: number; pages: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const item = dayMap[key] || { minutes: 0, pages: 0 };
+    trend.push({ date: key, minutes: item.minutes, pages: item.pages });
+  }
+  res.json(trend);
 });
 
 app.post('/api/reading-logs', async (req, res) => {
@@ -214,19 +339,41 @@ app.post('/api/reading-logs', async (req, res) => {
 app.get('/api/leaderboard', async (req, res) => {
   const logs = await db.readingLogs.find<ReadingLog>({});
   const userPages: Record<string, number> = {};
+  const userMinutes: Record<string, number> = {};
   logs.forEach((l) => {
     userPages[l.userId] = (userPages[l.userId] || 0) + l.pages;
+    userMinutes[l.userId] = (userMinutes[l.userId] || 0) + l.minutes;
   });
   const users = await db.users.find<User>({});
   const board = users
-    .map((u) => ({
+    .map((u, idx) => ({
+      rank: idx + 1,
       userId: u._id,
       username: u.username,
       avatar: u.avatar,
       pages: userPages[u._id!] || 0,
+      minutes: userMinutes[u._id!] || 0,
+      medal: '' as '' | 'gold' | 'silver' | 'bronze',
     }))
-    .sort((a, b) => b.pages - a.pages);
-  res.json(board);
+    .sort((a, b) => b.pages - a.pages)
+    .map((item, idx) => {
+      const rank = idx + 1;
+      let medal: '' | 'gold' | 'silver' | 'bronze' = '';
+      if (rank === 1) medal = 'gold';
+      else if (rank === 2) medal = 'silver';
+      else if (rank === 3) medal = 'bronze';
+      return { ...item, rank, medal };
+    });
+  const totalBooks = await db.books.count({});
+  const totalPages = board.reduce((s, x) => s + x.pages, 0);
+  res.json({
+    board,
+    stats: {
+      members: users.length,
+      books: totalBooks,
+      totalPages,
+    },
+  });
 });
 
 const PORT = 3001;
