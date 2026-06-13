@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:server": "ts-node --esm server/index.ts",
+    "dev:server": "node server/index.js",
     "build": "tsc && vite build"
   },
   "dependencies": {

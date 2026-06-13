@@ -1,10 +1,8 @@
 import express from 'express';
-import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { events, songs } from './db.js';
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 
 app.get('/api/events', async (req, res) => {
@@ -55,7 +53,7 @@ app.put('/api/events/:id', async (req, res) => {
       res.status(400).json({ error: 'Notes must be 200 chars or less' });
       return;
     }
-    const updateData: Record<string, unknown> = {};
+    const updateData = {};
     if (title !== undefined) updateData.title = title;
     if (datetime !== undefined) updateData.datetime = datetime;
     if (location !== undefined) updateData.location = location;
@@ -63,8 +61,8 @@ app.put('/api/events/:id', async (req, res) => {
     if (notes !== undefined) updateData.notes = notes;
     updateData.updatedAt = new Date().toISOString();
 
-    const updated = await events.update({ _id: id }, { $set: updateData }, { returnUpdatedDocs: true });
-    if (!updated) {
+    const updated = await events.update({ _id: id }, { $set: updateData }, {});
+    if (updated === 0) {
       res.status(404).json({ error: 'Event not found' });
       return;
     }
@@ -106,14 +104,13 @@ app.put('/api/songs', async (req, res) => {
       return;
     }
     for (const song of songList) {
-      const updateData: Record<string, unknown> = {};
+      const updateData = {};
       if (song.bpm !== undefined) updateData.bpm = song.bpm;
       if (song.key !== undefined) updateData.key = song.key;
       if (song.progress !== undefined) updateData.progress = song.progress;
       if (song.order !== undefined) updateData.order = song.order;
       if (song.practiced !== undefined) updateData.practiced = song.practiced;
       updateData.updatedAt = new Date().toISOString();
-
       await songs.update({ _id: song._id }, { $set: updateData });
     }
     const allSongs = await songs.find({}).sort({ order: 1 });
@@ -127,7 +124,7 @@ app.put('/api/songs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { bpm, key, progress, order, practiced } = req.body;
-    const updateData: Record<string, unknown> = {};
+    const updateData = {};
     if (bpm !== undefined) updateData.bpm = bpm;
     if (key !== undefined) updateData.key = key;
     if (progress !== undefined) updateData.progress = progress;
@@ -167,8 +164,8 @@ const seedEvents = async () => {
   const count = await events.count({});
   if (count === 0) {
     const today = new Date();
-    const fmt = (d: Date) => d.toISOString().slice(0, 16);
-    const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+    const fmt = (d) => d.toISOString().slice(0, 16);
+    const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
     const defaultEvents = [
       { _id: uuidv4(), title: '排练-新曲磨合', datetime: fmt(addDays(today, 0)), location: '地下排练室', type: 'rehearsal', notes: '重点练习烈焰节拍', createdAt: new Date().toISOString() },
       { _id: uuidv4(), title: 'Live House 演出', datetime: fmt(addDays(today, 2)), location: '市中心Live House', type: 'gig', notes: '需提前1小时到场调音', createdAt: new Date().toISOString() },

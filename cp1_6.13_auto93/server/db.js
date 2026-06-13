@@ -1,13 +1,18 @@
-const Datastore = require('nedb-promises');
+import Datastore from 'nedb-promises';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const events = new Datastore({
-  filename: './data/events.db',
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const events = Datastore.create({
+  filename: join(__dirname, '..', 'data', 'events.db'),
   autoload: true,
 });
 
-const songs = new Datastore({
-  filename: './data/songs.db',
+const songs = Datastore.create({
+  filename: join(__dirname, '..', 'data', 'songs.db'),
   autoload: true,
 });
 
-module.exports = { events, songs };
+export { events, songs };
