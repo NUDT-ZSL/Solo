@@ -25,6 +25,11 @@ let mouse: THREE.Vector2;
 
 function init(): void {
   const container = document.getElementById('canvas-container')!;
+  container.style.background = '#05051a';
+  container.style.overflow = 'hidden';
+
+  document.documentElement.style.minWidth = MIN_WIDTH + 'px';
+  document.body.style.minWidth = MIN_WIDTH + 'px';
 
   scene = new THREE.Scene();
   scene.background = createGradientTexture();
@@ -34,10 +39,11 @@ function init(): void {
   camera.position.copy(INITIAL_CAMERA_POS);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setSize(w, h);
+  renderer.setSize(w, h, false);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  centerRenderer();
   container.appendChild(renderer.domElement);
+
+  applyCanvasLetterboxStyle();
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -50,7 +56,6 @@ function init(): void {
 
   raycaster = new THREE.Raycaster();
   raycaster.params.Points = { threshold: 5 };
-  raycaster.params.Mesh = { threshold: 3 };
   mouse = new THREE.Vector2();
 
   createStarField(scene);
@@ -85,37 +90,39 @@ function init(): void {
 }
 
 function computeRenderSize(): { w: number; h: number } {
-  let winW = window.innerWidth;
-  let winH = window.innerHeight;
-  if (winW < MIN_WIDTH) {
-    winW = MIN_WIDTH;
-  }
-  const ratio = winW / winH;
+  const bodyW = Math.max(document.documentElement.clientWidth, MIN_WIDTH);
+  const winH = window.innerHeight;
+
   let w: number;
   let h: number;
+  const ratio = bodyW / winH;
+
   if (ratio > ASPECT_RATIO) {
     h = winH;
     w = Math.round(h * ASPECT_RATIO);
   } else {
-    w = winW;
+    w = bodyW;
     h = Math.round(w / ASPECT_RATIO);
   }
   return { w, h };
 }
 
-function centerRenderer(): void {
+function applyCanvasLetterboxStyle(): void {
   if (!renderer) return;
   const canvas = renderer.domElement;
   const { w, h } = computeRenderSize();
-  Object.assign(canvas.style, {
-    position: 'absolute',
-    top: `${(window.innerHeight - h) / 2}px`,
-    left: `${(window.innerWidth - w) / 2}px`,
-    width: `${w}px`,
-    height: `${h}px`,
-    maxWidth: '100%',
-    maxHeight: '100%',
-  });
+  const bodyW = Math.max(document.documentElement.clientWidth, MIN_WIDTH);
+
+  const left = (bodyW - w) / 2;
+  const top = (window.innerHeight - h) / 2;
+
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.style.position = 'absolute';
+  canvas.style.left = left + 'px';
+  canvas.style.top = top + 'px';
+  canvas.style.display = 'block';
+  canvas.style.touchAction = 'none';
 }
 
 function createGradientTexture(): THREE.Texture {
@@ -137,33 +144,29 @@ function onResize(): void {
   const { w, h } = computeRenderSize();
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
-  centerRenderer();
+  renderer.setSize(w, h, false);
+  applyCanvasLetterboxStyle();
 }
 
-function getCanvasLogicalSize(): { w: number; h: number } {
+function getCanvasLogicalSize(): { w: number; h: number; left: number; top: number } {
   const canvas = renderer.domElement;
   const rect = canvas.getBoundingClientRect();
-  return { w: rect.width, h: rect.height };
+  return { w: rect.width, h: rect.height, left: rect.left, top: rect.top };
 }
 
 function onMouseMove(event: MouseEvent): void {
-  const canvas = renderer.domElement;
-  const rect = canvas.getBoundingClientRect();
-  const { w, h } = getCanvasLogicalSize();
-  mouse.x = ((event.clientX - rect.left) / w) * 2 - 1;
-  mouse.y = -(((event.clientY - rect.top) / h) * 2 - 1);
+  const { w, h, left, top } = getCanvasLogicalSize();
+  mouse.x = ((event.clientX - left) / w) * 2 - 1;
+  mouse.y = -(((event.clientY - top) / h) * 2 - 1);
 
   raycaster.setFromCamera(mouse, camera);
   handleHover(raycaster);
 }
 
 function onMouseClick(event: MouseEvent): void {
-  const canvas = renderer.domElement;
-  const rect = canvas.getBoundingClientRect();
-  const { w, h } = getCanvasLogicalSize();
-  mouse.x = ((event.clientX - rect.left) / w) * 2 - 1;
-  mouse.y = -(((event.clientY - rect.top) / h) * 2 - 1);
+  const { w, h, left, top } = getCanvasLogicalSize();
+  mouse.x = ((event.clientX - left) / w) * 2 - 1;
+  mouse.y = -(((event.clientY - top) / h) * 2 - 1);
 
   raycaster.setFromCamera(mouse, camera);
   handleClick(raycaster);

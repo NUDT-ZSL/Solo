@@ -5,7 +5,7 @@ export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 export interface ConstellationData {
   name: string;
   nameZh: string;
-  starCount: number;
+  brightStarCount: number;
   bestSeason: Season;
   mythStory: string;
   stars: [number, number, number][];
@@ -23,9 +23,9 @@ const CONSTELLATION_DATA: ConstellationData[] = [
   {
     name: 'Ursa Major',
     nameZh: '大熊座',
-    starCount: 7,
+    brightStarCount: 7,
     bestSeason: 'spring',
-    mythStory: '宙斯爱上了美丽的仙女卡利斯托，将她化为大熊放在天上保护。北斗七星就是她的尾巴和腰身，在春季夜空中最为明亮醒目。',
+    mythStory: '众神之王宙斯被凡人少女卡利斯托的美貌深深吸引，常常化为人形与她相伴。不久后卡利斯托生下了儿子阿卡斯，宙斯的妻子赫拉得知后妒火中烧，将卡利斯托变成了一只皮毛粗糙的大熊。多年后阿卡斯长大成人成为一名出色的猎人，一次狩猎中他遇见了化作大熊的母亲，正要举矛刺向她时宙斯及时出现，将他们母子一同升上天空化为大熊座和小熊座。',
     stars: [
       [60, 120, -80], [40, 100, -60], [20, 85, -50], [5, 70, -40],
       [-15, 65, -30], [-30, 75, -45], [-10, 90, -55],
@@ -35,9 +35,9 @@ const CONSTELLATION_DATA: ConstellationData[] = [
   {
     name: 'Orion',
     nameZh: '猎户座',
-    starCount: 7,
+    brightStarCount: 7,
     bestSeason: 'winter',
-    mythStory: '猎人俄里翁被毒蝎蛰死后被宙斯升上天空成为星座。腰带上的三颗亮星是他的腰带，左右两肩和两膝构成他雄壮的身躯。',
+    mythStory: '海神波塞冬与欧律阿勒之子俄里翁是世间最勇猛的猎人，他夸口自己能杀死地上所有的野兽，这番狂言惹怒了大地女神盖亚。盖亚派出一只巨大的毒蝎悄悄偷袭，俄里翁被毒针刺中脚踝后毒发身亡。宙斯为纪念这位伟大的猎人将他升上天空成为猎户座，而毒蝎也被升为天蝎座，两个星座永远分居天空两侧，彼此永不相见。',
     stars: [
       [-80, -30, 60], [-60, -50, 40], [-70, -70, 50],
       [-90, -90, 55], [-50, -90, 35], [-65, -110, 45], [-85, -120, 50],
@@ -47,9 +47,9 @@ const CONSTELLATION_DATA: ConstellationData[] = [
   {
     name: 'Cassiopeia',
     nameZh: '仙后座',
-    starCount: 5,
+    brightStarCount: 5,
     bestSeason: 'autumn',
-    mythStory: '埃塞俄比亚王后卡西奥佩亚因自负被罚永远在天空旋转。五颗亮星组成的"W"或"M"形就是她坐在王座上的形象。',
+    mythStory: '埃塞俄比亚国王克甫斯有一位美丽但极度虚荣的王后卡西奥佩亚，她当众宣称自己和女儿安德洛墨达比海中的所有仙女还要美丽。这番话触怒了海神波塞冬的妻子安菲特里忒，波塞冬为报复派出海怪刻托蹂躏埃塞俄比亚海岸。绝望的国王献祭女儿安德洛墨达后才平息神怒，而卡西奥佩亚则被缚在王座上升入天空，永远倒挂旋转作为惩罚。',
     stars: [
       [30, 160, 30], [50, 140, 20], [70, 155, 25], [90, 135, 15], [110, 150, 20],
     ],
@@ -58,9 +58,9 @@ const CONSTELLATION_DATA: ConstellationData[] = [
   {
     name: 'Cygnus',
     nameZh: '天鹅座',
-    starCount: 6,
+    brightStarCount: 6,
     bestSeason: 'summer',
-    mythStory: '宙斯化身天鹅去接近斯巴达王后勒达。十字形的亮星结构犹如一只展翅飞翔的天鹅，天津四是他高高翘起的尾部。',
+    mythStory: '众神之王宙斯倾慕斯巴达王后勒达的绝世容颜已久，一日趁勒达在欧罗塔斯河沐浴时，他化身为一只羽毛洁白的温柔天鹅缓缓靠近。勒达被这只优雅的天鹅打动，将它紧紧拥入怀中。后来勒达生下了两枚神奇的天鹅蛋，每枚蛋中各孕育了一对双胞胎，其中便有日后引发特洛伊战争的绝代美人海伦。天鹅座便是宙斯化身的那只天鹅升上天空后的形象。',
     stars: [
       [-100, 80, -120], [-85, 60, -110], [-70, 40, -100],
       [-115, 55, -115], [-55, 55, -105], [-85, 20, -95],
@@ -70,9 +70,9 @@ const CONSTELLATION_DATA: ConstellationData[] = [
   {
     name: 'Hercules',
     nameZh: '武仙座',
-    starCount: 7,
+    brightStarCount: 7,
     bestSeason: 'summer',
-    mythStory: '大力神赫拉克勒斯完成十二项功绩后被升入星空。虽然没有特别明亮的星，但他拱顶石般的梯形结构（Keystone）很容易辨认。',
+    mythStory: '宙斯与底比斯王后阿尔克墨涅的私生子赫拉克勒斯，从出生起就背负着天后赫拉的无尽诅咒。赫拉让他在疯狂中亲手杀死了自己的妻儿，清醒后的赫拉克勒斯为赎罪接受了十二项不可能完成的试炼。他斩杀了九头蛇许德拉、生擒了地狱恶犬刻耳柏洛斯、取回了赫斯珀里得斯的金苹果，最终以凡人之躯完成了神都难以企及的功绩。死后宙斯感念他的英勇，将他升为天空中的武仙座。',
     stars: [
       [-140, 50, 80], [-120, 35, 70], [-100, 45, 75],
       [-130, 20, 65], [-110, 15, 60], [-150, 30, 85], [-105, 55, 90],
@@ -82,9 +82,9 @@ const CONSTELLATION_DATA: ConstellationData[] = [
   {
     name: 'Lyra',
     nameZh: '天琴座',
-    starCount: 5,
+    brightStarCount: 5,
     bestSeason: 'summer',
-    mythStory: '俄耳甫斯的竖琴，他的音乐能让万物动容。最亮的织女星就是琴弦顶端的明珠，与周围四颗星组成精巧的小菱形。',
+    mythStory: '色雷斯国王俄耳甫斯拥有一把由阿波罗亲手赠予的黄金竖琴，他的琴声能让奔流的河水驻足、凶猛的野兽俯首帖耳、甚至连岩石都会为之动容。他的妻子欧律狄刻在新婚之日不慎被毒蛇咬死，俄耳甫斯悲痛欲绝，抱着竖琴勇闯冥府。冥王被他凄美的琴声打动，破例允许他带妻子还阳，但要求他在走出冥界前绝不能回头。然而就在出口前的最后一步，俄耳甫斯忍不住回头确认妻子是否跟随，最终永远失去了她。他死后竖琴被宙斯升上天空成为天琴座。',
     stars: [
       [-80, 100, -80], [-70, 85, -75], [-65, 90, -70],
       [-75, 80, -85], [-85, 88, -90],
@@ -102,6 +102,53 @@ const STAR_DEFAULT_COLOR = 0x60a5fa;
 const STAR_HOVER_COLOR = 0xffffff;
 const STAR_SEASON_COLOR = 0xfbbf24;
 const NON_SEASON_OPACITY = 0.2;
+
+const TWEEN_DURATION = 300;
+
+type Tween = {
+  startTime: number;
+  duration: number;
+  from: number;
+  to: number;
+  onUpdate: (v: number) => void;
+  onComplete?: () => void;
+  ease: (t: number) => number;
+};
+
+let tweens: Tween[] = [];
+
+function addTween(
+  from: number,
+  to: number,
+  duration: number,
+  onUpdate: (v: number) => void,
+  onComplete?: () => void
+): void {
+  tweens.push({
+    startTime: performance.now(),
+    duration,
+    from,
+    to,
+    onUpdate,
+    onComplete,
+    ease: (t) => 1 - Math.pow(1 - t, 3),
+  });
+}
+
+function updateTweens(): void {
+  const now = performance.now();
+  tweens = tweens.filter((tw) => {
+    const t = Math.min((now - tw.startTime) / tw.duration, 1);
+    const eased = tw.ease(t);
+    const v = tw.from + (tw.to - tw.from) * eased;
+    tw.onUpdate(v);
+    if (t >= 1) {
+      tw.onComplete?.();
+      return false;
+    }
+    return true;
+  });
+}
 
 function createGlowTexture(colorHex: string): THREE.Texture {
   const canvas = document.createElement('canvas');
@@ -146,7 +193,10 @@ function createStarMesh(pos: [number, number, number]): THREE.Mesh {
   mesh.position.set(pos[0], pos[1], pos[2]);
   mesh.userData.currentScale = 1;
   mesh.userData.targetScale = 1;
+  mesh.userData.currentGlowScale = STAR_BASE_RADIUS;
+  mesh.userData.targetGlowScale = STAR_BASE_RADIUS;
   mesh.userData.isConstellationStar = true;
+  mesh.userData.tweenScale = null as null | { from: number; to: number; start: number };
   return mesh;
 }
 
@@ -162,8 +212,6 @@ function createGlowSprite(pos: [number, number, number]): THREE.Sprite {
   const sprite = new THREE.Sprite(material);
   sprite.position.set(pos[0], pos[1], pos[2]);
   sprite.scale.set(STAR_BASE_RADIUS, STAR_BASE_RADIUS, 1);
-  sprite.userData.currentGlowScale = STAR_BASE_RADIUS;
-  sprite.userData.targetGlowScale = STAR_BASE_RADIUS;
   return sprite;
 }
 
@@ -178,9 +226,11 @@ function createConstellationLines(data: ConstellationData): THREE.LineSegments {
     color: LINE_DEFAULT_COLOR,
     transparent: true,
     opacity: 0.6,
-    linewidth: 2,
   });
-  return new THREE.LineSegments(geometry, material);
+  const ls = new THREE.LineSegments(geometry, material);
+  (ls.material as THREE.LineBasicMaterial).userData.currentOpacity = 0.6;
+  (ls.material as THREE.LineBasicMaterial).userData.targetOpacity = 0.6;
+  return ls;
 }
 
 export function createConstellations(
@@ -201,7 +251,6 @@ export function createConstellations(
       const glow = createGlowSprite(pos);
       mesh.userData.glowSprite = glow;
       mesh.userData.constellationName = data.nameZh;
-      mesh.userData.constellationIndex = constellationGroups.length;
       starMeshes.push(mesh);
       group.add(mesh);
       group.add(glow);
@@ -215,66 +264,140 @@ export function createConstellations(
     return { data, starMeshes, lineObject, group };
   });
 
-  updateSeason(currentSeason);
+  updateSeason(currentSeason, true);
   return constellationGroups;
 }
 
-export function updateSeason(season: Season): void {
+function applyStarState(
+  mesh: THREE.Mesh,
+  targetScale: number,
+  colorHex: number,
+  opacity: number,
+  glowColor: string,
+  glowScale: number,
+  glowOpacity: number,
+  immediate = false
+): void {
+  const mat = mesh.material as THREE.MeshBasicMaterial;
+  const glow = mesh.userData.glowSprite as THREE.Sprite;
+  const glowMat = glow.material as THREE.SpriteMaterial;
+
+  if (mat.color.getHex() !== colorHex) {
+    mat.color.setHex(colorHex);
+  }
+  if (glowMat.map !== getCachedGlowTexture(glowColor)) {
+    glowMat.map = getCachedGlowTexture(glowColor);
+    glowMat.needsUpdate = true;
+  }
+
+  const fromScale = mesh.userData.currentScale as number;
+  const toScale = targetScale;
+  const fromGlow = mesh.userData.currentGlowScale as number;
+  const toGlow = glowScale;
+  const fromOpacity = mat.opacity;
+  const toOpacity = opacity;
+  const fromGlowOpacity = glowMat.opacity;
+  const toGlowOpacity = glowOpacity;
+
+  if (immediate) {
+    mesh.userData.currentScale = toScale;
+    mesh.scale.setScalar(toScale);
+    mesh.userData.targetScale = toScale;
+    mesh.userData.currentGlowScale = toGlow;
+    glow.scale.set(toGlow, toGlow, 1);
+    mesh.userData.targetGlowScale = toGlow;
+    mat.opacity = toOpacity;
+    glowMat.opacity = toGlowOpacity;
+    return;
+  }
+
+  mesh.userData.targetScale = toScale;
+  mesh.userData.targetGlowScale = toGlow;
+  addTween(fromScale, toScale, TWEEN_DURATION, (v) => {
+    mesh.userData.currentScale = v;
+    mesh.scale.setScalar(v);
+  });
+  addTween(fromGlow, toGlow, TWEEN_DURATION, (v) => {
+    mesh.userData.currentGlowScale = v;
+    glow.scale.set(v, v, 1);
+  });
+  addTween(fromOpacity, toOpacity, TWEEN_DURATION, (v) => {
+    mat.opacity = v;
+  });
+  addTween(fromGlowOpacity, toGlowOpacity, TWEEN_DURATION, (v) => {
+    glowMat.opacity = v;
+  });
+}
+
+function applyLineState(
+  ls: THREE.LineSegments,
+  colorHex: number,
+  opacity: number,
+  immediate = false
+): void {
+  const mat = ls.material as THREE.LineBasicMaterial;
+  if (mat.color.getHex() !== colorHex) {
+    mat.color.setHex(colorHex);
+  }
+  const from = (mat.userData.currentOpacity as number) ?? mat.opacity;
+  const to = opacity;
+  if (immediate) {
+    mat.opacity = to;
+    mat.userData.currentOpacity = to;
+    mat.userData.targetOpacity = to;
+    return;
+  }
+  mat.userData.targetOpacity = to;
+  addTween(from, to, TWEEN_DURATION, (v) => {
+    mat.opacity = v;
+    mat.userData.currentOpacity = v;
+  });
+}
+
+export function updateSeason(season: Season, immediate = false): void {
   currentSeason = season;
 
   for (const cg of constellationGroups) {
     const isSeasonal = cg.data.bestSeason === season;
 
     for (const mesh of cg.starMeshes) {
-      const mat = mesh.material as THREE.MeshBasicMaterial;
-      const glow = mesh.userData.glowSprite as THREE.Sprite;
-      const glowMat = glow.material as THREE.SpriteMaterial;
-
-      if (mesh === hoveredMesh) {
-        mesh.userData.targetScale = STAR_HOVER_RADIUS / STAR_BASE_RADIUS;
-        mat.color.setHex(STAR_HOVER_COLOR);
-        mat.opacity = 1;
-        mesh.userData.glowSprite.userData.targetGlowScale = STAR_HOVER_RADIUS;
-        glowMat.map = getCachedGlowTexture('#ffffff');
-        glowMat.opacity = 1;
-        continue;
-      }
+      if (mesh === hoveredMesh) continue;
 
       if (isSeasonal) {
-        mesh.userData.targetScale = STAR_SEASON_RADIUS / STAR_BASE_RADIUS;
-        mat.color.setHex(STAR_SEASON_COLOR);
-        mat.opacity = 1;
-        glow.userData.targetGlowScale = STAR_SEASON_RADIUS;
-        glowMat.map = getCachedGlowTexture('#fbbf24');
-        glowMat.opacity = 1;
+        applyStarState(
+          mesh,
+          STAR_SEASON_RADIUS / STAR_BASE_RADIUS,
+          STAR_SEASON_COLOR,
+          1,
+          '#fbbf24',
+          STAR_SEASON_RADIUS,
+          1,
+          immediate
+        );
       } else {
-        mesh.userData.targetScale = 1;
-        mat.color.setHex(STAR_DEFAULT_COLOR);
-        mat.opacity = NON_SEASON_OPACITY;
-        glow.userData.targetGlowScale = STAR_BASE_RADIUS;
-        glowMat.map = getCachedGlowTexture('#60a5fa');
-        glowMat.opacity = NON_SEASON_OPACITY * 0.9;
+        applyStarState(
+          mesh,
+          1,
+          STAR_DEFAULT_COLOR,
+          NON_SEASON_OPACITY,
+          '#60a5fa',
+          STAR_BASE_RADIUS,
+          NON_SEASON_OPACITY * 0.9,
+          immediate
+        );
       }
-      glowMat.needsUpdate = true;
     }
 
-    const lineMat = cg.lineObject.material as THREE.LineBasicMaterial;
     if (isSeasonal) {
-      lineMat.color.setHex(LINE_SEASON_COLOR);
-      lineMat.opacity = 0.95;
+      applyLineState(cg.lineObject, LINE_SEASON_COLOR, 0.95, immediate);
     } else {
-      lineMat.color.setHex(LINE_DEFAULT_COLOR);
-      lineMat.opacity = NON_SEASON_OPACITY * 0.7;
+      applyLineState(cg.lineObject, LINE_DEFAULT_COLOR, NON_SEASON_OPACITY * 0.7, immediate);
     }
   }
 }
 
 function getAllStarMeshes(): THREE.Mesh[] {
-  const result: THREE.Mesh[] = [];
-  for (const cg of constellationGroups) {
-    result.push(...cg.starMeshes);
-  }
-  return result;
+  return constellationGroups.flatMap((cg) => cg.starMeshes);
 }
 
 function findConstellationByName(name: string): ConstellationGroup | undefined {
@@ -288,28 +411,29 @@ export function handleHover(raycaster: THREE.Raycaster): void {
   const intersects = raycaster.intersectObjects(allMeshes, false);
 
   if (hoveredMesh) {
-    const mat = hoveredMesh.material as THREE.MeshBasicMaterial;
-    const glow = hoveredMesh.userData.glowSprite as THREE.Sprite;
-    const glowMat = glow.material as THREE.SpriteMaterial;
     const cg = findConstellationByName(hoveredMesh.userData.constellationName);
     const isSeasonal = cg ? cg.data.bestSeason === currentSeason : false;
-
     if (isSeasonal) {
-      hoveredMesh.userData.targetScale = STAR_SEASON_RADIUS / STAR_BASE_RADIUS;
-      mat.color.setHex(STAR_SEASON_COLOR);
-      mat.opacity = 1;
-      glow.userData.targetGlowScale = STAR_SEASON_RADIUS;
-      glowMat.map = getCachedGlowTexture('#fbbf24');
-      glowMat.opacity = 1;
+      applyStarState(
+        hoveredMesh,
+        STAR_SEASON_RADIUS / STAR_BASE_RADIUS,
+        STAR_SEASON_COLOR,
+        1,
+        '#fbbf24',
+        STAR_SEASON_RADIUS,
+        1
+      );
     } else {
-      hoveredMesh.userData.targetScale = 1;
-      mat.color.setHex(STAR_DEFAULT_COLOR);
-      mat.opacity = NON_SEASON_OPACITY;
-      glow.userData.targetGlowScale = STAR_BASE_RADIUS;
-      glowMat.map = getCachedGlowTexture('#60a5fa');
-      glowMat.opacity = NON_SEASON_OPACITY * 0.9;
+      applyStarState(
+        hoveredMesh,
+        1,
+        STAR_DEFAULT_COLOR,
+        NON_SEASON_OPACITY,
+        '#60a5fa',
+        STAR_BASE_RADIUS,
+        NON_SEASON_OPACITY * 0.9
+      );
     }
-    glowMat.needsUpdate = true;
     hoveredMesh = null;
   }
 
@@ -317,16 +441,15 @@ export function handleHover(raycaster: THREE.Raycaster): void {
     const mesh = intersects[0].object as THREE.Mesh;
     if (mesh.userData.isConstellationStar) {
       hoveredMesh = mesh;
-      const mat = mesh.material as THREE.MeshBasicMaterial;
-      const glow = mesh.userData.glowSprite as THREE.Sprite;
-      const glowMat = glow.material as THREE.SpriteMaterial;
-      mesh.userData.targetScale = STAR_HOVER_RADIUS / STAR_BASE_RADIUS;
-      mat.color.setHex(STAR_HOVER_COLOR);
-      mat.opacity = 1;
-      glow.userData.targetGlowScale = STAR_HOVER_RADIUS;
-      glowMat.map = getCachedGlowTexture('#ffffff');
-      glowMat.opacity = 1;
-      glowMat.needsUpdate = true;
+      applyStarState(
+        mesh,
+        STAR_HOVER_RADIUS / STAR_BASE_RADIUS,
+        STAR_HOVER_COLOR,
+        1,
+        '#ffffff',
+        STAR_HOVER_RADIUS,
+        1
+      );
       document.body.style.cursor = 'pointer';
       return;
     }
@@ -355,25 +478,5 @@ export function handleClick(raycaster: THREE.Raycaster): void {
 }
 
 export function updateAnimations(): void {
-  for (const mesh of constellationGroups.flatMap((cg) => cg.starMeshes)) {
-    const current = mesh.userData.currentScale as number;
-    const target = mesh.userData.targetScale as number;
-    const diff = target - current;
-    if (Math.abs(diff) > 0.001) {
-      const newScale = current + diff * 0.15;
-      mesh.userData.currentScale = newScale;
-      mesh.scale.setScalar(newScale);
-    }
-    const glow = mesh.userData.glowSprite as THREE.Sprite;
-    if (glow) {
-      const gCur = glow.userData.currentGlowScale as number;
-      const gTgt = glow.userData.targetGlowScale as number;
-      const gDiff = gTgt - gCur;
-      if (Math.abs(gDiff) > 0.001) {
-        const gNew = gCur + gDiff * 0.15;
-        glow.userData.currentGlowScale = gNew;
-        glow.scale.set(gNew, gNew, 1);
-      }
-    }
-  }
+  updateTweens();
 }

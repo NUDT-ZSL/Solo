@@ -171,7 +171,7 @@ export function updateInfoPanel(data: ConstellationData | null): void {
     </div>
     <div style="margin-bottom:12px;">
       <span style="color:#94a3b8; font-size:13px;">亮星数</span>
-      <div style="color:#e2e8f0; font-size:15px; font-weight:500;">${data.starCount} 颗</div>
+      <div style="color:#e2e8f0; font-size:15px; font-weight:500;">${data.brightStarCount} 颗</div>
     </div>
     <div style="margin-bottom:12px;">
       <span style="color:#94a3b8; font-size:13px;">最佳观测季节</span>
