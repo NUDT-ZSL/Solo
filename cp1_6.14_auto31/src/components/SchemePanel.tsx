@@ -1,40 +1,49 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { ColorScheme, HSL } from '../utils/colorUtils';
-import { hslToHex, getContrastColor } from '../utils/colorUtils';
+import { hslToHex, getContrastColor, copyToClipboard } from '../utils/colorUtils';
 
 interface SchemePanelProps {
-  schemes: ColorScheme[];
+  schemes: readonly ColorScheme[];
   primary: HSL;
   onCopy?: (hex: string) => void;
 }
+
+const TOAST_DURATION = 300;
 
 const ColorSwatch: React.FC<{
   color: HSL;
   onCopy?: (hex: string) => void;
 }> = ({ color, onCopy }) => {
   const hex = hslToHex(color);
-  const [showToast, setShowToast] = useState(false);
+  const [toastState, setToastState] = useState<'idle' | 'show' | 'hiding'>('idle');
+  const toastTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) {
+        window.clearTimeout(toastTimer.current);
+        toastTimer.current = null;
+      }
+    };
+  }, []);
 
   const handleClick = useCallback(async () => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(hex);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = hex;
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setShowToast(true);
-      onCopy?.(hex);
-      setTimeout(() => setShowToast(false), 800);
-    } catch {
-      // ignore
+    if (toastTimer.current) {
+      window.clearTimeout(toastTimer.current);
+      toastTimer.current = null;
     }
+    const ok = await copyToClipboard(hex);
+    if (ok) {
+      onCopy?.(hex);
+    }
+    setToastState('show');
+    toastTimer.current = window.setTimeout(() => {
+      setToastState('hiding');
+      toastTimer.current = window.setTimeout(() => {
+        setToastState('idle');
+        toastTimer.current = null;
+      }, 120);
+    }, TOAST_DURATION);
   }, [hex, onCopy]);
 
   return (
@@ -47,14 +56,25 @@ const ColorSwatch: React.FC<{
       onClick={handleClick}
       title={`点击复制 ${hex}`}
     >
-      <div className={`copy-toast ${showToast ? 'show' : ''}`}>
+      <div
+        className="copy-toast"
+        style={{
+          opacity: toastState === 'idle' ? 0 : 1,
+          transform: `translateX(-50%) translateY(${toastState === 'show' ? '-4px' : '8px'})`,
+          transition:
+            toastState === 'show'
+              ? `opacity ${TOAST_DURATION}ms ease-out, transform ${TOAST_DURATION}ms ease-out`
+              : `opacity 120ms ease-in, transform 120ms ease-in`,
+          pointerEvents: 'none',
+        }}
+      >
         已复制 {hex}
       </div>
     </div>
   );
 };
 
-const SchemePanel: React.FC<SchemePanelProps> = ({ schemes, onCopy }) => {
+const SchemePanel: React.FC<SchemePanelProps> = ({ schemes }) => {
   return (
     <div className="schemes-section">
       <div className="section-title">
@@ -70,7 +90,6 @@ const SchemePanel: React.FC<SchemePanelProps> = ({ schemes, onCopy }) => {
                 <ColorSwatch
                   key={`${scheme.type}-${idx}`}
                   color={color}
-                  onCopy={onCopy}
                 />
               ))}
             </div>

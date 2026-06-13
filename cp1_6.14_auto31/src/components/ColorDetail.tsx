@@ -1,10 +1,12 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { HSL } from '../utils/colorUtils';
 import {
   hslToHex,
   hslToRgb,
   hslToString,
   rgbToString,
+  copyToClipboard,
+  validateHSL,
 } from '../utils/colorUtils';
 
 interface ColorDetailProps {
@@ -13,58 +15,91 @@ interface ColorDetailProps {
 }
 
 const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
+  const [localH, setLocalH] = useState<number>(primary.h);
+  const [localS, setLocalS] = useState<number>(primary.s);
+  const [localL, setLocalL] = useState<number>(primary.l);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef<HSL | null>(null);
+
+  useEffect(() => {
+    setLocalH(primary.h);
+    setLocalS(primary.s);
+    setLocalL(primary.l);
+  }, [primary.h, primary.s, primary.l]);
+
+  const flushPending = useCallback(() => {
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    rafRef.current = null;
+    if (pending) {
+      onChange(pending);
+    }
+  }, [onChange]);
+
+  const scheduleChange = useCallback(
+    (next: HSL) => {
+      const validated = validateHSL(next);
+      pendingRef.current = validated;
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(flushPending);
+      }
+    },
+    [flushPending]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleHueChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = parseInt(e.target.value, 10) || 0;
+      setLocalH(v);
+      scheduleChange({ h: v, s: localS, l: localL });
+    },
+    [localS, localL, scheduleChange]
+  );
+
+  const handleSatChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = parseInt(e.target.value, 10) || 0;
+      setLocalS(v);
+      scheduleChange({ h: localH, s: v, l: localL });
+    },
+    [localH, localL, scheduleChange]
+  );
+
+  const handleLightChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = parseInt(e.target.value, 10) || 0;
+      setLocalL(v);
+      scheduleChange({ h: localH, s: localS, l: v });
+    },
+    [localH, localS, scheduleChange]
+  );
+
   const hex = hslToHex(primary);
   const rgb = hslToRgb(primary);
   const hslStr = hslToString(primary);
   const rgbStr = rgbToString(rgb);
 
-  const handleHueChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onChange({ ...primary, h: parseInt(e.target.value, 10) });
+  const handleCopy = useCallback(
+    async (text: string) => {
+      await copyToClipboard(text);
     },
-    [onChange, primary]
+    []
   );
-
-  const handleSatChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onChange({ ...primary, s: parseInt(e.target.value, 10) });
-    },
-    [onChange, primary]
-  );
-
-  const handleLightChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onChange({ ...primary, l: parseInt(e.target.value, 10) });
-    },
-    [onChange, primary]
-  );
-
-  const copyValue = useCallback(async (text: string) => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
 
   return (
     <aside className="detail-panel">
       <div className="detail-header">
         <div className="detail-title">颜色细节</div>
-        <div className="detail-subtitle">
-          拖动滑块精细调节颜色参数
-        </div>
+        <div className="detail-subtitle">拖动滑块精细调节颜色参数</div>
       </div>
 
       <div className="color-values">
@@ -72,7 +107,7 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
           <span className="value-label">HEX</span>
           <div
             className="value-content"
-            onClick={() => copyValue(hex)}
+            onClick={() => handleCopy(hex)}
             title="点击复制"
           >
             {hex}
@@ -82,7 +117,7 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
           <span className="value-label">RGB</span>
           <div
             className="value-content"
-            onClick={() => copyValue(rgbStr)}
+            onClick={() => handleCopy(rgbStr)}
             title="点击复制"
           >
             {rgbStr}
@@ -92,7 +127,7 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
           <span className="value-label">HSL</span>
           <div
             className="value-content"
-            onClick={() => copyValue(hslStr)}
+            onClick={() => handleCopy(hslStr)}
             title="点击复制"
           >
             {hslStr}
@@ -104,14 +139,14 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
         <div className="slider-group">
           <div className="slider-header">
             <span className="slider-label">色相 (Hue)</span>
-            <span className="slider-value">{primary.h}°</span>
+            <span className="slider-value">{localH}°</span>
           </div>
           <input
             type="range"
             min={0}
             max={360}
             step={1}
-            value={primary.h}
+            value={localH}
             onChange={handleHueChange}
             className="slider-track-hue"
           />
@@ -120,17 +155,17 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
         <div className="slider-group">
           <div className="slider-header">
             <span className="slider-label">饱和度 (Saturation)</span>
-            <span className="slider-value">{primary.s}%</span>
+            <span className="slider-value">{localS}%</span>
           </div>
           <input
             type="range"
             min={0}
             max={100}
             step={1}
-            value={primary.s}
+            value={localS}
             onChange={handleSatChange}
             style={{
-              background: `linear-gradient(to right, hsl(${primary.h}, 0%, 50%), hsl(${primary.h}, 100%, 50%))`,
+              background: `linear-gradient(to right, hsl(${localH}, 0%, 50%), hsl(${localH}, 100%, 50%))`,
             }}
           />
         </div>
@@ -138,17 +173,17 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
         <div className="slider-group">
           <div className="slider-header">
             <span className="slider-label">明度 (Lightness)</span>
-            <span className="slider-value">{primary.l}%</span>
+            <span className="slider-value">{localL}%</span>
           </div>
           <input
             type="range"
             min={0}
             max={100}
             step={1}
-            value={primary.l}
+            value={localL}
             onChange={handleLightChange}
             style={{
-              background: `linear-gradient(to right, hsl(${primary.h}, ${primary.s}%, 0%), hsl(${primary.h}, ${primary.s}%, 50%), hsl(${primary.h}, ${primary.s}%, 100%))`,
+              background: `linear-gradient(to right, hsl(${localH}, ${localS}%, 0%), hsl(${localH}, ${localS}%, 50%), hsl(${localH}, ${localS}%, 100%))`,
             }}
           />
         </div>
