@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuronBloom - 3D 神经元森林</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a14;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+      color: #e5e7eb;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #control-panel {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      width: 260px;
+      background: rgba(30, 30, 46, 0.56);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 20px 16px 20px 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      user-select: none;
+      z-index: 10;
+    }
+    #panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #a78bfa;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    #neuron-info {
+      font-size: 12px;
+      line-height: 1.7;
+      padding: 10px 12px;
+      background: rgba(55, 65, 81, 0.4);
+      border-radius: 8px;
+      margin-bottom: 18px;
+      min-height: 62px;
+      color: #d1d5db;
+    }
+    #neuron-info.empty {
+      color: #6b7280;
+      font-style: italic;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .slider-group {
+      margin-bottom: 18px;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-bottom: 6px;
+      color: #e5e7eb;
+    }
+    .slider-value {
+      font-weight: 600;
+      color: #a78bfa;
+      font-variant-numeric: tabular-nums;
+      min-width: 42px;
+      text-align: right;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #374151;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #8b5cf6;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.6);
+      transition: transform 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #8b5cf6;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.6);
+    }
+    #reset-btn {
+      width: 160px;
+      height: 40px;
+      display: block;
+      margin: 6px auto 0;
+      border: none;
+      border-radius: 8px;
+      background: #8b5cf6;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      font-family: inherit;
+    }
+    #reset-btn:hover {
+      background: #7c3aed;
+    }
+    #reset-btn:active {
+      transform: scale(0.95);
+      transition: transform 0.1s;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="control-panel">
+      <div id="panel-title">NeuronBloom 控制面板</div>
+      <div id="neuron-info" class="empty">悬停在神经元上查看信息</div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>放电触发范围</span>
+          <span class="slider-value" id="trigger-range-value">50</span>
+        </div>
+        <input type="range" id="trigger-range" min="10" max="100" value="50" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>信号传播延迟</span>
+          <span class="slider-value" id="prop-delay-value">200</span>
+        </div>
+        <input type="range" id="prop-delay" min="50" max="500" value="200" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>粒子数量</span>
+          <span class="slider-value" id="particle-count-value">20</span>
+        </div>
+        <input type="range" id="particle-count" min="5" max="60" value="20" />
+      </div>
+      <button id="reset-btn">重置场景</button>
+    </div>
+  </div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
