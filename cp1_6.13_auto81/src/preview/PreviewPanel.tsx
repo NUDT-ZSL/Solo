@@ -8,8 +8,69 @@ const applyTokensToElement = (element: HTMLElement, tokens: ColorToken[]) => {
   });
 };
 
-const SchemePreview = memo(({ scheme }: { scheme: ColorScheme }) => {
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
+    : null;
+};
+
+const getLuminance = (r: number, g: number, b: number): number => {
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+};
+
+const adjustColor = (hex: string, amount: number): string => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+
+  const adjust = (channel: number) => {
+    const adjusted = channel + amount;
+    return Math.max(0, Math.min(255, Math.round(adjusted)));
+  };
+
+  return `rgb(${adjust(rgb.r)}, ${adjust(rgb.g)}, ${adjust(rgb.b)})`;
+};
+
+const generatePreviewBackground = (tokens: ColorToken[]): string => {
+  const bgToken = tokens.find(t => t.name === '--background');
+  const primaryToken = tokens.find(t => t.name === '--primary');
+
+  if (bgToken) {
+    const rgb = hexToRgb(bgToken.value);
+    if (rgb) {
+      const luminance = getLuminance(rgb.r, rgb.g, rgb.b);
+      if (luminance < 0.5) {
+        return adjustColor(bgToken.value, 30);
+      }
+      return bgToken.value;
+    }
+  }
+
+  if (primaryToken) {
+    const rgb = hexToRgb(primaryToken.value);
+    if (rgb) {
+      const luminance = getLuminance(rgb.r, rgb.g, rgb.b);
+      const adjustAmount = luminance < 0.5 ? 180 : -50;
+      return adjustColor(primaryToken.value, adjustAmount);
+    }
+  }
+
+  return '#f9fafb';
+};
+
+interface SchemePreviewProps {
+  scheme: ColorScheme;
+  onScroll?: (scrollTop: number, scrollLeft: number) => void;
+  scrollTarget?: { top: number; left: number } | null;
+}
+
+const SchemePreview = memo(({ scheme, onScroll, scrollTarget }: SchemePreviewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScroll = useRef(false);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -17,16 +78,33 @@ const SchemePreview = memo(({ scheme }: { scheme: ColorScheme }) => {
     }
   }, [scheme.tokens]);
 
+  useEffect(() => {
+    if (scrollTarget && containerRef.current && !isProgrammaticScroll.current) {
+      isProgrammaticScroll.current = true;
+      containerRef.current.scrollTop = scrollTarget.top;
+      containerRef.current.scrollLeft = scrollTarget.left;
+      requestAnimationFrame(() => {
+        isProgrammaticScroll.current = false;
+      });
+    }
+  }, [scrollTarget]);
+
   const bgColor = useMemo(() => {
-    const bgToken = scheme.tokens.find(t => t.name === '--background');
-    return bgToken?.value || '#f9fafb';
+    return generatePreviewBackground(scheme.tokens);
   }, [scheme.tokens]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (isProgrammaticScroll.current) return;
+    const target = e.currentTarget;
+    onScroll?.(target.scrollTop, target.scrollLeft);
+  };
 
   return (
     <div
       ref={containerRef}
       className="colorplay-preview-container"
       data-scroll-sync
+      onScroll={handleScroll}
       style={{
         flex: 1,
         minWidth: 0,
@@ -48,50 +126,41 @@ SchemePreview.displayName = 'SchemePreview';
 export const PreviewPanel: React.FC = () => {
   const { state, getCurrentScheme, getCompareSchemes } = useColorContext();
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollSyncRef = useRef<boolean>(false);
+  const [scrollPosition, setScrollPosition] = React.useState<{ top: number; left: number } | null>(null);
+  const isSyncing = useRef(false);
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleScroll = (e: Event) => {
-      if (scrollSyncRef.current) return;
-      scrollSyncRef.current = true;
-
-      const target = e.target as HTMLElement;
-      const scrollTop = target.scrollTop;
-      const scrollLeft = target.scrollLeft;
-
-      const allContainers = container.querySelectorAll('[data-scroll-sync]');
-      allContainers.forEach(el => {
-        if (el !== target) {
-          (el as HTMLElement).scrollTop = scrollTop;
-          (el as HTMLElement).scrollLeft = scrollLeft;
-        }
-      });
-
+  const handlePanelScroll = useMemo(() => {
+    return (schemeId: string, top: number, left: number) => {
+      if (isSyncing.current) return;
+      isSyncing.current = true;
+      setScrollPosition({ top, left });
       requestAnimationFrame(() => {
-        scrollSyncRef.current = false;
+        isSyncing.current = false;
       });
     };
-
-    const allContainers = container.querySelectorAll('[data-scroll-sync]');
-    allContainers.forEach(el => {
-      el.addEventListener('scroll', handleScroll, { passive: true });
-    });
-
-    return () => {
-      allContainers.forEach(el => {
-        el.removeEventListener('scroll', handleScroll);
-      });
-    };
-  }, [state.isCompareMode, state.compareSchemeIds.length]);
+  }, []);
 
   const renderContent = useMemo(() => {
     if (state.isCompareMode) {
       const compareSchemes = getCompareSchemes();
-      if (compareSchemes.length < 2) {
-        return null;
+      if (compareSchemes.length < 2 || compareSchemes.length > 4) {
+        return (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#6b7280',
+              fontSize: '14px',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <div style={{ fontSize: '48px' }}>🎨</div>
+            <div>请在左侧选择 2-4 个配色方案进行对比</div>
+          </div>
+        );
       }
 
       return (
@@ -111,6 +180,7 @@ export const PreviewPanel: React.FC = () => {
                 display: 'flex',
                 flexDirection: 'column',
                 minWidth: 0,
+                height: '100%',
               }}
             >
               <div
@@ -122,11 +192,16 @@ export const PreviewPanel: React.FC = () => {
                   fontWeight: 600,
                   color: '#374151',
                   textAlign: 'center',
+                  flexShrink: 0,
                 }}
               >
                 {scheme.name}
               </div>
-              <SchemePreview scheme={scheme} />
+              <SchemePreview
+                scheme={scheme}
+                onScroll={(top, left) => handlePanelScroll(scheme.id, top, left)}
+                scrollTarget={scrollPosition}
+              />
             </div>
           ))}
         </div>
@@ -151,8 +226,25 @@ export const PreviewPanel: React.FC = () => {
       );
     }
 
-    return <SchemePreview scheme={currentScheme} />;
-  }, [state.isCompareMode, state.compareSchemeIds, state.currentSchemeId, state.schemes]);
+    return (
+      <SchemePreview
+        scheme={currentScheme}
+        onScroll={(top, left) => handlePanelScroll(currentScheme.id, top, left)}
+        scrollTarget={null}
+      />
+    );
+  }, [state.isCompareMode, state.compareSchemeIds, state.currentSchemeId, state.schemes, scrollPosition, handlePanelScroll, getCompareSchemes, getCurrentScheme]);
+
+  const containerBg = useMemo(() => {
+    if (state.isCompareMode) {
+      return '#e5e7eb';
+    }
+    const currentScheme = getCurrentScheme();
+    if (currentScheme) {
+      return generatePreviewBackground(currentScheme.tokens);
+    }
+    return '#f9fafb';
+  }, [state.isCompareMode, state.currentSchemeId, state.schemes, getCurrentScheme]);
 
   return (
     <div
@@ -161,7 +253,8 @@ export const PreviewPanel: React.FC = () => {
         flex: 1,
         display: 'flex',
         minWidth: 0,
-        backgroundColor: '#f9fafb',
+        backgroundColor: containerBg,
+        transition: 'background-color 0.3s ease',
       }}
     >
       {renderContent}

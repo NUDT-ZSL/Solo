@@ -216,6 +216,34 @@ export const TextArea = memo(({
 
 TextArea.displayName = 'TextArea';
 
+const NavItem = memo(({ label }: { label: string }) => {
+  const navItemStyles: React.CSSProperties = {
+    color: '#ffffff',
+    fontSize: '14px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    transition: 'background-color 0.3s ease',
+  };
+
+  return (
+    <span
+      style={navItemStyles}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = 'transparent';
+      }}
+    >
+      {label}
+    </span>
+  );
+});
+
+NavItem.displayName = 'NavItem';
+
 export const NavBar = memo(({
   schemeName = 'ColorPlay',
 }: {
@@ -230,31 +258,6 @@ export const NavBar = memo(({
     borderRadius: '12px',
     ...componentStyles,
   };
-
-  const navItemStyles: React.CSSProperties = {
-    color: '#ffffff',
-    fontSize: '14px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    padding: '8px 16px',
-    borderRadius: '6px',
-    transition: 'background-color 0.3s ease',
-  };
-
-  const NavItem = memo(({ label }: { label: string }) => (
-    <span
-      style={navItemStyles}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'transparent';
-      }}
-    >
-      {label}
-    </span>
-  ));
-  NavItem.displayName = 'NavItem';
 
   return (
     <nav style={styles} className="colorplay-navbar">
@@ -310,15 +313,45 @@ const InputSection = memo(() => (
 ));
 InputSection.displayName = 'InputSection';
 
+const FormLabel = memo(({ children }: { children: React.ReactNode }) => (
+  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500, color: 'var(--text, #374151)' }}>
+    {children}
+  </label>
+));
+FormLabel.displayName = 'FormLabel';
+
 const FormSection = memo(() => (
   <Card title="表单示例" variant="solid">
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div style={{ display: 'flex', gap: '12px' }}>
         <div style={{ flex: 1 }}>
-          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500, color: 'var(--text, #374151)' }}>
-            姓名
-          </label>
+          <FormLabel>姓名</FormLabel>
           <Input placeholder="张三" />
         </div>
         <div style={{ flex: 1 }}>
-          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px',
+          <FormLabel>邮箱</FormLabel>
+          <Input placeholder="example@email.com" type="email" />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <Button variant="secondary">取消</Button>
+        <Button variant="primary">提交</Button>
+      </div>
+    </div>
+  </Card>
+));
+FormSection.displayName = 'FormSection';
+
+export const ComponentSet = memo(() => {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <NavBar />
+      <ButtonGroup />
+      <CardSection />
+      <InputSection />
+      <FormSection />
+    </div>
+  );
+});
+
+ComponentSet.displayName = 'ComponentSet';
