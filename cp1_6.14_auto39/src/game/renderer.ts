@@ -1,4 +1,4 @@
-import type { IGameData } from './types';
+import type { IGameData, GameState } from './types';
 import { RoomData, TILE_SIZE, getTileCenter } from './room';
 import type { IPlayerState, IEnemyState, IProjectileState, IDebris, IParticle, IAttackArea } from './types';
 import { Player } from './entities';
@@ -44,8 +44,20 @@ export class GameRenderer {
     this.ctx.restore();
 
     if (state === 'death_animation' || state === 'game_over') {
-      this.ctx.fillStyle = `rgba(0, 0, 0, ${deathAnimationProgress})`;
+      const easedProgress = 1 - Math.pow(1 - deathAnimationProgress, 3);
+      this.ctx.fillStyle = `rgba(0, 0, 0, ${easedProgress})`;
       this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+    }
+
+    if (state === 'item_select' || state === 'upgrade_select') {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.font = 'bold 24px system-ui, sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      const label = state === 'item_select' ? '选择道具中...' : '选择升级中...';
+      this.ctx.fillText(label, this.canvasWidth / 2, this.canvasHeight / 2);
     }
   }
 
@@ -119,46 +131,43 @@ export class GameRenderer {
     const pulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 / 1.5);
     const alpha = 0.5 + 0.5 * pulse;
 
+    const isVertical = (pos: { x: number; y: number }) =>
+      pos.x === 0 || pos.x === room.width - 1;
+
     const entrancePos = getTileCenter(room.entrance.x, room.entrance.y);
     this.ctx.save();
     this.ctx.globalAlpha = alpha;
     this.ctx.fillStyle = '#60a5fa';
-    this.ctx.fillRect(
-      entrancePos.x - 8,
-      entrancePos.y - 16,
-      16,
-      32
-    );
-    this.ctx.shadowColor = '#60a5fa';
-    this.ctx.shadowBlur = 10;
-    this.ctx.fillRect(
-      entrancePos.x - 8,
-      entrancePos.y - 16,
-      16,
-      32
-    );
+    if (isVertical(room.entrance)) {
+      this.ctx.fillRect(entrancePos.x - 8, entrancePos.y - 16, 16, 32);
+      this.ctx.shadowColor = '#60a5fa';
+      this.ctx.shadowBlur = 10;
+      this.ctx.fillRect(entrancePos.x - 8, entrancePos.y - 16, 16, 32);
+    } else {
+      this.ctx.fillRect(entrancePos.x - 16, entrancePos.y - 8, 32, 16);
+      this.ctx.shadowColor = '#60a5fa';
+      this.ctx.shadowBlur = 10;
+      this.ctx.fillRect(entrancePos.x - 16, entrancePos.y - 8, 32, 16);
+    }
     this.ctx.restore();
 
     const exitPos = getTileCenter(room.exit.x, room.exit.y);
     this.ctx.save();
     this.ctx.globalAlpha = alpha;
     this.ctx.fillStyle = '#fbbf24';
-    this.ctx.fillRect(
-      exitPos.x - 8,
-      exitPos.y - 16,
-      16,
-      32
-    );
-    this.ctx.shadowColor = '#fbbf24';
-    this.ctx.shadowBlur = 15;
-    this.ctx.fillRect(
-      exitPos.x - 8,
-      exitPos.y - 16,
-      16,
-      32
-    );
+    if (isVertical(room.exit)) {
+      this.ctx.fillRect(exitPos.x - 8, exitPos.y - 16, 16, 32);
+      this.ctx.shadowColor = '#fbbf24';
+      this.ctx.shadowBlur = 15;
+      this.ctx.fillRect(exitPos.x - 8, exitPos.y - 16, 16, 32);
+    } else {
+      this.ctx.fillRect(exitPos.x - 16, exitPos.y - 8, 32, 16);
+      this.ctx.shadowColor = '#fbbf24';
+      this.ctx.shadowBlur = 15;
+      this.ctx.fillRect(exitPos.x - 16, exitPos.y - 8, 32, 16);
+    }
     this.ctx.fillStyle = '#f59e0b';
-    this.ctx.fillRect(exitPos.x + 2, exitPos.y - 2, 3, 3);
+    this.ctx.fillRect(exitPos.x - 1.5, exitPos.y - 1.5, 3, 3);
     this.ctx.restore();
   }
 

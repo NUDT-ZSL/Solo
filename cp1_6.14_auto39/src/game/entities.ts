@@ -514,17 +514,30 @@ export class Enemy extends Entity {
       if (blockedX || blockedY) {
         this.wallCollisionCount++;
         if (this.state === 'patrol') {
-          if (blockedX && blockedY) {
-            this.patrolDirection += Math.PI;
-          } else if (blockedX) {
-            this.patrolDirection = Math.PI - this.patrolDirection;
-          } else {
-            this.patrolDirection = -this.patrolDirection;
-          }
-          if (this.wallCollisionCount > 4) {
-            this.patrolDirection = Math.random() * Math.PI * 2;
+          if (this.wallCollisionCount > 8) {
+            this.state = 'idle';
+            this.idleTimer = 1;
+            this.vx = 0;
+            this.vy = 0;
             this.wallCollisionCount = 0;
+          } else if (this.wallCollisionCount > 4) {
+            this.patrolDirection = Math.random() * Math.PI * 2;
+          } else {
+            if (blockedX && blockedY) {
+              this.patrolDirection += Math.PI;
+            } else if (blockedX) {
+              this.patrolDirection = Math.PI - this.patrolDirection;
+            } else {
+              this.patrolDirection = -this.patrolDirection;
+            }
           }
+        }
+        if (this.state === 'chase' && this.wallCollisionCount > 10) {
+          this.state = 'idle';
+          this.idleTimer = 0.8;
+          this.vx = 0;
+          this.vy = 0;
+          this.wallCollisionCount = 0;
         }
       } else {
         this.wallCollisionCount = 0;
@@ -601,21 +614,22 @@ export class Enemy extends Entity {
     if (dist < 0.001) return true;
 
     const halfAngle = attackArea.angle / 2;
-    const cosHalf = Math.cos(halfAngle);
     const dirX = Math.cos(attackArea.direction);
     const dirY = Math.sin(attackArea.direction);
 
     const dot = dx * dirX + dy * dirY;
-    const perpDot = dx * (-dirY) + dy * dirX;
 
-    if (dot >= dist * cosHalf) return true;
+    if (dot < 0 && dist > this.radius) return false;
 
-    if (dot * dot + perpDot * perpDot <= this.radius * this.radius) {
-      const cross = Math.abs(perpDot);
-      if (cross <= this.radius * Math.sin(halfAngle) + dist * cosHalf * 0.1) {
-        return true;
-      }
+    let effectiveHalfAngle = halfAngle;
+    if (dist > this.radius) {
+      effectiveHalfAngle = halfAngle + Math.asin(this.radius / dist);
+    } else {
+      effectiveHalfAngle = Math.PI;
     }
+
+    const cosEffective = Math.cos(effectiveHalfAngle);
+    if (dot >= dist * cosEffective) return true;
 
     return false;
   }

@@ -82,9 +82,15 @@ export class GameCore {
     if (room.entrance.x === 0) {
       spawnX = 1 * 48 + 24;
       spawnY = room.entrance.y * 48 + 24;
-    } else {
+    } else if (room.entrance.x === room.width - 1) {
+      spawnX = (room.width - 2) * 48 + 24;
+      spawnY = room.entrance.y * 48 + 24;
+    } else if (room.entrance.y === 0) {
       spawnX = room.entrance.x * 48 + 24;
       spawnY = 1 * 48 + 24;
+    } else {
+      spawnX = room.entrance.x * 48 + 24;
+      spawnY = (room.height - 2) * 48 + 24;
     }
     const player = new Player('player', spawnX, spawnY, 100, 10, 150, 0);
 
@@ -253,7 +259,9 @@ export class GameCore {
     });
 
     if (this.getEntityCount() > MAX_ENTITY_COUNT) {
-      this.data.debris = this.data.debris.slice(0, this.data.debris.length - 4);
+      this.data.debris.sort((a, b) => a.life - b.life);
+      const excess = this.getEntityCount() - MAX_ENTITY_COUNT;
+      this.data.debris.splice(0, Math.min(excess, this.data.debris.length));
     }
 
     for (let i = 0; i < this.data.room.chests.length; i++) {
@@ -325,9 +333,15 @@ export class GameCore {
     if (room.entrance.x === 0) {
       spawnX = 1 * 48 + 24;
       spawnY = room.entrance.y * 48 + 24;
-    } else {
+    } else if (room.entrance.x === room.width - 1) {
+      spawnX = (room.width - 2) * 48 + 24;
+      spawnY = room.entrance.y * 48 + 24;
+    } else if (room.entrance.y === 0) {
       spawnX = room.entrance.x * 48 + 24;
       spawnY = 1 * 48 + 24;
+    } else {
+      spawnX = room.entrance.x * 48 + 24;
+      spawnY = (room.height - 2) * 48 + 24;
     }
     this.data.player.x = spawnX;
     this.data.player.y = spawnY;
@@ -396,8 +410,8 @@ export class GameCore {
       direction: p.direction,
       isAttacking: p.isAttacking,
       hasShield: p.hasShield,
-      activeItems: p.activeItems,
-      permanentUpgrades: p.permanentUpgrades,
+      activeItems: p.activeItems.map(item => ({ ...item })),
+      permanentUpgrades: p.permanentUpgrades.map(u => ({ ...u })),
       hitFlashTimer: p.hitFlashTimer,
       invincibleTimer: p.invincibleTimer,
     };
@@ -428,17 +442,21 @@ export class GameCore {
       life: p.life,
     }));
 
+    const debrisState = this.data.debris.map(d => ({ ...d }));
+    const chestItemsState = this.data.chestItems.map(item => ({ ...item }));
+    const upgradeOptionsState = this.data.upgradeOptions.map(u => ({ ...u }));
+
     return {
       state: this.data.state,
       room: this.data.room,
       player: playerState,
       enemies: enemiesState,
       projectiles: projectilesState,
-      debris: this.data.debris,
-      chestItems: this.data.chestItems,
+      debris: debrisState,
+      chestItems: chestItemsState,
       selectedChestIndex: this.data.selectedChestIndex,
-      upgradeOptions: this.data.upgradeOptions,
-      stats: this.data.stats,
+      upgradeOptions: upgradeOptionsState,
+      stats: { ...this.data.stats },
       deathAnimationProgress: this.data.deathAnimationProgress,
     };
   }
