@@ -160,7 +160,8 @@ body {
 .toolbox-wrapper {
   width: 100%;
   height: 100%;
-  padding: 16px 12px;
+  padding: 16px 0;
+  overflow-y: auto;
 }
 
 .toolbox-title {
@@ -178,11 +179,12 @@ body {
   align-items: center;
   gap: 12px;
   padding: 0 16px;
+  margin: 0 8px 8px 8px;
   border-radius: 10px;
   cursor: grab;
   transition: all 0.2s ease-in-out;
-  margin-bottom: 8px;
   user-select: none;
+  background: transparent;
 }
 
 .toolbox-item:hover {
@@ -274,21 +276,24 @@ body {
 
 .color-preset-btn {
   width: 100%;
+  height: 32px;
   padding: 0;
-  aspect-ratio: 1;
   border: 2px solid transparent;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease-in-out;
+  position: relative;
 }
 
 .color-preset-btn:hover {
-  transform: scale(1.05);
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .color-preset-btn.selected {
   border-color: #ffffff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 0 8px rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
 }
 
 .empty-properties {

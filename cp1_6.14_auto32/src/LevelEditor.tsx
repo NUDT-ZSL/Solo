@@ -371,7 +371,7 @@ const LevelEditor = forwardRef(function LevelEditor(
     h: number,
     cam: typeof camera
   ) => {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.066)';
+    ctx.strokeStyle = '#ffffff11';
     ctx.lineWidth = 1;
 
     const startX = Math.floor(cam.x / GRID_SIZE) * GRID_SIZE;
@@ -995,7 +995,7 @@ const LevelEditor = forwardRef(function LevelEditor(
           </div>
         ))}
 
-        <div style={{ marginTop: 24, padding: '0 4px' }}>
+        <div style={{ marginTop: 24, padding: '0 16px' }}>
           <div className="toolbox-title" style={{ opacity: 0.7 }}>⌨️ 快捷键</div>
           <div style={{ fontSize: 11, color: '#9ca3af', lineHeight: 1.8 }}>
             <div>Ctrl+Z 撤销</div>
@@ -1111,7 +1111,13 @@ const LevelEditor = forwardRef(function LevelEditor(
                     className={`color-preset-btn ${selectedElement.color === color ? 'selected' : ''}`}
                     style={{ background: color }}
                     onClick={() => updateElement(selectedElement.id, { color })}
+                    title={color}
                   />
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 4 }}>
+                {['红', '橙', '黄', '绿', '青', '蓝', '紫', '粉'].map((name) => (
+                  <div key={name} style={{ textAlign: 'center', fontSize: 10, color: '#6b7280' }}>{name}</div>
                 ))}
               </div>
             </div>
@@ -1142,11 +1148,11 @@ const LevelEditor = forwardRef(function LevelEditor(
             <DifficultyChart
               elements={elements}
               jumpRecord={completionJumpRecord}
-              width={228}
-              height={180}
+              width={260}
+              height={200}
             />
           ) : (
-            <DifficultyChart elements={elements} jumpRecord={[]} width={228} height={180} />
+            <DifficultyChart elements={elements} jumpRecord={[]} width={260} height={200} />
           )}
         </div>
       </div>

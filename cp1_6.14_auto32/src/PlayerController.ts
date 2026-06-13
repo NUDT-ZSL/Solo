@@ -36,7 +36,7 @@ const GRAVITY = 1500;
 const RUN_SPEED = 280;
 const JUMP_VELOCITY = -620;
 const MAX_FALL_SPEED = 900;
-const CAMERA_LERP = 0.5;
+const CAMERA_FOLLOW_SPEED_FACTOR = 0.5;
 const PLAYER_WIDTH = 40;
 const PLAYER_HEIGHT = 60;
 const FALL_THRESHOLD = 1000;
@@ -305,8 +305,15 @@ export class PlayerController {
 
       const targetCameraX = this.player.x - 300;
       const targetCameraY = Math.max(0, this.player.y - 300);
-      this.camera.x += (targetCameraX - this.camera.x) * CAMERA_LERP * delta * 60;
-      this.camera.y += (targetCameraY - this.camera.y) * CAMERA_LERP * delta * 60;
+      const maxCameraSpeed = RUN_SPEED * CAMERA_FOLLOW_SPEED_FACTOR;
+      const dx = targetCameraX - this.camera.x;
+      const dy = targetCameraY - this.camera.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 0) {
+        const moveAmount = Math.min(dist, maxCameraSpeed * delta);
+        this.camera.x += (dx / dist) * moveAmount;
+        this.camera.y += (dy / dist) * moveAmount;
+      }
     }
 
     if (this.tickCallback) {

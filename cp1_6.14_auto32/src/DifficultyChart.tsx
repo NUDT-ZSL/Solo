@@ -94,43 +94,45 @@ export default function DifficultyChart({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
-    const padding = { top: 24, right: 12, bottom: 24, left: 32 };
+    const padding = { top: 28, right: 16, bottom: 28, left: 36 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
     const data = calculateDifficultyData(elements, jumpRecord);
-    const maxScore = Math.max(10, ...data.map(d => d.compositeScore));
+    const maxScore = 10;
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.fillStyle = '#0f0f1a';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = padding.top + (chartHeight / 4) * i;
+    for (let i = 0; i <= 5; i++) {
+      const y = padding.top + (chartHeight / 5) * i;
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
       ctx.lineTo(width - padding.right, y);
       ctx.stroke();
     }
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.font = '9px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText('高', padding.left - 4, padding.top + 4);
-    ctx.fillText('中', padding.left - 4, padding.top + chartHeight / 2 + 4);
-    ctx.fillText('低', padding.left - 4, padding.top + chartHeight);
+    ctx.fillText(`${maxScore}`, padding.left - 4, padding.top + 4);
+    ctx.fillText(`${maxScore / 2}`, padding.left - 4, padding.top + chartHeight / 2 + 4);
+    ctx.fillText('0', padding.left - 4, padding.top + chartHeight + 4);
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.fillText('起点', padding.left + 6, height - 6);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.fillText('起点', padding.left, height - 6);
     if (data.length > 1) {
-      ctx.fillText('终点', width - padding.right - 6, height - 6);
+      ctx.fillText('终点', width - padding.right, height - 6);
     }
-    ctx.fillText('关卡距离', width / 2, height - 6);
 
     if (data.length === 0) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('暂无数据', width / 2, height / 2);
+      ctx.fillText('暂无关卡数据', width / 2, height / 2);
       return;
     }
 
@@ -142,52 +144,45 @@ export default function DifficultyChart({
       return padding.top + chartHeight - (chartHeight * score) / maxScore;
     };
 
-    const gradientFill = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
-    gradientFill.addColorStop(0, 'rgba(167, 139, 250, 0.35)');
-    gradientFill.addColorStop(0.5, 'rgba(167, 139, 250, 0.2)');
-    gradientFill.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
+    const baselineY = getY(0);
 
     const gradientStroke = ctx.createLinearGradient(padding.left, 0, width - padding.right, 0);
     gradientStroke.addColorStop(0, '#3b82f6');
     gradientStroke.addColorStop(1, '#a78bfa');
 
-    ctx.beginPath();
-    ctx.moveTo(getX(0), getY(0));
+    const gradientFill = ctx.createLinearGradient(padding.left, 0, width - padding.right, 0);
+    gradientFill.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+    gradientFill.addColorStop(1, 'rgba(167, 139, 250, 0.3)');
 
-    for (let i = 0; i < data.length; i++) {
-      const x = getX(i);
-      const y = getY(data[i].compositeScore);
-
-      if (i === 0) {
-        ctx.lineTo(x, y);
+    function buildCurvePath(close: boolean) {
+      ctx.beginPath();
+      if (close) {
+        ctx.moveTo(getX(0), baselineY);
+        ctx.lineTo(getX(0), getY(data[0].compositeScore));
       } else {
+        ctx.moveTo(getX(0), getY(data[0].compositeScore));
+      }
+
+      for (let i = 1; i < data.length; i++) {
+        const x = getX(i);
+        const y = getY(data[i].compositeScore);
         const prevX = getX(i - 1);
         const prevY = getY(data[i - 1].compositeScore);
         const cpX = (prevX + x) / 2;
         ctx.bezierCurveTo(cpX, prevY, cpX, y, x, y);
       }
+
+      if (close) {
+        ctx.lineTo(getX(data.length - 1), baselineY);
+        ctx.closePath();
+      }
     }
 
-    ctx.lineTo(getX(data.length - 1), getY(0));
-    ctx.lineTo(getX(0), getY(0));
-    ctx.closePath();
+    buildCurvePath(true);
     ctx.fillStyle = gradientFill;
     ctx.fill();
 
-    ctx.beginPath();
-    for (let i = 0; i < data.length; i++) {
-      const x = getX(i);
-      const y = getY(data[i].compositeScore);
-
-      if (i === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        const prevX = getX(i - 1);
-        const prevY = getY(data[i - 1].compositeScore);
-        const cpX = (prevX + x) / 2;
-        ctx.bezierCurveTo(cpX, prevY, cpX, y, x, y);
-      }
-    }
+    buildCurvePath(false);
     ctx.strokeStyle = gradientStroke;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
@@ -199,16 +194,21 @@ export default function DifficultyChart({
         const x = getX(i);
         const y = getY(data[i].compositeScore);
         ctx.beginPath();
-        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
         ctx.fillStyle = data[i].compositeScore > 7 ? '#ff4444' : '#ffffff';
         ctx.fill();
+        if (data[i].compositeScore > 7) {
+          ctx.strokeStyle = gradientStroke;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
       }
     }
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('难度曲线', padding.left, 14);
+    ctx.fillText('难度曲线', padding.left, 16);
   }, [elements, jumpRecord, width, height]);
 
   return (
@@ -216,6 +216,8 @@ export default function DifficultyChart({
       ref={canvasRef}
       style={{
         display: 'block',
+        width: `${width}px`,
+        height: `${height}px`,
         borderRadius: '8px',
         background: '#0f0f1a',
       }}
