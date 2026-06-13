@@ -32,8 +32,13 @@ function updatePlanetOrbit(planet: PlanetObject, deltaTime: number, timeScale: n
   const orbitSpeed = BASE_ORBIT_SPEED / Math.sqrt(planet.data.orbitRadius / 20);
   planet.currentAngle += orbitSpeed * deltaTime * timeScale;
 
-  const x = Math.cos(planet.currentAngle) * planet.parentOrbitRadius;
-  const z = Math.sin(planet.currentAngle) * planet.parentOrbitRadius;
+  const a = planet.parentOrbitRadius;
+  const e = planet.orbitEccentricity;
+  const b = a * Math.sqrt(1 - e * e);
+  const focusOffset = a * e;
+
+  const x = Math.cos(planet.currentAngle) * a - focusOffset;
+  const z = Math.sin(planet.currentAngle) * b;
 
   planet.group.position.x = x;
   planet.group.position.z = z;

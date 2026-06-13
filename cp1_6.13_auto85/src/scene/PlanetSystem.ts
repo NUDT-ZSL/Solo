@@ -7,10 +7,11 @@ export interface PlanetObject {
   mesh: THREE.Mesh;
   group: THREE.Group;
   orbitGroup: THREE.Group;
-  orbitLine: THREE.LineSegments | null;
+  orbitLine: THREE.Mesh | null;
   highlightRing: THREE.Mesh | null;
   moons: MoonObject[];
   parentOrbitRadius: number;
+  orbitEccentricity: number;
   currentAngle: number;
 }
 
@@ -32,33 +33,35 @@ export interface PlanetSystemResult {
 
 const ORBIT_LINE_COLOR = 0xffedd5;
 const ORBIT_LINE_OPACITY = 0.4;
+const ORBIT_LINE_WIDTH = 0.15;
 
-function createOrbitLine(radius: number): THREE.LineSegments {
-  const segments = 128;
-  const geometry = new THREE.BufferGeometry();
-  const positions: number[] = [];
+function createOrbitLine(semiMajorAxis: number, eccentricity: number = 0.05): THREE.Mesh {
+  const segments = 256;
+  const points: THREE.Vector3[] = [];
+  const semiMinorAxis = semiMajorAxis * Math.sqrt(1 - eccentricity * eccentricity);
+  const focusOffset = semiMajorAxis * eccentricity;
 
   for (let i = 0; i <= segments; i++) {
     const angle = (i / segments) * Math.PI * 2;
-    positions.push(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-    if (i < segments) {
-      const nextAngle = ((i + 1) / segments) * Math.PI * 2;
-      positions.push(Math.cos(nextAngle) * radius, 0, Math.sin(nextAngle) * radius);
-    }
+    const x = Math.cos(angle) * semiMajorAxis - focusOffset;
+    const z = Math.sin(angle) * semiMinorAxis;
+    points.push(new THREE.Vector3(x, 0, z));
   }
 
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const curve = new THREE.CatmullRomCurve3(points);
+  curve.closed = true;
 
-  const material = new THREE.LineBasicMaterial({
+  const tubeGeometry = new THREE.TubeGeometry(curve, segments, ORBIT_LINE_WIDTH, 4, true);
+
+  const material = new THREE.MeshBasicMaterial({
     color: ORBIT_LINE_COLOR,
     transparent: true,
     opacity: ORBIT_LINE_OPACITY,
-    linewidth: 2,
+    side: THREE.DoubleSide,
   });
 
-  const line = new THREE.LineSegments(geometry, material);
-  line.rotation.x = -Math.PI / 2;
-  return line;
+  const tube = new THREE.Mesh(tubeGeometry, material);
+  return tube;
 }
 
 function createSunHalo(): { sprite: THREE.Sprite; update: (time: number) => void } {
@@ -195,6 +198,7 @@ export function createPlanetSystem(scene: THREE.Scene): PlanetSystemResult {
     highlightRing: sunHighlight,
     moons: [],
     parentOrbitRadius: 0,
+    orbitEccentricity: 0,
     currentAngle: 0,
   };
   planets.push(sunObject);
@@ -270,6 +274,8 @@ export function createPlanetSystem(scene: THREE.Scene): PlanetSystemResult {
       }
     }
 
+    const eccentricity = 0.02 + Math.random() * 0.06;
+
     const planetObject: PlanetObject = {
       id: planetData.id,
       data: planetData,
@@ -280,6 +286,7 @@ export function createPlanetSystem(scene: THREE.Scene): PlanetSystemResult {
       highlightRing,
       moons: moonObjects,
       parentOrbitRadius: planetData.orbitRadius,
+      orbitEccentricity: eccentricity,
       currentAngle: Math.random() * Math.PI * 2,
     };
 
