@@ -141,8 +141,9 @@ export class GameEngine {
     if (card.defense > 0) {
       attacker.shield += card.defense;
     }
-    if (card.energy > 0) {
-      attacker.energy = Math.min(attacker.maxEnergy, attacker.energy + card.energy);
+    if (card.energy !== 0) {
+      const newEnergy = attacker.energy + card.energy;
+      attacker.energy = Math.max(0, Math.min(MAX_ENERGY, Math.min(attacker.maxEnergy, newEnergy)));
     }
 
     this.state.lastPlayedCard = { card, by: who };
@@ -158,8 +159,8 @@ export class GameEngine {
       this.state.turnCount++;
     }
     const cur = this.state[this.state.turn];
-    cur.maxEnergy = Math.min(MAX_ENERGY, cur.maxEnergy + 1);
-    cur.energy = cur.maxEnergy;
+    cur.maxEnergy = Math.max(1, Math.min(MAX_ENERGY, cur.maxEnergy + 1));
+    cur.energy = Math.max(0, Math.min(MAX_ENERGY, cur.maxEnergy));
     this.drawCards(this.state.turn, 1);
     this.notify();
   }

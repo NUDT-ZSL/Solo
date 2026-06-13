@@ -75,47 +75,102 @@ const GameBoard: React.FC<GameBoardProps> = ({ deck }) => {
     }
   }, [state?.turn, state?.gameOver, engine, state]);
 
+  const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; life: number; maxLife: number; color: string; size: number; rotation: number; rotationSpeed: number }>>([]);
+  const animationFrameRef = useRef<number | null>(null);
+
   const spawnParticles = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const particles: Array<{ x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }> = [];
+    
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
-    const colors = ['#b87333', '#ffd700', '#ff6b35', '#c0c0c0', '#8b5e3c'];
+    const colors = ['#b87333', '#ffd700', '#ff6b35', '#c0c0c0', '#8b5e3c', '#d4a574', '#ff9500'];
+    
     for (let i = 0; i < 20; i++) {
-      const angle = (Math.PI * 2 * i) / 20 + Math.random() * 0.5;
-      const speed = 2 + Math.random() * 3;
-      particles.push({
-        x: cx,
-        y: cy,
+      const angle = (Math.PI * 2 * i) / 20 + Math.random() * 0.8;
+      const speed = 2.5 + Math.random() * 4;
+      const life = 0.8 + Math.random() * 0.4;
+      particlesRef.current.push({
+        x: cx + (Math.random() - 0.5) * 30,
+        y: cy + (Math.random() - 0.5) * 30,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1,
+        vy: Math.sin(angle) * speed - 1,
+        life: life,
+        maxLife: life,
         color: colors[Math.floor(Math.random() * colors.length)],
-        size: 2 + Math.random() * 4
+        size: 2 + Math.random() * 5,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.3
       });
     }
-    let frame = 0;
-    const totalFrames = 60;
-    const animate = () => {
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    const startTime = performance.now();
+    const totalDuration = 2000;
+    
+    const animate = (timestamp: number) => {
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(1, elapsed / totalDuration);
+      
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      particles.forEach(p => {
+      
+      particlesRef.current = particlesRef.current.filter(p => {
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.05;
-        p.life -= 1 / totalFrames;
-        ctx.globalAlpha = Math.max(0, p.life);
+        p.vy += 0.08;
+        p.vx *= 0.99;
+        p.life -= 1 / 120;
+        p.rotation += p.rotationSpeed;
+        
+        if (p.life <= 0) return false;
+        
+        const alpha = Math.max(0, p.life / p.maxLife);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+        
+        if (Math.random() > 0.5) {
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(0, -p.size / 2);
+          ctx.lineTo(p.size / 2, p.size / 2);
+          ctx.lineTo(-p.size / 2, p.size / 2);
+          ctx.closePath();
+          ctx.fill();
+        }
+        
+        ctx.restore();
+        return true;
       });
+      
       ctx.globalAlpha = 1;
-      frame++;
-      if (frame < totalFrames) requestAnimationFrame(animate);
-      else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (progress < 1 && particlesRef.current.length > 0) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particlesRef.current = [];
+        animationFrameRef.current = null;
+      }
     };
-    requestAnimationFrame(animate);
+    
+    animationFrameRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, []);
 
   const handlePlayCard = () => {
@@ -152,8 +207,54 @@ const GameBoard: React.FC<GameBoardProps> = ({ deck }) => {
   const renderCard = (card: Card, index: number, total: number, clickable: boolean) => {
     const mid = (total - 1) / 2;
     const offset = index - mid;
-    const rotation = offset * 5;
-    const translateY = Math.abs(offset) * 8;
+    
+    let maxAngle = 30;
+    let cardWidth = 120;
+    let cardHeight = 180;
+    let xOffset = 80;
+    
+    if (total <= 2) {
+      maxAngle = 30;
+      xOffset = 100;
+    } else if (total <= 3) {
+      maxAngle = 25;
+      xOffset = 95;
+    } else if (total <= 4) {
+      maxAngle = 28;
+      xOffset = 85;
+    } else if (total <= 5) {
+      maxAngle = 30;
+      xOffset = 80;
+    } else if (total <= 6) {
+      maxAngle = 35;
+      xOffset = 75;
+      cardWidth = 115;
+      cardHeight = 172;
+    } else if (total <= 7) {
+      maxAngle = 42;
+      xOffset = 70;
+      cardWidth = 110;
+      cardHeight = 165;
+    } else if (total <= 8) {
+      maxAngle = 48;
+      xOffset = 65;
+      cardWidth = 105;
+      cardHeight = 158;
+    } else if (total <= 9) {
+      maxAngle = 52;
+      xOffset = 60;
+      cardWidth = 100;
+      cardHeight = 150;
+    } else {
+      maxAngle = 55;
+      xOffset = 55;
+      cardWidth = 95;
+      cardHeight = 142;
+    }
+    
+    const rotation = offset * (maxAngle / (total > 1 ? (total - 1) / 2 : 1));
+    const x = offset * xOffset;
+    const translateY = Math.abs(offset) * (total > 5 ? 6 : 8);
     const isSelected = selectedCardId === card.instanceId;
     const canPlay = engine?.canPlayCard('player', card.instanceId || '') && clickable;
 
@@ -162,8 +263,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ deck }) => {
         key={card.instanceId || card.id + '-' + index}
         className={`card ${isSelected ? 'selected' : ''} ${!canPlay ? 'disabled' : ''}`}
         style={{
-          transform: `translateY(${isSelected ? -30 : -translateY}px) rotate(${rotation}deg)`,
-          zIndex: isSelected ? 100 : index
+          transform: `translate(${x}px, ${isSelected ? -40 : -translateY}px) rotate(${rotation}deg)`,
+          zIndex: isSelected ? 100 : index,
+          width: `${cardWidth}px`,
+          height: `${cardHeight}px`
         }}
         onClick={() => {
           if (!clickable || !canPlay) return;
@@ -881,7 +984,7 @@ const styles = `
     letter-spacing: 4px;
     padding: 20px 60px;
     border-radius: 16px;
-    animation: slideDown 1s ease-out;
+    animation: slideIn 0.5s ease-out forwards;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
   }
   
@@ -893,7 +996,7 @@ const styles = `
     -webkit-background-clip: text;
     background-image: linear-gradient(135deg, #ffd700, #fff7b0, #ffd700, #c9a66b, #ffd700);
     background-size: 300% 300%;
-    animation: slideDown 1s ease-out, shimmer 3s ease-in-out infinite;
+    animation: slideIn 0.5s ease-out forwards, shimmer 3s ease-in-out infinite;
   }
   
   .winner-banner.silver {
@@ -904,12 +1007,12 @@ const styles = `
     -webkit-background-clip: text;
     background-image: linear-gradient(135deg, #e0e0e0, #808080, #c0c0c0, #a0a0a0, #e0e0e0);
     background-size: 300% 300%;
-    animation: slideDown 1s ease-out, shimmer 3s ease-in-out infinite;
+    animation: slideIn 0.5s ease-out forwards, shimmer 3s ease-in-out infinite;
   }
   
-  @keyframes slideDown {
+  @keyframes slideIn {
     from {
-      transform: translateY(-200%);
+      transform: translateY(-100%);
       opacity: 0;
     }
     to {
@@ -936,59 +1039,190 @@ const styles = `
 
 function workerCode() {
   return `
-    function chooseBestCard(state) {
+    const MAX_ENERGY = 10;
+    
+    function validateCard(card) {
+      if (!card || typeof card !== 'object') return false;
+      if (typeof card.id !== 'number') return false;
+      if (typeof card.name !== 'string') return false;
+      if (typeof card.cost !== 'number' || card.cost < 0 || card.cost > 10) return false;
+      if (typeof card.damage !== 'number' || card.damage < 0) return false;
+      if (typeof card.defense !== 'number' || card.defense < 0) return false;
+      if (typeof card.energy !== 'number') return false;
+      if (typeof card.type !== 'string' || !['attack', 'defense', 'energy'].includes(card.type)) return false;
+      if (typeof card.description !== 'string') return false;
+      return true;
+    }
+    
+    function findCardCombos(hand, energy) {
+      const energyCards = hand.filter(c => c.type === 'energy' && c.cost <= energy && c.energy > 0);
+      const attackCards = hand.filter(c => c.type === 'attack' && c.cost <= energy);
+      let bestCombo = null;
+      let bestScore = -Infinity;
+      for (const energyCard of energyCards) {
+        const afterEnergyCost = energy - energyCard.cost;
+        const totalEnergy = Math.min(MAX_ENERGY, afterEnergyCost + energyCard.energy);
+        const remainingHand = hand.filter(c => c.instanceId !== energyCard.instanceId);
+        const playableAttacks = remainingHand.filter(c => c.type === 'attack' && c.cost <= totalEnergy);
+        for (const attackCard of playableAttacks) {
+          if (attackCard.cost > totalEnergy) continue;
+          const totalDamage = energyCard.damage + attackCard.damage;
+          const totalDefense = energyCard.defense + attackCard.defense;
+          const remainingEnergy = totalEnergy - attackCard.cost;
+          const score = totalDamage * 1.5 + totalDefense * 0.8 + remainingEnergy * 0.3;
+          if (score > bestScore) {
+            bestScore = score;
+            bestCombo = { cards: [energyCard, attackCard], totalDamage, totalDefense, totalEnergyGain: energyCard.energy, remainingEnergy };
+          }
+        }
+      }
+      return bestCombo;
+    }
+    
+    function chooseBestCard(state, playedThisTurn) {
       const hand = state.ai.hand;
       const energy = state.ai.energy;
-      const playable = hand.filter(c => c.cost <= energy);
+      if (energy < 0 || hand.length === 0) return null;
+      const validHand = hand.filter(validateCard);
+      if (validHand.length === 0) return null;
+      const playable = validHand.filter(c => c.cost <= energy && c.cost >= 0);
       if (playable.length === 0) return null;
+      
       const playerLowHp = state.player.hp <= 15;
+      const playerCritical = state.player.hp <= 8;
       const aiLowHp = state.ai.hp <= 20;
-      const scored = playable.map(card => {
+      const aiCritical = state.ai.hp <= 12;
+      const playerHasShield = state.player.shield > 0;
+      const aiHasShield = state.ai.shield > 0;
+      const turnCount = state.turnCount;
+      const playedEnergyCards = playedThisTurn.filter(c => c.type === 'energy').length;
+      const playedAttackCards = playedThisTurn.filter(c => c.type === 'attack').length;
+      const playedDefenseCards = playedThisTurn.filter(c => c.type === 'defense').length;
+      
+      if (energy >= 2 && playedEnergyCards === 0 && turnCount <= 3) {
+        const energyCards = playable.filter(c => c.type === 'energy' && c.energy > 0 && c.cost <= 2);
+        if (energyCards.length > 0) {
+          energyCards.sort((a, b) => b.energy - a.energy);
+          return energyCards[0];
+        }
+      }
+      
+      if (aiCritical && !aiHasShield) {
+        const defenseCards = playable.filter(c => c.type === 'defense' && c.defense >= 6);
+        if (defenseCards.length > 0) {
+          defenseCards.sort((a, b) => b.defense - a.defense);
+          return defenseCards[0];
+        }
+      }
+      
+      if (playerCritical && !playerHasShield) {
+        const attackCards = playable.filter(c => c.type === 'attack');
+        if (attackCards.length > 0) {
+          const lethal = attackCards.find(c => c.damage >= state.player.hp);
+          if (lethal) return lethal;
+          attackCards.sort((a, b) => b.damage - a.damage);
+          return attackCards[0];
+        }
+      }
+      
+      if (energy >= 3 && playedThisTurn.length === 0) {
+        const combo = findCardCombos(playable, energy);
+        if (combo && combo.cards.length >= 2) {
+          return combo.cards[0];
+        }
+      }
+      
+      let scored = playable.map(card => {
         let score = 0;
         score += card.damage * 1.2;
         score += card.defense * 1.0;
-        score += card.energy * 0.8;
-        if (card.type === 'attack' && playerLowHp) score += 5;
-        if (card.type === 'defense' && aiLowHp) score += 5;
-        if (card.cost > 0) score += (card.cost / energy) * 2;
+        score += card.energy * 0.9;
+        if (card.type === 'attack') {
+          if (playerCritical) score += 10;
+          else if (playerLowHp) score += 5;
+          if (playerHasShield && card.damage > state.player.shield) {
+            score += (card.damage - state.player.shield) * 0.5;
+          }
+          if (playedAttackCards === 0 && energy >= card.cost + 2) score += 2;
+        }
+        if (card.type === 'defense') {
+          if (aiCritical) score += 12;
+          else if (aiLowHp) score += 6;
+          if (!aiHasShield && card.defense >= 5) score += 3;
+          if (playedDefenseCards === 0 && aiLowHp) score += 4;
+        }
+        if (card.type === 'energy') {
+          if (card.energy > 0) {
+            const potentialGain = Math.min(MAX_ENERGY, energy + card.energy) - energy;
+            score += potentialGain * 1.5;
+            if (playedEnergyCards === 0 && energy < 5) score += 3;
+          }
+        }
+        if (card.cost > 0) {
+          const efficiency = (card.damage + card.defense + card.energy * 0.7) / card.cost;
+          score += efficiency * 2;
+        }
+        if (card.cost <= energy * 0.7) score += 1.5;
+        if (card.damage > 0 && card.defense > 0) score += 2;
+        if (card.energy > 0 && (card.damage > 0 || card.defense > 0)) score += 3;
         return { card, score };
       });
+      
       scored.sort((a, b) => b.score - a.score);
-      if (scored.length > 1 && Math.random() < 0.2) {
+      
+      if (scored.length > 1 && scored[0].score - scored[1].score < 3 && Math.random() < 0.25) {
         return scored[Math.floor(Math.random() * Math.min(3, scored.length))].card;
       }
+      if (scored[0].score < 0) return null;
       return scored[0].card;
     }
+    
+    function applyCardEffects(state, card) {
+      const attacker = state.ai;
+      const defender = state.player;
+      if (card.cost < 0 || card.cost > attacker.energy) return;
+      attacker.energy = Math.max(0, attacker.energy - card.cost);
+      if (card.damage > 0) {
+        let dmg = card.damage;
+        if (defender.shield > 0) {
+          const abs = Math.min(defender.shield, dmg);
+          defender.shield -= abs;
+          dmg -= abs;
+        }
+        defender.hp = Math.max(0, defender.hp - dmg);
+      }
+      if (card.defense > 0) attacker.shield += card.defense;
+      if (card.energy !== 0) {
+        const newEnergy = attacker.energy + card.energy;
+        attacker.energy = Math.max(0, Math.min(MAX_ENERGY, Math.min(attacker.maxEnergy, newEnergy)));
+      }
+    }
+    
     self.onmessage = (e) => {
       const { state } = e.data;
       const delay = 200 + Math.random() * 300;
       setTimeout(() => {
         const decisions = [];
-        const tempState = JSON.parse(JSON.stringify(state));
-        for (let i = 0; i < 5; i++) {
-          const card = chooseBestCard(tempState);
-          if (!card) break;
-          const cid = card.instanceId;
-          decisions.push({ instanceId: cid });
-          const attacker = tempState.ai;
-          const defender = tempState.player;
-          const idx = attacker.hand.findIndex(c => c.instanceId === cid);
-          if (idx === -1) break;
-          const c = attacker.hand[idx];
-          attacker.energy -= c.cost;
-          attacker.hand.splice(idx, 1);
-          if (c.damage > 0) {
-            let dmg = c.damage;
-            if (defender.shield > 0) {
-              const abs = Math.min(defender.shield, dmg);
-              defender.shield -= abs;
-              dmg -= abs;
-            }
-            defender.hp = Math.max(0, defender.hp - dmg);
-          }
-          if (c.defense > 0) attacker.shield += c.defense;
-          if (c.energy > 0) attacker.energy = Math.min(attacker.maxEnergy, attacker.energy + c.energy);
+        const playedCards = [];
+        let tempState = JSON.parse(JSON.stringify(state));
+        const maxPlays = Math.min(5, tempState.ai.hand.length);
+        
+        for (let i = 0; i < maxPlays; i++) {
+          if (tempState.ai.energy <= 0) break;
           if (tempState.player.hp <= 0 || tempState.ai.hp <= 0) break;
+          const card = chooseBestCard(tempState, playedCards);
+          if (!card) break;
+          if (!validateCard(card)) continue;
+          const cid = card.instanceId;
+          if (!cid) continue;
+          const idx = tempState.ai.hand.findIndex(c => c.instanceId === cid);
+          if (idx === -1) break;
+          const actualCard = tempState.ai.hand[idx];
+          if (actualCard.cost > tempState.ai.energy) break;
+          decisions.push({ instanceId: cid });
+          playedCards.push(actualCard);
+          tempState.ai.hand.splice(idx, 1);
+          applyCardEffects(tempState, actualCard);
         }
         self.postMessage(decisions);
       }, delay);
