@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import type { Layer, BlendMode } from './types'
 import { BLEND_MODES } from './types'
 
@@ -19,15 +19,28 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
   selectedLayerId,
   onFileUpload,
   onLayerSelect,
-  onLayerReorder,
   onBlendModeChange,
   onOpacityChange,
   onLayerDelete,
+  onLayerReorder,
   maxLayers,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  const [dragState, setDragState] = useState<{
+    isDragging: boolean
+    dragIndex: number | null
+    overIndex: number | null
+    startY: number
+    offsetY: number
+  }>({
+    isDragging: false,
+    dragIndex: null,
+    overIndex: null,
+    startY: 0,
+    offsetY: 0,
+  })
 
   const handleUploadClick = () => {
     if (layers.length < maxLayers) {
@@ -45,51 +58,95 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
     }
   }
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', index.toString())
-  }
+  const handleHandleMouseDown = useCallback(
+    (e: React.MouseEvent, index: number) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragState({
+        isDragging: true,
+        dragIndex: index,
+        overIndex: null,
+        startY: e.clientY,
+        offsetY: 0,
+      })
+    },
+    []
+  )
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    if (draggedIndex !== null && draggedIndex !== index) {
-      setDragOverIndex(index)
+  useEffect(() => {
+    if (!dragState.isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const offsetY = e.clientY - dragState.startY
+
+      if (dragState.dragIndex === null) return
+      const cardElements = listRef.current?.querySelectorAll('.layer-card')
+      if (!cardElements) return
+
+      let overIndex: number | null = null
+      for (let i = 0; i < cardElements.length; i++) {
+        const rect = cardElements[i].getBoundingClientRect()
+        const midY = rect.top + rect.height / 2
+        if (e.clientY < midY) {
+          overIndex = layers.length - 1 - i
+          break
+        }
+      }
+      if (overIndex === null && cardElements.length > 0) {
+        overIndex = 0
+      }
+
+      setDragState((prev) => ({
+        ...prev,
+        offsetY,
+        overIndex,
+      }))
     }
-  }
 
-  const handleDragLeave = () => {
-    setDragOverIndex(null)
-  }
-
-  const handleDrop = (e: React.DragEvent, toIndex: number) => {
-    e.preventDefault()
-    const fromIndex = draggedIndex
-    if (fromIndex !== null && fromIndex !== toIndex) {
-      onLayerReorder(fromIndex, toIndex)
+    const handleMouseUp = () => {
+      if (dragState.dragIndex !== null && dragState.overIndex !== null && dragState.dragIndex !== dragState.overIndex) {
+        onLayerReorder(dragState.dragIndex, dragState.overIndex)
+      }
+      setDragState({
+        isDragging: false,
+        dragIndex: null,
+        overIndex: null,
+        startY: 0,
+        offsetY: 0,
+      })
     }
-    setDraggedIndex(null)
-    setDragOverIndex(null)
-  }
 
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-    setDragOverIndex(null)
-  }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [dragState.isDragging, dragState.dragIndex, dragState.overIndex, dragState.startY, layers.length, onLayerReorder])
 
-  const handleBlendModeChange = useCallback((id: string, e: React.ChangeEvent<HTMLSelectElement>) => {
-    onBlendModeChange(id, e.target.value as BlendMode)
-  }, [onBlendModeChange])
+  const handleBlendModeChange = useCallback(
+    (id: string, e: React.ChangeEvent<HTMLSelectElement>) => {
+      onBlendModeChange(id, e.target.value as BlendMode)
+    },
+    [onBlendModeChange]
+  )
 
-  const handleOpacityChange = useCallback((id: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    onOpacityChange(id, parseInt(e.target.value, 10))
-  }, [onOpacityChange])
+  const handleOpacityChange = useCallback(
+    (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+      onOpacityChange(id, parseInt(e.target.value, 10))
+    },
+    [onOpacityChange]
+  )
 
-  const handleDelete = useCallback((e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    onLayerDelete(id)
-  }, [onLayerDelete])
+  const handleDelete = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      e.stopPropagation()
+      onLayerDelete(id)
+    },
+    [onLayerDelete]
+  )
+
+  const displayLayers = [...layers].reverse()
 
   return (
     <aside className="sidebar">
@@ -101,7 +158,7 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
       <div
         className="upload-zone"
         onClick={handleUploadClick}
-        style={{ opacity: layers.length >= maxLayers ? 0.5 : 1 }}
+        style={{ opacity: layers.length >= maxLayers ? 0.5 : 1, cursor: layers.length >= maxLayers ? 'not-allowed' : 'pointer' }}
       >
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -120,23 +177,25 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
         />
       </div>
 
-      <div className="layer-list">
-        {[...layers].reverse().map((layer, displayIndex) => {
+      <div className="layer-list" ref={listRef}>
+        {displayLayers.map((layer, displayIndex) => {
           const actualIndex = layers.length - 1 - displayIndex
+          const isBeingDragged = dragState.isDragging && dragState.dragIndex === actualIndex
+          const isDragOver = dragState.isDragging && dragState.overIndex === actualIndex && dragState.dragIndex !== actualIndex
+
           return (
             <div
               key={layer.id}
               className={`layer-card ${selectedLayerId === layer.id ? 'selected' : ''} ${
-                draggedIndex === actualIndex ? 'dragging' : ''
-              } ${dragOverIndex === actualIndex ? 'drag-over' : ''}`}
+                isBeingDragged ? 'dragging' : ''
+              } ${isDragOver ? 'drag-over' : ''}`}
+              style={isBeingDragged ? { transform: `translateY(${dragState.offsetY}px)`, zIndex: 100 } : undefined}
               onClick={() => onLayerSelect(layer.id)}
-              draggable
-              onDragStart={(e) => handleDragStart(e, actualIndex)}
-              onDragOver={(e) => handleDragOver(e, actualIndex)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, actualIndex)}
-              onDragEnd={handleDragEnd}
             >
+              {isDragOver && (
+                <div className="drag-placeholder" />
+              )}
+
               <button className="layer-delete" onClick={(e) => handleDelete(e, layer.id)}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -144,7 +203,10 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
               </button>
 
               <div className="layer-top">
-                <div className="drag-handle">
+                <div
+                  className="drag-handle"
+                  onMouseDown={(e) => handleHandleMouseDown(e, actualIndex)}
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
                     <circle cx="9" cy="6" r="1.5" />
                     <circle cx="15" cy="6" r="1.5" />

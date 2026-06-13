@@ -1,36 +1,41 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
+import React, { useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Layer, CompareMode } from './types'
 import { compositeLayers } from './compositor'
 
 interface CanvasProps {
   layers: Layer[]
-  selectedLayerIndex: number
   compareMode: CompareMode
   dividerPosition: number
-  onDividerPositionChange: (position: number) => void
-  onCompareModeChange: (mode: CompareMode) => void
   blinkOpacity: number
+  isDraggingDivider: boolean
+  onCompareModeChange: (mode: CompareMode) => void
+  onDividerMouseDown: (e: React.MouseEvent) => void
+  setCanvasWrapperRef: (el: HTMLDivElement | null) => void
+  setCanvasRef: (el: HTMLCanvasElement | null) => void
 }
 
 const Canvas: React.FC<CanvasProps> = ({
   layers,
-  selectedLayerIndex: _selectedLayerIndex,
   compareMode,
   dividerPosition,
-  onDividerPositionChange,
-  onCompareModeChange,
   blinkOpacity,
+  isDraggingDivider,
+  onCompareModeChange,
+  onDividerMouseDown,
+  setCanvasWrapperRef,
+  setCanvasRef,
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [isDraggingDivider, setIsDraggingDivider] = useState(false)
-  const animationFrameRef = useRef<number | null>(null)
   const pendingRenderRef = useRef(false)
+  const rafRef = useRef<number>(0)
+  const localCanvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  const mergeCanvasRef = useCallback((el: HTMLCanvasElement | null) => {
+    localCanvasRef.current = el
+    setCanvasRef(el)
+  }, [setCanvasRef])
 
   const canvasSize = useMemo(() => {
-    if (layers.length === 0) {
-      return { width: 800, height: 600 }
-    }
+    if (layers.length === 0) return { width: 800, height: 600 }
     let maxWidth = 0
     let maxHeight = 0
     for (const layer of layers) {
@@ -42,145 +47,87 @@ const Canvas: React.FC<CanvasProps> = ({
     return { width: maxWidth || 800, height: maxHeight || 600 }
   }, [layers])
 
-  const scheduleRender = useCallback(() => {
-    if (pendingRenderRef.current) return
-    pendingRenderRef.current = true
-    
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-    }
-    
-    animationFrameRef.current = requestAnimationFrame(() => {
-      pendingRenderRef.current = false
-      render()
-    })
-  }, [layers, compareMode, dividerPosition, blinkOpacity, canvasSize])
-
   const render = useCallback(() => {
-    const canvas = canvasRef.current
+    const canvas = localCanvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return
 
     const { width, height } = canvasSize
-
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width
       canvas.height = height
     }
-
     ctx.clearRect(0, 0, width, height)
 
-    if (layers.length === 0) {
-      return
-    }
+    if (layers.length === 0) return
 
     const readyLayers = layers.filter((l) => l.imageData && l.image)
     if (readyLayers.length === 0) return
 
     if (compareMode === 'divider' && readyLayers.length >= 2) {
       const dividerX = Math.round(width * dividerPosition)
-
-      const bottomImageData = compositeLayers(readyLayers, width, height, 0, readyLayers.length - 1)
-      const topImageData = compositeLayers(readyLayers, width, height, readyLayers.length - 1, readyLayers.length)
-
-      const leftData = bottomImageData.data
-      const rightData = topImageData.data
+      const bottomImg = compositeLayers(readyLayers, width, height, 0, readyLayers.length - 1)
+      const topImg = compositeLayers(readyLayers, width, height, readyLayers.length - 1, readyLayers.length)
+      const left = bottomImg.data
+      const right = topImg.data
       const output = ctx.createImageData(width, height)
-      const outData = output.data
+      const out = output.data
 
       for (let y = 0; y < height; y++) {
+        const rowOffset = y * width * 4
         for (let x = 0; x < width; x++) {
-          const i = (y * width + x) * 4
-          const sourceData = x < dividerX ? leftData : rightData
-          outData[i] = sourceData[i]
-          outData[i + 1] = sourceData[i + 1]
-          outData[i + 2] = sourceData[i + 2]
-          outData[i + 3] = sourceData[i + 3]
+          const i = rowOffset + x * 4
+          const src = x < dividerX ? left : right
+          out[i] = src[i]
+          out[i + 1] = src[i + 1]
+          out[i + 2] = src[i + 2]
+          out[i + 3] = src[i + 3]
         }
       }
-
       ctx.putImageData(output, 0, 0)
     } else if (compareMode === 'blink' && readyLayers.length >= 2) {
-      const bottomImageData = compositeLayers(readyLayers, width, height, 0, readyLayers.length - 1)
-      const topImageData = compositeLayers(readyLayers, width, height, readyLayers.length - 1, readyLayers.length)
-
-      const bottomData = bottomImageData.data
-      const topData = topImageData.data
+      const bottomImg = compositeLayers(readyLayers, width, height, 0, readyLayers.length - 1)
+      const topImg = compositeLayers(readyLayers, width, height, readyLayers.length - 1, readyLayers.length)
+      const bottom = bottomImg.data
+      const top = topImg.data
       const output = ctx.createImageData(width, height)
-      const outData = output.data
-
+      const out = output.data
       const t = blinkOpacity
 
-      for (let i = 0; i < outData.length; i += 4) {
-        const bottomA = bottomData[i + 3] / 255
-        const topA = topData[i + 3] / 255
-
-        const blendedA = bottomA * (1 - t) + topA * t
-
+      for (let i = 0; i < out.length; i += 4) {
+        const bA = bottom[i + 3] / 255
+        const tA = top[i + 3] / 255
+        const blendedA = bA * (1 - t) + tA * t
         if (blendedA > 0) {
-          outData[i] = (bottomData[i] * bottomA * (1 - t) + topData[i] * topA * t) / blendedA
-          outData[i + 1] = (bottomData[i + 1] * bottomA * (1 - t) + topData[i + 1] * topA * t) / blendedA
-          outData[i + 2] = (bottomData[i + 2] * bottomA * (1 - t) + topData[i + 2] * topA * t) / blendedA
-          outData[i + 3] = blendedA * 255
+          out[i] = (bottom[i] * bA * (1 - t) + top[i] * tA * t) / blendedA
+          out[i + 1] = (bottom[i + 1] * bA * (1 - t) + top[i + 1] * tA * t) / blendedA
+          out[i + 2] = (bottom[i + 2] * bA * (1 - t) + top[i + 2] * tA * t) / blendedA
+          out[i + 3] = blendedA * 255
         }
       }
-
       ctx.putImageData(output, 0, 0)
     } else {
       const imageData = compositeLayers(readyLayers, width, height)
       ctx.putImageData(imageData, 0, 0)
     }
-  }, [layers, compareMode, dividerPosition, blinkOpacity, canvasSize])
+  }, [layers, compareMode, dividerPosition, blinkOpacity, canvasSize, localCanvasRef])
 
   useEffect(() => {
-    scheduleRender()
-  }, [scheduleRender])
+    if (pendingRenderRef.current) return
+    pendingRenderRef.current = true
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    rafRef.current = requestAnimationFrame(() => {
+      pendingRenderRef.current = false
+      render()
+    })
+  }, [render])
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [])
-
-  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsDraggingDivider(true)
-  }, [])
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDraggingDivider || !containerRef.current) return
-
-      const rect = containerRef.current.getBoundingClientRect()
-      const canvas = canvasRef.current
-      if (!canvas) return
-
-      const canvasRect = canvas.getBoundingClientRect()
-      const x = e.clientX - canvasRect.left
-      const position = Math.max(0, Math.min(1, x / canvasRect.width))
-      onDividerPositionChange(position)
-    },
-    [isDraggingDivider, onDividerPositionChange]
-  )
-
-  const handleMouseUp = useCallback(() => {
-    setIsDraggingDivider(false)
-  }, [])
-
-  useEffect(() => {
-    if (isDraggingDivider) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isDraggingDivider, handleMouseMove, handleMouseUp])
 
   return (
     <div className="canvas-container">
@@ -210,7 +157,7 @@ const Canvas: React.FC<CanvasProps> = ({
         </div>
       </div>
 
-      <div className="canvas-wrapper" ref={containerRef}>
+      <div className="canvas-wrapper" ref={setCanvasWrapperRef}>
         {layers.length === 0 ? (
           <div className="empty-state">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -225,13 +172,24 @@ const Canvas: React.FC<CanvasProps> = ({
           </div>
         ) : (
           <>
-            <canvas ref={canvasRef} className="canvas-element" />
+            <canvas ref={mergeCanvasRef} className="canvas-element" />
             {compareMode === 'divider' && (
               <div
-                className="divider-line"
+                className={`divider-line ${isDraggingDivider ? 'divider-line-active' : ''}`}
                 style={{ left: `${dividerPosition * 100}%` }}
-                onMouseDown={handleDividerMouseDown}
-              />
+                onMouseDown={onDividerMouseDown}
+              >
+                <div className="divider-handle">
+                  <svg width="10" height="30" viewBox="0 0 10 30">
+                    <circle cx="3" cy="8" r="1.5" fill="#999" />
+                    <circle cx="7" cy="8" r="1.5" fill="#999" />
+                    <circle cx="3" cy="15" r="1.5" fill="#999" />
+                    <circle cx="7" cy="15" r="1.5" fill="#999" />
+                    <circle cx="3" cy="22" r="1.5" fill="#999" />
+                    <circle cx="7" cy="22" r="1.5" fill="#999" />
+                  </svg>
+                </div>
+              </div>
             )}
           </>
         )}

@@ -4,7 +4,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
-function blendNormal(base: number, blend: number): number {
+function blendNormal(_base: number, blend: number): number {
   return blend
 }
 

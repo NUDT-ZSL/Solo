@@ -27,6 +27,7 @@ html, body, #root {
   gap: 12px;
   overflow-y: auto;
   flex-shrink: 0;
+  user-select: none;
 }
 
 .sidebar-header {
@@ -96,6 +97,7 @@ html, body, #root {
   gap: 8px;
   flex: 1;
   overflow-y: auto;
+  position: relative;
 }
 
 .layer-card {
@@ -108,7 +110,7 @@ html, body, #root {
   flex-direction: column;
   gap: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.2s ease-in-out;
+  transition: box-shadow 0.2s ease-in-out, transform 0.15s ease;
   cursor: pointer;
   position: relative;
 }
@@ -122,11 +124,25 @@ html, body, #root {
 }
 
 .layer-card.dragging {
-  opacity: 0.5;
+  opacity: 0.85;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
 }
 
 .layer-card.drag-over {
   border: 2px dashed #6366f1;
+  background: #f5f3ff;
+}
+
+.drag-placeholder {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #6366f1;
+  border-radius: 2px;
+  opacity: 0.6;
 }
 
 .layer-top {
@@ -145,10 +161,18 @@ html, body, #root {
   cursor: grab;
   color: #9ca3af;
   flex-shrink: 0;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.drag-handle:hover {
+  background: #f3f4f6;
+  color: #6366f1;
 }
 
 .drag-handle:active {
   cursor: grabbing;
+  background: #e5e7eb;
 }
 
 .drag-handle svg {
@@ -164,6 +188,14 @@ html, body, #root {
   background: #1e1e1e;
   flex-shrink: 0;
   position: relative;
+  background-image:
+    linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+  background-color: #1e1e1e;
 }
 
 .layer-thumbnail img {
@@ -234,7 +266,6 @@ html, body, #root {
   border-radius: 2px;
   background: #d1d5db;
   outline: none;
-  transition: all 0.15s ease;
 }
 
 .opacity-slider::-webkit-slider-thumb {
@@ -245,11 +276,17 @@ html, body, #root {
   border-radius: 50%;
   background: #6366f1;
   cursor: pointer;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
 }
 
 .opacity-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+}
+
+.opacity-slider::-webkit-slider-thumb:active {
+  transform: scale(1.05);
 }
 
 .opacity-slider::-moz-range-thumb {
@@ -259,7 +296,18 @@ html, body, #root {
   background: #6366f1;
   cursor: pointer;
   border: none;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
+}
+
+.opacity-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+}
+
+.opacity-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #d1d5db;
 }
 
 .opacity-value {
@@ -268,6 +316,7 @@ html, body, #root {
   width: 32px;
   text-align: right;
   flex-shrink: 0;
+  transition: color 0.15s ease;
 }
 
 .layer-delete {
@@ -387,45 +436,34 @@ html, body, #root {
   cursor: ew-resize;
   z-index: 10;
   transform: translateX(-50%);
+  transition: width 0.1s ease;
 }
 
-.divider-line::before,
-.divider-line::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 20px;
-  height: 40px;
+.divider-line:hover,
+.divider-line-active {
+  width: 4px;
   background: #ffffff;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5), 0 0 0 2px rgba(99, 102, 241, 0.3);
 }
 
-.divider-line::before {
-  top: 50%;
-  margin-top: -50px;
-}
-
-.divider-line::after {
-  top: 50%;
-  margin-top: 10px;
-}
-
-.canvas-overlay {
+.divider-handle {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 36px;
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
 }
 
-.canvas-overlay img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.divider-handle svg {
+  pointer-events: none;
 }
 
 .empty-state {
