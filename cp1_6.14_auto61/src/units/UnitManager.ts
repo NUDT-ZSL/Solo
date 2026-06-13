@@ -90,22 +90,6 @@ export class UnitManager {
     });
   }
 
-  private handleCanvasClick(pos: Position): void {
-    const cell = this.getCellAtPosition(pos.x, pos.y);
-    if (!cell) return;
-
-    const state = eventBus as unknown as { selectedPlant: PlantType | null };
-    const selectedPlant = (state as Record<string, unknown>).selectedPlant as PlantType | null;
-
-    if (selectedPlant && !cell.occupied) {
-      const config = PLANT_CONFIGS[selectedPlant];
-      const currentSunlight = (state as Record<string, unknown>).sunlight as number;
-      if (currentSunlight >= config.cost) {
-        this.placePlant(cell.q, cell.r, selectedPlant);
-      }
-    }
-  }
-
   getCellAtPosition(x: number, y: number): HexCell | null {
     let closestCell: HexCell | null = null;
     let closestDist = Infinity;
