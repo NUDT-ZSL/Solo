@@ -233,6 +233,12 @@ export class SkillTreeCanvas {
       const dy = (e.clientY - this.dragStartMouse.y) / this.view.scale;
       const newX = this.dragStartWorld.x + dx;
       const newY = this.dragStartWorld.y + dy;
+
+      const nodeIdx = this.nodes.findIndex(n => n.id === this.draggedNodeId);
+      if (nodeIdx !== -1) {
+        this.nodes[nodeIdx] = { ...this.nodes[nodeIdx], x: newX, y: newY };
+      }
+
       this.callbacks.onNodePositionChange(this.draggedNodeId, newX, newY);
     } else if (this.isPanning) {
       this.view.offsetX = e.clientX - this.panStart.x;
@@ -274,19 +280,20 @@ export class SkillTreeCanvas {
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
+
     const rect = this.canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.view.scale * delta));
+    const worldX = (mouseX - this.view.offsetX) / this.view.scale;
+    const worldY = (mouseY - this.view.offsetY) / this.view.scale;
 
-    const worldX = (mx - this.view.offsetX) / this.view.scale;
-    const worldY = (my - this.view.offsetY) / this.view.scale;
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.view.scale * zoomFactor));
 
+    this.view.offsetX = mouseX - worldX * newScale;
+    this.view.offsetY = mouseY - worldY * newScale;
     this.view.scale = newScale;
-    this.view.offsetX = mx - worldX * newScale;
-    this.view.offsetY = my - worldY * newScale;
 
     this.callbacks.onScaleChange(newScale);
   };

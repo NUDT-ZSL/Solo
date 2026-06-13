@@ -198,7 +198,16 @@ export class TreeDataManager {
   }
 
   importJSON(json: string): SkillTreeData {
-    const data = JSON.parse(json) as SkillTreeData;
+    const raw = JSON.parse(json);
+    const data: SkillTreeData = {
+      nodes: (raw.nodes || []) as SkillNode[],
+      connections: (raw.connections || []).map((c: Partial<SkillConnection>) => ({
+        id: c.id || generateId(),
+        sourceId: c.sourceId || '',
+        targetId: c.targetId || '',
+        type: c.type || 'prerequisite' as ConnectionType,
+      })),
+    };
     this.loadData(data);
     return data;
   }
