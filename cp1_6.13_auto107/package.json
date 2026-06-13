@@ -1,0 +1,38 @@
+{
+  "name": "wavstudio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.162.0",
+    "@react-three/fiber": "^8.15.19",
+    "@react-three/drei": "^9.99.0",
+    "tone": "^14.8.49",
+    "axios": "^1.6.8",
+    "express": "^4.19.2",
+    "nedb-promises": "^6.2.3",
+    "uuid": "^9.0.1",
+    "zustand": "^4.5.2",
+    "lucide-react": "^0.363.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.73",
+    "@types/react-dom": "^18.2.22",
+    "@types/three": "^0.162.0",
+    "@types/uuid": "^9.0.8",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.3",
+    "vite": "^5.2.7"
+  }
+}
