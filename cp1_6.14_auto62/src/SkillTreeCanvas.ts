@@ -109,18 +109,24 @@ export class SkillTreeCanvas {
     return this.view.scale;
   }
 
-  private screenToWorld(sx: number, sy: number): { x: number; y: number } {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = (sx - rect.left - this.view.offsetX) / this.view.scale;
-    const y = (sy - rect.top - this.view.offsetY) / this.view.scale;
+  private screenToWorld(canvasX: number, canvasY: number): { x: number; y: number } {
+    const x = (canvasX - this.view.offsetX) / this.view.scale;
+    const y = (canvasY - this.view.offsetY) / this.view.scale;
     return { x, y };
   }
 
   private worldToScreen(wx: number, wy: number): { x: number; y: number } {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = wx * this.view.scale + this.view.offsetX + rect.left;
-    const y = wy * this.view.scale + this.view.offsetY + rect.top;
+    const x = wx * this.view.scale + this.view.offsetX;
+    const y = wy * this.view.scale + this.view.offsetY;
     return { x, y };
+  }
+
+  private getCanvasMouse(e: MouseEvent | WheelEvent | DragEvent): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (e as MouseEvent).clientX - rect.left,
+      y: (e as MouseEvent).clientY - rect.top,
+    };
   }
 
   private hitTestNode(wx: number, wy: number): SkillNode | null {
@@ -209,7 +215,8 @@ export class SkillTreeCanvas {
   };
 
   private onMouseDown = (e: MouseEvent): void => {
-    const world = this.screenToWorld(e.clientX, e.clientY);
+    const cm = this.getCanvasMouse(e);
+    const world = this.screenToWorld(cm.x, cm.y);
     const node = this.hitTestNode(world.x, world.y);
 
     if (e.button === 0) {
@@ -217,20 +224,21 @@ export class SkillTreeCanvas {
         this.isDraggingNode = true;
         this.draggedNodeId = node.id;
         this.dragStartWorld = { x: node.x, y: node.y };
-        this.dragStartMouse = { x: e.clientX, y: e.clientY };
+        this.dragStartMouse = { x: cm.x, y: cm.y };
       } else {
         this.isPanning = true;
-        this.panStart = { x: e.clientX - this.view.offsetX, y: e.clientY - this.view.offsetY };
+        this.panStart = { x: cm.x - this.view.offsetX, y: cm.y - this.view.offsetY };
       }
     }
   };
 
   private onMouseMove = (e: MouseEvent): void => {
-    this.mouseScreenPos = { x: e.clientX, y: e.clientY };
+    const cm = this.getCanvasMouse(e);
+    this.mouseScreenPos = { x: cm.x, y: cm.y };
 
     if (this.isDraggingNode && this.draggedNodeId) {
-      const dx = (e.clientX - this.dragStartMouse.x) / this.view.scale;
-      const dy = (e.clientY - this.dragStartMouse.y) / this.view.scale;
+      const dx = (cm.x - this.dragStartMouse.x) / this.view.scale;
+      const dy = (cm.y - this.dragStartMouse.y) / this.view.scale;
       const newX = this.dragStartWorld.x + dx;
       const newY = this.dragStartWorld.y + dy;
 
@@ -241,18 +249,17 @@ export class SkillTreeCanvas {
 
       this.callbacks.onNodePositionChange(this.draggedNodeId, newX, newY);
     } else if (this.isPanning) {
-      this.view.offsetX = e.clientX - this.panStart.x;
-      this.view.offsetY = e.clientY - this.panStart.y;
+      this.view.offsetX = cm.x - this.panStart.x;
+      this.view.offsetY = cm.y - this.panStart.y;
     } else {
-      const world = this.screenToWorld(e.clientX, e.clientY);
+      const world = this.screenToWorld(cm.x, cm.y);
       const node = this.hitTestNode(world.x, world.y);
       const newHoveredId = node ? node.id : null;
 
       if (newHoveredId !== this.hoveredNodeId) {
         this.hoveredNodeId = newHoveredId;
         if (node) {
-          const rect = this.canvas.getBoundingClientRect();
-          this.callbacks.onHoverNode(node, e.clientX - rect.left, e.clientY - rect.top);
+          this.callbacks.onHoverNode(node, cm.x, cm.y);
         } else {
           this.callbacks.onHoverNode(null, 0, 0);
         }
@@ -281,25 +288,24 @@ export class SkillTreeCanvas {
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
 
-    const rect = this.canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const cm = this.getCanvasMouse(e);
 
-    const worldX = (mouseX - this.view.offsetX) / this.view.scale;
-    const worldY = (mouseY - this.view.offsetY) / this.view.scale;
+    const worldX = (cm.x - this.view.offsetX) / this.view.scale;
+    const worldY = (cm.y - this.view.offsetY) / this.view.scale;
 
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.view.scale * zoomFactor));
 
-    this.view.offsetX = mouseX - worldX * newScale;
-    this.view.offsetY = mouseY - worldY * newScale;
+    this.view.offsetX = cm.x - worldX * newScale;
+    this.view.offsetY = cm.y - worldY * newScale;
     this.view.scale = newScale;
 
     this.callbacks.onScaleChange(newScale);
   };
 
   private onClick = (e: MouseEvent): void => {
-    const world = this.screenToWorld(e.clientX, e.clientY);
+    const cm = this.getCanvasMouse(e);
+    const world = this.screenToWorld(cm.x, cm.y);
     const node = this.hitTestNode(world.x, world.y);
     const conn = this.hitTestConnection(world.x, world.y);
 
@@ -328,7 +334,8 @@ export class SkillTreeCanvas {
   };
 
   private onDblClick = (e: MouseEvent): void => {
-    const world = this.screenToWorld(e.clientX, e.clientY);
+    const cm = this.getCanvasMouse(e);
+    const world = this.screenToWorld(cm.x, cm.y);
     const node = this.hitTestNode(world.x, world.y);
     if (node) {
       this.connectionSourceId = node.id;
@@ -344,7 +351,8 @@ export class SkillTreeCanvas {
     const category = e.dataTransfer?.getData('category');
     if (!category) return;
 
-    const world = this.screenToWorld(e.clientX, e.clientY);
+    const cm = this.getCanvasMouse(e);
+    const world = this.screenToWorld(cm.x, cm.y);
     this.callbacks.onDropTemplate(category, world.x, world.y);
   };
 
