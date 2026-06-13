@@ -456,6 +456,7 @@ export class UIController {
   }): string {
     const threeJSCDN = 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js';
     const orbitControlsCDN = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js';
+    const serializedState = JSON.stringify(sceneState);
 
     return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -490,6 +491,21 @@ export class UIController {
       border: 1px solid rgba(255, 255, 255, 0.1);
       z-index: 10;
     }
+    #config-display {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #8a2be2;
+      font-size: 12px;
+      background: rgba(26, 26, 46, 0.7);
+      padding: 8px 16px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      z-index: 10;
+      font-family: monospace;
+    }
     #controls {
       position: absolute;
       top: 20px;
@@ -500,6 +516,7 @@ export class UIController {
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.1);
       z-index: 10;
+      min-width: 180px;
     }
     .control-btn {
       display: block;
@@ -526,6 +543,10 @@ export class UIController {
         top: auto;
         right: 20px;
       }
+      #config-display {
+        top: 90px;
+        font-size: 10px;
+      }
     }
   </style>
 </head>
@@ -535,8 +556,9 @@ export class UIController {
     🎵 3D音乐波形可视化<br>
     <small>拖拽旋转 • 滚轮缩放</small>
   </div>
+  <div id="config-display"></div>
   <div id="controls">
-    <button class="control-btn" id="autoRotateBtn">🔄 自动旋转: 关</button>
+    <button class="control-btn" id="autoRotateBtn">🔄 自动旋转: ${sceneState.sceneConfig.autoRotate ? '开' : '关'}</button>
     <button class="control-btn" id="particlesBtn">✨ 粒子效果: ${sceneState.sceneConfig.particlesEnabled ? '开' : '关'}</button>
     <button class="control-btn" id="resetBtn">🎯 重置视角</button>
   </div>
@@ -545,13 +567,35 @@ export class UIController {
   <script src="${orbitControlsCDN}"></script>
   <script>
     (function() {
-      const config = ${JSON.stringify(sceneState)};
+      const config = ${serializedState};
       
       let scene, camera, renderer, controls;
-      let waveGroup, particles = [];
+      let waveGroup, particleSystem;
+      let allParticles = [];
       let autoRotate = config.sceneConfig.autoRotate;
       let particlesEnabled = config.sceneConfig.particlesEnabled;
+      let autoRotateSpeed = config.sceneConfig.autoRotateSpeed || 15;
+      let particlePool = [];
+      let activeParticles = [];
+      let maxParticles = 2000;
+      let particlesPerSecond = config.sceneConfig.particleCount || 200;
+      let particleLifetime = config.sceneConfig.particleLifetime || 0.8;
+      let lastParticleTime = 0;
       let animationId;
+      let currentSpherical = null;
+      let isEasing = false;
+      let easeStartTime = 0;
+      let easeDuration = 0.3;
+      let easeStartTheta = 0;
+      let easeTargetTheta = 0;
+      let targetRotationY = 0;
+      let currentRotationY = 0;
+
+      const heightMultiplier = config.waveConfig.heightMultiplier;
+      const barCount = config.waveConfig.barCount;
+      const rowsCount = config.waveConfig.rowsCount;
+      const barThickness = config.waveConfig.barThickness;
+      const barSpacing = config.waveConfig.barSpacing;
 
       function init() {
         const container = document.getElementById('container');
@@ -588,6 +632,7 @@ export class UIController {
         controls.maxDistance = 150;
         controls.minPolarAngle = Math.PI / 6;
         controls.maxPolarAngle = Math.PI / 2;
+        controls.enablePan = false;
         controls.target.set(
           config.cameraTarget.x,
           config.cameraTarget.y,
@@ -595,12 +640,35 @@ export class UIController {
         );
         controls.update();
 
+        targetRotationY = getAzimuthalAngle();
+        currentRotationY = targetRotationY;
+
         setupLighting();
         setupGround();
         setupWaveform();
         setupParticles();
         setupEventListeners();
+        displayConfig();
         animate();
+
+        if (autoRotate) {
+          startAutoRotate();
+        }
+      }
+
+      function displayConfig() {
+        const el = document.getElementById('config-display');
+        el.innerHTML = 
+          '高度: ' + heightMultiplier.toFixed(1) + 
+          ' | 粗细: ' + barThickness + 
+          ' | 间距: ' + barSpacing.toFixed(1) +
+          ' | 粒子: ' + (particlesEnabled ? '开' : '关');
+      }
+
+      function getAzimuthalAngle() {
+        const offset = new THREE.Vector3();
+        offset.copy(camera.position).sub(controls.target);
+        return Math.atan2(offset.x, offset.z);
       }
 
       function setupLighting() {
@@ -645,12 +713,6 @@ export class UIController {
         waveGroup = new THREE.Group();
         scene.add(waveGroup);
 
-        const barCount = config.waveConfig.barCount;
-        const rowsCount = config.waveConfig.rowsCount;
-        const barThickness = config.waveConfig.barThickness;
-        const barSpacing = config.waveConfig.barSpacing;
-        const heightMultiplier = config.waveConfig.heightMultiplier;
-
         const totalWidth = barCount * (barThickness + barSpacing);
         const totalDepth = rowsCount * (barThickness + barSpacing);
         const startX = -totalWidth / 2;
@@ -660,8 +722,9 @@ export class UIController {
           for (let col = 0; col < barCount; col++) {
             const x = startX + col * (barThickness + barSpacing) + barThickness / 2;
             const z = startZ + row * (barThickness + barSpacing) + barThickness / 2;
-            
-            const height = 0.1 + Math.random() * 2 * heightMultiplier;
+            const frequency = col / barCount;
+            const basePhase = (frequency * 3 + row * 0.5) * Math.PI * 2;
+            const baseHeight = 0.2 + (0.3 + 0.7 * Math.abs(Math.sin(basePhase))) * heightMultiplier * 3;
             
             const geometry = new THREE.BoxGeometry(
               barThickness * 0.1,
@@ -669,8 +732,7 @@ export class UIController {
               barThickness * 0.1
             );
 
-            const normalizedHeight = height / (heightMultiplier * 10);
-            const color = getColorForHeight(normalizedHeight, col / barCount);
+            const color = getBarColor(0.5, frequency);
 
             const material = new THREE.MeshStandardMaterial({
               color: color,
@@ -681,82 +743,220 @@ export class UIController {
             });
 
             const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(x, height / 2, z);
-            mesh.scale.y = height;
+            mesh.position.set(x, baseHeight / 2, z);
+            mesh.scale.y = baseHeight;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
-            mesh.userData = { baseHeight: height, col, row };
+            mesh.userData = { 
+              baseHeight: baseHeight, 
+              col: col, 
+              row: row,
+              frequency: frequency,
+              basePhase: basePhase,
+              posX: x,
+              posZ: z
+            };
             waveGroup.add(mesh);
           }
         }
       }
 
-      function getColorForHeight(normalizedHeight, frequency) {
-        const bottomColor = new THREE.Color(0x1e90ff);
-        const topColor = new THREE.Color(0xff4500);
-        const t = Math.max(0, Math.min(1, normalizedHeight));
-        const color = bottomColor.clone().lerp(topColor, t);
-        const frequencyBoost = frequency * 0.2;
-        color.r = Math.min(1, color.r + frequencyBoost);
-        color.g = Math.min(1, color.g + frequencyBoost * 0.5);
-        return color;
+      function getBarColor(normalizedHeight, frequency) {
+        const freqLowColor = new THREE.Color(0x1e90ff);
+        const freqHighColor = new THREE.Color(0xff4500);
+        
+        const freqT = Math.max(0, Math.min(1, frequency));
+        const baseColor = freqLowColor.clone().lerp(freqHighColor, freqT);
+        
+        const brightness = 0.4 + Math.max(0, Math.min(1, normalizedHeight)) * 0.6;
+        const result = baseColor.clone();
+        result.offsetHSL(0, 0, (brightness - 0.5) * 0.5);
+        
+        return result;
       }
 
       function setupParticles() {
-        const particleCount = 500;
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(particleCount * 3);
-        const colors = new Float32Array(particleCount * 3);
-
-        for (let i = 0; i < particleCount; i++) {
-          positions[i * 3] = (Math.random() - 0.5) * 100;
-          positions[i * 3 + 1] = Math.random() * 50;
-          positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
-
-          const color = getColorForHeight(Math.random(), Math.random());
-          colors[i * 3] = color.r;
-          colors[i * 3 + 1] = color.g;
-          colors[i * 3 + 2] = color.b;
-
-          particles.push({
-            velocity: new THREE.Vector3(
-              (Math.random() - 0.5) * 0.1,
-              Math.random() * 0.1,
-              (Math.random() - 0.5) * 0.1
-            ),
-            baseY: Math.random() * 50
+        for (let i = 0; i < maxParticles; i++) {
+          particlePool.push({
+            position: new THREE.Vector3(),
+            velocity: new THREE.Vector3(),
+            color: new THREE.Color(),
+            life: 0,
+            maxLife: particleLifetime,
+            size: 0.3
           });
         }
 
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
+        const geometry = new THREE.BufferGeometry();
         const material = new THREE.PointsMaterial({
           size: 0.3,
           vertexColors: true,
           transparent: true,
-          opacity: 0.6,
+          opacity: 0.9,
           blending: THREE.AdditiveBlending,
           depthWrite: false
         });
 
-        const particleSystem = new THREE.Points(geometry, material);
+        particleSystem = new THREE.Points(geometry, material);
         particleSystem.name = 'particleSystem';
+        particleSystem.visible = particlesEnabled;
         scene.add(particleSystem);
+      }
+
+      function emitParticles(time) {
+        const interval = 1000 / particlesPerSecond;
+        const elapsed = time - lastParticleTime;
+        
+        if (elapsed < interval) return;
+        
+        const batches = Math.floor(elapsed / interval);
+        lastParticleTime = time - (elapsed % interval);
+
+        const activeBars = waveGroup.children.filter(function(mesh) {
+          return mesh.scale.y > 0.3;
+        });
+        
+        if (activeBars.length === 0) return;
+
+        const thickness = barThickness * 0.1;
+
+        for (let batch = 0; batch < batches; batch++) {
+          const bar = activeBars[Math.floor(Math.random() * activeBars.length)];
+          const userData = bar.userData;
+          const particle = particlePool.find(function(p) { return p.life <= 0; });
+          
+          if (particle) {
+            const barHeight = bar.scale.y;
+            particle.position.set(
+              userData.posX + (Math.random() - 0.5) * thickness * 0.8,
+              barHeight,
+              userData.posZ + (Math.random() - 0.5) * thickness * 0.8
+            );
+            
+            const heightFactor = Math.min(1, barHeight / 10);
+            particle.velocity.set(
+              (Math.random() - 0.5) * 0.5,
+              0.5 + heightFactor * 2.5 + Math.random() * 1.5,
+              (Math.random() - 0.5) * 0.5
+            );
+            
+            const freqColor = getBarColor(heightFactor, userData.frequency);
+            particle.color.copy(freqColor);
+            particle.life = particleLifetime;
+            particle.maxLife = particleLifetime;
+            particle.size = 0.15 + Math.random() * 0.2 + heightFactor * 0.1;
+            
+            if (!activeParticles.includes(particle)) {
+              activeParticles.push(particle);
+            }
+          }
+          
+          if (activeParticles.length >= maxParticles) break;
+        }
+      }
+
+      function updateParticles() {
+        const positions = [];
+        const colors = [];
+        const sizes = [];
+
+        const deltaTime = 1 / 60;
+
+        for (let i = activeParticles.length - 1; i >= 0; i--) {
+          const particle = activeParticles[i];
+          
+          if (particle.life <= 0) {
+            activeParticles.splice(i, 1);
+            continue;
+          }
+
+          particle.life -= deltaTime;
+          
+          particle.velocity.multiplyScalar(0.98);
+          particle.velocity.y -= 1.5 * deltaTime;
+          particle.position.addScaledVector(particle.velocity, deltaTime);
+
+          const lifeRatio = particle.life / particle.maxLife;
+          const easeOutRatio = Math.pow(Math.max(0, lifeRatio), 0.5);
+
+          positions.push(particle.position.x, particle.position.y, particle.position.z);
+          colors.push(
+            particle.color.r * easeOutRatio,
+            particle.color.g * easeOutRatio,
+            particle.color.b * easeOutRatio
+          );
+          sizes.push(particle.size * (0.3 + easeOutRatio * 0.7));
+        }
+
+        const geometry = particleSystem.geometry;
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+        geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.color.needsUpdate = true;
+      }
+
+      function startAutoRotate() {
+        targetRotationY = getAzimuthalAngle();
+        currentRotationY = targetRotationY;
+      }
+
+      function startEasing(targetRotation) {
+        isEasing = true;
+        easeStartTime = performance.now();
+        easeStartTheta = currentRotationY;
+        easeTargetTheta = targetRotation;
+      }
+
+      function updateEasing(time) {
+        if (!isEasing) return;
+
+        const elapsed = (time - easeStartTime) / 1000;
+        const progress = Math.min(1, elapsed / easeDuration);
+        
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        
+        currentRotationY = easeStartTheta + (easeTargetTheta - easeStartTheta) * easeOut;
+
+        const spherical = new THREE.Spherical();
+        spherical.setFromVector3(camera.position);
+        spherical.theta = currentRotationY;
+        camera.position.setFromSpherical(spherical);
+        camera.lookAt(controls.target);
+
+        if (progress >= 1) {
+          isEasing = false;
+        }
       }
 
       function setupEventListeners() {
         window.addEventListener('resize', onWindowResize);
 
+        controls.addEventListener('start', function() {
+          isEasing = false;
+        });
+
+        controls.addEventListener('change', function() {
+          if (!autoRotate && !isEasing) {
+            targetRotationY = getAzimuthalAngle();
+            currentRotationY = targetRotationY;
+          }
+        });
+
         document.getElementById('autoRotateBtn').addEventListener('click', function() {
           autoRotate = !autoRotate;
           this.textContent = '🔄 自动旋转: ' + (autoRotate ? '开' : '关');
+          if (autoRotate) {
+            startAutoRotate();
+            startEasing(targetRotationY);
+          } else {
+            startEasing(currentRotationY);
+          }
         });
 
         document.getElementById('particlesBtn').addEventListener('click', function() {
           particlesEnabled = !particlesEnabled;
           this.textContent = '✨ 粒子效果: ' + (particlesEnabled ? '开' : '关');
-          const particleSystem = scene.getObjectByName('particleSystem');
           if (particleSystem) {
             particleSystem.visible = particlesEnabled;
           }
@@ -774,8 +974,13 @@ export class UIController {
             config.cameraTarget.z
           );
           controls.update();
+          
           autoRotate = false;
           document.getElementById('autoRotateBtn').textContent = '🔄 自动旋转: 关';
+          
+          targetRotationY = getAzimuthalAngle();
+          currentRotationY = targetRotationY;
+          isEasing = false;
         });
       }
 
@@ -789,38 +994,35 @@ export class UIController {
       function animate() {
         animationId = requestAnimationFrame(animate);
 
-        const time = Date.now() * 0.001;
+        const now = performance.now();
+        const time = now * 0.001;
 
         waveGroup.children.forEach(function(mesh) {
           const userData = mesh.userData;
-          const wave = Math.sin(time * 2 + userData.col * 0.2) * 0.5 + 0.5;
-          const newHeight = Math.max(0.1, userData.baseHeight * (0.5 + wave * 0.5));
+          const wave = Math.sin(time * 2 + userData.basePhase) * 0.5 + 0.5;
+          const newHeight = Math.max(0.1, userData.baseHeight * (0.4 + wave * 0.8));
           mesh.scale.y = newHeight;
           mesh.position.y = newHeight / 2;
           
-          const normalizedHeight = newHeight / (config.waveConfig.heightMultiplier * 10);
-          const color = getColorForHeight(normalizedHeight, userData.col / config.waveConfig.barCount);
+          const normalizedHeight = Math.min(1, newHeight / (heightMultiplier * 10));
+          const color = getBarColor(normalizedHeight, userData.frequency);
           mesh.material.color.copy(color);
           mesh.material.emissive.copy(color);
         });
 
         if (particlesEnabled) {
-          const particleSystem = scene.getObjectByName('particleSystem');
-          if (particleSystem) {
-            const positions = particleSystem.geometry.attributes.position.array;
-            for (let i = 0; i < particles.length; i++) {
-              positions[i * 3 + 1] += particles[i].velocity.y;
-              if (positions[i * 3 + 1] > 50) {
-                positions[i * 3 + 1] = 0;
-              }
-            }
-            particleSystem.geometry.attributes.position.needsUpdate = true;
-          }
+          emitParticles(now);
+          updateParticles();
         }
 
         if (autoRotate) {
           const delta = 1 / 60;
-          waveGroup.rotation.y += (config.sceneConfig.autoRotateSpeed * Math.PI / 180) * delta;
+          targetRotationY += (autoRotateSpeed * Math.PI / 180) * delta;
+          startEasing(targetRotationY);
+        }
+
+        if (isEasing) {
+          updateEasing(now);
         }
 
         controls.update();

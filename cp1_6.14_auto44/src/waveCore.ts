@@ -64,17 +64,17 @@ export class WaveCore {
   }
 
   getColorForHeight(normalizedHeight: number, frequency: number): THREE.Color {
-    const bottomColor = new THREE.Color(0x1e90ff);
-    const topColor = new THREE.Color(0xff4500);
+    const freqLowColor = new THREE.Color(0x1e90ff);
+    const freqHighColor = new THREE.Color(0xff4500);
     
-    const t = Math.max(0, Math.min(1, normalizedHeight));
-    const color = bottomColor.clone().lerp(topColor, t);
+    const freqT = Math.max(0, Math.min(1, frequency));
+    const baseColor = freqLowColor.clone().lerp(freqHighColor, freqT);
     
-    const frequencyBoost = frequency * 0.2;
-    color.r = Math.min(1, color.r + frequencyBoost);
-    color.g = Math.min(1, color.g + frequencyBoost * 0.5);
+    const brightness = 0.4 + Math.max(0, Math.min(1, normalizedHeight)) * 0.6;
+    const saturated = baseColor.clone();
+    saturated.offsetHSL(0, 0, (brightness - 0.5) * 0.5);
     
-    return color;
+    return saturated;
   }
 
   getSpectrumColor(normalizedFreq: number): string {

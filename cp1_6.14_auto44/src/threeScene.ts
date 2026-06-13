@@ -175,7 +175,7 @@ export class ThreeScene {
 
     this.controls.addEventListener('change', () => {
       if (!this.autoRotate && !this.isEasing) {
-        this.targetRotationY = this.controls.getAzimuthalAngle();
+        this.targetRotationY = this.getAzimuthalAngle();
         this.currentRotationY = this.targetRotationY;
       }
     });
@@ -245,42 +245,50 @@ export class ThreeScene {
   }
 
   private emitParticles(time: number): void {
-    if (time - this.lastParticleTime < 1000 / this.particlesPerSecond) return;
-    this.lastParticleTime = time;
+    const interval = 1000 / this.particlesPerSecond;
+    const elapsed = time - this.lastParticleTime;
+    
+    if (elapsed < interval) return;
+    
+    const batches = Math.floor(elapsed / interval);
+    this.lastParticleTime = time - (elapsed % interval);
 
     const bars = this.waveCore.getBars();
-    const activeBars = bars.filter(bar => bar.height > 0.5);
+    const activeBars = bars.filter(bar => bar.height > 0.3);
     
     if (activeBars.length === 0) return;
 
-    const particlesToEmit = Math.min(5, Math.ceil(this.particlesPerSecond / 60));
-    
-    for (let i = 0; i < particlesToEmit; i++) {
+    for (let batch = 0; batch < batches; batch++) {
       const bar = activeBars[Math.floor(Math.random() * activeBars.length)];
       const particle = this.particlePool.find(p => p.life <= 0);
       
       if (particle) {
+        const barThickness = this.waveCore.getConfig().barThickness * 0.1;
+        
         particle.position.set(
-          bar.position.x + (Math.random() - 0.5) * 0.5,
-          bar.height + Math.random() * 0.5,
-          bar.position.z + (Math.random() - 0.5) * 0.5
+          bar.position.x + (Math.random() - 0.5) * barThickness * 0.8,
+          bar.height,
+          bar.position.z + (Math.random() - 0.5) * barThickness * 0.8
         );
         
+        const heightFactor = Math.min(1, bar.height / 10);
         particle.velocity.set(
-          (Math.random() - 0.5) * 2,
-          2 + Math.random() * 3,
-          (Math.random() - 0.5) * 2
+          (Math.random() - 0.5) * 0.5,
+          0.5 + heightFactor * 2.5 + Math.random() * 1.5,
+          (Math.random() - 0.5) * 0.5
         );
         
         particle.color.copy(bar.color);
         particle.life = this.particleLifetime;
         particle.maxLife = this.particleLifetime;
-        particle.size = 0.2 + Math.random() * 0.2;
+        particle.size = 0.15 + Math.random() * 0.2 + heightFactor * 0.1;
         
         if (!this.particles.includes(particle)) {
           this.particles.push(particle);
         }
       }
+      
+      if (this.particles.length >= this.maxParticles) break;
     }
   }
 
@@ -301,19 +309,21 @@ export class ThreeScene {
 
       particle.life -= deltaTime;
       
-      particle.velocity.y -= 9.8 * deltaTime * 0.5;
-      particle.position.add(particle.velocity.clone().multiplyScalar(deltaTime));
+      particle.velocity.multiplyScalar(0.98);
+      particle.velocity.y -= 1.5 * deltaTime;
+      particle.position.addScaledVector(particle.velocity, deltaTime);
 
       const lifeRatio = particle.life / particle.maxLife;
-      const alpha = Math.max(0, lifeRatio);
+      const easeOutRatio = Math.pow(lifeRatio, 0.5);
+      const alpha = Math.max(0, easeOutRatio);
 
       positions.push(particle.position.x, particle.position.y, particle.position.z);
       colors.push(
-        particle.color.r * lifeRatio,
-        particle.color.g * lifeRatio,
-        particle.color.b * lifeRatio
+        particle.color.r * alpha,
+        particle.color.g * alpha,
+        particle.color.b * alpha
       );
-      sizes.push(particle.size * alpha);
+      sizes.push(particle.size * (0.3 + alpha * 0.7));
     }
 
     this.particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -355,11 +365,25 @@ export class ThreeScene {
   }
 
   setAutoRotate(enabled: boolean): void {
+    if (this.autoRotate === enabled) return;
+    
     this.autoRotate = enabled;
+    
+    const currentAzimuth = this.getAzimuthalAngle();
+    this.targetRotationY = currentAzimuth;
+    this.currentRotationY = currentAzimuth;
+    
     if (enabled) {
-      this.targetRotationY = this.controls.getAzimuthalAngle();
-      this.currentRotationY = this.targetRotationY;
+      this.startEasing(this.targetRotationY);
+    } else {
+      this.startEasing(this.currentRotationY);
     }
+  }
+
+  private getAzimuthalAngle(): number {
+    const offset = new THREE.Vector3();
+    offset.copy(this.camera.position).sub(this.controls.target);
+    return Math.atan2(offset.x, offset.z);
   }
 
   getAutoRotate(): boolean {
