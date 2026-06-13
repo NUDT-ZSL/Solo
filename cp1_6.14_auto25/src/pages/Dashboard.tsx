@@ -6,25 +6,43 @@ interface Props {
   onReminderPosted?: () => void;
 }
 
-function ProgressRing({ progress, size = 40 }: { progress: number; size?: number }) {
-  const stroke = 4;
-  const radius = (size - stroke) / 2;
+function ProgressRing({ progress, size = 40, strokeWidth = 4 }: { progress: number; size?: number; strokeWidth?: number }) {
+  const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (progress / 100) * circumference;
+  const clampedProgress = Math.max(0, Math.min(100, progress));
+  const offset = circumference - (clampedProgress / 100) * circumference;
+  const center = size / 2;
+
   return (
     <div className="progress-ring-wrap" style={{ width: size, height: size }}>
-      <svg width={size} height={size}>
-        <circle className="progress-ring-bg" cx={size / 2} cy={size / 2} r={radius} />
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ transform: 'rotate(-90deg)' }}
+      >
         <circle
-          className="progress-ring-fg"
-          cx={size / 2}
-          cy={size / 2}
+          cx={center}
+          cy={center}
           r={radius}
+          fill="none"
+          stroke="#e8dccd"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="#2d6a4f"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
         />
       </svg>
-      <div className="progress-text">{progress}%</div>
+      <div className="progress-text">{Math.round(clampedProgress)}%</div>
     </div>
   );
 }
@@ -35,12 +53,14 @@ export default function Dashboard({ onOpenBook }: Props) {
 
   useEffect(() => {
     const t0 = performance.now();
-    booksApi.list().then((data) => {
+    booksApi.list(false).then((data) => {
       setBooks(data.slice(0, 3));
       setLoading(false);
       const elapsed = performance.now() - t0;
       if (elapsed > 200) {
         console.warn(`[perf] Dashboard books load took ${elapsed.toFixed(0)}ms (>200ms)`);
+      } else {
+        console.info(`[perf] Dashboard books load: ${elapsed.toFixed(0)}ms`);
       }
     });
   }, []);

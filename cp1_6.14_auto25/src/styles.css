@@ -61,18 +61,46 @@ input, textarea {
   }
 }
 
-@keyframes scrollUpOut {
+@keyframes navItemPulse {
   0% {
+    background-color: rgba(139, 94, 60, 0.12);
+  }
+  50% {
+    background-color: rgba(139, 94, 60, 0.28);
+  }
+  100% {
+    background-color: rgba(139, 94, 60, 0.12);
+  }
+}
+
+@keyframes navItemPulseInactive {
+  0% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(139, 94, 60, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes reminderSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  15% {
     opacity: 1;
     transform: translateY(0);
   }
-  80% {
+  85% {
     opacity: 1;
     transform: translateY(0);
   }
   100% {
     opacity: 0;
-    transform: translateY(-30px);
+    transform: translateY(-24px);
   }
 }
 
@@ -141,6 +169,7 @@ input, textarea {
   position: relative;
   transition: background-color 0.2s ease;
   border-left: 4px solid transparent;
+  user-select: none;
 }
 
 .nav-item:hover {
@@ -151,6 +180,14 @@ input, textarea {
   border-left-color: var(--wood-dark);
   background: rgba(139, 94, 60, 0.12);
   font-weight: 600;
+}
+
+.nav-item.clicked {
+  animation: navItemPulse 0.4s ease;
+}
+
+.nav-item.clicked:not(.active) {
+  animation: navItemPulseInactive 0.4s ease;
 }
 
 .nav-icon {
@@ -191,6 +228,8 @@ input, textarea {
 
 .reminder-item {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 20px;
   line-height: 20px;
@@ -199,7 +238,7 @@ input, textarea {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  animation: scrollUpOut 2s ease-out forwards;
+  animation: reminderSlideUp 2.5s ease-out forwards;
 }
 
 .reminder-item::before {
@@ -845,5 +884,25 @@ input, textarea {
 
   .book-header-title {
     font-size: 18px;
+  }
+}
+
+@media (max-width: 375px) {
+  .book-card {
+    height: auto;
+    min-height: 180px;
+  }
+
+  .progress-ring-wrap {
+    top: 12px;
+    right: 12px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .section-card {
+    padding: 16px;
   }
 }

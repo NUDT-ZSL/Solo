@@ -135,8 +135,21 @@ app.get('/api/books/:id', async (req: Request, res: Response) => {
 
 app.get('/api/books/:id/notes', async (req: Request, res: Response) => {
   try {
-    const notes = await notesDB.find({ bookId: req.params.id }).sort({ createdAt: -1 });
-    res.json(notes);
+    const bookId = req.params.id;
+    const limit = parseInt(req.query.limit as string) || 0;
+    const skip = parseInt(req.query.skip as string) || 0;
+
+    const query = notesDB.find({ bookId }).sort({ createdAt: -1 });
+    let notes;
+    let total;
+    if (limit > 0) {
+      notes = await query.skip(skip).limit(limit);
+      total = await notesDB.count({ bookId });
+    } else {
+      notes = await query;
+      total = notes.length;
+    }
+    res.json({ notes, total, hasMore: skip + notes.length < total });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

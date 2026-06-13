@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { booksApi, Book, Note, Member, MemberStatus, remindersApi } from '../api';
+import { booksApi, Book, Note, Member, MemberStatus, remindersApi, NotesPage } from '../api';
 
 interface Props {
   bookId: string;
@@ -8,6 +8,7 @@ interface Props {
 }
 
 const CURRENT_USER_ID = 'u1';
+const PAGE_SIZE = 10;
 
 function formatDate(ts: number) {
   const d = new Date(ts);
@@ -36,33 +37,63 @@ export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) 
   const [notes, setNotes] = useState<Note[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalNotes, setTotalNotes] = useState(0);
   const [content, setContent] = useState('');
   const [quote, setQuote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [urgedMap, setUrgedMap] = useState<Record<string, boolean>>({});
 
   const notesStartRef = useRef<number>(0);
+  const skipRef = useRef(0);
+  const listEndRef = useRef<HTMLDivElement>(null);
 
-  const loadData = useCallback(async () => {
+  const loadInitialData = useCallback(async () => {
     notesStartRef.current = performance.now();
-    const [b, n, m] = await Promise.all([
+    skipRef.current = 0;
+
+    const [bookData, notesData, membersData] = await Promise.all([
       booksApi.get(bookId),
-      booksApi.getNotes(bookId),
+      booksApi.getNotes(bookId, { limit: PAGE_SIZE, skip: 0 }),
       booksApi.getMembers(bookId),
     ]);
-    setBook(b);
-    setNotes(n);
-    setMembers(m);
+
+    setBook(bookData);
+    setNotes(notesData.notes);
+    setHasMore(notesData.hasMore);
+    setTotalNotes(notesData.total);
+    setMembers(membersData);
     setLoading(false);
+
     const elapsed = performance.now() - notesStartRef.current;
     if (elapsed > 200) {
       console.warn(`[perf] BookDetail initial load took ${elapsed.toFixed(0)}ms (>200ms)`);
+    } else {
+      console.info(`[perf] BookDetail initial load: ${elapsed.toFixed(0)}ms`);
     }
   }, [bookId]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadInitialData();
+  }, [loadInitialData]);
+
+  const loadMoreNotes = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextSkip = skipRef.current + PAGE_SIZE;
+    try {
+      const data: NotesPage = await booksApi.getNotes(bookId, {
+        limit: PAGE_SIZE,
+        skip: nextSkip,
+      });
+      setNotes((prev) => [...prev, ...data.notes]);
+      setHasMore(data.hasMore);
+      skipRef.current = nextSkip;
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [bookId, hasMore, loadingMore]);
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
@@ -75,8 +106,10 @@ export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) 
         quote: quote.trim() || undefined,
       });
       setNotes((prev) => [newNote, ...prev]);
+      setTotalNotes((prev) => prev + 1);
       setContent('');
       setQuote('');
+      skipRef.current = skipRef.current + 1;
       const elapsed = performance.now() - t0;
       if (elapsed > 100) {
         console.warn(`[perf] Note update took ${elapsed.toFixed(0)}ms (>100ms)`);
@@ -154,7 +187,7 @@ export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) 
             <div className="section-title">
               <span>📝</span>
               <span>阅读笔记</span>
-              <span style={{ color: '#a99882', fontWeight: 500, fontSize: 13 }}>({notes.length})</span>
+              <span style={{ color: '#a99882', fontWeight: 500, fontSize: 13 }}>({totalNotes})</span>
             </div>
 
             {notes.length === 0 ? (
@@ -176,11 +209,24 @@ export default function BookDetail({ bookId, onBack, onReminderPosted }: Props) 
                       </div>
                       <div className="note-content">{note.content}</div>
                       {note.quote && note.quote.trim() && (
-                        <div className="note-quote">“{note.quote}”</div>
+                        <div className="note-quote">"{note.quote}"</div>
                       )}
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {hasMore && (
+              <div ref={listEndRef} style={{ textAlign: 'center', padding: '16px 0' }}>
+                <button
+                  className="btn-submit"
+                  onClick={loadMoreNotes}
+                  disabled={loadingMore}
+                  style={{ background: 'var(--wood-dark)' }}
+                >
+                  {loadingMore ? '加载中...' : `加载更多 (${totalNotes - notes.length} 条)`}
+                </button>
               </div>
             )}
 
