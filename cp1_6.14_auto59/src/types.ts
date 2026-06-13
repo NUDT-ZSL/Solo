@@ -19,6 +19,7 @@ export interface Task {
   description: string
   createdAt: number
   estimatedHours: number
+  isNew?: boolean
 }
 
 export interface AppState {
@@ -30,6 +31,7 @@ export interface AppState {
 export type ActionType =
   | 'INIT_DATA'
   | 'ADD_TASK'
+  | 'CLEAR_NEW_FLAG'
   | 'UPDATE_TASK_STATUS'
   | 'UPDATE_TASK'
   | 'DELETE_TASK'

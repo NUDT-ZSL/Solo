@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 import type { Task, Member, TaskStatus } from './types'
 import { getStatusName, getStatusColor, getPriorityColor, getPriorityName } from './utils'
@@ -7,7 +7,6 @@ interface BoardProps {
   tasks: Task[]
   members: Member[]
   onDragEnd: (result: DropResult) => void
-  newTaskId?: string | null
 }
 
 const columns: { id: TaskStatus; name: string }[] = [
@@ -21,25 +20,18 @@ interface TaskCardProps {
   task: Task
   member: Member | undefined
   index: number
-  isNew?: boolean
 }
 
-function TaskCard({ task, member, index, isNew }: TaskCardProps) {
+function TaskCard({ task, member, index }: TaskCardProps) {
   const statusColor = getStatusColor(task.status)
   const priorityColor = getPriorityColor(task.priority)
   const priorityName = getPriorityName(task.priority)
-  const [hasJustDropped, setHasJustDropped] = useState(false)
 
   return (
     <Draggable draggableId={task.id} index={index}>
       {(provided, snapshot) => {
         const isDragging = snapshot.isDragging
-
-        let transform = provided.draggableProps.style?.transform || ''
-
-        if (isDragging) {
-          transform = `${transform} scale(0.9)`
-        }
+        const dndTransform = provided.draggableProps.style?.transform || ''
 
         return (
           <div
@@ -48,16 +40,12 @@ function TaskCard({ task, member, index, isNew }: TaskCardProps) {
             {...provided.dragHandleProps}
             style={{
               ...provided.draggableProps.style,
-              transform,
+              transform: `scale(${isDragging ? 0.9 : 1}) ${dndTransform}`,
               opacity: isDragging ? 0.7 : 1,
               transition: isDragging
                 ? 'none'
                 : 'background-color 0.3s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease',
-              animation: isNew
-                ? 'flyInFromTop 0.3s ease-out forwards'
-                : hasJustDropped
-                ? 'bounceBack 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)'
-                : 'none',
+              animation: task.isNew ? 'flyInFromTop 0.3s ease-out forwards' : 'none',
               background: isDragging ? '#ffffff' : statusColor,
               borderRadius: '8px',
               padding: '12px',
@@ -66,10 +54,8 @@ function TaskCard({ task, member, index, isNew }: TaskCardProps) {
                 ? '0 8px 24px rgba(0,0,0,0.15)'
                 : '0 1px 3px rgba(0,0,0,0.08)',
               cursor: 'grab',
-              userSelect: 'none'
-            }}
-            onTransitionEnd={() => {
-              setHasJustDropped(false)
+              userSelect: 'none',
+              willChange: isDragging ? 'transform' : 'auto'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -141,19 +127,8 @@ function TaskCard({ task, member, index, isNew }: TaskCardProps) {
   )
 }
 
-export default function Board({ tasks, members, onDragEnd, newTaskId }: BoardProps) {
+export default function Board({ tasks, members, onDragEnd }: BoardProps) {
   const getMemberById = (id: string) => members.find(m => m.id === id)
-  const [animatedTaskId, setAnimatedTaskId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (newTaskId) {
-      setAnimatedTaskId(newTaskId)
-      const timer = setTimeout(() => {
-        setAnimatedTaskId(null)
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [newTaskId])
 
   const tasksByStatus = useMemo(() => {
     const grouped: Record<TaskStatus, Task[]> = {
@@ -242,7 +217,6 @@ export default function Board({ tasks, members, onDragEnd, newTaskId }: BoardPro
                       task={task}
                       member={getMemberById(task.assigneeId)}
                       index={index}
-                      isNew={animatedTaskId === task.id}
                     />
                   ))}
                   {provided.placeholder}

@@ -30,7 +30,14 @@ function reducer(state: AppState, action: Action): AppState {
     case 'ADD_TASK':
       return {
         ...state,
-        tasks: [action.payload, ...state.tasks]
+        tasks: [{ ...action.payload, isNew: true }, ...state.tasks]
+      }
+    case 'CLEAR_NEW_FLAG':
+      return {
+        ...state,
+        tasks: state.tasks.map(task =>
+          task.id === action.payload ? { ...task, isNew: false } : task
+        )
       }
     case 'UPDATE_TASK_STATUS': {
       const { taskId, newStatus } = action.payload
@@ -67,11 +74,18 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
-  const [newTaskId, setNewTaskId] = useState<string | null>(null)
   const [displayProgress, setDisplayProgress] = useState(0)
   const rafRef = useRef<number | null>(null)
   const currentProgressRef = useRef(0)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isUnmountedRef = useRef(false)
+
+  useEffect(() => {
+    isUnmountedRef.current = false
+    return () => {
+      isUnmountedRef.current = true
+    }
+  }, [])
 
   useEffect(() => {
     const savedData = loadFromLocalStorage<{ tasks: Task[]; members: any[] } | null>(STORAGE_KEY, null)
@@ -88,13 +102,25 @@ export default function App() {
         payload: { tasks, members }
       })
     }
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current)
+        searchTimerRef.current = null
+      }
+    }
   }, [])
 
   useEffect(() => {
     if (state.tasks.length > 0 && state.members.length > 0) {
       const timer = setTimeout(() => {
+        const tasksToSave = state.tasks.map(({ isNew, ...rest }) => rest)
         saveToLocalStorage(STORAGE_KEY, {
-          tasks: state.tasks,
+          tasks: tasksToSave,
           members: state.members
         })
       }, 10)
@@ -105,12 +131,16 @@ export default function App() {
   const progress = useMemo(() => calculateProgress(state.tasks), [state.tasks])
 
   useEffect(() => {
+    if (isUnmountedRef.current) return
+
     const startValue = currentProgressRef.current
     const endValue = progress
     const duration = 300
     const startTime = performance.now()
 
     const animate = (currentTime: number) => {
+      if (isUnmountedRef.current) return
+
       const elapsed = currentTime - startTime
       const progressRatio = Math.min(elapsed / duration, 1)
       const easeOut = 1 - Math.pow(1 - progressRatio, 3)
@@ -122,6 +152,7 @@ export default function App() {
         rafRef.current = requestAnimationFrame(animate)
       } else {
         currentProgressRef.current = endValue
+        rafRef.current = null
       }
     }
 
@@ -133,34 +164,26 @@ export default function App() {
     return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
       }
     }
   }, [progress])
 
-  const debouncedSetSearch = useCallback((value: string) => {
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearchInput(value)
+
     if (searchTimerRef.current) {
       clearTimeout(searchTimerRef.current)
     }
+
     searchTimerRef.current = setTimeout(() => {
-      dispatch({ type: 'SET_SEARCH_KEYWORD', payload: value })
+      if (!isUnmountedRef.current) {
+        dispatch({ type: 'SET_SEARCH_KEYWORD', payload: value })
+        searchTimerRef.current = null
+      }
     }, 300)
   }, [])
-
-  useEffect(() => {
-    return () => {
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current)
-      }
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current)
-      }
-    }
-  }, [])
-
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchInput(e.target.value)
-    debouncedSetSearch(e.target.value)
-  }, [debouncedSetSearch])
 
   const handleDragEnd = useCallback((result: any) => {
     if (!result.destination) return
@@ -174,20 +197,22 @@ export default function App() {
     })
   }, [])
 
-  const handleCreateTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt'>) => {
-    const newTaskIdValue = crypto.randomUUID()
-    const newTask: Task = {
+  const handleCreateTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'isNew'>) => {
+    const newTaskId = crypto.randomUUID()
+    const newTask: Task & { isNew?: boolean } = {
       ...taskData,
-      id: newTaskIdValue,
-      createdAt: Date.now()
+      id: newTaskId,
+      createdAt: Date.now(),
+      isNew: true
     }
     dispatch({ type: 'ADD_TASK', payload: newTask })
-    setNewTaskId(newTaskIdValue)
     setIsModalOpen(false)
 
     setTimeout(() => {
-      setNewTaskId(null)
-    }, 1000)
+      if (!isUnmountedRef.current) {
+        dispatch({ type: 'CLEAR_NEW_FLAG', payload: newTaskId })
+      }
+    }, 500)
   }, [])
 
   const filteredTasks = useMemo(() => {
@@ -395,7 +420,6 @@ export default function App() {
           tasks={filteredTasks}
           members={state.members}
           onDragEnd={handleDragEnd}
-          newTaskId={newTaskId}
         />
       </div>
 

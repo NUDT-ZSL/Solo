@@ -85,22 +85,28 @@ export default function StatsPanel({ tasks, members }: StatsPanelProps) {
         boxPadding: 6,
         callbacks: {
           afterBody: function(context: any) {
+            if (!context || !context[0] || context[0].dataIndex === undefined) return
             const dataIndex = context[0].dataIndex
             const stat = memberStats[dataIndex]
+            if (!stat) return
             return [
               '',
               `完成率: ${stat.completionRate}%`
             ]
           },
           label: function(context: any) {
+            if (!context || context.dataIndex === undefined) return []
             const stat = memberStats[context.dataIndex]
+            if (!stat) return []
             return [
               `任务数: ${stat.totalTasks}`,
               `已完成: ${stat.completedTasks}`
             ]
           },
           beforeLabel: function(context: any) {
+            if (!context || context.dataIndex === undefined) return ''
             const stat = memberStats[context.dataIndex]
+            if (!stat || !stat.member) return ''
             return stat.member.name
           }
         }
