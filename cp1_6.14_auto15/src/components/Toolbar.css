@@ -1,0 +1,135 @@
+.toolbar {
+  position: absolute;
+  top: 20px;
+  right: 310px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 16px 20px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 220px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.toolbar-layer-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.switch-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.switch-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.switch-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.layer-indicator {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.layer-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.layer-name {
+  font-size: 14px;
+  color: #e2e8f0;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolbar-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.opacity-slider {
+  flex: 1;
+  width: 160px;
+  height: 20px;
+}
+
+.opacity-value {
+  font-size: 12px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    min-width: auto;
+    padding: 12px 16px;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .toolbar-title {
+    display: none;
+  }
+
+  .toolbar-layer-switch {
+    flex: 1;
+  }
+
+  .toolbar-slider-container {
+    flex: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .toolbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .toolbar-layer-switch,
+  .toolbar-slider-container {
+    width: 100%;
+  }
+}
