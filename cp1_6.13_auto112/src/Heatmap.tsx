@@ -28,45 +28,32 @@ const GRID_SIZE = 10;
 const GAUSSIAN_SIGMA = 30;
 const MAX_OPACITY = 0.6;
 
-function createGaussianKernel(sigma: number): number[] {
+function buildGaussianKernel1D(sigma: number): { kernel: Float32Array; radius: number } {
   const radius = Math.ceil(sigma * 3);
-  const kernel: number[] = [];
+  const size = radius * 2 + 1;
+  const kernel = new Float32Array(size);
   const twoSigmaSq = 2 * sigma * sigma;
-  const factor = 1 / (Math.PI * twoSigmaSq);
+  const factor = 1 / Math.sqrt(Math.PI * twoSigmaSq);
   let sum = 0;
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const val = factor * Math.exp(-(dx * dx + dy * dy) / twoSigmaSq);
-      kernel.push(val);
-      sum += val;
-    }
+  for (let i = 0; i < size; i++) {
+    const x = i - radius;
+    const val = factor * Math.exp(-(x * x) / twoSigmaSq);
+    kernel[i] = val;
+    sum += val;
   }
-  for (let i = 0; i < kernel.length; i++) {
+  for (let i = 0; i < size; i++) {
     kernel[i] /= sum;
   }
-  return kernel;
+  return { kernel, radius };
 }
 
-function applyGaussianBlur(
+function applySeparableGaussianBlur(
   grid: Float32Array,
   cols: number,
   rows: number,
   sigma: number
 ): Float32Array {
-  const radius = Math.ceil(sigma * 3);
-  const kernel1D: number[] = [];
-  const twoSigmaSq = 2 * sigma * sigma;
-  const factor = 1 / (Math.sqrt(Math.PI * twoSigmaSq));
-  let sum1D = 0;
-  for (let i = -radius; i <= radius; i++) {
-    const val = factor * Math.exp(-(i * i) / twoSigmaSq);
-    kernel1D.push(val);
-    sum1D += val;
-  }
-  for (let i = 0; i < kernel1D.length; i++) {
-    kernel1D[i] /= sum1D;
-  }
-
+  const { kernel, radius } = buildGaussianKernel1D(sigma);
   const temp = new Float32Array(cols * rows);
   const result = new Float32Array(cols * rows);
 
@@ -75,7 +62,7 @@ function applyGaussianBlur(
       let val = 0;
       for (let k = -radius; k <= radius; k++) {
         const xx = Math.max(0, Math.min(cols - 1, x + k));
-        val += grid[y * cols + xx] * kernel1D[k + radius];
+        val += grid[y * cols + xx] * kernel[k + radius];
       }
       temp[y * cols + x] = val;
     }
@@ -86,7 +73,7 @@ function applyGaussianBlur(
       let val = 0;
       for (let k = -radius; k <= radius; k++) {
         const yy = Math.max(0, Math.min(rows - 1, y + k));
-        val += temp[yy * cols + x] * kernel1D[k + radius];
+        val += temp[yy * cols + x] * kernel[k + radius];
       }
       result[y * cols + x] = val;
     }
@@ -99,8 +86,7 @@ function buildDensityGrid(
   feedbacks: FeedbackArea[],
   attitude: Attitude,
   cols: number,
-  rows: number,
-  gridSize: number
+  rows: number
 ): Float32Array {
   const grid = new Float32Array(cols * rows);
   const filtered = feedbacks.filter((f) => f.attitude === attitude);
@@ -108,24 +94,19 @@ function buildDensityGrid(
   for (const fb of filtered) {
     const cx = fb.x + fb.width / 2;
     const cy = fb.y + fb.height / 2;
-    const gx = Math.floor(cx / gridSize);
-    const gy = Math.floor(cy / gridSize);
-    if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
-      grid[gy * cols + gx] += 1;
-    }
+    const gx = Math.floor(cx / GRID_SIZE);
+    const gy = Math.floor(cy / GRID_SIZE);
+    const halfW = Math.max(1, Math.floor(fb.width / 2 / GRID_SIZE));
+    const halfH = Math.max(1, Math.floor(fb.height / 2 / GRID_SIZE));
 
-    const halfW = Math.floor(fb.width / (2 * gridSize));
-    const halfH = Math.floor(fb.height / (2 * gridSize));
     for (let dy = -halfH; dy <= halfH; dy++) {
       for (let dx = -halfW; dx <= halfW; dx++) {
         const x = gx + dx;
         const y = gy + dy;
-        if (x >= 0 && x < cols && y >= 0 && y < rows) {
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const maxDist = Math.sqrt(halfW * halfW + halfH * halfH);
-          const weight = maxDist === 0 ? 1 : Math.max(0, 1 - dist / maxDist) * 0.5;
-          grid[y * cols + x] += weight;
-        }
+        if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+        const distRatio = Math.sqrt(dx * dx + dy * dy) / Math.sqrt(halfW * halfW + halfH * halfH);
+        const weight = Math.max(0.2, 1 - distRatio);
+        grid[y * cols + x] += weight;
       }
     }
   }
@@ -140,10 +121,14 @@ export default function Heatmap({ width, height, feedbacks, showOverlay }: Heatm
     const canvas = canvasRef.current;
     if (!canvas || width <= 0 || height <= 0) return;
 
-    canvas.width = width;
-    canvas.height = height;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    ctx.scale(dpr, dpr);
 
     ctx.clearRect(0, 0, width, height);
     if (!showOverlay || feedbacks.length === 0) return;
@@ -156,8 +141,9 @@ export default function Heatmap({ width, height, feedbacks, showOverlay }: Heatm
 
     let maxDensity = 0;
     for (const att of attitudes) {
-      const grid = buildDensityGrid(feedbacks, att, cols, rows, GRID_SIZE);
-      const blurred = applyGaussianBlur(grid, cols, rows, GAUSSIAN_SIGMA / GRID_SIZE);
+      const grid = buildDensityGrid(feedbacks, att, cols, rows);
+      const sigmaInGrid = GAUSSIAN_SIGMA / GRID_SIZE;
+      const blurred = applySeparableGaussianBlur(grid, cols, rows, sigmaInGrid);
       blurredGrids[att] = blurred;
       for (let i = 0; i < blurred.length; i++) {
         if (blurred[i] > maxDensity) maxDensity = blurred[i];
@@ -189,15 +175,16 @@ export default function Heatmap({ width, height, feedbacks, showOverlay }: Heatm
           a = Math.max(a, opacity);
         }
 
-        if (a <= 0) continue;
+        if (a <= 0.001) continue;
 
         const startX = gx * GRID_SIZE;
         const startY = gy * GRID_SIZE;
         const endX = Math.min(startX + GRID_SIZE, width);
         const endY = Math.min(startY + GRID_SIZE, height);
 
-        for (let py = startY; py < endY; py++) {
-          for (let px = startX; px < endX; px++) {
+        for (let py = Math.floor(startY); py < endY; py++) {
+          for (let px = Math.floor(startX); px < endX; px++) {
+            if (px < 0 || py < 0 || px >= width || py >= height) continue;
             const pixelIdx = (py * width + px) * 4;
             data[pixelIdx] = Math.min(255, r);
             data[pixelIdx + 1] = Math.min(255, g);
@@ -218,8 +205,6 @@ export default function Heatmap({ width, height, feedbacks, showOverlay }: Heatm
         position: 'absolute',
         top: 0,
         left: 0,
-        width: '100%',
-        height: '100%',
         pointerEvents: 'none'
       }}
     />
