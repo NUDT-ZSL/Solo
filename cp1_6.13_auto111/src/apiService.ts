@@ -1,7 +1,14 @@
-import axios from 'axios';
+import axios, { AxiosError, type AxiosResponse } from 'axios';
 import type { Station, TimeSeriesPoint, WeatherData, Concentrations } from './config';
 
 const API_BASE = '/api';
+
+export interface ApiError {
+  message: string;
+  status?: number;
+  code?: string;
+  isNetworkError: boolean;
+}
 
 const apiClient = axios.create({
   baseURL: API_BASE,
@@ -11,6 +18,38 @@ const apiClient = axios.create({
   },
 });
 
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => {
+    const apiError: ApiError = {
+      message: '请求失败',
+      isNetworkError: !error.response,
+    };
+
+    if (error.code) {
+      apiError.code = error.code;
+    }
+
+    if (error.response) {
+      apiError.status = error.response.status;
+      const data = error.response.data as { error?: string; message?: string };
+      apiError.message = data?.error || data?.message || `HTTP ${error.response.status}`;
+    } else if (error.request) {
+      apiError.message = '网络连接异常，请检查服务器是否启动';
+    } else {
+      apiError.message = error.message || '未知错误';
+    }
+
+    return Promise.reject(apiError);
+  }
+);
+
+function handleApiError(error: unknown, context: string): never {
+  const apiError = error as ApiError;
+  console.error(`[apiService] ${context}:`, apiError);
+  throw new Error(apiError.message || `${context}失败`);
+}
+
 export async function fetchStations(hour: number = 12): Promise<Station[]> {
   try {
     const response = await apiClient.get<Station[]>('/stations', {
@@ -18,20 +57,21 @@ export async function fetchStations(hour: number = 12): Promise<Station[]> {
     });
     return response.data;
   } catch (error) {
-    console.error('[apiService] 获取站点数据失败:', error);
-    throw new Error('获取站点数据失败，请稍后重试');
+    return handleApiError(error, '获取站点数据');
   }
 }
 
 export async function fetchTimeSeries(stationId: string): Promise<TimeSeriesPoint[]> {
   try {
+    if (!stationId) {
+      throw new Error('stationId不能为空');
+    }
     const response = await apiClient.get<TimeSeriesPoint[]>('/timeseries', {
       params: { stationId },
     });
     return response.data;
   } catch (error) {
-    console.error('[apiService] 获取时间序列数据失败:', error);
-    throw new Error('获取时间序列数据失败，请稍后重试');
+    return handleApiError(error, '获取时间序列数据');
   }
 }
 
@@ -40,15 +80,20 @@ export async function fetchWeather(
   hour?: number
 ): Promise<WeatherData[]> {
   try {
+    if (!stationId) {
+      throw new Error('stationId不能为空');
+    }
     const params: Record<string, any> = { stationId };
     if (hour !== undefined) {
+      if (hour < 0 || hour > 23) {
+        throw new Error('hour参数必须在0-23之间');
+      }
       params.hour = hour;
     }
     const response = await apiClient.get<WeatherData[]>('/weather', { params });
     return response.data;
   } catch (error) {
-    console.error('[apiService] 获取气象数据失败:', error);
-    throw new Error('获取气象数据失败，请稍后重试');
+    return handleApiError(error, '获取气象数据');
   }
 }
 
