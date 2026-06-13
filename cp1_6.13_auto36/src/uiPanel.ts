@@ -1,7 +1,9 @@
-import type { ConstellationData, Season } from './constellation';
+import * as THREE from 'three';
+import type { Season } from './constellation';
+import type { ConstellationData } from './constellation';
 
 type SeasonChangeCallback = (season: Season) => void;
-type ConstellationSelectCallback = (data: ConstellationData | null) => void;
+type RippleTrigger = () => void;
 
 const SEASON_LABELS: Record<Season, string> = {
   spring: '春季',
@@ -14,20 +16,23 @@ const SEASON_ORDER: Season[] = ['spring', 'summer', 'autumn', 'winter'];
 
 let onSeasonChange: SeasonChangeCallback | null = null;
 let onResetView: (() => void) | null = null;
+let triggerRipple: RippleTrigger | null = null;
 
 export function initUIPanel(
   seasonCb: SeasonChangeCallback,
-  constellationCb: ConstellationSelectCallback,
-  resetCb: () => void
+  resetCb: () => void,
+  rippleCb: RippleTrigger
 ): void {
   onSeasonChange = seasonCb;
   onResetView = resetCb;
+  triggerRipple = rippleCb;
 
   createNavbar();
-  createInfoPanel(constellationCb);
+  createInfoPanel();
   createSeasonSlider();
-  handleResize();
-  window.addEventListener('resize', handleResize);
+  createRippleOverlay();
+  handleUIPanelResize();
+  window.addEventListener('resize', handleUIPanelResize);
 }
 
 function createNavbar(): void {
@@ -102,7 +107,7 @@ function applyNavbarStyles(nav: HTMLElement): void {
   });
 }
 
-function createInfoPanel(constellationCb: ConstellationSelectCallback): void {
+function createInfoPanel(): void {
   const panel = document.createElement('div');
   panel.id = 'info-panel';
   panel.innerHTML = `
@@ -128,6 +133,8 @@ function applyInfoPanelStyles(panel: HTMLElement): void {
     zIndex: '90',
     border: '1px solid rgba(165, 180, 252, 0.15)',
     transition: 'all 0.3s ease',
+    pointerEvents: 'none',
+    boxSizing: 'border-box',
   });
 
   const placeholder = panel.querySelector('.info-placeholder') as HTMLElement;
@@ -155,6 +162,7 @@ export function updateInfoPanel(data: ConstellationData | null): void {
     return;
   }
 
+  const seasonText = SEASON_LABELS[data.bestSeason];
   content.innerHTML = `
     <h3 style="margin:0 0 16px 0; font-size:20px; color:#e2e8f0; font-weight:700; letter-spacing:0.5px;">${data.nameZh}</h3>
     <div style="margin-bottom:12px;">
@@ -167,7 +175,7 @@ export function updateInfoPanel(data: ConstellationData | null): void {
     </div>
     <div style="margin-bottom:12px;">
       <span style="color:#94a3b8; font-size:13px;">最佳观测季节</span>
-      <div style="color:#fbbf24; font-size:15px; font-weight:500;">${SEASON_LABELS[data.bestSeason]}</div>
+      <div style="color:#fbbf24; font-size:15px; font-weight:500;">${seasonText}</div>
     </div>
     <div style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(165,180,252,0.15);">
       <span style="color:#94a3b8; font-size:13px;">神话故事</span>
@@ -211,6 +219,7 @@ function applySeasonSliderStyles(container: HTMLElement): void {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '10px',
+    pointerEvents: 'auto',
   });
 
   const trackContainer = container.querySelector('.slider-track-container') as HTMLElement;
@@ -218,49 +227,41 @@ function applySeasonSliderStyles(container: HTMLElement): void {
     width: '400px',
   });
 
-  requestAnimationFrame(() => {
-    const slider = container.querySelector('#season-slider') as HTMLInputElement;
-    Object.assign(slider.style, {
-      width: '100%',
-      height: '8px',
-      appearance: 'none',
-      WebkitAppearance: 'none',
-      background: '#312e81',
-      borderRadius: '4px',
-      outline: 'none',
-      cursor: 'pointer',
-    });
-
-    const styleId = 'season-slider-thumb-style';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        #season-slider::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #a5b4fc;
-          cursor: pointer;
-          box-shadow: 0 0 10px rgba(255,255,255,0.5), 0 0 20px rgba(165,180,252,0.4);
-          border: 2px solid rgba(255,255,255,0.3);
-          transition: box-shadow 0.25s ease;
-        }
-        #season-slider::-moz-range-thumb {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #a5b4fc;
-          cursor: pointer;
-          box-shadow: 0 0 10px rgba(255,255,255,0.5), 0 0 20px rgba(165,180,252,0.4);
-          border: 2px solid rgba(255,255,255,0.3);
-        }
-      `;
-      document.head.appendChild(style);
+  const slider = document.createElement('style');
+  slider.textContent = `
+    #season-slider {
+      width: 100%;
+      height: 8px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #312e81;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
     }
-  });
+    #season-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #a5b4fc;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,255,255,0.5), 0 0 20px rgba(165,180,252,0.4);
+      border: 2px solid rgba(255,255,255,0.3);
+      transition: box-shadow 0.25s ease;
+    }
+    #season-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #a5b4fc;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,255,255,0.5), 0 0 20px rgba(165,180,252,0.4);
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+  `;
+  document.head.appendChild(slider);
 
   const label = container.querySelector('#season-label') as HTMLElement;
   Object.assign(label.style, {
@@ -273,7 +274,58 @@ function applySeasonSliderStyles(container: HTMLElement): void {
   });
 }
 
-function handleResize(): void {
+function createRippleOverlay(): void {
+  const ripple = document.createElement('div');
+  ripple.id = 'ripple-overlay';
+  Object.assign(ripple.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    zIndex: '200',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  });
+  document.body.appendChild(ripple);
+}
+
+export function playRipple(): void {
+  const overlay = document.getElementById('ripple-overlay');
+  if (!overlay) return;
+  overlay.innerHTML = '';
+
+  const ring = document.createElement('div');
+  Object.assign(ring.style, {
+    width: '0px',
+    height: '0px',
+    borderRadius: '50%',
+    border: '2px solid rgba(255,255,255,0.6)',
+    opacity: '0.6',
+    transition: 'all 0.5s ease-out',
+    boxSizing: 'border-box',
+  });
+  overlay.appendChild(ring);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      Object.assign(ring.style, {
+        width: '160px',
+        height: '160px',
+        borderWidth: '2px',
+        opacity: '0',
+      });
+    });
+  });
+
+  setTimeout(() => {
+    ring.remove();
+  }, 600);
+}
+
+function handleUIPanelResize(): void {
   const panel = document.getElementById('info-panel');
   if (!panel) return;
 

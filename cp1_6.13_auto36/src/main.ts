@@ -8,11 +8,13 @@ import {
   handleClick,
   updateAnimations,
 } from './constellation';
-import { initUIPanel, updateInfoPanel } from './uiPanel';
+import { initUIPanel, updateInfoPanel, playRipple } from './uiPanel';
 
 const INITIAL_CAMERA_POS = new THREE.Vector3(0, 0, 300);
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
+const ASPECT_RATIO = 16 / 9;
+const MIN_WIDTH = 800;
 
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
@@ -27,12 +29,14 @@ function init(): void {
   scene = new THREE.Scene();
   scene.background = createGradientTexture();
 
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+  const { w, h } = computeRenderSize();
+  camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 2000);
   camera.position.copy(INITIAL_CAMERA_POS);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  centerRenderer();
   container.appendChild(renderer.domElement);
 
   controls = new OrbitControls(camera, renderer.domElement);
@@ -41,24 +45,35 @@ function init(): void {
   controls.minDistance = INITIAL_CAMERA_POS.z * MIN_ZOOM;
   controls.maxDistance = INITIAL_CAMERA_POS.z * MAX_ZOOM;
   controls.enablePan = false;
+  controls.rotateSpeed = 0.6;
+  controls.zoomSpeed = 0.8;
 
   raycaster = new THREE.Raycaster();
-  raycaster.params.Points = { threshold: 2 };
+  raycaster.params.Points = { threshold: 5 };
+  raycaster.params.Mesh = { threshold: 3 };
   mouse = new THREE.Vector2();
 
   createStarField(scene);
 
-  createConstellations(scene, (data) => {
-    updateInfoPanel(data);
-  });
+  createConstellations(
+    scene,
+    (data) => {
+      updateInfoPanel(data);
+    },
+    () => {
+      playRipple();
+    }
+  );
 
   initUIPanel(
     (season) => {
       updateSeason(season);
     },
-    () => {},
     () => {
       resetView();
+    },
+    () => {
+      playRipple();
     }
   );
 
@@ -67,6 +82,40 @@ function init(): void {
   renderer.domElement.addEventListener('click', onMouseClick);
 
   animate();
+}
+
+function computeRenderSize(): { w: number; h: number } {
+  let winW = window.innerWidth;
+  let winH = window.innerHeight;
+  if (winW < MIN_WIDTH) {
+    winW = MIN_WIDTH;
+  }
+  const ratio = winW / winH;
+  let w: number;
+  let h: number;
+  if (ratio > ASPECT_RATIO) {
+    h = winH;
+    w = Math.round(h * ASPECT_RATIO);
+  } else {
+    w = winW;
+    h = Math.round(w / ASPECT_RATIO);
+  }
+  return { w, h };
+}
+
+function centerRenderer(): void {
+  if (!renderer) return;
+  const canvas = renderer.domElement;
+  const { w, h } = computeRenderSize();
+  Object.assign(canvas.style, {
+    position: 'absolute',
+    top: `${(window.innerHeight - h) / 2}px`,
+    left: `${(window.innerWidth - w) / 2}px`,
+    width: `${w}px`,
+    height: `${h}px`,
+    maxWidth: '100%',
+    maxHeight: '100%',
+  });
 }
 
 function createGradientTexture(): THREE.Texture {
@@ -80,26 +129,42 @@ function createGradientTexture(): THREE.Texture {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 2, 512);
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
 function onResize(): void {
-  const w = Math.max(window.innerWidth, 800);
-  const h = window.innerHeight;
+  const { w, h } = computeRenderSize();
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(w, h);
+  centerRenderer();
+}
+
+function getCanvasLogicalSize(): { w: number; h: number } {
+  const canvas = renderer.domElement;
+  const rect = canvas.getBoundingClientRect();
+  return { w: rect.width, h: rect.height };
 }
 
 function onMouseMove(event: MouseEvent): void {
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  const canvas = renderer.domElement;
+  const rect = canvas.getBoundingClientRect();
+  const { w, h } = getCanvasLogicalSize();
+  mouse.x = ((event.clientX - rect.left) / w) * 2 - 1;
+  mouse.y = -(((event.clientY - rect.top) / h) * 2 - 1);
 
   raycaster.setFromCamera(mouse, camera);
   handleHover(raycaster);
 }
 
-function onMouseClick(_event: MouseEvent): void {
+function onMouseClick(event: MouseEvent): void {
+  const canvas = renderer.domElement;
+  const rect = canvas.getBoundingClientRect();
+  const { w, h } = getCanvasLogicalSize();
+  mouse.x = ((event.clientX - rect.left) / w) * 2 - 1;
+  mouse.y = -(((event.clientY - rect.top) / h) * 2 - 1);
+
   raycaster.setFromCamera(mouse, camera);
   handleClick(raycaster);
 }
