@@ -46,6 +46,20 @@ export const exportMap = (state: EditorStateShape): ExportedMapData => {
   const canvasHeight = state.gridSize * state.cellSize;
   const collision = buildCollisionGrid(state.elements, state.gridSize);
 
+  if (collision.collisionGrid.length !== state.gridSize ||
+      (collision.collisionGrid[0] && collision.collisionGrid[0].length !== state.gridSize)) {
+    console.warn('[IOHandler] 碰撞层维度与网格尺寸不匹配，已自动修正');
+  }
+
+  const normalizedCollision: boolean[][] = [];
+  for (let y = 0; y < state.gridSize; y++) {
+    const row: boolean[] = [];
+    for (let x = 0; x < state.gridSize; x++) {
+      row.push(collision.collisionGrid[y]?.[x] ?? false);
+    }
+    normalizedCollision.push(row);
+  }
+
   return {
     version: CURRENT_VERSION,
     exportedAt: Date.now(),
@@ -63,7 +77,7 @@ export const exportMap = (state: EditorStateShape): ExportedMapData => {
         rotation: el.properties.rotation
       }
     })),
-    collisionLayer: collision.collisionGrid,
+    collisionLayer: normalizedCollision,
     collisionStats: {
       blockedCount: collision.blockedCount,
       passableCount: collision.passableCount,
@@ -152,11 +166,21 @@ export const importMap = (jsonString: string): ImportResult => {
         gridX: el.gridX,
         gridY: el.gridY,
         properties: {
-          opacity: typeof props.opacity === 'number' ? Math.max(0.3, Math.min(1, props.opacity)) : undefined,
+          opacity: typeof props.opacity === 'number' ? Math.max(0.3, Math.min(1, props.opacity)) : 0.8,
           rotation: typeof props.rotation === 'number' ? props.rotation % 360 : undefined
         },
         placedAt: Date.now()
       });
+    }
+
+    if (data.collisionLayer && Array.isArray(data.collisionLayer)) {
+      const importedRows = data.collisionLayer.length;
+      const importedCols = data.collisionLayer[0]?.length || 0;
+      if (importedRows !== gridSize || importedCols !== gridSize) {
+        console.warn(
+          `[IOHandler] 导入的碰撞层维度(${importedRows}x${importedCols})与网格尺寸(${gridSize}x${gridSize})不匹配，已根据元素重新生成`
+        );
+      }
     }
 
     const state: Partial<EditorStateShape> = {
