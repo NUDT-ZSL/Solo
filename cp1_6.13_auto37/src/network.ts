@@ -17,24 +17,66 @@ export class GameNetwork {
   private ws: WebSocket | null = null;
   private callbacks: NetworkCallbacks;
   private reconnectAttempts: number = 0;
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: number | null = null;
+  private reconnectTimer: number | null = null;
   private isManualClose: boolean = false;
   private playerName: string = '';
+  private isDestroyed: boolean = false;
 
   constructor(callbacks: NetworkCallbacks) {
     this.callbacks = callbacks;
   }
 
   public connect(playerName: string): void {
+    if (this.isDestroyed) {
+      this.isDestroyed = false;
+    }
+    
     this.playerName = playerName;
     this.isManualClose = false;
     this.reconnectAttempts = 0;
+    
+    this.cleanupAllTimers();
+    this.cleanupWebSocket();
+    
     this.establishConnection();
   }
 
+  private cleanupAllTimers(): void {
+    if (this.heartbeatTimer !== null) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private cleanupWebSocket(): void {
+    if (this.ws !== null) {
+      try {
+        this.ws.onopen = null;
+        this.ws.onmessage = null;
+        this.ws.onclose = null;
+        this.ws.onerror = null;
+        
+        if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+          this.ws.close();
+        }
+      } catch (_e) {
+      }
+      this.ws = null;
+    }
+  }
+
   private establishConnection(): void {
+    if (this.isDestroyed || this.isManualClose) return;
+    
     try {
+      this.cleanupWebSocket();
+      
       this.ws = new WebSocket(WS_URL);
       
       this.ws.onopen = this.handleOpen.bind(this);
@@ -47,18 +89,27 @@ export class GameNetwork {
   }
 
   private handleOpen(): void {
+    if (this.isDestroyed || this.isManualClose) return;
+    
     console.log('WebSocket connected');
+    
     this.reconnectAttempts = 0;
     
+    this.startHeartbeat();
+    
     if (this.callbacks.onConnect) {
-      this.callbacks.onConnect();
+      try {
+        this.callbacks.onConnect();
+      } catch (_e) {
+      }
     }
     
-    this.startHeartbeat();
     this.sendMatchRequest();
   }
 
   private handleMessage(event: MessageEvent): void {
+    if (this.isDestroyed) return;
+    
     try {
       const message: ServerMessage = JSON.parse(event.data);
       
@@ -78,12 +129,20 @@ export class GameNetwork {
   }
 
   private handleClose(event: CloseEvent): void {
+    if (this.isDestroyed) return;
+    
     console.log('WebSocket closed:', event.code, event.reason);
+    
     this.stopHeartbeat();
     
-    if (this.callbacks.onDisconnect) {
-      this.callbacks.onDisconnect();
+    if (this.callbacks.onDisconnect && !this.isManualClose) {
+      try {
+        this.callbacks.onDisconnect();
+      } catch (_e) {
+      }
     }
+    
+    this.cleanupWebSocket();
     
     if (!this.isManualClose && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       this.scheduleReconnect();
@@ -91,21 +150,34 @@ export class GameNetwork {
   }
 
   private handleError(error: Event | Error): void {
+    if (this.isDestroyed) return;
+    
     console.error('WebSocket error:', error);
+    
+    this.stopHeartbeat();
+    
     if (this.callbacks.onError) {
-      this.callbacks.onError(error instanceof Error ? error : new Error('WebSocket error'));
+      try {
+        this.callbacks.onError(error instanceof Error ? error : new Error('WebSocket error'));
+      } catch (_e) {
+      }
     }
   }
 
   private scheduleReconnect(): void {
+    if (this.isDestroyed || this.isManualClose) return;
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
+    
     this.reconnectAttempts++;
     console.log(`Reconnecting... Attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
     
-    if (this.reconnectTimer) {
+    if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
     
-    this.reconnectTimer = setTimeout(() => {
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
       this.establishConnection();
     }, RECONNECT_DELAY);
   }
@@ -113,19 +185,33 @@ export class GameNetwork {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     
-    this.heartbeatTimer = setInterval(() => {
+    if (this.isDestroyed) return;
+    
+    this.heartbeatTimer = window.setInterval(() => {
+      if (this.isDestroyed) {
+        this.stopHeartbeat();
+        return;
+      }
+      
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        const heartbeat = {
-          type: 'heartbeat',
-          timestamp: Date.now(),
-        };
-        this.ws.send(JSON.stringify(heartbeat));
+        try {
+          const heartbeat = {
+            type: 'heartbeat',
+            timestamp: Date.now(),
+          };
+          this.ws.send(JSON.stringify(heartbeat));
+        } catch (error) {
+          console.error('Failed to send heartbeat:', error);
+          this.stopHeartbeat();
+        }
+      } else if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+        this.stopHeartbeat();
       }
     }, HEARTBEAT_INTERVAL);
   }
 
   private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
+    if (this.heartbeatTimer !== null) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
@@ -150,6 +236,8 @@ export class GameNetwork {
   }
 
   private send(message: ClientMessage): void {
+    if (this.isDestroyed) return;
+    
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(JSON.stringify(message));
@@ -163,21 +251,16 @@ export class GameNetwork {
 
   public disconnect(): void {
     this.isManualClose = true;
-    this.stopHeartbeat();
+    this.isDestroyed = true;
     
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.cleanupAllTimers();
+    this.cleanupWebSocket();
     
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    this.reconnectAttempts = 0;
   }
 
   public isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN && !this.isDestroyed;
   }
 
   public getReconnectAttempts(): number {

@@ -13,6 +13,9 @@ const COLORS = {
   hover: '#ffffff',
 };
 
+const TARGET_FPS = 60;
+const FRAME_DURATION = 1000 / TARGET_FPS;
+
 export interface RendererOptions {
   canvas: HTMLCanvasElement;
   onCellClick?: (coord: HexCoord) => void;
@@ -26,12 +29,16 @@ export class GameRenderer {
   private hoveredCoord: HexCoord | null = null;
   private currentPlayer: 1 | 2 = 1;
   private animationFrameId: number | null = null;
-  private lastTime: number = 0;
+  private accumulator: number = 0;
+  private lastFrameTime: number = 0;
   private onCellClick?: (coord: HexCoord) => void;
   private onCellHover?: (coord: HexCoord | null) => void;
   private screenShake: { offsetX: number; offsetY: number; startTime: number; duration: number } | null = null;
   private chainHighlights: ChainReactionEvent[] = [];
   private invalidCell: { coord: HexCoord; startTime: number } | null = null;
+  private boundHandleClick: (e: MouseEvent) => void;
+  private boundHandleMouseMove: (e: MouseEvent) => void;
+  private boundHandleMouseLeave: () => void;
 
   constructor(options: RendererOptions) {
     this.canvas = options.canvas;
@@ -42,13 +49,17 @@ export class GameRenderer {
     this.onCellClick = options.onCellClick;
     this.onCellHover = options.onCellHover;
     
+    this.boundHandleClick = this.handleClick.bind(this);
+    this.boundHandleMouseMove = this.handleMouseMove.bind(this);
+    this.boundHandleMouseLeave = this.handleMouseLeave.bind(this);
+    
     this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
-    this.canvas.addEventListener('click', this.handleClick.bind(this));
-    this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-    this.canvas.addEventListener('mouseleave', this.handleMouseLeave.bind(this));
+    this.canvas.addEventListener('click', this.boundHandleClick);
+    this.canvas.addEventListener('mousemove', this.boundHandleMouseMove);
+    this.canvas.addEventListener('mouseleave', this.boundHandleMouseLeave);
   }
 
   private handleClick(e: MouseEvent): void {
@@ -73,7 +84,6 @@ export class GameRenderer {
       return;
     }
     
-    this.selectedCoord = coord;
     this.triggerClickAnimation(coord);
     
     if (this.onCellClick) {
@@ -154,8 +164,9 @@ export class GameRenderer {
   }
 
   public start(): void {
-    this.lastTime = performance.now();
-    this.loop();
+    this.lastFrameTime = performance.now();
+    this.accumulator = 0;
+    this.loop(this.lastFrameTime);
   }
 
   public stop(): void {
@@ -165,16 +176,19 @@ export class GameRenderer {
     }
   }
 
-  private loop(): void {
-    const now = performance.now();
-    const deltaTime = now - this.lastTime;
+  private loop(currentTime: number): void {
+    const deltaTime = currentTime - this.lastFrameTime;
+    this.lastFrameTime = currentTime;
     
-    if (deltaTime >= 1000 / 60) {
-      this.lastTime = now;
-      this.render();
+    this.accumulator += deltaTime;
+    
+    while (this.accumulator >= FRAME_DURATION) {
+      this.accumulator -= FRAME_DURATION;
     }
     
-    this.animationFrameId = requestAnimationFrame(this.loop.bind(this));
+    this.render();
+    
+    this.animationFrameId = requestAnimationFrame((t) => this.loop(t));
   }
 
   private render(): void {
@@ -252,15 +266,12 @@ export class GameRenderer {
     const drawY = y + bounceOffset;
     const actualSize = size * scale;
     
-    this.drawHexBackground(x, drawY, actualSize, cell.owner);
+    const isHovered = this.isHovered(cell.coord);
+    this.drawHexBackground(x, drawY, actualSize, cell.owner, isHovered);
     this.drawHexBorder(x, drawY, actualSize);
     
     if (this.isPlaceable(cell)) {
       this.drawPlaceableHighlight(x, drawY, actualSize);
-    }
-    
-    if (this.isHovered(cell.coord)) {
-      this.drawHoverEffect(x, drawY, actualSize);
     }
     
     if (this.isChainHighlighted(cell.coord)) {
@@ -288,7 +299,24 @@ export class GameRenderer {
     }
   }
 
-  private drawHexBackground(x: number, y: number, size: number, owner: number | null): void {
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+    } : { r: 0, g: 0, b: 0 };
+  }
+
+  private brightenColor(hex: string, percent: number): string {
+    const { r, g, b } = this.hexToRgb(hex);
+    const newR = Math.min(255, Math.round(r + (255 - r) * percent));
+    const newG = Math.min(255, Math.round(g + (255 - g) * percent));
+    const newB = Math.min(255, Math.round(b + (255 - b) * percent));
+    return `rgb(${newR}, ${newG}, ${newB})`;
+  }
+
+  private drawHexBackground(x: number, y: number, size: number, owner: number | null, hovered: boolean): void {
     const ctx = this.ctx;
     const corners = getHexCorners(x, y, size);
     
@@ -302,6 +330,10 @@ export class GameRenderer {
     let fillColor = COLORS.background;
     if (owner === 1) fillColor = COLORS.player1;
     else if (owner === 2) fillColor = COLORS.player2;
+    
+    if (hovered) {
+      fillColor = this.brightenColor(fillColor, 0.2);
+    }
     
     ctx.fillStyle = fillColor;
     ctx.fill();
@@ -325,7 +357,7 @@ export class GameRenderer {
 
   private drawPlaceableHighlight(x: number, y: number, size: number): void {
     const ctx = this.ctx;
-    const corners = getHexCorners(x, y, size + 2);
+    const corners = getHexCorners(x, y, size + 3);
     
     const time = Date.now() / 500;
     const alpha = 0.5 + Math.sin(time * Math.PI * 2) * 0.5;
@@ -340,21 +372,6 @@ export class GameRenderer {
     ctx.strokeStyle = `rgba(236, 201, 75, ${alpha})`;
     ctx.lineWidth = 3;
     ctx.stroke();
-  }
-
-  private drawHoverEffect(x: number, y: number, size: number): void {
-    const ctx = this.ctx;
-    const corners = getHexCorners(x, y, size);
-    
-    ctx.beginPath();
-    ctx.moveTo(corners[0].x, corners[0].y);
-    for (let i = 1; i < 6; i++) {
-      ctx.lineTo(corners[i].x, corners[i].y);
-    }
-    ctx.closePath();
-    
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.fill();
   }
 
   private drawChainHighlight(x: number, y: number, size: number): void {
@@ -512,9 +529,9 @@ export class GameRenderer {
 
   public destroy(): void {
     this.stop();
-    this.canvas.removeEventListener('click', this.handleClick.bind(this));
-    this.canvas.removeEventListener('mousemove', this.handleMouseMove.bind(this));
-    this.canvas.removeEventListener('mouseleave', this.handleMouseLeave.bind(this));
+    this.canvas.removeEventListener('click', this.boundHandleClick);
+    this.canvas.removeEventListener('mousemove', this.boundHandleMouseMove);
+    this.canvas.removeEventListener('mouseleave', this.boundHandleMouseLeave);
   }
 }
 

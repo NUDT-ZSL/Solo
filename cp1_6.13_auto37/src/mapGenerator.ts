@@ -60,7 +60,7 @@ export function hexToPixel(coord: HexCoord, centerX: number, centerY: number): {
 export function getHexCorners(centerX: number, centerY: number, size: number): { x: number; y: number }[] {
   const corners: { x: number; y: number }[] = [];
   for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 3) * i - Math.PI / 6;
+    const angle = (Math.PI / 3) * i;
     corners.push({
       x: centerX + size * Math.cos(angle),
       y: centerY + size * Math.sin(angle),

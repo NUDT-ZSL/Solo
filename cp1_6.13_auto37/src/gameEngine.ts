@@ -3,10 +3,8 @@ import {
   GameAction,
   PlaceAction,
   UpgradeAction,
-  SkipAction,
   HexCell,
   Tower,
-  TowerType,
   PlayerId,
   HexCoord,
   ChainReactionEvent,
@@ -25,6 +23,7 @@ const PLACE_COST = 1;
 const UPGRADE_COST = 2;
 const MAX_TOWER_LEVEL = 3;
 const MAX_TURNS = 20;
+const ELECTRIC_COOLDOWN = 3;
 
 export function createInitialState(player1Name: string, player2Name: string): GameState {
   const map = generateHexGrid();
@@ -60,7 +59,6 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       newState = handleUpgradeAction(newState, action, player);
       break;
     case 'skip':
-      newState = handleSkipAction(newState, player);
       break;
   }
   
@@ -98,7 +96,9 @@ function handlePlaceAction(
   
   player.energy -= PLACE_COST;
   
-  return processChainReactions(state, action.coord);
+  addChainEvent(state, action.coord, 0);
+  
+  return state;
 }
 
 function handleUpgradeAction(
@@ -122,93 +122,86 @@ function handleUpgradeAction(
   
   player.energy -= UPGRADE_COST;
   
-  return processChainReactions(state, action.coord);
-}
-
-function handleSkipAction(
-  state: GameState,
-  _player: { id: PlayerId; name: string; energy: number }
-): GameState {
+  addChainEvent(state, action.coord, 0);
+  
   return state;
 }
 
-function processChainReactions(state: GameState, triggerCoord: HexCoord): GameState {
-  const chainEvents: ChainReactionEvent[] = [];
-  const processedCells = new Set<string>();
+function addChainEvent(state: GameState, coord: HexCoord, delay: number): void {
+  const event: ChainReactionEvent = {
+    coord,
+    startTime: Date.now() + delay,
+  };
+  state.chainReactions.push(event);
+}
+
+export function endTurn(state: GameState): GameState {
+  const newState = deepCloneState(state);
+  newState.chainReactions = [];
   
-  function coordKey(coord: HexCoord): string {
-    return `${coord.q},${coord.r}`;
+  const prevPlayer = newState.currentPlayer;
+  newState.currentPlayer = newState.currentPlayer === 1 ? 2 : 1;
+  
+  if (newState.currentPlayer === 1) {
+    newState.turn++;
   }
   
-  function processCell(coord: HexCoord, delay: number) {
-    const key = coordKey(coord);
-    if (processedCells.has(key)) return;
-    processedCells.add(key);
+  processTowerEffects(newState, prevPlayer);
+  
+  applyIceSlows(newState);
+  
+  const currentPlayerData = getPlayer(newState, newState.currentPlayer);
+  if (currentPlayerData) {
+    currentPlayerData.energy += ENERGY_PER_TURN;
+  }
+  
+  const winResult = checkWin(newState);
+  if (winResult) {
+    newState.phase = 'ended';
+    newState.winner = winResult;
+  }
+  
+  return newState;
+}
+
+function processTowerEffects(state: GameState, actingPlayerId: PlayerId): void {
+  const activeTowers = state.map.filter(c => c.tower && c.tower.owner === actingPlayerId);
+  
+  let delay = 0;
+  const delayIncrement = 100;
+  
+  for (const cell of activeTowers) {
+    if (!cell.tower) continue;
     
-    const cell = findCell(state.map, coord);
-    if (!cell || !cell.tower) return;
+    const tower = cell.tower;
+    const actionInterval = tower.slowed ? 2 : 1;
     
-    chainEvents.push({
-      coord,
-      startTime: Date.now() + delay,
-    });
+    if (state.turn - tower.lastActionTurn < actionInterval) continue;
     
-    const adjacentCoords = getAdjacentHexes(coord);
+    tower.lastActionTurn = state.turn;
+    
+    addChainEvent(state, cell.coord, delay);
+    delay += delayIncrement;
+    
+    const adjacentCoords = getAdjacentHexes(cell.coord);
     const adjacentCells = adjacentCoords
       .map(c => findCell(state.map, c))
       .filter((c): c is HexCell => c !== undefined);
     
-    applyTowerEffects(state, cell, adjacentCells);
+    const chainBonus = calculateChainBonus(state, cell);
     
-    if (cell.tower?.type === 'electric') {
-      const electricTargets = state.map.filter(
-        c => c.tower &&
-        c.tower.owner !== cell.tower!.owner &&
-        getHexDistance(coord, c.coord) <= 2 &&
-        getHexDistance(coord, c.coord) > 0
-      );
-      
-      if (electricTargets.length > 0 && state.turn % 3 === 0) {
-        const randomTarget = electricTargets[Math.floor(Math.random() * electricTargets.length)];
-        applyElectricDamage(state, cell, randomTarget);
-        processCell(randomTarget.coord, delay + 100);
-      }
+    switch (tower.type) {
+      case 'fire':
+        processFireTower(state, cell, tower, adjacentCells, chainBonus, delay);
+        delay += delayIncrement * adjacentCells.length;
+        break;
+      case 'ice':
+        processIceTower(tower, adjacentCells);
+        break;
+      case 'electric':
+        delay = processElectricTower(state, cell, tower, delay);
+        break;
     }
-  }
-  
-  processCell(triggerCoord, 0);
-  
-  state.chainReactions = chainEvents;
-  
-  return state;
-}
-
-function applyTowerEffects(
-  state: GameState,
-  sourceCell: HexCell,
-  adjacentCells: HexCell[]
-): void {
-  const tower = sourceCell.tower;
-  if (!tower) return;
-  
-  const currentTurn = state.turn;
-  const actionInterval = tower.slowed ? 2 : 1;
-  
-  if (currentTurn - tower.lastActionTurn < actionInterval) return;
-  
-  tower.lastActionTurn = currentTurn;
-  
-  const chainBonus = calculateChainBonus(state, sourceCell);
-  
-  switch (tower.type) {
-    case 'fire':
-      applyFireEffect(state, tower, adjacentCells, chainBonus);
-      break;
-    case 'ice':
-      applyIceEffect(adjacentCells, tower.owner);
-      break;
-    case 'electric':
-      break;
   }
 }
 
@@ -232,80 +225,141 @@ function calculateChainBonus(state: GameState, cell: HexCell): number {
   return bonus;
 }
 
-function applyFireEffect(
-  _state: GameState,
+function processFireTower(
+  state: GameState,
+  _sourceCell: HexCell,
   tower: Tower,
   adjacentCells: HexCell[],
-  chainBonus: number
+  chainBonus: number,
+  startDelay: number
 ): void {
   const baseDamage = 2;
   const damage = baseDamage + chainBonus;
   
+  if (damage <= 0) return;
+  
+  let delay = startDelay;
+  const delayIncrement = 100;
+  
   for (const cell of adjacentCells) {
-    if (cell.owner !== null && cell.owner !== tower.owner) {
-      cell.owner = tower.owner;
-      if (cell.tower && cell.tower.owner !== tower.owner) {
+    addChainEvent(state, cell.coord, delay);
+    delay += delayIncrement;
+    
+    if (cell.tower && cell.tower.owner !== tower.owner) {
+      if (cell.tower.level <= damage) {
         cell.tower = null;
+        cell.owner = tower.owner;
+      } else {
+        cell.tower.level = (cell.tower.level - damage) as 1 | 2 | 3;
       }
-    } else if (cell.owner === null && damage > 0) {
+    } else if (cell.owner !== tower.owner) {
       cell.owner = tower.owner;
     }
   }
 }
 
-function applyIceEffect(adjacentCells: HexCell[], owner: PlayerId): void {
+function processIceTower(
+  tower: Tower,
+  adjacentCells: HexCell[]
+): void {
   for (const cell of adjacentCells) {
-    if (cell.tower && cell.tower.owner !== owner) {
+    if (cell.tower && cell.tower.owner !== tower.owner) {
       cell.tower.slowed = true;
     }
   }
 }
 
-function applyElectricDamage(
-  state: GameState,
-  sourceCell: HexCell,
-  targetCell: HexCell
-): void {
-  if (!sourceCell.tower || !targetCell.tower) return;
+function applyIceSlows(state: GameState): void {
+  const activeIceTowers = state.map.filter(c => c.tower && c.tower.type === 'ice');
+  const slowedEnemyCells = new Set<string>();
   
-  const damage = sourceCell.tower.level;
-  
-  if (targetCell.tower.level <= damage) {
-    targetCell.tower = null;
-    targetCell.owner = sourceCell.tower.owner;
-  } else {
-    targetCell.tower.level = (targetCell.tower.level - damage) as 1 | 2 | 3;
+  for (const cell of activeIceTowers) {
+    if (!cell.tower) continue;
+    
+    const adjacentCoords = getAdjacentHexes(cell.coord);
+    for (const adjCoord of adjacentCoords) {
+      const adjCell = findCell(state.map, adjCoord);
+      if (adjCell?.tower && adjCell.tower.owner !== cell.tower.owner) {
+        slowedEnemyCells.add(`${adjCoord.q},${adjCoord.r}`);
+      }
+    }
   }
   
-  state.chainReactions.push({
-    coord: targetCell.coord,
-    startTime: Date.now() + 100,
-  });
+  for (const cell of state.map) {
+    if (cell.tower) {
+      const key = `${cell.coord.q},${cell.coord.r}`;
+      if (slowedEnemyCells.has(key)) {
+        cell.tower.slowed = true;
+      } else {
+        cell.tower.slowed = false;
+      }
+    }
+  }
 }
 
-export function endTurn(state: GameState): GameState {
-  const newState = deepCloneState(state);
+function processElectricTower(
+  state: GameState,
+  sourceCell: HexCell,
+  tower: Tower,
+  startDelay: number
+): number {
+  tower.cooldown = (tower.cooldown || 0) + 1;
   
-  newState.currentPlayer = newState.currentPlayer === 1 ? 2 : 1;
-  
-  if (newState.currentPlayer === 1) {
-    newState.turn++;
+  if (tower.cooldown < ELECTRIC_COOLDOWN) {
+    return startDelay;
   }
   
-  const currentPlayerData = getPlayer(newState, newState.currentPlayer);
-  if (currentPlayerData) {
-    currentPlayerData.energy += ENERGY_PER_TURN;
+  tower.cooldown = 0;
+  
+  let delay = startDelay;
+  const visited = new Set<string>();
+  const queue: { coord: HexCoord; level: number; currentDelay: number }[] = [];
+  
+  queue.push({ coord: sourceCell.coord, level: tower.level, currentDelay: delay });
+  visited.add(`${sourceCell.coord.q},${sourceCell.coord.r}`);
+  
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const currentSourceCell = findCell(state.map, current.coord);
+    if (!currentSourceCell?.tower) continue;
+    
+    const damage = current.level;
+    
+    const targets = state.map.filter(c => {
+      const key = `${c.coord.q},${c.coord.r}`;
+      if (visited.has(key)) return false;
+      if (!c.tower) return false;
+      if (c.tower.owner === currentSourceCell.tower!.owner) return false;
+      const dist = getHexDistance(current.coord, c.coord);
+      return dist > 0 && dist <= 2;
+    });
+    
+    if (targets.length === 0) continue;
+    
+    const randomTarget = targets[Math.floor(Math.random() * targets.length)];
+    const targetKey = `${randomTarget.coord.q},${randomTarget.coord.r}`;
+    visited.add(targetKey);
+    
+    delay = current.currentDelay + 100;
+    addChainEvent(state, randomTarget.coord, delay);
+    
+    if (randomTarget.tower!.level <= damage) {
+      randomTarget.tower = null;
+      randomTarget.owner = currentSourceCell.tower!.owner;
+    } else {
+      randomTarget.tower!.level = (randomTarget.tower!.level - damage) as 1 | 2 | 3;
+      
+      if (randomTarget.tower!.type === 'electric') {
+        queue.push({
+          coord: randomTarget.coord,
+          level: randomTarget.tower!.level,
+          currentDelay: delay,
+        });
+      }
+    }
   }
   
-  const winResult = checkWin(newState);
-  if (winResult) {
-    newState.phase = 'ended';
-    newState.winner = winResult;
-  }
-  
-  newState.chainReactions = [];
-  
-  return newState;
+  return delay;
 }
 
 export function checkWin(state: GameState): PlayerId | 'draw' | null {
