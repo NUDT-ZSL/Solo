@@ -16,15 +16,15 @@ const dataDir = path.join(__dirname, '..', 'data')
 const projectsDB = Datastore.create({
   filename: path.join(dataDir, 'projects.db'),
   autoload: true,
-})
+}) as any
 const paragraphsDB = Datastore.create({
   filename: path.join(dataDir, 'paragraphs.db'),
   autoload: true,
-})
+}) as any
 const confirmationsDB = Datastore.create({
   filename: path.join(dataDir, 'confirmations.db'),
   autoload: true,
-})
+}) as any
 
 const STAGES = ['创作', '编曲', '排练', '录制', '发布']
 const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#6366f1', '#a855f7', '#ec4899']
