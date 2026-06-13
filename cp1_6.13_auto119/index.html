@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>横版卷轴平台跳跃</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0f172a; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; }
+    #game-container { position: relative; width: 900px; height: 600px; }
+    #game { display: block; width: 900px; height: 600px; border-radius: 4px; }
+    #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); border-radius: 4px; z-index: 10; }
+    #start-btn { border: none; padding: 14px 48px; border-radius: 8px; background: linear-gradient(to bottom, #22c55e, #16a34a); color: #ffffff; font-size: 24px; cursor: pointer; font-family: system-ui, -apple-system, sans-serif; box-shadow: 0 4px 12px rgba(34,197,94,0.4); transition: transform 0.15s, box-shadow 0.15s; }
+    #start-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(34,197,94,0.6); }
+    #end-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); border-radius: 4px; z-index: 10; }
+    #end-modal { width: 400px; height: 250px; background: #ffffff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+    #end-modal h2 { font-size: 28px; color: #1e3a8a; margin: 0; }
+    #end-modal p { font-size: 20px; color: #1e3a8a; margin: 0; }
+    #replay-btn { border: none; padding: 12px 40px; border-radius: 8px; background: linear-gradient(to bottom, #22c55e, #16a34a); color: #ffffff; font-size: 20px; cursor: pointer; font-family: system-ui, -apple-system, sans-serif; box-shadow: 0 4px 12px rgba(34,197,94,0.4); transition: transform 0.15s, box-shadow 0.15s; }
+    #replay-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(34,197,94,0.6); }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game" width="900" height="600"></canvas>
+    <div id="overlay">
+      <button id="start-btn">开始游戏</button>
+    </div>
+    <div id="end-screen">
+      <div id="end-modal">
+        <h2 id="end-title">游戏结束</h2>
+        <p id="end-score">总分：0</p>
+        <button id="replay-btn">再玩一次</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
