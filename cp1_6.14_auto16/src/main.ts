@@ -67,10 +67,10 @@ class App {
       },
       {
         onParticleCountChange: (count) => {
-          this.controlsPanel.updateParticleCount(count);
+          this.controlsPanel?.updateParticleCount(count);
         },
         onFpsUpdate: (fps) => {
-          this.controlsPanel.updateFps(fps);
+          this.controlsPanel?.updateFps(fps);
         },
       }
     );

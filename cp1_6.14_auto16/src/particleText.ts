@@ -58,7 +58,6 @@ export class ParticleText {
   private shuffledIndices: Int32Array = new Int32Array();
 
   private animationMode: AnimationMode = 'idle';
-  private previousMode: AnimationMode = 'idle';
   private animationElapsed: number = 0;
   private transitionElapsed: number = 0;
   private transitionDuration: number = 0.5;
@@ -66,11 +65,9 @@ export class ParticleText {
   private speedMultiplier: number = 1;
 
   private explodePhase: 'out' | 'in' = 'out';
-  private explodeRadius: number = 0;
 
   private spiralRandomOffsets: Float32Array = new Float32Array();
 
-  private lastFrameTime: number = 0;
   private fpsAccumulator: number = 0;
   private fpsFrameCount: number = 0;
 
@@ -112,6 +109,17 @@ export class ParticleText {
     this.spriteTexture.needsUpdate = true;
   }
 
+  private computeParticleCount(text: string): number {
+    const lettersOnly = text.replace(/\s/g, '');
+    const letterCount = Math.max(1, lettersOnly.length);
+    const perLetter = Math.floor(
+      this.particlesPerLetter[0] +
+      Math.random() * (this.particlesPerLetter[1] - this.particlesPerLetter[0])
+    );
+    const total = letterCount * perLetter;
+    return Math.min(total, this.maxParticles);
+  }
+
   private sampleTextPositions(text: string): { positions: Float32Array; count: number } {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
@@ -133,12 +141,7 @@ export class ParticleText {
     const imageData = ctx.getImageData(0, 0, textWidth, textHeight);
     const data = imageData.data;
 
-    const letterCount = Math.max(1, (text || ' ').replace(/\s/g, '').length);
-    const minPerLetter = Math.floor(
-      this.particlesPerLetter[0] +
-      Math.random() * (this.particlesPerLetter[1] - this.particlesPerLetter[0])
-    ));
-    const targetCount = Math.min(letterCount * minPerLetter, this.maxParticles);
+    const targetCount = this.computeParticleCount(text);
 
     const whitePixels: Array<[number, number]> = [];
 
@@ -148,6 +151,15 @@ export class ParticleText {
         if (data[idx + 3] > 128) {
           whitePixels.push([x, y]);
         }
+      }
+    }
+
+    if (whitePixels.length === 0) {
+      for (let i = 0; i < 50; i++) {
+        whitePixels.push([
+          padding + Math.random() * (textWidth - padding * 2),
+          textHeight / 2 + (Math.random() - 0.5) * fontSize,
+        ]);
       }
     }
 
@@ -243,7 +255,6 @@ export class ParticleText {
   public setAnimation(mode: AnimationMode): void {
     if (mode === this.animationMode && !this.isTransitioning) return;
     this.startPositions.set(this.currentPositions);
-    this.previousMode = this.animationMode;
     this.animationMode = mode;
     this.animationElapsed = 0;
     this.transitionElapsed = 0;
@@ -251,7 +262,6 @@ export class ParticleText {
 
     if (mode === 'explode') {
       this.explodePhase = 'out';
-      this.explodeRadius = 0;
     }
     if (mode === 'shuffle') {
       this.reshuffleIndices();
@@ -262,7 +272,9 @@ export class ParticleText {
     const n = this.shuffledIndices.length;
     for (let i = n - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [this.shuffledIndices[i], this.shuffledIndices[j]] = [this.shuffledIndices[j], this.shuffledIndices[i]];
+      const tmp = this.shuffledIndices[i];
+      this.shuffledIndices[i] = this.shuffledIndices[j];
+      this.shuffledIndices[j] = tmp;
     }
   }
 
@@ -292,10 +304,8 @@ export class ParticleText {
     }
   }
 
-  private updateExplodePositions(time: number): void {
-    const totalDuration = 1.5;
-    const phaseDuration = totalDuration;
-
+  private updateExplodePositions(): void {
+    const phaseDuration = 1.5;
     const t = Math.min(1, this.animationElapsed / phaseDuration);
     const eased = easeInOutCubic(t);
 
@@ -305,13 +315,11 @@ export class ParticleText {
         this.animationElapsed = 0;
         this.startPositions.set(this.tempPositions);
       } else {
-        this.explodePhase = 'out';
-        this.animationElapsed = 0;
-        this.startPositions.set(this.targetPositions);
         this.animationMode = 'idle';
         this.isTransitioning = true;
-        this.previousMode = 'explode';
+        this.startPositions.set(this.tempPositions);
         this.transitionElapsed = 0;
+        this.explodePhase = 'out';
         return;
       }
     }
@@ -322,16 +330,15 @@ export class ParticleText {
       const ty = this.targetPositions[i3 + 1];
       const tz = this.targetPositions[i3 + 2];
 
-      const dirX = tx !== 0 || ty !== 0 || tz !== 0
-        ? tx
-        : (Math.random() - 0.5);
-      const dirY = ty !== 0 || tx !== 0 || tz !== 0
-        ? ty
-        : (Math.random() - 0.5);
-      const dirZ = tz !== 0 || tx !== 0 || ty !== 0
-        ? tz
-        : (Math.random() - 0.5);
-      const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ) || 1;
+      let dirX = tx;
+      let dirY = ty;
+      let dirZ = tz;
+      if (dirX === 0 && dirY === 0 && dirZ === 0) {
+        dirX = (Math.random() - 0.5) || 0.001;
+        dirY = (Math.random() - 0.5) || 0.001;
+        dirZ = (Math.random() - 0.5) || 0.001;
+      }
+      const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
       const nx = dirX / len;
       const ny = dirY / len;
       const nz = dirZ / len;
@@ -350,14 +357,13 @@ export class ParticleText {
     }
   }
 
-  private updateSpiralPositions(time: number): void {
+  private updateSpiralPositions(): void {
     const totalDuration = 2.0;
     const t = Math.min(1, this.animationElapsed / totalDuration);
     const eased = easeInOutCubic(t);
 
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
-
       const tx = this.targetPositions[i3];
       const ty = this.targetPositions[i3 + 1];
       const tz = this.targetPositions[i3 + 2];
@@ -367,14 +373,14 @@ export class ParticleText {
       const sz = this.spiralRandomOffsets[i3 + 2];
 
       const angle = (1 - eased) * (Math.PI * 3 + (i % 13) * 0.2);
-      const radiusLerp = 1 - eased;
 
       const rotatedX = sx * Math.cos(angle) - sy * Math.sin(angle);
       const rotatedY = sx * Math.sin(angle) + sy * Math.cos(angle);
+      const rl = 1 - eased;
 
-      this.tempPositions[i3] = lerp(rotatedX, tx, eased);
-      this.tempPositions[i3 + 1] = lerp(rotatedY, ty, eased);
-      this.tempPositions[i3 + 2] = lerp(sz * radiusLerp, tz, eased);
+      this.tempPositions[i3] = lerp(rotatedX * rl, tx, eased);
+      this.tempPositions[i3 + 1] = lerp(rotatedY * rl, ty, eased);
+      this.tempPositions[i3 + 2] = lerp(sz * rl, tz, eased);
     }
 
     if (t >= 1 && !this.isTransitioning) {
@@ -399,13 +405,14 @@ export class ParticleText {
     }
   }
 
-  private updateShufflePositions(time: number): void {
+  private updateShufflePositions(): void {
     const totalDuration = 2.5;
     const t = Math.min(1, this.animationElapsed / totalDuration);
     const eased = easeInOutCubic(t);
 
     if (eased < 0.85) {
       const subT = eased / 0.85;
+      const subEased = easeInOutCubic(subT);
       for (let i = 0; i < this.particleCount; i++) {
         const i3 = i * 3;
         const si = this.shuffledIndices[i] * 3;
@@ -420,9 +427,9 @@ export class ParticleText {
 
         const jump = Math.sin(subT * Math.PI) * 3;
 
-        this.tempPositions[i3] = lerp(tx, ox, easeInOutCubic(subT));
-        this.tempPositions[i3 + 1] = lerp(ty, oy, easeInOutCubic(subT)) + jump;
-        this.tempPositions[i3 + 2] = lerp(tz, oz, easeInOutCubic(subT)) + jump * 0.5;
+        this.tempPositions[i3] = lerp(tx, ox, subEased);
+        this.tempPositions[i3 + 1] = lerp(ty, oy, subEased) + jump;
+        this.tempPositions[i3 + 2] = lerp(tz, oz, subEased) + jump * 0.5;
       }
     } else {
       const subT = (eased - 0.85) / 0.15;
@@ -455,23 +462,21 @@ export class ParticleText {
       this.transitionElapsed += delta;
     }
 
-    const time = this.animationElapsed;
-
     switch (this.animationMode) {
       case 'idle':
-        this.updateIdlePositions(time);
+        this.updateIdlePositions(this.animationElapsed);
         break;
       case 'explode':
-        this.updateExplodePositions(time);
+        this.updateExplodePositions();
         break;
       case 'spiral':
-        this.updateSpiralPositions(time);
+        this.updateSpiralPositions();
         break;
       case 'wave':
-        this.updateWavePositions(time);
+        this.updateWavePositions(this.animationElapsed);
         break;
       case 'shuffle':
-        this.updateShufflePositions(time);
+        this.updateShufflePositions();
         break;
     }
 

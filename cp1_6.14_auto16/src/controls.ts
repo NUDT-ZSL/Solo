@@ -39,8 +39,11 @@ export class ControlsPanel {
 
   private colorPresets: Record<string, HTMLElement> = {};
   private colorInput: HTMLInputElement | null = null;
+  private colorValueEl: HTMLElement | null = null;
   private sizeSlider: HTMLInputElement | null = null;
+  private sizeValueEl: HTMLElement | null = null;
   private speedSlider: HTMLInputElement | null = null;
+  private speedValueEl: HTMLElement | null = null;
   private gridToggle: HTMLElement | null = null;
   private animButtons: Record<string, HTMLElement> = {};
   private particleCountEl: HTMLElement | null = null;
@@ -67,17 +70,11 @@ export class ControlsPanel {
     panel.id = 'controls-panel';
 
     panel.appendChild(this.createTitle('Controls'));
-
     panel.appendChild(this.createColorSection());
-
     panel.appendChild(this.createSizeSection());
-
     panel.appendChild(this.createSpeedSection());
-
     panel.appendChild(this.createAnimationSection());
-
     panel.appendChild(this.createGridSection());
-
     panel.appendChild(this.createStatsSection());
 
     return panel;
@@ -109,7 +106,6 @@ export class ControlsPanel {
       valueEl.textContent = value;
       labelEl.appendChild(valueEl);
       group.appendChild(labelEl);
-
       const content = document.createElement('div');
       group.appendChild(content);
       return { group, label: labelEl, valueEl, content };
@@ -130,14 +126,12 @@ export class ControlsPanel {
     for (const preset of PRESETS) {
       const btn = document.createElement('div');
       btn.className = `color-preset ${preset.key}`;
-      btn.title = preset.key.charAt(0).toUpperCase() + preset.key.slice(1);
+      btn.title = `${preset.key.charAt(0).toUpperCase() + preset.key.slice(1)} ${preset.color}`;
       btn.dataset.color = preset.color;
       btn.dataset.preset = preset.key;
 
       btn.addEventListener('click', () => {
-        this.values.colorPreset = preset.key;
-        this.updateColorPresetActive();
-        this.callbacks.onColorChange(preset.color);
+        this.applyColor(preset.color, preset.key);
       });
 
       this.colorPresets[preset.key] = btn;
@@ -157,38 +151,67 @@ export class ControlsPanel {
     this.colorInput.type = 'color';
     this.colorInput.value = this.values.customColor;
     this.colorInput.id = 'custom-color-input';
-
-    this.colorInput.addEventListener('input', (e) => {
-      const val = (e.target as HTMLInputElement).value;
-      this.values.colorPreset = 'custom';
-      this.values.customColor = val;
-      this.updateColorPresetActive();
-      this.callbacks.onColorChange(val);
-    });
+    this.colorInput.title = 'Pick custom color';
 
     const label = document.createElement('span');
     label.className = 'custom-color-label';
-    label.textContent = 'Custom color';
+    label.textContent = 'Custom';
+
+    this.colorValueEl = document.createElement('span');
+    this.colorValueEl.className = 'custom-color-value';
+    this.colorValueEl.textContent = this.values.customColor.toUpperCase();
+
+    this.colorInput.addEventListener('input', (e) => {
+      const val = (e.target as HTMLInputElement).value;
+      this.applyColor(val, 'custom');
+    });
+
+    this.colorInput.addEventListener('change', (e) => {
+      const val = (e.target as HTMLInputElement).value;
+      this.applyColor(val, 'custom');
+    });
 
     customWrapper.appendChild(this.colorInput);
     customWrapper.appendChild(label);
+    customWrapper.appendChild(this.colorValueEl);
     content.appendChild(customWrapper);
+
+    if (this.values.colorPreset !== 'custom') {
+      const initialPreset = PRESETS.find(p => p.key === this.values.colorPreset);
+      if (initialPreset) {
+        this.colorInput.value = initialPreset.color;
+        this.colorValueEl.textContent = initialPreset.color.toUpperCase();
+      }
+    }
 
     return group;
   }
 
-  private updateColorPresetActive(): void {
+  private applyColor(color: string, preset: 'cyan' | 'magenta' | 'gold' | 'lime' | 'custom'): void {
+    this.values.colorPreset = preset;
+    this.values.customColor = color;
+
     for (const key of Object.keys(this.colorPresets)) {
       this.colorPresets[key].classList.remove('active');
     }
-    if (this.values.colorPreset !== 'custom' && this.colorPresets[this.values.colorPreset]) {
-      this.colorPresets[this.values.colorPreset].classList.add('active');
+    if (preset !== 'custom' && this.colorPresets[preset]) {
+      this.colorPresets[preset].classList.add('active');
     }
+
+    if (this.colorInput) {
+      this.colorInput.value = color;
+    }
+    if (this.colorValueEl) {
+      this.colorValueEl.textContent = color.toUpperCase();
+    }
+
+    this.callbacks.onColorChange(color);
   }
 
   private createSizeSection(): HTMLElement {
     const initial = this.values.particleSize.toFixed(1) + ' px';
     const { group, valueEl, content } = this.createControlGroup('Particle Size', initial);
+    this.sizeValueEl = valueEl || null;
 
     this.sizeSlider = document.createElement('input');
     this.sizeSlider.type = 'range';
@@ -196,11 +219,13 @@ export class ControlsPanel {
     this.sizeSlider.max = '5';
     this.sizeSlider.step = '0.1';
     this.sizeSlider.value = String(this.values.particleSize);
+    this.sizeSlider.title = `Size: ${this.values.particleSize.toFixed(1)} px`;
 
     this.sizeSlider.addEventListener('input', (e) => {
       const val = parseFloat((e.target as HTMLInputElement).value);
       this.values.particleSize = val;
-      if (valueEl) valueEl.textContent = val.toFixed(1) + ' px';
+      if (this.sizeValueEl) this.sizeValueEl.textContent = val.toFixed(1) + ' px';
+      this.sizeSlider!.title = `Size: ${val.toFixed(1)} px`;
       this.callbacks.onSizeChange(val);
     });
 
@@ -211,6 +236,7 @@ export class ControlsPanel {
   private createSpeedSection(): HTMLElement {
     const initial = this.values.speedMultiplier.toFixed(1) + ' x';
     const { group, valueEl, content } = this.createControlGroup('Speed Multiplier', initial);
+    this.speedValueEl = valueEl || null;
 
     this.speedSlider = document.createElement('input');
     this.speedSlider.type = 'range';
@@ -218,11 +244,13 @@ export class ControlsPanel {
     this.speedSlider.max = '2';
     this.speedSlider.step = '0.1';
     this.speedSlider.value = String(this.values.speedMultiplier);
+    this.speedSlider.title = `Speed: ${this.values.speedMultiplier.toFixed(1)}x`;
 
     this.speedSlider.addEventListener('input', (e) => {
       const val = parseFloat((e.target as HTMLInputElement).value);
       this.values.speedMultiplier = val;
-      if (valueEl) valueEl.textContent = val.toFixed(1) + ' x';
+      if (this.speedValueEl) this.speedValueEl.textContent = val.toFixed(1) + ' x';
+      this.speedSlider!.title = `Speed: ${val.toFixed(1)}x`;
       this.callbacks.onSpeedChange(val);
     });
 
@@ -276,11 +304,13 @@ export class ControlsPanel {
     const wrapper = document.createElement('div');
     wrapper.className = 'toggle-wrapper';
 
-    const spacer = document.createElement('span');
-    spacer.style.flex = '1';
+    const label = document.createElement('span');
+    label.className = 'toggle-label';
+    label.textContent = 'Show reference grid';
 
     this.gridToggle = document.createElement('div');
     this.gridToggle.className = 'toggle-switch';
+    this.gridToggle.title = this.values.showGrid ? 'Hide grid' : 'Show grid';
     if (this.values.showGrid) {
       this.gridToggle.classList.add('active');
     }
@@ -288,10 +318,13 @@ export class ControlsPanel {
     this.gridToggle.addEventListener('click', () => {
       this.values.showGrid = !this.values.showGrid;
       this.gridToggle?.classList.toggle('active', this.values.showGrid);
+      if (this.gridToggle) {
+        this.gridToggle.title = this.values.showGrid ? 'Hide grid' : 'Show grid';
+      }
       this.callbacks.onGridToggle(this.values.showGrid);
     });
 
-    wrapper.appendChild(spacer);
+    wrapper.appendChild(label);
     wrapper.appendChild(this.gridToggle);
     content.appendChild(wrapper);
     return group;
@@ -303,19 +336,23 @@ export class ControlsPanel {
 
     const row1 = document.createElement('div');
     row1.className = 'stat-row';
-    row1.innerHTML = '<span>Particle Count</span>';
+    const label1 = document.createElement('span');
+    label1.textContent = 'Particle Count';
     this.particleCountEl = document.createElement('span');
     this.particleCountEl.className = 'stat-value';
     this.particleCountEl.textContent = '--';
+    row1.appendChild(label1);
     row1.appendChild(this.particleCountEl);
     stats.appendChild(row1);
 
     const row2 = document.createElement('div');
     row2.className = 'stat-row';
-    row2.innerHTML = '<span>Frame Rate</span>';
+    const label2 = document.createElement('span');
+    label2.textContent = 'Frame Rate';
     this.fpsEl = document.createElement('span');
     this.fpsEl.className = 'stat-value';
     this.fpsEl.textContent = '-- FPS';
+    row2.appendChild(label2);
     row2.appendChild(this.fpsEl);
     stats.appendChild(row2);
 
@@ -328,6 +365,7 @@ export class ControlsPanel {
       toggleBtn.addEventListener('click', () => {
         this.isOpen = !this.isOpen;
         this.panel.classList.toggle('open', this.isOpen);
+        toggleBtn.textContent = this.isOpen ? 'Hide' : 'Controls';
       });
     }
   }
@@ -347,19 +385,27 @@ export class ControlsPanel {
   public updateValues(values: Partial<ControlValues>): void {
     if (values.colorPreset !== undefined) {
       this.values.colorPreset = values.colorPreset;
-      this.updateColorPresetActive();
+      for (const key of Object.keys(this.colorPresets)) {
+        this.colorPresets[key].classList.remove('active');
+      }
+      if (values.colorPreset !== 'custom' && this.colorPresets[values.colorPreset]) {
+        this.colorPresets[values.colorPreset].classList.add('active');
+      }
     }
     if (values.customColor !== undefined) {
       this.values.customColor = values.customColor;
       if (this.colorInput) this.colorInput.value = values.customColor;
+      if (this.colorValueEl) this.colorValueEl.textContent = values.customColor.toUpperCase();
     }
     if (values.particleSize !== undefined) {
       this.values.particleSize = values.particleSize;
       if (this.sizeSlider) this.sizeSlider.value = String(values.particleSize);
+      if (this.sizeValueEl) this.sizeValueEl.textContent = values.particleSize.toFixed(1) + ' px';
     }
     if (values.speedMultiplier !== undefined) {
       this.values.speedMultiplier = values.speedMultiplier;
       if (this.speedSlider) this.speedSlider.value = String(values.speedMultiplier);
+      if (this.speedValueEl) this.speedValueEl.textContent = values.speedMultiplier.toFixed(1) + ' x';
     }
     if (values.animationMode !== undefined) {
       this.values.animationMode = values.animationMode;
@@ -368,6 +414,9 @@ export class ControlsPanel {
     if (values.showGrid !== undefined) {
       this.values.showGrid = values.showGrid;
       this.gridToggle?.classList.toggle('active', values.showGrid);
+      if (this.gridToggle) {
+        this.gridToggle.title = values.showGrid ? 'Hide grid' : 'Show grid';
+      }
     }
   }
 }

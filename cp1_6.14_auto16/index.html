@@ -39,6 +39,14 @@
       left: 50%;
       transform: translateX(-50%);
       z-index: 10;
+      border-radius: 12px;
+      padding: 2px;
+      background: transparent;
+      transition: background 0.25s ease, box-shadow 0.25s ease;
+    }
+    .input-wrapper.focused {
+      background: linear-gradient(90deg, #4ade80, #3b82f6);
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
     }
     .text-input {
       width: 360px;
@@ -47,29 +55,18 @@
       font-size: 16px;
       color: #ffffff;
       background: #1e2433;
-      border: 2px solid transparent;
+      border: none;
       border-radius: 10px;
       outline: none;
-      position: relative;
-      transition: box-shadow 0.3s ease;
+      display: block;
       background-clip: padding-box;
-    }
-    .input-wrapper {
-      position: absolute;
-      top: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-      border-radius: 12px;
-      padding: 2px;
-      background: transparent;
-      transition: background 0.3s ease;
-    }
-    .input-wrapper.focused {
-      background: linear-gradient(90deg, #4ade80, #3b82f6);
+      transition: background 0.2s ease;
+      font-weight: 500;
+      letter-spacing: 0.5px;
     }
     .text-input::placeholder {
       color: #64748b;
+      letter-spacing: 0;
     }
     .controls-panel {
       position: fixed;
@@ -81,6 +78,7 @@
       padding: 20px;
       z-index: 20;
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(96, 165, 250, 0.15);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
       max-height: calc(100vh - 100px);
@@ -119,11 +117,13 @@
       margin-bottom: 8px;
       display: block;
       font-weight: 500;
+      line-height: 1.4;
     }
     .control-value {
       float: right;
       color: #60a5fa;
       font-size: 12px;
+      font-weight: 600;
     }
     input[type="range"] {
       -webkit-appearance: none;
@@ -134,6 +134,12 @@
       border-radius: 3px;
       outline: none;
       cursor: pointer;
+      border: none;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      background: #334155;
+      border-radius: 3px;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
@@ -143,12 +149,19 @@
       background: #60a5fa;
       border-radius: 50%;
       cursor: pointer;
+      margin-top: -5px;
       transition: transform 0.15s ease, box-shadow 0.15s ease;
       box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+      border: 2px solid #ffffff;
     }
     input[type="range"]::-webkit-slider-thumb:hover {
       transform: scale(1.15);
       box-shadow: 0 0 12px rgba(96, 165, 250, 0.7);
+    }
+    input[type="range"]::-moz-range-track {
+      height: 6px;
+      background: #334155;
+      border-radius: 3px;
     }
     input[type="range"]::-moz-range-thumb {
       width: 16px;
@@ -156,7 +169,7 @@
       background: #60a5fa;
       border-radius: 50%;
       cursor: pointer;
-      border: none;
+      border: 2px solid #ffffff;
       transition: transform 0.15s ease, box-shadow 0.15s ease;
       box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
     }
@@ -205,6 +218,10 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      padding: 8px 10px;
+      background: rgba(30, 36, 51, 0.6);
+      border-radius: 8px;
+      border: 1px solid rgba(96, 165, 250, 0.1);
     }
     input[type="color"] {
       -webkit-appearance: none;
@@ -216,10 +233,14 @@
       padding: 2px;
       background: #1e2433;
       cursor: pointer;
-      transition: border-color 0.2s ease;
+      transition: border-color 0.2s ease, transform 0.1s ease;
+      flex-shrink: 0;
     }
     input[type="color"]:hover {
       border-color: #60a5fa;
+    }
+    input[type="color"]:active {
+      transform: scale(0.96);
     }
     input[type="color"]::-webkit-color-swatch-wrapper {
       padding: 0;
@@ -228,9 +249,22 @@
       border: none;
       border-radius: 5px;
     }
+    input[type="color"]::-moz-color-swatch {
+      border: none;
+      border-radius: 5px;
+    }
     .custom-color-label {
       font-size: 12px;
       color: #94a3b8;
+      font-weight: 500;
+    }
+    .custom-color-value {
+      margin-left: auto;
+      font-size: 11px;
+      color: #60a5fa;
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-weight: 600;
+      text-transform: uppercase;
     }
     .animation-buttons {
       display: grid;
@@ -247,6 +281,7 @@
       border-radius: 8px;
       cursor: pointer;
       transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+      letter-spacing: 0.3px;
     }
     .anim-btn:hover {
       background: #3b82f6;
@@ -264,6 +299,11 @@
       align-items: center;
       justify-content: space-between;
     }
+    .toggle-label {
+      font-size: 12px;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
     .toggle-switch {
       position: relative;
       width: 42px;
@@ -272,6 +312,7 @@
       border-radius: 12px;
       cursor: pointer;
       transition: background 0.2s ease;
+      flex-shrink: 0;
     }
     .toggle-switch.active {
       background: #2563eb;
@@ -300,13 +341,17 @@
     .stat-row {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       font-size: 11px;
       color: #64748b;
       margin-bottom: 6px;
     }
+    .stat-row:last-child {
+      margin-bottom: 0;
+    }
     .stat-value {
       color: #60a5fa;
-      font-weight: 500;
+      font-weight: 600;
     }
     .panel-toggle {
       display: none;
@@ -314,7 +359,7 @@
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      padding: 10px 20px;
+      padding: 10px 22px;
       background: #2563eb;
       color: #fff;
       border: none;
@@ -322,10 +367,13 @@
       cursor: pointer;
       z-index: 25;
       font-size: 14px;
-      transition: background 0.2s ease, transform 0.1s ease;
+      font-weight: 500;
+      transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
     }
     .panel-toggle:hover {
       background: #3b82f6;
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45);
     }
     .panel-toggle:active {
       transform: translateX(-50%) scale(0.96);
@@ -349,7 +397,7 @@
         left: 0;
         bottom: 0;
         width: 100%;
-        max-height: 50vh;
+        max-height: 55vh;
         border-radius: 16px 16px 0 0;
         transform: translateY(100%);
         border: none;
@@ -365,9 +413,9 @@
   <div id="app">
     <div id="canvas-container"></div>
     <div class="input-wrapper" id="input-wrapper">
-      <input type="text" class="text-input" id="text-input" placeholder="Type a word or phrase..." value="HELLO" autocomplete="off" spellcheck="false" />
+      <input type="text" class="text-input" id="text-input" placeholder="Type a word or phrase..." value="HELLO" autocomplete="off" spellcheck="false" maxlength="20" />
     </div>
-    <button class="panel-toggle" id="panel-toggle">Toggle Controls</button>
+    <button class="panel-toggle" id="panel-toggle">Controls</button>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
