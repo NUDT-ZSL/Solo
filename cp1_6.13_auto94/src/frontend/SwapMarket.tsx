@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
 import { Collectible } from './types';
 import { UserContext, ToastContext } from './App';
@@ -6,14 +6,20 @@ import { UserContext, ToastContext } from './App';
 function SwapItem({
   collectible,
   index,
-  onRequestSwap
+  onRequestSwap,
+  isOwner
 }: {
   collectible: Collectible;
   index: number;
   onRequestSwap: () => void;
+  isOwner: boolean;
 }) {
-  const { currentUser } = useContext(UserContext);
-  const isOwner = collectible.owner === currentUser;
+  const handleSwapClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('[SwapMarket] Request swap clicked for:', collectible.name);
+    onRequestSwap();
+  };
 
   return (
     <div
@@ -33,7 +39,11 @@ function SwapItem({
       {isOwner ? (
         <span className="status-tag status-swap">我的藏品</span>
       ) : (
-        <button className="btn btn-primary" onClick={onRequestSwap}>
+        <button
+          className="btn btn-primary"
+          onClick={handleSwapClick}
+          type="button"
+        >
           🤝 请求交换
         </button>
       )}
@@ -47,10 +57,12 @@ export default function SwapMarket() {
   const { currentUser } = useContext(UserContext);
   const { showToast } = useContext(ToastContext);
 
-  const fetchSwapItems = async () => {
+  const fetchSwapItems = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('[SwapMarket] Fetching swap items');
       const response = await axios.get('/api/swap');
+      console.log('[SwapMarket] Got:', response.data.length, 'items');
       setCollectibles(response.data);
     } catch (error) {
       console.error('获取待交换列表失败:', error);
@@ -58,22 +70,25 @@ export default function SwapMarket() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchSwapItems();
-  }, []);
+  }, [fetchSwapItems]);
 
-  const handleRequestSwap = async (collectibleId: string, collectibleName: string) => {
+  const handleRequestSwap = async (collectibleId: string, collectibleName: string, owner: string) => {
     try {
-      await axios.post('/api/swap/request', {
-        collectibleId,
+      console.log('[SwapMarket] Sending swap request:', { collectibleId, requester: currentUser });
+      const response = await axios.post('/api/swap/request', {
+        collectibleId: collectibleId,
         requester: currentUser
       });
-      showToast(`已向所有者发送「${collectibleName}」的交换请求`, 'success');
+      console.log('[SwapMarket] Request sent successfully:', response.data);
+      showToast(`已向 @${owner} 发送「${collectibleName}」的交换请求`, 'success');
     } catch (error) {
       console.error('发送交换请求失败:', error);
-      showToast('发送请求失败，请稍后重试', 'error');
+      const errMsg = (error as any).response?.data?.error || '发送请求失败，请稍后重试';
+      showToast(errMsg, 'error');
     }
   };
 
@@ -102,8 +117,9 @@ export default function SwapMarket() {
               key={collectible._id}
               collectible={collectible}
               index={index}
+              isOwner={collectible.owner === currentUser}
               onRequestSwap={() =>
-                handleRequestSwap(collectible._id, collectible.name)
+                handleRequestSwap(collectible._id, collectible.name, collectible.owner)
               }
             />
           ))}

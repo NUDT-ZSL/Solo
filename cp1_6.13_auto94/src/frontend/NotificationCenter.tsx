@@ -1,7 +1,7 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Notification } from './types';
+import { Notification as NotificationType } from './types';
 import { UserContext, ToastContext } from './App';
 
 const notificationTypeConfig = {
@@ -32,27 +32,41 @@ function NotificationItem({
   onReject,
   onMarkRead
 }: {
-  notification: Notification;
+  notification: NotificationType;
   index: number;
-  onAccept: (id: string) => void;
-  onReject: (id: string) => void;
+  onAccept: (swapRequestId: string, notificationId: string) => void;
+  onReject: (swapRequestId: string, notificationId: string) => void;
   onMarkRead: (id: string) => void;
 }) {
   const config = notificationTypeConfig[notification.type];
   const isPendingRequest =
     notification.type === 'swap_request' && !notification.read;
 
-  const handleClick = () => {
+  const handleItemClick = () => {
     if (!notification.read) {
       onMarkRead(notification._id);
     }
+  };
+
+  const handleAcceptClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    console.log('[Notification] Accept clicked for:', notification.swapRequestId);
+    onAccept(notification.swapRequestId, notification._id);
+  };
+
+  const handleRejectClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    console.log('[Notification] Reject clicked for:', notification.swapRequestId);
+    onReject(notification.swapRequestId, notification._id);
   };
 
   return (
     <div
       className={`notification-item ${!notification.read ? 'unread' : ''}`}
       style={{ animationDelay: `${index * 0.1}s` }}
-      onClick={handleClick}
+      onClick={handleItemClick}
     >
       <div className={`notification-icon ${config.iconClass}`}>{config.icon}</div>
       <div className="notification-content">
@@ -66,16 +80,18 @@ function NotificationItem({
           {new Date(notification.createdAt).toLocaleString('zh-CN')}
         </p>
         {isPendingRequest && (
-          <div className="notification-actions" onClick={(e) => e.stopPropagation()}>
+          <div className="notification-actions">
             <button
               className="btn btn-success btn-sm"
-              onClick={() => onAccept(notification.swapRequestId)}
+              onClick={handleAcceptClick}
+              type="button"
             >
               ✓ 接受
             </button>
             <button
               className="btn btn-danger btn-sm"
-              onClick={() => onReject(notification.swapRequestId)}
+              onClick={handleRejectClick}
+              type="button"
             >
               ✕ 拒绝
             </button>
@@ -87,16 +103,18 @@ function NotificationItem({
 }
 
 export default function NotificationCenter() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentUser, refreshNotifications } = useContext(UserContext);
   const { showToast } = useContext(ToastContext);
   const navigate = useNavigate();
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('[Notification] Fetching for user:', currentUser);
       const response = await axios.get(`/api/notifications/${currentUser}`);
+      console.log('[Notification] Got:', response.data.length, 'items');
       setNotifications(response.data);
     } catch (error) {
       console.error('获取通知失败:', error);
@@ -104,14 +122,15 @@ export default function NotificationCenter() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, showToast]);
 
   useEffect(() => {
     fetchNotifications();
-  }, [currentUser]);
+  }, [fetchNotifications]);
 
   const markAsRead = async (id: string) => {
     try {
+      console.log('[Notification] Mark as read:', id);
       await axios.put(`/api/notifications/${id}/read`);
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, read: true } : n))
@@ -122,27 +141,35 @@ export default function NotificationCenter() {
     }
   };
 
-  const handleAccept = async (swapRequestId: string) => {
+  const handleAccept = async (swapRequestId: string, notificationId: string) => {
     try {
+      console.log('[Notification] Accepting swap:', swapRequestId);
       await axios.post(`/api/swap/${swapRequestId}/accept`);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === notificationId ? { ...n, read: true } : n))
+      );
       showToast('已接受交换请求', 'success');
       fetchNotifications();
       refreshNotifications();
     } catch (error) {
       console.error('接受交换失败:', error);
-      showToast('操作失败', 'error');
+      showToast('操作失败：' + (error as Error).message, 'error');
     }
   };
 
-  const handleReject = async (swapRequestId: string) => {
+  const handleReject = async (swapRequestId: string, notificationId: string) => {
     try {
+      console.log('[Notification] Rejecting swap:', swapRequestId);
       await axios.post(`/api/swap/${swapRequestId}/reject`);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === notificationId ? { ...n, read: true } : n))
+      );
       showToast('已拒绝交换请求', 'success');
       fetchNotifications();
       refreshNotifications();
     } catch (error) {
       console.error('拒绝交换失败:', error);
-      showToast('操作失败', 'error');
+      showToast('操作失败：' + (error as Error).message, 'error');
     }
   };
 

@@ -35,17 +35,22 @@ body {
 button {
   font-family: inherit;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+  -webkit-transition: all 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
   border: none;
   outline: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 button:hover {
   transform: translateY(-1px);
+  -webkit-transform: translateY(-1px);
 }
 
 button:active {
   transform: translateY(0);
+  -webkit-transform: translateY(0);
 }
 
 a {
@@ -175,6 +180,20 @@ textarea:focus {
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
 
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+  transition: all 0.3s ease;
+}
+
+.btn-sm:hover {
+  transform: translateY(-1px);
+}
+
+.btn-sm:active {
+  transform: translateY(0);
+}
+
 .navbar {
   position: sticky;
   top: 0;
@@ -289,35 +308,39 @@ textarea:focus {
 
 .collection-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 280px);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 280px));
   gap: 24px;
   justify-content: center;
+  width: 100%;
 }
 
 @media (max-width: 768px) {
   .collection-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
     gap: 16px;
   }
 }
 
 @media (max-width: 480px) {
   .collection-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(1, 1fr) !important;
+    gap: 16px;
+    padding: 0 8px;
   }
 }
 
 .card {
   width: 280px;
   height: 360px;
-  background: var(--card-bg);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
   animation: fadeInUp 0.5s ease forwards;
   opacity: 0;
+  will-change: transform, box-shadow;
 }
 
 @media (max-width: 768px) {
@@ -328,8 +351,10 @@ textarea:focus {
 }
 
 .card:hover {
-  transform: translateY(-6px);
-  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-6px) translateZ(0);
+  -webkit-transform: translateY(-6px) translateZ(0);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+  -webkit-box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
 }
 
 .card-image {
@@ -558,20 +583,42 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.3s ease forwards;
   opacity: 0;
+  transition: opacity 0.3s ease;
+  animation: dialogFadeIn 0.3s ease-out forwards;
+}
+
+@keyframes dialogFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .dialog-content {
-  background: var(--card-bg);
-  border-radius: var(--radius-card);
+  background: #ffffff;
+  border-radius: 16px;
   padding: 32px;
   max-width: 400px;
   width: 90%;
   text-align: center;
-  animation: scaleIn 0.3s ease forwards;
-  animation-delay: 0.1s;
   opacity: 0;
+  transform: scale(0.9);
+  transition: all 0.3s ease;
+  animation: dialogScaleIn 0.3s ease-out 0.05s forwards;
+}
+
+@keyframes dialogScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .dialog-title {
