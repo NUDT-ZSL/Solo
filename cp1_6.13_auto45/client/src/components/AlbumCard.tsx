@@ -59,7 +59,10 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ podcast }) => {
 
   useEffect(() => {
     if (!isLoading) {
-      drawWaveform();
+      const timer = setTimeout(() => {
+        drawWaveform();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [isLoading, drawWaveform]);
 
