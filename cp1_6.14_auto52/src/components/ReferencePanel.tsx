@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, memo, useCallback } from 'react'
 import { SHADE_LABELS } from '../utils/colorUtils'
 import './ReferencePanel.css'
 
@@ -16,7 +16,35 @@ interface VariableItem {
   value: string
 }
 
-export function ReferencePanel({
+interface ReferenceVarItemProps {
+  name: string
+  value: string
+  copied: boolean
+  onClick: (name: string, value: string) => void
+}
+
+const ReferenceVarItem = memo(function ReferenceVarItem({
+  name,
+  value,
+  copied,
+  onClick,
+}: ReferenceVarItemProps) {
+  return (
+    <div
+      className={`reference-var-item ${copied ? 'copied' : ''}`}
+      onClick={() => onClick(name, value)}
+      title={`${name}: ${value}`}
+    >
+      <div
+        className="reference-var-swatch"
+        style={{ backgroundColor: value }}
+      />
+      <span className="reference-var-name">{name}</span>
+    </div>
+  )
+})
+
+export const ReferencePanel = memo(function ReferencePanel({
   primary,
   secondary,
   neutral,
@@ -45,11 +73,13 @@ export function ReferencePanel({
     return vars
   }, [primary, secondary, neutral, success, warning, error])
 
-  const handleCopy = (name: string, value: string) => {
+  const handleCopy = useCallback((name: string, value: string) => {
     navigator.clipboard.writeText(name).catch(() => {})
     setCopiedVar(name)
     setTimeout(() => setCopiedVar(null), 1000)
-  }
+  }, [])
+
+  const displayVars = useMemo(() => variables.slice(0, 12), [variables])
 
   return (
     <div className="reference-panel">
@@ -58,19 +88,14 @@ export function ReferencePanel({
         <span className="reference-panel-hint">点击复制</span>
       </div>
       <div className="reference-panel-grid">
-        {variables.slice(0, 12).map(v => (
-          <div
+        {displayVars.map(v => (
+          <ReferenceVarItem
             key={v.name}
-            className={`reference-var-item ${copiedVar === v.name ? 'copied' : ''}`}
-            onClick={() => handleCopy(v.name, v.value)}
-            title={`${v.name}: ${v.value}`}
-          >
-            <div
-              className="reference-var-swatch"
-              style={{ backgroundColor: v.value }}
-            />
-            <span className="reference-var-name">{v.name}</span>
-          </div>
+            name={v.name}
+            value={v.value}
+            copied={copiedVar === v.name}
+            onClick={handleCopy}
+          />
         ))}
       </div>
       <div className="reference-panel-more">
@@ -78,4 +103,4 @@ export function ReferencePanel({
       </div>
     </div>
   )
-}
+})

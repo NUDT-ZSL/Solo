@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react'
 import {
   parseColor,
   generateShades,
@@ -24,6 +24,49 @@ interface ColorEditorProps {
   onExport: () => void
 }
 
+interface ShadeCardProps {
+  shade: string
+  label: string
+  onClick: (hex: string) => void
+}
+
+const ShadeCard = memo(function ShadeCard({ shade, label, onClick }: ShadeCardProps) {
+  return (
+    <div
+      className="shade-card"
+      onClick={() => onClick(shade)}
+    >
+      <div
+        className="shade-card-preview"
+        style={{ backgroundColor: shade }}
+      />
+      <div className="shade-card-info">
+        <span className="shade-card-level">{label}</span>
+        <span className="shade-card-hex">{shade}</span>
+      </div>
+    </div>
+  )
+})
+
+const ColorSlotTab = memo(function ColorSlotTab({
+  slot,
+  isActive,
+  onClick,
+}: {
+  slot: ColorSlot
+  isActive: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      className={`color-slot-tab ${isActive ? 'active' : ''}`}
+      style={{ backgroundColor: slot.hex }}
+      onClick={onClick}
+      title={slot.name}
+    />
+  )
+})
+
 export function ColorEditor({
   slots,
   activeSlotId,
@@ -40,11 +83,44 @@ export function ColorEditor({
   const [isAnimating, setIsAnimating] = useState(false)
   const [lightnessOffset, setLightnessOffset] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const rafIdRef = useRef<number | null>(null)
+  const pendingSliderRef = useRef<{ offset: number; hex: string; id: string } | null>(null)
 
   useEffect(() => {
     setInputValue(activeSlot.hex)
     setLightnessOffset(0)
   }, [activeSlot.id, activeSlot.hex])
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+      }
+    }
+  }, [])
+
+  const commitSliderUpdate = useCallback(() => {
+    rafIdRef.current = null
+    const pending = pendingSliderRef.current
+    if (pending) {
+      pendingSliderRef.current = null
+      onSlotChange(pending.id, pending.hex)
+    }
+  }, [onSlotChange])
+
+  const scheduleSliderUpdate = useCallback(
+    (offset: number) => {
+      const hsl = hexToHsl(activeSlot.hex)
+      const newL = Math.max(3, Math.min(97, hsl.l + offset))
+      const newHex = hslToHex({ ...hsl, l: newL })
+      pendingSliderRef.current = { offset, hex: newHex, id: activeSlot.id }
+
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(commitSliderUpdate)
+      }
+    },
+    [activeSlot.hex, activeSlot.id, commitSliderUpdate]
+  )
 
   const handleColorApply = useCallback(() => {
     const parsed = parseColor(inputValue)
@@ -76,23 +152,21 @@ export function ColorEditor({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const offset = parseInt(e.target.value, 10)
       setLightnessOffset(offset)
-
-      const hsl = hexToHsl(activeSlot.hex)
-      const newL = Math.max(3, Math.min(97, hsl.l + offset))
-      const newHex = hslToHex({ ...hsl, l: newL })
-      onSlotChange(activeSlot.id, newHex)
+      scheduleSliderUpdate(offset)
     },
-    [activeSlot.hex, activeSlot.id, onSlotChange]
+    [scheduleSliderUpdate]
   )
 
-  const handleShadeClick = useCallback(
-    (shadeHex: string) => {
-      navigator.clipboard.writeText(shadeHex).catch(() => {})
-    },
-    []
+  const handleShadeClick = useCallback((shadeHex: string) => {
+    navigator.clipboard.writeText(shadeHex).catch(() => {})
+  }, [])
+
+  const primaryHex = useMemo(
+    () => slots.find(s => s.id === 'primary')?.hex || '#6366f1',
+    [slots]
   )
 
-  const primaryHex = slots.find(s => s.id === 'primary')?.hex || '#6366f1'
+  const shades = activeSlot.shades
 
   return (
     <div className="color-editor">
@@ -103,12 +177,11 @@ export function ColorEditor({
 
       <div className="color-slot-tabs">
         {slots.map(slot => (
-          <button
+          <ColorSlotTab
             key={slot.id}
-            className={`color-slot-tab ${slot.id === activeSlotId ? 'active' : ''}`}
-            style={{ backgroundColor: slot.hex }}
+            slot={slot}
+            isActive={slot.id === activeSlotId}
             onClick={() => onActiveSlotChange(slot.id)}
-            title={slot.name}
           />
         ))}
       </div>
@@ -158,22 +231,16 @@ export function ColorEditor({
           <span>色阶</span>
           <span className="shade-list-hint">点击复制色值</span>
         </div>
-        {activeSlot.shades.map((shade, index) => (
-          <div
-            key={SHADE_LABELS[index]}
-            className="shade-card"
-            onClick={() => handleShadeClick(shade)}
-          >
-            <div
-              className="shade-card-preview"
-              style={{ backgroundColor: shade }}
+        <div className="shade-list-inner">
+          {shades.map((shade, index) => (
+            <ShadeCard
+              key={`${activeSlot.id}-${SHADE_LABELS[index]}`}
+              shade={shade}
+              label={SHADE_LABELS[index]}
+              onClick={handleShadeClick}
             />
-            <div className="shade-card-info">
-              <span className="shade-card-level">{SHADE_LABELS[index]}</span>
-              <span className="shade-card-hex">{shade}</span>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <button

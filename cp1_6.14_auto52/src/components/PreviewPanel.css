@@ -61,6 +61,10 @@
   transition: width 0.25s ease, left 0.25s ease;
 }
 
+.preview-nav-link:hover {
+  color: var(--link-hover, #374151);
+}
+
 .preview-nav-link:hover::after {
   width: 100%;
   left: 0;

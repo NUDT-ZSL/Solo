@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, memo } from 'react'
 import { getContrastText } from '../utils/colorUtils'
 import './PreviewPanel.css'
 
@@ -13,7 +13,7 @@ interface PreviewPanelProps {
   onDarkModeChange: (dark: boolean) => void
 }
 
-export function PreviewPanel({
+export const PreviewPanel = memo(function PreviewPanel({
   primaryShades,
   secondaryShades,
   neutralShades,
@@ -24,11 +24,10 @@ export function PreviewPanel({
   onDarkModeChange,
 }: PreviewPanelProps) {
   const primary = primaryShades[5]
+  const primaryNav = darkMode ? primaryShades[3] : primaryShades[5]
   const secondary = secondaryShades[5]
   const neutral300 = neutralShades[3]
   const neutral700 = neutralShades[7]
-  const neutral800 = neutralShades[8]
-  const neutral900 = neutralShades[9]
 
   const bgColor = darkMode ? '#1a1a2e' : '#f8f9fa'
   const textColor = darkMode ? '#e2e8f0' : '#1f2937'
@@ -38,6 +37,8 @@ export function PreviewPanel({
   const inputBorder = darkMode ? '#3a3a4e' : neutral300
   const navBg = darkMode ? '#2a2a3e' : '#ffffff'
   const navBorder = darkMode ? '#3a3a4e' : neutral300
+  const navTextColor = darkMode ? '#f1f5f9' : '#1f2937'
+  const navLinkHover = darkMode ? '#cbd5e1' : '#374151'
   const toggleBg = darkMode ? neutral700 : neutral300
 
   const primaryText = useMemo(
@@ -62,20 +63,36 @@ export function PreviewPanel({
           transition: 'background-color 0.3s ease-in-out, border-color 0.3s ease-in-out',
         }}
       >
-        <div className="preview-nav-brand" style={{ color: primary }}>
+        <div className="preview-nav-brand" style={{ color: primaryNav }}>
           ChromaChord
         </div>
         <div className="preview-nav-links">
-          <a href="#" className="preview-nav-link" style={{ color: textColor }}>
+          <a
+            href="#"
+            className="preview-nav-link"
+            style={{ color: navTextColor, ['--link-hover' as string]: navLinkHover }}
+          >
             首页
           </a>
-          <a href="#" className="preview-nav-link" style={{ color: textColor }}>
+          <a
+            href="#"
+            className="preview-nav-link"
+            style={{ color: navTextColor, ['--link-hover' as string]: navLinkHover }}
+          >
             组件
           </a>
-          <a href="#" className="preview-nav-link" style={{ color: textColor }}>
+          <a
+            href="#"
+            className="preview-nav-link"
+            style={{ color: navTextColor, ['--link-hover' as string]: navLinkHover }}
+          >
             文档
           </a>
-          <a href="#" className="preview-nav-link" style={{ color: textColor }}>
+          <a
+            href="#"
+            className="preview-nav-link"
+            style={{ color: navTextColor, ['--link-hover' as string]: navLinkHover }}
+          >
             关于
           </a>
         </div>
@@ -299,4 +316,4 @@ export function PreviewPanel({
       </div>
     </div>
   )
-}
+})

@@ -157,7 +157,7 @@
 .shade-slider {
   -webkit-appearance: none;
   appearance: none;
-  width: 320px;
+  width: 300px;
   height: 6px;
   border-radius: 3px;
   background: #3a3a4e;
@@ -240,7 +240,7 @@
 }
 
 .shade-card:hover {
-  background: #3a3a4e;
+  background: #4a4a5e;
 }
 
 .shade-card-preview {
