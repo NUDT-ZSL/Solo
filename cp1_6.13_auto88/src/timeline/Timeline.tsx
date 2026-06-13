@@ -1,30 +1,37 @@
-import { useCallback, useRef, useEffect } from 'react';
-import '../styles/Timeline.css';
+import { useCallback, useRef, useEffect, memo } from 'react';
+import './Timeline.css';
 
 interface TimelineProps {
   currentHour: number;
   onHourChange: (hour: number) => void;
 }
 
-export function Timeline({ currentHour, onHourChange }: TimelineProps) {
+function TimelineComponent({ currentHour, onHourChange }: TimelineProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const rafId = useRef<number | null>(null);
+  const pendingHour = useRef<number | null>(null);
 
   const updateHourFromPosition = useCallback((clientY: number) => {
     if (!trackRef.current) return;
     const rect = trackRef.current.getBoundingClientRect();
     const percentage = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
     const hour = percentage * 24;
-    onHourChange(hour);
+    pendingHour.current = hour;
+    if (rafId.current === null) {
+      rafId.current = requestAnimationFrame(() => {
+        if (pendingHour.current !== null) {
+          onHourChange(pendingHour.current);
+          pendingHour.current = null;
+        }
+        rafId.current = null;
+      });
+    }
   }, [onHourChange]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging.current) return;
-    if (rafId.current !== null) cancelAnimationFrame(rafId.current);
-    rafId.current = requestAnimationFrame(() => {
-      updateHourFromPosition(e.clientY);
-    });
+    updateHourFromPosition(e.clientY);
   }, [updateHourFromPosition]);
 
   const handleMouseUp = useCallback(() => {
@@ -61,6 +68,7 @@ export function Timeline({ currentHour, onHourChange }: TimelineProps) {
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const handleTop = (currentHour / 24) * 100;
+  const selectedHour = Math.round(currentHour);
 
   return (
     <div className="timeline-container">
@@ -80,7 +88,7 @@ export function Timeline({ currentHour, onHourChange }: TimelineProps) {
         >
           <div className="timeline-line" />
           {hours.map((hour) => {
-            const isSelected = Math.floor(currentHour) === hour;
+            const isSelected = selectedHour === hour;
             return (
               <div
                 key={hour}
@@ -91,7 +99,12 @@ export function Timeline({ currentHour, onHourChange }: TimelineProps) {
                   onHourChange(hour);
                 }}
               >
-                {isSelected && <div className="timeline-pulse" />}
+                {isSelected && (
+                  <>
+                    <div className="timeline-pulse timeline-pulse-1" />
+                    <div className="timeline-pulse timeline-pulse-2" />
+                  </>
+                )}
                 <div className="timeline-dot" />
                 <span className="timeline-label">{String(hour).padStart(2, '0')}:00</span>
               </div>
@@ -107,3 +120,5 @@ export function Timeline({ currentHour, onHourChange }: TimelineProps) {
     </div>
   );
 }
+
+export const Timeline = memo(TimelineComponent);

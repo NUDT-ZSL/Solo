@@ -36,7 +36,7 @@
 
 .timeline-track {
   position: relative;
-  width: 120px;
+  width: 140px;
   height: 100%;
   cursor: pointer;
   user-select: none;
@@ -44,17 +44,16 @@
 
 .timeline-line {
   position: absolute;
-  left: 50%;
+  left: 20px;
   top: 0;
   bottom: 0;
   width: 2px;
   background: linear-gradient(to bottom, #e5e7eb, #d1d5db, #e5e7eb);
-  transform: translateX(-50%);
 }
 
 .timeline-node {
   position: absolute;
-  left: 50%;
+  left: 20px;
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
@@ -70,6 +69,7 @@
   background: #9ca3af;
   transition: all 0.2s ease;
   z-index: 3;
+  flex-shrink: 0;
 }
 
 .timeline-node:hover .timeline-dot {
@@ -80,6 +80,7 @@
 .timeline-node.selected .timeline-dot {
   background: #f59e0b;
   transform: scale(1.5);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
 }
 
 .timeline-pulse {
@@ -89,20 +90,34 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f59e0b;
   transform: translate(-50%, -50%);
-  animation: pulse 1.5s ease-out infinite;
+  pointer-events: none;
   z-index: 1;
 }
 
-@keyframes pulse {
+.timeline-pulse-1 {
+  animation: pulse-glow 1.5s ease-out infinite;
+}
+
+.timeline-pulse-2 {
+  animation: pulse-glow 1.5s ease-out infinite 0.75s;
+}
+
+@keyframes pulse-glow {
   0% {
     transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
+    opacity: 0.8;
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.8);
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(3);
+    opacity: 0;
+    box-shadow: 0 0 0 12px rgba(245, 158, 11, 0);
   }
   100% {
-    transform: translate(-50%, -50%) scale(3.5);
+    transform: translate(-50%, -50%) scale(3);
     opacity: 0;
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
   }
 }
 
@@ -112,7 +127,7 @@
   font-weight: 500;
   white-space: nowrap;
   position: absolute;
-  left: calc(50% + 20px);
+  left: 20px;
   transform: translateY(-50%);
   pointer-events: none;
 }
@@ -124,7 +139,7 @@
 
 .timeline-handle {
   position: absolute;
-  left: 50%;
+  left: 20px;
   transform: translateX(-50%);
   width: 20px;
   height: 20px;

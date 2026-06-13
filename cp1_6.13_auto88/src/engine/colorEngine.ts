@@ -22,17 +22,17 @@ function hslToHex(h: number, s: number, l: number): string {
 function getLightness(hour: number): number {
   const normalized = (hour - 6) / 24;
   const angle = normalized * Math.PI * 2;
-  return 0.5 + 0.25 * Math.sin(angle);
+  return 0.45 + 0.22 * Math.sin(angle);
 }
 
 function getSaturation(hour: number): number {
   const isDaytime = hour >= 6 && hour <= 18;
   if (isDaytime) {
     const transition = Math.sin(((hour - 6) / 12) * Math.PI);
-    return 0.55 + 0.2 * transition;
+    return 0.58 + 0.18 * transition;
   } else {
     const nightProgress = hour < 6 ? (hour + 6) / 12 : (hour - 18) / 12;
-    return 0.55 - 0.15 * Math.sin(nightProgress * Math.PI);
+    return 0.58 - 0.18 * Math.sin(nightProgress * Math.PI);
   }
 }
 
@@ -47,19 +47,57 @@ export function generateColorPalette(hour: number): [string, string, string, str
   const saturation = getSaturation(clampedHour);
 
   const primaryHue = baseHue;
-  const secondaryHue = (baseHue + 30) % 360;
+  const secondaryHue = (baseHue + 32) % 360;
   const accentHue = (baseHue + 180) % 360;
 
   const primary = hslToHex(primaryHue, saturation, lightness);
-  const secondary = hslToHex(secondaryHue, saturation * 0.9, lightness * 0.95);
-  const accent = hslToHex(accentHue, saturation * 1.1, Math.min(lightness * 1.1, 0.9));
+  const secondary = hslToHex(secondaryHue, saturation * 0.9, Math.min(lightness * 0.97, 0.92));
+  const accent = hslToHex(accentHue, Math.min(saturation * 1.05, 0.9), Math.min(Math.max(lightness * 1.05, 0.3), 0.85));
 
-  const bgLightness = lightness > 0.5 ? 0.95 : 0.1;
-  const bgSaturation = saturation * 0.1;
+  const isDarkMode = lightness < 0.45;
+  const bgLightness = isDarkMode ? 0.08 + (lightness * 0.15) : 0.96 - ((0.7 - lightness) * 0.1);
+  const bgSaturation = Math.min(saturation * 0.12, 0.1);
   const background = hslToHex(baseHue, bgSaturation, bgLightness);
 
-  const textLightness = lightness > 0.5 ? 0.15 : 0.9;
-  const text = hslToHex(baseHue, saturation * 0.2, textLightness);
+  const textLightness = isDarkMode ? 0.9 : 0.12;
+  const text = hslToHex(baseHue, Math.min(saturation * 0.25, 0.2), textLightness);
 
   return [primary, secondary, accent, background, text];
+}
+
+export function validatePalette(): void {
+  const midnightColors = generateColorPalette(0);
+  const noonColors = generateColorPalette(12);
+
+  const hexToRgb = (hex: string) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return [r, g, b];
+  };
+
+  const getLuminance = ([r, g, b]: number[]) => {
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  };
+
+  const midnightBgLum = getLuminance(hexToRgb(midnightColors[3]));
+  const noonBgLum = getLuminance(hexToRgb(noonColors[3]));
+
+  if (midnightBgLum > noonBgLum) {
+    console.warn('配色引擎警告: 0点背景亮度高于12点，请检查亮度曲线');
+  }
+
+  if (midnightBgLum > 100) {
+    console.warn('配色引擎警告: 0点背景色过亮，夜间模式应该是深色');
+  }
+
+  if (noonBgLum < 150) {
+    console.warn('配色引擎警告: 12点背景色过暗，白天模式应该是亮色');
+  }
+
+  const midnightPrimaryLum = getLuminance(hexToRgb(midnightColors[0]));
+  const contrast = Math.abs(midnightBgLum - midnightPrimaryLum);
+  if (contrast < 30) {
+    console.warn('配色引擎警告: 0点主色与背景对比度不足');
+  }
 }
