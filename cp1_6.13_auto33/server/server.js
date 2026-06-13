@@ -184,6 +184,14 @@ function handleReconnect(clientId, message) {
   client.name = player.name;
   player.isActive = true;
 
+  if (room.status === 'playing' && player.hand && player.hand.length > 0) {
+    sendToClient(clientId, {
+      type: 'deal_cards',
+      cards: player.hand,
+      playerId,
+    });
+  }
+
   sendToClient(clientId, {
     type: 'reconnect_success',
     room: getPlayerRoomState(room, playerId),
@@ -408,6 +416,7 @@ function handlePlayerAction(clientId, message) {
         winners: result.winners.map((w) => ({ ...w, hand: w.hand })),
         pot: result.pot,
         communityCards: room.communityCards,
+        chipHistory: room.chipHistory,
       });
 
       const activePlayers = room.players.filter((p) => p.chips > 0);

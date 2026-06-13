@@ -107,6 +107,9 @@ const GamePage: React.FC = () => {
                 prev ? { ...prev, communityCards: message.communityCards } : prev
               );
             }
+            if (message.chipHistory) {
+              setChipHistory(message.chipHistory);
+            }
             break;
 
           case 'game_ended':

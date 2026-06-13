@@ -549,6 +549,232 @@ function runTests() {
     }
   });
 
+  // ========== 边界测试 ==========
+
+  test('evaluateHand - 6张牌含三对时取最大的两对', () => {
+    const cards = [
+      makeCard(14, 'hearts'),
+      makeCard(14, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(10, 'spades'),
+      makeCard(5, 'hearts'),
+      makeCard(5, 'diamonds'),
+    ];
+    const result = evaluateHand(cards);
+    expect(result.rank).toBe(HAND_RANKS.TWO_PAIR);
+    expect(result.highCards[0]).toBe(14);
+    expect(result.highCards[1]).toBe(10);
+  });
+
+  test('evaluateHand - 7张牌应识别葫芦 (三加二)', () => {
+    const cards = [
+      makeCard(10, 'hearts'),
+      makeCard(10, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(5, 'spades'),
+      makeCard(5, 'hearts'),
+      makeCard(2, 'diamonds'),
+      makeCard(3, 'clubs'),
+    ];
+    const result = evaluateHand(cards);
+    expect(result.rank).toBe(HAND_RANKS.FULL_HOUSE);
+    expect(result.highCards[0]).toBe(10);
+    expect(result.highCards[1]).toBe(5);
+  });
+
+  test('evaluateHand - 10JQKA是最大顺子', () => {
+    const cards = [
+      makeCard(10, 'hearts'),
+      makeCard(11, 'diamonds'),
+      makeCard(12, 'clubs'),
+      makeCard(13, 'spades'),
+      makeCard(14, 'hearts'),
+    ];
+    const result = evaluateHand(cards);
+    expect(result.rank).toBe(HAND_RANKS.STRAIGHT);
+    expect(result.highCards[0]).toBe(14);
+  });
+
+  test('evaluateHand - 非连续牌不是顺子', () => {
+    const cards = [
+      makeCard(2, 'hearts'),
+      makeCard(4, 'diamonds'),
+      makeCard(6, 'clubs'),
+      makeCard(8, 'spades'),
+      makeCard(10, 'hearts'),
+    ];
+    const result = evaluateHand(cards);
+    expect(result.rank).toBe(HAND_RANKS.HIGH_CARD);
+  });
+
+  test('evaluateHand - 4张同花+3张不同花不是同花', () => {
+    const cards = [
+      makeCard(2, 'hearts'),
+      makeCard(5, 'hearts'),
+      makeCard(8, 'hearts'),
+      makeCard(10, 'hearts'),
+      makeCard(12, 'diamonds'),
+    ];
+    const result = evaluateHand(cards);
+    expect(result.rank).toBe(HAND_RANKS.HIGH_CARD);
+  });
+
+  test('compareHands - 两对比较大对子优先', () => {
+    const hand1 = evaluateHand([
+      makeCard(14, 'hearts'),
+      makeCard(14, 'diamonds'),
+      makeCard(5, 'clubs'),
+      makeCard(5, 'spades'),
+      makeCard(2, 'hearts'),
+    ]);
+    const hand2 = evaluateHand([
+      makeCard(13, 'hearts'),
+      makeCard(13, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(10, 'spades'),
+      makeCard(2, 'hearts'),
+    ]);
+    expect(compareHands(hand1, hand2)).toBeGreaterThan(0);
+  });
+
+  test('compareHands - 同花顺比较高位', () => {
+    const hand1 = evaluateHand([
+      makeCard(6, 'hearts'),
+      makeCard(7, 'hearts'),
+      makeCard(8, 'hearts'),
+      makeCard(9, 'hearts'),
+      makeCard(10, 'hearts'),
+    ]);
+    const hand2 = evaluateHand([
+      makeCard(5, 'spades'),
+      makeCard(6, 'spades'),
+      makeCard(7, 'spades'),
+      makeCard(8, 'spades'),
+      makeCard(9, 'spades'),
+    ]);
+    expect(compareHands(hand1, hand2)).toBeGreaterThan(0);
+  });
+
+  test('compareHands - 顺子比较高位', () => {
+    const hand1 = evaluateHand([
+      makeCard(10, 'hearts'),
+      makeCard(11, 'diamonds'),
+      makeCard(12, 'clubs'),
+      makeCard(13, 'spades'),
+      makeCard(14, 'hearts'),
+    ]);
+    const hand2 = evaluateHand([
+      makeCard(5, 'hearts'),
+      makeCard(6, 'diamonds'),
+      makeCard(7, 'clubs'),
+      makeCard(8, 'spades'),
+      makeCard(9, 'hearts'),
+    ]);
+    expect(compareHands(hand1, hand2)).toBeGreaterThan(0);
+  });
+
+  test('compareHands - 同花比较逐张', () => {
+    const hand1 = evaluateHand([
+      makeCard(14, 'hearts'),
+      makeCard(10, 'hearts'),
+      makeCard(8, 'hearts'),
+      makeCard(5, 'hearts'),
+      makeCard(2, 'hearts'),
+    ]);
+    const hand2 = evaluateHand([
+      makeCard(13, 'diamonds'),
+      makeCard(10, 'diamonds'),
+      makeCard(8, 'diamonds'),
+      makeCard(5, 'diamonds'),
+      makeCard(2, 'diamonds'),
+    ]);
+    expect(compareHands(hand1, hand2)).toBeGreaterThan(0);
+  });
+
+  test('compareHands - 四条比较kicker', () => {
+    const hand1 = evaluateHand([
+      makeCard(10, 'hearts'),
+      makeCard(10, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(10, 'spades'),
+      makeCard(14, 'hearts'),
+    ]);
+    const hand2 = evaluateHand([
+      makeCard(10, 'hearts'),
+      makeCard(10, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(10, 'spades'),
+      makeCard(5, 'hearts'),
+    ]);
+    expect(compareHands(hand1, hand2)).toBeGreaterThan(0);
+  });
+
+  test('compareHands - 三条比较kicker', () => {
+    const hand1 = evaluateHand([
+      makeCard(10, 'hearts'),
+      makeCard(10, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(14, 'spades'),
+      makeCard(8, 'hearts'),
+    ]);
+    const hand2 = evaluateHand([
+      makeCard(10, 'hearts'),
+      makeCard(10, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(5, 'spades'),
+      makeCard(8, 'hearts'),
+    ]);
+    expect(compareHands(hand1, hand2)).toBeGreaterThan(0);
+  });
+
+  test('dealHands - 空玩家列表不崩溃', () => {
+    const deck = createDeck();
+    const result = dealHands([], deck);
+    expect(result.players.length).toBe(0);
+    expect(result.deck.length).toBe(52);
+  });
+
+  test('shuffleDeck - 空牌堆不崩溃', () => {
+    const result = shuffleDeck([]);
+    expect(result.length).toBe(0);
+  });
+
+  test('shuffleDeck - 单张牌不崩溃', () => {
+    const result = shuffleDeck([makeCard(14, 'spades')]);
+    expect(result.length).toBe(1);
+    expect(result[0].rank).toBe(14);
+  });
+
+  test('determineWinners - 全部弃牌只剩一人', () => {
+    const players = [
+      { id: '1', hand: [makeCard(2, 'hearts'), makeCard(3, 'diamonds')], isFolded: false },
+      { id: '2', hand: [makeCard(14, 'hearts'), makeCard(14, 'diamonds')], isFolded: true },
+      { id: '3', hand: [makeCard(10, 'hearts'), makeCard(10, 'diamonds')], isFolded: true },
+    ];
+    const communityCards = [
+      makeCard(4, 'clubs'),
+      makeCard(5, 'spades'),
+      makeCard(6, 'hearts'),
+    ];
+    const winners = determineWinners(players, communityCards);
+    expect(winners.length).toBe(1);
+    expect(winners[0].id).toBe('1');
+  });
+
+  test('evaluateHand - 7张牌含四条+同花应返回四条', () => {
+    const cards = [
+      makeCard(10, 'hearts'),
+      makeCard(10, 'diamonds'),
+      makeCard(10, 'clubs'),
+      makeCard(10, 'spades'),
+      makeCard(5, 'hearts'),
+      makeCard(8, 'hearts'),
+      makeCard(12, 'hearts'),
+    ];
+    const result = evaluateHand(cards);
+    expect(result.rank).toBe(HAND_RANKS.FOUR_OF_A_KIND);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   return failed === 0;
 }

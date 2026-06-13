@@ -25,7 +25,7 @@ const ChipBar: React.FC<ChipBarProps> = ({
   isFolded = false,
   isAllIn = false,
   gameStatus = 'waiting',
-  round = 'preflop',
+  round = 'preflop' as 'preflop' | 'flop' | 'turn' | 'river' | 'showdown',
   onAction,
 }) => {
   const [raiseAmount, setRaiseAmount] = useState(40);
