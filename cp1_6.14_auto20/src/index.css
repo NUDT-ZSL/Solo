@@ -1,0 +1,270 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  color: #374151;
+}
+
+.app-container {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.canvas-container {
+  flex: 1;
+  min-width: 600px;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.panel-container {
+  width: 280px;
+  min-width: 280px;
+  height: 100vh;
+  padding: 24px 20px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+  overflow-y: auto;
+  transition: opacity 0.5s ease;
+}
+
+.panel-meditating {
+  opacity: 0.4;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  letter-spacing: 0.02em;
+}
+
+.panel-hint {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.water-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  color: white;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.2s ease;
+  outline: none;
+}
+
+.water-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #93c5fd, #60a5fa);
+}
+
+.water-btn:disabled {
+  cursor: not-allowed;
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.light-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #d1d5db;
+  outline: none;
+  cursor: pointer;
+}
+
+.light-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.light-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.slider-value {
+  font-size: 12px;
+  color: #6b7280;
+  min-width: 24px;
+  text-align: right;
+}
+
+.sound-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.5);
+  color: #1f2937;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  outline: none;
+}
+
+.sound-btn:hover {
+  background: rgba(255,255,255,0.8);
+}
+
+.sound-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+  transition: background 0.3s ease;
+}
+
+.sound-dot-active {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+.mood-bar-container {
+  width: 200px;
+  height: 12px;
+  border-radius: 6px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.mood-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.5s linear, background-color 0.5s linear;
+}
+
+.meditate-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #374151;
+  transition: background 0.2s ease, color 0.2s ease;
+  outline: none;
+}
+
+.meditate-btn:hover {
+  background: rgba(255,255,255,0.6);
+}
+
+.meditate-active {
+  background: rgba(139, 92, 246, 0.3);
+  color: #7c3aed;
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .panel-container {
+    width: 100%;
+    min-width: unset;
+    height: 80px;
+    min-height: 80px;
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 16px;
+    gap: 12px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .panel-section {
+    flex-shrink: 0;
+  }
+
+  .panel-hint {
+    display: none;
+  }
+
+  .canvas-container {
+    min-width: unset;
+    flex: 1;
+  }
+
+  .mood-bar-container {
+    width: 120px;
+  }
+
+  .meditate-btn {
+    position: static;
+    flex-shrink: 0;
+  }
+}
