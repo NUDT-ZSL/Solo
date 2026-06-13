@@ -83,7 +83,7 @@ class DataStore {
 
     await this.db.update(
       { _id: id },
-      { $set: { favorites, isFavorited }
+      { $set: { favorites, isFavorited } }
     );
 
     return { favorites, isFavorited };
