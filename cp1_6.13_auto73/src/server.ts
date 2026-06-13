@@ -37,6 +37,9 @@ interface Review {
   createdAt: number;
 }
 
+type CategoryType = 'portrait' | 'landscape' | 'street' | 'still';
+const VALID_CATEGORIES: CategoryType[] = ['portrait', 'landscape', 'street', 'still'];
+
 const db = {
   photos: Datastore.create({
     filename: path.join(__dirname, '../data/photos.db'),
@@ -131,16 +134,16 @@ async function urlToBase64(url: string): Promise<string> {
 }
 
 async function initMockData() {
-  const existingPhotos = await db.photos.find({});
+  const existingPhotos = (await db.photos.find({})) as Photo[];
   if (existingPhotos.length > 0) return;
 
   console.log('初始化模拟数据...');
 
-  const categories: Array<'portrait' | 'landscape' | 'street' | 'still'> =
+  const categories: CategoryType[] =
     ['portrait', 'landscape', 'street', 'still'];
 
   for (let i = 0; i < 25; i++) {
-    const category = categories[i % 4];
+    const category: CategoryType = categories[i % 4] as CategoryType;
     const imageUrl = sampleImages[i % sampleImages.length];
     const imageBase64 = await urlToBase64(imageUrl);
 
@@ -158,7 +161,7 @@ async function initMockData() {
       compositeScore: 0
     };
 
-    const insertedPhoto = await db.photos.insert(photo);
+    const insertedPhoto = (await db.photos.insert(photo)) as Photo;
 
     const reviewCount = Math.floor(Math.random() * 8) + 2;
     let totalRating = 0;
@@ -244,12 +247,12 @@ app.get('/api/photos', async (req: Request, res: Response) => {
   const skip = (page - 1) * limit;
 
   try {
-    const total = await db.photos.count(query);
-    const photos = await db.photos
+    const total = (await db.photos.count(query)) as number;
+    const photos = (await db.photos
       .find(query)
       .sort(sortQuery)
       .skip(skip)
-      .limit(limit);
+      .limit(limit)) as Photo[];
 
     res.json({
       photos,
@@ -267,15 +270,15 @@ app.get('/api/photos/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    const photo = await db.photos.findOne({ _id: id });
+    const photo = (await db.photos.findOne({ _id: id })) as Photo | null;
     if (!photo) {
       return res.status(404).json({ error: '作品不存在' });
     }
 
-    const reviews = await db.reviews
+    const reviews = (await db.reviews
       .find({ photoId: id })
       .sort({ createdAt: -1 })
-      .limit(20);
+      .limit(20)) as Review[];
 
     res.json({ photo, reviews });
   } catch (error) {
@@ -295,10 +298,14 @@ app.post('/api/photos', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '标题不能超过30字' });
     }
 
+    if (!VALID_CATEGORIES.includes(category as CategoryType)) {
+      return res.status(400).json({ error: '无效的分类类型' });
+    }
+
     const photo: Photo = {
       _id: uuidv4(),
       title,
-      category,
+      category: category as CategoryType,
       description: description || '',
       imageBase64,
       author: author || '匿名用户',
@@ -309,7 +316,7 @@ app.post('/api/photos', async (req: Request, res: Response) => {
       compositeScore: 0
     };
 
-    const insertedPhoto = await db.photos.insert(photo);
+    const insertedPhoto = (await db.photos.insert(photo)) as Photo;
 
     res.json({
       success: true,
@@ -325,11 +332,11 @@ app.put('/api/photos/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { averageRating, reviewCount, compositeScore } = req.body;
 
-    const updated = await db.photos.update(
+    const updated = (await db.photos.update(
       { _id: id },
       { $set: { averageRating, reviewCount, compositeScore } },
       { returnUpdatedDocs: true }
-    );
+    )) as unknown as Photo;
 
     res.json({ success: true, photo: updated });
   } catch (error) {
@@ -346,12 +353,12 @@ app.get('/api/photos/:id/reviews', async (req: Request, res: Response) => {
   const skip = (page - 1) * limit;
 
   try {
-    const total = await db.reviews.count({ photoId: id });
-    const reviews = await db.reviews
+    const total = (await db.reviews.count({ photoId: id })) as number;
+    const reviews = (await db.reviews
       .find({ photoId: id })
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)) as Review[];
 
     res.json({ reviews, total });
   } catch (error) {
@@ -387,10 +394,10 @@ app.post('/api/reviews', async (req: Request, res: Response) => {
       createdAt: Date.now()
     };
 
-    const insertedReview = await db.reviews.insert(review);
+    const insertedReview = (await db.reviews.insert(review)) as Review;
     await updatePhotoRating(photoId);
 
-    const updatedPhoto = await db.photos.findOne({ _id: photoId });
+    const updatedPhoto = (await db.photos.findOne({ _id: photoId })) as Photo | null;
 
     res.json({
       success: true,
@@ -406,10 +413,10 @@ app.get('/api/hot', async (req: Request, res: Response) => {
   await simulateDelay();
 
   try {
-    const photos = await db.photos
+    const photos = (await db.photos
       .find({})
       .sort({ compositeScore: -1 })
-      .limit(10);
+      .limit(10)) as Photo[];
 
     res.json({ photos });
   } catch (error) {
