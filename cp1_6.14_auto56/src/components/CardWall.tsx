@@ -146,7 +146,6 @@ const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
                           ? null 
                           : `${spec.id}-${colorIndex}`
                       )}
-                      title={color.value}
                     >
                       <span 
                         className="color-value"
@@ -156,6 +155,7 @@ const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
                       >
                         {color.value}
                       </span>
+                      <span className="color-tooltip">{color.value}</span>
                     </div>
                     <span style={colorLabelStyle}>{color.name}</span>
                     
@@ -220,7 +220,7 @@ const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
                   </div>
                   <p style={{
                     ...fontPreviewStyle,
-                    fontFamily: `'${spec.fonts.heading}', ${spec.fonts.fallback}`,
+                    fontFamily: spec.fonts.headingStack || `'${spec.fonts.heading}', ${spec.fonts.fallback}`,
                   }}>
                     设计改变世界
                   </p>
@@ -257,7 +257,7 @@ const CardWall = ({ specs, onSpecChange }: CardWallProps) => {
                   </div>
                   <p style={{
                     ...fontPreviewStyle,
-                    fontFamily: `'${spec.fonts.body}', ${spec.fonts.fallback}`,
+                    fontFamily: spec.fonts.bodyStack || `'${spec.fonts.body}', ${spec.fonts.fallback}`,
                     fontSize: '16px',
                     fontWeight: 400,
                   }}>

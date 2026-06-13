@@ -8,6 +8,8 @@ export interface FontPair {
   heading: string;
   body: string;
   fallback: string;
+  headingStack: string;
+  bodyStack: string;
 }
 
 export interface TypographyLevel {
@@ -55,8 +57,8 @@ const stylePresets: StylePreset[] = [
       ],
     ],
     fontPairs: [
-      { heading: 'Georgia', body: 'Times New Roman', fallback: 'serif' },
-      { heading: 'Playfair Display', body: 'Crimson Text', fallback: 'serif' },
+      { heading: 'Georgia', body: 'Times New Roman', fallback: 'serif', headingStack: "Georgia, 'Palatino Linotype', 'Book Antiqua', Palatino, serif", bodyStack: "'Times New Roman', Times, Georgia, serif" },
+      { heading: 'Playfair Display', body: 'Crimson Text', fallback: 'serif', headingStack: "'Playfair Display', Georgia, 'Palatino Linotype', serif", bodyStack: "'Crimson Text', Georgia, 'Times New Roman', serif" },
     ],
   },
   {
@@ -79,8 +81,8 @@ const stylePresets: StylePreset[] = [
       ],
     ],
     fontPairs: [
-      { heading: 'Inter', body: 'Inter', fallback: 'sans-serif' },
-      { heading: 'Poppins', body: 'Roboto', fallback: 'sans-serif' },
+      { heading: 'Inter', body: 'Inter', fallback: 'sans-serif', headingStack: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", bodyStack: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" },
+      { heading: 'Poppins', body: 'Roboto', fallback: 'sans-serif', headingStack: "Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', Verdana, Arial, sans-serif", bodyStack: "Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Verdana, Arial, sans-serif" },
     ],
   },
   {
@@ -103,8 +105,8 @@ const stylePresets: StylePreset[] = [
       ],
     ],
     fontPairs: [
-      { heading: 'Helvetica Neue', body: 'Helvetica Neue', fallback: 'sans-serif' },
-      { heading: 'SF Pro Display', body: 'SF Pro Text', fallback: 'sans-serif' },
+      { heading: 'Helvetica Neue', body: 'Helvetica Neue', fallback: 'sans-serif', headingStack: "'Helvetica Neue', Helvetica, Arial, Verdana, sans-serif", bodyStack: "'Helvetica Neue', Helvetica, Arial, Verdana, sans-serif" },
+      { heading: 'SF Pro Display', body: 'SF Pro Text', fallback: 'sans-serif', headingStack: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif", bodyStack: "'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif" },
     ],
   },
   {
@@ -127,8 +129,8 @@ const stylePresets: StylePreset[] = [
       ],
     ],
     fontPairs: [
-      { heading: 'Cinzel', body: 'Cormorant Garamond', fallback: 'serif' },
-      { heading: 'UnifrakturMaguntia', body: 'EB Garamond', fallback: 'serif' },
+      { heading: 'Cinzel', body: 'Cormorant Garamond', fallback: 'serif', headingStack: "Cinzel, Georgia, 'Palatino Linotype', 'Book Antiqua', serif", bodyStack: "'Cormorant Garamond', Georgia, 'Times New Roman', Garamond, serif" },
+      { heading: 'UnifrakturMaguntia', body: 'EB Garamond', fallback: 'serif', headingStack: "'UnifrakturMaguntia', Georgia, 'Palatino Linotype', serif", bodyStack: "'EB Garamond', Garamond, Georgia, 'Times New Roman', serif" },
     ],
   },
   {
@@ -151,8 +153,8 @@ const stylePresets: StylePreset[] = [
       ],
     ],
     fontPairs: [
-      { heading: 'Lora', body: 'Merriweather', fallback: 'serif' },
-      { heading: 'Abril Fatface', body: 'Source Serif Pro', fallback: 'serif' },
+      { heading: 'Lora', body: 'Merriweather', fallback: 'serif', headingStack: "Lora, Georgia, 'Palatino Linotype', 'Book Antiqua', serif", bodyStack: "Merriweather, Georgia, 'Times New Roman', Garamond, serif" },
+      { heading: 'Abril Fatface', body: 'Source Serif Pro', fallback: 'serif', headingStack: "'Abril Fatface', Georgia, 'Palatino Linotype', serif", bodyStack: "'Source Serif Pro', Georgia, 'Times New Roman', Garamond, serif" },
     ],
   },
   {
@@ -175,24 +177,50 @@ const stylePresets: StylePreset[] = [
       ],
     ],
     fontPairs: [
-      { heading: 'Orbitron', body: 'Rajdhani', fallback: 'sans-serif' },
-      { heading: 'Space Grotesk', body: 'JetBrains Mono', fallback: 'monospace' },
+      { heading: 'Orbitron', body: 'Rajdhani', fallback: 'sans-serif', headingStack: "Orbitron, Verdana, Arial, 'Trebuchet MS', sans-serif", bodyStack: "Rajdhani, Verdana, Arial, Tahoma, sans-serif" },
+      { heading: 'Space Grotesk', body: 'JetBrains Mono', fallback: 'monospace', headingStack: "'Space Grotesk', -apple-system, BlinkMacSystemFont, Verdana, Arial, sans-serif", bodyStack: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace" },
     ],
   },
 ];
 
 const typographyPresets: TypographyLevel[] = [
-  { tag: 'h1', fontSize: '2.5rem', fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.02em' },
-  { tag: 'h2', fontSize: '2rem', fontWeight: 700, lineHeight: 1.3, letterSpacing: '-0.01em' },
-  { tag: 'h3', fontSize: '1.75rem', fontWeight: 600, lineHeight: 1.3, letterSpacing: '-0.01em' },
-  { tag: 'h4', fontSize: '1.5rem', fontWeight: 600, lineHeight: 1.4, letterSpacing: '0' },
+  { tag: 'h1', fontSize: '3.052rem', fontWeight: 700, lineHeight: 1.125, letterSpacing: '-0.025em' },
+  { tag: 'h2', fontSize: '2.441rem', fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.02em' },
+  { tag: 'h3', fontSize: '1.953rem', fontWeight: 600, lineHeight: 1.25, letterSpacing: '-0.015em' },
+  { tag: 'h4', fontSize: '1.563rem', fontWeight: 600, lineHeight: 1.3, letterSpacing: '-0.01em' },
   { tag: 'h5', fontSize: '1.25rem', fontWeight: 500, lineHeight: 1.4, letterSpacing: '0' },
-  { tag: 'h6', fontSize: '1.125rem', fontWeight: 500, lineHeight: 1.5, letterSpacing: '0' },
+  { tag: 'h6', fontSize: '1rem', fontWeight: 500, lineHeight: 1.5, letterSpacing: '0' },
 ];
 
 const alternativeFonts: Record<string, string[]> = {
-  heading: ['Inter', 'Poppins', 'Roboto', 'Montserrat', 'Open Sans', 'Playfair Display', 'Georgia', 'Helvetica Neue'],
-  body: ['Inter', 'Roboto', 'Open Sans', 'Source Sans Pro', 'Lato', 'Georgia', 'Times New Roman', 'Merriweather'],
+  heading: [
+    'Georgia',
+    'Helvetica Neue',
+    'Verdana',
+    'Trebuchet MS',
+    'Palatino Linotype',
+    'Garamond',
+    'Inter',
+    'Poppins',
+    'Roboto',
+    'Montserrat',
+    'Open Sans',
+    'Playfair Display',
+  ],
+  body: [
+    'Georgia',
+    'Times New Roman',
+    'Verdana',
+    'Arial',
+    'Tahoma',
+    'Garamond',
+    'Inter',
+    'Roboto',
+    'Open Sans',
+    'Source Sans Pro',
+    'Lato',
+    'Merriweather',
+  ],
 };
 
 const getRandomItem = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -248,7 +276,15 @@ export const exportToJSON = (specs: DesignSpec[]): string => {
     exportTime: new Date().toISOString(),
     colors: specs.filter(s => s.type === 'colors').flatMap(s => s.colors || []),
     fonts: specs.filter(s => s.type === 'fonts').map(s => s.fonts),
-    typography: specs.filter(s => s.type === 'typography').map(s => s.typography),
+    typography: specs.filter(s => s.type === 'typography').map(s => 
+      (s.typography || []).map(t => ({
+        tag: t.tag,
+        fontSize: t.fontSize,
+        fontWeight: t.fontWeight,
+        lineHeight: t.lineHeight,
+        letterSpacing: t.letterSpacing,
+      }))
+    ),
   };
   return JSON.stringify(exportData, null, 2);
 };

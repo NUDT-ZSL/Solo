@@ -89,10 +89,6 @@ body {
     margin-left: 0 !important;
     margin-top: 72px;
   }
-
-  .card-grid {
-    grid-template-columns: 1fr !important;
-  }
 }
 
 @media (max-width: 768px) {
@@ -171,9 +167,14 @@ body {
 }
 
 .card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 24px;
+  column-count: 2;
+  column-gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .card-grid {
+    column-count: 1;
+  }
 }
 
 .card {
@@ -181,6 +182,8 @@ body {
   border-radius: 16px;
   padding: 24px;
   will-change: transform, opacity;
+  break-inside: avoid;
+  margin-bottom: 24px;
 }
 
 .color-swatch {
@@ -193,6 +196,7 @@ body {
   justify-content: center;
   transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
 }
 
 .color-swatch:hover {
@@ -202,6 +206,40 @@ body {
 
 .color-swatch:hover .color-value {
   opacity: 1;
+}
+
+.color-swatch:hover .color-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.color-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background-color: #212529;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 5;
+}
+
+.color-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #212529;
 }
 
 .color-value {
