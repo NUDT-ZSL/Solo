@@ -1,19 +1,39 @@
-import { useState } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import ActivityList from './pages/ActivityList';
 import ActivityDetail from './pages/ActivityDetail';
+import TimelineTab from './pages/TimelineTab';
+import GuestsTab from './pages/GuestsTab';
+import ReminderTab from './pages/ReminderTab';
 
-interface Activity {
-  _id: string;
-  name: string;
-  date: string;
-  status: string;
-  location: string;
-  description: string;
-}
+const ScrollRestoration = () => {
+  const location = useLocation();
+  const scrollPositions = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    const key = location.pathname.split('/').slice(0, 4).join('/');
+    const saved = scrollPositions.current[key];
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollTop = saved || 0;
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const mainEl = document.querySelector('main');
+    if (!mainEl) return;
+    const onScroll = () => {
+      const key = location.pathname.split('/').slice(0, 4).join('/');
+      scrollPositions.current[key] = mainEl.scrollTop;
+    };
+    mainEl.addEventListener('scroll', onScroll);
+    return () => mainEl.removeEventListener('scroll', onScroll);
+  }, [location.pathname]);
+
+  return null;
+};
 
 const App = () => {
-  const location = useLocation();
   const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState('activities');
 
@@ -66,9 +86,15 @@ const App = () => {
       </aside>
 
       <main style={styles.mainContent}>
+        <ScrollRestoration />
         <Routes>
           <Route path="/" element={<ActivityList />} />
-          <Route path="/activity/:id" element={<ActivityDetail />} />
+          <Route path="/activity/:id" element={<ActivityDetail />}>
+            <Route index element={<TimelineTab />} />
+            <Route path="timeline" element={<TimelineTab />} />
+            <Route path="guests" element={<GuestsTab />} />
+            <Route path="reminder" element={<ReminderTab />} />
+          </Route>
         </Routes>
       </main>
     </div>
