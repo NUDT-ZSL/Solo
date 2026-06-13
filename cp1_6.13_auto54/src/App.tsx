@@ -1,0 +1,163 @@
+import React from 'react';
+import InputPanel from './components/InputPanel';
+import PreviewPair from './components/PreviewPair';
+import IndicatorPanel from './components/IndicatorPanel';
+import SimulationToggle from './components/SimulationToggle';
+import { ColorScheme, ColorBlindnessType, applyColorBlindnessToScheme } from './utils/ColorCalculator';
+
+const defaultSchemeA: ColorScheme = {
+  primary: '#3B82F6',
+  background: '#FFFFFF',
+  text: '#111827'
+};
+
+const defaultSchemeB: ColorScheme = {
+  primary: '#10B981',
+  background: '#1F2937',
+  text: '#F9FAFB'
+};
+
+const App: React.FC = () => {
+  const [schemeA, setSchemeA] = React.useState<ColorScheme>(defaultSchemeA);
+  const [schemeB, setSchemeB] = React.useState<ColorScheme>(defaultSchemeB);
+  const [filterType, setFilterType] = React.useState<ColorBlindnessType>('normal');
+  const [filterTransitioning, setFilterTransitioning] = React.useState(false);
+
+  const handleFilterChange = (type: ColorBlindnessType) => {
+    setFilterTransitioning(true);
+    setTimeout(() => {
+      setFilterType(type);
+      setTimeout(() => setFilterTransitioning(false), 300);
+    }, 100);
+  };
+
+  const displayedSchemeA = applyColorBlindnessToScheme(schemeA, filterType);
+  const displayedSchemeB = applyColorBlindnessToScheme(schemeB, filterType);
+
+  return (
+    <div style={styles.app}>
+      <style>{`
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; filter: brightness(1.1); }
+        }
+        .filter-transitioning {
+          animation: pulse-glow 0.4s ease-in-out;
+        }
+        * {
+          box-sizing: border-box;
+        }
+        body {
+          margin: 0;
+          padding: 0;
+          background-color: #111827;
+        }
+      `}</style>
+
+      <header style={styles.header}>
+        <div style={styles.logoRow}>
+          <div style={styles.logoIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="13.5" cy="6.5" r=".5" fill="#ffffff"/>
+              <circle cx="17.5" cy="10.5" r=".5" fill="#ffffff"/>
+              <circle cx="8.5" cy="7.5" r=".5" fill="#ffffff"/>
+              <circle cx="6.5" cy="12.5" r=".5" fill="#ffffff"/>
+              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+            </svg>
+          </div>
+          <div>
+            <h1 style={styles.title}>ColorClash</h1>
+            <p style={styles.subtitle}>配色方案对比与可读性分析工具</p>
+          </div>
+        </div>
+      </header>
+
+      <main style={styles.main}>
+        <div style={styles.layout}>
+          <InputPanel
+            schemeA={schemeA}
+            schemeB={schemeB}
+            onSchemeAChange={setSchemeA}
+            onSchemeBChange={setSchemeB}
+          />
+
+          <section style={styles.rightPanel}>
+            <SimulationToggle
+              currentType={filterType}
+              onChange={handleFilterChange}
+            />
+
+            <div className={filterTransitioning ? 'filter-transitioning' : ''}>
+              <PreviewPair
+                schemeA={displayedSchemeA}
+                schemeB={displayedSchemeB}
+                filterActive={filterTransitioning}
+              />
+            </div>
+
+            <IndicatorPanel
+              schemeA={displayedSchemeA}
+              schemeB={displayedSchemeB}
+            />
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  app: {
+    minHeight: '100vh',
+    backgroundColor: '#111827',
+    color: '#f9fafb',
+    fontFamily: "'JetBrains Mono', monospace"
+  },
+  header: {
+    padding: '20px 32px',
+    borderBottom: '1px solid #1f2937'
+  },
+  logoRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14
+  },
+  logoIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #10b981 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  title: {
+    margin: 0,
+    fontSize: 22,
+    fontWeight: 700,
+    fontFamily: "'JetBrains Mono', monospace",
+    letterSpacing: -0.5
+  },
+  subtitle: {
+    margin: '2px 0 0 0',
+    fontSize: 12,
+    color: '#9ca3af',
+    fontFamily: "'JetBrains Mono', monospace"
+  },
+  main: {
+    padding: 28
+  },
+  layout: {
+    display: 'flex',
+    gap: 28,
+    maxWidth: 1400,
+    margin: '0 auto',
+    flexWrap: 'wrap'
+  },
+  rightPanel: {
+    flex: 1,
+    minWidth: 0
+  }
+};
+
+export default App;
