@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WindSculpt - 三维大气气流动态可视化</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #000000;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 14px;
+        color: #e2e8f0;
+      }
+
+      #canvas-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+      }
+
+      #three-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      #terrain-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 2;
+        opacity: 0.3;
+      }
+
+      #color-legend {
+        position: fixed;
+        left: 24px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .legend-bar {
+        width: 20px;
+        height: 300px;
+        background: linear-gradient(to top, #1e3a8a, #3b82f6, #f97316);
+        border-radius: 4px;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+      }
+
+      .legend-labels {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 300px;
+        position: absolute;
+        left: 32px;
+        font-size: 11px;
+        color: #94a3b8;
+      }
+
+      .legend-label {
+        line-height: 1;
+      }
+
+      #control-panel {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        width: 260px;
+        padding: 24px;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 16px;
+        z-index: 20;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .panel-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 20px;
+        color: #f1f5f9;
+        letter-spacing: 0.5px;
+      }
+
+      .control-group {
+        margin-bottom: 20px;
+      }
+
+      .control-group:last-child {
+        margin-bottom: 0;
+      }
+
+      .control-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 13px;
+        color: #cbd5e1;
+      }
+
+      .control-value {
+        font-weight: 600;
+        color: #3b82f6;
+      }
+
+      .slider {
+        width: 100%;
+        height: 6px;
+        -webkit-appearance: none;
+        appearance: none;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        outline: none;
+        cursor: pointer;
+        transition: background 0.3s ease-in-out;
+      }
+
+      .slider:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      .slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        background: #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+      }
+
+      .slider::-webkit-slider-thumb:hover {
+        transform: scale(1.15);
+        box-shadow: 0 2px 12px rgba(59, 130, 246, 0.7);
+      }
+
+      .slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        background: #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
+      }
+
+      .button-group {
+        display: flex;
+        gap: 10px;
+      }
+
+      .btn {
+        flex: 1;
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        color: #e2e8f0;
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .btn:hover {
+        background: rgba(59, 130, 246, 0.3);
+        border-color: rgba(59, 130, 246, 0.5);
+        transform: translateY(-1px);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .btn-primary {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
+      }
+
+      .btn-primary:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+
+      .btn-icon {
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      #tooltip {
+        position: fixed;
+        pointer-events: none;
+        background: rgba(15, 23, 42, 0.95);
+        backdrop-filter: blur(8px);
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #f1f5f9;
+        z-index: 100;
+        opacity: 0;
+        transition: opacity 0.15s ease-in-out;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        white-space: nowrap;
+      }
+
+      #tooltip.visible {
+        opacity: 1;
+      }
+
+      .tooltip-label {
+        color: #94a3b8;
+        font-size: 11px;
+        margin-right: 4px;
+      }
+
+      .tooltip-value {
+        color: #f97316;
+        font-weight: 600;
+      }
+
+      #app-title {
+        position: fixed;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        text-align: center;
+      }
+
+      #app-title h1 {
+        font-size: 20px;
+        font-weight: 600;
+        color: #f1f5f9;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+      }
+
+      #app-title p {
+        font-size: 12px;
+        color: #64748b;
+      }
+
+      .highlight-overlay {
+        position: fixed;
+        pointer-events: none;
+        z-index: 5;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, transparent 70%);
+        transform: translate(-50%, -50%);
+        opacity: 0;
+        transition: opacity 0.15s ease-in-out;
+      }
+
+      .highlight-overlay.active {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container">
+      <canvas id="three-canvas"></canvas>
+      <canvas id="terrain-canvas"></canvas>
+    </div>
+
+    <div id="app-title">
+      <h1>WINDSCULPT</h1>
+      <p>2023 摩羯台风 · 三维大气气流动态可视化</p>
+    </div>
+
+    <div id="color-legend">
+      <div class="legend-bar"></div>
+      <div class="legend-labels">
+        <span class="legend-label">50 m/s</span>
+        <span class="legend-label">40</span>
+        <span class="legend-label">30</span>
+        <span class="legend-label">20</span>
+        <span class="legend-label">10</span>
+        <span class="legend-label">0</span>
+      </div>
+    </div>
+
+    <div id="control-panel">
+      <div class="panel-title">控制面板</div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>速度倍率</span>
+          <span class="control-value" id="speed-value">1.0x</span>
+        </div>
+        <input
+          type="range"
+          id="speed-slider"
+          class="slider"
+          min="0.5"
+          max="2.0"
+          step="0.1"
+          value="1.0"
+        />
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>粒子密度</span>
+          <span class="control-value" id="density-value">2000</span>
+        </div>
+        <input
+          type="range"
+          id="density-slider"
+          class="slider"
+          min="500"
+          max="4000"
+          step="100"
+          value="2000"
+        />
+      </div>
+
+      <div class="control-group">
+        <div class="button-group">
+          <button id="play-btn" class="btn btn-primary">
+            <span class="btn-icon" id="play-icon">⏸</span>
+            <span id="play-text">暂停</span>
+          </button>
+          <button id="view-btn" class="btn">
+            <span class="btn-icon" id="view-icon">⬇</span>
+            <span id="view-text">俯视</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tooltip">
+      <span class="tooltip-label">风速:</span>
+      <span class="tooltip-value" id="tooltip-wind-speed">0.0 m/s</span>
+    </div>
+
+    <div id="highlight" class="highlight-overlay"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
