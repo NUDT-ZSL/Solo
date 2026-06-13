@@ -204,7 +204,7 @@ const BookingPage: React.FC = () => {
 
         <div style={{ marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, color: '#334155', marginBottom: 12 }}>选择服务项目</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          <div className="booking-service-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             {services.map(svc => (
               <div
                 key={svc.name}
@@ -288,7 +288,7 @@ const BookingPage: React.FC = () => {
         {selectedService && selectedDate && selectedTime && (
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: '#334155', marginBottom: 12 }}>填写宠物信息</h3>
-            <div style={{
+            <div className="booking-form-container" style={{
               background: '#ffffff',
               borderRadius: 12,
               padding: 20,
@@ -368,7 +368,7 @@ const BookingPage: React.FC = () => {
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', marginBottom: 20 }}>📅 选择门店</h2>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+      <div className="booking-store-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
         {stores.map(store => {
           const availableCount = store.todaySlots.filter(s => s.available).length
           return (

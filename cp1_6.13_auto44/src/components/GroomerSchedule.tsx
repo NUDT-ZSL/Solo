@@ -123,7 +123,7 @@ const GroomerSchedule: React.FC = () => {
           今日暂无预约
         </div>
       ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+        <div className="groomer-schedule-container" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
           {sorted.map(apt => {
             const isCompleted = apt.status === 'completed'
             const bgColor = isCompleted ? '#f3f4f6' : serviceBgMap[apt.service] || '#f1f5f9'

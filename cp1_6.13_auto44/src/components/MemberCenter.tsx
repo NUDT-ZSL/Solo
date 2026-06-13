@@ -169,7 +169,7 @@ const MemberCenter: React.FC = () => {
 
           <div style={{ background: '#ffffff', borderRadius: 12, padding: 20, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1e293b', marginBottom: 16 }}>积分兑换</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <div className="member-gift-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {gifts.map(gift => {
                 const canRedeem = selectedMember.points >= gift.points
                 return (

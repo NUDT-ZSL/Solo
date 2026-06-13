@@ -97,12 +97,23 @@ const Dashboard: React.FC = () => {
   const chartData = useMemo(() => {
     const days: string[] = []
     const counts: number[] = []
+
+    const dateCountMap: Record<string, number> = {}
+    appointments.forEach(apt => {
+      if (!dateCountMap[apt.date]) dateCountMap[apt.date] = 0
+      dateCountMap[apt.date]++
+    })
+
     for (let i = 6; i >= 0; i--) {
       const d = new Date(Date.now() - i * 86400000)
       const dateStr = d.toISOString().slice(0, 10)
-      days.push(`${d.getMonth() + 1}/${d.getDate()}`)
-      counts.push(appointments.filter(a => a.date === dateStr).length)
+      const label = `${d.getMonth() + 1}/${d.getDate()}`
+      days.push(label)
+      counts.push(dateCountMap[dateStr] || 0)
     }
+
+    console.log('Chart data - last 7 days:', { labels: days, data: counts, rawCounts: dateCountMap })
+
     return {
       labels: days,
       datasets: [
@@ -175,7 +186,7 @@ const Dashboard: React.FC = () => {
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', marginBottom: 20 }}>总店仪表板</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+      <div className="dashboard-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
         <div style={{ background: '#ffffff', borderRadius: 12, padding: 20, boxShadow: cardShadow }}>
           <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>总会员数</div>
           <div style={{ fontSize: 32, fontWeight: 700, color: '#f97316' }}>{totalMembers}</div>

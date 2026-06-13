@@ -43,7 +43,7 @@ const App: React.FC = () => {
         </button>
 
         <aside
-          className="sidebar"
+          className={`sidebar ${sidebarOpen ? 'open' : ''}`}
           style={{
             width: 220,
             minHeight: '100vh',
@@ -112,13 +112,31 @@ const App: React.FC = () => {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
+        {sidebarOpen && (
+          <div
+            className="sidebar-overlay"
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              display: 'none',
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 999,
+            }}
+          />
+        )}
       </div>
 
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; }
+
         @media (max-width: 768px) {
           .hamburger-btn { display: block !important; }
+          .sidebar-overlay { display: block !important; }
           .sidebar {
             position: fixed !important;
             left: 0; top: 0;
@@ -131,6 +149,37 @@ const App: React.FC = () => {
           }
           main {
             padding: 60px 12px 12px !important;
+          }
+
+          .groomer-schedule-container {
+            flex-direction: column !important;
+          }
+          .groomer-schedule-container > div {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          .booking-store-list > div {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          .booking-service-list > div {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          .member-gift-list > div {
+            width: calc(50% - 8px) !important;
+            max-width: 100% !important;
+          }
+
+          .dashboard-metrics > div {
+            width: 100% !important;
+          }
+
+          .booking-form-container {
+            max-width: 100% !important;
           }
         }
       `}</style>
