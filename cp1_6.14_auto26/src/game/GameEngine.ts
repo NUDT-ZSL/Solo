@@ -52,6 +52,7 @@ export interface GameEngineState {
   loopCount: number
   shardsCollected: string[]
   activePuzzleId: string | null
+  isWarning: boolean
 }
 
 export class GameEngine {
@@ -71,6 +72,13 @@ export class GameEngine {
   private finalPedestalOrder: number[] = []
   private activatedPedestalOrder: number[] = []
   private isRunning: boolean = false
+  private boundKeyDown: (e: KeyboardEvent) => void
+  private boundKeyUp: (e: KeyboardEvent) => void
+  private boundResize: () => void
+  private moveLeft: boolean = false
+  private moveRight: boolean = false
+  private jumpPressed: boolean = false
+  private interactPressed: boolean = false
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -111,6 +119,9 @@ export class GameEngine {
       flashCount: 0,
     }
 
+    this.boundKeyDown = this.handleKeyDown.bind(this)
+    this.boundKeyUp = this.handleKeyUp.bind(this)
+    this.boundResize = this.handleResize.bind(this)
     this.setupEventListeners()
   }
 
@@ -292,22 +303,71 @@ export class GameEngine {
   }
 
   private setupEventListeners(): void {
-    window.addEventListener('keydown', this.handleKeyDown.bind(this))
-    window.addEventListener('keyup', this.handleKeyUp.bind(this))
-    window.addEventListener('resize', this.handleResize.bind(this))
+    window.addEventListener('keydown', this.boundKeyDown)
+    window.addEventListener('keyup', this.boundKeyUp)
+    window.addEventListener('resize', this.boundResize)
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
     const key = e.key.toLowerCase()
+
+    if (['a', 'd', 'w', 'e', ' ', 'arrowleft', 'arrowright', 'arrowup'].includes(key)) {
+      e.preventDefault()
+    }
+
     this.keys.add(key)
 
-    if (key === 'e' && !this.gameState.showPuzzle) {
-      this.tryInteract()
+    if (key === 'a' || key === 'arrowleft') {
+      this.moveLeft = true
+    }
+    if (key === 'd' || key === 'arrowright') {
+      this.moveRight = true
+    }
+    if (key === 'w' || key === 'arrowup' || key === ' ') {
+      if (!this.jumpPressed) {
+        this.jumpPressed = true
+        this.tryJump()
+      }
+    }
+    if (key === 'e') {
+      if (!this.interactPressed) {
+        this.interactPressed = true
+        if (!this.gameState.showPuzzle && !this.gameState.isWin) {
+          this.tryInteract()
+        }
+      }
+    }
+    if (key === 'escape') {
+      if (this.gameState.showPuzzle) {
+        this.closePuzzle()
+      }
     }
   }
 
   private handleKeyUp(e: KeyboardEvent): void {
-    this.keys.delete(e.key.toLowerCase())
+    const key = e.key.toLowerCase()
+    this.keys.delete(key)
+
+    if (key === 'a' || key === 'arrowleft') {
+      this.moveLeft = false
+    }
+    if (key === 'd' || key === 'arrowright') {
+      this.moveRight = false
+    }
+    if (key === 'w' || key === 'arrowup' || key === ' ') {
+      this.jumpPressed = false
+    }
+    if (key === 'e') {
+      this.interactPressed = false
+    }
+  }
+
+  private tryJump(): void {
+    if (this.gameState.showPuzzle) return
+    if (this.player.onGround) {
+      this.player.vy = -JUMP_FORCE
+      this.player.onGround = false
+    }
   }
 
   private handleResize(): void {
@@ -326,6 +386,9 @@ export class GameEngine {
     if (this.animationId) {
       cancelAnimationFrame(this.animationId)
     }
+    window.removeEventListener('keydown', this.boundKeyDown)
+    window.removeEventListener('keyup', this.boundKeyUp)
+    window.removeEventListener('resize', this.boundResize)
   }
 
   private gameLoop(): void {
@@ -342,35 +405,41 @@ export class GameEngine {
   }
 
   private update(deltaTime: number): void {
-    if (this.gameState.isPaused || this.gameState.isWin) return
+    if (this.gameState.isWin) return
 
-    this.timeLoopManager.update(deltaTime, this.gameState.showPuzzle)
+    this.updateTransitionEffect(deltaTime)
+    this.updateFlashEffect(deltaTime)
+
+    if (this.gameState.showPuzzle) {
+      this.notifyListeners()
+      return
+    }
+
+    if (this.gameState.isPaused) return
+
+    const loopReset = this.timeLoopManager.update(deltaTime, false)
+    if (loopReset) {
+      this.performLoopReset()
+    }
+
     this.updatePlayer()
     this.checkCollisions()
     this.checkRoomTransition()
-    this.updateTransitionEffect(deltaTime)
-    this.updateFlashEffect(deltaTime)
     this.notifyListeners()
   }
 
   private updatePlayer(): void {
-    const room = this.rooms.get(this.currentRoomId)!
     const roomSize = this.renderer.getRoomSize()
     const wallThickness = 16
 
-    if (this.keys.has('a') || this.keys.has('arrowleft')) {
+    if (this.moveLeft) {
       this.player.vx = -PLAYER_SPEED
       this.player.facingRight = false
-    } else if (this.keys.has('d') || this.keys.has('arrowright')) {
+    } else if (this.moveRight) {
       this.player.vx = PLAYER_SPEED
       this.player.facingRight = true
     } else {
       this.player.vx = 0
-    }
-
-    if ((this.keys.has('w') || this.keys.has('arrowup') || this.keys.has(' ')) && this.player.onGround) {
-      this.player.vy = -JUMP_FORCE
-      this.player.onGround = false
     }
 
     this.player.vy += GRAVITY
@@ -420,24 +489,6 @@ export class GameEngine {
       }
     }
 
-    if (room.isFinalRoom && room.pedestals && !room.portalActive) {
-      for (const pedestal of room.pedestals) {
-        if (!pedestal.activated) {
-          const px = pedestal.x
-          const py = pedestal.y
-          const ps = 20
-
-          if (
-            this.player.x < px + ps &&
-            this.player.x + this.player.width > px &&
-            this.player.y < py + ps &&
-            this.player.y + this.player.height > py
-          ) {
-          }
-        }
-      }
-    }
-
     if (room.isFinalRoom && room.portalActive) {
       const portalX = this.renderer.getRoomSize().width / 2 - 16
       const portalY = 60
@@ -468,6 +519,21 @@ export class GameEngine {
 
   private tryInteract(): void {
     const room = this.rooms.get(this.currentRoomId)!
+
+    if (room.hasMemoryShard && !room.shardCollected) {
+      const shardX = 32
+      const shardY = this.renderer.getRoomSize().height - 40
+      const shardSize = 10
+      if (
+        this.player.x < shardX + shardSize + 16 &&
+        this.player.x + this.player.width > shardX - 16 &&
+        this.player.y < shardY + shardSize + 16 &&
+        this.player.y + this.player.height > shardY - 16
+      ) {
+        this.collectShard()
+        return
+      }
+    }
 
     if (room.puzzleId) {
       const puzzle = this.puzzleManager.getPuzzle(room.puzzleId)
@@ -636,6 +702,33 @@ export class GameEngine {
     }
   }
 
+  private performLoopReset(): void {
+    this.triggerResetFlash()
+
+    for (const room of this.rooms.values()) {
+      if (room.hasMemoryShard && !this.timeLoopManager.hasShard(`shard_${room.id}`)) {
+        room.shardCollected = false
+      }
+    }
+
+    const startRoom = this.getStartRoom()
+    this.currentRoomId = startRoom.id
+    this.player.currentRoomId = startRoom.id
+    this.player.x = this.renderer.getRoomSize().width / 2 - PLAYER_WIDTH / 2
+    this.player.y = this.renderer.getRoomSize().height - 48
+    this.player.vx = 0
+    this.player.vy = 0
+
+    const finalRoom = this.getFinalRoom()
+    if (finalRoom && finalRoom.pedestals) {
+      for (const pedestal of finalRoom.pedestals) {
+        pedestal.activated = false
+      }
+      this.activatedPedestalOrder = []
+      finalRoom.portalActive = false
+    }
+  }
+
   private render(): void {
     const room = this.rooms.get(this.currentRoomId)!
     this.renderer.render(
@@ -690,34 +783,6 @@ export class GameEngine {
     this.renderer.spawnResetParticles()
   }
 
-  resetLoop(): void {
-    this.timeLoopManager.resetLoop()
-    this.triggerResetFlash()
-
-    for (const room of this.rooms.values()) {
-      if (room.hasMemoryShard && !this.timeLoopManager.hasShard(`shard_${room.id}`)) {
-        room.shardCollected = false
-      }
-    }
-
-    const startRoom = this.getStartRoom()
-    this.currentRoomId = startRoom.id
-    this.player.currentRoomId = startRoom.id
-    this.player.x = ROOM_WIDTH / 2 - PLAYER_WIDTH / 2
-    this.player.y = ROOM_HEIGHT - 48
-    this.player.vx = 0
-    this.player.vy = 0
-
-    const finalRoom = this.getFinalRoom()
-    if (finalRoom && finalRoom.pedestals) {
-      for (const pedestal of finalRoom.pedestals) {
-        pedestal.activated = false
-      }
-      this.activatedPedestalOrder = []
-      finalRoom.portalActive = false
-    }
-  }
-
   private getFinalRoom(): Room | undefined {
     for (const room of this.rooms.values()) {
       if (room.isFinalRoom) return room
@@ -747,6 +812,7 @@ export class GameEngine {
       loopCount: this.timeLoopManager.getLoopCount(),
       shardsCollected: this.timeLoopManager.getShardsCollected(),
       activePuzzleId: this.gameState.activePuzzleId,
+      isWarning: this.timeLoopManager.isWarning(),
     }
     this.listeners.forEach((listener) => listener(state))
   }
@@ -760,6 +826,7 @@ export class GameEngine {
       loopCount: this.timeLoopManager.getLoopCount(),
       shardsCollected: this.timeLoopManager.getShardsCollected(),
       activePuzzleId: this.gameState.activePuzzleId,
+      isWarning: this.timeLoopManager.isWarning(),
     }
   }
 }

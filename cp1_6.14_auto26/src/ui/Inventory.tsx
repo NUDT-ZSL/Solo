@@ -1,5 +1,5 @@
 import React from 'react'
-import { FONT_FAMILY, FONT_SIZE, COLORS, MAX_INVENTORY_SLOTS, MAX_SHARDS } from '../game/constants'
+import { FONT_FAMILY, FONT_SIZE, MOBILE_FONT_SIZE, COLORS, MAX_INVENTORY_SLOTS, MAX_SHARDS } from '../game/constants'
 
 interface InventoryProps {
   shardsCollected: string[]
@@ -10,7 +10,7 @@ export const Inventory: React.FC<InventoryProps> = ({ shardsCollected, isMobile 
   const gridCols = isMobile ? 4 : 8
   const gridRows = isMobile ? 4 : 2
   const cellSize = isMobile ? 28 : 32
-  const fontSize = isMobile ? 10 : FONT_SIZE - 4
+  const fontSize = isMobile ? MOBILE_FONT_SIZE - 4 : FONT_SIZE - 4
 
   const slots = []
   for (let i = 0; i < MAX_INVENTORY_SLOTS; i++) {

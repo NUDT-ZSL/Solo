@@ -38,41 +38,16 @@ const App: React.FC = () => {
 
     setGameState(engine.getState())
     engine.start()
-
-    const timeLoopManager = engine.getTimeLoopManager()
-    const originalUpdate = timeLoopManager.update.bind(timeLoopManager)
-    timeLoopManager.update = (deltaTime, isPaused) => {
-      const oldTime = timeLoopManager.getTimeRemaining()
-      originalUpdate(deltaTime, isPaused)
-      const newTime = timeLoopManager.getTimeRemaining()
-      if (newTime > oldTime && newTime > 100) {
-        engine.triggerResetFlash()
-      }
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        const state = engine.getState()
-        if (state.gameState.showPuzzle) {
-          engine.closePuzzle()
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
   }, [])
 
   useEffect(() => {
     if (gameStarted && canvasRef.current) {
-      const cleanup = initGame()
+      initGame()
       return () => {
         if (gameEngineRef.current) {
           gameEngineRef.current.stop()
+          gameEngineRef.current = null
         }
-        if (cleanup) cleanup()
       }
     }
   }, [gameStarted, initGame])
@@ -114,8 +89,9 @@ const App: React.FC = () => {
     }
 
     if (room.hasMemoryShard && !room.shardCollected) {
-      const shardX = 32
-      const shardY = 240
+      const roomSize = gameEngineRef.current.getRenderer().getRoomSize()
+      const shardX = isMobile ? 24 : 32
+      const shardY = roomSize.height - (isMobile ? 30 : 40)
       const dx = Math.abs(player.x - shardX)
       const dy = Math.abs(player.y - shardY)
       if (dx < 30 && dy < 30) {
@@ -126,7 +102,7 @@ const App: React.FC = () => {
 
     setShowHint(hasInteraction)
     setHintText(text)
-  }, [gameState])
+  }, [gameState, isMobile])
 
   const handleStart = () => {
     setGameStarted(true)
@@ -168,6 +144,7 @@ const App: React.FC = () => {
               loopCount={gameState.loopCount}
               timeRemaining={gameState.timeRemaining}
               shardCount={gameState.shardsCollected.length}
+              isMobile={isMobile}
             />
             <Inventory shardsCollected={gameState.shardsCollected} isMobile={isMobile} />
             <InteractionHint text={hintText} visible={showHint} />
@@ -213,8 +190,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   canvas: {
     display: 'block',
-    imageRendering: 'pixelated',
-    msInterpolationMode: 'nearest-neighbor' as any,
+    imageRendering: 'pixelated' as any,
+    WebkitImageRendering: 'pixelated' as any,
   },
 }
 

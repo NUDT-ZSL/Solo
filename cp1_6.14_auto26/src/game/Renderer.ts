@@ -2,12 +2,15 @@ import { Room, Player, GameState, Pedestal } from './types'
 import {
   ROOM_WIDTH,
   ROOM_HEIGHT,
+  MOBILE_ROOM_WIDTH,
+  MOBILE_ROOM_HEIGHT,
   COLORS,
   PLAYER_WIDTH,
   PLAYER_HEIGHT,
   WARNING_TIME,
   FONT_FAMILY,
   FONT_SIZE,
+  MOBILE_FONT_SIZE,
 } from './constants'
 
 export class Renderer {
@@ -18,6 +21,7 @@ export class Renderer {
   private scale: number
   private animFrame: number = 0
   private particles: Particle[] = []
+  private isMobile: boolean = false
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -30,6 +34,10 @@ export class Renderer {
     this.resize()
   }
 
+  getIsMobile(): boolean {
+    return this.isMobile
+  }
+
   resize(): void {
     const container = this.canvas.parentElement
     if (!container) return
@@ -37,9 +45,9 @@ export class Renderer {
     const containerWidth = container.clientWidth
     const containerHeight = container.clientHeight
 
-    const isMobile = containerWidth < 768
-    const targetWidth = isMobile ? 240 : ROOM_WIDTH
-    const targetHeight = isMobile ? 210 : ROOM_HEIGHT
+    this.isMobile = containerWidth < 768
+    const targetWidth = this.isMobile ? MOBILE_ROOM_WIDTH : ROOM_WIDTH
+    const targetHeight = this.isMobile ? MOBILE_ROOM_HEIGHT : ROOM_HEIGHT
 
     const scaleX = containerWidth / targetWidth
     const scaleY = containerHeight / targetHeight
@@ -48,8 +56,8 @@ export class Renderer {
     this.roomWidth = targetWidth
     this.roomHeight = targetHeight
 
-    this.canvas.width = targetWidth * this.scale
-    this.canvas.height = targetHeight * this.scale
+    this.canvas.width = Math.floor(targetWidth * this.scale)
+    this.canvas.height = Math.floor(targetHeight * this.scale)
     this.ctx.imageSmoothingEnabled = false
   }
 
@@ -85,7 +93,7 @@ export class Renderer {
   }
 
   private drawWallsAndFloor(room: Room): void {
-    const wallThickness = 16
+    const wallThickness = this.isMobile ? 12 : 16
 
     this.ctx.fillStyle = COLORS.wall
     this.ctx.fillRect(0, 0, this.roomWidth, wallThickness)
@@ -94,16 +102,17 @@ export class Renderer {
     this.ctx.fillRect(this.roomWidth - wallThickness, 0, wallThickness, this.roomHeight)
 
     this.ctx.fillStyle = COLORS.wallDark
-    for (let x = 0; x < this.roomWidth; x += 16) {
-      if ((x / 16) % 2 === 0) {
-        this.ctx.fillRect(x, 0, 8, wallThickness)
-        this.ctx.fillRect(x + 8, this.roomHeight - wallThickness, 8, wallThickness)
+    const brickW = this.isMobile ? 12 : 16
+    for (let x = 0; x < this.roomWidth; x += brickW) {
+      if ((x / brickW) % 2 === 0) {
+        this.ctx.fillRect(x, 0, brickW / 2, wallThickness)
+        this.ctx.fillRect(x + brickW / 2, this.roomHeight - wallThickness, brickW / 2, wallThickness)
       }
     }
-    for (let y = 0; y < this.roomHeight; y += 16) {
-      if ((y / 16) % 2 === 0) {
-        this.ctx.fillRect(0, y, wallThickness, 8)
-        this.ctx.fillRect(this.roomWidth - wallThickness, y + 8, wallThickness, 8)
+    for (let y = 0; y < this.roomHeight; y += brickW) {
+      if ((y / brickW) % 2 === 0) {
+        this.ctx.fillRect(0, y, wallThickness, brickW / 2)
+        this.ctx.fillRect(this.roomWidth - wallThickness, y + brickW / 2, wallThickness, brickW / 2)
       }
     }
 
@@ -112,13 +121,14 @@ export class Renderer {
 
     this.ctx.strokeStyle = COLORS.floorLine
     this.ctx.lineWidth = 1
-    for (let x = wallThickness; x < this.roomWidth - wallThickness; x += 16) {
+    const gridStep = this.isMobile ? 12 : 16
+    for (let x = wallThickness; x < this.roomWidth - wallThickness; x += gridStep) {
       this.ctx.beginPath()
       this.ctx.moveTo(x + 0.5, wallThickness)
       this.ctx.lineTo(x + 0.5, this.roomHeight - wallThickness)
       this.ctx.stroke()
     }
-    for (let y = wallThickness; y < this.roomHeight - wallThickness; y += 16) {
+    for (let y = wallThickness; y < this.roomHeight - wallThickness; y += gridStep) {
       this.ctx.beginPath()
       this.ctx.moveTo(wallThickness, y + 0.5)
       this.ctx.lineTo(this.roomWidth - wallThickness, y + 0.5)
@@ -127,9 +137,9 @@ export class Renderer {
   }
 
   private drawDoors(room: Room): void {
-    const doorWidth = 24
-    const doorHeight = 32
-    const wallThickness = 16
+    const doorWidth = this.isMobile ? 18 : 24
+    const doorHeight = this.isMobile ? 24 : 32
+    const wallThickness = this.isMobile ? 12 : 16
 
     if (room.doors.north) {
       const x = (this.roomWidth - doorWidth) / 2
@@ -167,9 +177,9 @@ export class Renderer {
   private drawMemoryShard(room: Room): void {
     if (!room.hasMemoryShard || room.shardCollected) return
 
-    const x = 32
-    const y = this.roomHeight - 40
-    const size = 10
+    const x = this.isMobile ? 24 : 32
+    const y = this.roomHeight - (this.isMobile ? 30 : 40)
+    const size = this.isMobile ? 8 : 10
 
     const flicker = Math.sin(this.animFrame * 0.1) * 0.3 + 0.7
 
@@ -191,10 +201,12 @@ export class Renderer {
   private drawPedestals(room: Room): void {
     if (!room.pedestals || room.pedestals.length === 0) return
 
+    const scale = this.isMobile ? 0.75 : 1
+
     for (const pedestal of room.pedestals) {
-      const x = pedestal.x
-      const y = pedestal.y
-      const size = 20
+      const x = Math.floor(pedestal.x * scale * (this.roomWidth / ROOM_WIDTH))
+      const y = Math.floor(pedestal.y * scale * (this.roomHeight / ROOM_HEIGHT))
+      const size = this.isMobile ? 15 : 20
 
       if (pedestal.activated) {
         const glow = Math.sin(this.animFrame * 0.08) * 0.3 + 0.7
@@ -211,20 +223,21 @@ export class Renderer {
       this.ctx.fillStyle = COLORS.wallDark
       this.ctx.fillRect(x + 2, y + 2, size - 4, size - 4)
 
+      const fontSize = this.isMobile ? 8 : 10
       this.ctx.fillStyle = pedestal.activated ? COLORS.goldBright : COLORS.gray
-      this.ctx.font = `10px ${FONT_FAMILY}`
+      this.ctx.font = `${fontSize}px ${FONT_FAMILY}`
       this.ctx.textAlign = 'center'
-      this.ctx.fillText(pedestal.order.toString(), x + size / 2, y + size / 2 + 4)
+      this.ctx.fillText(pedestal.order.toString(), x + size / 2, y + size / 2 + fontSize / 3)
     }
   }
 
   private drawPortal(room: Room): void {
     if (!room.isFinalRoom || !room.portalActive) return
 
-    const x = this.roomWidth / 2 - 16
-    const y = 60
-    const w = 32
-    const h = 48
+    const x = this.roomWidth / 2 - (this.isMobile ? 12 : 16)
+    const y = this.isMobile ? 45 : 60
+    const w = this.isMobile ? 24 : 32
+    const h = this.isMobile ? 36 : 48
 
     const pulse = Math.sin(this.animFrame * 0.1) * 0.2 + 0.8
 

@@ -1,12 +1,12 @@
 import { TimeLoopState, GameEvent } from './types'
-import { LOOP_DURATION, MAX_SHARDS } from './constants'
+import { LOOP_DURATION, MAX_SHARDS, WARNING_TIME } from './constants'
 
 type Listener = (state: TimeLoopState, event?: GameEvent) => void
 
 export class TimeLoopManager {
   private state: TimeLoopState
   private listeners: Set<Listener> = new Set()
-  private deltaAccumulator: number = 0
+  private elapsedSinceLastSecond: number = 0
 
   constructor() {
     this.state = {
@@ -37,6 +37,10 @@ export class TimeLoopManager {
     return this.state.shardsCollected.includes(shardId)
   }
 
+  isWarning(): boolean {
+    return this.state.timeRemaining <= WARNING_TIME && this.state.timeRemaining > 0
+  }
+
   collectShard(shardId: string): boolean {
     if (this.state.shardsCollected.length >= MAX_SHARDS) return false
     if (this.state.shardsCollected.includes(shardId)) return false
@@ -46,24 +50,34 @@ export class TimeLoopManager {
     return true
   }
 
-  update(deltaTime: number, isPaused: boolean): void {
-    if (isPaused) return
+  update(deltaTime: number, isPaused: boolean): boolean {
+    if (isPaused) return false
 
-    this.deltaAccumulator += deltaTime
-    if (this.deltaAccumulator >= 1) {
-      const secondsToSubtract = Math.floor(this.deltaAccumulator)
-      this.deltaAccumulator -= secondsToSubtract
-      this.state.timeRemaining -= secondsToSubtract
+    this.elapsedSinceLastSecond += deltaTime
+
+    let loopReset = false
+
+    while (this.elapsedSinceLastSecond >= 1) {
+      this.elapsedSinceLastSecond -= 1
+      this.state.timeRemaining -= 1
 
       if (this.state.timeRemaining <= 0) {
+        this.state.timeRemaining = 0
         this.resetLoop()
+        loopReset = true
+        break
       }
+
+      this.notifyListeners()
     }
+
+    return loopReset
   }
 
   resetLoop(): void {
     this.state.loopCount += 1
     this.state.timeRemaining = LOOP_DURATION
+    this.elapsedSinceLastSecond = 0
     this.notifyListeners({ type: 'LOOP_RESET' })
   }
 
@@ -76,7 +90,8 @@ export class TimeLoopManager {
   }
 
   private notifyListeners(event?: GameEvent): void {
-    this.listeners.forEach((listener) => listener(this.getState(), event))
+    const state = this.getState()
+    this.listeners.forEach((listener) => listener(state, event))
   }
 
   checkAllShardsCollected(): boolean {
