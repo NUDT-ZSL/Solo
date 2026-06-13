@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,10 +6,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new DatabaseSync(path.join(__dirname, 'pollvault.db'));
+const db = new Database(path.join(__dirname, 'pollvault.db'));
 
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS polls (
@@ -222,8 +222,7 @@ export function submitVote(
     UPDATE polls SET participant_count = participant_count + 1 WHERE id = ?
   `);
 
-  try {
-    db.exec('BEGIN');
+  const transaction = db.transaction(() => {
     insertSession.run(sessionId, pollId, ipPrefix, now);
 
     for (const selection of selections) {
@@ -240,10 +239,12 @@ export function submitVote(
     }
 
     updateParticipantCount.run(pollId);
-    db.exec('COMMIT');
+  });
+
+  try {
+    transaction();
     return { success: true };
   } catch (err) {
-    db.exec('ROLLBACK');
     return { success: false, message: '投票失败' };
   }
 }

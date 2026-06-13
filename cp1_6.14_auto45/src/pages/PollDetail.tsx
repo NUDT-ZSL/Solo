@@ -16,6 +16,7 @@ const PollDetail: React.FC = () => {
   const [rankingOrder, setRankingOrder] = useState<number[]>([]);
   const [hasVoted, setHasVoted] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [fadeOut, setFadeOut] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showRecords, setShowRecords] = useState(false);
   const [voteRecords, setVoteRecords] = useState<any[]>([]);
@@ -141,7 +142,14 @@ const PollDetail: React.FC = () => {
       await axios.post(`/api/polls/${poll.id}/vote`, { selections });
       setHasVoted(true);
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 2000);
+      setFadeOut(false);
+      setTimeout(() => {
+        setFadeOut(true);
+      }, 800);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setFadeOut(false);
+      }, 1300);
     } catch (err: any) {
       setError(err.response?.data?.error || '投票失败');
     } finally {
@@ -359,7 +367,12 @@ const PollDetail: React.FC = () => {
       </div>
 
       {showSuccess && (
-        <div style={styles.successOverlay}>
+        <div
+          style={{
+            ...styles.successOverlay,
+            animation: fadeOut ? 'fadeOut 0.5s ease-out forwards' : 'fadeInUp 0.3s ease-out',
+          }}
+        >
           <div style={styles.successCheckmark}>
             <svg width="80" height="80" viewBox="0 0 52 52">
               <circle
@@ -368,20 +381,28 @@ const PollDetail: React.FC = () => {
                 r="24"
                 fill="none"
                 stroke="#10b981"
-                strokeWidth="2"
+                strokeWidth="3"
                 style={styles.circle}
               />
               <path
                 fill="none"
                 stroke="#10b981"
-                strokeWidth="3"
+                strokeWidth="4"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M14 27l7 7 16-16"
                 style={styles.checkmarkPath}
               />
             </svg>
-            <p style={styles.successText}>投票成功!</p>
+            <p
+              style={{
+                ...styles.successText,
+                opacity: fadeOut ? 0 : 1,
+                transition: 'opacity 0.5s ease-out',
+              }}
+            >
+              投票成功!
+            </p>
           </div>
         </div>
       )}
@@ -682,12 +703,12 @@ const styles: Record<string, React.CSSProperties> = {
   circle: {
     strokeDasharray: 151,
     strokeDashoffset: 151,
-    animation: 'checkmarkCircle 0.5s ease-out forwards',
+    animation: 'checkmarkCircle 0.5s cubic-bezier(0.65, 0, 0.45, 1) forwards',
   },
   checkmarkPath: {
-    strokeDasharray: 100,
-    strokeDashoffset: 100,
-    animation: 'checkmark 0.3s ease-out 0.2s forwards',
+    strokeDasharray: 60,
+    strokeDashoffset: 60,
+    animation: 'checkmark 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.2s forwards',
   },
 };
 

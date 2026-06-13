@@ -1,12 +1,21 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
-  const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-  const createRipple = (e: React.MouseEvent<HTMLButtonElement>, key: string) => {
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const createRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
     const button = e.currentTarget;
     const rect = button.getBoundingClientRect();
     const size = Math.max(rect.width, rect.height);
@@ -27,6 +36,14 @@ const Navbar: React.FC = () => {
     navigate(-1);
   };
 
+  const toggleMenu = () => {
+    setMenuOpen(!menuOpen);
+  };
+
+  const handleMenuClick = () => {
+    setMenuOpen(false);
+  };
+
   return (
     <nav style={styles.navbar}>
       <div style={styles.navContainer}>
@@ -40,35 +57,47 @@ const Navbar: React.FC = () => {
 
         <div style={styles.navRight}>
           <button
-            style={styles.navButton}
-            className="ripple-button"
-            onClick={(e) => { createRipple(e, 'back'); handleBack(); }}
+            onClick={(e) => { createRipple(e); handleBack(); }}
+            className="ripple-button nav-back-btn"
+            style={styles.iconButton}
+            title="返回"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>
 
-          <button
-            style={styles.menuButton}
-            className="ripple-button"
-            onClick={(e) => { createRipple(e, 'menu'); setMenuOpen(!menuOpen); }}
+          <Link
+            to="/create"
+            className="nav-desktop-link"
+            style={styles.desktopLink}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {menuOpen ? (
-                <>
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </>
-              ) : (
-                <>
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </>
-              )}
-            </svg>
-          </button>
+            创建投票
+          </Link>
+
+          {isMobile && (
+            <button
+              onClick={(e) => { createRipple(e); toggleMenu(); }}
+              className="ripple-button"
+              style={styles.iconButton}
+              title="菜单"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {menuOpen ? (
+                  <>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </>
+                ) : (
+                  <>
+                    <line x1="3" y1="12" x2="21" y2="12" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <line x1="3" y1="18" x2="21" y2="18" />
+                  </>
+                )}
+              </svg>
+            </button>
+          )}
 
           <div style={styles.avatar} title="用户">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,16 +108,60 @@ const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {menuOpen && (
-        <div style={styles.mobileMenu}>
-          <Link to="/" style={styles.menuItem} onClick={() => setMenuOpen(false)}>
+      {isMobile && menuOpen && (
+        <div
+          style={{
+            ...styles.mobileMenu,
+            animation: 'slideDown 0.3s ease-out',
+          }}
+        >
+          <Link
+            to="/"
+            style={styles.menuItem}
+            onClick={handleMenuClick}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={styles.menuIcon}>
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
             投票列表
           </Link>
-          <Link to="/create" style={styles.menuItem} onClick={() => setMenuOpen(false)}>
+          <Link
+            to="/create"
+            style={styles.menuItem}
+            onClick={handleMenuClick}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={styles.menuIcon}>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
             创建投票
           </Link>
         </div>
       )}
+
+      <style>{`
+        @media (min-width: 769px) {
+          .nav-back-btn {
+            display: none !important;
+          }
+        }
+        @media (max-width: 768px) {
+          .nav-desktop-link {
+            display: none !important;
+          }
+        }
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </nav>
   );
 };
@@ -130,31 +203,28 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
   },
-  navButton: {
-    display: 'none',
+  iconButton: {
     width: '40px',
     height: '40px',
     borderRadius: '50%',
     backgroundColor: 'transparent',
     color: '#e2e8f0',
+    display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'background-color 0.2s ease',
     position: 'relative',
     overflow: 'hidden',
+    cursor: 'pointer',
+    border: 'none',
   },
-  menuButton: {
-    display: 'none',
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    backgroundColor: 'transparent',
+  desktopLink: {
+    padding: '8px 16px',
     color: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontSize: '14px',
+    fontWeight: 500,
+    borderRadius: '8px',
     transition: 'background-color 0.2s ease',
-    position: 'relative',
-    overflow: 'hidden',
   },
   avatar: {
     width: '40px',
@@ -169,7 +239,6 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'background-color 0.2s ease',
   },
   mobileMenu: {
-    display: 'none',
     position: 'absolute',
     top: '56px',
     left: 0,
@@ -177,21 +246,21 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#0f172a',
     borderTop: '1px solid #1e293b',
     padding: '8px 0',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+    zIndex: 99,
   },
   menuItem: {
-    display: 'block',
-    padding: '12px 24px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '14px 24px',
     color: '#e2e8f0',
+    fontSize: '15px',
     transition: 'background-color 0.2s ease',
   },
+  menuIcon: {
+    flexShrink: 0,
+  },
 };
-
-const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-  @media (max-width: 768px) {
-    .nav-desktop-link { display: none !important; }
-  }
-`;
-document.head.appendChild(styleSheet);
 
 export default Navbar;

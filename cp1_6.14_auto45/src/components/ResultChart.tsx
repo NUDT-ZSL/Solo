@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PollType, PollResult } from '../types';
 
 interface ResultChartProps {
@@ -8,64 +8,177 @@ interface ResultChartProps {
   participantCount: number;
 }
 
+interface AnimatedValue {
+  count: number;
+  avgRating: number;
+  startAngle: number;
+  endAngle: number;
+  barHeight: number;
+  barWidth: number;
+}
+
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#06b6d4', '#f97316'];
+const ANIMATION_DURATION = 300;
+const SIZE = 280;
+const CENTER = SIZE / 2;
+const OUTER_RADIUS = 110;
+const INNER_RADIUS = 70;
+
+const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
 
 const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, participantCount }) => {
-  const [animatedResults, setAnimatedResults] = useState<PollResult[]>(results);
   const [isVisible, setIsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<number | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const animatedValuesRef = useRef<AnimatedValue[]>([]);
+  const targetValuesRef = useRef<AnimatedValue[]>([]);
+  const startValuesRef = useRef<AnimatedValue[]>([]);
+  const animationStartTimeRef = useRef<number>(0);
+  const [, forceRender] = useState({});
+
+  const calculateAngles = useCallback((values: PollResult[]): { startAngle: number; endAngle: number }[] => {
+    const total = values.reduce((sum, r) => sum + r.count, 0);
+    if (total === 0) {
+      return values.map(() => ({ startAngle: -Math.PI / 2, endAngle: -Math.PI / 2 }));
+    }
+
+    let currentAngle = -Math.PI / 2;
+    return values.map(r => {
+      const percentage = r.count / total;
+      const angle = percentage * 2 * Math.PI;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + angle;
+      currentAngle = endAngle;
+      return { startAngle, endAngle };
+    });
+  }, []);
+
+  const calculateBarHeights = useCallback((values: PollResult[], chartHeight: number): number[] => {
+    const maxValue = Math.max(...values.map(r => r.avgRating || r.count), 1);
+    return values.map(r => {
+      const value = r.avgRating || r.count;
+      return (value / maxValue) * (chartHeight - 40);
+    });
+  }, []);
+
+  const calculateBarWidths = useCallback((values: PollResult[], chartWidth: number): number[] => {
+    const maxValue = Math.max(...values.map(r => r.count), 1);
+    return values.map(r => (r.count / maxValue) * (chartWidth - 120));
+  }, []);
+
+  const initAnimatedValues = useCallback(() => {
+    const angles = calculateAngles(results);
+    const barHeights = calculateBarHeights(results, 240);
+    const barWidths = calculateBarWidths(results, 400);
+
+    const values: AnimatedValue[] = results.map((r, i) => ({
+      count: r.count,
+      avgRating: r.avgRating || 0,
+      startAngle: angles[i].startAngle,
+      endAngle: angles[i].endAngle,
+      barHeight: barHeights[i],
+      barWidth: barWidths[i],
+    }));
+
+    animatedValuesRef.current = values;
+    targetValuesRef.current = [...values];
+    startValuesRef.current = [...values];
+  }, [results, calculateAngles, calculateBarHeights, calculateBarWidths]);
 
   useEffect(() => {
+    initAnimatedValues();
     setIsVisible(true);
   }, []);
 
   useEffect(() => {
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
+    if (animatedValuesRef.current.length === 0) {
+      initAnimatedValues();
+      return;
     }
 
-    const startValues = animatedResults.map(r => ({ ...r }));
-    const endValues = results.map(r => ({ ...r }));
-    const duration = 300;
-    const startTime = performance.now();
+    const newAngles = calculateAngles(results);
+    const newBarHeights = calculateBarHeights(results, 240);
+    const newBarWidths = calculateBarWidths(results, 400);
+
+    const newTargets: AnimatedValue[] = results.map((r, i) => ({
+      count: r.count,
+      avgRating: r.avgRating || 0,
+      startAngle: newAngles[i].startAngle,
+      endAngle: newAngles[i].endAngle,
+      barHeight: newBarHeights[i],
+      barWidth: newBarWidths[i],
+    }));
+
+    startValuesRef.current = animatedValuesRef.current.map(v => ({ ...v }));
+    targetValuesRef.current = newTargets;
+    animationStartTimeRef.current = performance.now();
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
 
     const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      const elapsed = currentTime - animationStartTimeRef.current;
+      const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+      const easedProgress = easeOutCubic(progress);
 
-      const newResults = startValues.map((start, i) => {
-        const end = endValues[i] || { optionIndex: i, count: 0, avgRating: 0 };
+      animatedValuesRef.current = startValuesRef.current.map((start, i) => {
+        const target = targetValuesRef.current[i] || start;
         return {
-          optionIndex: start.optionIndex,
-          count: start.count + (end.count - start.count) * easeProgress,
-          avgRating: (start.avgRating || 0) + ((end.avgRating || 0) - (start.avgRating || 0)) * easeProgress,
+          count: start.count + (target.count - start.count) * easedProgress,
+          avgRating: start.avgRating + (target.avgRating - start.avgRating) * easedProgress,
+          startAngle: start.startAngle + (target.startAngle - start.startAngle) * easedProgress,
+          endAngle: start.endAngle + (target.endAngle - start.endAngle) * easedProgress,
+          barHeight: start.barHeight + (target.barHeight - start.barHeight) * easedProgress,
+          barWidth: start.barWidth + (target.barWidth - start.barWidth) * easedProgress,
         };
       });
 
-      setAnimatedResults(newResults);
+      forceRender({});
 
       if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        animationFrameRef.current = null;
       }
     };
 
-    animationRef.current = requestAnimationFrame(animate);
+    animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [results]);
+  }, [results, calculateAngles, calculateBarHeights, calculateBarWidths, initAnimatedValues]);
+
+  const createPiePath = (startAngle: number, endAngle: number): string => {
+    const angle = endAngle - startAngle;
+    if (angle < 0.001) return '';
+
+    const x1 = CENTER + OUTER_RADIUS * Math.cos(startAngle);
+    const y1 = CENTER + OUTER_RADIUS * Math.sin(startAngle);
+    const x2 = CENTER + OUTER_RADIUS * Math.cos(endAngle);
+    const y2 = CENTER + OUTER_RADIUS * Math.sin(endAngle);
+    const x3 = CENTER + INNER_RADIUS * Math.cos(endAngle);
+    const y3 = CENTER + INNER_RADIUS * Math.sin(endAngle);
+    const x4 = CENTER + INNER_RADIUS * Math.cos(startAngle);
+    const y4 = CENTER + INNER_RADIUS * Math.sin(startAngle);
+
+    const largeArc = angle > Math.PI ? 1 : 0;
+
+    return [
+      `M ${x1} ${y1}`,
+      `A ${OUTER_RADIUS} ${OUTER_RADIUS} 0 ${largeArc} 1 ${x2} ${y2}`,
+      `L ${x3} ${y3}`,
+      `A ${INNER_RADIUS} ${INNER_RADIUS} 0 ${largeArc} 0 ${x4} ${y4}`,
+      'Z',
+    ].join(' ');
+  };
 
   const renderPieChart = () => {
-    const size = 280;
-    const center = size / 2;
-    const outerRadius = 110;
-    const innerRadius = 70;
-    const totalVotes = animatedResults.reduce((sum, r) => sum + r.count, 0);
+    const animated = animatedValuesRef.current;
+    const totalVotes = animated.reduce((sum, r) => sum + r.count, 0);
 
     if (totalVotes === 0) {
       return (
@@ -75,57 +188,32 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
       );
     }
 
-    let currentAngle = -Math.PI / 2;
-    const segments = animatedResults.map((result, index) => {
-      const percentage = result.count / totalVotes;
-      const angle = percentage * 2 * Math.PI;
-      const startAngle = currentAngle;
-      const endAngle = currentAngle + angle;
-      currentAngle = endAngle;
-
-      const x1 = center + outerRadius * Math.cos(startAngle);
-      const y1 = center + outerRadius * Math.sin(startAngle);
-      const x2 = center + outerRadius * Math.cos(endAngle);
-      const y2 = center + outerRadius * Math.sin(endAngle);
-      const x3 = center + innerRadius * Math.cos(endAngle);
-      const y3 = center + innerRadius * Math.sin(endAngle);
-      const x4 = center + innerRadius * Math.cos(startAngle);
-      const y4 = center + innerRadius * Math.sin(startAngle);
-
-      const largeArc = angle > Math.PI ? 1 : 0;
-
-      const pathData = [
-        `M ${x1} ${y1}`,
-        `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x2} ${y2}`,
-        `L ${x3} ${y3}`,
-        `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4}`,
-        'Z',
-      ].join(' ');
+    const segments = animated.map((value, index) => {
+      const pathData = createPiePath(value.startAngle, value.endAngle);
+      if (!pathData) return null;
 
       return (
-        <g key={index}>
-          <path
-            d={pathData}
-            fill={COLORS[index % COLORS.length]}
-            style={{ transition: 'all 0.3s ease' }}
-          />
-        </g>
+        <path
+          key={index}
+          d={pathData}
+          fill={COLORS[index % COLORS.length]}
+        />
       );
     });
 
     return (
       <div style={styles.chartWrapper}>
-        <svg width={size} height={size} style={styles.svg}>
+        <svg width={SIZE} height={SIZE} style={styles.svg}>
           {segments}
-          <text x={center} y={center - 8} textAnchor="middle" style={styles.centerText}>
+          <text x={CENTER} y={CENTER - 8} textAnchor="middle" style={styles.centerText}>
             {Math.round(totalVotes)}
           </text>
-          <text x={center} y={center + 16} textAnchor="middle" style={styles.centerSubtext}>
+          <text x={CENTER} y={CENTER + 16} textAnchor="middle" style={styles.centerSubtext}>
             总票数
           </text>
         </svg>
         <div style={styles.legend}>
-          {animatedResults.map((result, index) => (
+          {animated.map((value, index) => (
             <div key={index} style={styles.legendItem}>
               <div
                 style={{
@@ -133,9 +221,9 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
                   backgroundColor: COLORS[index % COLORS.length],
                 }}
               />
-              <span style={styles.legendLabel}>{options[result.optionIndex]}</span>
+              <span style={styles.legendLabel}>{options[index]}</span>
               <span style={styles.legendValue}>
-                {Math.round(result.count)} ({totalVotes > 0 ? ((result.count / totalVotes) * 100).toFixed(1) : 0}%)
+                {Math.round(value.count)} ({totalVotes > 0 ? ((value.count / totalVotes) * 100).toFixed(1) : 0}%)
               </span>
             </div>
           ))}
@@ -145,7 +233,7 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
   };
 
   const renderBarChart = () => {
-    const maxValue = Math.max(...animatedResults.map(r => r.avgRating || r.count), 1);
+    const animated = animatedValuesRef.current;
     const chartHeight = 240;
     const barWidth = Math.min(60, 300 / options.length);
     const gap = 20;
@@ -162,11 +250,9 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
             stroke="#2a2a3e"
             strokeWidth={1}
           />
-          {animatedResults.map((result, index) => {
-            const value = result.avgRating || result.count;
-            const height = (value / maxValue) * (chartHeight - 40);
+          {animated.map((value, index) => {
             const x = index * (barWidth + gap);
-            const y = chartHeight - height;
+            const y = chartHeight - value.barHeight;
 
             return (
               <g key={index}>
@@ -174,10 +260,9 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
                   x={x}
                   y={y}
                   width={barWidth}
-                  height={height}
+                  height={value.barHeight}
                   fill={COLORS[index % COLORS.length]}
                   rx={6}
-                  style={{ transition: 'all 0.3s ease' }}
                 />
                 <text
                   x={x + barWidth / 2}
@@ -185,7 +270,7 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
                   textAnchor="middle"
                   style={styles.barValue}
                 >
-                  {type === 'rating' ? (result.avgRating || 0).toFixed(1) : Math.round(result.count)}
+                  {type === 'rating' ? value.avgRating.toFixed(1) : Math.round(value.count)}
                 </text>
                 <text
                   x={x + barWidth / 2}
@@ -193,8 +278,8 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
                   textAnchor="middle"
                   style={styles.barLabel}
                 >
-                  {options[result.optionIndex]?.substring(0, 6)}
-                  {options[result.optionIndex]?.length > 6 ? '...' : ''}
+                  {options[index]?.substring(0, 6)}
+                  {options[index]?.length > 6 ? '...' : ''}
                 </text>
               </g>
             );
@@ -205,7 +290,11 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
   };
 
   const renderHorizontalBarChart = () => {
-    const maxValue = Math.max(...animatedResults.map(r => r.count), 1);
+    const animated = animatedValuesRef.current;
+    const sortedIndices = animated
+      .map((_, i) => i)
+      .sort((a, b) => animated[b].count - animated[a].count);
+
     const barHeight = 32;
     const gap = 12;
     const chartHeight = options.length * (barHeight + gap) - gap;
@@ -214,43 +303,38 @@ const ResultChart: React.FC<ResultChartProps> = ({ type, options, results, parti
     return (
       <div style={styles.chartWrapper}>
         <svg width={chartWidth} height={chartHeight + 20} style={styles.svg}>
-          {animatedResults
-            .slice()
-            .sort((a, b) => b.count - a.count)
-            .map((result, index) => {
-              const value = result.count;
-              const width = (value / maxValue) * (chartWidth - 120);
-              const y = index * (barHeight + gap);
+          {sortedIndices.map((originalIndex, displayIndex) => {
+            const value = animated[originalIndex];
+            const y = displayIndex * (barHeight + gap);
 
-              return (
-                <g key={result.optionIndex}>
-                  <text
-                    x={0}
-                    y={y + barHeight / 2 + 4}
-                    style={styles.hBarLabel}
-                  >
-                    {options[result.optionIndex]?.substring(0, 8)}
-                    {options[result.optionIndex]?.length > 8 ? '...' : ''}
-                  </text>
-                  <rect
-                    x={100}
-                    y={y}
-                    width={width}
-                    height={barHeight}
-                    fill={COLORS[result.optionIndex % COLORS.length]}
-                    rx={6}
-                    style={{ transition: 'all 0.3s ease' }}
-                  />
-                  <text
-                    x={100 + width + 8}
-                    y={y + barHeight / 2 + 4}
-                    style={styles.hBarValue}
-                  >
-                    {Math.round(value)} 票
-                  </text>
-                </g>
-              );
-            })}
+            return (
+              <g key={originalIndex}>
+                <text
+                  x={0}
+                  y={y + barHeight / 2 + 4}
+                  style={styles.hBarLabel}
+                >
+                  {options[originalIndex]?.substring(0, 8)}
+                  {options[originalIndex]?.length > 8 ? '...' : ''}
+                </text>
+                <rect
+                  x={100}
+                  y={y}
+                  width={value.barWidth}
+                  height={barHeight}
+                  fill={COLORS[originalIndex % COLORS.length]}
+                  rx={6}
+                />
+                <text
+                  x={100 + value.barWidth + 8}
+                  y={y + barHeight / 2 + 4}
+                  style={styles.hBarValue}
+                >
+                  {Math.round(value.count)} 票
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
     );

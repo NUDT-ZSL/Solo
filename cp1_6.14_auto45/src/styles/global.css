@@ -84,7 +84,7 @@ input, select {
 
 @keyframes checkmark {
   0% {
-    stroke-dashoffset: 100;
+    stroke-dashoffset: 60;
   }
   100% {
     stroke-dashoffset: 0;
@@ -93,7 +93,7 @@ input, select {
 
 @keyframes checkmarkCircle {
   0% {
-    stroke-dashoffset: 314;
+    stroke-dashoffset: 151;
   }
   100% {
     stroke-dashoffset: 0;

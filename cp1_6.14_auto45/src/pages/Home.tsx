@@ -1,48 +1,121 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import PollCard from '../components/PollCard';
 import { Poll } from '../types';
+
+const POOL_SIZE = 25;
+const ITEM_HEIGHT = 96;
+const BUFFER = 5;
+const PAGE_SIZE = 100;
 
 const Home: React.FC = () => {
   const [polls, setPolls] = useState<Poll[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
-  const ITEM_HEIGHT = 96;
-  const BUFFER = 5;
+  const scrollTopRef = useRef(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const visibleRangeRef = useRef({ start: 0, end: 20 });
+  const [, forceUpdate] = useState({});
 
-  const loadPolls = useCallback(async (offset: number, limit: number) => {
-    setLoading(true);
+  const loadedPagesRef = useRef<Set<number>>(new Set());
+
+  const loadPollsPage = useCallback(async (pageIndex: number) => {
+    if (loadedPagesRef.current.has(pageIndex)) return;
+    loadedPagesRef.current.add(pageIndex);
+
+    const offset = pageIndex * PAGE_SIZE;
     try {
       const res = await axios.get('/api/polls', {
-        params: { offset, limit },
+        params: { offset, limit: PAGE_SIZE },
       });
-      setPolls(res.data.polls);
-      setTotal(res.data.total);
+
+      setPolls(prev => {
+        const newPolls = [...prev];
+        res.data.polls.forEach((poll: Poll, idx: number) => {
+          newPolls[offset + idx] = poll;
+        });
+        return newPolls;
+      });
+
+      if (pageIndex === 0) {
+        setTotal(res.data.total);
+      }
     } catch (err) {
       console.error('Failed to load polls:', err);
-    } finally {
-      setLoading(false);
+      loadedPagesRef.current.delete(pageIndex);
     }
   }, []);
 
   useEffect(() => {
-    loadPolls(0, 100);
-  }, [loadPolls]);
+    setLoading(true);
+    loadPollsPage(0).finally(() => setLoading(false));
+  }, [loadPollsPage]);
+
+  const updateVisibleRange = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const scrollTop = scrollTopRef.current;
+    const clientHeight = containerRef.current.clientHeight;
+
+    const visibleStart = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER);
+    const visibleEnd = Math.min(total, Math.ceil((scrollTop + clientHeight) / ITEM_HEIGHT) + BUFFER);
+
+    const midPoint = Math.floor((visibleStart + visibleEnd) / 2 / PAGE_SIZE);
+    for (let p = Math.max(0, midPoint - 1); p <= midPoint + 1; p++) {
+      if (p * PAGE_SIZE < total) {
+        loadPollsPage(p);
+      }
+    }
+
+    if (
+      visibleStart !== visibleRangeRef.current.start ||
+      visibleEnd !== visibleRangeRef.current.end
+    ) {
+      visibleRangeRef.current = { start: visibleStart, end: visibleEnd };
+      forceUpdate({});
+    }
+
+    animationFrameRef.current = null;
+  }, [total, loadPollsPage]);
 
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
-    const { scrollTop, clientHeight } = containerRef.current;
-    const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER);
-    const end = Math.min(total, Math.ceil((scrollTop + clientHeight) / ITEM_HEIGHT) + BUFFER);
-    setVisibleRange({ start, end });
-  }, [total]);
+    scrollTopRef.current = containerRef.current.scrollTop;
 
-  const visiblePolls = polls.slice(visibleRange.start, visibleRange.end);
-  const offsetY = visibleRange.start * ITEM_HEIGHT;
+    if (animationFrameRef.current === null) {
+      animationFrameRef.current = requestAnimationFrame(updateVisibleRange);
+    }
+  }, [updateVisibleRange]);
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  const visibleItems = useMemo(() => {
+    const { start, end } = visibleRangeRef.current;
+    const items: { index: number; poll: Poll | null }[] = [];
+
+    const poolStart = start;
+    const poolEnd = Math.min(start + POOL_SIZE, end);
+
+    for (let i = poolStart; i < poolEnd; i++) {
+      items.push({
+        index: i,
+        poll: polls[i] || null,
+      });
+    }
+
+    return items;
+  }, [polls]);
+
   const totalHeight = total * ITEM_HEIGHT;
+  const offsetY = visibleRangeRef.current.start * ITEM_HEIGHT;
 
   return (
     <div style={styles.page}>
@@ -62,11 +135,31 @@ const Home: React.FC = () => {
         style={styles.listContainer}
         onScroll={handleScroll}
       >
-        <div style={{ height: totalHeight, position: 'relative' }}>
-          <div style={{ transform: `translateY(${offsetY}px)` }}>
-            {visiblePolls.map((poll) => (
-              <div key={poll.id} style={{ marginBottom: '16px' }}>
-                <PollCard poll={poll} />
+        <div style={{ height: totalHeight, position: 'relative', willChange: 'transform' }}>
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              transform: `translateY(${offsetY}px)`,
+              willChange: 'transform',
+            }}
+          >
+            {visibleItems.map(({ index, poll }) => (
+              <div
+                key={`item-${index}`}
+                style={{
+                  height: ITEM_HEIGHT - 16,
+                  marginBottom: '16px',
+                  position: 'relative',
+                }}
+              >
+                {poll ? (
+                  <PollCard poll={poll} />
+                ) : (
+                  <div style={styles.skeleton} />
+                )}
               </div>
             ))}
           </div>
@@ -76,7 +169,7 @@ const Home: React.FC = () => {
           <div style={styles.loading}>加载中...</div>
         )}
 
-        {!loading && polls.length === 0 && (
+        {!loading && total === 0 && (
           <div style={styles.empty}>
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={styles.emptyIcon}>
               <path d="M9 11l3 3L22 4" />
@@ -125,16 +218,33 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '12px',
     padding: '16px',
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+    WebkitOverflowScrolling: 'touch',
+  },
+  skeleton: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#2a2a3e',
+    borderRadius: '10px',
+    animation: 'pulse 1.5s ease-in-out infinite',
   },
   loading: {
     textAlign: 'center',
     padding: '40px',
     color: '#94a3b8',
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
   },
   empty: {
     textAlign: 'center',
     padding: '60px 20px',
     color: '#94a3b8',
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '100%',
   },
   emptyIcon: {
     marginBottom: '16px',
@@ -149,5 +259,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
   },
 };
+
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 0.3; }
+  }
+`;
+if (!document.getElementById('home-styles')) {
+  styleSheet.id = 'home-styles';
+  document.head.appendChild(styleSheet);
+}
 
 export default Home;
