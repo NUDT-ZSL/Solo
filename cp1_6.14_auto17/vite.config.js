@@ -11,5 +11,13 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['@xenova/transformers']
+  },
+  define: {
+    'global': 'globalThis'
+  },
+  resolve: {
+    alias: {
+      'sharp': false
+    }
   }
 });
