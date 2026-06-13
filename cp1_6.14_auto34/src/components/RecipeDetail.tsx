@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useFavorites } from '../context/FavoritesContext';
 
 interface Recipe {
   id: string;
@@ -26,6 +27,7 @@ const RecipeDetail: React.FC = () => {
   const [userRating, setUserRating] = useState(0);
   const [noteText, setNoteText] = useState('');
   const [saving, setSaving] = useState(false);
+  const { setFavorite, isFavorite, initFavorites } = useFavorites();
 
   useEffect(() => {
     if (!id) return;
@@ -35,6 +37,7 @@ const RecipeDetail: React.FC = () => {
         const res = await axios.get(`/api/recipes/${id}`);
         setRecipe(res.data);
         setNoteText(res.data.notes || '');
+        initFavorites([res.data]);
       } catch (err) {
         console.error('Failed to fetch recipe:', err);
       } finally {
@@ -42,7 +45,7 @@ const RecipeDetail: React.FC = () => {
       }
     };
     fetchRecipe();
-  }, [id]);
+  }, [id, initFavorites]);
 
   const toggleIngredient = useCallback((ingredient: string) => {
     setPreparedSet((prev) => {
@@ -85,15 +88,20 @@ const RecipeDetail: React.FC = () => {
 
   const handleToggleFavorite = useCallback(async () => {
     if (!recipe) return;
+    const nextValue = !isFavorite(recipe.id);
+    setFavorite(recipe.id, nextValue);
     try {
       const res = await axios.put(`/api/recipes/${recipe.id}`, {
-        favorite: !recipe.favorite,
+        favorite: nextValue,
       });
       setRecipe(res.data);
     } catch (err) {
       console.error('Failed to toggle favorite:', err);
+      setFavorite(recipe.id, !nextValue);
     }
-  }, [recipe]);
+  }, [recipe, isFavorite, setFavorite]);
+
+  const favorited = recipe ? isFavorite(recipe.id) : false;
 
   if (loading) {
     return <div className="loading-spinner">加载中...</div>;
@@ -125,11 +133,11 @@ const RecipeDetail: React.FC = () => {
 
         <div className="detail-text-section" style={{ position: 'relative' }}>
           <button
-            className={`detail-favorite-btn${recipe.favorite ? ' favorited' : ''}`}
+            className={`detail-favorite-btn${favorited ? ' favorited' : ''}`}
             onClick={handleToggleFavorite}
-            title={recipe.favorite ? '取消收藏' : '收藏'}
+            title={favorited ? '取消收藏' : '收藏'}
           >
-            {recipe.favorite ? '❤️' : '🤍'}
+            {favorited ? '❤️' : '🤍'}
           </button>
 
           <h1 className="detail-title">{recipe.name}</h1>

@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useFavorites } from '../context/FavoritesContext';
 
 interface Recipe {
   id: string;
@@ -15,9 +16,15 @@ interface Recipe {
 
 const categories = ['全部', '中式', '西式', '甜品', '汤羹'];
 
-const RecipeCard = React.memo(({ recipe, onClick }: { recipe: Recipe; onClick: () => void }) => (
+interface RecipeCardProps {
+  recipe: Recipe;
+  isFavorite: boolean;
+  onClick: () => void;
+}
+
+const RecipeCard = React.memo(({ recipe, isFavorite, onClick }: RecipeCardProps) => (
   <div className="recipe-card" onClick={onClick}>
-    {recipe.favorite && <div className="recipe-card-favorite">❤</div>}
+    {isFavorite && <div className="recipe-card-favorite">❤</div>}
     <div className="recipe-card-image" style={{ background: recipe.gradient }} />
     <div className="recipe-card-body">
       <div className="recipe-card-name">{recipe.name}</div>
@@ -40,6 +47,7 @@ const RecipeList: React.FC = () => {
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [category, setCategory] = useState('全部');
   const navigate = useNavigate();
+  const { initFavorites, isFavorite } = useFavorites();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedKeyword(keyword), 300);
@@ -55,6 +63,7 @@ const RecipeList: React.FC = () => {
         if (debouncedKeyword) params.keyword = debouncedKeyword;
         const res = await axios.get('/api/recipes', { params });
         setRecipes(res.data);
+        initFavorites(res.data);
       } catch (err) {
         console.error('Failed to fetch recipes:', err);
       } finally {
@@ -62,7 +71,7 @@ const RecipeList: React.FC = () => {
       }
     };
     fetchRecipes();
-  }, [category, debouncedKeyword]);
+  }, [category, debouncedKeyword, initFavorites]);
 
   const handleCardClick = useCallback(
     (id: string) => {
@@ -104,6 +113,7 @@ const RecipeList: React.FC = () => {
             <RecipeCard
               key={recipe.id}
               recipe={recipe}
+              isFavorite={isFavorite(recipe.id)}
               onClick={() => handleCardClick(recipe.id)}
             />
           ))}
