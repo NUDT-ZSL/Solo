@@ -1,41 +1,69 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useBooks } from './hooks/useBooks';
 import { useReminders } from './hooks/useReminders';
+import { useReservations } from './hooks/useReservations';
 import { SearchBar } from './components/SearchBar';
 import { BookList } from './components/BookList';
 import { ReminderBar } from './components/ReminderBar';
-import type { ToastMessage } from './types';
+import type { Book, ToastMessage } from './types';
 import './App.css';
 
 function HomePage() {
-  const { books, loading, toasts, borrowBook, returnBook, fetchBooks } = useBooks();
+  const { books, setBooks, loading, toasts, borrowBook, returnBook, fetchBooks, showToast } = useBooks();
   const { reminders, fetchReminders } = useReminders();
   const [filter, setFilter] = useState('');
 
+  const handleSyncBooks = useCallback((updatedBooks: Book[]) => {
+    setBooks(updatedBooks);
+    fetchReminders();
+  }, [setBooks, fetchReminders]);
+
+  const { addReservation, cancelReservation, fetchReservations } = useReservations({
+    onSyncBooks: handleSyncBooks
+  });
+
+  useEffect(() => {
+    if (books.length > 0) {
+      fetchReservations();
+    }
+  }, [books.length, fetchReservations]);
+
   const handleBorrow = useCallback(async (id: string): Promise<boolean> => {
-    const ok = await borrowBook(id);
-    if (ok) {
+    const book = books.find(b => b.id === id);
+    const ok = await addReservation(id, book);
+    if (!ok) {
+      showToast('error', '预约失败，请稍后重试');
+      fetchBooks();
+      fetchReminders();
+    } else {
+      showToast('success', '预约成功！');
       fetchReminders();
     }
     return ok;
-  }, [borrowBook, fetchReminders]);
+  }, [books, addReservation, showToast, fetchBooks, fetchReminders]);
 
   const handleCancel = useCallback(async (id: string): Promise<boolean> => {
-    const ok = await returnBook(id);
-    if (ok) {
+    const ok = await cancelReservation(id);
+    if (!ok) {
+      showToast('error', '取消失败，请稍后重试');
+      fetchBooks();
+      fetchReminders();
+    } else {
+      showToast('success', '取消预约成功！');
       fetchReminders();
     }
     return ok;
-  }, [returnBook, fetchReminders]);
+  }, [cancelReservation, showToast, fetchBooks, fetchReminders]);
 
   const handleReturnFromReminder = useCallback(async (id: string): Promise<boolean> => {
     const ok = await returnBook(id);
     if (ok) {
       fetchReminders();
+      fetchReservations();
     }
     return ok;
-  }, [returnBook, fetchReminders]);
+  }, [returnBook, fetchReminders, fetchReservations]);
 
   return (
     <div className="app">

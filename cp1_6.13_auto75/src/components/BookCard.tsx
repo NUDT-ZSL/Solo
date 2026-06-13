@@ -37,17 +37,17 @@ export function BookCard({ book, index, onBorrow, onCancel }: BookCardProps) {
     if (loading) return;
     setLoading(true);
     try {
+      let ok = false;
       if (isBorrowed) {
-        const ok = await onCancel(book.id);
-        if (ok) {
-          setHighlight(true);
-        }
+        ok = await onCancel(book.id);
       } else {
-        const ok = await onBorrow(book.id);
-        if (ok) {
-          setHighlight(true);
-        }
+        ok = await onBorrow(book.id);
       }
+      if (ok) {
+        setHighlight(true);
+      }
+    } catch (err) {
+      console.error('操作失败', err);
     } finally {
       setLoading(false);
     }

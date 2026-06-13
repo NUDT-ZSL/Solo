@@ -14,6 +14,14 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
     setLocal(value);
   }, [value]);
 
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     setLocal(v);

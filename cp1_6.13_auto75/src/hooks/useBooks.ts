@@ -63,5 +63,5 @@ export function useBooks() {
     };
   }, [fetchBooks]);
 
-  return { books, loading, toasts, borrowBook, returnBook, fetchBooks, showToast };
+  return { books, setBooks, loading, toasts, borrowBook, returnBook, fetchBooks, showToast };
 }
