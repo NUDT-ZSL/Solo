@@ -1,0 +1,49 @@
+.book-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 280px);
+  gap: 24px;
+  justify-content: center;
+  padding: 0 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.book-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 16px;
+}
+
+.empty-text {
+  font-size: 18px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.refresh-btn {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 24px;
+  border: 2px solid #eab308;
+  border-radius: 8px;
+  background: transparent;
+  color: #eab308;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: #eab308;
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .book-list {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 0 12px;
+  }
+}
