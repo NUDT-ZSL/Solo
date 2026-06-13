@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Artwork, mockGetWorks, mockGetFavorites, mockToggleFavorite } from '../shared/mockApi'
@@ -8,6 +8,16 @@ const ProfilePage = () => {
   const navigate = useNavigate()
   const [favorites, setFavorites] = useState<Artwork[]>([])
   const [loading, setLoading] = useState(true)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const removingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (removingTimerRef.current) {
+        clearTimeout(removingTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -36,10 +46,17 @@ const ProfilePage = () => {
     fetchFavorites()
   }, [user])
 
-  const handleRemoveFavorite = async (artworkId: string) => {
-    const newFavorites = await mockToggleFavorite(artworkId)
-    setFavorites((prev) => prev.filter((artwork) => artwork.id !== artworkId))
-    return newFavorites
+  const handleRemoveFavorite = async (artworkId: string, artworkTitle: string) => {
+    const confirmed = window.confirm(`确定要从收藏夹中移除「${artworkTitle}」吗？`)
+    if (!confirmed) return
+
+    setRemovingId(artworkId)
+
+    removingTimerRef.current = setTimeout(async () => {
+      await mockToggleFavorite(artworkId)
+      setFavorites((prev) => prev.filter((artwork) => artwork.id !== artworkId))
+      setRemovingId(null)
+    }, 300)
   }
 
   const handleArtworkClick = (artworkId: string) => {
@@ -103,7 +120,9 @@ const ProfilePage = () => {
               {favorites.map((artwork) => (
                 <div
                   key={artwork.id}
-                  className="favorite-card"
+                  className={`favorite-card ${
+                    removingId === artwork.id ? 'removing' : ''
+                  }`}
                   onClick={() => handleArtworkClick(artwork.id)}
                 >
                   <div className="favorite-image-wrapper">
@@ -114,13 +133,16 @@ const ProfilePage = () => {
                     />
                     <button
                       className="remove-favorite-btn"
+                      title="移除收藏"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleRemoveFavorite(artwork.id)
+                        handleRemoveFavorite(artwork.id, artwork.title)
                       }}
                     >
-                      <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
                     </button>
                   </div>
@@ -249,7 +271,12 @@ const ProfilePage = () => {
           border-radius: 10px;
           overflow: hidden;
           cursor: pointer;
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
+          transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .favorite-card.removing {
+          opacity: 0;
+          transform: scale(0.9) translateX(-20px);
         }
 
         .favorite-card:hover {
@@ -278,24 +305,31 @@ const ProfilePage = () => {
           position: absolute;
           top: 10px;
           right: 10px;
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           border: none;
           background: rgba(0, 0, 0, 0.5);
-          color: #e74c3c;
+          color: #fff;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           transition: all 0.2s ease;
           backdrop-filter: blur(4px);
+          opacity: 0;
+          transform: scale(0.8);
+        }
+
+        .favorite-card:hover .remove-favorite-btn {
+          opacity: 1;
+          transform: scale(1);
         }
 
         .remove-favorite-btn:hover {
-          background: rgba(231, 76, 60, 0.9);
+          background: rgba(231, 76, 60, 0.95);
           color: #fff;
-          transform: scale(1.1);
+          transform: scale(1.1) !important;
         }
 
         .remove-favorite-btn svg {

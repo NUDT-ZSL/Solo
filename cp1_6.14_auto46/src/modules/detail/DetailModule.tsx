@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Artwork, mockGetWorkById, mockToggleFavorite, mockGetFavorites, mockAddToCart } from '../../shared/mockApi'
 import { eventBus } from '../../shared/eventBus'
@@ -34,6 +34,30 @@ const DetailModule = () => {
     fetchArtwork()
   }, [id])
 
+  const handleCloseZoom = useCallback(() => {
+    setShowZoomed(false)
+  }, [])
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showZoomed) {
+        handleCloseZoom()
+      }
+    },
+    [showZoomed, handleCloseZoom]
+  )
+
+  useEffect(() => {
+    if (showZoomed) {
+      document.addEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [showZoomed, handleKeyDown])
+
   const handleAddToCart = async () => {
     if (!artwork || isAddingToCart) return
     setIsAddingToCart(true)
@@ -63,6 +87,10 @@ const DetailModule = () => {
 
   const handleBack = () => {
     navigate(-1)
+  }
+
+  const handleImageClick = () => {
+    setShowZoomed(true)
   }
 
   if (loading) {
@@ -114,7 +142,15 @@ const DetailModule = () => {
         <div className="detail-image-section">
           <div
             className="detail-image-wrapper"
-            onClick={() => setShowZoomed(true)}
+            onClick={handleImageClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                handleImageClick()
+              }
+            }}
           >
             {imageLoading && <div className="image-placeholder" />}
             <img
@@ -195,13 +231,13 @@ const DetailModule = () => {
       {showZoomed && (
         <div
           className="zoomed-image-overlay"
-          onClick={() => setShowZoomed(false)}
+          onClick={handleCloseZoom}
         >
           <button
             className="close-zoom-btn"
             onClick={(e) => {
               e.stopPropagation()
-              setShowZoomed(false)
+              handleCloseZoom()
             }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -268,6 +304,16 @@ const DetailModule = () => {
           border-radius: 12px;
           overflow: hidden;
           background: #2d2d44;
+          outline: none;
+          transition: box-shadow 0.3s ease;
+        }
+
+        .detail-image-wrapper:hover {
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .detail-image-wrapper:focus-visible {
+          box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.4);
         }
 
         .detail-image {
@@ -511,16 +557,17 @@ const DetailModule = () => {
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.9);
+          background: rgba(0, 0, 0, 0.92);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 1000;
           cursor: zoom-out;
-          animation: fadeIn 0.3s ease;
+          animation: fadeInZoom 0.25s ease;
+          padding: 40px;
         }
 
-        @keyframes fadeIn {
+        @keyframes fadeInZoom {
           from { opacity: 0; }
           to { opacity: 1; }
         }
@@ -552,10 +599,23 @@ const DetailModule = () => {
         }
 
         .zoomed-image {
-          max-width: 90vw;
-          max-height: 90vh;
+          max-width: 100%;
+          max-height: 100%;
           object-fit: contain;
           border-radius: 8px;
+          animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes zoomIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
         }
 
         @media (max-width: 1024px) {

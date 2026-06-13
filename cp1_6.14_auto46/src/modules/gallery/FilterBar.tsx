@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface FilterBarProps {
   styleOptions: string[]
@@ -27,26 +27,28 @@ const FilterBar = ({
   onSearchChange,
 }: FilterBarProps) => {
   const [localKeyword, setLocalKeyword] = useState(searchKeyword)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const debounce = useCallback((func: (value: string) => void, delay: number) => {
-    let timeoutId: ReturnType<typeof setTimeout>
-    return (value: string) => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => func(value), delay)
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
     }
   }, [])
-
-  const debouncedSearch = useCallback(
-    debounce((value: string) => {
-      onSearchChange(value)
-    }, 300),
-    [debounce, onSearchChange]
-  )
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setLocalKeyword(value)
-    debouncedSearch(value)
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      onSearchChange(value)
+      debounceTimerRef.current = null
+    }, 300)
   }
 
   return (

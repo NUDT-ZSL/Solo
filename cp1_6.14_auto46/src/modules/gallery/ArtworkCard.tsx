@@ -69,14 +69,26 @@ const ArtworkCard = ({
           onClick={handleFavoriteClick}
           aria-label={isFavorite ? '取消收藏' : '收藏'}
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill={isFavorite ? 'currentColor' : 'none'}
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
+          <span className="heart-wrapper">
+            <svg
+              className="heart-outline"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            <svg
+              className="heart-filled"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          </span>
         </button>
       </div>
       <div className="card-content">
@@ -154,7 +166,7 @@ const ArtworkCard = ({
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: all 0.2s ease-in-out;
+          transition: background 0.2s ease-in-out, transform 0.2s ease-in-out, color 0.3s ease;
           backdrop-filter: blur(4px);
         }
 
@@ -165,6 +177,34 @@ const ArtworkCard = ({
 
         .favorite-btn.favorited {
           color: #e74c3c;
+        }
+
+        .heart-wrapper {
+          position: relative;
+          width: 20px;
+          height: 20px;
+        }
+
+        .heart-outline,
+        .heart-filled {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 20px;
+          height: 20px;
+          transition: opacity 0.3s ease;
+        }
+
+        .heart-filled {
+          opacity: 0;
+        }
+
+        .favorite-btn.favorited .heart-filled {
+          opacity: 1;
+        }
+
+        .favorite-btn.favorited .heart-outline {
+          opacity: 0;
         }
 
         .favorite-btn.animating {
@@ -181,11 +221,6 @@ const ArtworkCard = ({
           100% {
             transform: scale(1);
           }
-        }
-
-        .favorite-btn svg {
-          width: 20px;
-          height: 20px;
         }
 
         .card-content {

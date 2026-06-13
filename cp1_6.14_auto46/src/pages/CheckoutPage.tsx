@@ -31,6 +31,16 @@ const CheckoutPage = () => {
     0
   )
 
+  const validatePhone = (phone: string): string => {
+    if (!phone.trim()) {
+      return '请输入联系电话'
+    }
+    if (!/^1[3-9]\d{9}$/.test(phone.trim())) {
+      return '请输入正确的11位手机号'
+    }
+    return ''
+  }
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
@@ -38,10 +48,9 @@ const CheckoutPage = () => {
       newErrors.name = '请输入收货人姓名'
     }
 
-    if (!formData.phone.trim()) {
-      newErrors.phone = '请输入联系电话'
-    } else if (!/^1[3-9]\d{9}$/.test(formData.phone)) {
-      newErrors.phone = '请输入正确的手机号'
+    const phoneError = validatePhone(formData.phone)
+    if (phoneError) {
+      newErrors.phone = phoneError
     }
 
     if (!formData.address.trim()) {
@@ -80,6 +89,13 @@ const CheckoutPage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }))
+    }
+
+    if (name === 'phone' && value.trim()) {
+      const phoneError = validatePhone(value)
+      if (phoneError) {
+        setErrors((prev) => ({ ...prev, phone: phoneError }))
+      }
     }
   }
 
@@ -515,10 +531,11 @@ const CheckoutPage = () => {
         .order-info {
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          padding: 16px;
-          background: #f5f5f5;
-          border-radius: 8px;
+          gap: 6px;
+          padding: 20px;
+          background: linear-gradient(135deg, rgba(201, 168, 76, 0.08) 0%, rgba(201, 168, 76, 0.02) 100%);
+          border: 2px solid rgba(201, 168, 76, 0.2);
+          border-radius: 12px;
           margin-bottom: 24px;
         }
 
@@ -526,14 +543,17 @@ const CheckoutPage = () => {
           font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
           font-size: 12px;
           color: #888;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         .order-number {
           font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 16px;
-          font-weight: 600;
-          color: #1a1a2e;
-          letter-spacing: 1px;
+          font-size: 20px;
+          font-weight: 700;
+          color: #c9a84c;
+          letter-spacing: 2px;
+          user-select: all;
         }
 
         .continue-btn {
