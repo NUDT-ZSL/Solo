@@ -15,7 +15,7 @@ interface WheelCache {
 }
 
 const _HSLtoRGB = (h: number, s: number, l: number): [number, number, number] => {
-  const hh = (h % 360) / 360;
+  const hh = ((h % 360) + 360) % 360 / 360;
   const ss = s / 100;
   const ll = l / 100;
   if (ss === 0) {
@@ -42,11 +42,14 @@ const _HSLtoRGB = (h: number, s: number, l: number): [number, number, number] =>
 
 const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const cacheRef = useRef<WheelCache | null>(null);
   const isDragging = useRef(false);
   const rafId = useRef<number | null>(null);
   const pendingRender = useRef(false);
   const lastPrimaryRef = useRef<HSL | null>(null);
+  const lastSizeRef = useRef<number>(size);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [, forceRender] = useState(0);
 
   const center = size / 2;
@@ -66,17 +69,17 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
       off.width = scaledSize;
       off.height = scaledSize;
       const ctx = off.getContext('2d', { alpha: false })!;
-      const cx = targetSize * dpr / 2;
-      const cy = cx;
+      const cxs = targetSize * dpr / 2;
+      const cys = cxs;
       const outR = (targetSize / 2 - 4) * dpr;
       const inR = outR - targetSize * 0.18 * dpr;
       const img = ctx.createImageData(scaledSize, scaledSize);
       const data = img.data;
 
       for (let y = 0; y < scaledSize; y++) {
-        const dy = y - cy;
+        const dy = y - cys;
         for (let x = 0; x < scaledSize; x++) {
-          const dx = x - cx;
+          const dx = x - cxs;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const idx = (y * scaledSize + x) * 4;
           if (dist >= inR && dist <= outR) {
@@ -110,12 +113,12 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
 
       ctx.save();
       ctx.beginPath();
-      ctx.arc(cx, cy, inR - dpr, 0, Math.PI * 2);
+      ctx.arc(cxs, cys, inR - dpr, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.lineWidth = dpr;
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(cx, cy, outR + dpr, 0, Math.PI * 2);
+      ctx.arc(cxs, cys, outR + dpr, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(255,255,255,0.06)';
       ctx.lineWidth = 2 * dpr;
       ctx.stroke();
@@ -133,22 +136,26 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
     const ctx = canvas.getContext('2d')!;
     const cache = cacheRef.current;
     const dpr = cache.dpr;
+    const s = cache.size;
+    const cx = s / 2;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(cache.pixelBuffer, 0, 0);
 
     const hsl = validateHSL(primary);
     const angleRad = ((hsl.h - 90) * Math.PI) / 180;
-    const midR = ((innerRadius + outerRadius) / 2) * dpr;
-    const cxC = center * dpr;
-    const cyC = cxC;
+    const inner = (s / 2 - 4) - s * 0.18;
+    const outer = s / 2 - 4;
+    const midR = ((inner + outer) / 2) * dpr;
+    const cxs = cx * dpr;
+    const cys = cxs;
 
-    const rayEndX = cxC + Math.cos(angleRad) * (outerRadius * dpr + 2 * dpr);
-    const rayEndY = cyC + Math.sin(angleRad) * (outerRadius * dpr + 2 * dpr);
+    const rayEndX = cxs + Math.cos(angleRad) * (outer * dpr + 2 * dpr);
+    const rayEndY = cys + Math.sin(angleRad) * (outer * dpr + 2 * dpr);
 
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(cxC, cyC);
+    ctx.moveTo(cxs, cys);
     ctx.lineTo(rayEndX, rayEndY);
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.lineWidth = 2 * dpr;
@@ -158,8 +165,8 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
     ctx.stroke();
     ctx.restore();
 
-    const indicatorX = cxC + Math.cos(angleRad) * midR;
-    const indicatorY = cyC + Math.sin(angleRad) * midR;
+    const indicatorX = cxs + Math.cos(angleRad) * midR;
+    const indicatorY = cys + Math.sin(angleRad) * midR;
 
     ctx.save();
     ctx.beginPath();
@@ -175,7 +182,7 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
     ctx.restore();
 
     lastPrimaryRef.current = hsl;
-  }, [primary, center, innerRadius, outerRadius]);
+  }, [primary]);
 
   const scheduleRender = useCallback(() => {
     if (pendingRender.current) return;
@@ -184,17 +191,24 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
     rafId.current = requestAnimationFrame(renderIndicators);
   }, [renderIndicators]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const scaledSize = size * devicePixelRatio;
-    canvas.width = scaledSize;
-    canvas.height = scaledSize;
+  const setupCanvas = useCallback(
+    (s: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const scaledSize = s * devicePixelRatio;
+      canvas.width = scaledSize;
+      canvas.height = scaledSize;
+      cacheRef.current = buildWheelCache(s, devicePixelRatio);
+      lastPrimaryRef.current = null;
+      scheduleRender();
+    },
+    [buildWheelCache, devicePixelRatio, scheduleRender]
+  );
 
-    cacheRef.current = buildWheelCache(size, devicePixelRatio);
-    scheduleRender();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size, devicePixelRatio, buildWheelCache]);
+  useEffect(() => {
+    setupCanvas(size);
+    lastSizeRef.current = size;
+  }, [size, setupCanvas]);
 
   useEffect(() => {
     if (!cacheRef.current) return;
@@ -206,14 +220,35 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
   }, [primary, scheduleRender]);
 
   useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || typeof ResizeObserver === 'undefined') return;
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const cr = entry.contentRect;
+        const newSize = Math.max(200, Math.min(Math.round(cr.width), Math.round(cr.height)));
+        if (newSize !== lastSizeRef.current && Math.abs(newSize - lastSizeRef.current) > 8) {
+          lastSizeRef.current = newSize;
+          cacheRef.current = null;
+          setupCanvas(newSize);
+          forceRender((n) => n + 1);
+        }
+      }
+    });
+
+    ro.observe(wrapper);
+    resizeObserverRef.current = ro;
+    return () => {
+      ro.disconnect();
+      resizeObserverRef.current = null;
+    };
+  }, [setupCanvas]);
+
+  useEffect(() => {
     return () => {
       if (rafId.current) cancelAnimationFrame(rafId.current);
     };
   }, []);
-
-  useEffect(() => {
-    forceRender((n) => n + 1);
-  }, [size]);
 
   const getHueFromEvent = useCallback(
     (clientX: number, clientY: number): number => {
@@ -271,6 +306,7 @@ const ColorWheel: React.FC<ColorWheelProps> = ({ primary, onChange, size = 400 }
 
   return (
     <div
+      ref={wrapperRef}
       className="color-wheel-wrapper"
       style={{ width: size, height: size }}
     >

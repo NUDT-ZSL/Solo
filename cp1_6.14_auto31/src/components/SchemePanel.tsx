@@ -8,43 +8,83 @@ interface SchemePanelProps {
   onCopy?: (hex: string) => void;
 }
 
-const TOAST_DURATION = 300;
+const TOAST_SHOW_MS = 300;
+const TOAST_HIDE_MS = 150;
+
+type ToastKind = 'success' | 'error';
 
 const ColorSwatch: React.FC<{
   color: HSL;
   onCopy?: (hex: string) => void;
 }> = ({ color, onCopy }) => {
   const hex = hslToHex(color);
-  const [toastState, setToastState] = useState<'idle' | 'show' | 'hiding'>('idle');
-  const toastTimer = useRef<number | null>(null);
+  const [toastState, setToastState] = useState<{
+    visible: boolean;
+    kind: ToastKind;
+    message: string;
+  }>({ visible: false, kind: 'success', message: '' });
+  const toastTimer1 = useRef<number | null>(null);
+  const toastTimer2 = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
-      if (toastTimer.current) {
-        window.clearTimeout(toastTimer.current);
-        toastTimer.current = null;
-      }
+      if (toastTimer1.current) window.clearTimeout(toastTimer1.current);
+      if (toastTimer2.current) window.clearTimeout(toastTimer2.current);
+      toastTimer1.current = null;
+      toastTimer2.current = null;
     };
   }, []);
 
-  const handleClick = useCallback(async () => {
-    if (toastTimer.current) {
-      window.clearTimeout(toastTimer.current);
-      toastTimer.current = null;
+  const showToast = useCallback((kind: ToastKind, message: string) => {
+    if (toastTimer1.current) {
+      window.clearTimeout(toastTimer1.current);
+      toastTimer1.current = null;
     }
+    if (toastTimer2.current) {
+      window.clearTimeout(toastTimer2.current);
+      toastTimer2.current = null;
+    }
+    setToastState({ visible: true, kind, message });
+    toastTimer1.current = window.setTimeout(() => {
+      setToastState((prev) => ({ ...prev, visible: false }));
+      toastTimer2.current = window.setTimeout(() => {
+        setToastState({ visible: false, kind: 'success', message: '' });
+        toastTimer2.current = null;
+      }, TOAST_HIDE_MS);
+      toastTimer1.current = null;
+    }, TOAST_SHOW_MS);
+  }, []);
+
+  const handleClick = useCallback(async () => {
     const ok = await copyToClipboard(hex);
     if (ok) {
       onCopy?.(hex);
+      showToast('success', `已复制 ${hex}`);
+    } else {
+      try {
+        const sel = window.getSelection();
+        if (sel) {
+          const range = document.createRange();
+          const span = document.createElement('span');
+          span.textContent = hex;
+          span.style.position = 'fixed';
+          span.style.top = '-100vh';
+          span.style.left = '-100vw';
+          span.style.userSelect = 'all';
+          document.body.appendChild(span);
+          range.selectNodeContents(span);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.body.removeChild(span);
+        }
+      } catch {
+        // ignore
+      }
+      showToast('error', '自动复制失败，请手动复制');
     }
-    setToastState('show');
-    toastTimer.current = window.setTimeout(() => {
-      setToastState('hiding');
-      toastTimer.current = window.setTimeout(() => {
-        setToastState('idle');
-        toastTimer.current = null;
-      }, 120);
-    }, TOAST_DURATION);
-  }, [hex, onCopy]);
+  }, [hex, onCopy, showToast]);
+
+  const toastBg = toastState.kind === 'success' ? 'var(--success)' : 'var(--danger)';
 
   return (
     <div
@@ -59,16 +99,17 @@ const ColorSwatch: React.FC<{
       <div
         className="copy-toast"
         style={{
-          opacity: toastState === 'idle' ? 0 : 1,
-          transform: `translateX(-50%) translateY(${toastState === 'show' ? '-4px' : '8px'})`,
+          background: toastBg,
+          opacity: toastState.visible ? 1 : 0,
+          transform: `translateX(-50%) translateY(${toastState.visible ? '-4px' : '8px'})`,
           transition:
-            toastState === 'show'
-              ? `opacity ${TOAST_DURATION}ms ease-out, transform ${TOAST_DURATION}ms ease-out`
-              : `opacity 120ms ease-in, transform 120ms ease-in`,
+            toastState.visible
+              ? `opacity ${TOAST_SHOW_MS}ms ease-out, transform ${TOAST_SHOW_MS}ms ease-out`
+              : `opacity ${TOAST_HIDE_MS}ms ease-in, transform ${TOAST_HIDE_MS}ms ease-in`,
           pointerEvents: 'none',
         }}
       >
-        已复制 {hex}
+        {toastState.message || `已复制 ${hex}`}
       </div>
     </div>
   );

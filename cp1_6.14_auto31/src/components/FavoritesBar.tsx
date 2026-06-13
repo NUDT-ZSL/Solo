@@ -10,8 +10,11 @@ interface FavoritesBarProps {
   onClear: () => void;
 }
 
-const formatTime = (timestamp: number): string => {
-  const d = new Date(timestamp);
+const SAFE_TIMESTAMP = 0;
+
+const formatTime = (ts: unknown): string => {
+  const timestamp = typeof ts === 'number' && Number.isFinite(ts) ? ts : SAFE_TIMESTAMP;
+  const d = new Date(timestamp || Date.now());
   const h = d.getHours().toString().padStart(2, '0');
   const m = d.getMinutes().toString().padStart(2, '0');
   const s = d.getSeconds().toString().padStart(2, '0');
@@ -24,13 +27,20 @@ const FavoritesBar: React.FC<FavoritesBarProps> = ({
   onSelect,
   onClear,
 }) => {
-  const sortedFavorites = useMemo(
-    () =>
-      [...favorites].sort(
-        (a: FavoriteEntry, b: FavoriteEntry) => b.timestamp - a.timestamp
-      ),
-    [favorites]
-  );
+  const safeFavorites = useMemo(() => {
+    if (!Array.isArray(favorites)) return [] as readonly FavoriteEntry[];
+    return favorites
+      .filter((e): e is FavoriteEntry => !!e && typeof e.id === 'string')
+      .slice();
+  }, [favorites]);
+
+  const sortedFavorites = useMemo(() => {
+    return [...safeFavorites].sort((a, b) => {
+      const ta = typeof a.timestamp === 'number' && Number.isFinite(a.timestamp) ? a.timestamp : SAFE_TIMESTAMP;
+      const tb = typeof b.timestamp === 'number' && Number.isFinite(b.timestamp) ? b.timestamp : SAFE_TIMESTAMP;
+      return tb - ta;
+    });
+  }, [safeFavorites]);
 
   return (
     <aside
@@ -41,8 +51,9 @@ const FavoritesBar: React.FC<FavoritesBarProps> = ({
         maxWidth: isOpen ? 280 : 0,
         overflow: 'hidden',
       }}
+      aria-hidden={!isOpen}
     >
-      <div style={{ width: 280, minWidth: 280 }}>
+      <div style={{ width: 280, minWidth: 280, maxWidth: 280, height: '100%', display: 'flex', flexDirection: 'column' }}>
         <div className="favorites-header">
           <div className="favorites-title">
             <Star size={16} fill="currentColor" color="#f59e0b" />
@@ -62,6 +73,7 @@ const FavoritesBar: React.FC<FavoritesBarProps> = ({
               className="favorites-clear"
               onClick={onClear}
               title="清空所有收藏"
+              type="button"
             >
               <Trash2
                 size={12}
@@ -86,39 +98,59 @@ const FavoritesBar: React.FC<FavoritesBarProps> = ({
               </div>
             </div>
           ) : (
-            sortedFavorites.map((entry) => (
-              <div
-                key={entry.id}
-                className="favorite-item"
-                onClick={() => onSelect(entry.primary)}
-                title="点击恢复此配色方案"
-              >
-                <div className="favorite-item-header">
-                  <span className="favorite-item-type">
-                    {entry.schemes.length > 0
-                      ? entry.schemes[0].name + '等方案'
-                      : '配色方案'}
-                  </span>
-                  <span className="favorite-item-time">
-                    {formatTime(entry.timestamp)}
-                  </span>
-                </div>
-                <div className="favorite-item-colors">
-                  <div
-                    className="favorite-thumb"
-                    style={{ backgroundColor: hslToHex(entry.primary) }}
-                    title="主色"
-                  />
-                  {entry.schemes[0]?.colors.slice(0, 4).map((c, i) => (
+            sortedFavorites.map((entry) => {
+              const safePrimary: HSL =
+                entry.primary &&
+                typeof entry.primary.h === 'number' &&
+                typeof entry.primary.s === 'number' &&
+                typeof entry.primary.l === 'number'
+                  ? entry.primary
+                  : { h: 0, s: 0, l: 50 };
+              const safeSchemes = Array.isArray(entry.schemes) ? entry.schemes : [];
+              const firstScheme = safeSchemes[0];
+              const previewColors = firstScheme && Array.isArray(firstScheme.colors)
+                ? firstScheme.colors.slice(0, 4)
+                : [];
+              return (
+                <div
+                  key={entry.id}
+                  className="favorite-item"
+                  onClick={() => onSelect(safePrimary)}
+                  title="点击恢复此配色方案"
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="favorite-item-header">
+                    <span className="favorite-item-type">
+                      {firstScheme?.name ? `${firstScheme.name}等方案` : '配色方案'}
+                    </span>
+                    <span className="favorite-item-time">
+                      {formatTime(entry.timestamp)}
+                    </span>
+                  </div>
+                  <div className="favorite-item-colors">
                     <div
-                      key={i}
                       className="favorite-thumb"
-                      style={{ backgroundColor: hslToHex(c) }}
+                      style={{ backgroundColor: hslToHex(safePrimary) }}
+                      title="主色"
                     />
-                  ))}
+                    {previewColors.map((c, i) => {
+                      const validColor: HSL =
+                        c && typeof c.h === 'number' && typeof c.s === 'number' && typeof c.l === 'number'
+                          ? c
+                          : { h: 0, s: 0, l: 80 };
+                      return (
+                        <div
+                          key={i}
+                          className="favorite-thumb"
+                          style={{ backgroundColor: hslToHex(validColor) }}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

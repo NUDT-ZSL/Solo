@@ -20,8 +20,11 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
   const [localL, setLocalL] = useState<number>(primary.l);
   const rafRef = useRef<number | null>(null);
   const pendingRef = useRef<HSL | null>(null);
+  const lastEmitRef = useRef<number>(0);
+  const draggingRef = useRef(false);
 
   useEffect(() => {
+    if (draggingRef.current) return;
     setLocalH(primary.h);
     setLocalS(primary.s);
     setLocalL(primary.l);
@@ -31,6 +34,7 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
     const pending = pendingRef.current;
     pendingRef.current = null;
     rafRef.current = null;
+    lastEmitRef.current = performance.now();
     if (pending) {
       onChange(pending);
     }
@@ -40,7 +44,13 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
     (next: HSL) => {
       const validated = validateHSL(next);
       pendingRef.current = validated;
-      if (rafRef.current === null) {
+      const now = performance.now();
+      const delta = now - lastEmitRef.current;
+      if (delta >= 16) {
+        if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+        flushPending();
+      } else if (rafRef.current === null) {
         rafRef.current = requestAnimationFrame(flushPending);
       }
     },
@@ -58,42 +68,50 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
 
   const handleHueChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const v = parseInt(e.target.value, 10) || 0;
-      setLocalH(v);
-      scheduleChange({ h: v, s: localS, l: localL });
+      const v = parseInt(e.target.value, 10);
+      const num = Number.isFinite(v) ? v : 0;
+      setLocalH(num);
+      draggingRef.current = true;
+      scheduleChange({ h: num, s: localS, l: localL });
     },
     [localS, localL, scheduleChange]
   );
 
   const handleSatChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const v = parseInt(e.target.value, 10) || 0;
-      setLocalS(v);
-      scheduleChange({ h: localH, s: v, l: localL });
+      const v = parseInt(e.target.value, 10);
+      const num = Number.isFinite(v) ? v : 0;
+      setLocalS(num);
+      draggingRef.current = true;
+      scheduleChange({ h: localH, s: num, l: localL });
     },
     [localH, localL, scheduleChange]
   );
 
   const handleLightChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const v = parseInt(e.target.value, 10) || 0;
-      setLocalL(v);
-      scheduleChange({ h: localH, s: localS, l: v });
+      const v = parseInt(e.target.value, 10);
+      const num = Number.isFinite(v) ? v : 0;
+      setLocalL(num);
+      draggingRef.current = true;
+      scheduleChange({ h: localH, s: localS, l: num });
     },
     [localH, localS, scheduleChange]
   );
 
-  const hex = hslToHex(primary);
-  const rgb = hslToRgb(primary);
-  const hslStr = hslToString(primary);
+  const handleDragEnd = useCallback(() => {
+    draggingRef.current = false;
+  }, []);
+
+  const validatedPrimary = validateHSL(primary);
+  const hex = hslToHex(validatedPrimary);
+  const rgb = hslToRgb(validatedPrimary);
+  const hslStr = hslToString(validatedPrimary);
   const rgbStr = rgbToString(rgb);
 
-  const handleCopy = useCallback(
-    async (text: string) => {
-      await copyToClipboard(text);
-    },
-    []
-  );
+  const handleCopy = useCallback(async (text: string) => {
+    await copyToClipboard(text);
+  }, []);
 
   return (
     <aside className="detail-panel">
@@ -148,6 +166,8 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
             step={1}
             value={localH}
             onChange={handleHueChange}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
             className="slider-track-hue"
           />
         </div>
@@ -164,6 +184,8 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
             step={1}
             value={localS}
             onChange={handleSatChange}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
             style={{
               background: `linear-gradient(to right, hsl(${localH}, 0%, 50%), hsl(${localH}, 100%, 50%))`,
             }}
@@ -182,6 +204,8 @@ const ColorDetail: React.FC<ColorDetailProps> = ({ primary, onChange }) => {
             step={1}
             value={localL}
             onChange={handleLightChange}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
             style={{
               background: `linear-gradient(to right, hsl(${localH}, ${localS}%, 0%), hsl(${localH}, ${localS}%, 50%), hsl(${localH}, ${localS}%, 100%))`,
             }}
