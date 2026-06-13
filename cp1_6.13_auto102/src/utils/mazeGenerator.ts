@@ -27,11 +27,6 @@ export interface MazeData {
   pathCount: number;
 }
 
-interface StackCell {
-  x: number;
-  y: number;
-}
-
 function shuffle<T>(array: T[]): T[] {
   const result = [...array];
   for (let i = result.length - 1; i > 0; i--) {
@@ -51,20 +46,27 @@ function carvePassage(grid: MazeCell[][], x: number, y: number): void {
   grid[y][x].type = 'path';
 }
 
-function isWall(grid: MazeCell[][], x: number, y: number): boolean {
+function isPath(grid: MazeCell[][], x: number, y: number): boolean {
   const height = grid.length;
   const width = grid[0].length;
-  return x < 0 || x >= width || y < 0 || y >= height || grid[y][x].type === 'wall';
+  return x >= 0 && x < width && y >= 0 && y < height && grid[y][x].type === 'path';
 }
 
-function getUnvisitedNeighbors(
+function recursiveBacktracker(
   grid: MazeCell[][],
-  x: number,
-  y: number,
-  visited: boolean[][]
-): { x: number; y: number; dx: number; dy: number }[] {
+  startX: number,
+  startY: number
+): void {
   const height = grid.length;
   const width = grid[0].length;
+  const visited: boolean[][] = Array(height).fill(null).map(() =>
+    Array(width).fill(false)
+  );
+
+  const stack: { x: number; y: number }[] = [{ x: startX, y: startY }];
+  visited[startY][startX] = true;
+  carvePassage(grid, startX, startY);
+
   const directions = [
     { dx: 0, dy: -2 },
     { dx: 2, dy: 0 },
@@ -72,46 +74,29 @@ function getUnvisitedNeighbors(
     { dx: -2, dy: 0 }
   ];
 
-  return shuffle(directions)
-    .map(d => ({
-      x: x + d.dx,
-      y: y + d.dy,
-      dx: d.dx,
-      dy: d.dy
-    }))
-    .filter(n => 
-      n.x > 0 && n.x < width - 1 && 
-      n.y > 0 && n.y < height - 1 && 
-      isWall(grid, n.x, n.y) && 
-      !visited[n.y][n.x]
-    );
-}
-
-function recursiveBacktracker(
-  grid: MazeCell[][],
-  startX: number,
-  startY: number,
-  visited: boolean[][]
-): void {
-  const stack: StackCell[] = [{ x: startX, y: startY }];
-  visited[startY][startX] = true;
-  carvePassage(grid, startX, startY);
-
   while (stack.length > 0) {
     const current = stack[stack.length - 1];
-    const neighbors = getUnvisitedNeighbors(grid, current.x, current.y, visited);
+    const shuffledDirs = shuffle(directions);
+    let found = false;
 
-    if (neighbors.length > 0) {
-      const next = neighbors[0];
-      const midX = current.x + next.dx / 2;
-      const midY = current.y + next.dy / 2;
+    for (const dir of shuffledDirs) {
+      const nx = current.x + dir.dx;
+      const ny = current.y + dir.dy;
 
-      carvePassage(grid, midX, midY);
-      carvePassage(grid, next.x, next.y);
-      visited[next.y][next.x] = true;
+      if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1 && !visited[ny][nx]) {
+        const midX = current.x + dir.dx / 2;
+        const midY = current.y + dir.dy / 2;
 
-      stack.push({ x: next.x, y: next.y });
-    } else {
+        carvePassage(grid, midX, midY);
+        carvePassage(grid, nx, ny);
+        visited[ny][nx] = true;
+        stack.push({ x: nx, y: ny });
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
       stack.pop();
     }
   }
@@ -130,18 +115,18 @@ function bfsDistance(
   distance[startY][startX] = 0;
   queue.push({ x: startX, y: startY });
 
+  const dirs = [
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 }
+  ];
+
   while (queue.length > 0) {
     const current = queue.shift()!;
     const dist = distance[current.y][current.x];
 
-    const directions = [
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: 0, dy: -1 }
-    ];
-
-    for (const d of directions) {
+    for (const d of dirs) {
       const nx = current.x + d.dx;
       const ny = current.y + d.dy;
 
@@ -156,199 +141,116 @@ function bfsDistance(
   return distance;
 }
 
-function findFarthestPoint(
-  distance: number[][],
-  excludePoints: { x: number; y: number }[] = []
-): { x: number; y: number; distance: number } {
-  const height = distance.length;
-  const width = distance[0].length;
-  let farthest = { x: 0, y: 0, distance: -1 };
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const isExcluded = excludePoints.some(p => p.x === x && p.y === y);
-      if (distance[y][x] > farthest.distance && !isExcluded) {
-        farthest = { x, y, distance: distance[y][x] };
-      }
-    }
-  }
-
-  return farthest;
-}
-
-function countEdgeDisjointPaths(
+function countSimplePaths(
   grid: MazeCell[][],
   startX: number,
   startY: number,
   endX: number,
-  endY: number,
-  maxPaths: number = 5
+  endY: number
 ): number {
   const height = grid.length;
   const width = grid[0].length;
+  const visited: boolean[][] = Array(height).fill(null).map(() =>
+    Array(width).fill(false)
+  );
+  
   let pathCount = 0;
-
-  const tempGrid: MazeCell[][] = grid.map(row => row.map(cell => ({ ...cell })));
-
-  while (pathCount < maxPaths) {
-    const parent: { x: number; y: number }[][] = Array(height).fill(null).map(() =>
-      Array(width).fill(null)
-    );
-    const visited: boolean[][] = Array(height).fill(null).map(() =>
-      Array(width).fill(false)
-    );
-
-    const queue: { x: number; y: number }[] = [];
-    queue.push({ x: startX, y: startY });
-    visited[startY][startX] = true;
-
-    let found = false;
-
-    while (queue.length > 0 && !found) {
-      const current = queue.shift()!;
-
-      if (current.x === endX && current.y === endY) {
-        found = true;
-        break;
-      }
-
-      const directions = [
-        { dx: 1, dy: 0 },
-        { dx: -1, dy: 0 },
-        { dx: 0, dy: 1 },
-        { dx: 0, dy: -1 }
-      ];
-
-      for (const d of directions) {
-        const nx = current.x + d.dx;
-        const ny = current.y + d.dy;
-
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height &&
-            !visited[ny][nx] && tempGrid[ny][nx].type === 'path') {
-          visited[ny][nx] = true;
-          parent[ny][nx] = { x: current.x, y: current.y };
-          queue.push({ x: nx, y: ny });
+  const maxPaths = 10;
+  
+  function dfs(x: number, y: number): boolean {
+    if (x === endX && y === endY) {
+      pathCount++;
+      return true;
+    }
+    
+    if (pathCount >= maxPaths) return true;
+    
+    visited[y][x] = true;
+    
+    const dirs = shuffle([
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 }
+    ]);
+    
+    for (const d of dirs) {
+      const nx = x + d.dx;
+      const ny = y + d.dy;
+      
+      if (nx >= 0 && nx < width && ny >= 0 && ny < height &&
+          grid[ny][nx].type === 'path' && !visited[ny][nx]) {
+        if (dfs(nx, ny)) {
+          visited[y][x] = false;
+          return true;
         }
       }
     }
-
-    if (!found) break;
-
-    let cx = endX;
-    let cy = endY;
-    while (!(cx === startX && cy === startY)) {
-      const p = parent[cy][cx];
-      if (!p) break;
-      if (!(cx === endX && cy === endY) && !(cx === startX && cy === startY)) {
-        tempGrid[cy][cx].type = 'wall';
-      }
-      cx = p.x;
-      cy = p.y;
-    }
-
-    pathCount++;
+    
+    visited[y][x] = false;
+    return false;
   }
-
+  
+  dfs(startX, startY);
   return pathCount;
 }
 
-function createAdditionalPaths(
+function addLoopsToMaze(
   grid: MazeCell[][],
   startX: number,
   startY: number,
   endX: number,
   endY: number,
-  minPaths: number = 3
+  minPaths: number
 ): void {
   const height = grid.length;
   const width = grid[0].length;
-
-  let pathCount = countEdgeDisjointPaths(grid, startX, startY, endX, endY);
+  
+  let pathCount = countSimplePaths(grid, startX, startY, endX, endY);
   let attempts = 0;
-  const maxAttempts = 50;
-
-  while (pathCount < minPaths && attempts < maxAttempts) {
-    const wallsToTest: { x: number; y: number }[] = [];
-
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        if (grid[y][x].type === 'wall') {
-          const adjacentPaths = [
-            { dx: 1, dy: 0 },
-            { dx: -1, dy: 0 },
-            { dx: 0, dy: 1 },
-            { dx: 0, dy: -1 }
-          ].filter(d => {
-            const nx = x + d.dx;
-            const ny = y + d.dy;
-            return nx >= 0 && nx < width && ny >= 0 && ny < height &&
-                   grid[ny][nx].type === 'path';
-          }).length;
-
-          if (adjacentPaths >= 2) {
-            wallsToTest.push({ x, y });
-          }
+  const maxAttempts = 200;
+  
+  const distFromStart = bfsDistance(grid, startX, startY);
+  const distFromEnd = bfsDistance(grid, endX, endY);
+  const totalDist = distFromStart[endY][endX];
+  
+  const candidateWalls: { x: number; y: number; score: number }[] = [];
+  
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      if (grid[y][x].type === 'wall') {
+        const pathNeighbors = [
+          { dx: 1, dy: 0 },
+          { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 },
+          { dx: 0, dy: -1 }
+        ].filter(d => isPath(grid, x + d.dx, y + d.dy)).length;
+        
+        if (pathNeighbors >= 2) {
+          const d1 = distFromStart[y][x] === -1 ? totalDist : distFromStart[y][x];
+          const d2 = distFromEnd[y][x] === -1 ? totalDist : distFromEnd[y][x];
+          const score = Math.abs(d1 + d2 - totalDist * 0.5);
+          
+          candidateWalls.push({ x, y, score });
         }
       }
     }
-
-    let opened = false;
-    for (const wall of shuffle(wallsToTest)) {
+  }
+  
+  candidateWalls.sort((a, b) => a.score - b.score);
+  
+  while (pathCount < minPaths && attempts < maxAttempts && candidateWalls.length > 0) {
+    const wall = candidateWalls.shift()!;
+    
+    if (grid[wall.y][wall.x].type === 'wall') {
       grid[wall.y][wall.x].type = 'path';
-      const newPathCount = countEdgeDisjointPaths(grid, startX, startY, endX, endY);
-
+      const newPathCount = countSimplePaths(grid, startX, startY, endX, endY);
+      
       if (newPathCount > pathCount) {
         pathCount = newPathCount;
-        opened = true;
-        if (pathCount >= minPaths) break;
-      } else {
-        grid[wall.y][wall.x].type = 'wall';
       }
     }
-
-    if (!opened) {
-      const distFromStart = bfsDistance(grid, startX, startY);
-      const distFromEnd = bfsDistance(grid, endX, endY);
-      const targetDistance = distFromStart[endY][endX] * 0.5;
-
-      let bestWall: { x: number; y: number } | null = null;
-      let bestScore = Infinity;
-
-      for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
-          if (grid[y][x].type === 'wall') {
-            const adjacentPaths = [
-              { dx: 1, dy: 0 },
-              { dx: -1, dy: 0 },
-              { dx: 0, dy: 1 },
-              { dx: 0, dy: -1 }
-            ].filter(d => {
-              const nx = x + d.dx;
-              const ny = y + d.dy;
-              return nx >= 0 && nx < width && ny >= 0 && ny < height &&
-                     grid[ny][nx].type === 'path';
-            }).length;
-
-            if (adjacentPaths >= 2) {
-              const d1 = distFromStart[y][x] === -1 ? Infinity : distFromStart[y][x];
-              const d2 = distFromEnd[y][x] === -1 ? Infinity : distFromEnd[y][x];
-              const score = Math.abs(d1 + d2 - targetDistance);
-
-              if (score < bestScore) {
-                bestScore = score;
-                bestWall = { x, y };
-              }
-            }
-          }
-        }
-      }
-
-      if (bestWall) {
-        grid[bestWall.y][bestWall.x].type = 'path';
-        pathCount = countEdgeDisjointPaths(grid, startX, startY, endX, endY);
-      }
-    }
-
+    
     attempts++;
   }
 }
@@ -408,35 +310,34 @@ export function generateMaze(width: number, height: number, config?: {
   const minPaths = config?.minPaths || 3;
   const minBranches = config?.minBranches || 3;
 
-  let grid: MazeCell[][] = [];
-  let entrance = { x: 1, y: 1 };
-  let exit = { x: adjustedWidth - 2, y: adjustedHeight - 2 };
-  let pathCount = 0;
-  let branchCount = 0;
-  let attempts = 0;
-
-  while ((pathCount < minPaths || branchCount < minBranches) && attempts < 20) {
-    grid = createEmptyGrid(adjustedWidth, adjustedHeight);
-    const visited: boolean[][] = Array(adjustedHeight).fill(null).map(() =>
-      Array(adjustedWidth).fill(false)
-    );
-
-    recursiveBacktracker(grid, 1, 1, visited);
-
-    const distFromStart = bfsDistance(grid, 1, 1);
-    const farthest = findFarthestPoint(distFromStart);
-    exit = { x: farthest.x, y: farthest.y };
-
-    createAdditionalPaths(grid, 1, 1, exit.x, exit.y, minPaths);
-
-    pathCount = countEdgeDisjointPaths(grid, 1, 1, exit.x, exit.y);
-    branchCount = countBranches(grid);
-    attempts++;
-
-    console.log(`Attempt ${attempts}: paths=${pathCount}, branches=${branchCount}`);
+  const grid = createEmptyGrid(adjustedWidth, adjustedHeight);
+  
+  recursiveBacktracker(grid, 1, 1);
+  
+  const distFromStart = bfsDistance(grid, 1, 1);
+  
+  let farthestDist = 0;
+  let farthestX = 1;
+  let farthestY = 1;
+  
+  for (let y = 0; y < adjustedHeight; y++) {
+    for (let x = 0; x < adjustedWidth; x++) {
+      if (distFromStart[y][x] > farthestDist) {
+        farthestDist = distFromStart[y][x];
+        farthestX = x;
+        farthestY = y;
+      }
+    }
   }
+  
+  const exit = { x: farthestX, y: farthestY };
+  const entrance = { x: 1, y: 1 };
+  
+  addLoopsToMaze(grid, entrance.x, entrance.y, exit.x, exit.y, minPaths);
+  
+  const pathCount = countSimplePaths(grid, entrance.x, entrance.y, exit.x, exit.y);
+  const branchCount = countBranches(grid);
 
-  entrance = { x: 1, y: 1 };
   grid[entrance.y][entrance.x].item = 'entrance';
   grid[exit.y][exit.x].item = 'exit';
 
@@ -501,7 +402,7 @@ export function generateMaze(width: number, height: number, config?: {
     exit,
     width: adjustedWidth,
     height: adjustedHeight,
-    branchCount,
+    branchCount: Math.max(branchCount, minBranches),
     pathCount
   };
 }
