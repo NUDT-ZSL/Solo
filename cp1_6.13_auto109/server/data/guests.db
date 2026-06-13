@@ -1,0 +1,5 @@
+{"_id":"8a81204f-525b-48e0-8f1a-199101bbf545","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","name":"张明","email":"zhangming@example.com","phone":"13800138001","role":"VIP客户","status":"confirmed","note":"需要VIP停车位"}
+{"_id":"6c514780-c84e-4e2b-b223-205c38ad2f48","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","name":"李华","email":"lihua@example.com","phone":"13800138002","role":"媒体记者","status":"pending","note":"财经日报"}
+{"_id":"38af9ba7-ad88-4a06-96a3-edc93951e5df","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","name":"王芳","email":"wangfang@example.com","phone":"13800138003","role":"合作伙伴","status":"confirmed","note":""}
+{"_id":"806da5d8-efed-41ef-812b-b85357dc9f2e","activityId":"cccdffe8-7f7c-4761-b000-7f610b502ede","name":"陈强","email":"chenqiang@example.com","phone":"13900139001","role":"大客户","status":"confirmed","note":"对海鲜过敏"}
+{"_id":"88288348-5d6f-4dd2-b7fc-b5f89f84e961","activityId":"cccdffe8-7f7c-4761-b000-7f610b502ede","name":"赵丽","email":"zhaoli@example.com","phone":"13900139002","role":"战略客户","status":"pending","note":""}

@@ -1,0 +1,7 @@
+{"_id":"d51b6830-b081-4017-96a2-6d138bdc2974","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","title":"确定活动主题","description":"与设计团队确认发布会视觉主题","date":"2026-06-11","order":0,"completed":true}
+{"_id":"b781bd7b-eb33-40b9-8c14-91d4df4a3a86","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","title":"邀请嘉宾名单确认","description":"确定VIP客户与媒体名单","date":"2026-06-14","order":1,"completed":false}
+{"_id":"651c28f8-42ae-4f43-b777-5f96df6e3bda","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","title":"场地布置完成","description":"舞台、灯光、音响调试完毕","date":"2026-06-16","order":2,"completed":false}
+{"_id":"5d3056fe-beed-4d12-b7a9-ba732737c914","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","title":"发布会正式开始","description":"主活动日","date":"2026-06-18","order":3,"completed":false}
+{"_id":"cf4c365f-1f01-47b4-bb71-295574a8ed06","activityId":"cccdffe8-7f7c-4761-b000-7f610b502ede","title":"菜单与酒水敲定","description":"与酒店确认晚宴菜单","date":"2026-06-18","order":0,"completed":false}
+{"_id":"567ef704-e8b9-46e0-abe9-b9126932de59","activityId":"cccdffe8-7f7c-4761-b000-7f610b502ede","title":"座位安排","description":"根据客户重要性排定桌次","date":"2026-06-23","order":1,"completed":false}
+{"_id":"6f1b281d-404e-4292-9c82-82d9eab3b203","activityId":"cccdffe8-7f7c-4761-b000-7f610b502ede","title":"晚宴当天","description":"客户答谢晚宴正式举办","date":"2026-06-28","order":2,"completed":false}
