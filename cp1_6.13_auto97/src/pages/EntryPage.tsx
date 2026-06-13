@@ -1,6 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+
+function lerpColor(a: number[], b: number[], t: number): number[] {
+  return a.map((v, i) => Math.round(v + (b[i] - v) * t));
+}
+
+function hexToRgb(hex: string): number[] {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return [r, g, b];
+}
+
+function getMoodIndicatorColor(mood: number): string {
+  const red = hexToRgb('#ef4444');
+  const yellow = hexToRgb('#eab308');
+  const green = hexToRgb('#22c55e');
+  if (mood <= 5) {
+    const t = (mood - 1) / 4;
+    const c = lerpColor(red, yellow, t);
+    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+  }
+  const t = (mood - 5) / 5;
+  const c = lerpColor(yellow, green, t);
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
 
 const EntryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -8,17 +33,7 @@ const EntryPage: React.FC = () => {
   const [note, setNote] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
-  const getIndicatorColor = (val: number): string => {
-    if (val <= 3) return '#ef4444';
-    if (val <= 6) return '#eab308';
-    return '#22c55e';
-  };
-
-  const getSliderBackground = (): string => {
-    return 'linear-gradient(to top, #ef4444, #eab308, #22c55e)';
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (submitting) return;
     setSubmitting(true);
     try {
@@ -32,64 +47,66 @@ const EntryPage: React.FC = () => {
       console.error('Failed to save entry:', err);
       setSubmitting(false);
     }
-  };
+  }, [submitting, mood, note, navigate]);
 
-  const indicatorColor = getIndicatorColor(mood);
+  const indicatorColor = getMoodIndicatorColor(mood);
+
+  const moodLabel =
+    mood <= 2 ? '😢 非常低落' :
+    mood <= 4 ? '😕 有些低落' :
+    mood <= 6 ? '😐 一般般' :
+    mood <= 8 ? '🙂 不错' :
+    '😊 非常棒！';
 
   return (
-    <div style={{ padding: '32px 24px', maxWidth: 480, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1f2937', marginBottom: 32, textAlign: 'center' }}>
-        记录此刻心情
-      </h2>
+    <div className="entry-page">
+      <h2 className="entry-title">记录此刻心情</h2>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 40, marginBottom: 40 }}>
-        <div style={{ position: 'relative', height: 260, display: 'flex', alignItems: 'center' }}>
+      <div className="entry-slider-area">
+        <div className="entry-slider-track-wrapper">
+          <div className="entry-slider-track">
+            <div
+              className="entry-slider-fill"
+              style={{ height: `${((mood - 1) / 9) * 100}%` }}
+            />
+            <div
+              className="entry-slider-thumb"
+              style={{ bottom: `${((mood - 1) / 9) * 100}%` }}
+            />
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((v) => (
+              <div
+                key={v}
+                className="entry-slider-tick"
+                style={{ bottom: `${((v - 1) / 9) * 100}%` }}
+              />
+            ))}
+          </div>
           <input
             type="range"
             min={1}
             max={10}
+            step={1}
             value={mood}
             onChange={(e) => setMood(Number(e.target.value))}
-            style={{
-              writingMode: 'vertical-lr' as React.CSSProperties['writingMode'],
-              direction: 'rtl',
-              appearance: 'none',
-              WebkitAppearance: 'none',
-              width: 260,
-              height: 8,
-              background: getSliderBackground(),
-              borderRadius: 4,
-              outline: 'none',
-              cursor: 'pointer',
-            }}
+            className="entry-slider-input"
           />
         </div>
 
-        <div
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: '50%',
-            backgroundColor: indicatorColor,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontSize: 24,
-            fontWeight: 700,
-            boxShadow: `0 0 20px ${indicatorColor}66`,
-            transition: 'all 0.2s ease-out',
-          }}
-        >
-          {mood}
+        <div className="entry-indicator-area">
+          <div
+            className="entry-indicator"
+            style={{
+              backgroundColor: indicatorColor,
+              boxShadow: `0 0 24px ${indicatorColor}88, 0 0 48px ${indicatorColor}44`,
+            }}
+          >
+            <span className="entry-indicator-value">{mood}</span>
+          </div>
+          <div className="entry-mood-label">{moodLabel}</div>
         </div>
       </div>
 
-      <div style={{ marginBottom: 12, fontSize: 14, color: '#6b7280', textAlign: 'center' }}>
-        {mood <= 2 ? '😢 非常低落' : mood <= 4 ? '😕 有些低落' : mood <= 6 ? '😐 一般般' : mood <= 8 ? '🙂 不错' : '😊 非常棒！'}
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
+      <div className="entry-textarea-wrapper">
         <textarea
           value={note}
           onChange={(e) => {
@@ -97,55 +114,16 @@ const EntryPage: React.FC = () => {
           }}
           placeholder="写下此刻的想法（最多150字）..."
           maxLength={150}
-          style={{
-            width: '100%',
-            height: 100,
-            padding: '12px 16px',
-            border: '1px solid #e5e7eb',
-            borderRadius: 8,
-            fontSize: 14,
-            lineHeight: 1.6,
-            resize: 'none',
-            outline: 'none',
-            fontFamily: 'inherit',
-            boxSizing: 'border-box',
-            transition: 'border-color 0.2s',
-          }}
-          onFocus={(e) => (e.currentTarget.style.borderColor = '#6366f1')}
-          onBlur={(e) => (e.currentTarget.style.borderColor = '#e5e7eb')}
+          className="entry-textarea"
         />
-        <div style={{ textAlign: 'right', fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-          {note.length}/150
-        </div>
+        <div className="entry-char-count">{note.length}/150</div>
       </div>
 
       <button
         onClick={handleSubmit}
         disabled={submitting}
-        style={{
-          width: '100%',
-          padding: '12px 0',
-          backgroundColor: submitting ? '#a5b4fc' : '#6366f1',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 8,
-          fontSize: 16,
-          fontWeight: 600,
-          cursor: submitting ? 'not-allowed' : 'pointer',
-          transition: 'all 0.2s ease-out',
-        }}
-        onMouseEnter={(e) => {
-          if (!submitting) e.currentTarget.style.backgroundColor = '#4f46e5';
-        }}
-        onMouseLeave={(e) => {
-          if (!submitting) e.currentTarget.style.backgroundColor = '#6366f1';
-        }}
-        onMouseDown={(e) => {
-          e.currentTarget.style.transform = 'scale(0.95)';
-        }}
-        onMouseUp={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-        }}
+        className="entry-submit-btn"
+        style={{ backgroundColor: submitting ? '#a5b4fc' : '#6366f1' }}
       >
         {submitting ? '记录中...' : '记录'}
       </button>

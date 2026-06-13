@@ -29,9 +29,13 @@ app.post('/api/entries', async (req, res) => {
     if (mood === undefined || mood === null) {
       return res.status(400).json({ error: 'mood is required' });
     }
+    const moodNum = Number(mood);
+    if (isNaN(moodNum) || moodNum < 1 || moodNum > 10) {
+      return res.status(400).json({ error: 'mood must be between 1 and 10' });
+    }
     const entry = {
       id: uuidv4(),
-      mood: Number(mood),
+      mood: moodNum,
       note: note || '',
       date: date || new Date().toISOString().slice(0, 10),
       createdAt: new Date().toISOString(),
@@ -48,9 +52,9 @@ app.get('/api/entries', async (req, res) => {
     const { date, start, end } = req.query;
     let query = {};
     if (date) {
-      query.date = date;
+      query = { date: String(date) };
     } else if (start && end) {
-      query.date = { $gte: String(start), $lte: String(end) };
+      query = { date: { $gte: String(start), $lte: String(end) } };
     }
     const entries = await db.find(query).sort({ date: 1, createdAt: 1 }).exec();
     res.json(entries);
@@ -68,20 +72,29 @@ app.get('/api/entries/all', async (req, res) => {
   }
 });
 
+function getDateStr(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 app.get('/api/stats/summary', async (req, res) => {
   try {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    const startStr = sevenDaysAgo.toISOString().slice(0, 10);
-    const endStr = today.toISOString().slice(0, 10);
+    const startStr = getDateStr(sevenDaysAgo);
+    const endStr = getDateStr(today);
 
     const entries = await db
       .find({ date: { $gte: startStr, $lte: endStr } })
       .sort({ date: 1 })
       .exec();
 
-    const dailyMap = {};
+    const dailyMap: Record<string, { moods: number[]; notes: string[] }> = {};
     entries.forEach((e) => {
       if (!dailyMap[e.date]) {
         dailyMap[e.date] = { moods: [], notes: [] };
@@ -93,11 +106,11 @@ app.get('/api/stats/summary', async (req, res) => {
     const daily = [];
     const cur = new Date(sevenDaysAgo);
     while (cur <= today) {
-      const dateStr = cur.toISOString().slice(0, 10);
+      const dateStr = getDateStr(cur);
       const data = dailyMap[dateStr];
       daily.push({
         date: dateStr,
-        avgMood: data ? data.moods.reduce((a, b) => a + b, 0) / data.moods.length : null,
+        avgMood: data ? Math.round((data.moods.reduce((a, b) => a + b, 0) / data.moods.length) * 10) / 10 : null,
         count: data ? data.moods.length : 0,
         notes: data ? data.notes : [],
       });
@@ -106,9 +119,29 @@ app.get('/api/stats/summary', async (req, res) => {
 
     const allMoods = entries.map((e) => e.mood);
     const overallAvg =
-      allMoods.length > 0 ? allMoods.reduce((a, b) => a + b, 0) / allMoods.length : null;
+      allMoods.length > 0
+        ? Math.round((allMoods.reduce((a, b) => a + b, 0) / allMoods.length) * 100) / 100
+        : null;
 
-    res.json({ daily, overallAvg, totalEntries: entries.length });
+    const weekStart = getDateStr(sevenDaysAgo);
+    const weekEnd = getDateStr(today);
+
+    const weekHigh = allMoods.length > 0 ? Math.max(...allMoods) : null;
+    const weekLow = allMoods.length > 0 ? Math.min(...allMoods) : null;
+
+    const weekDaysWithData = daily.filter((d) => d.count > 0).length;
+
+    res.json({
+      daily,
+      overallAvg,
+      totalEntries: entries.length,
+      weekStart,
+      weekEnd,
+      weekHigh,
+      weekLow,
+      weekDaysWithData,
+      weekTotalDays: 7,
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to compute summary' });
   }
@@ -116,7 +149,10 @@ app.get('/api/stats/summary', async (req, res) => {
 
 app.delete('/api/entries/:id', async (req, res) => {
   try {
-    await db.remove({ id: req.params.id });
+    const numRemoved = await db.remove({ id: req.params.id });
+    if (numRemoved === 0) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete entry' });

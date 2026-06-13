@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import EntryPage from './pages/EntryPage';
+import SearchPage from './pages/SearchPage';
 
 const NAV_ITEMS = [
   {
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    to: '/?search=true',
+    to: '/search',
     label: '搜索',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -32,6 +33,65 @@ const NAV_ITEMS = [
     ),
   },
 ];
+
+const ExportButton: React.FC = () => {
+  const handleExport = async () => {
+    try {
+      const res = await fetch('/api/entries/all');
+      const allEntries = await res.json();
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+      const monthEntries = allEntries.filter((e: { date: string }) => e.date.startsWith(monthStr));
+      const monthMoods = monthEntries.map((e: { mood: number }) => e.mood);
+      const monthAvg =
+        monthMoods.length > 0
+          ? (monthMoods.reduce((a: number, b: number) => a + b, 0) / monthMoods.length).toFixed(2)
+          : 'N/A';
+
+      const dailyStats: Record<string, { moods: number[]; notes: string[] }> = {};
+      monthEntries.forEach((e: { date: string; mood: number; note: string }) => {
+        if (!dailyStats[e.date]) dailyStats[e.date] = { moods: [], notes: [] };
+        dailyStats[e.date].moods.push(e.mood);
+        if (e.note) dailyStats[e.date].notes.push(e.note);
+      });
+
+      const exportData = {
+        reportMonth: monthStr,
+        overallAverage: monthAvg,
+        totalEntries: monthEntries.length,
+        dailyBreakdown: Object.entries(dailyStats).map(([date, data]) => ({
+          date,
+          averageMood: (data.moods.reduce((a, b) => a + b, 0) / data.moods.length).toFixed(2),
+          entryCount: data.moods.length,
+          notes: data.notes,
+        })),
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mind-palette-report-${monthStr}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  };
+
+  return (
+    <button className="sidebar-export-btn" onClick={handleExport}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+      导出本月报告
+    </button>
+  );
+};
 
 const Sidebar: React.FC = () => {
   return (
@@ -58,6 +118,9 @@ const Sidebar: React.FC = () => {
           </NavLink>
         ))}
       </div>
+      <div className="sidebar-footer">
+        <ExportButton />
+      </div>
     </nav>
   );
 };
@@ -67,7 +130,7 @@ const BottomTab: React.FC = () => {
   return (
     <nav className="bottom-tab">
       {NAV_ITEMS.map((item) => {
-        const isActive = item.to === '/' ? location.pathname === '/' : location.pathname === item.to;
+        const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to);
         return (
           <NavLink
             key={item.label}
@@ -111,6 +174,7 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/entry" element={<EntryPage />} />
+              <Route path="/search" element={<SearchPage />} />
             </Routes>
           </main>
         </div>

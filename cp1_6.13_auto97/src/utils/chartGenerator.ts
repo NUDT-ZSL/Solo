@@ -32,28 +32,6 @@ export function getMoodColor(mood: number): string {
   return '#22c55e';
 }
 
-export function getMoodGradient(mood: number): string {
-  if (mood <= 3) {
-    const t = (mood - 1) / 2;
-    const r = Math.round(239);
-    const g = Math.round(68 * t);
-    const b = Math.round(68 * t);
-    return `rgb(${r}, ${g}, ${b})`;
-  }
-  if (mood <= 6) {
-    const t = (mood - 4) / 2;
-    const r = Math.round(234 + (34 - 234) * (1 - t));
-    const g = Math.round(179 + (197 - 179) * t);
-    const b = Math.round(8 + (94 - 8) * t);
-    return `rgb(${r}, ${g}, ${b})`;
-  }
-  const t = (mood - 7) / 3;
-  const r = Math.round(34 + (34 - 34) * t);
-  const g = Math.round(197 + (197 - 197) * t);
-  const b = Math.round(94 + (94 - 94) * t);
-  return '#22c55e';
-}
-
 export function getMoodCardBackground(avgMood: number | null): string {
   if (avgMood === null) return '#f3f4f6';
   if (avgMood <= 3) return 'linear-gradient(135deg, #fef2f2, #fee2e2)';
