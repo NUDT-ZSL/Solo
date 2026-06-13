@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 import type { Task, Member, TaskStatus } from './types'
 import { getStatusName, getStatusColor, getPriorityColor, getPriorityName } from './utils'
@@ -7,6 +7,7 @@ interface BoardProps {
   tasks: Task[]
   members: Member[]
   onDragEnd: (result: DropResult) => void
+  newTaskId?: string | null
 }
 
 const columns: { id: TaskStatus; name: string }[] = [
@@ -27,105 +28,132 @@ function TaskCard({ task, member, index, isNew }: TaskCardProps) {
   const statusColor = getStatusColor(task.status)
   const priorityColor = getPriorityColor(task.priority)
   const priorityName = getPriorityName(task.priority)
+  const [hasJustDropped, setHasJustDropped] = useState(false)
 
   return (
     <Draggable draggableId={task.id} index={index}>
-      {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          style={{
-            ...provided.draggableProps.style,
-            opacity: snapshot.isDragging ? 0.5 : 1,
-            transform: snapshot.isDragging
-              ? `${provided.draggableProps.style?.transform} scale(0.9)`
-              : provided.draggableProps.style?.transform,
-            transition: snapshot.isDragging
-              ? 'none'
-              : 'background-color 0.3s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            animation: isNew ? 'flyInFromTop 0.3s ease-out, bounceBack 0.2s ease-out 0.3s' : 'none',
-            background: snapshot.isDragging ? '#ffffff' : statusColor,
-            borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '12px',
-            boxShadow: snapshot.isDragging
-              ? '0 8px 24px rgba(0,0,0,0.15)'
-              : '0 1px 3px rgba(0,0,0,0.08)',
-            cursor: 'grab',
-            userSelect: 'none'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <div
-              style={{
-                flex: 1,
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#333',
-                lineHeight: '1.4',
-                wordBreak: 'break-word',
-                paddingRight: '8px'
-              }}
-            >
-              {task.title}
-            </div>
-            {member && (
+      {(provided, snapshot) => {
+        const isDragging = snapshot.isDragging
+
+        let transform = provided.draggableProps.style?.transform || ''
+
+        if (isDragging) {
+          transform = `${transform} scale(0.9)`
+        }
+
+        return (
+          <div
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            style={{
+              ...provided.draggableProps.style,
+              transform,
+              opacity: isDragging ? 0.7 : 1,
+              transition: isDragging
+                ? 'none'
+                : 'background-color 0.3s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease',
+              animation: isNew
+                ? 'flyInFromTop 0.3s ease-out forwards'
+                : hasJustDropped
+                ? 'bounceBack 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                : 'none',
+              background: isDragging ? '#ffffff' : statusColor,
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '12px',
+              boxShadow: isDragging
+                ? '0 8px 24px rgba(0,0,0,0.15)'
+                : '0 1px 3px rgba(0,0,0,0.08)',
+              cursor: 'grab',
+              userSelect: 'none'
+            }}
+            onTransitionEnd={() => {
+              setHasJustDropped(false)
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
               <div
-                title={member.name}
                 style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  border: '2px solid #e0e0e0',
-                  flexShrink: 0,
-                  overflow: 'hidden',
-                  background: member.color,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontSize: '12px',
-                  fontWeight: 600
+                  flex: 1,
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#333',
+                  lineHeight: '1.4',
+                  wordBreak: 'break-word',
+                  paddingRight: '8px'
                 }}
               >
-                {member.name.charAt(0)}
+                {task.title}
               </div>
-            )}
-          </div>
+              {member && (
+                <div
+                  title={member.name}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    border: '2px solid #e0e0e0',
+                    flexShrink: 0,
+                    overflow: 'hidden',
+                    background: member.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontWeight: 600
+                  }}
+                >
+                  {member.name.charAt(0)}
+                </div>
+              )}
+            </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-            <span
-              style={{
-                padding: '2px 8px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                color: '#ffffff',
-                backgroundColor: priorityColor,
-                fontWeight: 500
-              }}
-            >
-              {priorityName}
-            </span>
-          </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  color: '#ffffff',
+                  backgroundColor: priorityColor,
+                  fontWeight: 500
+                }}
+              >
+                {priorityName}
+              </span>
+            </div>
 
-          <div style={{
-            fontSize: '12px',
-            color: '#666',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>
-            📍 {task.milestone}
+            <div style={{
+              fontSize: '12px',
+              color: '#666',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              📍 {task.milestone}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }}
     </Draggable>
   )
 }
 
-export default function Board({ tasks, members, onDragEnd }: BoardProps) {
+export default function Board({ tasks, members, onDragEnd, newTaskId }: BoardProps) {
   const getMemberById = (id: string) => members.find(m => m.id === id)
+  const [animatedTaskId, setAnimatedTaskId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (newTaskId) {
+      setAnimatedTaskId(newTaskId)
+      const timer = setTimeout(() => {
+        setAnimatedTaskId(null)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [newTaskId])
 
   const tasksByStatus = useMemo(() => {
     const grouped: Record<TaskStatus, Task[]> = {
@@ -140,14 +168,12 @@ export default function Board({ tasks, members, onDragEnd }: BoardProps) {
     return grouped
   }, [tasks])
 
-  const newTaskIds = useMemo(() => {
-    const now = Date.now()
-    return new Set(
-      tasks
-        .filter(task => now - task.createdAt < 1000)
-        .map(task => task.id)
-    )
-  }, [tasks])
+  const columnTaskCounts = useMemo(() => ({
+    todo: tasksByStatus.todo.length,
+    in_progress: tasksByStatus.in_progress.length,
+    review: tasksByStatus.review.length,
+    done: tasksByStatus.done.length
+  }), [tasksByStatus])
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
@@ -183,11 +209,14 @@ export default function Board({ tasks, members, onDragEnd }: BoardProps) {
                   fontWeight: 600,
                   color: '#666',
                   background: '#f0f0f0',
-                  padding: '2px 8px',
-                  borderRadius: '10px'
+                  padding: '2px 10px',
+                  borderRadius: '10px',
+                  minWidth: '28px',
+                  textAlign: 'center',
+                  transition: 'all 0.3s ease'
                 }}
               >
-                {tasksByStatus[column.id].length}
+                {columnTaskCounts[column.id]}
               </span>
             </div>
 
@@ -213,7 +242,7 @@ export default function Board({ tasks, members, onDragEnd }: BoardProps) {
                       task={task}
                       member={getMemberById(task.assigneeId)}
                       index={index}
-                      isNew={newTaskIds.has(task.id)}
+                      isNew={animatedTaskId === task.id}
                     />
                   ))}
                   {provided.placeholder}

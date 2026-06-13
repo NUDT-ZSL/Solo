@@ -46,6 +46,7 @@ export default function StatsPanel({ tasks, members }: StatsPanelProps) {
     datasets: [
       {
         data: memberStats.map(s => s.totalTasks),
+        completionRates: memberStats.map(s => s.completionRate),
         backgroundColor: memberStats.map(s => s.member.color),
         borderColor: '#ffffff',
         borderWidth: 2,
@@ -54,7 +55,7 @@ export default function StatsPanel({ tasks, members }: StatsPanelProps) {
     ]
   }), [memberStats])
 
-  const doughnutOptions = {
+  const doughnutOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -71,22 +72,36 @@ export default function StatsPanel({ tasks, members }: StatsPanelProps) {
         }
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
         titleFont: {
-          size: 14
+          size: 14,
+          weight: 600 as const
         },
         bodyFont: {
           size: 13
         },
-        padding: 12,
+        padding: 14,
         cornerRadius: 8,
+        boxPadding: 6,
         callbacks: {
+          afterBody: function(context: any) {
+            const dataIndex = context[0].dataIndex
+            const stat = memberStats[dataIndex]
+            return [
+              '',
+              `完成率: ${stat.completionRate}%`
+            ]
+          },
           label: function(context: any) {
             const stat = memberStats[context.dataIndex]
             return [
               `任务数: ${stat.totalTasks}`,
-              `完成率: ${stat.completionRate}%`
+              `已完成: ${stat.completedTasks}`
             ]
+          },
+          beforeLabel: function(context: any) {
+            const stat = memberStats[context.dataIndex]
+            return stat.member.name
           }
         }
       }
@@ -94,9 +109,10 @@ export default function StatsPanel({ tasks, members }: StatsPanelProps) {
     cutout: '65%',
     animation: {
       animateScale: true,
-      animateRotate: true
+      animateRotate: true,
+      duration: 500
     }
-  }
+  }), [memberStats])
 
   const barChartData = useMemo(() => {
     let labels: string[] = []
@@ -139,9 +155,10 @@ export default function StatsPanel({ tasks, members }: StatsPanelProps) {
         display: false
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
         titleFont: {
-          size: 14
+          size: 14,
+          weight: 600 as const
         },
         bodyFont: {
           size: 13

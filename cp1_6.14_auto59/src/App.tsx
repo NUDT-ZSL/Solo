@@ -1,10 +1,9 @@
-import { useReducer, useEffect, useCallback, useState, useMemo } from 'react'
+import { useReducer, useEffect, useCallback, useState, useMemo, useRef } from 'react'
 import type { AppState, Action, Task, TaskStatus } from './types'
 import {
   generateMockMembers,
   generateMockTasks,
   calculateProgress,
-  debounce,
   saveToLocalStorage,
   loadFromLocalStorage
 } from './utils'
@@ -68,6 +67,11 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
+  const [newTaskId, setNewTaskId] = useState<string | null>(null)
+  const [displayProgress, setDisplayProgress] = useState(0)
+  const rafRef = useRef<number | null>(null)
+  const currentProgressRef = useRef(0)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const savedData = loadFromLocalStorage<{ tasks: Task[]; members: any[] } | null>(STORAGE_KEY, null)
@@ -98,24 +102,72 @@ export default function App() {
     }
   }, [state.tasks, state.members])
 
-  const debouncedSearch = useMemo(
-    () => debounce((value: string) => {
+  const progress = useMemo(() => calculateProgress(state.tasks), [state.tasks])
+
+  useEffect(() => {
+    const startValue = currentProgressRef.current
+    const endValue = progress
+    const duration = 300
+    const startTime = performance.now()
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime
+      const progressRatio = Math.min(elapsed / duration, 1)
+      const easeOut = 1 - Math.pow(1 - progressRatio, 3)
+      const currentValue = Math.round(startValue + (endValue - startValue) * easeOut)
+      setDisplayProgress(currentValue)
+      currentProgressRef.current = currentValue
+
+      if (progressRatio < 1) {
+        rafRef.current = requestAnimationFrame(animate)
+      } else {
+        currentProgressRef.current = endValue
+      }
+    }
+
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [progress])
+
+  const debouncedSetSearch = useCallback((value: string) => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current)
+    }
+    searchTimerRef.current = setTimeout(() => {
       dispatch({ type: 'SET_SEARCH_KEYWORD', payload: value })
-    }, 300),
-    []
-  )
+    }, 300)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current)
+      }
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [])
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchInput(e.target.value)
-    debouncedSearch(e.target.value)
-  }, [debouncedSearch])
+    debouncedSetSearch(e.target.value)
+  }, [debouncedSetSearch])
 
   const handleDragEnd = useCallback((result: any) => {
     if (!result.destination) return
-    
+
     const { draggableId, destination } = result
     const newStatus = destination.droppableId as TaskStatus
-    
+
     dispatch({
       type: 'UPDATE_TASK_STATUS',
       payload: { taskId: draggableId, newStatus }
@@ -123,16 +175,20 @@ export default function App() {
   }, [])
 
   const handleCreateTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt'>) => {
+    const newTaskIdValue = crypto.randomUUID()
     const newTask: Task = {
       ...taskData,
-      id: crypto.randomUUID(),
+      id: newTaskIdValue,
       createdAt: Date.now()
     }
     dispatch({ type: 'ADD_TASK', payload: newTask })
+    setNewTaskId(newTaskIdValue)
     setIsModalOpen(false)
-  }, [])
 
-  const progress = useMemo(() => calculateProgress(state.tasks), [state.tasks])
+    setTimeout(() => {
+      setNewTaskId(null)
+    }, 1000)
+  }, [])
 
   const filteredTasks = useMemo(() => {
     if (!state.searchKeyword.trim()) return state.tasks
@@ -143,8 +199,11 @@ export default function App() {
     )
   }, [state.tasks, state.searchKeyword])
 
-  const visibleMembers = state.members.slice(0, 5)
-  const extraMembersCount = Math.max(0, state.members.length - 5)
+  const maxVisibleMembers = 5
+  const visibleMembers = state.members.slice(0, maxVisibleMembers)
+  const extraMembersCount = state.members.length > maxVisibleMembers
+    ? state.members.length - maxVisibleMembers
+    : 0
 
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
@@ -234,6 +293,7 @@ export default function App() {
             ))}
             {extraMembersCount > 0 && (
               <div
+                title={`还有 ${extraMembersCount} 位成员`}
                 style={{
                   width: '32px',
                   height: '32px',
@@ -271,15 +331,24 @@ export default function App() {
                 style={{
                   height: '100%',
                   background: 'linear-gradient(90deg, #66bb6a 0%, #42a5f5 100%)',
-                  width: `${progress}%`,
-                  transition: 'width 0.3s ease-out',
+                  width: `${displayProgress}%`,
+                  transition: 'width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   borderRadius: '4px'
                 }}
               />
             </div>
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#333', minWidth: '60px', textAlign: 'right' }}>
-            {progress}%
+          <div
+            style={{
+              fontSize: '20px',
+              fontWeight: 700,
+              color: '#333',
+              minWidth: '60px',
+              textAlign: 'right',
+              transition: 'color 0.3s ease'
+            }}
+          >
+            {displayProgress}%
           </div>
         </div>
       </div>
@@ -326,6 +395,7 @@ export default function App() {
           tasks={filteredTasks}
           members={state.members}
           onDragEnd={handleDragEnd}
+          newTaskId={newTaskId}
         />
       </div>
 
