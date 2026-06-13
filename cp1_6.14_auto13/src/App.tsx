@@ -1,5 +1,5 @@
-import React, { useState, lazy, Suspense, useCallback } from 'react';
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import React, { useState, lazy, Suspense, useCallback, useEffect } from 'react';
+import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { loginUser, User } from './api/requests';
 
 const UserDashboard = lazy(() => import('./pages/UserDashboard'));
@@ -13,16 +13,49 @@ function LoadingSpinner() {
   );
 }
 
+function loadStoredUser(): User | null {
+  try {
+    const stored = localStorage.getItem('fithub_user');
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return null;
+}
+
+function saveStoredUser(user: User | null) {
+  if (user) {
+    localStorage.setItem('fithub_user', JSON.stringify(user));
+  } else {
+    localStorage.removeItem('fithub_user');
+  }
+}
+
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(loadStoredUser);
   const [loginName, setLoginName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const location = useLocation();
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (!mobile) setMenuOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   const handleLogin = useCallback(async () => {
     if (!loginName.trim()) return;
     try {
       const u = await loginUser(loginName.trim());
       setUser(u);
+      saveStoredUser(u);
       setLoginName('');
     } catch {
       console.error('Login failed');
@@ -31,6 +64,7 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     setUser(null);
+    saveStoredUser(null);
     setMenuOpen(false);
   }, []);
 
@@ -73,36 +107,41 @@ export default function App() {
             </svg>
             <span className="brand-name">FitHub</span>
           </div>
-          <nav className="nav-tabs">
-            <NavLink
-              to="/user"
-              className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              会员端
-            </NavLink>
-            <NavLink
-              to="/admin"
-              className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              管理端
-            </NavLink>
-          </nav>
+          {!isMobile && (
+            <nav className="nav-tabs">
+              <NavLink
+                to="/user"
+                className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}
+              >
+                会员端
+              </NavLink>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}
+              >
+                管理端
+              </NavLink>
+            </nav>
+          )}
         </div>
-        <div className="nav-right">
-          <span className="user-name">{user.name}</span>
-          <button className="logout-btn" onClick={handleLogout}>退出</button>
-        </div>
-        <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)}>
-          <span className={`hamburger-line ${menuOpen ? 'open' : ''}`} />
-          <span className={`hamburger-line ${menuOpen ? 'open' : ''}`} />
-          <span className={`hamburger-line ${menuOpen ? 'open' : ''}`} />
-        </button>
+        {!isMobile && (
+          <div className="nav-right">
+            <span className="user-name">{user.name}</span>
+            <button className="logout-btn" onClick={handleLogout}>退出</button>
+          </div>
+        )}
+        {isMobile && (
+          <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)}>
+            <span className={`hamburger-line ${menuOpen ? 'open' : ''}`} />
+            <span className={`hamburger-line ${menuOpen ? 'open' : ''}`} />
+            <span className={`hamburger-line ${menuOpen ? 'open' : ''}`} />
+          </button>
+        )}
       </header>
 
-      {menuOpen && (
+      {isMobile && menuOpen && (
         <div className="mobile-menu">
+          <div className="mobile-user-info">{user.name}</div>
           <NavLink to="/user" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>会员端</NavLink>
           <NavLink to="/admin" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>管理端</NavLink>
           <button className="mobile-logout" onClick={handleLogout}>退出登录</button>

@@ -65,7 +65,6 @@ export default function UserDashboard({ user }: UserDashboardProps) {
   const totalCalories = weekRecords.reduce((s, r) => s + (r.calories || 0), 0);
 
   const recentRecords = weekTrainingRecords;
-  const displayRecords = weekTrainingRecords.slice(0, 20);
 
   const handleBodySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,8 +81,8 @@ export default function UserDashboard({ user }: UserDashboardProps) {
       });
       toast.success('身体指标已记录');
       setBodyForm({ weight: '', bodyFat: '', chest: '', waist: '', hips: '' });
-      loadData();
-      loadTrend();
+      await loadData();
+      await loadTrend();
     } catch {
       toast.error('记录失败');
     }
@@ -145,7 +144,7 @@ export default function UserDashboard({ user }: UserDashboardProps) {
           <h2 className="section-title">📋 训练记录</h2>
           {recentRecords.length === 0 ? (
             <div className="empty-state">暂无训练记录</div>
-          ) : recentRecords.length > 50 ? (
+          ) : recentRecords.length > 20 ? (
             <List
               height={400}
               itemCount={recentRecords.length}
@@ -156,7 +155,7 @@ export default function UserDashboard({ user }: UserDashboardProps) {
             </List>
           ) : (
             <div className="records-list">
-              {displayRecords.map(r => (
+              {recentRecords.map(r => (
                 <div key={r._id} className="record-row">
                   <div className="record-date">{r.date}</div>
                   <div className="record-info">

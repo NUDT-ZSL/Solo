@@ -81,18 +81,31 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
         toast.success('课程已创建');
       }
       resetForm();
-      loadData();
+      await loadData();
     } catch {
       toast.error('操作失败');
     }
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm('确定删除该课程？所有未签到预约将被自动取消。')) return;
+    const course = courses.find(c => c._id === courseId);
+    if (!course) return;
+    const affectedBookings = bookings.filter(b => b.courseId === courseId && b.status === 'booked');
+    if (!confirm(`确定删除课程"${course.name}"？${affectedBookings.length > 0 ? `将自动取消${affectedBookings.length}个未签到预约并通知会员。` : ''}`)) return;
     try {
       const result = await deleteCourse(courseId);
-      toast.success(`课程已删除，${result.cancelledBookings?.length || 0}个预约已取消`);
-      loadData();
+      const cancelled = result.cancelledBookings || [];
+      if (cancelled.length > 0) {
+        const affectedNames = cancelled.map(b => b.userName || b.userId);
+        const uniqueNames = [...new Set(affectedNames)];
+        uniqueNames.forEach(name => {
+          toast(`📋 通知：${name}，您预约的${course.name}课程已取消`, { duration: 5000, icon: '⚠️' });
+        });
+        toast.success(`课程已删除，${cancelled.length}个预约已取消并通知会员`);
+      } else {
+        toast.success('课程已删除');
+      }
+      await loadData();
     } catch {
       toast.error('删除失败');
     }
@@ -102,7 +115,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     try {
       await checkinBooking(bookingId);
       toast.success('签到成功');
-      loadData();
+      await loadData();
     } catch (err: any) {
       toast.error(err.response?.data?.error || '签到失败');
     }
@@ -112,7 +125,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     try {
       await cancelBooking(bookingId);
       toast.success('预约已取消');
-      loadData();
+      await loadData();
     } catch (err: any) {
       toast.error(err.response?.data?.error || '取消失败');
     }

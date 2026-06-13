@@ -9,6 +9,17 @@ interface BookingCalendarProps {
   onBookingChange: () => void;
 }
 
+function getCurrentUserId(): string | null {
+  try {
+    const stored = localStorage.getItem('fithub_user');
+    if (stored) {
+      const user = JSON.parse(stored);
+      return user._id || null;
+    }
+  } catch {}
+  return null;
+}
+
 const DAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 function getNext7Days(): Date[] {
@@ -39,8 +50,10 @@ export default function BookingCalendar({ courses, bookings, userId, onBookingCh
   }, [courses]);
 
   const handleBook = useCallback(async (courseId: string) => {
-    if (!userId) {
-      toast.error('请先登录');
+    const storedUserId = getCurrentUserId();
+    const effectiveUserId = userId || storedUserId;
+    if (!effectiveUserId) {
+      toast.error('请先登录后再预约');
       return;
     }
     const course = courses.find(c => c._id === courseId);
@@ -57,7 +70,7 @@ export default function BookingCalendar({ courses, bookings, userId, onBookingCh
       return;
     }
     try {
-      await createBooking(userId, courseId);
+      await createBooking(effectiveUserId, courseId);
       toast.success('预约成功！');
       onBookingChange();
     } catch (err: any) {

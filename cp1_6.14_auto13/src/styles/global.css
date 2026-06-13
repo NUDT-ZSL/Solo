@@ -213,7 +213,7 @@ input, select {
 }
 
 .hamburger {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 5px;
   background: none;
@@ -226,11 +226,38 @@ input, select {
   border-radius: 1px;
   transition: all 0.3s ease-out;
 }
+.hamburger-line.open:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.hamburger-line.open:nth-child(2) {
+  opacity: 0;
+}
+.hamburger-line.open:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
 .mobile-menu {
-  display: none;
   background: #fff;
   border-bottom: 1px solid var(--border);
   padding: 8px 0;
+  animation: slideDown 0.2s ease-out;
+}
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mobile-user-info {
+  padding: 12px 24px;
+  color: var(--dark);
+  font-weight: 600;
+  font-size: 15px;
+  border-bottom: 1px solid var(--border);
 }
 .mobile-nav-link {
   display: block;
@@ -239,6 +266,10 @@ input, select {
   text-decoration: none;
   font-size: 15px;
   border-left: 3px solid transparent;
+  transition: all 0.2s;
+}
+.mobile-nav-link:hover {
+  background: #fff7ed;
 }
 .mobile-nav-link.active {
   color: var(--primary);
@@ -252,6 +283,8 @@ input, select {
   text-align: left;
   color: var(--danger);
   font-size: 15px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
 }
 
 /* ==================== MAIN CONTENT ==================== */
@@ -311,6 +344,8 @@ input, select {
   gap: 4px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .tab-btn {
   padding: 12px 24px;
@@ -321,6 +356,7 @@ input, select {
   border-bottom: 3px solid transparent;
   margin-bottom: -1px;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 .tab-btn.active {
   color: var(--primary);
@@ -681,6 +717,7 @@ input, select {
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  min-width: 0;
 }
 .course-item-name {
   font-weight: 600;
@@ -690,6 +727,9 @@ input, select {
 .course-item-meta {
   font-size: 12px;
   color: var(--text-gray);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .course-type-tag {
   display: inline-block;
@@ -710,6 +750,7 @@ input, select {
 .course-item-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 .action-btn {
   padding: 6px 14px;
@@ -733,11 +774,13 @@ input, select {
 /* ==================== BOOKING TABLE ==================== */
 .booking-table-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .booking-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  min-width: 600px;
 }
 .booking-table thead th {
   background: var(--dark);
@@ -769,6 +812,7 @@ input, select {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
 }
 .status-tag.status-booked {
   background: #dbeafe;
@@ -793,6 +837,7 @@ input, select {
   font-size: 12px;
   font-weight: 500;
   transition: transform 0.2s;
+  white-space: nowrap;
 }
 .table-btn:hover {
   transform: scale(1.1);
@@ -811,7 +856,7 @@ input, select {
   font-weight: 500;
 }
 
-/* ==================== RESPONSIVE ==================== */
+/* ==================== RESPONSIVE: TABLET ==================== */
 @media (max-width: 1024px) {
   .admin-layout {
     grid-template-columns: 1fr;
@@ -819,37 +864,65 @@ input, select {
   .calendar-grid {
     grid-template-columns: repeat(4, 1fr);
   }
+  .stat-card {
+    max-width: 100%;
+  }
 }
 
+/* ==================== RESPONSIVE: MOBILE ==================== */
 @media (max-width: 768px) {
   .main-content {
-    padding: 16px;
+    padding: 12px;
   }
-  .nav-tabs, .nav-right {
-    display: none;
+  .top-nav {
+    padding: 0 16px;
   }
-  .hamburger {
-    display: flex;
-  }
-  .mobile-menu {
-    display: block;
+  .nav-left {
+    gap: 16px;
   }
   .calendar-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
   .calendar-day {
     min-height: auto;
+    padding: 8px;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
   .stat-card {
     max-width: 100%;
     height: auto;
-    padding: 20px;
+    padding: 16px;
+    border-radius: 12px;
   }
   .stat-value {
-    font-size: 36px;
+    font-size: 32px;
+    margin-bottom: 8px;
+  }
+  .stat-label {
+    font-size: 12px;
+  }
+  .tab-bar {
+    margin-bottom: 16px;
+  }
+  .tab-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  .records-section,
+  .body-section,
+  .admin-left,
+  .admin-right {
+    padding: 16px;
+    border-radius: 12px;
   }
   .record-row {
     grid-template-columns: 100px 1fr 80px;
+    padding: 10px 8px;
+    gap: 8px;
   }
   .record-notes {
     grid-column: 1 / -1;
@@ -858,30 +931,51 @@ input, select {
     padding-top: 4px;
     border-top: 1px dashed var(--border);
   }
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  .admin-left, .admin-right {
-    padding: 16px;
-  }
   .booking-table thead th,
   .booking-table tbody td {
     padding: 8px 10px;
     font-size: 12px;
   }
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .section-title {
+    font-size: 17px;
+  }
+  .login-card {
+    padding: 32px 24px;
+  }
+  .login-logo h1 {
+    font-size: 26px;
+  }
 }
 
+/* ==================== RESPONSIVE: SMALL MOBILE ==================== */
 @media (max-width: 480px) {
+  .main-content {
+    padding: 8px;
+  }
+  .top-nav {
+    padding: 0 12px;
+  }
+  .brand-name {
+    font-size: 17px;
+  }
   .calendar-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .calendar-day {
+    padding: 10px;
   }
   .stats-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
   .tab-btn {
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: 8px 12px;
+    font-size: 12px;
   }
   .course-item {
     flex-direction: column;
@@ -894,8 +988,17 @@ input, select {
   .action-cell {
     flex-direction: column;
     gap: 4px;
+    align-items: stretch;
   }
   .table-btn {
     width: 100%;
+    text-align: center;
+  }
+  .form-actions {
+    flex-direction: column;
+  }
+  .submit-btn, .cancel-form-btn {
+    width: 100%;
+    text-align: center;
   }
 }
