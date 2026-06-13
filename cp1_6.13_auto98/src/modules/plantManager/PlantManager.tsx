@@ -160,9 +160,17 @@ export const PlantManagerProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, [refreshData])
 
+  const PAGE_SIZE = 8
+
   const getPlantPhotos = useCallback(async (plantId: string, page: number = 1) => {
-    const res = await axios.get(`/api/plants/${plantId}/photos`, { params: { page, limit: 8 } })
-    return res.data
+    const pageSize = PAGE_SIZE
+    const res = await axios.get(`/api/plants/${plantId}/photos`, {
+      params: { page: page, limit: pageSize }
+    })
+    return {
+      ...res.data,
+      pageSize
+    }
   }, [])
 
   const uploadPhoto = useCallback(async (plantId: string, dataUrl: string, date?: string) => {
@@ -330,19 +338,20 @@ interface TimelineProps {
 
 export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
   const { getPlantPhotos } = usePlantManager()
+  const PAGE_SIZE = 8
   const [photos, setPhotos] = useState<Photo[]>([])
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [loading, setLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [hasMorePhotos, setHasMorePhotos] = useState<boolean>(true)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
   const [hoveredPhoto, setHoveredPhoto] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const loadingRef = useRef(false)
-  const lastScrollHeightRef = useRef(0)
+  const isLoadingRef = useRef<boolean>(false)
+  const lastScrollHeightRef = useRef<number>(0)
 
-  const loadMorePhotos = useCallback(async () => {
-    if (loadingRef.current || !hasMore) return
-    loadingRef.current = true
-    setLoading(true)
+  const loadEarlierPhotos = useCallback(async (pageToLoad: number): Promise<void> => {
+    if (isLoadingRef.current || !hasMorePhotos) return
+    isLoadingRef.current = true
+    setIsLoading(true)
 
     const container = containerRef.current
     if (container) {
@@ -350,61 +359,72 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
     }
 
     try {
-      const nextPage = page + 1
-      const result = await getPlantPhotos(plantId, nextPage)
-      if (result.photos.length > 0) {
-        setPhotos(prev => {
-          const existingIds = new Set(prev.map(p => p._id))
-          const newPhotos = result.photos.filter((p: Photo) => !existingIds.has(p._id))
-          return [...newPhotos, ...prev]
+      const result = await getPlantPhotos(plantId, pageToLoad)
+      if (result.photos && result.photos.length > 0) {
+        setPhotos(prevPhotos => {
+          const existingIds = new Set(prevPhotos.map(p => p._id))
+          const newUniquePhotos = result.photos.filter(
+            (p: Photo) => !existingIds.has(p._id)
+          )
+          return [...newUniquePhotos, ...prevPhotos]
         })
-        setPage(nextPage)
+        setCurrentPage(pageToLoad)
       }
-      setHasMore(result.hasMore)
+      setHasMorePhotos(Boolean(result.hasMore))
+    } catch (err) {
+      console.error('加载更早照片失败:', err)
     } finally {
-      loadingRef.current = false
-      setLoading(false)
+      isLoadingRef.current = false
+      setIsLoading(false)
       if (container && lastScrollHeightRef.current > 0) {
         requestAnimationFrame(() => {
           const newScrollHeight = container.scrollHeight
-          container.scrollTop = newScrollHeight - lastScrollHeightRef.current
+          container.scrollTop = newScrollHeight - lastScrollHeightRef.current + 30
         })
       }
     }
-  }, [plantId, page, hasMore, getPlantPhotos])
+  }, [plantId, hasMorePhotos, getPlantPhotos])
 
-  const loadInitialPhotos = useCallback(async () => {
-    loadingRef.current = true
-    setLoading(true)
+  const loadFirstPage = useCallback(async (): Promise<void> => {
+    isLoadingRef.current = true
+    setIsLoading(true)
     try {
       const result = await getPlantPhotos(plantId, 1)
-      setPhotos(result.photos)
-      setPage(1)
-      setHasMore(result.hasMore)
+      setPhotos(result.photos || [])
+      setCurrentPage(1)
+      setHasMorePhotos(Boolean(result.hasMore))
+    } catch (err) {
+      console.error('加载照片失败:', err)
+      setPhotos([])
+      setHasMorePhotos(false)
     } finally {
-      loadingRef.current = false
-      setLoading(false)
+      isLoadingRef.current = false
+      setIsLoading(false)
     }
   }, [plantId, getPlantPhotos])
 
   useEffect(() => {
     setPhotos([])
-    setPage(1)
-    setHasMore(true)
-    loadingRef.current = false
-    loadInitialPhotos()
-  }, [plantId, loadInitialPhotos])
+    setCurrentPage(1)
+    setHasMorePhotos(true)
+    isLoadingRef.current = false
+    loadFirstPage()
+  }, [plantId, loadFirstPage])
 
-  const handleScroll = useCallback(() => {
+  const handleScroll = useCallback((): void => {
     const container = containerRef.current
-    if (!container || loadingRef.current || !hasMore) return
+    if (!container || isLoadingRef.current || !hasMorePhotos) return
 
-    if (container.scrollTop <= 20) {
-      loadMorePhotos()
+    const scrollTop = container.scrollTop
+    const SCROLL_THRESHOLD = 50
+
+    if (scrollTop <= SCROLL_THRESHOLD) {
+      const nextPage = currentPage + 1
+      loadEarlierPhotos(nextPage)
     }
-  }, [hasMore, loadMorePhotos])
+  }, [currentPage, hasMorePhotos, loadEarlierPhotos])
 
-  if (photos.length === 0 && !loading) {
+  if (photos.length === 0 && !isLoading) {
     return (
       <div style={{
         padding: 48,
@@ -433,7 +453,7 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
         WebkitOverflowScrolling: 'touch'
       }}
     >
-      {loading && photos.length > 0 && (
+      {isLoading && photos.length > 0 && (
         <div style={{ textAlign: 'center', padding: '0 0 16px 0' }}>
           <div style={{
             width: 280,
@@ -443,10 +463,10 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
             animation: 'pulse 1.5s ease-in-out infinite',
             margin: '0 auto'
           }} />
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>加载更早的照片...</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>加载更早的照片 (每次{PAGE_SIZE}张)...</p>
         </div>
       )}
-      {loading && photos.length === 0 && (
+      {isLoading && photos.length === 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {[1, 2, 3].map(i => (
             <div key={i} style={{
@@ -546,7 +566,7 @@ export const GrowthTimeline: React.FC<TimelineProps> = ({ plantId }) => {
           ))}
         </div>
       </div>
-      {!hasMore && photos.length > 0 && (
+      {!hasMorePhotos && photos.length > 0 && (
         <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 16 }}>
           已加载全部 {photos.length} 张照片 · 最早记录于 {new Date(sortedPhotos[0]?.date).toLocaleDateString('zh-CN')}
         </p>

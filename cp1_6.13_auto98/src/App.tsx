@@ -61,31 +61,43 @@ const globalStyles = `
   a { text-decoration: none; color: inherit; }
 `
 
-const DISMISSED_REMINDERS_KEY = 'garden_dismissed_reminders'
+const DISMISSED_REMINDERS_KEY = 'garden_care_dismissed_reminders_date'
 
-const getTodayKey = () => {
+const getTodayDateString = (): string => {
   const now = new Date()
-  return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-const areRemindersDismissedToday = (): boolean => {
+const checkIfRemindersDismissedToday = (): boolean => {
   try {
-    const stored = localStorage.getItem(DISMISSED_REMINDERS_KEY)
-    if (!stored) return false
-    const data = JSON.parse(stored)
-    return data.date === getTodayKey() && data.dismissed
-  } catch {
+    const storedValue = localStorage.getItem(DISMISSED_REMINDERS_KEY)
+    if (!storedValue) {
+      return false
+    }
+    const parsed = JSON.parse(storedValue)
+    const today = getTodayDateString()
+    const isSameDay = parsed.date === today && parsed.dismissed === true
+    return isSameDay
+  } catch (error) {
+    console.warn('读取localStorage提醒状态失败:', error)
     return false
   }
 }
 
-const setRemindersDismissedToday = () => {
+const saveRemindersDismissedToday = (): void => {
   try {
-    localStorage.setItem(DISMISSED_REMINDERS_KEY, JSON.stringify({
-      date: getTodayKey(),
-      dismissed: true
-    }))
-  } catch {}
+    const dataToStore = {
+      date: getTodayDateString(),
+      dismissed: true,
+      timestamp: Date.now()
+    }
+    localStorage.setItem(DISMISSED_REMINDERS_KEY, JSON.stringify(dataToStore))
+  } catch (error) {
+    console.warn('写入localStorage提醒状态失败:', error)
+  }
 }
 
 const SkeletonCard: React.FC = () => (
@@ -226,10 +238,13 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, badge }) => (
       <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>{label}</p>
       <p style={{
         margin: '4px 0 0 0',
-        fontSize: 32,
+        fontSize: '32px',
         fontWeight: 'bold',
         color: '#334155',
-        lineHeight: 1.1
+        lineHeight: 1.1,
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap'
       }}>
         {value}
         {badge !== undefined && badge > 0 && (
