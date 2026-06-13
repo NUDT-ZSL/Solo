@@ -13,10 +13,12 @@ export interface PerfSnapshot {
 }
 
 type Callback = (metrics: PerfMetrics) => void;
+type FpsCallback = (fps: number) => void;
 
 export class PerfMonitor {
   private isRunning = false;
   private callback: Callback | null = null;
+  private fpsCallback: FpsCallback | null = null;
   private fpsFrames = 0;
   private fpsLastTime = performance.now();
   private currentFps = 0;
@@ -27,28 +29,39 @@ export class PerfMonitor {
   private rafId: number | null = null;
   private observer: PerformanceObserver | null = null;
   private sampleInterval: number | null = null;
+  private fpsSampleInterval: number | null = null;
   private lastSampleTime = 0;
   private sampleRateMs = 500;
+  private fpsQueue: number[] = [];
+  private fpsQueueSize = 60;
+  private fpsSampleLastTime = performance.now();
+  private fpsSampleFrames = 0;
 
-  start(callback: Callback): void {
+  start(callback: Callback, fpsCallback?: FpsCallback): void {
     if (this.isRunning) return;
     this.isRunning = true;
     this.callback = callback;
+    this.fpsCallback = fpsCallback || null;
     this.totalReflowCount = 0;
     this.layoutDurations = [];
     this.metricsHistory = [];
+    this.fpsQueue = [];
     this.fpsFrames = 0;
     this.fpsLastTime = performance.now();
+    this.fpsSampleLastTime = performance.now();
+    this.fpsSampleFrames = 0;
     this.lastSampleTime = performance.now();
 
     this.startFpsCounter();
     this.startLayoutObserver();
     this.startSampling();
+    this.startFpsSampling();
   }
 
   stop(): void {
     this.isRunning = false;
     this.callback = null;
+    this.fpsCallback = null;
 
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
@@ -63,6 +76,11 @@ export class PerfMonitor {
     if (this.sampleInterval !== null) {
       window.clearInterval(this.sampleInterval);
       this.sampleInterval = null;
+    }
+
+    if (this.fpsSampleInterval !== null) {
+      window.clearInterval(this.fpsSampleInterval);
+      this.fpsSampleInterval = null;
     }
   }
 
@@ -88,10 +106,29 @@ export class PerfMonitor {
     return [...this.metricsHistory];
   }
 
+  getFpsQueue(): number[] {
+    return [...this.fpsQueue];
+  }
+
+  getCurrentFps(): number {
+    return this.currentFps;
+  }
+
+  getReflowCount(): number {
+    return this.totalReflowCount;
+  }
+
+  getAvgLayoutDuration(windowMs: number = 5000): number {
+    const recent = this.getRecentMetrics(windowMs);
+    if (recent.length === 0) return 0;
+    return recent.reduce((sum, m) => sum + m.layoutDuration, 0) / recent.length;
+  }
+
   private startFpsCounter(): void {
     const loop = () => {
       if (!this.isRunning) return;
       this.fpsFrames++;
+      this.fpsSampleFrames++;
       const now = performance.now();
       const delta = now - this.fpsLastTime;
 
@@ -106,6 +143,34 @@ export class PerfMonitor {
     this.rafId = requestAnimationFrame(loop);
   }
 
+  private startFpsSampling(): void {
+    this.fpsSampleInterval = window.setInterval(() => {
+      if (!this.isRunning) return;
+
+      const now = performance.now();
+      const delta = now - this.fpsSampleLastTime;
+      let fps: number;
+
+      if (delta > 0) {
+        fps = Math.round((this.fpsSampleFrames * 1000) / delta);
+      } else {
+        fps = this.currentFps;
+      }
+
+      this.fpsQueue.push(fps);
+      if (this.fpsQueue.length > this.fpsQueueSize) {
+        this.fpsQueue.shift();
+      }
+
+      this.fpsSampleFrames = 0;
+      this.fpsSampleLastTime = now;
+
+      if (this.fpsCallback) {
+        this.fpsCallback(fps);
+      }
+    }, 1000);
+  }
+
   private startLayoutObserver(): void {
     if (typeof PerformanceObserver === 'undefined') {
       return;
@@ -117,13 +182,21 @@ export class PerfMonitor {
           if (entry.entryType === 'layout-shift') {
             this.totalReflowCount++;
           }
+          if (entry.entryType === 'longtask') {
+            this.totalReflowCount++;
+          }
           if ('duration' in entry && entry.duration > 0) {
             this.layoutDurations.push(entry.duration);
           }
         }
       });
 
-      this.observer.observe({ entryTypes: ['layout-shift', 'measure', 'mark'] });
+      const entryTypes: string[] = ['layout-shift', 'measure', 'mark'];
+      if (PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
+        entryTypes.push('longtask');
+      }
+
+      this.observer.observe({ entryTypes });
     } catch (e) {
       console.warn('PerformanceObserver not supported for layout monitoring');
     }
@@ -170,12 +243,6 @@ export class PerfMonitor {
     const now = performance.now();
     const cutoff = now - windowMs;
     return this.metricsHistory.filter(m => m.timestamp >= cutoff);
-  }
-
-  getAverageLayoutDuration(windowMs: number = 5000): number {
-    const recent = this.getRecentMetrics(windowMs);
-    if (recent.length === 0) return 0;
-    return recent.reduce((sum, m) => sum + m.layoutDuration, 0) / recent.length;
   }
 }
 

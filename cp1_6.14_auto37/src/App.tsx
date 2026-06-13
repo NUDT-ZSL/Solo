@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   GridConfig,
   FlexConfig,
@@ -7,6 +7,7 @@ import {
   defaultFlexConfig,
   getLayoutStyle,
   generateRandomColors,
+  resetColorSeed,
 } from './layoutDebugger';
 import { perfMonitor, PerfMetrics } from './perfMonitor';
 
@@ -16,11 +17,12 @@ interface CardData {
   color: string;
 }
 
+const CARD_COUNT = 12;
+
 function App() {
   const [layoutType, setLayoutType] = useState<'grid' | 'flex'>('grid');
   const [gridConfig, setGridConfig] = useState<GridConfig>(defaultGridConfig);
   const [flexConfig, setFlexConfig] = useState<FlexConfig>(defaultFlexConfig);
-  const [cards, setCards] = useState<CardData[]>([]);
   const [highlightedCard, setHighlightedCard] = useState<number | null>(null);
   const [perfPanelExpanded, setPerfPanelExpanded] = useState(false);
   const [metrics, setMetrics] = useState<PerfMetrics>({
@@ -29,27 +31,35 @@ function App() {
     reflowCount: 0,
     timestamp: 0,
   });
-  const [metricsHistory, setMetricsHistory] = useState<PerfMetrics[]>([]);
+  const [fpsQueue, setFpsQueue] = useState<number[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [floatingVisible, setFloatingVisible] = useState(false);
   const [floatingPosition, setFloatingPosition] = useState({ x: 0, y: 0 });
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [draggedCard, setDraggedCard] = useState<number | null>(null);
-  const [dragOverCard, setDragOverCard] = useState<number | null>(null);
+  const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null);
+  const [dragOverCardIndex, setDragOverCardIndex] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const rafDrawId = useRef<number | null>(null);
 
-  useEffect(() => {
-    const colors = generateRandomColors(12, 30);
-    const initialCards: CardData[] = Array.from({ length: 12 }, (_, i) => ({
+  const cardColors = useMemo(() => {
+    resetColorSeed();
+    return generateRandomColors(CARD_COUNT, 30);
+  }, [CARD_COUNT]);
+
+  const cards: CardData[] = useMemo(() => {
+    return Array.from({ length: CARD_COUNT }, (_, i) => ({
       id: i,
       number: i + 1,
-      color: colors[i],
+      color: cardColors[i],
     }));
-    setCards(initialCards);
-  }, []);
+  }, [cardColors]);
+
+  const [cardOrder, setCardOrder] = useState<number[]>(() =>
+    Array.from({ length: CARD_COUNT }, (_, i) => i)
+  );
 
   useEffect(() => {
     const checkMobile = () => {
@@ -61,10 +71,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    perfMonitor.start((newMetrics) => {
-      setMetrics(newMetrics);
-      setMetricsHistory(perfMonitor.getMetricsHistory());
-    });
+    perfMonitor.start(
+      (newMetrics) => {
+        setMetrics(newMetrics);
+      },
+      (fps) => {
+        setFpsQueue(perfMonitor.getFpsQueue());
+      }
+    );
 
     return () => {
       perfMonitor.stop();
@@ -105,29 +119,24 @@ function App() {
         ctx.lineTo(width - padding.right, y);
         ctx.stroke();
 
-        const value = Math.round(16 - i * 4);
+        const value = Math.round(60 - i * 15);
         ctx.textAlign = 'right';
-        ctx.fillText(`${value}ms`, padding.left - 4, y + 3);
+        ctx.fillText(`${value}`, padding.left - 4, y + 3);
       }
 
-      const timeWindow = 60000;
-      const now = performance.now();
-      const visibleMetrics = metricsHistory.filter(
-        (m) => now - m.timestamp <= timeWindow
-      );
-
-      if (visibleMetrics.length > 1) {
+      if (fpsQueue.length > 1) {
         const points: { x: number; y: number }[] = [];
-        const maxValue = 16;
+        const maxValue = 60;
+        const queueLength = 60;
 
-        visibleMetrics.forEach((m, i) => {
+        fpsQueue.forEach((fps, i) => {
           const x =
             padding.left +
-            ((m.timestamp - (now - timeWindow)) / timeWindow) * chartWidth;
+            (i / (queueLength - 1)) * chartWidth;
           const y =
             padding.top +
             chartHeight -
-            Math.min(m.layoutDuration / maxValue, 1) * chartHeight;
+            Math.min(fps / maxValue, 1) * chartHeight;
           points.push({ x, y });
         });
 
@@ -165,13 +174,19 @@ function App() {
       ctx.textAlign = 'center';
       ctx.fillText('-60s', padding.left, height - 5);
       ctx.fillText('now', width - padding.right, height - 5);
+
+      rafDrawId.current = requestAnimationFrame(drawChart);
     };
 
-    drawChart();
-    const interval = setInterval(drawChart, 500);
+    rafDrawId.current = requestAnimationFrame(drawChart);
 
-    return () => clearInterval(interval);
-  }, [metricsHistory]);
+    return () => {
+      if (rafDrawId.current !== null) {
+        cancelAnimationFrame(rafDrawId.current);
+        rafDrawId.current = null;
+      }
+    };
+  }, [fpsQueue]);
 
   const currentConfig: LayoutConfig =
     layoutType === 'grid' ? gridConfig : flexConfig;
@@ -190,6 +205,14 @@ function App() {
     setFlexConfig((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleResetGrid = () => {
+    setGridConfig(defaultGridConfig);
+  };
+
+  const handleResetFlex = () => {
+    setFlexConfig(defaultFlexConfig);
+  };
+
   const handleCardClick = useCallback((id: number) => {
     setHighlightedCard(id);
     perfMonitor.recordSelectEvent();
@@ -198,9 +221,10 @@ function App() {
     }, 2000);
   }, []);
 
-  const handleDragStart = (e: React.DragEvent, id: number) => {
-    setDraggedCard(id);
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedCardIndex(index);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
     const target = e.target as HTMLElement;
     target.style.opacity = '0.4';
   };
@@ -208,55 +232,67 @@ function App() {
   const handleDragEnd = (e: React.DragEvent) => {
     const target = e.target as HTMLElement;
     target.style.opacity = '1';
-    setDraggedCard(null);
-    setDragOverCard(null);
+    setDraggedCardIndex(null);
+    setDragOverCardIndex(null);
   };
 
-  const handleDragOver = (e: React.DragEvent, id: number) => {
+  const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    if (draggedCard !== null && draggedCard !== id) {
-      setDragOverCard(id);
+    if (draggedCardIndex !== null && draggedCardIndex !== index) {
+      setDragOverCardIndex(index);
     }
   };
 
   const handleDragLeave = () => {
-    setDragOverCard(null);
+    setDragOverCardIndex(null);
   };
 
-  const handleDrop = (e: React.DragEvent, targetId: number) => {
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
-    if (draggedCard === null || draggedCard === targetId) return;
+    if (draggedCardIndex === null || draggedCardIndex === targetIndex) return;
 
-    setCards((prev) => {
-      const newCards = [...prev];
-      const draggedIndex = newCards.findIndex((c) => c.id === draggedCard);
-      const targetIndex = newCards.findIndex((c) => c.id === targetId);
-      const [removed] = newCards.splice(draggedIndex, 1);
-      newCards.splice(targetIndex, 0, removed);
-      return newCards;
+    setCardOrder((prev) => {
+      const newOrder = [...prev];
+      const [removed] = newOrder.splice(draggedCardIndex, 1);
+      newOrder.splice(targetIndex, 0, removed);
+      return newOrder;
     });
 
-    setDraggedCard(null);
-    setDragOverCard(null);
+    setDraggedCardIndex(null);
+    setDragOverCardIndex(null);
+  };
+
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const handleExport = () => {
-    const snapshot = {
+    const perfSnapshot = perfMonitor.getSnapshot();
+
+    const exportData = {
+      date: formatDate(new Date()),
       timestamp: new Date().toISOString(),
-      layoutType,
-      layoutConfig: currentConfig,
-      performance: perfMonitor.getSnapshot(),
+      gridConfig,
+      flexConfig,
+      performance: {
+        fps: perfSnapshot.fps,
+        avgLayoutDuration: perfSnapshot.avgLayoutDuration,
+        totalReflowCount: perfSnapshot.totalReflowCount,
+      },
     };
 
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
       type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const date = new Date().toISOString().replace(/[:.]/g, '-');
+    const dateStr = formatDate(new Date());
     a.href = url;
-    a.download = `gridrush_snapshot_${date}.json`;
+    a.download = `gridrush_snapshot_${dateStr}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -305,6 +341,8 @@ function App() {
     return 'danger';
   };
 
+  const orderedCards = cardOrder.map((idx) => cards[idx]);
+
   const ControlPanelContent = () => (
     <>
       <div className="panel-section">
@@ -326,7 +364,24 @@ function App() {
 
       {layoutType === 'grid' ? (
         <>
-          <div className="panel-header">Grid 布局设置</div>
+          <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Grid 布局设置</span>
+            <button
+              onClick={handleResetGrid}
+              style={{
+                background: 'none',
+                border: '1px solid #60a5fa',
+                color: '#60a5fa',
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                marginLeft: 'auto',
+              }}
+            >
+              重置
+            </button>
+          </div>
           <div className="panel-section">
             <div className="control-row">
               <label className="control-label">
@@ -407,7 +462,24 @@ function App() {
         </>
       ) : (
         <>
-          <div className="panel-header">Flexbox 布局设置</div>
+          <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Flexbox 布局设置</span>
+            <button
+              onClick={handleResetFlex}
+              style={{
+                background: 'none',
+                border: '1px solid #60a5fa',
+                color: '#60a5fa',
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                marginLeft: 'auto',
+              }}
+            >
+              重置
+            </button>
+          </div>
           <div className="panel-section">
             <div className="control-row">
               <label className="control-label">方向</label>
@@ -555,31 +627,34 @@ function App() {
 
       <div className="preview-area">
         <div className="preview-container" style={getLayoutStyle(currentConfig)}>
-          {cards.map((card) => (
-            <div
-              key={card.id}
-              className={`card ${
-                highlightedCard === card.id ? 'highlighted' : ''
-              } ${draggedCard === card.id ? 'dragging' : ''} ${
-                dragOverCard === card.id ? 'drag-over' : ''
-              }`}
-              style={{
-                backgroundColor: card.color,
-                ...(layoutType === 'flex' && flexConfig.wrap === 'wrap'
-                  ? { flex: '1 1 calc(25% - ' + (flexConfig.gap * 0.75) + 'px)', minWidth: '120px' }
-                  : {}),
-              }}
-              draggable
-              onClick={() => handleCardClick(card.id)}
-              onDragStart={(e) => handleDragStart(e, card.id)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => handleDragOver(e, card.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, card.id)}
-            >
-              {card.number}
-            </div>
-          ))}
+          {orderedCards.map((card, displayIndex) => {
+            const originalIndex = cardOrder.indexOf(card.id);
+            return (
+              <div
+                key={card.id}
+                className={`card ${
+                  highlightedCard === card.id ? 'highlighted' : ''
+                } ${draggedCardIndex === originalIndex ? 'dragging' : ''} ${
+                  dragOverCardIndex === originalIndex ? 'drag-over' : ''
+                }`}
+                style={{
+                  backgroundColor: card.color,
+                  ...(layoutType === 'flex' && flexConfig.wrap === 'wrap'
+                    ? { flex: '1 1 calc(25% - ' + (flexConfig.gap * 0.75) + 'px)', minWidth: '120px' }
+                    : {}),
+                }}
+                draggable
+                onClick={() => handleCardClick(card.id)}
+                onDragStart={(e) => handleDragStart(e, originalIndex)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, originalIndex)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, originalIndex)}
+              >
+                {card.number}
+              </div>
+            );
+          })}
         </div>
       </div>
 

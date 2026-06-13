@@ -99,26 +99,54 @@ export function getLayoutStyle(config: LayoutConfig): React.CSSProperties {
   return generateFlexStyles(config);
 }
 
+let lastHue = -1;
+
+export function getRandomColor(minHueDiff: number = 30): string {
+  let hue: number;
+  let attempts = 0;
+
+  do {
+    hue = Math.floor(Math.random() * 360);
+    attempts++;
+  } while (
+    attempts < 100 &&
+    lastHue !== -1 &&
+    Math.abs(((hue - lastHue + 540) % 360) - 180) > 180 - minHueDiff
+  );
+
+  lastHue = hue;
+  const saturation = 55 + Math.random() * 20;
+  const lightness = 50 + Math.random() * 15;
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
 export function generateRandomColors(count: number, minHueDiff: number = 30): string[] {
   const colors: string[] = [];
-  const usedHues: number[] = [];
+  let prevHue = -1;
 
   for (let i = 0; i < count; i++) {
     let hue: number;
     let attempts = 0;
+
     do {
       hue = Math.floor(Math.random() * 360);
       attempts++;
     } while (
       attempts < 100 &&
-      usedHues.some(h => Math.abs(h - hue) < minHueDiff && Math.abs(h - hue) > 360 - minHueDiff)
+      prevHue !== -1 &&
+      Math.abs(((hue - prevHue + 540) % 360) - 180) > 180 - minHueDiff
     );
 
-    usedHues.push(hue);
+    prevHue = hue;
+    lastHue = hue;
     const saturation = 55 + Math.random() * 20;
     const lightness = 50 + Math.random() * 15;
     colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
   }
 
   return colors;
+}
+
+export function resetColorSeed(): void {
+  lastHue = -1;
 }
