@@ -17,42 +17,46 @@ const SoundSphere: React.FC<SoundSphereProps> = ({
   onSelect,
   onUpdate,
 }) => {
-  const prevIdRef = useRef<string | null>(null);
+  const addedRef = useRef(false);
+  const prevPositionRef = useRef({
+    x: source.position.x,
+    y: source.position.y,
+    z: source.position.z,
+  });
 
   useEffect(() => {
     if (!sceneManager) return;
-
-    if (prevIdRef.current && prevIdRef.current !== source.id) {
-      sceneManager.removeSphere(prevIdRef.current);
-    }
-
-    if (!prevIdRef.current || prevIdRef.current !== source.id) {
+    if (!addedRef.current) {
       sceneManager.addSphere(source);
-      prevIdRef.current = source.id;
+      addedRef.current = true;
+      prevPositionRef.current = {
+        x: source.position.x,
+        y: source.position.y,
+        z: source.position.z,
+      };
     }
-
     return () => {
-      if (prevIdRef.current && sceneManager) {
-        sceneManager.removeSphere(prevIdRef.current);
-        prevIdRef.current = null;
+      if (addedRef.current && sceneManager) {
+        sceneManager.removeSphere(source.id);
+        addedRef.current = false;
       }
     };
-  }, [source.id]);
+  }, [source.id, sceneManager]);
 
   useEffect(() => {
-    if (!sceneManager) return;
+    if (!sceneManager || !addedRef.current) return;
     sceneManager.selectSphere(isSelected ? source.id : null);
   }, [isSelected, source.id, sceneManager]);
 
   useEffect(() => {
-    if (!sceneManager) return;
-    sceneManager.updateSpherePosition(
-      source.id,
-      source.position.x,
-      source.position.y,
-      source.position.z
-    );
-  }, [source.position.x, source.position.y, source.position.z, sceneManager]);
+    if (!sceneManager || !addedRef.current) return;
+    const p = source.position;
+    const prev = prevPositionRef.current;
+    if (p.x !== prev.x || p.y !== prev.y || p.z !== prev.z) {
+      sceneManager.updateSpherePosition(source.id, p.x, p.y, p.z);
+      prevPositionRef.current = { x: p.x, y: p.y, z: p.z };
+    }
+  }, [source.id, source.position.x, source.position.y, source.position.z, sceneManager]);
 
   return null;
 };
