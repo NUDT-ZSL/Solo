@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { eventBus, AppEvents, ForceFieldData, FluidType } from '../events/EventBus';
-import { clamp, randomRange } from '../utils/MathUtils';
+import { clamp, randomRange, lerp } from '../utils/MathUtils';
 
 export interface ParticleState {
   positions: Float32Array;
@@ -8,12 +8,58 @@ export interface ParticleState {
   densities: Float32Array;
 }
 
+interface FluidPhysicsParams {
+  particleMass: number;
+  restDensity: number;
+  stiffness: number;
+  viscosity: number;
+  surfaceTension: number;
+  gravityScale: number;
+  buoyancy: number;
+  damping: number;
+}
+
+const FLUID_PRESETS: Record<FluidType, FluidPhysicsParams> = {
+  water: {
+    particleMass: 1.0,
+    restDensity: 1000,
+    stiffness: 800,
+    viscosity: 250,
+    surfaceTension: 0.5,
+    gravityScale: 1.0,
+    buoyancy: 0.0,
+    damping: 0.998,
+  },
+  smoke: {
+    particleMass: 0.15,
+    restDensity: 80,
+    stiffness: 120,
+    viscosity: 40,
+    surfaceTension: 0.02,
+    gravityScale: -0.15,
+    buoyancy: 1.5,
+    damping: 0.992,
+  },
+  fire: {
+    particleMass: 0.08,
+    restDensity: 40,
+    stiffness: 60,
+    viscosity: 15,
+    surfaceTension: 0.01,
+    gravityScale: -2.2,
+    buoyancy: 3.0,
+    damping: 0.985,
+  },
+};
+
 export class SimulationEngine {
   private particleCount: number;
   private positions: Float32Array;
   private velocities: Float32Array;
   private densities: Float32Array;
+  private pressures: Float32Array;
 
+  private baseGravity: number = -9.8;
   private gravity: number = -9.8;
   private wind: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
   private windStrength: number = 0;
@@ -28,28 +74,48 @@ export class SimulationEngine {
   private bounds = {
     minX: -12,
     maxX: 12,
-    minY: -5,
-    maxY: 8,
-    minZ: -4,
-    maxZ: 4,
+    minY: -4,
+    maxY: 10,
+    minZ: -3,
+    maxZ: 3,
   };
 
-  private particleRadius: number = 0.3;
-  private restDensity: number = 1000;
-  private stiffness: number = 200;
-  private viscosity: number = 50;
-  private dt: number = 1 / 60;
+  private smoothingRadius: number = 0.8;
+  private cellSize: number = 0.8;
+
+  private currentParams: FluidPhysicsParams;
+  private targetParams: FluidPhysicsParams;
+  private paramsTransitionProgress: number = 1;
+  private paramsTransitionDuration: number = 0.5;
   private currentFluidType: FluidType = 'water';
 
-  private maxVelocity: number = 20;
+  private maxVelocity: number = 25;
   private spatialHash: Map<string, number[]> = new Map();
-  private cellSize: number = 0.8;
+  private dt: number = 1 / 60;
+
+  private accelX: Float32Array;
+  private accelY: Float32Array;
+  private accelZ: Float32Array;
+  private neighborCache: number[][];
+  private neighborCountCache: Int32Array;
 
   constructor(particleCount: number = 3000) {
     this.particleCount = particleCount;
     this.positions = new Float32Array(particleCount * 3);
     this.velocities = new Float32Array(particleCount * 3);
     this.densities = new Float32Array(particleCount);
+    this.pressures = new Float32Array(particleCount);
+
+    this.currentParams = { ...FLUID_PRESETS.water };
+    this.targetParams = { ...FLUID_PRESETS.water };
+
+    this.accelX = new Float32Array(particleCount);
+    this.accelY = new Float32Array(particleCount);
+    this.accelZ = new Float32Array(particleCount);
+    this.neighborCache = new Array(particleCount).fill(null).map(() => []);
+    this.neighborCountCache = new Int32Array(particleCount);
+
+    this.gravity = this.baseGravity * this.currentParams.gravityScale;
 
     this.initializeParticles();
     this.setupEventListeners();
@@ -66,19 +132,23 @@ export class SimulationEngine {
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
       this.positions[i3] = randomRange(-10, 10);
-      this.positions[i3 + 1] = randomRange(-2, 2);
+      this.positions[i3 + 1] = randomRange(-1, 1);
       this.positions[i3 + 2] = randomRange(-1.5, 1.5);
 
-      this.velocities[i3] = randomRange(-0.5, 0.5);
-      this.velocities[i3 + 1] = randomRange(-0.3, 0.3);
-      this.velocities[i3 + 2] = randomRange(-0.2, 0.2);
+      this.velocities[i3] = randomRange(-0.1, 0.1);
+      this.velocities[i3 + 1] = randomRange(-0.05, 0.05);
+      this.velocities[i3 + 2] = randomRange(-0.05, 0.05);
 
-      this.densities[i] = this.restDensity;
+      this.densities[i] = this.currentParams.restDensity;
+      this.pressures[i] = 0;
     }
   }
 
   private handleParamsChanged(params: any): void {
-    if (params.gravity !== undefined) this.gravity = params.gravity;
+    if (params.gravity !== undefined) {
+      this.baseGravity = params.gravity;
+      this.gravity = this.baseGravity * this.currentParams.gravityScale;
+    }
     if (params.windX !== undefined) this.wind.x = params.windX;
     if (params.windY !== undefined) this.wind.y = params.windY;
     if (params.windZ !== undefined) this.wind.z = params.windZ;
@@ -92,9 +162,9 @@ export class SimulationEngine {
   }
 
   private handleForceFieldApplied(data: ForceFieldData): void {
-    this.activeForceFields = this.activeForceFields.filter(
-      (f) => Math.random() > 0.5 || this.activeForceFields.length < 3
-    );
+    if (this.activeForceFields.length >= 5) {
+      this.activeForceFields.shift();
+    }
     this.activeForceFields.push(data);
   }
 
@@ -111,25 +181,30 @@ export class SimulationEngine {
 
   private handleFluidTypeChanged(type: FluidType): void {
     this.currentFluidType = type;
-    switch (type) {
-      case 'water':
-        this.viscosity = 50;
-        this.restDensity = 1000;
-        this.stiffness = 200;
-        break;
-      case 'smoke':
-        this.viscosity = 10;
-        this.restDensity = 100;
-        this.stiffness = 50;
-        this.gravity = Math.abs(this.gravity) * -0.3;
-        break;
-      case 'fire':
-        this.viscosity = 5;
-        this.restDensity = 50;
-        this.stiffness = 30;
-        this.gravity = -Math.abs(this.gravity) * 2;
-        break;
-    }
+    this.targetParams = { ...FLUID_PRESETS[type] };
+    this.paramsTransitionProgress = 0;
+  }
+
+  private updateParamsTransition(deltaTime: number): void {
+    if (this.paramsTransitionProgress >= 1) return;
+
+    this.paramsTransitionProgress = Math.min(
+      1,
+      this.paramsTransitionProgress + deltaTime / this.paramsTransitionDuration
+    );
+    const t = this.paramsTransitionProgress;
+    const smoothT = t * t * (3 - 2 * t);
+
+    this.currentParams.particleMass = lerp(this.currentParams.particleMass, this.targetParams.particleMass, smoothT);
+    this.currentParams.restDensity = lerp(this.currentParams.restDensity, this.targetParams.restDensity, smoothT);
+    this.currentParams.stiffness = lerp(this.currentParams.stiffness, this.targetParams.stiffness, smoothT);
+    this.currentParams.viscosity = lerp(this.currentParams.viscosity, this.targetParams.viscosity, smoothT);
+    this.currentParams.surfaceTension = lerp(this.currentParams.surfaceTension, this.targetParams.surfaceTension, smoothT);
+    this.currentParams.gravityScale = lerp(this.currentParams.gravityScale, this.targetParams.gravityScale, smoothT);
+    this.currentParams.buoyancy = lerp(this.currentParams.buoyancy, this.targetParams.buoyancy, smoothT);
+    this.currentParams.damping = lerp(this.currentParams.damping, this.targetParams.damping, smoothT);
+
+    this.gravity = this.baseGravity * this.currentParams.gravityScale;
   }
 
   public resizeParticleCount(newCount: number): void {
@@ -142,11 +217,18 @@ export class SimulationEngine {
     const oldPositions = this.positions;
     const oldVelocities = this.velocities;
     const oldDensities = this.densities;
+    const oldPressures = this.pressures;
 
     this.particleCount = newCount;
     this.positions = new Float32Array(newCount * 3);
     this.velocities = new Float32Array(newCount * 3);
     this.densities = new Float32Array(newCount);
+    this.pressures = new Float32Array(newCount);
+    this.accelX = new Float32Array(newCount);
+    this.accelY = new Float32Array(newCount);
+    this.accelZ = new Float32Array(newCount);
+    this.neighborCache = new Array(newCount).fill(null).map(() => []);
+    this.neighborCountCache = new Int32Array(newCount);
 
     const copyCount = Math.min(oldCount, newCount);
     for (let i = 0; i < copyCount; i++) {
@@ -159,17 +241,19 @@ export class SimulationEngine {
       this.velocities[i3 + 1] = oldVelocities[oldI3 + 1];
       this.velocities[i3 + 2] = oldVelocities[oldI3 + 2];
       this.densities[i] = oldDensities[i];
+      this.pressures[i] = oldPressures[i];
     }
 
     for (let i = copyCount; i < newCount; i++) {
       const i3 = i * 3;
       this.positions[i3] = randomRange(-10, 10);
-      this.positions[i3 + 1] = randomRange(-2, 2);
+      this.positions[i3 + 1] = randomRange(-1, 1);
       this.positions[i3 + 2] = randomRange(-1.5, 1.5);
-      this.velocities[i3] = randomRange(-0.5, 0.5);
-      this.velocities[i3 + 1] = randomRange(-0.3, 0.3);
-      this.velocities[i3 + 2] = randomRange(-0.2, 0.2);
-      this.densities[i] = this.restDensity;
+      this.velocities[i3] = randomRange(-0.1, 0.1);
+      this.velocities[i3 + 1] = randomRange(-0.05, 0.05);
+      this.velocities[i3 + 2] = randomRange(-0.05, 0.05);
+      this.densities[i] = this.currentParams.restDensity;
+      this.pressures[i] = 0;
     }
 
     eventBus.emit(AppEvents.PARTICLE_COUNT_CHANGED, newCount);
@@ -184,109 +268,165 @@ export class SimulationEngine {
       const cx = Math.floor(this.positions[i3] / cs);
       const cy = Math.floor(this.positions[i3 + 1] / cs);
       const cz = Math.floor(this.positions[i3 + 2] / cs);
-      const key = `${cx},${cy},${cz}`;
+      const key = (cx * 73856093) ^ (cy * 19349663) ^ (cz * 83492791);
 
-      if (!this.spatialHash.has(key)) {
-        this.spatialHash.set(key, []);
+      if (!this.spatialHash.has(key as unknown as string)) {
+        this.spatialHash.set(key as unknown as string, []);
       }
-      this.spatialHash.get(key)!.push(i);
+      this.spatialHash.get(key as unknown as string)!.push(i);
     }
   }
 
-  private getNeighbors(i: number): number[] {
-    const neighbors: number[] = [];
+  private findNeighbors(): void {
     const cs = this.cellSize;
-    const i3 = i * 3;
-    const cx = Math.floor(this.positions[i3] / cs);
-    const cy = Math.floor(this.positions[i3 + 1] / cs);
-    const cz = Math.floor(this.positions[i3 + 2] / cs);
+    const h = this.smoothingRadius;
+    const h2 = h * h;
 
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dz = -1; dz <= 1; dz++) {
-          const key = `${cx + dx},${cy + dy},${cz + dz}`;
-          const cell = this.spatialHash.get(key);
-          if (cell) {
-            for (const j of cell) {
-              if (j !== i) neighbors.push(j);
+    for (let i = 0; i < this.particleCount; i++) {
+      const i3 = i * 3;
+      const cx = Math.floor(this.positions[i3] / cs);
+      const cy = Math.floor(this.positions[i3 + 1] / cs);
+      const cz = Math.floor(this.positions[i3 + 2] / cs);
+
+      const neighbors = this.neighborCache[i];
+      let count = 0;
+
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            const key = ((cx + dx) * 73856093) ^ ((cy + dy) * 19349663) ^ ((cz + dz) * 83492791);
+            const cell = this.spatialHash.get(key as unknown as string);
+            if (!cell) continue;
+
+            for (let k = 0; k < cell.length; k++) {
+              const j = cell[k];
+              if (j === i) continue;
+
+              const j3 = j * 3;
+              const rx = this.positions[i3] - this.positions[j3];
+              const ry = this.positions[i3 + 1] - this.positions[j3 + 1];
+              const rz = this.positions[i3 + 2] - this.positions[j3 + 2];
+              const r2 = rx * rx + ry * ry + rz * rz;
+
+              if (r2 < h2 && r2 > 1e-6) {
+                if (count >= neighbors.length) {
+                  neighbors.push(j);
+                } else {
+                  neighbors[count] = j;
+                }
+                count++;
+              }
             }
           }
         }
       }
+      this.neighborCountCache[i] = count;
     }
-    return neighbors;
   }
 
   private computeDensityPressure(): void {
-    const h = this.particleRadius * 2;
+    const h = this.smoothingRadius;
     const h2 = h * h;
-    const poly6Coeff = 315 / (64 * Math.PI * Math.pow(h, 9));
+    const h9 = Math.pow(h, 9);
+    const poly6 = (315.0) / (64.0 * Math.PI * h9);
+    const mass = this.currentParams.particleMass;
+    const restDensity = this.currentParams.restDensity;
+    const stiffness = this.currentParams.stiffness;
 
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
-      let density = 0;
-      const neighbors = this.getNeighbors(i);
+      let density = mass * poly6 * Math.pow(h2, 3);
 
-      for (const j of neighbors) {
+      const neighbors = this.neighborCache[i];
+      const nCount = this.neighborCountCache[i];
+
+      for (let k = 0; k < nCount; k++) {
+        const j = neighbors[k];
         const j3 = j * 3;
-        const dx = this.positions[i3] - this.positions[j3];
-        const dy = this.positions[i3 + 1] - this.positions[j3 + 1];
-        const dz = this.positions[i3 + 2] - this.positions[j3 + 2];
-        const r2 = dx * dx + dy * dy + dz * dz;
+        const rx = this.positions[i3] - this.positions[j3];
+        const ry = this.positions[i3 + 1] - this.positions[j3 + 1];
+        const rz = this.positions[i3 + 2] - this.positions[j3 + 2];
+        const r2 = rx * rx + ry * ry + rz * rz;
 
-        if (r2 < h2) {
-          const diff = h2 - r2;
-          density += poly6Coeff * diff * diff * diff;
-        }
+        const diff = h2 - r2;
+        density += mass * poly6 * diff * diff * diff;
       }
 
-      density += poly6Coeff * h2 * h2 * h2;
-      this.densities[i] = Math.max(density * 100, this.restDensity * 0.5);
+      this.densities[i] = Math.max(density, restDensity * 0.2);
+
+      const densityRatio = this.densities[i] / restDensity;
+      this.pressures[i] = stiffness * (densityRatio * densityRatio * densityRatio - 1) * restDensity;
+      if (this.pressures[i] < 0) this.pressures[i] = 0;
     }
   }
 
-  private computeForces(accelX: Float32Array, accelY: Float32Array, accelZ: Float32Array): void {
-    const h = this.particleRadius * 2;
+  private computeForces(): void {
+    const h = this.smoothingRadius;
     const h2 = h * h;
-    const spikyCoeff = -45 / (Math.PI * Math.pow(h, 6));
-    const viscCoeff = 45 / (Math.PI * Math.pow(h, 6));
+    const h6 = Math.pow(h, 6);
+    const spikyGrad = -45.0 / (Math.PI * h6);
+    const viscLap = 45.0 / (Math.PI * h6);
+    const cohesionCoef = this.currentParams.surfaceTension * 32.0 / (Math.PI * Math.pow(h, 9));
+    const mass = this.currentParams.particleMass;
+
+    const ax = this.accelX;
+    const ay = this.accelY;
+    const az = this.accelZ;
 
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
 
-      accelX[i] = this.wind.x * this.windStrength;
-      accelY[i] = this.gravity + this.wind.y * this.windStrength;
-      accelZ[i] = this.wind.z * this.windStrength;
+      ax[i] = this.wind.x * this.windStrength;
+      ay[i] = this.gravity + this.wind.y * this.windStrength;
+      az[i] = this.wind.z * this.windStrength;
 
-      this.applyVortexForce(i, accelX, accelY, accelZ);
-      this.applyExternalForceFields(i, accelX, accelY, accelZ);
+      const rhoI = this.densities[i];
+      const rhoI2 = rhoI * rhoI;
+      const pI = this.pressures[i];
 
-      const neighbors = this.getNeighbors(i);
-      const pressureI = this.stiffness * (this.densities[i] - this.restDensity);
+      this.applyVortexForce(i, i3, ax, ay, az);
+      this.applyExternalForceFields(i, i3, ax, ay, az);
 
-      for (const j of neighbors) {
+      const buoyancy = this.currentParams.buoyancy;
+      if (buoyancy !== 0) {
+        const heightFactor = clamp((this.positions[i3 + 1] + 4) / 14, 0, 1);
+        ay[i] += buoyancy * heightFactor;
+      }
+
+      const neighbors = this.neighborCache[i];
+      const nCount = this.neighborCountCache[i];
+
+      for (let k = 0; k < nCount; k++) {
+        const j = neighbors[k];
         const j3 = j * 3;
-        const dx = this.positions[i3] - this.positions[j3];
-        const dy = this.positions[i3 + 1] - this.positions[j3 + 1];
-        const dz = this.positions[i3 + 2] - this.positions[j3 + 2];
-        const r2 = dx * dx + dy * dy + dz * dz;
 
-        if (r2 < h2 && r2 > 0.0001) {
-          const r = Math.sqrt(r2);
-          const diff = h - r;
-          const invR = 1 / r;
+        const rx = this.positions[i3] - this.positions[j3];
+        const ry = this.positions[i3 + 1] - this.positions[j3 + 1];
+        const rz = this.positions[i3 + 2] - this.positions[j3 + 2];
+        const r2 = rx * rx + ry * ry + rz * rz;
+        const r = Math.sqrt(r2);
+        const diff = h - r;
+        const diff2 = diff * diff;
+        const invR = 1.0 / r;
 
-          const pressureJ = this.stiffness * (this.densities[j] - this.restDensity);
-          const pressureForce = -((pressureI + pressureJ) / (2 * this.densities[j])) * spikyCoeff * diff * diff;
+        const pJ = this.pressures[j];
+        const rhoJ = this.densities[j];
 
-          accelX[i] += pressureForce * dx * invR;
-          accelY[i] += pressureForce * dy * invR;
-          accelZ[i] += pressureForce * dz * invR;
+        const pressureTerm = -mass * (pI + pJ) / (2.0 * rhoJ) * spikyGrad * diff2;
+        ax[i] += pressureTerm * rx * invR;
+        ay[i] += pressureTerm * ry * invR;
+        az[i] += pressureTerm * rz * invR;
 
-          const viscForce = (this.viscosity / this.densities[j]) * viscCoeff * diff;
-          accelX[i] += viscForce * (this.velocities[j3] - this.velocities[i3]);
-          accelY[i] += viscForce * (this.velocities[j3 + 1] - this.velocities[i3 + 1]);
-          accelZ[i] += viscForce * (this.velocities[j3 + 2] - this.velocities[i3 + 2]);
+        const viscTerm = this.currentParams.viscosity * mass / rhoJ * viscLap * diff;
+        ax[i] += viscTerm * (this.velocities[j3] - this.velocities[i3]);
+        ay[i] += viscTerm * (this.velocities[j3 + 1] - this.velocities[i3 + 1]);
+        az[i] += viscTerm * (this.velocities[j3 + 2] - this.velocities[i3 + 2]);
+
+        if (this.currentParams.surfaceTension > 0.001) {
+          const cohesion = cohesionCoef * mass * mass * diff2 * (h2 - r2);
+          ax[i] -= cohesion * rx * invR / rhoI2;
+          ay[i] -= cohesion * ry * invR / rhoI2;
+          az[i] -= cohesion * rz * invR / rhoI2;
         }
       }
     }
@@ -294,47 +434,51 @@ export class SimulationEngine {
 
   private applyVortexForce(
     i: number,
-    accelX: Float32Array,
-    accelY: Float32Array,
-    accelZ: Float32Array
+    i3: number,
+    ax: Float32Array,
+    ay: Float32Array,
+    az: Float32Array
   ): void {
     if (this.vortexStrength === 0) return;
 
-    const i3 = i * 3;
     const dx = this.positions[i3] - this.vortexCenter.x;
     const dy = this.positions[i3 + 1] - this.vortexCenter.y;
     const dz = this.positions[i3 + 2] - this.vortexCenter.z;
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const dist2 = dx * dx + dy * dy + dz * dz;
+    const radius2 = this.vortexRadius * this.vortexRadius;
 
-    if (dist < this.vortexRadius && dist > 0.1) {
-      const falloff = 1 - dist / this.vortexRadius;
-      const strength = this.vortexStrength * falloff * falloff;
+    if (dist2 < radius2 && dist2 > 0.01) {
+      const dist = Math.sqrt(dist2);
+      const t = 1 - dist / this.vortexRadius;
+      const falloff = t * t;
+      const strength = this.vortexStrength * falloff;
 
-      const tangentX = -dz;
-      const tangentZ = dx;
-      const tangentLen = Math.sqrt(tangentX * tangentX + tangentZ * tangentZ) || 1;
+      const invDist = 1 / dist;
+      const tx = -dz * invDist;
+      const ty = 0;
+      const tz = dx * invDist;
 
-      accelX[i] += (tangentX / tangentLen) * strength;
-      accelZ[i] += (tangentZ / tangentLen) * strength;
-      accelY[i] += dy * strength * 0.1;
+      ax[i] += tx * strength;
+      ay[i] += ty * strength + dy * strength * 0.05;
+      az[i] += tz * strength;
     }
   }
 
   private applyExternalForceFields(
     i: number,
-    accelX: Float32Array,
-    accelY: Float32Array,
-    accelZ: Float32Array
+    i3: number,
+    ax: Float32Array,
+    ay: Float32Array,
+    az: Float32Array
   ): void {
-    const i3 = i * 3;
-
-    for (const field of this.activeForceFields) {
-      this.applySingleForceField(i, i3, field, 1, accelX, accelY, accelZ);
+    for (let f = 0; f < this.activeForceFields.length; f++) {
+      this.applySingleForceField(i, i3, this.activeForceFields[f], 1, ax, ay, az);
     }
 
-    for (const decaying of this.decayingForceFields) {
+    for (let f = 0; f < this.decayingForceFields.length; f++) {
+      const decaying = this.decayingForceFields[f];
       const strengthFactor = 1 - decaying.currentTime / decaying.decayTime;
-      this.applySingleForceField(i, i3, decaying.data, strengthFactor, accelX, accelY, accelZ);
+      this.applySingleForceField(i, i3, decaying.data, strengthFactor, ax, ay, az);
     }
   }
 
@@ -343,60 +487,124 @@ export class SimulationEngine {
     i3: number,
     field: ForceFieldData,
     strengthFactor: number,
-    accelX: Float32Array,
-    accelY: Float32Array,
-    accelZ: Float32Array
+    ax: Float32Array,
+    ay: Float32Array,
+    az: Float32Array
   ): void {
     const dx = this.positions[i3] - field.position.x;
     const dy = this.positions[i3 + 1] - field.position.y;
     const dz = this.positions[i3 + 2] - field.position.z;
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const dist2 = dx * dx + dy * dy + dz * dz;
+    const radius2 = field.radius * field.radius;
 
-    if (dist < field.radius && dist > 0.01) {
-      const falloff = 1 - dist / field.radius;
-      const falloff2 = falloff * falloff;
-      const strength = field.strength * falloff2 * strengthFactor;
+    if (dist2 < radius2 && dist2 > 0.0001) {
+      const dist = Math.sqrt(dist2);
+      const t = 1 - dist / field.radius;
+      const falloff = t * t;
+      const strength = field.strength * falloff * strengthFactor;
 
-      accelX[i] += field.direction.x * strength;
-      accelY[i] += field.direction.y * strength;
-      accelZ[i] += field.direction.z * strength;
+      ax[i] += field.direction.x * strength;
+      ay[i] += field.direction.y * strength;
+      az[i] += field.direction.z * strength;
 
-      const pushStrength = strength * 0.3 * falloff;
-      accelX[i] -= (dx / dist) * pushStrength;
-      accelY[i] -= (dy / dist) * pushStrength;
-      accelZ[i] -= (dz / dist) * pushStrength;
+      const push = strength * 0.25 * t;
+      const invR = 1 / dist;
+      ax[i] -= dx * invR * push;
+      ay[i] -= dy * invR * push;
+      az[i] -= dz * invR * push;
     }
   }
 
-  private integrate(
-    accelX: Float32Array,
-    accelY: Float32Array,
-    accelZ: Float32Array
-  ): void {
-    const substeps = 2;
+  private xsphSmoothing(): void {
+    const h = this.smoothingRadius;
+    const h2 = h * h;
+    const h6 = Math.pow(h, 6);
+    const poly6 = 315.0 / (64.0 * Math.PI * Math.pow(h, 9));
+    const epsilon = 0.15;
+
+    const newVx = new Float32Array(this.particleCount);
+    const newVy = new Float32Array(this.particleCount);
+    const newVz = new Float32Array(this.particleCount);
+
+    for (let i = 0; i < this.particleCount; i++) {
+      const i3 = i * 3;
+      let sumVx = 0;
+      let sumVy = 0;
+      let sumVz = 0;
+      let sumW = poly6 * Math.pow(h2, 3);
+
+      sumVx += this.velocities[i3] * sumW;
+      sumVy += this.velocities[i3 + 1] * sumW;
+      sumVz += this.velocities[i3 + 2] * sumW;
+
+      const neighbors = this.neighborCache[i];
+      const nCount = this.neighborCountCache[i];
+
+      for (let k = 0; k < nCount; k++) {
+        const j = neighbors[k];
+        const j3 = j * 3;
+        const rx = this.positions[i3] - this.positions[j3];
+        const ry = this.positions[i3 + 1] - this.positions[j3 + 1];
+        const rz = this.positions[i3 + 2] - this.positions[j3 + 2];
+        const r2 = rx * rx + ry * ry + rz * rz;
+        const diff = h2 - r2;
+        const w = poly6 * diff * diff * diff;
+
+        sumVx += this.velocities[j3] * w;
+        sumVy += this.velocities[j3 + 1] * w;
+        sumVz += this.velocities[j3 + 2] * w;
+        sumW += w;
+      }
+
+      if (sumW > 1e-6) {
+        const avgVx = sumVx / sumW;
+        const avgVy = sumVy / sumW;
+        const avgVz = sumVz / sumW;
+
+        newVx[i] = this.velocities[i3] + epsilon * (avgVx - this.velocities[i3]);
+        newVy[i] = this.velocities[i3 + 1] + epsilon * (avgVy - this.velocities[i3 + 1]);
+        newVz[i] = this.velocities[i3 + 2] + epsilon * (avgVz - this.velocities[i3 + 2]);
+      } else {
+        newVx[i] = this.velocities[i3];
+        newVy[i] = this.velocities[i3 + 1];
+        newVz[i] = this.velocities[i3 + 2];
+      }
+    }
+
+    for (let i = 0; i < this.particleCount; i++) {
+      const i3 = i * 3;
+      this.velocities[i3] = newVx[i];
+      this.velocities[i3 + 1] = newVy[i];
+      this.velocities[i3 + 2] = newVz[i];
+    }
+  }
+
+  private integrate(): void {
+    const substeps = 1;
     const subDt = this.dt / substeps;
+    const damping = this.currentParams.damping;
+    const maxV2 = this.maxVelocity * this.maxVelocity;
 
     for (let step = 0; step < substeps; step++) {
       for (let i = 0; i < this.particleCount; i++) {
         const i3 = i * 3;
 
-        this.velocities[i3] += accelX[i] * subDt;
-        this.velocities[i3 + 1] += accelY[i] * subDt;
-        this.velocities[i3 + 2] += accelZ[i] * subDt;
+        this.velocities[i3] += this.accelX[i] * subDt;
+        this.velocities[i3 + 1] += this.accelY[i] * subDt;
+        this.velocities[i3 + 2] += this.accelZ[i] * subDt;
 
-        const speed2 =
+        const v2 =
           this.velocities[i3] * this.velocities[i3] +
           this.velocities[i3 + 1] * this.velocities[i3 + 1] +
           this.velocities[i3 + 2] * this.velocities[i3 + 2];
 
-        if (speed2 > this.maxVelocity * this.maxVelocity) {
-          const invSpeed = this.maxVelocity / Math.sqrt(speed2);
-          this.velocities[i3] *= invSpeed;
-          this.velocities[i3 + 1] *= invSpeed;
-          this.velocities[i3 + 2] *= invSpeed;
+        if (v2 > maxV2) {
+          const s = this.maxVelocity / Math.sqrt(v2);
+          this.velocities[i3] *= s;
+          this.velocities[i3 + 1] *= s;
+          this.velocities[i3 + 2] *= s;
         }
 
-        const damping = 0.998;
         this.velocities[i3] *= damping;
         this.velocities[i3 + 1] *= damping;
         this.velocities[i3 + 2] *= damping;
@@ -411,42 +619,42 @@ export class SimulationEngine {
   }
 
   private enforceBoundary(i: number, i3: number): void {
-    const bounce = 0.3;
-    const friction = 0.9;
+    const bounce = 0.25;
+    const friction = 0.92;
 
     if (this.positions[i3] < this.bounds.minX) {
       this.positions[i3] = this.bounds.minX;
-      this.velocities[i3] = -this.velocities[i3] * bounce;
+      if (this.velocities[i3] < 0) this.velocities[i3] = -this.velocities[i3] * bounce;
       this.velocities[i3 + 1] *= friction;
       this.velocities[i3 + 2] *= friction;
     }
     if (this.positions[i3] > this.bounds.maxX) {
       this.positions[i3] = this.bounds.maxX;
-      this.velocities[i3] = -this.velocities[i3] * bounce;
+      if (this.velocities[i3] > 0) this.velocities[i3] = -this.velocities[i3] * bounce;
       this.velocities[i3 + 1] *= friction;
       this.velocities[i3 + 2] *= friction;
     }
     if (this.positions[i3 + 1] < this.bounds.minY) {
       this.positions[i3 + 1] = this.bounds.minY;
-      this.velocities[i3 + 1] = -this.velocities[i3 + 1] * bounce;
+      if (this.velocities[i3 + 1] < 0) this.velocities[i3 + 1] = -this.velocities[i3 + 1] * bounce;
       this.velocities[i3] *= friction;
       this.velocities[i3 + 2] *= friction;
     }
     if (this.positions[i3 + 1] > this.bounds.maxY) {
       this.positions[i3 + 1] = this.bounds.maxY;
-      this.velocities[i3 + 1] = -this.velocities[i3 + 1] * bounce;
+      if (this.velocities[i3 + 1] > 0) this.velocities[i3 + 1] = -this.velocities[i3 + 1] * bounce;
       this.velocities[i3] *= friction;
       this.velocities[i3 + 2] *= friction;
     }
     if (this.positions[i3 + 2] < this.bounds.minZ) {
       this.positions[i3 + 2] = this.bounds.minZ;
-      this.velocities[i3 + 2] = -this.velocities[i3 + 2] * bounce;
+      if (this.velocities[i3 + 2] < 0) this.velocities[i3 + 2] = -this.velocities[i3 + 2] * bounce;
       this.velocities[i3] *= friction;
       this.velocities[i3 + 1] *= friction;
     }
     if (this.positions[i3 + 2] > this.bounds.maxZ) {
       this.positions[i3 + 2] = this.bounds.maxZ;
-      this.velocities[i3 + 2] = -this.velocities[i3 + 2] * bounce;
+      if (this.velocities[i3 + 2] > 0) this.velocities[i3 + 2] = -this.velocities[i3 + 2] * bounce;
       this.velocities[i3] *= friction;
       this.velocities[i3 + 1] *= friction;
     }
@@ -462,20 +670,20 @@ export class SimulationEngine {
   }
 
   public step(deltaTime: number): ParticleState {
-    const clampedDt = Math.min(deltaTime, this.dt * 2);
-    this.dt = clampedDt;
+    this.dt = Math.min(deltaTime, 0.033);
 
+    this.updateParamsTransition(deltaTime);
     this.updateDecayingForceFields(deltaTime);
 
     this.buildSpatialHash();
-
-    const accelX = new Float32Array(this.particleCount);
-    const accelY = new Float32Array(this.particleCount);
-    const accelZ = new Float32Array(this.particleCount);
-
+    this.findNeighbors();
     this.computeDensityPressure();
-    this.computeForces(accelX, accelY, accelZ);
-    this.integrate(accelX, accelY, accelZ);
+    this.computeForces();
+    this.integrate();
+
+    if (this.currentParams.viscosity > 80) {
+      this.xsphSmoothing();
+    }
 
     return {
       positions: this.positions,
@@ -504,5 +712,6 @@ export class SimulationEngine {
     this.initializeParticles();
     this.activeForceFields = [];
     this.decayingForceFields = [];
+    this.paramsTransitionProgress = 1;
   }
 }
