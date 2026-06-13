@@ -88,3 +88,78 @@ input:focus, select:focus, textarea:focus {
 .notification-slide-out {
   animation: slideOutToLeft 0.3s ease forwards;
 }
+
+.course-card {
+  width: 200px;
+  height: 120px;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.course-card:not(.course-card-disabled):hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+}
+
+.course-card-disabled {
+  cursor: not-allowed;
+}
+
+.course-card:not(.course-card-disabled) {
+  cursor: pointer;
+}
+
+.admin-table-row {
+  height: 48px;
+  transition: background 0.15s ease;
+}
+
+.admin-table-row-odd {
+  background: #f9fafb;
+}
+
+.admin-table-row-even {
+  background: #ffffff;
+}
+
+.admin-table-row:hover {
+  background: #eff6ff !important;
+}
+
+.bar-chart-bar {
+  width: 20px;
+  background: linear-gradient(180deg, #38bdf8 0%, #818cf8 100%);
+  border-radius: 6px 6px 2px 2px;
+  transition: height 0.3s ease;
+}
+
+.bar-chart-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 6px;
+  opacity: 0.95;
+}
+
+.coach-course-card {
+  height: 80px;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.coach-course-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}

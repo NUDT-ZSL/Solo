@@ -898,18 +898,9 @@ export default function AdminDashboard() {
               const cnt = courseList.filter((x) => x.coachId === c._id && x.status === 'active').length;
               return (
                 <tr
-                  key={c._id}
-                  style={{
-                    height: 48,
-                    background: idx % 2 === 0 ? '#ffffff' : '#f9fafb',
-                    transition: 'background 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = '#eff6ff')}
-                  onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLTableRowElement).style.background =
-                      idx % 2 === 0 ? '#ffffff' : '#f9fafb')
-                  }
-                >
+                key={c._id}
+                className={`admin-table-row ${idx % 2 === 0 ? 'admin-table-row-even' : 'admin-table-row-odd'}`}
+              >
                   <td style={{ padding: '0 20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div
@@ -1199,16 +1190,7 @@ export default function AdminDashboard() {
               return (
                 <tr
                   key={b._id}
-                  style={{
-                    height: 48,
-                    background: idx % 2 === 0 ? '#ffffff' : '#f9fafb',
-                    transition: 'background 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = '#eff6ff')}
-                  onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLTableRowElement).style.background =
-                      idx % 2 === 0 ? '#ffffff' : '#f9fafb')
-                  }
+                  className={`admin-table-row ${idx % 2 === 0 ? 'admin-table-row-even' : 'admin-table-row-odd'}`}
                 >
                   <td style={{ padding: '0 20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

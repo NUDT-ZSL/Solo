@@ -55,30 +55,9 @@ function CourseCard({
   return (
     <div
       onClick={() => !disabled && onClick()}
+      className={`course-card ${disabled ? 'course-card-disabled' : ''}`}
       style={{
-        width: 200,
-        height: 120,
-        borderRadius: 12,
-        background: courseTypeColor,
-        padding: 14,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-        transition: 'all 0.2s ease',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        position: 'relative',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between'
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) {
-          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+        background: courseTypeColor
       }}
     >
       <div>

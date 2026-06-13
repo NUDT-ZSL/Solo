@@ -31,6 +31,30 @@ function broadcast(msg: WSMessage) {
   });
 }
 
+async function checkCoachScheduleConflict(
+  coachId: string,
+  date: string,
+  startTime: string,
+  endTime: string,
+  excludeCourseId?: string
+) {
+  const query: any = {
+    coachId,
+    date,
+    $or: [
+      { startTime: { $gte: startTime, $lt: endTime } },
+      { endTime: { $gt: startTime, $lte: endTime } },
+      { startTime: { $lte: startTime }, endTime: { $gte: endTime } }
+    ],
+    status: 'active'
+  };
+  if (excludeCourseId) {
+    query._id = { $ne: excludeCourseId };
+  }
+  const conflict = await db.courses.findOne(query);
+  return conflict;
+}
+
 await db.initMockData();
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -116,16 +140,12 @@ app.get('/api/courses/:id', async (req, res) => {
 
 app.post('/api/courses', async (req, res) => {
   const body = req.body as Partial<Course>;
-  const conflict = await db.courses.findOne({
-    coachId: body.coachId,
-    date: body.date,
-    $or: [
-      { startTime: { $gte: body.startTime!, $lt: body.endTime! } },
-      { endTime: { $gt: body.startTime!, $lte: body.endTime! } },
-      { startTime: { $lte: body.startTime! }, endTime: { $gte: body.endTime! } }
-    ],
-    status: 'active'
-  });
+  const conflict = await checkCoachScheduleConflict(
+    body.coachId!,
+    body.date!,
+    body.startTime!,
+    body.endTime!
+  );
   if (conflict) {
     return res.status(409).json({ error: '该教练在此时段已有课程安排', conflict });
   }
@@ -147,6 +167,25 @@ app.post('/api/courses', async (req, res) => {
 app.put('/api/courses/:id', async (req, res) => {
   const { id } = req.params;
   const body = req.body as Partial<Course>;
+  const existing = await db.courses.findOne({ _id: id });
+  if (!existing) return res.status(404).json({ error: '课程不存在' });
+
+  const coachId = body.coachId ?? existing.coachId;
+  const date = body.date ?? existing.date;
+  const startTime = body.startTime ?? existing.startTime;
+  const endTime = body.endTime ?? existing.endTime;
+
+  const conflict = await checkCoachScheduleConflict(
+    coachId,
+    date,
+    startTime,
+    endTime,
+    id
+  );
+  if (conflict) {
+    return res.status(409).json({ error: '该教练在此时段已有课程安排', conflict });
+  }
+
   const course = await db.courses.update({ _id: id }, { $set: body }, { returnUpdatedDocs: true });
   broadcast({ type: 'course:updated', data: course });
   res.json(course);

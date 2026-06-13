@@ -50,24 +50,15 @@ function WeeklyBarChart({ data, labels }: { data: number[]; labels: string[] }) 
           }}
         >
           <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'white',
-              marginBottom: 6,
-              opacity: 0.95
-            }}
+            className="bar-chart-label"
           >
             {v}
           </div>
           <div
+            className="bar-chart-bar"
             style={{
-              width: 20,
               height: `${(v / max) * 80}%`,
-              minHeight: v > 0 ? 8 : 2,
-              background: 'linear-gradient(180deg, #38bdf8 0%, #818cf8 100%)',
-              borderRadius: '6px 6px 2px 2px',
-              transition: 'height 0.3s ease'
+              minHeight: v > 0 ? 8 : 2
             }}
           />
           <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>
@@ -271,24 +262,7 @@ function CourseRowCard({
 
   return (
     <div
-      style={{
-        height: 80,
-        borderRadius: 14,
-        background: 'white',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-        display: 'flex',
-        alignItems: 'center',
-        overflow: 'hidden',
-        transition: 'all 0.2s ease'
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 20px rgba(0,0,0,0.1)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 10px rgba(0,0,0,0.06)';
-      }}
+      className="coach-course-card"
     >
       <div style={{ width: 6, height: '100%', background: courseTypeColor, flexShrink: 0 }} />
       <div style={{ flex: 1, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 20 }}>
