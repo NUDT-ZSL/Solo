@@ -43,7 +43,11 @@ class GameManager {
     const state = gameState.getState();
     if (state.isGameOver) return;
 
-    const cell = unitManager.getCellAtPosition(pos.x, pos.y);
+    const effectiveScale = canvasRenderer.getEffectiveScale();
+    const worldX = pos.x / effectiveScale;
+    const worldY = pos.y / effectiveScale;
+
+    const cell = unitManager.getCellAtPosition(worldX, worldY);
     if (!cell) return;
 
     if (state.selectedPlant && !cell.occupied) {

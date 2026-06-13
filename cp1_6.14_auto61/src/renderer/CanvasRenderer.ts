@@ -19,9 +19,11 @@ export class CanvasRenderer {
   private width: number = 800;
   private height: number = 600;
   private scale: number = 1;
+  private gridScale: number = 1;
   private mousePos: Position = { x: 0, y: 0 };
   private selectedPlant: PlantType | null = null;
   private hoveredCell: HexCell | null = null;
+  private lowQuality: boolean = false;
 
   constructor() {
     this.setupEventListeners();
@@ -46,8 +48,11 @@ export class CanvasRenderer {
     this.canvas.height = this.height * window.devicePixelRatio;
 
     if (this.ctx) {
+      this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     }
+
+    this.calculateGridScale();
 
     if (this.width < 768) {
       this.scale = 0.6;
@@ -55,15 +60,38 @@ export class CanvasRenderer {
       this.scale = 1;
     }
 
-    unitManager.setCanvasSize(this.width, this.height);
+    const effectiveScale = this.scale * this.gridScale;
+    unitManager.setCanvasSize(this.width / effectiveScale, this.height / effectiveScale);
+  }
+
+  private calculateGridScale(): void {
+    const targetGridWidth = (HEX_CONFIG.cols - 1) * HEX_CONFIG.horizontalSpacing + HEX_CONFIG.rowOffset + HEX_CONFIG.size * 2;
+    const targetGridHeight = (HEX_CONFIG.rows - 1) * HEX_CONFIG.verticalSpacing + HEX_CONFIG.size * 2;
+
+    const padding = 20;
+    const availableWidth = Math.max(200, this.width - padding * 2);
+    const availableHeight = Math.max(200, this.height - padding * 2);
+
+    const scaleX = availableWidth / targetGridWidth;
+    const scaleY = availableHeight / targetGridHeight;
+
+    this.gridScale = Math.min(scaleX, scaleY, 1.2);
   }
 
   private setupEventListeners(): void {
-    eventBus.on(GameEvent.RENDER, () => this.render());
+    eventBus.on(GameEvent.RENDER, (data) => {
+      const { lowQuality } = (data || {}) as { lowQuality?: boolean };
+      this.lowQuality = lowQuality || false;
+      this.render();
+    });
     eventBus.on(GameEvent.CANVAS_MOUSE_MOVE, (data) => {
       const pos = data as Position;
-      this.mousePos = pos;
-      this.hoveredCell = unitManager.getCellAtPosition(pos.x, pos.y);
+      const effectiveScale = this.scale * this.gridScale;
+      this.mousePos = {
+        x: pos.x / effectiveScale,
+        y: pos.y / effectiveScale,
+      };
+      this.hoveredCell = unitManager.getCellAtPosition(this.mousePos.x, this.mousePos.y);
     });
     eventBus.on(GameEvent.UI_SELECT_PLANT, (data) => {
       this.selectedPlant = data as PlantType | null;
@@ -76,6 +104,10 @@ export class CanvasRenderer {
     this.ctx.save();
     this.ctx.clearRect(0, 0, this.width, this.height);
 
+    const effectiveScale = this.scale * this.gridScale;
+    this.ctx.save();
+    this.ctx.scale(effectiveScale, effectiveScale);
+
     this.drawBackground();
     this.drawHexGrid();
     this.drawPlants();
@@ -85,17 +117,21 @@ export class CanvasRenderer {
     this.drawPlacementIndicator();
 
     this.ctx.restore();
+    this.ctx.restore();
   }
 
   private drawBackground(): void {
     if (!this.ctx) return;
 
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
+    const scaledWidth = this.width / (this.scale * this.gridScale);
+    const scaledHeight = this.height / (this.scale * this.gridScale);
+
+    const gradient = this.ctx.createLinearGradient(0, 0, 0, scaledHeight);
     gradient.addColorStop(0, '#0d1b0e');
     gradient.addColorStop(1, '#1a2f1c');
 
     this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, this.width, this.height);
+    this.ctx.fillRect(0, 0, scaledWidth, scaledHeight);
   }
 
   private drawHexGrid(): void {
@@ -105,7 +141,7 @@ export class CanvasRenderer {
 
     grid.forEach((row) => {
       row.forEach((cell) => {
-        this.drawHexagon(cell.x, cell.y, HEX_CONFIG.size * this.scale, cell);
+        this.drawHexagon(cell.x, cell.y, HEX_CONFIG.size, cell);
       });
     });
   }
@@ -154,7 +190,7 @@ export class CanvasRenderer {
     if (!this.ctx) return;
 
     const config = PLANT_CONFIGS[plant.type];
-    const size = config.size * this.scale * plant.scale;
+    const size = config.size * plant.scale;
     const x = plant.x;
     const y = plant.y;
 
@@ -170,7 +206,7 @@ export class CanvasRenderer {
 
     this.ctx.restore();
 
-    this.drawHealthBar(x, y - size - 8, 40 * this.scale, 4, plant.health / plant.maxHealth);
+    this.drawHealthBar(x, y - size - 8, 40, 4, plant.health / plant.maxHealth);
   }
 
   private drawSunflower(x: number, y: number, size: number): void {
@@ -296,7 +332,7 @@ export class CanvasRenderer {
     if (!this.ctx) return;
 
     const config = ENEMY_CONFIGS[enemy.type];
-    const size = config.size * this.scale;
+    const size = config.size;
     const x = enemy.x;
     const y = enemy.y;
 
@@ -308,7 +344,7 @@ export class CanvasRenderer {
       this.drawButterfly(x, y, size);
     }
 
-    this.drawHealthBar(x, y - size - 6, 30 * this.scale, 3, enemy.health / enemy.maxHealth);
+    this.drawHealthBar(x, y - size - 6, 30, 3, enemy.health / enemy.maxHealth);
   }
 
   private drawBee(x: number, y: number, size: number): void {
@@ -463,25 +499,29 @@ export class CanvasRenderer {
   private drawBullet(bullet: Bullet): void {
     if (!this.ctx) return;
 
-    bullet.trail.forEach((trail) => {
-      this.ctx!.beginPath();
-      this.ctx!.arc(trail.x, trail.y, trail.radius * this.scale, 0, Math.PI * 2);
-      this.ctx!.fillStyle = `rgba(255, 255, 255, ${trail.alpha * 0.6})`;
-      this.ctx!.fill();
-    });
+    if (!this.lowQuality) {
+      bullet.trail.forEach((trail) => {
+        this.ctx!.beginPath();
+        this.ctx!.arc(trail.x, trail.y, trail.radius, 0, Math.PI * 2);
+        this.ctx!.fillStyle = `rgba(255, 255, 255, ${trail.alpha * 0.6})`;
+        this.ctx!.fill();
+      });
+    }
 
     this.ctx.beginPath();
-    this.ctx.arc(bullet.x, bullet.y, 6 * this.scale, 0, Math.PI * 2);
+    this.ctx.arc(bullet.x, bullet.y, 6, 0, Math.PI * 2);
     this.ctx.fillStyle = bullet.color;
     this.ctx.fill();
 
     this.ctx.beginPath();
-    this.ctx.arc(bullet.x - 1, bullet.y - 1, 3 * this.scale, 0, Math.PI * 2);
+    this.ctx.arc(bullet.x - 1, bullet.y - 1, 3, 0, Math.PI * 2);
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     this.ctx.fill();
   }
 
   private drawParticles(): void {
+    if (this.lowQuality) return;
+
     const particles = unitManager.getParticles();
 
     particles.forEach((particle) => {
@@ -493,7 +533,7 @@ export class CanvasRenderer {
     if (!this.ctx) return;
 
     this.ctx.beginPath();
-    this.ctx.arc(particle.x, particle.y, particle.radius * this.scale, 0, Math.PI * 2);
+    this.ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
     this.ctx.fillStyle = particle.color;
     this.ctx.globalAlpha = particle.alpha;
     this.ctx.fill();
@@ -505,7 +545,7 @@ export class CanvasRenderer {
 
     const x = this.mousePos.x;
     const y = this.mousePos.y;
-    const indicatorRadius = 25 * this.scale;
+    const indicatorRadius = 25;
 
     let canPlace = false;
     let cellX = x;
@@ -542,6 +582,10 @@ export class CanvasRenderer {
 
   getHeight(): number {
     return this.height;
+  }
+
+  getEffectiveScale(): number {
+    return this.scale * this.gridScale;
   }
 }
 

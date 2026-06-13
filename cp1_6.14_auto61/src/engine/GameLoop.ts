@@ -1,4 +1,5 @@
 import { eventBus, GameEvent } from './EventBus';
+import { FPSMonitor } from './Performance';
 
 export class GameLoop {
   private animationFrameId: number | null = null;
@@ -8,8 +9,11 @@ export class GameLoop {
   private accumulator: number = 0;
   private fixedTimeStep: number = 1000 / 60;
   private maxFrameTime: number = 1000 / 30;
+  private fpsMonitor: FPSMonitor;
+  private lowQualityMode: boolean = false;
 
   constructor() {
+    this.fpsMonitor = new FPSMonitor();
     this.setupEventListeners();
   }
 
@@ -26,6 +30,7 @@ export class GameLoop {
     this.isPaused = false;
     this.lastTime = performance.now();
     this.accumulator = 0;
+    this.fpsMonitor.reset();
     this.loop(this.lastTime);
   }
 
@@ -56,6 +61,13 @@ export class GameLoop {
     if (!this.isRunning) return;
 
     this.animationFrameId = requestAnimationFrame(this.loop);
+    this.fpsMonitor.update(currentTime);
+
+    const newLowQuality = this.fpsMonitor.shouldReduceQuality();
+    if (newLowQuality !== this.lowQualityMode) {
+      this.lowQualityMode = newLowQuality;
+      eventBus.emit('quality_change', { lowQuality: this.lowQualityMode });
+    }
 
     if (this.isPaused) {
       this.lastTime = currentTime;
@@ -71,13 +83,20 @@ export class GameLoop {
 
     this.accumulator += deltaTime;
 
-    while (this.accumulator >= this.fixedTimeStep) {
+    const maxSteps = this.lowQualityMode ? 2 : 3;
+    let steps = 0;
+    while (this.accumulator >= this.fixedTimeStep && steps < maxSteps) {
       this.update(this.fixedTimeStep / 1000);
       this.accumulator -= this.fixedTimeStep;
+      steps++;
     }
 
     const alpha = this.accumulator / this.fixedTimeStep;
-    eventBus.emit(GameEvent.RENDER, { deltaTime: deltaTime / 1000, alpha });
+    eventBus.emit(GameEvent.RENDER, {
+      deltaTime: deltaTime / 1000,
+      alpha,
+      lowQuality: this.lowQualityMode,
+    });
   };
 
   private update(deltaTime: number): void {
@@ -90,6 +109,14 @@ export class GameLoop {
 
   getIsPaused(): boolean {
     return this.isPaused;
+  }
+
+  getFPS(): number {
+    return this.fpsMonitor.getFPS();
+  }
+
+  getLowQualityMode(): boolean {
+    return this.lowQualityMode;
   }
 }
 

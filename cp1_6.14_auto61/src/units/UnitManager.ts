@@ -19,6 +19,11 @@ const generateId = (): string => {
   return `id_${idCounter}_${Date.now()}`;
 };
 
+const MAX_PLANTS = 32;
+const MAX_ENEMIES = 30;
+const MAX_BULLETS = 50;
+const MAX_PARTICLES = 100;
+
 export class UnitManager {
   private plants: Map<string, PlantUnit> = new Map();
   private enemies: Map<string, EnemyUnit> = new Map();
@@ -29,6 +34,7 @@ export class UnitManager {
   private canvasHeight: number = 600;
   private gridOffsetX: number = 0;
   private gridOffsetY: number = 0;
+  private lowQuality: boolean = false;
 
   constructor() {
     this.initHexGrid();
@@ -88,6 +94,10 @@ export class UnitManager {
       const { type, row } = data as { type: EnemyType; row: number };
       this.spawnEnemy(type, row);
     });
+    eventBus.on('quality_change', (data) => {
+      const { lowQuality } = data as { lowQuality: boolean };
+      this.lowQuality = lowQuality;
+    });
   }
 
   getCellAtPosition(x: number, y: number): HexCell | null {
@@ -108,9 +118,11 @@ export class UnitManager {
     return closestCell;
   }
 
-  placePlant(q: number, r: number, type: PlantType): void {
+  placePlant(q: number, r: number, type: PlantType): boolean {
     const cell = this.hexGrid[r]?.[q];
-    if (!cell || cell.occupied) return;
+    if (!cell || cell.occupied) return false;
+
+    if (this.plants.size >= MAX_PLANTS) return false;
 
     const config = PLANT_CONFIGS[type];
     const id = generateId();
@@ -136,9 +148,12 @@ export class UnitManager {
     cell.plantId = id;
 
     eventBus.emit(GameEvent.PLANT_PLACED, { plant, cost: config.cost });
+    return true;
   }
 
-  spawnEnemy(type: EnemyType, row: number): void {
+  spawnEnemy(type: EnemyType, row: number): boolean {
+    if (this.enemies.size >= MAX_ENEMIES) return false;
+
     const config = ENEMY_CONFIGS[type];
     const id = generateId();
 
@@ -159,6 +174,7 @@ export class UnitManager {
     };
 
     this.enemies.set(id, enemy);
+    return true;
   }
 
   private generatePath(row: number): Position[] {
@@ -252,6 +268,8 @@ export class UnitManager {
   }
 
   private fireBullet(plant: PlantUnit, target: EnemyUnit): void {
+    if (this.bullets.length >= MAX_BULLETS) return;
+
     const config = PLANT_CONFIGS[plant.type];
     const dx = target.x - plant.x;
     const dy = target.y - plant.y;
@@ -349,25 +367,32 @@ export class UnitManager {
 
   private updateBullets(deltaTime: number): void {
     const bulletsToRemove: number[] = [];
+    const maxTrailLength = this.lowQuality ? 3 : 8;
 
     this.bullets.forEach((bullet, index) => {
       bullet.x += bullet.vx * deltaTime;
       bullet.y += bullet.vy * deltaTime;
 
-      const trailCount = Math.floor(Math.random() * 3) + 2;
-      for (let i = 0; i < trailCount; i++) {
-        bullet.trail.push({
-          x: bullet.x + (Math.random() - 0.5) * 4,
-          y: bullet.y + (Math.random() - 0.5) * 4,
-          alpha: 1,
-          radius: Math.random() * 2 + 3,
-        });
+      if (!this.lowQuality) {
+        const trailCount = Math.floor(Math.random() * 3) + 2;
+        for (let i = 0; i < trailCount; i++) {
+          bullet.trail.push({
+            x: bullet.x + (Math.random() - 0.5) * 4,
+            y: bullet.y + (Math.random() - 0.5) * 4,
+            alpha: 1,
+            radius: Math.random() * 2 + 3,
+          });
+        }
       }
 
       bullet.trail = bullet.trail.filter((t) => {
         t.alpha -= 0.05;
         return t.alpha > 0;
       });
+
+      if (bullet.trail.length > maxTrailLength) {
+        bullet.trail = bullet.trail.slice(-maxTrailLength);
+      }
 
       if (
         bullet.x < -50 ||
@@ -385,6 +410,10 @@ export class UnitManager {
   }
 
   private updateParticles(deltaTime: number): void {
+    if (this.particles.length > MAX_PARTICLES) {
+      this.particles = this.particles.slice(-MAX_PARTICLES);
+    }
+
     this.particles = this.particles.filter((p) => {
       p.x += p.vx * deltaTime;
       p.y += p.vy * deltaTime;
@@ -396,22 +425,26 @@ export class UnitManager {
 
   private checkCollisions(): void {
     const bulletsToRemove: Set<number> = new Set();
+    const enemyList = this.getEnemies();
 
     this.bullets.forEach((bullet, bulletIndex) => {
-      this.enemies.forEach((enemy) => {
+      for (const enemy of enemyList) {
+        if (bulletsToRemove.has(bulletIndex)) break;
+
         const config = ENEMY_CONFIGS[enemy.type];
         const dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
 
         if (dist < config.size + 5) {
           if (enemy.dodgeChance > 0 && Math.random() < enemy.dodgeChance) {
-            return;
+            continue;
           }
 
           bulletsToRemove.add(bulletIndex);
           this.damageEnemy(enemy, bullet.damage);
           eventBus.emit(GameEvent.BULLET_HIT, { bullet, enemy });
+          break;
         }
-      });
+      }
     });
 
     const sortedIndices = Array.from(bulletsToRemove).sort((a, b) => b - a);
@@ -429,14 +462,19 @@ export class UnitManager {
 
   private killEnemy(enemy: EnemyUnit): void {
     const config = ENEMY_CONFIGS[enemy.type];
-    this.createExplosion(enemy.x, enemy.y);
+    if (!this.lowQuality) {
+      this.createExplosion(enemy.x, enemy.y);
+    }
     this.enemies.delete(enemy.id);
     eventBus.emit(GameEvent.ENEMY_DEATH, { enemy, score: config.score });
   }
 
   private createExplosion(x: number, y: number): void {
+    if (this.particles.length >= MAX_PARTICLES) return;
+
     const colors = ['#FF5722', '#FF9800', '#FFEB3B', '#FFC107', '#FF5252', '#FFD740'];
-    const particleCount = Math.floor(Math.random() * 5) + 8;
+    const baseCount = Math.floor(Math.random() * 5) + 8;
+    const particleCount = this.lowQuality ? Math.floor(baseCount / 2) : baseCount;
 
     for (let i = 0; i < particleCount; i++) {
       const angle = (Math.PI * 2 * i) / particleCount + Math.random() * 0.5;
@@ -491,6 +529,15 @@ export class UnitManager {
 
   getGridOffset(): { x: number; y: number } {
     return { x: this.gridOffsetX, y: this.gridOffsetY };
+  }
+
+  getStats(): { plants: number; enemies: number; bullets: number; particles: number } {
+    return {
+      plants: this.plants.size,
+      enemies: this.enemies.size,
+      bullets: this.bullets.length,
+      particles: this.particles.length,
+    };
   }
 }
 
