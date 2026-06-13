@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { PlanetDataItem, MoonData } from '../data/PlanetData';
 import { getPlanetById, PLANET_DATA } from '../data/PlanetData';
 
@@ -15,6 +15,14 @@ interface InfoSectionProps {
 
 const InfoSection: React.FC<InfoSectionProps> = ({ title, children, defaultOpen = true }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number>(0);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [children]);
 
   return (
     <div style={{ marginBottom: '12px' }}>
@@ -44,16 +52,18 @@ const InfoSection: React.FC<InfoSectionProps> = ({ title, children, defaultOpen 
             transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
             fontSize: '12px',
+            display: 'inline-block',
           }}
         >
           ▼
         </span>
       </button>
       <div
+        ref={contentRef}
         style={{
-          maxHeight: isOpen ? '500px' : '0',
+          maxHeight: isOpen ? `${contentHeight + 24}px` : '0px',
           overflow: 'hidden',
-          transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease',
+          transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           opacity: isOpen ? 1 : 0,
           padding: isOpen ? '12px 4px 0 4px' : '0 4px',
         }}

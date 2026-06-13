@@ -16,14 +16,16 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
 
   const canvasGradient = document.createElement('canvas');
   canvasGradient.width = 2;
-  canvasGradient.height = 512;
+  canvasGradient.height = 1024;
   const ctx = canvasGradient.getContext('2d')!;
-  const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+  const gradient = ctx.createLinearGradient(0, 0, 0, 1024);
   gradient.addColorStop(0, '#0f172a');
+  gradient.addColorStop(0.5, '#0a1128');
   gradient.addColorStop(1, '#020617');
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 2, 512);
+  ctx.fillRect(0, 0, 2, 1024);
   const backgroundTexture = new THREE.CanvasTexture(canvasGradient);
+  backgroundTexture.mapping = THREE.EquirectangularReflectionMapping;
   scene.background = backgroundTexture;
 
   const camera = new THREE.PerspectiveCamera(
@@ -70,8 +72,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
 
     starSizes.push(1 + Math.random() * 2);
 
-    const colorVariation = 0.85 + Math.random() * 0.15;
-    starColors.push(0.9 * colorVariation, 0.95 * colorVariation, 1.0 * colorVariation);
+    const colorVariation = 0.8 + Math.random() * 0.2;
+    const blueShift = 0.9 + Math.random() * 0.1;
+    starColors.push(
+      0.95 * colorVariation * blueShift,
+      0.97 * colorVariation * blueShift,
+      1.0 * colorVariation
+    );
   }
 
   starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
