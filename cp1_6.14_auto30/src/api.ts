@@ -25,6 +25,19 @@ export interface Message {
   waveformData?: number[]
 }
 
+export interface TrackUpdateData {
+  muted?: boolean
+  solo?: boolean
+  volume?: number
+  pan?: number
+  order?: number
+}
+
+export interface ReorderItem {
+  id: string
+  order: number
+}
+
 const api = axios.create({ baseURL: '/api' })
 
 export async function fetchTracks(): Promise<Track[]> {
@@ -41,7 +54,7 @@ export async function deleteTrack(id: string): Promise<void> {
   await api.delete(`/tracks/${id}`)
 }
 
-export async function reorderTracks(orders: { id: string; order: number }[]): Promise<Track[]> {
+export async function reorderTracks(orders: ReorderItem[]): Promise<Track[]> {
   const res = await api.put('/tracks/reorder', { orders })
   return res.data
 }
