@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Photo } from './types';
 
 interface SlideshowProps {
@@ -18,32 +18,85 @@ export default function Slideshow({
   onNext,
   onPrev,
 }: SlideshowProps) {
-  const [isFading, setIsFading] = useState(false);
   const [displayIndex, setDisplayIndex] = useState(currentIndex);
+  const [isFading, setIsFading] = useState(false);
+  const [nextImageLoaded, setNextImageLoaded] = useState(false);
+  const isTransitioningRef = useRef(false);
 
   const currentPhoto = photos[displayIndex];
+  const nextIndex = (currentIndex + 1) % photos.length;
+  const prevIndex = (currentIndex - 1 + photos.length) % photos.length;
 
-  const handleNext = useCallback(() => {
-    if (isFading || photos.length <= 1) return;
-    setIsFading(true);
-    setTimeout(() => {
-      onNext();
-      setIsFading(false);
-    }, 250);
-  }, [isFading, photos.length, onNext]);
-
-  const handlePrev = useCallback(() => {
-    if (isFading || photos.length <= 1) return;
-    setIsFading(true);
-    setTimeout(() => {
-      onPrev();
-      setIsFading(false);
-    }, 250);
-  }, [isFading, photos.length, onPrev]);
+  const preloadImages = useCallback(() => {
+    if (photos.length === 0) return;
+    const nextImg = new Image();
+    nextImg.src = photos[nextIndex].thumbnails.w1200;
+    const prevImg = new Image();
+    prevImg.src = photos[prevIndex].thumbnails.w1200;
+  }, [photos, nextIndex, prevIndex]);
 
   useEffect(() => {
-    setDisplayIndex(currentIndex);
-  }, [currentIndex]);
+    if (isOpen) {
+      preloadImages();
+    }
+  }, [isOpen, preloadImages]);
+
+  useEffect(() => {
+    if (!isOpen || photos.length === 0) return;
+    if (currentIndex === displayIndex) return;
+    if (isTransitioningRef.current) return;
+
+    isTransitioningRef.current = true;
+    setNextImageLoaded(false);
+    setIsFading(true);
+
+    const targetPhoto = photos[currentIndex];
+    const preloader = new Image();
+    preloader.src = targetPhoto.thumbnails.w1200;
+
+    let completed = false;
+    const MIN_FADE_DELAY = 250;
+
+    const finishTransition = () => {
+      if (completed) return;
+      completed = true;
+      setDisplayIndex(currentIndex);
+      setTimeout(() => {
+        setIsFading(false);
+        isTransitioningRef.current = false;
+        preloadImages();
+      }, 50);
+    };
+
+    preloader.onload = () => {
+      setTimeout(finishTransition, MIN_FADE_DELAY);
+    };
+
+    preloader.onerror = () => {
+      setTimeout(finishTransition, MIN_FADE_DELAY);
+    };
+
+    if (preloader.complete) {
+      finishTransition();
+    }
+
+    const timeoutId = setTimeout(finishTransition, 3000);
+
+    return () => {
+      clearTimeout(timeoutId);
+      completed = true;
+    };
+  }, [currentIndex, isOpen, photos, displayIndex, preloadImages]);
+
+  const handleNext = useCallback(() => {
+    if (isTransitioningRef.current || photos.length <= 1) return;
+    onNext();
+  }, [photos.length, onNext]);
+
+  const handlePrev = useCallback(() => {
+    if (isTransitioningRef.current || photos.length <= 1) return;
+    onPrev();
+  }, [photos.length, onPrev]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -105,6 +158,7 @@ export default function Slideshow({
           alignItems: 'center',
           justifyContent: 'center',
           transition: 'background-color 0.2s ease, transform 0.1s ease',
+          zIndex: 10,
         }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
@@ -137,6 +191,7 @@ export default function Slideshow({
           justifyContent: 'center',
           transition: 'background-color 0.2s ease, transform 0.1s ease',
           lineHeight: 1,
+          zIndex: 10,
         }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
@@ -169,6 +224,7 @@ export default function Slideshow({
           justifyContent: 'center',
           transition: 'background-color 0.2s ease, transform 0.1s ease',
           lineHeight: 1,
+          zIndex: 10,
         }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
@@ -189,19 +245,30 @@ export default function Slideshow({
           gap: 24,
         }}
       >
-        <img
-          src={currentPhoto.thumbnails.w1200}
-          alt={currentPhoto.title}
+        <div
           style={{
+            position: 'relative',
             maxWidth: '80vw',
             maxHeight: '70vh',
-            objectFit: 'contain',
-            borderRadius: '8px',
-            boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
-            opacity: isFading ? 0 : 1,
-            transition: 'opacity 0.5s ease-in-out',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
-        />
+        >
+          <img
+            src={currentPhoto.thumbnails.w1200}
+            alt={currentPhoto.title}
+            style={{
+              maxWidth: '80vw',
+              maxHeight: '70vh',
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+              opacity: isFading ? 0 : 1,
+              transition: 'opacity 0.5s ease-in-out',
+            }}
+          />
+        </div>
 
         <div
           style={{
