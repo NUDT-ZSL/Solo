@@ -212,7 +212,7 @@ export default function App() {
     setEditorCollapsed((prev) => !prev);
   }, []);
 
-  const previewWidth = isMobile ? 100 : 100 - editorWidth - (6 / (containerRef.current?.offsetWidth || 1)) * 100;
+  const previewWidth = isMobile ? 100 : 100 - editorWidth;
 
   return (
     <div className={styles.app}>

@@ -40,100 +40,106 @@ const SANDBOX_HTML = `
 <body>
   <div id="root"></div>
   <script>
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    let compiledCode = null;
-    let lastProps = null;
-    let renderTimeout = null;
+    (function() {
+      'use strict';
+      
+      let renderTimeout = null;
+      let currentRoot = null;
 
-    function formatError(error) {
-      let message = error.message || String(error);
-      const locMatch = message.match(/\\((\\d+):(\\d+)\\)/);
-      if (locMatch) {
-        const line = locMatch[1];
-        const col = locMatch[2];
-        message = message.replace(/\\(\\d+:\\d+\\)/, '');
-        return \`第 \${line} 行第 \${col} 列: \${message.trim()}\`;
-      }
-      const lineMatch = message.match(/line (\\d+)/i);
-      if (lineMatch) {
-        return \`第 \${lineMatch[1]} 行: \${message.trim()}\`;
-      }
-      return message;
-    }
-
-    function compileAndRender(code, props) {
-      try {
-        if (!window.Babel) {
-          throw new Error('Babel 尚未加载完成，请稍候...');
+      function formatError(error) {
+        let message = error.message || String(error);
+        const locMatch = message.match(/\\((\\d+):(\\d+)\\)/);
+        if (locMatch) {
+          const line = locMatch[1];
+          const col = locMatch[2];
+          message = message.replace(/\\(\\d+:\\d+\\)/, '');
+          return \`第 \${line} 行第 \${col} 列: \${message.trim()}\`;
         }
+        const lineMatch = message.match(/line (\\d+)/i);
+        if (lineMatch) {
+          return \`第 \${lineMatch[1]} 行: \${message.trim()}\`;
+        }
+        return message;
+      }
 
-        const wrapperCode = \`
-          (function(React, props) {
+      function compileAndRender(code, props) {
+        try {
+          if (!window.Babel) {
+            throw new Error('Babel 尚未加载完成，请稍候...');
+          }
+
+          const componentCode = \`
             \${code}
-          })
-        \`;
+          \`;
 
-        const transformed = window.Babel.transform(wrapperCode, {
-          presets: ['react'],
-          filename: 'SandboxComponent.jsx',
-        });
+          const transformed = window.Babel.transform(componentCode, {
+            presets: ['react'],
+            filename: 'SandboxComponent.jsx',
+          });
 
-        const ComponentFactory = eval(transformed.code);
-        const Component = ComponentFactory(React, props);
+          const ComponentFactory = new Function('React', 'props', transformed.code);
+          const Component = ComponentFactory(React, props);
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'component-wrapper';
-        document.getElementById('root').innerHTML = '';
-        document.getElementById('root').appendChild(wrapper);
+          const rootEl = document.getElementById('root');
+          rootEl.innerHTML = '';
 
-        const sandboxRoot = ReactDOM.createRoot(wrapper);
-        
-        wrapper.classList.add('updating');
-        if (renderTimeout) clearTimeout(renderTimeout);
-        
-        sandboxRoot.render(
-          React.createElement(Component, props)
-        );
+          const wrapper = document.createElement('div');
+          wrapper.className = 'component-wrapper';
+          rootEl.appendChild(wrapper);
 
-        renderTimeout = setTimeout(() => {
-          wrapper.classList.remove('updating');
-        }, 150);
+          if (currentRoot) {
+            currentRoot.unmount();
+          }
+          
+          currentRoot = ReactDOM.createRoot(wrapper);
+          
+          wrapper.classList.add('updating');
+          if (renderTimeout) clearTimeout(renderTimeout);
+          
+          currentRoot.render(
+            React.createElement(Component, props)
+          );
 
-        parent.postMessage({ type: 'ready' }, '*');
-        return true;
-      } catch (error) {
-        const formattedError = formatError(error);
-        parent.postMessage({ type: 'error', error: formattedError }, '*');
-        
-        const rootEl = document.getElementById('root');
-        rootEl.innerHTML = \`
-          <div style="
-            padding: 24px;
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            border-radius: 8px;
-            color: #991b1b;
-            font-family: monospace;
-            font-size: 13px;
-            max-width: 100%;
-            word-wrap: break-word;
-          ">
-            <div style="font-weight: 600; margin-bottom: 8px;">编译错误</div>
-            <div>\${formattedError}</div>
-          </div>
-        \`;
-        return false;
+          renderTimeout = setTimeout(() => {
+            wrapper.classList.remove('updating');
+          }, 150);
+
+          window.parent.postMessage({ type: 'ready' }, '*');
+          return true;
+        } catch (error) {
+          const formattedError = formatError(error);
+          window.parent.postMessage({ type: 'error', error: formattedError }, '*');
+          
+          const rootEl = document.getElementById('root');
+          rootEl.innerHTML = \`
+            <div style="
+              padding: 24px;
+              background: #fef2f2;
+              border: 1px solid #fecaca;
+              border-radius: 8px;
+              color: #991b1b;
+              font-family: monospace;
+              font-size: 13px;
+              max-width: 100%;
+              word-wrap: break-word;
+            ">
+              <div style="font-weight: 600; margin-bottom: 8px;">编译错误</div>
+              <div>\${formattedError}</div>
+            </div>
+          \`;
+          return false;
+        }
       }
-    }
 
-    window.addEventListener('message', (event) => {
-      const data = event.data;
-      if (data && data.type === 'render') {
-        compileAndRender(data.code, data.props);
-      }
-    });
+      window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (data && data.type === 'render') {
+          compileAndRender(data.code, data.props);
+        }
+      });
 
-    parent.postMessage({ type: 'ready' }, '*');
+      window.parent.postMessage({ type: 'ready' }, '*');
+    })();
   </script>
 </body>
 </html>
