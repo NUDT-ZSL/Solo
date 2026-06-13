@@ -8,23 +8,27 @@ const api = axios.create({
   },
 });
 
+function isValidParam(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 export async function getSnippets(params?: SearchParams): Promise<Snippet[]> {
   const queryParams: Record<string, string> = {};
 
-  if (params?.lang) {
-    queryParams.lang = params.lang;
+  if (isValidParam(params?.lang)) {
+    queryParams.lang = params!.lang.trim();
   }
-  if (params?.tags) {
-    queryParams.tags = params.tags;
+  if (isValidParam(params?.tags)) {
+    queryParams.tags = params!.tags.trim();
   }
-  if (params?.keyword) {
-    queryParams.keyword = params.keyword;
+  if (isValidParam(params?.keyword)) {
+    queryParams.keyword = params!.keyword.trim();
   }
-  if (params?.sortBy) {
-    queryParams.sortBy = params.sortBy;
+  if (isValidParam(params?.sortBy)) {
+    queryParams.sortBy = params!.sortBy.trim();
   }
-  if (params?.order) {
-    queryParams.order = params.order;
+  if (isValidParam(params?.order)) {
+    queryParams.order = params!.order.trim();
   }
 
   const response = await api.get<Snippet[]>('/snippets', { params: queryParams });
@@ -61,8 +65,8 @@ export async function searchSnippets(
   keyword?: string
 ): Promise<Snippet[]> {
   const params: SearchParams = {};
-  if (language) params.lang = language;
-  if (tags) params.tags = tags;
-  if (keyword) params.keyword = keyword;
+  if (isValidParam(language)) params.lang = language.trim();
+  if (isValidParam(tags)) params.tags = tags.trim();
+  if (isValidParam(keyword)) params.keyword = keyword.trim();
   return getSnippets(params);
 }

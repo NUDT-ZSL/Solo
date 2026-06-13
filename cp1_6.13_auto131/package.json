@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n server,client -c yellow,cyan \"tsx server/index.ts\" \"vite\"",
+    "dev:client": "vite",
     "dev:server": "tsx server/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview"
@@ -32,6 +33,7 @@
     "vite": "^5.0.8",
     "tsx": "^4.7.0",
     "cors": "^2.8.5",
-    "@types/cors": "^2.8.17"
+    "@types/cors": "^2.8.17",
+    "concurrently": "^8.2.2"
   }
 }

@@ -181,19 +181,56 @@ export default function CodeEditor({ code, language, editable = false, onChange 
     }
   }, [code, language, editable]);
 
+  const copyToClipboardFallback = (text: string): boolean => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.top = '-1000px';
+      textArea.style.left = '-1000px';
+      textArea.style.opacity = '0';
+      textArea.setAttribute('readonly', '');
+      document.body.appendChild(textArea);
+      textArea.select();
+      textArea.setSelectionRange(0, 99999);
+      const success = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return success;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const showCopiedFeedback = () => {
+    setCopied(true);
+    setToastVisible(true);
+    setTimeout(() => {
+      setToastVisible(false);
+    }, 2000);
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+  };
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setToastVisible(true);
-      setTimeout(() => {
-        setToastVisible(false);
-      }, 2000);
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(code);
+        showCopiedFeedback();
+      } else {
+        const success = copyToClipboardFallback(code);
+        if (success) {
+          showCopiedFeedback();
+        } else {
+          console.error('Both clipboard methods failed');
+        }
+      }
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error('Failed to copy, trying fallback:', err);
+      const fallbackSuccess = copyToClipboardFallback(code);
+      if (fallbackSuccess) {
+        showCopiedFeedback();
+      }
     }
   };
 

@@ -13,14 +13,41 @@ const snippetListStyles = `
   .snippet-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 20px;
+    gap: 24px;
     padding: 0;
+  }
+
+  @media (min-width: 1440px) {
+    .snippet-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (max-width: 1200px) {
+    .snippet-grid {
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+  }
+
+  @media (max-width: 992px) {
+    .snippet-grid {
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 18px;
+    }
   }
 
   @media (max-width: 768px) {
     .snippet-grid {
       grid-template-columns: repeat(2, 1fr);
       gap: 16px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .snippet-grid {
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
     }
   }
 
