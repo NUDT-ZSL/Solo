@@ -10,11 +10,14 @@ import type {
 import { PLAYER_COLORS, PLAYER_NAMES } from './types';
 
 function getGridCoords(position: number): { gridX: number; gridY: number } {
-  if (position >= 0 && position <= 9) return { gridX: position, gridY: 0 };
-  if (position >= 10 && position <= 18) return { gridX: 9, gridY: position - 9 };
-  if (position >= 19 && position <= 27) return { gridX: 27 - position, gridY: 9 };
-  return { gridX: 0, gridY: 36 - position };
+  const pos = ((position % 40) + 40) % 40;
+  if (pos >= 0 && pos <= 10) return { gridX: pos, gridY: 10 };
+  if (pos >= 11 && pos <= 20) return { gridX: 10, gridY: 20 - pos };
+  if (pos >= 21 && pos <= 30) return { gridX: 30 - pos, gridY: 0 };
+  return { gridX: 0, gridY: pos - 30 };
 }
+
+export { getGridCoords };
 
 export function createInitialPlayers(count: number): Player[] {
   const validCount = Math.max(2, Math.min(4, count));
@@ -27,7 +30,7 @@ export function createInitialPlayers(count: number): Player[] {
       cash: 1500,
       position: 0,
       gridX: 0,
-      gridY: 0,
+      gridY: 10,
       isBankrupt: false,
       inJail: false,
       jailTurns: 0,
@@ -76,6 +79,13 @@ export function drawRandomCard(cards: Card[]): Card {
   return cards[Math.floor(Math.random() * cards.length)];
 }
 
+const RENT_MULTIPLIER: Record<number, number> = {
+  0: 1,
+  1: 1,
+  2: 2,
+  3: 4,
+};
+
 export function calculateRent(
   cell: CellConfig,
   property: Property | undefined,
@@ -83,8 +93,8 @@ export function calculateRent(
 ): number {
   if (!property || !owner || property.ownerId === null) return 0;
   if (!cell.baseRent) return 0;
-  const multipliers = [1, 1, 2, 4];
-  return cell.baseRent * multipliers[property.level];
+  const multiplier = RENT_MULTIPLIER[property.level] ?? 1;
+  return cell.baseRent * multiplier;
 }
 
 export function getPlayerAssets(
@@ -119,23 +129,56 @@ export function getRankings(
     .sort((a, b) => b.totalAssets - a.totalAssets);
 }
 
+export function movePlayerOneStep(
+  state: GameState,
+  playerId: string
+): GameState {
+  const newPlayers = state.players.map((p) => {
+    if (p.id !== playerId) return p;
+    const newPosition = (p.position + 1) % 40;
+    const { gridX, gridY } = getGridCoords(newPosition);
+    const passedStart = newPosition === 0;
+    return {
+      ...p,
+      position: newPosition,
+      gridX,
+      gridY,
+      cash: passedStart ? p.cash + 200 : p.cash,
+    };
+  });
+  return { ...state, players: newPlayers };
+}
+
+export function movePlayerOneStepBackward(
+  state: GameState,
+  playerId: string
+): GameState {
+  const newPlayers = state.players.map((p) => {
+    if (p.id !== playerId) return p;
+    const newPosition = (p.position - 1 + 40) % 40;
+    const { gridX, gridY } = getGridCoords(newPosition);
+    return { ...p, position: newPosition, gridX, gridY };
+  });
+  return { ...state, players: newPlayers };
+}
+
 export function movePlayer(
   state: GameState,
   playerId: string,
   steps: number,
   cells: CellConfig[]
 ): GameState {
-  const newPlayers = state.players.map((p) => {
-    if (p.id !== playerId) return p;
-    let newPosition = (p.position + steps + 40) % 40;
-    const { gridX, gridY } = getGridCoords(newPosition);
-    let cash = p.cash;
-    if (p.position + steps >= 40) {
-      cash += 200;
+  let newState = state;
+  if (steps >= 0) {
+    for (let i = 0; i < steps; i++) {
+      newState = movePlayerOneStep(newState, playerId);
     }
-    return { ...p, position: newPosition, gridX, gridY, cash };
-  });
-  return { ...state, players: newPlayers };
+  } else {
+    for (let i = 0; i < Math.abs(steps); i++) {
+      newState = movePlayerOneStepBackward(newState, playerId);
+    }
+  }
+  return newState;
 }
 
 export function movePlayerToPosition(
@@ -255,9 +298,10 @@ export function adjustPlayerCash(
 }
 
 export function sendToJail(state: GameState, playerId: string): GameState {
+  const { gridX, gridY } = getGridCoords(10);
   const newPlayers = state.players.map((p) =>
     p.id === playerId
-      ? { ...p, inJail: true, jailTurns: 0, position: 10, gridX: 0, gridY: 1 }
+      ? { ...p, inJail: true, jailTurns: 0, position: 10, gridX, gridY }
       : p
   );
   return { ...state, players: newPlayers };

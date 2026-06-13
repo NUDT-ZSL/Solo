@@ -8,38 +8,37 @@ app.use(cors());
 app.use(express.json());
 
 function generateBoardLayout() {
-  const cells = [];
-  const pathCoords = [];
+  const pathCoords: Array<{ x: number; y: number }> = [];
 
-  for (let i = 0; i <= 9; i++) pathCoords.push({ x: i, y: 0 });
-  for (let i = 1; i <= 9; i++) pathCoords.push({ x: 9, y: i });
-  for (let i = 8; i >= 0; i--) pathCoords.push({ x: i, y: 9 });
-  for (let i = 8; i >= 1; i--) pathCoords.push({ x: 0, y: i });
+  for (let i = 0; i <= 10; i++) pathCoords.push({ x: i, y: 10 });
+  for (let i = 9; i >= 0; i--) pathCoords.push({ x: 10, y: i });
+  for (let i = 9; i >= 0; i--) pathCoords.push({ x: i, y: 0 });
+  for (let i = 1; i <= 9; i++) pathCoords.push({ x: 0, y: i });
 
-  const cellTypes = [
-    { type: 'start', name: '起点', price: undefined, baseRent: undefined, colorGroup: undefined },
+  const cellDefs = [
+    { type: 'start', name: '起点' },
     { type: 'property', name: '地中海大道', price: 60, baseRent: 2, colorGroup: 'brown' },
-    { type: 'fate', name: '命运', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'fate', name: '命运' },
     { type: 'property', name: '波罗的海大道', price: 60, baseRent: 4, colorGroup: 'brown' },
-    { type: 'tax', name: '所得税', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'tax', name: '所得税' },
     { type: 'railway', name: '雷丁铁路', price: 200, baseRent: 25, colorGroup: 'railway' },
     { type: 'property', name: '东方大道', price: 100, baseRent: 6, colorGroup: 'cyan' },
-    { type: 'chance', name: '机会', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'chance', name: '机会' },
     { type: 'property', name: '佛蒙特大道', price: 100, baseRent: 6, colorGroup: 'cyan' },
     { type: 'property', name: '康涅狄格大道', price: 120, baseRent: 8, colorGroup: 'cyan' },
-    { type: 'jail', name: '监狱', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'jail', name: '监狱' },
     { type: 'property', name: '圣查尔斯广场', price: 140, baseRent: 10, colorGroup: 'pink' },
     { type: 'utility', name: '电力公司', price: 150, baseRent: 20, colorGroup: 'utility' },
     { type: 'property', name: '各州大道', price: 140, baseRent: 10, colorGroup: 'pink' },
     { type: 'property', name: '弗吉尼亚大道', price: 160, baseRent: 12, colorGroup: 'pink' },
     { type: 'railway', name: '宾夕法尼亚铁路', price: 200, baseRent: 25, colorGroup: 'railway' },
     { type: 'property', name: '圣詹姆斯广场', price: 180, baseRent: 14, colorGroup: 'orange' },
-    { type: 'fate', name: '命运', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'fate', name: '命运' },
     { type: 'property', name: '田纳西大道', price: 180, baseRent: 14, colorGroup: 'orange' },
     { type: 'property', name: '纽约大道', price: 200, baseRent: 16, colorGroup: 'orange' },
-    { type: 'parking', name: '免费停车', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'parking', name: '免费停车' },
     { type: 'property', name: '肯塔基大道', price: 220, baseRent: 18, colorGroup: 'red' },
-    { type: 'chance', name: '机会', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'chance', name: '机会' },
     { type: 'property', name: '印第安纳大道', price: 220, baseRent: 18, colorGroup: 'red' },
     { type: 'property', name: '伊利诺伊大道', price: 240, baseRent: 20, colorGroup: 'red' },
     { type: 'railway', name: 'B&O铁路', price: 200, baseRent: 25, colorGroup: 'railway' },
@@ -47,26 +46,28 @@ function generateBoardLayout() {
     { type: 'property', name: '威尼托大道', price: 260, baseRent: 22, colorGroup: 'yellow' },
     { type: 'utility', name: '自来水公司', price: 150, baseRent: 20, colorGroup: 'utility' },
     { type: 'property', name: '马文花园', price: 280, baseRent: 24, colorGroup: 'yellow' },
-    { type: 'jail', name: '去监狱', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'jail', name: '去监狱' },
     { type: 'property', name: '太平洋大道', price: 300, baseRent: 26, colorGroup: 'green' },
     { type: 'property', name: '北卡罗来纳大道', price: 300, baseRent: 26, colorGroup: 'green' },
-    { type: 'fate', name: '命运', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'fate', name: '命运' },
     { type: 'property', name: '宾夕法尼亚大道', price: 320, baseRent: 28, colorGroup: 'green' },
     { type: 'railway', name: '短线铁路', price: 200, baseRent: 25, colorGroup: 'railway' },
-    { type: 'chance', name: '机会', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'chance', name: '机会' },
     { type: 'property', name: '公园广场', price: 350, baseRent: 35, colorGroup: 'purple' },
-    { type: 'tax', name: '奢侈品税', price: undefined, baseRent: undefined, colorGroup: undefined },
+    { type: 'tax', name: '奢侈品税' },
     { type: 'property', name: '木板路', price: 400, baseRent: 50, colorGroup: 'purple' },
   ];
 
-  for (let i = 0; i < 40; i++) {
-    cells.push({
-      id: i,
-      ...cellTypes[i],
-      gridX: pathCoords[i].x,
-      gridY: pathCoords[i].y,
-    });
-  }
+  const cells = cellDefs.map((def, i) => ({
+    id: i,
+    type: def.type,
+    name: def.name,
+    gridX: pathCoords[i].x,
+    gridY: pathCoords[i].y,
+    price: 'price' in def ? def.price : undefined,
+    baseRent: 'baseRent' in def ? def.baseRent : undefined,
+    colorGroup: 'colorGroup' in def ? def.colorGroup : undefined,
+  }));
 
   return cells;
 }
@@ -109,7 +110,7 @@ app.get('/api/cards', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Monopoly Config API running on http://localhost:${PORT}`);
-  console.log(`GET /api/config - 获取完整配置`);
-  console.log(`GET /api/cells - 获取棋盘布局`);
-  console.log(`GET /api/cards - 获取卡牌库`);
+  console.log(`GET /api/config - Full config`);
+  console.log(`GET /api/cells  - Board layout (${boardLayout.length} cells)`);
+  console.log(`GET /api/cards  - Card deck (${cards.length} cards)`);
 });
