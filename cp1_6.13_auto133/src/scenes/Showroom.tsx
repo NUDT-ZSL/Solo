@@ -17,6 +17,9 @@ const PODIUM_RADIUS = 0.4;
 const PODIUM_HEIGHT = 0.6;
 const PRODUCT_SPEED = 0.5;
 const INTERACT_DISTANCE = 1.2;
+const PODIUM_COLLIDE_RADIUS = PODIUM_RADIUS + PLAYER_RADIUS;
+
+const COLOR_PALETTE = ['#f97316', '#a855f7', '#06b6d4', '#22c55e'];
 
 interface PedestalPos {
   x: number;
@@ -100,15 +103,15 @@ function Walls() {
   );
 }
 
-function HeartSprite({ position, color = '#fbbf24' }: { position: [number, number, number]; color?: string }) {
+function HeartSprite({ position }: { position: [number, number, number] }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 128;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, 128, 128);
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
+    ctx.fillStyle = '#fbbf24';
+    ctx.shadowColor = '#fbbf24';
     ctx.shadowBlur = 20;
     ctx.beginPath();
     const x = 64, y = 70;
@@ -119,7 +122,7 @@ function HeartSprite({ position, color = '#fbbf24' }: { position: [number, numbe
     const tex = new THREE.CanvasTexture(canvas);
     tex.needsUpdate = true;
     return tex;
-  }, [color]);
+  }, []);
 
   return (
     <sprite position={position} scale={[0.25, 0.25, 0.25]}>
@@ -150,6 +153,16 @@ function GlowSprite({ position, color }: { position: [number, number, number]; c
   );
 }
 
+function clampColorToPalette(colorStr: string): string {
+  const normalized = colorStr.toLowerCase();
+  if (COLOR_PALETTE.includes(normalized)) return normalized;
+  let hash = 0;
+  for (let i = 0; i < colorStr.length; i++) {
+    hash = (hash * 31 + colorStr.charCodeAt(i)) >>> 0;
+  }
+  return COLOR_PALETTE[hash % COLOR_PALETTE.length];
+}
+
 function ProductShape({
   shapeType,
   color,
@@ -161,6 +174,7 @@ function ProductShape({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const targetScale = isNear ? 1.3 : 1;
+  const safeColor = useMemo(() => clampColorToPalette(color), [color]);
 
   useFrame((_, delta) => {
     if (groupRef.current) {
@@ -176,52 +190,68 @@ function ProductShape({
       {shapeType === 0 && (
         <group>
           <mesh castShadow>
-            <boxGeometry args={[0.45, 0.5, 0.35]} />
-            <meshStandardMaterial color={color} metalness={0.3} roughness={0.4} />
+            <boxGeometry args={[0.42, 0.38, 0.28]} />
+            <meshStandardMaterial color={safeColor} metalness={0.3} roughness={0.4} />
           </mesh>
-          <mesh position={[0, 0.32, 0]} castShadow>
-            <sphereGeometry args={[0.12, 16, 16]} />
-            <meshStandardMaterial color="#ffffff" metalness={0.8} roughness={0.2} />
+          <mesh position={[0, 0.26, 0]} castShadow>
+            <sphereGeometry args={[0.11, 16, 16]} />
+            <meshStandardMaterial color={safeColor} metalness={0.5} roughness={0.3} emissive={safeColor} emissiveIntensity={0.2} />
           </mesh>
-          <mesh position={[-0.28, 0, 0]} castShadow>
-            <torusGeometry args={[0.04, 0.015, 8, 24]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.3} />
+          <mesh position={[0, -0.05, 0.16]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <torusGeometry args={[0.06, 0.018, 8, 24]} />
+            <meshStandardMaterial color={safeColor} metalness={0.7} roughness={0.25} />
           </mesh>
-          <mesh position={[0.28, 0, 0]} rotation={[0, 0, Math.PI]} castShadow>
-            <torusGeometry args={[0.04, 0.015, 8, 24]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.3} />
+          <mesh position={[-0.23, -0.05, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <torusGeometry args={[0.05, 0.015, 8, 20]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.7} roughness={0.3} />
+          </mesh>
+          <mesh position={[0.23, -0.05, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <torusGeometry args={[0.05, 0.015, 8, 20]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.7} roughness={0.3} />
           </mesh>
         </group>
       )}
       {shapeType === 1 && (
         <group>
-          <mesh castShadow>
-            <sphereGeometry args={[0.28, 24, 24]} />
-            <meshStandardMaterial color={color} metalness={0.5} roughness={0.3} />
+          <mesh position={[0, 0.02, 0]} castShadow>
+            <sphereGeometry args={[0.24, 24, 24]} />
+            <meshStandardMaterial color={safeColor} metalness={0.45} roughness={0.32} />
           </mesh>
-          <mesh position={[0, 0.22, 0.15]} castShadow>
-            <torusGeometry args={[0.1, 0.02, 8, 32]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.7} roughness={0.2} />
+          <mesh position={[0, 0.2, 0.12]} castShadow>
+            <boxGeometry args={[0.16, 0.16, 0.04]} />
+            <meshStandardMaterial color="#0f172a" metalness={0.5} roughness={0.3} />
           </mesh>
-          <mesh position={[0, 0.22, 0.15]}>
-            <circleGeometry args={[0.08, 32]} />
-            <meshStandardMaterial color="#0ea5e9" emissive="#0ea5e9" emissiveIntensity={0.3} />
+          <mesh position={[0, 0.2, 0.145]}>
+            <boxGeometry args={[0.13, 0.13, 0.005]} />
+            <meshStandardMaterial color={safeColor} emissive={safeColor} emissiveIntensity={0.6} />
+          </mesh>
+          <mesh position={[0, -0.1, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <torusGeometry args={[0.18, 0.025, 10, 36]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.8} roughness={0.2} />
           </mesh>
         </group>
       )}
       {shapeType === 2 && (
         <group>
-          <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.1, 0]} castShadow>
-            <cylinderGeometry args={[0.22, 0.3, 0.4, 24]} />
-            <meshStandardMaterial color={color} metalness={0.4} roughness={0.35} />
+          <mesh position={[0, -0.02, 0]} castShadow>
+            <boxGeometry args={[0.34, 0.3, 0.34]} />
+            <meshStandardMaterial color={safeColor} metalness={0.35} roughness={0.38} />
           </mesh>
-          <mesh position={[0, 0.38, 0]} castShadow>
-            <torusKnotGeometry args={[0.08, 0.03, 48, 12]} />
-            <meshStandardMaterial color="#fbbf24" metalness={0.9} roughness={0.1} />
+          <mesh position={[0, 0.17, 0]} castShadow>
+            <sphereGeometry args={[0.08, 16, 16]} />
+            <meshStandardMaterial color="#fbbf24" metalness={0.9} roughness={0.12} emissive="#fbbf24" emissiveIntensity={0.3} />
           </mesh>
-          <mesh position={[0, 0.1, 0]} rotation={[0, 0, 0]}>
-            <ringGeometry args={[0.32, 0.35, 32]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.8} roughness={0.2} side={THREE.DoubleSide} />
+          <mesh position={[0, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <torusGeometry args={[0.22, 0.02, 10, 40]} />
+            <meshStandardMaterial color={safeColor} metalness={0.8} roughness={0.2} emissive={safeColor} emissiveIntensity={0.15} />
+          </mesh>
+          <mesh position={[-0.14, 0.08, 0.18]} rotation={[0, Math.PI / 4, 0]} castShadow>
+            <boxGeometry args={[0.04, 0.12, 0.04]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.3} />
+          </mesh>
+          <mesh position={[0.14, 0.08, 0.18]} rotation={[0, -Math.PI / 4, 0]} castShadow>
+            <boxGeometry args={[0.04, 0.12, 0.04]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.3} />
           </mesh>
         </group>
       )}
@@ -238,19 +268,53 @@ interface ProductPedestalProps {
 }
 
 function ProductPedestal({ product, position, playerPos, onClick, isFavorited }: ProductPedestalProps) {
-  const podiumRef = useRef<THREE.Group>(null);
   const pedestalPos = useMemo(() => new THREE.Vector3(...position), [position]);
   const [hovered, setHovered] = useState(false);
+  const safeColor = useMemo(() => clampColorToPalette(product.color), [product.color]);
 
   const distance = useMemo(() => {
-    return pedestalPos.distanceTo(playerPos);
+    const dx = pedestalPos.x - playerPos.x;
+    const dz = pedestalPos.z - playerPos.z;
+    return Math.sqrt(dx * dx + dz * dz);
   }, [pedestalPos, playerPos]);
 
   const isNear = distance < INTERACT_DISTANCE;
 
+  const labelTexture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(0, 0, 512, 128, 20);
+      ctx.fill();
+    } else {
+      ctx.fillRect(0, 0, 512, 128);
+    }
+    ctx.strokeStyle = 'rgba(99, 102, 241, 0.5)';
+    ctx.lineWidth = 2;
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(0, 0, 512, 128, 20);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#f1f5f9';
+    ctx.font = 'bold 40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(product.name, 256, 60);
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.fillText(`¥${product.price}`, 256, 100);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }, [product.name, product.price]);
+
   return (
     <group position={position}>
-      <group ref={podiumRef}>
+      <group>
         <mesh position={[0, PODIUM_HEIGHT / 2, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[PODIUM_RADIUS, PODIUM_RADIUS * 1.1, PODIUM_HEIGHT, 32]} />
           <meshPhysicalMaterial
@@ -269,7 +333,7 @@ function ProductPedestal({ product, position, playerPos, onClick, isFavorited }:
         </mesh>
       </group>
 
-      {isNear && <GlowSprite position={[0, 0.08, 0]} color={product.color} />}
+      {isNear && <GlowSprite position={[0, 0.08, 0]} color={safeColor} />}
 
       <group
         onClick={(e) => {
@@ -286,12 +350,12 @@ function ProductPedestal({ product, position, playerPos, onClick, isFavorited }:
           document.body.style.cursor = 'grab';
         }}
       >
-        <ProductShape shapeType={product.shapeType} color={product.color} isNear={isNear} />
+        <ProductShape shapeType={product.shapeType} color={safeColor} isNear={isNear} />
       </group>
 
       <pointLight
         position={[0, 0.15, 0]}
-        color={product.color}
+        color={safeColor}
         intensity={isNear ? 0.6 : 0.3}
         distance={3}
         decay={2}
@@ -303,32 +367,7 @@ function ProductPedestal({ product, position, playerPos, onClick, isFavorited }:
 
       {hovered && (
         <sprite position={[0, PODIUM_HEIGHT + 1.3, 0]} scale={[1.5, 0.45, 1]}>
-          <spriteMaterial>
-            {(() => {
-              const canvas = document.createElement('canvas');
-              canvas.width = 512;
-              canvas.height = 128;
-              const ctx = canvas.getContext('2d')!;
-              ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-              ctx.roundRect(0, 0, 512, 128, 20);
-              ctx.fill();
-              ctx.strokeStyle = 'rgba(99, 102, 241, 0.5)';
-              ctx.lineWidth = 2;
-              ctx.stroke();
-              ctx.fillStyle = '#f1f5f9';
-              ctx.font = 'bold 40px sans-serif';
-              ctx.textAlign = 'center';
-              ctx.fillText(product.name, 256, 60);
-              ctx.fillStyle = '#fbbf24';
-              ctx.font = 'bold 32px sans-serif';
-              ctx.fillText(`¥${product.price}`, 256, 100);
-              const tex = new THREE.CanvasTexture(canvas);
-              tex.needsUpdate = true;
-              (THREE.SpriteMaterial.prototype as any);
-              const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-              return mat as any;
-            })()}
-          </spriteMaterial>
+          <spriteMaterial map={labelTexture} transparent depthTest={false} />
         </sprite>
       )}
     </group>
@@ -339,9 +378,15 @@ interface FirstPersonControlsProps {
   playerPosRef: React.MutableRefObject<THREE.Vector3>;
   setPlayerPos: (p: THREE.Vector3) => void;
   isMobile: boolean;
+  pedestalPositions: PedestalPos[];
 }
 
-function FirstPersonControls({ playerPosRef, setPlayerPos, isMobile }: FirstPersonControlsProps) {
+function FirstPersonControls({
+  playerPosRef,
+  setPlayerPos,
+  isMobile,
+  pedestalPositions,
+}: FirstPersonControlsProps) {
   const { camera, gl } = useThree();
   const yawRef = useRef(0);
   const pitchRef = useRef(-0.15);
@@ -427,6 +472,39 @@ function FirstPersonControls({ playerPosRef, setPlayerPos, isMobile }: FirstPers
     };
   }, [gl, isMobile]);
 
+  const collideWithWalls = useCallback((pos: THREE.Vector3, dx: number, dz: number): [number, number] => {
+    let nextX = pos.x + dx;
+    let nextZ = pos.z + dz;
+    const boundary = ROOM_HALF - PLAYER_RADIUS;
+    if (nextX > boundary) nextX = boundary;
+    if (nextX < -boundary) nextX = -boundary;
+    if (nextZ > boundary) nextZ = boundary;
+    if (nextZ < -boundary) nextZ = -boundary;
+    return [nextX - pos.x, nextZ - pos.z];
+  }, []);
+
+  const collideWithPedestals = useCallback((pos: THREE.Vector3, dx: number, dz: number): [number, number] => {
+    let newX = dx;
+    let newZ = dz;
+    for (const ped of pedestalPositions) {
+      const testX = pos.x + newX;
+      const testZ = pos.z + newZ;
+      const relX = testX - ped.x;
+      const relZ = testZ - ped.z;
+      const distSq = relX * relX + relZ * relZ;
+      if (distSq < PODIUM_COLLIDE_RADIUS * PODIUM_COLLIDE_RADIUS) {
+        const dist = Math.sqrt(distSq);
+        if (dist === 0) continue;
+        const overlap = PODIUM_COLLIDE_RADIUS - dist;
+        const pushX = (relX / dist) * overlap;
+        const pushZ = (relZ / dist) * overlap;
+        newX += pushX;
+        newZ += pushZ;
+      }
+    }
+    return [newX, newZ];
+  }, [pedestalPositions]);
+
   useFrame((_, delta) => {
     const damp = 0.1;
     yawRef.current += (targetYaw.current - yawRef.current) * damp;
@@ -436,8 +514,10 @@ function FirstPersonControls({ playerPosRef, setPlayerPos, isMobile }: FirstPers
     camera.quaternion.setFromEuler(eulerRef.current);
 
     const speed = (isMobile ? MOBILE_MOVE_SPEED : BASE_MOVE_SPEED) * delta;
-    const forward = new THREE.Vector3(-Math.sin(yawRef.current), 0, -Math.cos(yawRef.current));
-    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    const sinY = Math.sin(yawRef.current);
+    const cosY = Math.cos(yawRef.current);
+    const forward = new THREE.Vector3(-sinY, 0, -cosY);
+    const right = new THREE.Vector3(cosY, 0, -sinY);
 
     const move = new THREE.Vector3();
     const keys = keysRef.current;
@@ -448,19 +528,19 @@ function FirstPersonControls({ playerPosRef, setPlayerPos, isMobile }: FirstPers
 
     if (move.lengthSq() > 0) {
       move.normalize().multiplyScalar(speed);
-      const pos = playerPosRef.current.clone();
+      let dx = move.x;
+      let dz = move.z;
 
-      const tryX = pos.x + move.x;
-      if (Math.abs(tryX) < ROOM_HALF - PLAYER_RADIUS) {
-        pos.x = tryX;
-      }
-      const tryZ = pos.z + move.z;
-      if (Math.abs(tryZ) < ROOM_HALF - PLAYER_RADIUS) {
-        pos.z = tryZ;
-      }
+      [dx, dz] = collideWithWalls(playerPosRef.current, dx, dz);
+      [dx, dz] = collideWithPedestals(playerPosRef.current, dx, dz);
 
-      playerPosRef.current = pos;
-      setPlayerPos(pos.clone());
+      const boundary = ROOM_HALF - PLAYER_RADIUS;
+      const finalX = Math.max(-boundary, Math.min(boundary, playerPosRef.current.x + dx));
+      const finalZ = Math.max(-boundary, Math.min(boundary, playerPosRef.current.z + dz));
+
+      playerPosRef.current.x = finalX;
+      playerPosRef.current.z = finalZ;
+      setPlayerPos(playerPosRef.current.clone());
     }
 
     camera.position.set(
@@ -500,6 +580,7 @@ function SceneContent({
         playerPosRef={playerPosRef}
         setPlayerPos={setPlayerPos}
         isMobile={isMobile}
+        pedestalPositions={pedestalPositions}
       />
 
       <ambientLight intensity={0.4} />
@@ -572,7 +653,7 @@ export default function Showroom() {
           api.getProducts(),
           api.getFavorites().catch(() => []),
         ]);
-        setProducts(prods);
+        setProducts(prods.map(p => ({ ...p, color: clampColorToPalette(p.color) })));
         setFavorites(new Set(favs));
       } catch (e) {
         console.error('加载数据失败:', e);
