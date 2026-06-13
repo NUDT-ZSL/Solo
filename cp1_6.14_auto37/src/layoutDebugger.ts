@@ -108,11 +108,14 @@ export function getRandomColor(minHueDiff: number = 30): string {
   do {
     hue = Math.floor(Math.random() * 360);
     attempts++;
-  } while (
-    attempts < 100 &&
-    lastHue !== -1 &&
-    Math.abs(((hue - lastHue + 540) % 360) - 180) > 180 - minHueDiff
-  );
+
+    if (lastHue === -1) break;
+
+    const diff = Math.abs(hue - lastHue);
+    const circularDiff = Math.min(diff, 360 - diff);
+
+    if (circularDiff >= minHueDiff) break;
+  } while (attempts < 100);
 
   lastHue = hue;
   const saturation = 55 + Math.random() * 20;

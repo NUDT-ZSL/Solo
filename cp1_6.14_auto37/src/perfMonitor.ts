@@ -32,8 +32,10 @@ export class PerfMonitor {
   private fpsSampleInterval: number | null = null;
   private lastSampleTime = 0;
   private sampleRateMs = 500;
-  private fpsQueue: number[] = [];
+  private fpsQueue: number[] = new Array(60).fill(0);
   private fpsQueueSize = 60;
+  private fpsWriteIndex = 0;
+  private fpsQueueCount = 0;
   private fpsSampleLastTime = performance.now();
   private fpsSampleFrames = 0;
 
@@ -45,7 +47,9 @@ export class PerfMonitor {
     this.totalReflowCount = 0;
     this.layoutDurations = [];
     this.metricsHistory = [];
-    this.fpsQueue = [];
+    this.fpsQueue = new Array(60).fill(0);
+    this.fpsWriteIndex = 0;
+    this.fpsQueueCount = 0;
     this.fpsFrames = 0;
     this.fpsLastTime = performance.now();
     this.fpsSampleLastTime = performance.now();
@@ -107,7 +111,16 @@ export class PerfMonitor {
   }
 
   getFpsQueue(): number[] {
-    return [...this.fpsQueue];
+    if (this.fpsQueueCount === 0) return [];
+    if (this.fpsQueueCount < this.fpsQueueSize) {
+      return this.fpsQueue.slice(0, this.fpsQueueCount);
+    }
+    const result: number[] = [];
+    for (let i = 0; i < this.fpsQueueSize; i++) {
+      const idx = (this.fpsWriteIndex + i) % this.fpsQueueSize;
+      result.push(this.fpsQueue[idx]);
+    }
+    return result;
   }
 
   getCurrentFps(): number {
@@ -157,9 +170,10 @@ export class PerfMonitor {
         fps = this.currentFps;
       }
 
-      this.fpsQueue.push(fps);
-      if (this.fpsQueue.length > this.fpsQueueSize) {
-        this.fpsQueue.shift();
+      this.fpsQueue[this.fpsWriteIndex] = fps;
+      this.fpsWriteIndex = (this.fpsWriteIndex + 1) % this.fpsQueueSize;
+      if (this.fpsQueueCount < this.fpsQueueSize) {
+        this.fpsQueueCount++;
       }
 
       this.fpsSampleFrames = 0;

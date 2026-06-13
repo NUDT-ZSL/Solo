@@ -226,14 +226,20 @@ function App() {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(index));
     const target = e.target as HTMLElement;
+    target.style.transform = 'scale(1.05)';
     target.style.opacity = '0.4';
   };
 
   const handleDragEnd = (e: React.DragEvent) => {
     const target = e.target as HTMLElement;
+    target.style.transform = '';
     target.style.opacity = '1';
+    target.style.transition = 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
     setDraggedCardIndex(null);
     setDragOverCardIndex(null);
+    setTimeout(() => {
+      if (target) target.style.transition = '';
+    }, 200);
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
@@ -244,13 +250,21 @@ function App() {
     }
   };
 
-  const handleDragLeave = () => {
-    setDragOverCardIndex(null);
+  const handleDragLeave = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragOverCardIndex === index) {
+      setDragOverCardIndex(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
-    if (draggedCardIndex === null || draggedCardIndex === targetIndex) return;
+    e.stopPropagation();
+    if (draggedCardIndex === null || draggedCardIndex === targetIndex) {
+      setDraggedCardIndex(null);
+      setDragOverCardIndex(null);
+      return;
+    }
 
     setCardOrder((prev) => {
       const newOrder = [...prev];
@@ -627,34 +641,31 @@ function App() {
 
       <div className="preview-area">
         <div className="preview-container" style={getLayoutStyle(currentConfig)}>
-          {orderedCards.map((card, displayIndex) => {
-            const originalIndex = cardOrder.indexOf(card.id);
-            return (
-              <div
-                key={card.id}
-                className={`card ${
-                  highlightedCard === card.id ? 'highlighted' : ''
-                } ${draggedCardIndex === originalIndex ? 'dragging' : ''} ${
-                  dragOverCardIndex === originalIndex ? 'drag-over' : ''
-                }`}
-                style={{
-                  backgroundColor: card.color,
-                  ...(layoutType === 'flex' && flexConfig.wrap === 'wrap'
-                    ? { flex: '1 1 calc(25% - ' + (flexConfig.gap * 0.75) + 'px)', minWidth: '120px' }
-                    : {}),
-                }}
-                draggable
-                onClick={() => handleCardClick(card.id)}
-                onDragStart={(e) => handleDragStart(e, originalIndex)}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => handleDragOver(e, originalIndex)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, originalIndex)}
-              >
-                {card.number}
-              </div>
-            );
-          })}
+          {orderedCards.map((card, index) => (
+            <div
+              key={card.id}
+              className={`card ${
+                highlightedCard === card.id ? 'highlighted' : ''
+              } ${draggedCardIndex === index ? 'dragging' : ''} ${
+                dragOverCardIndex === index ? 'drag-over' : ''
+              }`}
+              style={{
+                backgroundColor: card.color,
+                ...(layoutType === 'flex' && flexConfig.wrap === 'wrap'
+                  ? { flex: '1 1 calc(25% - ' + (flexConfig.gap * 0.75) + 'px)', minWidth: '120px' }
+                  : {}),
+              }}
+              draggable
+              onClick={() => handleCardClick(card.id)}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={(e) => handleDragLeave(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+            >
+              {card.number}
+            </div>
+          ))}
         </div>
       </div>
 
