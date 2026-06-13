@@ -29,7 +29,7 @@
       ],
       "rating": 4.4,
       "ratingCount": 36,
-      "favorite": true,
+      "favorite": false,
       "notes": "",
       "gradient": "linear-gradient(135deg, #f97316, #fbbf24)"
     },
