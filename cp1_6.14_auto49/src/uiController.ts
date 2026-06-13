@@ -14,16 +14,19 @@ export class UIController {
   private detailContent: HTMLElement;
   private leftPanel: HTMLElement;
   private rightPanel: HTMLElement;
-  private leftTitle: HTMLElement;
-  private rightTitle: HTMLElement;
   private isPlaying: boolean = true;
   private callbacks: UIControllerCallbacks;
   private mq: MediaQueryList;
   private isMobile: boolean = false;
-  private leftExpandBtn: HTMLButtonElement | null = null;
-  private rightExpandBtn: HTMLButtonElement | null = null;
+  private mobileListenersBound: boolean = false;
+
   private leftCollapseBtn: HTMLButtonElement | null = null;
   private rightCollapseBtn: HTMLButtonElement | null = null;
+
+  private boundHandleLeftBarClick: ((e: Event) => void) | null = null;
+  private boundHandleRightBarClick: ((e: Event) => void) | null = null;
+  private boundHandleResize: (() => void) | null = null;
+  private boundHandleMQChange: ((e: MediaQueryListEvent) => void) | null = null;
 
   constructor(callbacks: UIControllerCallbacks) {
     this.callbacks = callbacks;
@@ -34,11 +37,6 @@ export class UIController {
     this.detailContent = document.getElementById('detail-content') as HTMLElement;
     this.leftPanel = document.getElementById('left-panel') as HTMLElement;
     this.rightPanel = document.getElementById('right-panel') as HTMLElement;
-
-    const leftTitleEl = this.leftPanel.querySelector('.panel-title') as HTMLElement | null;
-    const rightTitleEl = this.rightPanel.querySelector('.panel-title') as HTMLElement | null;
-    this.leftTitle = leftTitleEl ?? this.leftPanel;
-    this.rightTitle = rightTitleEl ?? this.rightPanel;
 
     this.playPauseBtn.addEventListener('click', () => {
       this.isPlaying = !this.isPlaying;
@@ -52,17 +50,36 @@ export class UIController {
       this.callbacks.onVolatilityChange(val);
     });
 
+    this.boundHandleLeftBarClick = this.handleLeftBarClick.bind(this);
+    this.boundHandleRightBarClick = this.handleRightBarClick.bind(this);
+    this.boundHandleResize = this.handleResize.bind(this);
+    this.boundHandleMQChange = this.handleMQChange.bind(this);
+
     this.mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
-    this.handleBreakpointChange(this.mq.matches);
+    this.isMobile = this.mq.matches;
+
     if (typeof this.mq.addEventListener === 'function') {
-      this.mq.addEventListener('change', (e) => this.handleBreakpointChange(e.matches));
+      this.mq.addEventListener('change', this.boundHandleMQChange);
     } else if (typeof (this.mq as any).addListener === 'function') {
-      (this.mq as any).addListener((e: MediaQueryListEvent) => this.handleBreakpointChange(e.matches));
+      (this.mq as any).addListener(this.boundHandleMQChange);
     }
 
-    window.addEventListener('resize', () => this.handleBreakpointChange(
-      window.innerWidth <= MOBILE_BREAKPOINT
-    ));
+    window.addEventListener('resize', this.boundHandleResize);
+
+    if (this.isMobile) {
+      this.enableMobileLayout();
+    }
+  }
+
+  private handleMQChange(e: MediaQueryListEvent): void {
+    this.handleBreakpointChange(e.matches);
+  }
+
+  private handleResize(): void {
+    const nowMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+    if (nowMobile !== this.isMobile) {
+      this.handleBreakpointChange(nowMobile);
+    }
   }
 
   private handleBreakpointChange(isMobile: boolean): void {
@@ -77,23 +94,13 @@ export class UIController {
   }
 
   private enableMobileLayout(): void {
+    if (this.mobileListenersBound) return;
+
     this.leftPanel.classList.remove('expanded');
     this.rightPanel.classList.remove('expanded');
 
-    this.removeCollapseBtns();
-
-    this.leftExpandBtn = document.createElement('button');
-    this.leftExpandBtn.textContent = '☰ 香调';
-    this.styleMobileBarBtn(this.leftExpandBtn);
-    this.leftPanel.style.display = 'block';
-
-    this.rightExpandBtn = document.createElement('button');
-    this.rightExpandBtn.textContent = '详情 ▸';
-    this.styleMobileBarBtn(this.rightExpandBtn);
-    this.rightPanel.style.display = 'block';
-
-    this.leftPanel.addEventListener('click', this.handleLeftBarClick);
-    this.rightPanel.addEventListener('click', this.handleRightBarClick);
+    this.leftPanel.addEventListener('click', this.boundHandleLeftBarClick!);
+    this.rightPanel.addEventListener('click', this.boundHandleRightBarClick!);
 
     this.leftCollapseBtn = document.createElement('button');
     this.styleCollapseBtn(this.leftCollapseBtn, '← 收起');
@@ -110,40 +117,42 @@ export class UIController {
       e.stopPropagation();
       this.rightPanel.classList.remove('expanded');
     });
+
+    this.mobileListenersBound = true;
   }
 
   private disableMobileLayout(): void {
+    if (!this.mobileListenersBound) return;
+
     this.leftPanel.classList.remove('expanded');
     this.rightPanel.classList.remove('expanded');
     this.leftPanel.style.display = '';
     this.rightPanel.style.display = '';
 
-    this.leftPanel.removeEventListener('click', this.handleLeftBarClick);
-    this.rightPanel.removeEventListener('click', this.handleRightBarClick);
+    if (this.boundHandleLeftBarClick) {
+      this.leftPanel.removeEventListener('click', this.boundHandleLeftBarClick);
+    }
+    if (this.boundHandleRightBarClick) {
+      this.rightPanel.removeEventListener('click', this.boundHandleRightBarClick);
+    }
 
-    this.removeCollapseBtns();
-  }
-
-  private removeCollapseBtns(): void {
-    if (this.leftCollapseBtn && this.leftCollapseBtn.parentNode) {
-      this.leftCollapseBtn.parentNode.removeChild(this.leftCollapseBtn);
+    if (this.leftCollapseBtn) {
+      if (this.leftCollapseBtn.parentNode) {
+        this.leftCollapseBtn.parentNode.removeChild(this.leftCollapseBtn);
+      }
       this.leftCollapseBtn = null;
     }
-    if (this.rightCollapseBtn && this.rightCollapseBtn.parentNode) {
-      this.rightCollapseBtn.parentNode.removeChild(this.rightCollapseBtn);
+    if (this.rightCollapseBtn) {
+      if (this.rightCollapseBtn.parentNode) {
+        this.rightCollapseBtn.parentNode.removeChild(this.rightCollapseBtn);
+      }
       this.rightCollapseBtn = null;
     }
-    if (this.leftExpandBtn && this.leftExpandBtn.parentNode) {
-      this.leftExpandBtn.parentNode.removeChild(this.leftExpandBtn);
-      this.leftExpandBtn = null;
-    }
-    if (this.rightExpandBtn && this.rightExpandBtn.parentNode) {
-      this.rightExpandBtn.parentNode.removeChild(this.rightExpandBtn);
-      this.rightExpandBtn = null;
-    }
+
+    this.mobileListenersBound = false;
   }
 
-  private handleLeftBarClick = (e: Event): void => {
+  private handleLeftBarClick(e: Event): void {
     if (!this.isMobile) return;
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('input')) return;
@@ -152,9 +161,9 @@ export class UIController {
       e.stopPropagation();
       this.leftPanel.classList.add('expanded');
     }
-  };
+  }
 
-  private handleRightBarClick = (e: Event): void => {
+  private handleRightBarClick(e: Event): void {
     if (!this.isMobile) return;
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('input')) return;
@@ -163,19 +172,6 @@ export class UIController {
       e.stopPropagation();
       this.rightPanel.classList.add('expanded');
     }
-  };
-
-  private styleMobileBarBtn(btn: HTMLButtonElement): void {
-    btn.style.position = 'absolute';
-    btn.style.top = '8px';
-    btn.style.right = '12px';
-    btn.style.background = 'transparent';
-    btn.style.border = '1px solid #ffffff40';
-    btn.style.color = '#fff';
-    btn.style.padding = '4px 10px';
-    btn.style.borderRadius = '6px';
-    btn.style.fontSize = '13px';
-    btn.style.cursor = 'pointer';
   }
 
   private styleCollapseBtn(btn: HTMLButtonElement, label: string): void {
@@ -227,5 +223,19 @@ export class UIController {
 
   getIsPlaying(): boolean {
     return this.isPlaying;
+  }
+
+  destroy(): void {
+    if (this.boundHandleMQChange) {
+      if (typeof this.mq.removeEventListener === 'function') {
+        this.mq.removeEventListener('change', this.boundHandleMQChange);
+      } else if (typeof (this.mq as any).removeListener === 'function') {
+        (this.mq as any).removeListener(this.boundHandleMQChange);
+      }
+    }
+    if (this.boundHandleResize) {
+      window.removeEventListener('resize', this.boundHandleResize);
+    }
+    this.disableMobileLayout();
   }
 }

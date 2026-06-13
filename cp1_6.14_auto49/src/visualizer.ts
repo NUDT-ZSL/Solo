@@ -156,10 +156,19 @@ export class MoleculeVisualizer {
 
   private perpendicularTo(dir: THREE.Vector3): THREE.Vector3 {
     const a = dir.clone().normalize();
-    const worldUp = Math.abs(a.y) < 0.9
-      ? new THREE.Vector3(0, 1, 0)
-      : new THREE.Vector3(1, 0, 0);
-    return new THREE.Vector3().crossVectors(a, worldUp).normalize();
+    const absX = Math.abs(a.x);
+    const absY = Math.abs(a.y);
+    const absZ = Math.abs(a.z);
+
+    let upAxis: THREE.Vector3;
+    if (absX <= absY && absX <= absZ) {
+      upAxis = new THREE.Vector3(1, 0, 0);
+    } else if (absY <= absX && absY <= absZ) {
+      upAxis = new THREE.Vector3(0, 1, 0);
+    } else {
+      upAxis = new THREE.Vector3(0, 0, 1);
+    }
+    return new THREE.Vector3().crossVectors(a, upAxis).normalize();
   }
 
   private createBondCylinder(start: THREE.Vector3, end: THREE.Vector3, color: number, radius: number): THREE.Mesh {
@@ -199,6 +208,7 @@ export class MoleculeVisualizer {
 
       for (const am of mg.atomMeshes) {
         const mat = am.material as THREE.MeshStandardMaterial;
+        mat.transparent = true;
         mat.emissiveIntensity = mg.baseEmissiveIntensity * emissiveMul;
         mat.opacity = dimOpacity;
       }
@@ -206,6 +216,7 @@ export class MoleculeVisualizer {
       for (let j = 0; j < mg.bondMeshes.length; j++) {
         const bm = mg.bondMeshes[j];
         const mat = bm.material as THREE.MeshStandardMaterial;
+        mat.transparent = true;
         mat.color.set(isSelected ? 0x00ffff : mg.originalBondColors[j]);
         mat.opacity = bondOpacity;
       }
@@ -356,23 +367,29 @@ export class MoleculeVisualizer {
       }
     }
 
-    const toRemove: number[] = [];
-    for (let i = 0; i < this.particles.length; i++) {
-      const p = this.particles[i];
-      if (p.life >= p.maxLife) toRemove.push(i);
+    if (this.particles.length > MAX_PARTICLES) {
+      const indexed = this.particles.map((p, i) => ({ i, life: p.life }));
+      indexed.sort((a, b) => b.life - a.life);
+      const excess = this.particles.length - MAX_PARTICLES;
+      const toRemove = indexed.slice(0, excess).map(x => x.i);
+      toRemove.sort((a, b) => b - a);
+      for (const idx of toRemove) {
+        const p = this.particles[idx];
+        p.mesh.visible = false;
+        this.particlePool.push(p.mesh);
+        this.particles.splice(idx, 1);
+      }
+      return;
     }
 
-    while (this.particles.length - toRemove.length > MAX_PARTICLES) {
-      for (let i = 0; i < this.particles.length; i++) {
-        if (!toRemove.includes(i)) {
-          toRemove.push(i);
-          if (this.particles.length - toRemove.length <= MAX_PARTICLES) break;
-        }
+    const deadIndices: number[] = [];
+    for (let i = 0; i < this.particles.length; i++) {
+      if (this.particles[i].life >= this.particles[i].maxLife) {
+        deadIndices.push(i);
       }
     }
-
-    toRemove.sort((a, b) => b - a);
-    for (const idx of toRemove) {
+    deadIndices.sort((a, b) => b - a);
+    for (const idx of deadIndices) {
       const p = this.particles[idx];
       p.mesh.visible = false;
       this.particlePool.push(p.mesh);

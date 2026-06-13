@@ -47,10 +47,17 @@ const ATOMIC_WEIGHTS: Record<AtomSymbol, number> = {
   H: 1.008,
 };
 
-function atom(symbol: AtomSymbol, x: number, y: number, z: number): AtomData {
+const BOND_LEN_CC_SINGLE = 1.54;
+const BOND_LEN_CC_DOUBLE = 1.34;
+const BOND_LEN_CC_AROMATIC = 1.39;
+const BOND_LEN_C_H = 1.09;
+const BOND_LEN_C_O_SINGLE = 1.43;
+const BOND_LEN_C_O_DOUBLE = 1.20;
+
+function atom(symbol: AtomSymbol, pos: THREE.Vector3): AtomData {
   return {
     symbol,
-    position: new THREE.Vector3(x, y, z),
+    position: pos,
     radius: ATOM_RADII[symbol],
     color: CPK_COLORS[symbol],
   };
@@ -71,243 +78,614 @@ function makeMolecule(
   return { name, atoms, bonds, noteTag, volatility, molecularWeight };
 }
 
-function hexRingAtoms(cx: number, cy: number, cz: number, r: number, aromatic: boolean = false): AtomData[] {
+interface Ring3DBuilder {
+  atoms: AtomData[];
+  bonds: BondData[];
+  baseIndex: number;
+}
+
+function buildBenzeneRing(center: THREE.Vector3, normal: THREE.Vector3, radius: number = BOND_LEN_CC_AROMATIC): Ring3DBuilder {
   const atoms: AtomData[] = [];
+  const bonds: BondData[] = [];
+
+  const n = normal.clone().normalize();
+  const up = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const u = new THREE.Vector3().crossVectors(n, up).normalize();
+  const v = new THREE.Vector3().crossVectors(n, u).normalize();
+
   for (let i = 0; i < 6; i++) {
-    const ang = (Math.PI / 3) * i;
-    const x = cx + r * Math.cos(ang);
-    const y = cy + r * Math.sin(ang);
-    atoms.push(atom(aromatic ? 'C' : 'C', x, y, cz));
+    const angle = (Math.PI / 3) * i;
+    const x = center.x + radius * (u.x * Math.cos(angle) + v.x * Math.sin(angle));
+    const y = center.y + radius * (u.y * Math.cos(angle) + v.y * Math.sin(angle));
+    const z = center.z + radius * (u.z * Math.cos(angle) + v.z * Math.sin(angle));
+    atoms.push(atom('C', new THREE.Vector3(x, y, z)));
   }
-  return atoms;
+
+  for (let i = 0; i < 6; i++) {
+    const next = (i + 1) % 6;
+    bonds.push(bond(i, next, i % 2 === 0 ? 'double' : 'single'));
+  }
+
+  return { atoms, bonds, baseIndex: 0 };
+}
+
+function addHydrogenToRing(ring: Ring3DBuilder, normal: THREE.Vector3): void {
+  const h = normal.clone().normalize();
+  for (let i = 0; i < 6; i++) {
+    const cPos = ring.atoms[i].position;
+    const toCenter = new THREE.Vector3().subVectors(cPos, new THREE.Vector3(0, 0, 0)).normalize();
+    const hPos = cPos.clone().add(toCenter.multiplyScalar(BOND_LEN_C_H * 0.8));
+    const hAtom = atom('H', hPos);
+    ring.atoms.push(hAtom);
+    ring.bonds.push(bond(i, ring.atoms.length - 1, 'single'));
+  }
+}
+
+function v3(x: number, y: number, z: number): THREE.Vector3 {
+  return new THREE.Vector3(x, y, z);
 }
 
 export function generateMolecules(): MoleculeData[] {
-  return [
+  const molecules: MoleculeData[] = [];
 
-    makeMolecule('Limonene', 'Citrus', 0.88, [
-      atom('C', 0, 0, 0), atom('C', 1.5, 0.2, 0), atom('C', 2.8, -0.6, 0.3),
-      atom('C', 4.1, 0.0, 0), atom('C', 3.9, 1.4, 0.2), atom('C', 2.6, 1.9, -0.2),
-      atom('C', 1.3, 1.2, -0.5), atom('C', 0.0, 1.8, 0.2), atom('H', -1.2, -0.3, 0.3),
-      atom('H', 5.2, -0.6, 0.2), atom('H', -1.0, 1.4, 0.6), atom('H', 0.0, 2.8, -0.1),
-    ], [
-      bond(0, 1, 'double'), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5),
-      bond(5, 6), bond(6, 0), bond(6, 7), bond(0, 8), bond(3, 9), bond(7, 10), bond(7, 11),
-    ]),
+  // === CITRUS (4) ===
+  {
+    const c = [
+      v3(-3.1, 0, 0),
+      v3(-1.5, 0.5, 0),
+      v3(0, 0, 0),
+      v3(1.5, 0.5, 0),
+      v3(3.0, 0, 0),
+      v3(1.5, -1.0, 0),
+      v3(0, -1.5, 0),
+      v3(-1.5, -1.0, 0),
+      v3(-1.5, 1.8, 0),
+      v3(3.0, -1.5, 0),
+      v3(4.3, 0.5, 0),
+    ];
+    const atoms: AtomData[] = c.map(p => atom('C', p));
+    atoms.push(atom('H', v3(-3.5, -0.8, 0)));
+    atoms.push(atom('H', v3(-3.5, 0.8, 0)));
+    atoms.push(atom('H', v3(-1.5, 2.5, 0.5)));
+    atoms.push(atom('H', v3(3.0, -2.0, -0.5)));
+    atoms.push(atom('H', v3(4.3, 1.2, 0.5)));
+    atoms.push(atom('H', v3(4.3, 0.0, -0.7)));
 
-    makeMolecule('Citral', 'Citrus', 0.92, [
-      atom('C', 0, 0, 0), atom('C', 1.3, 0.5, 0.1), atom('C', 2.5, -0.1, 0.3),
-      atom('C', 3.8, 0.4, 0.0), atom('C', 5.0, -0.2, 0.2), atom('C', 6.2, 0.3, 0.0),
-      atom('C', 7.4, -0.3, 0.2), atom('O', 7.3, -1.6, 0.4), atom('H', -1.0, 0.4, 0.3),
-      atom('H', 1.2, 1.5, -0.1), atom('H', 2.4, -1.1, 0.5), atom('H', 6.3, 1.3, -0.2),
-    ], [
+    const bonds: BondData[] = [
+      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4, 'double'),
+      bond(3, 5), bond(5, 6), bond(6, 7), bond(7, 2),
+      bond(1, 8), bond(5, 9), bond(4, 10),
+      bond(0, 11), bond(0, 12), bond(8, 13), bond(9, 14),
+      bond(10, 15), bond(10, 16),
+    ];
+    molecules.push(makeMolecule('Limonene', 'Citrus', 0.88, atoms, bonds));
+  }
+
+  {
+    const c = [
+      v3(-6.0, 0, 0),
+      v3(-4.5, 0.3, 0),
+      v3(-3.0, -0.3, 0),
+      v3(-1.5, 0.2, 0),
+      v3(0, -0.4, 0),
+      v3(1.5, 0.1, 0),
+      v3(3.0, -0.5, 0),
+      v3(4.5, 0.0, 0),
+      v3(6.0, -0.6, 0),
+      v3(7.5, 0.0, 0),
+      v3(8.5, -0.5, 0),
+    ];
+    const atoms: AtomData[] = c.map(p => atom('C', p));
+    atoms.push(atom('O', v3(9.0, 0.5, 0)));
+    atoms.push(atom('H', v3(-6.0, -1.0, 0)));
+    atoms.push(atom('H', v3(-4.5, 1.2, 0)));
+    atoms.push(atom('H', v3(-3.0, -1.2, 0)));
+    atoms.push(atom('H', v3(4.5, 0.9, 0)));
+    atoms.push(atom('H', v3(6.0, -1.4, 0)));
+    atoms.push(atom('H', v3(7.5, 0.9, 0.5)));
+
+    const bonds: BondData[] = [
       bond(0, 1, 'double'), bond(1, 2), bond(2, 3, 'double'), bond(3, 4),
-      bond(4, 5, 'double'), bond(5, 6), bond(6, 7, 'double'), bond(0, 8),
-      bond(1, 9), bond(2, 10), bond(5, 11),
-    ]),
+      bond(4, 5, 'double'), bond(5, 6), bond(6, 7, 'double'), bond(7, 8),
+      bond(8, 9, 'double'), bond(9, 10), bond(9, 11, 'double'),
+      bond(0, 12), bond(1, 13), bond(2, 14), bond(6, 15), bond(7, 16), bond(8, 17),
+    ];
+    molecules.push(makeMolecule('Citral', 'Citrus', 0.92, atoms, bonds));
+  }
 
-    makeMolecule('Linalyl-Acetate', 'Citrus', 0.80, [
-      atom('C', 0, 0, 0), atom('C', 1.3, 0.4, 0), atom('C', 2.5, -0.3, 0.3),
-      atom('C', 3.7, 0.2, 0), atom('O', 4.8, -0.4, 0.3), atom('C', 5.9, 0.1, 0.0),
-      atom('O', 7.0, -0.5, 0.2), atom('C', 2.4, -1.7, 0), atom('C', 1.2, -2.2, 0.3),
-      atom('H', -1.0, 0.5, 0.2), atom('H', 3.6, -2.0, 0.3), atom('H', 5.9, 1.1, -0.2),
-    ], [
-      bond(0, 1, 'double'), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5),
-      bond(5, 6, 'double'), bond(2, 7), bond(7, 8), bond(0, 9), bond(7, 10), bond(5, 11),
-    ]),
+  {
+    const c = [
+      v3(-4.0, 0, 0),
+      v3(-2.5, 0.4, 0),
+      v3(-1.0, -0.2, 0),
+      v3(0.5, 0.3, 0),
+      v3(2.0, -0.3, 0),
+      v3(3.5, 0.2, 0),
+      v3(5.0, -0.4, 0),
+      v3(6.5, 0.1, 0),
+    ];
+    const atoms: AtomData[] = c.map(p => atom('C', p));
+    atoms.push(atom('O', v3(1.7, -1.5, 0)));
+    atoms.push(atom('O', v3(7.5, -0.5, 0)));
+    atoms.push(atom('C', v3(-2.5, -1.3, 0)));
+    atoms.push(atom('C', v3(-3.5, -2.0, 0)));
+    atoms.push(atom('H', v3(-4.5, 0.8, 0)));
+    atoms.push(atom('H', v3(6.5, 1.0, 0)));
+    atoms.push(atom('H', v3(-3.0, -2.6, 0.5)));
 
-    makeMolecule('Bergapten', 'Citrus', 0.55, [
-      atom('C', 0, 0, 0), atom('C', 1.3, 0.5, 0), atom('C', 2.6, 0.0, 0.3),
-      atom('O', 3.5, 0.8, 0.0), atom('C', 3.8, 2.1, 0.2), atom('C', 2.7, 2.9, -0.1),
-      atom('C', 1.4, 2.5, 0.1), atom('C', 1.2, 1.1, -0.2), atom('O', 0.3, 2.8, 0.4),
-      atom('C', 4.3, -0.9, 0.2), atom('O', 5.5, -0.6, 0.0), atom('H', -0.9, -0.4, 0.3),
-      atom('H', 4.7, 2.4, 0.4),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5),
-      bond(5, 6), bond(6, 7), bond(7, 1), bond(6, 8), bond(2, 9),
-      bond(9, 10, 'double'), bond(0, 11), bond(4, 12),
-    ]),
-
-    makeMolecule('Linalool', 'Floral', 0.72, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.5, 0.2), atom('C', 2.5, -0.2, 0),
-      atom('C', 3.7, 0.4, 0.2), atom('O', 4.8, -0.4, 0.4), atom('C', 2.4, -1.6, 0.1),
-      atom('C', 1.2, -2.1, 0.3), atom('C', 2.8, 1.8, 0), atom('C', 1.5, 2.3, 0.2),
-      atom('H', -1.0, 0.6, 0.3), atom('H', 3.5, -1.9, 0.3), atom('H', 0.4, 1.9, 0.4),
-    ], [
-      bond(0, 1), bond(1, 2, 'double'), bond(2, 3), bond(3, 4), bond(2, 5),
-      bond(5, 6), bond(3, 7), bond(7, 8), bond(0, 9), bond(5, 10), bond(8, 11),
-    ]),
-
-    makeMolecule('Geraniol', 'Floral', 0.78, [
-      atom('C', 0, 0, 0), atom('C', 1.3, 0.5, 0.1), atom('C', 2.5, -0.2, 0.3),
-      atom('C', 3.7, 0.4, 0.0), atom('C', 4.9, -0.3, 0.2), atom('C', 6.1, 0.3, 0.0),
-      atom('O', 7.2, -0.4, 0.2), atom('C', 1.3, 1.9, 0.3), atom('C', 4.9, -1.7, 0.3),
-      atom('H', -1.0, 0.5, 0.3), atom('H', 7.1, -1.3, -0.1), atom('H', 0.3, 2.3, 0.5),
-    ], [
+    const bonds: BondData[] = [
       bond(0, 1), bond(1, 2, 'double'), bond(2, 3), bond(3, 4, 'double'),
-      bond(4, 5), bond(5, 6), bond(1, 7), bond(4, 8), bond(0, 9), bond(6, 10), bond(7, 11),
-    ]),
+      bond(4, 5), bond(5, 6), bond(6, 7, 'double'), bond(7, 9),
+      bond(4, 8), bond(2, 10), bond(10, 11),
+      bond(0, 12), bond(7, 13), bond(11, 14),
+    ];
+    molecules.push(makeMolecule('Linalyl-Acetate', 'Citrus', 0.80, atoms, bonds));
+  }
 
-    makeMolecule('Jasmone', 'Floral', 0.62, [
-      atom('C', 0, 0, 0), atom('C', 1.5, 0.3, 0.1), atom('C', 2.6, -0.6, 0.4),
-      atom('C', 2.3, -2.0, 0.2), atom('C', 0.9, -2.4, 0.0), atom('C', -0.3, -1.5, 0.3),
-      atom('O', 2.9, -3.2, 0.3), atom('C', 3.9, 0.1, 0.2), atom('C', 5.1, -0.6, 0.4),
-      atom('C', 6.3, 0.0, 0.2), atom('C', 7.4, -0.8, 0.0), atom('H', -1.2, -1.8, 0.5),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5), bond(5, 0),
-      bond(3, 6, 'double'), bond(2, 7), bond(7, 8, 'double'), bond(8, 9), bond(9, 10), bond(5, 11),
-    ]),
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
 
-    makeMolecule('Neroli', 'Floral', 0.70, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.5, 0.1), atom('C', 2.4, -0.2, 0.3),
-      atom('C', 3.6, 0.4, 0.0), atom('C', 4.8, -0.3, 0.2), atom('C', 6.0, 0.3, 0.0),
-      atom('O', 7.1, -0.4, 0.2), atom('C', 0.0, -1.4, 0.2), atom('H', -1.0, 0.5, 0.3),
-      atom('H', 7.0, -1.3, -0.1), atom('H', 2.3, -1.2, 0.5), atom('H', 0.0, -2.3, 0.0),
-    ], [
-      bond(0, 1), bond(1, 2, 'double'), bond(2, 3), bond(3, 4), bond(4, 5, 'double'),
-      bond(5, 6), bond(0, 7), bond(0, 8), bond(6, 9), bond(2, 10), bond(7, 11),
-    ]),
+    atoms.push(atom('C', v3(2.0, 0, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
 
-    makeMolecule('Cedrol', 'Woody', 0.18, [
-      atom('C', 0, 0, 0), atom('C', 1.3, 0.5, 0.2), atom('C', 2.4, -0.3, 0.4),
-      atom('C', 3.5, 0.3, 0.1), atom('C', 3.2, 1.7, 0.3), atom('C', 1.9, 2.1, -0.1),
-      atom('C', 0.8, 1.3, 0.3), atom('C', -0.4, 1.8, -0.1), atom('O', -1.4, 1.0, 0.4),
-      atom('C', -0.3, -1.0, 0.4), atom('C', 2.5, 2.9, -0.3), atom('C', 4.6, 2.2, 0.5),
-      atom('H', 4.4, -0.2, 0.2), atom('H', -1.2, -0.8, 0.7),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5),
-      bond(5, 6), bond(6, 0), bond(6, 7), bond(7, 8), bond(0, 9),
-      bond(5, 10), bond(4, 11), bond(3, 12), bond(9, 13),
-    ]),
+    atoms.push(atom('O', v3(3.5, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
 
-    makeMolecule('Sandalol', 'Woody', 0.15, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.6, 0.1), atom('C', 2.4, 0.0, 0.3),
-      atom('C', 3.5, 0.6, 0.0), atom('C', 4.6, -0.1, 0.2), atom('O', 5.6, 0.4, -0.1),
-      atom('C', 3.3, 1.9, 0.3), atom('C', 2.1, 2.4, -0.1), atom('C', 0.9, 1.9, 0.3),
-      atom('C', -0.3, 1.2, 0.5), atom('C', 4.4, -1.4, 0.3), atom('C', 5.5, -2.1, 0.1),
-      atom('H', -0.8, -0.6, 0.4), atom('H', 6.5, 0.1, 0.1),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5),
-      bond(3, 6), bond(6, 7), bond(7, 8), bond(8, 9), bond(9, 0),
-      bond(4, 10), bond(10, 11), bond(0, 12), bond(5, 13),
-    ]),
+    atoms.push(atom('O', v3(-2.0, -1.5, 0)));
+    bonds.push(bond(4, atoms.length - 1, 'single'));
 
-    makeMolecule('Patchoulol', 'Woody', 0.12, [
-      atom('C', 0, 0, 0), atom('C', 1.0, 0.8, 0.3), atom('C', 2.3, 0.4, 0.1),
-      atom('C', 3.4, 1.1, 0.4), atom('C', 4.4, 0.3, 0.2), atom('O', 4.2, -1.0, 0.4),
-      atom('C', 5.5, 1.0, 0.0), atom('C', 3.4, 2.4, 0.2), atom('C', 2.2, 2.9, -0.1),
-      atom('C', 1.0, 2.2, 0.4), atom('C', -0.3, 2.8, 0.1), atom('C', -0.4, -0.7, 0.5),
-      atom('C', 2.3, -0.4, -1.0), atom('H', -1.2, 0.7, 0.5),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5),
-      bond(4, 6), bond(3, 7), bond(7, 8), bond(8, 9), bond(9, 10),
-      bond(9, 1), bond(0, 11), bond(2, 12), bond(0, 13),
-    ]),
+    atoms.push(atom('C', v3(-3.5, -1.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
 
-    makeMolecule('Guaiacol', 'Woody', 0.45, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.6, 0), atom('C', 2.4, 0.0, 0.3),
-      atom('C', 2.4, -1.3, 0.4), atom('C', 1.2, -1.9, 0.1), atom('C', 0.0, -1.3, -0.2),
-      atom('O', -1.1, -1.8, 0.3), atom('C', -2.2, -1.0, 0.0), atom('O', 0.0, 1.3, 0.2),
-      atom('C', 1.1, 2.0, 0.0), atom('H', 3.4, -1.8, 0.6), atom('H', -3.1, -1.6, 0.3),
-    ], [
+    atoms.push(atom('H', v3(-3.8, -0.2, 0.5)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Bergapten', 'Citrus', 0.55, atoms, bonds));
+  }
+
+  // === FLORAL (4) ===
+  {
+    const c = [
+      v3(-5, 0, 0),
+      v3(-3.5, 0.5, 0),
+      v3(-2, 0, 0),
+      v3(-0.5, 0.5, 0),
+      v3(1, 0, 0),
+      v3(2.5, 0.5, 0),
+      v3(4, 0, 0),
+      v3(5.5, 0.5, 0),
+      v3(6.5, 0, 0.5),
+    ];
+    const atoms: AtomData[] = c.map(p => atom('C', p));
+    atoms.push(atom('O', v3(6.0, -1.0, 0)));
+    atoms.push(atom('C', v3(-2, -1.5, 0)));
+    atoms.push(atom('C', v3(-3.5, -2.0, 0)));
+    atoms.push(atom('H', v3(-5.5, -0.8, 0)));
+    atoms.push(atom('H', v3(5.0, -1.8, 0)));
+    atoms.push(atom('H', v3(-3.5, -2.8, 0.5)));
+
+    const bonds: BondData[] = [
       bond(0, 1, 'double'), bond(1, 2), bond(2, 3, 'double'), bond(3, 4),
-      bond(4, 5, 'double'), bond(5, 0), bond(5, 6), bond(6, 7), bond(0, 8), bond(8, 9),
-      bond(3, 10), bond(7, 11),
-    ]),
+      bond(4, 5, 'double'), bond(5, 6), bond(6, 7, 'double'), bond(7, 8),
+      bond(6, 9), bond(2, 10), bond(10, 11),
+      bond(0, 12), bond(9, 13), bond(11, 14),
+    ];
+    molecules.push(makeMolecule('Linalool', 'Floral', 0.72, atoms, bonds));
+  }
 
-    makeMolecule('Vanillin', 'Spicy', 0.42, [
-      atom('C', 0, 0, 0), atom('C', 1.3, 0.6, 0), atom('C', 2.5, 0.0, 0.3),
-      atom('C', 2.5, -1.4, 0.4), atom('C', 1.3, -2.0, 0.1), atom('C', 0.1, -1.4, -0.2),
-      atom('O', -1.0, -1.9, 0.3), atom('C', -2.2, -1.1, 0.0), atom('C', 3.7, -1.9, 0.2),
-      atom('O', 3.7, -3.2, 0.4), atom('O', 3.6, 0.7, 0.0), atom('H', -3.1, -1.7, 0.3),
-      atom('H', 1.3, -3.0, 0.3),
-    ], [
-      bond(0, 1, 'double'), bond(1, 2), bond(2, 3), bond(3, 4, 'double'),
-      bond(4, 5), bond(5, 0), bond(5, 6), bond(6, 7), bond(3, 8),
-      bond(8, 9, 'double'), bond(2, 10), bond(7, 11), bond(4, 12),
-    ]),
+  {
+    const c = [
+      v3(-5, 0, 0), v3(-3.5, 0.5, 0), v3(-2, 0, 0),
+      v3(-0.5, 0.5, 0), v3(1, 0, 0), v3(2.5, 0.5, 0),
+      v3(4, 0, 0), v3(5.5, 0.5, 0), v3(7, 0, 0),
+    ];
+    const atoms: AtomData[] = c.map(p => atom('C', p));
+    atoms.push(atom('O', v3(7.5, 1.2, 0)));
+    atoms.push(atom('C', v3(-3.5, 1.8, 0)));
+    atoms.push(atom('H', v3(-5, -0.8, 0)));
+    atoms.push(atom('H', v3(7.5, -0.8, 0)));
+    atoms.push(atom('H', v3(-3.5, 2.5, 0.5)));
 
-    makeMolecule('Eugenol', 'Spicy', 0.52, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.6, 0), atom('C', 2.4, 0.0, 0.3),
-      atom('C', 2.4, -1.3, 0.4), atom('C', 1.2, -1.9, 0.1), atom('C', 0.0, -1.3, -0.2),
-      atom('O', -1.1, -1.8, 0.3), atom('C', 3.6, -2.0, 0.0), atom('O', 4.6, -1.3, 0.3),
-      atom('C', 3.7, -3.2, 0.2), atom('C', 3.6, 0.7, 0.1), atom('C', 4.7, 1.4, -0.2),
-      atom('H', 5.6, 0.9, 0.1), atom('H', 2.3, -4.0, 0.0),
-    ], [
+    const bonds: BondData[] = [
+      bond(0, 1), bond(1, 2, 'double'), bond(2, 3), bond(3, 4, 'double'),
+      bond(4, 5), bond(5, 6, 'double'), bond(6, 7), bond(7, 8),
+      bond(8, 9, 'double'), bond(1, 10),
+      bond(0, 11), bond(8, 12), bond(10, 13),
+    ];
+    molecules.push(makeMolecule('Geraniol', 'Floral', 0.78, atoms, bonds));
+  }
+
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1), 1.5);
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('O', v3(-2.5, 0, 0)));
+    bonds.push(bond(3, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-4.0, 0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(2.5, 0.5, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -0.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('C', v3(5.5, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Jasmone', 'Floral', 0.62, atoms, bonds));
+  }
+
+  {
+    const c = [
+      v3(-4, 0, 0), v3(-2.5, 0.5, 0), v3(-1, 0, 0),
+      v3(0.5, 0.5, 0), v3(2, 0, 0), v3(3.5, 0.5, 0),
+      v3(5, 0, 0),
+    ];
+    const atoms: AtomData[] = c.map(p => atom('C', p));
+    atoms.push(atom('O', v3(6.5, 0.5, 0)));
+    atoms.push(atom('C', v3(-4, 1.5, 0)));
+    atoms.push(atom('C', v3(-4, -1.5, 0)));
+    atoms.push(atom('H', v3(5.5, -0.8, 0)));
+    atoms.push(atom('H', v3(-4, 2.2, 0.5)));
+    atoms.push(atom('H', v3(-4, -2.2, 0.5)));
+
+    const bonds: BondData[] = [
       bond(0, 1, 'double'), bond(1, 2), bond(2, 3, 'double'), bond(3, 4),
-      bond(4, 5, 'double'), bond(5, 0), bond(5, 6), bond(3, 7),
-      bond(7, 8), bond(7, 9), bond(2, 10), bond(10, 11, 'double'),
-      bond(11, 12), bond(9, 13),
-    ]),
+      bond(4, 5, 'double'), bond(5, 6),
+      bond(0, 8), bond(0, 9), bond(6, 7, 'double'),
+      bond(6, 10), bond(8, 11), bond(9, 12),
+    ];
+    molecules.push(makeMolecule('Neroli', 'Floral', 0.70, atoms, bonds));
+  }
 
-    makeMolecule('Cinnamaldehyde', 'Spicy', 0.60, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.6, 0.1), atom('C', 2.4, 0.0, 0.3),
-      atom('C', 2.4, -1.3, 0.4), atom('C', 1.2, -1.9, 0.1), atom('C', 0.0, -1.3, -0.2),
-      atom('C', -1.2, -2.0, 0.2), atom('C', -2.3, -1.3, -0.1), atom('C', -3.5, -2.0, 0.1),
-      atom('O', -3.5, -3.3, -0.1), atom('H', 3.4, 0.4, 0.5), atom('H', 3.4, -1.8, 0.6),
-    ], [
-      bond(0, 1, 'double'), bond(1, 2), bond(2, 3, 'double'), bond(3, 4),
-      bond(4, 5, 'double'), bond(5, 0), bond(5, 6), bond(6, 7, 'double'),
-      bond(7, 8), bond(8, 9, 'double'), bond(2, 10), bond(3, 11),
-    ]),
+  // === WOODY (5) ===
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
 
-    makeMolecule('Coumarin', 'Herbal', 0.48, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.5, 0), atom('C', 2.4, 0.0, 0.3),
-      atom('C', 2.4, -1.3, 0.4), atom('C', 1.2, -1.9, 0.1), atom('C', 0.0, -1.3, -0.2),
-      atom('O', -1.1, -1.8, 0.3), atom('O', 3.4, -2.0, 0.2), atom('C', 3.5, -3.2, 0.4),
-      atom('H', -0.9, 1.0, 0.3), atom('H', 3.4, 0.5, 0.1),
-    ], [
-      bond(0, 1, 'double'), bond(1, 2), bond(2, 3, 'double'), bond(3, 4),
-      bond(4, 5, 'double'), bond(5, 0), bond(5, 6), bond(3, 7), bond(7, 8, 'double'),
-      bond(0, 9), bond(2, 10),
-    ]),
+    atoms.push(atom('C', v3(2.5, -1.5, 0)));
+    bonds.push(bond(1, atoms.length - 1, 'single'));
 
-    makeMolecule('Thymol', 'Herbal', 0.50, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.6, 0), atom('C', 2.4, 0.0, 0.3),
-      atom('C', 2.4, -1.3, 0.4), atom('C', 1.2, -1.9, 0.1), atom('C', 0.0, -1.3, -0.2),
-      atom('O', -1.0, -1.9, 0.3), atom('C', -0.9, 1.1, 0.2), atom('C', 3.6, 0.7, 0.1),
-      atom('C', 4.7, 0.0, 0.3), atom('C', 5.8, 0.7, 0.1), atom('H', 3.5, -2.7, 0.2),
-      atom('H', -1.8, 0.6, 0.4),
-    ], [
-      bond(0, 1, 'double'), bond(1, 2), bond(2, 3, 'double'), bond(3, 4),
-      bond(4, 5, 'double'), bond(5, 0), bond(5, 6), bond(0, 7), bond(2, 8),
-      bond(8, 9), bond(9, 10), bond(3, 11), bond(7, 12),
-    ]),
+    atoms.push(atom('C', v3(4.0, -2.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
 
-    makeMolecule('Iso-E-Super', 'Woody', 0.32, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.6, 0.2), atom('C', 2.4, 0.1, 0.0),
-      atom('C', 3.5, 0.7, 0.3), atom('C', 4.6, -0.1, 0.1), atom('O', 4.4, -1.3, 0.3),
-      atom('C', 5.6, 0.5, -0.1), atom('C', 3.6, 2.0, 0.1), atom('C', 2.4, 2.5, 0.3),
-      atom('C', 1.2, 2.0, -0.1), atom('C', 0.1, 2.6, 0.2), atom('C', -0.9, -0.6, 0.4),
-      atom('H', -1.1, 0.7, 0.4), atom('H', 6.6, 0.0, 0.1),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4, 'double'), bond(4, 5),
-      bond(4, 6), bond(3, 7), bond(7, 8), bond(8, 9), bond(9, 10), bond(9, 1),
-      bond(0, 11), bond(0, 12), bond(6, 13),
-    ]),
+    atoms.push(atom('C', v3(5.5, -1.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
 
-    makeMolecule('Galaxolide', 'Musk', 0.22, [
-      atom('C', 0, 0, 0), atom('C', 1.1, 0.6, 0.2), atom('C', 2.3, 0.1, 0.0),
-      atom('O', 2.4, -1.2, 0.3), atom('C', 3.4, 0.8, 0.2), atom('C', 4.5, 0.1, 0.0),
-      atom('C', 5.6, 0.8, 0.2), atom('C', 3.3, 2.1, 0.3), atom('C', 2.1, 2.6, 0.1),
-      atom('C', 0.9, 2.0, -0.1), atom('C', -0.2, -1.3, 0.2), atom('H', 6.5, 0.3, 0.4),
-      atom('H', -0.8, 0.7, 0.4),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(2, 4), bond(4, 5, 'double'),
-      bond(5, 6), bond(4, 7), bond(7, 8), bond(8, 9), bond(9, 1), bond(0, 10),
-      bond(6, 11), bond(0, 12),
-    ]),
+    atoms.push(atom('C', v3(6.5, -2.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
 
-    makeMolecule('Ambroxan', 'Marine', 0.28, [
-      atom('C', 0, 0, 0), atom('C', 1.2, 0.6, 0.2), atom('C', 2.4, 0.1, 0.0),
-      atom('C', 3.5, 0.7, 0.3), atom('C', 4.5, -0.1, 0.1), atom('O', 4.3, -1.3, 0.3),
-      atom('C', 3.3, -1.7, 0.1), atom('C', 2.1, -1.2, 0.3), atom('C', 1.0, -1.8, 0.1),
-      atom('C', -0.2, -1.0, 0.3), atom('C', -1.0, 0.6, 0.1), atom('C', 5.6, 0.5, -0.1),
-      atom('H', -1.2, -1.7, 0.5),
-    ], [
-      bond(0, 1), bond(1, 2), bond(2, 3), bond(3, 4), bond(4, 5),
-      bond(5, 6), bond(6, 7), bond(7, 8), bond(8, 9), bond(9, 0),
-      bond(0, 10), bond(4, 11), bond(9, 12),
-    ]),
-  ];
+    atoms.push(atom('C', v3(5.0, -3.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(3.5, -3.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(8.0, -2.0, 0)));
+    bonds.push(bond(8, atoms.length - 1, 'single'));
+
+    atoms.push(atom('H', v3(-2.0, -1.5, 0.5)));
+    bonds.push(bond(4, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Cedrol', 'Woody', 0.18, atoms, bonds));
+  }
+
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('C', v3(2.5, 0.5, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -0.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(5.5, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(6.5, -0.8, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(5.5, -2.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -1.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-2.5, 1.0, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(-3.8, 0.3, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Sandalol', 'Woody', 0.15, atoms, bonds));
+  }
+
+  {
+    const ring1 = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring1.atoms;
+    const bonds = ring1.bonds;
+
+    atoms.push(atom('C', v3(2.5, 0, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(3.5, 1.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(5.0, 1.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(5.5, -0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.5, -1.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(3.0, -1.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(6.8, -0.8, 0)));
+    bonds.push(bond(9, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Patchoulol', 'Woody', 0.12, atoms, bonds));
+  }
+
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('O', v3(-2.5, 0, 0)));
+    bonds.push(bond(3, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-4.0, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(0, -2.5, 0)));
+    bonds.push(bond(4, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(0.5, -4.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('H', v3(2.0, -2.0, 0.5)));
+    bonds.push(bond(1, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Guaiacol', 'Woody', 0.45, atoms, bonds));
+  }
+
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('C', v3(2.5, 0.8, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, 0.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('C', v3(5.5, 0.8, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(6.5, -0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(7.5, 0.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('C', v3(-2.0, -1.5, 0)));
+    bonds.push(bond(4, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-3.5, -1.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Iso-E-Super', 'Woody', 0.32, atoms, bonds));
+  }
+
+  // === SPICY (3) ===
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('O', v3(-2.5, 0, 0)));
+    bonds.push(bond(3, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-4.0, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(0, 2.5, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(0.5, 4.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(2.5, -2.0, 0)));
+    bonds.push(bond(1, atoms.length - 1, 'double'));
+
+    atoms.push(atom('C', v3(4.0, -2.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('H', v3(-4.0, 1.5, 0.5)));
+    bonds.push(bond(7, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Vanillin', 'Spicy', 0.42, atoms, bonds));
+  }
+
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('O', v3(-2.5, 0, 0)));
+    bonds.push(bond(3, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-4.0, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(2.5, -1.0, 0)));
+    bonds.push(bond(1, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -0.3, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('C', v3(5.5, -1.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(2.5, 1.5, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, 2.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Eugenol', 'Spicy', 0.52, atoms, bonds));
+  }
+
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('C', v3(2.5, 0.5, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -0.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('C', v3(5.5, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(7.0, -0.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('O', v3(8.0, 0.8, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('H', v3(-2.0, -1.8, 0.5)));
+    bonds.push(bond(4, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Cinnamaldehyde', 'Spicy', 0.60, atoms, bonds));
+  }
+
+  // === HERBAL (2) ===
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('O', v3(2.5, 1.5, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, 0.8, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'double'));
+
+    atoms.push(atom('O', v3(2.5, -1.8, 0)));
+    bonds.push(bond(1, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -2.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-2.5, 0.8, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('H', v3(-4.0, 0.3, 0.5)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Coumarin', 'Herbal', 0.48, atoms, bonds));
+  }
+
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('O', v3(-2.5, 0, 0)));
+    bonds.push(bond(3, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-4.0, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-1.5, 2.2, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(2.5, 1.2, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(5.5, 1.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('H', v3(-4.0, 1.2, 0.5)));
+    bonds.push(bond(7, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Thymol', 'Herbal', 0.50, atoms, bonds));
+  }
+
+  // === MUSK (1) ===
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('O', v3(0, 2.5, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-1.0, 4.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(1.0, 4.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-1.5, -2.2, 0)));
+    bonds.push(bond(4, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-3.0, -1.8, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-4.5, -2.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Galaxolide', 'Musk', 0.22, atoms, bonds));
+  }
+
+  // === MARINE (1) ===
+  {
+    const ring = buildBenzeneRing(v3(0, 0, 0), v3(0, 0, 1));
+    const atoms = ring.atoms;
+    const bonds = ring.bonds;
+
+    atoms.push(atom('C', v3(2.5, 0.5, 0)));
+    bonds.push(bond(0, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -0.2, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(5.5, 0.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('O', v3(6.5, -0.8, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(5.5, -2.0, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(4.0, -1.5, 0)));
+    bonds.push(bond(atoms.length - 2, atoms.length - 1, 'single'));
+
+    atoms.push(atom('C', v3(-2.5, 1.0, 0)));
+    bonds.push(bond(2, atoms.length - 1, 'single'));
+
+    molecules.push(makeMolecule('Ambroxan', 'Marine', 0.28, atoms, bonds));
+  }
+
+  return molecules;
 }
