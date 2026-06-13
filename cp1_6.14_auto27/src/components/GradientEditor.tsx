@@ -77,16 +77,17 @@ const GradientEditor: React.FC<GradientEditorProps> = ({
 
   const handleMouseDown = (stopId: string, e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDraggingStopId(stopId);
     dragStateRef.current = { isDragging: true, stopId, tab: activeTab };
+
+    const target = e.target as HTMLElement;
+    const slider = target.closest('.color-stop-slider-container') as HTMLElement;
+    if (!slider) return;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!dragStateRef.current.isDragging || !dragStateRef.current.stopId) return;
       
-      const target = moveEvent.target as HTMLElement;
-      const slider = target.closest('.color-stop-slider-container') as HTMLElement;
-      if (!slider) return;
-
       const rect = slider.getBoundingClientRect();
       const x = moveEvent.clientX - rect.left;
       const percentage = clamp((x / rect.width) * 100, 0, 100);

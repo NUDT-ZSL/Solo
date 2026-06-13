@@ -80,7 +80,7 @@ input[type="range"]::-moz-range-thumb:hover {
 
 .preview-panel {
   width: 60%;
-  background-color: #1e1e2e;
+  background-color: transparent;
   position: relative;
   min-height: 500px;
   overflow: hidden;
