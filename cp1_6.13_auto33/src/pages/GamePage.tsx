@@ -10,7 +10,7 @@ import ChartModal from '../components/ChartModal';
 const GamePage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const { ws, sendMessage, playerName } = useWebSocket();
+  const { ws, sendMessage, playerName, saveGameState, clearGameState } = useWebSocket();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -19,7 +19,9 @@ const GamePage: React.FC = () => {
   const [showChart, setShowChart] = useState(false);
   const [chipHistory, setChipHistory] = useState<ChipHistoryEntry[]>([]);
   const [isDealing, setIsDealing] = useState(false);
+  const [dealTrigger, setDealTrigger] = useState(0);
   const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
+  const hasJoinedRef = useRef(false);
 
   useEffect(() => {
     if (!ws || !roomId) return;
@@ -33,6 +35,7 @@ const GamePage: React.FC = () => {
             setRoom(message.room);
             if (message.playerId) {
               setPlayerId(message.playerId);
+              saveGameState(message.playerId, roomId);
             }
             if (message.room?.currentPlayerIndex !== undefined && message.room?.players) {
               const currentPlayer = message.room.players[message.room.currentPlayerIndex];
@@ -43,8 +46,27 @@ const GamePage: React.FC = () => {
             }
             break;
 
+          case 'reconnect_success':
+            setRoom(message.room);
+            if (message.playerId) {
+              setPlayerId(message.playerId);
+            }
+            if (message.room?.currentPlayerIndex !== undefined && message.room?.players) {
+              const currentPlayer = message.room.players[message.room.currentPlayerIndex];
+              setCurrentPlayerId(currentPlayer?.id || null);
+            }
+            if (message.room?.chipHistory) {
+              setChipHistory(message.room.chipHistory);
+            }
+            break;
+
+          case 'reconnect_failed':
+            clearGameState();
+            break;
+
           case 'deal_cards':
             setIsDealing(true);
+            setDealTrigger((prev) => prev + 1);
             setTimeout(() => setIsDealing(false), 800);
             break;
 
@@ -52,6 +74,9 @@ const GamePage: React.FC = () => {
             break;
 
           case 'player_left':
+            break;
+
+          case 'player_reconnected':
             break;
 
           case 'game_started':
@@ -70,16 +95,14 @@ const GamePage: React.FC = () => {
             break;
 
           case 'community_cards':
-            if (room) {
-              setRoom((prev) =>
-                prev ? { ...prev, communityCards: message.cards } : prev
-              );
-            }
+            setRoom((prev) =>
+              prev ? { ...prev, communityCards: message.cards } : prev
+            );
             break;
 
           case 'round_ended':
             setWinners(message.winners || []);
-            if (message.communityCards && room) {
+            if (message.communityCards) {
               setRoom((prev) =>
                 prev ? { ...prev, communityCards: message.communityCards } : prev
               );
@@ -105,19 +128,25 @@ const GamePage: React.FC = () => {
     messageHandlerRef.current = handleMessage;
     ws.addEventListener('message', handleMessage);
 
+    if (!hasJoinedRef.current) {
+      hasJoinedRef.current = true;
+      sendMessage({ type: 'join_room', roomId, playerName });
+    }
+
     return () => {
       if (messageHandlerRef.current) {
         ws.removeEventListener('message', messageHandlerRef.current);
       }
     };
-  }, [ws, roomId, room]);
+  }, [ws, roomId, playerName, sendMessage, saveGameState, clearGameState]);
 
   const handleBack = useCallback(() => {
     if (roomId) {
       sendMessage({ type: 'leave_room', roomId });
     }
+    clearGameState();
     navigate('/');
-  }, [roomId, sendMessage, navigate]);
+  }, [roomId, sendMessage, clearGameState, navigate]);
 
   const handleStartGame = useCallback(() => {
     if (roomId) {
@@ -147,7 +176,14 @@ const GamePage: React.FC = () => {
   );
 
   const currentPlayer = room?.players.find((p) => p.id === playerId);
-  const isCurrentTurn = playerId === currentPlayerId && room?.status === 'playing' && room?.round !== 'showdown';
+  const isCurrentTurn = 
+    playerId === currentPlayerId && 
+    room?.status === 'playing' && 
+    room?.round !== 'showdown' &&
+    currentPlayer && 
+    !currentPlayer.isFolded && 
+    !currentPlayer.isAllIn;
+  
   const showStartButton = room?.status === 'waiting' && room.players.length >= 2;
   const showNextHandButton = room?.round === 'showdown' && room.status === 'playing';
   const isHost = room?.players[0]?.id === playerId;
@@ -183,15 +219,17 @@ const GamePage: React.FC = () => {
       </header>
 
       <main className="game-table-container">
-        <div className="game-table">
+        <div className="game-table" data-deal-trigger={dealTrigger}>
           <div className="pot-display">
             <div className="pot-label">底池</div>
             <div className="pot-amount">💰 {room?.pot || 0}</div>
           </div>
 
           <div className="community-cards">
-            {room?.communityCards.map((card: Card) => (
-              <CardComponent key={card.id} card={card} isFacingUp={true} />
+            {room?.communityCards.map((card: Card, index: number) => (
+              <div key={card.id} className="community-card-slot" style={{ animationDelay: `${index * 0.1}s` }}>
+                <CardComponent card={card} isFacingUp={true} />
+              </div>
             ))}
             {Array.from({ length: 5 - (room?.communityCards.length || 0) }).map(
               (_, i) => (
@@ -231,6 +269,7 @@ const GamePage: React.FC = () => {
               isCurrentPlayer={player.id === currentPlayerId}
               isSelf={player.id === playerId}
               isWinner={getWinnerIds().includes(player.id)}
+              isDealing={isDealing}
             />
           ))}
 
@@ -242,6 +281,10 @@ const GamePage: React.FC = () => {
               playerChips={currentPlayer.chips}
               playerCurrentBet={currentPlayer.currentBet}
               pot={room?.pot || 0}
+              isFolded={currentPlayer.isFolded}
+              isAllIn={currentPlayer.isAllIn}
+              gameStatus={room?.status || 'waiting'}
+              round={room?.round || 'preflop'}
               onAction={handleAction}
             />
           )}

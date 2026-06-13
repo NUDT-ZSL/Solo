@@ -7,6 +7,7 @@ interface PlayerSeatProps {
   isCurrentPlayer: boolean;
   isSelf: boolean;
   isWinner: boolean;
+  isDealing?: boolean;
 }
 
 const PlayerSeat: React.FC<PlayerSeatProps> = ({
@@ -14,14 +15,17 @@ const PlayerSeat: React.FC<PlayerSeatProps> = ({
   isCurrentPlayer,
   isSelf,
   isWinner,
+  isDealing = false,
 }) => {
   const seatClass = `seat-${player.seat}`;
   const statusClass = player.isFolded ? 'folded' : player.isAllIn ? 'allin' : '';
+  const dealClass = isDealing && player.hand.length > 0 ? 'dealing' : '';
 
   const getStatusText = () => {
     if (player.isFolded) return '已弃牌';
     if (player.isAllIn) return '全下';
     if (isCurrentPlayer) return '思考中...';
+    if (!player.isActive) return '离线';
     return '';
   };
 
@@ -29,7 +33,7 @@ const PlayerSeat: React.FC<PlayerSeatProps> = ({
     <div
       className={`player-seat ${seatClass} ${isCurrentPlayer ? 'active' : ''} ${
         player.isFolded ? 'folded' : ''
-      } ${isWinner ? 'winner' : ''}`}
+      } ${isWinner ? 'winner' : ''} ${!player.isActive ? 'offline' : ''}`}
     >
       <div className="player-avatar">
         {player.name.charAt(0).toUpperCase()}
@@ -42,14 +46,19 @@ const PlayerSeat: React.FC<PlayerSeatProps> = ({
       {getStatusText() && (
         <div className={`player-status ${statusClass}`}>{getStatusText()}</div>
       )}
-      <div className="player-hand">
+      <div className={`player-hand ${dealClass}`}>
         {player.hand.map((card, index) => (
-          <CardComponent
+          <div
             key={card.id}
-            card={card}
-            isFacingUp={isSelf || isWinner}
-            isClickable={isSelf && !player.isFolded}
-          />
+            className={`card-deal-${player.seat}`}
+            style={{ animationDelay: `${index * 0.15}s` }}
+          >
+            <CardComponent
+              card={card}
+              isFacingUp={isSelf || isWinner}
+              isClickable={isSelf && !player.isFolded}
+            />
+          </div>
         ))}
         {player.hand.length === 0 && !player.isFolded && isSelf === false && (
           <>

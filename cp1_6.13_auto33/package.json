@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"node server/server.js\"",
     "build": "tsc && vite build",
-    "server": "node server/server.js"
+    "server": "node server/server.js",
+    "test": "node test/gameLogic.test.js"
   },
   "dependencies": {
     "react": "^18.2.0",

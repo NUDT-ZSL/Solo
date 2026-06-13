@@ -24,7 +24,10 @@ const PORT = 3001;
 
 const rooms = new Map();
 const clients = new Map();
+const disconnectedPlayers = new Map();
 let onlineCount = 0;
+
+const RECONNECT_TIMEOUT = 30000;
 
 app.use(express.json());
 
@@ -58,8 +61,43 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     onlineCount--;
     const client = clients.get(clientId);
-    if (client && client.roomId) {
-      leaveRoom(clientId);
+    if (client && client.roomId && client.playerId) {
+      const playerKey = `${client.roomId}:${client.playerId}`;
+      disconnectedPlayers.set(playerKey, {
+        roomId: client.roomId,
+        playerId: client.playerId,
+        name: client.name,
+        disconnectTime: Date.now(),
+      });
+
+      const room = rooms.get(client.roomId);
+      if (room) {
+        const player = room.players.find((p) => p.id === client.playerId);
+        if (player) {
+          player.isActive = false;
+        }
+        broadcastRoomUpdate(client.roomId);
+      }
+
+      setTimeout(() => {
+        if (disconnectedPlayers.has(playerKey)) {
+          disconnectedPlayers.delete(playerKey);
+          const room = rooms.get(client.roomId);
+          if (room) {
+            removePlayer(room, client.playerId);
+            broadcastToRoom(client.roomId, {
+              type: 'player_left',
+              playerId: client.playerId,
+            });
+            if (room.players.length === 0) {
+              rooms.delete(client.roomId);
+            } else {
+              broadcastRoomUpdate(client.roomId);
+            }
+            broadcastRoomList();
+          }
+        }
+      }, RECONNECT_TIMEOUT);
     }
     clients.delete(clientId);
     broadcastOnlineCount();
@@ -98,9 +136,67 @@ function handleMessage(clientId, message) {
     case 'get_online_count':
       sendToClient(clientId, { type: 'online_count', count: onlineCount });
       break;
+    case 'reconnect':
+      handleReconnect(clientId, message);
+      break;
     default:
       sendToClient(clientId, { type: 'error', message: '未知的消息类型' });
   }
+}
+
+function handleReconnect(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+
+  const { roomId, playerId } = message;
+  if (!roomId || !playerId) {
+    sendToClient(clientId, { type: 'error', message: '缺少重连参数' });
+    return;
+  }
+
+  const room = rooms.get(roomId);
+  if (!room) {
+    sendToClient(clientId, { type: 'reconnect_failed', message: '房间不存在' });
+    return;
+  }
+
+  const playerKey = `${roomId}:${playerId}`;
+  const disconnected = disconnectedPlayers.get(playerKey);
+
+  if (!disconnected) {
+    const existingPlayer = room.players.find((p) => p.id === playerId);
+    if (!existingPlayer) {
+      sendToClient(clientId, { type: 'reconnect_failed', message: '玩家不存在' });
+      return;
+    }
+  }
+
+  const player = room.players.find((p) => p.id === playerId);
+  if (!player) {
+    sendToClient(clientId, { type: 'reconnect_failed', message: '玩家不存在' });
+    return;
+  }
+
+  disconnectedPlayers.delete(playerKey);
+
+  client.roomId = roomId;
+  client.playerId = playerId;
+  client.name = player.name;
+  player.isActive = true;
+
+  sendToClient(clientId, {
+    type: 'reconnect_success',
+    room: getPlayerRoomState(room, playerId),
+    playerId,
+  });
+
+  broadcastToRoom(roomId, {
+    type: 'player_reconnected',
+    playerId,
+  });
+
+  broadcastRoomUpdate(roomId);
+  broadcastRoomList();
 }
 
 function handleJoinLobby(clientId, message) {

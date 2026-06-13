@@ -142,6 +142,96 @@ button:disabled {
   100% { background-position: 200% 0; }
 }
 
+@keyframes dealFromTop {
+  0% {
+    transform: translateY(-200px) scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes dealFromBottom {
+  0% {
+    transform: translateY(200px) scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes dealFromLeft {
+  0% {
+    transform: translateX(-200px) scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes dealFromRight {
+  0% {
+    transform: translateX(200px) scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes communityCardDeal {
+  0% {
+    transform: translateY(-30px) scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.community-card-slot {
+  animation: communityCardDeal 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.card-deal-0 {
+  animation: dealFromBottom 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.card-deal-1 {
+  animation: dealFromRight 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.card-deal-2 {
+  animation: dealFromTop 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.card-deal-3 {
+  animation: dealFromLeft 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.player-seat.offline {
+  opacity: 0.5;
+  filter: grayscale(0.5);
+}
+
+.player-status.offline {
+  background: rgba(160, 174, 192, 0.3);
+  color: #a0aec0;
+}
+
 /* ========== 大厅页面 ========== */
 
 .lobby-page {

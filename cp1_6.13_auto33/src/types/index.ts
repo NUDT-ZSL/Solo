@@ -52,4 +52,8 @@ export interface WebSocketContextType {
   sendMessage: (message: any) => void;
   playerName: string;
   setPlayerName: (name: string) => void;
+  savedPlayerId: string | null;
+  savedRoomId: string | null;
+  saveGameState: (playerId: string, roomId: string) => void;
+  clearGameState: () => void;
 }
