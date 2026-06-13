@@ -44,10 +44,13 @@ export interface Level {
 
 export interface MissionLog {
   levelId: number;
-  completedAt: string;
-  duration: number;
-  signalUsed: number;
-  detected: boolean;
+  agentName: string;
+  action: string;
+  timestamp: string;
+  completedAt?: string;
+  duration?: number;
+  signalUsed?: number;
+  detected?: boolean;
 }
 
 export interface Position {

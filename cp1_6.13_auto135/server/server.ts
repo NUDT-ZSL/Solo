@@ -210,6 +210,30 @@ app.get('/api/levels', (req: Request, res: Response) => {
 app.post('/api/logs', async (req: Request, res: Response) => {
   try {
     const log: MissionLog = req.body;
+
+    if (
+      typeof log.levelId !== 'number' ||
+      typeof log.agentName !== 'string' ||
+      log.agentName.trim() === '' ||
+      typeof log.action !== 'string' ||
+      log.action.trim() === '' ||
+      typeof log.timestamp !== 'string' ||
+      log.timestamp.trim() === ''
+    ) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Missing or invalid required fields: levelId (number), agentName (string), action (string), timestamp (string)'
+      });
+    }
+
+    if (!Number.isInteger(log.levelId) || log.levelId < 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'levelId must be a positive integer'
+      });
+    }
+
     const logWithId = {
       ...log,
       _id: uuidv4()
