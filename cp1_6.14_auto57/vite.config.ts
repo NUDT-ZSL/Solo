@@ -1,15 +1,14 @@
 import { defineConfig } from 'vite';
-import typescript from '@vitejs/plugin-typescript';
 import path from 'path';
 
 export default defineConfig({
   root: '.',
   server: {
-    port: 5173,
+    port: 5199,
+    strictPort: true,
     host: true,
     hmr: true
   },
-  plugins: [typescript()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src')

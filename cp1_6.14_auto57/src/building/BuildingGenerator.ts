@@ -4,11 +4,18 @@ import { eventBus } from '@/core/EventBus';
 
 type RoofStyle = 'flat' | 'slope' | 'spire' | 'dome';
 
+interface BuildingGroup extends THREE.Group {
+  userData: {
+    buildingData: BuildingData;
+    windowMaterial: THREE.MeshStandardMaterial;
+    bodyMaterial: THREE.MeshStandardMaterial;
+  };
+}
+
 export class BuildingGenerator {
   private scene: THREE.Scene;
   private buildingGroup: THREE.Group;
-  private buildingMeshes: THREE.Mesh[] = [];
-  private buildingData: BuildingData[] = [];
+  private buildings: BuildingGroup[] = [];
   private windowMaterials: THREE.MeshStandardMaterial[] = [];
 
   constructor(scene: THREE.Scene, buildingGroup: THREE.Group) {
@@ -28,7 +35,6 @@ export class BuildingGenerator {
 
     const gridSize = 10;
     const cellSize = 100 / gridSize;
-    const buildingsPerCell = Math.ceil(config.density * 4);
     const roofStyles: RoofStyle[] = ['flat', 'slope', 'spire', 'dome'];
     const buildingColors = [
       0x5a6978, 0x6b7b8a, 0x4a5568, 0x718096,
@@ -37,8 +43,9 @@ export class BuildingGenerator {
 
     for (let gx = 0; gx < gridSize; gx++) {
       for (let gz = 0; gz < gridSize; gz++) {
-        for (let i = 0; i < buildingsPerCell; i++) {
-          if (Math.random() > config.density) continue;
+        const buildingsInCell = Math.ceil(config.density * 1.2);
+        for (let i = 0; i < buildingsInCell; i++) {
+          if (Math.random() > config.density * 1.2) continue;
 
           const cellX = -50 + gx * cellSize + cellSize / 2;
           const cellZ = -50 + gz * cellSize + cellSize / 2;
@@ -57,25 +64,34 @@ export class BuildingGenerator {
           const color = buildingColors[Math.floor(Math.random() * buildingColors.length)];
 
           const building = this.createBuilding(width, depth, height, roofStyle, color);
+          (building as BuildingGroup).userData = {
+            buildingData: {
+              id: `building_${gx}_${gz}_${i}`,
+              position: { x: posX, z: posZ },
+              dimensions: { width, depth, height },
+              rotation,
+              roofStyle,
+              color
+            },
+            windowMaterial: building.userData.windowMaterial,
+            bodyMaterial: building.userData.bodyMaterial
+          };
+
           building.position.set(posX, height / 2, posZ);
           building.rotation.y = rotation;
 
           this.buildingGroup.add(building);
-          this.buildingMeshes.push(building);
+          this.buildings.push(building as BuildingGroup);
 
-          this.buildingData.push({
-            id: `building_${gx}_${gz}_${i}`,
-            position: { x: posX, z: posZ },
-            dimensions: { width, depth, height },
-            rotation,
-            roofStyle,
-            color
-          });
+          if (building.userData.windowMaterial) {
+            this.windowMaterials.push(building.userData.windowMaterial);
+          }
         }
       }
     }
 
-    eventBus.emit('buildings:updated', this.buildingData);
+    const buildingDataList = this.buildings.map((b) => b.userData.buildingData);
+    eventBus.emit('buildings:updated', buildingDataList);
   }
 
   private createBuilding(
@@ -84,104 +100,117 @@ export class BuildingGenerator {
     height: number,
     roofStyle: RoofStyle,
     color: number
-  ): THREE.Mesh {
+  ): THREE.Group {
     const group = new THREE.Group();
+
+    const { texture, emissiveTexture, windowMat } = this.createWindowTexture(color);
 
     const bodyGeometry = new THREE.BoxGeometry(width, height, depth);
     const bodyMaterial = new THREE.MeshStandardMaterial({
-      color,
+      map: texture,
+      emissiveMap: emissiveTexture,
+      emissive: new THREE.Color(0xffd700),
+      emissiveIntensity: 0,
       roughness: 0.7,
       metalness: 0.2
     });
+
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     body.castShadow = true;
     body.receiveShadow = true;
     group.add(body);
 
-    this.addWindows(group, width, height, depth);
+    group.userData.windowMaterial = windowMat;
+    group.userData.bodyMaterial = bodyMaterial;
 
-    const roof = this.createRoof(width, depth, roofStyle, color);
-    roof.position.y = height / 2;
-    group.add(roof);
+    this.addRoof(group, width, depth, height, roofStyle, color);
 
-    const merged = this.mergeGroup(group);
-    return merged;
+    return group;
   }
 
-  private addWindows(group: THREE.Group, width: number, height: number, depth: number): void {
-    const windowSize = 1.2;
-    const windowGap = 2.5;
-    const windowHeightGap = 3.5;
+  private createWindowTexture(
+    color: number
+  ): {
+    texture: THREE.CanvasTexture;
+    emissiveTexture: THREE.CanvasTexture;
+    windowMat: THREE.MeshStandardMaterial;
+  } {
+    const canvasW = 128;
+    const canvasH = 512;
+    const dayCanvas = document.createElement('canvas');
+    const nightCanvas = document.createElement('canvas');
+    dayCanvas.width = canvasW;
+    dayCanvas.height = canvasH;
+    nightCanvas.width = canvasW;
+    nightCanvas.height = canvasH;
 
-    const windowColor = 0x1a1a2e;
-    const windowEmissive = 0xffd700;
+    const dayCtx = dayCanvas.getContext('2d')!;
+    const nightCtx = nightCanvas.getContext('2d')!;
 
-    const windowsFloor = Math.floor(height / windowHeightGap) - 1;
-    const windowsWidth = Math.floor(width / windowGap) - 1;
-    const windowsDepth = Math.floor(depth / windowGap) - 1;
+    const c = new THREE.Color(color);
+    const r = Math.round(c.r * 255);
+    const g = Math.round(c.g * 255);
+    const b = Math.round(c.b * 255);
 
-    const windowMaterial = new THREE.MeshStandardMaterial({
-      color: windowColor,
-      emissive: windowEmissive,
+    dayCtx.fillStyle = `rgb(${r},${g},${b})`;
+    dayCtx.fillRect(0, 0, canvasW, canvasH);
+
+    nightCtx.fillStyle = '#0a0a14';
+    nightCtx.fillRect(0, 0, canvasW, canvasH);
+
+    const cols = 5;
+    const rows = Math.floor(canvasH / 28);
+    const winW = 12;
+    const winH = 16;
+    const gapX = (canvasW - cols * winW) / (cols + 1);
+    const gapY = (canvasH - rows * winH) / (rows + 1);
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const x = gapX + col * (winW + gapX);
+        const y = gapY + row * (winH + gapY);
+
+        dayCtx.fillStyle = '#1a2030';
+        dayCtx.fillRect(x, y, winW, winH);
+
+        if (Math.random() > 0.4) {
+          nightCtx.fillStyle = '#ffd700';
+          nightCtx.fillRect(x, y, winW, winH);
+        } else {
+          nightCtx.fillStyle = '#0a0a14';
+          nightCtx.fillRect(x, y, winW, winH);
+        }
+      }
+    }
+
+    const texture = new THREE.CanvasTexture(dayCanvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+
+    const emissiveTexture = new THREE.CanvasTexture(nightCanvas);
+    emissiveTexture.wrapS = THREE.RepeatWrapping;
+    emissiveTexture.wrapT = THREE.RepeatWrapping;
+
+    const windowMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a2e,
+      emissive: 0xffd700,
       emissiveIntensity: 0,
       roughness: 0.3,
       metalness: 0.9
     });
 
-    this.windowMaterials.push(windowMaterial);
-
-    for (let floor = 0; floor < windowsFloor; floor++) {
-      for (let w = 0; w < windowsWidth; w++) {
-        const windowGeo = new THREE.PlaneGeometry(windowSize, windowSize * 1.5);
-        const frontWindow = new THREE.Mesh(windowGeo, windowMaterial);
-        frontWindow.position.set(
-          -width / 2 + windowGap + w * windowGap,
-          -height / 2 + windowHeightGap + floor * windowHeightGap,
-          depth / 2 + 0.01
-        );
-        group.add(frontWindow);
-
-        const backWindow = new THREE.Mesh(windowGeo, windowMaterial);
-        backWindow.position.set(
-          -width / 2 + windowGap + w * windowGap,
-          -height / 2 + windowHeightGap + floor * windowHeightGap,
-          -depth / 2 - 0.01
-        );
-        backWindow.rotation.y = Math.PI;
-        group.add(backWindow);
-      }
-
-      for (let d = 0; d < windowsDepth; d++) {
-        const windowGeo = new THREE.PlaneGeometry(windowSize, windowSize * 1.5);
-        const rightWindow = new THREE.Mesh(windowGeo, windowMaterial);
-        rightWindow.position.set(
-          width / 2 + 0.01,
-          -height / 2 + windowHeightGap + floor * windowHeightGap,
-          -depth / 2 + windowGap + d * windowGap
-        );
-        rightWindow.rotation.y = Math.PI / 2;
-        group.add(rightWindow);
-
-        const leftWindow = new THREE.Mesh(windowGeo, windowMaterial);
-        leftWindow.position.set(
-          -width / 2 - 0.01,
-          -height / 2 + windowHeightGap + floor * windowHeightGap,
-          -depth / 2 + windowGap + d * windowGap
-        );
-        leftWindow.rotation.y = -Math.PI / 2;
-        group.add(leftWindow);
-      }
-    }
+    return { texture, emissiveTexture, windowMat };
   }
 
-  private createRoof(
+  private addRoof(
+    group: THREE.Group,
     width: number,
     depth: number,
+    height: number,
     style: RoofStyle,
     color: number
-  ): THREE.Group {
-    const roofGroup = new THREE.Group();
-    const roofColor = new THREE.Color(color).multiplyScalar(0.8).getHex();
+  ): void {
+    const roofColor = new THREE.Color(color).multiplyScalar(0.7);
     const roofMaterial = new THREE.MeshStandardMaterial({
       color: roofColor,
       roughness: 0.8,
@@ -190,145 +219,119 @@ export class BuildingGenerator {
 
     switch (style) {
       case 'flat': {
-        const flatGeo = new THREE.BoxGeometry(width * 1.05, 1, depth * 1.05);
-        const flat = new THREE.Mesh(flatGeo, roofMaterial);
-        flat.castShadow = true;
-        roofGroup.add(flat);
+        const geo = new THREE.BoxGeometry(width * 1.08, 1.5, depth * 1.08);
+        const mesh = new THREE.Mesh(geo, roofMaterial);
+        mesh.position.y = height / 2 + 0.75;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+
+        const edgeGeo = new THREE.BoxGeometry(width * 1.12, 2.5, depth * 1.12);
+        const edgeMat = new THREE.MeshStandardMaterial({
+          color: roofColor.clone().multiplyScalar(0.9),
+          roughness: 0.9,
+          metalness: 0.05
+        });
+        const edge = new THREE.Mesh(edgeGeo, edgeMat);
+        edge.position.y = height / 2 + 1.25;
+        group.add(edge);
         break;
       }
       case 'slope': {
-        const slopeHeight = Math.min(width, depth) * 0.3;
-        const slopeGeo = new THREE.ConeGeometry(Math.max(width, depth) * 0.7, slopeHeight, 4);
-        const slope = new THREE.Mesh(slopeGeo, roofMaterial);
-        slope.position.y = slopeHeight / 2;
-        slope.rotation.y = Math.PI / 4;
-        slope.castShadow = true;
-        roofGroup.add(slope);
+        const slopeHeight = Math.min(width, depth) * 0.35;
+        const baseGeo = new THREE.BoxGeometry(width * 1.02, 1, depth * 1.02);
+        const base = new THREE.Mesh(baseGeo, roofMaterial);
+        base.position.y = height / 2 + 0.5;
+        base.castShadow = true;
+        group.add(base);
+
+        const roofGeo = new THREE.BufferGeometry();
+        const hw = width / 2;
+        const hd = depth / 2;
+        const ridgeH = slopeHeight;
+        const verts = new Float32Array([
+          -hw, 0, -hd,
+          hw, 0, -hd,
+          0, ridgeH, 0,
+          hw, 0, -hd,
+          hw, 0, hd,
+          0, ridgeH, 0,
+          hw, 0, hd,
+          -hw, 0, hd,
+          0, ridgeH, 0,
+          -hw, 0, hd,
+          -hw, 0, -hd,
+          0, ridgeH, 0
+        ]);
+        roofGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        roofGeo.computeVertexNormals();
+        const slopeMesh = new THREE.Mesh(roofGeo, roofMaterial);
+        slopeMesh.position.y = height / 2 + 1;
+        slopeMesh.castShadow = true;
+        group.add(slopeMesh);
         break;
       }
       case 'spire': {
-        const spireHeight = Math.min(width, depth) * 0.8;
-        const spireGeo = new THREE.ConeGeometry(Math.min(width, depth) * 0.15, spireHeight, 8);
-        const spire = new THREE.Mesh(spireGeo, roofMaterial);
-        spire.position.y = spireHeight / 2;
+        const baseGeo = new THREE.BoxGeometry(width * 1.02, 1, depth * 1.02);
+        const base = new THREE.Mesh(baseGeo, roofMaterial);
+        base.position.y = height / 2 + 0.5;
+        base.castShadow = true;
+        group.add(base);
+
+        const spireHeight = Math.min(width, depth) * 0.9;
+        const spireGeo = new THREE.ConeGeometry(
+          Math.min(width, depth) * 0.2,
+          spireHeight,
+          8
+        );
+        const spireMat = new THREE.MeshStandardMaterial({
+          color: 0x888899,
+          roughness: 0.4,
+          metalness: 0.6
+        });
+        const spire = new THREE.Mesh(spireGeo, spireMat);
+        spire.position.y = height / 2 + 1 + spireHeight / 2;
         spire.castShadow = true;
-        roofGroup.add(spire);
+        group.add(spire);
         break;
       }
       case 'dome': {
-        const domeRadius = Math.min(width, depth) * 0.4;
-        const domeGeo = new THREE.SphereGeometry(domeRadius, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-        const dome = new THREE.Mesh(domeGeo, roofMaterial);
-        dome.position.y = domeRadius * 0.8;
+        const baseGeo = new THREE.BoxGeometry(width * 1.02, 1, depth * 1.02);
+        const base = new THREE.Mesh(baseGeo, roofMaterial);
+        base.position.y = height / 2 + 0.5;
+        base.castShadow = true;
+        group.add(base);
+
+        const domeRadius = Math.min(width, depth) * 0.45;
+        const domeGeo = new THREE.SphereGeometry(
+          domeRadius,
+          24,
+          12,
+          0,
+          Math.PI * 2,
+          0,
+          Math.PI / 2
+        );
+        const domeMat = new THREE.MeshStandardMaterial({
+          color: 0x99aacc,
+          roughness: 0.3,
+          metalness: 0.5
+        });
+        const dome = new THREE.Mesh(domeGeo, domeMat);
+        dome.position.y = height / 2 + 1;
         dome.castShadow = true;
-        roofGroup.add(dome);
+        group.add(dome);
         break;
       }
     }
-
-    return roofGroup;
-  }
-
-  private mergeGroup(group: THREE.Group): THREE.Mesh {
-    const geometries: THREE.BufferGeometry[] = [];
-    let mergedMaterial: THREE.Material | THREE.Material[] = new THREE.MeshStandardMaterial({ color: 0x666666 });
-    const materials: THREE.Material[] = [];
-
-    group.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.geometry) {
-        const clonedGeo = child.geometry.clone();
-        clonedGeo.applyMatrix4(child.matrixWorld);
-
-        if (Array.isArray(child.material)) {
-          child.material.forEach((m) => materials.push(m));
-        } else if (child.material) {
-          materials.push(child.material);
-        }
-
-        geometries.push(clonedGeo);
-      }
-    });
-
-    if (materials.length > 0) {
-      mergedMaterial = materials.length === 1 ? materials[0] : materials;
-    }
-
-    if (geometries.length === 0) {
-      const fallback = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mergedMaterial as THREE.Material);
-      return fallback;
-    }
-
-    const mergedGeometry = this.mergeBufferGeometries(geometries);
-    const mergedMesh = new THREE.Mesh(mergedGeometry, mergedMaterial);
-    mergedMesh.castShadow = true;
-    mergedMesh.receiveShadow = true;
-    return mergedMesh;
-  }
-
-  private mergeBufferGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-    if (geometries.length === 1) return geometries[0];
-
-    let totalVertices = 0;
-    let totalIndices = 0;
-    let hasIndex = false;
-    let hasNormal = false;
-    let hasUV = false;
-
-    geometries.forEach((geo) => {
-      totalVertices += geo.attributes.position.count;
-      if (geo.index) {
-        totalIndices += geo.index.count;
-        hasIndex = true;
-      }
-      if (geo.attributes.normal) hasNormal = true;
-      if (geo.attributes.uv) hasUV = true;
-    });
-
-    const positions = new Float32Array(totalVertices * 3);
-    const normals = hasNormal ? new Float32Array(totalVertices * 3) : null;
-    const uvs = hasUV ? new Float32Array(totalVertices * 2) : null;
-    const indices = hasIndex ? new Uint32Array(totalIndices) : null;
-
-    let vertexOffset = 0;
-    let indexOffset = 0;
-
-    geometries.forEach((geo) => {
-      const pos = geo.attributes.position.array as Float32Array;
-      positions.set(pos, vertexOffset * 3);
-
-      if (normals && geo.attributes.normal) {
-        const n = geo.attributes.normal.array as Float32Array;
-        normals.set(n, vertexOffset * 3);
-      }
-
-      if (uvs && geo.attributes.uv) {
-        const u = geo.attributes.uv.array as Float32Array;
-        uvs.set(u, vertexOffset * 2);
-      }
-
-      if (indices && geo.index) {
-        const idx = geo.index.array as Uint32Array;
-        for (let i = 0; i < idx.length; i++) {
-          indices[indexOffset + i] = idx[i] + vertexOffset;
-        }
-        indexOffset += idx.length;
-      }
-
-      vertexOffset += geo.attributes.position.count;
-    });
-
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    if (normals) merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-    if (uvs) merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
-
-    return merged;
   }
 
   public setWindowLights(intensity: number): void {
-    this.windowMaterials.forEach((mat) => {
-      mat.emissiveIntensity = intensity * (0.5 + Math.random() * 0.5);
+    this.buildings.forEach((building) => {
+      const bodyMat = building.userData.bodyMaterial as THREE.MeshStandardMaterial;
+      if (bodyMat && bodyMat.emissiveIntensity !== undefined) {
+        bodyMat.emissiveIntensity = intensity * (0.6 + Math.random() * 0.4);
+      }
     });
   }
 
@@ -337,25 +340,28 @@ export class BuildingGenerator {
   }
 
   public clear(): void {
-    this.buildingMeshes.forEach((mesh) => {
-      this.buildingGroup.remove(mesh);
-      if (mesh.geometry) mesh.geometry.dispose();
-      if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((m) => m.dispose());
-      } else if (mesh.material) {
-        mesh.material.dispose();
-      }
+    this.buildings.forEach((building) => {
+      this.buildingGroup.remove(building);
+      building.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.geometry) child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m) => m.dispose());
+          } else if (child.material) {
+            child.material.dispose();
+          }
+        }
+      });
     });
-    this.buildingMeshes = [];
-    this.buildingData = [];
+    this.buildings = [];
     this.windowMaterials = [];
   }
 
-  public getBuildingMeshes(): THREE.Mesh[] {
-    return this.buildingMeshes;
+  public getBuildingGroups(): BuildingGroup[] {
+    return this.buildings;
   }
 
   public getBuildingData(): BuildingData[] {
-    return this.buildingData;
+    return this.buildings.map((b) => b.userData.buildingData);
   }
 }
