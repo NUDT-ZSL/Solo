@@ -1,11 +1,17 @@
-import express, { Request, Response } from 'express'
-import Datastore from 'nedb-promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { v4 as uuidv4 } from 'uuid'
+import { createRequire } from 'module'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+const require = createRequire(import.meta.url)
+
+const express = require('express')
+const Datastore = require('nedb-promises')
+const { v4: uuidv4 } = require('uuid')
+
+type Request = any
+type Response = any
 
 const app = express()
 const PORT = 3001
