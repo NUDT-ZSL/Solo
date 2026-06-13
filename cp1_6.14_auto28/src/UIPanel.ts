@@ -192,14 +192,15 @@ export class UIPanel {
     PRESET_COLORS.forEach((color) => {
       const swatch = document.createElement('div');
       swatch.className = 'vf-color-swatch';
+      swatch.dataset.color = color;
       swatch.style.cssText = `
         width: 28px;
         height: 28px;
         background: ${color};
         border-radius: 4px;
         cursor: pointer;
-        transition: border 0.1s, transform 0.1s;
-        border: ${color === this.currentColor ? '2px solid #ffffff' : '2px solid transparent'};
+        transition: box-shadow 0.1s ease, transform 0.1s ease;
+        box-shadow: ${color === this.currentColor ? 'inset 0 0 0 2px #ffffff' : 'inset 0 0 0 0px transparent'};
         box-sizing: border-box;
       `;
       swatch.addEventListener('click', () => {
@@ -341,11 +342,10 @@ export class UIPanel {
     const swatches = this.container.querySelectorAll('.vf-color-swatch');
     swatches.forEach((sw) => {
       const el = sw as HTMLElement;
-      const bg = el.style.background;
-      if (bg === this.currentColor || bg.toLowerCase() === this.currentColor.toLowerCase()) {
-        el.style.border = '2px solid #ffffff';
+      if (el.dataset.color === this.currentColor) {
+        el.style.boxShadow = 'inset 0 0 0 2px #ffffff';
       } else {
-        el.style.border = '2px solid transparent';
+        el.style.boxShadow = 'inset 0 0 0 0px transparent';
       }
     });
   }
