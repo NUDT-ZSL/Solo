@@ -16,6 +16,7 @@ interface StrataState {
   selectLayer: (layerId: string | null) => void;
   setFossils: (fossils: Fossil[]) => void;
   viewFossil: (fossil: Fossil | null) => void;
+  setFossilRotating: (value: boolean) => void;
   toggleFossilRotation: () => void;
   setTimeline: (value: number) => void;
   setAnimationSpeed: (speed: AnimationSpeed) => void;
@@ -39,6 +40,7 @@ export const useStrataStore = create<StrataState>((set) => ({
   selectLayer: (layerId) => set({ selectedLayerId: layerId }),
   setFossils: (fossils) => set({ fossils }),
   viewFossil: (fossil) => set({ viewingFossil: fossil }),
+  setFossilRotating: (value) => set({ fossilRotating: value }),
   toggleFossilRotation: () => set((state) => ({ fossilRotating: !state.fossilRotating })),
   setTimeline: (value) => set({ timeline: value }),
   setAnimationSpeed: (speed) => set({ animationSpeed: speed }),

@@ -1,134 +1,178 @@
-import { useRef, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
-import * as THREE from 'three'
-import type { Layer } from '@/types'
+import { useRef, useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import type { Layer } from '@/types';
+import { easeInOutCubic } from '@/utils/easing';
 
 interface LayerSliceProps {
-  layer: Layer
-  isSelected: boolean
-  onClick: () => void
-  visible: boolean
-  targetY: number
+  layer: Layer;
+  isSelected: boolean;
+  onClick: () => void;
+  timelineProgress: number;
+  animationSpeed: number;
+  baseY: number;
+  layerHeight: number;
+  totalLayers: number;
 }
 
-export function LayerSlice({ layer, isSelected, onClick, visible, targetY }: LayerSliceProps) {
-  const groupRef = useRef<THREE.Group>(null)
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null)
-  const currentY = useRef(targetY)
-  const currentScaleY = useRef(1)
-  const currentOpacity = useRef(0.7)
+export function LayerSlice({
+  layer,
+  isSelected,
+  onClick,
+  timelineProgress,
+  animationSpeed,
+  baseY,
+  layerHeight,
+  totalLayers,
+}: LayerSliceProps) {
+  const groupRef = useRef<THREE.Group>(null);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+  const edgesMaterialRef = useRef<THREE.LineBasicMaterial>(null);
+
+  const animState = useRef({
+    currentY: baseY - totalLayers * (layerHeight + 1),
+    currentOpacity: 0,
+    currentScaleY: 0,
+    targetY: baseY - totalLayers * (layerHeight + 1),
+    targetOpacity: 0,
+    targetScaleY: 0,
+    animating: false,
+    startY: 0,
+    startOpacity: 0,
+    startScaleY: 0,
+    animDuration: 1.5 / animationSpeed,
+    animStart: -9999,
+    selectOffset: 0,
+    selectAnimStart: -9999,
+  });
 
   const geometry = useMemo(() => {
-    const shape = new THREE.Shape()
-    const offsets = [
-      [0, 0], [6, -3], [-4, 7], [5, -2], [-7, 4],
-      [3, -5], [-5, 8], [7, -4], [-3, 6], [4, -7],
-      [-6, 3], [8, -6], [-2, 5], [5, 8], [-8, -3],
-      [6, 4], [-4, -6], [3, 7], [-7, -5], [9, -2]
-    ]
-
-    const halfSize = 90
+    const shape = new THREE.Shape();
+    const halfSize = 90;
+    const cornerOffsets = [
+      [3, -2], [-2, 4], [4, -3], [-3, 2],
+      [2, -4], [-4, 3], [3, 3], [-2, -3],
+      [4, 2], [-3, -4], [2, 3], [-4, 2],
+      [3, -4], [-2, 4], [4, -2], [-3, 3],
+    ];
     const vertices: [number, number][] = [
       [-halfSize, -halfSize],
-      [-halfSize + 30, -halfSize],
-      [0, -halfSize],
-      [halfSize - 30, -halfSize],
+      [-halfSize * 0.6, -halfSize + 4],
+      [0, -halfSize - 2],
+      [halfSize * 0.6, -halfSize + 3],
       [halfSize, -halfSize],
-      [halfSize, -halfSize + 30],
-      [halfSize, 0],
-      [halfSize, halfSize - 30],
+      [halfSize + 3, -halfSize * 0.6],
+      [halfSize - 2, 0],
+      [halfSize + 2, halfSize * 0.6],
       [halfSize, halfSize],
-      [halfSize - 30, halfSize],
-      [0, halfSize],
-      [-halfSize + 30, halfSize],
+      [halfSize * 0.6, halfSize - 3],
+      [0, halfSize + 2],
+      [-halfSize * 0.6, halfSize - 4],
       [-halfSize, halfSize],
-      [-halfSize, halfSize - 30],
-      [-halfSize, 0],
-      [-halfSize, -halfSize + 30],
-    ]
+      [-halfSize - 3, halfSize * 0.6],
+      [-halfSize + 2, 0],
+      [-halfSize - 2, -halfSize * 0.6],
+    ];
 
-    const startVert = vertices[0]
-    const startOff = offsets[0]
-    shape.moveTo(startVert[0] + startOff[0], startVert[1] + startOff[1])
-
-    for (let i = 1; i < vertices.length; i++) {
-      const v = vertices[i]
-      const o = offsets[i % offsets.length]
-      shape.lineTo(v[0] + o[0], v[1] + o[1])
+    for (let i = 0; i < vertices.length; i++) {
+      const [vx, vy] = vertices[i];
+      const [ox, oy] = cornerOffsets[i % cornerOffsets.length];
+      if (i === 0) {
+        shape.moveTo(vx + ox, vy + oy);
+      } else {
+        const prevI = i - 1;
+        const [pvx, pvy] = vertices[prevI];
+        const [pox, poy] = cornerOffsets[prevI % cornerOffsets.length];
+        const cpx = (pvx + pox + vx + ox) / 2 + (Math.random() - 0.5) * 6;
+        const cpy = (pvy + poy + vy + oy) / 2 + (Math.random() - 0.5) * 6;
+        shape.quadraticCurveTo(cpx, cpy, vx + ox, vy + oy);
+      }
     }
-
-    shape.lineTo(startVert[0] + startOff[0], startVert[1] + startOff[1])
+    shape.closePath();
 
     const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-      depth: layer.thickness / 50,
+      depth: layerHeight,
       bevelEnabled: true,
       bevelThickness: 0.5,
       bevelSize: 0.5,
       bevelSegments: 2,
-    }
+      curveSegments: 8,
+    };
 
-    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings)
-    geo.center()
-    return geo
-  }, [layer.thickness])
+    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    geo.center();
+    return geo;
+  }, [layerHeight]);
 
-  const baseColor = useMemo(() => {
-    const c = new THREE.Color(layer.color)
+  const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 20), [geometry]);
+
+  useFrame((_state, delta) => {
+    if (!groupRef.current || !materialRef.current || !edgesMaterialRef.current) return;
+
+    const layerThreshold = ((layer.order - 1) / totalLayers) * 100;
+    const shouldBeVisible = timelineProgress > layerThreshold;
+    const withinRange = timelineProgress >= layerThreshold && timelineProgress <= layerThreshold + (100 / totalLayers) + 0.01;
+    const progressWithin = withinRange
+      ? Math.min(1, (timelineProgress - layerThreshold) / (100 / totalLayers))
+      : shouldBeVisible ? 1 : 0;
+
+    const easedProgress = easeInOutCubic(progressWithin);
+
+    const finalTargetY = baseY + (1 - easedProgress) * (-totalLayers * (layerHeight + 1) * 2);
+    const finalTargetOpacity = easedProgress * (isSelected ? 0.85 : 0.7);
+    const finalTargetScaleY = 0.2 + easedProgress * 0.8;
+
+    const selectTarget = isSelected ? 8 : 0;
+    animState.current.selectOffset += (selectTarget - animState.current.selectOffset) * Math.min(1, delta * 8);
+
+    const lerpFactor = Math.min(1, delta * 4 * animationSpeed);
+    animState.current.currentY += (finalTargetY - animState.current.currentY) * lerpFactor;
+    animState.current.currentOpacity += (finalTargetOpacity - animState.current.currentOpacity) * lerpFactor;
+    animState.current.currentScaleY += (finalTargetScaleY - animState.current.currentScaleY) * lerpFactor;
+
+    groupRef.current.position.y = animState.current.currentY + animState.current.selectOffset;
+    groupRef.current.scale.y = animState.current.currentScaleY;
+    materialRef.current.opacity = animState.current.currentOpacity;
+
+    const baseC = new THREE.Color(layer.color);
     if (isSelected) {
-      c.offsetHSL(0, 0.2, 0)
+      const hsl = { h: 0, s: 0, l: 0 };
+      baseC.getHSL(hsl);
+      hsl.s = Math.min(1, hsl.s + 0.2);
+      baseC.setHSL(hsl.h, hsl.s, hsl.l);
     }
-    return c
-  }, [layer.color, isSelected])
-
-  const targetOpacity = isSelected ? 0.85 : 0.6
-  const targetScaleY = visible ? 1 : 0
-  const actualTargetY = isSelected ? targetY + 8 : targetY
-
-  useFrame(() => {
-    if (!groupRef.current || !materialRef.current) return
-
-    currentY.current += (actualTargetY - currentY.current) * 0.1
-    groupRef.current.position.y = currentY.current
-
-    currentScaleY.current += (targetScaleY - currentScaleY.current) * 0.1
-    groupRef.current.scale.y = currentScaleY.current
-
-    currentOpacity.current += (visible ? targetOpacity : 0 - currentOpacity.current) * 0.1
-    materialRef.current.opacity = currentOpacity.current
-
-    const c = new THREE.Color(layer.color)
-    if (isSelected) {
-      c.offsetHSL(0, 0.2, 0)
-    }
-    materialRef.current.color.copy(c)
-  })
-
-  const edges = useMemo(() => {
-    return new THREE.EdgesGeometry(geometry, 15)
-  }, [geometry])
+    materialRef.current.color.copy(baseC);
+    edgesMaterialRef.current.opacity = isSelected ? 1 : 0;
+    edgesMaterialRef.current.visible = isSelected;
+  });
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} rotation={[-Math.PI / 2, 0, 0]}>
       <mesh
         geometry={geometry}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer' }}
-        onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto' }}
-        onClick={(e) => { e.stopPropagation(); onClick() }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; }}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
       >
         <meshStandardMaterial
           ref={materialRef}
-          color={baseColor}
+          color={layer.color}
           transparent
           opacity={0.7}
           roughness={0.8}
           metalness={0.05}
+          side={THREE.DoubleSide}
         />
       </mesh>
-      {isSelected && (
-        <lineSegments geometry={edges}>
-          <lineBasicMaterial color="white" linewidth={1} />
-        </lineSegments>
-      )}
+      <lineSegments geometry={edgesGeometry}>
+        <lineBasicMaterial
+          ref={edgesMaterialRef}
+          color="#ffffff"
+          transparent
+          opacity={0}
+          visible={false}
+        />
+      </lineSegments>
     </group>
-  )
+  );
 }
