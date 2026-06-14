@@ -31,21 +31,84 @@ const DEFAULT_VOTE: VoteResult = {
   totalCommands: 0,
 };
 
+const STORY_EVENTS = [
+  { options: ['打开宝箱', '跳过'], results: ['你获得了神秘道具！', '你安全地离开了'] },
+  { options: ['进入洞穴', '绕道而行'], results: ['你发现了一块宝石！', '你避开了危险'] },
+  { options: ['帮助旅人', '继续赶路'], results: ['旅人赠送了你地图！', '你节省了时间'] },
+  { options: ['挑战巨人', '悄悄溜走'], results: ['你击败了巨人！', '你明智地选择了回避'] },
+  { options: ['饮下泉水', '离开水池'], results: ['你恢复了体力！', '你没有冒险'] },
+];
+
+const MOVE_DIR_MAP: Record<string, GameAction> = {
+  left: 'MOVE_LEFT',
+  right: 'MOVE_RIGHT',
+  forward: 'MOVE_FORWARD',
+  backward: 'MOVE_BACKWARD',
+};
+
+const SKILL_ACTION_MAP: Record<string, GameAction> = {
+  fireball: 'SKILL_FIREBALL',
+  ice: 'SKILL_ICE',
+  shield: 'SKILL_SHIELD',
+};
+
 const App: React.FC = () => {
   const [viewerCount, setViewerCount] = useState(0);
   const [totalCommands, setTotalCommands] = useState(0);
   const [recentCommands, setRecentCommands] = useState<DanmakuCommand[]>([]);
   const [voteResult, setVoteResult] = useState<VoteResult>(DEFAULT_VOTE);
-  const [currentAction, setCurrentAction] = useState<GameAction | null>(null);
+  const [executeAction, setExecuteAction] = useState<GameAction | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [resetFlag, setResetFlag] = useState(false);
   const [storyText, setStoryText] = useState<string | null>(null);
+  const [storyOptions, setStoryOptions] = useState<string[] | null>(null);
   const [danmakuInput, setDanmakuInput] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [simulatedDanmaku, setSimulatedDanmaku] = useState<string[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const moveVoteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const storyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storyVoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skillCooldownRef = useRef<Record<string, number>>({ fireball: 0, ice: 0, shield: 0 });
+  const currentEventRef = useRef<{ options: string[]; results: string[] } | null>(null);
+  const storyVotingActiveRef = useRef(false);
+
+  const triggerStoryEvent = useCallback(() => {
+    if (storyVotingActiveRef.current) return;
+    const event = STORY_EVENTS[Math.floor(Math.random() * STORY_EVENTS.length)];
+    currentEventRef.current = event;
+    storyVotingActiveRef.current = true;
+    setStoryOptions(event.options);
+
+    storyVoteTimerRef.current = setTimeout(() => {
+      const votes = voteResultRef.current.story;
+      const entries = Object.entries(votes);
+      let maxKey = 'A';
+      let maxVal = -1;
+      for (const [k, v] of entries) {
+        if (v > maxVal) {
+          maxVal = v;
+          maxKey = k;
+        }
+      }
+      const idx = maxKey === 'A' ? 0 : maxKey === 'B' ? 1 : 0;
+      const resultText = currentEventRef.current
+        ? currentEventRef.current.results[Math.min(idx, currentEventRef.current.results.length - 1)]
+        : '你获得了神秘道具！';
+      setStoryText(resultText);
+      setStoryOptions(null);
+      storyVotingActiveRef.current = false;
+      currentEventRef.current = null;
+      setTimeout(() => setStoryText(null), 3000);
+    }, 3000);
+  }, []);
+
+  const voteResultRef = useRef<VoteResult>(DEFAULT_VOTE);
+  useEffect(() => {
+    voteResultRef.current = voteResult;
+  }, [voteResult]);
 
   const connectWS = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -74,12 +137,6 @@ const App: React.FC = () => {
             if (msg.voteResult) setVoteResult(msg.voteResult as VoteResult);
             if (msg.recentCommands) setRecentCommands(msg.recentCommands as DanmakuCommand[]);
             setViewerCount((msg.viewerCount as number) || 0);
-            if (msg.command) {
-              const cmd = msg.command as DanmakuCommand;
-              if (cmd.action) {
-                setCurrentAction(cmd.action as GameAction);
-              }
-            }
             break;
           case 'viewer_update':
             setViewerCount((msg.viewerCount as number) || 0);
@@ -119,6 +176,59 @@ const App: React.FC = () => {
     };
   }, [connectWS]);
 
+  useEffect(() => {
+    if (isPaused) return;
+
+    moveVoteTimerRef.current = setInterval(() => {
+      const votes = voteResultRef.current.move;
+      const entries = Object.entries(votes);
+      let maxKey = '';
+      let maxVal = 0;
+      let total = 0;
+      for (const [k, v] of entries) {
+        total += v;
+        if (v > maxVal) {
+          maxVal = v;
+          maxKey = k;
+        }
+      }
+      if (total > 0 && maxKey && MOVE_DIR_MAP[maxKey]) {
+        setExecuteAction(MOVE_DIR_MAP[maxKey]);
+        setTimeout(() => setExecuteAction(null), 100);
+      }
+    }, 2000);
+
+    storyTimerRef.current = setInterval(() => {
+      triggerStoryEvent();
+    }, 30000);
+
+    setTimeout(() => triggerStoryEvent(), 5000);
+
+    return () => {
+      if (moveVoteTimerRef.current) clearInterval(moveVoteTimerRef.current);
+      if (storyTimerRef.current) clearInterval(storyTimerRef.current);
+      if (storyVoteTimerRef.current) clearTimeout(storyVoteTimerRef.current);
+    };
+  }, [isPaused, triggerStoryEvent]);
+
+  useEffect(() => {
+    if (isPaused) return;
+    const votes = voteResult.skill;
+    const total = Object.values(votes).reduce((a, b) => a + b, 0);
+    if (total === 0) return;
+    const now = Date.now();
+    for (const [key, count] of Object.entries(votes)) {
+      if (count / total > 0.5) {
+        if (now - (skillCooldownRef.current[key] || 0) > 8000) {
+          skillCooldownRef.current[key] = now;
+          setExecuteAction(SKILL_ACTION_MAP[key]);
+          setTimeout(() => setExecuteAction(null), 100);
+        }
+        break;
+      }
+    }
+  }, [voteResult.skill, isPaused]);
+
   const sendDanmaku = async (text: string) => {
     try {
       await fetch('/api/danmaku', {
@@ -144,11 +254,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStoryEvent = useCallback((text: string) => {
-    setStoryText(text);
-    setTimeout(() => setStoryText(null), 3000);
-  }, []);
-
   return (
     <div style={styles.app}>
       <div style={styles.leftPanel}>
@@ -163,33 +268,52 @@ const App: React.FC = () => {
       <div style={styles.centerPanel}>
         <div style={styles.gameArea}>
           <GameScene
-            currentAction={currentAction}
-            onStoryEvent={handleStoryEvent}
+            executeAction={executeAction}
             isPaused={isPaused}
             onReset={resetFlag}
           />
         </div>
 
+        {storyOptions && (
+          <div style={styles.storyOptions}>
+            <div style={styles.storyOptionsTitle}>分支剧情 - 请投票选择：</div>
+            <div style={styles.storyOptionsRow}>
+              {storyOptions.map((opt, i) => (
+                <div key={i} style={styles.storyOption}>
+                  选项{i === 0 ? 'A' : 'B'}: {opt}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div style={styles.controlBar}>
           <button
             style={{ ...styles.controlBtn, ...(isPaused ? {} : styles.activeBtn) }}
             onClick={() => setIsPaused(false)}
+            onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
           >
             ▶ 开始
           </button>
           <button
             style={{ ...styles.controlBtn, ...(!isPaused ? {} : styles.activeBtn) }}
             onClick={() => setIsPaused(true)}
+            onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
           >
             ⏸ 暂停
           </button>
           <button
             style={{ ...styles.controlBtn, background: '#aa2244' }}
+            onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
             onClick={async () => {
               try {
                 await fetch('/api/reset', { method: 'POST' });
               } catch {}
               setResetFlag((prev) => !prev);
+              skillCooldownRef.current = { fireball: 0, ice: 0, shield: 0 };
             }}
           >
             ↺ 重置
@@ -231,13 +355,23 @@ const App: React.FC = () => {
             style={styles.danmakuInput}
           />
 
-          <button onClick={handleSendSingle} style={styles.sendBtn}>
+          <button
+            onClick={handleSendSingle}
+            style={styles.sendBtn}
+            onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+          >
             发送弹幕
           </button>
 
           <div style={styles.divider} />
 
-          <button onClick={handleSimulate} style={styles.simulateBtn}>
+          <button
+            onClick={handleSimulate}
+            style={styles.simulateBtn}
+            onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+          >
             模拟发送
           </button>
 
@@ -263,22 +397,19 @@ const App: React.FC = () => {
       </div>
 
       <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(20px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @media (max-width: 768px) {
-          .app-layout {
-            flex-direction: column !important;
-          }
-          .left-panel, .right-panel {
-            width: 100% !important;
-            height: auto !important;
-            max-height: 200px;
-          }
-          .center-panel {
-            width: 100% !important;
-            flex: 1;
-          }
-          .game-area {
-            min-height: 300px;
-          }
+          .app-layout { flex-direction: column !important; }
+          .left-panel, .right-panel { width: 100% !important; height: auto !important; max-height: 200px; }
+          .center-panel { width: 100% !important; flex: 1; }
+          .game-area { min-height: 300px; }
         }
       `}</style>
     </div>
@@ -468,6 +599,36 @@ const styles: Record<string, React.CSSProperties> = {
     animation: 'fadeInUp 0.5s ease-out',
     textAlign: 'center' as const,
     padding: '20px',
+  },
+  storyOptions: {
+    position: 'absolute',
+    top: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: 'rgba(11,11,26,0.95)',
+    border: '1px solid #00d4ff',
+    borderRadius: '12px',
+    padding: '12px 20px',
+    zIndex: 5,
+    animation: 'fadeInUp 0.3s ease-out',
+  },
+  storyOptionsTitle: {
+    fontSize: '12px',
+    color: '#00d4ff',
+    textAlign: 'center' as const,
+    marginBottom: '8px',
+  },
+  storyOptionsRow: {
+    display: 'flex',
+    gap: '12px',
+  },
+  storyOption: {
+    background: '#1a1a2e',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: '#eee',
+    border: '1px solid #2a2a4e',
   },
 };
 
