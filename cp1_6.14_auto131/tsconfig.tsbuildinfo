@@ -1,0 +1,1 @@
+{"root":["./src/data-engine.ts","./src/event-bus.ts","./src/main.tsx","./src/scene-manager.ts","./src/ui-panel.tsx","./src/vite-env.d.ts"],"version":"5.8.3"}
