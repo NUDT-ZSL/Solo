@@ -34,6 +34,16 @@ body {
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
     overflow-x: visible;
+    justify-items: center;
+  }
+
+  .mood-emoji-container .mood-emoji-button {
+    width: 56px;
+    height: 56px;
+  }
+
+  .mood-emoji-container .mood-emoji-button .mood-emoji-text {
+    font-size: 32px;
   }
 }
 
@@ -74,4 +84,9 @@ body {
 
 .mood-emoji-button:hover {
   transform: scale(1.1);
+}
+
+.mood-tag-remove:hover {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
 }

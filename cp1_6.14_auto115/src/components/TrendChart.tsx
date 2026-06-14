@@ -85,7 +85,7 @@ function TrendChart() {
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickFormatter={(value) => {
                     const labels: Record<number, string> = {
-                      1: '😠', 2: '😢', 3: '😴', 4: '😌', 5: '😊'
+                      1: '�', 2: '�', 3: '�', 4: '�', 5: '�'
                     };
                     return labels[value] || '';
                   }}

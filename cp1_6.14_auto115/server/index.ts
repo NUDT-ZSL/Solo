@@ -23,12 +23,12 @@ export interface MoodConfig {
 }
 
 export const moodConfigs: Record<string, MoodConfig> = {
-  happy: { emoji: '😊', label: '开心', value: 5, color: '#ffeaa7' },
-  calm: { emoji: '😌', label: '平静', value: 4, color: '#81ecec' },
-  sad: { emoji: '😢', label: '悲伤', value: 2, color: '#74b9ff' },
-  angry: { emoji: '😠', label: '愤怒', value: 1, color: '#ff7675' },
-  anxious: { emoji: '😰', label: '焦虑', value: 2, color: '#a29bfe' },
-  tired: { emoji: '😴', label: '疲惫', value: 3, color: '#b2bec3' }
+  happy: { emoji: '😊', label: '开心', value: 1, color: '#ffeaa7' },
+  calm: { emoji: '😌', label: '平静', value: 2, color: '#81ecec' },
+  sad: { emoji: '😢', label: '悲伤', value: 3, color: '#74b9ff' },
+  angry: { emoji: '😠', label: '愤怒', value: 4, color: '#ff7675' },
+  anxious: { emoji: '😰', label: '焦虑', value: 5, color: '#a29bfe' },
+  tired: { emoji: '😴', label: '疲惫', value: 5, color: '#b2bec3' }
 };
 
 let moods: Mood[] = [];

@@ -59,7 +59,7 @@ function MoodEntry({ onSubmit }: MoodEntryProps) {
             className="mood-emoji-button"
             aria-label={moodConfigs[mood].label}
           >
-            <span style={styles.emoji}>{moodConfigs[mood].emoji}</span>
+            <span style={styles.emoji} className="mood-emoji-text">{moodConfigs[mood].emoji}</span>
           </button>
         ))}
       </div>
@@ -102,6 +102,8 @@ function MoodEntry({ onSubmit }: MoodEntryProps) {
                       type="button"
                       onClick={() => handleRemoveTag(index)}
                       style={styles.tagRemove}
+                      className="mood-tag-remove"
+                      aria-label={`删除标签${tag}`}
                     >
                       ×
                     </button>
@@ -217,13 +219,21 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#4a5568'
   },
   tagRemove: {
-    background: 'none',
+    background: '#d1d5db',
     border: 'none',
     cursor: 'pointer',
-    fontSize: '16px',
-    color: '#718096',
+    fontSize: '14px',
+    fontWeight: 700,
+    color: '#4a5568',
+    width: '18px',
+    height: '18px',
     padding: 0,
-    lineHeight: 1
+    lineHeight: '18px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.15s ease'
   },
   submitButton: {
     width: '100%',
