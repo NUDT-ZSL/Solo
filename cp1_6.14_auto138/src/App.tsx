@@ -18,6 +18,12 @@ const App: React.FC = () => {
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2())
   const planeRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0))
   
+  const renderTargetRef = useRef<THREE.WebGLRenderTarget | null>(null)
+  const lowResSceneRef = useRef<THREE.Scene | null>(null)
+  const lowResCameraRef = useRef<THREE.OrthographicCamera | null>(null)
+  const lowResQuadRef = useRef<THREE.Mesh | null>(null)
+  const isLowResModeRef = useRef(false)
+  
   const [currentBrush, setCurrentBrush] = useState<BrushType>('spray')
   const [brushParams, setBrushParams] = useState<BrushParams>({
     density: 65,
@@ -128,12 +134,13 @@ const App: React.FC = () => {
     if (!engine || !camera) return
 
     const particles = engine.getParticles()
+    
     const exportData = {
       particles: particles.map((p: ParticleData) => ({
         position: [p.position.x, p.position.y, p.position.z],
         color: `#${p.startColor.getHexString()}`,
         radius: p.radius,
-        life: p.life,
+        remainingTime: p.remainingTime,
         maxLife: p.maxLife
       })),
       camera: {
@@ -142,23 +149,48 @@ const App: React.FC = () => {
       }
     }
 
+    const jsonStr = JSON.stringify(exportData)
+    const estimatedSize = new Blob([jsonStr]).size
+    
+    if (estimatedSize > 5 * 1024 * 1024) {
+      alert('导出数据过大（超过5MB），请减少粒子数量后再试')
+      return
+    }
+
     const htmlContent = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NebulaCanvas Gallery</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { width: 100vw; height: 100vh; overflow: hidden; background: radial-gradient(ellipse at center, #0a0a1e 0%, #16162a 100%); }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      background: radial-gradient(ellipse at center, #0a0a1e 0%, #16162a 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
     canvas { display: block; }
-    .info { position: fixed; top: 16px; left: 16px; color: rgba(255,255,255,0.7); font-family: sans-serif; font-size: 14px; }
+    .info {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+      background: rgba(10, 10, 30, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 8px 16px;
+      backdrop-filter: blur(10px);
+    }
+    .info .count { color: #a78bfa; font-weight: 600; }
   </style>
 </head>
 <body>
-  <div class="info">NebulaCanvas Gallery - 粒子数: ${particles.length}</div>
+  <div class="info">NebulaCanvas Gallery · 粒子: <span class="count">${particles.length}</span></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    const data = ${JSON.stringify(exportData)};
+    const data = ${jsonStr};
     
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(data.camera.fov, window.innerWidth / window.innerHeight, 0.1, 10000);
@@ -177,7 +209,8 @@ const App: React.FC = () => {
     data.particles.forEach(p => {
       positions.push(...p.position);
       const color = new THREE.Color(p.color);
-      colors.push(color.r, color.g, color.b);
+      const lifeRatio = Math.max(0, Math.min(1, p.remainingTime / p.maxLife));
+      colors.push(color.r * lifeRatio, color.g * lifeRatio, color.b * lifeRatio);
       sizes.push(p.radius);
     });
     
@@ -191,7 +224,8 @@ const App: React.FC = () => {
       vertexColors: true,
       transparent: true,
       opacity: 0.9,
-      sizeAttenuation: true
+      sizeAttenuation: true,
+      blending: THREE.AdditiveBlending
     });
     
     const points = new THREE.Points(geometry, material);
@@ -199,23 +233,25 @@ const App: React.FC = () => {
     
     const linePositions = [];
     const lineColors = [];
+    const CONNECTION_DISTANCE = 25;
     
     for (let i = 0; i < data.particles.length; i++) {
+      const p1 = data.particles[i];
       for (let j = i + 1; j < data.particles.length; j++) {
-        const p1 = data.particles[i];
         const p2 = data.particles[j];
-        const dist = Math.sqrt(
-          Math.pow(p1.position[0] - p2.position[0], 2) +
-          Math.pow(p1.position[1] - p2.position[1], 2) +
-          Math.pow(p1.position[2] - p2.position[2], 2)
-        );
-        if (dist < 25) {
+        const dx = p1.position[0] - p2.position[0];
+        const dy = p1.position[1] - p2.position[1];
+        const dz = p1.position[2] - p2.position[2];
+        const distSq = dx * dx + dy * dy + dz * dz;
+        if (distSq < CONNECTION_DISTANCE * CONNECTION_DISTANCE) {
           linePositions.push(...p1.position, ...p2.position);
           const c1 = new THREE.Color(p1.color);
           const c2 = new THREE.Color(p2.color);
           const mixed = c1.clone().lerp(c2, 0.5);
-          lineColors.push(mixed.r, mixed.g, mixed.b, 0.3);
-          lineColors.push(mixed.r, mixed.g, mixed.b, 0.3);
+          const alpha1 = Math.max(0, p1.remainingTime / p1.maxLife);
+          const alpha2 = Math.max(0, p2.remainingTime / p2.maxLife);
+          lineColors.push(mixed.r, mixed.g, mixed.b, alpha1 * 0.3);
+          lineColors.push(mixed.r, mixed.g, mixed.b, alpha2 * 0.3);
         }
       }
     }
@@ -227,19 +263,24 @@ const App: React.FC = () => {
       const lineMaterial = new THREE.LineBasicMaterial({
         vertexColors: true,
         transparent: true,
-        opacity: 0.3
+        opacity: 0.3,
+        linewidth: 1
       });
       const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
       scene.add(lines);
     }
     
-    let angle = 0;
+    const originalPos = [...data.camera.position];
+    const radius = Math.sqrt(originalPos[0]**2 + originalPos[1]**2 + originalPos[2]**2);
+    let angle = Math.atan2(originalPos[0], originalPos[2]);
+    const targetY = originalPos[1];
+    
     function animate() {
       requestAnimationFrame(animate);
       angle += 0.002;
-      const radius = data.camera.position.reduce((a, b) => a + b * b, 0) ** 0.5;
       camera.position.x = radius * Math.sin(angle);
       camera.position.z = radius * Math.cos(angle);
+      camera.position.y = targetY;
       camera.lookAt(0, 0, 0);
       renderer.render(scene, camera);
     }
@@ -263,25 +304,56 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url)
   }, [])
 
+  const setupLowResRendering = useCallback((width: number, height: number) => {
+    if (!sceneRef.current || !rendererRef.current) return
+
+    const halfWidth = Math.floor(width / 2)
+    const halfHeight = Math.floor(height / 2)
+
+    if (!renderTargetRef.current) {
+      renderTargetRef.current = new THREE.WebGLRenderTarget(halfWidth, halfHeight, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        format: THREE.RGBAFormat
+      })
+    } else {
+      renderTargetRef.current.setSize(halfWidth, halfHeight)
+    }
+
+    if (!lowResSceneRef.current) {
+      lowResSceneRef.current = new THREE.Scene()
+      
+      const lowResGeometry = new THREE.PlaneGeometry(2, 2)
+      const lowResMaterial = new THREE.MeshBasicMaterial({
+        map: renderTargetRef.current.texture,
+        transparent: true
+      })
+      lowResQuadRef.current = new THREE.Mesh(lowResGeometry, lowResMaterial)
+      lowResSceneRef.current.add(lowResQuadRef.current)
+      
+      lowResCameraRef.current = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    }
+  }, [])
+
   useEffect(() => {
     if (!containerRef.current) return
 
     const scene = new THREE.Scene()
     sceneRef.current = scene
 
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      containerRef.current.clientWidth / containerRef.current.clientHeight,
-      0.1,
-      10000
-    )
+    const width = containerRef.current.clientWidth
+    const height = containerRef.current.clientHeight
+
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 10000)
     cameraRef.current = camera
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     rendererRef.current = renderer
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight)
+    renderer.setSize(width, height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     containerRef.current.appendChild(renderer.domElement)
+
+    setupLowResRendering(width, height)
 
     const particleEngine = new ParticleEngine()
     particleEngineRef.current = particleEngine
@@ -310,10 +382,12 @@ const App: React.FC = () => {
 
     const handleResize = () => {
       if (!containerRef.current || !camera || !renderer) return
-      camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight
+      const w = containerRef.current.clientWidth
+      const h = containerRef.current.clientHeight
+      camera.aspect = w / h
       camera.updateProjectionMatrix()
-      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight)
-      
+      renderer.setSize(w, h)
+      setupLowResRendering(w, h)
       setIsToolbarCollapsed(window.innerWidth < 1024)
     }
 
@@ -400,7 +474,7 @@ const App: React.FC = () => {
 
       particles.forEach(p => {
         positions.push(p.position.x, p.position.y, p.position.z)
-        const lifeRatio = p.life / p.maxLife
+        const lifeRatio = p.remainingTime / p.maxLife
         colors.push(
           p.startColor.r * lifeRatio,
           p.startColor.g * lifeRatio,
@@ -416,9 +490,22 @@ const App: React.FC = () => {
       particleGeometry.computeBoundingSphere()
 
       const detectionInterval = particleEngine.getConnectionDetectionInterval()
-      lineRenderer.update(particles, detectionInterval)
+      const skipDistanceThreshold = particleEngine.getSkipDistanceThreshold()
+      lineRenderer.update(particles, detectionInterval, skipDistanceThreshold)
 
-      renderer.render(scene, camera)
+      const performanceLevel = particleEngine.getPerformanceLevel()
+      isLowResModeRef.current = performanceLevel === 'low' || performanceLevel === 'ultra'
+
+      if (isLowResModeRef.current && renderTargetRef.current && lowResSceneRef.current && lowResCameraRef.current && lowResQuadRef.current) {
+        renderer.setRenderTarget(renderTargetRef.current)
+        renderer.render(scene, camera)
+        
+        renderer.setRenderTarget(null)
+        renderer.render(lowResSceneRef.current, lowResCameraRef.current)
+      } else {
+        renderer.setRenderTarget(null)
+        renderer.render(scene, camera)
+      }
     }
 
     animate()
@@ -437,12 +524,13 @@ const App: React.FC = () => {
       particleMaterial.dispose()
       lineRenderer.dispose()
       renderer.dispose()
+      renderTargetRef.current?.dispose()
       
       if (containerRef.current && renderer.domElement.parentNode === containerRef.current) {
         containerRef.current.removeChild(renderer.domElement)
       }
     }
-  }, [getWorldPosition, lerpCamera])
+  }, [getWorldPosition, lerpCamera, setupLowResRendering])
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -483,7 +571,14 @@ const App: React.FC = () => {
             padding: '8px 16px',
             backdropFilter: 'blur(10px)',
             transition: 'all 0.2s ease'
-          }}>
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.filter = 'brightness(1.1)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.filter = 'brightness(1)'
+          }}
+          >
             <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 14 }}>
               粒子: <span style={{ color: '#a78bfa', fontWeight: 600 }}>{particleCount}</span>
             </span>
@@ -498,7 +593,14 @@ const App: React.FC = () => {
             transition: 'all 0.2s ease',
             fontSize: 12,
             color: '#94a3b8'
-          }}>
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.filter = 'brightness(1.1)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.filter = 'brightness(1)'
+          }}
+          >
             FPS: {fps}
           </div>
         </div>
@@ -597,7 +699,8 @@ const App: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 200
+            zIndex: 200,
+            transition: 'opacity 0.2s ease'
           }}
           onClick={() => setShowClearConfirm(false)}
         >
@@ -610,7 +713,8 @@ const App: React.FC = () => {
               border: '1px solid rgba(255, 255, 255, 0.08)',
               minWidth: 300,
               color: 'white',
-              backdropFilter: 'blur(10px)'
+              backdropFilter: 'blur(10px)',
+              transition: 'all 0.2s ease'
             }}
           >
             <div style={{ fontSize: 16, marginBottom: 20, textAlign: 'center' }}>

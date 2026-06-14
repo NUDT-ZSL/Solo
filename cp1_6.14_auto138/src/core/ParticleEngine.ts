@@ -6,7 +6,8 @@ import {
   COLOR_PALETTE,
   MAX_PARTICLES,
   HIGH_PARTICLE_THRESHOLD,
-  PERFORMANCE_THRESHOLD
+  PERFORMANCE_THRESHOLD,
+  SKIP_CONNECTION_DISTANCE
 } from './ParticleData'
 
 type EventType = 'particleCountChange' | 'needsRender'
@@ -29,6 +30,7 @@ export class ParticleEngine {
   private history: ParticleData[][] = []
   private maxHistory = 20
   private connectionDetectionInterval = 1
+  private performanceLevel: 'normal' | 'low' | 'ultra' = 'normal'
 
   constructor() {
     this.initParticlePool()
@@ -44,6 +46,7 @@ export class ParticleEngine {
         startColor: new THREE.Color(),
         life: 0,
         maxLife: 0,
+        remainingTime: 0,
         radius: 0,
         startRadius: 0,
         speedFactor: 0,
@@ -73,6 +76,7 @@ export class ParticleEngine {
     poolParticle.startColor.copy(startColor)
     poolParticle.life = maxLife
     poolParticle.maxLife = maxLife
+    poolParticle.remainingTime = maxLife
     poolParticle.radius = 3
     poolParticle.startRadius = 3
     poolParticle.speedFactor = 1
@@ -87,10 +91,23 @@ export class ParticleEngine {
   private updatePerformanceSettings(): void {
     const count = this.particles.length
     if (count > HIGH_PARTICLE_THRESHOLD) {
-      this.connectionDetectionInterval = 3
+      this.performanceLevel = 'ultra'
+      this.connectionDetectionInterval = 1
+    } else if (count > PERFORMANCE_THRESHOLD) {
+      this.performanceLevel = 'low'
+      this.connectionDetectionInterval = 1
     } else {
+      this.performanceLevel = 'normal'
       this.connectionDetectionInterval = 1
     }
+  }
+
+  getPerformanceLevel(): 'normal' | 'low' | 'ultra' {
+    return this.performanceLevel
+  }
+
+  getSkipDistanceThreshold(): number {
+    return this.performanceLevel === 'ultra' ? SKIP_CONNECTION_DISTANCE : -1
   }
 
   getConnectionDetectionInterval(): number {
@@ -175,15 +192,12 @@ export class ParticleEngine {
   }
 
   update(deltaTime: number): void {
-    const particleCount = this.particles.length
-    const step = particleCount > PERFORMANCE_THRESHOLD ? 2 : 1
-
-    for (let i = this.particles.length - 1; i >= 0; i -= step) {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i]
       
-      p.life -= deltaTime
+      p.remainingTime -= deltaTime
       
-      if (p.life <= 0) {
+      if (p.remainingTime <= 0) {
         p.active = false
         this.particles.splice(i, 1)
         this.updatePerformanceSettings()
@@ -192,7 +206,7 @@ export class ParticleEngine {
         continue
       }
 
-      const lifeRatio = p.life / p.maxLife
+      const lifeRatio = p.remainingTime / p.maxLife
       
       p.speedFactor = lifeRatio
       
@@ -259,12 +273,19 @@ export class ParticleEngine {
   }
 
   private saveHistory(): void {
-    const snapshot = this.particles.map(p => ({
-      ...p,
+    const snapshot: ParticleData[] = this.particles.map(p => ({
+      id: p.id,
       position: p.position.clone(),
       velocity: p.velocity.clone(),
       color: p.color.clone(),
-      startColor: p.startColor.clone()
+      startColor: p.startColor.clone(),
+      life: p.life,
+      maxLife: p.maxLife,
+      remainingTime: p.remainingTime,
+      radius: p.radius,
+      startRadius: p.startRadius,
+      speedFactor: p.speedFactor,
+      active: p.active
     }))
     this.history.push(snapshot)
     if (this.history.length > this.maxHistory) {
@@ -289,6 +310,7 @@ export class ParticleEngine {
         poolParticle.startColor.copy(state.startColor)
         poolParticle.life = state.life
         poolParticle.maxLife = state.maxLife
+        poolParticle.remainingTime = state.remainingTime
         poolParticle.radius = state.radius
         poolParticle.startRadius = state.startRadius
         poolParticle.speedFactor = state.speedFactor

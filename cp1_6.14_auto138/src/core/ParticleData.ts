@@ -8,11 +8,14 @@ export interface ParticleData {
   startColor: THREE.Color
   life: number
   maxLife: number
+  remainingTime: number
   radius: number
   startRadius: number
   speedFactor: number
   active: boolean
 }
+
+export const SKIP_CONNECTION_DISTANCE = 50
 
 export type BrushType = 'spray' | 'vortex' | 'trail'
 
