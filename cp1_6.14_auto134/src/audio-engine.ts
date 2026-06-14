@@ -1,4 +1,4 @@
-import { eventBus } from './utils/event-bus';
+import { eventBus } from './event-bus';
 
 export interface BeatEvent {
   beatIndex: number;
