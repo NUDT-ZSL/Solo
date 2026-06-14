@@ -1,9 +1,8 @@
 import React from 'react';
-import { ToolMode } from '../App';
+import EditorState, { ToolMode } from './EditorState';
 
 interface Props {
-  toolMode: ToolMode;
-  onToolChange: (mode: ToolMode) => void;
+  editorState: EditorState;
 }
 
 const tools: { mode: ToolMode; icon: string; label: string }[] = [
@@ -13,7 +12,13 @@ const tools: { mode: ToolMode; icon: string; label: string }[] = [
   { mode: 'goal', icon: '◉', label: '终点' },
 ];
 
-const Sidebar: React.FC<Props> = ({ toolMode, onToolChange }) => {
+const Sidebar: React.FC<Props> = ({ editorState }) => {
+  const toolMode = editorState.toolMode;
+
+  const handleToolClick = (mode: ToolMode) => {
+    editorState.setToolMode(mode);
+  };
+
   return (
     <div style={{
       width: '200px',
@@ -34,50 +39,61 @@ const Sidebar: React.FC<Props> = ({ toolMode, onToolChange }) => {
       }}>
         工具
       </div>
-      {tools.map(tool => (
-        <button
-          key={tool.mode}
-          onClick={() => onToolChange(tool.mode)}
-          style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '8px',
-            border: 'none',
-            background: toolMode === tool.mode ? '#ff6b6b' : '#3d3d55',
-            color: '#ffffff',
-            fontSize: '20px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-          }}
-          onMouseEnter={e => {
-            if (toolMode !== tool.mode) {
-              e.currentTarget.style.background = '#4d4d65';
-            }
-          }}
-          onMouseLeave={e => {
-            if (toolMode !== tool.mode) {
-              e.currentTarget.style.background = '#3d3d55';
-            }
-          }}
-          title={tool.label}
-        >
-          {tool.icon}
-        </button>
-      ))}
+      {tools.map(tool => {
+        const isActive = toolMode === tool.mode;
+        return (
+          <button
+            key={tool.mode}
+            onClick={() => handleToolClick(tool.mode)}
+            title={tool.label}
+            style={{
+              width: '48px',
+              height: '48px',
+              minWidth: '48px',
+              minHeight: '48px',
+              borderRadius: '8px',
+              border: 'none',
+              background: isActive ? '#ff6b6b' : '#3d3d55',
+              color: '#ffffff',
+              fontSize: '20px',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxSizing: 'border-box',
+              padding: 0,
+              lineHeight: 1,
+            }}
+            onMouseEnter={(e) => {
+              if (!isActive) {
+                e.currentTarget.style.background = '#4d4d65';
+              } else {
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isActive) {
+                e.currentTarget.style.background = '#3d3d55';
+              } else {
+                e.currentTarget.style.transform = 'scale(1)';
+              }
+            }}
+          >
+            {tool.icon}
+          </button>
+        );
+      })}
       <div style={{
         fontSize: '10px',
         color: '#666688',
         marginTop: '16px',
-        lineHeight: '1.6',
+        lineHeight: '1.8',
       }}>
         <div>左键: 放置/选择</div>
         <div>右键/中键: 平移</div>
-        <div>滚轮: 缩放</div>
-        <div>Delete: 删除</div>
+        <div>滚轮: 缩放 0.5x-2.0x</div>
+        <div>Delete: 删除选中</div>
         <div>Esc: 退出预览</div>
       </div>
     </div>

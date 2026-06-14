@@ -29,14 +29,88 @@ export interface LevelData {
   elements: ElementData[];
 }
 
+export type ToolMode = 'select' | 'platform' | 'spike' | 'goal';
+
+type ChangeListener = () => void;
+
 let nextId = 1;
 
 class EditorState {
-  elements: ElementData[] = [];
-  selectedId: string | null = null;
-  zoom: number = 1;
-  panX: number = 0;
-  panY: number = 0;
+  private _elements: ElementData[] = [];
+  private _selectedId: string | null = null;
+  private _zoom: number = 1;
+  private _panX: number = 0;
+  private _panY: number = 0;
+  private _toolMode: ToolMode = 'select';
+  private _isPlaying: boolean = false;
+  private _listeners: Set<ChangeListener> = new Set();
+
+  get elements(): ElementData[] {
+    return this._elements;
+  }
+
+  get selectedId(): string | null {
+    return this._selectedId;
+  }
+
+  get zoom(): number {
+    return this._zoom;
+  }
+
+  get panX(): number {
+    return this._panX;
+  }
+
+  get panY(): number {
+    return this._panY;
+  }
+
+  get toolMode(): ToolMode {
+    return this._toolMode;
+  }
+
+  get isPlaying(): boolean {
+    return this._isPlaying;
+  }
+
+  subscribe(listener: ChangeListener): () => void {
+    this._listeners.add(listener);
+    return () => this._listeners.delete(listener);
+  }
+
+  private notify(): void {
+    this._listeners.forEach(l => l());
+  }
+
+  setToolMode(mode: ToolMode): void {
+    if (this._toolMode !== mode) {
+      this._toolMode = mode;
+      this.notify();
+    }
+  }
+
+  setPlaying(playing: boolean): void {
+    if (this._isPlaying !== playing) {
+      this._isPlaying = playing;
+      this.notify();
+    }
+  }
+
+  setZoom(zoom: number): void {
+    const z = Math.max(0.5, Math.min(2.0, zoom));
+    if (this._zoom !== z) {
+      this._zoom = z;
+      this.notify();
+    }
+  }
+
+  setPan(panX: number, panY: number): void {
+    if (this._panX !== panX || this._panY !== panY) {
+      this._panX = panX;
+      this._panY = panY;
+      this.notify();
+    }
+  }
 
   addPlatform(x: number, y: number): PlatformData {
     const p: PlatformData = {
@@ -47,7 +121,9 @@ class EditorState {
       width: 80,
       height: 20,
     };
-    this.elements.push(p);
+    this._elements = [...this._elements, p];
+    this._selectedId = p.id;
+    this.notify();
     return p;
   }
 
@@ -56,9 +132,11 @@ class EditorState {
       id: `spike_${nextId++}`,
       type: 'spike',
       x: Math.round(x - 12),
-      y: Math.round(y - 20),
+      y: Math.round(y),
     };
-    this.elements.push(s);
+    this._elements = [...this._elements, s];
+    this._selectedId = s.id;
+    this.notify();
     return s;
   }
 
@@ -69,35 +147,44 @@ class EditorState {
       x: Math.round(x - 20),
       y: Math.round(y - 20),
     };
-    this.elements.push(g);
+    this._elements = [...this._elements, g];
+    this._selectedId = g.id;
+    this.notify();
     return g;
   }
 
   removeElement(id: string): void {
-    this.elements = this.elements.filter(e => e.id !== id);
-    if (this.selectedId === id) {
-      this.selectedId = null;
+    const prev = this._elements.length;
+    this._elements = this._elements.filter(e => e.id !== id);
+    if (this._elements.length !== prev) {
+      if (this._selectedId === id) {
+        this._selectedId = null;
+      }
+      this.notify();
     }
   }
 
   select(id: string | null): void {
-    this.selectedId = id;
+    if (this._selectedId !== id) {
+      this._selectedId = id;
+      this.notify();
+    }
   }
 
   getSelected(): ElementData | null {
-    return this.elements.find(e => e.id === this.selectedId) || null;
+    return this._elements.find(e => e.id === this._selectedId) || null;
   }
 
   getPlatforms(): PlatformData[] {
-    return this.elements.filter((e): e is PlatformData => e.type === 'platform');
+    return this._elements.filter((e): e is PlatformData => e.type === 'platform');
   }
 
   getSpikes(): SpikeData[] {
-    return this.elements.filter((e): e is SpikeData => e.type === 'spike');
+    return this._elements.filter((e): e is SpikeData => e.type === 'spike');
   }
 
   getGoals(): GoalData[] {
-    return this.elements.filter((e): e is GoalData => e.type === 'goal');
+    return this._elements.filter((e): e is GoalData => e.type === 'goal');
   }
 
   getLeftmostPlatform(): PlatformData | null {
@@ -107,18 +194,18 @@ class EditorState {
   }
 
   hitTest(wx: number, wy: number): ElementData | null {
-    for (let i = this.elements.length - 1; i >= 0; i--) {
-      const e = this.elements[i];
+    for (let i = this._elements.length - 1; i >= 0; i--) {
+      const e = this._elements[i];
       if (e.type === 'platform') {
         if (wx >= e.x && wx <= e.x + e.width && wy >= e.y && wy <= e.y + e.height) {
           return e;
         }
       } else if (e.type === 'spike') {
         const cx = e.x + 12;
-        const by = e.y + 20;
-        const ty = e.y;
-        if (wx >= e.x && wx <= e.x + 24 && wy >= ty && wy <= by) {
-          const relY = (wy - ty) / (by - ty);
+        const by = e.y;
+        const ty = e.y + 20;
+        if (wx >= e.x && wx <= e.x + 24 && wy >= by && wy <= ty) {
+          const relY = (wy - by) / (ty - by);
           const halfW = 12 * relY;
           if (wx >= cx - halfW && wx <= cx + halfW) {
             return e;
@@ -143,14 +230,14 @@ class EditorState {
     const p = sel as PlatformData;
     const hs = 6;
     const handles = [
-      { handle: 'tl', x: p.x, y: p.y },
-      { handle: 'tr', x: p.x + p.width, y: p.y },
-      { handle: 'bl', x: p.x, y: p.y + p.height },
-      { handle: 'br', x: p.x + p.width, y: p.y + p.height },
+      { handle: 'tl', x: p.x, y: p.y + p.height },
+      { handle: 'tr', x: p.x + p.width, y: p.y + p.height },
+      { handle: 'bl', x: p.x, y: p.y },
+      { handle: 'br', x: p.x + p.width, y: p.y },
       { handle: 'ml', x: p.x, y: p.y + p.height / 2 },
       { handle: 'mr', x: p.x + p.width, y: p.y + p.height / 2 },
-      { handle: 'mt', x: p.x + p.width / 2, y: p.y },
-      { handle: 'mb', x: p.x + p.width / 2, y: p.y + p.height },
+      { handle: 'mt', x: p.x + p.width / 2, y: p.y + p.height },
+      { handle: 'mb', x: p.x + p.width / 2, y: p.y },
     ];
     for (const h of handles) {
       if (Math.abs(wx - h.x) <= hs && Math.abs(wy - h.y) <= hs) {
@@ -161,62 +248,77 @@ class EditorState {
   }
 
   resizePlatform(id: string, handle: string, wx: number, wy: number): void {
-    const el = this.elements.find(e => e.id === id);
+    const el = this._elements.find(e => e.id === id);
     if (!el || el.type !== 'platform') return;
     const p = el as PlatformData;
     const minW = 20;
     const minH = 10;
+    const oldX = p.x;
+    const oldY = p.y;
+    const oldW = p.width;
+    const oldH = p.height;
+    let newX = oldX, newY = oldY, newW = oldW, newH = oldH;
+
     switch (handle) {
       case 'tl':
-        p.width = Math.max(minW, p.x + p.width - wx);
-        p.height = Math.max(minH, p.y + p.height - wy);
-        p.x = p.x + (p.width === minW ? 0 : wx - p.x) > 0 ? Math.min(wx, p.x + p.width - minW) : p.x;
-        p.y = p.y + (p.height === minH ? 0 : wy - p.y) > 0 ? Math.min(wy, p.y + p.height - minH) : p.y;
+        newW = Math.max(minW, oldX + oldW - wx);
+        newH = Math.max(minH, wy - oldY);
+        newX = oldX + oldW - newW;
+        newY = oldY + oldH - newH;
         break;
       case 'tr':
-        p.width = Math.max(minW, wx - p.x);
-        p.height = Math.max(minH, p.y + p.height - wy);
-        p.y = Math.min(wy, p.y + p.height - minH);
+        newW = Math.max(minW, wx - oldX);
+        newH = Math.max(minH, wy - oldY);
+        newY = oldY + oldH - newH;
         break;
       case 'bl':
-        p.width = Math.max(minW, p.x + p.width - wx);
-        p.height = Math.max(minH, wy - p.y);
-        p.x = Math.min(wx, p.x + p.width - minW);
+        newW = Math.max(minW, oldX + oldW - wx);
+        newH = Math.max(minH, oldY + oldH - wy);
+        newX = oldX + oldW - newW;
         break;
       case 'br':
-        p.width = Math.max(minW, wx - p.x);
-        p.height = Math.max(minH, wy - p.y);
+        newW = Math.max(minW, wx - oldX);
+        newH = Math.max(minH, oldY + oldH - wy);
         break;
       case 'ml':
-        p.width = Math.max(minW, p.x + p.width - wx);
-        p.x = Math.min(wx, p.x + p.width - minW);
+        newW = Math.max(minW, oldX + oldW - wx);
+        newX = oldX + oldW - newW;
         break;
       case 'mr':
-        p.width = Math.max(minW, wx - p.x);
+        newW = Math.max(minW, wx - oldX);
         break;
       case 'mt':
-        p.height = Math.max(minH, p.y + p.height - wy);
-        p.y = Math.min(wy, p.y + p.height - minH);
+        newH = Math.max(minH, wy - oldY);
+        newY = oldY + oldH - newH;
         break;
       case 'mb':
-        p.height = Math.max(minH, wy - p.y);
+        newH = Math.max(minH, oldY + oldH - wy);
         break;
     }
+
+    p.x = Math.round(newX);
+    p.y = Math.round(newY);
+    p.width = Math.round(newW);
+    p.height = Math.round(newH);
+    this._elements = [...this._elements];
+    this.notify();
   }
 
-  moveElement(id: string, dx: number, dy: number): void {
-    const el = this.elements.find(e => e.id === id);
+  moveElement(id: string, x: number, y: number): void {
+    const el = this._elements.find(e => e.id === id);
     if (!el) return;
-    el.x += dx;
-    el.y += dy;
+    el.x = Math.round(x);
+    el.y = Math.round(y);
+    this._elements = [...this._elements];
+    this.notify();
   }
 
   screenToWorld(sx: number, sy: number, canvasWidth: number, canvasHeight: number): { x: number; y: number } {
     const cx = canvasWidth / 2;
     const cy = canvasHeight / 2;
     return {
-      x: (sx - cx) / this.zoom + this.panX,
-      y: -(sy - cy) / this.zoom + this.panY,
+      x: (sx - cx) / this._zoom + this._panX,
+      y: -(sy - cy) / this._zoom + this._panY,
     };
   }
 
@@ -224,17 +326,21 @@ class EditorState {
     const cx = canvasWidth / 2;
     const cy = canvasHeight / 2;
     return {
-      x: (wx - this.panX) * this.zoom + cx,
-      y: -(wy - this.panY) * this.zoom + cy,
+      x: (wx - this._panX) * this._zoom + cx,
+      y: -(wy - this._panY) * this._zoom + cy,
     };
   }
 
-  exportJSON(): LevelData {
+  toJSON(): LevelData {
     return {
       name: 'untitled',
       version: 1,
-      elements: this.elements.map(e => ({ ...e })),
+      elements: this._elements.map(e => ({ ...e })),
     };
+  }
+
+  exportLevel(): LevelData {
+    return this.toJSON();
   }
 }
 
