@@ -1,0 +1,253 @@
+.message-center {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 20px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.tab {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #f8fafc;
+}
+
+.tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.message-list-container {
+  height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.message-card {
+  width: 100%;
+  min-height: 108px;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #1e293b;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+}
+
+.message-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.message-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #334155;
+}
+
+.message-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.message-username {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.message-status {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.message-time {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.message-content {
+  margin-bottom: 12px;
+}
+
+.exchange-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.skill-badge {
+  display: inline-block;
+  background: #1e293b;
+  color: #94a3b8;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.skill-badge.my {
+  background: #3b82f6;
+  color: white;
+}
+
+.exchange-arrow {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.hours-badge {
+  background: #22c55e;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.message-text {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.message-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-accept {
+  background: #22c55e;
+  color: white;
+}
+
+.btn-accept:hover {
+  background: #16a34a;
+}
+
+.btn-reject {
+  background: #334155;
+  color: #94a3b8;
+}
+
+.btn-reject:hover {
+  background: #475569;
+  color: #f8fafc;
+}
+
+.btn-modify {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-modify:hover {
+  background: #2563eb;
+}
+
+.btn-confirm {
+  background: #22c55e;
+  color: white;
+}
+
+.btn-confirm:hover {
+  background: #16a34a;
+}
+
+.modify-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: #1e293b;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.modify-section label {
+  font-size: 13px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.modify-section input[type="range"] {
+  flex: 1;
+  accent-color: #3b82f6;
+}
+
+.hours-display {
+  font-size: 14px;
+  font-weight: 600;
+  color: #22c55e;
+  min-width: 50px;
+  text-align: right;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .message-list-container {
+    width: 100%;
+  }
+
+  .message-card {
+    width: 100%;
+  }
+}

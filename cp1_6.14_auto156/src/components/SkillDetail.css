@@ -1,0 +1,331 @@
+.skill-detail-modal {
+  max-width: 700px;
+  width: 100%;
+}
+
+.skill-detail-backdrop {
+  z-index: 999;
+}
+
+.skill-detail-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.skill-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #334155;
+  margin-bottom: 20px;
+}
+
+.detail-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #334155;
+}
+
+.detail-user-info {
+  flex: 1;
+}
+
+.detail-username {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 6px;
+}
+
+.detail-skill-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.detail-skill-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.detail-tag {
+  font-size: 12px;
+}
+
+.detail-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-rating-text {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.detail-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f8fafc;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detail-description {
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.6;
+  background: #0f172a;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.time-slot-wrapper {
+  overflow-x: auto;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.time-slot-grid {
+  min-width: 600px;
+}
+
+.time-slot-header {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.time-slot-corner {
+  width: 60px;
+}
+
+.time-slot-day-label {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+  padding: 4px 0;
+}
+
+.time-slot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.time-slot-row {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.time-slot-hour-label {
+  font-size: 11px;
+  color: #64748b;
+  text-align: right;
+  padding-right: 8px;
+}
+
+.time-slot {
+  height: 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.time-slot.available {
+  background: #22c55e;
+}
+
+.time-slot.unavailable {
+  background: #6b7280;
+}
+
+.time-slot.available:hover {
+  opacity: 0.8;
+}
+
+.time-slot-legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.legend-color.available {
+  background: #22c55e;
+}
+
+.legend-color.unavailable {
+  background: #6b7280;
+}
+
+.add-review-btn {
+  background: transparent;
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-review-btn:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+.review-form {
+  background: #0f172a;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.rating-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rating-label {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.rating-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f59e0b;
+}
+
+.review-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.char-count {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.reviews-container {
+  height: 300px;
+  overflow-y: auto;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.reviews-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.review-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #1e293b;
+}
+
+.review-item:last-child {
+  border-bottom: none;
+}
+
+.review-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #334155;
+  flex-shrink: 0;
+}
+
+.review-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.review-username {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.review-date {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.review-text {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.detail-footer {
+  position: sticky;
+  bottom: 0;
+  background: #1e293b;
+}
+
+.star-rating {
+  display: flex;
+  gap: 2px;
+}
+
+@media (max-width: 768px) {
+  .skill-detail-modal {
+    width: 100%;
+    max-height: 90vh;
+  }
+
+  .skill-detail-body {
+    max-height: none;
+  }
+}
