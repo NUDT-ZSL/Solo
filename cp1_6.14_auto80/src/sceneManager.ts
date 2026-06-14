@@ -16,9 +16,22 @@ interface DeletingVoxel {
   duration: number;
 }
 
+interface ActiveVoxel {
+  x: number;
+  y: number;
+  z: number;
+  matId: number;
+  distance: number;
+  lodLevel: 0 | 1 | 2;
+}
+
 const LOD_THRESHOLD = 2000;
 const LOD_NEAR = 10;
 const LOD_MID = 20;
+
+const LOD0_FULL = 0;
+const LOD1_THREE_FACES = 1;
+const LOD2_SIMPLE = 2;
 
 export class SceneManager {
   private container: HTMLElement;
@@ -50,11 +63,21 @@ export class SceneManager {
   private instancedEdges: Map<number, THREE.LineSegments> = new Map();
   private positionIndex: Map<string, { matId: number; idx: number }> = new Map();
 
+  private lodEnabled: boolean = false;
+  private activeVoxels: ActiveVoxel[] = [];
+  private lodUpdateInterval: number = 250;
+  private lastLodUpdateTime: number = 0;
+  private lodMeshesByLevel: Map<number, Map<number, THREE.InstancedMesh>> = new Map();
+  private lodEdgesByLevel: Map<number, Map<number, THREE.LineSegments>> = new Map();
+
   private geometryCache: {
     box: THREE.BoxGeometry;
     boxSmall: THREE.BoxGeometry;
     edges: THREE.EdgesGeometry;
     edgesSmall: THREE.EdgesGeometry;
+    threeFaceBox: THREE.BoxGeometry;
+    simpleBox: THREE.BoxGeometry;
+    simpleEdges: THREE.EdgesGeometry;
   };
 
   private deletingVoxels: DeletingVoxel[] = [];
@@ -113,6 +136,9 @@ export class SceneManager {
       boxSmall: new THREE.BoxGeometry(0.98, 0.98, 0.98),
       edges: new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
       edgesSmall: new THREE.EdgesGeometry(new THREE.BoxGeometry(0.98, 0.98, 0.98)),
+      threeFaceBox: this.createThreeFaceBox(),
+      simpleBox: new THREE.BoxGeometry(1, 1, 1),
+      simpleEdges: new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
     };
 
     this.buildLights();
@@ -137,6 +163,10 @@ export class SceneManager {
 
     this.bus.on('voxelsUpdated', this.handleVoxelsUpdated.bind(this));
     this.bus.on('exportSTL:request', this.handleExportSTL.bind(this));
+
+    requestAnimationFrame(() => {
+      this.emitCameraAngles(0);
+    });
   }
 
   private buildLights(): void {
@@ -210,6 +240,20 @@ export class SceneManager {
     }
   }
 
+  private createThreeFaceBox(): THREE.BoxGeometry {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const groups = [];
+    for (let i = 0; i < 6; i++) {
+      if (i === 0 || i === 2 || i === 4) {
+        groups.push({ start: i * 6, count: 6, materialIndex: 0 });
+      } else {
+        groups.push({ start: i * 6, count: 6, materialIndex: 1 });
+      }
+    }
+    for (const g of groups) geo.addGroup(g.start, g.count, g.materialIndex);
+    return geo;
+  }
+
   private attachEvents(): void {
     const dom = this.renderer.domElement;
 
@@ -277,8 +321,17 @@ export class SceneManager {
     this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const voxelMeshes = Array.from(this.instancedMeshes.values());
-    const voxelHits = this.raycaster.intersectObjects(voxelMeshes, false);
+    let targetMeshes: THREE.Object3D[] = [];
+    if (!this.lodEnabled) {
+      targetMeshes = Array.from(this.instancedMeshes.values());
+    } else {
+      for (const [level, meshes] of this.lodMeshesByLevel) {
+        for (const mesh of meshes.values()) {
+          if (mesh.visible) targetMeshes.push(mesh);
+        }
+      }
+    }
+    const voxelHits = this.raycaster.intersectObjects(targetMeshes, false);
     if (voxelHits.length > 0) {
       const hit = voxelHits[0];
       const instMesh = hit.object as THREE.InstancedMesh;
@@ -317,6 +370,11 @@ export class SceneManager {
     for (const [id, m] of this.instancedMeshes) {
       if (m === mesh) return id;
     }
+    for (const [level, meshes] of this.lodMeshesByLevel) {
+      for (const [id, m] of meshes) {
+        if (m === mesh) return id;
+      }
+    }
     return -1;
   }
 
@@ -328,6 +386,10 @@ export class SceneManager {
         const parts = key.split(',').map(Number);
         return { x: parts[0], y: parts[1], z: parts[2] };
       }
+    }
+    if (this.activeVoxels.length > 0) {
+      const voxel = this.activeVoxels.find((v) => v.matId === matId);
+      if (voxel) return { x: voxel.x, y: voxel.y, z: voxel.z };
     }
     return null;
   }
@@ -368,6 +430,7 @@ export class SceneManager {
       entry.start = performance.now();
     }
 
+    this.activeVoxels = [];
     let totalCount = 0;
     for (let x = 0; x < GRID_SIZE; x++) {
       for (let y = 0; y < GRID_SIZE; y++) {
@@ -376,43 +439,148 @@ export class SceneManager {
           if (matId === -1) continue;
           if (!positionsByMat.has(matId)) positionsByMat.set(matId, []);
           positionsByMat.get(matId)!.push({ x, y, z });
+          this.activeVoxels.push({ x, y, z, matId, distance: 0, lodLevel: LOD0_FULL });
           totalCount++;
         }
       }
     }
 
     this.clearVoxelMeshes();
+    this.clearLodMeshes();
 
     if (totalCount === 0) return;
 
-    const useLOD = totalCount > LOD_THRESHOLD;
+    this.lodEnabled = totalCount > LOD_THRESHOLD;
 
+    if (!this.lodEnabled) {
+      for (const [matId, positions] of positionsByMat) {
+        const matDef = getMaterialById(matId);
+        if (!matDef) continue;
+
+        const material = new THREE.MeshLambertMaterial({
+          color: matDef.hex,
+          transparent: !!matDef.transparent,
+          opacity: matDef.transparent && matDef.opacity != null ? matDef.opacity : 1.0,
+          side: THREE.FrontSide,
+        });
+
+        const inst = new THREE.InstancedMesh(
+          this.geometryCache.boxSmall,
+          material,
+          positions.length
+        );
+        inst.castShadow = true;
+        inst.receiveShadow = true;
+        inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9 });
+        const edges = new THREE.LineSegments(this.geometryCache.edgesSmall, edgeMat);
+        edges.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(positions.length * 16), 16);
+        edges.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        (edges as any).count = positions.length;
+        (edges as any).isInstancedMesh = true;
+
+        for (let i = 0; i < positions.length; i++) {
+          const p = positions[i];
+          this._dummy.position.set(p.x, p.y, p.z);
+          this._dummy.rotation.set(0, 0, 0);
+          this._dummy.scale.set(1, 1, 1);
+          this._dummy.updateMatrix();
+          inst.setMatrixAt(i, this._dummy.matrix);
+          edges.instanceMatrix.set(i, this._dummy.matrix.elements);
+          this.positionIndex.set(`${p.x},${p.y},${p.z}`, { matId, idx: i });
+        }
+        inst.instanceMatrix.needsUpdate = true;
+        edges.instanceMatrix.needsUpdate = true;
+        inst.computeBoundingSphere();
+
+        this.instancedMeshes.set(matId, inst);
+        this.instancedEdges.set(matId, edges);
+        this.voxelGroup.add(inst);
+        this.edgesGroup.add(edges);
+      }
+      this.ghostGroup.visible = true;
+      this.voxelGroup.visible = true;
+      this.edgesGroup.visible = true;
+      for (const m of this.lodMeshesByLevel.values()) {
+        for (const mesh of m.values()) mesh.visible = false;
+      }
+      for (const m of this.lodEdgesByLevel.values()) {
+        for (const edges of m.values()) edges.visible = false;
+      }
+    } else {
+      this.buildLodMeshes(positionsByMat);
+      this.ghostGroup.visible = false;
+      this.voxelGroup.visible = false;
+      this.edgesGroup.visible = false;
+      this.updateLOD(performance.now());
+    }
+  }
+
+  private clearLodMeshes(): void {
+    for (const [level, meshes] of this.lodMeshesByLevel) {
+      for (const mesh of meshes.values()) {
+        mesh.geometry.dispose();
+        if (Array.isArray(mesh.material)) mesh.material.forEach((m) => m.dispose());
+        else mesh.material.dispose();
+        this.scene.remove(mesh);
+      }
+      meshes.clear();
+    }
+    for (const [level, edges] of this.lodEdgesByLevel) {
+      for (const e of edges.values()) {
+        e.geometry.dispose();
+        if (Array.isArray(e.material)) e.material.forEach((m) => m.dispose());
+        else e.material.dispose();
+        this.scene.remove(e);
+      }
+      edges.clear();
+    }
+    this.lodMeshesByLevel.clear();
+    this.lodEdgesByLevel.clear();
+  }
+
+  private buildLodMeshes(positionsByMat: Map<number, { x: number; y: number; z: number }[]>): void {
     for (const [matId, positions] of positionsByMat) {
       const matDef = getMaterialById(matId);
       if (!matDef) continue;
 
-      const material = new THREE.MeshLambertMaterial({
+      const mat0 = new THREE.MeshLambertMaterial({
         color: matDef.hex,
         transparent: !!matDef.transparent,
         opacity: matDef.transparent && matDef.opacity != null ? matDef.opacity : 1.0,
-        side: THREE.FrontSide,
       });
 
-      const inst = new THREE.InstancedMesh(
-        this.geometryCache.boxSmall,
-        material,
-        positions.length
-      );
-      inst.castShadow = true;
-      inst.receiveShadow = true;
-      inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      const mat1Arr = [
+        new THREE.MeshLambertMaterial({ color: matDef.hex }),
+        new THREE.MeshLambertMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
+      ];
 
-      const edgeMat = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9 });
-      const edges = new THREE.LineSegments(this.geometryCache.edgesSmall, edgeMat);
-      edges.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(positions.length * 16), 16);
-      edges.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      (edges as any).count = positions.length;
-      (edges as any).isInstancedMesh = true;
+      const mat2 = new THREE.MeshLambertMaterial({ color: matDef.hex, flatShading: true });
+
+      const edgeMat0 = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9 });
+      const edgeMat2 = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.3 });
+
+      const lod0Mesh = new THREE.InstancedMesh(this.geometryCache.boxSmall, mat0, positions.length);
+      const lod0Edges = new THREE.LineSegments(this.geometryCache.edgesSmall, edgeMat0);
+      const lod1Mesh = new THREE.InstancedMesh(this.geometryCache.threeFaceBox, mat1Arr, positions.length);
+      const lod2Mesh = new THREE.InstancedMesh(this.geometryCache.simpleBox, mat2, positions.length);
+      const lod2Edges = new THREE.LineSegments(this.geometryCache.simpleEdges, edgeMat2);
+
+      [lod0Mesh, lod1Mesh, lod2Mesh].forEach((m) => {
+        m.castShadow = true;
+        m.receiveShadow = true;
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        m.visible = false;
+      });
+      [lod0Edges, lod2Edges].forEach((e) => {
+        e.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(positions.length * 16), 16);
+        e.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        (e as any).count = positions.length;
+        (e as any).isInstancedMesh = true;
+        e.visible = false;
+      });
+      lod1Mesh.visible = false;
 
       for (let i = 0; i < positions.length; i++) {
         const p = positions[i];
@@ -420,24 +588,93 @@ export class SceneManager {
         this._dummy.rotation.set(0, 0, 0);
         this._dummy.scale.set(1, 1, 1);
         this._dummy.updateMatrix();
-        inst.setMatrixAt(i, this._dummy.matrix);
-        edges.instanceMatrix.set(i, this._dummy.matrix.elements);
+        lod0Mesh.setMatrixAt(i, this._dummy.matrix);
+        lod0Edges.instanceMatrix.set(i, this._dummy.matrix.elements);
+        lod1Mesh.setMatrixAt(i, this._dummy.matrix);
+        lod2Mesh.setMatrixAt(i, this._dummy.matrix);
+        lod2Edges.instanceMatrix.set(i, this._dummy.matrix.elements);
         this.positionIndex.set(`${p.x},${p.y},${p.z}`, { matId, idx: i });
       }
-      inst.instanceMatrix.needsUpdate = true;
-      edges.instanceMatrix.needsUpdate = true;
-      inst.computeBoundingSphere();
 
-      this.instancedMeshes.set(matId, inst);
-      this.instancedEdges.set(matId, edges);
-      this.voxelGroup.add(inst);
-      this.edgesGroup.add(edges);
+      [lod0Mesh, lod1Mesh, lod2Mesh].forEach((m) => {
+        m.instanceMatrix.needsUpdate = true;
+        m.computeBoundingSphere();
+      });
+      [lod0Edges, lod2Edges].forEach((e) => {
+        e.instanceMatrix.needsUpdate = true;
+      });
+
+      if (!this.lodMeshesByLevel.has(LOD0_FULL)) this.lodMeshesByLevel.set(LOD0_FULL, new Map());
+      if (!this.lodMeshesByLevel.has(LOD1_THREE_FACES)) this.lodMeshesByLevel.set(LOD1_THREE_FACES, new Map());
+      if (!this.lodMeshesByLevel.has(LOD2_SIMPLE)) this.lodMeshesByLevel.set(LOD2_SIMPLE, new Map());
+      if (!this.lodEdgesByLevel.has(LOD0_FULL)) this.lodEdgesByLevel.set(LOD0_FULL, new Map());
+      if (!this.lodEdgesByLevel.has(LOD2_SIMPLE)) this.lodEdgesByLevel.set(LOD2_SIMPLE, new Map());
+
+      this.lodMeshesByLevel.get(LOD0_FULL)!.set(matId, lod0Mesh);
+      this.lodMeshesByLevel.get(LOD1_THREE_FACES)!.set(matId, lod1Mesh);
+      this.lodMeshesByLevel.get(LOD2_SIMPLE)!.set(matId, lod2Mesh);
+      this.lodEdgesByLevel.get(LOD0_FULL)!.set(matId, lod0Edges);
+      this.lodEdgesByLevel.get(LOD2_SIMPLE)!.set(matId, lod2Edges);
+
+      this.scene.add(lod0Mesh);
+      this.scene.add(lod1Mesh);
+      this.scene.add(lod2Mesh);
+      this.scene.add(lod0Edges);
+      this.scene.add(lod2Edges);
+    }
+  }
+
+  private updateLOD(now: number): void {
+    if (!this.lodEnabled || this.activeVoxels.length === 0) return;
+    if (now - this.lastLodUpdateTime < this.lodUpdateInterval) return;
+    this.lastLodUpdateTime = now;
+
+    const camPos = this.camera.position;
+    const center = this.gridCenterOffset;
+    const countsByLevel = { [LOD0_FULL]: new Map<number, number>(), [LOD1_THREE_FACES]: new Map<number, number>(), [LOD2_SIMPLE]: new Map<number, number>() };
+
+    for (const v of this.activeVoxels) {
+      const dx = v.x + 0.5 - camPos.x;
+      const dy = v.y + 0.5 - camPos.y;
+      const dz = v.z + 0.5 - camPos.z;
+      v.distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (v.distance < LOD_NEAR) v.lodLevel = LOD0_FULL;
+      else if (v.distance < LOD_MID) v.lodLevel = LOD1_THREE_FACES;
+      else v.lodLevel = LOD2_SIMPLE;
+      const map = countsByLevel[v.lodLevel];
+      map.set(v.matId, (map.get(v.matId) ?? 0) + 1);
     }
 
-    if (useLOD) {
-      this.ghostGroup.visible = false;
-    } else {
-      this.ghostGroup.visible = true;
+    for (const [level, meshes] of this.lodMeshesByLevel) {
+      for (const [matId, mesh] of meshes) {
+        const positions = this.activeVoxels.filter((v) => v.lodLevel === level && v.matId === matId);
+        let idx = 0;
+        for (const v of positions) {
+          this._dummy.position.set(v.x, v.y, v.z);
+          this._dummy.rotation.set(0, 0, 0);
+          this._dummy.scale.set(1, 1, 1);
+          this._dummy.updateMatrix();
+          mesh.setMatrixAt(idx, this._dummy.matrix);
+          const edgesMap = this.lodEdgesByLevel.get(level);
+          if (edgesMap) {
+            const edges = edgesMap.get(matId);
+            if (edges) edges.instanceMatrix.set(idx, this._dummy.matrix.elements);
+          }
+          idx++;
+        }
+        mesh.count = positions.length;
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.visible = positions.length > 0;
+        const edgesMap = this.lodEdgesByLevel.get(level);
+        if (edgesMap) {
+          const edges = edgesMap.get(matId);
+          if (edges) {
+            edges.count = positions.length;
+            edges.instanceMatrix.needsUpdate = true;
+            edges.visible = positions.length > 0;
+          }
+        }
+      }
     }
   }
 
@@ -551,16 +788,21 @@ export class SceneManager {
     this.controls.update();
     this.updateDeletingAnimations(now);
     this.emitCameraAngles(now);
+    if (this.lodEnabled) this.updateLOD(now);
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this.animate);
   };
 
   public dispose(): void {
     this.clearVoxelMeshes();
+    this.clearLodMeshes();
     this.geometryCache.box.dispose();
     this.geometryCache.boxSmall.dispose();
     this.geometryCache.edges.dispose();
     this.geometryCache.edgesSmall.dispose();
+    this.geometryCache.threeFaceBox.dispose();
+    this.geometryCache.simpleBox.dispose();
+    this.geometryCache.simpleEdges.dispose();
     this.controls.dispose();
     this.renderer.dispose();
   }

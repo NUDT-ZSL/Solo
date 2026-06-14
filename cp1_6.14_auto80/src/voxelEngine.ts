@@ -59,8 +59,8 @@ export class VoxelEngine {
   private voxelCount: number = 0;
   private currentMaterialId: number = 0;
 
-  private undoStack: OperationEntry[] = [];
-  private redoStack: OperationEntry[] = [];
+  private undoStack: (OperationEntry | OperationEntry[])[] = [];
+  private redoStack: (OperationEntry | OperationEntry[])[] = [];
   private batchOpen: boolean = false;
   private batchOps: OperationEntry[] = [];
 
@@ -115,8 +115,7 @@ export class VoxelEngine {
   }
 
   private pushUndo(entry: OperationEntry | OperationEntry[]): void {
-    const arr = Array.isArray(entry) ? entry : [entry];
-    this.undoStack.push(arr as unknown as OperationEntry);
+    this.undoStack.push(entry);
     while (this.undoStack.length > MAX_UNDO_STEPS) {
       this.undoStack.shift();
     }
@@ -178,7 +177,7 @@ export class VoxelEngine {
   public undo(): void {
     if (this.undoStack.length === 0) return;
     const top = this.undoStack.pop()!;
-    const arr = Array.isArray(top) ? (top as unknown as OperationEntry[]) : [top];
+    const arr = Array.isArray(top) ? top : [top];
     for (let i = arr.length - 1; i >= 0; i--) this.applyEntryReverse(arr[i]);
     this.redoStack.push(top);
     this.emitUpdate();
@@ -187,9 +186,9 @@ export class VoxelEngine {
   public redo(): void {
     if (this.redoStack.length === 0) return;
     const top = this.redoStack.pop()!;
-    const arr = Array.isArray(top) ? (top as unknown as OperationEntry[]) : [top];
+    const arr = Array.isArray(top) ? top : [top];
     for (const e of arr) this.applyEntryForward(e);
-    this.pushUndo(top);
+    this.undoStack.push(top);
     this.emitUpdate();
   }
 
