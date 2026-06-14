@@ -1,11 +1,34 @@
-import { RideRecord, RideReport, RideSummary, TrackPoint, ChartSeries, Note, PlannedRoute } from '../types';
+import {
+  RideRecord,
+  RideReport,
+  RideSummary,
+  TrackPoint,
+  ChartSeries,
+  Note,
+  PlannedRoute,
+} from '../types';
 import { eventBus } from '../eventBus';
 
+interface EChartsPoint {
+  name: string;
+  value: [number, number];
+}
+
+interface EChartsCompatibleSeries {
+  xAxisTimestamps: number[];
+  xAxisLabels: string[];
+  numericData: number[];
+  echartsPoints: EChartsPoint[];
+}
+
 class ReportBuilder {
+  private static readonly MIN_ELEVATION_GAIN_M = 0.8;
+  private static readonly SAMPLE_INTERVAL_SEC = 4;
+
   buildReport(rideRecord: RideRecord): RideReport {
     const summary = this.calculateSummary(rideRecord.trackPoints, rideRecord.plannedRoute);
-    const elevationChart = this.buildElevationChart(rideRecord.trackPoints);
-    const speedChart = this.buildSpeedChart(rideRecord.trackPoints);
+    const elevationSeries = this.buildElevationSeries(rideRecord.trackPoints);
+    const speedSeries = this.buildSpeedSeries(rideRecord.trackPoints);
     const notesTimeline = this.sortNotesByTime(rideRecord.notes);
 
     const report: RideReport = {
@@ -13,10 +36,21 @@ class ReportBuilder {
       rideId: rideRecord.id,
       generatedAt: Date.now(),
       summary,
-      elevationChart,
-      speedChart,
+      elevationChart: {
+        xAxis: elevationSeries.xAxisTimestamps,
+        data: elevationSeries.numericData,
+      } as ChartSeries,
+      speedChart: {
+        xAxis: speedSeries.xAxisTimestamps,
+        data: speedSeries.numericData,
+      } as ChartSeries,
       notesTimeline,
     };
+
+    (report.elevationChart as any).echartsPoints = elevationSeries.echartsPoints;
+    (report.elevationChart as any).xAxisLabels = elevationSeries.xAxisLabels;
+    (report.speedChart as any).echartsPoints = speedSeries.echartsPoints;
+    (report.speedChart as any).xAxisLabels = speedSeries.xAxisLabels;
 
     eventBus.emit('report:generated', report);
     return report;
@@ -53,27 +87,186 @@ class ReportBuilder {
   }
 
   buildElevationChart(trackPoints: TrackPoint[]): ChartSeries {
-    const xAxis: string[] = [];
-    const data: number[] = [];
-
-    for (const point of trackPoints) {
-      xAxis.push(this.formatTime(point.timestamp));
-      data.push(Math.round(point.altitude * 10) / 10);
-    }
-
-    return { xAxis, data };
+    const series = this.buildElevationSeries(trackPoints);
+    const result: ChartSeries = {
+      xAxis: series.xAxisTimestamps,
+      data: series.numericData,
+    };
+    (result as any).echartsPoints = series.echartsPoints;
+    (result as any).xAxisLabels = series.xAxisLabels;
+    return result;
   }
 
   buildSpeedChart(trackPoints: TrackPoint[]): ChartSeries {
-    const xAxis: string[] = [];
-    const data: number[] = [];
+    const series = this.buildSpeedSeries(trackPoints);
+    const result: ChartSeries = {
+      xAxis: series.xAxisTimestamps,
+      data: series.numericData,
+    };
+    (result as any).echartsPoints = series.echartsPoints;
+    (result as any).xAxisLabels = series.xAxisLabels;
+    return result;
+  }
 
-    for (const point of trackPoints) {
-      xAxis.push(this.formatTime(point.timestamp));
-      data.push(Math.round(point.speed * 10) / 10);
+  getEChartsSeriesData(
+    chart: ChartSeries
+  ): EChartsPoint[] {
+    const typed = chart as any;
+    if (typed && Array.isArray(typed.echartsPoints) && typed.echartsPoints.length > 0) {
+      return typed.echartsPoints;
     }
 
-    return { xAxis, data };
+    const timestamps = chart.xAxis as number[];
+    const values = chart.data;
+    const result: EChartsPoint[] = [];
+
+    for (let i = 0; i < timestamps.length; i++) {
+      result.push({
+        name: this.formatTime(timestamps[i]),
+        value: [timestamps[i], values[i]],
+      });
+    }
+    return result;
+  }
+
+  getXAxisLabels(chart: ChartSeries): string[] {
+    const typed = chart as any;
+    if (typed && Array.isArray(typed.xAxisLabels) && typed.xAxisLabels.length > 0) {
+      return typed.xAxisLabels;
+    }
+    const timestamps = chart.xAxis as number[];
+    return timestamps.map((t) => this.formatTime(t));
+  }
+
+  private buildElevationSeries(trackPoints: TrackPoint[]): EChartsCompatibleSeries {
+    const sampled = this.downsample(trackPoints);
+    const smoothed = this.smoothAltitude(sampled);
+
+    const xAxisTimestamps: number[] = [];
+    const xAxisLabels: string[] = [];
+    const numericData: number[] = [];
+    const echartsPoints: EChartsPoint[] = [];
+
+    for (let i = 0; i < smoothed.length; i++) {
+      const tp = smoothed[i];
+      const ts = tp.timestamp;
+      const alt = Math.round(tp.altitude * 10) / 10;
+      const label = this.formatTime(ts);
+
+      xAxisTimestamps.push(ts);
+      xAxisLabels.push(label);
+      numericData.push(alt);
+      echartsPoints.push({
+        name: label,
+        value: [ts, alt],
+      });
+    }
+
+    return { xAxisTimestamps, xAxisLabels, numericData, echartsPoints };
+  }
+
+  private buildSpeedSeries(trackPoints: TrackPoint[]): EChartsCompatibleSeries {
+    const sampled = this.downsample(trackPoints);
+    const smoothed = this.smoothSpeed(sampled);
+
+    const xAxisTimestamps: number[] = [];
+    const xAxisLabels: string[] = [];
+    const numericData: number[] = [];
+    const echartsPoints: EChartsPoint[] = [];
+
+    for (let i = 0; i < smoothed.length; i++) {
+      const tp = smoothed[i];
+      const ts = tp.timestamp;
+      const spd = Math.round(tp.speed * 10) / 10;
+      const label = this.formatTime(ts);
+
+      xAxisTimestamps.push(ts);
+      xAxisLabels.push(label);
+      numericData.push(spd);
+      echartsPoints.push({
+        name: label,
+        value: [ts, spd],
+      });
+    }
+
+    return { xAxisTimestamps, xAxisLabels, numericData, echartsPoints };
+  }
+
+  private downsample(points: TrackPoint[]): TrackPoint[] {
+    if (points.length <= 300) return [...points];
+
+    const result: TrackPoint[] = [];
+    const targetCount = 280;
+    const step = points.length / targetCount;
+
+    for (let i = 0; i < targetCount; i++) {
+      const idx = Math.min(points.length - 1, Math.floor(i * step));
+      result.push(points[idx]);
+    }
+
+    if (result[result.length - 1] !== points[points.length - 1]) {
+      result.push(points[points.length - 1]);
+    }
+
+    return result;
+  }
+
+  private smoothAltitude(points: TrackPoint[]): TrackPoint[] {
+    if (points.length < 3) return points;
+
+    const WINDOW = 5;
+    const result: TrackPoint[] = [];
+
+    for (let i = 0; i < points.length; i++) {
+      const start = Math.max(0, i - WINDOW);
+      const end = Math.min(points.length - 1, i + WINDOW);
+      let sum = 0;
+      let count = 0;
+
+      for (let j = start; j <= end; j++) {
+        const dist = Math.abs(j - i);
+        const weight = 1 - dist / (WINDOW + 1);
+        sum += points[j].altitude * weight;
+        count += weight;
+      }
+
+      const smoothed = count > 0 ? sum / count : points[i].altitude;
+      result.push({
+        ...points[i],
+        altitude: Math.round(smoothed * 10) / 10,
+      });
+    }
+
+    return result;
+  }
+
+  private smoothSpeed(points: TrackPoint[]): TrackPoint[] {
+    if (points.length < 3) return points;
+
+    const WINDOW = 3;
+    const result: TrackPoint[] = [];
+
+    for (let i = 0; i < points.length; i++) {
+      const start = Math.max(0, i - WINDOW);
+      const end = Math.min(points.length - 1, i + WINDOW);
+      let sum = 0;
+      let count = 0;
+
+      for (let j = start; j <= end; j++) {
+        const dist = Math.abs(j - i);
+        const weight = 1 - dist / (WINDOW + 1);
+        sum += points[j].speed * weight;
+        count += weight;
+      }
+
+      const smoothed = count > 0 ? sum / count : points[i].speed;
+      result.push({
+        ...points[i],
+        speed: Math.max(0, Math.round(smoothed * 10) / 10),
+      });
+    }
+
+    return result;
   }
 
   sortNotesByTime(notes: Note[]): Note[] {
@@ -90,7 +283,10 @@ class ReportBuilder {
 
   private calculateTotalDuration(trackPoints: TrackPoint[]): number {
     if (trackPoints.length < 2) return 0;
-    return (trackPoints[trackPoints.length - 1].timestamp - trackPoints[0].timestamp) / 1000;
+    return (
+      (trackPoints[trackPoints.length - 1].timestamp - trackPoints[0].timestamp) /
+      1000
+    );
   }
 
   private calculateMaxSpeed(trackPoints: TrackPoint[]): number {
@@ -104,14 +300,33 @@ class ReportBuilder {
   }
 
   private calculateTotalElevation(trackPoints: TrackPoint[]): number {
+    if (trackPoints.length < 2) return 0;
+
+    const alts: number[] = trackPoints.map((p) => p.altitude);
+
+    const W = 5;
+    const smoothed: number[] = [];
+    for (let i = 0; i < alts.length; i++) {
+      let sum = 0;
+      let cnt = 0;
+      for (let j = Math.max(0, i - W); j <= Math.min(alts.length - 1, i + W); j++) {
+        const d = Math.abs(j - i);
+        const w = 1 - d / (W + 1);
+        sum += alts[j] * w;
+        cnt += w;
+      }
+      smoothed.push(cnt > 0 ? sum / cnt : alts[i]);
+    }
+
     let totalGain = 0;
-    for (let i = 1; i < trackPoints.length; i++) {
-      const gain = trackPoints[i].altitude - trackPoints[i - 1].altitude;
-      if (gain > 0) {
-        totalGain += gain;
+    for (let i = 1; i < smoothed.length; i++) {
+      const delta = smoothed[i] - smoothed[i - 1];
+      if (delta > ReportBuilder.MIN_ELEVATION_GAIN_M) {
+        totalGain += delta - ReportBuilder.MIN_ELEVATION_GAIN_M * 0.5;
       }
     }
-    return totalGain;
+
+    return Math.max(0, totalGain);
   }
 
   private haversineDistance(p1: TrackPoint, p2: TrackPoint): number {
@@ -121,8 +336,10 @@ class ReportBuilder {
     const dLng = toRad(p2.lng - p1.lng);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      Math.cos(toRad(p1.lat)) *
+        Math.cos(toRad(p2.lat)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
@@ -136,7 +353,16 @@ class ReportBuilder {
   }
 
   private generateId(): string {
-    return 'rpt_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
+    return (
+      'rpt_' +
+      Date.now().toString(36) +
+      '_' +
+      Math.random().toString(36).substring(2, 8)
+    );
+  }
+
+  static get SAMPLE_INTERVAL(): number {
+    return ReportBuilder.SAMPLE_INTERVAL_SEC;
   }
 }
 
