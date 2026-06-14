@@ -1,0 +1,47 @@
+{
+  "users": [
+    {
+      "id": "64ebbc27-a42a-49d5-b02d-1c5cb00e1f15",
+      "nickname": "小明",
+      "nativeLanguage": "中文",
+      "targetLanguage": "英语",
+      "avatarColor": "#98D8C8",
+      "createdAt": 1781395242997,
+      "isOnline": true
+    },
+    {
+      "id": "aa63f5cb-a443-481e-aa8a-673c82b6004a",
+      "nickname": "Tom",
+      "nativeLanguage": "英语",
+      "targetLanguage": "中文",
+      "avatarColor": "#52BE80",
+      "createdAt": 1781395285746,
+      "isOnline": true
+    }
+  ],
+  "sessions": [
+    {
+      "id": "326fc07c-0f03-491e-a6ff-6eb93082b87b",
+      "participants": [
+        "aa63f5cb-a443-481e-aa8a-673c82b6004a",
+        "64ebbc27-a42a-49d5-b02d-1c5cb00e1f15"
+      ],
+      "messages": [
+        {
+          "id": "6081e66d-2783-42ef-a654-28a430d41f09",
+          "sessionId": "326fc07c-0f03-491e-a6ff-6eb93082b87b",
+          "senderId": "aa63f5cb-a443-481e-aa8a-673c82b6004a",
+          "content": "你好！我是 Tom，很高兴认识你！",
+          "timestamp": 1781395339139,
+          "type": "text"
+        }
+      ],
+      "corrections": [],
+      "notes": [],
+      "createdAt": 1781395329564,
+      "endedAt": null,
+      "duration": 0
+    }
+  ],
+  "unreadMessages": {}
+}
