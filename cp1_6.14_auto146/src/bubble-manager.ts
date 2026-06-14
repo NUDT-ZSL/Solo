@@ -52,6 +52,9 @@ export class BubbleManager {
   private animationProgress: number;
   private filterState: 'idle' | 'fadeOut' | 'fadeIn';
 
+  private pointerDownPos: { x: number; y: number } | null;
+  private static readonly CLICK_THRESHOLD = 5;
+
   private onStatusUpdate?: (info: BubbleStatusInfo | null) => void;
   private containerElement: HTMLElement;
   private clock: THREE.Clock;
@@ -100,6 +103,7 @@ export class BubbleManager {
     this.filterAnimating = false;
     this.animationProgress = 0;
     this.filterState = 'idle';
+    this.pointerDownPos = null;
 
     this.clock = new THREE.Clock();
     this.animationFrameId = 0;
@@ -131,7 +135,8 @@ export class BubbleManager {
   private addEventListeners(): void {
     const dom = this.renderer.domElement;
     dom.addEventListener('pointermove', this.onPointerMove);
-    dom.addEventListener('click', this.onClick);
+    dom.addEventListener('pointerdown', this.onPointerDown);
+    dom.addEventListener('pointerup', this.onPointerUp);
     dom.addEventListener('pointerleave', this.onPointerLeave);
     window.addEventListener('resize', this.onResize);
   }
@@ -142,7 +147,19 @@ export class BubbleManager {
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   };
 
-  private onClick = (): void => {
+  private onPointerDown = (event: PointerEvent): void => {
+    this.pointerDownPos = { x: event.clientX, y: event.clientY };
+  };
+
+  private onPointerUp = (event: PointerEvent): void => {
+    if (!this.pointerDownPos) return;
+    const dx = event.clientX - this.pointerDownPos.x;
+    const dy = event.clientY - this.pointerDownPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    this.pointerDownPos = null;
+
+    if (dist > BubbleManager.CLICK_THRESHOLD) return;
+
     if (this.hoveredCode) {
       this.selectedCode = this.hoveredCode;
       const evt = new CustomEvent('BubbleSelected', { detail: { code: this.hoveredCode } });
@@ -394,6 +411,7 @@ export class BubbleManager {
 
   private resetTradeLines(): void {
     for (const line of this.tradeLines) {
+      if (!line.material) continue;
       const mat = line.material as THREE.LineBasicMaterial;
       mat.color.setHex(DEFAULT_LINE_COLOR);
       mat.opacity = DEFAULT_LINE_OPACITY;
@@ -551,7 +569,8 @@ export class BubbleManager {
     cancelAnimationFrame(this.animationFrameId);
     const dom = this.renderer.domElement;
     dom.removeEventListener('pointermove', this.onPointerMove);
-    dom.removeEventListener('click', this.onClick);
+    dom.removeEventListener('pointerdown', this.onPointerDown);
+    dom.removeEventListener('pointerup', this.onPointerUp);
     dom.removeEventListener('pointerleave', this.onPointerLeave);
     window.removeEventListener('resize', this.onResize);
     this.clearBubbles();

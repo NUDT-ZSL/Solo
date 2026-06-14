@@ -9,6 +9,7 @@ export function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const bubbleManagerRef = useRef<BubbleManager | null>(null);
   const allDataRef = useRef<ProcessedCountry[]>([]);
+  const rafRef = useRef<number>(0);
 
   const [statusInfo, setStatusInfo] = useState<{
     name: string;
@@ -47,7 +48,10 @@ export function App() {
   const handleFilterChange = <K extends keyof FilterConfig>(key: K, value: FilterConfig[K]) => {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
-      bubbleManagerRef.current?.applyFilters(next);
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        bubbleManagerRef.current?.applyFilters(next);
+      });
       return next;
     });
   };

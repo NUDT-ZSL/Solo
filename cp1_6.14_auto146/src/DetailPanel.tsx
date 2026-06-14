@@ -51,14 +51,28 @@ export function DetailPanel({ allCountries }: DetailPanelProps) {
     };
     window.addEventListener('resize', resizeHandler);
     return () => {
-      lineChartInstance.current?.dispose();
-      barChartInstance.current?.dispose();
+      if (lineChartInstance.current) {
+        lineChartInstance.current.dispose();
+        lineChartInstance.current = null;
+      }
+      if (barChartInstance.current) {
+        barChartInstance.current.dispose();
+        barChartInstance.current = null;
+      }
       window.removeEventListener('resize', resizeHandler);
     };
   }, []);
 
   useEffect(() => {
-    if (!selectedCountry) return;
+    if (!selectedCountry) {
+      if (lineChartInstance.current) {
+        lineChartInstance.current.clear();
+      }
+      if (barChartInstance.current) {
+        barChartInstance.current.clear();
+      }
+      return;
+    }
 
     const years = selectedCountry.emissions.map((e) => e.year);
     const emissions = selectedCountry.emissions.map((e) => e.value);

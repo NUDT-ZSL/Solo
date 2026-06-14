@@ -70,8 +70,10 @@ function generateSeries(
 
 function pickRandomPartners(allCodes: string[], ownCode: string, count: number): string[] {
   const available = allCodes.filter((c) => c !== ownCode);
+  if (available.length === 0) return [];
+  const actualCount = Math.min(count, available.length);
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  return shuffled.slice(0, actualCount);
 }
 
 const RAW_COUNTRIES: Omit<RawCountryData, 'emissions' | 'gdpPerCapita' | 'tradePartners'>[] = [
@@ -184,11 +186,13 @@ function buildRawData(): RawCountryData[] {
   return RAW_COUNTRIES.map((c) => {
     const ep = EMISSION_PROFILES[c.code] || { base: 100, rate: 0.02, vol: 10 };
     const gp = GDP_PROFILES[c.code] || { base: 2000, rate: 0.03, vol: 100 };
+    const maxPartners = Math.max(0, codes.length - 1);
+    const partnerCount = Math.min(3 + Math.floor(Math.random() * 3), maxPartners);
     return {
       ...c,
       emissions: generateSeries(ep.base, ep.rate, ep.vol),
       gdpPerCapita: generateSeries(gp.base, gp.rate, gp.vol),
-      tradePartners: pickRandomPartners(codes, c.code, 3 + Math.floor(Math.random() * 3)),
+      tradePartners: pickRandomPartners(codes, c.code, partnerCount),
     };
   });
 }
